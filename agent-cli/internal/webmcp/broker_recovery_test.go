@@ -49,7 +49,7 @@ func TestStatefulBrokerDisconnectDuringSelectionUnblocksWithBrowserLoss(t *testi
 		t.Fatalf("disconnect browser: %v", err)
 	}
 	selection := receiveSelectionCall(t, selectionDone)
-	classified := assertBrowserDisconnected(t, selection.err, "list_targets")
+	classified := requireBrowserDisconnected(t, selection.err, "list_targets")
 	if selection.page != (webmcp.PageContext{}) {
 		t.Fatalf("selection page = %#v, want empty page on failure", selection.page)
 	}
@@ -96,7 +96,7 @@ func TestStatefulBrokerDisconnectDuringEnableRetiresSelectionAndUnblocksOnce(t *
 	}
 
 	selection := receiveSelectionCall(t, selectionDone)
-	classified := assertBrowserDisconnected(t, selection.err, "session")
+	classified := requireBrowserDisconnected(t, selection.err, "session")
 	if selection.page != (webmcp.PageContext{}) {
 		t.Fatalf("selection page = %#v, want empty page on failure", selection.page)
 	}
@@ -286,26 +286,26 @@ func newRecoveryInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserR
 		Discoverer: staticDiscoverer{candidate},
 	})
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: targetID}); err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("select recovery target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("list recovery tools: %v", err)
 	}
 	if len(snapshot.Tools) != 1 {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("recovery tools = %#v, want one", snapshot.Tools)
 	}
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open recovery handle: %v", err)
 	}
 	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession(targetID)
 	if session == nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatal("recovery session is nil")
 	}
 	return broker, session, snapshot.Tools[0].Ref
@@ -338,7 +338,7 @@ func nextRecoveryBrokerEvent(t *testing.T, events <-chan webmcp.BrokerEvent) web
 	}
 }
 
-func assertBrowserDisconnected(t *testing.T, err error, phase string) *webmcp.ClassifiedError {
+func assertBrowserDisconnected(t *testing.T, err error, phase string) {
 	t.Helper()
 	if err == nil {
 		t.Fatal("operation succeeded, want browser_disconnected")
@@ -350,7 +350,25 @@ func assertBrowserDisconnected(t *testing.T, err error, phase string) *webmcp.Cl
 	if phase != "" && classified.Details["phase"] != phase && phase != "session" {
 		t.Fatalf("browser loss details = %#v, want phase %q", classified.Details, phase)
 	}
+}
+
+func requireBrowserDisconnected(t *testing.T, err error, phase string) *webmcp.ClassifiedError {
+	t.Helper()
+	assertBrowserDisconnected(t, err, phase)
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) {
+		t.Fatalf("error = %v (%T), want classified browser_disconnected", err, err)
+	}
 	return classified
+}
+
+// closeFailedSetupBroker releases a broker whose setup already failed. The
+// setup failure is the reported cause, so a close error is only logged.
+func closeFailedSetupBroker(t *testing.T, broker *webmcp.StatefulBroker) {
+	t.Helper()
+	if err := broker.Close(); err != nil {
+		t.Logf("close broker after setup failure: %v", err)
+	}
 }
 
 func isClassifiedCode(err error, code webmcp.ErrorCode) bool {

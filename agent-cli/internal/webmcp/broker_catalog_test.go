@@ -128,7 +128,7 @@ func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Title: "A", URL: "https://fixture.test/"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Title: "A", URL: "https://fixture.test/"},
 					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
 				),
 			},
@@ -146,13 +146,62 @@ func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 		}
 	}()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
-	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list tools: %v", err)
+	first := assertInitialCatalogRefBinding(t, broker, candidate.ID)
+
+	handleValue, err := runtime.Open(context.Background(), candidate)
+	requireBrokerStep(t, err, "open fixture handle")
+	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	if session == nil {
+		t.Fatal("fixture session is nil")
 	}
+	requireBrokerStep(t, session.EmitToolsAdded(pageTool("read_state", "frame-1", `{"type":"object","properties":{"count":{"type":"integer"}},"required":["count"],"additionalProperties":false}`)), "replace descriptor")
+	changed := listToolsForTest(t, broker, webmcp.ListToolsOptions{IncludeSchemas: true}, "list changed tools")
+	if len(changed.Tools) != 1 || changed.Tools[0].Ref == first.Ref || changed.Tools[0].SchemaDigest == first.SchemaDigest {
+		t.Fatalf("changed descriptor = %#v, want a new ref and digest", changed.Tools)
+	}
+	assertStaleInvokeWithoutOperation(t, broker, runtime, first.Ref, webmcp.ErrorStaleToolRef, "ref changed by schema update")
+
+	requireBrokerStep(t, session.EmitToolsRemoved("frame-1", "read_state"), "remove descriptor")
+	removed := listToolsForTest(t, broker, webmcp.ListToolsOptions{IncludeSchemas: true}, "list removed tools")
+	if len(removed.Tools) != 0 {
+		t.Fatalf("catalog after removal = %#v, want empty", removed.Tools)
+	}
+	assertStaleInvokeWithoutOperation(t, broker, runtime, changed.Tools[0].Ref, webmcp.ErrorStaleToolRef, "removed ref")
+
+	requireBrokerStep(t, session.EmitToolsAdded(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)), "re-add descriptor")
+	current := listToolsForTest(t, broker, webmcp.ListToolsOptions{IncludeSchemas: true}, "list re-added tools")
+	currentRef := current.Tools[0].Ref
+	requireBrokerStep(t, session.EmitToolsRemoved("frame-1", "read_state"), "remove old frame descriptor")
+	requireBrokerStep(t, session.EmitToolsAdded(pageTool("read_state", "frame-2", `{"type":"object","properties":{},"additionalProperties":false}`)), "add changed frame descriptor")
+	frameChanged := listToolsForTest(t, broker, webmcp.ListToolsOptions{IncludeSchemas: true}, "list changed frame tools")
+	if len(frameChanged.Tools) != 1 || frameChanged.Tools[0].FrameID != "frame-2" || frameChanged.Tools[0].Ref == currentRef {
+		t.Fatalf("frame-changed catalog = %#v, want one new frame-bound ref", frameChanged.Tools)
+	}
+	assertStaleInvokeWithoutOperation(t, broker, runtime, currentRef, webmcp.ErrorStaleToolRef, "frame-changed ref")
+	currentRef = frameChanged.Tools[0].Ref
+	requireBrokerStep(t, session.Navigate("https://fixture.test/next", "https://fixture.test"), "navigate")
+	postNavigation := listToolsForTest(t, broker, webmcp.ListToolsOptions{IncludeSchemas: true}, "list after navigation")
+	if postNavigation.Generation != 2 || len(postNavigation.Tools) != 0 {
+		t.Fatalf("catalog after navigation = generation %d tools %#v, want generation two and empty", postNavigation.Generation, postNavigation.Tools)
+	}
+	assertStaleInvokeWithoutOperation(t, broker, runtime, currentRef, webmcp.ErrorStaleToolRef, "navigation ref")
+
+	assertBrokerError(t, func() error {
+		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: "webmcp.tool-ref.v0:AAECAwQFBgcICQoLDA0ODw", Input: json.RawMessage(`{}`)})
+		return err
+	}, webmcp.ErrorInvalidToolInput, "malformed ref")
+	requireBrokerStep(t, session.EmitTargetDetached("fixture test"), "detach")
+	assertStaleInvokeWithoutOperation(t, broker, runtime, currentRef, webmcp.ErrorStaleSelection, "detached selected target")
+}
+
+// assertInitialCatalogRefBinding checks the first catalog ref is opaque,
+// descriptor-bound, and stable across an unchanged refresh.
+func assertInitialCatalogRefBinding(t *testing.T, broker *webmcp.StatefulBroker, browserID webmcp.BrowserID) webmcp.ToolDescriptor {
+	t.Helper()
+	snapshot := listToolsForTest(t, broker, webmcp.ListToolsOptions{IncludeSchemas: true}, "list tools")
 	if snapshot.Generation != 1 || len(snapshot.Tools) != 1 {
 		t.Fatalf("snapshot = %#v, want generation one and one tool", snapshot)
 	}
@@ -165,112 +214,32 @@ func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 			t.Fatalf("ref %q exposed descriptor value %q", first.Ref, secret)
 		}
 	}
-	if first.BrowserID != candidate.ID || first.TargetID != "tab-a" || first.FrameID != "frame-1" || first.Generation != 1 || first.SchemaDigest == "" {
+	if first.BrowserID != browserID || first.TargetID != primaryTargetID || first.FrameID != "frame-1" || first.Generation != 1 || first.SchemaDigest == "" {
 		t.Fatalf("descriptor binding fields = %#v", first)
 	}
 
-	refAgain, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{Refresh: true, IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("refresh tools: %v", err)
-	}
+	refAgain := listToolsForTest(t, broker, webmcp.ListToolsOptions{Refresh: true, IncludeSchemas: true}, "refresh tools")
 	if len(refAgain.Tools) != 1 || refAgain.Tools[0].Ref != first.Ref {
 		t.Fatalf("unchanged descriptor ref = %q, want stable %q", refAgain.Tools[0].Ref, first.Ref)
 	}
+	return first
+}
 
-	handleValue, err := runtime.Open(context.Background(), candidate)
-	if err != nil {
-		t.Fatalf("open fixture handle: %v", err)
-	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
-	if session == nil {
-		t.Fatal("fixture session is nil")
-	}
-	if err := session.EmitToolsAdded(pageTool("read_state", "frame-1", `{"type":"object","properties":{"count":{"type":"integer"}},"required":["count"],"additionalProperties":false}`)); err != nil {
-		t.Fatalf("replace descriptor: %v", err)
-	}
-	changed, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list changed tools: %v", err)
-	}
-	if len(changed.Tools) != 1 || changed.Tools[0].Ref == first.Ref || changed.Tools[0].SchemaDigest == first.SchemaDigest {
-		t.Fatalf("changed descriptor = %#v, want a new ref and digest", changed.Tools)
-	}
-	assertBrokerError(t, func() error {
-		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: first.Ref, Input: json.RawMessage(`{}`)})
-		return err
-	}, webmcp.ErrorStaleToolRef, "ref changed by schema update")
-	assertNoOperation(t, runtime, testkit.OperationInvoke)
+func listToolsForTest(t *testing.T, broker *webmcp.StatefulBroker, options webmcp.ListToolsOptions, label string) webmcp.ToolCatalogSnapshot {
+	t.Helper()
+	snapshot, err := broker.ListTools(context.Background(), options)
+	requireBrokerStep(t, err, label)
+	return snapshot
+}
 
-	if err := session.EmitToolsRemoved("frame-1", "read_state"); err != nil {
-		t.Fatalf("remove descriptor: %v", err)
-	}
-	removed, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list removed tools: %v", err)
-	}
-	if len(removed.Tools) != 0 {
-		t.Fatalf("catalog after removal = %#v, want empty", removed.Tools)
-	}
+// assertStaleInvokeWithoutOperation requires an invoke with ref to fail with
+// want before any page invocation reaches the runtime.
+func assertStaleInvokeWithoutOperation(t *testing.T, broker *webmcp.StatefulBroker, runtime *testkit.ScriptedBrowserRuntime, ref webmcp.ToolRef, want webmcp.ErrorCode, label string) {
+	t.Helper()
 	assertBrokerError(t, func() error {
-		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: changed.Tools[0].Ref, Input: json.RawMessage(`{}`)})
+		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: json.RawMessage(`{}`)})
 		return err
-	}, webmcp.ErrorStaleToolRef, "removed ref")
-	assertNoOperation(t, runtime, testkit.OperationInvoke)
-
-	if err := session.EmitToolsAdded(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)); err != nil {
-		t.Fatalf("re-add descriptor: %v", err)
-	}
-	current, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list re-added tools: %v", err)
-	}
-	currentRef := current.Tools[0].Ref
-	if err := session.EmitToolsRemoved("frame-1", "read_state"); err != nil {
-		t.Fatalf("remove old frame descriptor: %v", err)
-	}
-	if err := session.EmitToolsAdded(pageTool("read_state", "frame-2", `{"type":"object","properties":{},"additionalProperties":false}`)); err != nil {
-		t.Fatalf("add changed frame descriptor: %v", err)
-	}
-	frameChanged, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list changed frame tools: %v", err)
-	}
-	if len(frameChanged.Tools) != 1 || frameChanged.Tools[0].FrameID != "frame-2" || frameChanged.Tools[0].Ref == currentRef {
-		t.Fatalf("frame-changed catalog = %#v, want one new frame-bound ref", frameChanged.Tools)
-	}
-	assertBrokerError(t, func() error {
-		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: currentRef, Input: json.RawMessage(`{}`)})
-		return err
-	}, webmcp.ErrorStaleToolRef, "frame-changed ref")
-	assertNoOperation(t, runtime, testkit.OperationInvoke)
-	currentRef = frameChanged.Tools[0].Ref
-	if err := session.Navigate("https://fixture.test/next", "https://fixture.test"); err != nil {
-		t.Fatalf("navigate: %v", err)
-	}
-	postNavigation, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		t.Fatalf("list after navigation: %v", err)
-	}
-	if postNavigation.Generation != 2 || len(postNavigation.Tools) != 0 {
-		t.Fatalf("catalog after navigation = generation %d tools %#v, want generation two and empty", postNavigation.Generation, postNavigation.Tools)
-	}
-	assertBrokerError(t, func() error {
-		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: currentRef, Input: json.RawMessage(`{}`)})
-		return err
-	}, webmcp.ErrorStaleToolRef, "navigation ref")
-	assertNoOperation(t, runtime, testkit.OperationInvoke)
-
-	assertBrokerError(t, func() error {
-		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: "webmcp.tool-ref.v0:AAECAwQFBgcICQoLDA0ODw", Input: json.RawMessage(`{}`)})
-		return err
-	}, webmcp.ErrorInvalidToolInput, "malformed ref")
-	if err := session.EmitTargetDetached("fixture test"); err != nil {
-		t.Fatalf("detach: %v", err)
-	}
-	assertBrokerError(t, func() error {
-		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: currentRef, Input: json.RawMessage(`{}`)})
-		return err
-	}, webmcp.ErrorStaleSelection, "detached selected target")
+	}, want, label)
 	assertNoOperation(t, runtime, testkit.OperationInvoke)
 }
 
@@ -410,56 +379,7 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 	currentRef := snapshot.Tools[0].Ref
 	for step := 1; step <= 6; step++ {
 		oldRefs = append(oldRefs, currentRef)
-		dispatched, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: currentRef, Input: []byte(`{}`)})
-		if err != nil {
-			t.Fatalf("step %d invoke: %v", step, err)
-		}
-		observed, err := session.WaitForInvocation(testContext(t))
-		if err != nil {
-			t.Fatalf("step %d wait for admitted invocation: %v", step, err)
-		}
-		if observed.ID != dispatched.InvocationID || observed.Generation != uint64(step) {
-			t.Fatalf("step %d invocation = %#v, want ID %q at generation %d", step, observed, dispatched.InvocationID, step)
-		}
-
-		if err := session.Navigate("https://fixture.test/storm/"+fmt.Sprint(step), "https://fixture.test"); err != nil {
-			t.Fatalf("step %d navigate: %v", step, err)
-		}
-		terminal, err := broker.WaitInvocation(testContext(t), dispatched.InvocationID)
-		if err != nil {
-			t.Fatalf("step %d wait navigation terminal: %v", step, err)
-		}
-		if terminal.State != webmcp.InvocationError || terminal.ErrorCode != string(webmcp.ErrorPageNavigated) || terminal.ErrorDetails["previous_generation"] != uint64(step) || terminal.ErrorDetails["current_generation"] != uint64(step+1) {
-			t.Fatalf("step %d navigation terminal = %#v, want exact generation transition", step, terminal)
-		}
-
-		// The target may still publish the response for the old document. It is
-		// reconciled against the retired browser invocation and cannot reopen the
-		// broker's registry or affect the next catalog.
-		if err := session.ReleaseInvocation(dispatched.InvocationID, []byte(`{"late":true}`)); err != nil {
-			t.Fatalf("step %d late response: %v", step, err)
-		}
-		if _, err := broker.Selected(context.Background()); err != nil {
-			t.Fatalf("step %d flush late response: %v", step, err)
-		}
-
-		if err := session.EmitToolsAdded(
-			pageTool(fmt.Sprintf("tool-%d", step), webmcp.FrameID(fmt.Sprintf("frame-%d", step)), `{}`),
-			pageTool(fmt.Sprintf("transient-%d", step), webmcp.FrameID(fmt.Sprintf("transient-frame-%d", step)), `{}`),
-		); err != nil {
-			t.Fatalf("step %d add current catalog: %v", step, err)
-		}
-		if err := session.EmitToolsRemoved(webmcp.FrameID(fmt.Sprintf("transient-frame-%d", step)), fmt.Sprintf("transient-%d", step)); err != nil {
-			t.Fatalf("step %d remove current catalog entry: %v", step, err)
-		}
-		snapshot, err = broker.ListTools(context.Background(), webmcp.ListToolsOptions{})
-		if err != nil {
-			t.Fatalf("step %d list current catalog: %v", step, err)
-		}
-		if snapshot.Generation != uint64(step+1) || len(snapshot.Tools) != 1 || snapshot.Tools[0].Name != fmt.Sprintf("tool-%d", step) || snapshot.Tools[0].Generation != uint64(step+1) {
-			t.Fatalf("step %d catalog = %#v, want one causal fresh tool", step, snapshot)
-		}
-		currentRef = snapshot.Tools[0].Ref
+		currentRef = runNavigationStormStep(t, broker, session, step, currentRef)
 	}
 
 	for _, ref := range oldRefs {
@@ -477,20 +397,76 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 	}
 }
 
+// runNavigationStormStep invokes currentRef, navigates the page underneath
+// it, and returns the ref of the fresh catalog published for the new document.
+func runNavigationStormStep(t *testing.T, broker *webmcp.StatefulBroker, session *testkit.ScriptedTargetSession, step int, currentRef webmcp.ToolRef) webmcp.ToolRef {
+	t.Helper()
+	dispatched, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: currentRef, Input: []byte(`{}`)})
+	if err != nil {
+		t.Fatalf("step %d invoke: %v", step, err)
+	}
+	observed, err := session.WaitForInvocation(testContext(t))
+	if err != nil {
+		t.Fatalf("step %d wait for admitted invocation: %v", step, err)
+	}
+	if observed.ID != dispatched.InvocationID || observed.Generation != uint64(step) {
+		t.Fatalf("step %d invocation = %#v, want ID %q at generation %d", step, observed, dispatched.InvocationID, step)
+	}
+
+	if err := session.Navigate("https://fixture.test/storm/"+fmt.Sprint(step), "https://fixture.test"); err != nil {
+		t.Fatalf("step %d navigate: %v", step, err)
+	}
+	terminal, err := broker.WaitInvocation(testContext(t), dispatched.InvocationID)
+	if err != nil {
+		t.Fatalf("step %d wait navigation terminal: %v", step, err)
+	}
+	if terminal.State != webmcp.InvocationError || terminal.ErrorCode != string(webmcp.ErrorPageNavigated) || terminal.ErrorDetails["previous_generation"] != uint64(step) || terminal.ErrorDetails["current_generation"] != uint64(step+1) {
+		t.Fatalf("step %d navigation terminal = %#v, want exact generation transition", step, terminal)
+	}
+
+	// The target may still publish the response for the old document. It is
+	// reconciled against the retired browser invocation and cannot reopen the
+	// broker's registry or affect the next catalog.
+	if err := session.ReleaseInvocation(dispatched.InvocationID, []byte(`{"late":true}`)); err != nil {
+		t.Fatalf("step %d late response: %v", step, err)
+	}
+	if _, err := broker.Selected(context.Background()); err != nil {
+		t.Fatalf("step %d flush late response: %v", step, err)
+	}
+
+	if err := session.EmitToolsAdded(
+		pageTool(fmt.Sprintf("tool-%d", step), webmcp.FrameID(fmt.Sprintf("frame-%d", step)), `{}`),
+		pageTool(fmt.Sprintf("transient-%d", step), webmcp.FrameID(fmt.Sprintf("transient-frame-%d", step)), `{}`),
+	); err != nil {
+		t.Fatalf("step %d add current catalog: %v", step, err)
+	}
+	if err := session.EmitToolsRemoved(webmcp.FrameID(fmt.Sprintf("transient-frame-%d", step)), fmt.Sprintf("transient-%d", step)); err != nil {
+		t.Fatalf("step %d remove current catalog entry: %v", step, err)
+	}
+	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{})
+	if err != nil {
+		t.Fatalf("step %d list current catalog: %v", step, err)
+	}
+	if snapshot.Generation != uint64(step+1) || len(snapshot.Tools) != 1 || snapshot.Tools[0].Name != fmt.Sprintf("tool-%d", step) || snapshot.Tools[0].Generation != uint64(step+1) {
+		t.Fatalf("step %d catalog = %#v, want one causal fresh tool", step, snapshot)
+	}
+	return snapshot.Tools[0].Ref
+}
+
 func TestStatefulBrokerRetiresRefsWhenSelectionSwitches(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page"}, testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`))),
+				testkit.NewTargetConfig(webmcp.Target{ID: primaryTargetID, Type: "page"}, testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`))),
 				testkit.NewTargetConfig(webmcp.Target{ID: "tab-b", Type: "page"}, testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`))),
 			},
 		},
 	)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
 	defer func() { _ = broker.Close() }()
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select tab-a: %v", err)
 	}
 	first, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})

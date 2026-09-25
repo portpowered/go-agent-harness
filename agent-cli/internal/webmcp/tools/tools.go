@@ -212,150 +212,89 @@ func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, arg
 			return brokerContextFailure(err)
 		}
 		return webmcp.EncodeToolResult(contextDataFrom(selected), nil)
-
 	case webmcp.ListTabsToolName:
-		browserID := webmcp.BrowserID(stringValue(args, "browser_id"))
-		targets, err := s.broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: browserID})
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorNoEligibleTab, map[string]any{"browser_id": string(browserID), "candidate_count": 0})
-		}
-		filtered := filterTargets(targets, stringValue(args, "origin_contains"), boolValueDefault(args, "eligible_only", true))
-		return webmcp.EncodeToolResult(tabsData{Targets: targetDataList(filtered)}, nil)
-
+		return s.executeListTabs(ctx, args)
 	case webmcp.SelectTabToolName:
-		selector := webmcp.TargetSelector{
-			BrowserID: webmcp.BrowserID(stringValue(args, "browser_id")),
-			TargetID:  webmcp.TargetID(stringValue(args, "target_id")),
-		}
-		selected, err := s.selectTarget(ctx, selector, boolValue(args, "activate"))
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorTargetAttachFailed, map[string]any{
-				"browser_id": string(selector.BrowserID),
-				"target_id":  string(selector.TargetID),
-				"phase":      "select",
-			})
-		}
-		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
-
+		return s.executeSelectTab(ctx, args)
 	case webmcp.OpenTabToolName:
-		opener, ok := s.broker.(webmcp.BrokerTabOpener)
-		if !ok {
-			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot open a new tab.", map[string]any{
-				"phase":  "open_tab",
-				"reason": "unsupported_operation",
-			}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "open_tab"})
-		}
-		selected, err := opener.OpenTab(ctx, webmcp.OpenTabRequest{
-			BrowserID: webmcp.BrowserID(stringValue(args, "browser_id")),
-			URL:       stringValue(args, "url"),
-			Activate:  boolValueDefault(args, "activate", true),
-		})
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "open_tab"})
-		}
-		return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
-
+		return s.executeOpenTab(ctx, args)
 	case webmcp.NavigateTabToolName:
-		navigator, ok := s.broker.(webmcp.BrokerTabNavigator)
-		if !ok {
-			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser cannot navigate the selected tab.", map[string]any{
-				"phase":  "navigate_tab",
-				"reason": "unsupported_operation",
-			}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "navigate_tab"})
-		}
-		selected, err := navigator.NavigateSelectedTab(ctx, stringValue(args, "url"))
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "navigate_tab"})
-		}
-		return webmcp.EncodeToolResult(navigationData{
-			contextData: contextDataFrom(selected),
-			Status:      "navigated",
-		}, nil)
-
+		return s.executeNavigateTab(ctx, args)
 	case webmcp.ListToolsToolName:
-		options := webmcp.ListToolsOptions{
-			Refresh:        boolValue(args, "refresh"),
-			NameContains:   stringValue(args, "name_contains"),
-			IncludeSchemas: boolValueDefault(args, "include_schemas", true),
-			FrameID:        webmcp.FrameID(stringValue(args, "frame_id")),
-		}
-		catalog, err := s.broker.ListTools(ctx, options)
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorStaleSelection, map[string]any{"phase": "list_tools"})
-		}
-		return webmcp.EncodeToolResult(catalogDataFrom(catalog, options.IncludeSchemas), nil)
-
+		return s.executeListTools(ctx, args)
 	case webmcp.InvokeToolName:
 		return s.invokeToolRef(ctx, webmcp.InvokeRequest{
 			ToolRef: webmcp.ToolRef(stringValue(args, "tool_ref")),
 			Input:   json.RawMessage(stringValue(args, "input_json")),
 			Reason:  stringValue(args, "reason"),
 		})
-
 	case webmcp.CancelToolName:
-		request := webmcp.CancelRequest{
-			InvocationID: webmcp.InvocationID(stringValue(args, "invocation_id")),
-			Reason:       stringValue(args, "reason"),
-		}
-		if err := s.broker.Cancel(ctx, request); err != nil {
-			return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
-				"invocation_id": string(request.InvocationID),
-				"phase":         "cancel",
-			})
-		}
-		return webmcp.EncodeToolResult(cancelData{InvocationID: request.InvocationID, Status: "cancel_requested"}, nil)
-
+		return s.executeCancel(ctx, args)
 	case webmcp.ShowPageToolName:
 		return s.capturePage(ctx)
-
 	case webmcp.ListCastDevicesToolName:
-		controller, ok := s.broker.(webmcp.BrokerCastController)
-		if !ok {
-			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "list_cast_devices", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "list_cast_devices"})
-		}
-		devices, err := controller.ListCastDevices(ctx)
-		if err != nil {
-			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "list_cast_devices"})
-		}
-		return webmcp.EncodeToolResult(castDevicesData{Devices: devices}, nil)
-
+		return s.executeListCastDevices(ctx)
 	case webmcp.CastTabToolName:
-		deviceName := stringValue(args, "device_name")
-		mode := webmcp.CastMode(stringValue(args, "mode"))
-		switch mode {
-		case webmcp.CastModeTab:
-			controller, ok := s.broker.(webmcp.BrokerCastController)
-			if !ok {
-				return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "cast_tab", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
-			}
-			if err := controller.CastSelectedTab(ctx, deviceName); err != nil {
-				return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_tab"})
-			}
-		case webmcp.CastModeMedia:
-			controller, ok := s.broker.(webmcp.BrokerMediaCastController)
-			if !ok {
-				return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support native media casting.", map[string]any{"phase": "cast_media", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_media"})
-			}
-			if err := controller.CastSelectedMedia(ctx, deviceName); err != nil {
-				return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "cast_media"})
-			}
-		}
-		return webmcp.EncodeToolResult(castActionData{DeviceName: deviceName, Mode: mode, Status: "cast_started"}, nil)
-
+		return s.executeCastTab(ctx, args)
 	case webmcp.StopCastingToolName:
-		controller, ok := s.broker.(webmcp.BrokerCastController)
-		if !ok {
-			return brokerFailure(webmcp.NewClassifiedError(webmcp.ErrorBrowserProtocol, "The connected browser does not support Cast controls.", map[string]any{"phase": "stop_casting", "reason": "unsupported_operation"}), webmcp.ErrorBrowserProtocol, map[string]any{"phase": "stop_casting"})
-		}
-		deviceName := stringValue(args, "device_name")
-		if err := controller.StopCasting(ctx, deviceName); err != nil {
-			return brokerFailure(err, webmcp.ErrorBrowserProtocol, map[string]any{"phase": "stop_casting"})
-		}
-		return webmcp.EncodeToolResult(castActionData{DeviceName: deviceName, Status: "cast_stopped"}, nil)
-
+		return s.executeStopCasting(ctx, args)
 	default:
 		return invalidEnvelope(unknownToolSchema(), "", []webmcp.ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
 	}
+}
+
+func (s *BrokerToolSet) executeListTabs(ctx context.Context, args map[string]any) ([]byte, error) {
+	browserID := webmcp.BrowserID(stringValue(args, "browser_id"))
+	targets, err := s.broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: browserID})
+	if err != nil {
+		return brokerFailure(err, webmcp.ErrorNoEligibleTab, map[string]any{"browser_id": string(browserID), "candidate_count": 0})
+	}
+	filtered := filterTargets(targets, stringValue(args, "origin_contains"), boolValueDefault(args, "eligible_only", true))
+	return webmcp.EncodeToolResult(tabsData{Targets: targetDataList(filtered)}, nil)
+}
+
+func (s *BrokerToolSet) executeSelectTab(ctx context.Context, args map[string]any) ([]byte, error) {
+	selector := webmcp.TargetSelector{
+		BrowserID: webmcp.BrowserID(stringValue(args, "browser_id")),
+		TargetID:  webmcp.TargetID(stringValue(args, "target_id")),
+	}
+	selected, err := s.selectTarget(ctx, selector, boolValue(args, "activate"))
+	if err != nil {
+		return brokerFailure(err, webmcp.ErrorTargetAttachFailed, map[string]any{
+			"browser_id": string(selector.BrowserID),
+			"target_id":  string(selector.TargetID),
+			"phase":      "select",
+		})
+	}
+	return webmcp.EncodeToolResult(selectionDataFrom(selected), nil)
+}
+
+func (s *BrokerToolSet) executeListTools(ctx context.Context, args map[string]any) ([]byte, error) {
+	options := webmcp.ListToolsOptions{
+		Refresh:        boolValue(args, "refresh"),
+		NameContains:   stringValue(args, "name_contains"),
+		IncludeSchemas: boolValueDefault(args, "include_schemas", true),
+		FrameID:        webmcp.FrameID(stringValue(args, "frame_id")),
+	}
+	catalog, err := s.broker.ListTools(ctx, options)
+	if err != nil {
+		return brokerFailure(err, webmcp.ErrorStaleSelection, map[string]any{"phase": "list_tools"})
+	}
+	return webmcp.EncodeToolResult(catalogDataFrom(catalog, options.IncludeSchemas), nil)
+}
+
+func (s *BrokerToolSet) executeCancel(ctx context.Context, args map[string]any) ([]byte, error) {
+	request := webmcp.CancelRequest{
+		InvocationID: webmcp.InvocationID(stringValue(args, "invocation_id")),
+		Reason:       stringValue(args, "reason"),
+	}
+	if err := s.broker.Cancel(ctx, request); err != nil {
+		return brokerFailure(err, webmcp.ErrorInvocationFailed, map[string]any{
+			"invocation_id": string(request.InvocationID),
+			"phase":         "cancel",
+		})
+	}
+	return webmcp.EncodeToolResult(cancelData{InvocationID: request.InvocationID, Status: "cancel_requested"}, nil)
 }
 
 // Optional broker extensions preserve the frozen Broker interface while
@@ -486,7 +425,7 @@ func decodeArguments(raw []byte, spec toolSpec) (map[string]any, []webmcp.ToolRe
 			continue
 		}
 		switch property.typeName {
-		case "string":
+		case schemaTypeString:
 			var value string
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, webmcp.ToolResultIssue{Path: pointerPath(property.name), Code: "invalid_type"})
@@ -497,7 +436,7 @@ func decodeArguments(raw []byte, spec toolSpec) (map[string]any, []webmcp.ToolRe
 				continue
 			}
 			result[property.name] = value
-		case "boolean":
+		case schemaTypeBoolean:
 			var value bool
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, webmcp.ToolResultIssue{Path: pointerPath(property.name), Code: "invalid_type"})
@@ -594,7 +533,7 @@ func brokerFailure(err error, fallback webmcp.ErrorCode, details map[string]any)
 func brokerContextFailure(err error) ([]byte, error) {
 	resultError := webmcp.ResultErrorFor(err, webmcp.ErrorStaleSelection, map[string]any{"phase": "selected"})
 	if resultError.Code == string(webmcp.ErrorStaleSelection) && noPageSelectedDetails(resultError.Details) {
-		resultError.Message = "no page is selected"
+		resultError.Message = noPageSelectedMessage
 	}
 	return webmcp.EncodeToolResult(nil, &resultError)
 }
@@ -789,21 +728,6 @@ type tabsData struct {
 	Targets []targetData `json:"targets"`
 }
 
-type castDevicesData struct {
-	Devices []webmcp.CastDevice `json:"devices"`
-}
-
-type castActionData struct {
-	DeviceName string          `json:"device_name"`
-	Mode       webmcp.CastMode `json:"mode,omitempty"`
-	Status     string          `json:"status"`
-}
-
-type navigationData struct {
-	contextData
-	Status string `json:"status"`
-}
-
 type targetData struct {
 	BrowserID         webmcp.BrowserID `json:"browser_id"`
 	TargetID          webmcp.TargetID  `json:"target_id"`
@@ -971,7 +895,7 @@ func flatParameters(schema map[string]any) []messages.ToolParameter {
 }
 
 func unknownToolSchema() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
+	return map[string]any{"type": schemaTypeObject, "properties": map[string]any{}, "additionalProperties": false}
 }
 
 func cloneMap(value map[string]any) map[string]any {

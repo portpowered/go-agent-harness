@@ -168,13 +168,13 @@ func (t *BrowserTarget) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return newScriptError("target", "%v", err)
 	}
-	if err := rejectUnknownFields(fields, map[string]struct{}{"id": {}, "type": {}, "title": {}, "url": {}, "webSocketDebuggerUrl": {}}); err != nil {
+	if err := rejectUnknownFields(fields, map[string]struct{}{"id": {}, jsonFieldType: {}, "title": {}, "url": {}, "webSocketDebuggerUrl": {}}); err != nil {
 		return newScriptError("target", "%v", err)
 	}
 	var result BrowserTarget
 	for name, destination := range map[string]*string{
 		"id":                   &result.ID,
-		"type":                 &result.Type,
+		jsonFieldType:          &result.Type,
 		"title":                &result.Title,
 		"url":                  &result.URL,
 		"webSocketDebuggerUrl": &result.WebSocketDebuggerURL,
@@ -202,7 +202,7 @@ func (t BrowserTarget) Validate() error {
 		return wrapScriptError("id", err)
 	}
 	if strings.TrimSpace(t.Type) == "" {
-		return newScriptError("type", "is required")
+		return newScriptError(jsonFieldType, "is required")
 	}
 	if strings.TrimSpace(t.URL) == "" {
 		return newScriptError("url", "is required")
@@ -302,16 +302,16 @@ func (e *OperationExpectation) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return newScriptError("expect", "%v", err)
 	}
-	if err := rejectUnknownFields(fields, map[string]struct{}{"type": {}, "frame_id": {}, "tool_name": {}, "input": {}, "invocation_id": {}, "url": {}}); err != nil {
+	if err := rejectUnknownFields(fields, map[string]struct{}{jsonFieldType: {}, "frame_id": {}, "tool_name": {}, "input": {}, jsonFieldInvocationID: {}, "url": {}}); err != nil {
 		return newScriptError("expect", "%v", err)
 	}
-	typeRaw, ok := fields["type"]
+	typeRaw, ok := fields[jsonFieldType]
 	if !ok {
-		return newScriptError("type", "is required")
+		return newScriptError(jsonFieldType, "is required")
 	}
 	typeName, err := parseScriptString(typeRaw)
 	if err != nil {
-		return wrapScriptError("type", err)
+		return wrapScriptError(jsonFieldType, err)
 	}
 	result := OperationExpectation{Type: OperationType(typeName)}
 	if raw, ok := fields["frame_id"]; ok {
@@ -335,10 +335,10 @@ func (e *OperationExpectation) UnmarshalJSON(data []byte) error {
 		}
 		result.inputSet = true
 	}
-	if raw, ok := fields["invocation_id"]; ok {
+	if raw, ok := fields[jsonFieldInvocationID]; ok {
 		result.InvocationID, err = parseScriptString(raw)
 		if err != nil {
-			return wrapScriptError("invocation_id", err)
+			return wrapScriptError(jsonFieldInvocationID, err)
 		}
 		result.invocationIDSet = true
 	}
@@ -359,49 +359,59 @@ func (e *OperationExpectation) UnmarshalJSON(data []byte) error {
 // Validate checks the operation vocabulary and all per-variant fields.
 func (e OperationExpectation) Validate() error {
 	if !isOperationType(e.Type) {
-		return newScriptError("type", "unknown operation type %q", e.Type)
+		return newScriptError(jsonFieldType, "unknown operation type %q", e.Type)
 	}
 	switch e.Type {
 	case OperationEnableLifecycle, OperationEnableWebMCP, OperationCloseTarget, OperationDetachTarget:
 		if e.frameIDSet || e.toolNameSet || e.inputSet || e.invocationIDSet || e.urlSet {
-			return newScriptError("type", "operation %q does not accept additional fields", e.Type)
+			return newScriptError(jsonFieldType, "operation %q does not accept additional fields", e.Type)
 		}
 	case OperationInvokeTool:
-		if strings.TrimSpace(e.FrameID) == "" {
-			return newScriptError("frame_id", "is required")
-		}
-		if err := validateScriptID(e.FrameID); err != nil {
-			return wrapScriptError("frame_id", err)
-		}
-		if strings.TrimSpace(e.ToolName) == "" {
-			return newScriptError("tool_name", "is required")
-		}
-		if !e.inputSet && len(e.Input) == 0 {
-			return newScriptError("input", "is required")
-		}
-		if !isJSONObject(e.Input) {
-			return newScriptError("input", "must be a JSON object")
-		}
-		if e.invocationIDSet || e.urlSet {
-			return newScriptError("type", "operation %q does not accept invocation_id or url", e.Type)
-		}
+		return e.validateInvokeTool()
 	case OperationCancelTool:
-		if strings.TrimSpace(e.InvocationID) == "" {
-			return newScriptError("invocation_id", "is required")
-		}
-		if err := validateScriptID(e.InvocationID); err != nil {
-			return wrapScriptError("invocation_id", err)
-		}
-		if e.frameIDSet || e.toolNameSet || e.inputSet || e.urlSet {
-			return newScriptError("type", "operation %q does not accept frame_id, tool_name, input, or url", e.Type)
-		}
+		return e.validateCancelTool()
 	case OperationNavigate:
 		if e.frameIDSet || e.toolNameSet || e.inputSet || e.invocationIDSet {
-			return newScriptError("type", "operation %q accepts only url", e.Type)
+			return newScriptError(jsonFieldType, "operation %q accepts only url", e.Type)
 		}
 		if e.urlSet && strings.TrimSpace(e.URL) == "" {
 			return newScriptError("url", "must not be empty")
 		}
+	}
+	return nil
+}
+
+func (e OperationExpectation) validateInvokeTool() error {
+	if strings.TrimSpace(e.FrameID) == "" {
+		return newScriptError("frame_id", "is required")
+	}
+	if err := validateScriptID(e.FrameID); err != nil {
+		return wrapScriptError("frame_id", err)
+	}
+	if strings.TrimSpace(e.ToolName) == "" {
+		return newScriptError("tool_name", "is required")
+	}
+	if !e.inputSet && len(e.Input) == 0 {
+		return newScriptError("input", "is required")
+	}
+	if !isJSONObject(e.Input) {
+		return newScriptError("input", "must be a JSON object")
+	}
+	if e.invocationIDSet || e.urlSet {
+		return newScriptError(jsonFieldType, "operation %q does not accept invocation_id or url", e.Type)
+	}
+	return nil
+}
+
+func (e OperationExpectation) validateCancelTool() error {
+	if strings.TrimSpace(e.InvocationID) == "" {
+		return newScriptError(jsonFieldInvocationID, "is required")
+	}
+	if err := validateScriptID(e.InvocationID); err != nil {
+		return wrapScriptError(jsonFieldInvocationID, err)
+	}
+	if e.frameIDSet || e.toolNameSet || e.inputSet || e.urlSet {
+		return newScriptError(jsonFieldType, "operation %q does not accept frame_id, tool_name, input, or url", e.Type)
 	}
 	return nil
 }
@@ -424,7 +434,7 @@ func validateOperationResult(operationType OperationType, raw json.RawMessage) e
 		if err != nil {
 			return err
 		}
-		if invocationRaw, ok := fields["invocation_id"]; ok {
+		if invocationRaw, ok := fields[jsonFieldInvocationID]; ok {
 			value, err := parseScriptString(invocationRaw)
 			if err != nil {
 				return fmt.Errorf("invocation_id: %w", err)
@@ -446,16 +456,16 @@ func (e *EmittedEvent) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return newScriptError("emit", "%v", err)
 	}
-	if err := rejectUnknownFields(fields, map[string]struct{}{"type": {}, "tools": {}, "invocation_id": {}, "status": {}, "output": {}, "error": {}}); err != nil {
+	if err := rejectUnknownFields(fields, map[string]struct{}{jsonFieldType: {}, "tools": {}, jsonFieldInvocationID: {}, "status": {}, "output": {}, "error": {}}); err != nil {
 		return newScriptError("emit", "%v", err)
 	}
-	typeRaw, ok := fields["type"]
+	typeRaw, ok := fields[jsonFieldType]
 	if !ok {
-		return newScriptError("type", "is required")
+		return newScriptError(jsonFieldType, "is required")
 	}
 	typeName, err := parseScriptString(typeRaw)
 	if err != nil {
-		return wrapScriptError("type", err)
+		return wrapScriptError(jsonFieldType, err)
 	}
 	result := EmittedEvent{Type: EmittedEventType(typeName)}
 	if raw, ok := fields["tools"]; ok {
@@ -471,10 +481,10 @@ func (e *EmittedEvent) UnmarshalJSON(data []byte) error {
 		}
 		result.toolsSet = true
 	}
-	if raw, ok := fields["invocation_id"]; ok {
+	if raw, ok := fields[jsonFieldInvocationID]; ok {
 		result.InvocationID, err = parseScriptString(raw)
 		if err != nil {
-			return wrapScriptError("invocation_id", err)
+			return wrapScriptError(jsonFieldInvocationID, err)
 		}
 	}
 	if raw, ok := fields["status"]; ok {
@@ -509,10 +519,10 @@ func (e EmittedEvent) Validate() error {
 	switch e.Type {
 	case EmittedToolsAdded:
 		if !e.toolsSet && e.Tools == nil {
-			return newScriptError("type", "tools_added requires tools")
+			return newScriptError(jsonFieldType, "tools_added requires tools")
 		}
 		if e.InvocationID != "" || e.Status != "" || e.outputSet || e.errorSet || len(e.Output) > 0 || len(e.Error) > 0 {
-			return newScriptError("type", "tools_added does not accept invocation response fields")
+			return newScriptError(jsonFieldType, "tools_added does not accept invocation response fields")
 		}
 		for index, tool := range e.Tools {
 			if err := tool.Validate(); err != nil {
@@ -520,39 +530,44 @@ func (e EmittedEvent) Validate() error {
 			}
 		}
 	case EmittedToolResponded:
-		hasOutput := e.outputSet || len(e.Output) > 0
-		hasError := e.errorSet || len(e.Error) > 0
-		if strings.TrimSpace(e.InvocationID) == "" {
-			return newScriptError("invocation_id", "is required")
-		}
-		if err := validateScriptID(e.InvocationID); err != nil {
-			return wrapScriptError("invocation_id", err)
-		}
-		if !isInvocationStatus(e.Status) {
-			return newScriptError("status", "must be Completed, Canceled, or Error")
-		}
-		if hasOutput == hasError || (!hasOutput && !hasError) {
-			return newScriptError("output", "exactly one of output or error is required")
-		}
-		if e.Status == "Completed" && !hasOutput {
-			return newScriptError("output", "Completed response requires output")
-		}
-		if e.Status != "Completed" && !hasError {
-			return newScriptError("error", "%s response requires error", e.Status)
-		}
-		if hasError {
-			if err := validateStableFixtureError(e.Error); err != nil {
-				return wrapScriptError("error", err)
-			}
-		}
+		return e.validateToolResponded()
 	default:
-		return newScriptError("type", "unknown emitted event type %q", e.Type)
+		return newScriptError(jsonFieldType, "unknown emitted event type %q", e.Type)
+	}
+	return nil
+}
+
+func (e EmittedEvent) validateToolResponded() error {
+	hasOutput := e.outputSet || len(e.Output) > 0
+	hasError := e.errorSet || len(e.Error) > 0
+	if strings.TrimSpace(e.InvocationID) == "" {
+		return newScriptError(jsonFieldInvocationID, "is required")
+	}
+	if err := validateScriptID(e.InvocationID); err != nil {
+		return wrapScriptError(jsonFieldInvocationID, err)
+	}
+	if !isInvocationStatus(e.Status) {
+		return newScriptError("status", "must be Completed, Canceled, or Error")
+	}
+	if hasOutput == hasError || (!hasOutput && !hasError) {
+		return newScriptError("output", "exactly one of output or error is required")
+	}
+	if e.Status == toolResponseStatusCompleted && !hasOutput {
+		return newScriptError("output", "Completed response requires output")
+	}
+	if e.Status != toolResponseStatusCompleted && !hasError {
+		return newScriptError("error", "%s response requires error", e.Status)
+	}
+	if hasError {
+		if err := validateStableFixtureError(e.Error); err != nil {
+			return wrapScriptError("error", err)
+		}
 	}
 	return nil
 }
 
 func isInvocationStatus(value string) bool {
-	return value == "Completed" || value == "Canceled" || value == "Error"
+	return value == toolResponseStatusCompleted || value == toolResponseStatusCanceled || value == "Error"
 }
 
 func validateStableFixtureError(raw json.RawMessage) error {
@@ -676,44 +691,6 @@ func (t ToolDescriptor) Validate() error {
 	}
 	if len(t.Annotations) > 0 && !isJSONObject(t.Annotations) {
 		return newScriptError("annotations", "must be a JSON object")
-	}
-	return nil
-}
-
-func scriptArray(raw json.RawMessage) ([]json.RawMessage, error) {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || trimmed[0] != '[' {
-		return nil, errors.New("must be a JSON array")
-	}
-	var values []json.RawMessage
-	if err := json.Unmarshal(trimmed, &values); err != nil {
-		return nil, err
-	}
-	if values == nil {
-		return nil, errors.New("must be a JSON array")
-	}
-	for index := range values {
-		values[index] = cloneRaw(values[index])
-	}
-	return values, nil
-}
-
-func isJSONObject(raw json.RawMessage) bool {
-	trimmed := bytes.TrimSpace(raw)
-	return len(trimmed) > 0 && trimmed[0] == '{' && json.Valid(trimmed)
-}
-
-func parseScriptString(raw json.RawMessage) (string, error) {
-	value, err := parseString(raw)
-	if err != nil {
-		return "", errors.New("must be a string")
-	}
-	return value, nil
-}
-
-func validateScriptID(value string) error {
-	if err := validateOpaqueID(value); err != nil {
-		return err
 	}
 	return nil
 }

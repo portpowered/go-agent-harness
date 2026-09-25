@@ -13,7 +13,7 @@ import (
 func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Eligible: true}),
+		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true}),
 	))
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
@@ -23,7 +23,7 @@ func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, err := broker.Select(ctx, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"})
+	_, err := broker.Select(ctx, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID})
 	if err == nil {
 		t.Fatal("select succeeded without page-tool evidence")
 	}
@@ -45,7 +45,7 @@ func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *
 func TestStatefulBrokerAcceptsExplicitEmptyCatalogEvidence(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Eligible: true},
+		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true},
 			testkit.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady, CatalogReady: true, ToolCountKnown: true}),
 		),
 	))
@@ -55,7 +55,7 @@ func TestStatefulBrokerAcceptsExplicitEmptyCatalogEvidence(t *testing.T) {
 	})
 	defer func() { _ = broker.Close() }()
 
-	selected, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"})
+	selected, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID})
 	if err != nil {
 		t.Fatalf("select explicit empty catalog: %v", err)
 	}

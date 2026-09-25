@@ -20,7 +20,7 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 		if definition.Name != wantNames[index] {
 			t.Fatalf("definition %d name = %q, want %q", index, definition.Name, wantNames[index])
 		}
-		if definition.Parameters["type"] != "object" || definition.Parameters["additionalProperties"] != false {
+		if definition.Parameters["type"] != schemaTypeObject || definition.Parameters["additionalProperties"] != false {
 			t.Fatalf("%s schema is not a closed object: %#v", definition.Name, definition.Parameters)
 		}
 		properties, ok := definition.Parameters["properties"].(map[string]any)
@@ -67,7 +67,7 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 }
 
 func TestLaneBToolExecutorGoldenSuccessAndCorrelation(t *testing.T) {
-	browser := discovery.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Source: discovery.SourceConfigured, Loopback: true}
+	browser := discovery.BrowserCandidate{ID: testBrowserID, Product: "Chrome/Test", Protocol: "1.3", Source: discovery.SourceConfigured, Loopback: true}
 	target := discovery.Target{
 		BrowserID:      browser.ID,
 		ID:             "target-a",
@@ -178,28 +178,7 @@ func TestLaneBInputValidationHasNoDiscoverySideEffects(t *testing.T) {
 			if fake.callCount() != before {
 				t.Fatalf("discovery calls changed from %d to %d", before, fake.callCount())
 			}
-			envelope, err := UnmarshalToolResult([]byte(response.Content))
-			if err != nil {
-				t.Fatalf("decode result: %v", err)
-			}
-			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorInvalidToolInput) {
-				t.Fatalf("envelope = %#v, want invalid_tool_input", envelope)
-			}
-			var details struct {
-				Issues []ToolResultIssue `json:"issues"`
-			}
-			if err := json.Unmarshal(mustJSON(t, envelope.Error.Details["issues"]), &details.Issues); err != nil {
-				t.Fatalf("decode issues: %v", err)
-			}
-			found := false
-			for _, issue := range details.Issues {
-				if issue.Path == testCase.path && issue.Code == testCase.code {
-					found = true
-				}
-			}
-			if !found {
-				t.Fatalf("issues = %#v, want %s/%s", details.Issues, testCase.path, testCase.code)
-			}
+			assertLaneBInvalidInputIssue(t, response.Content, testCase.path, testCase.code)
 			if strings.Contains(response.Content, "not returned") || strings.Contains(response.Content, "bad/id") {
 				t.Fatalf("invalid input echoed into result: %s", response.Content)
 			}
@@ -207,8 +186,34 @@ func TestLaneBInputValidationHasNoDiscoverySideEffects(t *testing.T) {
 	}
 }
 
+func assertLaneBInvalidInputIssue(t *testing.T, content, wantPath, wantCode string) {
+	t.Helper()
+	envelope, err := UnmarshalToolResult([]byte(content))
+	if err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorInvalidToolInput) {
+		t.Fatalf("envelope = %#v, want invalid_tool_input", envelope)
+	}
+	var details struct {
+		Issues []ToolResultIssue `json:"issues"`
+	}
+	if err := json.Unmarshal(mustJSON(t, envelope.Error.Details["issues"]), &details.Issues); err != nil {
+		t.Fatalf("decode issues: %v", err)
+	}
+	found := false
+	for _, issue := range details.Issues {
+		if issue.Path == wantPath && issue.Code == wantCode {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("issues = %#v, want %s/%s", details.Issues, wantPath, wantCode)
+	}
+}
+
 func TestLaneBOutputReappliesSafePageMetadataBoundary(t *testing.T) {
-	browser := discovery.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3"}
+	browser := discovery.BrowserCandidate{ID: testBrowserID, Product: "Chrome/Test", Protocol: "1.3"}
 	target := discovery.Target{
 		BrowserID:      browser.ID,
 		ID:             "target-a",
@@ -262,7 +267,7 @@ func TestLaneBOutputReappliesSafePageMetadataBoundary(t *testing.T) {
 }
 
 func TestLaneBToolFailuresRefreshAndActivation(t *testing.T) {
-	browser := discovery.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3"}
+	browser := discovery.BrowserCandidate{ID: testBrowserID, Product: "Chrome/Test", Protocol: "1.3"}
 	target := discovery.Target{BrowserID: browser.ID, ID: "target-a", Type: "page", Title: "Orders", URL: "https://example.test/orders", Origin: "https://example.test", Generation: 4, WebMCP: true, WebMCPKnown: true, ToolCount: 1, ToolCountKnown: true, Eligible: true}
 	selected := discovery.Selection{BrowserID: browser.ID, TargetID: target.ID, Title: target.Title, URL: target.URL, Origin: target.Origin, Generation: target.Generation, Target: target}
 
@@ -354,7 +359,7 @@ func TestLaneBToolFailuresRefreshAndActivation(t *testing.T) {
 func TestLaneBListTabsRequiresExactBrowserBeforeListing(t *testing.T) {
 	fake := &fakeDiscovery{candidates: []discovery.BrowserCandidate{
 		{ID: "browser-b", Product: "Beta"},
-		{ID: "browser-a", Product: "Alpha"},
+		{ID: testBrowserID, Product: "Alpha"},
 	}}
 	response, err := New(Options{Service: fake}).Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "ambiguous-list",
@@ -376,7 +381,7 @@ func TestLaneBListTabsRequiresExactBrowserBeforeListing(t *testing.T) {
 	if err := json.Unmarshal(mustJSON(t, envelope.Error.Details["candidate_browser_ids"]), &ids); err != nil {
 		t.Fatalf("decode candidate IDs: %v", err)
 	}
-	if !equalStrings(ids, []string{"browser-a", "browser-b"}) {
+	if !equalStrings(ids, []string{testBrowserID, "browser-b"}) {
 		t.Fatalf("candidate browser IDs = %v, want sorted exact IDs", ids)
 	}
 	recovery, ok := envelope.Error.Details["recovery"].(map[string]any)
@@ -528,4 +533,25 @@ func equalStrings(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+func TestLaneBGetContextReportsNoPageSelected(t *testing.T) {
+	response, err := New(Options{Service: &fakeDiscovery{}}).Executor().Execute(context.Background(), messages.ToolCall{
+		ID:        "lane-b-no-page",
+		Name:      GetContextToolName,
+		Arguments: `{}`,
+	})
+	if err != nil {
+		t.Fatalf("get context without selection: %v", err)
+	}
+	envelope, err := UnmarshalToolResult([]byte(response.Content))
+	if err != nil {
+		t.Fatalf("decode no-page context: %v", err)
+	}
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorStaleSelection) || envelope.Error.Message != "no page is selected" {
+		t.Fatalf("no-page context envelope = %+v, want truthful no-selection failure", envelope)
+	}
+	if details := envelope.Error.Details; details["browser_id"] != "" || details["target_id"] != "" || details["selected_generation"] != float64(0) || details["reason"] != "selection_not_connected" {
+		t.Fatalf("no-page context details = %#v, want empty identity at generation zero", details)
+	}
 }

@@ -206,7 +206,7 @@ func (r *BrowserReplay) ObserveExecution(ctx context.Context, execution RuntimeE
 		return r.divergeOperationLocked(execution.Request, "result", requestTypeLabel(execution.Request), requestTypeLabel(execution.Request), errors.New("scripted result differs at "+diff))
 	}
 	if expected.InvocationID != execution.InvocationID {
-		return r.divergeOperationLocked(execution.Request, "invocation_id", requestTypeLabel(execution.Request), requestTypeLabel(execution.Request), errors.New("invocation ID differs"))
+		return r.divergeOperationLocked(execution.Request, jsonFieldInvocationID, requestTypeLabel(execution.Request), requestTypeLabel(execution.Request), errors.New("invocation ID differs"))
 	}
 	for index, actual := range execution.Events {
 		if index >= len(expected.Events) {

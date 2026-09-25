@@ -338,11 +338,11 @@ func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *Tar
 	state.target.Generation = current
 	state.generation = current
 	state.target.Eligible = false
-	state.target.EligibilityReason = "target_closed"
+	state.target.EligibilityReason = staleReasonTargetClosed
 	s.storeLifecycleTargetLocked(event.BrowserID, event.TargetID, state)
 	reason := boundedLabel(event.Reason, maxLifecycleReason)
 	if reason == "" {
-		reason = "target_closed"
+		reason = staleReasonTargetClosed
 	}
 	// Keep the monotonic tombstone generation for stale-selection checks, but
 	// do not publish it as navigation: a closed target has no new document.
@@ -462,7 +462,7 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 	}
 	if !target.WebMCP {
 		target.Eligible = false
-		target.EligibilityReason = "unsupported_webmcp"
+		target.EligibilityReason = eligibilityUnsupportedWebMCP
 	}
 }
 
@@ -490,88 +490,21 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 
 	if event.Capabilities != nil || event.WebMCP != nil || event.ToolCount != nil {
 		applyLifecycleCapabilities(&target, event)
-		state.target = target
-		state.generation = target.Generation
-		state.closed = false
-		s.storeLifecycleTargetLocked(selection.BrowserID, selection.TargetID, state)
+		s.storeRefreshedTargetLocked(selection, state, target)
 	} else if browser, ok := s.browsers[selection.BrowserID]; ok && (s.targetLister != nil || s.endpoints[selection.BrowserID].httpURL != "") {
-		descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
+		listed, failed, failure := s.refreshListedSelectionTargetLocked(ctx, browser, selection)
 		if failure != nil {
-			failure = s.promoteRetainedBrowserEndpointLossLocked(failure, selection.BrowserID, selection.TargetID, "targets")
-			failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, "targets")
-			selection.statusSet = true
-			selection.connected = failure.Code != CodeBrowserDisconnected
-			selection.ready = false
-			s.selection = &selection
-			s.noteBrowserDisconnectedFailureLocked(failure, selection.BrowserID, selection.TargetID, "targets")
-			return selection, failure
+			return failed, failure
 		}
-		targets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
-		if normalizeFailure != nil {
-			normalizeFailure = s.promoteRetainedBrowserEndpointLossLocked(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
-			normalizeFailure = enrichBrowserDisconnected(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
-			selection.statusSet = true
-			selection.connected = normalizeFailure.Code != CodeBrowserDisconnected
-			selection.ready = false
-			s.selection = &selection
-			s.noteBrowserDisconnectedFailureLocked(normalizeFailure, selection.BrowserID, selection.TargetID, "targets")
-			return selection, normalizeFailure
-		}
-		snapshot := makeTargetSnapshot(browser, targets, resolvedTargetListOptions(TargetListOptions{BrowserID: selection.BrowserID, EligibleOnly: Bool(false)}))
-		s.emit(EventTargetsSnapshot, browser.ID, targetSnapshotPayload(snapshot))
-		var found bool
-		for _, candidate := range targets {
-			if candidate.ID == selection.TargetID {
-				target = candidate
-				found = true
-				break
-			}
-		}
-		if !found {
-			selection.statusSet = true
-			selection.connected = false
-			selection.ready = false
-			s.selection = &selection
-			return selection, newStaleSelection(selection.BrowserID, selection.TargetID, selection.Generation, "target_missing_after_refresh")
-		}
+		target = listed
 	} else if s.targetProbe != nil {
 		browser := s.browsers[selection.BrowserID]
 		capabilities, probeErr := s.targetProbe.Probe(ctx, browser, target)
 		if probeErr != nil {
-			failure := s.promoteRetainedBrowserEndpointLossLocked(classifyTargetListError(probeErr, browser), selection.BrowserID, selection.TargetID, "capability")
-			failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, "capability")
-			selection.statusSet = true
-			selection.connected = failure.Code != CodeBrowserDisconnected
-			selection.ready = false
-			s.selection = &selection
-			s.noteBrowserDisconnectedFailureLocked(failure, selection.BrowserID, selection.TargetID, "capability")
-			return selection, failure
+			return s.failSelectionRefreshLocked(selection, classifyTargetListError(probeErr, browser), "capability")
 		}
-		if capabilities.DomainKnown {
-			target.WebMCP = capabilities.DomainSupported
-			target.WebMCPKnown = true
-			target.WebMCPDomainSupported = capabilities.DomainSupported
-			target.WebMCPDomainKnown = true
-		} else {
-			target.WebMCP = capabilities.WebMCP
-			target.WebMCPKnown = true
-			target.WebMCPDomainSupported = capabilities.WebMCP
-			target.WebMCPDomainKnown = true
-		}
-		target.PageToolsReady = capabilities.PageToolsReady
-		target.PageToolsKnown = capabilities.PageToolsKnown
-		target.PageToolsEvidence = capabilities.PageToolsEvidence
-		target.DocumentReadyState = capabilities.DocumentReadyState
-		target.DocumentLoading = capabilities.DocumentLoading
-		target.DocumentLoadingKnown = capabilities.DocumentLoadingKnown
-		if capabilities.ToolCount >= 0 {
-			target.ToolCount = capabilities.ToolCount
-			target.ToolCountKnown = capabilities.ToolCountKnown || capabilities.ToolCount >= 0
-		}
-		state.target = target
-		state.generation = target.Generation
-		state.closed = false
-		s.storeLifecycleTargetLocked(selection.BrowserID, selection.TargetID, state)
+		applyProbedCapabilities(&target, capabilities)
+		s.storeRefreshedTargetLocked(selection, state, target)
 	}
 
 	selection = selectionFromTarget(selection, target)
@@ -587,6 +520,54 @@ func (s *Service) refreshSelectionLocked(ctx context.Context, event LifecycleEve
 	return selection, nil
 }
 
+// refreshListedSelectionTargetLocked re-lists the selected browser's targets
+// and returns the exact selected target. On failure it returns the recorded
+// not-ready selection alongside the classified failure.
+func (s *Service) refreshListedSelectionTargetLocked(ctx context.Context, browser BrowserCandidate, selection Selection) (Target, Selection, *DiscoveryError) {
+	descriptors, failure := s.listTargetDescriptorsLocked(ctx, browser)
+	if failure != nil {
+		failed, classified := s.failSelectionRefreshLocked(selection, failure, "targets")
+		return Target{}, failed, classified
+	}
+	targets, normalizeFailure := s.normalizeTargetsLocked(ctx, browser, descriptors)
+	if normalizeFailure != nil {
+		failed, classified := s.failSelectionRefreshLocked(selection, normalizeFailure, "targets")
+		return Target{}, failed, classified
+	}
+	snapshot := makeTargetSnapshot(browser, targets, resolvedTargetListOptions(TargetListOptions{BrowserID: selection.BrowserID, EligibleOnly: Bool(false)}))
+	s.emit(EventTargetsSnapshot, browser.ID, targetSnapshotPayload(snapshot))
+	for _, candidate := range targets {
+		if candidate.ID == selection.TargetID {
+			return candidate, selection, nil
+		}
+	}
+	selection.statusSet = true
+	selection.connected = false
+	selection.ready = false
+	s.selection = &selection
+	return Target{}, selection, newStaleSelection(selection.BrowserID, selection.TargetID, selection.Generation, "target_missing_after_refresh")
+}
+
+// failSelectionRefreshLocked classifies a refresh failure for the selected
+// target and records the selection as not ready.
+func (s *Service) failSelectionRefreshLocked(selection Selection, failure *DiscoveryError, phase string) (Selection, *DiscoveryError) {
+	failure = s.promoteRetainedBrowserEndpointLossLocked(failure, selection.BrowserID, selection.TargetID, phase)
+	failure = enrichBrowserDisconnected(failure, selection.BrowserID, selection.TargetID, phase)
+	selection.statusSet = true
+	selection.connected = failure.Code != CodeBrowserDisconnected
+	selection.ready = false
+	s.selection = &selection
+	s.noteBrowserDisconnectedFailureLocked(failure, selection.BrowserID, selection.TargetID, phase)
+	return selection, failure
+}
+
+func (s *Service) storeRefreshedTargetLocked(selection Selection, state targetState, target Target) {
+	state.target = target
+	state.generation = target.Generation
+	state.closed = false
+	s.storeLifecycleTargetLocked(selection.BrowserID, selection.TargetID, state)
+}
+
 func (s *Service) validateSelectionGenerationLocked(browserID, targetID string, generation uint64) (Selection, error) {
 	if failure := s.browserDisconnectedFailureLocked(browserID, targetID, "selection"); failure != nil {
 		return Selection{}, failure
@@ -598,7 +579,7 @@ func (s *Service) validateSelectionGenerationLocked(browserID, targetID string, 
 	if s.selection == nil {
 		reason := "selection_not_active"
 		if stateOK && state.generation != generation {
-			reason = "generation_changed"
+			reason = staleReasonGenerationChanged
 		}
 		return Selection{}, newStaleSelection(browserID, targetID, generation, reason)
 	}
@@ -607,9 +588,9 @@ func (s *Service) validateSelectionGenerationLocked(browserID, targetID string, 
 		return Selection{}, newStaleSelection(browserID, targetID, generation, "selection_replaced")
 	}
 	if generation == 0 || current.Generation != generation || (stateOK && state.generation != generation) {
-		reason := "generation_changed"
+		reason := staleReasonGenerationChanged
 		if stateOK && state.closed {
-			reason = "target_closed"
+			reason = staleReasonTargetClosed
 		}
 		return Selection{}, newStaleSelection(browserID, targetID, generation, reason)
 	}

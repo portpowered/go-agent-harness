@@ -115,7 +115,7 @@ func newInvocationTestSession(t *testing.T, executor cdp.Executor) *targetSessio
 	session := newTargetSession(handle, targetContext, cancelTarget, webmcp.Target{
 		BrowserID: handle.candidate.ID,
 		ID:        "target-invocation",
-		Type:      "page",
+		Type:      pageTargetType,
 		Title:     "Invocation fixture",
 		URL:       "https://example.test/invocation",
 		Origin:    "https://example.test",
@@ -415,7 +415,7 @@ func TestToolRespondedPageFailureUsesC0InvocationClassification(t *testing.T) {
 		ErrorText:    "untrusted page error text must stay out of the neutral event",
 	})
 	responded := nextBrowserEvent(t, session.Events())
-	if responded.InvocationID != "page-failure-1" || responded.ErrorCode != string(webmcp.ErrorInvocationFailed) || responded.Reason != "page_error" {
+	if responded.InvocationID != "page-failure-1" || responded.ErrorCode != string(webmcp.ErrorInvocationFailed) || responded.Reason != eventReasonPageError {
 		t.Fatalf("page failure event = %+v, want invocation_failed/page_error", responded)
 	}
 	if strings.Contains(responded.Reason, "untrusted") {

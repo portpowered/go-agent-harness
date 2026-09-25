@@ -3,6 +3,8 @@ package chrome
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/url"
 	"strings"
 
@@ -242,7 +244,7 @@ func safeReason(err error) string {
 	}
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "canceled"
+		return invocationStatusCanceled
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline_exceeded"
 	case strings.Contains(strings.ToLower(err.Error()), "method not found"):
@@ -254,9 +256,12 @@ func safeReason(err error) string {
 	}
 }
 
+// loopbackAddressClass is the public scope label for a loopback endpoint.
+const loopbackAddressClass = "loopback"
+
 func addressClass(candidate webmcp.BrowserCandidate) string {
 	if candidate.Loopback {
-		return "loopback"
+		return loopbackAddressClass
 	}
 	endpoint := strings.TrimSpace(candidate.HTTPURL)
 	if endpoint == "" {
@@ -266,8 +271,130 @@ func addressClass(candidate webmcp.BrowserCandidate) string {
 	if err == nil {
 		host := strings.ToLower(parsed.Hostname())
 		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-			return "loopback"
+			return loopbackAddressClass
 		}
 	}
 	return "non_loopback"
+}
+
+// closeAfterRead releases a response body or read-only file after its bytes
+// were consumed. A close failure cannot invalidate data that was already read
+// and validated, so it is intentionally not surfaced to the caller.
+func closeAfterRead(closer io.Closer) {
+	if closer == nil {
+		return
+	}
+	if err := closer.Close(); err != nil {
+		return
+	}
+}
+
+// removeBestEffort deletes temporary staging state. The path is either already
+// consumed by a successful rename or abandoned on an error path whose own error
+// is reported, so a cleanup failure is intentionally not surfaced.
+func removeBestEffort(remove func(string) error, path string) {
+	if err := remove(path); err != nil {
+		return
+	}
+}
+
+func newChromeForTestingError(category string, cause error) error {
+	return &ChromeForTestingError{Category: category, Cause: cause}
+}
+
+// ChromeForTestingError classifies an internal fallback failure without
+// rendering URLs, paths, command output, or HTTP details.
+type ChromeForTestingError struct {
+	Category string
+	Cause    error
+}
+
+func (e *ChromeForTestingError) Error() string {
+	if e == nil {
+		return "Chrome for Testing fallback failed"
+	}
+	category := safeAcquisitionCategory(e.Category)
+	if category == "" {
+		category = "acquisition_failed"
+	}
+	return "Chrome for Testing fallback failed: " + category
+}
+
+func (e *ChromeForTestingError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+// Managed launch phases before and while waiting for DevTools readiness.
+const (
+	managedBrowserPhaseStartup   = "startup"
+	managedBrowserPhaseReadiness = "readiness"
+)
+
+func newManagedBrowserLaunchError(phase, mode string, processExit, cause error) error {
+	if phase == "" {
+		phase = managedBrowserPhaseStartup
+	}
+	if mode == "" {
+		mode = "unknown"
+	}
+	details := errors.Join(cause, processExit)
+	return &ManagedBrowserLaunchError{Phase: phase, Mode: mode, Cause: details}
+}
+
+// ManagedBrowserLaunchError is the single safe operator-facing launch error.
+// Phase and Mode are bounded labels; Cause is retained for errors.Is and
+// diagnostics but is never interpolated into Error, preventing profile paths,
+// URLs, command output, and nested process details from leaking.
+type ManagedBrowserLaunchError struct {
+	Phase string
+	Mode  string
+	Cause error
+}
+
+func (e *ManagedBrowserLaunchError) Error() string {
+	if e == nil {
+		return ErrManagedBrowserLaunch.Error()
+	}
+	phase := safeManagedBrowserLabel(e.Phase, managedBrowserPhaseStartup)
+	mode := safeManagedBrowserLabel(e.Mode, "unknown")
+	remediation := "check the Chrome prerequisite, writable agent config directory, and loopback DevTools availability, or supply an explicit browser endpoint"
+	switch phase {
+	case "configuration":
+		remediation = "fix the managed browser startup URL and retry"
+	case "profile":
+		remediation = "make the agent config directory writable and retry"
+	case "acquisition":
+		remediation = fmt.Sprintf("install Chrome %d or newer, or supply an explicit browser endpoint", MinimumManagedChromeMajor)
+	case "port":
+		remediation = "retry so the agent can reserve a free loopback DevTools port"
+	case "start":
+		remediation = "check that the qualified Chrome executable can start with an agent-owned profile"
+	case managedBrowserPhaseReadiness, managedBrowserPhaseStartup:
+		remediation = "check that Chrome can publish a loopback DevTools endpoint and retry"
+	}
+	return fmt.Sprintf("managed WebMCP browser launch failed during %s in %s mode; %s", phase, mode, remediation)
+}
+
+func (e *ManagedBrowserLaunchError) Unwrap() error {
+	if e == nil {
+		return ErrManagedBrowserLaunch
+	}
+	return errors.Join(ErrManagedBrowserLaunch, e.Cause)
+}
+
+func safeManagedBrowserLabel(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 32 {
+		return fallback
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-' {
+			continue
+		}
+		return fallback
+	}
+	return value
 }

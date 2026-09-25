@@ -28,7 +28,7 @@ func TestPinnedChromeWebMCPClassificationContractTwice(t *testing.T) {
 	if os.Getenv(classificationIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the live classification probes", classificationIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -277,7 +277,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 
 	ready := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", readyTab.TargetID, "--json")
 	readyReport := requireClassificationDoctor(t, ready, true)
-	if readyReport.Status != "ready" || readyReport.PageTools != "ready" || !readyReport.Catalog.Ready {
+	if readyReport.Status != gateStatusReady || readyReport.PageTools != gateStatusReady || !readyReport.Catalog.Ready {
 		t.Fatalf("probe 10 exact ready report = %+v, want ready/ready/true", readyReport)
 	}
 	recordClassificationResult(t, ready, configDir, "probe-10-exact-ready", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":true,"target_id":%q}`, readyReport.Status, readyReport.PageTools, readyTab.TargetID))
@@ -303,7 +303,7 @@ func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, confi
 	data := requireGateSuccessData[gateTabsData](t, result)
 	eligible := make([]gateTab, 0, len(data.Tabs))
 	for _, tab := range data.Tabs {
-		if tab.BrowserID == browserID && tab.Type == "page" && tab.Eligible {
+		if tab.BrowserID == browserID && tab.Type == pageTargetType && tab.Eligible {
 			eligible = append(eligible, tab)
 		}
 	}
@@ -349,7 +349,7 @@ func openClassificationTarget(ctx context.Context, baseURL, targetURL string) (d
 	if err != nil {
 		return devToolsTarget{}, err
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return devToolsTarget{}, fmt.Errorf("Chrome /json/new status: %s", response.Status)
 	}

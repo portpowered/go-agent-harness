@@ -92,7 +92,7 @@ func TestStatefulBrokerDirectCancelClassifiesExplicitProtocolRejectionAsUnconfir
 	cause := errors.New("cancel protocol rejected with secret transport details")
 	rejection := webmcp.NewClassifiedError(webmcp.ErrorInvocationCanceled, "the browser rejected cancellation", map[string]any{
 		"browser_id":          "browser-direct-cancel",
-		"target_id":           "tab-a",
+		"target_id":           primaryTargetID,
 		"invocation_id":       "browser-receipt-rejected",
 		"cancel_source":       "explicit",
 		"phase":               "cancel",

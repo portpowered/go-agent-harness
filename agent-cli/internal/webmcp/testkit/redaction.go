@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
@@ -407,83 +405,95 @@ func (r *Redactor) redactJSON(raw json.RawMessage) (json.RawMessage, redactionTr
 	}
 	switch trimmed[0] {
 	case '{':
-		fields, err := decodeJSONObject(trimmed)
-		if err != nil {
-			return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
-		}
-		result := make(map[string]json.RawMessage, len(fields))
-		trace := redactionTrace{rules: map[string]bool{}}
-		for key, value := range fields {
-			if isRawCDPField(key) {
-				return nil, trace, newRedactionError(ErrRawCDPDetected, "redact JSON", "payload."+key, nil, r.credentials)
-			}
-			redactedKey, keyChanged := redactPlainString(key, r.credentials)
-			if _, exists := result[redactedKey]; exists {
-				return nil, trace, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", errors.New("credential replacement produced duplicate object fields"), r.credentials)
-			}
-			child, childTrace, err := r.redactJSON(value)
-			if err != nil {
-				return nil, trace, err
-			}
-			result[redactedKey] = child
-			if keyChanged {
-				trace.changed = true
-			}
-			trace.merge(childTrace)
-		}
-		encoded, err := json.Marshal(result)
-		if err != nil {
-			return nil, trace, err
-		}
-		if !bytes.Equal(encoded, normalized) {
-			// A map marshal sorts keys, but key order is not a page-owned
-			// semantic difference. The changed bit is only for actual policy
-			// changes, not canonical object ordering.
-			if !sameJSONStructure(encoded, normalized) {
-				trace.changed = true
-			}
-		}
-		return encoded, trace, nil
+		return r.redactJSONObject(trimmed, normalized)
 	case '[':
-		values, err := scriptArray(trimmed)
-		if err != nil {
-			return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
-		}
-		result := make([]json.RawMessage, len(values))
-		trace := redactionTrace{rules: map[string]bool{}}
-		for index, value := range values {
-			child, childTrace, err := r.redactJSON(value)
-			if err != nil {
-				return nil, trace, err
-			}
-			result[index] = child
-			trace.merge(childTrace)
-		}
-		encoded, err := json.Marshal(result)
-		return encoded, trace, err
+		return r.redactJSONArray(trimmed)
 	case '"':
-		value, err := parseString(trimmed)
-		if err != nil {
-			return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
-		}
-		redacted, changed, queryChanged, fragmentChanged := r.redactString(value)
-		if !changed {
-			return normalized, redactionTrace{rules: map[string]bool{}}, nil
-		}
-		encoded, err := json.Marshal(redacted)
-		trace := redactionTrace{changed: true, rules: map[string]bool{}}
-		if queryChanged {
-			trace.rules[RedactionRuleURLQuery] = true
-		}
-		if fragmentChanged {
-			trace.rules[RedactionRuleURLFragment] = true
-		}
-		return encoded, trace, err
+		return r.redactJSONString(trimmed, normalized)
 	default:
 		// Numbers, booleans, and null are already normalized without passing
 		// through float64, preserving large page-owned integer tokens exactly.
 		return normalized, redactionTrace{rules: map[string]bool{}}, nil
 	}
+}
+
+func (r *Redactor) redactJSONObject(trimmed, normalized json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	fields, err := decodeJSONObject(trimmed)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	result := make(map[string]json.RawMessage, len(fields))
+	trace := redactionTrace{rules: map[string]bool{}}
+	for key, value := range fields {
+		if isRawCDPField(key) {
+			return nil, trace, newRedactionError(ErrRawCDPDetected, "redact JSON", "payload."+key, nil, r.credentials)
+		}
+		redactedKey, keyChanged := redactPlainString(key, r.credentials)
+		if _, exists := result[redactedKey]; exists {
+			return nil, trace, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", errors.New("credential replacement produced duplicate object fields"), r.credentials)
+		}
+		child, childTrace, err := r.redactJSON(value)
+		if err != nil {
+			return nil, trace, err
+		}
+		result[redactedKey] = child
+		if keyChanged {
+			trace.changed = true
+		}
+		trace.merge(childTrace)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return nil, trace, err
+	}
+	if !bytes.Equal(encoded, normalized) {
+		// A map marshal sorts keys, but key order is not a page-owned
+		// semantic difference. The changed bit is only for actual policy
+		// changes, not canonical object ordering.
+		if !sameJSONStructure(encoded, normalized) {
+			trace.changed = true
+		}
+	}
+	return encoded, trace, nil
+}
+
+func (r *Redactor) redactJSONArray(trimmed json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	values, err := scriptArray(trimmed)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	result := make([]json.RawMessage, len(values))
+	trace := redactionTrace{rules: map[string]bool{}}
+	for index, value := range values {
+		child, childTrace, err := r.redactJSON(value)
+		if err != nil {
+			return nil, trace, err
+		}
+		result[index] = child
+		trace.merge(childTrace)
+	}
+	encoded, err := json.Marshal(result)
+	return encoded, trace, err
+}
+
+func (r *Redactor) redactJSONString(trimmed, normalized json.RawMessage) (json.RawMessage, redactionTrace, error) {
+	value, err := parseString(trimmed)
+	if err != nil {
+		return nil, redactionTrace{}, newRedactionError(ErrInvalidBrowserEvent, "redact JSON", "payload", err, r.credentials)
+	}
+	redacted, changed, queryChanged, fragmentChanged := r.redactString(value)
+	if !changed {
+		return normalized, redactionTrace{rules: map[string]bool{}}, nil
+	}
+	encoded, err := json.Marshal(redacted)
+	trace := redactionTrace{changed: true, rules: map[string]bool{}}
+	if queryChanged {
+		trace.rules[RedactionRuleURLQuery] = true
+	}
+	if fragmentChanged {
+		trace.rules[RedactionRuleURLFragment] = true
+	}
+	return encoded, trace, err
 }
 
 func (r *Redactor) redactToolPayload(raw json.RawMessage, eventType EventType, tool string) (json.RawMessage, redactionTrace, error) {
@@ -504,53 +514,69 @@ func (r *Redactor) redactToolPayload(raw json.RawMessage, eventType EventType, t
 	digestTool := toolNameIn(tool, r.policy.DigestTools)
 	argumentTool := toolNameIn(tool, r.policy.ToolArguments)
 	if eventType == EventBrowserInvocationDispatched {
-		if input, ok := fields["input"]; ok {
-			if digestTool {
-				digest, err := digestJSON(input)
-				if err != nil {
-					return raw, trace, newRedactionError(ErrInvalidBrowserEvent, "redact tool input", "payload.input", err, r.credentials)
-				}
-				delete(fields, "input")
-				fields["input_sha256"] = json.RawMessage(strconv.Quote(digest))
-				trace.digest = true
-			} else if argumentTool {
-				fields["input"] = json.RawMessage(strconv.Quote(RedactionMarker))
-				trace.changed = true
-				trace.rules[RedactionRuleToolArguments] = true
-			}
+		if err := r.redactToolInput(fields, digestTool, argumentTool, &trace); err != nil {
+			return raw, trace, err
 		}
 	}
 	if eventType == EventBrowserInvocationCompleted {
-		if output, ok := fields["output"]; ok {
-			redactedOutput := output
-			if len(r.policy.ResultJSONPointers) > 0 {
-				for _, pointer := range r.policy.ResultJSONPointers {
-					updated, changed, err := replaceJSONPointer(redactedOutput, pointer, json.RawMessage(strconv.Quote(RedactionMarker)))
-					if err != nil {
-						return raw, trace, newRedactionError(ErrInvalidBrowserEvent, "redact result", "payload.output"+pointer, err, r.credentials)
-					}
-					if changed {
-						redactedOutput = updated
-						trace.changed = true
-						trace.rules[RedactionRuleResultJSONPointers] = true
-					}
-				}
-			}
-			if digestTool {
-				digest, err := digestJSON(redactedOutput)
-				if err != nil {
-					return raw, trace, newRedactionError(ErrInvalidBrowserEvent, "redact tool result", "payload.output", err, r.credentials)
-				}
-				delete(fields, "output")
-				fields["output_sha256"] = json.RawMessage(strconv.Quote(digest))
-				trace.digest = true
-			} else if !bytes.Equal(redactedOutput, output) {
-				fields["output"] = redactedOutput
-			}
+		if err := r.redactToolOutput(fields, digestTool, &trace); err != nil {
+			return raw, trace, err
 		}
 	}
 	encoded, err := json.Marshal(fields)
 	return encoded, trace, err
+}
+
+func (r *Redactor) redactToolInput(fields map[string]json.RawMessage, digestTool, argumentTool bool, trace *redactionTrace) error {
+	input, ok := fields["input"]
+	if !ok {
+		return nil
+	}
+	if digestTool {
+		digest, err := digestJSON(input)
+		if err != nil {
+			return newRedactionError(ErrInvalidBrowserEvent, "redact tool input", "payload.input", err, r.credentials)
+		}
+		delete(fields, "input")
+		fields["input_sha256"] = json.RawMessage(strconv.Quote(digest))
+		trace.digest = true
+	} else if argumentTool {
+		fields["input"] = json.RawMessage(strconv.Quote(RedactionMarker))
+		trace.changed = true
+		trace.rules[RedactionRuleToolArguments] = true
+	}
+	return nil
+}
+
+func (r *Redactor) redactToolOutput(fields map[string]json.RawMessage, digestTool bool, trace *redactionTrace) error {
+	output, ok := fields["output"]
+	if !ok {
+		return nil
+	}
+	redactedOutput := output
+	for _, pointer := range r.policy.ResultJSONPointers {
+		updated, changed, err := replaceJSONPointer(redactedOutput, pointer, json.RawMessage(strconv.Quote(RedactionMarker)))
+		if err != nil {
+			return newRedactionError(ErrInvalidBrowserEvent, "redact result", "payload.output"+pointer, err, r.credentials)
+		}
+		if changed {
+			redactedOutput = updated
+			trace.changed = true
+			trace.rules[RedactionRuleResultJSONPointers] = true
+		}
+	}
+	if digestTool {
+		digest, err := digestJSON(redactedOutput)
+		if err != nil {
+			return newRedactionError(ErrInvalidBrowserEvent, "redact tool result", "payload.output", err, r.credentials)
+		}
+		delete(fields, "output")
+		fields["output_sha256"] = json.RawMessage(strconv.Quote(digest))
+		trace.digest = true
+	} else if !bytes.Equal(redactedOutput, output) {
+		fields["output"] = redactedOutput
+	}
+	return nil
 }
 
 func (r *Redactor) redactString(value string) (string, bool, bool, bool) {
@@ -607,7 +633,7 @@ func eventInvocationAndTool(raw json.RawMessage) (string, string) {
 	if err != nil {
 		return "", ""
 	}
-	invocationID := stringField(fields, "invocation_id")
+	invocationID := stringField(fields, jsonFieldInvocationID)
 	tool := stringField(fields, "tool_name")
 	if tool == "" {
 		tool = stringField(fields, "tool_ref")
@@ -764,59 +790,6 @@ func isRawCDPField(name string) bool {
 	default:
 		return false
 	}
-}
-
-func newRedactionCredentials(credentials []string) ([][]byte, error) {
-	seen := make(map[string]struct{}, len(credentials))
-	values := make([][]byte, 0, len(credentials))
-	for _, credential := range credentials {
-		if credential == "" {
-			return nil, newRedactionError(ErrInvalidRedactionCredential, "validate credentials", "credentials", errors.New("credential values must be non-empty"), nil)
-		}
-		if credential == RedactionMarker {
-			return nil, newRedactionError(ErrInvalidRedactionCredential, "validate credentials", "credentials", errors.New("credential conflicts with redaction marker"), nil)
-		}
-		if !utf8.ValidString(credential) {
-			return nil, newRedactionError(ErrInvalidRedactionCredential, "validate credentials", "credentials", errors.New("credential must be valid UTF-8"), nil)
-		}
-		if _, ok := seen[credential]; ok {
-			continue
-		}
-		seen[credential] = struct{}{}
-		values = append(values, []byte(credential))
-	}
-	sort.Slice(values, func(i, j int) bool {
-		if len(values[i]) != len(values[j]) {
-			return len(values[i]) > len(values[j])
-		}
-		return bytes.Compare(values[i], values[j]) < 0
-	})
-	return values, nil
-}
-
-func containsCredentialInPolicy(policy RedactionPolicy, credentials [][]byte) bool {
-	data, err := json.Marshal(policy)
-	if err != nil {
-		return false
-	}
-	return containsCredential(data, credentials)
-}
-
-func containsCredential(value []byte, secrets [][]byte) bool {
-	for _, secret := range secrets {
-		if bytes.Contains(value, secret) {
-			return true
-		}
-	}
-	return false
-}
-
-func redactBytes(value string, secrets [][]byte) []byte {
-	redacted := []byte(value)
-	for _, secret := range secrets {
-		redacted = bytes.ReplaceAll(redacted, secret, []byte(RedactionMarker))
-	}
-	return redacted
 }
 
 // EnsureNoConfiguredCredentials is a small manifest-boundary helper. It

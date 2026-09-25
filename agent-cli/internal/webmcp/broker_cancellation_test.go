@@ -20,7 +20,7 @@ func TestStatefulBrokerCancelsDispatchedWorkOnceAndIgnoresLateResults(t *testing
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
@@ -81,7 +81,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: "test_fixture"}),
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
@@ -109,7 +109,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 		InvocationTimeout: 30 * time.Second,
 	})
 	t.Cleanup(func() { _ = fresh.Close() })
-	if _, err := fresh.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := fresh.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("fresh select: %v", err)
 	}
 	if _, ok := fresh.Invocation(dispatched.InvocationID); ok {
@@ -129,7 +129,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 	}
 
 	if err := fresh.CancelDirect(context.Background(), webmcp.DirectCancelRequest{
-		Target:       webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"},
+		Target:       webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID},
 		InvocationID: dispatched.BrowserInvocationID,
 		Reason:       "operator stopped the pending call",
 	}); err != nil {
@@ -139,7 +139,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 		t.Fatalf("target pending invocations after direct cancel = %#v", pending)
 	}
 	cancelOperations := operationsOfKind(runtime.Operations(), testkit.OperationCancel)
-	if len(cancelOperations) != 1 || cancelOperations[0].BrowserID != candidate.ID || cancelOperations[0].TargetID != "tab-a" || cancelOperations[0].InvocationID != dispatched.BrowserInvocationID || !cancelOperations[0].CancellationAcknowledged {
+	if len(cancelOperations) != 1 || cancelOperations[0].BrowserID != candidate.ID || cancelOperations[0].TargetID != primaryTargetID || cancelOperations[0].InvocationID != dispatched.BrowserInvocationID || !cancelOperations[0].CancellationAcknowledged {
 		t.Fatalf("direct cancel operations = %#v", cancelOperations)
 	}
 }
@@ -153,7 +153,7 @@ func TestStatefulBrokerCancelsQueuedWorkWithoutDispatch(t *testing.T) {
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
@@ -215,7 +215,7 @@ func TestStatefulBrokerContextCancellationLeavesUnknownMutationForReconciliation
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
@@ -259,7 +259,7 @@ func TestStatefulBrokerTimeoutsDispatchedWorkAndBoundsLateReconciliation(t *test
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
@@ -309,7 +309,7 @@ func TestStatefulBrokerNavigationTerminalizesCurrentInvocation(t *testing.T) {
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
@@ -334,7 +334,7 @@ func TestStatefulBrokerNavigationTerminalizesCurrentInvocation(t *testing.T) {
 	if terminal.State != webmcp.InvocationError || terminal.ErrorCode != string(webmcp.ErrorPageNavigated) {
 		t.Fatalf("navigation result = %#v, want page_navigated", terminal)
 	}
-	if terminal.ErrorDetails["browser_id"] != string(candidate.ID) || terminal.ErrorDetails["target_id"] != "tab-a" || terminal.ErrorDetails["previous_generation"] != uint64(1) || terminal.ErrorDetails["current_generation"] != uint64(2) {
+	if terminal.ErrorDetails["browser_id"] != string(candidate.ID) || terminal.ErrorDetails["target_id"] != primaryTargetID || terminal.ErrorDetails["previous_generation"] != uint64(1) || terminal.ErrorDetails["current_generation"] != uint64(2) {
 		t.Fatalf("navigation details = %#v, want generation transition", terminal.ErrorDetails)
 	}
 	if err := session.ReleaseInvocation(dispatched.InvocationID, []byte(`{"late":true}`)); err != nil {
@@ -504,7 +504,7 @@ func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 				testkit.BrowserConfig{
 					Candidate: candidate,
 					Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-						webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+						webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 						testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 					)},
 				},
@@ -529,16 +529,7 @@ func TestStatefulBrokerDetachAndDisconnectClassifyUnresolvedWork(t *testing.T) {
 			if terminal.State != webmcp.InvocationError || terminal.ErrorCode != string(testCase.wantCode) {
 				t.Fatalf("lifecycle result = %#v, want %s", terminal, testCase.wantCode)
 			}
-			switch testCase.wantCode {
-			case webmcp.ErrorTargetDetached:
-				if terminal.ErrorDetails["browser_id"] != string(candidate.ID) || terminal.ErrorDetails["target_id"] != "tab-a" || terminal.ErrorDetails["generation"] != uint64(1) || terminal.ErrorDetails["reason"] != testCase.wantReason {
-					t.Fatalf("detach details = %#v, want frozen safe details", terminal.ErrorDetails)
-				}
-			case webmcp.ErrorBrowserDisconnected:
-				if terminal.ErrorDetails["browser_id"] != string(candidate.ID) || terminal.ErrorDetails["target_id"] != "tab-a" || terminal.ErrorDetails["phase"] != "lifecycle" || terminal.ErrorDetails["reconnect_required"] != true {
-					t.Fatalf("disconnect details = %#v, want frozen safe details", terminal.ErrorDetails)
-				}
-			}
+			assertLifecycleTerminalDetails(t, terminal, testCase.wantCode, candidate.ID, testCase.wantReason)
 			if pending := broker.PendingInvocations(); len(pending) != 0 {
 				t.Fatalf("pending after %s = %#v, want empty", testCase.name, pending)
 			}
@@ -555,7 +546,7 @@ func TestStatefulBrokerKeepsBrowserDisconnectClassificationAfterSessionEnds(t *t
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
@@ -575,7 +566,7 @@ func TestStatefulBrokerKeepsBrowserDisconnectClassificationAfterSessionEnds(t *t
 		if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
 			t.Fatalf("%s error = %v (%T), want browser_disconnected", label, err, err)
 		}
-		if classified.Details["browser_id"] != string(candidate.ID) || classified.Details["target_id"] != "tab-a" || classified.Details["phase"] == "" || classified.Details["reconnect_required"] != true {
+		if classified.Details["browser_id"] != string(candidate.ID) || classified.Details["target_id"] != primaryTargetID || classified.Details["phase"] == "" || classified.Details["reconnect_required"] != true {
 			t.Fatalf("%s details = %#v, want exact disconnected identity", label, classified.Details)
 		}
 	}
@@ -593,7 +584,7 @@ func TestStatefulBrokerKeepsBrowserDisconnectClassificationAfterSessionEnds(t *t
 		return err
 	})
 	assertDisconnected("select exact target", func() error {
-		_, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"})
+		_, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID})
 		return err
 	})
 	assertDisconnected("invoke", func() error {
@@ -611,7 +602,7 @@ func TestStatefulBrokerCloseOrphansWorkAndIsIdempotent(t *testing.T) {
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 			)},
 		},
@@ -643,7 +634,7 @@ func TestStatefulBrokerCloseOrphansWorkAndIsIdempotent(t *testing.T) {
 	if terminal.State != webmcp.InvocationOrphaned || terminal.ErrorCode != string(webmcp.ErrorInvocationOrphaned) {
 		t.Fatalf("close result = %#v, want invocation_orphaned", terminal)
 	}
-	if terminal.ErrorDetails["invocation_id"] != string(dispatched.InvocationID) || terminal.ErrorDetails["target_id"] != "tab-a" || terminal.ErrorDetails["generation"] != uint64(1) || terminal.ErrorDetails["terminal_observed"] != false {
+	if terminal.ErrorDetails["invocation_id"] != string(dispatched.InvocationID) || terminal.ErrorDetails["target_id"] != primaryTargetID || terminal.ErrorDetails["generation"] != uint64(1) || terminal.ErrorDetails["terminal_observed"] != false {
 		t.Fatalf("orphan details = %#v, want frozen safe details", terminal.ErrorDetails)
 	}
 	if pending := broker.PendingInvocations(); len(pending) != 0 {
@@ -749,7 +740,7 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 					testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`)),
 				),
 				testkit.NewTargetConfig(
@@ -766,7 +757,7 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 		IDs:        ids,
 		Clock:      clock,
 	})
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select external target: %v", err)
 	}
 	if err := broker.Close(); err != nil {
@@ -781,10 +772,10 @@ func TestStatefulBrokerCloseLeavesExternalTargetsUsable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list targets after session close: %v", err)
 	}
-	if len(targets) != 2 || targets[0].ID != "tab-a" || targets[1].ID != "tab-b" {
+	if len(targets) != 2 || targets[0].ID != primaryTargetID || targets[1].ID != "tab-b" {
 		t.Fatalf("post-session targets = %#v, want both external targets", targets)
 	}
-	for _, targetID := range []webmcp.TargetID{"tab-a", "tab-b"} {
+	for _, targetID := range []webmcp.TargetID{primaryTargetID, "tab-b"} {
 		session, attachErr := probeHandle.Attach(context.Background(), targetID, webmcp.TargetOwnershipExternal)
 		if attachErr != nil {
 			t.Fatalf("attach post-session target %q: %v", targetID, attachErr)
@@ -831,7 +822,7 @@ func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T)
 			testkit.BrowserConfig{
 				Candidate: candidate,
 				Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 					testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{}`)),
 				)},
 			},
@@ -901,27 +892,27 @@ func newInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, 
 		Clock:             clock,
 		InvocationTimeout: timeout,
 	})
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
-		broker.Close()
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("list tools: %v", err)
 	}
 	if len(snapshot.Tools) != 1 {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("tools = %#v, want one page tool", snapshot.Tools)
 	}
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
+	session := scriptedTargetSession(t, handleValue, primaryTargetID)
 	if session == nil {
-		broker.Close()
+		closeFailedSetupBroker(t, broker)
 		t.Fatal("fixture session is nil")
 	}
 	t.Cleanup(func() { _ = broker.Close() })

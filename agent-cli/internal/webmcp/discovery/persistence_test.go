@@ -190,8 +190,8 @@ func TestPersistedSelectionRejectsQueryAndFragmentOnlyNavigation(t *testing.T) {
 			inputs, probe := persistenceInputs()
 			service := persistenceService(store, &descriptors, probe)
 			_, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{AutoSelect: AutoSelectPersisted})
-			stale := assertDiscoveryError(t, err, CodeStaleSelection)
-			if stale.Details["browser_id"] != persistenceBrowser().ID || stale.Details["target_id"] != targetID || stale.Details["reason"] != "continuity_changed" {
+			stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
+			if stale.Details["browser_id"] != persistenceBrowser().ID || stale.Details["target_id"] != targetID || stale.Details["reason"] != staleReasonContinuityChanged {
 				t.Fatalf("navigation continuity failure = %#v", stale.Details)
 			}
 			if _, ok := service.Selected(); ok {
@@ -231,11 +231,11 @@ func TestPersistedSelectionStaleAndUnsupportedFailuresNeverFallback(t *testing.T
 		{
 			name: "changed continuity",
 			mutate: func(descriptors []TargetDescriptor) []TargetDescriptor {
-				descriptors[0].ContinuityMarker = "document-b"
+				descriptors[0].ContinuityMarker = testContinuityMarkerB
 				return descriptors
 			},
 			wantCode:   CodeStaleSelection,
-			wantReason: "continuity_changed",
+			wantReason: staleReasonContinuityChanged,
 		},
 		{
 			name: "unsupported target",
@@ -257,7 +257,7 @@ func TestPersistedSelectionStaleAndUnsupportedFailuresNeverFallback(t *testing.T
 			inputs, probe := persistenceInputs()
 			service := persistenceService(store, &descriptors, probe)
 			_, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{AutoSelect: AutoSelectPersisted})
-			discoveryErr := assertDiscoveryError(t, err, test.wantCode)
+			discoveryErr := discoveryErrorWithCode(t, err, test.wantCode)
 			if test.wantReason != "" && discoveryErr.Details["reason"] != test.wantReason {
 				t.Fatalf("failure details = %#v, want reason %q", discoveryErr.Details, test.wantReason)
 			}
@@ -282,7 +282,7 @@ func TestPersistedSelectionRejectsCorruptAndUnknownState(t *testing.T) {
 		inputs, probe := persistenceInputs()
 		service := persistenceService(store, new([]TargetDescriptor), probe)
 		_, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{AutoSelect: AutoSelectPersisted})
-		invalid := assertDiscoveryError(t, err, CodeBrowserProtocolInvalid)
+		invalid := discoveryErrorWithCode(t, err, CodeBrowserProtocolInvalid)
 		if invalid.Details["phase"] != "selection_state" {
 			t.Fatalf("invalid state details = %#v", invalid.Details)
 		}
@@ -469,7 +469,7 @@ func TestSelectionPersistenceFailuresAreClassifiedAndDoNotCommit(t *testing.T) {
 	writeFailure.err = errors.New("disk path contains credentials and must stay private")
 	service := persistenceService(writeFailure, &descriptors, nil)
 	_, err := service.SelectTarget(context.Background(), persistenceBrowser(), targetID)
-	persistenceErr := assertDiscoveryError(t, err, CodeBrowserProtocolInvalid)
+	persistenceErr := discoveryErrorWithCode(t, err, CodeBrowserProtocolInvalid)
 	if persistenceErr.Details["phase"] != "selection_save" || persistenceErr.Details["reason_code"] != "save_failed" {
 		t.Fatalf("write failure = %#v", persistenceErr.Details)
 	}
@@ -484,7 +484,7 @@ func TestSelectionPersistenceFailuresAreClassifiedAndDoNotCommit(t *testing.T) {
 		}),
 	})
 	_, err = unsupportedStoreService.SelectTarget(context.Background(), persistenceBrowser(), targetID)
-	unsupported := assertDiscoveryError(t, err, CodeBrowserProtocolInvalid)
+	unsupported := discoveryErrorWithCode(t, err, CodeBrowserProtocolInvalid)
 	if unsupported.Details["phase"] != "selection_save" || unsupported.Details["reason_code"] != "store_unavailable" {
 		t.Fatalf("unsupported store = %#v", unsupported.Details)
 	}
@@ -564,7 +564,7 @@ func TestExplicitReconnectConflictCanBeRequiredWithoutOverwritingRecord(t *testi
 		TargetID:                secondID,
 		RejectPersistedConflict: true,
 	})
-	conflict := assertDiscoveryError(t, err, CodeStaleSelection)
+	conflict := discoveryErrorWithCode(t, err, CodeStaleSelection)
 	if conflict.Details["reason"] != "explicit_selection_conflict" || store.Writes() != 1 {
 		t.Fatalf("conflict = %#v writes=%d", conflict.Details, store.Writes())
 	}
@@ -583,12 +583,12 @@ func TestLifecycleRefreshUpdatesPersistedContinuityAndGeneration(t *testing.T) {
 		t.Fatalf("selection before lifecycle: %v", err)
 	}
 	oldMarker := selected.Target.ContinuityMarker
-	descriptors[0].ContinuityMarker = "document-b"
+	descriptors[0].ContinuityMarker = testContinuityMarkerB
 	if _, err := service.HandleLifecycle(context.Background(), LifecycleEvent{
 		Type:       LifecycleDocumentReplaced,
 		BrowserID:  selected.BrowserID,
 		TargetID:   selected.TargetID,
-		DocumentID: "document-b",
+		DocumentID: testContinuityMarkerB,
 		EventID:    "document-replaced-1",
 	}); err != nil {
 		t.Fatalf("persisted lifecycle refresh: %v", err)

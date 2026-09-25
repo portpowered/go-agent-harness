@@ -482,7 +482,7 @@ func validateEvent(event Event) error {
 	}
 	definition, ok := eventDefinitions[event.Type]
 	if !ok {
-		return newEventValidationError(0, "type", "unknown event type %q", event.Type)
+		return newEventValidationError(0, jsonFieldType, "unknown event type %q", event.Type)
 	}
 	if err := validateEventContext(event, definition); err != nil {
 		return err
@@ -689,43 +689,43 @@ var eventDefinitions = map[EventType]eventDefinition{
 	EventBrowserInvocationCreated: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "frame_id": payloadIdentifier,
+			jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "frame_id": payloadIdentifier,
 		}),
 	},
 	EventBrowserInvocationApproval: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "approved": payloadBoolean, "decision": payloadString, "reason": payloadString,
+			jsonFieldInvocationID: payloadIdentifier, "approved": payloadBoolean, "decision": payloadString, "reason": payloadString,
 		}),
 	},
 	EventBrowserInvocationDispatched: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "tool_ref": payloadIdentifier, "input": payloadAny, "input_sha256": payloadString, "input_digest": payloadString,
+			jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "input": payloadAny, "input_sha256": payloadString, "input_digest": payloadString,
 		}),
 	},
 	EventBrowserInvocationCompleted: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "status": payloadString, "output": payloadAny, "output_sha256": payloadString, "output_digest": payloadString, "error": payloadAny,
+			jsonFieldInvocationID: payloadIdentifier, "status": payloadString, "output": payloadAny, "output_sha256": payloadString, "output_digest": payloadString, "error": payloadAny,
 		}),
 	},
 	EventBrowserInvocationError: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "code": payloadString, "error": payloadAny, "message": payloadString,
+			jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "code": payloadString, "error": payloadAny, "message": payloadString,
 		}),
 	},
 	EventBrowserInvocationCancel: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "source": payloadString, "reason": payloadString,
+			jsonFieldInvocationID: payloadIdentifier, "source": payloadString, "reason": payloadString,
 		}),
 	},
 	EventBrowserInvocationCanceled: {
 		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
 		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"invocation_id": payloadIdentifier, "source": payloadString, "reason": payloadString,
+			jsonFieldInvocationID: payloadIdentifier, "source": payloadString, "reason": payloadString,
 		}),
 	},
 	EventBrowserPageGenerationChanged: {
@@ -809,7 +809,7 @@ func parseEvent(data []byte) (Event, error) {
 		return Event{}, newEventValidationError(0, "object", "%v", err)
 	}
 	if err := rejectUnknownFields(fields, map[string]struct{}{
-		"version": {}, "sequence": {}, "monotonic_ms": {}, "type": {}, "browser_id": {}, "target_id": {}, "generation": {},
+		"version": {}, "sequence": {}, "monotonic_ms": {}, jsonFieldType: {}, "browser_id": {}, "target_id": {}, "generation": {},
 		"payload": {}, "payload_sha256": {}, "redaction": {},
 	}); err != nil {
 		return Event{}, newEventValidationError(0, "object", "%v", err)
@@ -838,13 +838,13 @@ func parseEvent(data []byte) (Event, error) {
 	if err != nil {
 		return Event{}, newEventValidationError(0, "monotonic_ms", "%v", err)
 	}
-	typeRaw, ok := fields["type"]
+	typeRaw, ok := fields[jsonFieldType]
 	if !ok {
-		return Event{}, newEventValidationError(0, "type", "is required")
+		return Event{}, newEventValidationError(0, jsonFieldType, "is required")
 	}
 	eventType, err := parseString(typeRaw)
 	if err != nil {
-		return Event{}, newEventValidationError(0, "type", "%v", err)
+		return Event{}, newEventValidationError(0, jsonFieldType, "%v", err)
 	}
 	event := Event{
 		Version:     version,

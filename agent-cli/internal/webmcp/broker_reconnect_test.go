@@ -49,6 +49,47 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: oldCandidate.ID, TargetID: targetID}); err != nil {
 		t.Fatalf("select initial target: %v", err)
 	}
+	oldRef, oldHandle, oldSession := initialReconnectSelection(t, broker, runtime, oldCandidate.ID, targetID)
+	first := disconnectInitialReconnectBrowser(t, broker, oldHandle, oldSession, oldRef)
+
+	newHandle, newSession, newRef := replaceAndSelect(t, broker, runtime, discoverer, oldCandidate, newCandidate, targetID, "new_tool", "frame-new", `{"cycle":1}`)
+	if oldHandle.TargetSession(targetID) == nil {
+		t.Fatal("retired old session was not retained for late-event inspection")
+	}
+	assertStaleToolRef(t, broker, oldRef, "old ref after first fresh selection")
+	assertNoCancelForInvocation(t, runtime, first.InvocationID, "first invocation after first fresh selection")
+	assertFirstReplacementIsolated(t, broker, oldSession, newSession, newCandidate.ID, newRef, first.InvocationID)
+	second := disconnectFirstReplacementBrowser(t, broker, newHandle, newSession, newRef, first.InvocationID)
+
+	_, finalSession, finalRef := replaceAndSelect(t, broker, runtime, discoverer, newCandidate, finalCandidate, targetID, "final_tool", "frame-final", `{"cycle":2}`)
+	assertStaleToolRef(t, broker, newRef, "first replacement ref after second fresh selection")
+	assertNoCancelForInvocation(t, runtime, second.InvocationID, "second invocation after second fresh selection")
+	assertFinalReplacementIsolated(t, broker, newSession, finalSession, finalRef, first.InvocationID, second.InvocationID)
+	if pending := broker.PendingInvocations(); len(pending) != 0 {
+		t.Fatalf("pending invocations after two reconnects = %#v, want empty", pending)
+	}
+	if oldPending := oldSession.PendingInvocations(); len(oldPending) != 0 {
+		t.Fatalf("old session pending invocations = %#v, want empty after loss", oldPending)
+	}
+	if firstPending := newSession.PendingInvocations(); len(firstPending) != 0 {
+		t.Fatalf("first replacement pending invocations = %#v, want empty after loss", firstPending)
+	}
+	assertReconnectOperationCounts(t, runtime)
+	assertReconnectOperationOrder(t, runtime.Operations(), []webmcp.BrowserID{oldCandidate.ID, newCandidate.ID, newCandidate.ID, finalCandidate.ID})
+
+	// The broker and runtime teardown paths are both intentionally idempotent;
+	// the deferred calls above make the first close observable, while these
+	// explicit calls prove repeated cleanup does not reattach or panic.
+	if err := broker.Close(); err != nil {
+		t.Fatalf("first explicit broker close: %v", err)
+	}
+	if err := broker.Close(); err != nil {
+		t.Fatalf("second explicit broker close: %v", err)
+	}
+}
+
+func initialReconnectSelection(t *testing.T, broker *webmcp.StatefulBroker, runtime *testkit.ScriptedBrowserRuntime, browserID webmcp.BrowserID, targetID webmcp.TargetID) (webmcp.ToolRef, *testkit.ScriptedBrowserHandle, *testkit.ScriptedTargetSession) {
+	t.Helper()
 	oldCatalog, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
 		t.Fatalf("list initial catalog: %v", err)
@@ -56,8 +97,7 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	if len(oldCatalog.Tools) != 1 || oldCatalog.Tools[0].Name != "old_tool" {
 		t.Fatalf("initial catalog = %#v, want old tool", oldCatalog.Tools)
 	}
-	oldRef := oldCatalog.Tools[0].Ref
-	oldHandle := runtime.Browser(oldCandidate.ID)
+	oldHandle := runtime.Browser(browserID)
 	if oldHandle == nil {
 		t.Fatal("initial browser handle is nil")
 	}
@@ -65,9 +105,14 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	if oldSession == nil {
 		t.Fatal("initial target session is nil")
 	}
+	return oldCatalog.Tools[0].Ref, oldHandle, oldSession
+}
 
-	// Leave an invocation admitted on the retired session so disconnect
-	// reconciliation is exercised before the first replacement.
+// disconnectInitialReconnectBrowser leaves an invocation admitted on the
+// retired session so disconnect reconciliation is exercised before the first
+// replacement.
+func disconnectInitialReconnectBrowser(t *testing.T, broker *webmcp.StatefulBroker, oldHandle *testkit.ScriptedBrowserHandle, oldSession *testkit.ScriptedTargetSession, oldRef webmcp.ToolRef) webmcp.InvokeResult {
+	t.Helper()
 	oldSession.BlockInvocations()
 	first, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: oldRef, Input: json.RawMessage(`{}`)})
 	if err != nil || first.InvocationID == "" || first.State != webmcp.InvocationDispatched {
@@ -91,16 +136,14 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	default:
 		t.Fatal("initial session remained live after browser loss")
 	}
+	return first
+}
 
-	newHandle, newSession, newRef := replaceAndSelect(t, broker, runtime, discoverer, oldCandidate, newCandidate, targetID, "new_tool", "frame-new", `{"cycle":1}`)
-	if oldHandle.TargetSession(targetID) == nil {
-		t.Fatal("retired old session was not retained for late-event inspection")
-	}
-	assertStaleToolRef(t, broker, oldRef, "old ref after first fresh selection")
-	assertNoCancelForInvocation(t, runtime, first.InvocationID, "first invocation after first fresh selection")
-
-	// A retired session can still produce a late event, but the browser/target
-	// identity fence must prevent it from changing the replacement catalog.
+// assertFirstReplacementIsolated injects a late event from the retired
+// session. The browser/target identity fence must prevent it from changing
+// the replacement catalog, and the replacement must mint fresh invocations.
+func assertFirstReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker, oldSession, newSession *testkit.ScriptedTargetSession, newBrowserID webmcp.BrowserID, newRef webmcp.ToolRef, firstID webmcp.InvocationID) {
+	t.Helper()
 	if err := oldSession.InjectLateEventInto(newSession, webmcp.BrowserEvent{
 		Type:       webmcp.EventToolsAdded,
 		Generation: 1,
@@ -120,23 +163,27 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	}
 
 	firstFresh, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: newRef, Input: json.RawMessage(`{"value":1}`)})
-	if err != nil || firstFresh.InvocationID == first.InvocationID {
+	if err != nil || firstFresh.InvocationID == firstID {
 		t.Fatalf("first fresh invocation = %#v err=%v, want a new ID", firstFresh, err)
 	}
 	firstFreshTerminal, err := broker.WaitInvocation(testContext(t), firstFresh.InvocationID)
 	if err != nil || firstFreshTerminal.ErrorCode != "" || firstFreshTerminal.State != webmcp.InvocationCompleted {
 		t.Fatalf("first fresh terminal = %#v err=%v, want completed", firstFreshTerminal, err)
 	}
-	if record, ok := newSession.Invocation(firstFresh.InvocationID); !ok || record.BrowserID != newCandidate.ID || record.Generation != 1 {
+	if record, ok := newSession.Invocation(firstFresh.InvocationID); !ok || record.BrowserID != newBrowserID || record.Generation != 1 {
 		t.Fatalf("first fresh session invocation = %#v ok=%v, want new identity", record, ok)
 	}
+}
 
-	// Repeat the same lifecycle with the first replacement. This catches
-	// accidental reuse of the first replacement's selected session, catalog,
-	// terminal cache, or persistence-like browser lookup state.
+// disconnectFirstReplacementBrowser repeats the same lifecycle with the first
+// replacement. This catches accidental reuse of the first replacement's
+// selected session, catalog, terminal cache, or persistence-like browser
+// lookup state.
+func disconnectFirstReplacementBrowser(t *testing.T, broker *webmcp.StatefulBroker, newHandle *testkit.ScriptedBrowserHandle, newSession *testkit.ScriptedTargetSession, newRef webmcp.ToolRef, firstID webmcp.InvocationID) webmcp.InvokeResult {
+	t.Helper()
 	newSession.BlockInvocations()
 	second, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: newRef, Input: json.RawMessage(`{}`)})
-	if err != nil || second.InvocationID == first.InvocationID || second.State != webmcp.InvocationDispatched {
+	if err != nil || second.InvocationID == firstID || second.State != webmcp.InvocationDispatched {
 		t.Fatalf("second blocked invocation = %#v err=%v, want a distinct dispatched ID", second, err)
 	}
 	if _, err := newSession.WaitForInvocation(testContext(t)); err != nil {
@@ -154,14 +201,15 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	default:
 		t.Fatal("first replacement session remained live after browser loss")
 	}
+	return second
+}
 
-	_, finalSession, finalRef := replaceAndSelect(t, broker, runtime, discoverer, newCandidate, finalCandidate, targetID, "final_tool", "frame-final", `{"cycle":2}`)
-	assertStaleToolRef(t, broker, newRef, "first replacement ref after second fresh selection")
-	assertNoCancelForInvocation(t, runtime, second.InvocationID, "second invocation after second fresh selection")
+func assertFinalReplacementIsolated(t *testing.T, broker *webmcp.StatefulBroker, newSession, finalSession *testkit.ScriptedTargetSession, finalRef webmcp.ToolRef, firstID, secondID webmcp.InvocationID) {
+	t.Helper()
 	if err := newSession.InjectLateEventInto(finalSession, webmcp.BrowserEvent{
 		Type:         webmcp.EventToolResponded,
 		Generation:   1,
-		InvocationID: second.InvocationID,
+		InvocationID: secondID,
 		Status:       "Completed",
 		Output:       json.RawMessage(`{"poison":true}`),
 	}); err != nil {
@@ -179,22 +227,17 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	}
 
 	finalInvocation, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: finalRef, Input: json.RawMessage(`{"value":2}`)})
-	if err != nil || finalInvocation.InvocationID == first.InvocationID || finalInvocation.InvocationID == second.InvocationID {
+	if err != nil || finalInvocation.InvocationID == firstID || finalInvocation.InvocationID == secondID {
 		t.Fatalf("final invocation = %#v err=%v, want fresh ID", finalInvocation, err)
 	}
 	finalTerminal, err := broker.WaitInvocation(testContext(t), finalInvocation.InvocationID)
 	if err != nil || finalTerminal.State != webmcp.InvocationCompleted || string(finalTerminal.Output) != `{"cycle":2}` {
 		t.Fatalf("final terminal = %#v err=%v, want fresh completed result", finalTerminal, err)
 	}
-	if pending := broker.PendingInvocations(); len(pending) != 0 {
-		t.Fatalf("pending invocations after two reconnects = %#v, want empty", pending)
-	}
-	if oldPending := oldSession.PendingInvocations(); len(oldPending) != 0 {
-		t.Fatalf("old session pending invocations = %#v, want empty after loss", oldPending)
-	}
-	if firstPending := newSession.PendingInvocations(); len(firstPending) != 0 {
-		t.Fatalf("first replacement pending invocations = %#v, want empty after loss", firstPending)
-	}
+}
+
+func assertReconnectOperationCounts(t *testing.T, runtime *testkit.ScriptedBrowserRuntime) {
+	t.Helper()
 	if got := countReconnectOperations(runtime.Operations(), testkit.OperationAttach); got != 3 {
 		t.Fatalf("attach operations = %d, want one per fresh selection", got)
 	}
@@ -203,17 +246,6 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 	}
 	if got := countReconnectOperations(runtime.Operations(), testkit.OperationCancel); got != 0 {
 		t.Fatalf("cancel operations = %d, want no cancellation routed to a replacement", got)
-	}
-	assertReconnectOperationOrder(t, runtime.Operations(), []webmcp.BrowserID{oldCandidate.ID, newCandidate.ID, newCandidate.ID, finalCandidate.ID})
-
-	// The broker and runtime teardown paths are both intentionally idempotent;
-	// the deferred calls above make the first close observable, while these
-	// explicit calls prove repeated cleanup does not reattach or panic.
-	if err := broker.Close(); err != nil {
-		t.Fatalf("first explicit broker close: %v", err)
-	}
-	if err := broker.Close(); err != nil {
-		t.Fatalf("second explicit broker close: %v", err)
 	}
 }
 

@@ -14,7 +14,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
 		Targets: []TargetConfig{NewTargetConfig(
-			webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Generation: 1},
+			webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page", Generation: 1},
 		)},
 	})
 	defer func() { _ = runtime.Close() }()
@@ -24,7 +24,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 		t.Fatalf("open browser: %v", err)
 	}
 	handle := handleValue.(*ScriptedBrowserHandle)
-	sessionValue, err := handle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	sessionValue, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach target: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	attached := waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached
 	})
-	if attached.Event.BrowserID != candidate.ID || attached.Event.TargetID != "tab-a" || attached.Event.Generation != 1 || attached.Event.Sequence != 1 {
+	if attached.Event.BrowserID != candidate.ID || attached.Event.TargetID != defaultTargetID || attached.Event.Generation != 1 || attached.Event.Sequence != 1 {
 		t.Fatalf("attached publication = %#v, want producing browser/target/generation/sequence", attached)
 	}
 
@@ -42,7 +42,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	go func() { enableDone <- session.EnableWebMCP(context.Background()) }()
 	if operation, err := runtime.WaitForOperationAdmitted(testContext(t), OperationEnableWebMCP, operationCursor); err != nil {
 		t.Fatalf("wait enable admission: %v", err)
-	} else if operation.BrowserID != candidate.ID || operation.TargetID != "tab-a" || operation.Generation != 1 {
+	} else if operation.BrowserID != candidate.ID || operation.TargetID != defaultTargetID || operation.Generation != 1 {
 		t.Fatalf("enable operation = %#v, want target identity and generation", operation)
 	}
 
@@ -63,7 +63,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	disconnected := waitPublishedEventAfter(t, runtime, eventCursor, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventBrowserDisconnected
 	})
-	if disconnected.Event.BrowserID != candidate.ID || disconnected.Event.TargetID != "tab-a" || disconnected.Event.Generation != 1 || disconnected.Event.Reason != "transport_lost" {
+	if disconnected.Event.BrowserID != candidate.ID || disconnected.Event.TargetID != defaultTargetID || disconnected.Event.Generation != 1 || disconnected.Event.Reason != "transport_lost" {
 		t.Fatalf("disconnect publication = %#v, want bounded source identity", disconnected)
 	}
 	if session.Err() == nil {
@@ -84,7 +84,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 
 func TestTopologyStageGatesCanBeReleased(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
-	target := webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Generation: 1}
+	target := webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page", Generation: 1}
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
 		Targets:   []TargetConfig{NewTargetConfig(target)},
@@ -196,7 +196,7 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 			kind: OperationActivate,
 			run: func(ctx context.Context, _ *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
 				done := make(chan error, 1)
-				go func() { done <- handle.Activate(ctx, "tab-a") }()
+				go func() { done <- handle.Activate(ctx, defaultTargetID) }()
 				return done
 			},
 		},
@@ -207,7 +207,7 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 			run: func(ctx context.Context, _ *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
 				done := make(chan error, 1)
 				go func() {
-					_, err := handle.Attach(ctx, "tab-a", webmcp.TargetOwnershipExternal)
+					_, err := handle.Attach(ctx, defaultTargetID, webmcp.TargetOwnershipExternal)
 					done <- err
 				}()
 				return done
@@ -220,7 +220,7 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 			candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
 			runtime := NewScriptedBrowserRuntime(BrowserConfig{
 				Candidate: candidate,
-				Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"})},
+				Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page"})},
 			})
 			defer func() { _ = runtime.Close() }()
 			handleValue, err := runtime.Open(context.Background(), candidate)
@@ -252,8 +252,8 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
 		Targets: []TargetConfig{
-			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"}),
-			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"}),
+			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page"}),
+			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: secondTargetID, Type: "page"}),
 		},
 	})
 	defer func() { _ = runtime.Close() }()
@@ -262,21 +262,21 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 		t.Fatalf("open browser: %v", err)
 	}
 	handle := handleValue.(*ScriptedBrowserHandle)
-	firstValue, err := handle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	firstValue, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach first target: %v", err)
 	}
 	first := firstValue.(*ScriptedTargetSession)
-	secondValue, err := handle.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipExternal)
+	secondValue, err := handle.Attach(context.Background(), secondTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach second target: %v", err)
 	}
 	second := secondValue.(*ScriptedTargetSession)
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-a"
+		return event.Type == webmcp.EventTargetAttached && event.TargetID == defaultTargetID
 	})
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-b"
+		return event.Type == webmcp.EventTargetAttached && event.TargetID == secondTargetID
 	})
 
 	first.BlockInvocations()
@@ -299,7 +299,7 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 	if err != nil {
 		t.Fatalf("wait disconnected terminal: %v", err)
 	}
-	if terminal.Invocation.State != webmcp.InvocationOrphaned || terminal.Event.Type != webmcp.EventBrowserDisconnected || terminal.Event.BrowserID != candidate.ID || terminal.Event.TargetID != "tab-a" {
+	if terminal.Invocation.State != webmcp.InvocationOrphaned || terminal.Event.Type != webmcp.EventBrowserDisconnected || terminal.Event.BrowserID != candidate.ID || terminal.Event.TargetID != defaultTargetID {
 		t.Fatalf("terminal observation = %#v, want one orphaned browser event", terminal)
 	}
 	if terminal.PublicationSequence <= eventCursor {
@@ -414,6 +414,20 @@ func TestTopologyChurnPublishesTargetCloseWhenSessionBufferIsFull(t *testing.T) 
 	}
 }
 
+// assertRetiredBrowserOpenDisconnected requires reopening a replaced endpoint
+// identity to fail with the browser-disconnected classification.
+func assertRetiredBrowserOpenDisconnected(t *testing.T, runtime *ScriptedBrowserRuntime, candidate webmcp.BrowserCandidate) {
+	t.Helper()
+	_, err := runtime.Open(context.Background(), candidate)
+	if err == nil {
+		t.Fatal("open retired browser succeeded, want browser disconnected classification")
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
+		t.Fatalf("open retired browser error = %v, want browser disconnected classification", err)
+	}
+}
+
 func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst(t *testing.T) {
 	oldCandidate := webmcp.BrowserCandidate{
 		ID:           "browser-old",
@@ -463,14 +477,7 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 	if got := oldSession.Context(); got.Key != oldContext.Key || got.Generation != oldContext.Generation || got.Title != oldContext.Title || got.URL != oldContext.URL || got.Origin != oldContext.Origin {
 		t.Fatalf("retired session identity context = %#v, want unchanged identity fields from %#v", got, oldContext)
 	}
-	if _, err := runtime.Open(context.Background(), oldCandidate); err == nil {
-		t.Fatal("open retired browser succeeded, want browser disconnected classification")
-	} else {
-		var classified *webmcp.ClassifiedError
-		if !errors.As(err, &classified) || classified.Code != webmcp.ErrorBrowserDisconnected {
-			t.Fatalf("open retired browser error = %v, want browser disconnected classification", err)
-		}
-	}
+	assertRetiredBrowserOpenDisconnected(t, runtime, oldCandidate)
 
 	newHandleValue, err := runtime.Open(context.Background(), newCandidate)
 	if err != nil {
@@ -510,27 +517,34 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 		t.Fatalf("replacement catalog after late event = %#v, want unchanged empty fake catalog", newSession.Catalog())
 	}
 
-	previousSequence := uint64(0)
-	previousGeneration := oldContext.Generation
-	for _, step := range []Navigation{{URL: "https://fixture.test/one", Origin: "https://fixture.test"}, {URL: "https://fixture.test/two", Origin: "https://fixture.test"}, {URL: "https://fixture.test/three", Origin: "https://fixture.test"}} {
-		cursor := runtime.EventCursor()
-		if err := newSession.NavigateSequence(step); err != nil {
-			t.Fatalf("navigate burst step: %v", err)
-		}
-		navigation := waitPublishedEventAfter(t, runtime, cursor, func(event webmcp.BrowserEvent) bool {
-			return event.Type == webmcp.EventPageNavigated && event.BrowserID == newCandidate.ID
-		})
-		if navigation.Event.Generation <= previousGeneration || navigation.Event.PreviousGeneration != previousGeneration || navigation.Event.Sequence <= previousSequence || navigation.Event.TargetID != newTarget.ID {
-			t.Fatalf("navigation event = %#v, previous generation=%d sequence=%d", navigation, previousGeneration, previousSequence)
-		}
-		previousGeneration = navigation.Event.Generation
-		previousSequence = navigation.Event.Sequence
-	}
+	assertMonotonicNavigationBurst(t, runtime, newSession, newTarget, oldContext.Generation)
 	if got := newSession.Context().Generation; got != 4 {
 		t.Fatalf("replacement generation = %d, want three monotonic navigations from one", got)
 	}
 	if countOperations(runtime.Operations(), OperationReplace) != 1 {
 		t.Fatalf("replace operations = %#v, want one", runtime.Operations())
+	}
+}
+
+// assertMonotonicNavigationBurst drives three navigations on the replacement
+// session and requires strictly increasing generations and sequences.
+func assertMonotonicNavigationBurst(t *testing.T, runtime *ScriptedBrowserRuntime, session *ScriptedTargetSession, target webmcp.Target, startGeneration uint64) {
+	t.Helper()
+	previousSequence := uint64(0)
+	previousGeneration := startGeneration
+	for _, step := range []Navigation{{URL: "https://fixture.test/one", Origin: "https://fixture.test"}, {URL: "https://fixture.test/two", Origin: "https://fixture.test"}, {URL: "https://fixture.test/three", Origin: "https://fixture.test"}} {
+		cursor := runtime.EventCursor()
+		if err := session.NavigateSequence(step); err != nil {
+			t.Fatalf("navigate burst step: %v", err)
+		}
+		navigation := waitPublishedEventAfter(t, runtime, cursor, func(event webmcp.BrowserEvent) bool {
+			return event.Type == webmcp.EventPageNavigated && event.BrowserID == target.BrowserID
+		})
+		if navigation.Event.Generation <= previousGeneration || navigation.Event.PreviousGeneration != previousGeneration || navigation.Event.Sequence <= previousSequence || navigation.Event.TargetID != target.ID {
+			t.Fatalf("navigation event = %#v, previous generation=%d sequence=%d", navigation, previousGeneration, previousSequence)
+		}
+		previousGeneration = navigation.Event.Generation
+		previousSequence = navigation.Event.Sequence
 	}
 }
 

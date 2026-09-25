@@ -66,3 +66,12 @@ func defaultRuntimeOptions() RuntimeOptions {
 		HTTPClient:     http.DefaultClient,
 	}
 }
+
+func (h *handle) timeout() time.Duration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.commandTimeout > 0 {
+		return h.commandTimeout
+	}
+	return defaultCommandTimeout
+}

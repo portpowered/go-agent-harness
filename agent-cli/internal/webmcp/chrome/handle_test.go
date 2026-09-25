@@ -69,7 +69,7 @@ func TestOpenTabCreatesExactBrowserTarget(t *testing.T) {
 		createdID: "target-new",
 		targetInfos: []*target.Info{{
 			TargetID: "target-new",
-			Type:     "page",
+			Type:     pageTargetType,
 			Title:    "Notes",
 			URL:      "https://notes.example.test/",
 		}},
@@ -85,7 +85,7 @@ func TestOpenTabCreatesExactBrowserTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open tab: %v", err)
 	}
-	if opened.BrowserID != handle.candidate.ID || opened.ID != "target-new" || opened.Type != "page" || opened.URL != "https://notes.example.test/" {
+	if opened.BrowserID != handle.candidate.ID || opened.ID != "target-new" || opened.Type != pageTargetType || opened.URL != "https://notes.example.test/" {
 		t.Fatalf("opened target = %+v", opened)
 	}
 	calls := executor.snapshot()
@@ -99,7 +99,7 @@ func TestOpenTabReturnsExactAboutBlankTargetForVisibleManagedBootstrap(t *testin
 		createdID: "target-blank",
 		targetInfos: []*target.Info{{
 			TargetID: "target-blank",
-			Type:     "page",
+			Type:     pageTargetType,
 			URL:      "about:blank",
 		}},
 	}
@@ -114,7 +114,7 @@ func TestOpenTabReturnsExactAboutBlankTargetForVisibleManagedBootstrap(t *testin
 	if err != nil {
 		t.Fatalf("open visible blank tab: %v", err)
 	}
-	if opened.ID != "target-blank" || opened.URL != "about:blank" || opened.Type != "page" || opened.Eligible {
+	if opened.ID != "target-blank" || opened.URL != "about:blank" || opened.Type != pageTargetType || opened.Eligible {
 		t.Fatalf("opened blank target = %+v", opened)
 	}
 }
@@ -157,7 +157,7 @@ func TestExternalSessionCloseDetachesBeforeCancelAndNeverClosesTarget(t *testing
 	session := newTargetSession(handle, targetContext, cancelTarget, webmcp.Target{
 		BrowserID: handle.candidate.ID,
 		ID:        "target-1",
-		Type:      "page",
+		Type:      pageTargetType,
 		Title:     "Selected tab",
 		URL:       "https://example.test/selected",
 	}, webmcp.TargetOwnershipExternal)
@@ -211,7 +211,7 @@ func TestHandleCloseIsIdempotentAndPreservesExternalTarget(t *testing.T) {
 	session := newTargetSession(handle, targetContext, rawCancel, webmcp.Target{
 		BrowserID: handle.candidate.ID,
 		ID:        "target-2",
-		Type:      "page",
+		Type:      pageTargetType,
 		URL:       "https://example.test/selected",
 	}, webmcp.TargetOwnershipExternal)
 	session.setProtocolTarget(protocolTarget)
@@ -236,7 +236,7 @@ func TestHandleCloseIsIdempotentAndPreservesExternalTarget(t *testing.T) {
 
 func TestAttachUsesCallerTargetIDAndNormalizedTargetMetadata(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/list" {
+		if request.URL.Path != jsonListPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -309,7 +309,7 @@ func TestAttachKeepsTargetReaderAliveUntilTransportLoss(t *testing.T) {
 		target: func(context.Context) *chromedp.Target { return protocolTarget },
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/list" {
+		if request.URL.Path != jsonListPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -403,7 +403,7 @@ func TestAttachMissingExactTargetDoesNotInvokeAttacher(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(writer).Encode([]targetInfo{{
-			ID: "present-target", Type: "page", Title: "Present", URL: "https://example.test/present",
+			ID: "present-target", Type: pageTargetType, Title: "Present", URL: "https://example.test/present",
 			WSURL: "ws://127.0.0.1/devtools/page/present-target",
 		}})
 	}))

@@ -44,110 +44,158 @@ func TestPinnedChromeCubecadeTwoIndependentBrokerSessions(t *testing.T) {
 	if os.Getenv(cubecadeSharedBrowserIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the credit-free two-broker Cubecade proof", cubecadeSharedBrowserIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for %s, observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), cubecadeSharedBrowserTestTimeout)
 	defer cancel()
 
-	pinned, err := acquirePinnedChrome(ctx, t.TempDir())
+	run := launchCubecadeShared(t, ctx)
+	run.selectBothParticipants(t, ctx)
+	queueInvocation, queueTerminal, queueCompletedAt := run.queueMovesAsA(t, ctx)
+	reads := run.readStateConcurrently(t, ctx, queueCompletedAt)
+	run.assertRefreshIsolation(t, ctx)
+	postCloseTerminal := run.closeAAndReadB(t, ctx)
+	directState := run.detachBoth(t, ctx)
+
+	t.Logf("WEBMCP_CUBECADE_SHARED_PASS chrome=%s revision=%s browser=%s target=%s participant_a_queue_receipt=%s participant_a_queue_status=%s participant_a_read_receipt=%s participant_b_read_receipt=%s participant_b_post_close_receipt=%s state_moves=%d queue_depth=%d solved=%t session_ids_distinct=true external_target_survived=true provider=false credentials=false", run.pinned.Lock.Version, run.pinned.Lock.Revision, run.candidate.ID, run.targetID, queueInvocation, queueTerminal.State, reads[0].terminal.InvocationID, reads[1].terminal.InvocationID, postCloseTerminal.InvocationID, directState.MoveCount, directState.QueueDepth, directState.Solved)
+}
+
+// cubecadeSharedRun holds the shared browser and both participant brokers.
+type cubecadeSharedRun struct {
+	pinned        pinnedChrome
+	fixtureURL    string
+	browser       *runningChrome
+	closedBrowser bool
+	baseURL       string
+	rawTarget     devToolsTarget
+	candidate     webmcp.BrowserCandidate
+	targetID      webmcp.TargetID
+	wireA         *wireTraceRecorder
+	wireB         *wireTraceRecorder
+	brokerA       *webmcp.StatefulBroker
+	brokerB       *webmcp.StatefulBroker
+	closedA       bool
+	closedB       bool
+	selectedA     webmcp.PageContext
+	selectedB     webmcp.PageContext
+	catalogA      webmcp.ToolCatalogSnapshot
+	catalogB      webmcp.ToolCatalogSnapshot
+	stateA        webmcp.ToolDescriptor
+	queueA        webmcp.ToolDescriptor
+	stateB        webmcp.ToolDescriptor
+}
+
+func launchCubecadeShared(t *testing.T, ctx context.Context) *cubecadeSharedRun {
+	t.Helper()
+	run := &cubecadeSharedRun{}
+	var err error
+	run.pinned, err = acquirePinnedChrome(ctx, t.TempDir())
 	if err != nil {
 		t.Fatalf("acquire locked Chrome for Testing: %v", err)
 	}
 	fixture := newCubecadeSharedBrowserFixture()
 	t.Cleanup(fixture.Close)
-	fixtureURL := fixture.URL()
-	assertFixtureHeaders(t, ctx, fixtureURL)
+	run.fixtureURL = fixture.URL()
+	assertFixtureHeaders(t, ctx, run.fixtureURL)
 
-	browser, err := launchPinnedChrome(ctx, pinned, fixtureURL)
+	run.browser, err = launchPinnedChrome(ctx, run.pinned, run.fixtureURL)
 	if err != nil {
 		t.Fatalf("launch locked Chrome for Testing: %v", err)
 	}
-	closedBrowser := false
 	t.Cleanup(func() {
-		if !closedBrowser {
-			if closeErr := browser.Close(); closeErr != nil {
+		if !run.closedBrowser {
+			if closeErr := run.browser.Close(); closeErr != nil {
 				t.Logf("Cubecade shared-browser Chrome cleanup: %v", closeErr)
 			}
 		}
 	})
 
-	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	run.baseURL = browserHTTPURL(run.browser.endpoint())
+	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
-	rawTarget, err := waitForFixturePageTarget(ctx, baseURL, fixtureURL)
+	run.rawTarget, err = waitForFixturePageTarget(ctx, run.baseURL, run.fixtureURL)
 	if err != nil {
 		t.Fatalf("discover exact Cubecade target: %v", err)
 	}
-
-	candidate := webmcp.BrowserCandidate{
+	run.candidate = webmcp.BrowserCandidate{
 		ID:           webmcp.BrowserID("chrome-cft-" + lockedChromeVersion),
 		Source:       webmcp.DiscoverySourceExplicit,
 		Product:      version.Browser,
 		Protocol:     version.ProtocolVersion,
-		HTTPURL:      baseURL,
+		HTTPURL:      run.baseURL,
 		BrowserWSURL: version.WebSocketDebuggerURL,
 		Loopback:     true,
 		Explicit:     true,
 	}
-	targetID := webmcp.TargetID(rawTarget.ID)
+	run.targetID = webmcp.TargetID(run.rawTarget.ID)
+	run.startBrokers(t)
+	return run
+}
 
-	wireA := &wireTraceRecorder{}
-	wireB := &wireTraceRecorder{}
-	brokerA := newCubecadeSharedBrowserBroker(candidate, wireA)
-	brokerB := newCubecadeSharedBrowserBroker(candidate, wireB)
-	closedA := false
-	closedB := false
+func (r *cubecadeSharedRun) startBrokers(t *testing.T) {
+	t.Helper()
+	r.wireA = &wireTraceRecorder{}
+	r.wireB = &wireTraceRecorder{}
+	r.brokerA = newCubecadeSharedBrowserBroker(r.candidate, r.wireA)
+	r.brokerB = newCubecadeSharedBrowserBroker(r.candidate, r.wireB)
 	t.Cleanup(func() {
-		if !closedB {
-			if closeErr := brokerB.Close(); closeErr != nil {
+		if !r.closedB {
+			if closeErr := r.brokerB.Close(); closeErr != nil {
 				t.Logf("participant B broker cleanup: %v", closeErr)
 			}
 		}
-		if !closedA {
-			if closeErr := brokerA.Close(); closeErr != nil {
+		if !r.closedA {
+			if closeErr := r.brokerA.Close(); closeErr != nil {
 				t.Logf("participant A broker cleanup: %v", closeErr)
 			}
 		}
 	})
+}
 
-	selectedA, err := brokerA.Select(ctx, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: targetID})
+func (r *cubecadeSharedRun) selectBothParticipants(t *testing.T, ctx context.Context) {
+	t.Helper()
+	var err error
+	r.selectedA, err = r.brokerA.Select(ctx, webmcp.TargetSelector{BrowserID: r.candidate.ID, TargetID: r.targetID})
 	if err != nil {
 		t.Fatalf("participant A select shared Cubecade target: %v", err)
 	}
-	selectedB, err := brokerB.Select(ctx, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: targetID})
+	r.selectedB, err = r.brokerB.Select(ctx, webmcp.TargetSelector{BrowserID: r.candidate.ID, TargetID: r.targetID})
 	if err != nil {
 		t.Fatalf("participant B select shared Cubecade target: %v", err)
 	}
-	assertSharedBrowserSelection(t, "A", selectedA, candidate.ID, targetID)
-	assertSharedBrowserSelection(t, "B", selectedB, candidate.ID, targetID)
+	assertSharedBrowserSelection(t, "A", r.selectedA, r.candidate.ID, r.targetID)
+	assertSharedBrowserSelection(t, "B", r.selectedB, r.candidate.ID, r.targetID)
 
-	catalogA, err := brokerA.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+	r.catalogA, err = r.brokerA.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
 		t.Fatalf("participant A list Cubecade tools: %v", err)
 	}
-	catalogB, err := brokerB.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+	r.catalogB, err = r.brokerB.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
 		t.Fatalf("participant B list Cubecade tools: %v", err)
 	}
-	queueA := requireSharedBrowserTool(t, "A", catalogA, cubecadeSharedBrowserQueueTool)
-	stateA := requireSharedBrowserTool(t, "A", catalogA, cubecadeSharedBrowserStateTool)
-	queueB := requireSharedBrowserTool(t, "B", catalogB, cubecadeSharedBrowserQueueTool)
-	stateB := requireSharedBrowserTool(t, "B", catalogB, cubecadeSharedBrowserStateTool)
-	if queueA.Ref == queueB.Ref || stateA.Ref == stateB.Ref {
-		t.Fatalf("participant page refs are not isolated: A=(%q,%q) B=(%q,%q)", queueA.Ref, stateA.Ref, queueB.Ref, stateB.Ref)
+	r.queueA = requireSharedBrowserTool(t, "A", r.catalogA, cubecadeSharedBrowserQueueTool)
+	r.stateA = requireSharedBrowserTool(t, "A", r.catalogA, cubecadeSharedBrowserStateTool)
+	queueB := requireSharedBrowserTool(t, "B", r.catalogB, cubecadeSharedBrowserQueueTool)
+	r.stateB = requireSharedBrowserTool(t, "B", r.catalogB, cubecadeSharedBrowserStateTool)
+	if r.queueA.Ref == queueB.Ref || r.stateA.Ref == r.stateB.Ref {
+		t.Fatalf("participant page refs are not isolated: A=(%q,%q) B=(%q,%q)", r.queueA.Ref, r.stateA.Ref, queueB.Ref, r.stateB.Ref)
 	}
-	assertSharedBrowserFirstClassTools(t, ctx, brokerA, "A")
-	assertSharedBrowserFirstClassTools(t, ctx, brokerB, "B")
+	assertSharedBrowserFirstClassTools(t, ctx, r.brokerA, "A")
+	assertSharedBrowserFirstClassTools(t, ctx, r.brokerB, "B")
+}
 
-	queueInvocation, queueRecord, queueTerminal, err := invokeSharedBrowserTool(ctx, brokerA, queueA, "participant-a", "response-a-queue", `{"moves":["R","U","F","L'","D","B2"]}`)
+func (r *cubecadeSharedRun) queueMovesAsA(t *testing.T, ctx context.Context) (webmcp.InvocationID, webmcp.InvokeResult, time.Time) {
+	t.Helper()
+	queueInvocation, queueRecord, queueTerminal, err := invokeSharedBrowserTool(ctx, r.brokerA, r.queueA, "participant-a", "response-a-queue", `{"moves":["R","U","F","L'","D","B2"]}`)
 	if err != nil {
 		t.Fatalf("participant A queue cube moves: %v", err)
 	}
-	assertSharedBrowserTerminal(t, "A queue_cube_moves", queueRecord, queueTerminal, candidate.ID, targetID, "participant-a")
+	assertSharedBrowserTerminal(t, "A queue_cube_moves", queueRecord, queueTerminal, r.candidate.ID, r.targetID, "participant-a")
 	if queueTerminal.State != webmcp.InvocationCompleted || queueTerminal.BrowserInvocationID == "" {
 		t.Fatalf("participant A queue terminal = %+v, want completed browser-backed receipt", queueTerminal)
 	}
@@ -158,41 +206,45 @@ func TestPinnedChromeCubecadeTwoIndependentBrokerSessions(t *testing.T) {
 	if !queueResult.Accepted || queueResult.QueueDepth != 0 || queueResult.MoveCount != 6 || queueResult.Solved {
 		t.Fatalf("participant A queue result = %+v, want accepted six-move unsolved state", queueResult)
 	}
-	queueCompletedAt := time.Now()
+	return queueInvocation, queueTerminal, time.Now()
+}
 
-	type readResult struct {
-		label      string
-		invocation webmcp.InvocationID
-		record     webmcp.Invocation
-		terminal   webmcp.InvokeResult
-		state      cubecadeSharedBrowserState
-		err        error
+// cubecadeSharedRead is one participant's concurrent get_cube_state receipt.
+type cubecadeSharedRead struct {
+	label      string
+	invocation webmcp.InvocationID
+	record     webmcp.Invocation
+	terminal   webmcp.InvokeResult
+	state      cubecadeSharedBrowserState
+	err        error
+}
+
+func readCubecadeSharedState(ctx context.Context, label string, broker *webmcp.StatefulBroker, tool webmcp.ToolDescriptor, sessionID, responseID string) cubecadeSharedRead {
+	invocation, record, terminal, invokeErr := invokeSharedBrowserTool(ctx, broker, tool, sessionID, responseID, `{}`)
+	result := cubecadeSharedRead{label: label, invocation: invocation, record: record, terminal: terminal, err: invokeErr}
+	if invokeErr == nil {
+		result.err = json.Unmarshal(terminal.Output, &result.state)
 	}
-	readResults := make(chan readResult, 2)
+	return result
+}
+
+func (r *cubecadeSharedRun) readStateConcurrently(t *testing.T, ctx context.Context, queueCompletedAt time.Time) []cubecadeSharedRead {
+	t.Helper()
+	readResults := make(chan cubecadeSharedRead, 2)
 	go func() {
-		invocation, record, terminal, invokeErr := invokeSharedBrowserTool(ctx, brokerA, stateA, "participant-a", "response-a-read", `{}`)
-		result := readResult{label: "A", invocation: invocation, record: record, terminal: terminal, err: invokeErr}
-		if invokeErr == nil {
-			result.err = json.Unmarshal(terminal.Output, &result.state)
-		}
-		readResults <- result
+		readResults <- readCubecadeSharedState(ctx, "A", r.brokerA, r.stateA, "participant-a", "response-a-read")
 	}()
 	go func() {
-		invocation, record, terminal, invokeErr := invokeSharedBrowserTool(ctx, brokerB, stateB, "participant-b", "response-b-read", `{}`)
-		result := readResult{label: "B", invocation: invocation, record: record, terminal: terminal, err: invokeErr}
-		if invokeErr == nil {
-			result.err = json.Unmarshal(terminal.Output, &result.state)
-		}
-		readResults <- result
+		readResults <- readCubecadeSharedState(ctx, "B", r.brokerB, r.stateB, "participant-b", "response-b-read")
 	}()
 
-	reads := make([]readResult, 0, 2)
+	reads := make([]cubecadeSharedRead, 0, 2)
 	for range 2 {
 		result := <-readResults
 		if result.err != nil {
 			t.Fatalf("participant %s get_cube_state: %v", result.label, result.err)
 		}
-		assertSharedBrowserTerminal(t, result.label+" get_cube_state", result.record, result.terminal, candidate.ID, targetID, result.record.SessionID)
+		assertSharedBrowserTerminal(t, result.label+" get_cube_state", result.record, result.terminal, r.candidate.ID, r.targetID, result.record.SessionID)
 		if result.terminal.State != webmcp.InvocationCompleted || result.terminal.BrowserInvocationID == "" {
 			t.Fatalf("participant %s state terminal = %+v, want completed browser-backed receipt", result.label, result.terminal)
 		}
@@ -209,48 +261,55 @@ func TestPinnedChromeCubecadeTwoIndependentBrokerSessions(t *testing.T) {
 			t.Fatalf("participant %s read receipt was admitted before queue terminal: read=%s queue_completed=%s", result.label, result.record.CreatedAt, queueCompletedAt)
 		}
 	}
+	return reads
+}
 
-	refreshedA, err := brokerA.ListTools(ctx, webmcp.ListToolsOptions{Refresh: true, IncludeSchemas: true})
+func (r *cubecadeSharedRun) assertRefreshIsolation(t *testing.T, ctx context.Context) {
+	t.Helper()
+	refreshedA, err := r.brokerA.ListTools(ctx, webmcp.ListToolsOptions{Refresh: true, IncludeSchemas: true})
 	if err != nil {
 		t.Fatalf("participant A refresh Cubecade catalog: %v", err)
 	}
-	if refreshedA.Context.Key != selectedA.Key || refreshedA.Generation != catalogA.Generation {
-		t.Fatalf("participant A refresh context = %+v, want original target/generation %+v/%d", refreshedA.Context, selectedA, catalogA.Generation)
+	if refreshedA.Context.Key != r.selectedA.Key || refreshedA.Generation != r.catalogA.Generation {
+		t.Fatalf("participant A refresh context = %+v, want original target/generation %+v/%d", refreshedA.Context, r.selectedA, r.catalogA.Generation)
 	}
-	selectedBAfterRefresh, err := brokerB.Selected(ctx)
+	selectedBAfterRefresh, err := r.brokerB.Selected(ctx)
 	if err != nil {
 		t.Fatalf("participant B selected context after A refresh: %v", err)
 	}
-	if selectedBAfterRefresh.Key != selectedB.Key || selectedBAfterRefresh.Generation != selectedB.Generation || !selectedBAfterRefresh.Connected {
-		t.Fatalf("participant B context after A refresh = %+v, want unchanged connected selection %+v", selectedBAfterRefresh, selectedB)
+	if selectedBAfterRefresh.Key != r.selectedB.Key || selectedBAfterRefresh.Generation != r.selectedB.Generation || !selectedBAfterRefresh.Connected {
+		t.Fatalf("participant B context after A refresh = %+v, want unchanged connected selection %+v", selectedBAfterRefresh, r.selectedB)
 	}
-	refreshedB, err := brokerB.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+	refreshedB, err := r.brokerB.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
 		t.Fatalf("participant B list after A refresh: %v", err)
 	}
-	if refreshedB.Context.Key != selectedB.Key || len(refreshedB.Tools) != len(catalogB.Tools) || !hasSharedBrowserTool(refreshedB.Tools, cubecadeSharedBrowserQueueTool) || !hasSharedBrowserTool(refreshedB.Tools, cubecadeSharedBrowserStateTool) {
+	if refreshedB.Context.Key != r.selectedB.Key || len(refreshedB.Tools) != len(r.catalogB.Tools) || !hasSharedBrowserTool(refreshedB.Tools, cubecadeSharedBrowserQueueTool) || !hasSharedBrowserTool(refreshedB.Tools, cubecadeSharedBrowserStateTool) {
 		t.Fatalf("participant B catalog after A refresh = %+v, want unchanged shared-page surface", refreshedB)
 	}
+}
 
-	if err := brokerA.Close(); err != nil {
+func (r *cubecadeSharedRun) closeAAndReadB(t *testing.T, ctx context.Context) webmcp.InvokeResult {
+	t.Helper()
+	if err := r.brokerA.Close(); err != nil {
 		t.Fatalf("close participant A broker: %v", err)
 	}
-	closedA = true
-	selectedBAfterClose, err := brokerB.Selected(ctx)
+	r.closedA = true
+	selectedBAfterClose, err := r.brokerB.Selected(ctx)
 	if err != nil {
 		t.Fatalf("participant B selected context after A close: %v", err)
 	}
-	if selectedBAfterClose.Key != selectedB.Key || !selectedBAfterClose.Connected {
+	if selectedBAfterClose.Key != r.selectedB.Key || !selectedBAfterClose.Connected {
 		t.Fatalf("participant B context after A close = %+v, want connected original target", selectedBAfterClose)
 	}
-	postCloseInvocation, postCloseRecord, postCloseTerminal, err := invokeSharedBrowserTool(ctx, brokerB, stateB, "participant-b", "response-b-after-close", `{}`)
+	postCloseInvocation, postCloseRecord, postCloseTerminal, err := invokeSharedBrowserTool(ctx, r.brokerB, r.stateB, "participant-b", "response-b-after-close", `{}`)
 	if err != nil {
 		t.Fatalf("participant B read after A close: %v", err)
 	}
 	if postCloseInvocation == "" {
 		t.Fatal("participant B read after A close returned an empty receipt")
 	}
-	assertSharedBrowserTerminal(t, "B get_cube_state after A close", postCloseRecord, postCloseTerminal, candidate.ID, targetID, "participant-b")
+	assertSharedBrowserTerminal(t, "B get_cube_state after A close", postCloseRecord, postCloseTerminal, r.candidate.ID, r.targetID, "participant-b")
 	if postCloseTerminal.State != webmcp.InvocationCompleted || postCloseTerminal.BrowserInvocationID == "" {
 		t.Fatalf("participant B post-close terminal = %+v, want completed browser-backed receipt", postCloseTerminal)
 	}
@@ -261,36 +320,39 @@ func TestPinnedChromeCubecadeTwoIndependentBrokerSessions(t *testing.T) {
 	if postCloseState.MoveCount != 6 || postCloseState.QueueDepth != 0 || postCloseState.Solved {
 		t.Fatalf("participant B post-close state = %+v, want completed six-move state", postCloseState)
 	}
+	return postCloseTerminal
+}
 
-	directState, err := inspectCubecadeSharedBrowserTarget(ctx, browser.endpoint(), rawTarget.ID)
+func (r *cubecadeSharedRun) detachBoth(t *testing.T, ctx context.Context) cubecadeSharedBrowserState {
+	t.Helper()
+	directState, err := inspectCubecadeSharedBrowserTarget(ctx, r.browser.endpoint(), r.rawTarget.ID)
 	if err != nil {
 		t.Fatalf("inspect direct Cubecade DOM state after participant A close: %v", err)
 	}
-	if directState.URL != fixtureURL || directState.MoveCount != 6 || directState.QueueDepth != 0 || directState.Solved || directState.VisibleText == "" {
+	if directState.URL != r.fixtureURL || directState.MoveCount != 6 || directState.QueueDepth != 0 || directState.Solved || directState.VisibleText == "" {
 		t.Fatalf("direct Cubecade DOM state = %+v, want same completed six-move page state", directState)
 	}
 
-	if err := brokerB.Close(); err != nil {
+	if err := r.brokerB.Close(); err != nil {
 		t.Fatalf("close participant B broker: %v", err)
 	}
-	closedB = true
-	if _, err := waitForFixtureTarget(ctx, baseURL, targetID, fixtureURL, true); err != nil {
+	r.closedB = true
+	if _, err := waitForFixtureTarget(ctx, r.baseURL, r.targetID, r.fixtureURL, true); err != nil {
 		t.Fatalf("shared Cubecade target after both participant detach: %v", err)
 	}
-	if err := browser.Close(); err != nil {
+	if err := r.browser.Close(); err != nil {
 		t.Logf("close test-owned Chrome returned: %v", err)
 	}
-	closedBrowser = true
+	r.closedBrowser = true
 
-	assertSharedBrowserWireTraces(t, wireA.snapshot(), "A", candidate.ID, targetID)
-	assertSharedBrowserWireTraces(t, wireB.snapshot(), "B", candidate.ID, targetID)
-	aSessionID := sharedBrowserWireSessionID(wireA.snapshot())
-	bSessionID := sharedBrowserWireSessionID(wireB.snapshot())
+	assertSharedBrowserWireTraces(t, r.wireA.snapshot(), "A", r.candidate.ID, r.targetID)
+	assertSharedBrowserWireTraces(t, r.wireB.snapshot(), "B", r.candidate.ID, r.targetID)
+	aSessionID := sharedBrowserWireSessionID(r.wireA.snapshot())
+	bSessionID := sharedBrowserWireSessionID(r.wireB.snapshot())
 	if aSessionID == "" || bSessionID == "" || aSessionID == bSessionID {
 		t.Fatalf("target session identities = A:%q B:%q, want distinct attached sessions", aSessionID, bSessionID)
 	}
-
-	t.Logf("WEBMCP_CUBECADE_SHARED_PASS chrome=%s revision=%s browser=%s target=%s participant_a_queue_receipt=%s participant_a_queue_status=%s participant_a_read_receipt=%s participant_b_read_receipt=%s participant_b_post_close_receipt=%s state_moves=%d queue_depth=%d solved=%t session_ids_distinct=true external_target_survived=true provider=false credentials=false", pinned.Lock.Version, pinned.Lock.Revision, candidate.ID, targetID, queueInvocation, queueTerminal.State, reads[0].terminal.InvocationID, reads[1].terminal.InvocationID, postCloseTerminal.InvocationID, directState.MoveCount, directState.QueueDepth, directState.Solved)
+	return directState
 }
 
 func newCubecadeSharedBrowserBroker(candidate webmcp.BrowserCandidate, wire *wireTraceRecorder) *webmcp.StatefulBroker {

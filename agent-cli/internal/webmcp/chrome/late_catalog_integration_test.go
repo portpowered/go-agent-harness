@@ -34,24 +34,55 @@ func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
 	if os.Getenv(lateCatalogIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the pinned late-catalog integration proof", lateCatalogIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
+	run := launchLateCatalog(t, ctx)
+	run.startBroker(t)
+	selected := run.assertDeadlineKeepsSelection(t, ctx)
+	invokedOracle := run.invokeLateTool(t, ctx, selected)
+	run.assertRetainedSessionTraces(t)
+	if err := run.broker.Close(); err != nil {
+		t.Fatalf("close late catalog broker: %v", err)
+	}
+	if _, err := waitForFixtureTarget(ctx, run.baseURL, webmcp.TargetID(run.rawLate.ID), run.lateURL, true); err != nil {
+		t.Fatalf("external late target after broker detach: %v", err)
+	}
+
+	producerlessRaw, emptyRaw := run.openNegativeControlTargets(t, ctx)
+	runPinnedCatalogNegativeControls(t, ctx, run.adapter, run.candidate, run.baseURL, run.fixture, producerlessRaw, emptyRaw)
+	t.Logf("WEBMCP_LATE_CATALOG_PASS chrome=%s revision=%s platform=%s target=%s generation=1 registered=true invocations=%d negative_controls=producerless_prompt,empty_ready", lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, run.rawLate.ID, invokedOracle.InvocationCount)
+}
+
+// lateCatalogRun is the pinned browser, gated fixture, and broker shared by
+// the late-catalog phases.
+type lateCatalogRun struct {
+	fixture   *lateCatalogFixture
+	lateURL   string
+	baseURL   string
+	candidate webmcp.BrowserCandidate
+	rawLate   devToolsTarget
+	wire      *wireTraceRecorder
+	adapter   *Runtime
+	broker    *webmcp.StatefulBroker
+}
+
+func launchLateCatalog(t *testing.T, ctx context.Context) *lateCatalogRun {
+	t.Helper()
 	pinned, err := acquirePinnedChrome(ctx, t.TempDir())
 	if err != nil {
 		t.Fatalf("acquire locked Chrome for Testing: %v", err)
 	}
-
-	fixture := newLateCatalogFixture()
+	run := &lateCatalogRun{fixture: newLateCatalogFixture()}
 	t.Cleanup(func() {
-		fixture.ReleaseLoading()
-		fixture.Close()
+		run.fixture.ReleaseLoading()
+		run.fixture.Close()
 	})
-	lateURL := fixture.URL(lateCatalogPath)
-	browser, err := launchPinnedChrome(ctx, pinned, lateURL)
+	run.lateURL = run.fixture.URL(lateCatalogPath)
+	browser, err := launchPinnedChrome(ctx, pinned, run.lateURL)
 	if err != nil {
 		t.Fatalf("launch locked Chrome for Testing: %v", err)
 	}
@@ -61,116 +92,106 @@ func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
 		}
 	})
 
-	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	run.baseURL = browserHTTPURL(browser.endpoint())
+	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
-	if err := fixture.WaitForLoadingRequest(ctx); err != nil {
+	if err := run.fixture.WaitForLoadingRequest(ctx); err != nil {
 		t.Fatalf("wait for fixture loading gate: %v", err)
 	}
-	if _, err := waitForFixturePageTarget(ctx, baseURL, lateURL); err != nil {
+	if _, err := waitForFixturePageTarget(ctx, run.baseURL, run.lateURL); err != nil {
 		t.Fatalf("discover late-registration target: %v", err)
 	}
 
-	candidate := webmcp.BrowserCandidate{
+	run.candidate = webmcp.BrowserCandidate{
 		ID:           "chrome-late-catalog",
 		Source:       webmcp.DiscoverySourceExplicit,
 		Product:      version.Browser,
 		Protocol:     version.ProtocolVersion,
-		HTTPURL:      baseURL,
+		HTTPURL:      run.baseURL,
 		BrowserWSURL: version.WebSocketDebuggerURL,
 		Loopback:     true,
 		Explicit:     true,
 	}
-	targets, err := readDevToolsTargets(ctx, baseURL)
+	targets, err := readDevToolsTargets(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read late-registration target list: %v", err)
 	}
-	rawLate, err := findRawFixtureTarget(targets, lateURL)
+	run.rawLate, err = findRawFixtureTarget(targets, run.lateURL)
 	if err != nil {
 		t.Fatalf("find late-registration target: %v", err)
 	}
+	return run
+}
 
-	wire := &wireTraceRecorder{}
-	adapter := NewRuntime(
+func (r *lateCatalogRun) startBroker(t *testing.T) {
+	t.Helper()
+	r.wire = &wireTraceRecorder{}
+	r.adapter = NewRuntime(
 		WithEventBuffer(128),
 		WithCommandTimeout(15*time.Second),
-		WithWireTraceSink(wire),
+		WithWireTraceSink(r.wire),
 	)
-	broker := webmcp.NewBroker(webmcp.BrokerOptions{
-		Runtime:            adapter,
-		Discoverer:         pinnedCatalogDiscoverer{candidate: candidate},
+	r.broker = webmcp.NewBroker(webmcp.BrokerOptions{
+		Runtime:            r.adapter,
+		Discoverer:         pinnedCatalogDiscoverer{candidate: r.candidate},
 		CatalogWait:        100 * time.Millisecond,
 		LoadingCatalogWait: 100 * time.Millisecond,
 	})
-	t.Cleanup(func() { _ = broker.Close() })
+	t.Cleanup(func() { discardSecondaryError(r.broker.Close) })
+}
 
+func (r *lateCatalogRun) assertDeadlineKeepsSelection(t *testing.T, ctx context.Context) webmcp.PageContext {
+	t.Helper()
+	targetID := webmcp.TargetID(r.rawLate.ID)
 	selectContext, cancelSelect := context.WithTimeout(ctx, 30*time.Second)
-	_, selectErr := broker.Select(selectContext, webmcp.TargetSelector{
-		BrowserID: candidate.ID,
-		TargetID:  webmcp.TargetID(rawLate.ID),
+	_, selectErr := r.broker.Select(selectContext, webmcp.TargetSelector{
+		BrowserID: r.candidate.ID,
+		TargetID:  targetID,
 	})
 	cancelSelect()
 	if selectErr == nil {
-		_ = broker.Close()
-		t.Fatal("late registration selection succeeded before the fixture gate was released")
+		failClosingBroker(t, r.broker, "late registration selection succeeded before the fixture gate was released")
 	}
-	assertLateCatalogDeadline(t, selectErr, candidate.ID, webmcp.TargetID(rawLate.ID))
+	assertLateCatalogDeadline(t, selectErr, r.candidate.ID, targetID)
 
-	selected, err := broker.Selected(ctx)
+	selected, err := r.broker.Selected(ctx)
 	if err != nil {
-		_ = broker.Close()
-		t.Fatalf("read selected page after catalog deadline: %v", err)
+		failClosingBroker(t, r.broker, "read selected page after catalog deadline: %v", err)
 	}
-	if selected.Key.BrowserID != candidate.ID || selected.Key.TargetID != webmcp.TargetID(rawLate.ID) || selected.Generation != 1 || !selected.Connected {
-		_ = broker.Close()
-		t.Fatalf("selected page after catalog deadline = %+v, want exact connected target generation one", selected)
+	if selected.Key.BrowserID != r.candidate.ID || selected.Key.TargetID != targetID || selected.Generation != 1 || !selected.Connected {
+		failClosingBroker(t, r.broker, "selected page after catalog deadline = %+v, want exact connected target generation one", selected)
 	}
+	return selected
+}
 
-	fixture.ReleaseLoading()
-	registered, err := fixture.WaitForOracle(ctx, func(oracle lateCatalogOracle) bool {
+func (r *lateCatalogRun) invokeLateTool(t *testing.T, ctx context.Context, selected webmcp.PageContext) lateCatalogOracle {
+	t.Helper()
+	r.fixture.ReleaseLoading()
+	registered, err := r.fixture.WaitForOracle(ctx, func(oracle lateCatalogOracle) bool {
 		return oracle.Registered && oracle.RegistrationError == ""
 	})
 	if err != nil {
-		_ = broker.Close()
-		t.Fatalf("wait for late registration oracle: %v", err)
+		failClosingBroker(t, r.broker, "wait for late registration oracle: %v", err)
 	}
 	if registered.InvocationCount != 0 {
-		_ = broker.Close()
-		t.Fatalf("registration oracle before broker invocation = %+v, want zero invocations", registered)
+		failClosingBroker(t, r.broker, "registration oracle before broker invocation = %+v, want zero invocations", registered)
 	}
-
-	snapshot, err := broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		_ = broker.Close()
-		t.Fatalf("list late catalog on original selection: %v", err)
-	}
-	if snapshot.Generation != 1 || snapshot.Context.Key != selected.Key || !snapshot.Context.Ready || !snapshot.Context.CatalogReady || len(snapshot.Tools) != 1 || snapshot.Tools[0].Name != lateCatalogToolName {
-		_ = broker.Close()
-		t.Fatalf("late catalog snapshot = %+v, want one ready tool on the original target/generation", snapshot)
-	}
-	if snapshot.Tools[0].FrameID == "" || len(snapshot.Tools[0].InputSchema) == 0 {
-		_ = broker.Close()
-		t.Fatalf("late catalog tool = %+v, want frame and schema", snapshot.Tools[0])
-	}
-
-	invocation, err := broker.Invoke(ctx, webmcp.InvokeRequest{
-		ToolRef: snapshot.Tools[0].Ref,
+	tool := r.requireLateTool(t, ctx, selected)
+	invocation, err := r.broker.Invoke(ctx, webmcp.InvokeRequest{
+		ToolRef: tool.Ref,
 		Input:   json.RawMessage(`{"message":"late"}`),
 	})
 	if err != nil {
-		_ = broker.Close()
-		t.Fatalf("invoke late catalog tool: %v", err)
+		failClosingBroker(t, r.broker, "invoke late catalog tool: %v", err)
 	}
-	terminal, err := broker.WaitInvocation(ctx, invocation.InvocationID)
+	terminal, err := r.broker.WaitInvocation(ctx, invocation.InvocationID)
 	if err != nil {
-		_ = broker.Close()
-		t.Fatalf("wait for late catalog invocation: %v", err)
+		failClosingBroker(t, r.broker, "wait for late catalog invocation: %v", err)
 	}
 	if terminal.State != webmcp.InvocationCompleted || terminal.BrowserInvocationID == "" {
-		_ = broker.Close()
-		t.Fatalf("late catalog terminal result = %+v, want completed result with browser correlation", terminal)
+		failClosingBroker(t, r.broker, "late catalog terminal result = %+v, want completed result with browser correlation", terminal)
 	}
 	var output struct {
 		OK              bool   `json:"ok"`
@@ -178,61 +199,72 @@ func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
 		InvocationCount int    `json:"invocationCount"`
 	}
 	if err := json.Unmarshal(terminal.Output, &output); err != nil {
-		_ = broker.Close()
-		t.Fatalf("decode late catalog terminal output: %v", err)
+		failClosingBroker(t, r.broker, "decode late catalog terminal output: %v", err)
 	}
 	if !output.OK || output.Message != "late" || output.InvocationCount != 1 {
-		_ = broker.Close()
-		t.Fatalf("late catalog terminal output = %+v, want one successful invocation", output)
+		failClosingBroker(t, r.broker, "late catalog terminal output = %+v, want one successful invocation", output)
 	}
-	invokedOracle, err := fixture.WaitForOracle(ctx, func(oracle lateCatalogOracle) bool {
+	invokedOracle, err := r.fixture.WaitForOracle(ctx, func(oracle lateCatalogOracle) bool {
 		return oracle.Registered && oracle.InvocationCount >= 1
 	})
 	if err != nil {
-		_ = broker.Close()
-		t.Fatalf("wait for invocation oracle: %v", err)
+		failClosingBroker(t, r.broker, "wait for invocation oracle: %v", err)
 	}
 	if invokedOracle.InvocationCount != 1 || invokedOracle.LastMessage != "late" {
-		_ = broker.Close()
-		t.Fatalf("invocation oracle = %+v, want exactly one late invocation", invokedOracle)
+		failClosingBroker(t, r.broker, "invocation oracle = %+v, want exactly one late invocation", invokedOracle)
 	}
+	return invokedOracle
+}
 
-	traces := wire.snapshot()
+// requireLateTool lists the late catalog on the original selection and
+// returns its single registered tool.
+func (r *lateCatalogRun) requireLateTool(t *testing.T, ctx context.Context, selected webmcp.PageContext) webmcp.ToolDescriptor {
+	t.Helper()
+	snapshot, err := r.broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+	if err != nil {
+		failClosingBroker(t, r.broker, "list late catalog on original selection: %v", err)
+	}
+	if snapshot.Generation != 1 || snapshot.Context.Key != selected.Key || !snapshot.Context.Ready || !snapshot.Context.CatalogReady || len(snapshot.Tools) != 1 || snapshot.Tools[0].Name != lateCatalogToolName {
+		failClosingBroker(t, r.broker, "late catalog snapshot = %+v, want one ready tool on the original target/generation", snapshot)
+	}
+	if snapshot.Tools[0].FrameID == "" || len(snapshot.Tools[0].InputSchema) == 0 {
+		failClosingBroker(t, r.broker, "late catalog tool = %+v, want frame and schema", snapshot.Tools[0])
+	}
+	return snapshot.Tools[0]
+}
+
+func (r *lateCatalogRun) assertRetainedSessionTraces(t *testing.T) {
+	t.Helper()
+	targetID := webmcp.TargetID(r.rawLate.ID)
+	traces := r.wire.snapshot()
 	if len(traces) != 2 {
-		_ = broker.Close()
-		t.Fatalf("late catalog wire traces = %+v, want exactly one enable and one invoke on the retained session", traces)
+		failClosingBroker(t, r.broker, "late catalog wire traces = %+v, want exactly one enable and one invoke on the retained session", traces)
 	}
-	if traces[0].Method != webmcp.WebMCPEnableMethod || traces[1].Method != webmcp.WebMCPInvokeToolMethod || traces[0].TargetID != webmcp.TargetID(rawLate.ID) || traces[1].TargetID != webmcp.TargetID(rawLate.ID) || traces[0].TargetSessionID == "" || traces[0].TargetSessionID != traces[1].TargetSessionID || !traces[0].ListenerReady || !traces[1].ListenerReady {
-		_ = broker.Close()
-		t.Fatalf("late catalog wire traces = %+v, want enable/invoke on one listener-ready target session", traces)
+	if traces[0].Method != webmcp.WebMCPEnableMethod || traces[1].Method != webmcp.WebMCPInvokeToolMethod || traces[0].TargetID != targetID || traces[1].TargetID != targetID || traces[0].TargetSessionID == "" || traces[0].TargetSessionID != traces[1].TargetSessionID || !traces[0].ListenerReady || !traces[1].ListenerReady {
+		failClosingBroker(t, r.broker, "late catalog wire traces = %+v, want enable/invoke on one listener-ready target session", traces)
 	}
-	if err := broker.Close(); err != nil {
-		t.Fatalf("close late catalog broker: %v", err)
-	}
-	if _, err := waitForFixtureTarget(ctx, baseURL, webmcp.TargetID(rawLate.ID), lateURL, true); err != nil {
-		t.Fatalf("external late target after broker detach: %v", err)
-	}
+}
 
-	producerlessRaw, err := openClassificationTarget(ctx, baseURL, fixture.URL(producerlessPath))
-	if err != nil {
-		t.Fatalf("open producerless negative-control target: %v", err)
-	}
-	if _, err := waitForFixturePageTarget(ctx, baseURL, fixture.URL(producerlessPath)); err != nil {
-		t.Fatalf("discover producerless negative-control target: %v", err)
-	}
-	emptyRaw, err := openClassificationTarget(ctx, baseURL, fixture.URL(emptyCatalogPath))
-	if err != nil {
-		t.Fatalf("open empty-catalog negative-control target: %v", err)
-	}
-	if _, err := waitForFixturePageTarget(ctx, baseURL, fixture.URL(emptyCatalogPath)); err != nil {
-		t.Fatalf("discover empty-catalog negative-control target: %v", err)
-	}
-	if err := fixture.WaitForPageReady(ctx, emptyCatalogPath); err != nil {
+func (r *lateCatalogRun) openNegativeControlTargets(t *testing.T, ctx context.Context) (devToolsTarget, devToolsTarget) {
+	t.Helper()
+	producerlessRaw := r.openNegativeControlTarget(t, ctx, producerlessPath, "producerless")
+	emptyRaw := r.openNegativeControlTarget(t, ctx, emptyCatalogPath, "empty-catalog")
+	if err := r.fixture.WaitForPageReady(ctx, emptyCatalogPath); err != nil {
 		t.Fatalf("wait for empty-catalog page load: %v", err)
 	}
+	return producerlessRaw, emptyRaw
+}
 
-	runPinnedCatalogNegativeControls(t, ctx, adapter, candidate, baseURL, fixture, producerlessRaw, emptyRaw)
-	t.Logf("WEBMCP_LATE_CATALOG_PASS chrome=%s revision=%s platform=%s target=%s generation=1 registered=true invocations=%d negative_controls=producerless_prompt,empty_ready", lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, rawLate.ID, invokedOracle.InvocationCount)
+func (r *lateCatalogRun) openNegativeControlTarget(t *testing.T, ctx context.Context, path, label string) devToolsTarget {
+	t.Helper()
+	raw, err := openClassificationTarget(ctx, r.baseURL, r.fixture.URL(path))
+	if err != nil {
+		t.Fatalf("open %s negative-control target: %v", label, err)
+	}
+	if _, err := waitForFixturePageTarget(ctx, r.baseURL, r.fixture.URL(path)); err != nil {
+		t.Fatalf("discover %s negative-control target: %v", label, err)
+	}
+	return raw
 }
 
 func assertLateCatalogDeadline(t *testing.T, err error, browserID webmcp.BrowserID, targetID webmcp.TargetID) {
@@ -254,81 +286,59 @@ func assertLateCatalogDeadline(t *testing.T, err error, browserID webmcp.Browser
 
 func runPinnedCatalogNegativeControls(t *testing.T, ctx context.Context, adapter *Runtime, candidate webmcp.BrowserCandidate, baseURL string, fixture *lateCatalogFixture, producerless, empty devToolsTarget) {
 	t.Helper()
-	producerlessBroker := webmcp.NewBroker(webmcp.BrokerOptions{
-		Runtime:            adapter,
-		Discoverer:         pinnedCatalogDiscoverer{candidate: candidate},
-		CatalogWait:        150 * time.Millisecond,
-		LoadingCatalogWait: 150 * time.Millisecond,
-	})
-	started := time.Now()
-	producerlessPage, producerlessErr := producerlessBroker.Select(ctx, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: webmcp.TargetID(producerless.ID)})
-	elapsed := time.Since(started)
-	if producerlessErr == nil {
-		_ = producerlessBroker.Close()
-		t.Fatalf("producerless negative control unexpectedly selected successfully: %+v", producerlessPage)
-	}
-	assertLateCatalogDeadline(t, producerlessErr, candidate.ID, webmcp.TargetID(producerless.ID))
-	if elapsed >= time.Second {
-		_ = producerlessBroker.Close()
-		t.Fatalf("producerless negative-control selection took %s, want prompt completion under one second", elapsed)
-	}
-	producerlessPage, err := producerlessBroker.Selected(ctx)
-	if err != nil {
-		_ = producerlessBroker.Close()
-		t.Fatalf("producerless selected page after prompt diagnostic: %v", err)
-	}
-	if !producerlessPage.Connected || producerlessPage.Ready || producerlessPage.CatalogReady || producerlessPage.Generation != 1 || producerlessPage.DocumentReadyState != webmcp.DocumentReadyStateComplete || producerlessPage.DocumentLoading || !producerlessPage.DocumentLoadingKnown {
-		_ = producerlessBroker.Close()
-		t.Fatalf("producerless selected page = %+v, want load-complete connected recoverable unready state", producerlessPage)
-	}
-	if err := producerlessBroker.Close(); err != nil {
-		t.Fatalf("close producerless negative-control broker: %v", err)
-	}
+	assertProducerlessNegativeControl(t, ctx, newNegativeControlBroker(adapter, candidate), candidate.ID, webmcp.TargetID(producerless.ID))
 	if _, err := waitForFixtureTarget(ctx, baseURL, webmcp.TargetID(producerless.ID), fixture.URL(producerlessPath), true); err != nil {
 		t.Fatalf("producerless target after broker detach: %v", err)
 	}
-
-	emptyBroker := webmcp.NewBroker(webmcp.BrokerOptions{
-		Runtime:            adapter,
-		Discoverer:         pinnedCatalogDiscoverer{candidate: candidate},
-		CatalogWait:        150 * time.Millisecond,
-		LoadingCatalogWait: 150 * time.Millisecond,
-	})
-	emptyPage, err := emptyBroker.Select(ctx, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: webmcp.TargetID(empty.ID)})
-	if err != nil {
-		_ = emptyBroker.Close()
-		t.Fatalf("explicit empty-catalog selection: %v", err)
-	}
-	if !emptyPage.Connected || !emptyPage.Ready || !emptyPage.CatalogReady || emptyPage.Generation != 1 {
-		_ = emptyBroker.Close()
-		t.Fatalf("empty-catalog selected page = %+v, want ready generation-one selection", emptyPage)
-	}
-	emptySnapshot, err := emptyBroker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
-	if err != nil {
-		_ = emptyBroker.Close()
-		t.Fatalf("explicit empty-catalog list: %v", err)
-	}
-	if emptySnapshot.Generation != 1 || len(emptySnapshot.Tools) != 0 || !emptySnapshot.Context.Ready || !emptySnapshot.Context.CatalogReady {
-		_ = emptyBroker.Close()
-		t.Fatalf("empty-catalog snapshot = %+v, want zero tools and explicit readiness", emptySnapshot)
-	}
-	if err := emptyBroker.Close(); err != nil {
-		t.Fatalf("close empty-catalog negative-control broker: %v", err)
-	}
+	assertEmptyCatalogNegativeControl(t, ctx, newNegativeControlBroker(adapter, candidate), candidate.ID, webmcp.TargetID(empty.ID))
 	if _, err := waitForFixtureTarget(ctx, baseURL, webmcp.TargetID(empty.ID), fixture.URL(emptyCatalogPath), true); err != nil {
 		t.Fatalf("empty-catalog target after broker detach: %v", err)
 	}
 }
 
-type pinnedCatalogDiscoverer struct {
-	candidate webmcp.BrowserCandidate
+func assertProducerlessNegativeControl(t *testing.T, ctx context.Context, broker *webmcp.StatefulBroker, browserID webmcp.BrowserID, targetID webmcp.TargetID) {
+	t.Helper()
+	started := time.Now()
+	producerlessPage, producerlessErr := broker.Select(ctx, webmcp.TargetSelector{BrowserID: browserID, TargetID: targetID})
+	elapsed := time.Since(started)
+	if producerlessErr == nil {
+		failClosingBroker(t, broker, "producerless negative control unexpectedly selected successfully: %+v", producerlessPage)
+	}
+	assertLateCatalogDeadline(t, producerlessErr, browserID, targetID)
+	if elapsed >= time.Second {
+		failClosingBroker(t, broker, "producerless negative-control selection took %s, want prompt completion under one second", elapsed)
+	}
+	producerlessPage, err := broker.Selected(ctx)
+	if err != nil {
+		failClosingBroker(t, broker, "producerless selected page after prompt diagnostic: %v", err)
+	}
+	if !producerlessPage.Connected || producerlessPage.Ready || producerlessPage.CatalogReady || producerlessPage.Generation != 1 || producerlessPage.DocumentReadyState != webmcp.DocumentReadyStateComplete || producerlessPage.DocumentLoading || !producerlessPage.DocumentLoadingKnown {
+		failClosingBroker(t, broker, "producerless selected page = %+v, want load-complete connected recoverable unready state", producerlessPage)
+	}
+	if err := broker.Close(); err != nil {
+		t.Fatalf("close producerless negative-control broker: %v", err)
+	}
 }
 
-func (d pinnedCatalogDiscoverer) Discover(_ context.Context, options webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	if options.BrowserID != "" && options.BrowserID != d.candidate.ID {
-		return nil, nil
+func assertEmptyCatalogNegativeControl(t *testing.T, ctx context.Context, broker *webmcp.StatefulBroker, browserID webmcp.BrowserID, targetID webmcp.TargetID) {
+	t.Helper()
+	emptyPage, err := broker.Select(ctx, webmcp.TargetSelector{BrowserID: browserID, TargetID: targetID})
+	if err != nil {
+		failClosingBroker(t, broker, "explicit empty-catalog selection: %v", err)
 	}
-	return []webmcp.BrowserCandidate{d.candidate}, nil
+	if !emptyPage.Connected || !emptyPage.Ready || !emptyPage.CatalogReady || emptyPage.Generation != 1 {
+		failClosingBroker(t, broker, "empty-catalog selected page = %+v, want ready generation-one selection", emptyPage)
+	}
+	emptySnapshot, err := broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+	if err != nil {
+		failClosingBroker(t, broker, "explicit empty-catalog list: %v", err)
+	}
+	if emptySnapshot.Generation != 1 || len(emptySnapshot.Tools) != 0 || !emptySnapshot.Context.Ready || !emptySnapshot.Context.CatalogReady {
+		failClosingBroker(t, broker, "empty-catalog snapshot = %+v, want zero tools and explicit readiness", emptySnapshot)
+	}
+	if err := broker.Close(); err != nil {
+		t.Fatalf("close empty-catalog negative-control broker: %v", err)
+	}
 }
 
 type lateCatalogOracle struct {
@@ -619,16 +629,3 @@ window.addEventListener("load", async () => {
   fetch("/__test/ready?path=/empty", { method: "POST" }).catch(() => {});
 });
 </script></body></html>`)
-
-func findRawFixtureTarget(targets []devToolsTarget, fixtureURL string) (devToolsTarget, error) {
-	var matches []devToolsTarget
-	for _, target := range targets {
-		if target.Type == "page" && target.URL == fixtureURL {
-			matches = append(matches, target)
-		}
-	}
-	if len(matches) != 1 {
-		return devToolsTarget{}, fmt.Errorf("found %d page targets for fixture URL %q", len(matches), fixtureURL)
-	}
-	return matches[0], nil
-}

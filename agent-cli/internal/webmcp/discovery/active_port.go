@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +15,44 @@ import (
 )
 
 const maxActivePortBytes int64 = 4096
+
+// Public placeholder values used where the real value is absent or must not
+// be disclosed.
+const (
+	unknownValue               = "unknown"
+	redactedValue              = "redacted"
+	nilErrorText               = "<nil>"
+	browserDisconnectedMessage = "browser connection disconnected"
+)
+
+// Failure phases, CDP target types and stale/eligibility reasons shared by
+// discovery, selection, lifecycle and persistence.
+const (
+	phaseDisconnect              = "disconnect"
+	phaseTargets                 = "targets"
+	targetTypePage               = "page"
+	urlReasonMalformed           = "malformed_url"
+	staleReasonBrowserReplaced   = "browser_replaced"
+	staleReasonGenerationChanged = "generation_changed"
+	staleReasonContinuityChanged = "continuity_changed"
+	staleReasonTargetClosed      = string(LifecycleTargetClosed)
+	eligibilityUnsupportedWebMCP = string(CodeUnsupportedWebMCP)
+)
+
+// Endpoint URL schemes accepted for the CDP HTTP discovery endpoint.
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
+)
+
+// closeAfterRead releases a read-only resource once its content has been
+// consumed. A close failure cannot invalidate bytes that were already read and
+// validated, so it is deliberately not surfaced to the caller.
+func closeAfterRead(closer io.Closer) {
+	if err := closer.Close(); err != nil {
+		return
+	}
+}
 
 // FileActivePortReader reads the standard DevToolsActivePort file without
 // assuming that the harness owns the browser or profile.
@@ -29,7 +68,7 @@ func (FileActivePortReader) Read(ctx context.Context, userDataDir string) (Activ
 	if err != nil {
 		return ActivePortRecord{}, err
 	}
-	defer file.Close()
+	defer closeAfterRead(file)
 
 	data, err := io.ReadAll(io.LimitReader(file, maxActivePortBytes+1))
 	if err != nil {
@@ -83,4 +122,112 @@ func endpointFromActivePort(record ActivePortRecord) (Endpoint, error) {
 		CDPURL:            fmt.Sprintf("http://127.0.0.1:%d/json/version", record.Port),
 		BrowserWSEndpoint: fmt.Sprintf("ws://127.0.0.1:%d%s", record.Port, path),
 	}, nil
+}
+
+type parseURLFailure struct{ reason string }
+
+func (e *parseURLFailure) Error() string {
+	if e == nil {
+		return "invalid endpoint"
+	}
+	return e.reason
+}
+
+func parseHTTPURL(raw string) (*url.URL, *parseURLFailure) {
+	trimmed := strings.TrimSpace(raw)
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed == nil {
+		return nil, &parseURLFailure{reason: "malformed_endpoint"}
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	if parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
+		return nil, &parseURLFailure{reason: "unsupported_endpoint_scheme"}
+	}
+	if parsed.Host == "" || parsed.Hostname() == "" {
+		return nil, &parseURLFailure{reason: "missing_endpoint_host"}
+	}
+	if parsed.User != nil {
+		return nil, &parseURLFailure{reason: "credentials_not_allowed"}
+	}
+	if parsed.Port() != "" {
+		port, err := strconv.Atoi(parsed.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return nil, &parseURLFailure{reason: "invalid_endpoint_port"}
+		}
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed, nil
+}
+
+type normalizedWebSocketURL struct {
+	url      *url.URL
+	loopback bool
+}
+
+func parseBrowserWebSocketURL(raw string) (normalizedWebSocketURL, *parseURLFailure) {
+	trimmed := strings.TrimSpace(raw)
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed == nil {
+		return normalizedWebSocketURL{}, &parseURLFailure{reason: "malformed_browser_websocket"}
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
+		return normalizedWebSocketURL{}, &parseURLFailure{reason: "unsupported_websocket_scheme"}
+	}
+	if parsed.Host == "" || parsed.Hostname() == "" {
+		return normalizedWebSocketURL{}, &parseURLFailure{reason: "missing_websocket_host"}
+	}
+	if parsed.User != nil {
+		return normalizedWebSocketURL{}, &parseURLFailure{reason: "credentials_not_allowed"}
+	}
+	if !strings.HasPrefix(parsed.Path, "/devtools/browser/") || strings.TrimPrefix(parsed.Path, "/devtools/browser/") == "" {
+		if strings.HasPrefix(parsed.Path, "/devtools/page/") {
+			return normalizedWebSocketURL{}, &parseURLFailure{reason: "page_websocket_not_browser_websocket"}
+		}
+		return normalizedWebSocketURL{}, &parseURLFailure{reason: "browser_websocket_path_required"}
+	}
+	if parsed.Port() != "" {
+		port, err := strconv.Atoi(parsed.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return normalizedWebSocketURL{}, &parseURLFailure{reason: "invalid_websocket_port"}
+		}
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return normalizedWebSocketURL{url: parsed, loopback: isLoopbackHost(parsed.Hostname())}, nil
+}
+
+func versionPath(path string) string {
+	path = strings.TrimRight(path, "/")
+	if path == "" || path == "/" {
+		return "/json/version"
+	}
+	if strings.HasSuffix(path, "/json/version") {
+		return path
+	}
+	return path + "/json/version"
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(strings.Trim(host, "[]"))
+	if strings.EqualFold(host, "localhost") || strings.EqualFold(host, "localhost.") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func addressClass(loopback bool) string {
+	if loopback {
+		return "loopback"
+	}
+	return "non_loopback"
+}
+
+func addressClassFromEndpointKind(kind EndpointKind) string {
+	if kind == EndpointKindCDPHTTP || kind == EndpointKindBrowserWebSocket || kind == EndpointKindActivePort {
+		return "loopback"
+	}
+	return "non_loopback"
 }

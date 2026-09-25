@@ -11,15 +11,17 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 )
 
+type loadingCatalogCase struct {
+	name              string
+	documentState     string
+	documentLoading   bool
+	wantDeadline      int
+	advanceBeforeFire time.Duration
+	advanceAfterCheck time.Duration
+}
+
 func TestStatefulBrokerUsesLoadingAwareFirstCatalogAllowance(t *testing.T) {
-	tests := []struct {
-		name              string
-		documentState     string
-		documentLoading   bool
-		wantDeadline      int
-		advanceBeforeFire time.Duration
-		advanceAfterCheck time.Duration
-	}{
+	tests := []loadingCatalogCase{
 		{
 			name:              "loading",
 			documentState:     webmcp.DocumentReadyStateLoading,
@@ -69,109 +71,127 @@ func TestStatefulBrokerUsesLoadingAwareFirstCatalogAllowance(t *testing.T) {
 				_, err := broker.Select(selectContext, webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-loading"})
 				result <- err
 			}()
-			if _, err := runtime.WaitForOperationAdmitted(selectContext, testkit.OperationEnableAcknowledged); err != nil {
-				t.Fatalf("wait for enable acknowledgement: %v", err)
-			}
-			select {
-			case wait := <-timers.created:
-				if wait != time.Duration(test.wantDeadline)*time.Millisecond {
-					t.Fatalf("catalog timer duration = %s, want %d ms", wait, test.wantDeadline)
-				}
-			case <-selectContext.Done():
-				t.Fatalf("wait for catalog timer creation: %v", selectContext.Err())
-			}
-
-			clock.Advance(test.advanceBeforeFire)
-			if test.advanceAfterCheck > 0 {
-				select {
-				case err := <-result:
-					t.Fatalf("select returned before loading-aware deadline: %v", err)
-				default:
-				}
-				clock.Advance(test.advanceAfterCheck)
-			}
-
-			var selectErr error
-			select {
-			case selectErr = <-result:
-			case <-selectContext.Done():
-				t.Fatalf("wait for loading-aware select result: %v", selectContext.Err())
-			}
-			if selectErr == nil {
-				t.Fatal("select succeeded without catalog evidence")
-			}
-			var classified *webmcp.ClassifiedError
-			if !errors.As(selectErr, &classified) {
-				t.Fatalf("select error = %T %v, want classified catalog error", selectErr, selectErr)
-			}
-			if classified.Code != webmcp.ErrorBrowserProtocol || !classified.Retryable {
-				t.Fatalf("select error = %+v, want retryable browser protocol error", classified)
-			}
-			if classified.Details["reason_code"] != "page_tools_unverified" || classified.Details["reason"] != "deadline_exceeded" {
-				t.Fatalf("select details = %#v, want page_tools_unverified/deadline_exceeded", classified.Details)
-			}
-			if classified.Details["deadline_ms"] != test.wantDeadline {
-				t.Fatalf("select deadline details = %#v, want %d ms", classified.Details["deadline_ms"], test.wantDeadline)
-			}
-
-			selected, err := broker.Selected(context.Background())
-			if err != nil {
-				t.Fatalf("selected after catalog deadline: %v", err)
-			}
-			if !selected.Connected || selected.Ready || selected.CatalogReady || selected.Generation != 1 {
-				t.Fatalf("selected after catalog deadline = %+v, want connected unready generation one", selected)
-			}
-			if selected.DocumentReadyState != test.documentState || selected.DocumentLoading != test.documentLoading || !selected.DocumentLoadingKnown {
-				t.Fatalf("selected document readiness = %+v, want explicit %s loading=%t", selected, test.documentState, test.documentLoading)
-			}
-
+			selectErr := awaitLoadingCatalogDeadline(t, selectContext, runtime, clock, timers, result, test)
+			assertLoadingCatalogDeadlineError(t, selectErr, test.wantDeadline)
+			assertSelectedAfterLoadingCatalogDeadline(t, broker, test)
 			if test.documentLoading {
-				session := runtime.Browser(candidate.ID).TargetSession("tab-loading")
-				if session == nil {
-					t.Fatal("runtime did not retain loading target session")
-				}
-				lateTool := webmcp.ToolDescriptor{
-					Name:        "late_loading_tool",
-					FrameID:     "frame-loading",
-					Description: "late loading fixture tool",
-					InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-				}
-				session.SetAutoResponse("Completed", json.RawMessage(`{"registered":true}`))
-				if err := session.EmitToolsAdded(lateTool); err != nil {
-					t.Fatalf("emit late loading catalog: %v", err)
-				}
-				listContext, listCancel := context.WithTimeout(context.Background(), time.Second)
-				defer listCancel()
-				snapshot, err := broker.ListTools(listContext, webmcp.ListToolsOptions{IncludeSchemas: true})
-				if err != nil {
-					t.Fatalf("list late loading catalog: %v", err)
-				}
-				if snapshot.Generation != 1 || len(snapshot.Tools) != 1 || snapshot.Tools[0].Name != lateTool.Name {
-					t.Fatalf("late loading catalog = %+v, want one generation-one tool", snapshot)
-				}
-				invocation, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: snapshot.Tools[0].Ref, Input: json.RawMessage(`{}`)})
-				if err != nil {
-					t.Fatalf("invoke late loading tool: %v", err)
-				}
-				terminal, err := broker.WaitInvocation(context.Background(), invocation.InvocationID)
-				if err != nil {
-					t.Fatalf("wait late loading invocation: %v", err)
-				}
-				if terminal.State != webmcp.InvocationCompleted || string(terminal.Output) != `{"registered":true}` {
-					t.Fatalf("late loading invocation = %+v, want completed response", terminal)
-				}
-				operations := runtime.Operations()
-				attachCount := 0
-				for _, operation := range operations {
-					if operation.Kind == testkit.OperationAttach {
-						attachCount++
-					}
-				}
-				if attachCount != 1 {
-					t.Fatalf("attach operation count = %d, want one same-session attachment", attachCount)
-				}
+				assertLateLoadingCatalogRecovers(t, runtime, broker, candidate)
 			}
 		})
+	}
+}
+
+func awaitLoadingCatalogDeadline(t *testing.T, selectContext context.Context, runtime *testkit.ScriptedBrowserRuntime, clock *testkit.FakeClock, timers *loadingCatalogTimerFactory, result <-chan error, test loadingCatalogCase) error {
+	t.Helper()
+	if _, err := runtime.WaitForOperationAdmitted(selectContext, testkit.OperationEnableAcknowledged); err != nil {
+		t.Fatalf("wait for enable acknowledgement: %v", err)
+	}
+	select {
+	case wait := <-timers.created:
+		if wait != time.Duration(test.wantDeadline)*time.Millisecond {
+			t.Fatalf("catalog timer duration = %s, want %d ms", wait, test.wantDeadline)
+		}
+	case <-selectContext.Done():
+		t.Fatalf("wait for catalog timer creation: %v", selectContext.Err())
+	}
+
+	clock.Advance(test.advanceBeforeFire)
+	if test.advanceAfterCheck > 0 {
+		select {
+		case err := <-result:
+			t.Fatalf("select returned before loading-aware deadline: %v", err)
+		default:
+		}
+		clock.Advance(test.advanceAfterCheck)
+	}
+
+	var selectErr error
+	select {
+	case selectErr = <-result:
+	case <-selectContext.Done():
+		t.Fatalf("wait for loading-aware select result: %v", selectContext.Err())
+	}
+	return selectErr
+}
+
+func assertLoadingCatalogDeadlineError(t *testing.T, selectErr error, wantDeadline int) {
+	t.Helper()
+	if selectErr == nil {
+		t.Fatal("select succeeded without catalog evidence")
+	}
+	var classified *webmcp.ClassifiedError
+	if !errors.As(selectErr, &classified) {
+		t.Fatalf("select error = %T %v, want classified catalog error", selectErr, selectErr)
+	}
+	if classified.Code != webmcp.ErrorBrowserProtocol || !classified.Retryable {
+		t.Fatalf("select error = %+v, want retryable browser protocol error", classified)
+	}
+	if classified.Details["reason_code"] != catalogUnverifiedReasonCode || classified.Details["reason"] != catalogDeadlineReason {
+		t.Fatalf("select details = %#v, want page_tools_unverified/deadline_exceeded", classified.Details)
+	}
+	if classified.Details["deadline_ms"] != wantDeadline {
+		t.Fatalf("select deadline details = %#v, want %d ms", classified.Details["deadline_ms"], wantDeadline)
+	}
+}
+
+func assertSelectedAfterLoadingCatalogDeadline(t *testing.T, broker *webmcp.StatefulBroker, test loadingCatalogCase) {
+	t.Helper()
+	selected, err := broker.Selected(context.Background())
+	if err != nil {
+		t.Fatalf("selected after catalog deadline: %v", err)
+	}
+	if !selected.Connected || selected.Ready || selected.CatalogReady || selected.Generation != 1 {
+		t.Fatalf("selected after catalog deadline = %+v, want connected unready generation one", selected)
+	}
+	if selected.DocumentReadyState != test.documentState || selected.DocumentLoading != test.documentLoading || !selected.DocumentLoadingKnown {
+		t.Fatalf("selected document readiness = %+v, want explicit %s loading=%t", selected, test.documentState, test.documentLoading)
+	}
+}
+
+func assertLateLoadingCatalogRecovers(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, broker *webmcp.StatefulBroker, candidate webmcp.BrowserCandidate) {
+	t.Helper()
+	session := runtime.Browser(candidate.ID).TargetSession("tab-loading")
+	if session == nil {
+		t.Fatal("runtime did not retain loading target session")
+	}
+	lateTool := webmcp.ToolDescriptor{
+		Name:        "late_loading_tool",
+		FrameID:     "frame-loading",
+		Description: "late loading fixture tool",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	}
+	session.SetAutoResponse("Completed", json.RawMessage(`{"registered":true}`))
+	if err := session.EmitToolsAdded(lateTool); err != nil {
+		t.Fatalf("emit late loading catalog: %v", err)
+	}
+	listContext, listCancel := context.WithTimeout(context.Background(), time.Second)
+	defer listCancel()
+	snapshot, err := broker.ListTools(listContext, webmcp.ListToolsOptions{IncludeSchemas: true})
+	if err != nil {
+		t.Fatalf("list late loading catalog: %v", err)
+	}
+	if snapshot.Generation != 1 || len(snapshot.Tools) != 1 || snapshot.Tools[0].Name != lateTool.Name {
+		t.Fatalf("late loading catalog = %+v, want one generation-one tool", snapshot)
+	}
+	invocation, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: snapshot.Tools[0].Ref, Input: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatalf("invoke late loading tool: %v", err)
+	}
+	terminal, err := broker.WaitInvocation(context.Background(), invocation.InvocationID)
+	if err != nil {
+		t.Fatalf("wait late loading invocation: %v", err)
+	}
+	if terminal.State != webmcp.InvocationCompleted || string(terminal.Output) != `{"registered":true}` {
+		t.Fatalf("late loading invocation = %+v, want completed response", terminal)
+	}
+	attachCount := 0
+	for _, operation := range runtime.Operations() {
+		if operation.Kind == testkit.OperationAttach {
+			attachCount++
+		}
+	}
+	if attachCount != 1 {
+		t.Fatalf("attach operation count = %d, want one same-session attachment", attachCount)
 	}
 }
 

@@ -7,16 +7,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
       "file": "internal/webmcp/testkit/fixture_runtime.go",
-      "symbol": "*BrowserScriptRuntime.Execute",
-      "value": 26,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
-      "file": "internal/webmcp/testkit/fixture_runtime.go",
       "symbol": "NewScriptedFixtureRuntime",
       "value": 17,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -47,16 +37,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
       "file": "internal/webmcp/testkit/fixture_runtime.go",
-      "symbol": "*BrowserScriptRuntime.Execute",
-      "value": 22,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
-      "file": "internal/webmcp/testkit/fixture_runtime.go",
       "symbol": "validateOperationRequest",
       "value": 26,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -67,7 +47,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
       "file": "internal/webmcp/testkit/fixture_runtime.go",
-      "value": 1008,
+      "value": 969,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -77,17 +57,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
       "file": "internal/webmcp/testkit/fixture_runtime.go",
       "symbol": "*BrowserScriptRuntime.Execute",
-      "value": 115,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
-      "file": "internal/webmcp/testkit/fixture_runtime.go",
-      "symbol": "*BrowserScriptRuntime.Execute",
-      "value": 61,
+      "value": 88,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

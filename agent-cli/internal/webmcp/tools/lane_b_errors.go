@@ -364,7 +364,7 @@ func safeDetails(details map[string]any) map[string]any {
 func noSelectionError() error {
 	return &discovery.DiscoveryError{
 		Code:      discovery.CodeStaleSelection,
-		Message:   "no page is selected",
+		Message:   noPageSelectedMessage,
 		Retryable: true,
 		Details: map[string]any{
 			"browser_id":          "",
@@ -513,14 +513,14 @@ func safeIDList(value any) []string {
 func safeLabel(value any, max int) string {
 	text, _ := value.(string)
 	if strings.Contains(text, "://") || strings.ContainsAny(text, "?#@") {
-		return "redacted"
+		return redactedValue
 	}
 	return boundedOutputLabel(text, max)
 }
 
 func safeOriginFilter(value string) string {
 	if strings.ContainsAny(value, "?#") || strings.Contains(value, "@") {
-		return "redacted"
+		return redactedValue
 	}
 	return boundedOutputLabel(value, 128)
 }
@@ -535,7 +535,7 @@ func boundedOutputLabel(value string, max int) string {
 	}
 	for _, r := range value {
 		if r < 0x20 || r == 0x7f {
-			return "redacted"
+			return redactedValue
 		}
 	}
 	return value

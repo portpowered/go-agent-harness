@@ -115,6 +115,21 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 		t.Fatalf("adapter catalog has %d tools, want 10: %v", len(tools), tools)
 	}
 
+	assertYouTubeAdapterMediaTools(t, ctx, session, tools)
+
+	first := waitForYouTubeAdapterPlayer(t, ctx, targetSession, "tone1234567")
+	time.Sleep(1200 * time.Millisecond)
+	second := inspectYouTubeAdapterPlayer(t, ctx, targetSession)
+	if first.Path != "/watch" || first.VideoID != "tone1234567" || first.Paused || first.ReadyState < 2 || second.CurrentTime <= first.CurrentTime || second.Muted || second.Volume <= 0 {
+		t.Fatalf("independent player oracle first=%+v second=%+v", first, second)
+	}
+	t.Logf("WEBMCP_YOUTUBE_ADAPTER_PASS chrome=%s video=%s advance=%.3fs audible=true", chromeVersion, second.VideoID, second.CurrentTime-first.CurrentTime)
+}
+
+// assertYouTubeAdapterMediaTools drives search, selection, and audible play
+// through the generated WebMCP domain and checks each adapter response.
+func assertYouTubeAdapterMediaTools(t *testing.T, ctx context.Context, session webmcp.TargetSession, tools map[string]webmcp.ToolDescriptor) {
+	t.Helper()
 	search := invokeYouTubeAdapterTool(t, ctx, session, tools["youtube_search"], `{"query":"test tone"}`)
 	var searchResult struct {
 		OK   bool `json:"ok"`
@@ -149,14 +164,6 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	if err := json.Unmarshal(playerState.Output, &playerStateResult); err != nil || !playerStateResult.OK || playerStateResult.Data.VerifiedAdvanceSeconds <= 0 {
 		t.Fatalf("player-state response = %s, decode=%v", playerState.Output, err)
 	}
-
-	first := waitForYouTubeAdapterPlayer(t, ctx, targetSession, "tone1234567")
-	time.Sleep(1200 * time.Millisecond)
-	second := inspectYouTubeAdapterPlayer(t, ctx, targetSession)
-	if first.Path != "/watch" || first.VideoID != "tone1234567" || first.Paused || first.ReadyState < 2 || second.CurrentTime <= first.CurrentTime || second.Muted || second.Volume <= 0 {
-		t.Fatalf("independent player oracle first=%+v second=%+v", first, second)
-	}
-	t.Logf("WEBMCP_YOUTUBE_ADAPTER_PASS chrome=%s video=%s advance=%.3fs audible=true", chromeVersion, second.VideoID, second.CurrentTime-first.CurrentTime)
 }
 
 func invokeYouTubeAdapterTool(t *testing.T, ctx context.Context, session webmcp.TargetSession, tool webmcp.ToolDescriptor, input string) webmcp.BrowserEvent {
@@ -174,7 +181,7 @@ func invokeYouTubeAdapterTool(t *testing.T, ctx context.Context, session webmcp.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if event.Status != "Completed" {
+	if event.Status != toolStatusCompleted {
 		t.Fatalf("%s terminal = %+v", tool.Name, event)
 	}
 	return event

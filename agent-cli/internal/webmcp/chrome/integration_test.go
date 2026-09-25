@@ -1,7 +1,6 @@
 package chrome
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	_ "embed"
@@ -11,15 +10,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -52,27 +48,6 @@ var chromeAdapterFixtureHTML []byte
 
 type chromeForTestingLock = ChromeForTestingLock
 
-type pinnedChrome struct {
-	Lock       chromeForTestingLock
-	Executable string
-	WorkDir    string
-}
-
-type devToolsVersion struct {
-	Browser              string `json:"Browser"`
-	ProtocolVersion      string `json:"Protocol-Version"`
-	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
-}
-
-type devToolsTarget struct {
-	ID                   string `json:"id"`
-	Type                 string `json:"type"`
-	Title                string `json:"title"`
-	URL                  string `json:"url"`
-	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
-	Attached             bool   `json:"attached"`
-}
-
 type fixtureOracle struct {
 	Ready       bool     `json:"ready"`
 	Value       string   `json:"value"`
@@ -86,17 +61,6 @@ type fixtureServer struct {
 
 	mu     sync.Mutex
 	oracle fixtureOracle
-}
-
-type runningChrome struct {
-	cmd           *exec.Cmd
-	done          chan struct{}
-	endpointValue string
-
-	waitErr error
-
-	closeOnce sync.Once
-	closeErr  error
 }
 
 // liveCDPProxy adds one observable hold to the browser HTTP surface while
@@ -180,7 +144,7 @@ func (p *liveCDPProxy) Close() {
 func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request) {
 	delay := false
 	dead := false
-	if request.URL.Path == "/json/list" {
+	if request.URL.Path == jsonListPath {
 		p.mu.Lock()
 		delay = p.delayNextList
 		p.delayNextList = false
@@ -215,7 +179,7 @@ func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request)
 		http.Error(writer, "upstream browser unavailable", http.StatusBadGateway)
 		return
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	for key, values := range response.Header {
 		for _, value := range values {
 			writer.Header().Add(key, value)
@@ -245,109 +209,163 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 		t.Skipf("set %s=1 to run the pinned Chrome integration proof", chromeIntegrationEnv)
 	}
 
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
+	run := launchAdapterIntegration(t, ctx)
+	handle := run.openHandle(t, ctx)
+	defer func() {
+		if closeErr := handle.Close(); closeErr != nil {
+			t.Errorf("adapter handle cleanup: %v", closeErr)
+		}
+	}()
+	session := run.attachExternal(t, ctx, handle)
+	cancelTool, completedID, completed := run.invokeCompleted(t, ctx, session)
+	pendingID := run.startPending(t, ctx, session, cancelTool)
+	cancelObservationContext, cancelObservation := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelObservation()
+	canceled, cancelTrace, pendingOracle := run.observeCancellation(t, ctx, cancelObservationContext, session, pendingID)
+
+	if err := session.Close(); err != nil {
+		t.Fatalf("detach external target session: %v", err)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatalf("close adapter handle after external detach: %v", err)
+	}
+	if _, err := waitForFixtureTarget(ctx, run.baseURL, run.selectedTarget.ID, run.fixtureURL, true); err != nil {
+		t.Fatalf("target after adapter detach: %v", err)
+	}
+	afterDetach, afterReattach := run.verifyDetachAndReattach(t, ctx, pendingOracle)
+
+	t.Logf("WEBMCP_WIRE_CANCEL_PASS chrome=%s revision=%s browser=%s target=%s target_session=%s method=%s invocation=%s phase=%s listener_ready=%t", lockedChromeVersion, lockedChromeRevision, cancelTrace.BrowserID, cancelTrace.TargetID, cancelTrace.TargetSessionID, cancelTrace.Method, cancelTrace.InvocationID, cancelTrace.Phase, cancelTrace.ListenerReady)
+	t.Logf("WEBMCP_INTEGRATION_PASS chrome=%s revision=%s platform=%s target=%s listener_before_enable=true completed=%s/%s canceled=%s/%s state_after_detach=%q state_after_reattach=%q", lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, run.selectedTarget.ID, completedID, completed.Status, pendingID, canceled.Status, afterDetach.VisibleText, afterReattach.VisibleText)
+}
+
+// adapterIntegrationRun carries the pinned browser, fixture, and neutral
+// adapter shared by the phases of the adapter integration proof.
+type adapterIntegrationRun struct {
+	fixture             *fixtureServer
+	fixtureURL          string
+	browser             *runningChrome
+	baseURL             string
+	version             devToolsVersion
+	targetBeforeAdapter devToolsTarget
+	candidate           webmcp.BrowserCandidate
+	wire                *wireTraceRecorder
+	adapter             *Runtime
+	selectedTarget      webmcp.Target
+}
+
+func launchAdapterIntegration(t *testing.T, ctx context.Context) *adapterIntegrationRun {
+	t.Helper()
 	workDir := t.TempDir()
 	pinned, err := acquirePinnedChrome(ctx, workDir)
 	if err != nil {
 		t.Fatalf("acquire locked Chrome for Testing: %v", err)
 	}
 
-	fixture := newFixtureServer()
-	t.Cleanup(func() { fixture.Close() })
-	fixtureURL := fixture.URL()
-	assertFixtureHeaders(t, ctx, fixtureURL)
+	run := &adapterIntegrationRun{fixture: newFixtureServer()}
+	t.Cleanup(func() { run.fixture.Close() })
+	run.fixtureURL = run.fixture.URL()
+	assertFixtureHeaders(t, ctx, run.fixtureURL)
 
-	browser, err := launchPinnedChrome(ctx, pinned, fixtureURL)
+	run.browser, err = launchPinnedChrome(ctx, pinned, run.fixtureURL)
 	if err != nil {
 		t.Fatalf("launch locked Chrome for Testing: %v", err)
 	}
 	t.Cleanup(func() {
-		if closeErr := browser.Close(); closeErr != nil {
+		if closeErr := run.browser.Close(); closeErr != nil {
 			t.Logf("Chrome cleanup: %v", closeErr)
 		}
 	})
 
-	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	run.baseURL = browserHTTPURL(run.browser.endpoint())
+	run.version, err = waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
-	if version.WebSocketDebuggerURL != browser.endpoint() {
-		t.Fatalf("DevTools websocket = %q, launch announcement = %q", version.WebSocketDebuggerURL, browser.endpoint())
+	if run.version.WebSocketDebuggerURL != run.browser.endpoint() {
+		t.Fatalf("DevTools websocket = %q, launch announcement = %q", run.version.WebSocketDebuggerURL, run.browser.endpoint())
 	}
-	targetBeforeAdapter, err := waitForFixturePageTarget(ctx, browserHTTPURL(browser.endpoint()), fixtureURL)
+	run.targetBeforeAdapter, err = waitForFixturePageTarget(ctx, browserHTTPURL(run.browser.endpoint()), run.fixtureURL)
 	if err != nil {
 		t.Fatalf("discover exact external fixture target before adapter attach: %v", err)
 	}
 
-	candidate := webmcp.BrowserCandidate{
+	run.candidate = webmcp.BrowserCandidate{
 		ID:           webmcp.BrowserID("chrome-cft-" + lockedChromeVersion),
 		Source:       webmcp.DiscoverySourceExplicit,
-		Product:      version.Browser,
-		Protocol:     version.ProtocolVersion,
-		HTTPURL:      baseURL,
-		BrowserWSURL: version.WebSocketDebuggerURL,
+		Product:      run.version.Browser,
+		Protocol:     run.version.ProtocolVersion,
+		HTTPURL:      run.baseURL,
+		BrowserWSURL: run.version.WebSocketDebuggerURL,
 		Loopback:     true,
 		Explicit:     true,
 	}
-	wire := &wireTraceRecorder{}
-	adapter := NewRuntime(WithEventBuffer(128), WithCommandTimeout(20*time.Second), WithWireTraceSink(wire))
+	run.wire = &wireTraceRecorder{}
+	run.adapter = NewRuntime(WithEventBuffer(128), WithCommandTimeout(20*time.Second), WithWireTraceSink(run.wire))
+	return run
+}
 
-	neutralVersion, err := adapter.Version(ctx, candidate)
+func (r *adapterIntegrationRun) openHandle(t *testing.T, ctx context.Context) webmcp.BrowserHandle {
+	t.Helper()
+	neutralVersion, err := r.adapter.Version(ctx, r.candidate)
 	if err != nil {
 		t.Fatalf("neutral BrowserRuntime.Version: %v", err)
 	}
-	if neutralVersion.Browser != version.Browser || neutralVersion.ProtocolVersion != version.ProtocolVersion {
-		t.Fatalf("neutral version = %+v, want browser=%q protocol=%q", neutralVersion, version.Browser, version.ProtocolVersion)
+	if neutralVersion.Browser != r.version.Browser || neutralVersion.ProtocolVersion != r.version.ProtocolVersion {
+		t.Fatalf("neutral version = %+v, want browser=%q protocol=%q", neutralVersion, r.version.Browser, r.version.ProtocolVersion)
 	}
-	handle, err := adapter.Open(ctx, candidate)
+	handle, err := r.adapter.Open(ctx, r.candidate)
 	if err != nil {
 		t.Fatalf("neutral BrowserRuntime.Open: %v", err)
 	}
-	defer func() {
-		if closeErr := handle.Close(); closeErr != nil {
-			t.Errorf("adapter handle cleanup: %v", closeErr)
-		}
-	}()
+	return handle
+}
 
+func (r *adapterIntegrationRun) attachExternal(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle) webmcp.TargetSession {
+	t.Helper()
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
 		t.Fatalf("neutral BrowserHandle.ListTargets: %v", err)
 	}
-	selectedTarget, err := findFixtureTarget(targets, fixtureURL)
+	r.selectedTarget, err = findFixtureTarget(targets, r.fixtureURL)
 	if err != nil {
 		t.Fatalf("find exact fixture target through neutral target list: %v", err)
 	}
-	if selectedTarget.ID != webmcp.TargetID(targetBeforeAdapter.ID) {
-		t.Fatalf("neutral target selection ID = %q, pre-attach HTTP discovery ID = %q", selectedTarget.ID, targetBeforeAdapter.ID)
+	if r.selectedTarget.ID != webmcp.TargetID(r.targetBeforeAdapter.ID) {
+		t.Fatalf("neutral target selection ID = %q, pre-attach HTTP discovery ID = %q", r.selectedTarget.ID, r.targetBeforeAdapter.ID)
 	}
-	if !selectedTarget.Eligible || selectedTarget.ID == "" {
-		t.Fatalf("fixture target = %+v, want eligible exact page target", selectedTarget)
+	if !r.selectedTarget.Eligible || r.selectedTarget.ID == "" {
+		t.Fatalf("fixture target = %+v, want eligible exact page target", r.selectedTarget)
 	}
 
-	session, err := handle.Attach(ctx, selectedTarget.ID, webmcp.TargetOwnershipExternal)
+	session, err := handle.Attach(ctx, r.selectedTarget.ID, webmcp.TargetOwnershipExternal)
 	if err != nil {
-		t.Fatalf("neutral BrowserHandle.Attach(%s): %v", selectedTarget.ID, err)
+		t.Fatalf("neutral BrowserHandle.Attach(%s): %v", r.selectedTarget.ID, err)
 	}
 	if session.Ownership() != webmcp.TargetOwnershipExternal {
 		t.Fatalf("session ownership = %q, want external", session.Ownership())
 	}
-	if got := session.Context().Key.TargetID; got != selectedTarget.ID {
-		t.Fatalf("attached target ID = %q, want exact %q", got, selectedTarget.ID)
+	if got := session.Context().Key.TargetID; got != r.selectedTarget.ID {
+		t.Fatalf("attached target ID = %q, want exact %q", got, r.selectedTarget.ID)
 	}
-	initialOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Ready && oracle.Value == "initial" && oracle.VisibleText == "initial"
-	})
-	if err != nil {
+	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Value == fixtureOracleInitial && oracle.VisibleText == fixtureOracleInitial
+	}); err != nil {
 		t.Fatalf("initial independent page-state oracle: %v", err)
 	}
+	return session
+}
 
+// enableIntegrationTools enables WebMCP after the listeners are installed,
+// asserts all three fixture tools, and returns the complete and cancel tools.
+func enableIntegrationTools(t *testing.T, ctx context.Context, session webmcp.TargetSession) (webmcp.ToolDescriptor, webmcp.ToolDescriptor) {
+	t.Helper()
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("neutral TargetSession.EnableWebMCP: %v", err)
 	}
@@ -373,7 +391,12 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 	assertDeclarativeTool(t, completeTool, true)
 	assertDeclarativeTool(t, pendingTool, false)
 	assertRegisteredTool(t, cancelTool)
+	return completeTool, cancelTool
+}
 
+func (r *adapterIntegrationRun) invokeCompleted(t *testing.T, ctx context.Context, session webmcp.TargetSession) (webmcp.ToolDescriptor, webmcp.InvocationID, webmcp.BrowserEvent) {
+	t.Helper()
+	completeTool, cancelTool := enableIntegrationTools(t, ctx, session)
 	completedID, err := session.InvokeWebMCP(ctx, completeTool.FrameID, completeTool.Name, json.RawMessage(`{"message":"complete"}`))
 	if err != nil {
 		t.Fatalf("neutral invoke of declarative tool: %v", err)
@@ -393,23 +416,26 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if completed.Status != "Completed" || !json.Valid(completed.Output) || completed.ErrorCode != "" {
+	if completed.Status != toolStatusCompleted || !json.Valid(completed.Output) || completed.ErrorCode != "" {
 		t.Fatalf("completed response = %+v, want Completed structured output", completed)
 	}
 	var completedOutput map[string]any
 	if err := json.Unmarshal(completed.Output, &completedOutput); err != nil {
 		t.Fatalf("decode completed output: %v", err)
 	}
-	if completedOutput["greeting"] != "hello" || completedOutput["message"] != "complete" {
+	if completedOutput["greeting"] != fixtureGreeting || completedOutput["message"] != "complete" {
 		t.Fatalf("completed output = %v, want greeting/message object", completedOutput)
 	}
-	completedOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
+	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Value == "completed:complete" && oracle.VisibleText == "completed:complete" && !oracle.Pending
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("page-state oracle after completed invocation: %v", err)
 	}
+	return cancelTool, completedID, completed
+}
 
+func (r *adapterIntegrationRun) startPending(t *testing.T, ctx context.Context, session webmcp.TargetSession, cancelTool webmcp.ToolDescriptor) webmcp.InvocationID {
+	t.Helper()
 	pendingID, err := session.InvokeWebMCP(ctx, cancelTool.FrameID, cancelTool.Name, json.RawMessage(`{"message":"hold"}`))
 	if err != nil {
 		t.Fatalf("neutral invoke of pending imperative tool: %v", err)
@@ -419,8 +445,8 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Value == "pending:hold" && oracle.VisibleText == "pending:hold" && oracle.Pending
+	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Value == fixtureOraclePendingHold && oracle.VisibleText == fixtureOraclePendingHold && oracle.Pending
 	}); err != nil {
 		t.Fatalf("page-state oracle before cancellation: %v", err)
 	}
@@ -430,15 +456,13 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 			t.Fatalf("neutral cancelInvocation(%s): %v", pendingID, err)
 		}
 	}
-	cancelObservationContext, cancelObservation := context.WithTimeout(ctx, 10*time.Second)
-	defer cancelObservation()
-	if _, err := waitForFixtureOracle(cancelObservationContext, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		for _, invocation := range oracle.Invocations {
-			if invocation == "canceled:"+cancelToolName {
-				return true
-			}
-		}
-		return false
+	return pendingID
+}
+
+func (r *adapterIntegrationRun) observeCancellation(t *testing.T, ctx, cancelObservationContext context.Context, session webmcp.TargetSession, pendingID webmcp.InvocationID) (webmcp.BrowserEvent, *webmcp.WebMCPWireTrace, fixtureOracle) {
+	t.Helper()
+	if _, err := waitForFixtureOracle(cancelObservationContext, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return slices.Contains(oracle.Invocations, "canceled:"+cancelToolName)
 	}); err != nil {
 		t.Fatalf("page cancellation event: %v", err)
 	}
@@ -451,7 +475,19 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 	if canceled.Status != "Canceled" || canceled.ErrorCode != string(webmcp.ErrorInvocationCanceled) {
 		t.Fatalf("canceled response = %+v, want Canceled invocation semantics", canceled)
 	}
-	traces := wire.snapshot()
+	cancelTrace := r.assertCancelWireTrace(t, pendingID)
+	pendingOracle, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Value == fixtureOraclePendingHold && oracle.VisibleText == fixtureOraclePendingHold
+	})
+	if err != nil {
+		t.Fatalf("page-state oracle after cancellation: %v", err)
+	}
+	return canceled, cancelTrace, pendingOracle
+}
+
+func (r *adapterIntegrationRun) assertCancelWireTrace(t *testing.T, pendingID webmcp.InvocationID) *webmcp.WebMCPWireTrace {
+	t.Helper()
+	traces := r.wire.snapshot()
 	var cancelTrace *webmcp.WebMCPWireTrace
 	for index := range traces {
 		trace := &traces[index]
@@ -460,7 +496,7 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 			break
 		}
 	}
-	if cancelTrace == nil || cancelTrace.BrowserID != candidate.ID || cancelTrace.TargetID != selectedTarget.ID || cancelTrace.TargetSessionID == "" || cancelTrace.Phase != webmcp.WebMCPWirePhaseBeforeDispatch || !cancelTrace.ListenerReady {
+	if cancelTrace == nil || cancelTrace.BrowserID != r.candidate.ID || cancelTrace.TargetID != r.selectedTarget.ID || cancelTrace.TargetSessionID == "" || cancelTrace.Phase != webmcp.WebMCPWirePhaseBeforeDispatch || !cancelTrace.ListenerReady {
 		t.Fatalf("cancel wire trace = %+v, want exact ready target/session before dispatch", cancelTrace)
 	}
 	traceJSON, err := json.Marshal(cancelTrace)
@@ -472,266 +508,59 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 			t.Fatalf("cancel wire trace contains forbidden %q: %s", forbidden, traceJSON)
 		}
 	}
-	pendingOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Value == "pending:hold" && oracle.VisibleText == "pending:hold"
-	})
-	if err != nil {
-		t.Fatalf("page-state oracle after cancellation: %v", err)
-	}
+	return cancelTrace
+}
 
-	if err := session.Close(); err != nil {
-		t.Fatalf("detach external target session: %v", err)
-	}
-	if err := handle.Close(); err != nil {
-		t.Fatalf("close adapter handle after external detach: %v", err)
-	}
-	if _, err := waitForFixtureTarget(ctx, baseURL, selectedTarget.ID, fixtureURL, true); err != nil {
-		t.Fatalf("target after adapter detach: %v", err)
-	}
-
+func (r *adapterIntegrationRun) verifyDetachAndReattach(t *testing.T, ctx context.Context, pendingOracle fixtureOracle) (inspectedPageState, inspectedPageState) {
+	t.Helper()
 	// This is deliberately a separate CDP client and a separate target
 	// attachment. It verifies the actual visible DOM agrees with the independent
 	// HTTP oracle after the adapter released the external target.
-	afterDetach, err := inspectExternalTarget(ctx, browser.endpoint(), string(selectedTarget.ID))
+	afterDetach, err := inspectExternalTarget(ctx, r.browser.endpoint(), string(r.selectedTarget.ID))
 	if err != nil {
 		t.Fatalf("direct browser verification after adapter detach: %v", err)
 	}
 	assertPageStateMatchesOracle(t, afterDetach, pendingOracle)
 
-	secondHandle, err := adapter.Open(ctx, candidate)
+	r.reattachFreshClient(t, ctx)
+	if _, err := waitForFixtureTarget(ctx, r.baseURL, r.selectedTarget.ID, r.fixtureURL, true); err != nil {
+		t.Fatalf("target after fresh neutral reattach/detach: %v", err)
+	}
+	afterReattach, err := inspectExternalTarget(ctx, r.browser.endpoint(), string(r.selectedTarget.ID))
+	if err != nil {
+		t.Fatalf("direct browser verification after fresh reattach: %v", err)
+	}
+	assertPageStateMatchesOracle(t, afterReattach, pendingOracle)
+	return afterDetach, afterReattach
+}
+
+func (r *adapterIntegrationRun) reattachFreshClient(t *testing.T, ctx context.Context) {
+	t.Helper()
+	secondHandle, err := r.adapter.Open(ctx, r.candidate)
 	if err != nil {
 		t.Fatalf("fresh neutral client Open: %v", err)
 	}
-	secondSession, err := secondHandle.Attach(ctx, selectedTarget.ID, webmcp.TargetOwnershipExternal)
+	secondSession, err := secondHandle.Attach(ctx, r.selectedTarget.ID, webmcp.TargetOwnershipExternal)
 	if err != nil {
-		_ = secondHandle.Close()
-		t.Fatalf("fresh neutral client reattach(%s): %v", selectedTarget.ID, err)
+		discardSecondaryError(secondHandle.Close)
+		t.Fatalf("fresh neutral client reattach(%s): %v", r.selectedTarget.ID, err)
 	}
-	if secondSession.Context().Key.TargetID != selectedTarget.ID || !secondSession.Context().Connected {
-		_ = secondSession.Close()
-		_ = secondHandle.Close()
+	if secondSession.Context().Key.TargetID != r.selectedTarget.ID || !secondSession.Context().Connected {
+		discardSecondaryError(secondSession.Close)
+		discardSecondaryError(secondHandle.Close)
 		t.Fatalf("fresh neutral session context = %+v, want connected exact target", secondSession.Context())
 	}
 	if err := secondSession.Close(); err != nil {
-		_ = secondHandle.Close()
+		discardSecondaryError(secondHandle.Close)
 		t.Fatalf("fresh neutral client detach: %v", err)
 	}
 	if err := secondHandle.Close(); err != nil {
 		t.Fatalf("fresh neutral client close: %v", err)
 	}
-	if _, err := waitForFixtureTarget(ctx, baseURL, selectedTarget.ID, fixtureURL, true); err != nil {
-		t.Fatalf("target after fresh neutral reattach/detach: %v", err)
-	}
-	afterReattach, err := inspectExternalTarget(ctx, browser.endpoint(), string(selectedTarget.ID))
-	if err != nil {
-		t.Fatalf("direct browser verification after fresh reattach: %v", err)
-	}
-	assertPageStateMatchesOracle(t, afterReattach, pendingOracle)
-
-	t.Logf("WEBMCP_WIRE_CANCEL_PASS chrome=%s revision=%s browser=%s target=%s target_session=%s method=%s invocation=%s phase=%s listener_ready=%t", lockedChromeVersion, lockedChromeRevision, cancelTrace.BrowserID, cancelTrace.TargetID, cancelTrace.TargetSessionID, cancelTrace.Method, cancelTrace.InvocationID, cancelTrace.Phase, cancelTrace.ListenerReady)
-	t.Logf("WEBMCP_INTEGRATION_PASS chrome=%s revision=%s platform=%s target=%s listener_before_enable=true completed=%s/%s canceled=%s/%s state_after_detach=%q state_after_reattach=%q", lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, selectedTarget.ID, completedID, completed.Status, pendingID, canceled.Status, afterDetach.VisibleText, afterReattach.VisibleText)
-	_ = initialOracle
-	_ = completedOracle
-}
-
-func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, error) {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return pinnedChrome{}, fmt.Errorf("locked artifact platform is %s (darwin/arm64), observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	root, err := repositoryRoot()
-	if err != nil {
-		return pinnedChrome{}, err
-	}
-	lockPath := filepath.Join(root, "scripts", "webmcp-o0", "chrome-for-testing.json")
-	lock, err := LoadChromeForTestingLock(lockPath)
-	if err != nil {
-		return pinnedChrome{}, fmt.Errorf("read O0 Chrome lock: %w", err)
-	}
-	if err := validatePinnedChromeLock(lock); err != nil {
-		return pinnedChrome{}, err
-	}
-	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		return pinnedChrome{}, err
-	}
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{})
-	executable, err := acquirer.AcquirePinnedChrome(ctx, PinnedChromeRequest{
-		Platform:      platform,
-		RequiredMajor: MinimumManagedChromeMajor,
-		LockPath:      lockPath,
-		CacheDir:      workDir,
-	})
-	if err != nil {
-		return pinnedChrome{}, err
-	}
-	return pinnedChrome{Lock: lock, Executable: executable.Path, WorkDir: workDir}, nil
-}
-
-func repositoryRoot() (string, error) {
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", errors.New("locate integration test source")
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", "..", "..", "..")), nil
-}
-
-func validatePinnedChromeLock(lock chromeForTestingLock) error {
-	if lock.Channel != lockedChromeChannel || lock.Platform != lockedChromePlatform || lock.Version != lockedChromeVersion || lock.Revision != lockedChromeRevision || lock.ArchiveSHA256 != lockedChromeSHA256 {
-		return fmt.Errorf("O0 Chrome lock is not the qualified %s/%s %s revision %s artifact", lockedChromeChannel, lockedChromePlatform, lockedChromeVersion, lockedChromeRevision)
-	}
-	if lock.ManifestRetrievedAt == "" || lock.ExecutableRelative == "" {
-		return errors.New("O0 Chrome lock omits manifest retrieval or executable metadata")
-	}
-	if !strings.HasPrefix(lock.ManifestURL, "https://googlechromelabs.github.io/chrome-for-testing/") {
-		return fmt.Errorf("O0 Chrome manifest URL is not official: %q", lock.ManifestURL)
-	}
-	if !strings.HasPrefix(lock.DownloadURL, "https://storage.googleapis.com/chrome-for-testing-public/") {
-		return fmt.Errorf("O0 Chrome download URL is not official: %q", lock.DownloadURL)
-	}
-	return nil
-}
-
-func launchPinnedChrome(ctx context.Context, pinned pinnedChrome, fixtureURL string) (*runningChrome, error) {
-	return launchPinnedChromeAtPort(ctx, pinned, fixtureURL, 0)
-}
-
-// launchPinnedChromeAtPort keeps the normal O0 launch shape when port is zero
-// and permits the recovery suite to deliberately reuse the old browser's
-// loopback port after that browser has exited. The caller supplies only a
-// pinned executable and a temporary profile owned by this test package.
-func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureURL string, port int) (*runningChrome, error) {
-	profileDir := filepath.Join(pinned.WorkDir, "profile")
-	if err := os.Mkdir(profileDir, 0o700); err != nil {
-		return nil, fmt.Errorf("create isolated Chrome profile: %w", err)
-	}
-	if port < 0 || port > 65535 {
-		return nil, fmt.Errorf("Chrome debugging port is invalid: %d", port)
-	}
-	args := pinnedChromeLaunchFlags(profileDir, fixtureURL, port)
-	cmd := exec.Command(pinned.Executable, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("capture Chrome stdout: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("capture Chrome stderr: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start Chrome: %w", err)
-	}
-	running := &runningChrome{cmd: cmd, done: make(chan struct{})}
-	go func() {
-		running.waitErr = cmd.Wait()
-		close(running.done)
-	}()
-	endpoint := make(chan string, 1)
-	var stdoutLog, stderrLog bytes.Buffer
-	go scanChromeEndpoint(io.TeeReader(stdout, &stdoutLog), endpoint)
-	go scanChromeEndpoint(io.TeeReader(stderr, &stderrLog), endpoint)
-	select {
-	case value := <-endpoint:
-		running.setEndpoint(value)
-		return running, nil
-	case <-running.done:
-		return nil, fmt.Errorf("Chrome exited before exposing DevTools: %v (stdout=%q stderr=%q)", running.waitErr, strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
-	case <-ctx.Done():
-		_ = running.Close()
-		return nil, fmt.Errorf("wait for Chrome DevTools endpoint: %w (stdout=%q stderr=%q)", ctx.Err(), strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
-	}
-}
-
-func pinnedChromeLaunchFlags(profileDir, fixtureURL string, port int) []string {
-	return []string{
-		"--headless=new",
-		"--disable-gpu",
-		"--disable-background-networking",
-		"--disable-component-update",
-		"--disable-extensions",
-		"--disable-sync",
-		"--no-default-browser-check",
-		"--no-first-run",
-		"--remote-debugging-address=127.0.0.1",
-		fmt.Sprintf("--remote-debugging-port=%d", port),
-		"--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport",
-		"--enable-blink-features=DeclarativeWebmcp",
-		"--enable-experimental-web-platform-features",
-		"--user-data-dir=" + profileDir,
-		fixtureURL,
-	}
-}
-
-func scanChromeEndpoint(reader io.Reader, endpoints chan<- string) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		match := devToolsEndpointPattern.FindStringSubmatch(scanner.Text())
-		if len(match) != 2 {
-			continue
-		}
-		select {
-		case endpoints <- match[1]:
-		default:
-		}
-		return
-	}
-}
-
-func (p *runningChrome) endpoint() string {
-	return p.endpointValue
-}
-
-func (p *runningChrome) setEndpoint(value string) {
-	p.endpointValue = value
-}
-
-func (p *runningChrome) Close() error {
-	p.closeOnce.Do(func() {
-		select {
-		case <-p.done:
-			p.closeErr = p.waitErr
-			return
-		default:
-		}
-		if p.cmd.Process != nil {
-			if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
-				p.closeErr = err
-			}
-		}
-		select {
-		case <-p.done:
-		case <-time.After(10 * time.Second):
-			if p.cmd.Process != nil {
-				_ = p.cmd.Process.Kill()
-			}
-			<-p.done
-		}
-		if p.closeErr == nil {
-			p.closeErr = p.waitErr
-		}
-	})
-	return p.closeErr
-}
-
-func (p *runningChrome) Kill() error {
-	p.closeOnce.Do(func() {
-		if p.cmd == nil || p.cmd.Process == nil {
-			return
-		}
-		if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			p.closeErr = err
-			return
-		}
-		select {
-		case <-p.done:
-		case <-time.After(10 * time.Second):
-			p.closeErr = errors.New("Chrome did not exit after kill")
-		}
-	})
-	return p.closeErr
 }
 
 func newFixtureServer() *fixtureServer {
-	fixture := &fixtureServer{oracle: fixtureOracle{Value: "initial", VisibleText: "initial"}}
+	fixture := &fixtureServer{oracle: fixtureOracle{Value: fixtureOracleInitial, VisibleText: fixtureOracleInitial}}
 	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/":
@@ -799,7 +628,7 @@ func assertFixtureHeaders(t *testing.T, ctx context.Context, fixtureURL string) 
 	if err != nil {
 		t.Fatalf("read fixture headers: %v", err)
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("fixture status = %s, want 200", response.Status)
 	}
@@ -808,68 +637,10 @@ func assertFixtureHeaders(t *testing.T, ctx context.Context, fixtureURL string) 
 	}
 }
 
-func waitForDevToolsVersion(ctx context.Context, baseURL, expectedVersion string) (devToolsVersion, error) {
-	var lastErr error
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		version, err := readDevToolsVersion(ctx, baseURL)
-		if err == nil {
-			if strings.Contains(version.Browser, expectedVersion) {
-				return version, nil
-			}
-			lastErr = fmt.Errorf("browser identity = %q, want %s", version.Browser, expectedVersion)
-		} else {
-			lastErr = err
-		}
-		select {
-		case <-ctx.Done():
-			return devToolsVersion{}, fmt.Errorf("wait for DevTools version: %w (last error: %v)", ctx.Err(), lastErr)
-		case <-ticker.C:
-		}
-	}
-}
-
-func readDevToolsVersion(ctx context.Context, baseURL string) (devToolsVersion, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/json/version", nil)
-	if err != nil {
-		return devToolsVersion{}, err
-	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return devToolsVersion{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return devToolsVersion{}, fmt.Errorf("DevTools version HTTP status: %s", response.Status)
-	}
-	var version devToolsVersion
-	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&version); err != nil {
-		return devToolsVersion{}, err
-	}
-	return version, nil
-}
-
-func browserHTTPURL(endpoint string) string {
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return ""
-	}
-	if parsed.Scheme == "ws" {
-		parsed.Scheme = "http"
-	} else if parsed.Scheme == "wss" {
-		parsed.Scheme = "https"
-	}
-	parsed.Path = ""
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String()
-}
-
 func findFixtureTarget(targets []webmcp.Target, fixtureURL string) (webmcp.Target, error) {
 	var matches []webmcp.Target
 	for _, target := range targets {
-		if target.Type == "page" && target.URL == fixtureURL {
+		if target.Type == pageTargetType && target.URL == fixtureURL {
 			matches = append(matches, target)
 		}
 	}
@@ -984,7 +755,7 @@ func readFixtureOracle(ctx context.Context, endpoint string) (fixtureOracle, err
 	if err != nil {
 		return fixtureOracle{}, err
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode != http.StatusOK {
 		return fixtureOracle{}, fmt.Errorf("fixture oracle HTTP status: %s", response.Status)
 	}
@@ -1022,54 +793,6 @@ func waitForFixtureTarget(ctx context.Context, baseURL string, targetID webmcp.T
 		case <-ticker.C:
 		}
 	}
-}
-
-func waitForFixturePageTarget(ctx context.Context, baseURL, fixtureURL string) (devToolsTarget, error) {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	var lastErr error
-	for {
-		targets, err := readDevToolsTargets(ctx, baseURL)
-		if err == nil {
-			var matches []devToolsTarget
-			for _, target := range targets {
-				if target.Type == "page" && target.URL == fixtureURL {
-					matches = append(matches, target)
-				}
-			}
-			if len(matches) == 1 {
-				return matches[0], nil
-			}
-			lastErr = fmt.Errorf("found %d page targets for fixture URL", len(matches))
-		} else {
-			lastErr = err
-		}
-		select {
-		case <-ctx.Done():
-			return devToolsTarget{}, fmt.Errorf("wait for pre-attach fixture target: %w (last error: %v)", ctx.Err(), lastErr)
-		case <-ticker.C:
-		}
-	}
-}
-
-func readDevToolsTargets(ctx context.Context, baseURL string) ([]devToolsTarget, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/json/list", nil)
-	if err != nil {
-		return nil, err
-	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("DevTools target list HTTP status: %s", response.Status)
-	}
-	var targets []devToolsTarget
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&targets); err != nil {
-		return nil, err
-	}
-	return targets, nil
 }
 
 type inspectedPageState struct {

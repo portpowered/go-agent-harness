@@ -334,3 +334,56 @@ func normalizePolicyList(values []string) []string {
 
 // Redactor is the pure pre-persistence boundary for semantic browser events.
 // It owns no files and performs no network or clock operations.
+
+func newRedactionCredentials(credentials []string) ([][]byte, error) {
+	seen := make(map[string]struct{}, len(credentials))
+	values := make([][]byte, 0, len(credentials))
+	for _, credential := range credentials {
+		if credential == "" {
+			return nil, newRedactionError(ErrInvalidRedactionCredential, "validate credentials", "credentials", errors.New("credential values must be non-empty"), nil)
+		}
+		if credential == RedactionMarker {
+			return nil, newRedactionError(ErrInvalidRedactionCredential, "validate credentials", "credentials", errors.New("credential conflicts with redaction marker"), nil)
+		}
+		if !utf8.ValidString(credential) {
+			return nil, newRedactionError(ErrInvalidRedactionCredential, "validate credentials", "credentials", errors.New("credential must be valid UTF-8"), nil)
+		}
+		if _, ok := seen[credential]; ok {
+			continue
+		}
+		seen[credential] = struct{}{}
+		values = append(values, []byte(credential))
+	}
+	sort.Slice(values, func(i, j int) bool {
+		if len(values[i]) != len(values[j]) {
+			return len(values[i]) > len(values[j])
+		}
+		return bytes.Compare(values[i], values[j]) < 0
+	})
+	return values, nil
+}
+
+func containsCredentialInPolicy(policy RedactionPolicy, credentials [][]byte) bool {
+	data, err := json.Marshal(policy)
+	if err != nil {
+		return false
+	}
+	return containsCredential(data, credentials)
+}
+
+func containsCredential(value []byte, secrets [][]byte) bool {
+	for _, secret := range secrets {
+		if bytes.Contains(value, secret) {
+			return true
+		}
+	}
+	return false
+}
+
+func redactBytes(value string, secrets [][]byte) []byte {
+	redacted := []byte(value)
+	for _, secret := range secrets {
+		redacted = bytes.ReplaceAll(redacted, secret, []byte(RedactionMarker))
+	}
+	return redacted
+}

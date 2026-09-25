@@ -8,6 +8,22 @@ import (
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
 
+// JSON Schema type names used when normalizing and validating tool schemas.
+const (
+	schemaTypeString  = "string"
+	schemaTypeBoolean = "boolean"
+	schemaTypeObject  = "object"
+)
+
+const (
+	// redactedValue replaces page-controlled metadata and error text that
+	// must not reach the model.
+	redactedValue = "redacted"
+	// noPageSelectedMessage is the model-facing text for calls made before a
+	// page is selected.
+	noPageSelectedMessage = "no page is selected"
+)
+
 // Browser result contracts and the frozen error vocabulary are owned by the
 // reusable tools service. This package keeps the Lane B definition projection
 // and aliases the shared values for the CLI-hosted discovery adapter.
@@ -16,6 +32,9 @@ type ToolResultIssue = runtimeTools.ToolResultIssue
 type ToolResultError = runtimeTools.ToolResultError
 type ToolResultEnvelope = runtimeTools.ToolResultEnvelope
 
+// Result serialization is owned by the reusable tools service. These aliases
+// keep this CLI package source-compatible for its Lane B adapter and tests
+// while avoiding a second envelope implementation.
 type ResultEnvelope = runtimeTools.ResultEnvelope
 type ResultError = runtimeTools.ResultError
 type ResultIssue = runtimeTools.ResultIssue
@@ -178,7 +197,7 @@ func BrokerToolSchemas() []map[string]any { return StableToolSchemas() }
 
 func objectSchema() map[string]any {
 	result := map[string]any{
-		"type":                 "object",
+		"type":                 schemaTypeObject,
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}

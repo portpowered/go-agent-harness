@@ -76,19 +76,6 @@ func (h *TargetHandle) Release() error { return h.Detach(context.Background()) }
 // browser, process, or profile close operation.
 func (h *TargetHandle) Close() error { return h.Release() }
 
-// Close releases the selected target handle, if this selection owns one.
-// Selection values remain safe to close after the service selects another
-// target because the handle is independently idempotent.
-func (s Selection) Close() error {
-	if s.Handle == nil {
-		return nil
-	}
-	return s.Handle.Close()
-}
-
-// Release is an alias for Selection.Close.
-func (s Selection) Release() error { return s.Close() }
-
 // Select refreshes the supplied browser's targets and selects one exact
 // normalized browser/target pair. An empty TargetID is accepted only to make
 // the fail-closed ambiguity/no-match paths observable; it never authorizes a
@@ -140,45 +127,17 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 		return Selection{}, newUnsupportedWebMCP(browser.ID, target.ID)
 	}
 
-	var handle *TargetHandle
-	if s.targetAttacher != nil {
-		detacher, attachErr := s.targetAttacher.Attach(ctx, browser, target)
-		if attachErr != nil {
-			failure := classifySelectionOperationError(attachErr, browser.ID, target.ID, "attach", "attach_failed")
-			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "attach")
-			s.mu.Unlock()
-			return Selection{}, failure
-		}
-		handle = NewDetachOnlyTargetHandle(detacher)
-	}
-	if request.Activate && s.activator != nil {
-		if activateErr := s.activator.Activate(ctx, browser, target); activateErr != nil {
-			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
-			if failure.Code == CodeBrowserDisconnected {
-				if handle != nil {
-					_ = handle.Close()
-				}
-				s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
-				s.mu.Unlock()
-				return Selection{}, failure
-			}
-			// Foreground activation is ancillary. A live target can reject
-			// activation (for example, in headless mode) while remaining a
-			// valid connected WebMCP selection.
-		}
+	handle, failure := s.attachSelectionTargetLocked(ctx, browser, target, request.Activate)
+	if failure != nil {
+		s.mu.Unlock()
+		return Selection{}, failure
 	}
 
 	reason := boundedLabel(request.Reason, maxSelectionReason)
 	if reason == "" {
 		reason = defaultSelectionReason
 	}
-	selectedAt := time.Time{}
-	if s.clock != nil {
-		selectedAt = s.clock.Now()
-	}
-	if selectedAt.IsZero() {
-		selectedAt = time.Unix(0, 0).UTC()
-	}
+	selectedAt := s.selectionTime()
 	selected := Selection{
 		BrowserID:  browser.ID,
 		TargetID:   target.ID,
@@ -223,6 +182,52 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	return selected, nil
 }
 
+// selectionTime returns the selection clock value, never a zero time.
+func (s *Service) selectionTime() time.Time {
+	selectedAt := time.Time{}
+	if s.clock != nil {
+		selectedAt = s.clock.Now()
+	}
+	if selectedAt.IsZero() {
+		selectedAt = time.Unix(0, 0).UTC()
+	}
+	return selectedAt
+}
+
+// attachSelectionTargetLocked attaches the chosen target and optionally
+// activates it. Only a browser disconnect during activation is terminal.
+func (s *Service) attachSelectionTargetLocked(ctx context.Context, browser BrowserCandidate, target Target, activate bool) (*TargetHandle, *DiscoveryError) {
+	var handle *TargetHandle
+	if s.targetAttacher != nil {
+		detacher, attachErr := s.targetAttacher.Attach(ctx, browser, target)
+		if attachErr != nil {
+			failure := classifySelectionOperationError(attachErr, browser.ID, target.ID, "attach", "attach_failed")
+			s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "attach")
+			return nil, failure
+		}
+		handle = NewDetachOnlyTargetHandle(detacher)
+	}
+	if !activate || s.activator == nil {
+		return handle, nil
+	}
+	activateErr := s.activator.Activate(ctx, browser, target)
+	if activateErr == nil {
+		return handle, nil
+	}
+	failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
+	if failure.Code != CodeBrowserDisconnected {
+		// Foreground activation is ancillary. A live target can reject
+		// activation (for example, in headless mode) while remaining a
+		// valid connected WebMCP selection.
+		return handle, nil
+	}
+	if handle != nil {
+		discardTargetHandle(ctx, handle)
+	}
+	s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
+	return nil, failure
+}
+
 // SelectTarget is the convenience form for callers that already have the
 // normalized browser candidate returned by Discover.
 func (s *Service) SelectTarget(ctx context.Context, browser BrowserCandidate, targetID string, options ...SelectionOptions) (Selection, error) {
@@ -240,41 +245,6 @@ func (s *Service) SelectTarget(ctx context.Context, browser BrowserCandidate, ta
 func (s *Service) SelectExact(ctx context.Context, browser BrowserCandidate, targetID string, options ...SelectionOptions) (Selection, error) {
 	return s.SelectTarget(ctx, browser, targetID, options...)
 }
-
-// Selected returns a snapshot of the service's current selection. The boolean
-// is false when no selection has been committed.
-func (s *Service) Selected() (Selection, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.selection == nil {
-		return Selection{}, false
-	}
-	return *s.selection, true
-}
-
-// CurrentSelection is a descriptive alias for Selected.
-func (s *Service) CurrentSelection() (Selection, bool) { return s.Selected() }
-
-// ReleaseSelection clears and detaches the current selection. Releasing an
-// already empty service is a successful no-op.
-func (s *Service) ReleaseSelection() error {
-	s.mu.Lock()
-	if s.selection == nil {
-		s.mu.Unlock()
-		return nil
-	}
-	previous := s.selection
-	s.selection = nil
-	s.mu.Unlock()
-	if previous.Handle == nil {
-		return nil
-	}
-	return previous.Handle.Close()
-}
-
-// Close is the service-level selection cleanup hook. Discovery itself owns no
-// browser process, so closing the service only releases its attached target.
-func (s *Service) Close() error { return s.ReleaseSelection() }
 
 func firstSelectionOptions(options []SelectionOptions) SelectionOptions {
 	if len(options) == 0 {
@@ -359,7 +329,7 @@ func chooseSelectionTarget(browserID string, targets []Target, requestedID strin
 			if target.ID != requestedID {
 				continue
 			}
-			if target.Type == "page" && !target.WebMCP {
+			if target.Type == targetTypePage && !target.WebMCP {
 				return Target{}, newUnsupportedWebMCP(browserID, target.ID)
 			}
 			if !target.Eligible {
@@ -423,7 +393,7 @@ func (s *Service) emitTarget(kind EventType, browserID, targetID string, generat
 		Generation:  generation,
 		Payload:     copyPayload,
 		Redaction: Redaction{
-			Mode:  "redacted",
+			Mode:  redactedValue,
 			Rules: []string{"url_query", "url_fragment", "raw_cdp_disabled"},
 		},
 	})

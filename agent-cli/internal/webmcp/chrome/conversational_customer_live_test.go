@@ -1,7 +1,6 @@
 package chrome
 
 import (
-	"bufio"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -9,14 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -24,7 +20,6 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	looptranscript "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	browserconversation "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 	browserconversationWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation/wire"
 )
@@ -40,6 +35,7 @@ const (
 	conversationalCustomerPostLaneEnv   = "WEBMCP_CONVERSATIONAL_POST_LANE_I_FINDING"
 	conversationalCustomerLaneNumber    = "269"
 	conversationalCustomerModelEnv      = "WEBMCP_CONVERSATIONAL_MODEL"
+	conversationalCustomerLaneMerged    = "MERGED"
 
 	conversationalCustomerHomePage     = "home"
 	conversationalCustomerSettingsPage = "settings"
@@ -61,239 +57,25 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	if os.Getenv(conversationalCustomerLiveEnv) != "1" {
 		t.Skipf("set %s=1 to run the credentialed canonical conversation", conversationalCustomerLiveEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
-	apiKey := requiredNewlineFreeEnv(t, conversationalCustomerAPIKeyEnv)
-	// The production config loader consumes this scoped environment variable.
-	// It is intentionally never passed as a process argument or report field.
-	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", apiKey)
-	audioPaths := conversationalCustomerAudioPaths(t)
-	validatorCommand := conversationalCustomerValidatorCommand(t)
-	lane := readConversationalCustomerLaneStatus(t, ctx)
-	sourceRoot := conversationalCustomerSourceRoot(t, lane)
-
-	workDir := t.TempDir()
-	pinned, err := acquirePinnedChrome(ctx, workDir)
-	if err != nil {
-		t.Fatalf("acquire locked Chrome for Testing: %v", err)
-	}
-
-	fixture := newConversationalCustomerFixtureServer()
-	t.Cleanup(fixture.Close)
-	homeURL := fixture.URL(conversationalCustomerHomePage)
-	settingsURL := fixture.URL(conversationalCustomerSettingsPage)
-
-	browser, err := launchPinnedChrome(ctx, pinned, homeURL)
-	if err != nil {
-		t.Fatalf("launch locked Chrome for Testing: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := browser.Close(); closeErr != nil {
-			t.Logf("Chrome cleanup: %v", closeErr)
-		}
-	})
-
-	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
-	if err != nil {
-		t.Fatalf("read pinned Chrome DevTools version: %v", err)
-	}
-	target, err := waitForFixturePageTarget(ctx, baseURL, homeURL)
-	if err != nil {
-		t.Fatalf("discover exact conversational fixture target: %v", err)
-	}
-
-	binaryPath := filepath.Join(workDir, "agent")
-	if err := buildGateBinary(ctx, sourceRoot, binaryPath); err != nil {
-		t.Fatalf("build production agent binary from %s: %v", sourceRoot, err)
-	}
-	configDir := filepath.Join(workDir, "config")
-	if err := os.Mkdir(configDir, 0o700); err != nil {
-		t.Fatalf("create live config directory: %v", err)
-	}
-	if err := writeGateConfig(configDir, baseURL, fixture.Origin()); err != nil {
-		t.Fatalf("write live browser config: %v", err)
-	}
-	browserID, targetID, err := selectConversationalCustomerTarget(ctx, binaryPath, configDir, homeURL)
-	if err != nil {
-		t.Fatalf("select exact conversational fixture target: %v", err)
-	}
-	if target.ID != string(targetID) {
-		t.Fatalf("selected target = %s, discovered target = %s", targetID, target.ID)
-	}
-
-	observer, observerClose, err := openConversationalCustomerObserver(ctx, browserID, targetID, version)
-	if err != nil {
-		t.Fatalf("open independent browser event observer: %v", err)
-	}
-	collector := newConversationalCustomerEventCollector()
-	go collector.consume(observer)
-	t.Cleanup(func() {
-		if closeErr := observerClose(); closeErr != nil {
-			t.Logf("observer cleanup: %v", closeErr)
-		}
-	})
-
-	if _, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Page == conversationalCustomerHomePage
-	}); err != nil {
-		t.Fatalf("wait for initial independent fixture oracle: %v", err)
-	}
-
-	scenario := newConversationalCustomerScenario(homeURL, settingsURL)
-	browserService := browserconversationWire.NewService()
-	if _, err := browserService.ValidateScenario(scenario); err != nil {
-		t.Fatalf("canonical scenario validation: %v", err)
-	}
-	initialOracle, err := readConversationalCustomerOracle(ctx, fixture.StateURL())
-	if err != nil {
-		t.Fatalf("read initial independent oracle: %v", err)
-	}
-
-	promptPath := filepath.Join(workDir, "system-prompt.txt")
-	if err := os.WriteFile(promptPath, []byte(conversationalCustomerSystemPrompt()), 0o600); err != nil {
-		t.Fatalf("write fixed live system prompt: %v", err)
-	}
-	recordDir := filepath.Join(workDir, "recording")
-	sessionArgs := []string{
-		"session",
-		"--browser-tools=webmcp",
-		"--browser-cdp-url", baseURL,
-		"--browser-browser", browserID,
-		"--browser-tab", string(targetID),
-		"--browser-allowed-origin", fixture.Origin(),
-		"--browser-cancel-on-interrupt", "always",
-		"--provider", "openai",
-		"--model", conversationalCustomerModel(),
-		"--system-prompt", promptPath,
-		"--record-dir", recordDir,
-		"--wait-for-close",
-		"--max-duration", "8m",
-		"--audio-interrupt", audioPaths[4],
-		"--audio-interrupt-on-tool", "webmcp_customer_pending",
-	}
-	for _, path := range audioPaths {
-		sessionArgs = append(sessionArgs, "--audio-in-turn", path)
-	}
-	session, err := startGateCommand(ctx, binaryPath, configDir, sessionArgs...)
-	if err != nil {
-		t.Fatalf("start production conversational session: %v", err)
-	}
+	live := launchConversationalCustomerLive(t, ctx)
+	live.startObserver(t, ctx)
+	live.startSession(t, ctx)
 
 	// The event boundaries below are the customer-navigation clock. Each
 	// navigation is issued after the preceding browser terminal event, before
 	// the scheduler can release the next turn, and then admitted only after the
 	// independent target reports the new page.
-	labelTerminal, err := collector.wait(ctx, 0, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventToolResponded && event.ToolName == "webmcp_customer_set_label" && event.Status != ""
-	})
-	if err != nil {
-		t.Fatalf("wait for initial label terminal event: %v", err)
-	}
-	labelAfter, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Label == conversationalCustomerLabel
-	})
-	if err != nil {
-		t.Fatalf("wait for initial label oracle: %v", err)
-	}
-
-	themeTerminal, err := collector.wait(ctx, 0, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventToolResponded && event.ToolName == "webmcp_customer_set_theme" && event.Status != ""
-	})
-	if err != nil {
-		t.Fatalf("wait for second theme terminal event: %v", err)
-	}
-	themeAfter, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Theme == conversationalCustomerTheme
-	})
-	if err != nil {
-		t.Fatalf("wait for second theme oracle: %v", err)
-	}
-
-	settingsNavigationStart := collector.len()
-	if err := navigateConversationalCustomerTarget(ctx, browser.endpoint(), targetID, settingsURL); err != nil {
-		t.Fatalf("customer navigate to settings: %v", err)
-	}
-	settingsNavigation, err := collector.wait(ctx, settingsNavigationStart, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventPageNavigated || event.Type == webmcp.EventFrameNavigated
-	})
-	if err != nil {
-		t.Fatalf("observe settings navigation: %v", err)
-	}
-	settingsBefore, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Page == conversationalCustomerSettingsPage
-	})
-	if err != nil {
-		t.Fatalf("wait for settings oracle: %v", err)
-	}
-
-	priorityTerminal, err := collector.wait(ctx, settingsNavigationStart, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventToolResponded && event.ToolName == "webmcp_customer_set_priority" && event.Status != ""
-	})
-	if err != nil {
-		t.Fatalf("wait for fresh settings priority terminal event: %v", err)
-	}
-	settingsAfter, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Page == conversationalCustomerSettingsPage && oracle.Priority == conversationalCustomerPriority
-	})
-	if err != nil {
-		t.Fatalf("wait for settings priority oracle: %v", err)
-	}
-
-	homeNavigationStart := collector.len()
-	if err := navigateConversationalCustomerTarget(ctx, browser.endpoint(), targetID, homeURL); err != nil {
-		t.Fatalf("customer navigate back to home: %v", err)
-	}
-	homeNavigation, err := collector.wait(ctx, homeNavigationStart, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventPageNavigated || event.Type == webmcp.EventFrameNavigated
-	})
-	if err != nil {
-		t.Fatalf("observe home correction navigation: %v", err)
-	}
-	correctionBefore, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Page == conversationalCustomerHomePage && oracle.Label == conversationalCustomerLabel && oracle.Theme == conversationalCustomerTheme
-	})
-	if err != nil {
-		t.Fatalf("wait for correction baseline oracle: %v", err)
-	}
-	correctionTerminal, err := collector.wait(ctx, homeNavigationStart, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventToolResponded && event.ToolName == "webmcp_customer_set_label" && event.Status != "" && event.Sequence > homeNavigation.Sequence
-	})
-	if err != nil {
-		t.Fatalf("wait for correction terminal event: %v", err)
-	}
-	correctionAfter, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return oracle.Ready && oracle.Page == conversationalCustomerHomePage && oracle.Label == conversationalCustomerCorrected
-	})
-	if err != nil {
-		t.Fatalf("wait for correction oracle: %v", err)
-	}
-
-	pending, err := collector.wait(ctx, homeNavigationStart, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventToolInvoked && event.ToolName == "webmcp_customer_pending" && event.InvocationID != ""
-	})
-	if err != nil {
-		t.Fatalf("wait for synchronized pending invocation: %v", err)
-	}
-	if _, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool { return oracle.Pending }); err != nil {
-		t.Fatalf("wait for pending oracle: %v", err)
-	}
-	cancelResult, err := cancelConversationalCustomerInvocation(ctx, binaryPath, configDir, pending.InvocationID)
-	if err != nil {
-		t.Fatalf("cancel pending invocation through separate browser process: %v", err)
-	}
-	if cancelResult.Status != "cancel_requested" {
-		t.Fatalf("cancel pending invocation status = %q", cancelResult.Status)
-	}
-	if _, err := waitForConversationalCustomerOracle(ctx, fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
-		return !oracle.Pending && conversationalCustomerOracleHasInvocation(oracle, "canceled:webmcp_customer_pending")
-	}); err != nil {
-		t.Fatalf("wait for pending cancellation oracle: %v", err)
-	}
+	var observed conversationalCustomerObserved
+	live.observeInitialActions(t, ctx, &observed)
+	live.observeStaleRecovery(t, ctx, &observed)
+	live.observeCorrection(t, ctx, &observed)
+	live.cancelPendingInvocation(t, ctx, &observed)
 
 	// The explicit customer cancel turn is the final scheduled audio input. It
 	// is released only after the external browser cancellation unblocks the
@@ -302,60 +84,380 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	// here would drop the very customer turn this acceptance run must prove.
 	cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cleanupCancel()
-	sessionResult, waitErr := session.wait(cleanupContext)
+	live.finishSession(t, ctx, cleanupContext, &observed)
+
+	result, mechanical, verdict, validatorErr := live.evaluate(t, observed)
+	report, metadata := live.renderReport(t, result)
+	live.writeRequestedReport(t, result, metadata)
+	t.Log(report)
+	if validatorErr != nil {
+		t.Fatalf("validator command did not return a structured verdict")
+	}
+	if !mechanical.Passed {
+		t.Fatalf("mechanical live acceptance failed: %s", strings.Join(mechanical.Failures, "; "))
+	}
+	if !verdict.Passed {
+		t.Fatalf("validator live acceptance failed: %s", verdict.Summary)
+	}
+	if os.Getenv(conversationalCustomerPostLaneEnv) == "1" && live.lane.State != conversationalCustomerLaneMerged {
+		if err := postConversationalCustomerLaneFinding(ctx, report); err != nil {
+			t.Fatalf("post sanitized Lane I finding: %v", err)
+		}
+	}
+}
+
+// conversationalCustomerLive carries the browser, binary, and observer state
+// shared by the phases of the credentialed conversational acceptance run.
+type conversationalCustomerLive struct {
+	lane             conversationalCustomerLaneStatus
+	audioPaths       []string
+	validatorCommand []string
+	workDir          string
+	fixture          *conversationalCustomerFixtureServer
+	homeURL          string
+	settingsURL      string
+	browser          *runningChrome
+	baseURL          string
+	version          devToolsVersion
+	binaryPath       string
+	configDir        string
+	browserID        string
+	targetID         webmcp.TargetID
+	collector        *conversationalCustomerEventCollector
+	observerClose    func() error
+	scenario         browserconversation.BrowserConversationScenario
+	browserService   browserconversation.Service
+	initialOracle    conversationalCustomerOracle
+	recordDir        string
+	session          *gateCLIProcess
+}
+
+// conversationalCustomerObserved holds the browser events and independent
+// oracle readings captured at each customer-navigation boundary.
+type conversationalCustomerObserved struct {
+	labelAfter         conversationalCustomerOracle
+	themeAfter         conversationalCustomerOracle
+	settingsNavigation webmcp.BrowserEvent
+	settingsBefore     conversationalCustomerOracle
+	settingsAfter      conversationalCustomerOracle
+	homeNavigation     webmcp.BrowserEvent
+	correctionBefore   conversationalCustomerOracle
+	correctionAfter    conversationalCustomerOracle
+	pending            webmcp.BrowserEvent
+	cancelResult       conversationalCustomerCancelResult
+	postProbe          conversationalCustomerProbe
+	postOracle         conversationalCustomerOracle
+}
+
+func launchConversationalCustomerLive(t *testing.T, ctx context.Context) *conversationalCustomerLive {
+	t.Helper()
+	live := &conversationalCustomerLive{}
+	apiKey := requiredNewlineFreeEnv(t, conversationalCustomerAPIKeyEnv)
+	// The production config loader consumes this scoped environment variable.
+	// It is intentionally never passed as a process argument or report field.
+	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", apiKey)
+	live.audioPaths = conversationalCustomerAudioPaths(t)
+	live.validatorCommand = conversationalCustomerValidatorCommand(t)
+	live.lane = readConversationalCustomerLaneStatus(t, ctx)
+	sourceRoot := conversationalCustomerSourceRoot(t, live.lane)
+
+	live.workDir = t.TempDir()
+	pinned, err := acquirePinnedChrome(ctx, live.workDir)
+	if err != nil {
+		t.Fatalf("acquire locked Chrome for Testing: %v", err)
+	}
+
+	live.fixture = newConversationalCustomerFixtureServer()
+	t.Cleanup(live.fixture.Close)
+	live.homeURL = live.fixture.URL(conversationalCustomerHomePage)
+	live.settingsURL = live.fixture.URL(conversationalCustomerSettingsPage)
+
+	live.browser, err = launchPinnedChrome(ctx, pinned, live.homeURL)
+	if err != nil {
+		t.Fatalf("launch locked Chrome for Testing: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := live.browser.Close(); closeErr != nil {
+			t.Logf("Chrome cleanup: %v", closeErr)
+		}
+	})
+
+	live.baseURL = browserHTTPURL(live.browser.endpoint())
+	live.version, err = waitForDevToolsVersion(ctx, live.baseURL, lockedChromeVersion)
+	if err != nil {
+		t.Fatalf("read pinned Chrome DevTools version: %v", err)
+	}
+	target, err := waitForFixturePageTarget(ctx, live.baseURL, live.homeURL)
+	if err != nil {
+		t.Fatalf("discover exact conversational fixture target: %v", err)
+	}
+	live.selectTarget(t, ctx, sourceRoot, target)
+	return live
+}
+
+func (l *conversationalCustomerLive) selectTarget(t *testing.T, ctx context.Context, sourceRoot string, target devToolsTarget) {
+	t.Helper()
+	l.binaryPath = filepath.Join(l.workDir, "agent")
+	if err := buildGateBinary(ctx, sourceRoot, l.binaryPath); err != nil {
+		t.Fatalf("build production agent binary from %s: %v", sourceRoot, err)
+	}
+	l.configDir = filepath.Join(l.workDir, "config")
+	if err := os.Mkdir(l.configDir, 0o700); err != nil {
+		t.Fatalf("create live config directory: %v", err)
+	}
+	if err := writeGateConfig(l.configDir, l.baseURL, l.fixture.Origin()); err != nil {
+		t.Fatalf("write live browser config: %v", err)
+	}
+	var err error
+	l.browserID, l.targetID, err = selectConversationalCustomerTarget(ctx, l.binaryPath, l.configDir, l.homeURL)
+	if err != nil {
+		t.Fatalf("select exact conversational fixture target: %v", err)
+	}
+	if target.ID != string(l.targetID) {
+		t.Fatalf("selected target = %s, discovered target = %s", l.targetID, target.ID)
+	}
+}
+
+func (l *conversationalCustomerLive) startObserver(t *testing.T, ctx context.Context) {
+	t.Helper()
+	observer, observerClose, err := openConversationalCustomerObserver(ctx, l.browserID, l.targetID, l.version)
+	if err != nil {
+		t.Fatalf("open independent browser event observer: %v", err)
+	}
+	l.observerClose = observerClose
+	l.collector = newConversationalCustomerEventCollector()
+	go l.collector.consume(observer)
+	t.Cleanup(func() {
+		if closeErr := observerClose(); closeErr != nil {
+			t.Logf("observer cleanup: %v", closeErr)
+		}
+	})
+
+	if _, err := waitForConversationalCustomerOracle(ctx, l.fixture.StateURL(), func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Page == conversationalCustomerHomePage
+	}); err != nil {
+		t.Fatalf("wait for initial independent fixture oracle: %v", err)
+	}
+
+	l.scenario = newConversationalCustomerScenario(l.homeURL, l.settingsURL)
+	l.browserService = browserconversationWire.NewService()
+	if _, err := l.browserService.ValidateScenario(l.scenario); err != nil {
+		t.Fatalf("canonical scenario validation: %v", err)
+	}
+	l.initialOracle, err = readConversationalCustomerOracle(ctx, l.fixture.StateURL())
+	if err != nil {
+		t.Fatalf("read initial independent oracle: %v", err)
+	}
+}
+
+func (l *conversationalCustomerLive) startSession(t *testing.T, ctx context.Context) {
+	t.Helper()
+	promptPath := filepath.Join(l.workDir, "system-prompt.txt")
+	if err := os.WriteFile(promptPath, []byte(conversationalCustomerSystemPrompt()), 0o600); err != nil {
+		t.Fatalf("write fixed live system prompt: %v", err)
+	}
+	l.recordDir = filepath.Join(l.workDir, "recording")
+	sessionArgs := []string{
+		"session",
+		"--browser-tools=webmcp",
+		"--browser-cdp-url", l.baseURL,
+		"--browser-browser", l.browserID,
+		"--browser-tab", string(l.targetID),
+		"--browser-allowed-origin", l.fixture.Origin(),
+		"--browser-cancel-on-interrupt", "always",
+		"--provider", "openai",
+		"--model", conversationalCustomerModel(),
+		"--system-prompt", promptPath,
+		"--record-dir", l.recordDir,
+		"--wait-for-close",
+		"--max-duration", "8m",
+		"--audio-interrupt", l.audioPaths[4],
+		"--audio-interrupt-on-tool", "webmcp_customer_pending",
+	}
+	for _, path := range l.audioPaths {
+		sessionArgs = append(sessionArgs, "--audio-in-turn", path)
+	}
+	session, err := startGateCommand(ctx, l.binaryPath, l.configDir, sessionArgs...)
+	if err != nil {
+		t.Fatalf("start production conversational session: %v", err)
+	}
+	l.session = session
+}
+
+// waitTerminal waits for a responded event from the named page tool that also
+// satisfies the optional extra predicate.
+func (l *conversationalCustomerLive) waitTerminal(ctx context.Context, start int, toolName string, extra func(webmcp.BrowserEvent) bool) error {
+	_, err := l.collector.wait(ctx, start, func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventToolResponded && event.ToolName == toolName && event.Status != "" && (extra == nil || extra(event))
+	})
+	return err
+}
+
+func (l *conversationalCustomerLive) waitOracle(ctx context.Context, match func(conversationalCustomerOracle) bool) (conversationalCustomerOracle, error) {
+	return waitForConversationalCustomerOracle(ctx, l.fixture.StateURL(), match)
+}
+
+// navigate performs a customer navigation and returns the event index before
+// it plus the observed page or frame navigation event that followed it.
+func (l *conversationalCustomerLive) navigate(t *testing.T, ctx context.Context, pageURL, navigateFailure, observeFailure string) (int, webmcp.BrowserEvent) {
+	t.Helper()
+	start := l.collector.len()
+	if err := navigateConversationalCustomerTarget(ctx, l.browser.endpoint(), l.targetID, pageURL); err != nil {
+		t.Fatalf("%s: %v", navigateFailure, err)
+	}
+	event, err := l.collector.wait(ctx, start, func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventPageNavigated || event.Type == webmcp.EventFrameNavigated
+	})
+	if err != nil {
+		t.Fatalf("%s: %v", observeFailure, err)
+	}
+	return start, event
+}
+
+func (l *conversationalCustomerLive) observeInitialActions(t *testing.T, ctx context.Context, observed *conversationalCustomerObserved) {
+	t.Helper()
+	var err error
+	if err := l.waitTerminal(ctx, 0, "webmcp_customer_set_label", nil); err != nil {
+		t.Fatalf("wait for initial label terminal event: %v", err)
+	}
+	observed.labelAfter, err = l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Label == conversationalCustomerLabel
+	})
+	if err != nil {
+		t.Fatalf("wait for initial label oracle: %v", err)
+	}
+	if err := l.waitTerminal(ctx, 0, "webmcp_customer_set_theme", nil); err != nil {
+		t.Fatalf("wait for second theme terminal event: %v", err)
+	}
+	observed.themeAfter, err = l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Theme == conversationalCustomerTheme
+	})
+	if err != nil {
+		t.Fatalf("wait for second theme oracle: %v", err)
+	}
+}
+
+func (l *conversationalCustomerLive) observeStaleRecovery(t *testing.T, ctx context.Context, observed *conversationalCustomerObserved) {
+	t.Helper()
+	start, navigation := l.navigate(t, ctx, l.settingsURL, "customer navigate to settings", "observe settings navigation")
+	observed.settingsNavigation = navigation
+	var err error
+	observed.settingsBefore, err = l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Page == conversationalCustomerSettingsPage
+	})
+	if err != nil {
+		t.Fatalf("wait for settings oracle: %v", err)
+	}
+	if err := l.waitTerminal(ctx, start, "webmcp_customer_set_priority", nil); err != nil {
+		t.Fatalf("wait for fresh settings priority terminal event: %v", err)
+	}
+	observed.settingsAfter, err = l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Page == conversationalCustomerSettingsPage && oracle.Priority == conversationalCustomerPriority
+	})
+	if err != nil {
+		t.Fatalf("wait for settings priority oracle: %v", err)
+	}
+}
+
+func (l *conversationalCustomerLive) observeCorrection(t *testing.T, ctx context.Context, observed *conversationalCustomerObserved) {
+	t.Helper()
+	start, navigation := l.navigate(t, ctx, l.homeURL, "customer navigate back to home", "observe home correction navigation")
+	observed.homeNavigation = navigation
+	var err error
+	observed.correctionBefore, err = l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Page == conversationalCustomerHomePage && oracle.Label == conversationalCustomerLabel && oracle.Theme == conversationalCustomerTheme
+	})
+	if err != nil {
+		t.Fatalf("wait for correction baseline oracle: %v", err)
+	}
+	if err := l.waitTerminal(ctx, start, "webmcp_customer_set_label", func(event webmcp.BrowserEvent) bool {
+		return event.Sequence > navigation.Sequence
+	}); err != nil {
+		t.Fatalf("wait for correction terminal event: %v", err)
+	}
+	observed.correctionAfter, err = l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return oracle.Ready && oracle.Page == conversationalCustomerHomePage && oracle.Label == conversationalCustomerCorrected
+	})
+	if err != nil {
+		t.Fatalf("wait for correction oracle: %v", err)
+	}
+	observed.pending, err = l.collector.wait(ctx, start, func(event webmcp.BrowserEvent) bool {
+		return event.Type == webmcp.EventToolInvoked && event.ToolName == "webmcp_customer_pending" && event.InvocationID != ""
+	})
+	if err != nil {
+		t.Fatalf("wait for synchronized pending invocation: %v", err)
+	}
+}
+
+func (l *conversationalCustomerLive) cancelPendingInvocation(t *testing.T, ctx context.Context, observed *conversationalCustomerObserved) {
+	t.Helper()
+	if _, err := l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool { return oracle.Pending }); err != nil {
+		t.Fatalf("wait for pending oracle: %v", err)
+	}
+	cancelResult, err := cancelConversationalCustomerInvocation(ctx, l.binaryPath, l.configDir, observed.pending.InvocationID)
+	if err != nil {
+		t.Fatalf("cancel pending invocation through separate browser process: %v", err)
+	}
+	if cancelResult.Status != "cancel_requested" {
+		t.Fatalf("cancel pending invocation status = %q", cancelResult.Status)
+	}
+	observed.cancelResult = cancelResult
+	if _, err := l.waitOracle(ctx, func(oracle conversationalCustomerOracle) bool {
+		return !oracle.Pending && conversationalCustomerOracleHasInvocation(oracle, "canceled:webmcp_customer_pending")
+	}); err != nil {
+		t.Fatalf("wait for pending cancellation oracle: %v", err)
+	}
+}
+
+func (l *conversationalCustomerLive) finishSession(t *testing.T, ctx, cleanupContext context.Context, observed *conversationalCustomerObserved) {
+	t.Helper()
+	sessionResult, waitErr := l.session.wait(cleanupContext)
 	if waitErr != nil {
 		t.Fatalf("wait for production conversational session: %v", waitErr)
 	}
 	if sessionResult.Err != nil && sessionResult.ExitCode != 0 {
 		t.Fatalf("production conversational session exited with code %d", sessionResult.ExitCode)
 	}
-
-	if closeErr := observerClose(); closeErr != nil {
+	if closeErr := l.observerClose(); closeErr != nil {
 		t.Fatalf("detach independent browser observer: %v", closeErr)
 	}
-	postProbe, err := inspectConversationalCustomerTarget(ctx, browser.endpoint(), browserID, targetID)
+	var err error
+	observed.postProbe, err = inspectConversationalCustomerTarget(ctx, l.browser.endpoint(), l.browserID, l.targetID)
 	if err != nil {
 		t.Fatalf("independent post-detach tab probe: %v", err)
 	}
-	postOracle, err := readConversationalCustomerOracle(ctx, fixture.StateURL())
+	observed.postOracle, err = readConversationalCustomerOracle(ctx, l.fixture.StateURL())
 	if err != nil {
 		t.Fatalf("read post-session oracle: %v", err)
 	}
+}
 
+func (l *conversationalCustomerLive) evaluate(t *testing.T, observed conversationalCustomerObserved) (browserconversation.BrowserConversationResult, browserconversation.BrowserConversationMechanicalEvaluation, browserconversation.BrowserConversationValidatorVerdict, error) {
+	t.Helper()
 	result, err := buildConversationalCustomerResult(
-		scenario,
-		collector.snapshot(),
-		filepath.Join(recordDir, "session-log.jsonl"),
+		l.scenario,
+		l.collector.snapshot(),
+		filepath.Join(l.recordDir, "session-log.jsonl"),
 		[]conversationalCustomerNavigationObservation{
-			{StepID: "stale_recovery", Event: settingsNavigation},
-			{StepID: "correction", Event: homeNavigation},
+			{StepID: "stale_recovery", Event: observed.settingsNavigation},
+			{StepID: "correction", Event: observed.homeNavigation},
 		},
-		[]conversationalCustomerOracleObservation{
-			{StepID: "initial_action", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: initialOracle},
-			{StepID: "initial_action", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: labelAfter},
-			{StepID: "second_action", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: labelAfter},
-			{StepID: "second_action", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: themeAfter},
-			{StepID: "stale_recovery", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: settingsBefore},
-			{StepID: "stale_recovery", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: settingsAfter},
-			{StepID: "correction", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: correctionBefore},
-			{StepID: "correction", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: correctionAfter},
-			{StepID: "", Phase: browserconversation.BrowserConversationOraclePostSession, Oracle: postOracle},
-		},
-		browserID,
-		targetID,
-		postProbe,
-		pending,
-		cancelResult,
+		conversationalCustomerOracleObservations(l.initialOracle, observed),
+		l.browserID,
+		l.targetID,
+		observed.postProbe,
+		observed.pending,
+		observed.cancelResult,
 	)
 	if err != nil {
 		t.Fatalf("build joined live evidence: %v", err)
 	}
-	mechanical, err := browserService.Evaluate(scenario, result, nil)
+	mechanical, err := l.browserService.Evaluate(l.scenario, result, nil)
 	if err != nil {
 		t.Fatalf("evaluate joined live evidence: %v", err)
 	}
 	result.Mechanical = mechanical
-	validator, err := browserService.NewCommandValidator(browserconversation.BrowserConversationValidatorCommand{Command: validatorCommand, Env: sanitizedValidatorEnvironment(), Timeout: 90 * time.Second})
+	validator, err := l.browserService.NewCommandValidator(browserconversation.BrowserConversationValidatorCommand{Command: l.validatorCommand, Env: sanitizedValidatorEnvironment(), Timeout: 90 * time.Second})
 	if err != nil {
 		t.Fatalf("construct validator command: %v", err)
 	}
@@ -369,9 +471,28 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	} else {
 		result.Validator = verdict
 	}
+	return result, mechanical, verdict, validatorErr
+}
+
+func conversationalCustomerOracleObservations(initial conversationalCustomerOracle, observed conversationalCustomerObserved) []conversationalCustomerOracleObservation {
+	return []conversationalCustomerOracleObservation{
+		{StepID: "initial_action", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: initial},
+		{StepID: "initial_action", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: observed.labelAfter},
+		{StepID: "second_action", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: observed.labelAfter},
+		{StepID: "second_action", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: observed.themeAfter},
+		{StepID: "stale_recovery", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: observed.settingsBefore},
+		{StepID: "stale_recovery", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: observed.settingsAfter},
+		{StepID: "correction", Phase: browserconversation.BrowserConversationOracleBefore, Oracle: observed.correctionBefore},
+		{StepID: "correction", Phase: browserconversation.BrowserConversationOracleAfter, Oracle: observed.correctionAfter},
+		{StepID: "", Phase: browserconversation.BrowserConversationOraclePostSession, Oracle: observed.postOracle},
+	}
+}
+
+func (l *conversationalCustomerLive) renderReport(t *testing.T, result browserconversation.BrowserConversationResult) (string, browserconversation.BrowserConversationReportMetadata) {
+	t.Helper()
 	metadata := browserconversation.BrowserConversationReportMetadata{
 		Command:       fmt.Sprintf("agent session --browser-tools=webmcp --provider openai --model %s --record-dir <recording> --audio-in-turn <six finite files> --audio-interrupt <finite file> --audio-interrupt-on-tool webmcp_customer_pending", conversationalCustomerModel()),
-		Configuration: fmt.Sprintf("browser backend=webmcp cdp=loopback allowed_origin=%s browser=%s target=%s", fixture.Origin(), browserID, targetID),
+		Configuration: fmt.Sprintf("browser backend=webmcp cdp=loopback allowed_origin=%s browser=%s target=%s", l.fixture.Origin(), l.browserID, l.targetID),
 		DependencyBaseline: []string{
 			"go=" + runtime.Version(),
 			"chrome_channel=" + lockedChromeChannel,
@@ -383,184 +504,32 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 		BrowserChannel:   lockedChromeChannel,
 		BrowserVersion:   lockedChromeVersion,
 		BrowserRevision:  lockedChromeRevision,
-		PR269Status:      lane.State,
-		LaneIBranch:      lane.HeadRefName,
+		PR269Status:      l.lane.State,
+		LaneIBranch:      l.lane.HeadRefName,
 		LaneIPullRequest: "https://github.com/portpowered/go-agent-harness/pull/" + conversationalCustomerLaneNumber,
 	}
-	report, reportErr := browserService.RenderReport(result, metadata)
+	report, reportErr := l.browserService.RenderReport(result, metadata)
 	if reportErr != nil {
 		t.Fatalf("render sanitized live report: %v", reportErr)
 	}
-	if reportPath := strings.TrimSpace(os.Getenv(conversationalCustomerReportPathEnv)); reportPath != "" {
-		file, openErr := os.OpenFile(reportPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-		if openErr != nil {
-			t.Fatalf("open requested report path: %v", openErr)
-		}
-		writeErr := browserService.WriteReport(file, result, metadata)
-		closeErr := file.Close()
-		if writeErr != nil || closeErr != nil {
-			t.Fatalf("write requested report path: %v", errors.Join(writeErr, closeErr))
-		}
+	return report, metadata
+}
+
+func (l *conversationalCustomerLive) writeRequestedReport(t *testing.T, result browserconversation.BrowserConversationResult, metadata browserconversation.BrowserConversationReportMetadata) {
+	t.Helper()
+	reportPath := strings.TrimSpace(os.Getenv(conversationalCustomerReportPathEnv))
+	if reportPath == "" {
+		return
 	}
-	t.Log(report)
-	if validatorErr != nil {
-		t.Fatalf("validator command did not return a structured verdict")
+	file, openErr := os.OpenFile(reportPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if openErr != nil {
+		t.Fatalf("open requested report path: %v", openErr)
 	}
-	if !mechanical.Passed {
-		t.Fatalf("mechanical live acceptance failed: %s", strings.Join(mechanical.Failures, "; "))
+	writeErr := l.browserService.WriteReport(file, result, metadata)
+	closeErr := file.Close()
+	if writeErr != nil || closeErr != nil {
+		t.Fatalf("write requested report path: %v", errors.Join(writeErr, closeErr))
 	}
-	if !verdict.Passed {
-		t.Fatalf("validator live acceptance failed: %s", verdict.Summary)
-	}
-	if os.Getenv(conversationalCustomerPostLaneEnv) == "1" && lane.State != "MERGED" {
-		if err := postConversationalCustomerLaneFinding(ctx, report); err != nil {
-			t.Fatalf("post sanitized Lane I finding: %v", err)
-		}
-	}
-
-	_ = labelTerminal
-	_ = themeTerminal
-	_ = priorityTerminal
-	_ = correctionTerminal
-}
-
-type conversationalCustomerOracle struct {
-	Page        string   `json:"page"`
-	Ready       bool     `json:"ready"`
-	Label       string   `json:"label"`
-	Theme       string   `json:"theme"`
-	Priority    string   `json:"priority"`
-	Pending     bool     `json:"pending"`
-	VisibleText string   `json:"visibleText"`
-	Invocations []string `json:"invocations"`
-}
-
-type conversationalCustomerPageState struct {
-	Page        string `json:"page"`
-	Ready       bool   `json:"ready"`
-	Label       string `json:"label"`
-	Theme       string `json:"theme"`
-	Priority    string `json:"priority"`
-	Pending     bool   `json:"pending"`
-	VisibleText string `json:"visibleText"`
-}
-
-type conversationalCustomerFixtureServer struct {
-	server *httptest.Server
-	mu     sync.Mutex
-	oracle conversationalCustomerOracle
-}
-
-func newConversationalCustomerFixtureServer() *conversationalCustomerFixtureServer {
-	fixture := &conversationalCustomerFixtureServer{oracle: conversationalCustomerOracle{
-		Page: conversationalCustomerHomePage, Label: "unset", Theme: "default", Priority: "normal", VisibleText: "unset/default",
-	}}
-	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/", "/settings":
-			if request.Method != http.MethodGet {
-				writer.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
-			writer.Header().Set("Cache-Control", "no-store")
-			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-			writer.Header().Set("Origin-Agent-Cluster", "?1")
-			writer.Header().Set("Permissions-Policy", "tools=(self)")
-			_, _ = writer.Write(conversationalCustomerFixtureHTML)
-		case "/__test/conversational-state":
-			fixture.handleOracle(writer, request)
-		default:
-			http.NotFound(writer, request)
-		}
-	}))
-	return fixture
-}
-
-func (f *conversationalCustomerFixtureServer) Origin() string { return f.server.URL }
-
-func (f *conversationalCustomerFixtureServer) URL(page string) string {
-	if page == conversationalCustomerSettingsPage {
-		return f.server.URL + "/settings"
-	}
-	return f.server.URL + "/"
-}
-
-func (f *conversationalCustomerFixtureServer) StateURL() string {
-	return f.server.URL + "/__test/conversational-state"
-}
-
-func (f *conversationalCustomerFixtureServer) Close() {
-	if f != nil && f.server != nil {
-		f.server.Close()
-	}
-}
-
-func (f *conversationalCustomerFixtureServer) handleOracle(writer http.ResponseWriter, request *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	switch request.Method {
-	case http.MethodGet:
-		writer.Header().Set("Cache-Control", "no-store")
-		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(f.oracle)
-	case http.MethodPost:
-		var oracle conversationalCustomerOracle
-		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&oracle); err != nil {
-			http.Error(writer, "invalid oracle", http.StatusBadRequest)
-			return
-		}
-		oracle.Invocations = append([]string(nil), oracle.Invocations...)
-		f.oracle = oracle
-		writer.WriteHeader(http.StatusNoContent)
-	default:
-		writer.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-func newConversationalCustomerScenario(homeURL, settingsURL string) browserconversation.BrowserConversationScenario {
-	homeBefore := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, "unset", "default", "normal", false, "unset/default")
-	labelAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, "default", "normal", false, conversationalCustomerLabel+"/default")
-	themeAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, conversationalCustomerTheme, "normal", false, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
-	settingsBefore := conversationalCustomerState(settingsURL, conversationalCustomerSettingsPage, true, conversationalCustomerLabel, conversationalCustomerTheme, "normal", false, "normal")
-	settingsAfter := conversationalCustomerState(settingsURL, conversationalCustomerSettingsPage, true, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerPriority)
-	correctionBefore := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
-	correctionAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerCorrected, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerCorrected+"/"+conversationalCustomerTheme)
-	return browserconversation.BrowserConversationScenario{
-		Version: browserconversation.BrowserConversationScenarioVersion,
-		ID:      "canonical-webmcp-conversational-customer",
-		Name:    "canonical WebMCP conversational customer",
-		Fixture: browserconversation.BrowserConversationFixture{
-			ID:          "declarative-conversational-customer",
-			Pages:       []browserconversation.BrowserConversationPage{{ID: conversationalCustomerHomePage, URL: homeURL}, {ID: conversationalCustomerSettingsPage, URL: settingsURL}},
-			InitialPage: conversationalCustomerHomePage,
-		},
-		RunTimeout: 10 * time.Minute,
-		Steps: []browserconversation.BrowserConversationStep{
-			{ID: "initial_action", Utterance: "Set the customer label to live alpha.", PageID: conversationalCustomerHomePage, ExpectedState: &browserconversation.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: homeBefore, After: labelAfter}, Deadline: 90 * time.Second},
-			{ID: "second_action", Utterance: "Now set the customer theme to live dark.", PageID: conversationalCustomerHomePage, ExpectedState: &browserconversation.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: labelAfter, After: themeAfter}, Deadline: 90 * time.Second},
-			{ID: "stale_recovery", Utterance: "Set the customer priority to high.", PageID: conversationalCustomerSettingsPage, ExpectedState: &browserconversation.BrowserStateTransition{PageID: conversationalCustomerSettingsPage, Before: settingsBefore, After: settingsAfter}, Navigation: &browserconversation.BrowserCustomerNavigation{FromPageID: conversationalCustomerHomePage, ToPageID: conversationalCustomerSettingsPage, URL: settingsURL}, Deadline: 120 * time.Second},
-			{ID: "correction", Utterance: "Actually change the customer label to live corrected.", PageID: conversationalCustomerHomePage, Navigation: &browserconversation.BrowserCustomerNavigation{FromPageID: conversationalCustomerSettingsPage, ToPageID: conversationalCustomerHomePage, URL: homeURL}, Correction: &browserconversation.BrowserConversationCorrection{TargetStepID: "initial_action", ExpectedState: browserconversation.BrowserStateTransition{PageID: conversationalCustomerHomePage, Before: correctionBefore, After: correctionAfter}}, Deadline: 90 * time.Second},
-			{ID: "interrupt", Utterance: "Hold this customer request while I decide.", PageID: conversationalCustomerHomePage, Interrupt: &browserconversation.BrowserConversationInterrupt{Trigger: browserconversation.BrowserInterruptOnInFlightInvocation, ToolName: "webmcp_customer_pending"}, Deadline: 90 * time.Second},
-			{ID: "cancel", Utterance: "Stop and cancel that request.", PageID: conversationalCustomerHomePage, Cancel: &browserconversation.BrowserConversationCancelRequest{Reason: "customer explicitly stopped the pending request"}, Deadline: 90 * time.Second},
-		},
-		PostSession: browserconversation.BrowserConversationTabStateRequired{PageID: conversationalCustomerHomePage, MustRemainAlive: true, MustBeResponsive: true, MustAllowMutation: true},
-	}
-}
-
-func conversationalCustomerState(_ string, page string, ready bool, label, theme, priority string, pending bool, visible string) json.RawMessage {
-	state, _ := json.Marshal(conversationalCustomerPageState{Page: page, Ready: ready, Label: label, Theme: theme, Priority: priority, Pending: pending, VisibleText: visible})
-	return state
-}
-
-func conversationalCustomerSystemPrompt() string {
-	return `You are operating a real declarative WebMCP customer fixture through the browser tools in this session. Follow each customer request in order. Use webmcp_list_tools to discover current page tools and use only the exact current tool_ref and a syntactically valid JSON object string in webmcp_invoke. Never invent, reuse, or receive tool references or encoded arguments out of band. After customer navigation, list tools again; if a stale_tool_ref error occurs, retain that failed attempt as evidence and retry only with a freshly listed reference. Perform the requested page mutation before speaking confirmation, and ground confirmation in the resulting page state. A customer interruption or stop request cancels in-flight work; never claim a canceled action completed.`
-}
-
-func conversationalCustomerModel() string {
-	if value := strings.TrimSpace(os.Getenv(conversationalCustomerModelEnv)); value != "" {
-		return value
-	}
-	return "gpt-realtime"
 }
 
 func requiredNewlineFreeEnv(t *testing.T, name string) string {
@@ -642,7 +611,7 @@ func readConversationalCustomerLaneStatus(t *testing.T, ctx context.Context) con
 		t.Fatalf("decode Lane I PR status: %v", err)
 	}
 	status.State = strings.ToUpper(strings.TrimSpace(status.State))
-	if status.State != "MERGED" && status.State != "OPEN" {
+	if status.State != conversationalCustomerLaneMerged && status.State != "OPEN" {
 		t.Fatalf("Lane I PR status %q is not a supported pre-run state", status.State)
 	}
 	if status.HeadRefName == "" {
@@ -654,7 +623,7 @@ func readConversationalCustomerLaneStatus(t *testing.T, ctx context.Context) con
 func conversationalCustomerSourceRoot(t *testing.T, lane conversationalCustomerLaneStatus) string {
 	t.Helper()
 	var name, wantBranch string
-	if lane.State == "MERGED" {
+	if lane.State == conversationalCustomerLaneMerged {
 		name, wantBranch = conversationalCustomerMainRootEnv, "main"
 	} else {
 		name, wantBranch = conversationalCustomerLaneRootEnv, lane.HeadRefName
@@ -767,58 +736,6 @@ func openConversationalCustomerObserver(ctx context.Context, browserID string, t
 	return session, closeObserver, nil
 }
 
-type conversationalCustomerEventCollector struct {
-	mu      sync.Mutex
-	events  []webmcp.BrowserEvent
-	changed chan struct{}
-}
-
-func newConversationalCustomerEventCollector() *conversationalCustomerEventCollector {
-	return &conversationalCustomerEventCollector{changed: make(chan struct{})}
-}
-
-func (c *conversationalCustomerEventCollector) consume(session webmcp.TargetSession) {
-	for event := range session.Events() {
-		c.mu.Lock()
-		c.events = append(c.events, event)
-		close(c.changed)
-		c.changed = make(chan struct{})
-		c.mu.Unlock()
-	}
-}
-
-func (c *conversationalCustomerEventCollector) len() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.events)
-}
-
-func (c *conversationalCustomerEventCollector) snapshot() []webmcp.BrowserEvent {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]webmcp.BrowserEvent(nil), c.events...)
-}
-
-func (c *conversationalCustomerEventCollector) wait(ctx context.Context, start int, match func(webmcp.BrowserEvent) bool) (webmcp.BrowserEvent, error) {
-	for {
-		c.mu.Lock()
-		for index := start; index < len(c.events); index++ {
-			if match(c.events[index]) {
-				event := c.events[index]
-				c.mu.Unlock()
-				return event, nil
-			}
-		}
-		changed := c.changed
-		c.mu.Unlock()
-		select {
-		case <-changed:
-		case <-ctx.Done():
-			return webmcp.BrowserEvent{}, ctx.Err()
-		}
-	}
-}
-
 func navigateConversationalCustomerTarget(ctx context.Context, endpoint string, targetID webmcp.TargetID, pageURL string) error {
 	rootContext, cancelRoot := context.WithTimeout(ctx, 20*time.Second)
 	defer cancelRoot()
@@ -906,7 +823,7 @@ func readConversationalCustomerOracle(ctx context.Context, endpoint string) (con
 	if err != nil {
 		return conversationalCustomerOracle{}, err
 	}
-	defer response.Body.Close()
+	defer closeAfterRead(response.Body)
 	if response.StatusCode != http.StatusOK {
 		return conversationalCustomerOracle{}, fmt.Errorf("fixture oracle HTTP status: %s", response.Status)
 	}
@@ -954,492 +871,6 @@ func conversationalCustomerOracleHasInvocation(oracle conversationalCustomerOrac
 	return false
 }
 
-type conversationalCustomerSessionLogEntry struct {
-	TurnIndex int `json:"turn_index"`
-	Input     struct {
-		Text string `json:"text"`
-	} `json:"input"`
-	Response struct {
-		Text     string `json:"text"`
-		Complete bool   `json:"complete"`
-	} `json:"response"`
-}
-
-func readConversationalCustomerSessionLog(path string) ([]conversationalCustomerSessionLogEntry, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), 2<<20)
-	var entries []conversationalCustomerSessionLogEntry
-	for scanner.Scan() {
-		var entry conversationalCustomerSessionLogEntry
-		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-			return nil, err
-		}
-		entries = append(entries, entry)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return entries, nil
-}
-
-type conversationalCustomerProviderCall struct {
-	Name      string
-	Arguments string
-	ToolRef   webmcp.ToolRef
-	ToolName  string
-	InputJSON string
-	CallID    string
-}
-
-func readConversationalCustomerProviderCalls(path string) ([]conversationalCustomerProviderCall, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), 2<<20)
-	var calls []conversationalCustomerProviderCall
-	for scanner.Scan() {
-		var record looptranscript.Record
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-			return nil, err
-		}
-		var event struct {
-			Type      string          `json:"type"`
-			CallID    string          `json:"call_id"`
-			Name      string          `json:"name"`
-			Arguments json.RawMessage `json:"arguments"`
-			Item      json.RawMessage `json:"item"`
-		}
-		if err := json.Unmarshal(record.Payload, &event); err != nil || event.Type != "response.function_call_arguments.done" {
-			continue
-		}
-		arguments := conversationalCustomerFunctionCallArguments(event.Arguments)
-		call := conversationalCustomerProviderCall{Name: event.Name, Arguments: arguments, CallID: event.CallID}
-		if call.Name == "" && len(event.Item) > 0 {
-			var item struct {
-				CallID string `json:"call_id"`
-				Name   string `json:"name"`
-			}
-			if json.Unmarshal(event.Item, &item) == nil {
-				call.Name = item.Name
-				if call.CallID == "" {
-					call.CallID = item.CallID
-				}
-			}
-		}
-		if call.Name == webmcp.InvokeToolName {
-			call.ToolRef, call.InputJSON = conversationalCustomerInvokeArguments(arguments)
-		}
-		calls = append(calls, call)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return calls, nil
-}
-
-func conversationalCustomerFunctionCallArguments(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	trimmed := strings.TrimSpace(string(raw))
-	if strings.HasPrefix(trimmed, `"`) {
-		var decoded string
-		if err := json.Unmarshal(raw, &decoded); err == nil {
-			return decoded
-		}
-	}
-	return string(raw)
-}
-
-// conversationalCustomerInvokeArguments preserves malformed input_json as
-// the exact raw value. A failed outer function-call decode must remain a
-// visible invalid attempt in the report instead of disappearing from the
-// reconstructed provider trace.
-func conversationalCustomerInvokeArguments(arguments string) (webmcp.ToolRef, string) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(arguments), &fields); err != nil || fields == nil {
-		return "", arguments
-	}
-	var toolRef string
-	if raw, ok := fields["tool_ref"]; ok {
-		_ = json.Unmarshal(raw, &toolRef)
-	}
-	rawInput, ok := fields["input_json"]
-	if !ok {
-		return webmcp.ToolRef(toolRef), ""
-	}
-	if strings.TrimSpace(string(rawInput)) == "null" {
-		return webmcp.ToolRef(toolRef), string(rawInput)
-	}
-	var input string
-	if err := json.Unmarshal(rawInput, &input); err == nil {
-		return webmcp.ToolRef(toolRef), input
-	}
-	return webmcp.ToolRef(toolRef), string(rawInput)
-}
-
-func buildConversationalCustomerResult(
-	scenario browserconversation.BrowserConversationScenario,
-	events []webmcp.BrowserEvent,
-	logPath string,
-	navigations []conversationalCustomerNavigationObservation,
-	oracles []conversationalCustomerOracleObservation,
-	browserID string,
-	targetID webmcp.TargetID,
-	probe conversationalCustomerProbe,
-	pending webmcp.BrowserEvent,
-	cancel conversationalCustomerCancelResult,
-) (browserconversation.BrowserConversationResult, error) {
-	providerCalls, err := readConversationalCustomerProviderCalls(filepath.Join(filepath.Dir(logPath), "agent.transcript.jsonl"))
-	if err != nil {
-		return browserconversation.BrowserConversationResult{}, fmt.Errorf("read agent transcript: %w", err)
-	}
-	logs, err := readConversationalCustomerSessionLog(logPath)
-	if err != nil {
-		return browserconversation.BrowserConversationResult{}, fmt.Errorf("read session log: %w", err)
-	}
-	turns := make([]browserconversation.BrowserConversationTurn, 0, len(logs)*2)
-	logStepIDs := conversationalCustomerLogStepIDs(scenario, logs)
-	for index, entry := range logs {
-		stepID := logStepIDs[index]
-		if strings.TrimSpace(entry.Input.Text) != "" {
-			turns = append(turns, browserconversation.BrowserConversationTurn{StepID: stepID, Direction: browserconversation.BrowserConversationCustomerTurn, ExpectedText: expectedStepTextForStep(scenario, stepID), ObservedText: entry.Input.Text, Complete: entry.Response.Complete})
-		}
-		if strings.TrimSpace(entry.Response.Text) != "" {
-			turns = append(turns, browserconversation.BrowserConversationTurn{StepID: stepID, Direction: browserconversation.BrowserConversationAssistantTurn, ObservedText: entry.Response.Text, Complete: entry.Response.Complete})
-		}
-	}
-
-	toolNames := make(map[webmcp.ToolRef]string)
-	toolGenerations := make(map[webmcp.ToolRef]uint64)
-	toolRefsByGeneration := make(map[uint64]map[webmcp.ToolRef]struct{})
-	var firstGeneration uint64
-	for _, event := range events {
-		for _, tool := range event.Tools {
-			toolNames[tool.Ref] = tool.Name
-			toolGenerations[tool.Ref] = tool.Generation
-			if tool.Generation != 0 {
-				refs := toolRefsByGeneration[tool.Generation]
-				if refs == nil {
-					refs = make(map[webmcp.ToolRef]struct{})
-					toolRefsByGeneration[tool.Generation] = refs
-				}
-				refs[tool.Ref] = struct{}{}
-				if firstGeneration == 0 || tool.Generation < firstGeneration {
-					firstGeneration = tool.Generation
-				}
-			}
-		}
-	}
-	terminalByInvocation := make(map[webmcp.InvocationID]webmcp.BrowserEvent)
-	for _, event := range events {
-		if event.Type == webmcp.EventToolResponded && event.InvocationID != "" {
-			terminalByInvocation[event.InvocationID] = event
-		}
-	}
-	matchedInvocation := make(map[webmcp.InvocationID]bool)
-	var calls []browserconversation.BrowserConversationBrokerCall
-	appendCall := func(call browserconversation.BrowserConversationBrokerCall) {
-		call.Sequence = uint64(len(calls) + 1)
-		calls = append(calls, call)
-	}
-	navigationByStep := make(map[string]webmcp.BrowserEvent)
-	for _, navigation := range navigations {
-		navigationByStep[navigation.StepID] = navigation.Event
-	}
-	navigationAdded := make(map[string]bool)
-	appendNavigation := func(stepID string) {
-		if navigationAdded[stepID] {
-			return
-		}
-		event, ok := navigationByStep[stepID]
-		if !ok {
-			return
-		}
-		navigationAdded[stepID] = true
-		input := json.RawMessage(`{}`)
-		for _, step := range scenario.Steps {
-			if step.ID == stepID && step.Navigation != nil {
-				if encoded, err := json.Marshal(step.Navigation); err == nil {
-					input = encoded
-				}
-				break
-			}
-		}
-		appendCall(browserconversation.BrowserConversationBrokerCall{
-			StepID: stepID, Operation: browserconversation.BrowserConversationCustomerNavigate,
-			InputJSON: string(input), Generation: event.Generation,
-			PreviousGeneration: event.PreviousGeneration,
-		})
-	}
-	lastStep := "initial_action"
-	labelCount := 0
-	themeCount := 0
-	priorityCount := 0
-	for _, providerCall := range providerCalls {
-		if providerCall.Name == webmcp.ListToolsToolName {
-			var stepID string
-			switch {
-			case labelCount == 0:
-				stepID = "initial_action"
-			case themeCount == 0:
-				stepID = "second_action"
-			case priorityCount >= 2:
-				stepID = "correction"
-			default:
-				stepID = "stale_recovery"
-			}
-			appendNavigation(stepID)
-			refs, generation := conversationalCustomerCurrentToolRefs(toolNames, toolRefsByGeneration, stepID, navigationByStep, firstGeneration)
-			appendCall(browserconversation.BrowserConversationBrokerCall{StepID: stepID, Operation: browserconversation.BrowserConversationListTools, InputJSON: providerCall.Arguments, Generation: generation, ToolRefs: refs})
-			lastStep = stepID
-			continue
-		}
-		if providerCall.Name == webmcp.CancelToolName {
-			appendCall(browserconversation.BrowserConversationBrokerCall{StepID: "cancel", Operation: browserconversation.BrowserConversationCancel, InputJSON: providerCall.Arguments, State: webmcp.InvocationCanceled, Terminal: true})
-			continue
-		}
-		if providerCall.Name != webmcp.InvokeToolName {
-			continue
-		}
-		toolName := providerCall.ToolName
-		if toolName == "" {
-			toolName = toolNames[providerCall.ToolRef]
-		}
-		stepID := ""
-		switch toolName {
-		case "webmcp_customer_set_label":
-			if labelCount == 0 {
-				stepID = "initial_action"
-			} else {
-				stepID = "correction"
-			}
-			labelCount++
-		case "webmcp_customer_set_theme":
-			stepID = "second_action"
-			themeCount++
-		case "webmcp_customer_set_priority":
-			stepID = "stale_recovery"
-			priorityCount++
-		case "webmcp_customer_pending":
-			stepID = "interrupt"
-		}
-		if stepID == "" {
-			stepID = lastStep
-		}
-		appendNavigation(stepID)
-		lastStep = stepID
-		appendCall(browserconversation.BrowserConversationBrokerCall{StepID: stepID, Operation: browserconversation.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InputJSON: providerCall.InputJSON, State: webmcp.InvocationDispatched, Terminal: false, Generation: toolGenerations[providerCall.ToolRef]})
-		matched := false
-		for _, event := range events {
-			providerGeneration := toolGenerations[providerCall.ToolRef]
-			if event.Type != webmcp.EventToolInvoked || event.InvocationID == "" || matchedInvocation[event.InvocationID] || event.ToolName != toolName || (providerCall.ToolRef != "" && event.ToolName != "" && toolNames[providerCall.ToolRef] != "" && event.ToolName != toolNames[providerCall.ToolRef]) || (providerGeneration != 0 && event.Generation != 0 && providerGeneration != event.Generation) {
-				continue
-			}
-			matchedInvocation[event.InvocationID] = true
-			terminal, ok := terminalByInvocation[event.InvocationID]
-			if !ok {
-				continue
-			}
-			appendCall(browserconversation.BrowserConversationBrokerCall{StepID: stepID, Operation: browserconversation.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InvocationID: event.InvocationID, InputJSON: providerCall.InputJSON, State: conversationalCustomerInvocationState(terminal), Terminal: true, Output: conversationalCustomerJSON(terminal.Output), ErrorCode: terminal.ErrorCode, Generation: terminal.Generation, PreviousGeneration: terminal.PreviousGeneration})
-			matched = true
-			break
-		}
-		if !matched && toolName == "webmcp_customer_set_priority" && toolGenerations[providerCall.ToolRef] != 0 {
-			if navigationEvent, ok := navigationByStep["stale_recovery"]; ok && toolGenerations[providerCall.ToolRef] <= navigationEvent.PreviousGeneration {
-				appendCall(browserconversation.BrowserConversationBrokerCall{StepID: stepID, Operation: browserconversation.BrowserConversationInvoke, ToolRef: providerCall.ToolRef, ToolName: toolName, InputJSON: providerCall.InputJSON, State: webmcp.InvocationError, Terminal: true, ErrorCode: string(webmcp.ErrorStaleToolRef), Generation: toolGenerations[providerCall.ToolRef]})
-			}
-		}
-	}
-	if pending.InvocationID != "" {
-		found := false
-		for _, call := range calls {
-			if call.InvocationID == pending.InvocationID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			if terminal, ok := terminalByInvocation[pending.InvocationID]; ok {
-				appendCall(browserconversation.BrowserConversationBrokerCall{StepID: "interrupt", Operation: browserconversation.BrowserConversationInvoke, ToolName: pending.ToolName, InvocationID: pending.InvocationID, InputJSON: string(pending.Input), State: conversationalCustomerInvocationState(terminal), Terminal: true, ErrorCode: terminal.ErrorCode, Generation: terminal.Generation})
-			}
-		}
-	}
-	if cancel.InvocationID != "" {
-		cancelInput, _ := json.Marshal(struct {
-			InvocationID string `json:"invocation_id"`
-		}{InvocationID: cancel.InvocationID})
-		appendCall(browserconversation.BrowserConversationBrokerCall{StepID: "cancel", Operation: browserconversation.BrowserConversationCancel, InvocationID: webmcp.InvocationID(cancel.InvocationID), InputJSON: string(cancelInput), State: webmcp.InvocationCanceled, Terminal: true})
-	}
-	for _, step := range scenario.Steps {
-		if step.Navigation != nil {
-			appendNavigation(step.ID)
-		}
-	}
-	assignConversationalCustomerTurnSequences(turns, calls)
-
-	var oracleSnapshots []browserconversation.BrowserConversationOracleSnapshot
-	for index, observation := range oracles {
-		oracleSnapshots = append(oracleSnapshots, browserconversation.BrowserConversationOracleSnapshot{Sequence: uint64(index + 1), StepID: observation.StepID, PageID: observation.Oracle.Page, Generation: 0, Phase: observation.Phase, State: conversationalCustomerOracleState(observation.Oracle)})
-	}
-	lifecycle := browserconversation.BrowserConversationLifecycleEvidence{Outcome: browserconversation.BrowserConversationLifecycleCanceled, SessionStarted: true, SessionTerminated: true, Detached: true, DetachCount: 1, DetachRequired: true, ExternalBrowserID: webmcp.BrowserID(browserID), ExternalTargetID: targetID, ExternalTabAlive: probe.Alive, ExternalTabResponsive: probe.Responsive, ExternalTabAllowsMutation: probe.AllowsMutation, ExternalTabRead: probe.ReadSucceeded, ExternalTabMutation: probe.MutationSucceeded}
-	result := browserconversation.BrowserConversationResult{ScenarioID: scenario.ID, ScenarioName: scenario.Name, Finalized: true, Turns: turns, BrokerCalls: calls, Oracles: oracleSnapshots, Cancellation: browserconversation.BrowserConversationCancellationEvidence{Interrupted: true, Requested: true, InvocationID: pending.InvocationID, FinalState: webmcp.InvocationCanceled, Reason: "customer stop", InterruptedStepID: "interrupt", CancelStepID: "cancel", OverlappingAudioSent: true, ExplicitCancelAudioSent: true}, Lifecycle: lifecycle}
-	result.Corrections = browserconversationWire.NewService().DeriveCorrections(scenario, result)
-	result.Recovery = browserconversationWire.NewService().DeriveRecovery(scenario, result)
-	result.InputJSONValidity = browserconversationWire.NewService().ComputeInputJSONValidity(result.BrokerCalls)
-	return result, browserconversationWire.NewService().ValidateResult(result)
-}
-
-func expectedStepTextForStep(scenario browserconversation.BrowserConversationScenario, stepID string) string {
-	for _, step := range scenario.Steps {
-		if step.ID == stepID {
-			return step.Utterance
-		}
-	}
-	return ""
-}
-
-func conversationalCustomerLogStepIDs(scenario browserconversation.BrowserConversationScenario, logs []conversationalCustomerSessionLogEntry) []string {
-	stepIDs := make([]string, len(logs))
-	nextStep := 0
-	lastStep := ""
-	for index, entry := range logs {
-		text := strings.TrimSpace(entry.Input.Text)
-		if text == "" {
-			stepIDs[index] = lastStep
-			continue
-		}
-		matched := -1
-		for candidate := nextStep; candidate < len(scenario.Steps); candidate++ {
-			if strings.EqualFold(strings.TrimSpace(scenario.Steps[candidate].Utterance), text) {
-				matched = candidate
-				break
-			}
-		}
-		if matched >= 0 {
-			nextStep = matched + 1
-			lastStep = scenario.Steps[matched].ID
-			stepIDs[index] = lastStep
-			continue
-		}
-		// The canonical run sends the interruption utterance once to start the
-		// pending tool and may send the same audio again as overlap. Preserve
-		// that duplicate under the declared interruption step rather than
-		// inventing a seventh scenario step.
-		for candidate := 0; candidate < nextStep && candidate < len(scenario.Steps); candidate++ {
-			if scenario.Steps[candidate].Interrupt != nil && strings.EqualFold(strings.TrimSpace(scenario.Steps[candidate].Utterance), text) {
-				lastStep = scenario.Steps[candidate].ID
-				stepIDs[index] = lastStep
-				matched = candidate
-				break
-			}
-		}
-		if matched >= 0 {
-			continue
-		}
-		if nextStep < len(scenario.Steps) {
-			lastStep = scenario.Steps[nextStep].ID
-			nextStep++
-			stepIDs[index] = lastStep
-		}
-	}
-	return stepIDs
-}
-
-func assignConversationalCustomerTurnSequences(turns []browserconversation.BrowserConversationTurn, calls []browserconversation.BrowserConversationBrokerCall) {
-	type bounds struct{ first, last uint64 }
-	byStep := make(map[string]bounds)
-	for _, call := range calls {
-		if call.StepID == "" || call.Sequence == 0 {
-			continue
-		}
-		current := byStep[call.StepID]
-		if current.first == 0 || call.Sequence < current.first {
-			current.first = call.Sequence
-		}
-		if call.Sequence > current.last {
-			current.last = call.Sequence
-		}
-		byStep[call.StepID] = current
-	}
-	next := uint64(len(calls) + 1)
-	for index := range turns {
-		current, ok := byStep[turns[index].StepID]
-		if !ok {
-			turns[index].Sequence = next
-			next++
-			continue
-		}
-		if turns[index].Direction == browserconversation.BrowserConversationCustomerTurn {
-			turns[index].Sequence = current.first
-		} else {
-			turns[index].Sequence = current.last + 1
-		}
-	}
-}
-
-func conversationalCustomerInvocationState(event webmcp.BrowserEvent) webmcp.InvocationState {
-	switch strings.ToLower(strings.TrimSpace(event.Status)) {
-	case "completed":
-		return webmcp.InvocationCompleted
-	case "canceled", "cancelled":
-		return webmcp.InvocationCanceled
-	case "timed_out", "timeout", "timedout":
-		return webmcp.InvocationTimedOut
-	default:
-		return webmcp.InvocationError
-	}
-}
-
-func conversationalCustomerJSON(value json.RawMessage) json.RawMessage {
-	if len(value) == 0 {
-		return nil
-	}
-	if json.Valid(value) {
-		return append(json.RawMessage(nil), value...)
-	}
-	encoded, _ := json.Marshal(string(value))
-	return encoded
-}
-
-func conversationalCustomerCurrentToolRefs(
-	names map[webmcp.ToolRef]string,
-	refsByGeneration map[uint64]map[webmcp.ToolRef]struct{},
-	stepID string,
-	navigationByStep map[string]webmcp.BrowserEvent,
-	firstGeneration uint64,
-) ([]webmcp.ToolRef, uint64) {
-	generation := firstGeneration
-	if navigation, ok := navigationByStep[stepID]; ok && navigation.Generation != 0 {
-		generation = navigation.Generation
-	}
-	set := refsByGeneration[generation]
-	refs := make([]webmcp.ToolRef, 0, len(set))
-	for ref := range set {
-		if names[ref] != "" {
-			refs = append(refs, ref)
-		}
-	}
-	if len(refs) == 0 {
-		for ref, name := range names {
-			if name == "" {
-				continue
-			}
-			refs = append(refs, ref)
-		}
-	}
-	sort.Slice(refs, func(left, right int) bool { return refs[left] < refs[right] })
-	return refs, generation
-}
-
 func sanitizedValidatorEnvironment() []string {
 	result := make([]string, 0, len(os.Environ()))
 	for _, value := range os.Environ() {
@@ -1461,7 +892,7 @@ func postConversationalCustomerLaneFinding(ctx context.Context, report string) e
 	if err := os.WriteFile(path, []byte(report), 0o600); err != nil {
 		return err
 	}
-	defer os.Remove(path)
+	defer removeBestEffort(os.Remove, path)
 	command := exec.CommandContext(ctx, "gh", "pr", "comment", conversationalCustomerLaneNumber, "--body-file", path)
 	command.Stdin = nil
 	if _, err := command.CombinedOutput(); err != nil {

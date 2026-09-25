@@ -757,12 +757,7 @@ func (s *ScriptedTargetSession) terminateWithOptions(eventType webmcp.BrowserEve
 			s.runtime.record(Operation{Kind: OperationDetach, BrowserID: s.target.BrowserID, TargetID: s.target.ID, Generation: s.context.Generation, Ownership: s.ownership, Reason: reason})
 		}
 	}
-	event := webmcp.BrowserEvent{Type: eventType, Reason: reason}
-	if eventType == webmcp.EventBrowserDisconnected {
-		event.ErrorCode = string(webmcp.ErrorBrowserDisconnected)
-	} else if eventType == webmcp.EventTargetDetached {
-		event.ErrorCode = string(webmcp.ErrorTargetDetached)
-	}
+	event := webmcp.BrowserEvent{Type: eventType, Reason: reason, ErrorCode: terminalEventErrorCode(eventType)}
 	published, eventErr := s.emitPublishedLocked(event, true)
 	s.closeResult = eventErr
 	s.handle.sessionClosed(s)

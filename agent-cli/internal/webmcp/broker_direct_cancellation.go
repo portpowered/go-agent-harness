@@ -55,64 +55,21 @@ func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request Dir
 		return ErrClosed
 	}
 
-	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		return ErrClosed
-	}
-	selected := b.selected
-	if selected == nil || !selected.active || !selected.context.Connected {
-		err := staleSelectionForSession(selected, "selection_not_connected")
-		b.mu.Unlock()
+	selected, session, err := b.directCancelSelection(request)
+	if err != nil {
 		return err
 	}
-	if selected.context.Key.BrowserID != request.Target.BrowserID || selected.context.Key.TargetID != request.Target.TargetID {
-		err := staleSelectionError(request.Target.BrowserID, request.Target.TargetID, selected.context.Generation, "exact_target_not_selected")
-		b.mu.Unlock()
-		return err
-	}
-	session := selected.session
-	b.mu.Unlock()
 	selected.dispatchMu.Lock()
 
 	// Revalidate while holding the dispatch linearization point. Close and
 	// target lifecycle paths may retire a selection without waiting for a page
 	// command, so a check made before this lock is not sufficient.
 	b.mu.Lock()
-	if b.closed {
-		b.mu.Unlock()
-		selected.dispatchMu.Unlock()
-		return ErrClosed
+	var operation *directCancellation
+	err = b.revalidateDirectCancelLocked(selected, session, request)
+	if err == nil {
+		operation, err = b.beginDirectCancellationLocked(selected, request)
 	}
-	if b.selected != selected || !selected.active || !selected.context.Connected {
-		err := staleSelectionForSession(selected, "selection_not_connected")
-		b.mu.Unlock()
-		selected.dispatchMu.Unlock()
-		return err
-	}
-	if selected.context.Key.BrowserID != request.Target.BrowserID || selected.context.Key.TargetID != request.Target.TargetID {
-		err := staleSelectionError(request.Target.BrowserID, request.Target.TargetID, selected.context.Generation, "exact_target_not_selected")
-		b.mu.Unlock()
-		selected.dispatchMu.Unlock()
-		return err
-	}
-	if session == nil {
-		b.mu.Unlock()
-		selected.dispatchMu.Unlock()
-		return targetAttachError(request.Target, "cancel", ErrClosed)
-	}
-	// The broker selection and the target session are separate state holders.
-	// Recheck the session identity at the command boundary so a stale or
-	// accidentally substituted session can never receive a direct cancel for a
-	// different target.
-	sessionContext := session.Context()
-	if sessionContext.Key.BrowserID != request.Target.BrowserID || sessionContext.Key.TargetID != request.Target.TargetID {
-		err := staleSelectionError(request.Target.BrowserID, request.Target.TargetID, selected.context.Generation, "exact_target_session_mismatch")
-		b.mu.Unlock()
-		selected.dispatchMu.Unlock()
-		return err
-	}
-	operation, err := b.beginDirectCancellationLocked(selected, request)
 	b.mu.Unlock()
 	if err != nil {
 		selected.dispatchMu.Unlock()
@@ -124,21 +81,7 @@ func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request Dir
 	// the observer is already registered, but it must not be processed as a
 	// half-dispatched outcome.
 	if err := session.CancelWebMCP(ctx, request.InvocationID); err != nil {
-		b.mu.Lock()
-		observation, observed := takeDirectCancellationObservation(operation)
-		if !observed {
-			// The CDP command was attempted even when the browser rejected it.
-			// Keep the operation in the dispatched phase so an unconfirmed
-			// result cannot be mistaken for a pre-dispatch validation failure.
-			operation.phase = directCancellationDispatched
-		}
-		b.finishDirectCancellationLocked(operation)
-		b.mu.Unlock()
-		selected.dispatchMu.Unlock()
-		if observed {
-			return directCancellationResult(operation, observation)
-		}
-		return directCancellationDispatchFailure(operation, err)
+		return b.directCancelDispatchFailed(selected, operation, err)
 	}
 	b.mu.Lock()
 	operation.phase = directCancellationDispatched
@@ -345,7 +288,7 @@ func directCancellationDispatchFailure(operation *directCancellation, cause erro
 
 func directCancellationLifecycleError(operation *directCancellation, eventType BrowserEventType, reason, errorCode string) error {
 	code := ErrorInvocationOrphaned
-	outcome := "session_closed"
+	outcome := lifecycleReasonSessionClosed
 	message := "the target session closed before cancellation was confirmed"
 	if eventType == EventSessionClosed {
 		switch ErrorCode(errorCode) {
@@ -364,7 +307,7 @@ func directCancellationLifecycleError(operation *directCancellation, eventType B
 		message = "the page navigated before cancellation was confirmed"
 	case EventTargetDetached:
 		code = ErrorTargetDetached
-		outcome = "target_detached"
+		outcome = lifecycleReasonTargetDetached
 		message = "the target detached before cancellation was confirmed"
 	case EventBrowserDisconnected:
 		code = ErrorBrowserDisconnected

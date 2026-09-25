@@ -28,17 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/recovery_integration_test.go",
       "symbol": "testRecoveryLossAndReplacement",
-      "value": 34,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/recovery_integration_test.go",
-      "symbol": "testRecoveryNavigationStorm",
-      "value": 40,
+      "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -48,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/recovery_integration_test.go",
       "symbol": "testRecoveryTargetClosure",
-      "value": 31,
+      "value": 27,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -68,17 +58,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/recovery_integration_test.go",
       "symbol": "testRecoveryLossAndReplacement",
-      "value": 38,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/recovery_integration_test.go",
-      "symbol": "testRecoveryNavigationStorm",
-      "value": 31,
+      "value": 25,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -98,7 +78,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/recovery_integration_test.go",
       "symbol": "testRecoveryTargetClosure",
-      "value": 32,
+      "value": 28,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -107,17 +87,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/recovery_integration_test.go",
-      "value": 935,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-statements",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
-      "file": "internal/webmcp/chrome/recovery_integration_test.go",
-      "symbol": "testRecoveryLossAndReplacement",
-      "value": 82,
+      "value": 914,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }
