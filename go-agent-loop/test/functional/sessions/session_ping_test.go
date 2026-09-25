@@ -12,6 +12,7 @@ import (
 // This is the integration-level counterpart to the direct subsystem tests in
 // pkg/subsystems/ping_pong_test.go.
 func TestSessionPingPong_FullLoop(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -58,6 +59,7 @@ func TestSessionPingPong_FullLoop(t *testing.T) {
 
 // TestSessionPingDuringAudio tests that ping works alongside audio in session mode.
 func TestSessionPingDuringAudio(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)

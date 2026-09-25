@@ -13,6 +13,7 @@ import (
 // complete when these tests read it.
 
 func TestSessionGracefulClose(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -31,6 +32,7 @@ func TestSessionGracefulClose(t *testing.T) {
 }
 
 func TestSessionStopTermination(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -58,6 +60,7 @@ func TestSessionStopTermination(t *testing.T) {
 }
 
 func TestSessionLifecycleOrder(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)

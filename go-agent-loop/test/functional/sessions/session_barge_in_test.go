@@ -18,6 +18,7 @@ import (
 //  3. Agent loop sends RESPONSE.CANCEL to provider (within 500ms)
 //  4. Agent loop forwards the new user audio to provider
 func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -76,6 +77,7 @@ func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
 // streams audio and no user audio arrives, the session plays through without
 // RESPONSE.CANCEL being emitted.
 func TestSessionNoBargeIn_AudioWithoutInterruption(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)

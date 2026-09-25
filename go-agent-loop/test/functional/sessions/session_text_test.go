@@ -8,6 +8,7 @@ import (
 )
 
 func TestSessionSendText(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -43,6 +44,7 @@ func TestSessionSendText(t *testing.T) {
 }
 
 func TestSessionTextResponse(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -78,6 +80,7 @@ func TestSessionTextResponse(t *testing.T) {
 }
 
 func TestSessionTextAndAudioMixed(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -126,6 +129,7 @@ func TestSessionTextAndAudioMixed(t *testing.T) {
 }
 
 func TestSessionTextDoesNotTerminate(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)

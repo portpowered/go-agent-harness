@@ -20,6 +20,7 @@ func stopOnCleanup(t *testing.T, scenario *SessionScenario) {
 // TestSessionInferenceError verifies that an ERROR event from the provider
 // terminates the engine with that error, without the harness cancelling it.
 func TestSessionInferenceError(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	scenario := NewSessionScenario(t, inf, NewMockToolExecutor())
 	scenario.Start()
@@ -46,6 +47,7 @@ func TestSessionInferenceError(t *testing.T) {
 // TestSessionDisconnect verifies that a provider disconnect during an active
 // inference surfaces SESSION.CLOSE to the client.
 func TestSessionDisconnect(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	scenario := NewSessionScenario(t, inf, NewMockToolExecutor())
 	scenario.Start()

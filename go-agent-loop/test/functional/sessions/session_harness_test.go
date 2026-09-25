@@ -16,6 +16,7 @@ import (
 )
 
 func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
+	t.Parallel()
 	base := time.Date(2026, time.August, 16, 12, 0, 0, 0, time.UTC)
 	logicalClock := clock.NewDeterministic(base, time.Millisecond)
 	collector := NewSessionTranscript()
@@ -77,6 +78,7 @@ func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
 }
 
 func TestSessionCaptureSerializesConcurrentCrossings(t *testing.T) {
+	t.Parallel()
 	sink := newBlockingSessionSink()
 	capture := newSessionCapture(clock.NewDeterministic(time.Unix(42, 0).UTC(), time.Second), sink)
 
@@ -121,6 +123,7 @@ func TestSessionCaptureSerializesConcurrentCrossings(t *testing.T) {
 }
 
 func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
+	t.Parallel()
 	payloadCases := []struct {
 		name    string
 		message messages.Message
@@ -178,6 +181,7 @@ func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
 }
 
 func TestSessionScenarioCaptureIsOptInAndNilClockUsesRealTime(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	scenario := NewSessionScenario(t, inf, NewMockToolExecutor())
 	if _, ok := scenario.Clock().(clock.Real); !ok {
