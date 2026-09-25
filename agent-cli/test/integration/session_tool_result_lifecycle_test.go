@@ -195,11 +195,13 @@ func (s *interactiveTimeoutSession) result(callID string) (string, time.Duration
 
 type interactiveTimeoutInferencer struct{ session *interactiveTimeoutSession }
 
-func (i interactiveTimeoutInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	i.session.write(
-		messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("interactive-timeout", "test")},
-		messages.StreamMessage{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("interactive-timeout")},
-	)
+func (i interactiveTimeoutInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("interactive-timeout", "test")},
+		{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("interactive-timeout")},
+	} {
+		i.session.recv.Write(ctx, msg)
+	}
 	return i.session, nil
 }
 

@@ -22,6 +22,8 @@ const (
 	testLongTimeout = 2 * time.Second
 	testAckTimeout  = 20 * time.Millisecond
 	testWork        = 150 * time.Millisecond
+
+	completedContent = "done"
 )
 
 // contextBoundExecutor works for testWork unless its deadline ends it first.
@@ -32,7 +34,7 @@ func (contextBoundExecutor) Execute(ctx context.Context, call messages.ToolCall)
 	defer timer.Stop()
 	select {
 	case <-timer.C:
-		return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "done"}, nil
+		return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: completedContent}, nil
 	case <-ctx.Done():
 		return messages.ToolCallResponse{}, ctx.Err()
 	}
@@ -73,21 +75,21 @@ func TestBindAppliesConfiguredClassBounds(t *testing.T) {
 	if got := execute(t, executor, fastToolName).Content; !strings.Contains(got, timedOutText) {
 		t.Fatalf("fast/read result = %q, want the %s fast bound to end it", got, testFastTimeout)
 	}
-	if got := execute(t, executor, longToolName).Content; got != "done" {
+	if got := execute(t, executor, longToolName).Content; got != completedContent {
 		t.Fatalf("long-running result = %q, want completion under the long bound", got)
 	}
 }
 
 func TestBindExplicitTimeoutOverridesPolicy(t *testing.T) {
 	executor := boundCapabilities(t, Binding{Config: testConfig(), Timeout: testLongTimeout}).Executor
-	if got := execute(t, executor, fastToolName).Content; got != "done" {
+	if got := execute(t, executor, fastToolName).Content; got != completedContent {
 		t.Fatalf("fast/read result with explicit timeout = %q, want completion", got)
 	}
 }
 
 func TestBindDefaultsWithoutConfig(t *testing.T) {
 	executor := boundCapabilities(t, Binding{}).Executor
-	if got := execute(t, executor, fastToolName).Content; got != "done" {
+	if got := execute(t, executor, fastToolName).Content; got != completedContent {
 		t.Fatalf("fast/read result under the default 5s bound = %q, want completion", got)
 	}
 }
@@ -162,7 +164,7 @@ func TestBindPreservesUnadvertisedReplacementMarker(t *testing.T) {
 	if !allowsUnadvertisedTools(capabilities.Executor) {
 		t.Fatalf("bound executor %T dropped the replacement's unadvertised-tools marker", capabilities.Executor)
 	}
-	if got := execute(t, capabilities.Executor, longToolName).Content; got != "done" {
+	if got := execute(t, capabilities.Executor, longToolName).Content; got != completedContent {
 		t.Fatalf("marked executor result = %q, want the bounded call to complete", got)
 	}
 }
