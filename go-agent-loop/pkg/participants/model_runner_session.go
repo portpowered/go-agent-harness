@@ -69,7 +69,11 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
 		}
-		r.sendLatestUserText(ctx, session, req)
+		// After the provider's SESSION.CLOSE no response can follow, so a late
+		// request must not reach the closed wire.
+		if !state.sessionClosed {
+			r.sendLatestUserText(ctx, session, req)
+		}
 	case msg, ok := <-session.Receive().Chan():
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
