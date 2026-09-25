@@ -154,6 +154,34 @@ func TestDuplexRunnerKillsChildAtDeadline(t *testing.T) {
 	}
 }
 
+// duplexSlowStartBudget is the session budget for a child whose startup takes
+// four times as long; the budget must only start at the child's first output.
+const duplexSlowStartBudget = 100 * time.Millisecond
+
+func TestDuplexRunnerDeadlineExcludesChildStartup(t *testing.T) {
+	binary := buildDuplexTestChild(t)
+	result, err := RunDuplexSession(context.Background(), DuplexSessionConfig{
+		BinaryPath:     binary,
+		RecordDir:      filepath.Join(t.TempDir(), "record"),
+		Provider:       "openai",
+		Model:          "duplex-test-model",
+		MaxDuration:    duplexSlowStartBudget,
+		FrameDuration:  time.Millisecond,
+		ShutdownGrace:  time.Second,
+		AdditionalArgs: []string{"--duplex-slow-start", "--duplex-hold"},
+		Segments:       []DuplexAudioSegment{{PCM16: duplexTestFrame(1)}},
+	})
+	// The held child is killed by the budget; the budget must run from its
+	// first output, not from exec, so that output is observed and the kill
+	// lands a full budget after it.
+	if !errors.Is(err, ErrDuplexDeadline) || len(result.Output) == 0 {
+		t.Fatalf("slow-starting child = err:%v outputs:%d, want its first output and then the deadline; result = %+v", err, len(result.Output), result)
+	}
+	if first := result.Output[0].At; result.Duration < first+duplexSlowStartBudget {
+		t.Fatalf("deadline at %s, want at least %s after the first output at %s", result.Duration, duplexSlowStartBudget, first)
+	}
+}
+
 func TestDuplexRunnerRejectsPrematureChildExit(t *testing.T) {
 	// Test incomplete input after a normal child exit, independently of the
 	// deadline test above. Allow process startup under concurrent coverage load.
@@ -254,6 +282,9 @@ func runDuplexTestChild(args []string) {
 			hold = true
 		case "--duplex-exit-immediately":
 			return
+		case "--duplex-slow-start":
+			// Emulates a cold exec that outlives MaxDuration before any output.
+			time.Sleep(4 * duplexSlowStartBudget)
 		}
 	}
 	frame := make([]byte, 960)

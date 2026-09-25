@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -330,4 +331,19 @@ func (p *DuplexProgress) OutputClosed() bool {
 		return false
 	}
 	return p.state.outputIsClosed()
+}
+
+// startupReader reports the child's first output byte, which marks the end
+// of process startup for the duplex deadline.
+type startupReader struct {
+	io.Reader
+	mark func()
+}
+
+func (r startupReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if n > 0 {
+		r.mark()
+	}
+	return n, err
 }
