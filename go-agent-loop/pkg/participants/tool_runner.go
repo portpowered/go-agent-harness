@@ -50,22 +50,23 @@ type ToolRunner struct {
 
 func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunner {
 	return &ToolRunner{
-		executor:        executor,
-		admittedCallIDs: make(map[string]struct{}),
-		Inbox:           messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
-		DeltaOutbox:     messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		executor:             executor,
+		admittedCallIDs:      make(map[string]struct{}),
+		Inbox:                messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
+		DeltaOutbox:          messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		acknowledgementClock: clock.Real{},
 	}
 }
 
-// ConfigureAcknowledgement enables a one-shot callback when at least one
-// admitted long-running call remains pending after the configured threshold,
-// measured on source (nil selects the real clock). It is configured before Run
-// starts and is intentionally independent from the tool executor's timeout policy.
+// ConfigureAcknowledgement enables a one-shot callback for a long-running call still pending
+// after threshold on source (nil keeps the real clock); set before Run, independent of timeouts.
 func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, source clock.TimerSource, send func(context.Context, []messages.ToolCall)) {
 	r.acknowledgementThreshold = threshold
 	r.isLongRunningTool = isLongRunning
 	r.sendAcknowledgement = send
-	r.acknowledgementClock, _ = clock.Ensure(source).(clock.TimerSource)
+	if source != nil {
+		r.acknowledgementClock = source
+	}
 }
 
 func (r *ToolRunner) Run(ctx context.Context) error {
