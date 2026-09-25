@@ -150,18 +150,18 @@ cache, so the lanes are sized for a cold run:
 
 | Lane | Command |
 | --- | --- |
-| `CI (static lint linux agent-cli)` | `make lint LINT_SHARD=agent-cli`, then `make architecture-size-check` |
+| `CI (static lint linux agent-cli)` | `make lint LINT_SHARD=agent-cli` |
 | `CI (static lint linux runtime)` | `make lint LINT_SHARD=runtime` |
 | `CI (static lint linux support)` | `make lint LINT_SHARD=support` |
 | `CI (static lint windows agent-cli)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=agent-cli` |
 | `CI (static lint windows libraries)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=libraries` |
-| `CI (static lint darwin)` | `make lint-cross LINT_CROSS_GOOS=darwin` |
+| `CI (static lint darwin agent-cli)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli` |
+| `CI (static lint darwin libraries)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=libraries` |
 | `CI (static lint darwin cgo)` | `make lint-darwin-cgo` on macOS |
 
-`CI (static gates)` runs `make fmt`, `make wire-check` and `make
-check-ci-test-partition`. The required `CI (static)` check aggregates all of
-them. The architecture gate runs in the linux agent-cli lane because its type
-loading reuses the export data that lint compiled.
+`CI (static gates)` runs `make fmt`, `make wire-check`, `make
+check-ci-test-partition` and `make architecture-size-check`. The required
+`CI (static)` check aggregates all of them.
 
 Each lane restores its own Go build, module and golangci-lint caches through
 `.github/actions/go-cache` (the golangci-lint cache is passed as

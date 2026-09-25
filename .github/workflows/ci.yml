@@ -39,6 +39,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -63,6 +64,10 @@ jobs:
         if: always()
         run: make check-ci-test-partition
 
+      - name: Verify service architecture and size budgets
+        if: always()
+        run: make architecture-size-check
+
       - name: Save Go cache
         if: always()
         uses: ./.github/actions/go-cache-save
@@ -77,9 +82,8 @@ jobs:
   # sessioncapacityramp test tags). The linux lanes add the new-code pass and
   # the wireinject pass; the windows and darwin lanes lint with cgo disabled
   # (darwin also with the nomicrophone tag), and the darwin cgo lane lints
-  # cgo-constrained packages natively on macOS. The linux agent-cli lane also
-  # runs the architecture gate, whose type loading reuses the export data the
-  # lint run compiles. See docs/architecture/lint-policy.md.
+  # cgo-constrained packages natively on macOS. See
+  # docs/architecture/lint-policy.md.
   static-lint:
     name: CI (static lint ${{ matrix.lane }})
     runs-on: ${{ matrix.runner }}
@@ -97,7 +101,6 @@ jobs:
             runner: ubuntu-latest
             fetch-depth: 0
             command: make lint LINT_SHARD=agent-cli
-            architecture: true
           - lane: linux runtime
             cache: static-lint-linux-runtime
             runner: ubuntu-latest
@@ -118,11 +121,16 @@ jobs:
             runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=libraries
-          - lane: darwin
-            cache: static-lint-darwin
+          - lane: darwin agent-cli
+            cache: static-lint-darwin-agent-cli
             runner: ubuntu-latest
             fetch-depth: 1
-            command: make lint-cross LINT_CROSS_GOOS=darwin
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli
+          - lane: darwin libraries
+            cache: static-lint-darwin-libraries
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=libraries
           # cgo-constrained darwin files (CoreAudio capture, display
           # permission) need the macOS SDK.
           - lane: darwin cgo
@@ -164,10 +172,6 @@ jobs:
         env:
           GOLANGCI_LINT_CACHE: ${{ runner.temp }}/golangci-lint
         run: ${{ matrix.command }}
-
-      - name: Verify service architecture and size budgets
-        if: always() && matrix.architecture
-        run: make architecture-size-check
 
       - name: Save Go cache
         if: always()
