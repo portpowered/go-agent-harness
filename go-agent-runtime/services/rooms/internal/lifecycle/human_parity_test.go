@@ -463,7 +463,11 @@ func newFinalTurnFixture(t *testing.T, peerKind rooms.ParticipantKind, attachBef
 		t.Fatal(err)
 	}
 	f.graph = graph
-	t.Cleanup(func() { _ = graph.Close() })
+	t.Cleanup(func() {
+		if err := graph.Close(); err != nil {
+			t.Errorf("close graph: %v", err)
+		}
+	})
 	if attachBeforeBound {
 		f.delivery.attach(graph)
 	}
