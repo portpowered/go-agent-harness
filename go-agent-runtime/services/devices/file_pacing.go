@@ -23,15 +23,28 @@ type FilePacing struct {
 	// accepts them. Speed is ignored when Unpaced is set.
 	Unpaced bool
 	// Speed multiplies the paced cadence. Zero and one keep real time; ten
-	// releases ten seconds of audio per scheduler second. It must be finite
-	// and not negative.
+	// releases ten seconds of audio per scheduler second. A non-zero speed
+	// must lie in [MinFilePacingSpeed, MaxFilePacingSpeed]; use Unpaced for
+	// no pacing at all.
 	Speed float64
 }
 
-// Validate reports an unusable pacing selection.
+// The accepted speed range keeps accelerated scheduler arithmetic well inside
+// time.Duration: a slower speed would stretch waits past any useful bound and
+// a faster one is indistinguishable from Unpaced.
+const (
+	MinFilePacingSpeed = 0.01
+	MaxFilePacingSpeed = 1000
+)
+
+// Validate reports an unusable pacing selection. Speed is checked even when
+// Unpaced is set so a malformed request never passes silently.
 func (p FilePacing) Validate() error {
-	if math.IsNaN(p.Speed) || math.IsInf(p.Speed, 0) || p.Speed < 0 {
-		return fmt.Errorf("%w: file input pacing speed %v must be finite and not negative", ErrInvalidRequest, p.Speed)
+	if p.Speed == 0 {
+		return nil
+	}
+	if math.IsNaN(p.Speed) || p.Speed < MinFilePacingSpeed || p.Speed > MaxFilePacingSpeed {
+		return fmt.Errorf("%w: file input pacing speed %v must be between %vx and %vx (or use unpaced)", ErrInvalidRequest, p.Speed, MinFilePacingSpeed, MaxFilePacingSpeed)
 	}
 	return nil
 }

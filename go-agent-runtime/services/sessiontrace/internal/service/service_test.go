@@ -42,8 +42,10 @@ func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
 	monitor := &remoteRenderMonitor{endpoint: strings.TrimPrefix(server.URL, "http://"), observer: func(int, []int16) {}, stopTimeout: stopTimeout, cancel: func() {}, done: make(chan struct{})}
 	started := time.Now()
 	monitor.Stop()
-	if elapsed := time.Since(started); elapsed > remoteRenderStopTimeout {
-		t.Fatalf("remote render stop took %s, want its %s bound well under the %s default", elapsed, stopTimeout, remoteRenderStopTimeout)
+	// The injected bound plus scheduling slack stays well under the default,
+	// so a Stop that ignored stopTimeout would fail here.
+	if elapsed := time.Since(started); elapsed > stopTimeout+90*time.Millisecond {
+		t.Fatalf("remote render stop took %s, want its injected %s bound (default %s)", elapsed, stopTimeout, remoteRenderStopTimeout)
 	}
 	if len(requests) != 0 {
 		t.Fatal("remote render stop polled after its deadline")
