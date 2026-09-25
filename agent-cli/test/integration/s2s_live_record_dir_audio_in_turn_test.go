@@ -150,13 +150,14 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 		observedMu.Unlock()
 	})
 
+	// The representative real-pace barge-in: full-length corpus turns.
 	recordDir := filepath.Join(t.TempDir(), "barge-recording")
 	args := scheduledBoundaryArgs(
 		t.TempDir(),
 		recordDir,
-		multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
-		multiturnTurnSliceWAV(t, "multiturn_turn2.wav"),
-		multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
+		locateCLIFixture(t, "multiturn_turn1.wav"),
+		locateCLIFixture(t, "multiturn_turn2.wav"),
+		locateCLIFixture(t, "multiturn_turn1.wav"),
 	)
 	args = append(args, "--audio-in-turn-barge")
 	rootCmd := agentCLI.Generate()
