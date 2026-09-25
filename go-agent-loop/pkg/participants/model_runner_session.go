@@ -69,7 +69,11 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
 		}
-		r.forwardSessionInferenceRequest(ctx, session, state, req)
+		// After the provider's SESSION.CLOSE no response can follow, so a late
+		// request must not reach the closed wire.
+		if !state.sessionClosed {
+			r.sendLatestUserText(ctx, session, req)
+		}
 	case msg, ok := <-session.Receive().Chan():
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
@@ -77,19 +81,6 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 		r.forwardSessionMessageState(ctx, session, state, msg)
 	}
 	return false, nil
-}
-
-// forwardSessionInferenceRequest turns a loop inference request into the
-// provider's next-turn input. Once the provider has reported SESSION.CLOSE the
-// session can no longer produce a response, so a request that arrives after
-// that boundary (for example the coordinator's follow-up to the final
-// response) is discarded rather than written to the closed wire as a late
-// input or RESPONSE.CREATE.
-func (r *ModelRunner) forwardSessionInferenceRequest(ctx context.Context, session messages.Session, state *sessionRunState, req messages.InferenceRequest) {
-	if state.sessionClosed {
-		return
-	}
-	r.sendLatestUserText(ctx, session, req)
 }
 
 func (r *ModelRunner) awaitedSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) (bool, error) {
