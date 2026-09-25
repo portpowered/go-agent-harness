@@ -115,6 +115,7 @@ func TestUnscopedWriterFormatsSingleMessages(t *testing.T) {
 		{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("hello")},
 		{Type: messages.StreamTypeSessionClose, Value: (*messages.SessionCloseValue)(nil)},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{1})},
+		{Type: messages.StreamTypeError, Value: messages.NewNonTerminalErrorValue("late", "response_cancel_not_active")},
 	} {
 		if err := Write(&out, msg); err != nil {
 			t.Fatalf("write %s: %v", msg.Type, err)

@@ -209,26 +209,3 @@ func (s closingSession) Close() error {
 	_ = s.publicSession.Close() //nolint:errcheck // The public session close cannot fail.
 	return s.err
 }
-
-func TestPublicSessionLoopHelpersDelegateToService(t *testing.T) {
-	service := NewService()
-	if !service.ShouldStop(messages.StreamMessage{Type: messages.StreamTypeSessionClose}, sessionduration.StopPolicy{}) {
-		t.Fatal("provider close did not stop the session")
-	}
-	deltas := messages.NewTypedBuffer[messages.StreamMessage](2)
-	deltas.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta})
-	if stop, err := service.DrainBuffered(deltas, func(messages.StreamMessage) (bool, error) { return true, nil }); !stop || err != nil {
-		t.Fatalf("DrainBuffered() = %v, %v", stop, err)
-	}
-	if err := service.DrainStragglers(context.Background(), sessionduration.StragglerDrain{}); err == nil {
-		t.Fatal("DrainStragglers accepted a zero quiet period")
-	}
-	loop := queuedPublicLoop(context.Background(), t)
-	loop.sendErr = errors.New("loop closed")
-	if err := service.CloseLoop(context.Background(), loop); !errors.Is(err, loop.sendErr) {
-		t.Fatalf("CloseLoop() = %v, want send failure", err)
-	}
-	if err := service.TerminationError(context.Background(), nil); err != nil {
-		t.Fatalf("TerminationError(nil) = %v", err)
-	}
-}

@@ -309,16 +309,6 @@ func TestPublicWriteMessageReturnsSessionErrorTerminalFields(t *testing.T) {
 	}
 }
 
-func TestPublicWriteMessageIgnoresNonTerminalDiagnostic(t *testing.T) {
-	err := NewService().WriteMessage(io.Discard, messages.StreamMessage{
-		Type:  messages.StreamTypeError,
-		Value: messages.NewNonTerminalErrorValue("response is not active", "response_cancel_not_active"),
-	})
-	if err != nil {
-		t.Fatalf("nonterminal diagnostic became a replay error: %v", err)
-	}
-}
-
 func TestPublicAdmissionForwardsNonTerminalDiagnosticWithoutShutdown(t *testing.T) {
 	msg := messages.StreamMessage{
 		Type:  messages.StreamTypeError,
