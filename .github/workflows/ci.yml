@@ -319,6 +319,10 @@ jobs:
     name: CI (coverage agent-cli ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -327,22 +331,22 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
+
+      # Each shard keeps its own build cache: the unit and integration test
+      # binaries are built with coverage instrumentation, which setup-go's
+      # shared cache (written once by whichever job finishes first) never
+      # holds.
+      - name: Set up Go
+        id: go
+        uses: ./.github/actions/go-cache
+        with:
+          cache-name: coverage-agent-cli-${{ matrix.shard }}
 
       - name: Run hermetic agent-cli tests with coverage
         run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=${{ matrix.shard }}
@@ -354,6 +358,14 @@ jobs:
           path: coverage/agent-cli*.out
           if-no-files-found: error
           retention-days: 1
+
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
 
   # The unit, coverage libraries, coverage, race and OS jobs skip docs/temp
   # (about 90% of the checkout's bytes; no Go package, helper-module or
