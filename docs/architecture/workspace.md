@@ -111,7 +111,13 @@ Repository CI lives in `.github/workflows/ci.yml`. It:
 `hermetic` (`make test-hermetic`) and `webmcp-chrome` remain separate
 required jobs alongside the five `make ci`-derived jobs above, so all
 required outcomes must pass for the workflow to succeed. `webmcp-chrome` is
-intentionally macOS-only to match its locked mac-arm64 Chrome artifact; the
+intentionally macOS-only to match its locked mac-arm64 Chrome artifact. It
+runs as a step of the single `macos-audio-release` runner (sharing its arm64
+agent build and setup), and the `webmcp-chrome` job only reports that step's
+outcome under the required "CI (WebMCP Chrome)" name. The unit, coverage
+libraries, coverage gate, race and OS jobs restore a per-job Go build and
+module cache (`.github/actions/go-cache`) that main pushes save as each job's
+exact working set, instead of setup-go's single shared cache entry. The
 race-detector steps are intentionally Linux-only, since the current Windows
 `runtime/cgo: cgo.exe: exit status 2` failure is an environment limitation
 and Ubuntu CI is the authoritative reproduction environment.
