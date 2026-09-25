@@ -47,13 +47,15 @@ type Policy struct {
 	Limits                 Limits             `json:"limits"`
 }
 
+// ImportRule forbids Imports from From packages; see the README for its fields.
 type ImportRule struct {
-	From    []string `json:"from"`
-	Imports []string `json:"imports"`
-	// Except lists import patterns that stay allowed even when they match
-	// Imports, e.g. one shared contract package inside a forbidden module.
-	Except []string `json:"except,omitempty"`
-	Reason string   `json:"reason"`
+	From           []string `json:"from"`
+	Imports        []string `json:"imports"`
+	Except         []string `json:"except,omitempty"`
+	ExceptFrom     []string `json:"except_from,omitempty"`
+	Files          []string `json:"files,omitempty"`
+	ProductionOnly bool     `json:"production_only,omitempty"`
+	Reason         string   `json:"reason"`
 }
 
 type GeneratedRule struct {

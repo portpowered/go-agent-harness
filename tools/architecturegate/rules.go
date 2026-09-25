@@ -280,6 +280,17 @@ func moduleIsReusable(module *Module, policy Policy) bool {
 	return matchesAny(policy.ReusableModules, module.Path, module.Dir, filepath.Base(module.Dir))
 }
 
+// appliesTo reports whether the rule governs the imports of source in pkg.
+func (rule ImportRule) appliesTo(pkg *Package, module *Module, source *SourceFile) bool {
+	if !matchesAny(rule.From, pkg.ImportPath, module.Path) || matchesAny(rule.ExceptFrom, pkg.ImportPath) {
+		return false
+	}
+	if rule.ProductionOnly && source.Test {
+		return false
+	}
+	return len(rule.Files) == 0 || matchesAny(rule.Files, source.RelPath)
+}
+
 func matchesAny(patterns []string, values ...string) bool {
 	for _, pattern := range patterns {
 		for _, value := range values {
