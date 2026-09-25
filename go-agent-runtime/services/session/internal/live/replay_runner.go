@@ -81,9 +81,24 @@ func (h *handle) waitReplayReady(ctx context.Context) error {
 	select {
 	case <-h.replayReady:
 		return nil
+	case <-h.done:
+		// The session can end before session.updated arrives, for example when
+		// strict replay rejects the opening message. Report that terminal
+		// result instead of waiting for readiness that can no longer come.
+		return h.terminalResult()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (h *handle) terminalResult() error {
+	h.mu.Lock()
+	err := h.terminalErr
+	h.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return session.ErrLiveClosed
 }
 
 func (h *handle) waitReplayResponse(ctx context.Context, target int) error {

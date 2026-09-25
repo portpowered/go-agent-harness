@@ -560,3 +560,19 @@ func TestOpeningResponseGateHoldsFirstTurnUntilToolContinuationCompletes(t *test
 	closed.observeTerminalValue(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: &messages.SessionCloseValue{Reason: "provider_closed"}})
 	require.NoError(t, closed.waitForOpeningResponse(context.Background(), 1))
 }
+
+// Strict replay can reject the opening message before session.updated is
+// replayed; the readiness wait must return that terminal result, not block
+// until the caller's deadline.
+func TestWaitReplayReadyReturnsTerminalResultWhenSessionEndsFirst(t *testing.T) {
+	mismatch := errors.New("replay mismatch")
+	for _, terminal := range []error{mismatch, nil} {
+		h := &handle{request: session.LiveRequest{ReplayPlan: &session.LiveReplayPlan{WaitForSessionUpdated: true}}, replayReady: make(chan struct{}), done: make(chan struct{}), terminalErr: terminal}
+		close(h.done)
+		want := terminal
+		if want == nil {
+			want = session.ErrLiveClosed
+		}
+		require.ErrorIs(t, h.waitReplayReady(context.Background()), want)
+	}
+}
