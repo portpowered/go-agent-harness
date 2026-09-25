@@ -144,3 +144,17 @@ func sessionArtifactWriter(ctx context.Context) func(io.Writer, messages.StreamM
 		return service.WriteMessage(out, msg)
 	}
 }
+
+// boundCancellationClosed reports whether the owner-initiated bound
+// cancellation channel has fired. A nil channel never fires.
+func boundCancellationClosed(ch <-chan struct{}) bool {
+	if ch == nil {
+		return false
+	}
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}

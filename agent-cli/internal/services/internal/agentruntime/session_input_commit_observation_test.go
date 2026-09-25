@@ -12,7 +12,7 @@ import (
 func TestObservedSessionCommitExcludesLaterBufferAdmissions(t *testing.T) {
 	observer := &recordingSessionRuntimeObserver{}
 	recorder := sessiontracewire.NewRuntimeRecorder(observer, nil)
-	session := &observedSession{Session: newRoomTestSession(), runtime: recorder}
+	session := &observedSession{Session: newCommitTestSession(), runtime: recorder}
 	first, second := []byte{1, 2, 3, 4}, []byte{5, 6, 7, 8}
 	// Both frames can enter the core FIFO before its worker sends the first
 	// commit. Evidence must follow actual session sends, not these admissions.
@@ -51,7 +51,7 @@ func (s rejectObservedAudioSession) Send(_ context.Context, msg messages.StreamM
 func TestObservedSessionCommitExcludesRejectedAudio(t *testing.T) {
 	observer := &recordingSessionRuntimeObserver{}
 	recorder := sessiontracewire.NewRuntimeRecorder(observer, nil)
-	session := &observedSession{Session: rejectObservedAudioSession{Session: newRoomTestSession()}, runtime: recorder}
+	session := &observedSession{Session: rejectObservedAudioSession{Session: newCommitTestSession()}, runtime: recorder}
 	pcm := []byte{1, 2}
 	recorder.AudioInput(pcm)
 	if session.Send(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}) {
@@ -70,3 +70,26 @@ func TestObservedSessionCommitExcludesRejectedAudio(t *testing.T) {
 	}
 	t.Fatal("commit evidence missing")
 }
+
+// commitTestSession accepts every send; the observed-session wrapper under
+// test owns commit evidence, not this transport stand-in.
+type commitTestSession struct {
+	receive *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+}
+
+func newCommitTestSession() *commitTestSession {
+	return &commitTestSession{receive: messages.NewTypedBuffer[messages.StreamMessage](1), done: make(chan struct{})}
+}
+
+func (*commitTestSession) Send(context.Context, messages.StreamMessage) bool { return true }
+
+func (s *commitTestSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return s.receive
+}
+
+func (s *commitTestSession) Done() <-chan struct{} { return s.done }
+
+func (*commitTestSession) TerminalError() error { return nil }
+
+func (*commitTestSession) Close() error { return nil }

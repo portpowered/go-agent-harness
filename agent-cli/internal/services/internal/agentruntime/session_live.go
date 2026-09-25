@@ -361,7 +361,7 @@ func runAgentLoopSession(ctx context.Context, out io.Writer, sessionInferencer m
 	} else {
 		runErr = runAgentLoopSessionStream(ctx, renderer, sessionInferencer, opts)
 	}
-	if bounded || !roomChannelClosed(opts.BoundCancellation) {
+	if bounded || !boundCancellationClosed(opts.BoundCancellation) {
 		if !bounded {
 			runErr = audioResponseCompletionError(runErr, opts)
 		}
