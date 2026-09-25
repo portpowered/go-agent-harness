@@ -48,6 +48,8 @@ type webrtcSourceObservation struct {
 	offerAudioTracks, offerVideoTracks   int
 	answerAudioTracks, answerVideoTracks int
 	frameCount, videoFrameCount          int
+	connections                          int
+	videoWriteErr                        string
 
 	negotiated          chan struct{}
 	frameDelivered      chan struct{}
@@ -61,6 +63,8 @@ type webrtcSourceObservationSnapshot struct {
 	offerAudioTracks, offerVideoTracks   int
 	answerAudioTracks, answerVideoTracks int
 	frameCount, videoFrameCount          int
+	connections                          int
+	videoWriteErr                        string
 }
 
 func (o *webrtcSourceObservation) snapshot() webrtcSourceObservationSnapshot {
@@ -71,6 +75,7 @@ func (o *webrtcSourceObservation) snapshot() webrtcSourceObservationSnapshot {
 		offerAudioTracks: o.offerAudioTracks, offerVideoTracks: o.offerVideoTracks,
 		answerAudioTracks: o.answerAudioTracks, answerVideoTracks: o.answerVideoTracks,
 		frameCount: o.frameCount, videoFrameCount: o.videoFrameCount,
+		connections: o.connections, videoWriteErr: o.videoWriteErr,
 	}
 }
 
@@ -123,6 +128,7 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 			}
 		}()
 		observed.Lock()
+		observed.connections++
 		observed.path = r.URL.Path
 		observed.source = r.URL.Query().Get("src")
 		observed.Unlock()
@@ -338,6 +344,9 @@ func streamFixtureAudio(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, 
 			return
 		}
 		if _, err := video.Write(data); err != nil {
+			observed.Lock()
+			observed.videoWriteErr = err.Error()
+			observed.Unlock()
 			return
 		}
 		observed.recordVideoFrame()
@@ -391,4 +400,15 @@ func wrapMediaFieldError(name, value string, err error) error {
 		return fmt.Errorf("parse %s %q: %w", name, value, err)
 	}
 	return nil
+}
+
+// waitForVideoDelivery bounds the video delivery observation like
+// waitForExternalSourceEvent and reports what the fixture saw on timeout.
+func waitForVideoDelivery(t *testing.T, observed *webrtcSourceObservation, name string) {
+	t.Helper()
+	select {
+	case <-observed.videoFrameDelivered:
+	case <-time.After(20 * time.Second):
+		t.Fatalf("timed out waiting for %s\n%s", name, sourceObservationDiagnostics(observed.snapshot()))
+	}
 }
