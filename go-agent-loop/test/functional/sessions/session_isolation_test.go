@@ -1,6 +1,8 @@
 package sessions
 
 import (
+	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -104,4 +106,128 @@ func TestIsolationCheckerNamesLeakingSessionAndRecord(t *testing.T) {
 	if findings := checkRecordsIsolation(rampOwner, rampTokens, rampRecords); len(findings) != 0 {
 		t.Fatalf("prefix-collision scan reported findings: %v", findings)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Isolation checker
+// ---------------------------------------------------------------------------
+
+// isolationFinding describes one detected cross-session contamination.
+type isolationFinding struct {
+	Owner        string // session whose capture was scanned
+	ForeignToken string // another session's marker found in the capture
+	Where        string // location of the offending record
+	Snippet      string // printable snippet of the offending payload
+}
+
+func (f isolationFinding) String() string {
+	return fmt.Sprintf("session %q capture contains foreign marker %q at %s (payload %q)", f.Owner, f.ForeignToken, f.Where, f.Snippet)
+}
+
+// containsSessionMarker reports whether payload contains token as a whole
+// marker: an occurrence whose neighboring bytes are not themselves marker
+// characters. Plain substring matching misfires at large session counts where
+// one token is a prefix of another ("sess-10" inside "sess-100"), which would
+// fabricate leakage findings during the ceiling ramp.
+func containsSessionMarker(payload []byte, token string) bool {
+	if len(token) == 0 {
+		return false
+	}
+	isMarkerByte := func(b byte) bool {
+		return b == '-' || b == '_' ||
+			(b >= '0' && b <= '9') ||
+			(b >= 'A' && b <= 'Z') ||
+			(b >= 'a' && b <= 'z')
+	}
+	for start := 0; start+len(token) <= len(payload); start++ {
+		if !bytes.Equal(payload[start:start+len(token)], []byte(token)) {
+			continue
+		}
+		beforeOK := start == 0 || !isMarkerByte(payload[start-1])
+		end := start + len(token)
+		afterOK := end == len(payload) || !isMarkerByte(payload[end])
+		if beforeOK && afterOK {
+			return true
+		}
+	}
+	return false
+}
+
+// checkRecordsIsolation scans one session's captured records for foreign
+// session tokens.
+func checkRecordsIsolation(ownerToken string, foreignTokens []string, records []transcript.Record) []isolationFinding {
+	findings := []isolationFinding{}
+	for idx, record := range records {
+		for _, foreign := range foreignTokens {
+			if foreign != ownerToken && containsSessionMarker(record.Payload, foreign) {
+				findings = append(findings, isolationFinding{
+					Owner:        ownerToken,
+					ForeignToken: foreign,
+					Where:        fmt.Sprintf("record[%d] peer=%s dir=%s stream=%s", idx, record.Peer, record.Direction, record.Stream),
+					Snippet:      printableSnippet(record.Payload),
+				})
+			}
+		}
+	}
+	return findings
+}
+
+// checkDeltasIsolation scans one session's collected delta stream. Values are
+// reduced to comparable bytes through the same projection the capture sink
+// uses, plus the marshaled message for structured values such as tool calls.
+func checkDeltasIsolation(ownerToken string, foreignTokens []string, deltas []messages.StreamMessage) []isolationFinding {
+	findings := []isolationFinding{}
+	for idx, delta := range deltas {
+		payload := streamPayload(delta)
+		if len(payload) == 0 || bytes.Equal(payload, []byte(delta.Type)) {
+			payload = marshalPayload(delta, []byte(delta.Type))
+		}
+		for _, foreign := range foreignTokens {
+			if foreign != ownerToken && containsSessionMarker(payload, foreign) {
+				findings = append(findings, isolationFinding{
+					Owner:        ownerToken,
+					ForeignToken: foreign,
+					Where:        fmt.Sprintf("delta[%d] type=%s role=%s", idx, delta.Type, delta.Role),
+					Snippet:      printableSnippet(payload),
+				})
+			}
+		}
+	}
+	return findings
+}
+
+// checkSessionIsolation runs both projections for one session and fails t with
+// named findings when any foreign marker appears.
+func checkSessionIsolation(t *testing.T, ownerToken string, tokens []string, records []transcript.Record, deltas []messages.StreamMessage) {
+	t.Helper()
+	foreign := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		if token != ownerToken {
+			foreign = append(foreign, token)
+		}
+	}
+	findings := checkRecordsIsolation(ownerToken, foreign, records)
+	findings = append(findings, checkDeltasIsolation(ownerToken, foreign, deltas)...)
+	if len(findings) != 0 {
+		rendered := make([]string, 0, len(findings))
+		for _, finding := range findings {
+			rendered = append(rendered, finding.String())
+		}
+		t.Fatalf("cross-session leakage detected in session %q:\n%s", ownerToken, strings.Join(rendered, "\n"))
+	}
+}
+
+func printableSnippet(payload []byte) string {
+	const maxSnippet = 96
+	end := len(payload)
+	if end > maxSnippet {
+		end = maxSnippet
+	}
+	snippet := bytes.Map(func(r rune) rune {
+		if r >= 32 && r < 127 {
+			return r
+		}
+		return '.'
+	}, payload[:end])
+	return string(snippet)
 }

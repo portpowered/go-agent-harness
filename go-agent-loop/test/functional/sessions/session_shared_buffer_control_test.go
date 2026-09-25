@@ -73,7 +73,8 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 	deadline := time.Now().Add(concurrentRunBudget)
 	for atomic.LoadInt64(&live) > 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("aliased run did not finish within %v", concurrentRunBudget)
+			t.Fatalf("aliased run did not finish within %v at logical tick %d; unfinished sessions:\n%s",
+				concurrentRunBudget, tick, describeScriptProgress(results, concurrentDefaultTurns))
 		}
 		if _, err := functionalTime.AdvanceTo(tick); err != nil {
 			t.Fatalf("advance to logical tick %d: %v", tick, err)
