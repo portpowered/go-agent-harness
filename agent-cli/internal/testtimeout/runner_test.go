@@ -94,11 +94,17 @@ func testBlockedChildFailsClosedAndCleansDescendants(t *testing.T, fixtureBinary
 	}()
 
 	result, runErr := runFixture(ctx, fixtureBinary, marker, "blocked", "TestTimeoutFixtureBlockedChild", fixtureSafetyBudget)
+	// The run is over (cancelled on readiness, budget expired, or fixture
+	// crashed). Cancel so the readiness poller stops and reports on one of its
+	// buffered channels; the guard only bounds a poller that fails to return.
+	cancel()
 	var pids fixturePIDs
 	select {
 	case pids = <-ready:
 	case err := <-readyErr:
-		t.Fatalf("blocked fixture never reported its descendants within %s: %v; result=%+v output:\n%s", fixtureSafetyBudget, err, result, result.Output)
+		t.Fatalf("blocked fixture never reported its descendants within %s: %v; run error=%v result=%+v output:\n%s", fixtureSafetyBudget, err, runErr, result, result.Output)
+	case <-time.After(fixtureSafetyBudget):
+		t.Fatalf("blocked fixture never reported its descendants: readiness poller did not stop; run error=%v result=%+v output:\n%s", runErr, result, result.Output)
 	}
 	var runnerErr *Error
 	if !errors.As(runErr, &runnerErr) || result.TimedOut || runnerErr.TimedOut {
