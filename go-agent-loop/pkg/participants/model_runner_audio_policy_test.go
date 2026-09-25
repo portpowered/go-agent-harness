@@ -153,10 +153,20 @@ func TestSessionModelRunnerStopReleasesParkedWaitingAdmissions(t *testing.T) {
 		if !errors.Is(err, ErrSessionClosed) {
 			t.Fatalf("waiting audio admission after runner stop = %v, want ErrSessionClosed", err)
 		}
-		runner.ingressStop.start()
-		if runner.ingressStop.stopped() {
-			t.Fatal("a new runSession did not re-arm waiting admission")
+		// A second session run on the same runner must re-arm waiting admission.
+		for len(runner.sessionInputInbox) > 0 {
+			<-runner.sessionInputInbox
 		}
+		runner.sessionInferencer = &testSessionInferencer{session: newRecordingSession()}
+		ctx, cancel := context.WithCancel(t.Context())
+		runDone := make(chan error, 1)
+		go func() { runDone <- runner.Run(ctx) }()
+		synctest.Wait()
+		if err := runner.EnqueueSessionAudioInputWithPolicyWaiting(t.Context(), []byte{2}, messages.SessionAudioInputPolicyDefault); err != nil {
+			t.Fatalf("waiting audio admission during a second session run = %v, want success", err)
+		}
+		cancel()
+		<-runDone
 	})
 }
 

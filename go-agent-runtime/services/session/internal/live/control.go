@@ -79,7 +79,7 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 	stamp := h.controlStamp(control.Kind)
 	if err := loop.SendSessionEventWaiting(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
-		return err
+		return liveInputError(err)
 	}
 	select {
 	case accepted := <-ack:
@@ -139,7 +139,7 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 	defer h.setPendingToolDefinitions(nil)
 	if err := loop.SendSessionEventWaiting(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
-		return err
+		return liveInputError(err)
 	}
 	select {
 	case accepted := <-ack:

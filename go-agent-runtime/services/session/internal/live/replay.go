@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -264,7 +265,17 @@ func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages
 		}
 		return session.ErrLiveClosed
 	}
-	return loop.SendAudioInputWithPolicy(ctx, pcm, policy)
+	return liveInputError(loop.SendAudioInputWithPolicy(ctx, pcm, policy))
+}
+
+// liveInputError reports session ingress admission abandoned because the
+// provider session runner stopped as a clean live close, so a capture pump or
+// control racing a normal session end is not surfaced as a failure.
+func liveInputError(err error) error {
+	if errors.Is(err, participants.ErrSessionClosed) {
+		return fmt.Errorf("%w: %w", session.ErrLiveClosed, err)
+	}
+	return err
 }
 
 func (h *handle) recordCapturedAudio(frame sharedaudio.PCMFrame) {
