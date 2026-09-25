@@ -199,7 +199,7 @@ func (r *recorder) writeManifest(result rooms.RoomResult, runErr error, endedAt 
 		manifest.TurnCounts[configured.ID] = participantResult.TurnsCompleted
 		r.addParticipantArtifacts(&manifest, configured.ID, paths)
 	}
-	return writeManifestFile(filepath.Join(r.destination, roomevidence.ManifestPath), manifest, r.secrets)
+	return writeManifestFile(filepath.Join(r.destination, roomevidence.ManifestPath), manifest, r.secrets, r.syncFile)
 }
 
 func (r *recorder) addParticipantArtifacts(manifest *roomManifest, id string, paths roomevidence.ArtifactPaths) {

@@ -107,6 +107,7 @@ func normalizeResourceLimits(input recording.ResourceLimits) (recording.Resource
 		TerminalItems:   recording.DefaultTerminalItems,
 		ProviderBytes:   recording.DefaultProviderBytes,
 		ProviderItems:   recording.DefaultProviderItems,
+		SummaryBytes:    recording.DefaultSummaryBytes,
 	}
 	if err := applyLimit(&limits.TranscriptBytes, input.TranscriptBytes, recording.DefaultTranscriptBytes); err != nil {
 		return recording.ResourceLimits{}, fmt.Errorf("transcript byte limit: %w", err)
@@ -143,6 +144,9 @@ func normalizeResourceLimits(input recording.ResourceLimits) (recording.Resource
 	}
 	if err := applyLimit(&limits.ProviderItems, input.ProviderItems, recording.DefaultProviderItems); err != nil {
 		return recording.ResourceLimits{}, fmt.Errorf("provider item limit: %w", err)
+	}
+	if err := applyLimit(&limits.SummaryBytes, input.SummaryBytes, recording.DefaultSummaryBytes); err != nil {
+		return recording.ResourceLimits{}, fmt.Errorf("summary byte limit: %w", err)
 	}
 	return limits, nil
 }
@@ -224,6 +228,12 @@ type destinationClaim struct {
 const claimParentDirectoryMode = 0o755
 
 func Claim(options recording.ClaimOptions) (recording.DestinationClaim, error) {
+	return claimDestination(options, nil)
+}
+
+// claimDestination admits a destination and commits its lock metadata with
+// syncFile; nil selects the production fsync.
+func claimDestination(options recording.ClaimOptions, syncFile recording.FileSync) (recording.DestinationClaim, error) {
 	if options.Kind != recording.ClaimKindCapture && options.Kind != recording.ClaimKindDirectory {
 		return nil, &recording.ClaimError{Destination: options.Destination, Err: fmt.Errorf("unsupported claim kind %q", options.Kind)}
 	}
@@ -250,7 +260,7 @@ func Claim(options recording.ClaimOptions) (recording.DestinationClaim, error) {
 		_, marshalErr = lock.Write(metadata)
 	}
 	if marshalErr == nil {
-		marshalErr = lock.Sync()
+		marshalErr = syncFile.Sync(lock)
 	}
 	if marshalErr != nil {
 		return nil, &recording.ClaimError{Destination: destination, Err: errors.Join(marshalErr, lock.Close(), os.Remove(lockPath))}

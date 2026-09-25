@@ -118,7 +118,7 @@ func assertFIFOChildFailsClosed(t *testing.T, mode, destination, fifoPath string
 }
 
 func runFIFOReplayChild(t *testing.T, mode, destination, fifoPath string) {
-	service := NewService()
+	service := newTestService()
 	var err error
 	switch mode {
 	case "manifest", "artifact":

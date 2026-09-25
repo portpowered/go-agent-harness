@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -44,9 +45,16 @@ type Recorder struct {
 	active         map[string]string
 	lastSpeechStop map[string]uint64
 	transitions    map[string]*roomLatencyTransitionState
+	syncFile       roomevidence.FileSync
 }
 
 func New(source platformclock.Source, format rooms.AudioFormat) *Recorder {
+	return NewWithFileSync(source, format, nil)
+}
+
+// NewWithFileSync is New with a durability hook for Write; nil selects the
+// production fsync.
+func NewWithFileSync(source platformclock.Source, format rooms.AudioFormat, syncFile roomevidence.FileSync) *Recorder {
 	if format.SampleRate <= 0 || format.Channels <= 0 {
 		format = mixer.DefaultFormat()
 	}
@@ -60,6 +68,7 @@ func New(source platformclock.Source, format rooms.AudioFormat) *Recorder {
 		active:         make(map[string]string),
 		lastSpeechStop: make(map[string]uint64),
 		transitions:    make(map[string]*roomLatencyTransitionState),
+		syncFile:       syncFile,
 	}
 }
 

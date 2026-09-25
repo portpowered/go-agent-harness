@@ -8,7 +8,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -16,6 +18,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type pairedPrefixFailureCase struct {
@@ -26,6 +29,7 @@ type pairedPrefixFailureCase struct {
 }
 
 func TestDirectoryRecorderRollsBackPairedEvidenceOnAgentWriteFailure(t *testing.T) {
+	t.Parallel()
 	cases := []pairedPrefixFailureCase{
 		{name: "partial transcript", failAt: 4, failure: partialSpoolFailure},
 		{name: "zero-byte transcript", failAt: 4, failure: zeroByteSpoolFailure},
@@ -34,7 +38,10 @@ func TestDirectoryRecorderRollsBackPairedEvidenceOnAgentWriteFailure(t *testing.
 		{name: "offset audio", audio: true, failAt: 5, failure: noOffsetSpoolFailure},
 	}
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) { runPairedPrefixFailure(t, tc) })
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runPairedPrefixFailure(t, tc)
+		})
 	}
 }
 
@@ -110,9 +117,13 @@ func assertPairedTranscriptPrefix(t *testing.T, r *directoryRecorder) {
 // Both streams preserve their own order, but either may run ahead. Enumerate
 // every interleaving of two media frames with four normalized response events.
 func TestRecordedResponseAudioIsIndependentOfQueueScheduling(t *testing.T) {
+	t.Parallel()
 	for first := 0; first <= 4; first++ {
 		for second := first; second <= 4; second++ {
-			t.Run(fmt.Sprintf("audio-at-%d-%d", first, second), func(t *testing.T) { assertRecordedAudioInterleaving(t, first, second) })
+			t.Run(fmt.Sprintf("audio-at-%d-%d", first, second), func(t *testing.T) {
+				t.Parallel()
+				assertRecordedAudioInterleaving(t, first, second)
+			})
 		}
 	}
 }
@@ -177,22 +188,28 @@ func assertResponseAudioIndex(t *testing.T, r *directoryRecorder) {
 const testProviderCaptureAvailable = "available"
 
 func TestEvidenceResourceLimitsNormalizeProtectedDefaults(t *testing.T) {
-	smaller := recording.ResourceLimits{TranscriptBytes: 1, TranscriptItems: 1, AudioBytes: 1, AudioItems: 1, SidecarBytes: 1, SidecarItems: 1, MetadataBytes: 1, MetadataItems: 1, TerminalBytes: 1, TerminalItems: 1, ProviderBytes: 1, ProviderItems: 1}
+	t.Parallel()
+	smaller := recording.ResourceLimits{TranscriptBytes: 1, TranscriptItems: 1, AudioBytes: 1, AudioItems: 1, SidecarBytes: 1, SidecarItems: 1, MetadataBytes: 1, MetadataItems: 1, TerminalBytes: 1, TerminalItems: 1, ProviderBytes: 1, ProviderItems: 1, SummaryBytes: 1}
 	budget, err := newEvidenceResourceBudget(smaller)
 	if err != nil || budget.limits != smaller {
 		t.Fatalf("smaller limits: budget=%+v err=%v", budget.limits, err)
 	}
-	larger := recording.ResourceLimits{TranscriptBytes: recording.DefaultTranscriptBytes + 1, TranscriptItems: recording.DefaultTranscriptItems + 1, AudioBytes: recording.DefaultAudioBytes + 1, AudioItems: recording.DefaultAudioItems + 1, SidecarBytes: recording.DefaultSidecarBytes + 1, SidecarItems: recording.DefaultSidecarItems + 1, MetadataBytes: recording.DefaultMetadataBytes + 1, MetadataItems: recording.DefaultMetadataItems + 1, TerminalBytes: recording.DefaultTerminalBytes + 1, TerminalItems: recording.DefaultTerminalItems + 1, ProviderBytes: recording.DefaultProviderBytes + 1, ProviderItems: recording.DefaultProviderItems + 1}
+	larger := recording.ResourceLimits{TranscriptBytes: recording.DefaultTranscriptBytes + 1, TranscriptItems: recording.DefaultTranscriptItems + 1, AudioBytes: recording.DefaultAudioBytes + 1, AudioItems: recording.DefaultAudioItems + 1, SidecarBytes: recording.DefaultSidecarBytes + 1, SidecarItems: recording.DefaultSidecarItems + 1, MetadataBytes: recording.DefaultMetadataBytes + 1, MetadataItems: recording.DefaultMetadataItems + 1, TerminalBytes: recording.DefaultTerminalBytes + 1, TerminalItems: recording.DefaultTerminalItems + 1, ProviderBytes: recording.DefaultProviderBytes + 1, ProviderItems: recording.DefaultProviderItems + 1, SummaryBytes: recording.DefaultSummaryBytes + 1}
 	budget, err = newEvidenceResourceBudget(larger)
-	if err != nil || budget.limits.TranscriptBytes != recording.DefaultTranscriptBytes || budget.limits.ProviderItems != recording.DefaultProviderItems {
+	if err != nil || budget.limits.TranscriptBytes != recording.DefaultTranscriptBytes || budget.limits.ProviderItems != recording.DefaultProviderItems || budget.limits.SummaryBytes != recording.DefaultSummaryBytes {
 		t.Fatalf("larger limits: budget=%+v err=%v", budget.limits, err)
 	}
 	if _, err := newEvidenceResourceBudget(recording.ResourceLimits{TranscriptBytes: -1}); err == nil {
 		t.Fatal("negative protected limit was accepted")
 	}
+	defaults, err := newEvidenceResourceBudget(recording.ResourceLimits{})
+	if err != nil || defaults.limits.SummaryBytes != 2<<20 || newSummaryBudget(0).limit() != 2<<20 {
+		t.Fatalf("production summary cap = %d (err %v), want 2 MiB", defaults.limits.SummaryBytes, err)
+	}
 }
 
 func TestDirectoryRecorderResourceUsageSeparatesQueueFromRetainedSummary(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	if err := r.RecordMessage(t.Context(), session.LiveRecord{
 		Direction: session.LiveRecordAgent,
@@ -221,6 +238,7 @@ func TestDirectoryRecorderResourceUsageSeparatesQueueFromRetainedSummary(t *test
 }
 
 func TestMinimalRecordingConfigRetainsProviderMarkerAndBoundedTerminal(t *testing.T) {
+	t.Parallel()
 	config := transcript.RecordingConfig{SessionLog: []byte(strings.Repeat("session-log ", 1024)), Metadata: transcript.RecordingMetadata{Transport: "runtime", Configuration: map[string]string{"provider_capture": testProviderCaptureAvailable, "oversized": strings.Repeat("metadata ", 1024)}}, Terminal: &transcript.RecordingTerminalSummary{Reason: strings.Repeat("reason ", 1024), Classification: strings.Repeat("classification ", 1024), TerminalReason: messages.TerminalReason(strings.Repeat("terminal ", 1024)), TerminalProvenance: messages.TerminalProvenance(strings.Repeat("provenance ", 1024)), OutputState: messages.TerminalOutputState(strings.Repeat("output ", 1024))}}
 	minimal := minimalRecordingConfig(config, nil)
 	if minimal.Metadata.Transport != "runtime" || minimal.Metadata.Configuration["provider_capture"] != testProviderCaptureAvailable || len(minimal.SessionLog) != 0 || minimal.Corpus != nil {
@@ -232,6 +250,7 @@ func TestMinimalRecordingConfigRetainsProviderMarkerAndBoundedTerminal(t *testin
 }
 
 func TestPrepareBundleConfigFallsBackToMinimalMetadata(t *testing.T) {
+	t.Parallel()
 	r := &directoryRecorder{}
 	config := transcript.RecordingConfig{ClientTranscriptPath: "client.transcript.jsonl", AgentTranscriptPath: "agent.transcript.jsonl", Metadata: transcript.RecordingMetadata{Transport: "runtime", Model: strings.Repeat("model ", 2048), Configuration: map[string]string{"provider_capture": testProviderCaptureAvailable, "oversized": strings.Repeat("metadata ", 2048)}}, Terminal: &transcript.RecordingTerminalSummary{Reason: "complete", Classification: "complete", TerminalReason: messages.TerminalReasonProviderAuthoredCompletion, TerminalProvenance: messages.TerminalProvenanceProvider, OutputState: messages.TerminalOutputComplete}}
 	config = boundedRecordingConfig(config, nil)
@@ -253,6 +272,7 @@ func TestPrepareBundleConfigFallsBackToMinimalMetadata(t *testing.T) {
 }
 
 func TestRecordingManifestCountsConfiguredArtifactSources(t *testing.T) {
+	t.Parallel()
 	config := transcript.RecordingConfig{ManifestVersion: 2, ClientTranscript: []byte("client"), AgentTranscriptPath: "agent.transcript.jsonl", SessionLog: []byte("log"), InputSegments: [][]byte{{1}}, OutputSegmentPaths: []string{"output.pcm"}, BrowserArtifact: &transcript.BrowserArtifact{Format: transcript.BrowserEventsVersion}, AdditionalArtifacts: []transcript.RecordingArtifact{{Path: "extra.json"}}}
 	manifestBytes, err := recordingManifestBytes(config)
 	if err != nil || manifestBytes <= 0 {
@@ -275,7 +295,8 @@ func TestRecordingManifestCountsConfiguredArtifactSources(t *testing.T) {
 }
 
 func TestConversationSummarySnapshotReplacementReaccountsRetainedBytes(t *testing.T) {
-	conversation := newEvidenceConversation()
+	t.Parallel()
+	conversation := newEvidenceConversation(0)
 	conversation.appendTranscript(true, "item-1", "partial", false)
 	first := conversation.budget.bytes
 	conversation.appendTranscript(true, "item-1", "corrected full transcript", true)
@@ -296,7 +317,8 @@ func TestConversationSummarySnapshotReplacementReaccountsRetainedBytes(t *testin
 }
 
 func TestConversationSummaryItemLimitStopsOnlyProjection(t *testing.T) {
-	conversation := newEvidenceConversation()
+	t.Parallel()
+	conversation := newEvidenceConversation(0)
 	for index := 0; index < directorySummaryMaxItems+100; index++ {
 		conversation.appendText(true, "x")
 		if conversation.summaryFull {
@@ -314,8 +336,13 @@ func TestConversationSummaryItemLimitStopsOnlyProjection(t *testing.T) {
 	}
 }
 
+// overflowSummaryBytes keeps the overflow fixture small; the cap is the only
+// input that differs from production.
+const overflowSummaryBytes int64 = 16 << 10
+
 func TestConversationSummaryOverflowPublishesPartialAndContinuesRawEvidence(t *testing.T) {
-	r := newEvidenceRecorder(t)
+	t.Parallel()
+	r := newEvidenceRecorder(t, recording.ResourceLimits{SummaryBytes: overflowSummaryBytes})
 	recordOverflowAcceptedPrefix(t, r)
 	recordOverflowText(t, r)
 	recordOverflowAudioAndTerminal(t, r)
@@ -335,7 +362,7 @@ func recordOverflowAcceptedPrefix(t *testing.T, r *directoryRecorder) {
 
 func recordOverflowText(t *testing.T, r *directoryRecorder) {
 	t.Helper()
-	oversized := strings.Repeat("oversized-summary-", int(directorySummaryMaxBytes/6))
+	oversized := strings.Repeat("oversized-summary-", int(overflowSummaryBytes/6))
 	recordSummaryMessage(t, r, session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-overflow", Value: messages.NewTextDeltaValue(oversized)})
 	recordSummaryMessage(t, r, session.LiveRecordAgent, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-after", Value: messages.NewTextDeltaValue("raw-tail")})
 }
@@ -413,6 +440,7 @@ func assertOverflowBundle(t *testing.T, r *directoryRecorder) {
 }
 
 func TestMixedIdentifiedAndLegacyPCMUsesArtifactOffsets(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	recordResponsePCM(t, r, 0)
 	recordResponseMessage(t, r, 0)
@@ -431,4 +459,119 @@ func TestMixedIdentifiedAndLegacyPCMUsesArtifactOffsets(t *testing.T) {
 	if got := readEvidenceFile(t, r, "audio/out-000.pcm"); !bytes.Equal(got, []byte{1, 0, 2, 0}) {
 		t.Fatalf("recorded PCM = %v", got)
 	}
+}
+
+// skipFileSync keeps fixtures off the fsync path; the durability tests below
+// cover the production hook.
+func skipFileSync(recording.DurableFile) error { return nil }
+
+func newTestDirectoryRecorder(options recording.LiveEvidenceOptions, source clock.Source) (*directoryRecorder, error) {
+	if options.SyncFile == nil {
+		options.SyncFile = skipFileSync
+	}
+	return newDirectoryRecorder(options, source)
+}
+
+func newTestSemanticSidecar(providerCapturePath string) (session.LiveRecorder, error) {
+	recorder, err := newSemanticSidecar(providerCapturePath, skipFileSync)
+	if err != nil {
+		return nil, err
+	}
+	return recorder, nil
+}
+
+// syncRecorder counts durability hook calls by file base name.
+type syncRecorder struct {
+	mu    sync.Mutex
+	names []string
+}
+
+func (s *syncRecorder) sync(file recording.DurableFile) error {
+	s.mu.Lock()
+	s.names = append(s.names, filepath.Base(file.Name()))
+	s.mu.Unlock()
+	return file.Sync()
+}
+
+func (s *syncRecorder) synced() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	names := append([]string(nil), s.names...)
+	sort.Strings(names)
+	return strings.Join(names, ",")
+}
+
+func TestFileSyncNilSelectsOSFileSync(t *testing.T) {
+	t.Parallel()
+	file, err := os.CreateTemp(t.TempDir(), "sync-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recording.FileSync(nil).Sync(file); err != nil {
+		t.Fatalf("default sync of open file: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Only (*os.File).Sync reports os.ErrClosed here, proving nil delegates to
+	// the real fsync rather than silently skipping durability.
+	if err := recording.FileSync(nil).Sync(file); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("default sync of closed file = %v, want os.ErrClosed", err)
+	}
+}
+
+func TestDirectoryRecorderSyncsEveryEvidenceFile(t *testing.T) {
+	t.Parallel()
+	counter := &syncRecorder{}
+	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+		Destination: filepath.Join(t.TempDir(), "capture"), ClockBase: evidenceTime(), WallClockStart: evidenceTime(),
+		SyncFile: counter.sync,
+	}, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	recordEvidenceText(t, r, "durable")
+	for _, direction := range []session.LiveRecordDirection{session.LiveRecordClient, session.LiveRecordAgent} {
+		frame := audio.PCMFrame{Samples: []int16{1, 2}, Format: audio.PCM16DeviceFormat(24000)}
+		if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: direction, Timestamp: evidenceTime(), Frame: frame}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recordEvidenceTerminal(t, r)
+	if err := r.Finalize(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	// The claim lock plus both transcript and PCM spools are each committed
+	// exactly once before publication.
+	if got, want := counter.synced(), "agent.transcript.jsonl,capture.lock,client.transcript.jsonl,in.pcm,out.pcm"; got != want {
+		t.Fatalf("synced files = %s, want %s", got, want)
+	}
+}
+
+// newEvidenceRecorder opens a fixture recorder; at most one limits value is
+// applied.
+func newEvidenceRecorder(t *testing.T, limits ...recording.ResourceLimits) *directoryRecorder {
+	t.Helper()
+	options := recording.LiveEvidenceOptions{Destination: filepath.Join(t.TempDir(), "capture"), ClockBase: evidenceTime(), WallClockStart: evidenceTime()}
+	for _, limit := range limits {
+		options.Limits = limit
+	}
+	r, err := newTestDirectoryRecorder(options, clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A completed fake provider writes its actual fixture observation. Tests
+	// exercising missing evidence remove this source explicitly.
+	if err := os.WriteFile(r.ProviderCapturePath(), []byte(`{"fixture_observation":"session.created"}`), evidenceFileMode); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := r.Finalize(t.Context(), nil); err != nil {
+			t.Logf("recording cleanup: %v", err)
+		}
+	})
+	return r
 }

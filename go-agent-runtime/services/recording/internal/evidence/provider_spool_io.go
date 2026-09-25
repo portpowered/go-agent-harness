@@ -156,7 +156,7 @@ type providerCaptureRecordReader interface {
 	Next() (gatewaytesting.CapturedSessionEvent, bool, error)
 }
 
-func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, reader providerCaptureRecordReader) (returnErr error) {
+func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, reader providerCaptureRecordReader, syncFile recording.FileSync) (returnErr error) {
 	directory := filepath.Dir(path)
 	base := filepath.Base(path)
 	placeholder, err := os.CreateTemp(directory, "."+base+".provider-publish-")
@@ -178,7 +178,7 @@ func publishProviderCapture(path string, capture gatewaytesting.SessionCapture, 
 			}
 		}
 	}()
-	if err := writeProviderCaptureFromReader(stagePath, capture, reader); err != nil {
+	if err := writeProviderCaptureFromReader(stagePath, capture, reader, syncFile); err != nil {
 		return err
 	}
 	if err := os.Link(stagePath, path); err != nil {
@@ -226,7 +226,7 @@ func (s *providerCaptureSpool) run() {
 		s.latch(errProviderCaptureUnresolved)
 	}
 	if providerCaptureCanDrain(s.currentError()) {
-		if err := s.file.Sync(); err != nil {
+		if err := s.syncFile.Sync(s.file); err != nil {
 			s.latch(fmt.Errorf("sync provider capture spool: %w", err))
 		}
 	}

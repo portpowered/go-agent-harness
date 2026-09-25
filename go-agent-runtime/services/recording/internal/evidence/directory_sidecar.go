@@ -89,6 +89,7 @@ type sidecarRecorder struct {
 	sequence        uint64
 	terminalWritten bool
 	writeSpool      func(*os.File, []byte) error
+	syncFile        recording.FileSync
 
 	finalizeOnce sync.Once
 	finalizeErr  error
@@ -98,6 +99,14 @@ type sidecarRecorder struct {
 // provider capture path. The file is created lazily when a terminal runtime
 // event is observed, so a run without a terminal does not claim completion.
 func NewSemanticSidecar(providerCapturePath string) (session.LiveRecorder, error) {
+	recorder, err := newSemanticSidecar(providerCapturePath, nil)
+	if err != nil {
+		return nil, err
+	}
+	return recorder, nil
+}
+
+func newSemanticSidecar(providerCapturePath string, syncFile recording.FileSync) (*sidecarRecorder, error) {
 	path := durationSidecarPath(providerCapturePath)
 	if path == "" {
 		return nil, errors.New("semantic evidence requires a provider capture path")
@@ -106,7 +115,7 @@ func NewSemanticSidecar(providerCapturePath string) (session.LiveRecorder, error
 	if err != nil {
 		return nil, err
 	}
-	recorder := &sidecarRecorder{path: path, budget: budget, queue: make(chan sidecarEvent, semanticSidecarQueueCapacity), done: make(chan struct{}), writeSpool: writeAll}
+	recorder := &sidecarRecorder{path: path, budget: budget, queue: make(chan sidecarEvent, semanticSidecarQueueCapacity), done: make(chan struct{}), writeSpool: writeAll, syncFile: syncFile}
 	go recorder.run()
 	return recorder, nil
 }
@@ -230,7 +239,7 @@ func (r *sidecarRecorder) Finalize(_ context.Context, _ error) error {
 		recordErr := r.recordErr
 		r.mu.Unlock()
 		if r.file != nil {
-			r.finalizeErr = errors.Join(recordErr, r.workerErr, r.file.Sync(), r.file.Close())
+			r.finalizeErr = errors.Join(recordErr, r.workerErr, r.syncFile.Sync(r.file), r.file.Close())
 			return
 		}
 		r.finalizeErr = errors.Join(recordErr, r.workerErr)

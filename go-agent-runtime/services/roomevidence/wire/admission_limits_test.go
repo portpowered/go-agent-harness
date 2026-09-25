@@ -18,6 +18,7 @@ import (
 )
 
 func TestServiceRejectsOversizedReplayManifest(t *testing.T) {
+	t.Parallel()
 	bundle := t.TempDir()
 	path := filepath.Join(bundle, roomevidence.ManifestPath)
 	file, err := os.Create(path)
@@ -34,16 +35,18 @@ func TestServiceRejectsOversizedReplayManifest(t *testing.T) {
 		t.Fatalf("close manifest: %v", err)
 	}
 
-	_, err = NewService().LoadPlan(bundle)
+	_, err = newTestService().LoadPlan(bundle)
 	assertAdmissionLimitError(t, err, "manifest")
 }
 
 func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
+	t.Parallel()
 	t.Run("total bytes", func(t *testing.T) {
+		t.Parallel()
 		bundle, _ := finalizedReplayBundle(t)
 		rewriteReplayTimeline(t, bundle, writeOversizedWhitespaceTimeline)
 
-		_, err := NewService().LoadPlan(bundle)
+		_, err := newTestService().LoadPlan(bundle)
 		assertAdmissionLimitError(t, err, "room_timeline")
 		if !strings.Contains(err.Error(), "byte limit") {
 			t.Fatalf("timeline error = %v, want total byte limit", err)
@@ -51,10 +54,11 @@ func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
 	})
 
 	t.Run("event count", func(t *testing.T) {
+		t.Parallel()
 		bundle, _ := finalizedReplayBundle(t)
 		rewriteReplayTimeline(t, bundle, writeOversizedEventTimeline)
 
-		_, err := NewService().LoadPlan(bundle)
+		_, err := newTestService().LoadPlan(bundle)
 		assertAdmissionLimitError(t, err, "room_timeline")
 		if !strings.Contains(err.Error(), "event limit") {
 			t.Fatalf("timeline error = %v, want event count limit", err)
@@ -63,19 +67,22 @@ func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
 }
 
 func TestServiceRejectsOversizedReplayFilesBeforeHashing(t *testing.T) {
+	t.Parallel()
 	t.Run("timeline", func(t *testing.T) {
+		t.Parallel()
 		bundle, _ := finalizedReplayBundle(t)
 		rewriteOversizedReplayFile(t, bundle, roomevidence.TimelinePath, admission.MaxTimelineBytes+1)
 
-		_, err := NewService().LoadPlan(bundle)
+		_, err := newTestService().LoadPlan(bundle)
 		assertAdmissionLimitError(t, err, "room_timeline")
 	})
 	t.Run("artifact", func(t *testing.T) {
+		t.Parallel()
 		bundle, recorder := finalizedReplayBundle(t)
 		artifact := recorder.Artifacts("speaker").SentPCM
 		rewriteOversizedReplayFile(t, bundle, artifact, admission.MaxArtifactBytes+1)
 
-		_, err := NewService().LoadPlan(bundle)
+		_, err := newTestService().LoadPlan(bundle)
 		assertAdmissionLimitError(t, err, "participant:speaker:sent_pcm")
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 )
 
@@ -90,7 +91,7 @@ func (r *Recorder) Write(path string) (writeErr error) {
 			writeErr = errors.Join(writeErr, fmt.Errorf("remove room latency temporary file: %w", err))
 		}
 	}()
-	if err := writeLatencyTemporary(temporary, data); err != nil {
+	if err := writeLatencyTemporary(temporary, data, r.syncFile); err != nil {
 		return err
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
@@ -100,7 +101,7 @@ func (r *Recorder) Write(path string) (writeErr error) {
 	return nil
 }
 
-func writeLatencyTemporary(temporary *os.File, data []byte) (writeErr error) {
+func writeLatencyTemporary(temporary *os.File, data []byte, syncFile roomevidence.FileSync) (writeErr error) {
 	defer func() {
 		if err := temporary.Close(); err != nil {
 			writeErr = errors.Join(writeErr, fmt.Errorf("close room latency artifact temporary file: %w", err))
@@ -109,7 +110,7 @@ func writeLatencyTemporary(temporary *os.File, data []byte) (writeErr error) {
 	if _, err := temporary.Write(data); err != nil {
 		return fmt.Errorf("write room latency artifact temporary file: %w", err)
 	}
-	if err := temporary.Sync(); err != nil {
+	if err := syncFile.Sync(temporary); err != nil {
 		return fmt.Errorf("sync room latency artifact temporary file: %w", err)
 	}
 	return nil

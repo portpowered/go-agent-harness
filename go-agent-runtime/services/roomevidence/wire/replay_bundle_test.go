@@ -16,8 +16,9 @@ import (
 )
 
 func TestServiceAnalyzesRecordedBundle(t *testing.T) {
+	t.Parallel()
 	destination, _ := finalizedReplayBundle(t)
-	service := NewService()
+	service := newTestService()
 	plan, err := service.LoadPlan(destination)
 	if err != nil {
 		t.Fatalf("load replay plan: %v", err)
@@ -52,11 +53,13 @@ func TestServiceAnalyzesRecordedBundle(t *testing.T) {
 }
 
 func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
+	t.Parallel()
 	t.Run("direct artifact", func(t *testing.T) {
+		t.Parallel()
 		destination, recorder := finalizedReplayBundle(t)
 		artifact := recorder.Artifacts("speaker").SentPCM
 		outside := filepath.Join(t.TempDir(), "sent.pcm")
-		service := NewService()
+		service := newTestService()
 		plan, err := service.LoadPlan(destination)
 		if err != nil {
 			t.Fatalf("admit intact replay bundle: %v", err)
@@ -72,10 +75,11 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 	})
 
 	t.Run("parent directory", func(t *testing.T) {
+		t.Parallel()
 		destination, _ := finalizedReplayBundle(t)
 		participantDirectory := filepath.Join(destination, "participants", "speaker")
 		outside := filepath.Join(t.TempDir(), "speaker")
-		service := NewService()
+		service := newTestService()
 		plan, err := service.LoadPlan(destination)
 		if err != nil {
 			t.Fatalf("admit intact replay bundle: %v", err)
@@ -96,6 +100,7 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 }
 
 func TestServiceRejectsDirectoryReplayArtifact(t *testing.T) {
+	t.Parallel()
 	destination, recorder := finalizedReplayBundle(t)
 	artifact := recorder.Artifacts("speaker").SentPCM
 	path := filepath.Join(destination, filepath.FromSlash(artifact))
@@ -105,24 +110,27 @@ func TestServiceRejectsDirectoryReplayArtifact(t *testing.T) {
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatalf("replace replay artifact with directory: %v", err)
 	}
-	_, err := NewService().LoadPlan(destination)
+	_, err := newTestService().LoadPlan(destination)
 	if err == nil || !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
 		t.Fatalf("directory replay artifact error = %v, want invalid bundle", err)
 	}
 }
 
 func TestServiceRejectsUnsupportedPCMEncoding(t *testing.T) {
+	t.Parallel()
 	t.Run("manifest", func(t *testing.T) {
+		t.Parallel()
 		destination, _ := finalizedReplayBundle(t)
 		replaceReplayManifestEncoding(t, destination, "float32")
-		_, err := NewService().LoadPlan(destination)
+		_, err := newTestService().LoadPlan(destination)
 		if err == nil || !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
 			t.Fatalf("unsupported manifest encoding error = %v, want invalid replay bundle", err)
 		}
 	})
 	t.Run("caller plan", func(t *testing.T) {
+		t.Parallel()
 		destination, _ := finalizedReplayBundle(t)
-		service := NewService()
+		service := newTestService()
 		plan, err := service.LoadPlan(destination)
 		if err != nil {
 			t.Fatalf("admit intact replay bundle: %v", err)

@@ -18,17 +18,17 @@ import (
 )
 
 type recorder struct {
-	destination string
-	manifest    rooms.Manifest
-	format      rooms.AudioFormat
-	startedAt   time.Time
-	clock       clockState
-	secrets     []string
-	latency     rooms.LatencyRecorder
-	mix         *mixer.PCMAccumulator
-	timeline    *jsonlWriter
-	timelineMu  sync.Mutex
-
+	destination  string
+	syncFile     roomevidence.FileSync
+	manifest     rooms.Manifest
+	format       rooms.AudioFormat
+	startedAt    time.Time
+	clock        clockState
+	secrets      []string
+	latency      rooms.LatencyRecorder
+	mix          *mixer.PCMAccumulator
+	timeline     *jsonlWriter
+	timelineMu   sync.Mutex
 	participants map[string]*participantRecorder
 	captureSeen  map[string]bool
 	providerErrs map[string]struct{}

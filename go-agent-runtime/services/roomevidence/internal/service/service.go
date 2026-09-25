@@ -16,11 +16,17 @@ import (
 )
 
 // Service is the private implementation behind the public room evidence
-// contract. It is intentionally stateless; each Open call creates an
+// contract. It holds only immutable configuration; each Open call creates an
 // independent recorder with no process-wide ownership or mutable globals.
-type Service struct{}
+type Service struct {
+	syncFile roomevidence.FileSync
+}
 
-func New() *Service { return &Service{} }
+// New builds a service from options; the zero value selects production
+// defaults, including a real fsync for every artifact.
+func New(options roomevidence.ServiceOptions) *Service {
+	return &Service{syncFile: options.SyncFile}
+}
 
 func (s *Service) ValidateOutput(path string) error {
 	destination := filepath.Clean(strings.TrimSpace(path))
@@ -48,7 +54,7 @@ func (s *Service) PrepareOutput(path string) (string, error) {
 }
 
 func (s *Service) Open(options roomevidence.RecordingRequest) (roomevidence.Recorder, error) {
-	return newRecorder(options)
+	return newRecorder(options, s.syncFile)
 }
 
 func (s *Service) LoadPlan(bundle string) (roomevidence.RoomReplayPlan, error) {
@@ -309,7 +315,7 @@ func hashFile(path string) (hash string, err error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-func writeManifestFile(path string, manifest roomManifest, secrets []string) error {
+func writeManifestFile(path string, manifest roomManifest, secrets []string, syncFile roomevidence.FileSync) error {
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal room run manifest: %w", err)
@@ -320,7 +326,7 @@ func writeManifestFile(path string, manifest roomManifest, secrets []string) err
 		return fmt.Errorf("create room run manifest temporary file: %w", err)
 	}
 	temporaryPath := temporary.Name()
-	if err := writeManifestTemporary(temporary, data); err != nil {
+	if err := writeManifestTemporary(temporary, data, syncFile); err != nil {
 		return errors.Join(fmt.Errorf("write room run manifest temporary file: %w", err), removeManifestTemporary(temporaryPath))
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
@@ -329,7 +335,7 @@ func writeManifestFile(path string, manifest roomManifest, secrets []string) err
 	return nil
 }
 
-func writeManifestTemporary(file *os.File, data []byte) (err error) {
+func writeManifestTemporary(file *os.File, data []byte, syncFile roomevidence.FileSync) (err error) {
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close room run manifest temporary file: %w", closeErr))
@@ -338,7 +344,7 @@ func writeManifestTemporary(file *os.File, data []byte) (err error) {
 	if err := writeAll(file, data); err != nil {
 		return fmt.Errorf("write: %w", err)
 	}
-	if err := file.Sync(); err != nil {
+	if err := syncFile.Sync(file); err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}
 	return nil
