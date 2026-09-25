@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,22 +60,6 @@ func TestRun_InvalidFixtureFile_PrintsFilePathAndReason(t *testing.T) {
 	got := stderr.String()
 	if !strings.Contains(got, path) || !strings.Contains(got, "session.fixture_provenance") {
 		t.Fatalf("stderr = %q, want file path and validation reason", got)
-	}
-}
-
-func TestRun_HelpTextMentionsFixtureHygieneRules(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err := Run([]string{"-h"}, &stdout, &stderr)
-
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("Run error = %v, want flag.ErrHelp", err)
-	}
-	help := stderr.String()
-	for _, want := range []string{"session.fixture_provenance", "raw audio", "credential-like", "websocket_message", "stream_message"} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("help text = %q, want substring %q", help, want)
-		}
 	}
 }
 

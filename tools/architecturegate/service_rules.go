@@ -188,7 +188,7 @@ func importIssues(pkg *Package, module *Module, service serviceInfo, source *Sou
 func forbiddenImportIssues(pkg *Package, module *Module, source *SourceFile, importPath string, policy Policy) []Issue {
 	issues := make([]Issue, 0)
 	for _, rule := range policy.ForbiddenImports {
-		if matchesAny(rule.From, pkg.ImportPath, module.Path) && matchesAny(rule.Imports, importPath) {
+		if matchesAny(rule.From, pkg.ImportPath, module.Path) && matchesAny(rule.Imports, importPath) && !matchesAny(rule.Except, importPath) {
 			issues = append(issues, Issue{Rule: "forbidden-import", Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Message: fmt.Sprintf("%s imports %s: %s", pkg.ImportPath, importPath, rule.Reason)})
 		}
 	}

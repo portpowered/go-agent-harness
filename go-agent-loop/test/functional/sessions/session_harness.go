@@ -220,14 +220,14 @@ func (s *SessionScenario) Start() {
 		}
 	}()
 
-	// Start the loop.
-	go func() {
-		s.errCh <- s.Loop.Run(ctx)
-	}()
-
-	// Brief wait for engine to initialize.
-	time.Sleep(50 * time.Millisecond)
+	go func() { s.errCh <- s.Loop.Run(ctx) }()
+	s.WaitForEvent(messages.StreamTypeSessionOpen, sessionOpenWait)
 }
+
+const (
+	sessionOpenWait = 50 * time.Millisecond  // Start: bounds sessions that never publish SESSION.OPEN.
+	loopEndWait     = 200 * time.Millisecond // Stop: bounds loops that never publish LOOP.END.
+)
 
 // SendControlPlane sends a control plane message to the session (e.g. session_close, stop, ping).
 func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageType) {
@@ -269,13 +269,12 @@ func (s *SessionScenario) SendText(text string) {
 }
 
 // Stop triggers a graceful session close. It sends session_close, waits
-// briefly for the events to propagate, then cancels the context and
+// for LOOP.END (the last delta), then cancels the context and
 // closes the mock inferencer.
 func (s *SessionScenario) Stop(timeout time.Duration) error {
 	s.SendControlPlane(messages.ControlPlaneMessageTypeSessionClose)
 
-	// Brief wait for the control plane message to be processed by the engine.
-	time.Sleep(200 * time.Millisecond)
+	s.WaitForEvent(messages.StreamTypeLoopEnd, loopEndWait)
 
 	// Close the mock session (unblocks runSession if it's blocked on session.Done()).
 	s.Inf.Close()
@@ -368,7 +367,7 @@ func (s *SessionScenario) WaitForEvent(eventType messages.StreamMessageType, tim
 		select {
 		case <-deadline:
 			return false
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(time.Millisecond):
 		}
 	}
 }

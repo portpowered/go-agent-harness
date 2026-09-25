@@ -2,8 +2,6 @@ package functional
 
 import (
 	"context"
-	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -106,24 +104,4 @@ func TestGatewayConsumerUsesOnlySharedLoopContract(t *testing.T) {
 		t.Fatal("stream did not emit message end")
 	}
 
-	assertOnlySharedLoopContractDeps(t)
-}
-
-func assertOnlySharedLoopContractDeps(t *testing.T) {
-	t.Helper()
-
-	out, err := exec.Command("go", "list", "-test", "-deps", ".").CombinedOutput()
-	if err != nil {
-		t.Fatalf("list proof package dependencies: %v\n%s", err, out)
-	}
-
-	const (
-		loopPkgPrefix       = "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/"
-		allowedContractPath = "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	)
-	for _, dep := range strings.Fields(string(out)) {
-		if strings.HasPrefix(dep, loopPkgPrefix) && dep != allowedContractPath {
-			t.Fatalf("gateway consumer proof depends on forbidden non-contract loop package %q", dep)
-		}
-	}
 }

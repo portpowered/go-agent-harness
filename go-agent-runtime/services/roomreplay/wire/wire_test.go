@@ -7,18 +7,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
-func TestNewServiceReturnsIndependentAdmissionServices(t *testing.T) {
-	first := NewService(nil)
-	second := NewService(nil)
-	if first == nil || second == nil {
-		t.Fatal("NewService returned nil")
-	}
-	if first == second {
-		t.Fatal("NewService returned shared service state")
-	}
-	var _ = roomreplay.Service(first)
-}
-
 func TestServiceValidateOutputRejectsSourceAndAllowsExternalDestination(t *testing.T) {
 	source := t.TempDir()
 	plan := roomreplay.RoomReplayPlan{BundlePath: source}

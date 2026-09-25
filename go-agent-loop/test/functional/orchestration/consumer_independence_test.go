@@ -2,8 +2,6 @@ package orchestration
 
 import (
 	"context"
-	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -73,21 +71,4 @@ func TestConsumerCanUseLoopWithLocalInferencer(t *testing.T) {
 		t.Fatalf("inference requests: got %d, want 1", len(inf.requests))
 	}
 
-	assertNoGatewayProviderDeps(t)
-}
-
-func assertNoGatewayProviderDeps(t *testing.T) {
-	t.Helper()
-
-	out, err := exec.Command("go", "list", "-test", "-deps", ".").CombinedOutput()
-	if err != nil {
-		t.Fatalf("list proof package dependencies: %v\n%s", err, out)
-	}
-
-	const forbidden = "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/"
-	for _, dep := range strings.Fields(string(out)) {
-		if strings.HasPrefix(dep, forbidden) {
-			t.Fatalf("loop consumer proof depends on forbidden provider package %q", dep)
-		}
-	}
 }

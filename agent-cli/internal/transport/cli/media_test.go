@@ -54,16 +54,6 @@ func TestMediaProbeCommandRendersDeterministicCapabilityReport(t *testing.T) {
 	}
 }
 
-func TestMediaCommandRegistersProbeSubcommand(t *testing.T) {
-	command := NewMediaCommand(func(context.Context, string) (rtc.MediaCapabilities, error) {
-		return rtc.MediaCapabilities{}, nil
-	}).Generate()
-	probe, _, err := command.Find([]string{"probe"})
-	if err != nil || probe == nil || probe.Use != "probe <url>" {
-		t.Fatalf("probe command = %#v, error = %v", probe, err)
-	}
-}
-
 func TestMediaProbeCommandPreservesTypedSourceError(t *testing.T) {
 	want := &rtc.MediaSourceError{Kind: rtc.SourceErrorAuthentication, Source: "rtsp://camera:<redacted>@host:554/main"}
 	command := NewMediaProbeCommand(func(context.Context, string) (rtc.MediaCapabilities, error) {

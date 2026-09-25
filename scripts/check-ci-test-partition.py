@@ -25,6 +25,7 @@ CANONICAL_CORPORA = {
 # operating-system-specific invocations are separate execution variants.
 TARGET_CORPORA = {
     "coverage-ci-agent-cli": {"agent-cli/..."},
+    "coverage-agent-cli-shard": {"agent-cli/..."},
     "coverage-ci-libraries": CANONICAL_CORPORA - {"agent-cli/..."},
     "coverage": CANONICAL_CORPORA,
     "embed-check": {"tests/embedding/..."},

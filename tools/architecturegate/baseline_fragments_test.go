@@ -68,3 +68,29 @@ func TestHistoricalBaselineDirectoryAggregatesFragments(t *testing.T) {
 		t.Fatalf("historical baseline = %#v, found=%v, err=%v", baseline, found, err)
 	}
 }
+
+func TestForbiddenImportExceptAllowsOnlyTheSharedContract(t *testing.T) {
+	module := &Module{Dir: "/repo", Path: "example.com/gateway"}
+	policy := fixturePolicy()
+	policy.ForbiddenImports = []ImportRule{{
+		From:    []string{"example.com/gateway/test/functional"},
+		Imports: []string{"example.com/loop", "example.com/loop/**"},
+		Except:  []string{"example.com/loop/pkg/messages"},
+		Reason:  "gateway consumers depend only on the shared loop message contract",
+	}}
+	file := sourceFixture(t, "consumer_test.go", `package functional
+import "example.com/loop/pkg/engine"
+var _ engine.Engine
+`, true)
+	pkg := &Package{ImportPath: module.Path + "/test/functional", Dir: "/repo/test/functional", Module: module, Files: []*SourceFile{file}}
+	if issues := importIssues(pkg, module, serviceInfo{}, file, "example.com/loop/pkg/engine", policy); !hasRule(issues, "forbidden-import") {
+		t.Fatalf("non-contract loop import was accepted: %#v", issues)
+	}
+	if issues := importIssues(pkg, module, serviceInfo{}, file, "example.com/loop/pkg/messages", policy); hasRule(issues, "forbidden-import") {
+		t.Fatalf("excepted contract import was rejected: %#v", issues)
+	}
+	other := &Package{ImportPath: module.Path + "/pkg/providers", Dir: "/repo/pkg/providers", Module: module, Files: []*SourceFile{file}}
+	if issues := importIssues(other, module, serviceInfo{}, file, "example.com/loop/pkg/engine", policy); hasRule(issues, "forbidden-import") {
+		t.Fatalf("rule applied outside its from scope: %#v", issues)
+	}
+}

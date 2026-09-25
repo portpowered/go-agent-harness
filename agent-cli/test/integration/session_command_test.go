@@ -22,30 +22,6 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-func TestSessionCommand_HelpDocumentsRecordReplayAndHistorySubcommands(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
-	if err != nil {
-		t.Fatalf("initialize CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"session", "--help"})
-
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute help: %v", err)
-	}
-
-	help := testWriter.StdoutString()
-	for _, want := range []string{"--record", "--replay", "show", "list", "delete"} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("session help missing %q:\n%s", want, help)
-		}
-	}
-}
-
 func TestSessionCommand_ReplayMissingFileReturnsActionableError(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {

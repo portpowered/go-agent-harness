@@ -3,64 +3,84 @@ package functional
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestFunctionalSuite(t *testing.T) {
-	moduleRoot, err := functionalModuleRootPath()
+// Discovery lists only concern packages under test/functional (not the root
+// runner package, internal fixtures, or packages without tests) and their
+// sorted top-level tests. The fixture is a standalone module in testdata.
+func TestDiscoverFunctionalInventoryListsConcernPackagesAndTopLevelTests(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	root, err := filepath.Abs(filepath.Join("testdata", "discovery"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := RunDiscovered(context.Background(), moduleRoot, os.Stdout)
+	inventory, err := DiscoverFunctionalInventory(context.Background(), root)
 	if err != nil {
-		t.Fatalf("run discovered functional suite: %v", err)
+		t.Fatalf("discover fixture inventory: %v", err)
 	}
-	t.Logf("functional suite completed: %+v", report)
+	want := Inventory{Packages: []InventoryPackage{
+		{Path: "example.com/discovery/test/functional/alpha", Tests: []string{"TestAlphaOne", "TestAlphaTwo"}},
+		{Path: "example.com/discovery/test/functional/beta", Tests: []string{"TestBeta"}},
+	}}
+	if !reflect.DeepEqual(inventory, want) {
+		t.Fatalf("inventory = %+v, want %+v", inventory, want)
+	}
+
+	if _, err := DiscoverFunctionalInventory(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "discover functional packages") {
+		t.Fatalf("discovery outside a module: err = %v, want a discover functional packages error", err)
+	}
 }
 
-func TestFunctionalSuite_ExternalManifestControlsCanonicalInvocation(t *testing.T) {
-	moduleRoot, err := functionalModuleRootPath()
-	if err != nil {
+// A package TestMain narrows test.run to the manifest-selected tests that
+// also match the caller's own -run filter, and reports each quarantine.
+func TestApplyPackageSelectionIntersectsManifestWithRunFilter(t *testing.T) {
+	runFlag := flag.CommandLine.Lookup("test.run")
+	original := runFlag.Value.String()
+	t.Cleanup(func() {
+		if err := flag.CommandLine.Set("test.run", original); err != nil {
+			t.Errorf("restore test.run: %v", err)
+		}
+	})
+	selected := []TestSelector{{Package: "p", Test: "TestAlpha"}, {Package: "p", Test: "TestBeta"}}
+	for _, tc := range []struct{ filter, want string }{
+		{filter: "", want: "^(?:TestAlpha|TestBeta)$"},
+		{filter: "Beta", want: "^(?:TestBeta)$"},
+		{filter: "^TestGamma$", want: "a^"},
+	} {
+		if err := flag.CommandLine.Set("test.run", tc.filter); err != nil {
+			t.Fatal(err)
+		}
+		selection := Selection{Selected: selected, Quarantined: []QuarantinedSelector{{
+			Entry: Entry{Package: "p", Test: "TestQuarantined", Bucket: BucketGenuinelyFailing, Reason: "fixture", ExitCondition: "never"},
+			Tests: []TestSelector{{Package: "p", Test: "TestQuarantined"}},
+		}}}
+		if err := applyPackageSelection(selection); err != nil {
+			t.Fatalf("filter %q: %v", tc.filter, err)
+		}
+		if got := runFlag.Value.String(); got != tc.want {
+			t.Fatalf("filter %q: test.run = %q, want %q", tc.filter, got, tc.want)
+		}
+	}
+
+	if err := flag.CommandLine.Set("test.run", "("); err != nil {
 		t.Fatal(err)
 	}
-	manifestPath := writeProofManifest(t)
-
-	cmd := exec.Command("go", goCommandArgs(
-		"test",
-		"./test/functional",
-		"-v",
-		"-run", "^TestFunctionalSuite$",
-		"-count=1",
-	)...)
-	cmd.Dir = moduleRoot
-	cmd.Env = setEnv(os.Environ(), ManifestPathEnv, manifestPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("canonical invocation: %v\n%s", err, output)
-	}
-
-	text := string(output)
-	quarantined := "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration/TestBasic_SimpleRequestResponse"
-	runnable := "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration/TestBasic_SimpleRequestResponseWithSystemPrompt"
-	if !strings.Contains(text, "quarantine: selector="+quarantined+" ") {
-		t.Fatalf("canonical invocation did not report the quarantined real selector:\n%s", text)
-	}
-	if strings.Contains(text, "functional: selector="+quarantined+" observed=pass") {
-		t.Fatalf("canonical invocation executed the quarantined selector:\n%s", text)
-	}
-	if !strings.Contains(text, "functional: selector="+runnable+" observed=pass") {
-		t.Fatalf("canonical invocation did not execute a runnable real selector:\n%s", text)
-	}
-	if !strings.Contains(text, "summary: discovered=") || !strings.Contains(text, "quarantined=71") {
-		t.Fatalf("canonical invocation did not report exact quarantine counts:\n%s", text)
+	if err := applyPackageSelection(Selection{Selected: selected}); err == nil || !strings.Contains(err.Error(), "compile existing test.run filter") {
+		t.Fatalf("invalid -run filter: err = %v", err)
 	}
 }
 
 func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.T) {
+	// Each subprocess reads its own temporary manifest, so the two
+	// recursive invocations are independent.
+	t.Parallel()
 	moduleRoot, err := functionalModuleRootPath()
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +117,9 @@ func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.
 }
 
 func TestFunctionalSuite_ExternalManifestRejectsUnknownSelectorBeforeFilteredRecursiveInvocation(t *testing.T) {
+	// Each subprocess reads its own temporary manifest, so the two
+	// recursive invocations are independent.
+	t.Parallel()
 	moduleRoot, err := functionalModuleRootPath()
 	if err != nil {
 		t.Fatal(err)

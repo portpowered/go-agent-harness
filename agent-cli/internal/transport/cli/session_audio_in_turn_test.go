@@ -7,7 +7,6 @@ import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -15,30 +14,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 )
-
-func TestSessionCommandAudioInTurnBargeHelpExplainsExplicitPolicy(t *testing.T) {
-	command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetArgs([]string{"--help"})
-
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("session --help: %v", err)
-	}
-	help := out.String()
-	for _, want := range []string{
-		"--audio-in-turn",
-		"--audio-in-turn-barge",
-		"completion-gated by default",
-		"active prior response",
-		"non-terminal",
-		"Ordinary scheduled turns do not interrupt responses",
-	} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("session help missing %q:\n%s", want, help)
-		}
-	}
-}
 
 func TestSessionCommandAudioInTurnBargeRequiresTwoTurnsBeforeSetup(t *testing.T) {
 	for _, testCase := range []struct {

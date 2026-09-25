@@ -2,10 +2,14 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -32,33 +36,50 @@ func TestMain(m *testing.M) {
 }
 
 func runIntegrationTests(m *testing.M) int {
+	flag.Parse()
+	if listFlag := flag.Lookup("test.list"); listFlag != nil && listFlag.Value.String() != "" {
+		// Listing tests (used by scripts/go-test-shards.sh) runs no test, so
+		// it needs none of the process-boundary binaries.
+		return m.Run()
+	}
+
 	dir, err := os.MkdirTemp("", "s2s-v2d-agent-binary")
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "remove integration binary directory: %v\n", err)
+		}
+	}()
 
-	binary := filepath.Join(dir, "agent")
-	build := exec.Command("go", "build", "-o", binary, "../../cmd/agent")
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		panic("build agent binary: " + err.Error())
+	agentBinaryPath = filepath.Join(dir, "agent")
+	audioDeviceServerBinaryPath = filepath.Join(dir, "audio-device-server")
+	mockToolAgentBinaryPath = filepath.Join(dir, "mock-tool-agent")
+	// The binaries are independent link targets over a shared build cache;
+	// building them concurrently removes two serial links from package setup.
+	builds := []struct{ name, output, source string }{
+		{name: "agent", output: agentBinaryPath, source: "../../cmd/agent"},
+		{name: "audio-device-server", output: audioDeviceServerBinaryPath, source: "../../cmd/audio-device-server"},
+		{name: "mock-tool-agent", output: mockToolAgentBinaryPath, source: "./testcmd/mock-tool-agent"},
 	}
-	agentBinaryPath = binary
-	deviceServerBinary := filepath.Join(dir, "audio-device-server")
-	buildDeviceServer := exec.Command("go", "build", "-o", deviceServerBinary, "../../cmd/audio-device-server")
-	buildDeviceServer.Stderr = os.Stderr
-	if err := buildDeviceServer.Run(); err != nil {
-		panic("build audio-device-server binary: " + err.Error())
+	errs := make([]error, len(builds))
+	var wg sync.WaitGroup
+	for index, build := range builds {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cmd := exec.Command("go", "build", "-o", build.output, build.source)
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				errs[index] = fmt.Errorf("build %s binary: %w", build.name, err)
+			}
+		}()
 	}
-	audioDeviceServerBinaryPath = deviceServerBinary
-	mockToolBinary := filepath.Join(dir, "mock-tool-agent")
-	buildMockTool := exec.Command("go", "build", "-o", mockToolBinary, "./testcmd/mock-tool-agent")
-	buildMockTool.Stderr = os.Stderr
-	if err := buildMockTool.Run(); err != nil {
-		panic("build mock-tool agent binary: " + err.Error())
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		panic(err.Error())
 	}
-	mockToolAgentBinaryPath = mockToolBinary
 	return m.Run()
 }
 

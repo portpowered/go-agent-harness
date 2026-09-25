@@ -107,7 +107,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@1834:16",
+      "symbol": "func-literal@1722:16",
       "value": 26,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
@@ -117,7 +117,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@641:24",
+      "symbol": "func-literal@529:24",
       "value": 34,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
@@ -187,7 +187,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@1834:16",
+      "symbol": "func-literal@1722:16",
       "value": 24,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
@@ -197,7 +197,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@641:24",
+      "symbol": "func-literal@529:24",
       "value": 28,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
@@ -207,7 +207,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "value": 2391,
+      "value": 2279,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -230,6 +230,24 @@
       "value": 128,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
+    }
+  ],
+  "renames": [
+    {
+      "from": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1834:16",
+      "to": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1722:16"
+    },
+    {
+      "from": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@641:24",
+      "to": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@529:24"
+    },
+    {
+      "from": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1834:16",
+      "to": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1722:16"
+    },
+    {
+      "from": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@641:24",
+      "to": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@529:24"
     }
   ]
 }
