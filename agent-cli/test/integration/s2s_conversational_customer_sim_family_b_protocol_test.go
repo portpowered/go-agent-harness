@@ -81,9 +81,13 @@ func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, e
 		}
 	case familyBResponseCancelEvent:
 		f.recordCancellation()
-	case rtEventInputAudioCommit, rtEventResponseCreate:
-		// The fixture models the two customer turns from the continuously
-		// open stream and accepts the client's explicit end-of-input controls.
+	case rtEventResponseCreate:
+		return f.handleResponseCreate(connection)
+	case rtEventInputAudioCommit:
+		// The customer turns are modeled from the continuously open stream.
+		// The commit after the correction marks the end of the client's
+		// input, which gates the provider close.
+		return f.handleInputCommit(connection)
 	default:
 		// Optional provider metadata is not relevant to this filesystem and
 		// interruption proof.
@@ -233,10 +237,51 @@ func (f *familyBProviderFixture) handleToolResult(connection *websocket.Conn, ca
 	} else {
 		f.replacementResultSeen = true
 	}
+	f.pendingContinuation = callID
 	f.mu.Unlock()
+	return nil
+}
 
-	if callID == familyBOriginalCallID {
+// handleResponseCreate answers the client's continuation request for the
+// latest tool output. Emitting the continuation before this request would let
+// its lifecycle overtake the client's own response.create, which no realtime
+// provider does.
+func (f *familyBProviderFixture) handleResponseCreate(connection *websocket.Conn) error {
+	f.mu.Lock()
+	callID := f.pendingContinuation
+	f.pendingContinuation = ""
+	f.mu.Unlock()
+	switch callID {
+	case "":
+		return nil
+	case familyBOriginalCallID:
 		return f.sendOriginalOutput(connection)
+	default:
+		return f.sendReplacementOutput(connection)
 	}
-	return f.sendReplacementOutput(connection)
+}
+
+func (f *familyBProviderFixture) handleInputCommit(connection *websocket.Conn) error {
+	f.mu.Lock()
+	if f.utteranceIndex > 1 {
+		f.correctionCommitted = true
+	}
+	f.mu.Unlock()
+	return f.closeWhenComplete(connection)
+}
+
+// closeWhenComplete closes the provider session once the replacement output
+// finished and the client committed the end of its correction input, so the
+// close never races the customer stream that is still being admitted.
+func (f *familyBProviderFixture) closeWhenComplete(connection *websocket.Conn) error {
+	f.mu.Lock()
+	ready := f.correctionCommitted && f.replacementDone && !f.closeSent
+	if ready {
+		f.closeSent = true
+	}
+	f.mu.Unlock()
+	if !ready {
+		return nil
+	}
+	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_b_correction_complete"})
 }

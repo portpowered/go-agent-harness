@@ -356,13 +356,7 @@ func (h *handle) waitOpeningReady(ctx context.Context) error {
 		h.mu.Unlock()
 		return err
 	case <-h.done:
-		h.mu.Lock()
-		err := h.terminalErr
-		h.mu.Unlock()
-		if err != nil {
-			return err
-		}
-		return session.ErrLiveClosed
+		return h.terminalResult()
 	case <-ctx.Done():
 		return ctx.Err()
 	}

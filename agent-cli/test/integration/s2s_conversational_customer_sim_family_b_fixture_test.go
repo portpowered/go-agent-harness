@@ -60,6 +60,14 @@ type familyBProviderFixture struct {
 	cancelPending             bool
 	originalResultSeen        bool
 	replacementResultSeen     bool
+	// pendingContinuation is the call whose function_call_output arrived but
+	// whose continuation the client has not yet requested with
+	// response.create. A realtime provider never answers a tool output on
+	// its own, so the grounded continuation waits for that request.
+	pendingContinuation string
+	correctionCommitted bool
+	replacementDone     bool
+	closeSent           bool
 }
 
 func newFamilyBProviderFixture(scenario probe.CustomerScenario) *familyBProviderFixture {
