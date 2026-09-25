@@ -113,7 +113,7 @@ func TestSessionToolCallCompleted(t *testing.T) {
 	scenario.SendText("trigger")
 
 	// Wait for tool call processing.
-	time.Sleep(1 * time.Second)
+	waitForToolCalls(tool, 1, 3*time.Second)
 
 	// Verify the tool executor was called.
 	calls := tool.Calls()
@@ -154,7 +154,7 @@ func TestSessionMultipleToolCalls(t *testing.T) {
 	scenario.SendText("trigger")
 
 	// Wait for processing.
-	time.Sleep(1 * time.Second)
+	waitForToolCalls(tool, 2, 3*time.Second)
 
 	// Verify both tools were called.
 	calls := tool.Calls()
@@ -175,5 +175,14 @@ func TestSessionMultipleToolCalls(t *testing.T) {
 
 	if err := scenario.Stop(5 * time.Second); err != nil {
 		t.Fatalf("Stop: %v", err)
+	}
+}
+
+// waitForToolCalls returns once the executor has recorded at least want calls
+// or timeout elapses; callers assert on tool.Calls() afterwards.
+func waitForToolCalls(tool *MockToolExecutor, want int, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for len(tool.Calls()) < want && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
 	}
 }

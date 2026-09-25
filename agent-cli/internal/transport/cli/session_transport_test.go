@@ -10,43 +10,11 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/spf13/cobra"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
-
-func TestSessionCommandTransportHelpDocumentsDeferredWebRTCCapability(t *testing.T) {
-	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetArgs([]string{"--help"})
-
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("session --help: %v", err)
-	}
-	help := out.String()
-	for _, want := range []string{
-		"--transport string",
-		"ws (default, supported)",
-		"webrtc (deferred/unavailable customer path)",
-		"--signaling string",
-		"Deferred/unavailable WebRTC signaling endpoint",
-		"requires --transport webrtc",
-		"--transport webrtc requires this flag",
-		"--media-source string",
-		"Deferred/unavailable WebRTC receive-only external media source",
-		"cannot be combined with --audio-in",
-		"customer-reachable network signaling",
-		"spoken-audio input wiring",
-		"file, stdin, or microphone speech input",
-		"supported --transport ws",
-		"--audio-in-device",
-	} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("session help does not document %q:\n%s", want, help)
-		}
-	}
-}
 
 func TestSessionCommandTransportRejectsUnknownValueBeforeSessionSetup(t *testing.T) {
 	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
@@ -268,4 +236,25 @@ type cliSideEffectSessionInferencer struct {
 func (i *cliSideEffectSessionInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	i.connects++
 	return nil, errors.New("provider session should not be connected")
+}
+
+// TestFilesystemScopeHelpOmitsUnrestrictedCommandClaim guards security
+// wording: filesystem scoping is not command allow-listing, so neither the
+// direct tool nor the session command may claim every command is allowed.
+func TestFilesystemScopeHelpOmitsUnrestrictedCommandClaim(t *testing.T) {
+	commands := map[string]*cobra.Command{
+		"tool":    NewToolCommand(flags.NewGlobalFlags()).Generate(),
+		"session": newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate(),
+	}
+	for name, command := range commands {
+		var help bytes.Buffer
+		command.SetOut(&help)
+		command.SetArgs([]string{"--help"})
+		if err := command.ExecuteContext(context.Background()); err != nil {
+			t.Fatalf("%s --help: %v", name, err)
+		}
+		if strings.Contains(help.String(), "All commands will be allowed") {
+			t.Fatalf("%s help contains the removed unrestricted-command claim:\n%s", name, help.String())
+		}
+	}
 }

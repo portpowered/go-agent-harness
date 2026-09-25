@@ -138,6 +138,17 @@ func (rs *RunScenario) Stop() error {
 	return rs.stopErr
 }
 
+// stoppedHistory stops the loop and returns its conversation history. An idle
+// running engine holds its state lock while waiting for the next input, so a
+// snapshot taken while running blocks until the run context expires.
+func (rs *RunScenario) stoppedHistory() []messages.Message {
+	rs.t.Helper()
+	if err := rs.Stop(); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		rs.t.Fatalf("stop loop before reading history: %v", err)
+	}
+	return rs.Loop.GetConversationHistory()
+}
+
 // containsString reports whether s contains substr.
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
@@ -276,7 +287,7 @@ func TestRun_ConversationHistoryAccumulates(t *testing.T) {
 	}
 
 	// Full history after two turns: user1 → assistant1 → user2 → assistant2.
-	history := rs.Loop.GetConversationHistory()
+	history := rs.stoppedHistory()
 	AssertMessages(t, history, []ExpectedMessage{
 		{Role: messages.RoleUser, Text: msg1},
 		{Role: messages.RoleAssistant, Text: resp1},
@@ -303,7 +314,7 @@ func TestRun_WithSystemPrompt(t *testing.T) {
 		t.Fatalf("response not received: got %q", rs.Output.String())
 	}
 
-	history := rs.Loop.GetConversationHistory()
+	history := rs.stoppedHistory()
 	systemCount := 0
 	for _, m := range history {
 		if m.Role == messages.RoleSystem {

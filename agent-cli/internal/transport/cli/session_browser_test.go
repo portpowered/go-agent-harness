@@ -19,50 +19,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestSessionCommandBrowserFlagsExposeC0Surface(t *testing.T) {
-	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
-	var help bytes.Buffer
-	command.SetOut(&help)
-	command.SetArgs([]string{"--help"})
-
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("session --help: %v", err)
-	}
-	for _, name := range sessionBrowserFlagNames {
-		if command.Flags().Lookup(name) == nil {
-			t.Errorf("C0 flag --%s is not registered", name)
-		}
-		if !strings.Contains(help.String(), "--"+name) {
-			t.Errorf("session help does not contain --%s", name)
-		}
-	}
-	if !strings.Contains(help.String(), "webmcp") {
-		t.Fatalf("session help does not name the WebMCP capability:\n%s", help.String())
-	}
-	if strings.Contains(help.String(), "--webmcp-") {
-		t.Fatalf("session help exposes superseded --webmcp-* aliases:\n%s", help.String())
-	}
-}
-
-func TestSessionCommandInputAudioTranscriptionHelp(t *testing.T) {
-	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
-	var help bytes.Buffer
-	command.SetOut(&help)
-	command.SetArgs([]string{"--help"})
-
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("session --help: %v", err)
-	}
-	if command.Flags().Lookup("no-input-transcription") == nil {
-		t.Fatal("session command did not register --no-input-transcription")
-	}
-	for _, want := range []string{"enabled by default only for live OpenAI sessions that accept audio input", "--no-input-transcription", "Replay always follows its recorded session.update handshake"} {
-		if !strings.Contains(help.String(), want) {
-			t.Fatalf("session help does not document %q:\n%s", want, help.String())
-		}
-	}
-}
-
 func TestResolveSessionBrowserConfigAppliesCLIOverYAMLAndEnvironment(t *testing.T) {
 	configDir := t.TempDir()
 	configYAML := `

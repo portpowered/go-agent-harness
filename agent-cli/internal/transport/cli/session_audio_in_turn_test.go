@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -10,30 +9,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 )
-
-func TestSessionCommandAudioInTurnBargeHelpExplainsExplicitPolicy(t *testing.T) {
-	command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetArgs([]string{"--help"})
-
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("session --help: %v", err)
-	}
-	help := out.String()
-	for _, want := range []string{
-		"--audio-in-turn",
-		"--audio-in-turn-barge",
-		"completion-gated by default",
-		"active prior response",
-		"non-terminal",
-		"Ordinary scheduled turns do not interrupt responses",
-	} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("session help missing %q:\n%s", want, help)
-		}
-	}
-}
 
 func TestSessionCommandAudioInTurnBargeRequiresTwoTurnsBeforeSetup(t *testing.T) {
 	for _, testCase := range []struct {

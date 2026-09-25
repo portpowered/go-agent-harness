@@ -166,6 +166,19 @@
         "github.com/portpowered/go-agent-harness/go-agent-runtime/services/**/wire"
       ],
       "reason": "the runtime entrypoint composes through its module Wire injector"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/test/functional"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/go-agent-loop",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**"
+      ],
+      "except": [
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+      ],
+      "reason": "the gateway consumer proof depends on the loop only through the shared message contract"
     }
   ],
   "global_state_scopes": [

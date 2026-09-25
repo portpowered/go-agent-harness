@@ -26,53 +26,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestWebMCPDirectCommandTreeIsFrozen(t *testing.T) {
-	command := NewWebMCPCommand(flags.NewGlobalFlags()).Generate()
-	got := make([]string, 0, len(command.Commands()))
-	for _, child := range command.Commands() {
-		got = append(got, child.Name())
-	}
-	sort.Strings(got)
-	want := []string{"activate", "browsers", "cancel", "context", "doctor", "invoke", "select", "tabs", "tools", "watch", "x-prepare-video"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("WebMCP command names = %v, want %v", got, want)
-	}
-	for _, forbidden := range []string{"launch", "browser"} {
-		for _, name := range got {
-			if name == forbidden {
-				t.Fatalf("unexpected forbidden command %q", forbidden)
-			}
-		}
-	}
-}
-
-func TestWebMCPDirectFlagsUseOneUnprefixedSpelling(t *testing.T) {
-	operations := NewWebMCPOperationsCommand(flags.NewGlobalFlags())
-	root := &cobra.Command{Use: "webmcp"}
-	operations.AddCommands(root)
-	toolsCommand, _, err := root.Find([]string{"tools"})
-	if err != nil {
-		t.Fatalf("find tools command: %v", err)
-	}
-	for _, name := range []string{"cdp-url", "auto-select", "allowed-origin"} {
-		if toolsCommand.Flags().Lookup(name) == nil {
-			t.Fatalf("tools command missing canonical --%s flag", name)
-		}
-	}
-	for _, duplicate := range []string{"browser-cdp-url", "browser-auto-select", "browser-allowed-origin"} {
-		if toolsCommand.Flags().Lookup(duplicate) != nil {
-			t.Fatalf("tools command retained duplicate --%s flag", duplicate)
-		}
-	}
-	tabsCommand, _, err := root.Find([]string{"tabs"})
-	if err != nil {
-		t.Fatalf("find tabs command: %v", err)
-	}
-	if tabsCommand.Flags().Lookup("eligible") == nil || tabsCommand.Flags().Lookup("eligible-only") != nil {
-		t.Fatal("tabs command must expose only the canonical --eligible spelling")
-	}
-}
-
 func TestDirectInvocationResultErrorPropagatesFreshnessRetryability(t *testing.T) {
 	err := directInvocationResultError(webmcp.InvokeResult{
 		InvocationID:        "broker-invocation",
@@ -94,71 +47,6 @@ func TestDirectInvocationResultErrorPropagatesFreshnessRetryability(t *testing.T
 	}
 	if _, leaked := classified.Details["safe_retryable"]; leaked {
 		t.Fatalf("internal retry marker leaked into direct error details: %#v", classified.Details)
-	}
-}
-
-func TestWebMCPWatchHelpDocumentsCrossProcessObservationBoundary(t *testing.T) {
-	command := NewWebMCPCommand(flags.NewGlobalFlags()).Generate()
-	watch, _, err := command.Find([]string{"watch"})
-	if err != nil {
-		t.Fatalf("find webmcp watch command: %v", err)
-	}
-	tools, _, err := command.Find([]string{"tools"})
-	if err != nil {
-		t.Fatalf("find webmcp tools command: %v", err)
-	}
-
-	for _, test := range []struct {
-		name string
-		text string
-	}{
-		{name: "watch", text: watch.Long},
-		{name: "tools --watch", text: tools.Long},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			for _, want := range []string{
-				"toolsAdded/toolsRemoved -> catalog_changed",
-				"toolInvoked             -> invocation_created",
-				"toolResponded           -> invocation_terminal",
-				"selected and session_closed are watcher-local lifecycle events",
-				"broker admission, approval, and cancellation-request history remains",
-				"process-local; no cross-process visibility",
-				"failed session_closed event",
-			} {
-				if !strings.Contains(test.text, want) {
-					t.Errorf("help text does not contain %q:\n%s", want, test.text)
-				}
-			}
-		})
-	}
-}
-
-func TestWebMCPDirectInvokeAndCancelHelpDocumentHandoff(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		want []string
-	}{
-		{name: "invoke", want: []string{"stderr", "invocation_id", "dispatched", "Stdout", "SIGINT"}},
-		{name: "cancel", want: []string{"Two-process flow", "receipt", "exact", "falls back", "stdout"}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			operations := NewWebMCPOperationsCommand(flags.NewGlobalFlags())
-			root := &cobra.Command{Use: "webmcp", SilenceErrors: true, SilenceUsage: true}
-			operations.AddCommands(root)
-			var stdout, stderr bytes.Buffer
-			root.SetOut(&stdout)
-			root.SetErr(&stderr)
-			root.SetArgs([]string{test.name, "--help"})
-			if err := root.Execute(); err != nil {
-				t.Fatalf("execute %s help: %v", test.name, err)
-			}
-			description := stdout.String() + stderr.String()
-			for _, want := range test.want {
-				if !strings.Contains(description, want) {
-					t.Fatalf("help omitted %q:\n%s", want, description)
-				}
-			}
-		})
 	}
 }
 

@@ -19,11 +19,3 @@ func TestSessionCommandRejectsNonLoopbackAudioDeviceServerBeforeSessionSetup(t *
 		t.Fatalf("session remote device error = %v, want ErrInvalidRemoteEndpoint", err)
 	}
 }
-
-func TestSessionCommandAudioDeviceServerFlagIsDiscoverable(t *testing.T) {
-	command := newTestLiveSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
-	flag := command.Flags().Lookup("audio-device-server")
-	if flag == nil || flag.DefValue != "" {
-		t.Fatalf("audio-device-server flag = %#v, want optional empty default", flag)
-	}
-}

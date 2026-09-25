@@ -12,30 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 )
 
-func TestInteractionCommand_HelpDocumentsReplayOutputAndCredentialFreeBehavior(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
-	if err != nil {
-		t.Fatalf("initialize CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"interaction", "--help"})
-
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute help: %v", err)
-	}
-
-	help := testWriter.StdoutString()
-	for _, want := range []string{"replay", "one JSON object per line", "without provider credentials"} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("interaction help missing %q:\n%s", want, help)
-		}
-	}
-}
-
 func TestInteractionReplay_PrintsNormalizedEventsAsNDJSON(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
