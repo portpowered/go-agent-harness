@@ -14,8 +14,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
+// TestRoomGraphRoutesEachSourceToPeersOnly runs the mixers on a virtual clock
+// and advances it only after Alice's frame is queued at Bob's mixer, so Bob's
+// first mixed frame is Alice's PCM rather than an earlier cadence tick.
 func TestRoomGraphRoutesEachSourceToPeersOnly(t *testing.T) {
-	aliceInbound := &graphInbound{frames: make(chan audio.PCMFrame, 1)}
+	format := rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}
+	scheduler := newArmSignalingClock()
+	aliceInbound := newReadSignalingInbound()
 	bobInbound := &graphInbound{frames: make(chan audio.PCMFrame, 1)}
 	aliceOutbound := &graphOutbound{frames: make(chan audio.PCMFrame, 4)}
 	bobOutbound := &graphOutbound{frames: make(chan audio.PCMFrame, 4)}
@@ -23,7 +28,7 @@ func TestRoomGraphRoutesEachSourceToPeersOnly(t *testing.T) {
 		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: aliceInbound, Outbound: aliceOutbound}, finished: make(chan struct{})},
 		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: bobInbound, Outbound: bobOutbound}, finished: make(chan struct{})},
 	}
-	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, nil)
+	graph, err := newRoomGraph(context.Background(), scheduler, format, participants, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,31 +37,22 @@ func TestRoomGraphRoutesEachSourceToPeersOnly(t *testing.T) {
 			t.Errorf("close graph: %v", err)
 		}
 	}()
-	aliceInbound.frames <- audio.PCMFrame{Samples: []int16{11, 13}}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	var got audio.PCMFrame
-	select {
-	case got = <-bobOutbound.frames:
-	case <-ctx.Done():
-		t.Fatalf("bob did not receive alice media (graph error: %v)", graph.Err())
-	}
+	aliceInbound.deliver(t, ctx, audio.PCMFrame{Samples: []int16{11, 13}})
+	got := advanceUntil(t, ctx, scheduler, format.FrameDuration, bobOutbound.frames)
 	if len(got.Samples) != 2 || got.Samples[0] != 11 || got.Samples[1] != 13 {
 		t.Fatalf("bob received %v, want alice frame", got.Samples)
 	}
 	if got.Epoch != 1 || got.StreamID != "room:bob" || got.Sequence != 0 || got.StartSample != 0 {
 		t.Fatalf("bob mix lineage = epoch:%d stream:%q sequence:%d start:%d", got.Epoch, got.StreamID, got.Sequence, got.StartSample)
 	}
-	select {
-	case self := <-aliceOutbound.frames:
-		if len(self.Samples) != 2 || self.Samples[0] != 0 || self.Samples[1] != 0 {
-			t.Fatalf("alice received self media %v, want silence", self.Samples)
-		}
-		if self.Epoch != 1 || self.StreamID != "room:alice" {
-			t.Fatalf("alice output lineage = epoch:%d stream:%q", self.Epoch, self.StreamID)
-		}
-	case <-ctx.Done():
-		t.Fatal("alice did not receive a peer cadence frame")
+	self := advanceUntil(t, ctx, scheduler, format.FrameDuration, aliceOutbound.frames)
+	if len(self.Samples) != 2 || self.Samples[0] != 0 || self.Samples[1] != 0 {
+		t.Fatalf("alice received self media %v, want silence", self.Samples)
+	}
+	if self.Epoch != 1 || self.StreamID != "room:alice" {
+		t.Fatalf("alice output lineage = epoch:%d stream:%q", self.Epoch, self.StreamID)
 	}
 }
 
@@ -101,7 +97,7 @@ func TestRoomGraphRetiresFailedSourceAndKeepsSurvivorMesh(t *testing.T) {
 		t.Fatalf("graph error = %v, want survivor graph to remain active", graph.Err())
 	}
 	bobInbound.deliver(t, ctx, audio.PCMFrame{Samples: []int16{17, 19}})
-	got := scheduler.advanceUntilFrame(t, ctx, format.FrameDuration, charlieOutbound.frames)
+	got := advanceUntil(t, ctx, scheduler, format.FrameDuration, charlieOutbound.frames)
 	if len(got.Samples) != 2 || got.Samples[0] != 17 || got.Samples[1] != 19 {
 		t.Fatalf("survivor peer output = %v, want Bob PCM", got.Samples)
 	}
@@ -130,19 +126,19 @@ func (c *armSignalingClock) NewTimer(duration time.Duration) clock.Timer {
 	return timer
 }
 
-// advanceUntilFrame advances virtual time one cadence interval at a time
-// until frames yields a frame. A mixer that arms its timer only after an
-// advance is caught by the next advance its arming triggers.
-func (c *armSignalingClock) advanceUntilFrame(t *testing.T, ctx context.Context, step time.Duration, frames <-chan audio.PCMFrame) audio.PCMFrame {
+// advanceUntil advances virtual time one cadence interval at a time until
+// results yields a value. A mixer that arms its timer only after an advance is
+// caught by the next advance its arming triggers.
+func advanceUntil[T any](t *testing.T, ctx context.Context, c *armSignalingClock, step time.Duration, results <-chan T) T {
 	t.Helper()
 	for {
 		c.AdvanceBy(step)
 		select {
-		case frame := <-frames:
-			return frame
+		case result := <-results:
+			return result
 		case <-c.armed:
 		case <-ctx.Done():
-			t.Fatalf("survivor mesh stopped after Alice failure: %v", ctx.Err())
+			t.Fatalf("room graph produced no expected result: %v", ctx.Err())
 		}
 	}
 }
@@ -351,16 +347,21 @@ func (f *handleFailureFixture) waitDone(t *testing.T, runDone <-chan roomRunOutc
 	}
 }
 
+// TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission queues Alice's frame
+// before the virtual clock allows Bob's first rejected write, so source
+// evidence always precedes the observed failure.
 func TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission(t *testing.T) {
 	failure := errors.New("provider write failed")
-	source := &graphInbound{frames: make(chan audio.PCMFrame, 1)}
+	format := rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}
+	scheduler := newArmSignalingClock()
+	source := newReadSignalingInbound()
 	failed := make(chan error, 1)
 	probe := &graphRecorderProbe{}
 	participants := []*activeParticipant{
 		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: source}, finished: make(chan struct{})},
 		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Outbound: &failingGraphOutbound{err: failure}}, finished: make(chan struct{}), onMediaError: func(err error) { failed <- err }},
 	}
-	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, nil, probe)
+	graph, err := newRoomGraph(context.Background(), scheduler, format, participants, nil, nil, probe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,14 +370,11 @@ func TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission(t *testing.T) {
 			t.Errorf("close graph: %v", err)
 		}
 	}()
-	source.frames <- audio.PCMFrame{Samples: []int16{23, 29}}
-	select {
-	case got := <-failed:
-		if !errors.Is(got, failure) {
-			t.Fatalf("provider failure = %v, want %v", got, failure)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("provider failure was not observed")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	source.deliver(t, ctx, audio.PCMFrame{Samples: []int16{23, 29}})
+	if got := advanceUntil(t, ctx, scheduler, format.FrameDuration, failed); !errors.Is(got, failure) {
+		t.Fatalf("provider failure = %v, want %v", got, failure)
 	}
 	probe.mu.Lock()
 	received := probe.received
