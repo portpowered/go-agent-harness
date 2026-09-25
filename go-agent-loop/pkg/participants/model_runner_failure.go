@@ -3,6 +3,7 @@ package participants
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -83,20 +84,54 @@ func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, er
 	return err
 }
 
+// SessionIngressError is a constant sentinel error for session ingress
+// admission; being a constant, it cannot be reassigned.
+type SessionIngressError string
+
+func (e SessionIngressError) Error() string { return string(e) }
+
+// ErrSessionClosed reports that a waiting session admission was abandoned
+// because the session runner stopped and will never drain the ingress again.
+const ErrSessionClosed SessionIngressError = "session runner stopped; input was not admitted"
+
+// sessionIngressStop is closed once when the session runner returns, so
+// admissions parked on a full ingress are released instead of waiting for a
+// consumer that no longer exists.
+type sessionIngressStop struct {
+	init, closeOnce sync.Once
+	ch              chan struct{}
+}
+
+func (s *sessionIngressStop) done() <-chan struct{} {
+	s.init.Do(func() { s.ch = make(chan struct{}) })
+	return s.ch
+}
+
+func (s *sessionIngressStop) stop() {
+	s.done()
+	s.closeOnce.Do(func() { close(s.ch) })
+}
+
+func (s *sessionIngressStop) stopped() bool {
+	select {
+	case <-s.done():
+		return true
+	default:
+		return false
+	}
+}
+
 // EnqueueSessionEvent queues a control-plane event in the same ordered ingress
-// as audio admitted by EnqueueSessionAudioInput. It never waits for capacity:
-// a full ingress returns ErrSessionInputQueueFull so internal producers such as
-// tool-result forwarding cannot stall behind the provider.
+// as audio admitted by EnqueueSessionAudioInput. It does not wait for ingress
+// capacity: a full ingress returns ErrSessionInputQueueFull. It does, however,
+// take the FIFO admission lock that orders all session inputs, so it can wait
+// behind a waiting admission (EnqueueSessionEventWaiting or
+// EnqueueSessionAudioInputWithPolicyWaiting) that is parked on a full ingress,
+// until that admission is drained, cancelled, or released by runner shutdown.
 func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
 	return r.enqueueSessionEvent(ctx, msg, false, "EnqueueSessionEvent")
 }
 
-// EnqueueSessionEventWaiting queues a control-plane event behind previously
-// admitted audio, applying the same backpressure as
-// EnqueueSessionAudioInputWithPolicyWaiting. Caller-driven turn boundaries
-// (for example an audio commit sent right after an unpaced audio burst) use
-// it so a temporarily full ingress delays the boundary instead of failing the
-// session. It returns ctx.Err() if the context ends before capacity frees up.
 func (r *ModelRunner) EnqueueSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error {
 	return r.enqueueSessionEvent(ctx, msg, true, "EnqueueSessionEventWaiting")
 }
@@ -122,12 +157,19 @@ func (r *ModelRunner) enqueueSessionEvent(ctx context.Context, msg messages.Stre
 	r.markSessionToolEventQueued(msg)
 	input := sessionInput{kind: sessionInputEvent, event: msg}
 	if waitForCapacity {
+		if r.ingressStop.stopped() {
+			r.markSessionToolEventConsumed(msg)
+			return ErrSessionClosed
+		}
 		select {
 		case r.sessionInputInbox <- input:
 			return nil
 		case <-done:
 			r.markSessionToolEventConsumed(msg)
 			return ctx.Err()
+		case <-r.ingressStop.done():
+			r.markSessionToolEventConsumed(msg)
+			return ErrSessionClosed
 		}
 	}
 	select {
@@ -172,11 +214,16 @@ func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm [
 func (r *ModelRunner) enqueueSessionAudioInputLocked(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, waitForCapacity bool) error {
 	input := sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}
 	if waitForCapacity {
+		if r.ingressStop.stopped() {
+			return ErrSessionClosed
+		}
 		select {
 		case r.sessionInputInbox <- input:
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-r.ingressStop.done():
+			return ErrSessionClosed
 		}
 	}
 	select {

@@ -87,7 +87,7 @@ func (r *coreRuntime) runAction(runCtx, readCtx context.Context, cancel context.
 	if action.responseEnds <= 0 {
 		return fmt.Errorf("%w: final recorded input has no response.done completion boundary", publicreplay.ErrBundleIncomplete)
 	}
-	if err := r.runInput(runCtx, action); err != nil {
+	if err := r.runInput(readCtx, action); err != nil {
 		return err
 	}
 	ended := 0

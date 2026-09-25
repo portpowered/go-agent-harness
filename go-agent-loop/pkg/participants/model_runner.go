@@ -37,6 +37,7 @@ type ModelRunner struct {
 	// helpers. Audio and control events are admitted to one bounded ingress in
 	// caller order and then forwarded by the session runner in that order.
 	sessionInputMu sync.Mutex
+	ingressStop    sessionIngressStop // closed when runSession returns; releases parked waiting admissions
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
