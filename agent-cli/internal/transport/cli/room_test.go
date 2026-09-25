@@ -18,8 +18,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
 	rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
 func TestRoomRunCommandParsesManifestOutputAndStreamOptions(t *testing.T) {
@@ -407,7 +407,7 @@ func TestRoomRunCommandRejectsMalformedAndOccupiedStreamBeforeRunner(t *testing.
 	if err != nil {
 		t.Fatalf("reserve stream address: %v", err)
 	}
-	defer listener.Close()
+	defer closeTestResource(t, listener)
 	var calls atomic.Int32
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
 	command.SetRunner(func(context.Context, io.Writer, rooms.RoomRunOptions) (rooms.RoomResult, error) {
@@ -425,35 +425,35 @@ func TestRoomRunCommandRejectsMalformedAndOccupiedStreamBeforeRunner(t *testing.
 	}
 }
 
-func TestRoomEventServerServesEventsAndShutsDown(t *testing.T) {
-	broker, err := events.New([]string{"alice"}, events.Options{})
-	if err != nil {
-		t.Fatalf("new room event broker: %v", err)
+func TestRoomRunCommandRedactsCredentialsFromEventStreamOutputAndError(t *testing.T) {
+	manifestPath := writeRoomCLIManifest(t)
+	output, stream := &bytes.Buffer{}, (*http.Response)(nil)
+	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
+	command.SetRunner(func(ctx context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
+		response, err := http.Get(strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0])
+		if err != nil {
+			t.Fatalf("connect event stream: %v", err)
+		}
+		stream = response
+		t.Cleanup(func() { closeTestResource(t, response.Body) })
+		publishErr := errors.Join(options.EventSink.Publish(ctx, "alice", session.LiveEvent{Kind: "browser.invocation", State: "key alice-secret"}),
+			options.EventSink.Publish(ctx, "bob", session.LiveEvent{Kind: "browser.failed", Reason: "auth bob-secret rejected"}))
+		options.OnParticipantTerminated(rooms.RoomParticipantResult{ParticipantID: "alice", TerminationReason: "error alice-secret"})
+		return rooms.RoomResult{TerminationReason: "failed bob-secret"}, errors.Join(publishErr, errors.New("provider rejected alice-secret"))
+	})
+	cmd := command.Generate()
+	cmd.SetOut(output)
+	cmd.SetArgs([]string{"--manifest", manifestPath, "--out", filepath.Join(t.TempDir(), "out"), "--stream", "127.0.0.1:0"})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || strings.Contains(err.Error(), "alice-secret") || !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Fatalf("room error = %v, want the credential redacted", err)
 	}
-	server, err := startRoomEventServer("127.0.0.1:0", broker)
-	if err != nil {
-		t.Fatalf("start room event server: %v", err)
+	body, readErr := io.ReadAll(stream.Body)
+	if readErr != nil || !strings.Contains(string(body), `"state":"key [REDACTED]"`) || !strings.Contains(string(body), "auth [REDACTED] rejected") {
+		t.Fatalf("event stream = %q (%v), want redacted participant events", body, readErr)
 	}
-	response, err := http.Get("http://" + server.listener.Addr().String() + "/events?participant=alice")
-	if err != nil {
-		_ = server.shutdown(broker)
-		t.Fatalf("connect event stream: %v", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "text/event-stream" {
-		_ = server.shutdown(broker)
-		t.Fatalf("event response = %d %q", response.StatusCode, response.Header.Get("Content-Type"))
-	}
-	broker.Publish(events.EventParticipantJoined, "alice", "")
-	if err := server.shutdown(broker); err != nil {
-		t.Fatalf("shutdown event server: %v", err)
-	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf("read event stream: %v", err)
-	}
-	if !strings.Contains(string(body), `"event":"participant_joined"`) {
-		t.Fatalf("event stream body = %q", body)
+	if text := output.String() + string(body); strings.Contains(text, "alice-secret") || strings.Contains(text, "bob-secret") {
+		t.Fatalf("stdout or /events leaked a credential: %q", text)
 	}
 }
 
