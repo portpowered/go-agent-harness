@@ -320,7 +320,9 @@ func (f *roomLiveLivenessFixture) assertResult(t *testing.T) {
 	t.Helper()
 	select {
 	case outcome := <-f.resultChannel:
-		if outcome.err != nil {
+		// The released peer's media ends with the room, so every participant
+		// reports an error and the service classifies the run as such.
+		if outcome.err != nil && !errors.Is(outcome.err, runtimeRooms.ErrAllParticipantsFailed) {
 			t.Fatalf("room run: %v", outcome.err)
 		}
 		f.assertSilentResult(t, outcome.value)

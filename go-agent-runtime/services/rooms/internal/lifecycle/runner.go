@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -278,6 +279,7 @@ func (r Runner) newRecorder(request rooms.RoomRunOptions, manifest rooms.Manifes
 	}
 	return r.evidenceService.Open(roomevidence.RecordingRequest{
 		Destination: request.OutputDir, Manifest: manifest, AudioFormat: request.AudioFormat,
+		Secrets:   planning.EvidenceSecrets(manifest, request),
 		StartedAt: r.currentTime(), Clock: r.clock, Latency: r.latency,
 	})
 }

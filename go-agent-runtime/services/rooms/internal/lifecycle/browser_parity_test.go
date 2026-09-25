@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -154,7 +155,7 @@ func (h *browserParityHandle) Media() audio.MediaEndpoints      { return audio.M
 func (h *browserParityHandle) Events() <-chan session.LiveEvent { return h.events }
 
 func (h *browserParityHandle) Start(context.Context) error {
-	h.events <- session.LiveEvent{Kind: "turn_completed"}
+	h.events <- assistantTurnEndEvent("")
 	return nil
 }
 
@@ -278,7 +279,7 @@ func assertTypedLivenessResult(t *testing.T, outcome roomRunOutcome, classificat
 	if outcome.err != nil {
 		t.Fatalf("room run error = %v", outcome.err)
 	}
-	if got := outcome.result.Participants["silent"].Classification; got != classification {
+	if got := outcome.result.Participants[typedLivenessSilentID].Classification; got != classification {
 		t.Fatalf("silent classification = %q, want %q", got, classification)
 	}
 	if got := outcome.result.Participants["peer"].Classification; got != "" {
@@ -292,7 +293,7 @@ func assertForwardedLiveness(t *testing.T, sink *recordingRoomEventSink, classif
 	defer sink.mu.Unlock()
 	count := 0
 	for index, participantID := range sink.participants {
-		if participantID == "silent" && sink.events[index].Liveness != nil && sink.events[index].Liveness.Classification == classification {
+		if participantID == typedLivenessSilentID && sink.events[index].Liveness != nil && sink.events[index].Liveness.Classification == classification {
 			count++
 		}
 	}
@@ -355,5 +356,179 @@ func (s *livenessOrderingSink) Publish(_ context.Context, participantID string, 
 		s.peer.Cancel(nil)
 		s.once.Do(func() { close(s.seen) })
 	}
+	return nil
+}
+
+const (
+	scriptedAgentID = "agent"
+	scriptedPeerID  = "peer"
+)
+
+// liveStreamEvent projects a stream message exactly as the session live
+// owner publishes it: the event kind is the stream type (TEXT.DELTA is
+// renamed to the text kind) and the typed message is retained.
+func liveStreamEvent(sessionID string, msg messages.StreamMessage) session.LiveEvent {
+	observed := msg
+	kind := string(msg.Type)
+	if msg.Type == messages.StreamTypeTextDelta {
+		kind = string(session.LiveEventText)
+	}
+	return session.LiveEvent{Kind: kind, SessionID: sessionID, ParticipantID: sessionID, Role: msg.Role, ResponseID: msg.ResponseID, Message: &observed}
+}
+
+// assistantTurnEndEvent is the provider response-done boundary as the live
+// session publishes it.
+func assistantTurnEndEvent(sessionID string) session.LiveEvent {
+	return liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "resp", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+}
+
+// nonTurnEvents is the rest of a realistic assistant response: every event
+// the live session emits around a turn that must not itself count as one.
+func nonTurnEvents(sessionID string) []session.LiveEvent {
+	return []session.LiveEvent{
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "resp", Value: messages.NewMessageStartValue()}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "resp", Value: &messages.TextDeltaValue{Content: "hello"}}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, ResponseID: "resp", Value: messages.NewAudioEndValue()}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: "resp", Value: messages.NewTranscriptEndValue("hello")}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool, Value: messages.NewMessageEndValue(messages.TokenUsage{})}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleUser, Value: messages.NewMessageEndValue(messages.TokenUsage{})}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "interrupted", Value: messages.NewMessageEndValueWithTerminal(messages.TokenUsage{}, messages.TerminalReasonPartialOutput, messages.TerminalProvenanceProvider, messages.TerminalOutputPartial)}),
+	}
+}
+
+func TestAssistantTurnCompletedMatchesOnlyAssistantMessageEnd(t *testing.T) {
+	if !assistantTurnCompleted(assistantTurnEndEvent(scriptedAgentID)) {
+		t.Fatal("provider MESSAGE.END was not counted as a turn")
+	}
+	assistant := liveStreamEvent(scriptedAgentID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+	if !assistantTurnCompleted(assistant) {
+		t.Fatal("assistant MESSAGE.END was not counted as a turn")
+	}
+	for _, event := range append(nonTurnEvents(scriptedAgentID),
+		session.LiveEvent{Kind: string(session.LiveEventStarted)},
+		session.LiveEvent{Kind: string(session.LiveEventTerminal)},
+		session.LiveEvent{Kind: "turn_completed"},
+	) {
+		if assistantTurnCompleted(event) {
+			t.Errorf("event %q role=%q counted as a completed turn", event.Kind, event.Role)
+		}
+	}
+}
+
+func TestRunnerStopsAtMaxTurnsFromRealLiveEventKinds(t *testing.T) {
+	ids := []string{scriptedAgentID, scriptedPeerID}
+	service := &scriptedLiveService{handles: map[string]*scriptedLiveHandle{}}
+	manifest := rooms.Manifest{SchemaVersion: rooms.SchemaVersion, Room: rooms.Room{MaxTurns: 2}}
+	for _, id := range ids {
+		service.handles[id] = &scriptedLiveHandle{id: id, events: make(chan session.LiveEvent, 32), done: make(chan struct{})}
+		manifest.Participants = append(manifest.Participants, rooms.Participant{ID: id, Kind: rooms.ParticipantKindAgent, SystemPrompt: id, OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "KEY_" + id, Tools: []string{}})
+	}
+	processed := make(chan string, 128)
+	runner := New(Dependencies{Live: service, Clock: platformclock.Real{}})
+	done := make(chan scriptedOutcome, 1)
+	go func() {
+		result, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{
+			Manifest: manifest,
+			OnDiagnostic: func(participantID string, record rooms.RoomDiagnosticRecord) {
+				if strings.HasPrefix(record.Event, "live_") && record.Event != "live_"+string(session.LiveEventStarted) {
+					processed <- participantID
+				}
+			},
+		})
+		done <- scriptedOutcome{result, err}
+	}()
+
+	// Turn one for both agents, surrounded by every non-turn event kind.
+	sent := 0
+	for _, id := range ids {
+		events := append(nonTurnEvents(id), assistantTurnEndEvent(id))
+		events = append(events, nonTurnEvents(id)...)
+		for _, event := range events {
+			service.handles[id].events <- event
+			sent++
+		}
+	}
+	// Turn two for only the first agent: the bound is shared, so the room
+	// must keep running until every agent reaches it.
+	service.handles[scriptedAgentID].events <- assistantTurnEndEvent(scriptedAgentID)
+	sent++
+	waitProcessed(t, processed, sent)
+	expectRunning(t, done)
+
+	service.handles[scriptedPeerID].events <- assistantTurnEndEvent(scriptedPeerID)
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("Run error = %v", got.err)
+		}
+		if got.result.TerminationReason != rooms.RoomTerminationMaxTurnsReached {
+			t.Fatalf("room termination = %q, want max turns", got.result.TerminationReason)
+		}
+		for _, id := range ids {
+			if turns := got.result.Participants[id].TurnsCompleted; turns != 2 {
+				t.Errorf("%s turns = %d, want 2", id, turns)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("room did not stop after every agent completed two assistant turns")
+	}
+}
+
+type scriptedOutcome struct {
+	result rooms.RoomResult
+	err    error
+}
+
+func expectRunning(t *testing.T, done <-chan scriptedOutcome) {
+	t.Helper()
+	select {
+	case got := <-done:
+		t.Fatalf("room stopped before the turn bound: result=%+v err=%v", got.result, got.err)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func waitProcessed(t *testing.T, processed <-chan string, want int) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for seen := 0; seen < want; seen++ {
+		select {
+		case <-processed:
+		case <-deadline:
+			t.Fatalf("processed %d live events, want %d", seen, want)
+		}
+	}
+}
+
+type scriptedLiveService struct {
+	handles map[string]*scriptedLiveHandle
+}
+
+func (s *scriptedLiveService) OpenLive(_ context.Context, request session.LiveRequest) (session.LiveHandle, error) {
+	return s.handles[request.SessionID], nil
+}
+
+type scriptedLiveHandle struct {
+	id     string
+	events chan session.LiveEvent
+	done   chan struct{}
+	once   sync.Once
+	closed sync.Once
+}
+
+func (h *scriptedLiveHandle) Media() audio.MediaEndpoints      { return audio.MediaEndpoints{} }
+func (h *scriptedLiveHandle) Events() <-chan session.LiveEvent { return h.events }
+func (h *scriptedLiveHandle) Start(context.Context) error {
+	h.events <- session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.id}
+	return nil
+}
+func (*scriptedLiveHandle) Send(context.Context, session.LiveControl) error { return nil }
+func (h *scriptedLiveHandle) Cancel(error)                                  { h.once.Do(func() { close(h.done) }) }
+func (h *scriptedLiveHandle) Wait() error {
+	<-h.done
+	return nil
+}
+func (h *scriptedLiveHandle) Close() error {
+	h.closed.Do(func() { close(h.events) })
 	return nil
 }

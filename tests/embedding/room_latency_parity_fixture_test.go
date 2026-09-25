@@ -200,7 +200,6 @@ func (p *publicRoomLatencyProvider) releaseResponse(participantID, responseID st
 	// can therefore correlate this response even if the graph worker is
 	// scheduled immediately after the inbound frame is admitted.
 	handle.emit(publicRoomLatencyMessageEvent("audio_delta", responseID, messages.StreamTypeAudioDelta, messages.NewAudioDeltaValue(append([]byte(nil), pcm...))))
-	handle.emit(publicRoomLatencyMessageEvent("message_end", responseID, messages.StreamTypeMessageEnd, messages.NewMessageEndValue(messages.TokenUsage{})))
 	// Keep the provider landmark causally before the mixed peer emission even
 	// when both are observed during one logical scheduler tick.
 	p.clock.AdvanceBy(time.Millisecond)
@@ -219,8 +218,11 @@ func (p *publicRoomLatencyProvider) completeTurn(participantID string) {
 	if participant := p.participant(participantID); participant != nil && participant.handle != nil {
 		participant.mu.Lock()
 		participant.turnsCompleted++
+		responseID := participant.responseID
 		participant.mu.Unlock()
-		participant.handle.emit(session.LiveEvent{Kind: "turn_completed"})
+		// MESSAGE.END is the room turn boundary; publish it after fan-out so
+		// a final turn cannot stop the room before its peer hears it.
+		participant.handle.emit(publicRoomLatencyMessageEvent("message_end", responseID, messages.StreamTypeMessageEnd, messages.NewMessageEndValue(messages.TokenUsage{})))
 	}
 }
 

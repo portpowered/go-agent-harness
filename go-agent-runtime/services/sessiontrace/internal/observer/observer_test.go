@@ -324,3 +324,77 @@ func TestObserverPublicLivenessBoundaryPublishesTypedFailureAndStops(t *testing.
 	observer.ResetProviderProgress()
 	observer.StopLiveness()
 }
+
+// terminalObservations records what a room-style owner learns at the final
+// terminal boundary through the terminal and failure observer hooks.
+type terminalObservations struct {
+	mu        sync.Mutex
+	terminals []sessiontrace.TerminalObservation
+	failures  []sessiontrace.TerminalObservation
+}
+
+func observeTerminals(observer sessiontrace.Observer) *terminalObservations {
+	seen := &terminalObservations{}
+	observer.SetTerminalObserver(func(value sessiontrace.TerminalObservation) bool {
+		seen.mu.Lock()
+		defer seen.mu.Unlock()
+		seen.terminals = append(seen.terminals, value)
+		return true
+	})
+	observer.SetFailureObserver(func(value sessiontrace.TerminalObservation) {
+		seen.mu.Lock()
+		defer seen.mu.Unlock()
+		seen.failures = append(seen.failures, value)
+	})
+	return seen
+}
+
+func TestObserverTerminalHooksReportFailureAndCancellationOnce(t *testing.T) {
+	failed := newObserverForTest(&observerTestSink{})
+	failures := observeTerminals(failed)
+	if err := failed.Finish(errors.New("provider dial failed")); err == nil {
+		t.Fatal("Finish accepted a run failure")
+	}
+	if len(failures.failures) != 1 || !failures.failures[0].Failure || failures.failures[0].Classification == "" || failures.failures[0].Err == nil {
+		t.Fatalf("run failure observations = %+v, want one classified failure", failures.failures)
+	}
+
+	intent := &testCancellationIntent{}
+	cancelled := newObserverForTest(&observerTestSink{}, func(options *sessiontrace.NewObserverOptions) {
+		options.CancellationIntent = intent
+	})
+	cancellations := observeTerminals(cancelled)
+	intent.MarkSIGINT()
+	if err := cancelled.Finish(context.Canceled); err != nil {
+		t.Fatalf("clean cancellation Finish: %v", err)
+	}
+	if len(cancellations.terminals) != 1 || len(cancellations.failures) != 0 {
+		t.Fatalf("cancellation observations = %+v/%+v, want one terminal and no failure", cancellations.terminals, cancellations.failures)
+	}
+	if got := cancellations.terminals[0]; got.RoomBound || got.TerminalReason != messages.TerminalReasonCancellation || got.OutputState != messages.TerminalOutputNone {
+		t.Fatalf("cancellation observation = %+v, want a non-room cancellation without output", got)
+	}
+}
+
+func TestObserverRoomBoundCancellationIsCleanAndDirectNotificationsRespectTheHooks(t *testing.T) {
+	bound := newObserverForTest(&observerTestSink{})
+	seen := observeTerminals(bound)
+	bound.MarkRoomBoundCancellation()
+	if err := bound.Finish(context.Canceled); err != nil {
+		t.Fatalf("room-bound cancellation Finish: %v", err)
+	}
+	if len(seen.failures) != 0 {
+		t.Fatalf("room-bound cancellation reported failures %+v", seen.failures)
+	}
+	if bound.NotifyFailureObservation(sessiontrace.TerminalObservation{}) {
+		t.Fatal("a non-failure observation was accepted as a failure")
+	}
+	if !bound.NotifyFailureObservation(sessiontrace.TerminalObservation{Failure: true, Err: errors.New("peer failed")}) || len(seen.failures) != 1 {
+		t.Fatalf("direct failure notification = %+v, want forwarded to the failure hook", seen.failures)
+	}
+	vetoed := newObserverForTest(&observerTestSink{})
+	vetoed.SetTerminalObserver(func(sessiontrace.TerminalObservation) bool { return false })
+	if vetoed.NotifyTerminalObservation(sessiontrace.TerminalObservation{RoomBound: true}) {
+		t.Fatal("terminal notification ignored the owner's rejection")
+	}
+}

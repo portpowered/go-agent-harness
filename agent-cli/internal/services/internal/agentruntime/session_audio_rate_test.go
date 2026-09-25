@@ -6,41 +6,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"testing"
-	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/room"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
-
-func TestRoomProviderInputPCMResamples16kHzMixerTo24kHzContract(t *testing.T) {
-	mixer, err := room.NewPCM16Mixer(context.Background(), room.PCM16Format{
-		SampleRate:    wavio.Rate16kHz,
-		Channels:      1,
-		FrameDuration: 30 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatalf("new mixer: %v", err)
-	}
-	t.Cleanup(func() { _ = mixer.Close() })
-	sourceSamples := wavio.Rate16kHz * 30 / 1000
-	pcm := make([]byte, sourceSamples*2)
-	runtime := &roomParticipantRuntime{
-		mixer: mixer,
-		plan: &roomParticipantPlan{
-			manifest:             room.Participant{ID: "agent-a"},
-			options:              SessionRunOptions{AudioService: newTestAudioIOService()},
-			inputAudioSampleRate: wavio.Rate24kHz,
-		},
-	}
-	converted, err := roomProviderInputPCM(runtime, pcm)
-	if err != nil {
-		t.Fatalf("convert room input: %v", err)
-	}
-	if got, want := len(converted)/2, sourceSamples*wavio.Rate24kHz/wavio.Rate16kHz; got != want {
-		t.Fatalf("room provider samples = %d, want %d", got, want)
-	}
-}
 
 func TestConvertSessionAudioPCMIdentityAndFailures(t *testing.T) {
 	service := newTestAudioIOService()

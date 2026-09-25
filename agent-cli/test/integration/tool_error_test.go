@@ -241,7 +241,7 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 		cli.NewSessionListCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
 		cli.NewSessionDeleteCommand(globalFlags, runtimeSessionWire.NewFileStoreFactory()),
 		cli.NewSessionReplayCommand(nil),
-		cli.NewRoomRunCommand(globalFlags, nil),
+		cli.NewRoomRunCommand(globalFlags, nil, nil),
 		cli.NewConfigCommand(),
 		cli.NewConfigAddLocalCommand(globalFlags),
 		nil,

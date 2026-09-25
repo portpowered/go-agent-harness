@@ -15,10 +15,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/events"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/internal/roomhost"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"github.com/spf13/cobra"
 )
 
@@ -44,13 +50,15 @@ type RoomSignalContextFunc func(context.Context) (context.Context, func())
 type RoomRunCommand struct {
 	globalFlags   *flags.GlobalFlags
 	service       runtimeRooms.Service
+	registry      devicegw.DeviceRegistry
 	signalContext RoomSignalContextFunc
 	run           RoomRunFunc
 }
 
-// NewRoomRunCommand injects room orchestration without device construction.
-func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Service) *RoomRunCommand {
-	command := &RoomRunCommand{globalFlags: globalFlags, service: service, signalContext: defaultRoomSignalContext}
+// NewRoomRunCommand injects room orchestration and the host device registry
+// consulted by launch planning; it never constructs or opens a device.
+func NewRoomRunCommand(globalFlags *flags.GlobalFlags, service runtimeRooms.Service, registry devicegw.DeviceRegistry) *RoomRunCommand {
+	command := &RoomRunCommand{globalFlags: globalFlags, service: service, registry: registry, signalContext: defaultRoomSignalContext}
 	if service != nil {
 		command.run = service.Run
 	}
@@ -196,17 +204,13 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	if c == nil || c.service == nil {
 		return errors.New("room service is required")
 	}
-	plans, err := c.resolveRoomRunPlans(configPath, manifestPath, replayPath)
+	plan, outputDir, err := c.admitRoomRun(roomhost.Paths{
+		Config: configPath, Manifest: manifestPath, Replay: replayPath, ConfigDir: roomConfigDir(roomRunGlobalFlags(c)),
+	}, outputDir, cmd.Flags().Changed("out"))
 	if err != nil {
 		return err
 	}
-	roomManifest := plans.manifest
-
-	outputExplicit := cmd.Flags().Changed("out")
-	outputDir, err = c.resolveRoomOutput(plans, outputDir, outputExplicit)
-	if err != nil {
-		return err
-	}
+	roomManifest := plan.Manifest
 
 	outputLabel := outputDir
 	if outputLabel == "" {
@@ -217,8 +221,6 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	if err := output.err(); err != nil {
 		return err
 	}
-	readyParticipants := 0
-
 	participantIDs := make([]string, 0, len(roomManifest.Participants))
 	for _, participant := range roomManifest.Participants {
 		participantIDs = append(participantIDs, participant.ID)
@@ -266,37 +268,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	}
 	defer stopSignals()
 
-	options := runtimeRooms.RoomRunOptions{
-		Manifest:   roomManifest,
-		ReplayPath: plans.replayPath,
-		OutputDir:  outputDir,
-		ConfigDir:  roomConfigDir(roomRunGlobalFlags(c)),
-		WorkDir:    globalWorkDir(roomRunGlobalFlags(c)),
-		AllowPaths: globalAllowPaths(roomRunGlobalFlags(c)),
-		ReplayPlan: nil,
-		LaunchPlan: nil,
-		EventSink:  events.NewLiveSink(broker),
-		OnDiagnostic: func(participantID string, record runtimeRooms.RoomDiagnosticRecord) {
-			writeRoomDiagnosticProgress(output, participantID, record)
-		},
-		OnParticipantReady: func(ready runtimeRooms.RoomParticipantReady) {
-			output.printf("participant %q ready: kind=%s input=%s output=%s provider=%s model=%s\n", ready.ParticipantID, ready.Kind, ready.InputDevice, ready.OutputDevice, ready.Provider, ready.Model)
-			readyParticipants++
-			if readyParticipants == len(roomManifest.Participants) {
-				output.printf("room running: participants=%d\n", len(roomManifest.Participants))
-			}
-		},
-		OnParticipantTerminated: func(result runtimeRooms.RoomParticipantResult) {
-			output.printf("participant %q: %s turns=%d connected=%t\n", result.ParticipantID, result.TerminationReason, result.TurnsCompleted, result.Connected)
-		},
-	}
-	if plans.replayMode {
-		options.ReplayPlan = &plans.replayPlan
-		options.ConfigDir = ""
-	} else {
-		options.LaunchPlan = &plans.launchPlan
-		options.BrowserCapabilitiesFactory = NewRoomParticipantBrowserCapabilitiesFactory(roomConfigDir(roomRunGlobalFlags(c)))
-	}
+	options := c.roomRunOptions(plan, outputDir, output, broker)
 
 	var result runtimeRooms.RoomResult
 	var runErr error
@@ -304,9 +276,6 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		runErr = errors.New("room run service is not configured")
 	} else {
 		result, runErr = c.run(runContext, io.Discard, options)
-	}
-	if runErr == nil {
-		runErr = roomAllParticipantsFailedError(result)
 	}
 
 	var streamErr error
@@ -318,57 +287,52 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	return errors.Join(runErr, streamErr, output.err())
 }
 
-// roomAllParticipantsFailedError reports a non-nil error when a room run
-// reports success (runErr == nil) but every participant actually failed.
-// #321 fault isolation is untouched: it lives entirely inside rooms.RunRoom
-// and keeps one participant's failure from taking down a surviving peer. This
-// check runs only after that result comes back, purely to fix the exit code:
-// it fires exclusively when there is no surviving peer at all, so a genuine
-// partial failure (or full success) still exits 0 exactly as before.
-func roomAllParticipantsFailedError(result runtimeRooms.RoomResult) error {
-	if len(result.Participants) == 0 {
-		return nil
+// admitRoomRun resolves the service's run plan and evidence destination for
+// one invocation. Output validation errors name the --out flag.
+func (c *RoomRunCommand) admitRoomRun(paths roomhost.Paths, requested string, explicit bool) (runtimeRooms.RoomRunPlan, string, error) {
+	plan, err := c.service.ResolveRunPlan(roomhost.RunPlanOptions(paths, c.registry))
+	if err != nil {
+		return runtimeRooms.RoomRunPlan{}, "", err
 	}
-	ids := make([]string, 0, len(result.Participants))
-	for id, participant := range result.Participants {
-		if participant.TerminationReason != runtimeRooms.ParticipantTerminationError {
-			return nil
-		}
-		ids = append(ids, id)
+	outputDir, err := c.service.ResolveRunOutput(plan, requested, explicit)
+	if err != nil {
+		return runtimeRooms.RoomRunPlan{}, "", err
 	}
-	sort.Strings(ids)
-	details := make([]string, 0, len(ids))
-	for _, id := range ids {
-		details = append(details, fmt.Sprintf("%s: %s", id, result.Participants[id].Error))
+	if err := c.service.ValidateRunOutput(plan, outputDir); err != nil {
+		return runtimeRooms.RoomRunPlan{}, "", fmt.Errorf("validate --out %q: %w", outputDir, err)
 	}
-	return fmt.Errorf("room run: all %d participant(s) failed (%s)", len(ids), strings.Join(details, "; "))
+	return plan, outputDir, nil
 }
 
-func resolveRoomReplayCommandOutputDir(requested string) string {
-	requested = strings.TrimSpace(requested)
-	if requested == "" {
-		return DefaultRoomOutputDir
+// roomRunOptions binds the command's progress output and host capabilities
+// to the admitted plan. Replays never receive host config or browsers.
+func (c *RoomRunCommand) roomRunOptions(plan runtimeRooms.RoomRunPlan, outputDir string, output *roomCommandOutput, broker *events.Broker) runtimeRooms.RoomRunOptions {
+	participants := len(plan.Manifest.Participants)
+	readyParticipants := 0
+	options := roomhost.RunOptions(plan)
+	options.OutputDir = outputDir
+	options.WorkDir = globalWorkDir(roomRunGlobalFlags(c))
+	options.AllowPaths = globalAllowPaths(roomRunGlobalFlags(c))
+	options.EventSink = events.NewLiveSink(broker)
+	options.OnDiagnostic = func(participantID string, record runtimeRooms.RoomDiagnosticRecord) {
+		writeRoomDiagnosticProgress(output, participantID, record)
 	}
-	return requested
-}
-
-func resolveRoomCommandOutputDir(service runtimeRooms.Service, plan runtimeRooms.RoomLaunchPlan, requested string, explicit bool) (string, error) {
-	if !plan.Manifest.Room.RecordingEnabled() {
-		return "", nil
-	}
-	if !explicit {
-		if destination := plan.Manifest.Room.RecordingDirectory(); destination != "" {
-			return destination, nil
+	options.OnParticipantReady = func(ready runtimeRooms.RoomParticipantReady) {
+		output.printf("participant %q ready: kind=%s input=%s output=%s provider=%s model=%s\n", ready.ParticipantID, ready.Kind, ready.InputDevice, ready.OutputDevice, ready.Provider, ready.Model)
+		readyParticipants++
+		if readyParticipants == participants {
+			output.printf("room running: participants=%d\n", participants)
 		}
-		if plan.Mode == runtimeRooms.RoomLaunchModeBare {
-			return service.CreateFreshRunDirectory(plan.ConfigDir)
-		}
 	}
-	requested = strings.TrimSpace(requested)
-	if requested == "" {
-		requested = DefaultRoomOutputDir
+	options.OnParticipantTerminated = func(result runtimeRooms.RoomParticipantResult) {
+		output.printf("participant %q: %s turns=%d connected=%t\n", result.ParticipantID, result.TerminationReason, result.TurnsCompleted, result.Connected)
 	}
-	return requested, nil
+	if !plan.Replay() {
+		configDir := roomConfigDir(roomRunGlobalFlags(c))
+		options.ConfigDir, options.ConfigCredential = configDir, roomhost.ConfigCredential(configDir)
+		options.BrowserCapabilitiesFactory = newRoomParticipantBrowserCapabilitiesFactory(configDir)
+	}
+	return options
 }
 
 func defaultRoomSignalContext(parent context.Context) (context.Context, func()) {
@@ -524,4 +488,40 @@ func (s *roomEventServer) shutdown(broker *events.Broker) error {
 	}
 	serveErr := <-s.done
 	return errors.Join(shutdownErr, serveErr)
+}
+
+// newRoomParticipantBrowserCapabilitiesFactory composes one independent
+// browser owner per room participant. The session browser composition stays
+// the single source for broker tools, initialization, and cleanup; each
+// participant gets a fresh in-memory selection store. Room admission and
+// scoping of the resulting capability belong to the rooms service.
+func newRoomParticipantBrowserCapabilitiesFactory(configDir string) runtimeRooms.BrowserCapabilitiesFactory {
+	browserFactory := NewSessionToolCapabilitiesFactory(roomBrowserOnlyStaticExecutor{}, func(browser config.BrowserConfig) (webmcp.Broker, error) {
+		doctorFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionSelectionStore(discovery.NewMemorySelectionStore()))
+		return newSessionBrowserBrokerWithDoctorFactory(browser, doctorFactory)
+	})
+	return func(participant runtimeRooms.Participant) (runtimeRooms.BrowserCapabilities, error) {
+		if participant.BrowserTools == nil {
+			return runtimeRooms.BrowserCapabilities{}, errors.New("room browser capability requested for a participant without browserTools")
+		}
+		capabilities, err := browserFactory(&config.Config{Browser: config.BrowserConfigForRoomTools(*participant.BrowserTools), ConfigDir: configDir})
+		if err != nil {
+			return runtimeRooms.BrowserCapabilities{}, err
+		}
+		return runtimeRooms.BrowserCapabilities{
+			Executor: capabilities.Executor, Definitions: capabilities.Definitions,
+			ToolDefinitionBase:     append([]messages.ToolDefinition(nil), capabilities.Definitions...),
+			RefreshToolDefinitions: capabilities.RefreshDefinitionsWithError,
+			BrowserWatch:           roomhost.BrowserWatch(capabilities.BrowserEventWatch, capabilities.BrowserWatch),
+			Initialize:             capabilities.Initialize, Close: capabilities.Close,
+		}, nil
+	}
+}
+
+// roomBrowserOnlyStaticExecutor is the empty static surface handed to the
+// session capability factory so it composes only the browser tools.
+type roomBrowserOnlyStaticExecutor struct{}
+
+func (roomBrowserOnlyStaticExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name}, errors.New("room browser-only static executor has no tools")
 }
