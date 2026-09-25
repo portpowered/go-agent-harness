@@ -479,7 +479,7 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t
 	rootCmd.SetErr(testWriter.Stderr())
 	rootCmd.SetArgs([]string{
 		"session",
-		"--replay", capturePath,
+		"--replay", capturePath, "--audio-in-pacing", "unpaced",
 		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
 		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
 	})
@@ -513,7 +513,7 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithM
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetArgs([]string{
 		"session",
-		"--replay", capturePath,
+		"--replay", capturePath, "--audio-in-pacing", "unpaced",
 		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
 		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
 	})

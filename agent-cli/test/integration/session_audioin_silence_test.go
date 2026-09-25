@@ -182,9 +182,11 @@ func runSessionAudioIn(t *testing.T, wavPath, wirePath, audioOutPath string) (st
 	stdout := &testStdoutBuffer{}
 	cmd.SetOut(stdout)
 	cmd.SetErr(io.Discard)
+	// 20x pacing: the replay asserts which frames and boundaries are sent, not
+	// their arrival cadence (unpaced overruns the input queue on long clips).
 	args := []string{
 		"--replay", wirePath,
-		"--audio-in", wavPath,
+		"--audio-in", wavPath, "--audio-in-pacing", "20x",
 		"--max-duration", audioInSilenceMaxDuration,
 	}
 	if audioOutPath != "" {
@@ -299,10 +301,7 @@ func TestSessionAudioInNoiseFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 // commit-requiring fixture must produce at least one real commit whose turn
 // completes, proving the zero-commit assertions discriminate speech.
 func TestSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
-	// A 0.6s voiced slice of the 8.3s utterance is enough to prove a real
-	// commit; the full-length real-time audio-in session is
-	// TestS2SV2BAudioInLongCLIStaysOneTurn.
-	wavPath := writeVoicedWAVSlice(t, locateCorpusWAV(t, "utt_short_16k"), 2*shortVoicedSlice)
+	wavPath := locateCorpusWAV(t, "utt_short_16k")
 	samples := loadCorpusHarnessSamples(t, wavPath)
 	wirePath := buildSpeechCommitFixture(t, samples)
 	recordedReplyPath := filepath.Join(t.TempDir(), "response.wav")

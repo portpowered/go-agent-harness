@@ -419,7 +419,7 @@ func TestSessionCommand_LiveScheduledAudioSplitsLargeTurnAtProviderBudget(t *tes
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
-	rootCmd.SetArgs(scheduledBoundaryArgs(t.TempDir(), recordDir, inputPath))
+	rootCmd.SetArgs(append(scheduledBoundaryArgs(t.TempDir(), recordDir, inputPath), "--audio-in-pacing", "unpaced"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
