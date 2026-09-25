@@ -62,7 +62,11 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	defer func() { _ = broker.Close() }()
 	targetSession.BlockInvocations()
 
-	ledger := &sessionAudioInterruptEventLedger{}
+	// The ledger owns its own broker subscription for the whole run. It used
+	// to observe through the session's BrowserWatch, whose context ends at
+	// session close, so a terminal published just before close could be
+	// missed ("dispatched ... invocation had no terminal broker event").
+	ledger := newSessionAudioInterruptEventLedger(broker)
 	toolSet := webmcpTools.NewBrokerToolSet(broker)
 	executor := &sessionAudioInterruptRecordingExecutor{inner: toolSet.Executor()}
 	wire := newSessionAudioInterruptWire(scenario, refs)
@@ -98,9 +102,7 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 		return SessionToolCapabilities{
 			Executor:    executor,
 			Definitions: toolSet.Definitions(),
-			BrowserWatch: func(ctx context.Context) <-chan webmcp.BrokerEvent {
-				return ledger.watch(ctx, broker)
-			},
+			BrowserWatch: broker.Watch,
 			Close: broker.Close,
 		}, nil
 	}
@@ -131,7 +133,12 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 		t.Fatalf("scripted provider protocol: %v\nclient writes: %s\nprovider events: %v", err, wire.writeSummary(), wire.eventsSnapshot())
 	}
 
-	assertSessionAudioInterruptScenario(t, scenario, wire.writesSnapshot(), ledger.eventsSnapshot())
+	// Closing the broker ends the ledger's subscription after every event
+	// published so far; the ledger drains its buffer before reporting done.
+	if err := broker.Close(); err != nil {
+		t.Fatalf("close broker: %v", err)
+	}
+	assertSessionAudioInterruptScenario(t, scenario, wire.writesSnapshot(), ledger.completeEvents(t))
 }
 
 func sessionAudioInterruptArgs(scenario sessionAudioInterruptScenario, scheduledPath, interruptPath string) []string {
@@ -339,37 +346,36 @@ func (e *sessionAudioInterruptRecordingExecutor) callsSnapshot() []messages.Tool
 type sessionAudioInterruptEventLedger struct {
 	mu     sync.Mutex
 	events []sessionAudioInterruptEventObservation
+	done   chan struct{}
 }
 
-func (l *sessionAudioInterruptEventLedger) watch(ctx context.Context, broker webmcp.Broker) <-chan webmcp.BrokerEvent {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	source := broker.Watch(ctx)
-	out := make(chan webmcp.BrokerEvent, 64)
+// newSessionAudioInterruptEventLedger records every broker event until the
+// broker closes. Its subscription is independent of any session context.
+func newSessionAudioInterruptEventLedger(broker webmcp.Broker) *sessionAudioInterruptEventLedger {
+	ledger := &sessionAudioInterruptEventLedger{done: make(chan struct{})}
+	source := broker.Watch(context.Background())
 	go func() {
-		defer close(out)
-		for {
-			select {
-			case event, ok := <-source:
-				if !ok {
-					return
-				}
-				// The broker timestamps the transition under lock before publishing.
-				l.mu.Lock()
-				l.events = append(l.events, sessionAudioInterruptEventObservation{event: event, at: event.At})
-				l.mu.Unlock()
-				select {
-				case out <- event:
-				case <-ctx.Done():
-					return
-				}
-			case <-ctx.Done():
-				return
-			}
+		defer close(ledger.done)
+		for event := range source {
+			// The broker timestamps the transition under lock before publishing.
+			ledger.mu.Lock()
+			ledger.events = append(ledger.events, sessionAudioInterruptEventObservation{event: event, at: event.At})
+			ledger.mu.Unlock()
 		}
 	}()
-	return out
+	return ledger
+}
+
+// completeEvents waits until the broker closed the ledger's subscription and
+// returns every recorded event. The bound only converts a hang into a failure.
+func (l *sessionAudioInterruptEventLedger) completeEvents(t *testing.T) []sessionAudioInterruptEventObservation {
+	t.Helper()
+	select {
+	case <-l.done:
+	case <-time.After(30 * time.Second):
+		t.Fatalf("broker event ledger did not finish after broker close; events=%#v", l.eventsSnapshot())
+	}
+	return l.eventsSnapshot()
 }
 
 func (l *sessionAudioInterruptEventLedger) eventsSnapshot() []sessionAudioInterruptEventObservation {
