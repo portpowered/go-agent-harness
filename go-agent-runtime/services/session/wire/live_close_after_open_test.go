@@ -122,7 +122,7 @@ func TestFinitePromptSessionClosesOnlyAfterAcceptedRichResultAndContinuation(t *
 	awaitSignal(t, provider.accepted, "provider acceptance of the rich tool result")
 	assertStillOpen(t, done, "after result acceptance but before its continuation")
 
-	writeProvider(t, provider.recordingLiveSession, assistantResponse("response-continuation", "", "final grounded continuation")...)
+	writeProvider(t, provider.recordingLiveSession, assistantResponse("response-continuation", "final grounded continuation")...)
 	select {
 	case err := <-done:
 		if err != nil {

@@ -272,25 +272,3 @@ func cloneSessionFinalAccounting(accounting *SessionFinalAccounting) *SessionFin
 	}
 	return &clone
 }
-
-// Tool evidence is emitted at executor entry/result, independently of provider
-// request arrival. This preserves the actual timeout and execution interval.
-func (r *sessionRuntimeObservationRecorder) observeToolCall(call messages.ToolCall) {
-	if r == nil {
-		return
-	}
-	payload, err := json.Marshal(call)
-	r.observe(runtimeObservationKindToolCall, payload, 0, err == nil, err)
-}
-func (r *sessionRuntimeObservationRecorder) observeToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
-	if r == nil {
-		return
-	}
-	payload, err := json.Marshal(struct {
-		CallID   string                    `json:"call_id"`
-		Name     string                    `json:"name"`
-		Response messages.ToolCallResponse `json:"response"`
-		Failed   bool                      `json:"failed"`
-	}{call.ID, call.Name, response, failed})
-	r.observe(runtimeObservationKindToolResult, payload, 0, !failed && err == nil, err)
-}

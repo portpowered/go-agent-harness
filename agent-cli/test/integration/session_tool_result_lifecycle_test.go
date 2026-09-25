@@ -178,18 +178,17 @@ func (s *interactiveTimeoutSession) emitToolCalls() {
 	s.write(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 }
 
-// emitAcknowledgement answers an acknowledgement request with a response of
-// the same purpose, as the realtime provider adapter tags it.
+// emitAcknowledgement answers an acknowledgement request with an untagged
+// response; the session loop attributes it to the outstanding request.
 func (s *interactiveTimeoutSession) emitAcknowledgement(ctx context.Context) {
 	s.mu.Lock()
 	s.acks++
 	s.ackElapsed = time.Since(s.started)
 	s.mu.Unlock()
-	purpose := messages.ResponsePurposeToolAcknowledgement
 	for _, msg := range []messages.StreamMessage{
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewTextDeltaValue(interactiveAckText)},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-ack", ResponsePurpose: purpose, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-ack", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-ack", Value: messages.NewTextDeltaValue(interactiveAckText)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-ack", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
 		s.recv.Write(ctx, msg)
 	}

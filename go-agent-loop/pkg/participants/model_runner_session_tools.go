@@ -325,6 +325,46 @@ func (r *ModelRunner) noteDeferredSessionFailure(state *sessionRunState, evt, fa
 	}
 }
 
+// holdForAcknowledgement applies acknowledgement ordering and reports whether
+// it consumed evt. A progress acknowledgement is dropped while a response is
+// active or requested (the provider rejects a second response request, and
+// the acknowledgement is only useful while nothing is speaking); an ordinary
+// continuation waits until an outstanding acknowledgement has ended.
+func holdForAcknowledgement(state *sessionRunState, evt messages.StreamMessage) bool {
+	if evt.Type != messages.StreamTypeResponseCreate {
+		return false
+	}
+	if isToolAcknowledgementResponseCreate(evt) {
+		return state.responseInFlight || state.awaitingContinuation || state.acknowledgementOutstanding
+	}
+	if state.acknowledgementOutstanding {
+		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
+		return true
+	}
+	return false
+}
+
+// tagSessionAcknowledgement marks the provider output that belongs to an
+// outstanding acknowledgement request. Ordinary response requests are held
+// while an acknowledgement is outstanding, so an active-response rejection in
+// that window rejects the acknowledgement: releasing it lets a concurrently
+// active ordinary response keep its ordinary accounting.
+func tagSessionAcknowledgement(state *sessionRunState, msg *messages.StreamMessage) bool {
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		state.acknowledgementOutstanding = true
+	}
+	if value, ok := msg.Value.(*messages.ErrorValue); ok && value.IsNonTerminal() &&
+		value.Classification == messages.ErrorClassificationResponseCreateActive &&
+		state.acknowledgementOutstanding {
+		state.acknowledgementOutstanding = false
+		state.acknowledgementCancelled = false
+	}
+	if state.acknowledgementOutstanding && isSessionResponseStreamType(msg.Type) {
+		msg.ResponsePurpose = messages.ResponsePurposeToolAcknowledgement
+	}
+	return state.acknowledgementOutstanding
+}
+
 func isToolAcknowledgementResponseCreate(msg messages.StreamMessage) bool {
 	if msg.Type != messages.StreamTypeResponseCreate {
 		return false

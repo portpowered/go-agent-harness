@@ -186,11 +186,11 @@ func writeProvider(t *testing.T, provider *recordingLiveSession, stream ...messa
 	}
 }
 
-func assistantResponse(responseID string, purpose messages.ResponsePurpose, text string) []messages.StreamMessage {
+func assistantResponse(responseID, text string) []messages.StreamMessage {
 	return []messages.StreamMessage{
-		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, ResponsePurpose: purpose, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: responseID, ResponsePurpose: purpose, Value: messages.NewTextDeltaValue(text)},
-		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, ResponsePurpose: purpose, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTextDeltaValue(text)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}
 }
 
@@ -299,7 +299,7 @@ func (run *acknowledgementRun) awaitContinuationRequest(t *testing.T) {
 // clean finite finish.
 func (run *acknowledgementRun) completeContinuation(t *testing.T) {
 	t.Helper()
-	writeProvider(t, run.provider, assistantResponse("response-final", "", "all done")...)
+	writeProvider(t, run.provider, assistantResponse("response-final", "all done")...)
 	select {
 	case err := <-run.done:
 		if err != nil {
@@ -329,9 +329,11 @@ func (run *acknowledgementRun) awaitAcknowledgementRequest(t *testing.T) {
 	})
 }
 
+// speakAcknowledgement answers the acknowledgement request with an untagged
+// provider response; the loop attributes it to the outstanding request.
 func (run *acknowledgementRun) speakAcknowledgement(t *testing.T) {
 	t.Helper()
-	writeProvider(t, run.provider, assistantResponse("response-ack", messages.ResponsePurposeToolAcknowledgement, "one moment")...)
+	writeProvider(t, run.provider, assistantResponse("response-ack", "one moment")...)
 }
 
 func TestLongRunningToolRequestsOneSpokenAcknowledgementAtThreshold(t *testing.T) {
