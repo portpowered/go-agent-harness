@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/stretchr/testify/require"
+	"sync"
 	"testing"
 	"time"
 )
@@ -111,13 +113,9 @@ func assertEmptyResponseEvents(t testing.TB, events []session.LiveEvent) {
 func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 	provider := newTestSession()
 	frameSeen := make(chan struct{})
-	frameOnce := frameSeen
+	var frameOnce sync.Once
 	media := sharedaudio.NewSessionMediaAtRate(func(context.Context, sharedaudio.PCMFrame) error {
-		select {
-		case <-frameOnce:
-		default:
-			close(frameOnce)
-		}
+		frameOnce.Do(func() { close(frameSeen) })
 		return nil
 	}, 24000)
 	service := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
@@ -594,4 +592,9 @@ func TestMediaRequirementsRespectCapturePlaybackDirections(t *testing.T) {
 	if !(mediaRequirements{outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) || !(mediaRequirements{inbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Inbound: media.Endpoints().Inbound}) || (mediaRequirements{inbound: true, outbound: true}).satisfiedBy(sharedaudio.MediaEndpoints{Outbound: media.Endpoints().Outbound}) {
 		t.Fatal("direction-aware media admission mismatch")
 	}
+}
+func TestStoppedSessionInputReportsCleanLiveClose(t *testing.T) {
+	err := liveInputError(fmt.Errorf("admit ordered audio input: %w", participants.ErrSessionClosed))
+	require.ErrorIs(t, err, session.ErrLiveClosed)
+	require.True(t, isExpectedMediaPumpError(fmt.Errorf("capture boundary control %q: %w", session.LiveControlAudioCommit, err)))
 }
