@@ -6,7 +6,7 @@ enforces, each once, in three fail-fast stages:
 | Stage | Phases (run concurrently, at most `PREPUSH_JOBS`) |
 | --- | --- |
 | format | `fmt` |
-| static | `lint`, `verify-architecture`, `staticcheck`, `vet`, `build`, `coverage-registration`, `check-ci-test-partition`, and `test-factory-scripts` when `factory/` or the `Makefile` changed (always in the full scope) |
+| static | `lint` (its golangci config enables govet and staticcheck, so `make vet` and `make staticcheck` stay manual-only), `verify-architecture`, `build`, `coverage-registration`, `check-ci-test-partition`, and `test-factory-scripts` when `factory/` or the `Makefile` changed (always in the full scope) |
 | tests | `coverage COVERAGE_SCOPE=<scope>`, `test-cgo-delta`, `test-tools` (it runs a real golangci-lint, whose machine-wide lock must not overlap `lint`) |
 
 A failed stage stops the gate; the phases already running in that stage finish

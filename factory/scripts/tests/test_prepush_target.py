@@ -14,8 +14,6 @@ FORMAT_STAGE = ("fmt",)
 STATIC_STAGE = (
     "lint",
     "verify-architecture",
-    "staticcheck",
-    "vet",
     "build",
     "coverage-registration",
     "check-ci-test-partition",
@@ -127,22 +125,22 @@ class PrepushTargetTests(unittest.TestCase):
                 log_path,
                 env={
                     "PREPUSH_JOBS": "1",
-                    "PREPUSH_FAIL_PHASE": "staticcheck",
+                    "PREPUSH_FAIL_PHASE": "build",
                     "PREPUSH_FAIL_STATUS": "23",
                 },
             )
             phase_log = log_path.read_text(encoding="utf-8").splitlines()
 
             self.assertNotEqual(result.returncode, 0, result.output)
-            self.assertEqual(phase_log, list(PHASES[: PHASES.index("staticcheck") + 1]))
-            self.assertIn("==> prepush failed at phase staticcheck", result.output)
+            self.assertEqual(phase_log, list(PHASES[: PHASES.index("build") + 1]))
+            self.assertIn("==> prepush failed at phase build", result.output)
             self.assertIn("exit 23", result.output)
             self.assertRegex(
                 result.output,
-                r"==> prepush phase staticcheck completed in \d+s",
+                r"==> prepush phase build completed in \d+s",
             )
             self.assertRegex(result.output, r"==> prepush total completed in \d+s")
-            self.assertNotIn("==> prepush phase: build", result.output)
+            self.assertNotIn("==> prepush phase: coverage-registration", result.output)
 
     def test_concurrent_static_failure_blocks_the_test_stage(self):
         with tempfile.TemporaryDirectory() as temp_dir:
