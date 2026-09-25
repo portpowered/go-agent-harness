@@ -30,10 +30,11 @@ outputs:
 runs:
   using: composite
   steps:
-    # Linux and Windows images do not ship this Go release, and setup-go's
-    # download plus extraction took 11-17s per job. macOS images ship it.
+    # Linux images do not ship this Go release, and setup-go's download plus
+    # extraction took ~11s per job. macOS images ship it. Windows is left to
+    # setup-go: its tool cache entry is a symlink that a restored copy breaks.
     - name: Cache Go toolchain
-      if: runner.os != 'macOS'
+      if: runner.os == 'Linux'
       uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
       with:
         path: ${{ runner.tool_cache }}/go/1.26.7
