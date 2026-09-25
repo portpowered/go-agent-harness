@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +12,7 @@ import (
 	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/sessionbroker"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
@@ -26,47 +25,8 @@ import (
 )
 
 // SessionToolCapabilities is the config-scoped tool surface used by a
-// composed session command. Executor and Definitions are derived from the
-// same loaded config snapshot so the session cannot advertise a tool that its
-// executor does not expose.
-type SessionToolCapabilities struct {
-	Executor    messages.ToolExecutor
-	Definitions []messages.ToolDefinition
-	// BrowserCapabilityState is the session-owned browser state used to
-	// compose model-facing grounding. It is independent from whether the
-	// current definition snapshot happens to contain first-class page tools.
-	BrowserCapabilityState webmcp.BrowserCapabilityState
-	// DisplayCapability is the immutable host-surface admission result used
-	// to derive both display-dependent definitions and executor routes.
-	DisplayCapability SessionDisplayCapability
-	// RefreshDefinitions returns the final definition list after Initialize
-	// has run: the composed static and stable broker definitions plus any
-	// first-class page tools read from the connected browser catalog. Nil
-	// means Definitions is already final.
-	RefreshDefinitions func(context.Context) []messages.ToolDefinition
-	// RefreshDefinitionsWithError is the error-preserving form used by the
-	// live session publisher. A catalog read failure must not be collapsed into
-	// an empty page surface and treated as a successful provider update.
-	RefreshDefinitionsWithError func(context.Context) ([]messages.ToolDefinition, error)
-	// Initialize is called synchronously after capability construction and
-	// before the session provider can issue a browser tool call. An initialization
-	// error prevents provider startup, because advertising browser tools without
-	// a usable browser leaves the model in an unrecoverable session.
-	Initialize func(context.Context) error
-	// Status reports the explicit lifecycle state of an optional capability.
-	Status func() SessionCapabilityStatus
-	// BrowserWatch exposes the already-owned broker observation stream to an
-	// opt-in live session input boundary. It is nil for non-browser capability
-	// sets; callers must use the returned context to stop the watch.
-	BrowserWatch func(context.Context) <-chan webmcp.BrokerEvent
-	// BrowserEventWatch exposes the richer adapter-owned semantic browser event
-	// stream to the opt-in recording observer. It is independent from
-	// BrowserWatch and never participates in tool execution or continuation.
-	BrowserEventWatch func(context.Context) <-chan webmcp.BrowserEvent
-	// Close transfers ownership of any capability resources to the session
-	// coordinator. Nil means this capability has no closeable resources.
-	Close func() error
-}
+// composed session command; see sessionbroker.ToolCapabilities.
+type SessionToolCapabilities = sessionbroker.ToolCapabilities
 
 func sessionToolDiagnosticSink(out io.Writer) serviceSession.SessionToolDiagnosticSink {
 	return serviceSession.SessionToolDiagnosticFunc(func(diagnostic serviceSession.SessionToolDiagnostic) {
@@ -105,36 +65,25 @@ func sessionAudioDiagnosticSink(out io.Writer) serviceSession.SessionDiagnosticS
 }
 
 // SessionCapabilityState is the lifecycle state of a request-scoped session
-// capability. Browser capabilities begin initializing, then become ready or
-// retain a classified failure for every subsequent tool call.
-type SessionCapabilityState string
+// capability; see sessionbroker.State.
+type SessionCapabilityState = sessionbroker.State
 
 const (
-	SessionCapabilityInitializing SessionCapabilityState = "initializing"
-	SessionCapabilityReady        SessionCapabilityState = "ready"
-	SessionCapabilityFailed       SessionCapabilityState = "failed"
+	SessionCapabilityInitializing = sessionbroker.StateInitializing
+	SessionCapabilityReady        = sessionbroker.StateReady
+	SessionCapabilityFailed       = sessionbroker.StateFailed
 )
 
 // SessionCapabilityStatus is a read-only snapshot of capability setup.
-type SessionCapabilityStatus struct {
-	State                  SessionCapabilityState
-	Err                    error
-	BrowserCapabilityState webmcp.BrowserCapabilityState
-}
+type SessionCapabilityStatus = sessionbroker.Status
 
 // SessionCapabilityInitializer is the optional lifecycle seam exposed by a
-// browser-backed capability set. It is deliberately separate from the frozen
-// messages.ToolExecutor interface.
-type SessionCapabilityInitializer interface {
-	InitializeSession(context.Context) error
-	SessionCapabilityStatus() SessionCapabilityStatus
-}
+// browser-backed capability set.
+type SessionCapabilityInitializer = sessionbroker.Initializer
 
 // SessionToolCapabilitiesFactory builds the session tool surface from the
-// config selected by --config-dir. It is optional so direct command
-// constructors and callers that intentionally inject a no-tools session keep
-// their existing behavior.
-type SessionToolCapabilitiesFactory func(*config.Config) (SessionToolCapabilities, error)
+// config selected by --config-dir; see sessionbroker.ToolCapabilitiesFactory.
+type SessionToolCapabilitiesFactory = sessionbroker.ToolCapabilitiesFactory
 
 const (
 	// SessionTransportWebSocket is the default session transport. Keeping the

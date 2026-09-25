@@ -4,7 +4,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
 
 // The doctor diagnosis lives in internal/webmcp/doctor and the direct-command
@@ -48,22 +47,8 @@ type (
 	WebMCPDoctorError     = doctor.Error
 )
 
-// The forwarders below keep the session and probe callers, which are outside
-// this slice, on their existing names. Each delegates to the single
-// implementation in the feature package.
-
+// closeWebMCPDoctorRuntime keeps the probe caller on its existing name; it
+// delegates to the single implementation in the feature package.
 func closeWebMCPDoctorRuntime(runtime WebMCPDoctorRuntime) error {
 	return direct.CloseRuntime(runtime)
-}
-
-func webmcpRuntimeUnavailableError(phase string) error {
-	return direct.RuntimeUnavailableError(phase)
-}
-
-func splitCompositeTargetRef(value string) (string, string, bool) {
-	return normalize.SplitCompositeTargetRef(value)
-}
-
-func normalizeDirectOpaqueID(value string) string {
-	return direct.NormalizeOpaqueID(value)
 }
