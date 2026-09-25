@@ -265,3 +265,28 @@ func TestSessionModelRunner_InferenceRequestAfterSessionCloseSendsNothing(t *tes
 		})
 	}
 }
+
+func audioDeltaContent(t *testing.T, value any) []byte {
+	t.Helper()
+	delta, ok := value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("value = %T, want *messages.AudioDeltaValue", value)
+	}
+	return delta.Content
+}
+
+func toolCallEndValue(t *testing.T, value any) *messages.ToolCallEndValue {
+	t.Helper()
+	end, ok := value.(*messages.ToolCallEndValue)
+	if !ok {
+		t.Fatalf("value = %T, want *messages.ToolCallEndValue", value)
+	}
+	return end
+}
+
+func closeSessionForTest(t *testing.T, session interface{ Close() error }) {
+	t.Helper()
+	if err := session.Close(); err != nil {
+		t.Fatalf("session Close() error = %v", err)
+	}
+}

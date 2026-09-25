@@ -38,7 +38,9 @@ func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	if h == 0 {
 		t.Skipf("%s: unavailable capability: desktop device context (%v)", runtime.GOOS, err)
 	}
-	user32dll.NewProc("ReleaseDC").Call(0, h)
+	if released, _, releaseErr := user32dll.NewProc("ReleaseDC").Call(0, h); released == 0 {
+		t.Logf("ReleaseDC did not release the desktop device context: %v", releaseErr)
+	}
 	bounds := screenDisplayBounds(0)
 	if bounds.Dx() < 64 || bounds.Dy() < 64 {
 		t.Skipf("%s: unavailable capability: usable display bounds (%v)", runtime.GOOS, bounds)

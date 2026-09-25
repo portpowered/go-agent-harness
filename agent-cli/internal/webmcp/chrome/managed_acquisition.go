@@ -402,7 +402,7 @@ func checkChromeExecutable(path string) error {
 // supplied platform. It does not inspect running processes or user profiles.
 func DefaultStockChromePaths(goos, goarch string) []string {
 	var paths []string
-	home, homeErr := os.UserHomeDir()
+	home, homeErr := os.UserHomeDir() //nolint:forbidigo // Stock Chrome discovery is the host-directory boundary for acquisition defaults.
 	joinHome := func(parts ...string) {
 		if homeErr == nil && home != "" {
 			paths = append(paths, filepath.Join(append([]string{home}, parts...)...))

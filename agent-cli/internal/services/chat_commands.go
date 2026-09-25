@@ -72,7 +72,7 @@ type ChatCommand struct {
 // It is built on first use by registeredChatCommands because the help handler
 // renders from this registry, which would otherwise form an initialization
 // cycle.
-var chatCommands chatCommandRegistry
+var chatCommands chatCommandRegistry //nolint:gochecknoglobals // Pre-existing built-in command registry; it is now built on first use instead of in init().
 
 type chatCommandRegistry struct {
 	once     sync.Once

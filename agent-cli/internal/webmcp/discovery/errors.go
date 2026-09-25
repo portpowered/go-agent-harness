@@ -11,6 +11,8 @@ const (
 	maxAmbiguityCandidates = 32
 	maxAmbiguityTitle      = 160
 	maxAmbiguityOrigin     = 256
+	// maxOriginFilterLabelBytes bounds the origin filter echoed in errors.
+	maxOriginFilterLabelBytes = 128
 )
 
 // Code is the stable classified discovery error vocabulary.
@@ -185,7 +187,7 @@ func newNoEligibleTab(browserID string, options TargetListOptions, candidateCoun
 		details["browser_id"] = boundedLabel(browserID, 64)
 	}
 	if options.OriginContains != "" {
-		filters["origin_contains"] = boundedLabel(options.OriginContains, 128)
+		filters["origin_contains"] = boundedLabel(options.OriginContains, maxOriginFilterLabelBytes)
 	}
 	return &DiscoveryError{
 		Code:      CodeNoEligibleTab,

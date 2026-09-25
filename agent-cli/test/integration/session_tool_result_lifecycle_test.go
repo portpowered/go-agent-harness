@@ -422,14 +422,12 @@ func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) fu
 // cancellations the client sent to the provider.
 func countSessionToolBargeInSent(session *sessionToolBargeInSession) (results, cancels int) {
 	for _, msg := range session.sentSnapshot() {
-		switch msg.Type {
-		case messages.StreamTypeToolCallEnd:
-			value, ok := msg.Value.(*messages.ToolCallEndValue)
-			if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
-				results++
-			}
-		case messages.StreamTypeResponseCancel:
+		if msg.Type == messages.StreamTypeResponseCancel {
 			cancels++
+		}
+		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil &&
+			msg.Type == messages.StreamTypeToolCallEnd && value.ToolCallID == sessionToolBargeInCallID {
+			results++
 		}
 	}
 	return results, cancels

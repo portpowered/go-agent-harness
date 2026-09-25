@@ -298,7 +298,7 @@ func verifyV8Terminal(run v8DuplexRun, name string, terminal v8TerminalFact) err
 		return fmt.Errorf("harness %s terminal tick %d timestamp=%s, want deterministic timestamp %s", name, terminal.FinalTick, terminal.FinalTimestamp.Format(time.RFC3339Nano), wantTerminalTime.Format(time.RFC3339Nano))
 	}
 	if (run.harnesses[name].Err == nil) != terminalObservation.Clean {
-		return fmt.Errorf("harness %s runtime clean=%t disagrees with CLI error=%v", name, terminalObservation.Clean, run.harnesses[name].Err)
+		return fmt.Errorf("harness %s runtime clean=%t disagrees with CLI error=%w", name, terminalObservation.Clean, run.harnesses[name].Err)
 	}
 	return nil
 }

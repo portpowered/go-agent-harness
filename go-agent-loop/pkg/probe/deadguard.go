@@ -231,7 +231,7 @@ func (r *ScenarioRegistry) Snapshot() []Scenario {
 	return scenarios
 }
 
-var liveScenarioRegistry = newBuiltinScenarioRegistry()
+var liveScenarioRegistry = newBuiltinScenarioRegistry() //nolint:gochecknoglobals // Pre-existing live registry seam; only its initializer changed when init() registration was removed.
 
 // LiveRegistry and DefaultScenarioRegistry are aliases to the package's
 // ordinary live registry seam. Guard construction captures the pointer, not

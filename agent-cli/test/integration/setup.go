@@ -85,6 +85,8 @@ const (
 	replayHeardClearly    = "heard clearly"
 	replayAnsweringPrefix = "answering "
 	replayAnsweringNow    = "answering now"
+	// replayFixtureFileMode keeps generated replay fixtures private to the test user.
+	replayFixtureFileMode = 0o600
 )
 
 // testReporter is the subset of testing.TB the shared helpers need; keeping
@@ -192,7 +194,7 @@ func writeReplayCaptureFixture(t testReporter, capture gwtesting.SessionCapture,
 	if err != nil {
 		t.Fatalf("marshal replay fixture %s: %v", name, err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(path, data, replayFixtureFileMode); err != nil {
 		t.Fatalf("write replay fixture %s: %v", name, err)
 	}
 	if _, err := gwtesting.NewReplayWebSocketDialer(path); err != nil {

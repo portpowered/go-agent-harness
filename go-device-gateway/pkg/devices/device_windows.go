@@ -3,6 +3,7 @@
 package devices
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"sort"
@@ -16,15 +17,14 @@ import (
 )
 
 const (
-	wasapiBackend = "wasapi"
-
+	wasapiBackend       = "wasapi"
+	wasapiPollInterval  = 25 * time.Millisecond // paces WASAPI packet and padding polls
 	coinitMultithreaded = 0
 	clsctxAll           = 0x17
 	deviceStateActive   = 0x1
 	roleConsole         = 0
 	shareModeShared     = 0
-
-	vtLPWSTR = 31
+	vtLPWSTR            = 31
 
 	hresultNotFound                           = 0x80070490
 	audclntDeviceInvalidated                  = 0x88890004
@@ -392,7 +392,7 @@ func (d *wasapiOpenedDevice) verifyCaptureDataPath() error {
 			return fmt.Errorf("read WASAPI capture packet size: %w", err)
 		}
 		if packets == 0 {
-			time.Sleep(25 * time.Millisecond)
+			time.Sleep(wasapiPollInterval)
 			continue
 		}
 		frames, err := d.consumeCapturePacket()
@@ -439,7 +439,7 @@ func (d *wasapiOpenedDevice) verifyRenderDataPath() error {
 			return err
 		}
 		if padding >= bufferSize {
-			time.Sleep(25 * time.Millisecond)
+			time.Sleep(wasapiPollInterval)
 			continue
 		}
 		frames := bufferSize - padding
@@ -451,7 +451,7 @@ func (d *wasapiOpenedDevice) verifyRenderDataPath() error {
 		if submittedPadding <= padding {
 			// The engine may have consumed the packet between ReleaseBuffer
 			// and this observation. Retry until a queued packet is observable.
-			time.Sleep(25 * time.Millisecond)
+			time.Sleep(wasapiPollInterval)
 			continue
 		}
 		return d.awaitRenderConsumption(padding, submittedPadding, frames)
@@ -482,7 +482,7 @@ func (d *wasapiOpenedDevice) submitSilentRenderPacket(frames uint32) (uint32, er
 
 func (d *wasapiOpenedDevice) awaitRenderConsumption(padding, submittedPadding, frames uint32) error {
 	for consumeAttempt := 0; consumeAttempt < 40; consumeAttempt++ {
-		time.Sleep(25 * time.Millisecond)
+		time.Sleep(wasapiPollInterval)
 		consumedPadding, err := d.renderPadding("read WASAPI render padding during consumption")
 		if err != nil {
 			return err
@@ -612,8 +612,8 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 }
 
 func mapWASAPIOpenError(id DeviceID, operation string, err error) error {
-	coded, ok := err.(wasapiHRESULTWithCode)
-	if !ok {
+	var coded wasapiHRESULTWithCode
+	if !errors.As(err, &coded) {
 		return fmt.Errorf("WASAPI %s %q: %w", operation, id, err)
 	}
 	switch coded.hr {

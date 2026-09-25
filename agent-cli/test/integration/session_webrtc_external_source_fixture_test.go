@@ -135,7 +135,7 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 			return
 		}
 		defer discardCloseError(conn)
-		serveWebrtcSource(t, handlerContext, conn, opts, observed)
+		serveWebrtcSource(t, handlerContext, conn, opts, observed) //nolint:contextcheck // handlerContext derives from r.Context() and also ends with the fixture.
 	}))
 	u, err := url.Parse(server.URL)
 	if err != nil {

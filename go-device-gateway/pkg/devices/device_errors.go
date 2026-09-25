@@ -236,11 +236,14 @@ func joinCleanupErrorOnFailure(result *error, cleanupErr error) {
 // nilErrorText is what the typed device errors report for a nil receiver.
 const nilErrorText = "<nil>"
 
+// maxRemoteErrorPayloadBytes bounds how much of a remote error body is decoded.
+const maxRemoteErrorPayloadBytes = 1 << 20
+
 // readRemoteErrorPayload decodes a bounded remote error body. A body that is
 // not a valid error payload is reported by the HTTP status alone.
 func readRemoteErrorPayload(response *http.Response) remoteErrorResponse {
 	var payload remoteErrorResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxRemoteErrorPayloadBytes)).Decode(&payload); err != nil {
 		return remoteErrorResponse{Error: response.Status}
 	}
 	if payload.Error == "" {
