@@ -92,6 +92,26 @@ func ConfigCredential(configDir string) rooms.ConfigCredentialLookup {
 	}
 }
 
+// SecretRedactor resolves the admitted plan's participant credentials from
+// the same sources the run uses: the process environment and, for a live
+// room, the host config. Replays never read host config.
+func SecretRedactor(plan rooms.RoomRunPlan, configDir string) rooms.RoomSecretRedactor {
+	sources := rooms.RoomCredentialSources{Manifest: plan.Manifest}
+	if !plan.Replay() {
+		sources.ConfigCredential = ConfigCredential(configDir)
+	}
+	return roomswire.NewRoomSecretRedactor(sources)
+}
+
+// EventStream opens the plan's redacting live event stream.
+func EventStream(plan rooms.RoomRunPlan, redactor rooms.RoomSecretRedactor) (rooms.RoomEventStream, error) {
+	participantIDs := make([]string, 0, len(plan.Manifest.Participants))
+	for _, participant := range plan.Manifest.Participants {
+		participantIDs = append(participantIDs, participant.ID)
+	}
+	return roomswire.NewRoomEventStream(rooms.RoomEventStreamOptions{ParticipantIDs: participantIDs, Redactor: redactor})
+}
+
 // BrowserWatch projects the host browser event stream onto the room browser
 // watch, preferring semantic browser events over legacy broker events.
 func BrowserWatch(semantic func(context.Context) <-chan webmcp.BrowserEvent, legacy func(context.Context) <-chan webmcp.BrokerEvent) func(context.Context) <-chan rooms.BrowserEvent {

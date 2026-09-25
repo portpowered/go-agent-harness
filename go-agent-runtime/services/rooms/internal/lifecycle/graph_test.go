@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -359,3 +361,141 @@ func (p *graphRecorderProbe) RecordReceived(string, audio.PCMFrame) {
 	p.received++
 	p.mu.Unlock()
 }
+
+// peerStampProbe records whether peer-audio evidence for a source was stamped.
+type peerStampProbe struct {
+	graphRecorderProbe
+	peerSeen chan struct{}
+	once     sync.Once
+}
+
+func (*peerStampProbe) ObserveSpeakerAudio(string, []string, audio.PCMFrame) {}
+
+func (p *peerStampProbe) ObservePeerAudio(string, string, audio.PCMFrame) {
+	p.once.Do(func() { close(p.peerSeen) })
+}
+
+// stampCheckingOutbound reports, at hand-off time, whether the peer-audio
+// emission had already been stamped.
+type stampCheckingOutbound struct {
+	probe   *peerStampProbe
+	stamped chan bool
+}
+
+func (o *stampCheckingOutbound) WriteFrame(_ context.Context, frame audio.PCMFrame) error {
+	if frame.Samples[0] == 0 {
+		return nil
+	}
+	select {
+	case <-o.probe.peerSeen:
+		o.stamped <- true
+	default:
+		o.stamped <- false
+	}
+	return nil
+}
+
+func (*stampCheckingOutbound) Close() error { return nil }
+
+// A peer provider may react as soon as it holds the mixed frame, so the
+// emission landmark must be recorded before the hand-off; otherwise the
+// peer's reaction time is charged to local output latency.
+func TestRoomGraphStampsPeerAudioBeforeProviderHandOff(t *testing.T) {
+	source := &graphInbound{frames: make(chan audio.PCMFrame, 1)}
+	probe := &peerStampProbe{peerSeen: make(chan struct{})}
+	outbound := &stampCheckingOutbound{probe: probe, stamped: make(chan bool, 1)}
+	participants := []*activeParticipant{
+		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: source}, finished: make(chan struct{})},
+		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Outbound: outbound}, finished: make(chan struct{})},
+	}
+	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := graph.Close(); err != nil {
+			t.Errorf("close graph: %v", err)
+		}
+	}()
+	source.frames <- audio.PCMFrame{Samples: []int16{31, 37}}
+	select {
+	case stamped := <-outbound.stamped:
+		if !stamped {
+			t.Fatal("peer audio reached the provider before its emission was stamped")
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("peer did not receive the source frame (graph error: %v)", graph.Err())
+	}
+}
+
+// TestRunnerBoundsFinalTurnDeliveryWaitOnRoomClock pins the fallback of the
+// max_turns final-audio hold: when a speaker produced audio for its final
+// turn but no response boundary ever reaches the peer, the room keeps running
+// on the room clock and stops for max_turns once that speaker has been quiet
+// for the bounded window — never on wall-clock time.
+func TestRunnerBoundsFinalTurnDeliveryWaitOnRoomClock(t *testing.T) {
+	roomClock := clock.NewDeterministic(time.Unix(1700000000, 0).UTC(), time.Millisecond)
+	alice, bob := newFakeLiveHandle(), newFakeLiveHandle()
+	alice.startEvents = []session.LiveEvent{liveStreamEvent("alice", messages.StreamMessage{
+		Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "resp", Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0}),
+	})}
+	for _, handle := range []*fakeLiveHandle{alice, bob} {
+		handle.media = audio.MediaEndpoints{Inbound: silentInbound{}, Outbound: &recordingOutbound{}}
+	}
+	runner := New(Dependencies{Live: &fakeLiveService{handles: map[string]*fakeLiveHandle{"alice": alice, "bob": bob}}, Clock: roomClock})
+
+	turnEnds := make(chan string, 2)
+	type outcome struct {
+		result rooms.RoomResult
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := runner.Run(context.Background(), nil, rooms.RoomRunOptions{
+			Manifest: testManifest(),
+			OnDiagnostic: func(participantID string, record rooms.RoomDiagnosticRecord) {
+				if record.Fields["kind"] == string(messages.StreamTypeMessageEnd) {
+					turnEnds <- participantID
+				}
+			},
+		})
+		done <- outcome{result: result, err: err}
+	}()
+	for range 2 {
+		select {
+		case <-turnEnds:
+		case <-time.After(5 * time.Second):
+			t.Fatal("participants did not complete their turns")
+		}
+	}
+
+	select {
+	case got := <-done:
+		t.Fatalf("room stopped before alice's final audio could reach bob: %+v err=%v", got.result, got.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	roomClock.AdvanceBy(finalTurnDeliveryQuiet)
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("Run error = %v", got.err)
+		}
+		if got.result.TerminationReason != rooms.RoomTerminationMaxTurnsReached {
+			t.Fatalf("room termination = %q, want max turns", got.result.TerminationReason)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("room did not stop after the bounded final-turn delivery window")
+	}
+}
+
+// silentInbound is a provider track that never produces audio before the
+// room stops.
+type silentInbound struct{}
+
+func (silentInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
+	<-ctx.Done()
+	return audio.PCMFrame{}, ctx.Err()
+}
+
+func (silentInbound) Close() error { return nil }

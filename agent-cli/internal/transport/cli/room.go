@@ -5,15 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"sort"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -32,8 +29,6 @@ const (
 	// DefaultRoomOutputDir is retained for configured-room compatibility when
 	// --out is omitted. Bare rooms use a fresh config-directory child instead.
 	DefaultRoomOutputDir = runtimeRooms.DefaultRoomOutputDir
-
-	roomStreamShutdownTimeout = 5 * time.Second
 )
 
 // RoomRunFunc is the service seam used by the room command. Keeping the seam
@@ -204,72 +199,40 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	if c == nil || c.service == nil {
 		return errors.New("room service is required")
 	}
+	configDir := roomConfigDir(roomRunGlobalFlags(c))
 	plan, outputDir, err := c.admitRoomRun(roomhost.Paths{
-		Config: configPath, Manifest: manifestPath, Replay: replayPath, ConfigDir: roomConfigDir(roomRunGlobalFlags(c)),
+		Config: configPath, Manifest: manifestPath, Replay: replayPath, ConfigDir: configDir,
 	}, outputDir, cmd.Flags().Changed("out"))
 	if err != nil {
 		return err
 	}
-	roomManifest := plan.Manifest
+	// Every byte this command prints or returns after admission passes
+	// through the same credential redaction the room applies to evidence.
+	redactor := roomhost.SecretRedactor(plan, configDir)
+	output := &roomCommandOutput{writer: cmd.OutOrStdout(), redact: redactor.Redact}
+	return redactRoomError(redactor, c.runAdmitted(parent, plan, outputDir, output, redactor, streamAddress))
+}
 
+func (c *RoomRunCommand) runAdmitted(parent context.Context, plan runtimeRooms.RoomRunPlan, outputDir string, output *roomCommandOutput, redactor runtimeRooms.RoomSecretRedactor, streamAddress string) error {
 	outputLabel := outputDir
 	if outputLabel == "" {
 		outputLabel = "disabled"
 	}
-	output := &roomCommandOutput{writer: cmd.OutOrStdout()}
-	output.printf("room starting: participants=%d output=%s\n", len(roomManifest.Participants), outputLabel)
+	output.printf("room starting: participants=%d output=%s\n", len(plan.Manifest.Participants), outputLabel)
 	if err := output.err(); err != nil {
 		return err
 	}
-	participantIDs := make([]string, 0, len(roomManifest.Participants))
-	for _, participant := range roomManifest.Participants {
-		participantIDs = append(participantIDs, participant.ID)
+	stream, err := startRoomStream(parent, output, plan, redactor, streamAddress)
+	if err != nil {
+		return err
 	}
-
-	var broker *events.Broker
-	var eventServer *roomEventServer
-	if strings.TrimSpace(streamAddress) != "" {
-		broker, err = events.New(participantIDs, events.Options{})
-		if err != nil {
-			return fmt.Errorf("configure room stream: %w", err)
-		}
-		eventServer, err = startRoomEventServer(streamAddress, broker)
-		if err != nil {
-			_ = broker.Close()
-			return err
-		}
-		output.printf("room stream listening: http://%s/events\n", eventServer.listener.Addr().String())
-		if output.err() != nil {
-			_ = eventServer.shutdown(broker)
-			return output.err()
-		}
-		for _, participantID := range participantIDs {
-			broker.Publish(events.EventParticipantJoined, participantID, "")
-		}
-	}
-
-	var newSignalContext RoomSignalContextFunc = defaultRoomSignalContext
-	if c != nil && c.signalContext != nil {
-		newSignalContext = c.signalContext
-	}
-	runContext, stopSignals := newSignalContext(parent)
-	if runContext == nil {
-		if stopSignals != nil {
-			stopSignals()
-		}
-		contextErr := errors.New("room signal context factory returned a nil context")
-		if eventServer != nil {
-			return errors.Join(contextErr, eventServer.shutdown(broker))
-		}
-		return contextErr
-	}
-	if stopSignals == nil {
-		stopSignals = func() {}
+	runContext, stopSignals, err := c.newRunContext(parent)
+	if err != nil {
+		return errors.Join(err, stream.shutdown(parent))
 	}
 	defer stopSignals()
 
-	options := c.roomRunOptions(plan, outputDir, output, broker)
-
+	options := c.roomRunOptions(plan, outputDir, output, stream.sink())
 	var result runtimeRooms.RoomResult
 	var runErr error
 	if c.run == nil {
@@ -277,14 +240,74 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 	} else {
 		result, runErr = c.run(runContext, io.Discard, options)
 	}
-
-	var streamErr error
-	if eventServer != nil {
-		streamErr = eventServer.shutdown(broker)
-	}
-
+	streamErr := stream.shutdown(parent)
 	writeRoomResult(output, result)
 	return errors.Join(runErr, streamErr, output.err())
+}
+
+// newRunContext installs the command's signal ownership for one run.
+func (c *RoomRunCommand) newRunContext(parent context.Context) (context.Context, func(), error) {
+	newSignalContext := c.signalContext
+	if newSignalContext == nil {
+		newSignalContext = defaultRoomSignalContext
+	}
+	runContext, stopSignals := newSignalContext(parent)
+	if runContext == nil {
+		if stopSignals != nil {
+			stopSignals()
+		}
+		return nil, nil, errors.New("room signal context factory returned a nil context")
+	}
+	if stopSignals == nil {
+		stopSignals = func() {}
+	}
+	return runContext, stopSignals, nil
+}
+
+// roomStream is the optional --stream listener and the room stream it serves.
+type roomStream struct {
+	stream runtimeRooms.RoomEventStream
+	server *events.Server
+}
+
+// startRoomStream opens the redacting room stream and its listener when
+// --stream is set, then announces every participant as joined.
+func startRoomStream(ctx context.Context, output *roomCommandOutput, plan runtimeRooms.RoomRunPlan, redactor runtimeRooms.RoomSecretRedactor, address string) (*roomStream, error) {
+	if strings.TrimSpace(address) == "" {
+		return &roomStream{}, nil
+	}
+	stream, err := roomhost.EventStream(plan, redactor)
+	if err != nil {
+		return nil, fmt.Errorf("configure room stream: %w", err)
+	}
+	server, err := events.Start(address, stream)
+	if err != nil {
+		return nil, errors.Join(err, stream.Close())
+	}
+	active := &roomStream{stream: stream, server: server}
+	output.printf("room stream listening: %s\n", server.URL())
+	if err := output.err(); err != nil {
+		return nil, errors.Join(err, active.shutdown(ctx))
+	}
+	for _, participant := range plan.Manifest.Participants {
+		stream.PublishRoomEvent(runtimeRooms.RoomStreamEventParticipantJoined, participant.ID, "")
+	}
+	return active, nil
+}
+
+// sink is the run's live event sink, or nil when no stream is configured.
+func (s *roomStream) sink() runtimeRooms.EventSink {
+	if s == nil || s.stream == nil {
+		return nil
+	}
+	return s.stream
+}
+
+func (s *roomStream) shutdown(ctx context.Context) error {
+	if s == nil || s.server == nil {
+		return nil
+	}
+	return s.server.Shutdown(ctx)
 }
 
 // admitRoomRun resolves the service's run plan and evidence destination for
@@ -306,14 +329,14 @@ func (c *RoomRunCommand) admitRoomRun(paths roomhost.Paths, requested string, ex
 
 // roomRunOptions binds the command's progress output and host capabilities
 // to the admitted plan. Replays never receive host config or browsers.
-func (c *RoomRunCommand) roomRunOptions(plan runtimeRooms.RoomRunPlan, outputDir string, output *roomCommandOutput, broker *events.Broker) runtimeRooms.RoomRunOptions {
+func (c *RoomRunCommand) roomRunOptions(plan runtimeRooms.RoomRunPlan, outputDir string, output *roomCommandOutput, sink runtimeRooms.EventSink) runtimeRooms.RoomRunOptions {
 	participants := len(plan.Manifest.Participants)
 	readyParticipants := 0
 	options := roomhost.RunOptions(plan)
 	options.OutputDir = outputDir
 	options.WorkDir = globalWorkDir(roomRunGlobalFlags(c))
 	options.AllowPaths = globalAllowPaths(roomRunGlobalFlags(c))
-	options.EventSink = events.NewLiveSink(broker)
+	options.EventSink = sink
 	options.OnDiagnostic = func(participantID string, record runtimeRooms.RoomDiagnosticRecord) {
 		writeRoomDiagnosticProgress(output, participantID, record)
 	}
@@ -406,9 +429,12 @@ func writeRoomResult(output *roomCommandOutput, result runtimeRooms.RoomResult) 
 	}
 }
 
+// roomCommandOutput serializes progress lines and redacts every line with
+// the room's credential redactor before it reaches the writer.
 type roomCommandOutput struct {
 	mu       sync.Mutex
 	writer   io.Writer
+	redact   func(string) string
 	writeErr error
 }
 
@@ -424,7 +450,11 @@ func (o *roomCommandOutput) printf(format string, args ...any) {
 	if o.writer == nil {
 		o.writer = io.Discard
 	}
-	_, o.writeErr = fmt.Fprintf(o.writer, format, args...)
+	line := fmt.Sprintf(format, args...)
+	if o.redact != nil {
+		line = o.redact(line)
+	}
+	_, o.writeErr = io.WriteString(o.writer, line)
 }
 
 func (o *roomCommandOutput) err() error {
@@ -436,58 +466,25 @@ func (o *roomCommandOutput) err() error {
 	return o.writeErr
 }
 
-type roomEventServer struct {
-	server   *http.Server
-	listener net.Listener
-	done     chan error
+// redactedError keeps the error chain for errors.Is/As while presenting a
+// message with the room's credentials removed.
+type redactedError struct {
+	err     error
+	message string
 }
 
-func startRoomEventServer(address string, broker *events.Broker) (*roomEventServer, error) {
-	address = strings.TrimSpace(address)
-	if address == "" {
-		return nil, errors.New("room stream address is empty")
-	}
-	if broker == nil {
-		return nil, errors.New("room stream broker is nil")
-	}
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		return nil, fmt.Errorf("listen room stream on %q: %w", address, err)
-	}
-	server := &http.Server{
-		Handler:           broker,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	eventServer := &roomEventServer{
-		server:   server,
-		listener: listener,
-		done:     make(chan error, 1),
-	}
-	go func() {
-		serveErr := server.Serve(listener)
-		if errors.Is(serveErr, http.ErrServerClosed) {
-			serveErr = nil
-		}
-		eventServer.done <- serveErr
-	}()
-	return eventServer, nil
-}
+func (e redactedError) Error() string { return e.message }
+func (e redactedError) Unwrap() error { return e.err }
 
-func (s *roomEventServer) shutdown(broker *events.Broker) error {
-	if s == nil {
-		return nil
+func redactRoomError(redactor runtimeRooms.RoomSecretRedactor, err error) error {
+	if err == nil || redactor == nil {
+		return err
 	}
-	if broker != nil {
-		_ = broker.Close()
+	message := redactor.Redact(err.Error())
+	if message == err.Error() {
+		return err
 	}
-	shutdownContext, cancel := context.WithTimeout(context.Background(), roomStreamShutdownTimeout)
-	defer cancel()
-	shutdownErr := s.server.Shutdown(shutdownContext)
-	if shutdownErr != nil {
-		_ = s.server.Close()
-	}
-	serveErr := <-s.done
-	return errors.Join(shutdownErr, serveErr)
+	return redactedError{err: err, message: message}
 }
 
 // newRoomParticipantBrowserCapabilitiesFactory composes one independent

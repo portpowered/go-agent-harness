@@ -929,6 +929,24 @@
       "reason": "sentinel error identity is part of the room contract"
     },
     {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrUnknownRoomStreamParticipant",
+      "reason": "sentinel error identity is part of the room event stream contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrInvalidRoomStreamParticipant",
+      "reason": "sentinel error identity is part of the room event stream contract"
+    },
+    {
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms",
+      "file": "services/rooms/errors.go",
+      "name": "ErrRoomEventStreamClosed",
+      "reason": "sentinel error identity is part of the room event stream contract"
+    },
+    {
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room",
       "file": "pkg/analysis/room/room_types.go",
       "name": "ErrInvalidPCM16AnalysisInput",

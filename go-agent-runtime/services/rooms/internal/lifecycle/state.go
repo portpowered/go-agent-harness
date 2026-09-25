@@ -3,13 +3,13 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/events"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -51,6 +51,12 @@ type runState struct {
 	boundReason rooms.RoomTerminationReason
 	boundCause  error
 	stop        context.CancelCauseFunc
+	// delivery holds a reached turn bound until the final responses' audio
+	// reaches their peers; turnStopPending marks that held stop, and
+	// deliveryCtx ends the wait when the room stops for another reason.
+	delivery        *finalTurnDelivery
+	deliveryCtx     context.Context
+	turnStopPending bool
 }
 
 type terminalMetadata struct {
@@ -81,54 +87,6 @@ func (s *runState) noteTerminal(id string, event session.LiveEvent) {
 	s.mu.Unlock()
 }
 
-func terminalMetadataFromEvent(event session.LiveEvent) terminalMetadata {
-	value := terminalMetadataFromLiveness(event.Liveness)
-	mergeTerminalMetadata(&value, terminalMetadataFromTerminal(event.Terminal))
-	return value
-}
-
-func terminalMetadataFromLiveness(liveness *session.LiveLivenessFailure) terminalMetadata {
-	if liveness == nil {
-		return terminalMetadata{}
-	}
-	return terminalMetadata{
-		classification: strings.TrimSpace(liveness.Classification),
-		reason:         string(liveness.TerminalReason),
-		provenance:     string(liveness.TerminalProvenance),
-		outputState:    string(liveness.OutputState),
-	}
-}
-
-func terminalMetadataFromTerminal(terminal *messages.SessionCloseValue) terminalMetadata {
-	if terminal == nil {
-		return terminalMetadata{}
-	}
-	return terminalMetadata{
-		classification: strings.TrimSpace(terminal.Classification),
-		reason:         string(terminal.TerminalReason),
-		provenance:     string(terminal.TerminalProvenance),
-		outputState:    string(terminal.OutputState),
-	}
-}
-
-func mergeTerminalMetadata(destination *terminalMetadata, source terminalMetadata) {
-	if destination == nil {
-		return
-	}
-	if destination.classification == "" {
-		destination.classification = source.classification
-	}
-	if destination.reason == "" {
-		destination.reason = source.reason
-	}
-	if destination.provenance == "" {
-		destination.provenance = source.provenance
-	}
-	if destination.outputState == "" {
-		destination.outputState = source.outputState
-	}
-}
-
 func (s *runState) snapshotActive() []*activeParticipant {
 	if s == nil {
 		return nil
@@ -150,6 +108,9 @@ func (s *runState) setFailure(err error) {
 			s.stop(err)
 		}
 	}
+	// A failure while the final turn's audio drains ends the wait; the room
+	// keeps the turn bound it had already reached.
+	s.releaseTurnStopLocked()
 	s.mu.Unlock()
 }
 
@@ -183,21 +144,50 @@ func (s *runState) failParticipant(id string, err error) {
 
 func (s *runState) noteTurn(id string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.turns[id]++
-	if s.turnsBound <= 0 || s.boundReason != "" {
-		return
-	}
-	for _, turns := range s.turns {
-		if turns < s.turnsBound {
-			return
-		}
-	}
-	if len(s.turns) < s.agentCount {
+	if !s.turnsBoundReachedLocked() {
+		s.mu.Unlock()
 		return
 	}
 	s.boundReason = rooms.RoomTerminationMaxTurnsReached
 	s.boundCause = errTurnsBound
+	// MESSAGE.END usually precedes the peer hearing the final response, so
+	// the stop is held until that audio is delivered (bounded by the room
+	// clock) instead of truncating it.
+	s.turnStopPending = true
+	delivery, ctx := s.delivery, s.deliveryCtx
+	s.mu.Unlock()
+	if delivery == nil || ctx == nil {
+		s.releaseTurnStop()
+		return
+	}
+	delivery.begin(ctx, s.releaseTurnStop)
+}
+
+func (s *runState) turnsBoundReachedLocked() bool {
+	if s.turnsBound <= 0 || s.boundReason != "" {
+		return false
+	}
+	for _, turns := range s.turns {
+		if turns < s.turnsBound {
+			return false
+		}
+	}
+	return len(s.turns) >= s.agentCount
+}
+
+func (s *runState) releaseTurnStop() {
+	s.mu.Lock()
+	s.releaseTurnStopLocked()
+	s.mu.Unlock()
+}
+
+// releaseTurnStopLocked performs a held max_turns stop exactly once.
+func (s *runState) releaseTurnStopLocked() {
+	if !s.turnStopPending {
+		return
+	}
+	s.turnStopPending = false
 	if s.stop != nil {
 		s.stop(errTurnsBound)
 	}
@@ -211,6 +201,9 @@ func (s *runState) setBound(reason rooms.RoomTerminationReason, cause error) {
 			s.stop(cause)
 		}
 	}
+	// A duration bound ends a final-turn drain; the turn bound it reached
+	// first remains the room's reason.
+	s.releaseTurnStopLocked()
 	s.mu.Unlock()
 }
 
@@ -337,35 +330,6 @@ func (s *runState) finish(participant rooms.Participant, reason rooms.Participan
 	s.stopWhenAgentsDone()
 }
 
-const (
-	silentProviderEmptyResponse = "silent_provider_empty_response"
-	silentProviderTimeout       = "silent_provider_timeout"
-)
-
-func terminalLivenessFailure(event session.LiveEvent) error {
-	if event.Liveness != nil {
-		classification := strings.TrimSpace(event.Liveness.Classification)
-		if classification == "" {
-			return nil
-		}
-		if classification == silentProviderEmptyResponse || classification == silentProviderTimeout {
-			return fmt.Errorf("%s: provider response produced no observable output", classification)
-		}
-		return nil
-	}
-	if event.Terminal == nil {
-		return nil
-	}
-	classification := strings.TrimSpace(event.Terminal.Classification)
-	if classification == "" && event.Terminal.TerminalReason == messages.TerminalReasonPartialOutput && event.Terminal.OutputState == messages.TerminalOutputNone {
-		classification = silentProviderEmptyResponse
-	}
-	if classification != silentProviderEmptyResponse && classification != silentProviderTimeout {
-		return nil
-	}
-	return fmt.Errorf("%s: provider response produced no observable output", classification)
-}
-
 // stopWhenAgentsDone closes a room that has no provider work left. Human
 // participants do not own a LiveHandle, so they need the room cancellation
 // signal to release their capture and playback workers after the final agent
@@ -375,7 +339,7 @@ func (s *runState) stopWhenAgentsDone() {
 		return
 	}
 	s.mu.Lock()
-	if s.boundReason != "" || s.agentCount == 0 {
+	if s.agentCount == 0 {
 		s.mu.Unlock()
 		return
 	}
@@ -384,6 +348,12 @@ func (s *runState) stopWhenAgentsDone() {
 			s.mu.Unlock()
 			return
 		}
+	}
+	if s.boundReason != "" {
+		// No agent is left to deliver audio for a held turn stop.
+		s.releaseTurnStopLocked()
+		s.mu.Unlock()
+		return
 	}
 	s.boundReason = rooms.RoomTerminationStopped
 	s.boundCause = nil
@@ -397,4 +367,30 @@ func (s *runState) turnCount(id string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.turns[id]
+}
+
+// redactRunFailure removes the room's participant credentials — the evidence
+// redaction set, through the same redactor as the room event stream — from
+// the run error and result failure text hosts render. Secrets are resolved
+// only when failure text exists.
+func redactRunFailure(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions) (rooms.RoomResult, error) {
+	if runErr == nil && !resultHasFailureText(result) {
+		return result, nil
+	}
+	redactor := events.NewRedactor(planning.EvidenceSecrets(manifest, request))
+	return redactor.RedactResult(result), redactor.RedactError(runErr)
+}
+
+// resultHasFailureText reports whether a room result carries failure text
+// that may echo a participant credential.
+func resultHasFailureText(result rooms.RoomResult) bool {
+	if result.Error != "" {
+		return true
+	}
+	for _, participant := range result.Participants {
+		if participant.Error != "" || participant.TerminalReason != "" {
+			return true
+		}
+	}
+	return false
 }

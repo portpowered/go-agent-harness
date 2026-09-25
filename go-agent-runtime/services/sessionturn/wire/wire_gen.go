@@ -7,7 +7,6 @@
 package wire
 
 import (
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/internal/service"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -15,9 +14,9 @@ import (
 
 // Injectors from wire.go:
 
-// NewService assembles the session-turn implementation behind its public
-// contract. Each service allocates its own text-seed sentinels.
-func NewService(instructions session.InstructionService, policies tools.InteractiveToolPolicyFactory, staging tools.ImageStaging) sessionturn.Service {
-	serviceService := service.New(instructions, policies, staging)
+// NewService assembles the session tool-execution implementation behind its
+// public contract.
+func NewService(policies tools.InteractiveToolPolicyFactory) sessionturn.Service {
+	serviceService := service.New(policies)
 	return serviceService
 }

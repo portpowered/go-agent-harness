@@ -87,10 +87,6 @@ type LiveRequest struct {
 	// also enables the policy, which keeps request construction concise for
 	// hosts that only need a custom deadline.
 	FirstTurnTimeout time.Duration
-	// ToolExecutionTimeout bounds each participant tool invocation. A positive
-	// value uses the injected scheduler's context domain so tool cancellation,
-	// event timestamps, and room deadlines share one clock.
-	ToolExecutionTimeout time.Duration
 	// RateLimitRetry enables a bounded response.create retry when a provider
 	// emits a rate-limit terminal. It is opt-in because retrying an arbitrary
 	// realtime turn can duplicate side effects; scheduled/replay hosts select

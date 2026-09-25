@@ -65,6 +65,10 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 	}
 }
 func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		h.consumeToolAcknowledgement(ctx, msg)
+		return false
+	}
 	if eventcodec.OutputMessage(msg) {
 		h.mu.Lock()
 		h.outputObserved = true

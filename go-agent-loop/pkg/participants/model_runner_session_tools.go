@@ -325,6 +325,64 @@ func (r *ModelRunner) noteDeferredSessionFailure(state *sessionRunState, evt, fa
 	}
 }
 
+// holdForAcknowledgement applies acknowledgement ordering and reports whether
+// it consumed evt. A progress acknowledgement is dropped while a response is
+// active or requested (the provider rejects a second response request, and
+// the acknowledgement is only useful while nothing is speaking); an ordinary
+// continuation waits until an outstanding acknowledgement has ended.
+func holdForAcknowledgement(state *sessionRunState, evt messages.StreamMessage) bool {
+	if evt.Type != messages.StreamTypeResponseCreate {
+		return false
+	}
+	if isToolAcknowledgementResponseCreate(evt) {
+		return state.responseInFlight || state.awaitingContinuation || state.acknowledgementOutstanding
+	}
+	if state.acknowledgementOutstanding {
+		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
+		return true
+	}
+	return false
+}
+
+// tagSessionAcknowledgement marks the provider output that belongs to an
+// outstanding acknowledgement request. Ordinary response requests are held
+// while an acknowledgement is outstanding, so an active-response rejection in
+// that window rejects the acknowledgement. The provider may already have
+// started its own response, which was attributed to the acknowledgement; the
+// rejection reclassifies it by re-announcing its start without the
+// acknowledgement purpose, so its later output keeps ordinary accounting.
+func (r *ModelRunner) tagSessionAcknowledgement(ctx context.Context, state *sessionRunState, msg *messages.StreamMessage) bool {
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		state.acknowledgementOutstanding = true
+	} else if state.acknowledgementOutstanding && state.acknowledgementStart == nil && isSessionResponseStart(msg.Type) {
+		start := *msg
+		state.acknowledgementStart = &start
+	}
+	if rejectsActiveResponseCreate(*msg) && state.acknowledgementOutstanding {
+		state.acknowledgementOutstanding = false
+		state.acknowledgementCancelled = false
+		if start := state.acknowledgementStart; start != nil && start.ResponseID == state.currentResponseID {
+			r.DeltaOutbox.Write(ctx, *start)
+		}
+	}
+	if !state.acknowledgementOutstanding {
+		state.acknowledgementStart = nil
+	}
+	if state.acknowledgementOutstanding && isSessionResponseStreamType(msg.Type) {
+		msg.ResponsePurpose = messages.ResponsePurposeToolAcknowledgement
+	}
+	return state.acknowledgementOutstanding
+}
+
+func isSessionResponseStart(kind messages.StreamMessageType) bool {
+	return kind == messages.StreamTypeMessageStart || kind == messages.StreamTypeAudioStart
+}
+
+func rejectsActiveResponseCreate(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.ErrorValue)
+	return ok && value.IsNonTerminal() && value.Classification == messages.ErrorClassificationResponseCreateActive
+}
+
 func isToolAcknowledgementResponseCreate(msg messages.StreamMessage) bool {
 	if msg.Type != messages.StreamTypeResponseCreate {
 		return false

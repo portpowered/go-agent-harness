@@ -31,9 +31,6 @@ func (h *handle) validateTimingPolicy() error {
 	if h.request.FirstTurnTimeout < 0 {
 		return errors.New("live first-turn timeout must not be negative")
 	}
-	if h.request.ToolExecutionTimeout < 0 {
-		return errors.New("live tool execution timeout must not be negative")
-	}
 	if h.request.ProviderLiveness.Timeout < 0 {
 		return errors.New("live provider liveness timeout must not be negative")
 	}
@@ -49,7 +46,7 @@ func (h *handle) validateTimingPolicy() error {
 	return nil
 }
 func (h *handle) requiresScheduler() bool {
-	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.request.ToolExecutionTimeout > 0 || h.providerLivenessEnabled()
+	return h.request.MaxDuration > 0 || h.request.RequireSessionUpdated || h.firstTurnPolicyEnabled() || h.rateLimitRetryEnabled() || h.providerLivenessEnabled()
 }
 func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value == nil {

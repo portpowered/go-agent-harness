@@ -220,6 +220,46 @@ func TestServicePassesEachParticipantsSessionFactsToLive(t *testing.T) {
 	}
 }
 
+// A provider failure that echoes a participant credential (from the
+// environment or the config file) must reach the host's rendered error and
+// room result with the credential replaced by the evidence redaction marker.
+func TestServiceRedactsParticipantCredentialsFromRunFailures(t *testing.T) {
+	const envSecret, configSecret = "sk-env-alpha-0123456789", "sk-config-beta-9876543210"
+	openErr := errors.New("provider rejected credentials " + envSecret + " and " + configSecret)
+	live := newContractLive()
+	live.openErr[alphaID], live.openErr[betaID] = openErr, openErr
+	service := NewService(Dependencies{Live: live, Clock: clock.Real{}})
+	var terminated []rooms.RoomParticipantResult
+	result, err := service.Run(context.Background(), nil, rooms.RoomRunOptions{
+		Manifest: agentRoom(rooms.Room{MaxTurns: 1}, alphaID, betaID),
+		CredentialLookup: func(name string) (string, bool) {
+			return envSecret, name == "UNRESOLVED_"+alphaID
+		},
+		ConfigCredential: func(name string) (string, error) {
+			if name == "UNRESOLVED_"+betaID {
+				return configSecret, nil
+			}
+			return "", errors.New("not configured")
+		},
+		OnParticipantTerminated: func(value rooms.RoomParticipantResult) { terminated = append(terminated, value) },
+	})
+	if err == nil || !errors.Is(err, openErr) {
+		t.Fatalf("Run error = %v, want the provider failure chain", err)
+	}
+	visible := []string{err.Error(), result.Error}
+	for _, participant := range append(terminated, result.Participants[alphaID], result.Participants[betaID]) {
+		visible = append(visible, participant.Error, participant.TerminalReason)
+	}
+	for _, text := range visible {
+		if strings.Contains(text, envSecret) || strings.Contains(text, configSecret) {
+			t.Fatalf("host-visible failure %q leaks a participant credential", text)
+		}
+	}
+	if len(terminated) != 2 || !strings.Contains(err.Error(), "provider rejected credentials [REDACTED] and [REDACTED]") {
+		t.Fatalf("Run error = %q (terminated=%d), want the redacted failure for both participants", err, len(terminated))
+	}
+}
+
 func waitFor(t *testing.T, what string, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(contractWait)

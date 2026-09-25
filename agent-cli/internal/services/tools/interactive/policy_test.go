@@ -144,9 +144,6 @@ func TestPresentationProjectsHostFailures(t *testing.T) {
 	if failure := presentation.PageSightFailure(); !strings.Contains(failure, "page_sight_unavailable") {
 		t.Fatalf("page sight failure = %q", failure)
 	}
-	if presentation.FailedContent("plain result") {
-		t.Fatal("plain content classified as a filesystem refusal")
-	}
 	if err := presentation.DisplayPermissionDenied(runtimeTools.DisplayPermission{Reason: "denied"}); err == nil {
 		t.Fatal("denied display permission produced no error")
 	}

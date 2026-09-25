@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,8 @@ type liveToolSessionOptions struct {
 	toolNames  []string
 	observer   func(messages.StreamMessage)
 	output     io.Writer
+	// errOutput receives the command's operator diagnostics (stderr).
+	errOutput io.Writer
 	// inputPCM, when present, is admitted as one scheduled customer audio
 	// turn (--audio-in-turn, which requires a --record-dir bundle).
 	inputPCM []byte
@@ -73,7 +76,11 @@ func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra
 	}
 	root := agentCLI.Generate()
 	root.SetOut(output)
-	root.SetErr(io.Discard)
+	errOutput := options.errOutput
+	if errOutput == nil {
+		errOutput = io.Discard
+	}
+	root.SetErr(errOutput)
 	args := append([]string{"--config-dir", t.TempDir(), "session"}, options.args...)
 	if len(options.inputPCM) > 0 {
 		inputPath := filepath.Join(t.TempDir(), "customer-turn.wav")
@@ -89,7 +96,10 @@ func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra
 // CLI. A fast/read call whose executor ignores its context is ended by the
 // fast deadline and returned to the provider as a correlated failure, while a
 // bounded-long-running call slower than that deadline still completes under
-// the long budget, and the session keeps serving to a clean finish.
+// the long budget, and the session keeps serving to a clean finish. The
+// long-running call outlives the acknowledgement threshold, so the provider
+// is asked for exactly one spoken acknowledgement, and the timed-out call's
+// original error reaches the operator on stderr.
 
 const (
 	interactiveFastCallID   = "call_interactive_fast"
@@ -98,6 +108,7 @@ const (
 	interactiveLongToolName = "sleep"
 	interactiveLongPayload  = `{"slept":"ok"}`
 	interactiveTimeoutText  = "tool execution timed out"
+	interactiveAckText      = "One moment while I check."
 
 	interactiveFastTimeout = 100 * time.Millisecond
 	// interactiveLongWork exceeds the fast deadline but stays well inside the
@@ -118,6 +129,8 @@ type interactiveTimeoutSession struct {
 	mu           sync.Mutex
 	results      map[string]string
 	elapsed      map[string]time.Duration
+	acks         int
+	ackElapsed   time.Duration
 }
 
 func newInteractiveTimeoutSession() *interactiveTimeoutSession {
@@ -135,6 +148,10 @@ func (s *interactiveTimeoutSession) Send(ctx context.Context, msg messages.Strea
 	case messages.StreamTypeMessageEnd:
 		s.responseOnce.Do(s.emitToolCalls)
 	case messages.StreamTypeResponseCreate:
+		if value, ok := msg.Value.(*messages.ResponseCreateValue); ok && value.IsToolAcknowledgement() {
+			s.emitAcknowledgement(ctx)
+			break
+		}
 		s.continueOnce.Do(s.emitContinuation)
 	case messages.StreamTypeToolCallEnd:
 		if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
@@ -159,6 +176,28 @@ func (s *interactiveTimeoutSession) emitToolCalls() {
 		)
 	}
 	s.write(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+}
+
+// emitAcknowledgement answers an acknowledgement request with an untagged
+// response; the session loop attributes it to the outstanding request.
+func (s *interactiveTimeoutSession) emitAcknowledgement(ctx context.Context) {
+	s.mu.Lock()
+	s.acks++
+	s.ackElapsed = time.Since(s.started)
+	s.mu.Unlock()
+	for _, msg := range []messages.StreamMessage{
+		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-ack", Value: messages.NewMessageStartValue()},
+		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-ack", Value: messages.NewTextDeltaValue(interactiveAckText)},
+		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-ack", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+	} {
+		s.recv.Write(ctx, msg)
+	}
+}
+
+func (s *interactiveTimeoutSession) acknowledgements() (int, time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.acks, s.ackElapsed
 }
 
 func (s *interactiveTimeoutSession) emitContinuation() {
@@ -232,11 +271,13 @@ func TestSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
 	session := newInteractiveTimeoutSession()
 	executor := interactiveTimeoutExecutor{release: make(chan struct{})}
 	defer close(executor.release)
+	var stderr lockedBuffer
 	root := newLiveToolSessionRoot(t, liveToolSessionOptions{
 		inferencer: interactiveTimeoutInferencer{session: session},
 		executor:   executor,
 		toolNames:  []string{interactiveFastToolName, interactiveLongToolName},
 		output:     io.Discard,
+		errOutput:  &stderr,
 		inputPCM:   []byte{1, 2, 3, 4},
 		args: []string{
 			"--provider", "openai", "--model", "gpt-realtime", "--api-key", "test-key", "--experimental-tools",
@@ -270,4 +311,30 @@ func TestSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
 	if longElapsed < interactiveLongWork {
 		t.Fatalf("long-running result crossed after %s, before its %s of work", longElapsed, interactiveLongWork)
 	}
+	acks, ackElapsed := session.acknowledgements()
+	if acks != 1 || ackElapsed >= longElapsed {
+		t.Fatalf("acknowledgements = %d at %s, want exactly one before the long-running result at %s", acks, ackElapsed, longElapsed)
+	}
+	diagnostic := fmt.Sprintf("tool diagnostic: tool=%q call_id=%q", interactiveFastToolName, interactiveFastCallID)
+	if got := stderr.String(); !strings.Contains(got, diagnostic) || !strings.Contains(got, interactiveTimeoutText) || strings.Contains(got, interactiveLongCallID) {
+		t.Fatalf("stderr = %q, want only the timed-out call's operator diagnostic %q", got, diagnostic)
+	}
+}
+
+// lockedBuffer is a goroutine-safe command error writer.
+type lockedBuffer struct {
+	mu     sync.Mutex
+	buffer strings.Builder
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.String()
 }

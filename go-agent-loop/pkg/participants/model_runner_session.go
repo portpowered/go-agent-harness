@@ -292,8 +292,7 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 		state.pendingSendErrors = nil
 		return
 	}
-	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.acknowledgementOutstanding {
-		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
+	if holdForAcknowledgement(state, evt) {
 		return
 	}
 	// A control-plane event that asks the provider to open a new response

@@ -23,6 +23,4 @@ type RuntimeRecorder interface {
 	ResponseCreate(messages.StreamMessage)
 	TurnCompleted(int)
 	TerminalWithAccounting(int, error, *SessionFinalAccounting)
-	ObserveToolCall(messages.ToolCall)
-	ObserveToolResult(messages.ToolCall, messages.ToolCallResponse, bool)
 }

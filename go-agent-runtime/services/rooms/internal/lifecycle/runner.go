@@ -68,15 +68,19 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	if err != nil {
 		return rooms.RoomResult{}, err
 	}
+	delivery := newFinalTurnDelivery(r.clock, manifest)
 	request = installRecorder(request, recorder)
+	request.EventSink = deliveryEventSink{host: request.EventSink, delivery: delivery}
 
 	runCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	state := newRunState(manifest, cancel)
+	state.delivery, state.deliveryCtx = delivery, runCtx
 	stopTimer := r.startDurationBound(runCtx, manifest.Room.MaxDuration, state)
 	defer stopTimer()
 	r.openParticipants(ctx, runCtx, state, manifest, request, recorder)
 	graph := r.startGraph(runCtx, state, request, recorder)
+	delivery.attach(graph)
 	state.waitAll(runCtx, request, r.currentTime)
 	return r.finishRun(runCtx, state, graph, manifest, request, recorder)
 }
@@ -255,6 +259,7 @@ func finishMissingParticipants(state *runState, result rooms.RoomResult, manifes
 }
 
 func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (rooms.RoomResult, error) {
+	result, runErr = redactRunFailure(result, runErr, manifest, request)
 	if request.OnParticipantTerminated != nil {
 		for _, participant := range manifest.Participants {
 			if value, ok := result.Participants[participant.ID]; ok {

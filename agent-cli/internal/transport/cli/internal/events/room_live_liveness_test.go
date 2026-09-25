@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -142,11 +143,38 @@ func readRoomJSON(t *testing.T, path string) map[string]any {
 	return value
 }
 
-func newTestEventServer(t *testing.T, broker *Broker) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(broker)
-}
-
 var _ messages.SessionInferencer = roomLiveInferencer{}
 
 var _ runtimeRooms.EventSink = (*releasePeerOnLiveness)(nil)
+
+// frameReader reads one /events client's SSE frames in order.
+type frameReader struct{ reader *sseReader }
+
+func openFrames(t *testing.T, server *httptest.Server, participant string) *frameReader {
+	t.Helper()
+	path := Path
+	if participant != "" {
+		path += "?participant=" + participant
+	}
+	_, reader := openSSE(t, server, path)
+	return &frameReader{reader: reader}
+}
+
+func (r *frameReader) next(t *testing.T) map[string]json.RawMessage {
+	t.Helper()
+	var payload map[string]json.RawMessage
+	line := strings.TrimPrefix(r.reader.next(t)["raw"], "data: ")
+	if err := json.Unmarshal([]byte(line), &payload); err != nil {
+		t.Fatalf("decode room event %q: %v", line, err)
+	}
+	return payload
+}
+
+func frameString(t *testing.T, payload map[string]json.RawMessage, field string) string {
+	t.Helper()
+	var value string
+	if err := json.Unmarshal(payload[field], &value); err != nil {
+		t.Fatalf("decode room event %s: %v", field, err)
+	}
+	return value
+}

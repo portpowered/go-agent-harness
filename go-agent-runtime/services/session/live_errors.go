@@ -44,9 +44,6 @@ var (
 	// ErrLiveRateLimitRetryExhausted identifies a live session that received a
 	// second rate-limit terminal after consuming its configured retry budget.
 	ErrLiveRateLimitRetryExhausted = errors.New("live session exhausted rate-limit retry budget")
-	// ErrLiveToolExecutionTimeout identifies a tool invocation that exceeded
-	// the session's explicit tool execution budget.
-	ErrLiveToolExecutionTimeout = errors.New("live tool execution timed out")
 	// ErrLiveMediaUnavailable identifies a provider session that does not
 	// expose the PCM endpoints required by an admitted media direction. The
 	// sentinel is public so hosts can retain the cause when a device worker

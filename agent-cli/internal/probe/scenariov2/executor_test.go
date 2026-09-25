@@ -142,6 +142,29 @@ func TestRealUnavailableIsClassifiedAndDoesNotLeakCause(t *testing.T) {
 	}
 }
 
+func TestProviderAudioExpectationWithoutProviderFixtureFailsAsMissing(t *testing.T) {
+	scenario := probe.ScenarioV2{
+		SchemaVersion: probe.ScenarioV2Version,
+		ID:            "provider-audio-without-fixture",
+		Expectations: []probe.ScenarioV2Expectation{
+			{Type: probe.ScenarioV2ExpectationAssistantAudioStarted},
+			{Type: probe.ScenarioV2ExpectationAssistantAudioStopped},
+		},
+	}
+	result := testRunner().Execute(context.Background(), Selection{Scenario: scenario}, "")
+	if result.Pass {
+		t.Fatalf("provider audio expectations passed without provider evidence: %+v", result)
+	}
+	if len(result.ExpectationResults) != 2 {
+		t.Fatalf("expectation results = %+v, want two", result.ExpectationResults)
+	}
+	for _, got := range result.ExpectationResults {
+		if got.Passed || got.Actual != "<missing>" || got.Expected != string(got.Type) {
+			t.Fatalf("expectation result = %+v, want failed <missing> outcome", got)
+		}
+	}
+}
+
 func TestRealExecutorWithoutFactoryIsUnavailable(t *testing.T) {
 	scenario := probe.ScenarioV2{SchemaVersion: probe.ScenarioV2Version, ID: "real-no-factory"}
 	result := testRunner().Execute(context.Background(), Selection{Scenario: scenario}, "", WithBrowserExecutorMode(BrowserExecutorReal))

@@ -244,3 +244,27 @@ func (g *roomGraph) inputRetired(input *mixer.Input) bool {
 	_, retired := g.retired[participantID]
 	return retired
 }
+
+// deliveryTargets lists the live peers that consume source's audio.
+func (g *roomGraph) deliveryTargets(sourceID string) []string {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if _, retired := g.retired[sourceID]; retired {
+		return nil
+	}
+	targets := make([]string, 0, len(g.inputs[sourceID]))
+	for _, input := range g.inputs[sourceID] {
+		targetID := g.routeTo[input]
+		if _, retired := g.retired[targetID]; retired || targetID == "" {
+			continue
+		}
+		if output := g.output(targetID); output == nil || (output.provider == nil && output.playback == nil) {
+			continue
+		}
+		targets = append(targets, targetID)
+	}
+	return targets
+}

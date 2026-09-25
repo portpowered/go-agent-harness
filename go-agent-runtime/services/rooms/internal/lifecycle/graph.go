@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -30,6 +31,9 @@ type roomGraph struct {
 	outputs  []*graphOutput
 	err      error
 	recorder audioRecorder
+	// delivery observes peer hand-offs so a reached max_turns stop can wait
+	// for the final responses' audio. It is attached after the workers start.
+	delivery atomic.Pointer[finalTurnDelivery]
 
 	workers sync.WaitGroup
 	close   sync.Once
@@ -279,19 +283,23 @@ func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
 			}
 			return
 		}
+		g.delivery.Load().handedOff(output.target.participant.ID, mixed.Sources, frame.EndOfResponse)
 	}
 }
 
 func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) error {
 	frame := mixed.Frame
 	if output.provider != nil {
+		// Stamp the peer-audio emission before the hand-off: once the peer
+		// provider holds the frame it may answer, so a later stamp would
+		// charge the peer's reaction time to local output latency.
+		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
 		if err := output.provider.WriteFrame(g.ctx, frame); err != nil {
 			return fmt.Errorf("write room mix for %q: %w", output.target.participant.ID, err)
 		}
 		if g.recorder != nil {
 			g.recorder.RecordReceived(output.target.participant.ID, frame)
 		}
-		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
 	}
 	if output.queue == (audio.FrameProducer{}) {
 		return nil
