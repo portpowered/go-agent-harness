@@ -139,10 +139,10 @@ func (h *contractHandle) Close() error {
 	h.closeCount++
 	h.mu.Unlock()
 	h.closeEvents.Do(func() { close(h.events) })
-	if h.inbound != nil {
-		_ = h.inbound.Close()
+	if h.inbound == nil {
+		return nil
 	}
-	return nil
+	return h.inbound.Close()
 }
 
 func (h *contractHandle) counts() (cancels, closes int) {

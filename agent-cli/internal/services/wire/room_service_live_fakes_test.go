@@ -57,19 +57,6 @@ func (l *contractLive) handle(t *testing.T, id string) *contractHandle {
 	return handle
 }
 
-func (l *contractLive) request(t *testing.T, id string) session.LiveRequest {
-	t.Helper()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for _, request := range l.requests {
-		if request.ParticipantID == id {
-			return request
-		}
-	}
-	t.Fatalf("participant %q made no live request", id)
-	return session.LiveRequest{}
-}
-
 // contractHandle is one provider session. Inbound carries provider speech
 // into the room; Outbound records what the room delivered to the provider.
 type contractHandle struct {
@@ -135,10 +122,10 @@ func (h *contractHandle) Close() error {
 	h.closeCount++
 	h.mu.Unlock()
 	h.closeEvents.Do(func() { close(h.events) })
-	if h.inbound != nil {
-		_ = h.inbound.Close()
+	if h.inbound == nil {
+		return nil
 	}
-	return nil
+	return h.inbound.Close()
 }
 
 func (h *contractHandle) counts() (cancels, closes int) {

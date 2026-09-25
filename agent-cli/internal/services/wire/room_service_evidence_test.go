@@ -40,6 +40,7 @@ func readRunManifest(t *testing.T, output string) roomevidence.RunManifest {
 // humanMedia is one customer's device pair. Capture speaks a fixed frame
 // until the room stops; playback records the audible frames the room delivered.
 type humanMedia struct {
+	frame     []int16
 	heard     chan audio.PCMFrame
 	closeOnce sync.Once
 	closes    chan struct{}
@@ -54,8 +55,8 @@ type humanCapture struct{ *humanMedia }
 
 func (c humanCapture) Pump(ctx context.Context, room audio.OutboundMedia) error {
 	for ctx.Err() == nil {
-		if err := room.WriteFrame(ctx, audio.PCMFrame{Samples: constantFrame(9)}); err != nil {
-			return nil
+		if err := room.WriteFrame(ctx, audio.PCMFrame{Samples: c.frame}); err != nil {
+			return unlessStopping(ctx, err)
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -68,7 +69,7 @@ func (p humanPlayback) Pump(ctx context.Context, room audio.InboundMedia) error 
 	for {
 		frame, err := room.ReadFrame(ctx)
 		if err != nil {
-			return nil
+			return unlessStopping(ctx, err)
 		}
 		if silent(frame) {
 			continue
@@ -80,9 +81,24 @@ func (p humanPlayback) Pump(ctx context.Context, room audio.InboundMedia) error 
 	}
 }
 
+// unlessStopping treats a media error as the room's normal shutdown once the
+// room has cancelled the worker; any earlier error is a real device fault.
+func unlessStopping(ctx context.Context, err error) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+		return err
+	}
+}
+
 // constantFrame fills one complete frame at the room's default cadence.
-func constantFrame(sample int16) []int16 {
-	samples, _ := mixer.DefaultFormat().FrameSamples()
+func constantFrame(t *testing.T, sample int16) []int16 {
+	t.Helper()
+	samples, err := mixer.DefaultFormat().FrameSamples()
+	if err != nil {
+		t.Fatalf("default room frame size: %v", err)
+	}
 	frame := make([]int16, samples)
 	for index := range frame {
 		frame[index] = sample
@@ -109,7 +125,7 @@ func humanRoom() rooms.Manifest {
 func TestServiceFinalizesHumanRoomEvidenceWhenCallerCancels(t *testing.T) {
 	live := newContractLive()
 	live.media = true
-	device := &humanMedia{heard: make(chan audio.PCMFrame, 64), closes: make(chan struct{})}
+	device := &humanMedia{frame: constantFrame(t, 9), heard: make(chan audio.PCMFrame, 64), closes: make(chan struct{})}
 	var opens int
 	media := rooms.MediaFactoryFunc(func(_ context.Context, participant rooms.Participant, _ rooms.AudioFormat) (rooms.MediaPorts, error) {
 		if participant.Kind != rooms.ParticipantKindHuman {
@@ -126,7 +142,7 @@ func TestServiceFinalizesHumanRoomEvidenceWhenCallerCancels(t *testing.T) {
 	done, ready := startRun(ctx, service, rooms.RoomRunOptions{Manifest: humanRoom(), OutputDir: output, OnParticipantReady: func(value rooms.RoomParticipantReady) { readiness.Store(value.ParticipantID, value) }})
 	awaitReady(t, ready, 2)
 	agent := live.handle(t, agentID)
-	agent.inbound.frames <- audio.PCMFrame{Samples: constantFrame(5)}
+	agent.inbound.frames <- audio.PCMFrame{Samples: constantFrame(t, 5)}
 	awaitFrameContaining(t, agent.outbound.frames, 9)
 	awaitFrameContaining(t, device.heard, 5)
 	cancel()
@@ -156,9 +172,9 @@ func TestServiceFinalizesHumanRoomEvidenceWhenCallerCancels(t *testing.T) {
 
 func assertHumanReadiness(t *testing.T, readiness *sync.Map) {
 	t.Helper()
-	value, _ := readiness.Load(humanCustomerID)
-	human, _ := value.(rooms.RoomParticipantReady)
-	if human.Kind != rooms.ParticipantKindHuman || human.InputDevice != "input:mic" || human.OutputDevice != "output:speaker" || human.Provider != "" {
+	value, loaded := readiness.Load(humanCustomerID)
+	human, typed := value.(rooms.RoomParticipantReady)
+	if !loaded || !typed || human.Kind != rooms.ParticipantKindHuman || human.InputDevice != "input:mic" || human.OutputDevice != "output:speaker" || human.Provider != "" {
 		t.Fatalf("human readiness = %+v, want devices without a provider", human)
 	}
 }

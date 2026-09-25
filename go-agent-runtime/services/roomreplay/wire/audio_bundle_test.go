@@ -146,7 +146,7 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 
 	t.Run("PCM format mismatch", func(t *testing.T) {
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-		manifest["pcm_format"].(map[string]any)["sample_rate_hz"] = 16000
+		object(manifest["pcm_format"])["sample_rate_hz"] = 16000
 		writeRoomReplayAudioManifest(t, bundle, manifest)
 		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
 		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "pcm_format")
@@ -157,9 +157,9 @@ func TestLoadRoomReplayAudioBundleRejectsMissingHashTimelineAndFormatEvidence(t 
 
 	t.Run("duplicate stream identity", func(t *testing.T) {
 		bundle, manifest, _ := writeRoomReplayAudioBundle(t)
-		participants := manifest["participants"].(map[string]any)
-		betaStreams := participants["beta"].(map[string]any)["streams"].(map[string]any)
-		betaStreams["sent"].(map[string]any)["stream_id"] = bundleAlphaSent
+		participants := object(manifest["participants"])
+		betaStreams := object(object(participants["beta"])["streams"])
+		object(betaStreams["sent"])["stream_id"] = bundleAlphaSent
 		writeRoomReplayAudioManifest(t, bundle, manifest)
 		_, err := roomReplayAudioTestService().LoadAudioBundle(bundle)
 		assertRoomReplayAudioError(t, err, roomreplay.ErrInvalidRoomReplayBundle, "streams.alpha:sent")
@@ -190,7 +190,7 @@ func TestLoadRoomReplayAudioBundleRejectsEveryDeltaReconstructionMutation(t *tes
 		{
 			name: "altered delta",
 			mutate: func(lines []map[string]any) {
-				decoded, err := base64.StdEncoding.DecodeString(lines[0]["delta"].(string))
+				decoded, err := base64.StdEncoding.DecodeString(fmt.Sprint(lines[0]["delta"]))
 				if err != nil {
 					panic(err)
 				}
@@ -299,11 +299,11 @@ func TestLoadRoomReplayAudioBundleEnforcesAnnotationIdentityAndToleranceBounds(t
 		clock := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 		// Keep the declared stream interval inside the room while making the
 		// four-sample payload (about 167us at 24kHz) exceed the room by 67us.
-		manifest["timing"].(map[string]any)["ended_at"] = clock.Add(100 * time.Microsecond).Format(time.RFC3339Nano)
-		participants := manifest["participants"].(map[string]any)
+		object(manifest["timing"])["ended_at"] = clock.Add(100 * time.Microsecond).Format(time.RFC3339Nano)
+		participants := object(manifest["participants"])
 		for _, participantID := range []string{bundleAlphaID, "beta"} {
-			streams := participants[participantID].(map[string]any)["streams"].(map[string]any)
-			streams["wav"].(map[string]any)["timeline_end_ms"] = "100us"
+			streams := object(object(participants[participantID])["streams"])
+			object(streams["wav"])["timeline_end_ms"] = "100us"
 		}
 		timeline := []byte(fmt.Sprintf(`{"sequence":0,"monotonic_offset_ms":0,"unix_ms":%d,"type":"speech_start","participant_id":"alpha"}`+"\n"+`{"sequence":1,"monotonic_offset_ms":0,"unix_ms":%d,"type":"speech_start","participant_id":"beta"}`+"\n", clock.UnixMilli(), clock.UnixMilli()))
 		if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
@@ -382,7 +382,7 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 		"artifacts":    map[string]any{"room_timeline": roomReplayAudioArtifactValue(paths["room-timeline.jsonl"], "room-timeline.jsonl"), "room_mix": roomReplayAudioArtifactValue(paths["room-mix.wav"], "room-mix.wav")},
 		"annotations":  map[string]any{"overlaps": []any{map[string]any{"kind": "overlap", "id": "overlap-1", "start_ms": 10, "end_ms": 90, "participants": []any{bundleAlphaID, "beta"}}}},
 	}
-	participants := manifest["participants"].(map[string]any)
+	participants := object(manifest["participants"])
 	for _, participantID := range []string{bundleAlphaID, "beta"} {
 		artifactValues := map[string]any{}
 		for role, name := range map[string]string{
@@ -420,8 +420,8 @@ func writeRoomReplayAudioManifest(t *testing.T, bundle string, manifest map[stri
 
 func updateRoomReplayArtifact(t *testing.T, manifest map[string]any, role string, data []byte) {
 	t.Helper()
-	artifacts := manifest["artifacts"].(map[string]any)
-	value := artifacts[role].(map[string]any)
+	artifacts := object(manifest["artifacts"])
+	value := object(artifacts[role])
 	value["size"] = len(data)
 	digest := sha256.Sum256(data)
 	value["sha256"] = hex.EncodeToString(digest[:])
@@ -429,10 +429,10 @@ func updateRoomReplayArtifact(t *testing.T, manifest map[string]any, role string
 
 func updateRoomReplayParticipantArtifact(t *testing.T, manifest map[string]any, participantID, role string, data []byte) {
 	t.Helper()
-	participants := manifest["participants"].(map[string]any)
-	participant := participants[participantID].(map[string]any)
-	artifacts := participant["artifacts"].(map[string]any)
-	value := artifacts[role].(map[string]any)
+	participants := object(manifest["participants"])
+	participant := object(participants[participantID])
+	artifacts := object(participant["artifacts"])
+	value := object(artifacts[role])
 	value["size"] = len(data)
 	digest := sha256.Sum256(data)
 	value["sha256"] = hex.EncodeToString(digest[:])
@@ -472,4 +472,14 @@ func jsonLines(t *testing.T, values []map[string]any) []byte {
 		buffer.WriteByte('\n')
 	}
 	return buffer.Bytes()
+}
+
+// object views one decoded JSON object from the fixture manifest. A shape
+// mismatch yields nil, so a mutation against it fails the test loudly.
+func object(value any) map[string]any {
+	decoded, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return decoded
 }
