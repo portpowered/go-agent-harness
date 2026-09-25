@@ -23,6 +23,13 @@ type FileDeviceService struct {
 	Scheduler clock.Scheduler
 }
 
+// EventRenderer presents one live event to the operator.
+type EventRenderer func(context.Context, io.Writer, runtimeSession.LiveEvent) error
+
+// EventRendererFactory creates the invocation-scoped presentation state; the
+// flag reports a replayed session.
+type EventRendererFactory func(replay bool) EventRenderer
+
 // RequestBuilder resolves CLI configuration into the neutral runtime request.
 // It is deliberately a callback so this host package does not own provider,
 // capability, or prompt policy.
@@ -48,6 +55,12 @@ type Dependencies struct {
 	CredentialValues   func(serviceSession.Request) ([]string, error)
 	CaptureComplete    func(serviceSession.Request) []runtimeSession.LiveControl
 	TraceService       runtimeSessionTrace.Service
+	// FileMediaService opens the invocation's finite sources and sinks.
+	FileMediaService runtimeDevices.FileMediaService
+	// ImageStager gives read_image session-owned opening image copies.
+	ImageStager runtimeSession.LiveImageStager
+	// NewEventRenderer owns operator-facing event presentation.
+	NewEventRenderer EventRendererFactory
 }
 
 // Run admits a single host invocation into the reusable live runtime. File
@@ -75,7 +88,7 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 			runErr = errors.Join(runErr, finishTrace(traceRun, traceContext(ctx), bundle, runErr == nil))
 		}()
 	}
-	cleanupImages, err := stageLiveOpeningImages(request, &liveRequest)
+	cleanupImages, err := stageOpeningImages(request, &liveRequest, deps.ImageStager)
 	if err != nil {
 		return err
 	}
@@ -102,18 +115,14 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 		}
 		return errors.Join(cause, recorder.Finalize(context.WithoutCancel(ctx), cause))
 	}
-	filePorts, err := OpenFilePorts(request, out, liveRequest.OutputAudioSampleRate)
+	media, err := openFileMedia(request, out, liveRequest, deps, traceRun)
 	if err != nil {
 		return finishRecorder(err)
 	}
-	if filePorts != nil {
-		defer func() { runErr = errors.Join(runErr, filePorts.Close()) }()
+	if media != nil {
+		defer func() { runErr = errors.Join(runErr, media.Close()) }()
 	}
-	configureLegacyReplayInput(filePorts, request, liveRequest)
-	if traceRun != nil {
-		wrapTraceFilePorts(traceRun, filePorts)
-	}
-	options := liveRunOptions(out, request, liveRequest, recorder, filePorts, deps, traceRun, redactor)
+	options := liveRunOptions(out, request, liveRequest, recorder, media, deps, traceRun, redactor)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
 }
 
@@ -264,34 +273,9 @@ func configureLiveCapturePath(request serviceSession.Request, replayInputPath st
 	}
 }
 
-func configureLegacyReplayInput(filePorts *FilePorts, request serviceSession.Request, liveRequest runtimeSession.LiveRequest) {
-	if filePorts == nil || filePorts.Input == nil || request.ReplayPath == "" || liveRequest.ReplayPlan == nil {
-		return
-	}
-	if liveRequest.ReplayPlan.InputAudioSampleRate <= 0 {
-		UseLegacyFrameSource(filePorts.Input)
-	}
-}
-
-func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, filePorts *FilePorts, deps Dependencies, traceRun runtimeSessionTrace.Prepared, redactor runRedactor) runtimeSession.LiveRunOptions {
-	terminalRenderer := newTerminalEventRenderer(request.ReplayPath != "")
-	deviceService := deps.DeviceService
-	deviceRequest := devicesRequest(request, liveRequest)
-	if filePorts != nil {
-		applyFileSchedulers(filePorts, deps.FileDeviceService.Scheduler)
-		deviceRequest.FileInput = filePorts.Input
-		deviceRequest.FileOutput = filePorts.Output
-		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, filePorts)
-		if filePorts.Input != nil {
-			// FileInput owns the physical capture role in the composite device
-			// service, but the live lifecycle still needs to know that capture is
-			// active so it waits for the source boundary before finishing.
-			deviceRequest.CaptureEnabled = true
-		}
-	}
-	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && (filePorts == nil || len(filePorts.InputTurns) == 0 && len(filePorts.InputInterruptions) == 0) {
-		deviceService = nil
-	}
+func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, recorder runtimeSession.LiveRecorder, handle runtimeDevices.FileMediaHandle, deps Dependencies, traceRun runtimeSessionTrace.Prepared, redactor runRedactor) runtimeSession.LiveRunOptions {
+	media := fileMedia(handle)
+	deviceService, deviceRequest := liveDevices(request, liveRequest, handle, media, deps)
 	deviceService = wrapTraceDeviceService(deviceService, traceRun)
 	return runtimeSession.LiveRunOptions{
 		Request:                 liveRequest,
@@ -300,19 +284,48 @@ func liveRunOptions(out io.Writer, request serviceSession.Request, liveRequest r
 		AudioTurnAdmission:      audioTurnAdmission(request),
 		Metrics:                 request.MetricsRecorder,
 		Recorder:                recorder,
-		CaptureTurns:            captureTurns(filePorts),
-		CaptureInterruptions:    captureInterruptions(filePorts),
+		CaptureTurns:            media.InputTurns,
+		CaptureInterruptions:    media.Interruptions,
 		CaptureInterruptionTool: request.AudioInterruptTool,
 		CaptureCompleteControls: captureCompleteControls(request, deps.CaptureComplete),
-		Events: runtimeSession.LiveEventSinkFunc(func(eventContext context.Context, event runtimeSession.LiveEvent) error {
-			eventOut := outputWriter(request, out)
-			if err := renderTerminalEventWithRenderer(eventContext, eventOut, terminalRenderer, redactor.event(event)); err != nil {
+		Events:                  liveEventSink(out, request, deps, redactor),
+	}
+}
+
+// liveDevices routes capture and playback to the physical or finite device
+// service. A finite input owns the capture role, but the live lifecycle must
+// still know capture is active so it waits for the source boundary.
+func liveDevices(request serviceSession.Request, liveRequest runtimeSession.LiveRequest, handle runtimeDevices.FileMediaHandle, media runtimeDevices.FileMedia, deps Dependencies) (runtimeDevices.Service, runtimeDevices.Request) {
+	deviceService := deps.DeviceService
+	deviceRequest := devicesRequest(request, liveRequest)
+	if handle != nil {
+		deviceRequest.FileInput = media.Input
+		deviceRequest.FileOutput = media.Output
+		deviceService, deviceRequest = selectFileDevices(deviceService, deps.FileDeviceService.Service, deviceRequest, media)
+		if media.Input != nil {
+			deviceRequest.CaptureEnabled = true
+		}
+	}
+	if !deviceRequest.CaptureEnabled && !deviceRequest.PlaybackEnabled && len(media.InputTurns) == 0 && len(media.Interruptions) == 0 {
+		deviceService = nil
+	}
+	return deviceService, deviceRequest
+}
+
+func liveEventSink(out io.Writer, request serviceSession.Request, deps Dependencies, redactor runRedactor) runtimeSession.LiveEventSinkFunc {
+	var render EventRenderer
+	if deps.NewEventRenderer != nil {
+		render = deps.NewEventRenderer(request.ReplayPath != "")
+	}
+	return func(eventContext context.Context, event runtimeSession.LiveEvent) error {
+		if render != nil {
+			if err := render(eventContext, outputWriter(request, out), redactor.event(event)); err != nil {
 				return err
 			}
-			if request.StreamObserver != nil && event.Message != nil {
-				request.StreamObserver(*event.Message)
-			}
-			return nil
-		}),
+		}
+		if request.StreamObserver != nil && event.Message != nil {
+			request.StreamObserver(*event.Message)
+		}
+		return nil
 	}
 }

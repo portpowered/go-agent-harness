@@ -56,3 +56,11 @@ func TestLiveServiceRejectsMissingInferencerFactory(t *testing.T) {
 		t.Fatalf("OpenLive error = %v, want missing-factory failure", err)
 	}
 }
+
+func TestLiveImageStagerLeavesRequestsWithoutImagesUnchanged(t *testing.T) {
+	request := session.LiveRequest{}
+	cleanup, err := NewLiveImageStager().StageOpeningImages(session.LiveImageStageRequest{}, &request)
+	if err != nil || cleanup == nil || cleanup() != nil || request.Capabilities != nil {
+		t.Fatalf("stage without images = %v, capabilities = %v", err, request.Capabilities)
+	}
+}

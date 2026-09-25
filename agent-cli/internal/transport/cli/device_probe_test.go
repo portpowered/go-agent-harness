@@ -152,10 +152,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load device scenario: %v", err)
 	}
-	inputPlan, err := serviceDevices.ProbeInputPlan(scenario)
-	if err != nil {
-		t.Fatalf("device input contract: %v", err)
-	}
+	inputPlan := authoredDeviceProbeInput(t, scenario)
 	corpusPath, err := replayCorpusPath(inputPlan.CorpusID)
 	if err != nil {
 		t.Fatalf("locate authored input corpus: %v", err)
@@ -190,7 +187,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	const seededDeviceFrameCount = 8
 	corpusStart := -1
 	for offset := 0; offset+seededDeviceFrameCount*audio.FrameSize <= len(corpusSamples); offset += audio.FrameSize {
-		if serviceDevices.ProbeRMS(corpusSamples[offset:offset+audio.FrameSize]) > audio.DefaultVADConfig.EnergyThreshold {
+		if audio.PCM16RMSEnergy(corpusSamples[offset:offset+audio.FrameSize]) > audio.DefaultVADConfig.EnergyThreshold {
 			corpusStart = offset
 			break
 		}
@@ -228,10 +225,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		for {
 			select {
 			case message := <-session.sent:
-				if message.Type == messages.StreamTypeAudioDelta {
-					if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil {
-						audioObserved <- append([]byte(nil), value.Content...)
-					}
+				if recordProbeAudioDelta(message, audioObserved) {
 					continue
 				}
 				if message.Type != messages.StreamTypeMessageEnd {
@@ -286,14 +280,14 @@ drainAudio:
 	for i := range capturedSamples {
 		capturedSamples[i] = int16(binary.LittleEndian.Uint16(capturedAudio[i*2:]))
 	}
-	if serviceDevices.ProbeRMS(capturedSamples) <= audio.DefaultVADConfig.EnergyThreshold {
-		t.Fatalf("runtime forwarded authored input RMS = %.2f, want voiced corpus input above %.2f", serviceDevices.ProbeRMS(capturedSamples), audio.DefaultVADConfig.EnergyThreshold)
+	if audio.PCM16RMSEnergy(capturedSamples) <= audio.DefaultVADConfig.EnergyThreshold {
+		t.Fatalf("runtime forwarded authored input RMS = %.2f, want voiced corpus input above %.2f", audio.PCM16RMSEnergy(capturedSamples), audio.DefaultVADConfig.EnergyThreshold)
 	}
-	if !strings.Contains(observedInstructions, inputPlan.CorpusID) || !strings.Contains(observedInstructions, inputPlan.Utterance) {
-		t.Fatalf("session instructions = %q, want authored corpus %q and utterance %q", observedInstructions, inputPlan.CorpusID, inputPlan.Utterance)
+	if !strings.Contains(observedInstructions, inputPlan.CorpusID) || !strings.Contains(observedInstructions, inputPlan.Text) {
+		t.Fatalf("session instructions = %q, want authored corpus %q and utterance %q", observedInstructions, inputPlan.CorpusID, inputPlan.Text)
 	}
-	if len(observation.PCM16Samples) == 0 || serviceDevices.ProbeRMS(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
-		t.Fatalf("runtime output samples/RMS = %d/%.2f, want non-silent output", len(observation.PCM16Samples), serviceDevices.ProbeRMS(observation.PCM16Samples))
+	if len(observation.PCM16Samples) == 0 || audio.PCM16RMSEnergy(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
+		t.Fatalf("runtime output samples/RMS = %d/%.2f, want non-silent output", len(observation.PCM16Samples), audio.PCM16RMSEnergy(observation.PCM16Samples))
 	}
 	if observation.Transcript != "device round trip" {
 		t.Fatalf("runtime transcript = %q, want provider session transcript", observation.Transcript)
@@ -384,4 +378,33 @@ func (r *deviceProbeRegistry) Default(devicegw.Direction) (devicegw.Device, erro
 
 func (r *deviceProbeRegistry) Open(devicegw.DeviceID) (devicegw.OpenedDevice, error) {
 	return nil, fmt.Errorf("device probe availability must not open devices")
+}
+
+// authoredDeviceProbeInput returns the scenario's single authored send_audio
+// corpus and utterance; the runtime probe service validates the full contract.
+func authoredDeviceProbeInput(t *testing.T, scenario probe.Scenario) probe.Step {
+	t.Helper()
+	var authored []probe.Step
+	for _, step := range scenario.Steps {
+		if step.Type == probe.StepSendAudio || step.Kind == probe.StepSendAudio {
+			authored = append(authored, step)
+		}
+	}
+	if len(authored) != 1 || authored[0].CorpusID == "" || strings.TrimSpace(authored[0].Text) == "" {
+		t.Fatalf("device scenario send_audio steps = %#v, want one authored corpus with text", authored)
+	}
+	authored[0].Text = strings.TrimSpace(authored[0].Text)
+	return authored[0]
+}
+
+// recordProbeAudioDelta forwards the bytes of an uploaded audio delta and
+// reports whether message was one.
+func recordProbeAudioDelta(message messages.StreamMessage, observed chan<- []byte) bool {
+	if message.Type != messages.StreamTypeAudioDelta {
+		return false
+	}
+	if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil {
+		observed <- append([]byte(nil), value.Content...)
+	}
+	return true
 }

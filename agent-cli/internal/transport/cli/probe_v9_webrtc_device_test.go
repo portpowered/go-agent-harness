@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -75,11 +73,8 @@ func TestS2SV9ScenarioLoadsThroughProbeSchema(t *testing.T) {
 	if scenario.Steps[0].Type != probe.StepSendAudio || scenario.Steps[1].Type != probe.StepClose {
 		t.Fatalf("v9 steps = %#v, want send_audio followed by close", scenario.Steps)
 	}
-	input, err := serviceDevices.ProbeInputPlan(scenario)
-	if err != nil {
-		t.Fatalf("device input contract: %v", err)
-	}
-	if input.CorpusID != "utterance-hello-there" || input.Utterance != "The timer is ready for the next step." {
+	input := authoredDeviceProbeInput(t, scenario)
+	if input.CorpusID != "utterance-hello-there" || input.Text != "The timer is ready for the next step." {
 		t.Fatalf("device input contract = %#v, want authored corpus and utterance", input)
 	}
 	if scenario.Expectations[0].Type != probe.ExpectAudioEnergy || scenario.Expectations[1].Type != probe.ExpectTranscriptContains {
