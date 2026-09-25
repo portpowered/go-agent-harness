@@ -57,14 +57,6 @@ func NewMesh(config ...MeshConfig) *Mesh {
 	return &Mesh{delegate: runtimeRoomsWire.NewMesh(cfg)}
 }
 
-func NewParticipantMesh(ctx context.Context, factory PairFactory) *Mesh {
-	return NewMesh(MeshConfig{Context: ctx, PairFactory: factory})
-}
-
-func NewLoopbackMesh(ctx context.Context) *Mesh {
-	return NewParticipantMesh(ctx, NewLoopbackPairFactory())
-}
-
 func (m *Mesh) Context() context.Context {
 	if m == nil || m.delegate == nil {
 		return context.Background()
@@ -107,16 +99,12 @@ func (m *Mesh) Participants() []string {
 	return m.delegate.Participants()
 }
 
-func (m *Mesh) ParticipantIDs() []string { return m.Participants() }
-
 func (m *Mesh) Peers(id string) (map[string]PeerView, error) {
 	if m == nil || m.delegate == nil {
 		return nil, &MeshError{Operation: "inspect peers", ParticipantID: id, Cause: ErrMeshClosed}
 	}
 	return m.delegate.Peers(id)
 }
-
-func (m *Mesh) RemotePeers(id string) (map[string]PeerView, error) { return m.Peers(id) }
 
 func (m *Mesh) Pair(firstID, secondID string) (PairResource, error) {
 	if m == nil || m.delegate == nil {

@@ -5,7 +5,6 @@ package room
 
 import (
 	"os"
-	"strings"
 
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
@@ -49,19 +48,6 @@ type RecordingConfig = runtimeRooms.RecordingConfig
 type Participant = runtimeRooms.Participant
 type ValidationOptions = runtimeRooms.ValidationOptions
 type ValidationRegistry = runtimeRooms.ValidationRegistry
-
-// NormalizeParticipantKind retains the CLI helper for existing callers while
-// keeping the compatibility spelling at the document boundary.
-func NormalizeParticipantKind(kind ParticipantKind) ParticipantKind {
-	switch normalized := ParticipantKind(strings.ToLower(strings.TrimSpace(string(kind)))); normalized {
-	case "", ParticipantKindAgent:
-		return ParticipantKindAgent
-	case ParticipantKindHuman, ParticipantKindCustomer:
-		return ParticipantKindHuman
-	default:
-		return normalized
-	}
-}
 
 func NewValidationRegistry(providers []string, models map[string][]string, tools []string, voices map[string][]string) ValidationRegistry {
 	return runtimeWire.NewValidationRegistry(providers, models, tools, voices)
