@@ -433,10 +433,10 @@ func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, sta
 	return stopErr
 }
 
-// trackManagedBrowser installs Close and the exit watcher. Close joins the
-// watcher, so a closed handle never touches the profile directory afterwards.
+// trackManagedBrowser installs Close and the exit watcher. Close joins the watcher, so a closed handle never touches the profile.
 func (m *ManagedBrowserManager) trackManagedBrowser(browser *ManagedBrowser, statePath string, state ManagedBrowserState) {
 	closing, watcherDone := make(chan struct{}), make(chan struct{})
+	browser.exitWatcherDone = watcherDone
 	browser.closeHook = func() error {
 		err := m.closeManagedBrowser(browser, statePath, state)
 		close(closing)
