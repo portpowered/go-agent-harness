@@ -291,7 +291,8 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 	var calls atomic.Int32
 	var persistentFailure atomic.Bool
 	process := &reattachedManagedBrowserProcess{
-		state: ManagedBrowserState{PID: 55511},
+		state:        ManagedBrowserState{PID: 55511},
+		pollInterval: time.Millisecond,
 		inspector: ManagedBrowserProcessInspectorFunc(func(context.Context, ManagedBrowserState) (ManagedBrowserProcessInfo, error) {
 			call := calls.Add(1)
 			if persistentFailure.Load() || call <= 2 {

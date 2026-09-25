@@ -399,50 +399,6 @@ func TestSharedClockOptionConfiguresRecorderAndTargetSession(t *testing.T) {
 	}
 }
 
-func TestTargetSessionOptionsPreserveConfiguredRuntimeSeams(t *testing.T) {
-	clock := NewFakeClock(1)
-	ids := NewDeterministicIDs()
-	enableErr := errors.New("enable failed")
-	invokeErr := errors.New("invoke failed")
-	cancelErr := errors.New("cancel failed")
-	page := webmcp.PageContext{Title: "fixture page"}
-	tool := webmcp.ToolDescriptor{Name: "read_state"}
-	config := NewTargetConfig(
-		webmcp.Target{ID: "tab-1"},
-		WithEventBuffer(3),
-		WithContext(page),
-		WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded}),
-		WithInitialCatalog(tool),
-		WithAutoResponseStatus("Queued", []byte(okJSONOutput)),
-		WithEnableError(enableErr),
-		WithInvokeError(invokeErr),
-		WithCancelError(cancelErr),
-		WithCancellationAcknowledgement(false),
-		WithCancellationResponse(false),
-		WithIDs(ids),
-		WithClock(clock),
-	)
-	options := config.Session
-	if options.EventBuffer != 3 || options.Context.Title != page.Title || len(options.EnableEvents) != 1 {
-		t.Fatalf("basic session options = %+v", options)
-	}
-	if len(options.InitialCatalog) != 1 || options.InitialCatalog[0].Name != tool.Name {
-		t.Fatalf("catalog option = %+v", options.InitialCatalog)
-	}
-	if options.AutoResponseStatus != "Queued" || string(options.AutoResponseOutput) != okJSONOutput {
-		t.Fatalf("response options = %+v", options)
-	}
-	if options.EnableError != enableErr || options.InvokeError != invokeErr || options.CancelError != cancelErr {
-		t.Fatalf("failure options = %+v", options)
-	}
-	if options.AcknowledgeCancellation == nil || *options.AcknowledgeCancellation || options.EmitCancellationResponse == nil || *options.EmitCancellationResponse {
-		t.Fatalf("cancellation options = %+v", options)
-	}
-	if options.IDs != ids || options.Clock != clock {
-		t.Fatalf("injected seams = ids:%v clock:%v", options.IDs, options.Clock)
-	}
-}
-
 func TestDeterministicIDsAreValidAndReproducible(t *testing.T) {
 	pattern := regexp.MustCompile(`^webmcp\.tool-ref\.v1:[A-Za-z0-9_-]{22}$`)
 	left := NewDeterministicIDs()

@@ -92,10 +92,25 @@ func stringSetContains(values []string, expected string) bool {
 }
 
 func normalizedManagedShutdown(timeout time.Duration) time.Duration {
-	if timeout <= 0 {
-		return defaultManagedBrowserShutdownTimeout
+	return durationOrDefault(timeout, defaultManagedBrowserShutdownTimeout)
+}
+
+// durationOrDefault returns value when it is positive and fallback otherwise.
+// Unset timing fields use it to fall back to their production defaults.
+func durationOrDefault(value, fallback time.Duration) time.Duration {
+	if value <= 0 {
+		return fallback
 	}
-	return timeout
+	return value
+}
+
+// versionQueryOrDefault returns query, or the executable --version query when
+// query is nil.
+func versionQueryOrDefault(query VersionQuery) VersionQuery {
+	if query == nil {
+		return queryChromeVersion
+	}
+	return query
 }
 
 // discardCleanupError runs a release on an abandon or cleanup path whose

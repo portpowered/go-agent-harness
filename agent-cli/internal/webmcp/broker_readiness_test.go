@@ -15,9 +15,12 @@ func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
 		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Eligible: true}),
 	))
+	// The catalog wait expiring without evidence is the behavior under test;
+	// its length is irrelevant, so keep it short.
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
-		Runtime:    runtime,
-		Discoverer: staticDiscoverer{candidate},
+		Runtime:     runtime,
+		Discoverer:  staticDiscoverer{candidate},
+		CatalogWait: 10 * time.Millisecond,
 	})
 	defer closeAtTestEnd(t, broker)
 

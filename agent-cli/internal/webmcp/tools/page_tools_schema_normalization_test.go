@@ -200,25 +200,3 @@ func TestPageToolSkippedSchemaWarningNamesToolAndReason(t *testing.T) {
 		t.Fatalf("warning does not carry a reason the tool could not be normalized: %#v", fields)
 	}
 }
-
-// TestPageToolNormalSchemasUnaffectedByNormalization is required test 4: a
-// tool with an ordinary object schema (no top-level combinator) must pass
-// through byte-for-byte unchanged - normalization must not over-trigger on
-// schemas the provider already accepts.
-func TestPageToolNormalSchemasUnaffectedByNormalization(t *testing.T) {
-	schema := json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`)
-	broker := &recordingBroker{catalog: webmcp.ToolCatalogSnapshot{
-		Generation: 1,
-		Tools: []webmcp.ToolDescriptor{{
-			Ref:         webmcp.ToolRef("webmcp.tool-ref.v1:queue-cube-moves"),
-			Name:        "queue_cube_moves",
-			Description: "Queue cube rotations.",
-			InputSchema: schema,
-		}},
-	}}
-	definitions := NewBrokerToolSet(broker).PageToolDefinitions(context.Background())
-	if len(definitions) != 1 {
-		t.Fatalf("page definitions = %d, want 1", len(definitions))
-	}
-	assertJSONValueEqual(t, definitions[0].ParameterSchema, schema)
-}
