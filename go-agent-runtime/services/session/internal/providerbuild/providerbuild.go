@@ -109,6 +109,8 @@ func replayTiming(timing session.LiveReplayTiming) string {
 		return string(session.LiveReplayTimingRealtime)
 	case session.LiveReplayTimingStep:
 		return string(session.LiveReplayTimingStep)
+	case session.LiveReplayTimingFast:
+		return string(session.LiveReplayTimingFast)
 	default:
 		return string(session.LiveReplayTimingFast)
 	}

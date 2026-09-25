@@ -239,8 +239,8 @@ func (e *recordingToolExecutor) called(name string) bool {
 
 func TestLiveToolSurfaceFollowsRefreshedCapabilities(t *testing.T) {
 	executor := &recordingToolExecutor{}
-	var surface atomic.Value
-	surface.Store([]messages.ToolDefinition{{Name: "stable_tool"}})
+	var surface atomic.Pointer[[]messages.ToolDefinition]
+	surface.Store(&[]messages.ToolDefinition{{Name: "stable_tool"}})
 	provider := newScriptedLiveSession(func(s *scriptedLiveSession, msg messages.StreamMessage) {
 		if value, ok := msg.Value.(*messages.TextDeltaValue); ok && value.Content == "use the page tool" {
 			s.emit(
@@ -254,22 +254,26 @@ func TestLiveToolSurfaceFollowsRefreshedCapabilities(t *testing.T) {
 	handle, err := newScriptedLiveService(scriptedInferencer{session: provider}).OpenLive(context.Background(), session.LiveRequest{
 		SessionID: "refresh",
 		Capabilities: &session.LiveCapabilities{
-			Executor: executor, Definitions: surface.Load().([]messages.ToolDefinition),
+			Executor: executor, Definitions: *surface.Load(),
 			RefreshDefinitions: func(context.Context) ([]messages.ToolDefinition, error) {
-				return surface.Load().([]messages.ToolDefinition), nil
+				return *surface.Load(), nil
 			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("OpenLive: %v", err)
 	}
-	defer func() { _ = handle.Close() }()
+	defer func() {
+		if err := handle.Close(); err != nil {
+			t.Logf("close live handle: %v", err)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), liveRuntimeTestTimeout)
 	defer cancel()
 	if err := handle.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	surface.Store([]messages.ToolDefinition{{Name: "stable_tool"}, {Name: "page_tool"}})
+	surface.Store(&[]messages.ToolDefinition{{Name: "stable_tool"}, {Name: "page_tool"}})
 	if err := handle.Send(ctx, session.LiveControl{Kind: session.LiveControlText, Text: "use the page tool"}); err != nil {
 		t.Fatalf("send text control: %v", err)
 	}
