@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"io"
 	"maps"
 	"net/http"
 
@@ -512,10 +511,10 @@ func (p *FalProvider) doJSON(ctx context.Context, modelID string, body any, resu
 	if err != nil {
 		return fmt.Errorf("fal: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return providers.NewProviderHTTPError("fal", resp.StatusCode, fmt.Sprintf("%s %s: %d %s", req.Method, url, resp.StatusCode, string(body)))
+		body := readErrorBody(resp.Body)
+		return providers.NewProviderHTTPError("fal", resp.StatusCode, fmt.Sprintf("%s %s: %d %s", req.Method, url, resp.StatusCode, body))
 	}
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
 		return fmt.Errorf("fal: decode response: %w", err)

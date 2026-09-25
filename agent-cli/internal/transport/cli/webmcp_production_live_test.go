@@ -29,30 +29,9 @@ func TestProductionWebMCPDirectCommandsRehydrateSelectionAndOperateLiveBroker(t 
 		WebSocketURL:     "ws" + server.URL[len("http"):] + "/devtools/page/raw-tab",
 		ContinuityMarker: "document-live",
 	}
-	tool := webmcp.ToolDescriptor{
-		Name:        "set_state",
-		Description: "Mutate fixture state",
-		FrameID:     "frame-1",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"value":{"type":"number"}},"required":["value"],"additionalProperties":false}`),
-		Origin:      target.Origin,
-	}
+	tool := productionSetStateTool(target.Origin)
 	runtime := newReopeningProductionRuntime(candidate, target, tool, json.RawMessage(`{"mutated":true}`))
-	configDir := writeDoctorConfig(t, fmt.Sprintf(`
-browser:
-  tools:
-    enabled: true
-    backend: webmcp
-  connection:
-    cdp_url: %q
-  selection:
-    persist: true
-`, server.URL+"/json/version"))
-	store := NewFileWebMCPSelectionStore(configDir)
-	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
-		WithWebMCPProductionSelectionStore(store),
-	)
+	configDir, store, factory := newPersistedProductionDirectCLI(t, server, runtime)
 
 	selected := executeDirectCommand(t, configDir, store, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
 	selectedEnvelope := requireDirectSuccess(t, selected)
@@ -93,31 +72,7 @@ browser:
 		t.Fatalf("live watch = %+v", watchData)
 	}
 
-	operations := runtime.operations()
-	attachCount := countProductionRuntimeOperations(operations, testkit.OperationAttach)
-	detachCount := countProductionRuntimeOperations(operations, testkit.OperationDetach)
-	if attachCount == 0 || detachCount != attachCount {
-		t.Fatalf("external attach/detach counts = %d/%d; operations=%+v", attachCount, detachCount, operations)
-	}
-	if hasTestkitOperation(operations, testkit.OperationCloseTarget) {
-		t.Fatalf("production direct commands closed an externally owned target: %+v", operations)
-	}
-	if openCount := countProductionRuntimeOperations(operations, testkit.OperationOpen); openCount != countProductionRuntimeOperations(operations, testkit.OperationCloseHandle) {
-		t.Fatalf("browser handle cleanup count = %d opens/%d closes; operations=%+v", openCount, countProductionRuntimeOperations(operations, testkit.OperationCloseHandle), operations)
-	}
-	foundInvocation := false
-	for _, operation := range operations {
-		if operation.Kind != testkit.OperationInvoke {
-			continue
-		}
-		foundInvocation = true
-		if operation.TargetID != target.ID || operation.FrameID != tool.FrameID || operation.ToolName != tool.Name || string(operation.Input) != `{"value":7}` {
-			t.Fatalf("live invocation operation = %+v", operation)
-		}
-	}
-	if !foundInvocation {
-		t.Fatalf("live runtime did not receive invocation: %+v", operations)
-	}
+	assertLiveBrokerOperations(t, runtime.operations(), target, tool)
 	for _, secret := range []string{"secret", "#fragment", "query"} {
 		if containsDirectProductionOutput(secret, selected.stdout, contextResult.stdout, toolsResult.stdout, invokeResult.stdout, watch.stdout) {
 			t.Fatalf("direct production output exposed %q", secret)
@@ -141,30 +96,9 @@ func TestProductionWebMCPDirectCommandsCancelAcrossFreshProcessesAndRecover(t *t
 		ContinuityMarker: "document-pending",
 		Generation:       1,
 	}
-	tool := webmcp.ToolDescriptor{
-		Name:        "set_state",
-		Description: "Mutate fixture state",
-		FrameID:     "frame-1",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"value":{"type":"number"}},"required":["value"],"additionalProperties":false}`),
-		Origin:      target.Origin,
-	}
+	tool := productionSetStateTool(target.Origin)
 	runtime := newCrossProcessProductionRuntime(candidate, target, tool)
-	configDir := writeDoctorConfig(t, fmt.Sprintf(`
-browser:
-  tools:
-    enabled: true
-    backend: webmcp
-  connection:
-    cdp_url: %q
-  selection:
-    persist: true
-`, server.URL+"/json/version"))
-	store := NewFileWebMCPSelectionStore(configDir)
-	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
-		WithWebMCPProductionSelectionStore(store),
-	)
+	configDir, store, factory := newPersistedProductionDirectCLI(t, server, runtime)
 
 	selected := executeDirectCommand(t, configDir, store, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
 	requireDirectSuccess(t, selected)
@@ -194,30 +128,11 @@ browser:
 	cancelEnvelope := requireDirectSuccess(t, cancelResult)
 	var cancelData WebMCPDirectCancelData
 	decodeDirectData(t, cancelEnvelope.Data, &cancelData)
-	if cancelData.InvocationID != string(browserInvocationID) || cancelData.Status != "canceled" || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
+	if cancelData.InvocationID != string(browserInvocationID) || cancelData.Status != testCanceledStatus || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
 		t.Fatalf("live cancellation result = %+v", cancelData)
 	}
 
-	var invokeResult directCommandResult
-	select {
-	case invokeResult = <-invokeDone:
-	case <-time.After(time.Second):
-		t.Fatal("pending invoke did not observe cancellation")
-	}
-	if invokeResult.err == nil {
-		t.Fatal("pending invoke unexpectedly succeeded after cancellation")
-	}
-	var receipt WebMCPDirectInvocationReceipt
-	if err := json.Unmarshal([]byte(invokeResult.stderr), &receipt); err != nil {
-		t.Fatalf("decode live dispatch receipt: %v; stderr=%q", err, invokeResult.stderr)
-	}
-	if receipt.InvocationID != string(browserInvocationID) || receipt.ToolRef != toolsData.Tools[0].Ref || receipt.State != string(webmcp.InvocationDispatched) {
-		t.Fatalf("live dispatch receipt = %+v", receipt)
-	}
-	invokeEnvelope := decodeDirectEnvelope(t, invokeResult.stdout)
-	if invokeEnvelope.OK || invokeEnvelope.Error == nil || invokeEnvelope.Error.Code != string(webmcp.ErrorInvocationCanceled) || invokeEnvelope.Error.Details["invocation_id"] != string(browserInvocationID) {
-		t.Fatalf("canceled invoke envelope = %+v", invokeEnvelope)
-	}
+	invokeResult := awaitCanceledLiveInvoke(t, invokeDone, browserInvocationID, toolsData.Tools[0].Ref)
 
 	recovered := executeDirectCommand(t, configDir, store, factory, "invoke", "--tool-ref", toolsData.Tools[0].Ref, "--input-json", `{"value":8}`, "--timeout", "5s", "--json")
 	recoveredEnvelope := requireDirectSuccess(t, recovered)
@@ -236,6 +151,73 @@ browser:
 			}
 		}
 	}
+}
+
+func productionSetStateTool(origin string) webmcp.ToolDescriptor {
+	return webmcp.ToolDescriptor{
+		Name:        "set_state",
+		Description: "Mutate fixture state",
+		FrameID:     "frame-1",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"value":{"type":"number"}},"required":["value"],"additionalProperties":false}`),
+		Origin:      origin,
+	}
+}
+
+// assertLiveBrokerOperations requires balanced attach/detach and handle
+// cleanup, no closed external target, and the exact invocation on the target.
+func assertLiveBrokerOperations(t *testing.T, operations []testkit.Operation, target webmcp.Target, tool webmcp.ToolDescriptor) {
+	t.Helper()
+	attachCount := countProductionRuntimeOperations(operations, testkit.OperationAttach)
+	detachCount := countProductionRuntimeOperations(operations, testkit.OperationDetach)
+	if attachCount == 0 || detachCount != attachCount {
+		t.Fatalf("external attach/detach counts = %d/%d; operations=%+v", attachCount, detachCount, operations)
+	}
+	if hasTestkitOperation(operations, testkit.OperationCloseTarget) {
+		t.Fatalf("production direct commands closed an externally owned target: %+v", operations)
+	}
+	if openCount := countProductionRuntimeOperations(operations, testkit.OperationOpen); openCount != countProductionRuntimeOperations(operations, testkit.OperationCloseHandle) {
+		t.Fatalf("browser handle cleanup count = %d opens/%d closes; operations=%+v", openCount, countProductionRuntimeOperations(operations, testkit.OperationCloseHandle), operations)
+	}
+	foundInvocation := false
+	for _, operation := range operations {
+		if operation.Kind != testkit.OperationInvoke {
+			continue
+		}
+		foundInvocation = true
+		if operation.TargetID != target.ID || operation.FrameID != tool.FrameID || operation.ToolName != tool.Name || string(operation.Input) != `{"value":7}` {
+			t.Fatalf("live invocation operation = %+v", operation)
+		}
+	}
+	if !foundInvocation {
+		t.Fatalf("live runtime did not receive invocation: %+v", operations)
+	}
+}
+
+// awaitCanceledLiveInvoke waits for the pending invoke to fail with the
+// canceled envelope after emitting its dispatch receipt.
+func awaitCanceledLiveInvoke(t *testing.T, invokeDone <-chan directCommandResult, browserInvocationID webmcp.InvocationID, toolRef string) directCommandResult {
+	t.Helper()
+	var invokeResult directCommandResult
+	select {
+	case invokeResult = <-invokeDone:
+	case <-time.After(time.Second):
+		t.Fatal("pending invoke did not observe cancellation")
+	}
+	if invokeResult.err == nil {
+		t.Fatal("pending invoke unexpectedly succeeded after cancellation")
+	}
+	var receipt WebMCPDirectInvocationReceipt
+	if err := json.Unmarshal([]byte(invokeResult.stderr), &receipt); err != nil {
+		t.Fatalf("decode live dispatch receipt: %v; stderr=%q", err, invokeResult.stderr)
+	}
+	if receipt.InvocationID != string(browserInvocationID) || receipt.ToolRef != toolRef || receipt.State != string(webmcp.InvocationDispatched) {
+		t.Fatalf("live dispatch receipt = %+v", receipt)
+	}
+	invokeEnvelope := decodeDirectEnvelope(t, invokeResult.stdout)
+	if invokeEnvelope.OK || invokeEnvelope.Error == nil || invokeEnvelope.Error.Code != string(webmcp.ErrorInvocationCanceled) || invokeEnvelope.Error.Details["invocation_id"] != string(browserInvocationID) {
+		t.Fatalf("canceled invoke envelope = %+v", invokeEnvelope)
+	}
+	return invokeResult
 }
 
 type reopeningProductionRuntime struct {

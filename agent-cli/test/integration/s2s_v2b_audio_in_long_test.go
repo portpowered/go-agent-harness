@@ -145,11 +145,11 @@ func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.Sessio
 	var closeEvent *gatewaytesting.CapturedSessionEvent
 	for _, record := range base.Records {
 		switch record.Type {
-		case "session.update", "session.created":
+		case rtEventSessionUpdate, rtEventSessionCreated:
 			prefix = append(prefix, record)
-		case "response.created", "response.output_text.delta", "response.output_text.done", "response.done":
+		case rtEventResponseCreated, rtEventOutputTextDelta, rtEventOutputTextDone, rtEventResponseDone:
 			response = append(response, record)
-		case "session.closed":
+		case rtEventSessionClosed:
 			copyRecord := record
 			closeEvent = &copyRecord
 		}
@@ -172,7 +172,7 @@ func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.Sessio
 	}
 	for _, frame := range frames {
 		payload, marshalErr := json.Marshal(map[string]string{
-			"type":  "input_audio_buffer.append",
+			"type":  rtEventInputAudioAppend,
 			"audio": base64.StdEncoding.EncodeToString(frame),
 		})
 		if marshalErr != nil {
@@ -180,28 +180,28 @@ func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.Sessio
 		}
 		appendRecord(gatewaytesting.CapturedSessionEvent{
 			Direction:   gatewaytesting.DirectionClientToServer,
-			Type:        "input_audio_buffer.append",
+			Type:        rtEventInputAudioAppend,
 			PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
 			Payload:     payload,
 		})
 	}
 	appendRecord(gatewaytesting.CapturedSessionEvent{
 		Direction:   gatewaytesting.DirectionClientToServer,
-		Type:        "input_audio_buffer.commit",
+		Type:        rtEventInputAudioCommit,
 		PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
 	})
 	appendRecord(gatewaytesting.CapturedSessionEvent{
 		Direction:   gatewaytesting.DirectionClientToServer,
-		Type:        "response.create",
+		Type:        rtEventResponseCreate,
 		PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"response.create"}`),
 	})
 	for _, record := range response {
 		appendRecord(record)
-		if record.Type == "response.output_text.done" {
+		if record.Type == rtEventOutputTextDone {
 			audioDelta, marshalErr := json.Marshal(map[string]string{
-				"type":   "response.output_audio.delta",
+				"type":   rtEventOutputAudioDelta,
 				"delta":  base64.StdEncoding.EncodeToString(s2sV2BResponsePCM16LE()),
 				"format": "pcm16",
 			})
@@ -210,7 +210,7 @@ func buildS2SV2BLongCapture(t *testing.T, wavPath string) (gatewaytesting.Sessio
 			}
 			appendRecord(gatewaytesting.CapturedSessionEvent{
 				Direction:   gatewaytesting.DirectionServerToClient,
-				Type:        "response.output_audio.delta",
+				Type:        rtEventOutputAudioDelta,
 				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
 				Payload:     audioDelta,
 			})
@@ -243,11 +243,11 @@ func buildS2SV2BPerChunkCommitCapture(t *testing.T, positive gatewaytesting.Sess
 		clone.Sequence = len(records) + 1
 		clone.TimestampMs = int64(len(records))
 		records = append(records, clone)
-		if record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "input_audio_buffer.append" {
+		if record.Direction == gatewaytesting.DirectionClientToServer && record.Type == rtEventInputAudioAppend {
 			appends++
 			records = append(records, gatewaytesting.CapturedSessionEvent{
 				Direction:   gatewaytesting.DirectionClientToServer,
-				Type:        "input_audio_buffer.commit",
+				Type:        rtEventInputAudioCommit,
 				PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage,
 				Payload:     json.RawMessage(`{"type":"input_audio_buffer.commit"}`),
 				Sequence:    len(records) + 1,
@@ -276,10 +276,10 @@ func assertS2SV2BDifferOnlyByInsertedCommits(t *testing.T, positive, negative ga
 		return a.Direction == b.Direction && a.Type == b.Type && a.PayloadType == b.PayloadType && bytes.Equal(a.Payload, b.Payload)
 	}
 	isCommit := func(r gatewaytesting.CapturedSessionEvent) bool {
-		return r.Direction == gatewaytesting.DirectionClientToServer && r.Type == "input_audio_buffer.commit" && string(r.Payload) == `{"type":"input_audio_buffer.commit"}`
+		return r.Direction == gatewaytesting.DirectionClientToServer && r.Type == rtEventInputAudioCommit && string(r.Payload) == `{"type":"input_audio_buffer.commit"}`
 	}
 	isAppend := func(r gatewaytesting.CapturedSessionEvent) bool {
-		return r.Direction == gatewaytesting.DirectionClientToServer && r.Type == "input_audio_buffer.append"
+		return r.Direction == gatewaytesting.DirectionClientToServer && r.Type == rtEventInputAudioAppend
 	}
 
 	layout := make([]int, 0, len(positive.Records)*2)
@@ -341,13 +341,13 @@ func countS2SV2BEvents(capture gatewaytesting.SessionCapture) s2sV2BEventCounts 
 	var counts s2sV2BEventCounts
 	for _, record := range capture.Records {
 		switch {
-		case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "input_audio_buffer.append":
+		case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == rtEventInputAudioAppend:
 			counts.Appends++
-		case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "input_audio_buffer.commit":
+		case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == rtEventInputAudioCommit:
 			counts.Commits++
-		case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "response.create":
+		case record.Direction == gatewaytesting.DirectionClientToServer && record.Type == rtEventResponseCreate:
 			counts.ResponseCreate++
-		case record.Direction == gatewaytesting.DirectionServerToClient && record.Type == "response.done":
+		case record.Direction == gatewaytesting.DirectionServerToClient && record.Type == rtEventResponseDone:
 			counts.ResponseDone++
 		}
 	}
@@ -458,7 +458,7 @@ func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 
 	divergence := ""
 	for _, line := range strings.Split(diagnostics, "\n") {
-		if strings.Contains(line, "input_audio_buffer.commit") && strings.Contains(line, "input_audio_buffer.append") {
+		if strings.Contains(line, rtEventInputAudioCommit) && strings.Contains(line, rtEventInputAudioAppend) {
 			divergence = line
 			break
 		}

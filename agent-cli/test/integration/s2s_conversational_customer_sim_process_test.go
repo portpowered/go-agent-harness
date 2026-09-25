@@ -95,6 +95,19 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 	if !bytes.Equal(result.Stdout, wantAudio) {
 		t.Fatalf("captured stdout = %x, want only ordered PCM %x", result.Stdout, wantAudio)
 	}
+	assertCustomerSimulationProcessArgs(t, result)
+
+	entries, err := os.ReadDir(recordDir)
+	if err != nil {
+		t.Fatalf("read shipped session record directory: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("shipped session record directory is empty")
+	}
+}
+
+func assertCustomerSimulationProcessArgs(t *testing.T, result probe.DuplexRunResult) {
+	t.Helper()
 	if strings.Contains(result.Command, "hermetic-key") || strings.Contains(strings.Join(result.SanitizedArgs, "\x00"), "hermetic-key") {
 		t.Fatalf("API key leaked into process evidence: command=%q args=%q", result.Command, result.SanitizedArgs)
 	}
@@ -107,14 +120,6 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 		if !containsIntegrationString(result.SanitizedArgs, required) {
 			t.Fatalf("sanitized process args = %v, missing required %q", result.SanitizedArgs, required)
 		}
-	}
-
-	entries, err := os.ReadDir(recordDir)
-	if err != nil {
-		t.Fatalf("read shipped session record directory: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Fatal("shipped session record directory is empty")
 	}
 }
 
@@ -209,7 +214,7 @@ func (f *customerSimulationFixture) Snapshot() customerSimulationSnapshot {
 }
 
 func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -219,14 +224,12 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
 
-	activeResponse := ""
-	cancelPending := false
-	responseNumber := 0
+	state := &customerSimulationTurnState{}
 	for {
 		_, payload, readErr := connection.ReadMessage()
 		if readErr != nil {
@@ -241,84 +244,28 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 			return
 		}
 		switch event.Type {
-		case "session.update":
+		case rtEventSessionUpdate:
 			if err := f.handshake(connection); err != nil {
 				return
 			}
-		case "input_audio_buffer.append":
-			audio, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil {
-				f.failProtocol("decode input audio: " + decodeErr.Error())
+		case rtEventInputAudioAppend:
+			if !f.handleInputAudio(connection, event.Audio, state) {
 				return
 			}
-			silent := customerSimulationSilent(audio)
-			now := time.Now()
-			f.mu.Lock()
-			f.appends = append(f.appends, customerSimulationAppend{at: now, silent: silent})
-			if silent {
-				f.silentAppends++
-				f.committedTurns++
-			} else {
-				f.nonSilentAppends++
-				if f.nonSilentAppends == 2 {
-					f.correctionAt = now
-				}
-				if f.nonSilentAppends >= 3 && len(f.appends) > 1 {
-					f.finalAppendAfterFirst = f.appends[len(f.appends)-2].at.Before(now)
-				}
-			}
-			f.mu.Unlock()
-			if silent {
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
-					return
-				}
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-					return
-				}
-				continue
-			}
-
-			if cancelPending {
-				if err := f.send(connection, map[string]any{
-					"type":     "response.output_audio.done",
-					"response": map[string]string{"id": activeResponse},
-				}); err != nil {
-					return
-				}
-				if err := f.send(connection, map[string]any{
-					"type":     "response.done",
-					"response": map[string]string{"id": activeResponse, "status": "cancelled"},
-				}); err != nil {
-					return
-				}
-				f.recordResponseTerminal("cancelled")
-				activeResponse = ""
-				cancelPending = false
-			}
-
-			responseNumber++
-			activeResponse = fmt.Sprintf("response-%d", responseNumber)
-			complete := responseNumber > 1
-			if err := f.sendResponse(connection, activeResponse, responseNumber, complete); err != nil {
-				return
-			}
-			if complete {
-				activeResponse = ""
-			}
-		case "response.cancel":
+		case rtEventResponseCancel:
 			var cancelErr error
-			cancelPending, cancelErr = f.receiveCancel(connection, activeResponse)
+			state.cancelPending, cancelErr = f.receiveCancel(connection, state.activeResponse)
 			if cancelErr != nil {
 				return
 			}
-		case "input_audio_buffer.commit":
+		case rtEventInputAudioCommit:
 			// The fixture models server-VAD-shaped committed turns from the
 			// open stdin stream. Wait for the final PCM acknowledgment AND the
 			// product's EOF commit before closing this completed conversation.
 			// Abrupt provider-close durability is a separate contract.
-			if responseNumber == 3 {
+			if state.responseNumber == 3 {
 				<-f.closeReady
-				if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "customer_simulation_complete"}); err != nil {
+				if err := f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "customer_simulation_complete"}); err != nil {
 					return
 				}
 			}
@@ -327,6 +274,85 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 			// unknown client events are harmless for this focused fixture.
 		}
 	}
+}
+
+// customerSimulationTurnState is the per-connection response bookkeeping.
+type customerSimulationTurnState struct {
+	activeResponse string
+	cancelPending  bool
+	responseNumber int
+}
+
+// handleInputAudio records one appended frame and answers it. It reports
+// whether the session should keep reading; a write failure means the child
+// already hung up.
+func (f *customerSimulationFixture) handleInputAudio(connection *websocket.Conn, encoded string, state *customerSimulationTurnState) bool {
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		f.failProtocol("decode input audio: " + err.Error())
+		return false
+	}
+	if f.recordAppend(customerSimulationSilent(audio)) {
+		return f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}) == nil &&
+			f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}) == nil
+	}
+	if state.cancelPending {
+		if !f.finishCancelledResponse(connection, state.activeResponse) {
+			return false
+		}
+		state.cancelPending = false
+	}
+	state.responseNumber++
+	state.activeResponse = fmt.Sprintf("response-%d", state.responseNumber)
+	complete := state.responseNumber > 1
+	if err := f.sendResponse(connection, state.activeResponse, state.responseNumber, complete); err != nil {
+		return false
+	}
+	if complete {
+		state.activeResponse = ""
+	}
+	return true
+}
+
+// recordAppend stores one append's timing facts and returns whether it was
+// silent.
+func (f *customerSimulationFixture) recordAppend(silent bool) bool {
+	now := time.Now()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.appends = append(f.appends, customerSimulationAppend{at: now, silent: silent})
+	if silent {
+		f.silentAppends++
+		f.committedTurns++
+		return true
+	}
+	f.nonSilentAppends++
+	if f.nonSilentAppends == 2 {
+		f.correctionAt = now
+	}
+	if f.nonSilentAppends >= 3 && len(f.appends) > 1 {
+		f.finalAppendAfterFirst = f.appends[len(f.appends)-2].at.Before(now)
+	}
+	return false
+}
+
+// finishCancelledResponse closes the response the customer interrupted
+// before the correction's response starts.
+func (f *customerSimulationFixture) finishCancelledResponse(connection *websocket.Conn, responseID string) bool {
+	if err := f.send(connection, map[string]any{
+		"type":     "response.output_audio.done",
+		"response": map[string]string{"id": responseID},
+	}); err != nil {
+		return false
+	}
+	if err := f.send(connection, map[string]any{
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": responseID, "status": rtStatusCancelled},
+	}); err != nil {
+		return false
+	}
+	f.recordResponseTerminal(rtStatusCancelled)
+	return true
 }
 
 func (f *customerSimulationFixture) finishInput(ctx context.Context, progress *probe.DuplexProgress) error {
@@ -341,7 +367,7 @@ func (f *customerSimulationFixture) handshake(connection *websocket.Conn) error 
 	f.mu.Lock()
 	f.sessionUpdates++
 	f.mu.Unlock()
-	if err := f.send(connection, map[string]any{"type": "session.created", "session": map[string]string{"id": "customer-simulation", "model": "gpt-realtime"}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventSessionCreated, "session": map[string]string{"id": "customer-simulation", "model": "gpt-realtime"}}); err != nil {
 		return err
 	}
 	return f.send(connection, map[string]any{"type": "session.updated", "session": map[string]string{"id": "customer-simulation"}})
@@ -368,7 +394,7 @@ func (f *customerSimulationFixture) rejectInactiveCancel(connection *websocket.C
 	f.mu.Unlock()
 	return f.send(connection, map[string]any{
 		"type":  "error",
-		"error": map[string]string{"type": "invalid_request_error", "code": "response_cancel_not_active", "param": "response.cancel", "message": "Can only cancel an active response."},
+		"error": map[string]string{"type": "invalid_request_error", "code": "response_cancel_not_active", "param": rtEventResponseCancel, rtItemMessage: "Can only cancel an active response."},
 	})
 }
 
@@ -387,13 +413,13 @@ func (f *customerSimulationFixture) sendResponse(connection *websocket.Conn, res
 	}
 	audio := []byte{byte(responseNumber), 0x10, 0x20, 0x30}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": responseID},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":   "response.output_audio.delta",
+		"type":   rtEventOutputAudioDelta,
 		"delta":  base64.StdEncoding.EncodeToString(audio),
 		"format": "pcm16",
 	}); err != nil {
@@ -409,12 +435,12 @@ func (f *customerSimulationFixture) sendResponse(connection *websocket.Conn, res
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": responseID, "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": responseID, "status": rtStatusCompleted},
 	}); err != nil {
 		return err
 	}
-	f.recordResponseTerminal("completed")
+	f.recordResponseTerminal(rtStatusCompleted)
 	return nil
 }
 
@@ -459,4 +485,65 @@ func containsIntegrationString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func assertFamilyAProcessEvidence(t *testing.T, result probe.DuplexRunResult) {
+	t.Helper()
+	if result.ExitCode != 0 || !result.ChildWaited || !result.InputFinished || !result.InputClosed || !result.StdoutClosed || !result.StderrClosed {
+		t.Fatalf("process lifecycle result = %+v, want a fully reaped normal run", result)
+	}
+	if len(result.Input) != 8 {
+		t.Fatalf("input frame evidence = %d, want speech and silence for all four turns", len(result.Input))
+	}
+	if len(result.Output) == 0 || len(result.Stdout) < 16 {
+		t.Fatalf("output evidence reads=%d bytes=%d, want four streamed confirmation audio markers", len(result.Output), len(result.Stdout))
+	}
+	for marker := byte(1); marker <= 4; marker++ {
+		if !bytes.Contains(result.Stdout, []byte{marker, 0x41, 0x52, 0x50}) {
+			t.Fatalf("captured stdout = %x, missing confirmation marker %x", result.Stdout, []byte{marker, 0x41, 0x52, 0x50})
+		}
+	}
+}
+
+func evaluateFamilyARun(t *testing.T, scenario probe.CustomerScenario, observation familyAProviderObservation, checkpointCopy []probe.FilesystemCheckpoint) {
+	t.Helper()
+	if len(checkpointCopy) != len(scenario.Actions) {
+		t.Fatalf("filesystem checkpoints = %d, want one per action", len(checkpointCopy))
+	}
+	for index, checkpoint := range checkpointCopy {
+		if checkpoint.ActionID != scenario.Actions[index].ID {
+			t.Fatalf("checkpoint %d action = %q, want %q", index, checkpoint.ActionID, scenario.Actions[index].ID)
+		}
+	}
+
+	actionResults := make([]probe.ActionResult, 0, len(scenario.Actions))
+	for index, action := range scenario.Actions {
+		productEvent := observation.ProductTranscript[index]
+		result := probe.ActionResult{
+			ActionID:      action.ID,
+			TurnID:        productEvent.TurnID,
+			Confirmed:     true,
+			ConfirmedAt:   productEvent.At,
+			Disposition:   probe.DispositionCompleted,
+			EvidenceRefs:  []string{"filesystem-checkpoints.jsonl", "tool-observations.jsonl", "transcripts/product.jsonl"},
+			CheckpointIDs: []string{checkpointCopy[index].ID},
+		}
+		if index < len(observation.ToolObservations) {
+			result.ToolObservationIDs = []string{observation.ToolObservations[index].ID}
+		}
+		actionResults = append(actionResults, result)
+	}
+	mechanical, err := probe.EvaluateCustomerSimulation(
+		scenario,
+		actionResults,
+		checkpointCopy,
+		observation.ToolObservations,
+		observation.ProductTranscript,
+	)
+	if err != nil {
+		t.Fatalf("mechanical oracle evaluation: %v", err)
+	}
+	if !mechanical.Pass || len(mechanical.Findings) != 0 {
+		t.Fatalf("Family A mechanical verdict = %+v, want pass without findings", mechanical)
+	}
 }

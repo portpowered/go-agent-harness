@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -36,8 +37,7 @@ type fileLoggerCloser struct {
 }
 
 func (c *fileLoggerCloser) Close() error {
-	_ = c.logger.Sync()
-	return c.file.Close()
+	return errors.Join(c.logger.Sync(), c.file.Close())
 }
 
 // NewLoggerWithCloser creates a logger and an optional closer. When logging to a file, the caller must call closer.Close() when done so the file handle is released.

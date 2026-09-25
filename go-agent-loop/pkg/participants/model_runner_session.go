@@ -3,15 +3,16 @@ package participants
 import (
 	"context"
 	"fmt"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func (r *ModelRunner) runSession(ctx context.Context) error {
+func (r *ModelRunner) runSession(ctx context.Context) (err error) {
 	session, err := r.sessionInferencer.ConnectSession(ctx)
 	if err != nil {
 		return fmt.Errorf("session connect: %w", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer func() { err = joinOnFailure(err, session.Close()) }()
 
 	state := sessionRunState{}
 	state.ensureMaps()

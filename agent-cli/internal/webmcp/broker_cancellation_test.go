@@ -108,7 +108,7 @@ func TestStatefulBrokerDirectCancelUsesExactTargetWithoutLocalRegistry(t *testin
 		Clock:             clock,
 		InvocationTimeout: 30 * time.Second,
 	})
-	t.Cleanup(func() { _ = fresh.Close() })
+	t.Cleanup(func() { closeAtTestEnd(t, fresh) })
 	if _, err := fresh.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("fresh select: %v", err)
 	}
@@ -362,9 +362,9 @@ func TestStatefulBrokerSeparatesTargetClosureFromPageNavigation(t *testing.T) {
 			)},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker, session, oldRef := newRecoveryInvocationBroker(t, runtime, candidate, "tab-lifecycle")
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	watchContext, cancelWatch := context.WithCancel(context.Background())
 	defer cancelWatch()
@@ -427,9 +427,9 @@ func TestStatefulBrokerOrphansInvocationWhenTargetClosesBeforeReconciliation(t *
 			)},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker, _, ref := newRecoveryInvocationBroker(t, runtime, candidate, "tab-orphan")
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	handle := runtime.Browser(candidate.ID)
 	if handle == nil {
@@ -839,18 +839,18 @@ func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T)
 
 		watchContext, cancelWatch := context.WithCancel(context.Background())
 		watch := broker.Watch(watchContext)
-		start := make(chan struct{})
+		start, raceErrs := make(chan struct{}), make([]error, 2)
 		var wait sync.WaitGroup
 		wait.Add(2)
 		go func() {
 			defer wait.Done()
 			<-start
-			_ = broker.Cancel(context.Background(), webmcp.CancelRequest{InvocationID: dispatched.InvocationID})
+			raceErrs[0] = broker.Cancel(context.Background(), webmcp.CancelRequest{InvocationID: dispatched.InvocationID}) // Either side may lose; the settled state is asserted below.
 		}()
 		go func() {
 			defer wait.Done()
 			<-start
-			_ = session.ReleaseInvocation(dispatched.InvocationID, []byte(`{"late":true}`))
+			raceErrs[1] = session.ReleaseInvocation(dispatched.InvocationID, []byte(`{"late":true}`))
 		}()
 		close(start)
 		wait.Wait()
@@ -915,7 +915,7 @@ func newInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, 
 		closeFailedSetupBroker(t, broker)
 		t.Fatal("fixture session is nil")
 	}
-	t.Cleanup(func() { _ = broker.Close() })
+	t.Cleanup(func() { closeAtTestEnd(t, broker) })
 	return broker, session, snapshot.Tools[0].Ref
 }
 

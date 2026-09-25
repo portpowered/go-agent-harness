@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -48,7 +49,7 @@ func TestProviderContractThroughGateway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 	if dialer.url != "ws://localai.test/v1/realtime?model=gpt-realtime" || len(dialer.headers) != 0 {
 		t.Fatalf("dial = (%q, %v), want endpoint without credentials", dialer.url, dialer.headers)
 	}
@@ -165,7 +166,7 @@ type testConn struct {
 func newTestConn(events ...map[string]any) *testConn {
 	c := &testConn{wait: make(chan struct{})}
 	for _, event := range events {
-		data, _ := json.Marshal(event)
+		data := mustMarshalFixture(event)
 		c.server = append(c.server, data)
 	}
 	return c
@@ -198,4 +199,23 @@ func (l *testLogger) Error(_ string, fields ...logging.Field) {
 			l.values = append(l.values, value)
 		}
 	}
+}
+
+// closeForTest closes a test-owned resource and reports an unexpected close
+// failure without stopping the test.
+func closeForTest(t testing.TB, resource io.Closer) {
+	t.Helper()
+	if err := resource.Close(); err != nil {
+		t.Errorf("close %T: %v", resource, err)
+	}
+}
+
+// mustMarshalFixture encodes a fixture value built by the test itself; an
+// encoding failure is a broken fixture, not a behavior under test.
+func mustMarshalFixture(value any) []byte {
+	data, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("marshal test fixture: %v", err))
+	}
+	return data
 }

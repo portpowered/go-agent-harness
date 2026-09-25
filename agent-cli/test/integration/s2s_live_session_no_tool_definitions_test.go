@@ -131,21 +131,21 @@ func writeStrictOpenAIExecRoundTripCapture(t *testing.T, path, execCommand strin
 			FixtureProvenance: gwtesting.SessionFixtureProvenanceSynthetic,
 		},
 		Records: []gwtesting.CapturedSessionEvent{
-			strictOpenAIWebSocketRecord(1, gwtesting.DirectionClientToServer, "session.update", `{"type":"session.update","session":{"type":"realtime","model":"gpt-realtime","tools":[{"type":"function","name":"exec","description":"Execute a shell command and return its output. Use with caution.","parameters":{"type":"object","properties":{"command":{"type":"string","description":"The shell command to execute"},"working_dir":{"type":"string","description":"Optional working directory for the command"}},"required":["command"]}}]}}`),
-			strictOpenAIWebSocketRecord(2, gwtesting.DirectionServerToClient, "session.created", `{"type":"session.created","session":{"id":"sess-strict-exec-round-trip","model":"gpt-realtime"}}`),
-			strictOpenAIWebSocketRecord(3, gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"probe PROBE_TOOL_MARKER_9182"}]}}`),
-			strictOpenAIWebSocketRecord(4, gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`),
-			strictOpenAIWebSocketRecord(5, gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp-strict-exec-call"}}`),
-			strictOpenAIWebSocketRecord(6, gwtesting.DirectionServerToClient, "response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","id":"item-strict-exec-1","call_id":"`+strictOpenAIExecCallID+`","name":"exec"}}`),
-			strictOpenAIWebSocketRecord(7, gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+strictOpenAIExecCallID+`","name":"exec","arguments":`+strictOpenAIJSONQuote(fmt.Sprintf(`{"command":%s}`, strictOpenAIJSONQuote(execCommand)))+`}`),
-			strictOpenAIWebSocketRecord(8, gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp-strict-exec-call","status":"completed"}}`),
-			strictOpenAIWebSocketRecord(9, gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"`+strictOpenAIExecCallID+`","output":`+strictOpenAIJSONQuote(strictOpenAIExecOutput)+`}}`),
-			strictOpenAIWebSocketRecord(10, gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`),
-			strictOpenAIWebSocketRecord(11, gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp-strict-exec-continuation"}}`),
-			strictOpenAIWebSocketRecord(12, gwtesting.DirectionServerToClient, "response.output_text.delta", `{"type":"response.output_text.delta","delta":"`+strictOpenAIExecContinuation+`"}`),
-			strictOpenAIWebSocketRecord(13, gwtesting.DirectionServerToClient, "response.output_text.done", `{"type":"response.output_text.done"}`),
-			strictOpenAIWebSocketRecord(14, gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp-strict-exec-continuation","status":"completed"}}`),
-			strictOpenAIWebSocketRecord(15, gwtesting.DirectionServerToClient, "session.closed", `{"type":"session.closed","session_id":"sess-strict-exec-round-trip","reason":"fixture_complete"}`),
+			strictOpenAIWebSocketRecord(1, gwtesting.DirectionClientToServer, rtEventSessionUpdate, `{"type":"session.update","session":{"type":"realtime","model":"gpt-realtime","tools":[{"type":"function","name":"exec","description":"Execute a shell command and return its output. Use with caution.","parameters":{"type":"object","properties":{"command":{"type":"string","description":"The shell command to execute"},"working_dir":{"type":"string","description":"Optional working directory for the command"}},"required":["command"]}}]}}`),
+			strictOpenAIWebSocketRecord(2, gwtesting.DirectionServerToClient, rtEventSessionCreated, `{"type":"session.created","session":{"id":"sess-strict-exec-round-trip","model":"gpt-realtime"}}`),
+			strictOpenAIWebSocketRecord(3, gwtesting.DirectionClientToServer, rtEventConversationItemCreate, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"probe PROBE_TOOL_MARKER_9182"}]}}`),
+			strictOpenAIWebSocketRecord(4, gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`),
+			strictOpenAIWebSocketRecord(5, gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp-strict-exec-call"}}`),
+			strictOpenAIWebSocketRecord(6, gwtesting.DirectionServerToClient, rtEventOutputItemAdded, `{"type":"response.output_item.added","item":{"type":"function_call","id":"item-strict-exec-1","call_id":"`+strictOpenAIExecCallID+`","name":"exec"}}`),
+			strictOpenAIWebSocketRecord(7, gwtesting.DirectionServerToClient, rtEventFunctionCallArgumentsDone, `{"type":"response.function_call_arguments.done","call_id":"`+strictOpenAIExecCallID+`","name":"exec","arguments":`+strictOpenAIJSONQuote(fmt.Sprintf(`{"command":%s}`, strictOpenAIJSONQuote(execCommand)))+`}`),
+			strictOpenAIWebSocketRecord(8, gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"resp-strict-exec-call","status":"completed"}}`),
+			strictOpenAIWebSocketRecord(9, gwtesting.DirectionClientToServer, rtEventConversationItemCreate, `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"`+strictOpenAIExecCallID+`","output":`+strictOpenAIJSONQuote(strictOpenAIExecOutput)+`}}`),
+			strictOpenAIWebSocketRecord(10, gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`),
+			strictOpenAIWebSocketRecord(11, gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp-strict-exec-continuation"}}`),
+			strictOpenAIWebSocketRecord(12, gwtesting.DirectionServerToClient, rtEventOutputTextDelta, `{"type":"response.output_text.delta","delta":"`+strictOpenAIExecContinuation+`"}`),
+			strictOpenAIWebSocketRecord(13, gwtesting.DirectionServerToClient, rtEventOutputTextDone, `{"type":"response.output_text.done"}`),
+			strictOpenAIWebSocketRecord(14, gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"resp-strict-exec-continuation","status":"completed"}}`),
+			strictOpenAIWebSocketRecord(15, gwtesting.DirectionServerToClient, rtEventSessionClosed, `{"type":"session.closed","session_id":"sess-strict-exec-round-trip","reason":"fixture_complete"}`),
 		},
 	}, "", "  ")
 	if err != nil {
@@ -157,8 +157,7 @@ func writeStrictOpenAIExecRoundTripCapture(t *testing.T, path, execCommand strin
 }
 
 func strictOpenAIJSONQuote(value string) string {
-	data, _ := json.Marshal(value)
-	return string(data)
+	return string(mustMarshalFixture(value))
 }
 
 func strictOpenAIShellQuote(value string) string {

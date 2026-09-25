@@ -422,7 +422,7 @@ func (h *coreAudioHandle) WriteSamples(ctx context.Context, samples []int16) err
 
 func (h *coreAudioHandle) ensurePlaybackQueueLocked() *audio.PlaybackQueue {
 	if h.playback == nil {
-		h.playback, _ = audio.PlaybackQueueForFormat(h.format)
+		h.playback = playbackQueueOrNil(h.format)
 	}
 	return h.playback
 }

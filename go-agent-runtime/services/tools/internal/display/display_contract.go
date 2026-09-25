@@ -280,10 +280,3 @@ type DisplayProcess interface {
 	Run(context.Context, string, ...string) ([]byte, error)
 	LookPath(string) (string, error)
 }
-
-func normalizeDisplayProcess(process DisplayProcess) DisplayProcess {
-	if process == nil {
-		return defaultDisplayProcess()
-	}
-	return process
-}

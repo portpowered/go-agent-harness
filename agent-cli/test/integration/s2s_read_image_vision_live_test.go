@@ -283,7 +283,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 
 		if record.Direction == gwtesting.DirectionServerToClient {
 			switch record.Type {
-			case "response.output_item.added":
+			case rtEventOutputItemAdded:
 				var event struct {
 					Item struct {
 						Type   string `json:"type"`
@@ -292,12 +292,12 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 					} `json:"item"`
 				}
 				liveReadImageUnmarshal(t, payload, &event, "read_image output item")
-				if event.Item.Type == "function_call" && event.Item.Name == tools.ReadImageToolID {
+				if event.Item.Type == rtItemFunctionCall && event.Item.Name == tools.ReadImageToolID {
 					observation.readImageCallCount++
 					observation.readImageCallIndex = index
 					observation.readImageCallID = event.Item.CallID
 				}
-			case "response.function_call_arguments.done":
+			case rtEventFunctionCallArgumentsDone:
 				var event struct {
 					CallID    string `json:"call_id"`
 					Name      string `json:"name"`
@@ -313,7 +313,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 				observation.argumentCallID = event.CallID
 				observation.argumentName = event.Name
 				observation.argumentPath = arguments.Path
-			case "response.output_text.delta", "response.output_audio_transcript.delta":
+			case rtEventOutputTextDelta, rtEventOutputAudioTranscriptDelta:
 				var event struct {
 					Delta string `json:"delta"`
 				}
@@ -324,20 +324,20 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 				}
 				liveReadImageUnmarshal(t, payload, &event, "assistant transcript")
 				observation.audioTranscriptDone = append(observation.audioTranscriptDone, liveReadImageTextChunk{index: index, text: event.Transcript})
-			case "response.done":
+			case rtEventResponseDone:
 				var event struct {
 					Response struct {
 						Status string `json:"status"`
 					} `json:"response"`
 					Status string `json:"status"`
 				}
-				liveReadImageUnmarshal(t, payload, &event, "response.done")
+				liveReadImageUnmarshal(t, payload, &event, rtEventResponseDone)
 				status := event.Response.Status
 				if status == "" {
 					status = event.Status
 				}
 				observation.responseDoneEvents = append(observation.responseDoneEvents, liveReadImageResponseDone{index: index, status: status})
-			case "session.closed":
+			case rtEventSessionClosed:
 				observation.sessionClosedIndices = append(observation.sessionClosedIndices, index)
 			case "error":
 				observation.serverErrorCount++
@@ -346,11 +346,11 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 			continue
 		}
 
-		if record.Type == "response.create" {
+		if record.Type == rtEventResponseCreate {
 			observation.responseCreateIndices = append(observation.responseCreateIndices, index)
 			continue
 		}
-		if record.Type != "conversation.item.create" {
+		if record.Type != rtEventConversationItemCreate {
 			continue
 		}
 		var event struct {
@@ -368,7 +368,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		}
 		liveReadImageUnmarshal(t, payload, &event, "conversation item")
 		switch event.Item.Type {
-		case "function_call_output":
+		case rtItemFunctionCallOutput:
 			if strings.TrimSpace(event.Item.Output) == "" {
 				t.Fatal("live function_call_output output is empty")
 			}
@@ -380,9 +380,9 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 				output: event.Item.Output,
 				result: result,
 			})
-		case "message":
+		case rtItemMessage:
 			for _, part := range event.Item.Content {
-				if part.Type != "input_image" {
+				if part.Type != rtContentInputImage {
 					continue
 				}
 				observation.inputImageCount++
@@ -442,7 +442,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		if done.index <= observation.continuationIndex {
 			continue
 		}
-		if done.status == "cancelled" || done.status == "failed" || done.status == "incomplete" {
+		if done.status == rtStatusCancelled || done.status == rtStatusFailed || done.status == "incomplete" {
 			t.Fatalf("live continuation response.done status = %q at record %d", done.status, done.index)
 		}
 		observation.terminalResponseIndex = done.index
@@ -452,7 +452,7 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 	if observation.terminalResponseIndex < 0 {
 		t.Fatalf("live capture has no terminal response.done after continuation response.create")
 	}
-	if observation.terminalResponseStatus != "completed" {
+	if observation.terminalResponseStatus != rtStatusCompleted {
 		t.Fatalf("live continuation response.done status = %q, want completed", observation.terminalResponseStatus)
 	}
 	if wantImage && observation.encodedImageOccurrences != 1 {
@@ -487,7 +487,7 @@ func assertLiveReadImageSpokenInput(t *testing.T, capture gwtesting.SessionCaptu
 		}
 		payload := liveReadImageRecordPayload(record)
 		switch record.Type {
-		case "input_audio_buffer.append":
+		case rtEventInputAudioAppend:
 			var event struct {
 				Audio string `json:"audio"`
 			}
@@ -505,10 +505,10 @@ func assertLiveReadImageSpokenInput(t *testing.T, capture gwtesting.SessionCaptu
 			appendCount++
 			inputBytes += len(decoded)
 			lastAppendIndex = index
-		case "input_audio_buffer.commit":
+		case rtEventInputAudioCommit:
 			commitCount++
 			commitIndex = index
-		case "response.create":
+		case rtEventResponseCreate:
 			if firstResponseCreateIndex < 0 {
 				firstResponseCreateIndex = index
 			}
@@ -666,7 +666,7 @@ func assertLiveReadImageSemanticResult(t *testing.T, cliOutput, continuationText
 	if !strings.Contains(finalText, "image") {
 		t.Fatalf("live missing continuation did not mention the image: %q", continuationText)
 	}
-	if !strings.Contains(finalText, "could") && !strings.Contains(finalText, "unable") && !strings.Contains(finalText, "cannot") && !strings.Contains(finalText, "can't") && !strings.Contains(finalText, "failed") {
+	if !strings.Contains(finalText, "could") && !strings.Contains(finalText, "unable") && !strings.Contains(finalText, "cannot") && !strings.Contains(finalText, "can't") && !strings.Contains(finalText, rtStatusFailed) {
 		t.Fatalf("live missing continuation did not explain the read failure: %q", continuationText)
 	}
 	if !strings.Contains(finalText, "missing") && !strings.Contains(finalText, "not found") && !strings.Contains(finalText, "no such") && !strings.Contains(finalText, "does not exist") {
@@ -711,7 +711,7 @@ func logLiveReadImageEvidence(t *testing.T, capture gwtesting.SessionCapture, ob
 	result := observation.functionOutputs[0].result
 	eventOrder := make([]string, 0, len(observation.eventTypes))
 	for _, eventType := range observation.eventTypes {
-		if strings.Contains(eventType, "response.output_audio.delta") {
+		if strings.Contains(eventType, rtEventOutputAudioDelta) {
 			continue
 		}
 		eventOrder = append(eventOrder, eventType)
@@ -724,7 +724,7 @@ func logLiveReadImageSpokenEvidence(t *testing.T, capture gwtesting.SessionCaptu
 	result := observation.functionOutputs[0]
 	eventOrder := make([]string, 0, len(observation.eventTypes))
 	for _, eventType := range observation.eventTypes {
-		if strings.Contains(eventType, "response.output_audio.delta") {
+		if strings.Contains(eventType, rtEventOutputAudioDelta) {
 			continue
 		}
 		eventOrder = append(eventOrder, eventType)

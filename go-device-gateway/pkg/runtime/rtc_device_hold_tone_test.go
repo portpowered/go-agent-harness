@@ -126,12 +126,12 @@ func TestRTCDeviceSinkHoldToneFillsGapLongerThanThreshold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	sink, err := NewDefaultRTCDeviceSink(registry)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	sink.SetHoldToneConfig(testHoldToneSinkConfig())
 	sink.SetHoldToneTick(5 * time.Millisecond)
 
@@ -182,12 +182,12 @@ func TestRTCDeviceSinkHoldToneStaysSilentForShortGap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	sink, err := NewDefaultRTCDeviceSink(registry)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	// Tick quickly so a bug that ignores GapThreshold would show up fast;
 	// GapThreshold itself is left at its production default (2.5s).
 	sink.SetHoldToneTick(5 * time.Millisecond)
@@ -237,12 +237,12 @@ func TestRTCDeviceSinkHoldToneRealAudioReachesDeviceUnmodifiedAfterGap(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	sink, err := NewDefaultRTCDeviceSink(registry)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	sink.SetHoldToneConfig(testHoldToneSinkConfig())
 	sink.SetHoldToneTick(5 * time.Millisecond)
 
@@ -333,12 +333,12 @@ func TestRTCDeviceSinkHoldToneStopsImmediatelyOnDiscardPlayback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	sink, err := NewDefaultRTCDeviceSink(registry)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	sink.SetHoldToneConfig(testHoldToneSinkConfig())
 	sink.SetHoldToneTick(5 * time.Millisecond)
 
@@ -379,8 +379,11 @@ func TestRTCDeviceSinkHoldToneStopsImmediatelyOnDiscardPlayback(t *testing.T) {
 	for time.Now().Before(drainDeadline) {
 		frame := make([]int16, audio.FrameSize)
 		readCtx, readCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		_ = source.ReadFrame(readCtx, frame)
+		readErr := source.ReadFrame(readCtx, frame)
 		readCancel()
+		if readErr != nil && !errors.Is(readErr, context.DeadlineExceeded) {
+			t.Fatalf("drain queued playback: %v", readErr)
+		}
 	}
 	settledDeadline := time.Now().Add(150 * time.Millisecond)
 	if readUntilSignalOrDeadline(t, source, settledDeadline) {

@@ -187,3 +187,10 @@ func TestModelsConfig_ValidationScenarios(t *testing.T) {
 		})
 	}
 }
+
+// Shared provider fixture values for configuration tests.
+const (
+	testAPIKey       = "sk-xxx"
+	testLocalBaseURL = "http://localhost:11434/v1"
+	testLocalModel   = "llama3"
+)

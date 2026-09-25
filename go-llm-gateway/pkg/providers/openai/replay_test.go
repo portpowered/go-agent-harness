@@ -3,7 +3,6 @@ package openai
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
@@ -163,7 +162,7 @@ func TestReplay_ToolCall(t *testing.T) {
 		},
 		Tools: []models.ToolDefinition{
 			{
-				Name:        "get_weather",
+				Name:        testToolGetWeather,
 				Description: "Get weather for a city",
 				Parameters: []models.ToolParameter{
 					{Name: "city", Type: "string", Description: "City name", Required: true},
@@ -183,7 +182,7 @@ func TestReplay_ToolCall(t *testing.T) {
 	if tc.ID != "call_abc123" {
 		t.Errorf("expected tool call ID 'call_abc123', got %q", tc.ID)
 	}
-	if tc.Name != "get_weather" {
+	if tc.Name != testToolGetWeather {
 		t.Errorf("expected tool name 'get_weather', got %q", tc.Name)
 	}
 	if !strings.Contains(tc.Arguments, "New York") {
@@ -205,7 +204,7 @@ func TestReplay_ToolCallAndResult(t *testing.T) {
 			{
 				Role: models.RoleAssistant,
 				ToolCalls: []models.ToolCall{
-					{ID: "call_abc123", Name: "get_weather", Arguments: `{"city":"New York"}`},
+					{ID: "call_abc123", Name: testToolGetWeather, Arguments: `{"city":"New York"}`},
 				},
 			},
 			{
@@ -217,7 +216,7 @@ func TestReplay_ToolCallAndResult(t *testing.T) {
 			},
 		},
 		Tools: []models.ToolDefinition{
-			{Name: "get_weather", Description: "Get weather for a city"},
+			{Name: testToolGetWeather, Description: "Get weather for a city"},
 		},
 	})
 	if err != nil {
@@ -290,7 +289,7 @@ func TestReplay_AudioOutput(t *testing.T) {
 	for _, part := range resp.Message.ContentParts {
 		if ap, ok := part.(models.AudioPart); ok {
 			foundAudio = true
-			expected, _ := base64.StdEncoding.DecodeString("SGVsbG8gV29ybGQ=")
+			expected := []byte("Hello World") // the fixture's base64 audio "SGVsbG8gV29ybGQ="
 			if string(ap.Bytes) != string(expected) {
 				t.Errorf("audio bytes mismatch: got %q, want %q", string(ap.Bytes), string(expected))
 			}
@@ -367,7 +366,7 @@ func TestReplay_StreamingToolCalls(t *testing.T) {
 			models.NewTextMessage(models.RoleUser, "What's the weather?"),
 		},
 		Tools: []models.ToolDefinition{
-			{Name: "get_weather", Description: "Get weather"},
+			{Name: testToolGetWeather, Description: "Get weather"},
 		},
 	})
 	if err != nil {
@@ -405,7 +404,7 @@ func TestReplay_StreamingToolCalls(t *testing.T) {
 	// Verify tool call details.
 	for _, m := range msgs {
 		if v, ok := m.Value.(*messages.ToolCallStartValue); ok {
-			if v.Name != "get_weather" {
+			if v.Name != testToolGetWeather {
 				t.Errorf("expected tool name 'get_weather', got %q", v.Name)
 			}
 			if v.ToolCallID != "call_weather1" {
@@ -586,10 +585,10 @@ func TestReplay_Error400_BadRequest(t *testing.T) {
 	if !errors.As(err, &providerErr) {
 		t.Fatalf("expected ProviderError, got %T: %v", err, err)
 	}
-	if providerErr.Provider != "openai" || providerErr.StatusCode != 400 {
+	if providerErr.Provider != openAIProviderName || providerErr.StatusCode != 400 {
 		t.Fatalf("ProviderError = %+v, want provider openai status 400", providerErr)
 	}
-	if !strings.Contains(providerErr.Detail, "invalid_request_error") {
+	if !strings.Contains(providerErr.Detail, realtimeInvalidRequestErrorType) {
 		t.Errorf("ProviderError.Detail = %q, want provider error type", providerErr.Detail)
 	}
 	if !errors.Is(err, gateway.ErrProviderHTTPStatus) {
@@ -707,7 +706,7 @@ func TestReplay_InferTransportErrorClassified(t *testing.T) {
 	if !errors.As(err, &transportErr) {
 		t.Fatal("expected typed transport details")
 	}
-	if transportErr.Provider != "openai" {
+	if transportErr.Provider != openAIProviderName {
 		t.Fatalf("provider = %q, want openai", transportErr.Provider)
 	}
 }
@@ -876,7 +875,7 @@ func TestInfer_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
 
 	_, err := p.Infer(context.Background(), providers.InferenceRequest{
 		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "Hello"),
+			models.NewTextMessage(models.RoleUser, testGreeting),
 		},
 	})
 	if err != nil {
@@ -913,7 +912,7 @@ func TestInferStream_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
 
 	ch, err := p.InferStream(context.Background(), providers.InferenceRequest{
 		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "Hello"),
+			models.NewTextMessage(models.RoleUser, testGreeting),
 		},
 	})
 	if err != nil {
@@ -952,7 +951,7 @@ func TestInfer_WithAPIKey_IncludesAuthorizationHeader(t *testing.T) {
 
 	_, err := p.Infer(context.Background(), providers.InferenceRequest{
 		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "Hello"),
+			models.NewTextMessage(models.RoleUser, testGreeting),
 		},
 	})
 	if err != nil {

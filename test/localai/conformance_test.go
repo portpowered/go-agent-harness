@@ -2,7 +2,9 @@ package localai
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -121,7 +123,7 @@ func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfi
 	if err != nil {
 		return behaviorObservation{}, err
 	}
-	defer func() { _ = conn.Close() }()
+	defer discardClose(conn)
 	audio, err := speechPCM16(endpoint.inputRate)
 	if err != nil {
 		return behaviorObservation{}, err
@@ -146,7 +148,7 @@ func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfi
 	}
 	return behaviorObservation{
 		latency:  time.Since(started),
-		evidence: fmt.Sprintf("audio_deltas=%d pcm_bytes=%d rms=%.6f", countAudioDeltas(response.events), len(response.audio), mustRMS(response.audio)),
+		evidence: fmt.Sprintf("audio_deltas=%d pcm_bytes=%d rms=%s", countAudioDeltas(response.events), len(response.audio), rmsEvidence(response.audio)),
 	}, nil
 }
 
@@ -168,12 +170,11 @@ func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointCon
 	for turnIndex, turn := range turns {
 		final, err = sendTextTurn(ctx, conn, []map[string]any{{"type": "input_text", "text": turn}})
 		if err != nil {
-			_ = conn.Close()
-			return behaviorObservation{}, fmt.Errorf("context turn: %w", err)
+			return behaviorObservation{}, errors.Join(fmt.Errorf("context turn: %w", err), conn.Close())
 		}
 		t.Logf("context turn=%d reply=%q", turnIndex+1, final.text)
 	}
-	_ = conn.Close()
+	discardClose(conn)
 	positiveErr := requireContextFact(final.text, contextFact)
 
 	// The same assertion is deliberately exercised without the first two
@@ -184,7 +185,7 @@ func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointCon
 		return behaviorObservation{}, fmt.Errorf("withheld-history control connect: %w", err)
 	}
 	control, err := sendTextTurn(ctx, controlConn, []map[string]any{{"type": "input_text", "text": turns[2]}})
-	_ = controlConn.Close()
+	discardClose(controlConn)
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("withheld-history control response: %w", err)
 	}
@@ -215,7 +216,7 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	if err != nil {
 		return behaviorObservation{}, err
 	}
-	defer func() { _ = conn.Close() }()
+	defer discardClose(conn)
 	audio, err := speechPCM16(endpoint.inputRate)
 	if err != nil {
 		return behaviorObservation{}, err
@@ -369,7 +370,7 @@ func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig)
 		return behaviorObservation{}, err
 	}
 	positive, err := sendTextTurn(ctx, conn, []map[string]any{{"type": "input_text", "text": functionCallPrompt}})
-	_ = conn.Close()
+	discardClose(conn)
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("tool-enabled response: %w", err)
 	}
@@ -385,7 +386,7 @@ func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig)
 		return behaviorObservation{}, fmt.Errorf("no-tools control connect: %w", err)
 	}
 	control, err := sendTextTurn(ctx, controlConn, []map[string]any{{"type": "input_text", "text": functionCallPrompt}})
-	_ = controlConn.Close()
+	discardClose(controlConn)
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("no-tools control response: %w", err)
 	}
@@ -418,7 +419,7 @@ func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		{"type": "input_text", "text": question},
 		{"type": "input_image", "image_url": imageURI},
 	})
-	_ = conn.Close()
+	discardClose(conn)
 	positiveErr := err
 
 	controlConn, err := endpoint.connect(ctx, sessionSettings{modalities: []string{"text"}, instructions: instructions})
@@ -426,7 +427,7 @@ func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		return behaviorObservation{}, fmt.Errorf("no-image control connect: %w", err)
 	}
 	control, err := sendTextTurn(ctx, controlConn, []map[string]any{{"type": "input_text", "text": question}})
-	_ = controlConn.Close()
+	discardClose(controlConn)
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("no-image control response: %w", err)
 	}
@@ -460,9 +461,23 @@ func countAudioDeltas(events []string) int {
 	return count
 }
 
-func mustRMS(audio []byte) float64 {
-	rms, _ := pcm16RMS(audio)
-	return rms
+// rmsEvidence formats PCM16 energy for diagnostic evidence; invalid audio is
+// reported in the evidence text instead of a number.
+func rmsEvidence(audio []byte) string {
+	rms, err := pcm16RMS(audio)
+	if err != nil {
+		return "invalid(" + err.Error() + ")"
+	}
+	return fmt.Sprintf("%.6f", rms)
+}
+
+// discardClose closes a connection or body whose exchange already produced
+// its result. A close failure on a finished exchange cannot change the
+// observed behavior, so it must not turn a passing observation into a failure.
+func discardClose(closer io.Closer) {
+	if err := closer.Close(); err != nil {
+		return
+	}
 }
 
 func decodePCMDelta(encoded string) ([]byte, error) {

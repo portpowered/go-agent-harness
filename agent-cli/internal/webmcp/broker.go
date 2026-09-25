@@ -399,7 +399,7 @@ func (b *StatefulBroker) ListTargets(ctx context.Context, selector BrowserSelect
 	}
 	targets, err := handle.ListTargets(ctx)
 	if err != nil {
-		if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+		if isLifecycleClassifiedError(err) {
 			return nil, err
 		}
 		if failure := b.promoteBrowserLoss(b.selectedForBrowser(candidate.ID), TargetSelector{BrowserID: candidate.ID}, "list_targets", err); failure != nil {
@@ -573,7 +573,7 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 		// again instead of failing every later selection against it.
 		state.handle = nil
 		b.mu.Unlock()
-		_ = handle.Close()
+		discardCloseError(handle.Close)
 		b.mu.Lock()
 	}
 	runtime := b.runtime
@@ -586,7 +586,7 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 	}
 	handle, err := runtime.Open(ctx, candidate)
 	if err != nil {
-		if _, lifecycle := lifecycleClassifiedError(err); lifecycle {
+		if isLifecycleClassifiedError(err) {
 			return nil, err
 		}
 		return nil, classified(ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
@@ -598,7 +598,7 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
-		_ = handle.Close()
+		discardCloseError(handle.Close)
 		return nil, ErrClosed
 	}
 	state = b.browsers[candidate.ID]
@@ -610,7 +610,7 @@ func (b *StatefulBroker) handleFor(ctx context.Context, candidate BrowserCandida
 	}
 	current := state.handle
 	b.mu.Unlock()
-	_ = handle.Close()
+	discardCloseError(handle.Close)
 	return current, nil
 }
 

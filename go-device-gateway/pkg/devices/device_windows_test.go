@@ -317,7 +317,7 @@ func TestWASAPIOpenHasLiveDataPath(t *testing.T) {
 			if err != nil {
 				t.Skipf("Windows: exact %s endpoint cannot open: %v", direction, err)
 			}
-			defer func() { _ = opened.Close() }()
+			defer closeForTest(t, "opened", opened)
 			handle, ok := opened.(*wasapiOpenedDevice)
 			if !ok {
 				t.Fatal("WASAPI registry returned an unexpected opened-device type")
@@ -366,7 +366,7 @@ func TestWASAPIDeviceRegistryConformance(t *testing.T) {
 	} else {
 		// The probe open above is only a capability check; the fixture below
 		// creates fresh registries for each isolated conformance subtest.
-		_ = opened.Close()
+		closeForTest(t, "probe", opened)
 	}
 
 	RunDeviceRegistryConformance(t, func() DeviceRegistryConformanceFixture {

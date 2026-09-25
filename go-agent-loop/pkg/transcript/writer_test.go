@@ -58,7 +58,7 @@ func TestWriterNormalizesBoundedDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWriterWithConfig: %v", err)
 	}
-	defer func() { _ = writer.Close() }()
+	defer closeForTest(t, writer)
 	if writer.SegmentSize() != DefaultSegmentSize {
 		t.Fatalf("SegmentSize = %d, want %d", writer.SegmentSize(), DefaultSegmentSize)
 	}
@@ -445,7 +445,7 @@ func readRecordsFromFile(t *testing.T, path string) []Record {
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer func() { _ = file.Close() }()
+	defer closeForTest(t, file)
 	var records []Record
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), 2*1024*1024)
@@ -464,6 +464,14 @@ func readRecordsFromFile(t *testing.T, path string) []Record {
 		t.Fatalf("scan %s: %v", path, err)
 	}
 	return records
+}
+
+// closeForTest closes a resource the test owns and reports a close failure.
+func closeForTest(t *testing.T, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close: %v", err)
+	}
 }
 
 var _ io.WriteCloser = (*failingTranscriptSink)(nil)

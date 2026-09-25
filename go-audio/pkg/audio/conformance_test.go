@@ -51,7 +51,7 @@ func TestSourceConformancePartialFinalFrame(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			source := test.open(t)
-			defer func() { _ = source.Close() }()
+			defer closeForTest(t, source)
 			assertSourceFrames(t, source, samples)
 		})
 	}
@@ -96,4 +96,12 @@ func minInt(left, right int) int {
 		return left
 	}
 	return right
+}
+
+// closeForTest closes a test-owned resource and reports an unexpected failure.
+func closeForTest(t testing.TB, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("Close() error = %v", err)
+	}
 }

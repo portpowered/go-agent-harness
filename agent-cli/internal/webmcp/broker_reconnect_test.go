@@ -37,14 +37,14 @@ func TestStatefulBrokerRecoversThroughTwoExplicitFreshSelections(t *testing.T) {
 			},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: discoverer,
 		IDs:        testkit.NewDeterministicIDs(),
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: oldCandidate.ID, TargetID: targetID}); err != nil {
 		t.Fatalf("select initial target: %v", err)

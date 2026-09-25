@@ -17,7 +17,7 @@ import (
 // runInit gives the Bubbles textinput focus by sending FocusInputMsg (same as Init()'s first Cmd).
 func runInit(model services.ChatModel) services.ChatModel {
 	m, _ := model.Update(services.FocusInputMsg{})
-	return m.(services.ChatModel)
+	return asChatModel(m)
 }
 
 // typeInput simulates the user typing a string into model one rune at a time,
@@ -27,10 +27,10 @@ func typeInput(model services.ChatModel, text string) services.ChatModel {
 	for _, r := range text {
 		if r == ' ' {
 			m, _ := model.Update(tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
-			model = m.(services.ChatModel)
+			model = asChatModel(m)
 		} else {
 			m, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-			model = m.(services.ChatModel)
+			model = asChatModel(m)
 		}
 	}
 	return model
@@ -41,7 +41,7 @@ func typeInput(model services.ChatModel, text string) services.ChatModel {
 // It handles tea.BatchMsg by expanding batch commands into the work queue.
 func pressEnter(model services.ChatModel) (services.ChatModel, string) {
 	m, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = m.(services.ChatModel)
+	model = asChatModel(m)
 	cmds := []tea.Cmd{cmd}
 	for len(cmds) > 0 {
 		cmd = cmds[0]
@@ -58,7 +58,7 @@ func pressEnter(model services.ChatModel) (services.ChatModel, string) {
 			continue
 		}
 		m, nextCmd := model.Update(resultMsg)
-		model = m.(services.ChatModel)
+		model = asChatModel(m)
 		if nextCmd != nil {
 			cmds = append(cmds, nextCmd)
 		}
@@ -225,9 +225,9 @@ func TestChatModel_BackspaceEditing(t *testing.T) {
 	// Type "hello" then backspace twice → "hel"
 	model = typeInput(model, "hello")
 	m, _ := model.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	model = m.(services.ChatModel)
+	model = asChatModel(m)
 	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	model = m.(services.ChatModel)
+	model = asChatModel(m)
 
 	view := model.View()
 	if !strings.Contains(view, "hel") {
@@ -469,7 +469,7 @@ func TestChatModel_StreamingPartials(t *testing.T) {
 
 	model = typeInput(model, "count")
 	m, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = m.(services.ChatModel)
+	model = asChatModel(m)
 
 	// Drain stream until completion. KeyEnter returns a tea.Batch (Println + runAgent),
 	// so we need to expand BatchMsg into individual commands.
@@ -493,7 +493,7 @@ func TestChatModel_StreamingPartials(t *testing.T) {
 			continue
 		}
 		m, nextCmd := model.Update(msg)
-		model = m.(services.ChatModel)
+		model = asChatModel(m)
 		if nextCmd != nil {
 			cmds = append(cmds, nextCmd)
 		}
@@ -579,7 +579,7 @@ func TestExecutor_ExecuteStreamingTurn_ReturnsStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
-	defer func() { _ = stream.Close() }()
+	defer closeForTest(t, stream)
 
 	var assembled string
 	for stream.HasNext() {

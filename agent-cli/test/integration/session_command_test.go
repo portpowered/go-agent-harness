@@ -1,11 +1,8 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -15,11 +12,11 @@ import (
 	"testing"
 	"time"
 
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestSessionCommand_ReplayMissingFileReturnsActionableError(t *testing.T) {
@@ -844,130 +841,6 @@ func TestSessionCommand_ReplayGrokWebSocketCaptureFailsOnDivergentOutbound(t *te
 	// budget plus scheduler overhead while still requiring prompt divergence.
 	if elapsed >= 2*time.Second {
 		t.Fatalf("replay divergence should fail before the bounded session timeout; elapsed=%s", elapsed)
-	}
-}
-
-func writeGrokWebSocketCapture(t *testing.T, path string) {
-	t.Helper()
-
-	records := []gwtesting.CapturedSessionEvent{
-		grokWebSocketRecord(gwtesting.DirectionClientToServer, 1, `{"type":"session.update","session":{"model":"grok-replay-model"}}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 2, `{"type":"session.created","session_id":"sess-replay","model":"grok-replay-model"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 3, `{"type":"response.created"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 4, `{"type":"response.text.delta","delta":"Grok replay response"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 5, `{"type":"response.done"}`),
-	}
-	data, err := json.MarshalIndent(gwtesting.SessionCapture{
-		Version: gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{
-			Name:  "grok",
-			Model: "grok-replay-model",
-		},
-		Session: gwtesting.SessionMetadata{
-			ID:           "sess-replay",
-			StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
-		},
-		Records: records,
-	}, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal websocket capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		t.Fatalf("write websocket capture: %v", err)
-	}
-}
-
-func writeOpenAIBarePromptCapture(t *testing.T, path string) {
-	t.Helper()
-	writeOpenAIBarePromptCaptureWithText(t, path, "recorded bare replay prompt")
-}
-
-func writeOpenAIBarePromptCaptureWithText(t *testing.T, path, prompt string) {
-	t.Helper()
-
-	promptJSON, err := json.Marshal(prompt)
-	if err != nil {
-		t.Fatalf("marshal bare OpenAI prompt: %v", err)
-	}
-	records := []gwtesting.CapturedSessionEvent{
-		grokWebSocketRecord(gwtesting.DirectionClientToServer, 1, `{"type":"session.update","session":{"model":"gpt-realtime"}}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 2, `{"type":"session.created","session_id":"sess-bare-replay","model":"gpt-realtime"}`),
-		grokWebSocketRecord(gwtesting.DirectionClientToServer, 3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":`+string(promptJSON)+`}]}}`),
-		grokWebSocketRecord(gwtesting.DirectionClientToServer, 4, `{"type":"response.create"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 5, `{"type":"response.created"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 6, `{"type":"response.output_audio.delta","delta":"UklGRgQgMEA=","format":"pcm16"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 7, `{"type":"response.output_text.delta","delta":"recorded bare replay transcript"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 8, `{"type":"response.output_text.done"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 9, `{"type":"response.output_audio.done"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 10, `{"type":"response.done"}`),
-	}
-	data, err := json.MarshalIndent(gwtesting.SessionCapture{
-		Version: gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{
-			Name:  "openai",
-			Model: "gpt-realtime",
-		},
-		Session: gwtesting.SessionMetadata{
-			ID:           "sess-bare-replay",
-			StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano),
-		},
-		Records: records,
-	}, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal bare OpenAI websocket capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		t.Fatalf("write bare OpenAI websocket capture: %v", err)
-	}
-}
-
-func writeGrokWebSocketSmokeCapture(t *testing.T, path string) {
-	t.Helper()
-
-	records := []gwtesting.CapturedSessionEvent{
-		grokWebSocketRecord(gwtesting.DirectionClientToServer, 1, `{"type":"session.update","session":{"model":"grok-replay-smoke"}}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 2, `{"type":"session.created","session_id":"sess-replay-smoke","model":"grok-replay-smoke"}`),
-		grokWebSocketRecord(gwtesting.DirectionClientToServer, 3, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"run the smoke replay"}]}}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 4, `{"type":"response.created"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 5, `{"type":"response.text.delta","delta":"E2E Grok replay "}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 6, `{"type":"response.text.delta","delta":"complete."}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 7, `{"type":"response.text.done"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 8, `{"type":"response.done"}`),
-		grokWebSocketRecord(gwtesting.DirectionServerToClient, 9, `{"type":"session.closed","reason":"fixture_complete"}`),
-	}
-	data, err := json.MarshalIndent(gwtesting.SessionCapture{
-		Version: gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{
-			Name:  "grok",
-			Model: "grok-replay-smoke",
-		},
-		Session: gwtesting.SessionMetadata{
-			ID:                "sess-replay-smoke",
-			StartedAtUTC:      time.Now().UTC().Format(time.RFC3339Nano),
-			FixtureProvenance: "synthetic end-to-end smoke fixture generated by integration test",
-		},
-		Records: records,
-	}, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal websocket smoke capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		t.Fatalf("write websocket smoke capture: %v", err)
-	}
-}
-
-func grokWebSocketRecord(direction gwtesting.SessionEventDirection, sequence int, payload string) gwtesting.CapturedSessionEvent {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	_ = json.Unmarshal([]byte(payload), &envelope)
-	return gwtesting.CapturedSessionEvent{
-		Sequence:    sequence,
-		Direction:   direction,
-		TimestampMs: int64(sequence),
-		Type:        envelope.Type,
-		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
-		Payload:     json.RawMessage(payload),
 	}
 }
 

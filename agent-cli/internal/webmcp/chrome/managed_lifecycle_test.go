@@ -302,7 +302,8 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 	}
 	done := make(chan struct{})
 	go func() {
-		_ = process.Wait()
+		// The process is killed by the test, so Wait reports that signal.
+		discardSecondaryError(process.Wait)
 		close(done)
 	}()
 	deadline := time.Now().Add(time.Second)

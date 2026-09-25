@@ -18,19 +18,19 @@ func TestStatefulBrokerDisconnectDuringSelectionUnblocksWithBrowserLoss(t *testi
 		ID:        "tab-selection",
 		Type:      "page",
 	}))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	handle := handleValue.(*testkit.ScriptedBrowserHandle)
+	handle := mustAs[*testkit.ScriptedBrowserHandle](t, handleValue)
 	handle.BlockListTargets()
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	operationCursor := runtime.OperationCursor()
 	selectionDone := make(chan selectionCall, 1)
@@ -67,13 +67,13 @@ func TestStatefulBrokerDisconnectDuringEnableRetiresSelectionAndUnblocksOnce(t *
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-enable", Type: "page"},
 		testkit.WithBlockedEnable(),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	operationCursor := runtime.OperationCursor()
 	selectionDone := make(chan selectionCall, 1)
@@ -120,9 +120,9 @@ func TestStatefulBrokerDisconnectBeforeInvocationDispatchReturnsOneBrowserLoss(t
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-predispatch", Type: "page"},
 		testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{"type":"object"}`)),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker, _, ref := newRecoveryInvocationBroker(t, runtime, candidate, "tab-predispatch")
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	handle := runtime.Browser(candidate.ID)
 	if handle == nil {
@@ -175,9 +175,9 @@ func TestStatefulBrokerDisconnectDuringCatalogRefreshReturnsBrowserLoss(t *testi
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-refresh", Type: "page"},
 		testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object"}`)),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker, session, _ := newRecoveryInvocationBroker(t, runtime, candidate, "tab-refresh")
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	session.BlockEnableWebMCP()
 
 	operationCursor := runtime.OperationCursor()
@@ -208,9 +208,9 @@ func TestStatefulBrokerDisconnectAfterDispatchWinsOverLateResponse(t *testing.T)
 		webmcp.Target{BrowserID: candidate.ID, ID: "tab-postdispatch", Type: "page"},
 		testkit.WithInitialCatalog(pageTool("write_state", "frame-1", `{"type":"object"}`)),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker, session, ref := newRecoveryInvocationBroker(t, runtime, candidate, "tab-postdispatch")
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	session.BlockInvocations()
 
 	watchContext, cancelWatch := context.WithCancel(context.Background())
@@ -303,7 +303,7 @@ func newRecoveryInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserR
 		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open recovery handle: %v", err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession(targetID)
+	session := mustAs[*testkit.ScriptedBrowserHandle](t, handleValue).TargetSession(targetID)
 	if session == nil {
 		closeFailedSetupBroker(t, broker)
 		t.Fatal("recovery session is nil")

@@ -22,7 +22,9 @@ func (*replayCommandService) Prepare(context.Context, runtimeReplay.Request) (ru
 
 func (s *replayCommandService) Run(_ context.Context, out io.Writer, request runtimeReplay.Request) (runtimeReplay.Result, error) {
 	s.request = request
-	_, _ = io.WriteString(out, "recorded answer")
+	if _, err := io.WriteString(out, "recorded answer"); err != nil {
+		return runtimeReplay.Result{}, err
+	}
 	return runtimeReplay.Result{WireEvents: 7, ToolCalls: 1, Scope: runtimeReplay.EvidenceScope{Protocol: true, Tools: true, RenderTapUnavailable: true}}, s.err
 }
 

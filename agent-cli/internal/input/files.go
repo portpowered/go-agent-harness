@@ -87,7 +87,7 @@ func LoadAskContentPart(path string) (messages.ContentPart, error) {
 		return nil, &AttachmentError{Path: path, Reason: reason, Cause: err}
 	}
 	part := contentPartFromBytes(path, data)
-	if mediaType := contentPartMediaType(part); mediaType == "" || mediaType == "application/octet-stream" {
+	if mediaType := contentPartMediaType(part); mediaType == "" || mediaType == octetStreamMediaType {
 		return nil, &AttachmentError{
 			Path:   path,
 			Reason: fmt.Sprintf("%s (detected %q)", AttachmentReasonUnsupported, mediaType),

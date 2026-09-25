@@ -45,11 +45,11 @@ func resolveScenarioV2FixturePathFromRoot(root, reference string) (string, error
 
 	resolved, resolveErr := filepath.EvalSymlinks(candidate)
 	if resolveErr == nil {
-		resolved, _ = filepath.Abs(resolved)
-		if !scenarioV2PathContained(root, filepath.Clean(resolved)) {
+		contained, ok := scenarioV2ContainedAbs(root, resolved)
+		if !ok {
 			return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
 		}
-		return filepath.Clean(resolved), nil
+		return contained, nil
 	}
 	if !os.IsNotExist(resolveErr) {
 		return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
@@ -59,13 +59,24 @@ func resolveScenarioV2FixturePathFromRoot(root, reference string) (string, error
 	parent := filepath.Dir(candidate)
 	resolvedParent, parentErr := filepath.EvalSymlinks(parent)
 	if parentErr == nil {
-		resolvedParent, _ = filepath.Abs(resolvedParent)
-		if !scenarioV2PathContained(root, filepath.Clean(resolvedParent)) {
+		containedParent, ok := scenarioV2ContainedAbs(root, resolvedParent)
+		if !ok {
 			return "", &ScenarioV2Error{Cause: ErrScenarioV2FixturePath}
 		}
-		return filepath.Join(filepath.Clean(resolvedParent), filepath.Base(candidate)), nil
+		return filepath.Join(containedParent, filepath.Base(candidate)), nil
 	}
 	return candidate, nil
+}
+
+// scenarioV2ContainedAbs returns the clean absolute form of path and whether
+// it stays under root. A path that cannot be made absolute is not contained.
+func scenarioV2ContainedAbs(root, path string) (string, bool) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	abs = filepath.Clean(abs)
+	return abs, scenarioV2PathContained(root, abs)
 }
 
 func validateScenarioV2FixtureReference(reference string) error {

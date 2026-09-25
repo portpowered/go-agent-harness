@@ -8,6 +8,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
+// testToolGetWeather is the tool name used by the Anthropic fixtures.
+const testToolGetWeather = "get_weather"
+
 func TestApplyInferenceRequestOptions_Defaults(t *testing.T) {
 	params := anthropic.MessageNewParams{
 		Model:    anthropic.Model("claude-3-5-sonnet"),

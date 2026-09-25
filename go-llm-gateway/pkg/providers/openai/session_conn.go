@@ -4,6 +4,7 @@ package openai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -58,12 +59,10 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 	session.prepareRTCMedia()
 	sessionUpdate, err := p.buildRealtimeSessionUpdate(config, model)
 	if err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("openai realtime: build session update for %s: %w", safeEndpointForError(endpoint), err)
+		return nil, errors.Join(fmt.Errorf("openai realtime: build session update for %s: %w", safeEndpointForError(endpoint), err), conn.Close())
 	}
 	if err := session.writeEvent(sessionUpdate); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("openai realtime: send session update to %s: %w", safeEndpointForError(endpoint), err)
+		return nil, errors.Join(fmt.Errorf("openai realtime: send session update to %s: %w", safeEndpointForError(endpoint), err), conn.Close())
 	}
 
 	session.start(ctx)
@@ -124,7 +123,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 		_, data, err := s.conn.ReadMessage()
 		if err != nil {
 			if s.readStopped(ctx, err) {
-				_ = s.Close()
+				s.closeWithLog()
 				return
 			}
 			s.setTerminalError(err)
@@ -135,7 +134,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 				Type:  messages.StreamTypeError,
 				Value: providers.NewStreamTransportErrorValue(err),
 			})
-			_ = s.Close()
+			s.closeWithLog()
 			return
 		}
 
@@ -156,7 +155,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 					messages.TerminalOutputNone,
 				),
 			})
-			_ = s.Close()
+			s.closeWithLog()
 			return
 		}
 		if event.Type == models.SessionEventSessionClosed {
@@ -171,7 +170,7 @@ func (s *realtimeSession) readLoop(ctx context.Context) {
 			// normalized buffer fills, retaining both shutdown paths.
 			if outcome := s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg); !outcome.OK() {
 				if ctx.Err() != nil {
-					_ = s.Close()
+					s.closeWithLog()
 				}
 				return
 			}
@@ -219,7 +218,7 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			_ = s.Close()
+			s.closeWithLog()
 			return
 		case <-s.done:
 			return
@@ -232,7 +231,7 @@ func (s *realtimeSession) writeLoop(ctx context.Context) {
 				s.setTerminalError(err)
 				s.outbound.Complete()
 				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})
-				_ = s.Close()
+				s.closeWithLog()
 				return
 			}
 			s.markResponseRequestSent(event)
@@ -316,7 +315,10 @@ func (s *realtimeSession) writeEvent(event models.SessionEvent) error {
 			return fmt.Errorf("unmarshal event payload: %w", err)
 		}
 	}
-	typeBytes, _ := json.Marshal(event.Type)
+	typeBytes, err := json.Marshal(event.Type)
+	if err != nil {
+		return err
+	}
 	payload["type"] = typeBytes
 	data, err := json.Marshal(payload)
 	if err != nil {

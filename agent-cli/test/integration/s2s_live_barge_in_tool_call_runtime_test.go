@@ -4,7 +4,6 @@ import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/s
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -337,23 +336,10 @@ func (c *toolBargeInConn) WriteMessage(_ int, payload []byte) error {
 	s := c.server
 	s.mu.Lock()
 	switch envelope.Type {
-	case "session.update":
-	case "input_audio_buffer.append":
-		decoded, err := base64.StdEncoding.DecodeString(envelope.Audio)
-		if envelope.Audio == "" || err != nil || len(decoded) == 0 {
-			s.protocolErrs = append(s.protocolErrs, "input_audio_buffer.append was not non-empty base64 audio")
-		} else {
-			if !s.turnHasAudio {
-				s.turnHasAudio = true
-				events = append(events, `{"type":"input_audio_buffer.speech_started"}`)
-			}
-			if s.toolOutstanding && s.toolResultCount == 0 {
-				s.speechWhileToolOutstanding = true
-				s.recordMilestoneLocked("speech_overlap")
-				s.speechOverlapOnce.Do(func() { close(s.speechSignalCh) })
-			}
-		}
-	case "input_audio_buffer.commit":
+	case rtEventSessionUpdate:
+	case rtEventInputAudioAppend:
+		events = append(events, s.observeInputAppendLocked(envelope.Audio)...)
+	case rtEventInputAudioCommit:
 		if !s.turnHasAudio {
 			s.protocolErrs = append(s.protocolErrs, "input commit without non-empty audio")
 		}
@@ -367,8 +353,8 @@ func (c *toolBargeInConn) WriteMessage(_ int, payload []byte) error {
 			`{"type":"input_audio_buffer.committed"}`,
 			fmt.Sprintf(`{"type":"conversation.item.created","item":{"id":"item-tool-barge-in-%d","role":"user"}}`, s.commits),
 		)
-	case "conversation.item.create":
-		if envelope.Item.Type != "function_call_output" {
+	case rtEventConversationItemCreate:
+		if envelope.Item.Type != rtItemFunctionCallOutput {
 			break
 		}
 		s.toolResultCount++
@@ -383,50 +369,9 @@ func (c *toolBargeInConn) WriteMessage(_ int, payload []byte) error {
 			s.recordMilestoneLocked("tool_result_received")
 			s.toolOutstanding = false
 		}
-	case "response.create":
-		ordinal := len(s.responses) + 1
-		response := &toolBargeInServerResponse{ID: toolBargeInResponseID(ordinal)}
-		s.responses = append(s.responses, response)
-		s.active = response
-		events = append(events, fmt.Sprintf(`{"type":"response.created","response":{"id":%q}}`, response.ID))
-		switch ordinal {
-		case 1:
-			events = append(events,
-				plainSpeechAudioDelta(response.ID, 51),
-				fmt.Sprintf(`{"type":"response.output_audio.done","response_id":%q}`, response.ID),
-				fmt.Sprintf(`{"type":"response.output_item.added","response_id":%q,"item":{"id":"item-tool-call","type":"function_call","call_id":%q,"name":%q}}`, response.ID, toolBargeInCallID, toolBargeInToolName),
-				fmt.Sprintf(`{"type":"response.function_call_arguments.done","response_id":%q,"call_id":%q,"name":%q,"arguments":%q}`, response.ID, toolBargeInCallID, toolBargeInToolName, toolBargeInToolArguments),
-				fmt.Sprintf(`{"type":"response.done","response":{"id":%q,"status":"completed"}}`, response.ID),
-			)
-			response.TerminalSent = true
-			s.active = nil
-			s.toolOutstanding = true
-			s.recordMilestoneLocked("tool_call_issued")
-		case 2:
-			if s.toolResultCount != 1 {
-				s.protocolErrs = append(s.protocolErrs, "continuation response created without exactly one tool result")
-			}
-			s.recordMilestoneLocked("continuation_issued")
-			events = append(events,
-				plainSpeechAudioDelta(response.ID, 52),
-				fmt.Sprintf(`{"type":"response.output_audio.done","response_id":%q}`, response.ID),
-				fmt.Sprintf(`{"type":"response.done","response":{"id":%q,"status":"completed"}}`, response.ID),
-			)
-			response.TerminalSent = true
-			s.active = nil
-		case 3:
-			s.recordMilestoneLocked("later_response_issued")
-			events = append(events,
-				plainSpeechAudioDelta(response.ID, 53),
-				fmt.Sprintf(`{"type":"response.output_audio.done","response_id":%q}`, response.ID),
-				fmt.Sprintf(`{"type":"response.done","response":{"id":%q,"status":"completed"}}`, response.ID),
-			)
-			response.TerminalSent = true
-			s.active = nil
-		default:
-			s.protocolErrs = append(s.protocolErrs, fmt.Sprintf("unexpected response ordinal %d", ordinal))
-		}
-	case "response.cancel":
+	case rtEventResponseCreate:
+		events = append(events, s.createResponseLocked()...)
+	case rtEventResponseCancel:
 		if s.active == nil {
 			s.protocolErrs = append(s.protocolErrs, "response.cancel without active response")
 			break

@@ -641,13 +641,13 @@ func (p *cliChromeIntegrationProcess) stop() {
 		return
 	}
 	if p.command.Process != nil {
-		_ = p.command.Process.Kill()
+		discardSecondaryError(p.command.Process.Kill)
 	}
-	_ = p.Wait()
+	discardSecondaryError(p.Wait)
 }
 
 func receiptLineForCLIChrome(receipt cliChromeIntegrationReceipt) string {
-	encoded, _ := json.Marshal(receipt)
+	encoded := mustFixtureJSON(receipt)
 	return string(append(encoded, '\n'))
 }
 

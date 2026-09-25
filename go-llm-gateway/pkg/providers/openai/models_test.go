@@ -14,18 +14,18 @@ var testLogger = logging.DummyLogger()
 
 func TestMessagesToParams_UserMessageTextOnly(t *testing.T) {
 	// When ContentParts has one text part, user message is sent as content array with one text part.
-	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleUser, "Hello")}, testLogger)
+	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleUser, testGreeting)}, testLogger)
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
 	u := params[0]
-	if u.Role != "user" {
+	if u.Role != requestRoleUser {
 		t.Fatalf("expected role user, got %q", u.Role)
 	}
 	if u.Content == nil || u.Content.parts == nil || len(u.Content.parts) != 1 {
 		t.Fatalf("expected content array with 1 part, got %+v", u.Content)
 	}
-	if u.Content.parts[0].Type != "text" || u.Content.parts[0].Text != "Hello" {
+	if u.Content.parts[0].Type != contentTypeText || u.Content.parts[0].Text != testGreeting {
 		t.Errorf("expected text part Hello, got %+v", u.Content.parts[0])
 	}
 }
@@ -47,7 +47,7 @@ func TestMessagesToParams_UserMessageWithContentPartsText(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "What is in this image?" {
+	if parts[0].Type != contentTypeText || parts[0].Text != "What is in this image?" {
 		t.Errorf("expected text part, got %+v", parts[0])
 	}
 }
@@ -68,7 +68,7 @@ func TestMessagesToParams_UserMessageWithImagePartBase64(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(parts))
 	}
-	if parts[0].Type != "image_url" || parts[0].ImageURL == nil {
+	if parts[0].Type != contentTypeImageURL || parts[0].ImageURL == nil {
 		t.Fatal("expected image_url content part")
 	}
 	expectedURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imgBytes)
@@ -93,7 +93,7 @@ func TestMessagesToParams_UserMessageWithImagePartURL(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(parts))
 	}
-	if parts[0].Type != "image_url" || parts[0].ImageURL == nil {
+	if parts[0].Type != contentTypeImageURL || parts[0].ImageURL == nil {
 		t.Fatal("expected image_url content part")
 	}
 	if parts[0].ImageURL.URL != url {
@@ -117,7 +117,7 @@ func TestMessagesToParams_UserMessageWithAudioPartBase64(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(parts))
 	}
-	if parts[0].Type != "input_audio" || parts[0].InputAudio == nil {
+	if parts[0].Type != contentTypeInputAudio || parts[0].InputAudio == nil {
 		t.Fatal("expected input_audio content part")
 	}
 	if parts[0].InputAudio.Data != base64.StdEncoding.EncodeToString(audioBytes) {
@@ -144,7 +144,7 @@ func TestMessagesToParams_UserMessageWithAudioPartMp3(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(parts))
 	}
-	if parts[0].Type != "input_audio" || parts[0].InputAudio == nil {
+	if parts[0].Type != contentTypeInputAudio || parts[0].InputAudio == nil {
 		t.Fatal("expected input_audio content part")
 	}
 	if parts[0].InputAudio.Format != "mp3" {
@@ -169,10 +169,10 @@ func TestMessagesToParams_UserMessageWithTextAndImage(t *testing.T) {
 	if len(parts) != 2 {
 		t.Fatalf("expected 2 content parts, got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "What do you see?" {
+	if parts[0].Type != contentTypeText || parts[0].Text != "What do you see?" {
 		t.Errorf("first part should be text: %+v", parts[0])
 	}
-	if parts[1].Type != "image_url" || parts[1].ImageURL == nil {
+	if parts[1].Type != contentTypeImageURL || parts[1].ImageURL == nil {
 		t.Errorf("second part should be image_url: %+v", parts[1])
 	}
 	expectedURL := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(imgBytes)
@@ -210,7 +210,7 @@ func TestMessagesToParams_AudioPartEmptyBytesSkipped(t *testing.T) {
 	params := messagesToParams([]models.Message{{
 		Role: models.RoleUser,
 		ContentParts: []models.ContentPart{
-			models.TextPart{Text: "Hello"},
+			models.TextPart{Text: testGreeting},
 			models.AudioPart{MediaType: "audio/wav"}, // no Bytes
 		},
 	}}, testLogger)
@@ -221,7 +221,7 @@ func TestMessagesToParams_AudioPartEmptyBytesSkipped(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part (audio with no bytes skipped), got %d", len(parts))
 	}
-	if parts[0].Type != "text" {
+	if parts[0].Type != contentTypeText {
 		t.Error("expected only text part")
 	}
 }
@@ -259,7 +259,7 @@ func TestMessagesToParams_AssistantMessageTextOnly(t *testing.T) {
 	if a.Content == nil || a.Content.parts == nil || len(a.Content.parts) != 1 {
 		t.Fatalf("expected content array with 1 part, got %+v", a.Content)
 	}
-	if a.Content.parts[0].Type != "text" || a.Content.parts[0].Text != "Here is the answer." {
+	if a.Content.parts[0].Type != contentTypeText || a.Content.parts[0].Text != "Here is the answer." {
 		t.Errorf("expected Content string, got %+v", a.Content)
 	}
 	if len(a.ToolCalls) != 0 {
@@ -280,10 +280,10 @@ func TestMessagesToParams_AssistantMessageWithContentPartsText(t *testing.T) {
 	if len(parts) != 2 {
 		t.Fatalf("expected 2 content parts, got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "Part one." {
+	if parts[0].Type != contentTypeText || parts[0].Text != "Part one." {
 		t.Errorf("first part: got %+v", parts[0])
 	}
-	if parts[1].Type != "text" || parts[1].Text != " Part two." {
+	if parts[1].Type != contentTypeText || parts[1].Text != " Part two." {
 		t.Errorf("second part: got %+v", parts[1])
 	}
 }
@@ -306,10 +306,10 @@ func TestMessagesToParams_AssistantMessageWithContentPartsTextAndImage(t *testin
 	if len(parts) != 2 {
 		t.Fatalf("expected 2 content parts (text + image_url), got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "Only this text." {
+	if parts[0].Type != contentTypeText || parts[0].Text != "Only this text." {
 		t.Errorf("expected first part text: %+v", parts[0])
 	}
-	if parts[1].Type != "image_url" || parts[1].ImageURL == nil {
+	if parts[1].Type != contentTypeImageURL || parts[1].ImageURL == nil {
 		t.Errorf("expected second part image_url, got %+v", parts[1])
 	}
 	expectedURL := "data:image/png;base64,eA=="
@@ -336,10 +336,10 @@ func TestMessagesToParams_AssistantMessageWithContentPartsTextAndAudio(t *testin
 	if len(parts) != 2 {
 		t.Fatalf("expected 2 content parts (text + input_audio), got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "Summary." {
+	if parts[0].Type != contentTypeText || parts[0].Text != "Summary." {
 		t.Errorf("expected first part text: %+v", parts[0])
 	}
-	if parts[1].Type != "input_audio" || parts[1].InputAudio == nil {
+	if parts[1].Type != contentTypeInputAudio || parts[1].InputAudio == nil {
 		t.Errorf("expected second part input_audio, got %+v", parts[1])
 	}
 	expectedData := base64.StdEncoding.EncodeToString([]byte("wav"))
@@ -356,7 +356,7 @@ func TestMessagesToParams_AssistantMessageWithToolCallsAndContentParts(t *testin
 		Role:         models.RoleAssistant,
 		ContentParts: []models.ContentPart{models.TextPart{Text: "Calling a tool."}},
 		ToolCalls: []models.ToolCall{
-			{ID: "call_1", Name: "get_weather", Arguments: `{"city":"NYC"}`},
+			{ID: "call_1", Name: testToolGetWeather, Arguments: `{"city":"NYC"}`},
 		},
 	}}, testLogger)
 	if len(params) != 1 {
@@ -366,11 +366,11 @@ func TestMessagesToParams_AssistantMessageWithToolCallsAndContentParts(t *testin
 	if len(a.ToolCalls) != 1 {
 		t.Fatalf("expected 1 tool call, got %d", len(a.ToolCalls))
 	}
-	if a.ToolCalls[0].Function.Name != "get_weather" {
+	if a.ToolCalls[0].Function.Name != testToolGetWeather {
 		t.Errorf("expected tool name get_weather, got %q", a.ToolCalls[0].Function.Name)
 	}
 	parts := a.Content.parts
-	if len(parts) != 1 || parts[0].Type != "text" || parts[0].Text != "Calling a tool." {
+	if len(parts) != 1 || parts[0].Type != contentTypeText || parts[0].Text != "Calling a tool." {
 		t.Errorf("expected content part: %+v", a.Content)
 	}
 }
@@ -396,7 +396,7 @@ func TestMessagesToParams_ToolMessageTextOnly(t *testing.T) {
 	if tr.Content == nil || tr.Content.parts == nil || len(tr.Content.parts) != 1 {
 		t.Fatalf("expected content array with 1 part, got %+v", tr.Content)
 	}
-	if tr.Content.parts[0].Type != "text" || tr.Content.parts[0].Text != `{"result": "ok"}` {
+	if tr.Content.parts[0].Type != contentTypeText || tr.Content.parts[0].Text != `{"result": "ok"}` {
 		t.Errorf("expected content string, got %+v", tr.Content)
 	}
 }
@@ -415,7 +415,7 @@ func TestMessagesToParams_ToolMessageWithContentPartsText(t *testing.T) {
 	if len(parts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "Tool result text." {
+	if parts[0].Type != contentTypeText || parts[0].Text != "Tool result text." {
 		t.Errorf("expected text content, got %+v", parts[0])
 	}
 }
@@ -435,17 +435,17 @@ func TestMessagesToParams_ToolMessageWithContentPartsTextAndImage(t *testing.T) 
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
 	tr := params[0]
-	if tr.Role != "user" {
+	if tr.Role != requestRoleUser {
 		t.Fatalf("expected role changed to user for tool message with image, got %q", tr.Role)
 	}
 	parts := tr.Content.parts
 	if len(parts) != 2 {
 		t.Fatalf("expected 2 content parts (text + image_url), got %d", len(parts))
 	}
-	if parts[0].Type != "text" || parts[0].Text != "Only text." {
+	if parts[0].Type != contentTypeText || parts[0].Text != "Only text." {
 		t.Errorf("expected first part text: %+v", parts[0])
 	}
-	if parts[1].Type != "image_url" || parts[1].ImageURL == nil {
+	if parts[1].Type != contentTypeImageURL || parts[1].ImageURL == nil {
 		t.Errorf("expected second part image_url, got %+v", parts[1])
 	}
 	expectedURL := "data:image/png;base64,eA=="
@@ -468,7 +468,7 @@ func TestMessagesToParams_ToolMessageImageAtSecondPosition(t *testing.T) {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
 	tr := params[0]
-	if tr.Role != "user" {
+	if tr.Role != requestRoleUser {
 		t.Fatalf("expected role user when image is at second position, got %q", tr.Role)
 	}
 	if tr.ToolCallID != "call_img2" {
@@ -491,7 +491,7 @@ func TestMessagesToParams_ToolMessageImageAtThirdPosition(t *testing.T) {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
 	tr := params[0]
-	if tr.Role != "user" {
+	if tr.Role != requestRoleUser {
 		t.Fatalf("expected role user when image at third position, got %q", tr.Role)
 	}
 }
@@ -508,7 +508,7 @@ func TestMessagesToParams_ToolMessageImageOnlyAtFirstPosition(t *testing.T) {
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
-	if params[0].Role != "user" {
+	if params[0].Role != requestRoleUser {
 		t.Fatalf("expected role user for image-only tool message, got %q", params[0].Role)
 	}
 }
@@ -538,7 +538,7 @@ func TestMessagesToParams_ToolMessageWarnsOnRoleChange(t *testing.T) {
 	messagesToParams([]models.Message{{
 		Role: models.RoleTool,
 		ContentParts: []models.ContentPart{
-			models.TextPart{Text: "text"},
+			models.TextPart{Text: contentTypeText},
 			models.ImagePart{Bytes: []byte("x"), MediaType: "image/png"},
 		},
 		ToolCallID: "call_warn",
@@ -582,7 +582,7 @@ func TestResponseToMessage_WithToolCalls(t *testing.T) {
 			ID:   "call_abc",
 			Type: "function",
 			Function: toolCallFunc{
-				Name:      "get_weather",
+				Name:      testToolGetWeather,
 				Arguments: `{"city":"NYC"}`,
 			},
 		}},
@@ -595,7 +595,7 @@ func TestResponseToMessage_WithToolCalls(t *testing.T) {
 		t.Fatalf("expected 1 tool call, got %d", len(result.ToolCalls))
 	}
 	tc := result.ToolCalls[0]
-	if tc.ID != "call_abc" || tc.Name != "get_weather" || tc.Arguments != `{"city":"NYC"}` {
+	if tc.ID != "call_abc" || tc.Name != testToolGetWeather || tc.Arguments != `{"city":"NYC"}` {
 		t.Errorf("expected tool call get_weather, got ID=%q Name=%q Args=%q", tc.ID, tc.Name, tc.Arguments)
 	}
 }
@@ -700,18 +700,18 @@ func TestResponseToMessage_InvalidBase64AudioSkipped(t *testing.T) {
 // ── Stream chunks → gateway message ──────────────────────────────────────
 
 func TestStreamChunksToMessage_TextOnly(t *testing.T) {
-	result := StreamChunksToMessage("Hello", nil)
+	result := StreamChunksToMessage(testGreeting, nil)
 	if result.Role != models.RoleAssistant {
 		t.Errorf("expected role assistant, got %q", result.Role)
 	}
-	if result.TextContent() != "Hello" {
+	if result.TextContent() != testGreeting {
 		t.Errorf("expected content Hello, got %q", result.TextContent())
 	}
 	if len(result.ContentParts) != 1 {
 		t.Fatalf("expected 1 content part, got %d", len(result.ContentParts))
 	}
 	tp, ok := result.ContentParts[0].(models.TextPart)
-	if !ok || tp.Text != "Hello" {
+	if !ok || tp.Text != testGreeting {
 		t.Errorf("expected TextPart, got %+v", result.ContentParts[0])
 	}
 	if len(result.ToolCalls) != 0 {

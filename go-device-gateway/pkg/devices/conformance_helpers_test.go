@@ -90,3 +90,44 @@ func closeForTest(t testing.TB, name string, closer io.Closer) {
 		t.Errorf("close %s: %v", name, err)
 	}
 }
+
+// noErrorForTest fails the test immediately on an unexpected error.
+func noErrorForTest(t testing.TB, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// simulatedStreamForTest opens one simulated duplex stream and fails the test
+// when the registry refuses it or returns another handle type.
+func simulatedStreamForTest(t testing.TB, r *SimulatedDuplexRegistry, id DeviceID) *SimulatedDuplexStream {
+	t.Helper()
+	opened, err := r.Open(id)
+	if err != nil {
+		t.Fatalf("open simulated %s: %v", id, err)
+	}
+	stream, ok := opened.(*SimulatedDuplexStream)
+	if !ok {
+		t.Fatalf("open simulated %s returned %T", id, opened)
+	}
+	return stream
+}
+
+// virtualStreamForTest narrows a virtual registry handle to its stream type.
+func virtualStreamForTest(t testing.TB, opened OpenedDevice) *VirtualStream {
+	t.Helper()
+	stream, ok := opened.(*VirtualStream)
+	if !ok {
+		t.Fatalf("virtual registry returned %T", opened)
+	}
+	return stream
+}
+
+func int16Samples(start, count int) []int16 {
+	samples := make([]int16, count)
+	for index := range samples {
+		samples[index] = int16(start + index)
+	}
+	return samples
+}

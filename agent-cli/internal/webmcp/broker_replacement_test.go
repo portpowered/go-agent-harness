@@ -66,11 +66,11 @@ func TestStatefulBrokerRetiresSameAddressReplacementBeforeExplicitSelection(t *t
 			},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	discoverer := &replacementDiscoverer{candidates: []webmcp.BrowserCandidate{oldCandidate}}
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: discoverer})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: oldCandidate.ID, TargetID: targetID}); err != nil {
 		t.Fatalf("select old target: %v", err)
 	}

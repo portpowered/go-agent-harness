@@ -155,7 +155,7 @@ func insertConversationProviderCloseBeforeResult(t *testing.T, capture *gwtestin
 	}
 	providerClose := gwtesting.CapturedSessionEvent{
 		Direction:   gwtesting.DirectionServerToClient,
-		Type:        "session.closed",
+		Type:        rtEventSessionClosed,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_result_conversation","reason":"provider_close_while_result_pending"}`),
 	}
@@ -201,7 +201,7 @@ func removeConversationSessionClose(t *testing.T, capture *gwtesting.SessionCapt
 	filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
 	removed := false
 	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventSessionClosed {
 			removed = true
 			continue
 		}
@@ -218,7 +218,7 @@ func removeConversationAudioDelta(t *testing.T, capture *gwtesting.SessionCaptur
 	filtered := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records))
 	removed := false
 	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_audio.delta" {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventOutputAudioDelta {
 			removed = true
 			continue
 		}
@@ -235,7 +235,7 @@ func replaceConversationAudioDelta(t *testing.T, capture *gwtesting.SessionCaptu
 	seen := false
 	for index := range capture.Records {
 		record := &capture.Records[index]
-		if record.Direction != gwtesting.DirectionServerToClient || record.Type != "response.output_audio.delta" {
+		if record.Direction != gwtesting.DirectionServerToClient || record.Type != rtEventOutputAudioDelta {
 			continue
 		}
 		payload := conversationPayloadMap(t, record)
@@ -412,7 +412,7 @@ func TestSessionToolResultConversationContinuesWithoutProviderCloseShortcut(t *t
 		t.Fatalf("load no-close replay fixture: %v", err)
 	}
 	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventSessionClosed {
 			t.Fatal("default audio stop control still contains a provider session.closed record")
 		}
 	}

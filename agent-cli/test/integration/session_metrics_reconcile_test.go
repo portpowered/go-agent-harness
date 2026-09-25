@@ -52,35 +52,10 @@ func corpusAudioWAVPath(t *testing.T, name string) string {
 	return path
 }
 
-// buildMetricsReconcileFixture creates a normalized stream-message capture in
-// a temporary directory. It contains two complete assistant turns: a text-only
-// turn with a non-empty text delta and an audio-only turn with two non-empty
-// audio deltas cut from the committed corpus. Each turn has an incremental,
-// usage-bearing MESSAGE.END, followed by a recorded SESSION.CLOSE boundary.
-// There are no client records because this proof intentionally exercises the
-// output/accounting side without making input-series claims.
 func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 	t.Helper()
-
-	wavBytes, err := os.ReadFile(corpusAudioWAVPath(t, "utt_short_16k.wav"))
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	if rate != wavio.Rate16kHz || len(samples) < 2 {
-		t.Fatalf("committed corpus WAV = rate %d, %d samples; want 16kHz and audio", rate, len(samples))
-	}
-	audioPCM = make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(audioPCM[index*2:], uint16(sample))
-	}
+	audioPCM = metricsReconcileCorpusPCM(t)
 	half := len(audioPCM) / 2
-	if half == 0 {
-		t.Fatal("committed corpus WAV produced no PCM bytes")
-	}
 
 	streamRecord := func(sequence int, msg messages.StreamMessage) map[string]any {
 		payload, marshalErr := gwtesting.MarshalStreamMessage(msg)
@@ -94,6 +69,9 @@ func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 			"payload": json.RawMessage(payload),
 		}
 	}
+	assistant := func(sequence int, streamType messages.StreamMessageType, value messages.StreamMessageValue) map[string]any {
+		return streamRecord(sequence, messages.StreamMessage{Type: streamType, Role: messages.RoleAssistant, Value: value})
+	}
 
 	textUsage := messages.TokenUsage{PromptTokens: 11, CompletionTokens: 7, TotalTokens: 18, ReasoningTokens: 2}
 	audioUsage := messages.TokenUsage{PromptTokens: 3, CompletionTokens: 5, TotalTokens: 8, ReasoningTokens: 1}
@@ -106,67 +84,51 @@ func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 			Type:  messages.StreamTypeSessionCreated,
 			Value: messages.NewSessionCreatedValue("sess_metrics_reconcile", "grok-synthetic"),
 		}),
-		streamRecord(3, messages.StreamMessage{
-			Type:  messages.StreamTypeMessageStart,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageStartValue(),
-		}),
-		streamRecord(4, messages.StreamMessage{
-			Type:  messages.StreamTypeTextStart,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewTextStartValue(),
-		}),
-		streamRecord(5, messages.StreamMessage{
-			Type:  messages.StreamTypeTextDelta,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewTextDeltaValue(metricsReconcileText),
-		}),
-		streamRecord(6, messages.StreamMessage{
-			Type:  messages.StreamTypeTextEnd,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewTextEndValue(),
-		}),
-		streamRecord(7, messages.StreamMessage{
-			Type:  messages.StreamTypeMessageEnd,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageEndValue(textUsage),
-		}),
-		streamRecord(8, messages.StreamMessage{
-			Type:  messages.StreamTypeMessageStart,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageStartValue(),
-		}),
-		streamRecord(9, messages.StreamMessage{
-			Type:  messages.StreamTypeAudioStart,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewAudioStartValue(),
-		}),
-		streamRecord(10, messages.StreamMessage{
-			Type:  messages.StreamTypeAudioDelta,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewAudioDeltaValue(audioPCM[:half]),
-		}),
-		streamRecord(11, messages.StreamMessage{
-			Type:  messages.StreamTypeAudioDelta,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewAudioDeltaValue(audioPCM[half:]),
-		}),
-		streamRecord(12, messages.StreamMessage{
-			Type:  messages.StreamTypeAudioEnd,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewAudioEndValue(),
-		}),
-		streamRecord(13, messages.StreamMessage{
-			Type:  messages.StreamTypeMessageEnd,
-			Role:  messages.RoleAssistant,
-			Value: messages.NewMessageEndValue(audioUsage),
-		}),
+		assistant(3, messages.StreamTypeMessageStart, messages.NewMessageStartValue()),
+		assistant(4, messages.StreamTypeTextStart, messages.NewTextStartValue()),
+		assistant(5, messages.StreamTypeTextDelta, messages.NewTextDeltaValue(metricsReconcileText)),
+		assistant(6, messages.StreamTypeTextEnd, messages.NewTextEndValue()),
+		assistant(7, messages.StreamTypeMessageEnd, messages.NewMessageEndValue(textUsage)),
+		assistant(8, messages.StreamTypeMessageStart, messages.NewMessageStartValue()),
+		assistant(9, messages.StreamTypeAudioStart, messages.NewAudioStartValue()),
+		assistant(10, messages.StreamTypeAudioDelta, messages.NewAudioDeltaValue(audioPCM[:half])),
+		assistant(11, messages.StreamTypeAudioDelta, messages.NewAudioDeltaValue(audioPCM[half:])),
+		assistant(12, messages.StreamTypeAudioEnd, messages.NewAudioEndValue()),
+		assistant(13, messages.StreamTypeMessageEnd, messages.NewMessageEndValue(audioUsage)),
 		streamRecord(14, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("sess_metrics_reconcile", "fixture_complete"),
 		}),
 	}
+	return writeMetricsReconcileCapture(t, records), audioPCM
+}
 
+// metricsReconcileCorpusPCM decodes the committed 16 kHz corpus utterance
+// into little-endian PCM16 bytes.
+func metricsReconcileCorpusPCM(t *testing.T) []byte {
+	t.Helper()
+	wavBytes, err := os.ReadFile(corpusAudioWAVPath(t, "utt_short_16k.wav"))
+	if err != nil {
+		t.Fatalf("read committed corpus WAV: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse committed corpus WAV: %v", err)
+	}
+	if rate != wavio.Rate16kHz || len(samples) < 2 {
+		t.Fatalf("committed corpus WAV = rate %d, %d samples; want 16kHz and audio", rate, len(samples))
+	}
+	audioPCM := make([]byte, len(samples)*2)
+	for index, sample := range samples {
+		binary.LittleEndian.PutUint16(audioPCM[index*2:], uint16(sample))
+	}
+	return audioPCM
+}
+
+// writeMetricsReconcileCapture seals the synthetic Grok stream records into a
+// hygiene-validated capture file.
+func writeMetricsReconcileCapture(t *testing.T, records []map[string]any) string {
+	t.Helper()
 	recordData, err := json.Marshal(records)
 	if err != nil {
 		t.Fatalf("marshal metrics reconciliation records: %v", err)
@@ -176,11 +138,8 @@ func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 		t.Fatalf("decode metrics reconciliation records: %v", err)
 	}
 	capture := gwtesting.SessionCapture{
-		Version: gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{
-			Name:  "grok",
-			Model: "grok-synthetic",
-		},
+		Version:  gwtesting.SessionCaptureVersion,
+		Provider: gwtesting.SessionProviderMetadata{Name: "grok", Model: "grok-synthetic"},
 		Session: gwtesting.SessionMetadata{
 			ID:                "sess_metrics_reconcile",
 			StartedAtUTC:      "2026-08-25T00:00:00Z",
@@ -196,14 +155,14 @@ func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 	if err != nil {
 		t.Fatalf("marshal metrics reconciliation fixture: %v", err)
 	}
-	path = filepath.Join(t.TempDir(), "metrics_reconcile.session.json")
+	path := filepath.Join(t.TempDir(), "metrics_reconcile.session.json")
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("write metrics reconciliation fixture: %v", err)
 	}
 	if violations := gwtesting.ValidateSessionCaptureFile(path); len(violations) > 0 {
 		t.Fatalf("assembled fixture failed hygiene validation: %v", violations)
 	}
-	return path, audioPCM
+	return path
 }
 
 // ledgerEntry is one normalized stream event observed at either side of the

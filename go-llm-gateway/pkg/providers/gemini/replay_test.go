@@ -130,7 +130,7 @@ func TestReplay_ToolCall(t *testing.T) {
 		},
 		Tools: []models.ToolDefinition{
 			{
-				Name:        "get_weather",
+				Name:        testToolGetWeather,
 				Description: "Get weather for a city",
 				Parameters: []models.ToolParameter{
 					{Name: "city", Type: "string", Description: "City name", Required: true},
@@ -148,7 +148,7 @@ func TestReplay_ToolCall(t *testing.T) {
 	}
 
 	tc := resp.Message.ToolCalls[0]
-	if tc.Name != "get_weather" {
+	if tc.Name != testToolGetWeather {
 		t.Errorf("expected tool name 'get_weather', got %q", tc.Name)
 	}
 	if !strings.Contains(tc.Arguments, "New York") {
@@ -169,18 +169,18 @@ func TestReplay_ToolCallAndResult(t *testing.T) {
 			models.NewTextMessage(models.RoleUser, "What's the weather in New York?"),
 			{
 				Role:      models.RoleAssistant,
-				ToolCalls: []models.ToolCall{{ID: "call_1", Name: "get_weather", Arguments: `{"city":"New York","unit":"celsius"}`}},
+				ToolCalls: []models.ToolCall{{ID: "call_1", Name: testToolGetWeather, Arguments: `{"city":"New York","unit":"celsius"}`}},
 			},
 			{
 				Role: models.RoleTool,
-				Name: "get_weather",
+				Name: testToolGetWeather,
 				ContentParts: []models.ContentPart{
 					models.TextPart{Text: `{"temperature": 22, "condition": "partly cloudy"}`},
 				},
 			},
 		},
 		Tools: []models.ToolDefinition{
-			{Name: "get_weather", Description: "Get weather for a city"},
+			{Name: testToolGetWeather, Description: "Get weather for a city"},
 		},
 	})
 	if err != nil {

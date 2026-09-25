@@ -88,10 +88,10 @@ func TestV3BNegativeControlOrphanedToolResultFails(t *testing.T) {
 	if result["pass"] != false {
 		t.Fatalf("orphaned negative control must fail: %v", result)
 	}
-	outcomes := result["expectations"].([]any)
+	outcomes := mustAs[[]any](t, result["expectations"])
 	failed := false
 	for _, raw := range outcomes {
-		outcome := raw.(map[string]any)
+		outcome := mustAs[map[string]any](t, raw)
 		if outcome["kind"] == "no-orphaned-tool-result" && outcome["passed"] == false {
 			failed = true
 			detail := fmt.Sprint(outcome["actual"])
@@ -107,10 +107,10 @@ func TestV3BNegativeControlOrphanedToolResultFails(t *testing.T) {
 
 func TestV3BWrongFunctionCallOutputSubtypeFails(t *testing.T) {
 	source := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-delivered.session.json")
-	fixture := writeMutatedV3BFixture(t, source, "conversation.item.create", func(record map[string]any) {
-		payload := record["payload"].(map[string]any)
-		item := payload["item"].(map[string]any)
-		item["type"] = "message"
+	fixture := writeMutatedV3BFixture(t, source, rtEventConversationItemCreate, func(record map[string]any) {
+		payload := mustAs[map[string]any](t, record["payload"])
+		item := mustAs[map[string]any](t, payload["item"])
+		item["type"] = rtItemMessage
 	})
 	scenarioPath := writeV3BScenario(t, "v3b-delivered-wrong-subtype", fixture, true)
 
@@ -258,9 +258,9 @@ func assertExpectationKindsPass(t *testing.T, result map[string]any, kinds ...st
 		want[kind] = true
 	}
 	seen := map[string]bool{}
-	for _, raw := range result["expectations"].([]any) {
-		outcome := raw.(map[string]any)
-		kind := outcome["kind"].(string)
+	for _, raw := range mustAs[[]any](t, result["expectations"]) {
+		outcome := mustAs[map[string]any](t, raw)
+		kind := mustAs[string](t, outcome["kind"])
 		if want[kind] && outcome["passed"] != true {
 			t.Fatalf("expectation %s must pass: %v", kind, outcome)
 		}
@@ -275,8 +275,8 @@ func assertExpectationKindsPass(t *testing.T, result map[string]any, kinds ...st
 
 func assertExpectationKindFails(t *testing.T, result map[string]any, want string) {
 	t.Helper()
-	for _, raw := range result["expectations"].([]any) {
-		outcome := raw.(map[string]any)
+	for _, raw := range mustAs[[]any](t, result["expectations"]) {
+		outcome := mustAs[map[string]any](t, raw)
 		if outcome["kind"] == want {
 			if outcome["passed"] != false {
 				t.Fatalf("expectation %s must fail: %v", want, outcome)

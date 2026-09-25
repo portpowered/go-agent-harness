@@ -1,7 +1,12 @@
 package chrome
 
 import (
+	"context"
+	"errors"
+	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,4 +96,55 @@ func normalizedManagedShutdown(timeout time.Duration) time.Duration {
 		return defaultManagedBrowserShutdownTimeout
 	}
 	return timeout
+}
+
+// discardCleanupError runs a release on an abandon or cleanup path whose
+// outcome is already decided. The resource is dropped either way, so its
+// release error cannot change the result reported to the caller.
+func discardCleanupError(release func() error) {
+	if err := release(); err != nil {
+		return
+	}
+}
+
+// recordManagedBrowserLeaseOwner writes this process's PID into a newly
+// created lease. A lease whose owner cannot be recorded is removed at once so
+// stale detection never has to guess at its holder.
+func recordManagedBrowserLeaseOwner(path string, file *os.File) (*managedBrowserLease, error) {
+	_, writeErr := io.WriteString(file, strconv.Itoa(os.Getpid()))
+	if err := errors.Join(writeErr, file.Close()); err != nil {
+		removeBestEffort(os.Remove, path)
+		return nil, err
+	}
+	return &managedBrowserLease{path: path}, nil
+}
+
+// proveManagedBrowserProfileOwner reports whether pid is provably the managed
+// browser that owns profileDir. Any inspection failure is a failed proof.
+func proveManagedBrowserProfileOwner(ctx context.Context, inspector ManagedBrowserProcessInspector, pid int, profileDir string) (ManagedBrowserState, bool) {
+	commandLine, err := managedProcessCommandLine(ctx, pid)
+	if err != nil {
+		return ManagedBrowserState{}, false
+	}
+	state, ok := managedBrowserProfileOwnerState(pid, profileDir, commandLine)
+	if !ok {
+		return ManagedBrowserState{}, false
+	}
+	identity, err := managedProcessIdentity(ctx, pid, commandLine)
+	if err != nil || strings.TrimSpace(identity) == "" {
+		return ManagedBrowserState{}, false
+	}
+	state.ProcessIdentity = identity
+	_, err = inspector.Inspect(ctx, state)
+	return state, err == nil
+}
+
+// positivePIDOrZero parses a singleton lock PID suffix. A suffix that is not a
+// positive integer attributes the lock to no process.
+func positivePIDOrZero(text string) int {
+	pid, err := strconv.Atoi(text)
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
 }

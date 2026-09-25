@@ -271,3 +271,16 @@ func WithContextPressureNotifier(threshold float64, message string) Option {
 		c.PressureMessage = message
 	}
 }
+
+// forwardToOutputs writes a model text response to every configured output.
+// Outputs are best-effort observers: a failing writer is logged and must not
+// stop the run or starve the remaining outputs.
+func (al *AgentLoop) forwardToOutputs(text string) {
+	al.mu.Lock()
+	defer al.mu.Unlock()
+	for _, out := range al.outputs {
+		if _, err := out.Writer.Write([]byte(text)); err != nil {
+			al.logError("agentloop: output write failed", logging.Field{Key: "output", Value: out.Label}, logging.Field{Key: "error", Value: err.Error()})
+		}
+	}
+}

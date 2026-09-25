@@ -234,8 +234,10 @@ func writeDirectAmbiguityDetails(out io.Writer, result webmcp.ToolResultError) e
 }
 
 func stringValue(value any) string {
-	text, _ := value.(string)
-	return text
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
 }
 
 func compactDirectJSON(raw json.RawMessage) string {

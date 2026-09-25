@@ -4,6 +4,7 @@ import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -702,10 +703,7 @@ func (s *realtimeSession) Close() error {
 	s.closeOnce.Do(func() {
 		close(s.done)
 		s.releaseResponseAdmission()
-		if media := s.currentRTCMedia(); media != nil {
-			_ = media.Close()
-		}
-		closeErr = s.conn.Close()
+		closeErr = errors.Join(s.currentRTCMedia().Close(), s.conn.Close())
 	})
 	return closeErr
 }

@@ -11,6 +11,8 @@ const (
 	maxAmbiguityCandidates = 32
 	maxAmbiguityTitle      = 160
 	maxAmbiguityOrigin     = 256
+	// maxOriginFilterLabelBytes bounds the origin filter echoed in errors.
+	maxOriginFilterLabelBytes = 128
 )
 
 // Code is the stable classified discovery error vocabulary.
@@ -176,18 +178,16 @@ func newUnsupportedWebMCP(browserID, targetID string) *DiscoveryError {
 }
 
 func newNoEligibleTab(browserID string, options TargetListOptions, candidateCount int) *DiscoveryError {
-	details := map[string]any{
-		"filters": map[string]any{
-			"eligible_only":           options.resolvedEligibleOnly(),
-			"include_zero_tool_pages": options.IncludeZeroToolPages,
-		},
-		"candidate_count": candidateCount,
+	filters := map[string]any{
+		"eligible_only":           options.resolvedEligibleOnly(),
+		"include_zero_tool_pages": options.IncludeZeroToolPages,
 	}
+	details := map[string]any{"filters": filters, "candidate_count": candidateCount}
 	if browserID != "" {
 		details["browser_id"] = boundedLabel(browserID, 64)
 	}
 	if options.OriginContains != "" {
-		details["filters"].(map[string]any)["origin_contains"] = boundedLabel(options.OriginContains, 128)
+		filters["origin_contains"] = boundedLabel(options.OriginContains, maxOriginFilterLabelBytes)
 	}
 	return &DiscoveryError{
 		Code:      CodeNoEligibleTab,

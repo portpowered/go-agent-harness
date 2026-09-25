@@ -34,8 +34,10 @@ func TestEndpointHonorsWholeURLOverrideAndProbesSessionCreated(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer func() { _ = conn.Close() }()
-		_ = conn.WriteJSON(map[string]string{"type": "session.created"})
+		defer discardClose(conn)
+		if err := conn.WriteJSON(map[string]string{"type": "session.created"}); err != nil {
+			t.Errorf("write session.created: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -97,7 +99,7 @@ func TestEndpointDoesNotProbeAFailedEndpointAgain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen for ephemeral address: %v", err)
 	}
-	defer func() { _ = listener.Close() }()
+	defer discardClose(listener)
 
 	endpoint := "ws://" + listener.Addr().String() + "/v1/realtime?model=protocol-failure"
 	var accepted atomic.Int32
@@ -111,7 +113,7 @@ func TestEndpointDoesNotProbeAFailedEndpointAgain(t *testing.T) {
 		}
 		accepted.Add(1)
 		close(acceptedOnce)
-		_ = conn.Close()
+		discardClose(conn)
 	}()
 	t.Setenv(realtimeEndpointEnv, endpoint)
 

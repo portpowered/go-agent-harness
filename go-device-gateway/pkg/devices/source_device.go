@@ -35,7 +35,7 @@ type DeviceCapabilityError = DeviceAdapterError
 
 func (e *DeviceAdapterError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Err != nil {
 		return fmt.Sprintf("open %s device %q: %v", e.Direction, e.ID, e.Err)
@@ -154,8 +154,7 @@ func newDeviceSourceFromOpened(handle OpenedDevice, resolvedID DeviceID, format 
 	frames, hasFrames := handle.(deviceFrameReader)
 	bytes, hasBytes := handle.(deviceByteReader)
 	if !hasFrames && !hasBytes {
-		_ = handle.Close()
-		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}
+		return nil, withCleanupError(&DeviceCapabilityError{ID: resolvedID, Direction: DirectionInput, Operation: "read", Kind: ErrDeviceCapabilityMismatch}, handle.Close())
 	}
 	return &DeviceSource{adapter: newDeviceAdapter(handle, resolvedID, DirectionInput), frameReader: frames, byteReader: bytes, format: format}, nil
 }
@@ -267,3 +266,9 @@ func (s *VirtualStream) DeviceDirection() Direction {
 	}
 	return s.device.Direction
 }
+
+// Capture queue drop policies reported in audio.CaptureQueueStats.
+const (
+	captureDropOldest = "drop_oldest"
+	captureDropNewest = "drop_newest"
+)

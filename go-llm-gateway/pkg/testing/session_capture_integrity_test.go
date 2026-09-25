@@ -282,7 +282,7 @@ func TestWriteSessionCaptureFromReaderMatchesCanonicalDigest(t *testing.T) {
 	}
 	capture := SessionCapture{
 		Version:            SessionCaptureVersion,
-		Provider:           SessionProviderMetadata{Name: "grok", Model: "grok-realtime"},
+		Provider:           SessionProviderMetadata{Name: testProviderGrok, Model: "grok-realtime"},
 		Session:            SessionMetadata{ID: "session-1", StartedAtUTC: "2026-09-05T12:00:00Z"},
 		Records:            records,
 		EndsWithDisconnect: true,

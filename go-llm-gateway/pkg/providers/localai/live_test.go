@@ -35,7 +35,7 @@ func TestLiveRealtimeAudio(t *testing.T) {
 		}
 		t.Fatalf("connect to reachable LocalAI endpoint %s: %v", endpoint, err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	sendCtx, sendCancel := context.WithTimeout(context.Background(), time.Second)
 	defer sendCancel()

@@ -40,12 +40,9 @@ func TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := registry.Open(registry.output.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = opened.Close() })
-	if err := opened.(*SimulatedDuplexStream).WriteSamples(context.Background(), make([]int16, 960)); err != nil {
+	opened := simulatedStreamForTest(t, registry, registry.output.ID)
+	t.Cleanup(func() { closeForTest(t, "output", opened) })
+	if err := opened.WriteSamples(context.Background(), make([]int16, 960)); err != nil {
 		t.Fatal(err)
 	}
 	if err := registry.Advance(1); err != nil {
@@ -174,8 +171,8 @@ func TestSimulatedDuplexClockJitterFaultsAndEpochsAreDeterministic(t *testing.T)
 	}
 
 	r2, output2 := openSimulatedOutput(t, s)
-	_ = output2.WriteSamples(context.Background(), make([]int16, 480*5))
-	_ = r2.Advance(4)
+	noErrorForTest(t, output2.WriteSamples(context.Background(), make([]int16, 480*5)))
+	noErrorForTest(t, r2.Advance(4))
 	if !reflect.DeepEqual(r.Trace(), r2.Trace()) || !reflect.DeepEqual(r.RenderedSamples(), r2.RenderedSamples()) {
 		t.Fatal("same scenario did not replay deterministically")
 	}
@@ -210,12 +207,12 @@ func TestSimulatedDuplexAcousticDelayGainNearEndAndFIR(t *testing.T) {
 }
 
 func TestSimulatedDuplexCaptureOverflowPolicies(t *testing.T) {
-	for _, policy := range []string{"drop_oldest", "drop_newest"} {
+	for _, policy := range []string{captureDropOldest, captureDropNewest} {
 		t.Run(policy, func(t *testing.T) {
 			s := simulatedScenario(16000, []int{8})
 			s.CaptureQueue = QueueSpec{LatencyNanos: int64(time.Millisecond), DropPolicy: policy} // 16 samples
 			r, output := openSimulatedOutput(t, s)
-			_ = output.WriteSamples(context.Background(), int16Samples(1, 24))
+			noErrorForTest(t, output.WriteSamples(context.Background(), int16Samples(1, 24)))
 			if err := r.Advance(3); err != nil {
 				t.Fatal(err)
 			}
@@ -226,10 +223,10 @@ func TestSimulatedDuplexCaptureOverflowPolicies(t *testing.T) {
 			r.mu.Lock()
 			samples := append([]int16(nil), r.capture...)
 			r.mu.Unlock()
-			if policy == "drop_oldest" && samples[0] != 9 {
+			if policy == captureDropOldest && samples[0] != 9 {
 				t.Fatalf("drop-oldest retained stale prefix %d", samples[0])
 			}
-			if policy == "drop_newest" && samples[0] != 1 {
+			if policy == captureDropNewest && samples[0] != 1 {
 				t.Fatalf("drop-newest lost old prefix %d", samples[0])
 			}
 		})
@@ -297,10 +294,8 @@ func TestSimulatedDuplexRegistryAndStreamContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertSimulatedRegistryContracts(t, r)
-	outRaw, _ := r.Open(r.output.ID)
-	inRaw, _ := r.Open(r.input.ID)
-	out := outRaw.(*SimulatedDuplexStream)
-	in := inRaw.(*SimulatedDuplexStream)
+	out := simulatedStreamForTest(t, r, r.output.ID)
+	in := simulatedStreamForTest(t, r, r.input.ID)
 	if out.DeviceFormat() != audio.PCM16DeviceFormat(16000) {
 		t.Fatalf("format = %v", out.DeviceFormat())
 	}
@@ -465,13 +460,13 @@ func TestSimulatedDuplexScenarioValidationAndTimelineFaults(t *testing.T) {
 			t.Fatalf("invalid scenario %d accepted", i)
 		}
 	}
-	if r, _ := NewSimulatedDuplexRegistry(simulatedScenario(16000, []int{480})); r.Advance(-1) == nil {
+	if r, _ := openSimulatedOutput(t, simulatedScenario(16000, []int{480})); r.Advance(-1) == nil {
 		t.Fatal("negative advance accepted")
 	}
 	s := simulatedScenario(16000, []int{480})
 	s.Faults = []FaultEvent{{Callback: 0, Direction: DirectionOutput, Type: FaultForwardJump, Samples: 10}, {Callback: 1, Direction: DirectionOutput, Type: FaultBackwardJump}, {Callback: 0, Direction: DirectionInput, Type: FaultClockReset}}
 	r, out := openSimulatedOutput(t, s)
-	_ = out.WriteSamples(context.Background(), make([]int16, 960))
+	noErrorForTest(t, out.WriteSamples(context.Background(), make([]int16, 960)))
 	if err := r.Advance(2); err != nil {
 		t.Fatal(err)
 	}
@@ -495,17 +490,9 @@ func openSimulatedPair(t *testing.T, scenario DuplexScenario) (*SimulatedDuplexR
 	if err != nil {
 		t.Fatal(err)
 	}
-	outRaw, err := r.Open(r.output.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	inRaw, err := r.Open(r.input.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := outRaw.(*SimulatedDuplexStream)
-	in := inRaw.(*SimulatedDuplexStream)
-	t.Cleanup(func() { _ = out.Close(); _ = in.Close() })
+	out := simulatedStreamForTest(t, r, r.output.ID)
+	in := simulatedStreamForTest(t, r, r.input.ID)
+	t.Cleanup(func() { closeForTest(t, "output", out); closeForTest(t, "input", in) })
 	return r, out, in
 }
 func allZero(samples []int16) bool {

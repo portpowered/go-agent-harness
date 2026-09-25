@@ -183,7 +183,7 @@ func materializeReadImageReplayResultFixture(t *testing.T, committedPath, imageP
 	if !includeSessionClose {
 		filtered := capture.Records[:0]
 		for _, record := range capture.Records {
-			if record.Direction == gwtesting.DirectionServerToClient && record.Type == "session.closed" {
+			if record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventSessionClosed {
 				continue
 			}
 			filtered = append(filtered, record)
@@ -259,7 +259,7 @@ func writeReadImageModelConfig(t *testing.T, readImageEnabled bool, model string
 	fmt.Fprintf(&configYAML, "model:\n  provider: openai\n  openai:\n    model: %s\n", model)
 	configYAML.WriteString("tools:\n  list:\n")
 	for _, id := range config.DefaultToolIDs {
-		enabled := readImageEnabled && id == "read_image"
+		enabled := readImageEnabled && id == rtToolReadImage
 		fmt.Fprintf(&configYAML, "    - id: %s\n      enabled: %t\n", id, enabled)
 	}
 	if err := os.WriteFile(filepath.Join(dir, config.ConfigFileName), []byte(configYAML.String()), 0o600); err != nil {
@@ -300,7 +300,7 @@ func assertReadImageToolAdvertisement(t *testing.T, fixturePath string, wantRead
 	t.Helper()
 	capture := captureCopy(t, fixturePath)
 	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "session.update" {
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventSessionUpdate {
 			continue
 		}
 		var payload struct {
@@ -314,7 +314,7 @@ func assertReadImageToolAdvertisement(t *testing.T, fixturePath string, wantRead
 			t.Fatalf("decode session.update: %v", err)
 		}
 		if wantReadImage {
-			if len(payload.Session.Tools) != 1 || payload.Session.Tools[0].Name != "read_image" {
+			if len(payload.Session.Tools) != 1 || payload.Session.Tools[0].Name != rtToolReadImage {
 				t.Fatalf("advertised tools = %#v, want only read_image", payload.Session.Tools)
 			}
 		} else if len(payload.Session.Tools) != 0 {
@@ -337,139 +337,57 @@ func assertReadImageWireContract(t *testing.T, fixturePath, imagePath string, ex
 	wantDigestHex := hex.EncodeToString(wantDigest[:])
 	wantDataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(expectedBytes)
 
-	callCount := 0
-	callID := ""
-	functionOutputCount := 0
-	functionOutputIndex := -1
+	tally := scanReadImageWire(t, capture, imagePath, "", func(output string) {
+		assertReadImageSuccessOutput(t, output, len(expectedBytes), wantDigestHex)
+	})
 	imageItemCount := 0
 	imageItemIndex := -1
-	toolArgumentCount := 0
-	encodedImageOccurrences := 0
-	continuationResponseCreates := make([]int, 0, 2)
-	for index, record := range capture.Records {
-		payload := record.Payload
-		if len(payload) == 0 {
-			payload = record.Data
-		}
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_item.added" {
-			var event struct {
-				Item struct {
-					Type   string `json:"type"`
-					CallID string `json:"call_id"`
-					Name   string `json:"name"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode read_image tool call: %v", err)
-			}
-			if event.Item.Type == "function_call" && event.Item.Name == tools.ReadImageToolID {
-				callCount++
-				callID = event.Item.CallID
-			}
-		}
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" {
-			var event struct {
-				CallID    string `json:"call_id"`
-				Name      string `json:"name"`
-				Arguments string `json:"arguments"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode read_image arguments: %v", err)
-			}
-			if event.CallID != readImageCallID || event.Name != tools.ReadImageToolID {
-				t.Fatalf("read_image arguments correlation = (%q, %q), want (%q, %q)", event.CallID, event.Name, readImageCallID, tools.ReadImageToolID)
-			}
-			var arguments struct {
-				Path string `json:"path"`
-			}
-			if err := json.Unmarshal([]byte(event.Arguments), &arguments); err != nil {
-				t.Fatalf("decode read_image arguments JSON: %v", err)
-			}
-			if arguments.Path != imagePath {
-				t.Fatalf("wire read_image path = %q, want %q", arguments.Path, imagePath)
-			}
-			toolArgumentCount++
-		}
-		if record.Direction != gwtesting.DirectionClientToServer {
+	for _, message := range tally.messages {
+		if message.event.Item.ID != readImageToolImageItemID(readImageCallID) {
 			continue
 		}
-		encodedImageOccurrences += strings.Count(string(payload), base64.StdEncoding.EncodeToString(expectedBytes))
-		switch record.Type {
-		case "conversation.item.create":
-			var event struct {
-				Item struct {
-					Type    string `json:"type"`
-					CallID  string `json:"call_id"`
-					Output  string `json:"output"`
-					Role    string `json:"role"`
-					ID      string `json:"id"`
-					Content []struct {
-						Type     string `json:"type"`
-						ImageURL string `json:"image_url"`
-					} `json:"content"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode read_image conversation item: %v", err)
-			}
-			switch event.Item.Type {
-			case "function_call_output":
-				functionOutputCount++
-				functionOutputIndex = index
-				if event.Item.CallID != readImageCallID {
-					t.Fatalf("function_call_output call_id = %q, want %q", event.Item.CallID, readImageCallID)
-				}
-				if strings.TrimSpace(event.Item.Output) == "" {
-					t.Fatal("function_call_output output is empty")
-				}
-				var result tools.ReadImageResult
-				if err := json.Unmarshal([]byte(event.Item.Output), &result); err != nil {
-					t.Fatalf("decode function_call_output read_image envelope: %v", err)
-				}
-				if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusSuccess {
-					t.Fatalf("function_call_output result = %#v, want versioned success", result)
-				}
-				if len(event.Item.Output) > 1024 || strings.Contains(strings.ToLower(event.Item.Output), "data:") || strings.Contains(strings.ToLower(event.Item.Output), "base64") {
-					t.Fatalf("function_call_output is not a bounded metadata envelope: bytes=%d output=%q", len(event.Item.Output), event.Item.Output)
-				}
-				if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
-					t.Fatalf("function_call_output result metadata = %#v, want MIME image/png, length %d, digest %s, typed image projection", result, len(expectedBytes), wantDigestHex)
-				}
-			case "message":
-				if event.Item.ID != readImageToolImageItemID(readImageCallID) {
-					continue
-				}
-				imageItemCount++
-				imageItemIndex = index
-				if event.Item.Role != string(messages.RoleUser) || len(event.Item.Content) != 1 || event.Item.Content[0].Type != "input_image" || event.Item.Content[0].ImageURL != wantDataURL {
-					t.Fatalf("correlated input_image item = %#v, want one user image with exact fixture bytes", event.Item)
-				}
-			}
-		case "response.create":
-			continuationResponseCreates = append(continuationResponseCreates, index)
+		imageItemCount++
+		imageItemIndex = message.index
+		item := message.event.Item
+		if item.Role != string(messages.RoleUser) || len(item.Content) != 1 || item.Content[0].Type != rtContentInputImage || item.Content[0].ImageURL != wantDataURL {
+			t.Fatalf("correlated input_image item = %#v, want one user image with exact fixture bytes", item)
+		}
+	}
+	encodedImageOccurrences := 0
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionClientToServer {
+			encodedImageOccurrences += strings.Count(string(readImageSpokenRecordPayload(record)), base64.StdEncoding.EncodeToString(expectedBytes))
 		}
 	}
 
-	if callCount != 1 || callID != readImageCallID {
-		t.Fatalf("read_image calls = %d with call ID %q, want one call ID %q", callCount, callID, readImageCallID)
-	}
-	if toolArgumentCount != 1 {
-		t.Fatalf("read_image argument event count = %d, want exactly one", toolArgumentCount)
-	}
-	if functionOutputCount != 1 {
-		t.Fatalf("function_call_output count = %d, want exactly one", functionOutputCount)
-	}
+	tally.assertSingleTransaction(t)
 	if imageItemCount != 1 {
 		t.Fatalf("correlated input_image count = %d, want exactly one", imageItemCount)
 	}
 	if encodedImageOccurrences != 1 {
 		t.Fatalf("encoded image payload occurs %d times across client provider frames, want exactly once", encodedImageOccurrences)
 	}
-	if len(continuationResponseCreates) != 2 {
-		t.Fatalf("response.create count = %d, want initial request plus exactly one continuation", len(continuationResponseCreates))
+	if !strictlyIncreasing(tally.functionOutputIndex, imageItemIndex, tally.continuationResponseCreates[1]) {
+		t.Fatalf("read_image transaction order = function output %d, image item %d, continuation %d; want output < image < continuation", tally.functionOutputIndex, imageItemIndex, tally.continuationResponseCreates[1])
 	}
-	if !(functionOutputIndex < imageItemIndex && imageItemIndex < continuationResponseCreates[1]) {
-		t.Fatalf("read_image transaction order = function output %d, image item %d, continuation %d; want output < image < continuation", functionOutputIndex, imageItemIndex, continuationResponseCreates[1])
+}
+
+// assertReadImageSuccessOutput requires the function output to be a bounded,
+// versioned success envelope describing exactly the fixture image.
+func assertReadImageSuccessOutput(t *testing.T, output string, wantLength int, wantDigestHex string) {
+	t.Helper()
+	var result tools.ReadImageResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("decode function_call_output read_image envelope: %v", err)
+	}
+	if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusSuccess {
+		t.Fatalf("function_call_output result = %#v, want versioned success", result)
+	}
+	if len(output) > 1024 || strings.Contains(strings.ToLower(output), "data:") || strings.Contains(strings.ToLower(output), "base64") {
+		t.Fatalf("function_call_output is not a bounded metadata envelope: bytes=%d output=%q", len(output), output)
+	}
+	if result.MIMEType != "image/png" || result.ByteLength != wantLength || result.SHA256 != wantDigestHex || result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
+		t.Fatalf("function_call_output result metadata = %#v, want MIME image/png, length %d, digest %s, typed image projection", result, wantLength, wantDigestHex)
 	}
 }
 
@@ -478,124 +396,178 @@ func assertReadImageMissingWireContract(t *testing.T, fixturePath, imagePath str
 	capture := captureCopy(t, fixturePath)
 	wantError := expectedReadImageMissingError(t, imagePath)
 
-	callCount := 0
-	callID := ""
-	toolArgumentCount := 0
-	functionOutputCount := 0
-	functionOutputIndex := -1
+	tally := scanReadImageWire(t, capture, imagePath, "missing ", func(output string) {
+		var result tools.ReadImageResult
+		if err := json.Unmarshal([]byte(output), &result); err != nil {
+			t.Fatalf("decode missing read_image error envelope: %v", err)
+		}
+		if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error != wantError {
+			t.Fatalf("missing read_image result = %#v, want version %d error %q", result, tools.ReadImageResultVersion, wantError)
+		}
+		if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" {
+			t.Fatalf("missing read_image result unexpectedly carried image metadata: %#v", result)
+		}
+	})
 	imageItemCount := 0
-	continuationResponseCreates := make([]int, 0, 2)
+	for _, message := range tally.messages {
+		for _, part := range message.event.Item.Content {
+			if part.Type == rtContentInputImage {
+				imageItemCount++
+			}
+		}
+	}
+
+	tally.assertSingleTransaction(t)
+	if imageItemCount != 0 {
+		t.Fatalf("missing read_image emitted %d input_image item(s), want none", imageItemCount)
+	}
+	if tally.functionOutputIndex >= tally.continuationResponseCreates[1] {
+		t.Fatalf("missing read_image transaction order = function output %d, continuation %d; want output before continuation", tally.functionOutputIndex, tally.continuationResponseCreates[1])
+	}
+}
+
+// readImageItemEvent is the client conversation.item.create subset the
+// read_image wire oracles inspect.
+type readImageItemEvent struct {
+	Item struct {
+		Type    string `json:"type"`
+		CallID  string `json:"call_id"`
+		Output  string `json:"output"`
+		Role    string `json:"role"`
+		ID      string `json:"id"`
+		Content []struct {
+			Type     string `json:"type"`
+			ImageURL string `json:"image_url"`
+		} `json:"content"`
+	} `json:"item"`
+}
+
+type indexedReadImageItem struct {
+	index int
+	event readImageItemEvent
+}
+
+// readImageWireTally counts one capture's read_image transaction events.
+// label prefixes failure messages ("" or "missing ").
+type readImageWireTally struct {
+	label                                             string
+	callCount, toolArgumentCount, functionOutputCount int
+	callID                                            string
+	functionOutputIndex                               int
+	continuationResponseCreates                       []int
+	messages                                          []indexedReadImageItem
+}
+
+// scanReadImageWire tallies the provider tool call, its arguments, the
+// correlated function output (validated by checkOutput), client message items,
+// and response.create requests.
+func scanReadImageWire(t *testing.T, capture *gwtesting.SessionCapture, imagePath, label string, checkOutput func(output string)) *readImageWireTally {
+	t.Helper()
+	tally := &readImageWireTally{label: label, functionOutputIndex: -1, continuationResponseCreates: make([]int, 0, 2)}
 	for index, record := range capture.Records {
-		payload := record.Payload
-		if len(payload) == 0 {
-			payload = record.Data
-		}
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_item.added" {
-			var event struct {
-				Item struct {
-					Type   string `json:"type"`
-					CallID string `json:"call_id"`
-					Name   string `json:"name"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode missing read_image tool call: %v", err)
-			}
-			if event.Item.Type == "function_call" && event.Item.Name == tools.ReadImageToolID {
-				callCount++
-				callID = event.Item.CallID
-			}
-		}
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" {
-			var event struct {
-				CallID    string `json:"call_id"`
-				Name      string `json:"name"`
-				Arguments string `json:"arguments"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode missing read_image arguments: %v", err)
-			}
-			if event.CallID != readImageCallID || event.Name != tools.ReadImageToolID {
-				t.Fatalf("missing read_image arguments correlation = (%q, %q), want (%q, %q)", event.CallID, event.Name, readImageCallID, tools.ReadImageToolID)
-			}
-			var arguments struct {
-				Path string `json:"path"`
-			}
-			if err := json.Unmarshal([]byte(event.Arguments), &arguments); err != nil {
-				t.Fatalf("decode missing read_image arguments JSON: %v", err)
-			}
-			if arguments.Path != imagePath {
-				t.Fatalf("missing read_image path = %q, want %q", arguments.Path, imagePath)
-			}
-			toolArgumentCount++
+		payload := readImageSpokenRecordPayload(record)
+		if record.Direction == gwtesting.DirectionServerToClient {
+			tally.observeServer(t, record.Type, payload, imagePath)
+			continue
 		}
 		if record.Direction != gwtesting.DirectionClientToServer {
 			continue
 		}
 		switch record.Type {
-		case "conversation.item.create":
-			var event struct {
-				Item struct {
-					Type    string `json:"type"`
-					CallID  string `json:"call_id"`
-					Output  string `json:"output"`
-					Content []struct {
-						Type string `json:"type"`
-					} `json:"content"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode missing read_image conversation item: %v", err)
-			}
-			switch event.Item.Type {
-			case "function_call_output":
-				functionOutputCount++
-				functionOutputIndex = index
-				if event.Item.CallID != readImageCallID {
-					t.Fatalf("missing function_call_output call_id = %q, want %q", event.Item.CallID, readImageCallID)
-				}
-				if strings.TrimSpace(event.Item.Output) == "" {
-					t.Fatal("missing read_image function_call_output is empty")
-				}
-				var result tools.ReadImageResult
-				if err := json.Unmarshal([]byte(event.Item.Output), &result); err != nil {
-					t.Fatalf("decode missing read_image error envelope: %v", err)
-				}
-				if result.Version != tools.ReadImageResultVersion || result.Status != tools.ReadImageResultStatusError || result.Error != wantError {
-					t.Fatalf("missing read_image result = %#v, want version %d error %q", result, tools.ReadImageResultVersion, wantError)
-				}
-				if result.MIMEType != "" || result.ByteLength != 0 || result.SHA256 != "" || result.TypedProjection != "" {
-					t.Fatalf("missing read_image result unexpectedly carried image metadata: %#v", result)
-				}
-			case "message":
-				for _, part := range event.Item.Content {
-					if part.Type == "input_image" {
-						imageItemCount++
-					}
-				}
-			}
-		case "response.create":
-			continuationResponseCreates = append(continuationResponseCreates, index)
+		case rtEventConversationItemCreate:
+			tally.observeItem(t, index, payload, checkOutput)
+		case rtEventResponseCreate:
+			tally.continuationResponseCreates = append(tally.continuationResponseCreates, index)
 		}
 	}
+	return tally
+}
 
-	if callCount != 1 || callID != readImageCallID {
-		t.Fatalf("missing read_image calls = %d with call ID %q, want one call ID %q", callCount, callID, readImageCallID)
+func (tally *readImageWireTally) observeServer(t *testing.T, eventType string, payload []byte, imagePath string) {
+	t.Helper()
+	switch eventType {
+	case rtEventOutputItemAdded:
+		var event struct {
+			Item struct {
+				Type   string `json:"type"`
+				CallID string `json:"call_id"`
+				Name   string `json:"name"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal(payload, &event); err != nil {
+			t.Fatalf("decode %sread_image tool call: %v", tally.label, err)
+		}
+		if event.Item.Type == rtItemFunctionCall && event.Item.Name == tools.ReadImageToolID {
+			tally.callCount++
+			tally.callID = event.Item.CallID
+		}
+	case rtEventFunctionCallArgumentsDone:
+		tally.observeArguments(t, payload, imagePath)
 	}
-	if toolArgumentCount != 1 {
-		t.Fatalf("missing read_image argument event count = %d, want exactly one", toolArgumentCount)
+}
+
+func (tally *readImageWireTally) observeArguments(t *testing.T, payload []byte, imagePath string) {
+	t.Helper()
+	var event struct {
+		CallID    string `json:"call_id"`
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
 	}
-	if functionOutputCount != 1 {
-		t.Fatalf("missing function_call_output count = %d, want exactly one", functionOutputCount)
+	if err := json.Unmarshal(payload, &event); err != nil {
+		t.Fatalf("decode %sread_image arguments: %v", tally.label, err)
 	}
-	if imageItemCount != 0 {
-		t.Fatalf("missing read_image emitted %d input_image item(s), want none", imageItemCount)
+	if event.CallID != readImageCallID || event.Name != tools.ReadImageToolID {
+		t.Fatalf("%sread_image arguments correlation = (%q, %q), want (%q, %q)", tally.label, event.CallID, event.Name, readImageCallID, tools.ReadImageToolID)
 	}
-	if len(continuationResponseCreates) != 2 {
-		t.Fatalf("missing read_image response.create count = %d, want initial request plus exactly one continuation", len(continuationResponseCreates))
+	var arguments struct {
+		Path string `json:"path"`
 	}
-	if functionOutputIndex >= continuationResponseCreates[1] {
-		t.Fatalf("missing read_image transaction order = function output %d, continuation %d; want output before continuation", functionOutputIndex, continuationResponseCreates[1])
+	if err := json.Unmarshal([]byte(event.Arguments), &arguments); err != nil {
+		t.Fatalf("decode %sread_image arguments JSON: %v", tally.label, err)
+	}
+	if arguments.Path != imagePath {
+		t.Fatalf("%sread_image path = %q, want %q", tally.label, arguments.Path, imagePath)
+	}
+	tally.toolArgumentCount++
+}
+
+func (tally *readImageWireTally) observeItem(t *testing.T, index int, payload []byte, checkOutput func(output string)) {
+	t.Helper()
+	var event readImageItemEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		t.Fatalf("decode %sread_image conversation item: %v", tally.label, err)
+	}
+	switch event.Item.Type {
+	case rtItemFunctionCallOutput:
+		tally.functionOutputCount++
+		tally.functionOutputIndex = index
+		if event.Item.CallID != readImageCallID {
+			t.Fatalf("%sfunction_call_output call_id = %q, want %q", tally.label, event.Item.CallID, readImageCallID)
+		}
+		if strings.TrimSpace(event.Item.Output) == "" {
+			t.Fatalf("%sread_image function_call_output is empty", tally.label)
+		}
+		checkOutput(event.Item.Output)
+	case rtItemMessage:
+		tally.messages = append(tally.messages, indexedReadImageItem{index: index, event: event})
+	}
+}
+
+// assertSingleTransaction requires exactly one correlated call, argument
+// event, and function output, plus the initial and one continuation request.
+func (tally *readImageWireTally) assertSingleTransaction(t *testing.T) {
+	t.Helper()
+	if tally.callCount != 1 || tally.callID != readImageCallID {
+		t.Fatalf("%sread_image calls = %d with call ID %q, want one call ID %q", tally.label, tally.callCount, tally.callID, readImageCallID)
+	}
+	if tally.toolArgumentCount != 1 {
+		t.Fatalf("%sread_image argument event count = %d, want exactly one", tally.label, tally.toolArgumentCount)
+	}
+	if tally.functionOutputCount != 1 {
+		t.Fatalf("%sfunction_call_output count = %d, want exactly one", tally.label, tally.functionOutputCount)
+	}
+	if len(tally.continuationResponseCreates) != 2 {
+		t.Fatalf("%sread_image response.create count = %d, want initial request plus exactly one continuation", tally.label, len(tally.continuationResponseCreates))
 	}
 }
 
@@ -608,7 +580,7 @@ func rewriteReadImageCapture(t *testing.T, source string, mutate func(map[string
 	mutated := false
 	for index := range capture.Records {
 		record := &capture.Records[index]
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
 			continue
 		}
 		payload := record.Payload
@@ -620,7 +592,7 @@ func rewriteReadImageCapture(t *testing.T, source string, mutate func(map[string
 			t.Fatalf("decode read_image mutation payload: %v", err)
 		}
 		item, ok := decoded["item"].(map[string]any)
-		if !ok || item["type"] != "function_call_output" {
+		if !ok || item["type"] != rtItemFunctionCallOutput {
 			continue
 		}
 		mutate(item)
@@ -666,78 +638,104 @@ func assertReadImageGroundedWithProviderClose(output string, events []messages.S
 		return err
 	}
 
-	var toolCalls []*messages.ToolCallEndValue
-	providerMessageStarts := make([]int, 0, 2)
-	imageCallID := ""
-	imageMediaType := ""
-	imageBytes := make([]byte, 0)
-	imageStartIndex := -1
-	imageEndIndex := -1
+	evidence, err := collectReadImageStreamEvidence(events)
+	if err != nil {
+		return err
+	}
+	return evidence.verify(imagePath, expectedBytes)
+}
+
+// readImageStreamEvidence is the read_image transaction as observed on the
+// CLI session stream.
+type readImageStreamEvidence struct {
+	toolCalls                      []*messages.ToolCallEndValue
+	providerMessageStarts          []int
+	imageCallID, imageMediaType    string
+	imageBytes                     []byte
+	imageStartIndex, imageEndIndex int
+}
+
+func collectReadImageStreamEvidence(events []messages.StreamMessage) (readImageStreamEvidence, error) {
+	e := readImageStreamEvidence{providerMessageStarts: make([]int, 0, 2), imageBytes: make([]byte, 0), imageStartIndex: -1, imageEndIndex: -1}
 	for index, event := range events {
 		switch value := event.Value.(type) {
 		case *messages.ToolCallEndValue:
-			if value != nil && value.Name == "read_image" {
-				toolCalls = append(toolCalls, value)
+			if value != nil && value.Name == rtToolReadImage {
+				e.toolCalls = append(e.toolCalls, value)
 			}
 		case *messages.MessageStartValue:
 			if event.Role != messages.RoleTool {
-				providerMessageStarts = append(providerMessageStarts, index)
+				e.providerMessageStarts = append(e.providerMessageStarts, index)
 			}
-		case *messages.ImageStartValue:
-			if event.Role == messages.RoleTool {
-				if imageStartIndex >= 0 {
-					return fmt.Errorf("more than one tool image start observed")
-				}
-				imageStartIndex = index
-				imageCallID = event.ToolCallId
-				if value != nil {
-					imageMediaType = value.MediaType
-				}
+		default:
+			if event.Role != messages.RoleTool {
+				continue
 			}
-		case *messages.ImageDeltaValue:
-			if event.Role == messages.RoleTool {
-				if imageCallID == "" || event.ToolCallId != imageCallID {
-					return fmt.Errorf("tool image delta call ID = %q, want %q", event.ToolCallId, imageCallID)
-				}
-				if value != nil {
-					imageBytes = append(imageBytes, value.Content...)
-				}
-			}
-		case *messages.ImageEndValue:
-			if event.Role == messages.RoleTool {
-				if imageEndIndex >= 0 || event.ToolCallId != imageCallID {
-					return fmt.Errorf("tool image end is missing or has call ID %q, want %q", event.ToolCallId, imageCallID)
-				}
-				imageEndIndex = index
+			if err := e.observeToolImage(index, event); err != nil {
+				return e, err
 			}
 		}
 	}
-	if len(toolCalls) != 1 {
-		return fmt.Errorf("read_image tool calls = %d, want exactly one", len(toolCalls))
+	return e, nil
+}
+
+// observeToolImage folds one tool-role image stream event into the evidence.
+func (e *readImageStreamEvidence) observeToolImage(index int, event messages.StreamMessage) error {
+	switch value := event.Value.(type) {
+	case *messages.ImageStartValue:
+		if e.imageStartIndex >= 0 {
+			return fmt.Errorf("more than one tool image start observed")
+		}
+		e.imageStartIndex = index
+		e.imageCallID = event.ToolCallId
+		if value != nil {
+			e.imageMediaType = value.MediaType
+		}
+	case *messages.ImageDeltaValue:
+		if e.imageCallID == "" || event.ToolCallId != e.imageCallID {
+			return fmt.Errorf("tool image delta call ID = %q, want %q", event.ToolCallId, e.imageCallID)
+		}
+		if value != nil {
+			e.imageBytes = append(e.imageBytes, value.Content...)
+		}
+	case *messages.ImageEndValue:
+		if e.imageEndIndex >= 0 || event.ToolCallId != e.imageCallID {
+			return fmt.Errorf("tool image end is missing or has call ID %q, want %q", event.ToolCallId, e.imageCallID)
+		}
+		e.imageEndIndex = index
+	}
+	return nil
+}
+
+// verify requires one correlated read_image call whose exact PNG bytes were
+// streamed as a tool image before the post-image provider response began.
+func (e readImageStreamEvidence) verify(imagePath string, expectedBytes []byte) error {
+	if len(e.toolCalls) != 1 {
+		return fmt.Errorf("read_image tool calls = %d, want exactly one", len(e.toolCalls))
 	}
 	var arguments struct {
 		Path string `json:"path"`
 	}
-	if err := json.Unmarshal([]byte(toolCalls[0].Arguments), &arguments); err != nil {
+	if err := json.Unmarshal([]byte(e.toolCalls[0].Arguments), &arguments); err != nil {
 		return fmt.Errorf("decode read_image arguments: %w", err)
 	}
 	if arguments.Path != imagePath {
 		return fmt.Errorf("read_image path = %q, want committed fixture path %q", arguments.Path, imagePath)
 	}
-	if toolCalls[0].ToolCallID == "" || imageCallID != toolCalls[0].ToolCallID {
-		return fmt.Errorf("tool image call ID = %q, want read_image call ID %q", imageCallID, toolCalls[0].ToolCallID)
+	if e.toolCalls[0].ToolCallID == "" || e.imageCallID != e.toolCalls[0].ToolCallID {
+		return fmt.Errorf("tool image call ID = %q, want read_image call ID %q", e.imageCallID, e.toolCalls[0].ToolCallID)
 	}
-	if imageMediaType != "image/png" {
-		return fmt.Errorf("tool image MIME = %q, want image/png", imageMediaType)
+	if e.imageMediaType != "image/png" {
+		return fmt.Errorf("tool image MIME = %q, want image/png", e.imageMediaType)
 	}
-	if imageStartIndex < 0 || imageEndIndex <= imageStartIndex || !bytes.Equal(imageBytes, expectedBytes) {
-		return fmt.Errorf("tool image bytes were not preserved exactly (start=%d end=%d bytes=%d want=%d)", imageStartIndex, imageEndIndex, len(imageBytes), len(expectedBytes))
+	if e.imageStartIndex < 0 || e.imageEndIndex <= e.imageStartIndex || !bytes.Equal(e.imageBytes, expectedBytes) {
+		return fmt.Errorf("tool image bytes were not preserved exactly (start=%d end=%d bytes=%d want=%d)", e.imageStartIndex, e.imageEndIndex, len(e.imageBytes), len(expectedBytes))
 	}
-	if len(providerMessageStarts) < 2 {
-		return fmt.Errorf("provider message starts = %d, want initial response plus post-image response", len(providerMessageStarts))
+	if len(e.providerMessageStarts) < 2 {
+		return fmt.Errorf("provider message starts = %d, want initial response plus post-image response", len(e.providerMessageStarts))
 	}
-	if imageEndIndex >= providerMessageStarts[1] {
-		return fmt.Errorf("post-tool provider response started at event %d before image ended at event %d", providerMessageStarts[1], imageEndIndex)
+	if e.imageEndIndex >= e.providerMessageStarts[1] {
+		return fmt.Errorf("post-tool provider response started at event %d before image ended at event %d", e.providerMessageStarts[1], e.imageEndIndex)
 	}
 	return nil
 }
@@ -845,32 +843,7 @@ func TestReadImageCLI_DefaultLifecycleMissingFileContinues(t *testing.T) {
 	}
 
 	events := observer.snapshot()
-	toolCallIndex := -1
-	assistantMessageStarts := 0
-	continuationMessageStart := -1
-	finalAssistantEnd := -1
-	for index, event := range events {
-		if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == tools.ReadImageToolID {
-			if toolCallIndex >= 0 {
-				t.Fatalf("missing read_image observed duplicate tool call: %#v", events)
-			}
-			toolCallIndex = index
-		}
-		if event.Type == messages.StreamTypeImageStart || event.Type == messages.StreamTypeImageDelta || event.Type == messages.StreamTypeImageEnd {
-			if event.Role == messages.RoleTool || event.ToolCallId == readImageCallID {
-				t.Fatalf("missing read_image emitted image result event: %#v", event)
-			}
-		}
-		if event.Type == messages.StreamTypeMessageStart && event.Role != messages.RoleTool {
-			assistantMessageStarts++
-			if assistantMessageStarts == 2 {
-				continuationMessageStart = index
-			}
-		}
-		if event.Type == messages.StreamTypeMessageEnd && event.Role != messages.RoleTool && continuationMessageStart >= 0 {
-			finalAssistantEnd = index
-		}
-	}
+	toolCallIndex, assistantMessageStarts, continuationMessageStart, finalAssistantEnd := missingReadImageStreamOrder(t, events)
 	if toolCallIndex < 0 || continuationMessageStart <= toolCallIndex || finalAssistantEnd <= continuationMessageStart {
 		t.Fatalf("missing read_image session did not reach a terminal assistant continuation: tool_call=%d continuation_start=%d assistant_starts=%d assistant_end=%d events=%#v", toolCallIndex, continuationMessageStart, assistantMessageStarts, finalAssistantEnd, events)
 	}
@@ -895,7 +868,7 @@ func assertReadImageNoToolGrounding(output string, events []messages.StreamMessa
 	for _, event := range events {
 		switch value := event.Value.(type) {
 		case *messages.ToolCallEndValue:
-			if value != nil && value.Name == "read_image" {
+			if value != nil && value.Name == rtToolReadImage {
 				return fmt.Errorf("no-tool session executed read_image")
 			}
 		case *messages.ImageStartValue, *messages.ImageDeltaValue, *messages.ImageEndValue:
@@ -958,7 +931,7 @@ func TestReadImageGroundingCheckerRejectsMissingOrReplacedPixels(t *testing.T) {
 	}
 	positiveEvents := []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeToolCallEnd, ToolCallId: readImageCallID, Value: messages.NewToolCallEndValue(readImageCallID, "read_image", string(arguments))},
+		{Type: messages.StreamTypeToolCallEnd, ToolCallId: readImageCallID, Value: messages.NewToolCallEndValue(readImageCallID, rtToolReadImage, string(arguments))},
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleTool, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeImageStart, Role: messages.RoleTool, ToolCallId: readImageCallID, Value: messages.NewImageStartValue("image/png")},
 		{Type: messages.StreamTypeImageDelta, Role: messages.RoleTool, ToolCallId: readImageCallID, Value: messages.NewImageDeltaValue(imageBytes)},

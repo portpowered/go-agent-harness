@@ -108,10 +108,9 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	}
 	path := f.Name()
 	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("close temp file: %w", err)
+		return nil, errors.Join(fmt.Errorf("close temp file: %w", err), os.Remove(path))
 	}
-	defer func() { _ = os.Remove(path) }()
+	defer removeScreenshotStaging(path)
 
 	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
 	args := []string{"-a", area, path}
@@ -141,7 +140,7 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, er
 	if err != nil {
 		return nil, fmt.Errorf("open screenshot: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer discardScreenshotCleanup(f.Close)
 
 	img, err := png.Decode(contextReader{ctx: ctx, r: f})
 	if err != nil {
@@ -154,4 +153,19 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, er
 	rgba := image.NewRGBA(img.Bounds())
 	draw.Draw(rgba, rgba.Bounds(), img, img.Bounds().Min, draw.Src)
 	return rgba, nil
+}
+
+// removeScreenshotStaging deletes a screenshot staging file once the capture
+// outcome is decided.
+func removeScreenshotStaging(path string) {
+	discardScreenshotCleanup(func() error { return os.Remove(path) })
+}
+
+// discardScreenshotCleanup runs best-effort cleanup after a screenshot was
+// decoded or abandoned. A cleanup failure cannot change the captured image or
+// the error already returned to the caller.
+func discardScreenshotCleanup(cleanup func() error) {
+	if err := cleanup(); err != nil {
+		return
+	}
 }

@@ -3,8 +3,8 @@ package integration
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -389,15 +389,12 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	inferencer := newSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
 
-	secondAssistantResponseObserved := make(chan struct{})
-	releaseSecondAssistantObserver := make(chan struct{})
-	localSessionCloseObserved := make(chan struct{})
-	var localSessionCloseOnce sync.Once
+	observer := &followOnToolObserver{
+		secondAssistantObserved: make(chan struct{}),
+		releaseSecondAssistant:  make(chan struct{}),
+		clientCloseObserved:     make(chan struct{}),
+	}
 	var releaseObserverOnce sync.Once
-	var observerOnce sync.Once
-	var assistantResponseCount int
-	var localSessionCloseCount int
-	var observerMu sync.Mutex
 
 	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
 		executor,
@@ -407,31 +404,8 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
-	defer releaseObserverOnce.Do(func() { close(releaseSecondAssistantObserver) })
-	var session *sessionToolBargeInSession
-	agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
-		if msg.Type == messages.StreamTypeSessionClose {
-			if session != nil {
-				session.recordLifecycle("client_close")
-			}
-			observerMu.Lock()
-			localSessionCloseCount++
-			observerMu.Unlock()
-			localSessionCloseOnce.Do(func() { close(localSessionCloseObserved) })
-			return
-		}
-		if msg.Type != messages.StreamTypeMessageEnd || msg.Role != messages.RoleAssistant {
-			return
-		}
-		observerMu.Lock()
-		assistantResponseCount++
-		response := assistantResponseCount
-		observerMu.Unlock()
-		if response == 2 {
-			observerOnce.Do(func() { close(secondAssistantResponseObserved) })
-			<-releaseSecondAssistantObserver
-		}
-	})
+	defer releaseObserverOnce.Do(func() { close(observer.releaseSecondAssistant) })
+	agentCLI.SetSessionStreamObserver(observer.observe)
 
 	writer := NewTestWriter()
 	rootCmd := agentCLI.Generate()
@@ -455,14 +429,15 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	go func() { runErr <- rootCmd.ExecuteContext(ctx) }()
 
 	waitSessionToolBargeInSignal(t, inferencer.ready, "session connection")
-	session = inferencer.connectedSession()
+	session := inferencer.connectedSession()
 	if session == nil {
 		t.Fatal("connected session was not retained")
 	}
+	observer.setSession(session)
 	waitSessionToolBargeInSignal(t, executor.started, "slow tool executor to start")
 	close(executor.release)
 	waitSessionToolBargeInSignal(t, session.resultAccepted, "correlated tool result acceptance")
-	waitSessionToolBargeInSignal(t, secondAssistantResponseObserved, "second assistant response.done")
+	waitSessionToolBargeInSignal(t, observer.secondAssistantObserved, "second assistant response.done")
 	select {
 	case <-session.secondAudioSent:
 		t.Fatal("second scheduled audio was sent before the first continuation boundary was released")
@@ -476,7 +451,7 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 		t.Fatalf("slow tool call = %#v, want ID %q and name slow_tool", call, sessionToolBargeInCallID)
 	}
 	select {
-	case <-localSessionCloseObserved:
+	case <-observer.clientCloseObserved:
 		t.Fatal("client close was sent while the follow-on response observer was still held")
 	default:
 	}
@@ -484,9 +459,9 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	// Let the session runner finish observing the first grounded continuation.
 	// The next scheduled audio turn is eligible only after this observer barrier
 	// is released.
-	releaseObserverOnce.Do(func() { close(releaseSecondAssistantObserver) })
+	releaseObserverOnce.Do(func() { close(observer.releaseSecondAssistant) })
 	waitSessionToolBargeInSignal(t, session.secondAudioSent, "second scheduled audio dispatch")
-	waitSessionToolBargeInSignal(t, localSessionCloseObserved, "client close after accepted tool continuation")
+	waitSessionToolBargeInSignal(t, observer.clientCloseObserved, "client close after accepted tool continuation")
 
 	select {
 	case err := <-runErr:
@@ -495,32 +470,18 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 		t.Fatalf("session command did not finish after client close within %s", sessionLifecycleSafetyTimeout)
 	}
 
-	var resultCount int
-	for _, msg := range session.sentSnapshot() {
-		switch msg.Type {
-		case messages.StreamTypeToolCallEnd:
-			value, ok := msg.Value.(*messages.ToolCallEndValue)
-			if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
-				resultCount++
-			}
-		}
-	}
+	resultCount, cancelCount := countSessionToolBargeInSent(session)
 	if resultCount != 1 {
 		t.Fatalf("provider received %d correlated tool results, want exactly one", resultCount)
 	}
-	for _, msg := range session.sentSnapshot() {
-		if msg.Type == messages.StreamTypeResponseCancel {
-			t.Fatal("completion-gated scheduled tool continuation emitted RESPONSE.CANCEL")
-		}
+	if cancelCount != 0 {
+		t.Fatal("completion-gated scheduled tool continuation emitted RESPONSE.CANCEL")
 	}
-	observerMu.Lock()
-	closeCount := localSessionCloseCount
-	observerMu.Unlock()
-	if closeCount != 1 {
+	if closeCount := observer.clientCloses(); closeCount != 1 {
 		t.Fatalf("stream observer saw %d client closes, want exactly one", closeCount)
 	}
 	gotLifecycle := session.lifecycleSnapshot()
-	if len(gotLifecycle) != 3 || gotLifecycle[0] != "result_accepted" || gotLifecycle[1] != "second_audio_sent" || gotLifecycle[2] != "client_close" {
+	if !slices.Equal(gotLifecycle, []string{"result_accepted", "second_audio_sent", "client_close"}) {
 		t.Fatalf("session lifecycle order = %v, want [result_accepted second_audio_sent client_close]", gotLifecycle)
 	}
 }
@@ -536,39 +497,7 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
-	var finalResponseTextObserved bool
-	var traceMu sync.Mutex
-	var trace []string
-	agentCLI.SetSessionStreamObserver(func(msg messages.StreamMessage) {
-		traceMu.Lock()
-		trace = append(trace, fmt.Sprintf("%s role=%s response=%q", msg.Type, msg.Role, msg.ResponseID))
-		traceMu.Unlock()
-		if msg.Type == messages.StreamTypeSessionUpdated {
-			value, ok := msg.Value.(*messages.SessionUpdatedValue)
-			if ok && value != nil && value.SessionID == sessionToolBargeInContinuationReadyID {
-				if session := inferencer.connectedSession(); session != nil {
-					session.emitPendingBargeInContinuation()
-				}
-			}
-			return
-		}
-		if msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeTextDelta {
-			value, ok := msg.Value.(*messages.TextDeltaValue)
-			if ok && value != nil && msg.ResponseID == sessionToolBargeInFinalResponseID && value.Content == sessionToolBargeInFinalResponseText {
-				finalResponseTextObserved = true
-			}
-		}
-		if msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == sessionToolBargeInFinalResponseID && finalResponseTextObserved {
-			if session := inferencer.connectedSession(); session != nil {
-				session.markFinalResponseObserved()
-			}
-		}
-		if msg.Type == messages.StreamTypeSessionClose {
-			if session := inferencer.connectedSession(); session != nil {
-				session.recordLifecycle("client_close")
-			}
-		}
-	})
+	agentCLI.SetSessionStreamObserver(newActiveScheduledToolObserver(inferencer))
 
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
@@ -609,18 +538,7 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 		t.Fatalf("active scheduled tool command did not finish: %v", ctx.Err())
 	}
 
-	resultCount, cancelCount := 0, 0
-	for _, msg := range session.sentSnapshot() {
-		switch msg.Type {
-		case messages.StreamTypeToolCallEnd:
-			value, ok := msg.Value.(*messages.ToolCallEndValue)
-			if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
-				resultCount++
-			}
-		case messages.StreamTypeResponseCancel:
-			cancelCount++
-		}
-	}
+	resultCount, cancelCount := countSessionToolBargeInSent(session)
 	if resultCount != 1 {
 		t.Fatalf("active scheduled provider received %d correlated tool results, want exactly one", resultCount)
 	}
@@ -628,7 +546,7 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 		t.Fatalf("active scheduled provider received %d response cancellations, want exactly one", cancelCount)
 	}
 	gotLifecycle := session.lifecycleSnapshot()
-	if len(gotLifecycle) != 4 || gotLifecycle[0] != "second_audio_sent" || gotLifecycle[1] != "result_accepted" || gotLifecycle[2] != "final_response_observed" || gotLifecycle[3] != "client_close" {
+	if !slices.Equal(gotLifecycle, []string{"second_audio_sent", "result_accepted", "final_response_observed", "client_close"}) {
 		t.Fatalf("active scheduled session lifecycle order = %v, want [second_audio_sent result_accepted final_response_observed client_close]", gotLifecycle)
 	}
 }

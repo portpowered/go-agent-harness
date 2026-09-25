@@ -342,7 +342,7 @@ func (q *PlaybackQueue) ReadPCM16(destination []byte) int {
 	var rendered []int16
 	var pooled *[]int16
 	if observer != nil {
-		pooled = q.renderPool.Get().(*[]int16)
+		pooled = pooledInt16Buffer(&q.renderPool)
 		rendered = *pooled
 		if cap(rendered) < requested {
 			q.renderPool.Put(pooled)
@@ -428,7 +428,7 @@ func EmptyPlaybackQueueStats(format DeviceFormat) PlaybackQueueStats {
 	if format.Validate() != nil {
 		format = DefaultDeviceFormat()
 	}
-	capacity, _ := PlaybackQueueCapacity(format, DefaultPlaybackLatencyTarget)
+	capacity, _ := PlaybackQueueCapacity(format, DefaultPlaybackLatencyTarget) //nolint:errcheck // format is validated above and the latency target is a positive constant, so capacity cannot fail.
 	return PlaybackQueueStats{Format: format, LatencyTarget: DefaultPlaybackLatencyTarget, CapacitySamples: capacity}
 }
 

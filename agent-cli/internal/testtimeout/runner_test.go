@@ -179,7 +179,10 @@ func markerPID(text, name string) int {
 		if len(keyValue) != 2 || keyValue[0] != name {
 			continue
 		}
-		pid, _ := strconv.Atoi(keyValue[1])
+		pid, err := strconv.Atoi(keyValue[1])
+		if err != nil {
+			return 0
+		}
 		return pid
 	}
 	return 0

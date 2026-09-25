@@ -119,12 +119,12 @@ func TestPageToolExecutionValidatesRichSchemaBeforeDispatch(t *testing.T) {
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
 		testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool), testkit.WithAutoResponse(json.RawMessage(`{"accepted":true}`))),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: staticToolTestDiscoverer{candidate: candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
 		t.Fatalf("select cube page: %v", err)
 	}

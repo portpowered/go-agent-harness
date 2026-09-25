@@ -187,7 +187,7 @@ func readFamilyEJSONL[T any](t *testing.T, path string) []T {
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 	var values []T
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -279,7 +279,7 @@ func (f *familyEProviderFixture) Snapshot() familyEProviderObservation {
 }
 
 func (f *familyEProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -289,7 +289,7 @@ func (f *familyEProviderFixture) handle(writer http.ResponseWriter, request *htt
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -308,61 +308,24 @@ func (f *familyEProviderFixture) handle(writer http.ResponseWriter, request *htt
 			return
 		}
 		switch event.Type {
-		case "session.update":
+		case rtEventSessionUpdate:
 			f.mu.Lock()
 			f.sessionUpdates++
 			f.mu.Unlock()
 			if err := f.sendSessionReady(connection); err != nil {
 				return
 			}
-		case "input_audio_buffer.append":
-			audio, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil {
-				f.failProtocol("decode input audio: " + decodeErr.Error())
+		case rtEventInputAudioAppend:
+			if !f.handleInputAudio(connection, event.Audio) {
 				return
 			}
-			if familyESilent(audio) {
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
-					return
-				}
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-					return
-				}
-				f.mu.Lock()
-				finishRecovery := f.mode == familyEShippedRecovery && f.utteranceCount == 2 && !f.recoveryResponseSent
-				if finishRecovery {
-					f.recoveryResponseSent = true
-				}
-				f.mu.Unlock()
-				if finishRecovery {
-					if err := f.sendProductResponse(connection, "response-family-e-reprompt", "The request is complete.", []byte{2, 0x45, 0x50, 0x41}, false); err != nil {
-						return
-					}
-				}
-				continue
-			}
-			if err := f.handleUtterance(connection); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "input_audio_buffer.commit", "response.cancel":
+		case rtEventInputAudioCommit, rtEventResponseCancel:
 			// The fixture observes the audio and stdout boundaries. Explicit
 			// client-owned control events are accepted without adding a second
 			// runtime seam to the test.
-		case "response.create":
-			if f.mode == familyEShippedDeadAir || f.mode == familyEShippedRecovery {
-				// The production patience gate closes stdin only after declaring
-				// dead air or observing the post-re-prompt response. Let the child's
-				// ordinary end-of-turn path receive a provider close so the recording
-				// finalizer can persist the response before the verdict is built.
-				reason := "family_e_dead_air"
-				if f.mode == familyEShippedRecovery {
-					reason = "family_e_recovery_complete"
-				}
-				if err := f.send(connection, map[string]string{"type": "session.closed", "reason": reason}); err != nil {
-					return
-				}
-				continue
+		case rtEventResponseCreate:
+			if !f.handleResponseCreate(connection) {
+				return
 			}
 		default:
 		}
@@ -412,35 +375,35 @@ func (f *familyEProviderFixture) sendProductResponse(connection *websocket.Conn,
 		ID: "product-" + responseID, TurnID: probe.FamilyETurnID, Speaker: probe.TranscriptProduct, Text: text, At: startedAt, Final: true,
 	})
 	f.mu.Unlock()
-	if err := f.send(connection, map[string]any{"type": "response.created", "response": map[string]string{"id": responseID}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": responseID}}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.delta", "delta": text}); err != nil {
+	if err := f.send(connection, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "delta": text}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "transcript": text}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
+		"type": rtEventOutputAudioDelta, "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{"type": "response.output_audio.done", "response": map[string]string{"id": responseID}}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": responseID, "status": "completed"}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": responseID, "status": rtStatusCompleted}}); err != nil {
 		return err
 	}
 	if closeSession {
-		return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_e_response_complete"})
+		return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_e_response_complete"})
 	}
 	return nil
 }
 
 func (f *familyEProviderFixture) sendSessionReady(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
-		"type": "session.created", "session": map[string]string{"id": "family-e", "model": "gpt-realtime"},
+		"type": rtEventSessionCreated, "session": map[string]string{"id": "family-e", "model": "gpt-realtime"},
 	}); err != nil {
 		return err
 	}
@@ -481,11 +444,57 @@ func familyEFrame(marker byte) []byte {
 	return frame
 }
 
-func familyESilent(audio []byte) bool {
-	for _, value := range audio {
-		if value != 0 {
-			return false
-		}
+// handleInputAudio answers one appended frame and reports whether the
+// session should keep reading. A write failure means the child hung up.
+func (f *familyEProviderFixture) handleInputAudio(connection *websocket.Conn, encoded string) bool {
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		f.failProtocol("decode input audio: " + err.Error())
+		return false
+	}
+	if customerSimulationSilent(audio) {
+		return f.handleSilentFrame(connection)
+	}
+	if err := f.handleUtterance(connection); err != nil {
+		f.failProtocol(err.Error())
+		return false
 	}
 	return true
+}
+
+// handleSilentFrame emits the server-VAD boundary and, in the recovery mode,
+// the single post-re-prompt product response.
+func (f *familyEProviderFixture) handleSilentFrame(connection *websocket.Conn) bool {
+	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
+		return false
+	}
+	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
+		return false
+	}
+	f.mu.Lock()
+	finishRecovery := f.mode == familyEShippedRecovery && f.utteranceCount == 2 && !f.recoveryResponseSent
+	if finishRecovery {
+		f.recoveryResponseSent = true
+	}
+	f.mu.Unlock()
+	if !finishRecovery {
+		return true
+	}
+	return f.sendProductResponse(connection, "response-family-e-reprompt", "The request is complete.", []byte{2, 0x45, 0x50, 0x41}, false) == nil
+}
+
+// handleResponseCreate closes the provider session for the dead-air and
+// recovery modes. The production patience gate closes stdin only after
+// declaring dead air or observing the post-re-prompt response. Let the
+// child's ordinary end-of-turn path receive a provider close so the recording
+// finalizer can persist the response before the verdict is built.
+func (f *familyEProviderFixture) handleResponseCreate(connection *websocket.Conn) bool {
+	if f.mode != familyEShippedDeadAir && f.mode != familyEShippedRecovery {
+		return true
+	}
+	reason := "family_e_dead_air"
+	if f.mode == familyEShippedRecovery {
+		reason = "family_e_recovery_complete"
+	}
+	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": reason}) == nil
 }

@@ -65,7 +65,7 @@ func TestDeviceSourceEdgeContracts(t *testing.T) {
 		t.Fatal("nil source Close returned an error")
 	}
 	var nilAdapterError *DeviceAdapterError
-	if nilAdapterError.Error() != "<nil>" {
+	if nilAdapterError.Error() != nilErrorText {
 		t.Fatalf("nil adapter error = %q", nilAdapterError.Error())
 	}
 
@@ -139,7 +139,7 @@ func TestDeviceSourceVirtualLossAndConcurrentClose(t *testing.T) {
 	if !errors.As(lost, &lostErr) || lostErr.ID != "virtual:input" || lostErr.Direction != DirectionInput || !errors.Is(lost, ErrDeviceLost) || errors.Is(lost, io.EOF) {
 		t.Fatalf("pending read error = %v, want typed input loss", lost)
 	}
-	_ = source.Close()
+	closeForTest(t, "source", source)
 
 	r = adapterTestRegistry(t)
 	source, err = NewDeviceSource(r, "virtual:input")

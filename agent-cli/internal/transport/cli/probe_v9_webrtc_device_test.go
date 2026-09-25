@@ -43,7 +43,7 @@ func TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(run.stdout)), &result); err != nil {
 		t.Fatalf("decode device-tier result %q: %v", run.stdout, err)
 	}
-	if result["name"] != "s2s-v9-webrtc-device-roundtrip" || result["status"] != string(devicegw.DeviceProbeStatusSkip) {
+	if result["name"] != v9WebRTCDeviceScenarioID || result["status"] != string(devicegw.DeviceProbeStatusSkip) {
 		t.Fatalf("device-tier result = %v, want v9 scenario SKIP", result)
 	}
 	if result["reason_code"] != string(devicegw.DeviceProbeSkipNoDevices) || result["reason"] != "no audio input or output device" {
@@ -67,7 +67,7 @@ func TestS2SV9ScenarioLoadsThroughProbeSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load committed v9 scenario: %v", err)
 	}
-	if scenario.ID != "s2s-v9-webrtc-device-roundtrip" || len(scenario.Steps) != 2 || len(scenario.Expectations) != 2 {
+	if scenario.ID != v9WebRTCDeviceScenarioID || len(scenario.Steps) != 2 || len(scenario.Expectations) != 2 {
 		t.Fatalf("loaded v9 scenario = %#v, want one audio step, one close, and two expectations", scenario)
 	}
 	if scenario.Steps[0].Type != probe.StepSendAudio || scenario.Steps[1].Type != probe.StepClose {
@@ -93,40 +93,15 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create device registry: %v", err)
 	}
-	availability, err := devicegw.ProbeDeviceAvailability(registry)
-	if err != nil {
-		t.Fatalf("probe device availability: %v", err)
-	}
-	if availability.Status != devicegw.DeviceProbeStatusReady {
-		t.Fatalf("virtual device probe status = %s, want ready (reason=%s)", availability.Status, availability.Reason)
-	}
-	input, err := registry.Default(devicegw.DirectionInput)
-	if err != nil {
-		t.Fatalf("select default input device: %v", err)
-	}
-	output, err := registry.Default(devicegw.DirectionOutput)
-	if err != nil {
-		t.Fatalf("select default output device: %v", err)
-	}
-
-	source, err := devicegw.NewDeviceSource(registry, input.ID)
-	if err != nil {
-		t.Fatalf("open selected input %q: %v", input.ID, err)
-	}
-	defer func() { _ = source.Close() }()
-	sink, err := devicegw.NewDeviceSink(registry, output.ID)
-	if err != nil {
-		t.Fatalf("open selected output %q: %v", output.ID, err)
-	}
-	defer func() { _ = sink.Close() }()
+	source, sink := openReadyDeviceProbePair(t, registry)
 
 	peers, err := newDeviceProbePeerPair(t)
 	if err != nil {
 		t.Fatalf("negotiate local WebRTC peers: %v", err)
 	}
 	defer func() {
-		_ = peers.sender.Close()
-		_ = peers.receiver.Close()
+		releaseForTest(peers.sender.Close)
+		releaseForTest(peers.receiver.Close)
 	}()
 
 	encoder, err := codec.NewOpusEncoder()
@@ -142,7 +117,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create outbound RTC track: %v", err)
 	}
-	defer func() { _ = track.Close() }()
+	defer closeForTest(t, track.Close)
 
 	// The session runner is the same production boundary used by the live
 	// session loop. It records the outbound messages so this proof observes
@@ -178,6 +153,65 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 		t.Fatalf("commit captured frame to WebRTC track: %v", err)
 	}
 
+	sessionInput := readDeviceProbeSessionInput(t, sessionContext, peers)
+	sendDeviceProbeUserTurn(t, sessionContext, runner, session, pcm16ProbeBytes(sessionInput))
+
+	// The provider-side response is delivered through the same production
+	// session runner boundary as a live session. Route its raw PCM delta to the
+	// selected output device, while the tap records the exact frame accepted by
+	// the device sink. The virtual registry loops that output back to the
+	// selected input, allowing this CI-safe proof to observe the emitted frame
+	// through the same registry binding surface.
+	responseSamples := voicedDeviceProbeFrame()
+	responsePCM := pcm16ProbeBytes(responseSamples)
+	deliverDeviceProbeResponse(t, sessionContext, runner, session, responsePCM)
+
+	assertDeviceProbeSpeakerEmission(t, sessionContext, sink, source, responseSamples, responsePCM)
+
+	observations := registry.Observations()
+	if observations.OpenCount != 2 || observations.ReleaseCount != 0 {
+		t.Fatalf("registry observations before cleanup = %+v, want two opens and live handles", observations)
+	}
+}
+
+// deliverDeviceProbeResponse queues the scripted provider response and
+// requires the runner to surface its transcript and unchanged audio delta.
+func deliverDeviceProbeResponse(t *testing.T, ctx context.Context, runner *participants.ModelRunner, session *deviceProbeSession, responsePCM []byte) {
+	t.Helper()
+	for _, responseMessage := range []messages.StreamMessage{
+		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device ")},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("round trip")},
+		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(deviceProbeExpectedTranscript)},
+		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
+		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageEnd},
+	} {
+		if !session.receive.Write(ctx, responseMessage) {
+			t.Fatalf("queue session response event %s: %v", responseMessage.Type, ctx.Err())
+		}
+	}
+	recognizedTranscript, err := readDeviceProbeTranscript(t, ctx, runner.DeltaOutbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if violation := assertDeviceProbeTranscript(recognizedTranscript, deviceProbeExpectedTranscript); violation != nil {
+		t.Fatal(violation)
+	}
+	responseDelta := readDeviceProbeDelta(t, ctx, runner.DeltaOutbox, messages.StreamTypeAudioDelta)
+	responseValue, ok := responseDelta.Value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("response audio delta value = %T, want *messages.AudioDeltaValue", responseDelta.Value)
+	}
+	if !bytes.Equal(responseValue.Content, responsePCM) {
+		t.Fatalf("response audio bytes changed before speaker emission: got %d bytes, want %d", len(responseValue.Content), len(responsePCM))
+	}
+}
+
+// readDeviceProbeSessionInput binds the received remote WebRTC track to a
+// session input track and reads one decoded, voiced 20 ms 16 kHz frame.
+func readDeviceProbeSessionInput(t *testing.T, ctx context.Context, peers *deviceProbePeerPair) []int16 {
+	t.Helper()
 	remote, err := peers.waitRemoteTrack()
 	if err != nil {
 		t.Fatalf("receive remote WebRTC track: %v", err)
@@ -190,7 +224,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create RTC Opus decoder: %v", err)
 	}
-	defer func() { _ = decoder.Close() }()
+	t.Cleanup(func() { closeForTest(t, decoder.Close) })
 	// Pion exposes RTP attributes alongside the packet; the harness seam
 	// deliberately keeps those protocol details out of InboundTrack.
 	// deviceProbeRTPPacketSource performs that boundary adaptation.
@@ -202,9 +236,9 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bind remote track to session input: %v", err)
 	}
-	defer func() { _ = inbound.Close() }()
+	t.Cleanup(func() { closeForTest(t, inbound.Close) })
 
-	gotSessionInput, err := inbound.ReadFrame(sessionContext)
+	gotSessionInput, err := inbound.ReadFrame(ctx)
 	if err != nil {
 		t.Fatalf("read active session input track: %v", err)
 	}
@@ -215,94 +249,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	if len(gotSessionInput.Samples) != wantSessionSamples {
 		t.Fatalf("session input samples = %d, want one 20 ms 16 kHz frame", len(gotSessionInput.Samples))
 	}
-
-	pcm := pcm16ProbeBytes(gotSessionInput.Samples)
-	select {
-	case runner.UserAudioInbox <- pcm:
-	case <-sessionContext.Done():
-		t.Fatalf("send captured audio to session: %v", sessionContext.Err())
-	}
-	audioMessage := readDeviceProbeSessionMessage(t, sessionContext, session.sent)
-	if audioMessage.Type != messages.StreamTypeAudioDelta {
-		t.Fatalf("session audio message type = %s, want %s", audioMessage.Type, messages.StreamTypeAudioDelta)
-	}
-	audioValue, ok := audioMessage.Value.(*messages.AudioDeltaValue)
-	if !ok {
-		t.Fatalf("session audio message value = %T, want *messages.AudioDeltaValue", audioMessage.Value)
-	}
-	if !bytes.Equal(audioValue.Content, pcm) {
-		t.Fatalf("session audio bytes differ from active input track: got %d bytes, want %d", len(audioValue.Content), len(pcm))
-	}
-
-	select {
-	case runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd}:
-	case <-sessionContext.Done():
-		t.Fatalf("send captured turn boundary to session: %v", sessionContext.Err())
-	}
-	turnMessage := readDeviceProbeSessionMessage(t, sessionContext, session.sent)
-	if turnMessage.Type != messages.StreamTypeMessageEnd {
-		t.Fatalf("session turn message type = %s, want %s after audio", turnMessage.Type, messages.StreamTypeMessageEnd)
-	}
-
-	// The provider-side response is delivered through the same production
-	// session runner boundary as a live session. Route its raw PCM delta to the
-	// selected output device, while the tap records the exact frame accepted by
-	// the device sink. The virtual registry loops that output back to the
-	// selected input, allowing this CI-safe proof to observe the emitted frame
-	// through the same registry binding surface.
-	responseSamples := voicedDeviceProbeFrame()
-	responsePCM := pcm16ProbeBytes(responseSamples)
-	for _, responseMessage := range []messages.StreamMessage{
-		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
-		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device ")},
-		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("round trip")},
-		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(deviceProbeExpectedTranscript)},
-		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
-		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
-		{Type: messages.StreamTypeMessageEnd},
-	} {
-		if !session.receive.Write(sessionContext, responseMessage) {
-			t.Fatalf("queue session response event %s: %v", responseMessage.Type, sessionContext.Err())
-		}
-	}
-	recognizedTranscript, err := readDeviceProbeTranscript(t, sessionContext, runner.DeltaOutbox)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if violation := assertDeviceProbeTranscript(recognizedTranscript, deviceProbeExpectedTranscript); violation != nil {
-		t.Fatal(violation)
-	}
-	responseDelta := readDeviceProbeDelta(t, sessionContext, runner.DeltaOutbox, messages.StreamTypeAudioDelta)
-	responseValue, ok := responseDelta.Value.(*messages.AudioDeltaValue)
-	if !ok {
-		t.Fatalf("response audio delta value = %T, want *messages.AudioDeltaValue", responseDelta.Value)
-	}
-	if !bytes.Equal(responseValue.Content, responsePCM) {
-		t.Fatalf("response audio bytes changed before speaker emission: got %d bytes, want %d", len(responseValue.Content), len(responsePCM))
-	}
-
-	outputTap := &deviceProbeOutputTap{sink: sink}
-	if err := outputTap.WriteFrame(sessionContext, responseSamples); err != nil {
-		t.Fatalf("write session response to selected output device: %v", err)
-	}
-	emitted := make([]int16, audio.FrameSize)
-	if err := source.ReadFrame(sessionContext, emitted); err != nil {
-		t.Fatalf("tap selected output device emission: %v", err)
-	}
-	if !bytes.Equal(pcm16ProbeBytes(emitted), responsePCM) {
-		t.Fatalf("emitted speaker frame changed: got %d bytes, want %d", len(pcm16ProbeBytes(emitted)), len(responsePCM))
-	}
-	if err := assertDeviceProbeEnergy("speaker output", emitted); err != nil {
-		t.Fatal(err)
-	}
-	if got := outputTap.LastRMS(); got != pcm16ProbeRMS(emitted) {
-		t.Fatalf("speaker tap RMS = %.2f, loopback RMS = %.2f, want equal measurements", got, pcm16ProbeRMS(emitted))
-	}
-
-	observations := registry.Observations()
-	if observations.OpenCount != 2 || observations.ReleaseCount != 0 {
-		t.Fatalf("registry observations before cleanup = %+v, want two opens and live handles", observations)
-	}
+	return gotSessionInput.Samples
 }
 
 // TestS2SV9WebRTCDeviceTranscriptAssertionReportsActualText is the negative
@@ -350,12 +297,12 @@ func TestS2SV9WebRTCDeviceOutputSilenceFailsEnergyAssertion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open selected input %q: %v", input.ID, err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, source.Close)
 	sink, err := devicegw.NewDeviceSink(registry, output.ID)
 	if err != nil {
 		t.Fatalf("open selected output %q: %v", output.ID, err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, sink.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -514,12 +461,12 @@ func newDeviceProbePeerPair(t *testing.T) (*deviceProbePeerPair, error) {
 	}
 	receiver, err := api.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
-		_ = sender.Close()
+		releaseForTest(sender.Close)
 		return nil, err
 	}
 	cleanup := func(err error) (*deviceProbePeerPair, error) {
-		_ = sender.Close()
-		_ = receiver.Close()
+		releaseForTest(sender.Close)
+		releaseForTest(receiver.Close)
 		return nil, err
 	}
 

@@ -211,7 +211,8 @@ func (tc deviceLossCase) assertObservations(t *testing.T, before, after devicegw
 }
 func newSelectionRegistry(t *testing.T) *fixtureRegistry {
 	t.Helper()
-	r := newFixture().Registry.(*fixtureRegistry)
+	r, ok := newFixture().Registry.(*fixtureRegistry)
+	require.True(t, ok, "conformance fixture registry type")
 	for _, d := range []devicegw.Device{
 		mustFixtureDevice("input-choice", "Desk virtual:input-exact microphone", devicegw.DirectionInput),
 		mustFixtureDevice("input-exact", "virtual:input-exact", devicegw.DirectionInput),

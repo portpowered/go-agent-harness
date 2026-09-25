@@ -362,7 +362,7 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 		webmcp.CastTabToolName:         {"device_name", "mode"},
 		webmcp.StopCastingToolName:     {"device_name"},
 	}
-	properties := definition.Parameters["properties"].(map[string]any)
+	properties := optionalAs[map[string]any](definition.Parameters["properties"])
 	var requiredSet map[string]bool
 	if required, ok := definition.Parameters["required"].([]string); ok {
 		requiredSet = make(map[string]bool, len(required))
@@ -372,8 +372,8 @@ func makeToolSpec(definition webmcp.BrokerToolDefinition) toolSpec {
 	}
 	var specs []propertySpec
 	for _, name := range orders[definition.Name] {
-		schema, _ := properties[name].(map[string]any)
-		valueType, _ := schema["type"].(string)
+		schema := optionalAs[map[string]any](properties[name])
+		valueType := optionalAs[string](schema["type"])
 		spec := propertySpec{name: name, typeName: valueType, required: requiredSet[name]}
 		switch values := schema["enum"].(type) {
 		case []string:
@@ -599,7 +599,7 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 	if result.ErrorDetails != nil {
 		details = cloneMap(result.ErrorDetails)
 	}
-	retryable, _ := details["safe_retryable"].(bool)
+	retryable := optionalAs[bool](details["safe_retryable"])
 	delete(details, "safe_retryable")
 	switch code {
 	case webmcp.ErrorInvocationCanceled:
@@ -844,7 +844,7 @@ func compactJSONOrNull(raw json.RawMessage) (json.RawMessage, error) {
 }
 
 func flatParameters(schema map[string]any) []messages.ToolParameter {
-	properties, _ := schema["properties"].(map[string]any)
+	properties := optionalAs[map[string]any](schema["properties"])
 	required := map[string]bool{}
 	if requiredList, ok := schema["required"].([]string); ok {
 		for _, name := range requiredList {
@@ -877,9 +877,9 @@ func flatParameters(schema map[string]any) []messages.ToolParameter {
 	}
 	result := make([]messages.ToolParameter, 0, len(orders))
 	for _, name := range orders {
-		property, _ := properties[name].(map[string]any)
-		valueType, _ := property["type"].(string)
-		description, _ := property["description"].(string)
+		property := optionalAs[map[string]any](properties[name])
+		valueType := optionalAs[string](property["type"])
+		description := optionalAs[string](property["description"])
 		result = append(result, messages.ToolParameter{Name: name, Type: valueType, Description: description, Required: required[name]})
 	}
 	return result
@@ -909,12 +909,12 @@ func stringValue(values map[string]any, name string) string {
 	if values == nil {
 		return ""
 	}
-	value, _ := values[name].(string)
+	value := optionalAs[string](values[name])
 	return value
 }
 
 func boolValue(values map[string]any, name string) bool {
-	value, _ := values[name].(bool)
+	value := optionalAs[bool](values[name])
 	return value
 }
 

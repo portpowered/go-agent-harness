@@ -61,8 +61,7 @@ func (c *ConfigAddLocalCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.baseURL, "base-url", "", "Base URL of the local inference server (e.g. http://localhost:11434/v1)")
 	cmd.Flags().StringVar(&c.model, "model", "", "Model name to use (e.g. llama3, mistral)")
 
-	_ = cmd.MarkFlagRequired("base-url")
-	_ = cmd.MarkFlagRequired("model")
+	requireFlags(cmd, "base-url", "model")
 
 	return cmd
 }
@@ -171,13 +170,13 @@ func (c *ConfigAddLocalCommand) probeServer(cmd *cobra.Command, baseURL string) 
 	for _, url := range urls {
 		resp, err := client.Get(url)
 		if err == nil {
-			_ = resp.Body.Close()
+			discardCloseError(resp.Body.Close())
 			if resp.StatusCode == http.StatusOK {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Server reachable at %s\n", url)
+				writeAdvisory(cmd.OutOrStdout(), "Server reachable at %s\n", url)
 				return
 			}
 		}
 	}
 
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not reach server at %s (server may not be running yet)\n", baseURL)
+	writeAdvisory(cmd.ErrOrStderr(), "Warning: could not reach server at %s (server may not be running yet)\n", baseURL)
 }

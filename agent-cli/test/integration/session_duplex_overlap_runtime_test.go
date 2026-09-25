@@ -96,26 +96,8 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	logicalClock.AdvanceTo(v8OverlapTick)
 	coordinator := newV8CrossingCoordinator()
 
-	silencePath := v8AudioFixturePath(t, "silence_16k.wav")
-	silenceWAV, err := os.ReadFile(silencePath)
-	if err != nil {
-		t.Fatalf("read v8 silence fixture: %v", err)
-	}
-	_, silenceSamples, err := wavio.Read(bytes.NewReader(silenceWAV))
-	if err != nil {
-		t.Fatalf("parse v8 silence fixture: %v", err)
-	}
-	if len(silenceSamples) < audio.FrameSize {
-		t.Fatalf("v8 silence fixture has %d samples, want at least %d", len(silenceSamples), audio.FrameSize)
-	}
-	silenceFrame := v8PCM16Bytes(silenceSamples[:audio.FrameSize])
-
-	views := map[string]*v8RecordingView{
-		"A/client": {Harness: "A", Role: "client"},
-		"A/agent":  {Harness: "A", Role: "agent"},
-		"B/client": {Harness: "B", Role: "client"},
-		"B/agent":  {Harness: "B", Role: "agent"},
-	}
+	silenceFrame := loadV8SilenceFrame(t)
+	views := newV8RecordingViews()
 	aToBBridge := newV8PCMBridge(coordinator, v8DirectionAToB, views["A/client"], views["B/agent"], silenceFrame, mutateFirst)
 	bToABridge := newV8PCMBridge(coordinator, v8DirectionBToA, views["B/client"], views["A/agent"], silenceFrame, false)
 	aObserver := &v8RuntimeObserver{outputBridge: aToBBridge}
@@ -177,28 +159,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 	start("B", v8HarnessBInstruction, bReplay, v8PCMReader{bridge: aToBBridge}, v8PCMWriter{bridge: bToABridge}, bCLI, bObserver)
 	close(startGate)
 
-	harnesses := make(map[string]v8HarnessResult, 2)
-	contextDone := ctx.Done()
-	cleanupTimer := time.NewTimer(v8RunTimeout + time.Second)
-	defer cleanupTimer.Stop()
-	for len(harnesses) < 2 {
-		select {
-		case result := <-results:
-			harnesses[result.Name] = result
-			if result.Err != nil {
-				coordinator.abortRun()
-				cancel()
-			}
-		case <-contextDone:
-			coordinator.abortRun()
-			cancel()
-			contextDone = nil
-		case <-cleanupTimer.C:
-			coordinator.abortRun()
-			cancel()
-			t.Fatal("v8 CLI harnesses did not return after the bounded cleanup window")
-		}
-	}
+	harnesses := collectV8HarnessResults(t, ctx, results, v8RunTimeout, func() { coordinator.abortRun(); cancel() }, "v8 CLI harnesses")
 	wg.Wait()
 
 	finalTick := uint64(0)
@@ -212,17 +173,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 		turnsBound: v8TurnBound,
 	}
 	for name, result := range harnesses {
-		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
-		if err != nil {
-			t.Fatalf("harness %s terminal runtime observation: %v; command error=%v runtime=%+v stream=%+v", name, err, result.Err, result.Runtime, result.Stream)
-		}
-		terminal := v8TerminalFact{
-			Clean:          terminalObservation.Clean,
-			Turns:          terminalObservation.TurnsCompleted,
-			FinalTick:      terminalObservation.Tick,
-			FinalTimestamp: terminalObservation.Timestamp,
-			Error:          terminalObservation.Error,
-		}
+		terminal := v8TerminalFactFromRuntime(t, name, result)
 		if terminal.FinalTick > finalTick {
 			finalTick = terminal.FinalTick
 		}
@@ -236,13 +187,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 		run.terminal[name] = terminal
 	}
 	run.finalTick = finalTick
-	for name, view := range views {
-		terminal := run.terminal[view.Harness]
-		viewPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+".json")
-		wavPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+".wav")
-		writeV8ViewArtifacts(t, view, terminal, viewPath, wavPath)
-		run.artifacts = appendArtifactPaths(run.artifacts, name, viewPath, wavPath)
-	}
+	writeV8RunArtifacts(t, &run, runDir, "")
 	return run
 }
 
@@ -257,12 +202,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	coordinator := newV8MultiTurnCoordinator(logicalClock, base)
 	aTurnTwoReady := make(chan struct{})
 	bTurnTwoReady := make(chan struct{})
-	views := map[string]*v8RecordingView{
-		"A/client": {Harness: "A", Role: "client"},
-		"A/agent":  {Harness: "A", Role: "agent"},
-		"B/client": {Harness: "B", Role: "client"},
-		"B/agent":  {Harness: "B", Role: "agent"},
-	}
+	views := newV8RecordingViews()
 	aToBBridge := newV8MultiTurnBridge(coordinator, v8DirectionAToB, views["A/client"], views["B/agent"], bTurnTwoReady)
 	bToABridge := newV8MultiTurnBridge(coordinator, v8DirectionBToA, views["B/client"], views["A/agent"], aTurnTwoReady)
 	aObserver := &v8RuntimeObserver{outputBridge: aToBBridge, inputBridge: bToABridge, turnTwoReady: aTurnTwoReady}
@@ -312,28 +252,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	defer cancel()
 	startGate.release()
 
-	harnesses := make(map[string]v8HarnessResult, 2)
-	contextDone := ctx.Done()
-	cleanupTimer := time.NewTimer(v8MultiTurnRunTimeout + time.Second)
-	defer cleanupTimer.Stop()
-	for len(harnesses) < 2 {
-		select {
-		case result := <-results:
-			harnesses[result.Name] = result
-			if result.Err != nil {
-				coordinator.abortRun()
-				cancel()
-			}
-		case <-contextDone:
-			coordinator.abortRun()
-			cancel()
-			contextDone = nil
-		case <-cleanupTimer.C:
-			coordinator.abortRun()
-			cancel()
-			t.Fatal("v8 multi-turn CLI harnesses did not return after the bounded cleanup window")
-		}
-	}
+	harnesses := collectV8HarnessResults(t, ctx, results, v8MultiTurnRunTimeout, func() { coordinator.abortRun(); cancel() }, "v8 multi-turn CLI harnesses")
 	waitForV8MultiTurnCompletion(t, &wg, ctx, aToBBridge, bToABridge)
 
 	run := v8DuplexRun{
@@ -345,17 +264,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		turnsBound: v8MultiTurnCount,
 	}
 	for name, result := range harnesses {
-		terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
-		if err != nil {
-			t.Fatalf("harness %s terminal runtime observation: %v; command error=%v runtime=%+v stream=%+v", name, err, result.Err, result.Runtime, result.Stream)
-		}
-		terminal := v8TerminalFact{
-			Clean:          terminalObservation.Clean,
-			Turns:          terminalObservation.TurnsCompleted,
-			FinalTick:      terminalObservation.Tick,
-			FinalTimestamp: terminalObservation.Timestamp,
-			Error:          terminalObservation.Error,
-		}
+		terminal := v8TerminalFactFromRuntime(t, name, result)
 		if terminal.FinalTick > run.finalTick {
 			run.finalTick = terminal.FinalTick
 		}
@@ -368,13 +277,7 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		}
 		run.terminal[name] = terminal
 	}
-	for name, view := range views {
-		terminal := run.terminal[view.Harness]
-		viewPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+"-multiturn.json")
-		wavPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+"-multiturn.wav")
-		writeV8ViewArtifacts(t, view, terminal, viewPath, wavPath)
-		run.artifacts = appendArtifactPaths(run.artifacts, name, viewPath, wavPath)
-	}
+	writeV8RunArtifacts(t, &run, runDir, "-multiturn")
 	return run
 }
 
@@ -393,4 +296,86 @@ func waitForV8MultiTurnEOFs(t *testing.T, ctx context.Context, aToBBridge, bToAB
 func waitForV8MultiTurnCompletion(t *testing.T, wg *sync.WaitGroup, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
 	wg.Wait()
 	waitForV8MultiTurnEOFs(t, ctx, aToBBridge, bToABridge)
+}
+
+// loadV8SilenceFrame reads one frame of the committed 16 kHz silence fixture.
+func loadV8SilenceFrame(t *testing.T) []byte {
+	t.Helper()
+	silenceWAV, err := os.ReadFile(v8AudioFixturePath(t, "silence_16k.wav"))
+	if err != nil {
+		t.Fatalf("read v8 silence fixture: %v", err)
+	}
+	_, silenceSamples, err := wavio.Read(bytes.NewReader(silenceWAV))
+	if err != nil {
+		t.Fatalf("parse v8 silence fixture: %v", err)
+	}
+	if len(silenceSamples) < audio.FrameSize {
+		t.Fatalf("v8 silence fixture has %d samples, want at least %d", len(silenceSamples), audio.FrameSize)
+	}
+	return v8PCM16Bytes(silenceSamples[:audio.FrameSize])
+}
+
+func newV8RecordingViews() map[string]*v8RecordingView {
+	return map[string]*v8RecordingView{
+		"A/client": {Harness: "A", Role: "client"},
+		"A/agent":  {Harness: "A", Role: "agent"},
+		"B/client": {Harness: "B", Role: "client"},
+		"B/agent":  {Harness: "B", Role: "agent"},
+	}
+}
+
+// collectV8HarnessResults waits for both harness results. A failed harness or
+// an expired run context aborts the crossing coordinator; the cleanup window
+// bounds the wait.
+func collectV8HarnessResults(t *testing.T, ctx context.Context, results <-chan v8HarnessResult, timeout time.Duration, abort func(), label string) map[string]v8HarnessResult {
+	t.Helper()
+	harnesses := make(map[string]v8HarnessResult, 2)
+	contextDone := ctx.Done()
+	cleanupTimer := time.NewTimer(timeout + time.Second)
+	defer cleanupTimer.Stop()
+	for len(harnesses) < 2 {
+		select {
+		case result := <-results:
+			harnesses[result.Name] = result
+			if result.Err != nil {
+				abort()
+			}
+		case <-contextDone:
+			abort()
+			contextDone = nil
+		case <-cleanupTimer.C:
+			abort()
+			t.Fatalf("%s did not return after the bounded cleanup window", label)
+		}
+	}
+	return harnesses
+}
+
+// v8TerminalFactFromRuntime reads the harness's terminal runtime observation;
+// the caller fills the bridge-owned EOF and output-frame facts.
+func v8TerminalFactFromRuntime(t *testing.T, name string, result v8HarnessResult) v8TerminalFact {
+	t.Helper()
+	terminalObservation, err := v8RuntimeObservation(result.Runtime, runtimecontract.SessionRuntimeObservationTerminal)
+	if err != nil {
+		t.Fatalf("harness %s terminal runtime observation: %v; command error=%v runtime=%+v stream=%+v", name, err, result.Err, result.Runtime, result.Stream)
+	}
+	return v8TerminalFact{
+		Clean:          terminalObservation.Clean,
+		Turns:          terminalObservation.TurnsCompleted,
+		FinalTick:      terminalObservation.Tick,
+		FinalTimestamp: terminalObservation.Timestamp,
+		Error:          terminalObservation.Error,
+	}
+}
+
+// writeV8RunArtifacts writes each recording view's JSON and WAV artifact.
+func writeV8RunArtifacts(t *testing.T, run *v8DuplexRun, runDir, suffix string) {
+	t.Helper()
+	for name, view := range run.views {
+		terminal := run.terminal[view.Harness]
+		viewPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+suffix+".json")
+		wavPath := filepath.Join(runDir, strings.ReplaceAll(name, "/", "-")+suffix+".wav")
+		writeV8ViewArtifacts(t, view, terminal, viewPath, wavPath)
+		run.artifacts = appendArtifactPaths(run.artifacts, name, viewPath, wavPath)
+	}
 }

@@ -235,7 +235,7 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 	if transport.archiveCalls.Load() != 1 {
 		t.Fatalf("archive downloads = %d, want one", transport.archiveCalls.Load())
 	}
-	readyPath := filepath.Join(cacheDir, chromeForTestingCacheDirName, chromeForTestingPlatformCacheKey(lock), chromeForTestingReadyName)
+	readyPath := filepath.Join(cacheDir, chromeForTestingCacheDirName, chromeForTestingPlatformCacheKey(t, lock), chromeForTestingReadyName)
 	if _, err := os.Stat(readyPath); err != nil {
 		t.Fatalf("ready marker is unavailable: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 	if transport.archiveCalls.Load() != 1 {
 		t.Fatalf("concurrent archive downloads = %d, want one", transport.archiveCalls.Load())
 	}
-	readyPath := filepath.Join(cacheDir, chromeForTestingCacheDirName, chromeForTestingPlatformCacheKey(lock), chromeForTestingReadyName)
+	readyPath := filepath.Join(cacheDir, chromeForTestingCacheDirName, chromeForTestingPlatformCacheKey(t, lock), chromeForTestingReadyName)
 	if _, err := os.Stat(readyPath); err != nil {
 		t.Fatalf("concurrent ready marker is unavailable: %v", err)
 	}
@@ -351,14 +351,18 @@ func TestChromeForTestingAcquirerRemovesFailedAttemptWithoutReadyState(t *testin
 	if err == nil || !strings.Contains(err.Error(), "archive_integrity") {
 		t.Fatalf("corrupt archive error = %v, want archive_integrity", err)
 	}
-	readyPath := filepath.Join(cacheDir, chromeForTestingCacheDirName, chromeForTestingPlatformCacheKey(lock), chromeForTestingReadyName)
+	readyPath := filepath.Join(cacheDir, chromeForTestingCacheDirName, chromeForTestingPlatformCacheKey(t, lock), chromeForTestingReadyName)
 	if _, statErr := os.Stat(readyPath); !os.IsNotExist(statErr) {
 		t.Fatalf("failed acquisition ready marker stat error = %v, want absent", statErr)
 	}
 }
 
-func chromeForTestingPlatformCacheKey(lock ChromeForTestingLock) string {
-	platform, _ := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
+func chromeForTestingPlatformCacheKey(t *testing.T, lock ChromeForTestingLock) string {
+	t.Helper()
+	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatalf("Chrome for Testing platform: %v", err)
+	}
 	return chromeForTestingCacheKey(platform, lock)
 }
 

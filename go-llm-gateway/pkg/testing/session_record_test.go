@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
+
+// testProviderGrok is the provider name recorded by session capture tests.
+const testProviderGrok = "grok"
 
 func TestCaptureSnapshotsCannotMutateRetainedEvidence(t *testing.T) {
 	stream := NewSessionRecorder(newFakeSession(), WithSessionRelayContext(t.Context()))
@@ -107,7 +111,7 @@ func (s *fakeSession) Close() error {
 
 func TestSessionRecorder_CapturesEventsInOrder(t *testing.T) {
 	fake := newFakeSession()
-	rec := NewSessionRecorder(fake, WithSessionCaptureProvider("grok", "grok-realtime"))
+	rec := NewSessionRecorder(fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"))
 	ctx := context.Background()
 
 	// Simulate a server-to-client event arriving on the inbound buffer.
@@ -187,7 +191,7 @@ func TestSessionRecorder_CapturesEventsInOrder(t *testing.T) {
 	if capture.Version != SessionCaptureVersion {
 		t.Errorf("capture version = %d, want %d", capture.Version, SessionCaptureVersion)
 	}
-	if capture.Provider.Name != "grok" {
+	if capture.Provider.Name != testProviderGrok {
 		t.Errorf("capture provider name = %q, want grok", capture.Provider.Name)
 	}
 	if capture.Provider.Model != "grok-realtime" {
@@ -219,7 +223,7 @@ func TestMarshalStreamMessage_RoundTripsResponseID(t *testing.T) {
 
 func TestSessionRecorder_FlushToFile(t *testing.T) {
 	fake := newFakeSession()
-	rec := NewSessionRecorder(fake, WithSessionCaptureProvider("grok", "grok-realtime"), WithSessionCaptureID("session-123"))
+	rec := NewSessionRecorder(fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"), WithSessionCaptureID("session-123"))
 	ctx := context.Background()
 
 	// Record a client-to-server event.
@@ -246,7 +250,7 @@ func TestSessionRecorder_FlushToFile(t *testing.T) {
 	if capture.Version != SessionCaptureVersion {
 		t.Fatalf("version = %d, want %d", capture.Version, SessionCaptureVersion)
 	}
-	if capture.Provider.Name != "grok" {
+	if capture.Provider.Name != testProviderGrok {
 		t.Fatalf("provider name = %q, want grok", capture.Provider.Name)
 	}
 	if capture.Provider.Model != "grok-realtime" {
@@ -380,4 +384,14 @@ func TestMarshalStreamMessageRetainsInputItemAttribution(t *testing.T) {
 	if !ok || value.ItemID != "recorded-input-item" || got.Role != want.Role {
 		t.Fatalf("input item attribution lost: %+v", got)
 	}
+}
+
+// mustMarshalStreamMessage encodes a fixture message built by the test itself;
+// a failure is a broken fixture, not a behavior under test.
+func mustMarshalStreamMessage(msg messages.StreamMessage) json.RawMessage {
+	data, err := MarshalStreamMessage(msg)
+	if err != nil {
+		panic(fmt.Sprintf("marshal fixture stream message: %v", err))
+	}
+	return data
 }

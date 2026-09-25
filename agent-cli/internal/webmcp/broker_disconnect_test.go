@@ -23,7 +23,7 @@ func TestStatefulBrokerPreservesEndpointFailureBeforeBrowserTransportIsEstablish
 				Runtime:    failingOpenRuntime{err: testCase.err},
 				Discoverer: staticDiscoverer{candidate},
 			})
-			defer func() { _ = broker.Close() }()
+			defer closeAtTestEnd(t, broker)
 
 			_, err := broker.Select(context.Background(), webmcp.TargetSelector{
 				BrowserID: candidate.ID,

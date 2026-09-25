@@ -150,7 +150,10 @@ func TestPinnedRequestMatchesPinDoc(t *testing.T) {
 	if request["input"] != "probe text" || request["speed"] != 1.0 {
 		t.Fatalf("pinnedRequest = %#v", request)
 	}
-	params := request["params"].(map[string]string)
+	params, ok := request["params"].(map[string]string)
+	if !ok {
+		t.Fatalf("pinnedRequest params = %#v, want map[string]string", request["params"])
+	}
 	want := map[string]string{"temperature": "0.9", "top_k": "50", "top_p": "1.0", "repetition_penalty": "1.05", "max_new_tokens": "512", "seed": "17"}
 	for key, value := range want {
 		if params[key] != value {

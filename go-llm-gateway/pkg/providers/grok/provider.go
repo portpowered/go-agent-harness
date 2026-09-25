@@ -3,6 +3,7 @@ package grok
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -95,13 +96,11 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 	// Send initial session.update with config.
 	sessionUpdate, err := buildSessionUpdate(config)
 	if err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("grok: build session update: %w", err)
+		return nil, errors.Join(fmt.Errorf("grok: build session update: %w", err), conn.Close())
 	}
 
 	if err := gs.writeEvent(sessionUpdate); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("grok: send session update: %w", err)
+		return nil, errors.Join(fmt.Errorf("grok: send session update: %w", err), conn.Close())
 	}
 
 	// Start the read/write goroutines.

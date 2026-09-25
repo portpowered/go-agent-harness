@@ -196,7 +196,7 @@ func runFamilyCProcess(t *testing.T, imagePath string) familyCProcessRun {
 	captureCheckpoint := func(actionIndex int) probe.DuplexSegmentGate {
 		return func(_ context.Context, _ *probe.DuplexProgress) error {
 			action := scenario.Actions[actionIndex]
-			checkpoint, _ := oracle.CaptureCheckpoint(
+			checkpoint, _ := oracle.CaptureCheckpoint( //nolint:errcheck // a failed observation still returns partial evidence that the oracle verdict reports as BROKEN
 				"checkpoint-"+action.ID,
 				action.ID,
 				time.Since(startedAt),
@@ -299,7 +299,7 @@ func (f *familyCProviderFixture) Snapshot() familyCProviderObservation {
 }
 
 func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -309,7 +309,7 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -337,15 +337,15 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 			return
 		}
 		switch event.Type {
-		case "session.update":
+		case rtEventSessionUpdate:
 			f.mu.Lock()
 			f.sessionUpdates++
 			f.mu.Unlock()
 			if err := f.sendSessionReady(connection); err != nil {
 				return
 			}
-		case "conversation.item.create":
-			if event.Item.Type == "function_call_output" {
+		case rtEventConversationItemCreate:
+			if event.Item.Type == rtItemFunctionCallOutput {
 				if err := f.handleToolResult(connection, event.Item.CallID, event.Item.Output); err != nil {
 					f.failProtocol(err.Error())
 					return
@@ -356,31 +356,16 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 				f.failProtocol(err.Error())
 				return
 			}
-		case "input_audio_buffer.append":
-			audio, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil {
-				f.failProtocol("decode input audio: " + decodeErr.Error())
+		case rtEventInputAudioAppend:
+			if !f.handleInputAudio(connection, event.Audio) {
 				return
 			}
-			if familyCSilent(audio) {
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
-					return
-				}
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-					return
-				}
-				continue
-			}
-			if err := f.handleCustomerUtterance(connection); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "response.create":
+		case rtEventResponseCreate:
 			if err := f.handleContinuation(connection); err != nil {
 				f.failProtocol(err.Error())
 				return
 			}
-		case "input_audio_buffer.commit", "response.cancel":
+		case rtEventInputAudioCommit, rtEventResponseCancel:
 			// The fixture models the server-VAD-shaped commit and accepts the
 			// normal client controls without creating a second response.
 		default:
@@ -395,7 +380,7 @@ func (f *familyCProviderFixture) handleImage(content []struct {
 	ImageURL string `json:"image_url"`
 }) error {
 	for _, part := range content {
-		if part.Type != "input_image" {
+		if part.Type != rtContentInputImage {
 			continue
 		}
 		comma := strings.IndexByte(part.ImageURL, ',')
@@ -466,7 +451,7 @@ func (f *familyCProviderFixture) handleToolResult(connection *websocket.Conn, ca
 	now := f.elapsedLocked()
 	f.toolObservations = append(f.toolObservations, probe.ToolObservation{
 		ID: "tool-" + pending.ID, ActionID: pending.ActionID, TurnID: fmt.Sprintf("turn-%d", f.actionIndex), Tool: pending.Name,
-		Status: "completed", At: pending.Started, Duration: now - pending.Started, ResultSeen: true, Summary: output,
+		Status: rtStatusCompleted, At: pending.Started, Duration: now - pending.Started, ResultSeen: true, Summary: output,
 	})
 	f.pendingResult = true
 	f.mu.Unlock()
@@ -504,52 +489,52 @@ func (f *familyCProviderFixture) handleContinuation(connection *websocket.Conn) 
 }
 
 func (f *familyCProviderFixture) sendToolCall(connection *websocket.Conn, responseID string, call familyCFunctionCall) error {
-	if err := f.send(connection, map[string]any{"type": "response.created", "response": map[string]string{"id": responseID}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": responseID}}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_item.added",
-		"item": map[string]string{"type": "function_call", "id": call.ID, "call_id": call.ID, "name": call.Name, "arguments": ""},
+		"type": rtEventOutputItemAdded,
+		"item": map[string]string{"type": rtItemFunctionCall, "id": call.ID, "call_id": call.ID, "name": call.Name, "arguments": ""},
 	}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]any{"type": "response.function_call_arguments.done", "call_id": call.ID, "name": call.Name, "arguments": call.Args}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventFunctionCallArgumentsDone, "call_id": call.ID, "name": call.Name, "arguments": call.Args}); err != nil {
 		return err
 	}
-	return f.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": responseID, "status": "completed"}})
+	return f.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": responseID, "status": rtStatusCompleted}})
 }
 
 func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, turnID, text string, marker byte) error {
 	at := f.elapsed()
 	f.recordProductTranscript(probe.TranscriptEvent{ID: "product-" + turnID, TurnID: turnID, Speaker: probe.TranscriptProduct, Text: text, At: at, Final: true})
-	if err := f.send(connection, map[string]any{"type": "response.created", "response": map[string]string{"id": "response-" + turnID}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": "response-" + turnID}}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.delta", "delta": text}); err != nil {
+	if err := f.send(connection, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "delta": text}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "transcript": text}); err != nil {
 		return err
 	}
 	audio := []byte{marker, 0x43, 0x4d, 0x43}
-	if err := f.send(connection, map[string]any{"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16"}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventOutputAudioDelta, "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16"}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]string{"type": "response.output_audio.done"}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": "response-" + turnID, "status": "completed"}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": "response-" + turnID, "status": rtStatusCompleted}}); err != nil {
 		return err
 	}
 	if marker == 3 {
 		time.Sleep(25 * time.Millisecond)
-		return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_c_complete"})
+		return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_c_complete"})
 	}
 	return nil
 }
 
 func (f *familyCProviderFixture) sendSessionReady(connection *websocket.Conn) error {
-	if err := f.send(connection, map[string]any{"type": "session.created", "session": map[string]string{"id": "family-c", "model": "gpt-realtime"}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventSessionCreated, "session": map[string]string{"id": "family-c", "model": "gpt-realtime"}}); err != nil {
 		return err
 	}
 	return f.send(connection, map[string]any{"type": "session.updated", "session": map[string]string{"id": "family-c"}})
@@ -724,14 +709,22 @@ func familyCFrame(seed byte) []byte {
 	return frame
 }
 
-func familyCSilent(audio []byte) bool {
-	if len(audio) == 0 {
-		return true
+// handleInputAudio answers one appended frame and reports whether the
+// session should keep reading. Silent frames get the server-VAD boundary
+// events; a write failure there means the child already hung up.
+func (f *familyCProviderFixture) handleInputAudio(connection *websocket.Conn, encoded string) bool {
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		f.failProtocol("decode input audio: " + err.Error())
+		return false
 	}
-	for _, value := range audio {
-		if value != 0 {
-			return false
-		}
+	if customerSimulationSilent(audio) {
+		return f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}) == nil &&
+			f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}) == nil
+	}
+	if err := f.handleCustomerUtterance(connection); err != nil {
+		f.failProtocol(err.Error())
+		return false
 	}
 	return true
 }

@@ -225,31 +225,7 @@ func TestConfigAddLocalConcurrentUpdatesCommitExactlyOneRevision(t *testing.T) {
 	group.Wait()
 	close(results)
 
-	successes := 0
-	conflicts := 0
-	winner := ""
-	for result := range results {
-		if result.err == nil {
-			successes++
-			for _, model := range []string{"first-winner-candidate", "second-winner-candidate"} {
-				if strings.Contains(result.stdout, "  model: "+model+"\n") {
-					winner = model
-				}
-			}
-			continue
-		}
-		if errors.Is(result.err, config.ErrConfigRevisionConflict) {
-			conflicts++
-			if strings.Contains(result.stdout, "Local provider added") {
-				t.Fatalf("conflicting command printed success: %q", result.stdout)
-			}
-			if !strings.Contains(result.err.Error(), filepath.Clean(configPath)) {
-				t.Fatalf("conflict error = %v, want config path", result.err)
-			}
-			continue
-		}
-		t.Fatalf("unexpected add-local error: %v", result.err)
-	}
+	successes, conflicts, winner := tallyConcurrentAddLocalResults(t, results, configPath)
 	if successes != 1 || conflicts != 1 || winner == "" {
 		t.Fatalf("successes=%d conflicts=%d winner=%q, want one success and one conflict", successes, conflicts, winner)
 	}
@@ -265,6 +241,34 @@ func TestConfigAddLocalConcurrentUpdatesCommitExactlyOneRevision(t *testing.T) {
 	if final.Model.Provider != config.ProviderLocal || final.Model.Local == nil || final.Model.Local.Model != winner {
 		t.Fatalf("final config local provider = %#v, want winner %q", final.Model.Local, winner)
 	}
+}
+
+// tallyConcurrentAddLocalResults counts successful and revision-conflicted
+// add-local runs and names the model the successful run committed.
+func tallyConcurrentAddLocalResults(t *testing.T, results <-chan cliResult, configPath string) (successes, conflicts int, winner string) {
+	t.Helper()
+	for result := range results {
+		if result.err == nil {
+			successes++
+			for _, model := range []string{"first-winner-candidate", "second-winner-candidate"} {
+				if strings.Contains(result.stdout, "  model: "+model+"\n") {
+					winner = model
+				}
+			}
+			continue
+		}
+		if !errors.Is(result.err, config.ErrConfigRevisionConflict) {
+			t.Fatalf("unexpected add-local error: %v", result.err)
+		}
+		conflicts++
+		if strings.Contains(result.stdout, "Local provider added") {
+			t.Fatalf("conflicting command printed success: %q", result.stdout)
+		}
+		if !strings.Contains(result.err.Error(), filepath.Clean(configPath)) {
+			t.Fatalf("conflict error = %v, want config path", result.err)
+		}
+	}
+	return successes, conflicts, winner
 }
 
 func TestConfigAddLocalRejectsExternalRevisionDuringProbe(t *testing.T) {

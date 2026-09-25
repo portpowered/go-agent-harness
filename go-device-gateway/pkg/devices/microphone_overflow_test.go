@@ -12,7 +12,7 @@ import (
 )
 
 func TestCaptureOverflowPolicyAndSequenceGap(t *testing.T) {
-	m := &MicrophoneSource{frameCh: make(chan []int16, 64), stats: audio.CaptureQueueStats{DropPolicy: "drop_oldest"}}
+	m := &MicrophoneSource{frameCh: make(chan []int16, 64), stats: audio.CaptureQueueStats{DropPolicy: captureDropOldest}}
 	for sequence := int16(1); sequence <= 65; sequence++ {
 		frame := make([]int16, audio.FrameSize)
 		for i := range frame {
@@ -25,7 +25,7 @@ func TestCaptureOverflowPolicyAndSequenceGap(t *testing.T) {
 		m.onCapture(raw, audio.FrameSize)
 	}
 	stats := m.CaptureStats()
-	if stats.DroppedFrames != 1 || stats.DroppedSamples != audio.FrameSize || stats.SequenceGaps != 1 || stats.QueuedSamples != 64*audio.FrameSize || stats.DropPolicy != "drop_oldest" {
+	if stats.DroppedFrames != 1 || stats.DroppedSamples != audio.FrameSize || stats.SequenceGaps != 1 || stats.QueuedSamples != 64*audio.FrameSize || stats.DropPolicy != captureDropOldest {
 		t.Fatalf("capture stats = %+v", stats)
 	}
 	got := make([]int16, audio.FrameSize)
@@ -38,7 +38,7 @@ func TestCaptureOverflowPolicyAndSequenceGap(t *testing.T) {
 }
 
 func TestCapturePartialAndZeroCallbackAreSafe(t *testing.T) {
-	m := &MicrophoneSource{frameCh: make(chan []int16, 1), stats: audio.CaptureQueueStats{DropPolicy: "drop_oldest"}}
+	m := &MicrophoneSource{frameCh: make(chan []int16, 1), stats: audio.CaptureQueueStats{DropPolicy: captureDropOldest}}
 	m.onCapture(nil, 0)
 	m.onCapture([]byte{1, 0, 2, 0}, 99)
 	if got := m.CaptureStats().CapturedSamples; got != 2 {

@@ -96,7 +96,7 @@ func NewRunScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, o
 		rs.runErr <- loop.Run(ctx)
 	}()
 
-	t.Cleanup(func() { _ = rs.Stop() })
+	t.Cleanup(func() { _ = rs.Stop() }) //nolint:errcheck // Cleanup only stops the loop; tests assert Stop's result where it matters.
 
 	return rs
 }

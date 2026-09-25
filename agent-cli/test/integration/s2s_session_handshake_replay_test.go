@@ -113,7 +113,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 func firstSessionUpdateRecord(t *testing.T, capture gatewaytesting.SessionCapture) gatewaytesting.CapturedSessionEvent {
 	t.Helper()
 	for _, record := range capture.Records {
-		if record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "session.update" {
+		if record.Direction == gatewaytesting.DirectionClientToServer && record.Type == rtEventSessionUpdate {
 			return record
 		}
 	}
@@ -165,9 +165,9 @@ func (c *handshakeReplayConn) WriteMessage(_ int, payload []byte) error {
 		return err
 	}
 	switch event.Type {
-	case "session.update":
+	case rtEventSessionUpdate:
 		c.enqueue(`{"type":"session.created","session":{"id":"sess-record-replay","model":"gpt-realtime"}}`)
-	case "response.create":
+	case rtEventResponseCreate:
 		c.enqueue(`{"type":"response.created","response":{"id":"resp-record-replay"}}`)
 		c.enqueue(`{"type":"response.output_text.delta","delta":"recorded response"}`)
 		c.enqueue(`{"type":"response.output_text.done"}`)

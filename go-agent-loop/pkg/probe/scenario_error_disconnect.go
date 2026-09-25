@@ -21,7 +21,7 @@ const (
 
 const scenarioS2SV6BInput = "tell me about transport failures"
 
-func init() {
+func registerErrorDisconnectScenarios(register func(Scenario, ...DeadSessionControl) error) {
 	for _, registration := range []struct {
 		id           string
 		description  string
@@ -62,7 +62,7 @@ func init() {
 			Expected:         expectations,
 			ExpectedBehavior: expectations,
 		}
-		if err := RegisterScenario(scenario); err != nil {
+		if err := register(scenario); err != nil {
 			panic(err)
 		}
 	}

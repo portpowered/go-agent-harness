@@ -29,18 +29,15 @@ type Result struct {
 func Run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("session-fixture-validator", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	var usageErr error
 	flags.Usage = func() {
-		_, _ = fmt.Fprintf(flags.Output(), "Usage: %s [-emit-manifest FILE] [files-or-directories...]\n\n", flags.Name())
-		_, _ = fmt.Fprintln(flags.Output(), "Validates committed .session.json captures for fixture hygiene.")
-		_, _ = fmt.Fprintln(flags.Output(), "Checks require session.fixture_provenance, reject unsafe raw audio or credential-like fields and values,")
-		_, _ = fmt.Fprintln(flags.Output(), "and ensure provider wire events use payload_type \"websocket_message\" instead of generic \"stream_message\".")
-		_, _ = fmt.Fprintln(flags.Output(), "With -emit-manifest FILE, writes a generated manifest of the scanned fixture set")
+		usageErr = writeUsage(flags.Output(), flags.Name())
 	}
 
 	emitManifestPath := flags.String("emit-manifest", "", "write a sorted fixture manifest for the scanned roots to this `FILE` instead of validating")
 
 	if err := flags.Parse(args); err != nil {
-		return err
+		return errors.Join(err, usageErr)
 	}
 
 	paths := flags.Args()
@@ -49,7 +46,7 @@ func Run(args []string, stdout, stderr io.Writer) error {
 	}
 	if len(paths) == 0 {
 		flags.Usage()
-		return errors.New("at least one file or directory is required")
+		return errors.Join(errors.New("at least one file or directory is required"), usageErr)
 	}
 
 	result, err := ValidatePaths(paths)
@@ -59,13 +56,28 @@ func Run(args []string, stdout, stderr io.Writer) error {
 
 	if len(result.Errors) > 0 {
 		for _, validationErr := range result.Errors {
-			_, _ = fmt.Fprintln(stderr, validationErr.Error())
+			if _, err := fmt.Fprintln(stderr, validationErr.Error()); err != nil {
+				return errors.Join(ErrValidationFailed, err)
+			}
 		}
 		return ErrValidationFailed
 	}
 
-	_, _ = fmt.Fprintf(stdout, "validated %d session fixture file(s): ok\n", result.FilesScanned)
-	return nil
+	_, err = fmt.Fprintf(stdout, "validated %d session fixture file(s): ok\n", result.FilesScanned)
+	return err
+}
+
+const usageFormat = `Usage: %s [-emit-manifest FILE] [files-or-directories...]
+
+Validates committed .session.json captures for fixture hygiene.
+Checks require session.fixture_provenance, reject unsafe raw audio or credential-like fields and values,
+and ensure provider wire events use payload_type "websocket_message" instead of generic "stream_message".
+With -emit-manifest FILE, writes a generated manifest of the scanned fixture set
+`
+
+func writeUsage(w io.Writer, name string) error {
+	_, err := fmt.Fprintf(w, usageFormat, name)
+	return err
 }
 
 // ValidatePaths scans files and directories, then applies the shared session fixture validator.
@@ -100,8 +112,8 @@ func runEmitManifest(outputPath string, paths []string, stdout io.Writer) error 
 	if err := os.WriteFile(outputPath, data, 0644); err != nil {
 		return fmt.Errorf("write fixture manifest %s: %w", outputPath, err)
 	}
-	_, _ = fmt.Fprintf(stdout, "wrote fixture manifest %s: %d session fixture file(s)\n", outputPath, manifest.Count)
-	return nil
+	_, err = fmt.Fprintf(stdout, "wrote fixture manifest %s: %d session fixture file(s)\n", outputPath, manifest.Count)
+	return err
 }
 
 func collectSessionFixtureFiles(paths []string) ([]string, error) {
@@ -130,4 +142,15 @@ func collectSessionFixtureFiles(paths []string) ([]string, error) {
 	}
 	sort.Strings(files)
 	return files, nil
+}
+
+// currentDirectoryOrEmpty resolves the process working directory. An
+// unavailable directory leaves repository-root discovery to its caller-file
+// fallback, so the lookup failure is represented as an empty anchor.
+func currentDirectoryOrEmpty() string {
+	directory, err := filepath.Abs(".")
+	if err != nil {
+		return ""
+	}
+	return directory
 }

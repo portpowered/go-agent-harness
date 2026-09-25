@@ -209,7 +209,7 @@ func (l *ManagedBrowserLauncher) Launch(ctx context.Context) (*ManagedBrowser, e
 	}
 	port, err := managedLoopbackPort(listener)
 	if err != nil {
-		_ = listener.Close()
+		discardCleanupError(listener.Close)
 		return nil, newManagedBrowserLaunchError("port", mode, nil, err)
 	}
 	if err := listener.Close(); err != nil {
@@ -663,7 +663,7 @@ func prepareManagedBrowserProfile(profileDir string) error {
 	}
 	probePath := probe.Name()
 	if err := probe.Close(); err != nil {
-		_ = os.Remove(probePath)
+		removeBestEffort(os.Remove, probePath)
 		return err
 	}
 	if err := os.Remove(probePath); err != nil {

@@ -70,7 +70,7 @@ func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinn
 	if err != nil {
 		t.Fatalf("probe 04 launch Chrome: %v", err)
 	}
-	defer func() { _ = browser.Close() }()
+	defer discardSecondaryError(browser.Close)
 
 	baseURL := browserHTTPURL(browser.endpoint())
 	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
@@ -112,12 +112,12 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	}
 	baseURL := browserHTTPURL(initial.endpoint())
 	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
-		_ = initial.Close()
+		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 wait for initial Chrome: %v", err)
 	}
 	port, err := recoveryEndpointPort(initial.endpoint())
 	if err != nil {
-		_ = initial.Close()
+		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 read initial port: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
@@ -126,12 +126,12 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, iteration, "08-initial")
 	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, iteration, "08-initial")
 	if len(tabs) != 1 {
-		_ = initial.Close()
+		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 initial eligible tabs = %+v, want one", tabs)
 	}
 	selected := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "select", "--browser", browserID, "--tab", tabs[0].TargetID, "--json")
 	if selected.Err != nil || selected.ExitCode != 0 {
-		_ = initial.Close()
+		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 initial selection failed: exit=%d err=%v stdout=%q", selected.ExitCode, selected.Err, selected.Stdout)
 	}
 	recordClassificationResult(t, selected, configDir, "probe-08-initial-selection", fmt.Sprintf(`{"code":"success","browser_id":%q,"target_id":%q}`, browserID, tabs[0].TargetID))
@@ -154,7 +154,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	if err != nil {
 		t.Fatalf("probe 08 replacement Chrome: %v", err)
 	}
-	defer func() { _ = replacement.Close() }()
+	defer discardSecondaryError(replacement.Close)
 	if _, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint()), lockedChromeVersion); err != nil {
 		t.Fatalf("probe 08 wait for replacement Chrome: %v", err)
 	}
@@ -184,7 +184,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	if err != nil {
 		t.Fatalf("probe 09 Chrome: %v", err)
 	}
-	defer func() { _ = browser.Close() }()
+	defer discardSecondaryError(browser.Close)
 	baseURL := browserHTTPURL(browser.endpoint())
 	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
 		t.Fatalf("probe 09 wait for Chrome: %v", err)
@@ -240,7 +240,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	if err != nil {
 		t.Fatalf("probe 10 Chrome: %v", err)
 	}
-	defer func() { _ = browser.Close() }()
+	defer discardSecondaryError(browser.Close)
 	baseURL := browserHTTPURL(browser.endpoint())
 	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
 		t.Fatalf("probe 10 wait for Chrome: %v", err)
@@ -373,7 +373,7 @@ func newClassificationNoToolsServer() *httptest.Server {
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		writer.Header().Set("Origin-Agent-Cluster", "?1")
 		writer.Header().Set("Permissions-Policy", "tools=(self)")
-		_, _ = writer.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>unverified WebMCP probe page</title></head><body><p>no page tools</p></body></html>`))
+		writeFixtureBody(writer, []byte(`<!doctype html><html><head><meta charset="utf-8"><title>unverified WebMCP probe page</title></head><body><p>no page tools</p></body></html>`))
 	}))
 }
 

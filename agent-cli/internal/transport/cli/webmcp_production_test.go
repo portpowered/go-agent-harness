@@ -132,7 +132,7 @@ func TestProductionWebMCPCLIFreshTabsReferenceSurvivesIncarnationChurn(t *testin
 		mu.Unlock()
 		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/stable"
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
+		writeFixtureText(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
 	}))
 	t.Cleanup(server.Close)
 
@@ -227,7 +227,7 @@ func newRestartingVersionServer(t *testing.T) (*httptest.Server, func() int) {
 		mu.Unlock()
 		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + path
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
+		writeFixtureText(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
 	}))
 	t.Cleanup(server.Close)
 	return server, func() int {
@@ -340,7 +340,7 @@ func TestDefaultWebMCPDirectFactoryUsesProductionDiscovery(t *testing.T) {
 		}
 		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/default-browser"
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Default","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
+		writeFixtureText(writer, `{"Browser":"Chrome/Default","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
 	}))
 	defer server.Close()
 
@@ -640,7 +640,7 @@ func newProductionTestEndpoint(t *testing.T) (*httptest.Server, string, string, 
 		}
 		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/browser-token"
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
+		writeFixtureText(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
 	}))
 	browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/browser-token"
 	parsed, err := url.Parse(browserWebSocket)

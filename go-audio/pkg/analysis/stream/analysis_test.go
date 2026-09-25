@@ -10,6 +10,8 @@ import (
 	stream "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
+const clippingProperty = "clipping"
+
 func TestAnalyzePCM16MeasuresFramesWithoutPaddingTheTail(t *testing.T) {
 	samples := make([]int16, 45)
 	for index := range samples {
@@ -72,15 +74,15 @@ func syntheticDefectCases() []syntheticDefectCase {
 		{
 			name: "clean",
 			wantNoProperties: []string{
-				"clipping", "quiet-boundary-click", "dropout", "leading-click", "trailing-click", "probable-truncation-pop",
+				clippingProperty, "quiet-boundary-click", "dropout", "leading-click", "trailing-click", "probable-truncation-pop",
 			},
 		},
 		{
-			name: "clipping",
+			name: clippingProperty,
 			mutate: func(input *stream.PCM16Input) {
 				input.Samples[800] = -32700
 			},
-			wantProperties: []string{"clipping"},
+			wantProperties: []string{clippingProperty},
 		},
 		{
 			name: "quiet boundary click",
@@ -258,10 +260,10 @@ func TestAssertPCM16ReturnsStructuredActionableFailure(t *testing.T) {
 		t.Fatalf("AssertPCM16() error = %T/%v, want one typed failure", err, err)
 	}
 	failure := assertionErr.Failures[0]
-	if failure.Property != "clipping" || failure.StreamID != "clean-stream" || failure.SampleIndex != 800 || failure.FrameIndex != 40 || failure.Measured != 32700 || failure.Bound != 32700 {
+	if failure.Property != clippingProperty || failure.StreamID != "clean-stream" || failure.SampleIndex != 800 || failure.FrameIndex != 40 || failure.Measured != 32700 || failure.Bound != 32700 {
 		t.Fatalf("clipping failure = %+v, want stream/sample/frame/measured/bound populated", failure)
 	}
-	for _, want := range []string{"clipping", `stream="clean-stream"`, "sample=800", "frame=40", "measured=32700.000", "bound=32700.000"} {
+	for _, want := range []string{clippingProperty, `stream="clean-stream"`, "sample=800", "frame=40", "measured=32700.000", "bound=32700.000"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("assertion diagnostic %q missing %q", err, want)
 		}
@@ -299,7 +301,7 @@ func TestAnalyzeAndValidatePCM16AreConciseAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
 	}
-	if failures := clippedAnalysis.FailuresCopy(); len(failures) != 1 || failures[0].Property != "clipping" {
+	if failures := clippedAnalysis.FailuresCopy(); len(failures) != 1 || failures[0].Property != clippingProperty {
 		t.Fatalf("FailuresCopy() on a clipped analysis = %v, want one clipping failure", failures)
 	}
 }
@@ -316,8 +318,8 @@ func TestPCM16AnalysisErrorTypesHandleNilAndEmptyState(t *testing.T) {
 	if got, want := emptyAssertionErr.Error(), stream.ErrPCM16AnalysisFailed.Error(); got != want {
 		t.Errorf("empty-failures *PCM16AssertionError.Error() = %q, want %q", got, want)
 	}
-	populatedAssertionErr := &stream.PCM16AssertionError{StreamID: "s", Failures: []stream.PropertyFailure{{Property: "clipping"}}}
-	if failures := populatedAssertionErr.FailuresCopy(); len(failures) != 1 || failures[0].Property != "clipping" {
+	populatedAssertionErr := &stream.PCM16AssertionError{StreamID: "s", Failures: []stream.PropertyFailure{{Property: clippingProperty}}}
+	if failures := populatedAssertionErr.FailuresCopy(); len(failures) != 1 || failures[0].Property != clippingProperty {
 		t.Errorf("populated *PCM16AssertionError.FailuresCopy() = %v, want one clipping failure", failures)
 	}
 

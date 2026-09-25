@@ -12,6 +12,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+// Chat Completions request vocabulary shared by message conversion.
+const (
+	requestRoleUser       = "user"
+	contentTypeImageURL   = "image_url"
+	contentTypeInputAudio = "input_audio"
+	contentTypeText       = "text"
+)
+
 // messagesToParams converts gateway messages to OpenAI request messages.
 // All message roles (system, user, assistant, tool) support all content types
 // (text, image, audio, video) to allow maximum compatibility with third-party
@@ -41,9 +49,9 @@ func messagesToParams(msgs []models.Message, logger logging.Logger) []requestMsg
 func userMessageToParam(msg models.Message) requestMsg {
 	if len(msg.ContentParts) > 0 {
 		parts := contentPartsToRequestParts(msg.ContentParts)
-		return requestMsg{Role: "user", Content: arrContent(parts)}
+		return requestMsg{Role: requestRoleUser, Content: arrContent(parts)}
 	}
-	return requestMsg{Role: "user", Content: strContent(msg.TextContent())}
+	return requestMsg{Role: requestRoleUser, Content: strContent(msg.TextContent())}
 }
 
 // assistantMessageToParam converts a gateway assistant message to an OpenAI assistant request message.
@@ -97,7 +105,7 @@ func toolMessageToParam(msg models.Message, logger logging.Logger) requestMsg {
 				logging.Field{Key: "tool_call_id", Value: msg.ToolCallID},
 			)
 			return requestMsg{
-				Role:       "user",
+				Role:       requestRoleUser,
 				Content:    arrContent(parts),
 				ToolCallID: msg.ToolCallID,
 			}
@@ -144,7 +152,7 @@ func contentPartsToRequestParts(parts []models.ContentPart) []contentPart {
 func contentPartToRequestPart(p models.ContentPart) (contentPart, bool) {
 	switch v := p.(type) {
 	case models.TextPart:
-		return contentPart{Type: "text", Text: v.Text}, true
+		return contentPart{Type: contentTypeText, Text: v.Text}, true
 
 	case models.ImagePart:
 		url := v.URL
@@ -158,14 +166,14 @@ func contentPartToRequestPart(p models.ContentPart) (contentPart, bool) {
 		if url == "" {
 			return contentPart{}, false
 		}
-		return contentPart{Type: "image_url", ImageURL: &imageURL{URL: url}}, true
+		return contentPart{Type: contentTypeImageURL, ImageURL: &imageURL{URL: url}}, true
 
 	case models.AudioPart:
 		if len(v.Bytes) == 0 {
 			return contentPart{}, false
 		}
 		format := audioFormatFromMediaType(v.MediaType)
-		return contentPart{Type: "input_audio", InputAudio: &inputAudio{
+		return contentPart{Type: contentTypeInputAudio, InputAudio: &inputAudio{
 			Data:   codec.EncodeBase64(v.Bytes),
 			Format: format,
 		}}, true

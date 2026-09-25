@@ -261,47 +261,14 @@ func (r *Router) resolveCommandPaths(command *cobra.Command, args []string) erro
 		resolver = newPathResolver()
 	}
 	route := commandRoute(command)
-	updates := make([]commandPathFlagUpdate, 0, len(commandPathFlagNames(route)))
-	for _, name := range commandPathFlagNames(route) {
-		flag := command.Flags().Lookup(name)
-		if flag == nil || !flag.Changed {
-			continue
-		}
-		update, err := resolveCommandPathFlag(resolver, flag)
-		if err != nil {
-			return err
-		}
-		updates = append(updates, update)
+	updates, err := resolveCommandPathFlags(resolver, command, route)
+	if err != nil {
+		return err
 	}
-
-	var normalizedArgs []string
-	var err error
-	if route == commandRouteAsk {
-		normalizedArgs, err = resolveAskFileArguments(resolver, args)
-		if err != nil {
-			return err
-		}
-	} else if route == commandRouteProbeRun || route == commandRouteProbeCustomerSimulation {
-		normalizedArgs, err = resolvePathArguments(resolver, args, len(args), "scenario")
-		if err != nil {
-			return err
-		}
-	} else if route == commandRouteProbeAcceptance {
-		normalizedArgs, err = resolvePathArguments(resolver, args, 1, "acceptance executable")
-		if err != nil {
-			return err
-		}
-	} else if (route == commandRouteInteractionReplay || route == commandRouteSessionReplay) && len(args) == 1 {
-		resolved, resolveErr := resolver.Resolve(args[0])
-		if resolveErr != nil {
-			if route == commandRouteSessionReplay {
-				return fmt.Errorf("resolve session replay bundle: %w", resolveErr)
-			}
-			return fmt.Errorf("resolve interaction replay fixture: %w", resolveErr)
-		}
-		normalizedArgs = []string{resolved}
+	normalizedArgs, err := resolveCommandArguments(resolver, route, args)
+	if err != nil {
+		return err
 	}
-
 	for _, update := range updates {
 		if err := update.apply(); err != nil {
 			return fmt.Errorf("apply normalized --%s: %w", update.flag.Name, err)
@@ -311,4 +278,46 @@ func (r *Router) resolveCommandPaths(command *cobra.Command, args []string) erro
 		copy(args, normalizedArgs)
 	}
 	return nil
+}
+
+// resolveCommandPathFlags computes the normalized value of every changed path
+// flag for the route without applying any of them.
+func resolveCommandPathFlags(resolver *pathResolver, command *cobra.Command, route string) ([]commandPathFlagUpdate, error) {
+	names := commandPathFlagNames(route)
+	updates := make([]commandPathFlagUpdate, 0, len(names))
+	for _, name := range names {
+		flag := command.Flags().Lookup(name)
+		if flag == nil || !flag.Changed {
+			continue
+		}
+		update, err := resolveCommandPathFlag(resolver, flag)
+		if err != nil {
+			return nil, err
+		}
+		updates = append(updates, update)
+	}
+	return updates, nil
+}
+
+// resolveCommandArguments returns the route's normalized positional path
+// arguments, or nil when the route has none to normalize.
+func resolveCommandArguments(resolver *pathResolver, route string, args []string) ([]string, error) {
+	switch {
+	case route == commandRouteAsk:
+		return resolveAskFileArguments(resolver, args)
+	case route == commandRouteProbeRun || route == commandRouteProbeCustomerSimulation:
+		return resolvePathArguments(resolver, args, len(args), "scenario")
+	case route == commandRouteProbeAcceptance:
+		return resolvePathArguments(resolver, args, 1, "acceptance executable")
+	case (route == commandRouteInteractionReplay || route == commandRouteSessionReplay) && len(args) == 1:
+		resolved, err := resolver.Resolve(args[0])
+		if err == nil {
+			return []string{resolved}, nil
+		}
+		if route == commandRouteSessionReplay {
+			return nil, fmt.Errorf("resolve session replay bundle: %w", err)
+		}
+		return nil, fmt.Errorf("resolve interaction replay fixture: %w", err)
+	}
+	return nil, nil
 }

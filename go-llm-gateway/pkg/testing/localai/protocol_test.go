@@ -12,7 +12,7 @@ func TestVerifyRealtimeAudioRejectsNonSpeakingListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen for non-speaking endpoint: %v", err)
 	}
-	defer func() { _ = listener.Close() }()
+	defer discardClose(listener)
 
 	accepted := make(chan net.Conn, 1)
 	acceptDone := make(chan struct{})
@@ -38,10 +38,10 @@ func TestVerifyRealtimeAudioRejectsNonSpeakingListener(t *testing.T) {
 		t.Fatalf("non-speaking endpoint took %s, want a bounded failure under two seconds: %v", elapsed, verifyErr)
 	}
 
-	_ = listener.Close()
+	discardClose(listener)
 	select {
 	case conn := <-accepted:
-		_ = conn.Close()
+		discardClose(conn)
 	case <-time.After(time.Second):
 		t.Fatal("non-speaking listener did not accept the probe")
 	}

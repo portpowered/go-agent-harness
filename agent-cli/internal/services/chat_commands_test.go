@@ -186,9 +186,9 @@ func TestChatCommands_ResolutionFailuresAndEmptySkillList(t *testing.T) {
 
 func TestChatCommands_AutocompleteUsesVisibleRegistryAndPreservesSkillOrder(t *testing.T) {
 	harness := newChatTestHarness(t)
-	original := chatCommands
-	t.Cleanup(func() { chatCommands = original })
-	chatCommands = append([]ChatCommand{
+	original := registeredChatCommands()
+	t.Cleanup(func() { chatCommands.commands = original })
+	chatCommands.commands = append([]ChatCommand{
 		{
 			Name:                    "hidden",
 			Summary:                 "Hidden test-only command",
@@ -264,8 +264,8 @@ func TestChatCommands_RegistryLookupContract(t *testing.T) {
 }
 
 func TestChatCommands_RegistryOrderIsDispatchPrecedence(t *testing.T) {
-	names := make([]string, 0, len(chatCommands))
-	for _, cmd := range chatCommands {
+	names := make([]string, 0, len(registeredChatCommands()))
+	for _, cmd := range registeredChatCommands() {
 		names = append(names, cmd.Name)
 	}
 	want := []string{"system", "help", "clear"}
@@ -330,7 +330,7 @@ func TestChatCommands_DispatcherEmptyTokenFallsThroughToSkillLookup(t *testing.T
 	userLinesBefore := countUserChatLines(harness.model.lines)
 
 	updated, _ := harness.model.handleSlashCommand("")
-	model := updated.(ChatModel)
+	model := chatModelOf(updated)
 
 	if got := countUserChatLines(model.lines); got != userLinesBefore {
 		t.Fatalf("empty-token miss added %d user-message lines", got-userLinesBefore)
@@ -399,9 +399,9 @@ func TestChatCommands_HelpRendersRegistryByteIdentically(t *testing.T) {
 }
 
 func TestChatCommands_HiddenEntriesExcludedFromRenderedHelp(t *testing.T) {
-	original := chatCommands
-	t.Cleanup(func() { chatCommands = original })
-	chatCommands = append(append([]ChatCommand{}, original...), ChatCommand{
+	original := registeredChatCommands()
+	t.Cleanup(func() { chatCommands.commands = original })
+	chatCommands.commands = append(append([]ChatCommand{}, original...), ChatCommand{
 		Name:    "secret",
 		Summary: "Hidden test-only command",
 		Hidden:  true,

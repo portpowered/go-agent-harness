@@ -17,18 +17,18 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 			webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page", Generation: 1},
 		)},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime)
 
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	handle := handleValue.(*ScriptedBrowserHandle)
+	handle := mustType[*ScriptedBrowserHandle](t, handleValue)
 	sessionValue, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach target: %v", err)
 	}
-	session := sessionValue.(*ScriptedTargetSession)
+	session := mustType[*ScriptedTargetSession](t, sessionValue)
 	attached := waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached
 	})
@@ -89,7 +89,7 @@ func TestTopologyStageGatesCanBeReleased(t *testing.T) {
 		Candidate: candidate,
 		Targets:   []TargetConfig{NewTargetConfig(target)},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime)
 	handleTemplate := runtime.Browser(candidate.ID)
 	if handleTemplate == nil {
 		t.Fatal("scripted browser handle is nil")
@@ -115,7 +115,7 @@ func TestTopologyStageGatesCanBeReleased(t *testing.T) {
 	if opened.err != nil {
 		t.Fatalf("release open gate: %v", opened.err)
 	}
-	handle := opened.handle.(*ScriptedBrowserHandle)
+	handle := mustType[*ScriptedBrowserHandle](t, opened.handle)
 
 	handle.BlockActivate()
 	activateDone := make(chan error, 1)
@@ -153,7 +153,7 @@ func TestTopologyStageGatesCanBeReleased(t *testing.T) {
 	if attached.session == nil {
 		t.Fatal("attach gate returned nil session")
 	}
-	session := attached.session.(*ScriptedTargetSession)
+	session := mustType[*ScriptedTargetSession](t, attached.session)
 	session.BlockEnableWebMCP()
 	enableDone := make(chan error, 1)
 	enableCursor := runtime.OperationCursor()
@@ -222,18 +222,18 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 				Candidate: candidate,
 				Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page"})},
 			})
-			defer func() { _ = runtime.Close() }()
+			defer closeForTest(t, runtime)
 			handleValue, err := runtime.Open(context.Background(), candidate)
 			if err != nil {
 				t.Fatalf("open browser: %v", err)
 			}
-			handle := handleValue.(*ScriptedBrowserHandle)
+			handle := mustType[*ScriptedBrowserHandle](t, handleValue)
 			test.gate(handle)
 			done := test.run(context.Background(), runtime, handle)
 			if _, err := runtime.WaitForOperationAdmitted(testContext(t), test.kind); err != nil {
 				t.Fatalf("wait for %s admission: %v", test.kind, err)
 			}
-			_ = handle.Disconnect("transport_lost")
+			requireNoError(t, handle.Disconnect("transport_lost"), "disconnect")
 			select {
 			case err := <-done:
 				var classified *webmcp.ClassifiedError
@@ -256,22 +256,22 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: secondTargetID, Type: "page"}),
 		},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime)
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	handle := handleValue.(*ScriptedBrowserHandle)
+	handle := mustType[*ScriptedBrowserHandle](t, handleValue)
 	firstValue, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach first target: %v", err)
 	}
-	first := firstValue.(*ScriptedTargetSession)
+	first := mustType[*ScriptedTargetSession](t, firstValue)
 	secondValue, err := handle.Attach(context.Background(), secondTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach second target: %v", err)
 	}
-	second := secondValue.(*ScriptedTargetSession)
+	second := mustType[*ScriptedTargetSession](t, secondValue)
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.TargetID == defaultTargetID
 	})
@@ -323,12 +323,12 @@ func TestTopologyChurnClosesOneTargetWithoutDisconnectingBrowser(t *testing.T) {
 			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-keep", Type: "page"}),
 		},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime)
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	handle := handleValue.(*ScriptedBrowserHandle)
+	handle := mustType[*ScriptedBrowserHandle](t, handleValue)
 	_, err = handle.Attach(context.Background(), "tab-external", webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach external target: %v", err)
@@ -337,7 +337,7 @@ func TestTopologyChurnClosesOneTargetWithoutDisconnectingBrowser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("attach retained target: %v", err)
 	}
-	keep := keepValue.(*ScriptedTargetSession)
+	keep := mustType[*ScriptedTargetSession](t, keepValue)
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-external"
 	})
@@ -385,18 +385,18 @@ func TestTopologyChurnPublishesTargetCloseWhenSessionBufferIsFull(t *testing.T) 
 			WithEventBuffer(1),
 		)},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime)
 
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	handle := handleValue.(*ScriptedBrowserHandle)
+	handle := mustType[*ScriptedBrowserHandle](t, handleValue)
 	sessionValue, err := handle.Attach(context.Background(), "tab-buffer", webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach target: %v", err)
 	}
-	session := sessionValue.(*ScriptedTargetSession)
+	session := mustType[*ScriptedTargetSession](t, sessionValue)
 	if err := handle.CloseTarget(context.Background(), "tab-buffer"); err != nil {
 		t.Fatalf("close full-buffer target: %v", err)
 	}
@@ -440,17 +440,17 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 		Candidate: oldCandidate,
 		Targets:   []TargetConfig{NewTargetConfig(target)},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime)
 	oldHandleValue, err := runtime.Open(context.Background(), oldCandidate)
 	if err != nil {
 		t.Fatalf("open old browser: %v", err)
 	}
-	oldHandle := oldHandleValue.(*ScriptedBrowserHandle)
+	oldHandle := mustType[*ScriptedBrowserHandle](t, oldHandleValue)
 	oldSessionValue, err := oldHandle.Attach(context.Background(), target.ID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach old target: %v", err)
 	}
-	oldSession := oldSessionValue.(*ScriptedTargetSession)
+	oldSession := mustType[*ScriptedTargetSession](t, oldSessionValue)
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.BrowserID == oldCandidate.ID
 	})
@@ -494,7 +494,7 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 	if err != nil {
 		t.Fatalf("attach replacement target: %v", err)
 	}
-	newSession := newSessionValue.(*ScriptedTargetSession)
+	newSession := mustType[*ScriptedTargetSession](t, newSessionValue)
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.BrowserID == newCandidate.ID
 	})

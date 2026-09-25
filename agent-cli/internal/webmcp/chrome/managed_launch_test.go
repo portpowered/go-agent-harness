@@ -90,7 +90,7 @@ func TestManagedBrowserLauncherFallsBackToHeadlessWithoutDisplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch(): %v", err)
 	}
-	defer func() { _ = browser.Close() }()
+	defer closeForTest(t, browser)
 	if !browser.Headless() {
 		t.Fatal("display-free launch was not resolved as headless")
 	}
@@ -107,7 +107,7 @@ func TestManagedBrowserLauncherExplicitHeadlessWinsWhenDisplayExists(t *testing.
 	if err != nil {
 		t.Fatalf("Launch(): %v", err)
 	}
-	defer func() { _ = browser.Close() }()
+	defer closeForTest(t, browser)
 	if !browser.Headless() {
 		t.Fatal("explicit headless request was ignored")
 	}
@@ -217,7 +217,7 @@ func TestManagedBrowserLauncherPortCollisionFailsTheAttempt(t *testing.T) {
 	}
 	defer func() {
 		if collision != nil {
-			_ = collision.Close()
+			closeForTest(t, collision)
 		}
 	}()
 
@@ -266,7 +266,7 @@ func TestManagedBrowserLauncherRejectsSymlinkedProfileAndPortOutsideLoopback(t *
 		process := &managedLaunchTestProcess{}
 		launcher := newManagedLaunchTestLauncher(t, process, nil, nil)
 		launcher.options.PortAllocator = func() (net.Listener, error) {
-			return &managedLaunchTestListener{Listener: listener, address: &net.TCPAddr{IP: net.ParseIP("192.0.2.1"), Port: listener.Addr().(*net.TCPAddr).Port}}, nil
+			return &managedLaunchTestListener{Listener: listener, address: &net.TCPAddr{IP: net.ParseIP("192.0.2.1"), Port: mustType[*net.TCPAddr](t, listener.Addr()).Port}}, nil
 		}
 		_, err = launcher.Launch(context.Background())
 		if err == nil || !strings.Contains(err.Error(), "during port") {

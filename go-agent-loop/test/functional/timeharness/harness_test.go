@@ -14,7 +14,7 @@ func TestScenarioLifecycleExactTicksAndExpectations(t *testing.T) {
 	if got := s.Clock().Tick(); got != 0 {
 		t.Fatalf("scenario started at tick %d", got)
 	}
-	left, right := register(s, "left"), register(s, "right")
+	left, right := register(t, s, "left"), register(t, s, "right")
 	for _, name := range []string{" ", "left"} {
 		if _, err := s.Register(name); err == nil {
 			t.Fatalf("invalid name %q accepted", name)
@@ -58,7 +58,7 @@ func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
 	defer s.Close()
 	participants := make([]*Participant, 8)
 	for i := range participants {
-		participants[i] = register(s, "peer-"+string(rune('a'+i)))
+		participants[i] = register(t, s, "peer-"+string(rune('a'+i)))
 	}
 	started, events := make(chan struct{}, len(participants)), make(chan Observation, 16)
 	hold := make(chan struct{})
@@ -98,14 +98,26 @@ func TestBarrierWithheldParticipantAndConcurrentAdvances(t *testing.T) {
 	}
 }
 
-func register(s *Scenario, n string) *Participant { p, _ := s.Register(n); return p }
+func register(t *testing.T, s *Scenario, n string) *Participant {
+	t.Helper()
+	p, err := s.Register(n)
+	if err != nil {
+		t.Fatalf("Register(%q): %v", n, err)
+	}
+	return p
+}
 
 func runTicks(p *Participant, out chan<- Observation, ticks int, hold <-chan struct{}) {
 	if hold != nil && p.name == "peer-h" {
 		<-hold
 	}
 	for i := 1; i <= ticks; i++ {
-		o, _ := p.Observe(uint64(i))
+		o, err := p.Observe(uint64(i))
+		if err != nil {
+			// A zero observation (tick 0) makes the consuming test fail visibly.
+			out <- Observation{}
+			continue
+		}
 		out <- o
 	}
 	p.Complete()
@@ -124,7 +136,7 @@ func waitState(t *testing.T, s *Scenario, ready func(*Scenario) bool) {
 func TestCompleteBeforeActiveGenerationCreditsArrival(t *testing.T) {
 	s := New(time.Unix(100, 0).UTC(), time.Millisecond)
 	defer s.Close()
-	early, late := register(s, "early"), register(s, "late")
+	early, late := register(t, s, "early"), register(t, s, "late")
 	observed := make(chan Observation, 2)
 	late.Run(func() {
 		o, err := late.Observe(1)

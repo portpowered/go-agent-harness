@@ -83,51 +83,8 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 		t.Fatalf("Family B shipped-process run failed: run=%v provider=%+v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, observation, result, result.Stdout, result.Stderr)
 	}
 
-	if observation.ConnectionCount != 1 || observation.SessionUpdates != 1 {
-		t.Fatalf("provider lifecycle = connections:%d session_updates:%d, want one open session and one update", observation.ConnectionCount, observation.SessionUpdates)
-	}
-	if len(observation.CustomerTranscript) != 2 || observation.CustomerTranscript[1].At <= observation.CustomerTranscript[0].At {
-		t.Fatalf("customer correction transcript = %+v, want two ordered turns", observation.CustomerTranscript)
-	}
-	if len(observation.FunctionCalls) != 2 || observation.FunctionCalls[0].ActionID != probe.FamilyBOriginalActionID || observation.FunctionCalls[1].ActionID != probe.FamilyBReplacementActionID {
-		t.Fatalf("provider function calls = %+v, want original then replacement", observation.FunctionCalls)
-	}
-	if len(observation.ToolObservations) != 2 || observation.ToolObservations[0].Status != "completed" || observation.ToolObservations[1].Status != "completed" {
-		t.Fatalf("tool observations = %+v, want two completed results", observation.ToolObservations)
-	}
-	if got, want := strings.Join(observation.ResponseTerminalStatuses, ","), "cancelled,completed"; got != want {
-		t.Fatalf("response terminal statuses = %q, want %q", got, want)
-	}
-	correction := observation.Correction
-	if correction.OriginalResponseStatus != "cancelled" || correction.ReplacementResponseStatus != "completed" {
-		t.Fatalf("correction response statuses = %+v, want cancelled then completed", correction)
-	}
-	if !(correction.OriginalResponseStartedAt < correction.CorrectionStartedAt && correction.CorrectionStartedAt < correction.OriginalResponseEndedAt) {
-		t.Fatalf("correction timing = %+v, want correction inside original output interval", correction)
-	}
-	if !(correction.CancellationSentAt < correction.CorrectionStartedAt) {
-		t.Fatalf("cancellation timing = %+v, want cancellation before correction audio reaches provider", correction)
-	}
-
-	if result.ExitCode != 0 || !result.ChildWaited || !result.InputFinished || !result.InputClosed || !result.StdoutClosed || !result.StderrClosed {
-		t.Fatalf("process lifecycle result = %+v, want fully reaped normal run", result)
-	}
-	if len(result.Input) < 3 || len(result.Output) < 2 {
-		t.Fatalf("stream evidence input=%d output_reads=%d, want correction on one open paced stream", len(result.Input), len(result.Output))
-	}
-	for marker := byte(1); marker <= 2; marker++ {
-		if !bytes.Contains(result.Stdout, []byte{marker, 0x42, 0x52, 0x42}) {
-			t.Fatalf("captured stdout = %x, missing response audio marker %x", result.Stdout, []byte{marker, 0x42, 0x52, 0x42})
-		}
-	}
-	if strings.Contains(result.Command, "hermetic-key") || strings.Contains(strings.Join(result.SanitizedArgs, "\x00"), "hermetic-key") {
-		t.Fatalf("API key leaked into process evidence: command=%q args=%q", result.Command, result.SanitizedArgs)
-	}
-	for _, forbidden := range []string{"--audio-in-turn", "--api-key"} {
-		if containsIntegrationString(result.SanitizedArgs, forbidden) {
-			t.Fatalf("runner unexpectedly used forbidden boundary/credential argument %q: %v", forbidden, result.SanitizedArgs)
-		}
-	}
+	assertFamilyBObservation(t, observation)
+	assertFamilyBProcessEvidence(t, result)
 
 	finalCheckpoint, err := oracle.Checkpoint(
 		"checkpoint-replacement",
@@ -146,54 +103,7 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 		t.Fatalf("filesystem checkpoints = %d, want original and replacement boundaries", len(checkpointCopy))
 	}
 
-	actionResults := []probe.ActionResult{
-		{
-			ActionID:           probe.FamilyBOriginalActionID,
-			TurnID:             "turn-1",
-			Confirmed:          true,
-			ConfirmedAt:        observation.ProductTranscript[0].At,
-			Disposition:        probe.DispositionCancelled,
-			OutcomeReason:      "correction interrupted the original action after the draft write; preserved draft state was recorded",
-			EvidenceRefs:       []string{"filesystem-checkpoints.jsonl", "tool-observations.jsonl", "transcripts/product.jsonl"},
-			CheckpointIDs:      []string{"checkpoint-original"},
-			ToolObservationIDs: []string{observation.ToolObservations[0].ID},
-		},
-		{
-			ActionID:           probe.FamilyBReplacementActionID,
-			TurnID:             "turn-2",
-			Confirmed:          true,
-			ConfirmedAt:        observation.ProductTranscript[1].At,
-			Disposition:        probe.DispositionCompleted,
-			EvidenceRefs:       []string{"filesystem-checkpoints.jsonl", "tool-observations.jsonl", "transcripts/product.jsonl"},
-			CheckpointIDs:      []string{"checkpoint-replacement"},
-			ToolObservationIDs: []string{observation.ToolObservations[1].ID},
-		},
-	}
-	process := &probe.ProcessFacts{
-		PID:                result.PID,
-		ExitCode:           result.ExitCode,
-		ExitClassification: "normal",
-		ChildWaited:        result.ChildWaited,
-		InputClosed:        result.InputClosed,
-		OutputClosed:       result.StdoutClosed && result.StderrClosed,
-		StartedAt:          0,
-		EndedAt:            result.Duration,
-	}
-	correction.Process = process
-	mechanical, err := probe.EvaluateCustomerSimulationCorrection(
-		scenario,
-		actionResults,
-		checkpointCopy,
-		observation.ToolObservations,
-		observation.ProductTranscript,
-		correction,
-	)
-	if err != nil {
-		t.Fatalf("Family B mechanical evaluation: %v", err)
-	}
-	if !mechanical.Pass || len(mechanical.Findings) != 0 {
-		t.Fatalf("Family B mechanical verdict = %+v, want pass without findings", mechanical)
-	}
+	evaluateFamilyBRun(t, scenario, observation, result, checkpointCopy)
 }
 
 // TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries is
@@ -248,13 +158,13 @@ func TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries(t *te
 	if correction.OriginalResponseID != "response-original-output" {
 		t.Fatalf("original response ID = %q, want recorded active response ID", correction.OriginalResponseID)
 	}
-	if correction.OriginalResponseStatus != "cancelled" || correction.ReplacementResponseStatus != "completed" {
+	if correction.OriginalResponseStatus != rtStatusCancelled || correction.ReplacementResponseStatus != rtStatusCompleted {
 		t.Fatalf("response statuses = %q/%q, want cancelled/completed", correction.OriginalResponseStatus, correction.ReplacementResponseStatus)
 	}
-	if !(correction.OriginalResponseStartedAt < correction.CorrectionStartedAt && correction.CorrectionStartedAt < correction.OriginalResponseEndedAt) {
+	if !strictlyIncreasing(correction.OriginalResponseStartedAt, correction.CorrectionStartedAt, correction.OriginalResponseEndedAt) {
 		t.Fatalf("correction timing = %+v, want correction inside original response interval", correction)
 	}
-	if !(correction.CancellationSentAt < correction.CorrectionStartedAt) {
+	if correction.CancellationSentAt >= correction.CorrectionStartedAt {
 		t.Fatalf("cancellation timing = %+v, want cancellation before correction input", correction)
 	}
 	if _, err := probe.VerifyCustomerEvidenceBundle(run.BundleRoot); err != nil {
@@ -274,4 +184,109 @@ func loadFamilyBScenario(t *testing.T) probe.CustomerScenario {
 		t.Fatalf("parse Family B scenario: %v", err)
 	}
 	return scenario
+}
+
+func assertFamilyBProcessEvidence(t *testing.T, result probe.DuplexRunResult) {
+	t.Helper()
+	if result.ExitCode != 0 || !result.ChildWaited || !result.InputFinished || !result.InputClosed || !result.StdoutClosed || !result.StderrClosed {
+		t.Fatalf("process lifecycle result = %+v, want fully reaped normal run", result)
+	}
+	if len(result.Input) < 3 || len(result.Output) < 2 {
+		t.Fatalf("stream evidence input=%d output_reads=%d, want correction on one open paced stream", len(result.Input), len(result.Output))
+	}
+	for marker := byte(1); marker <= 2; marker++ {
+		if !bytes.Contains(result.Stdout, []byte{marker, 0x42, 0x52, 0x42}) {
+			t.Fatalf("captured stdout = %x, missing response audio marker %x", result.Stdout, []byte{marker, 0x42, 0x52, 0x42})
+		}
+	}
+	if strings.Contains(result.Command, "hermetic-key") || strings.Contains(strings.Join(result.SanitizedArgs, "\x00"), "hermetic-key") {
+		t.Fatalf("API key leaked into process evidence: command=%q args=%q", result.Command, result.SanitizedArgs)
+	}
+	for _, forbidden := range []string{"--audio-in-turn", "--api-key"} {
+		if containsIntegrationString(result.SanitizedArgs, forbidden) {
+			t.Fatalf("runner unexpectedly used forbidden boundary/credential argument %q: %v", forbidden, result.SanitizedArgs)
+		}
+	}
+}
+
+func assertFamilyBObservation(t *testing.T, observation familyBProviderObservation) {
+	t.Helper()
+	if observation.ConnectionCount != 1 || observation.SessionUpdates != 1 {
+		t.Fatalf("provider lifecycle = connections:%d session_updates:%d, want one open session and one update", observation.ConnectionCount, observation.SessionUpdates)
+	}
+	if len(observation.CustomerTranscript) != 2 || observation.CustomerTranscript[1].At <= observation.CustomerTranscript[0].At {
+		t.Fatalf("customer correction transcript = %+v, want two ordered turns", observation.CustomerTranscript)
+	}
+	if len(observation.FunctionCalls) != 2 || observation.FunctionCalls[0].ActionID != probe.FamilyBOriginalActionID || observation.FunctionCalls[1].ActionID != probe.FamilyBReplacementActionID {
+		t.Fatalf("provider function calls = %+v, want original then replacement", observation.FunctionCalls)
+	}
+	if len(observation.ToolObservations) != 2 || observation.ToolObservations[0].Status != rtStatusCompleted || observation.ToolObservations[1].Status != rtStatusCompleted {
+		t.Fatalf("tool observations = %+v, want two completed results", observation.ToolObservations)
+	}
+	if got, want := strings.Join(observation.ResponseTerminalStatuses, ","), "cancelled,completed"; got != want {
+		t.Fatalf("response terminal statuses = %q, want %q", got, want)
+	}
+	correction := observation.Correction
+	if correction.OriginalResponseStatus != rtStatusCancelled || correction.ReplacementResponseStatus != rtStatusCompleted {
+		t.Fatalf("correction response statuses = %+v, want cancelled then completed", correction)
+	}
+	if !strictlyIncreasing(correction.OriginalResponseStartedAt, correction.CorrectionStartedAt, correction.OriginalResponseEndedAt) {
+		t.Fatalf("correction timing = %+v, want correction inside original output interval", correction)
+	}
+	if correction.CancellationSentAt >= correction.CorrectionStartedAt {
+		t.Fatalf("cancellation timing = %+v, want cancellation before correction audio reaches provider", correction)
+	}
+}
+
+func evaluateFamilyBRun(t *testing.T, scenario probe.CustomerScenario, observation familyBProviderObservation, result probe.DuplexRunResult, checkpointCopy []probe.FilesystemCheckpoint) {
+	t.Helper()
+	correction := observation.Correction
+	actionResults := []probe.ActionResult{
+		{
+			ActionID:           probe.FamilyBOriginalActionID,
+			TurnID:             "turn-1",
+			Confirmed:          true,
+			ConfirmedAt:        observation.ProductTranscript[0].At,
+			Disposition:        probe.DispositionCancelled,
+			OutcomeReason:      "correction interrupted the original action after the draft write; preserved draft state was recorded",
+			EvidenceRefs:       []string{"filesystem-checkpoints.jsonl", "tool-observations.jsonl", "transcripts/product.jsonl"},
+			CheckpointIDs:      []string{"checkpoint-original"},
+			ToolObservationIDs: []string{observation.ToolObservations[0].ID},
+		},
+		{
+			ActionID:           probe.FamilyBReplacementActionID,
+			TurnID:             "turn-2",
+			Confirmed:          true,
+			ConfirmedAt:        observation.ProductTranscript[1].At,
+			Disposition:        probe.DispositionCompleted,
+			EvidenceRefs:       []string{"filesystem-checkpoints.jsonl", "tool-observations.jsonl", "transcripts/product.jsonl"},
+			CheckpointIDs:      []string{"checkpoint-replacement"},
+			ToolObservationIDs: []string{observation.ToolObservations[1].ID},
+		},
+	}
+	process := &probe.ProcessFacts{
+		PID:                result.PID,
+		ExitCode:           result.ExitCode,
+		ExitClassification: "normal",
+		ChildWaited:        result.ChildWaited,
+		InputClosed:        result.InputClosed,
+		OutputClosed:       result.StdoutClosed && result.StderrClosed,
+		StartedAt:          0,
+		EndedAt:            result.Duration,
+	}
+	correction.Process = process
+	mechanical, err := probe.EvaluateCustomerSimulationCorrection(
+		scenario,
+		actionResults,
+		checkpointCopy,
+		observation.ToolObservations,
+		observation.ProductTranscript,
+		correction,
+	)
+	if err != nil {
+		t.Fatalf("Family B mechanical evaluation: %v", err)
+	}
+	if !mechanical.Pass || len(mechanical.Findings) != 0 {
+		t.Fatalf("Family B mechanical verdict = %+v, want pass without findings", mechanical)
+	}
 }

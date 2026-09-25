@@ -68,7 +68,7 @@ func TestOpenReplayRejectsPCMHashCorruption(t *testing.T) {
 		}
 		if event.Kind == "audio" {
 			event.PCMHash = "0000000000000000000000000000000000000000000000000000000000000000"
-			lines[index], _ = json.Marshal(event)
+			lines[index] = marshalEventForTest(t, event)
 			break
 		}
 	}
@@ -105,7 +105,7 @@ func TestOpenReplayRejectsTimestampCorruption(t *testing.T) {
 		t.Fatal(err)
 	}
 	event.Timestamp = time.Unix(999, 0).UTC().Format(time.RFC3339Nano)
-	lines[1], _ = json.Marshal(event)
+	lines[1] = marshalEventForTest(t, event)
 	writeTimeline(t, directory, lines)
 	if _, err := OpenReplay(directory); !errors.Is(err, ErrIncomplete) {
 		t.Fatalf("corrupt timestamp error = %v, want ErrIncomplete", err)
@@ -131,7 +131,7 @@ func TestOpenReplayRejectsMissingOrUncleanTerminal(t *testing.T) {
 					t.Fatalf("decode terminal: %v", err)
 				}
 				test.edit(&event)
-				lines[len(lines)-1], _ = json.Marshal(event)
+				lines[len(lines)-1] = marshalEventForTest(t, event)
 			}
 			writeTimeline(t, directory, lines)
 			if _, err := OpenReplay(directory); !errors.Is(err, ErrIncomplete) {
@@ -265,4 +265,13 @@ func splitLines(data []byte) [][]byte {
 		lines = append(lines, data[start:])
 	}
 	return lines
+}
+
+func marshalEventForTest(t *testing.T, event Event) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("encode timeline event: %v", err)
+	}
+	return encoded
 }

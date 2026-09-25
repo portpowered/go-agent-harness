@@ -29,44 +29,39 @@ func NewDuplexDeviceSourceSinkWithFormat(registry DeviceRegistry, inputID Device
 	}
 	input, output, err := opener.OpenDuplexWithFormat(resolvedInput, inputFormat, resolvedOutput, outputFormat)
 	if err != nil {
-		if input != nil {
-			_ = input.Close()
-		}
-		if output != nil {
-			_ = output.Close()
-		}
-		return nil, nil, err
+		return nil, nil, withCleanupError(err, closeOpenedPair(input, output))
 	}
 	if input == nil || output == nil {
-		if input != nil {
-			_ = input.Close()
-		}
-		if output != nil {
-			_ = output.Close()
-		}
-		return nil, nil, ErrNilOpenedDevice
+		return nil, nil, withCleanupError(ErrNilOpenedDevice, closeOpenedPair(input, output))
 	}
 	if err := validateDuplexOpenedDevice(input, resolvedInput, DirectionInput, inputFormat); err != nil {
-		_ = input.Close()
-		_ = output.Close()
-		return nil, nil, err
+		return nil, nil, withCleanupError(err, closeOpenedPair(input, output))
 	}
 	if err := validateDuplexOpenedDevice(output, resolvedOutput, DirectionOutput, outputFormat); err != nil {
-		_ = input.Close()
-		_ = output.Close()
-		return nil, nil, err
+		return nil, nil, withCleanupError(err, closeOpenedPair(input, output))
 	}
 	source, err := newDeviceSourceFromOpened(input, resolvedInput, inputFormat)
 	if err != nil {
-		_ = output.Close()
-		return nil, nil, err
+		return nil, nil, withCleanupError(err, output.Close())
 	}
 	sink, err := newDeviceSinkFromOpened(output, resolvedOutput, outputFormat)
 	if err != nil {
-		_ = source.Close()
-		return nil, nil, err
+		return nil, nil, withCleanupError(err, source.Close())
 	}
 	return source, sink, nil
+}
+
+// closeOpenedPair releases whichever duplex handles were acquired before a
+// failed open and reports every release failure.
+func closeOpenedPair(input, output OpenedDevice) error {
+	var err error
+	if input != nil {
+		joinCleanupError(&err, input.Close())
+	}
+	if output != nil {
+		joinCleanupError(&err, output.Close())
+	}
+	return err
 }
 
 func validateDuplexOpenedDevice(handle OpenedDevice, id DeviceID, direction Direction, format audio.DeviceFormat) error {
@@ -142,7 +137,7 @@ func acquireDeviceWithFormat(registry DeviceRegistry, id DeviceID, direction Dir
 	}
 	if err != nil {
 		if !nilInterface(handle) {
-			_ = handle.Close()
+			err = withCleanupError(err, handle.Close())
 		}
 		return nil, err
 	}
@@ -150,15 +145,23 @@ func acquireDeviceWithFormat(registry DeviceRegistry, id DeviceID, direction Dir
 		return nil, &DeviceRegistryError{ID: id, Direction: direction, Err: ErrNilOpenedDevice}
 	}
 	if got, ok := openedDeviceDirection(handle); ok && got != direction {
-		_ = handle.Close()
-		return nil, &DeviceDirectionError{ID: id, Direction: direction, Want: direction, Got: got, Kind: ErrDeviceDirectionMismatch}
+		return nil, withCleanupError(&DeviceDirectionError{ID: id, Direction: direction, Want: direction, Got: got, Kind: ErrDeviceDirectionMismatch}, handle.Close())
 	}
 	if provider, ok := handle.(DeviceFormatProvider); ok {
 		actual := provider.DeviceFormat()
 		if !actual.Equal(format) {
-			_ = handle.Close()
-			return nil, &DeviceFormatError{ID: id, Direction: direction, Requested: format, Available: []audio.DeviceFormat{actual}}
+			return nil, withCleanupError(&DeviceFormatError{ID: id, Direction: direction, Requested: format, Available: []audio.DeviceFormat{actual}}, handle.Close())
 		}
 	}
 	return handle, nil
+}
+
+// constantDevice builds a device descriptor from compile-time constant
+// identifiers. Invalid constants are a programming error, not a runtime state.
+func constantDevice(backend, nativeID, name string, direction Direction) Device {
+	device, err := NewDevice(backend, nativeID, name, direction)
+	if err != nil {
+		panic(fmt.Sprintf("devices: invalid constant device %s/%s: %v", backend, nativeID, err))
+	}
+	return device
 }

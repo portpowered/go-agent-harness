@@ -151,14 +151,7 @@ func TestConfigAddLocalLeadingTildeWritesBelowHome(t *testing.T) {
 	workingDir := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get working directory: %v", err)
-	}
-	if err := os.Chdir(workingDir); err != nil {
-		t.Fatalf("chdir to test working directory: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(originalDir) })
+	t.Chdir(workingDir)
 
 	server := newProbeServer(t, map[string]int{"/models": 200})
 	defer server.Close()
@@ -192,14 +185,7 @@ func TestConfigDirResolutionFailurePrecedesConfigSideEffects(t *testing.T) {
 	root.SetErr(&stderr)
 	root.SetArgs([]string{"-C", "~/x", "config", "add-local", "--base-url", "http://127.0.0.1:1", "--model", "should-not-write"})
 
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get working directory: %v", err)
-	}
-	if err := os.Chdir(workingDir); err != nil {
-		t.Fatalf("chdir to test working directory: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(originalDir) })
+	t.Chdir(workingDir)
 
 	if err := root.ExecuteContext(context.Background()); err == nil {
 		t.Fatal("expected config-dir resolution error")

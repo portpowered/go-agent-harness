@@ -80,7 +80,11 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = seed.Close() }()
+	defer func() {
+		if err := seed.Close(); err != nil {
+			t.Errorf("close seed sink: %v", err)
+		}
+	}()
 	inputFrame := serviceProbeVoicedFrame()
 	for i := 0; i < 10; i++ {
 		if err := seed.WriteFrame(context.Background(), inputFrame); err != nil {

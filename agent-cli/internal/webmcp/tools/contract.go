@@ -214,7 +214,7 @@ func AgentLoopDefinitions() []messages.ToolDefinition {
 	definitions := StableToolDefinitions()
 	result := make([]messages.ToolDefinition, 0, len(definitions))
 	for _, definition := range definitions {
-		properties, _ := definition.Parameters["properties"].(map[string]any)
+		properties := optionalAs[map[string]any](definition.Parameters["properties"])
 		ordered := schemaOrder(definition.Name)
 		required := requiredNames(definition.Parameters)
 		for name := range properties {
@@ -224,9 +224,9 @@ func AgentLoopDefinitions() []messages.ToolDefinition {
 		}
 		parameters := make([]messages.ToolParameter, 0, len(ordered))
 		for _, name := range ordered {
-			property, _ := properties[name].(map[string]any)
-			valueType, _ := property["type"].(string)
-			description, _ := property["description"].(string)
+			property := optionalAs[map[string]any](properties[name])
+			valueType := optionalAs[string](property["type"])
+			description := optionalAs[string](property["description"])
 			parameters = append(parameters, messages.ToolParameter{
 				Name:        name,
 				Type:        valueType,
@@ -259,7 +259,7 @@ func schemaOrder(name string) []string {
 
 func requiredNames(schema map[string]any) map[string]bool {
 	result := make(map[string]bool)
-	values, _ := schema["required"].([]string)
+	values := optionalAs[[]string](schema["required"])
 	for _, value := range values {
 		result[value] = true
 	}

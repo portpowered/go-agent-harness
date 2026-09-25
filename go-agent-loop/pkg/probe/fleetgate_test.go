@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const gateSourceA = "run-a.jsonl"
+
 func gateArtifact(name string, lines ...string) FleetArtifact {
 	return FleetArtifact{Name: name, Reader: strings.NewReader(strings.Join(lines, "\n") + "\n")}
 }
@@ -34,7 +36,7 @@ const gateSummaryLine = `{"total":1,"passed":1,"failed":0,"status":"pass"}`
 
 func TestEvaluateFleetGateAllPass(t *testing.T) {
 	verdict, err := EvaluateFleetGate([]FleetArtifact{
-		gateArtifact("run-a.jsonl", gateResultLine("s2s-v1", true, "disconnect"), gateSummaryLine),
+		gateArtifact(gateSourceA, gateResultLine("s2s-v1", true, "disconnect"), gateSummaryLine),
 	})
 	if err != nil {
 		t.Fatalf("EvaluateFleetGate failed: %v", err)
@@ -45,7 +47,7 @@ func TestEvaluateFleetGateAllPass(t *testing.T) {
 	if verdict.Total != 1 || verdict.Passed != 1 || verdict.Failed != 0 || verdict.Stuck != 0 {
 		t.Fatalf("unexpected counts: %+v", verdict)
 	}
-	if len(verdict.Sources) != 1 || verdict.Sources[0].Source != "run-a.jsonl" || verdict.Sources[0].Status != StatusPass {
+	if len(verdict.Sources) != 1 || verdict.Sources[0].Source != gateSourceA || verdict.Sources[0].Status != StatusPass {
 		t.Fatalf("unexpected sources: %+v", verdict.Sources)
 	}
 	if len(verdict.Failing) != 0 {
@@ -60,7 +62,7 @@ func TestEvaluateFleetGateMixedSourcesFail(t *testing.T) {
 			gateResultLine("s2s-v3", false, "error:authentication"),
 			gateSummaryLine,
 		),
-		gateArtifact("run-a.jsonl",
+		gateArtifact(gateSourceA,
 			gateResultLine("s2s-v1", true, "disconnect"),
 			gateResultLine("s2s-v4", false, "disconnect"),
 			gateSummaryLine,
@@ -76,7 +78,7 @@ func TestEvaluateFleetGateMixedSourcesFail(t *testing.T) {
 		t.Fatalf("unexpected counts: %+v", verdict)
 	}
 	if len(verdict.Sources) != 2 ||
-		verdict.Sources[0].Source != "run-a.jsonl" || verdict.Sources[0].Status != StatusFail ||
+		verdict.Sources[0].Source != gateSourceA || verdict.Sources[0].Status != StatusFail ||
 		verdict.Sources[1].Source != "run-b.jsonl" || verdict.Sources[1].Status != StatusFail {
 		t.Fatalf("sources not sorted by name or wrong status: %+v", verdict.Sources)
 	}
@@ -88,7 +90,7 @@ func TestEvaluateFleetGateMixedSourcesFail(t *testing.T) {
 
 func TestEvaluateFleetGateStuckOnlyMarkerCountsAsFailure(t *testing.T) {
 	verdict, err := EvaluateFleetGate([]FleetArtifact{
-		gateArtifact("run-a.jsonl", gateResultLine("s2s-stuck", true, StuckTerminalReason)),
+		gateArtifact(gateSourceA, gateResultLine("s2s-stuck", true, StuckTerminalReason)),
 	})
 	if err != nil {
 		t.Fatalf("EvaluateFleetGate failed: %v", err)
@@ -117,7 +119,7 @@ func TestEvaluateFleetGateNoArtifactsIsTypedError(t *testing.T) {
 
 func TestEvaluateFleetGateEmptySourceIsReported(t *testing.T) {
 	_, err := EvaluateFleetGate([]FleetArtifact{
-		gateArtifact("run-a.jsonl"),
+		gateArtifact(gateSourceA),
 		gateArtifact("run-b.jsonl", gateResultLine("s2s-v1", true, "disconnect")),
 	})
 	var gateErr *FleetGateError
@@ -127,10 +129,10 @@ func TestEvaluateFleetGateEmptySourceIsReported(t *testing.T) {
 	if !errors.Is(gateErr, ErrEmptyFleetSource) {
 		t.Fatalf("err = %v, want ErrEmptyFleetSource", err)
 	}
-	if gateErr.Source != "run-a.jsonl" || gateErr.Line != 0 {
+	if gateErr.Source != gateSourceA || gateErr.Line != 0 {
 		t.Fatalf("empty-source error must name the source without a line: %+v", gateErr)
 	}
-	if !strings.Contains(gateErr.Error(), "run-a.jsonl") {
+	if !strings.Contains(gateErr.Error(), gateSourceA) {
 		t.Fatalf("error message must carry file context: %q", gateErr.Error())
 	}
 }
@@ -145,12 +147,12 @@ func TestEvaluateFleetGateMalformedLineNamesFileAndLine(t *testing.T) {
 		{name: "missing name", line: `{"pass": true}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := EvaluateFleetGate([]FleetArtifact{gateArtifact("run-a.jsonl", tt.line)})
+			_, err := EvaluateFleetGate([]FleetArtifact{gateArtifact(gateSourceA, tt.line)})
 			var gateErr *FleetGateError
 			if !errors.As(err, &gateErr) {
 				t.Fatalf("err = %v, want *FleetGateError", err)
 			}
-			if gateErr.Source != "run-a.jsonl" || gateErr.Line != 1 {
+			if gateErr.Source != gateSourceA || gateErr.Line != 1 {
 				t.Fatalf("error must carry file and line context: %+v", gateErr)
 			}
 			if !strings.Contains(gateErr.Error(), "run-a.jsonl:1") {
@@ -163,7 +165,7 @@ func TestEvaluateFleetGateMalformedLineNamesFileAndLine(t *testing.T) {
 func TestEvaluateFleetGateMalformedLineNumberCountsEveryLine(t *testing.T) {
 	_, err := EvaluateFleetGate([]FleetArtifact{
 		gateArtifact(
-			"run-a.jsonl",
+			gateSourceA,
 			gateResultLine("s2s-v1", true, "disconnect"),
 			"",
 			`not json at all`,
@@ -185,7 +187,7 @@ func TestEvaluateFleetGateDeterministicJSON(t *testing.T) {
 				gateResultLine("s2s-v3", false, "disconnect"),
 				gateResultLine("s2s-v1", true, "synthetic"),
 			),
-			gateArtifact("run-a.jsonl",
+			gateArtifact(gateSourceA,
 				gateResultLine("s2s-v9", false, "disconnect"),
 				gateResultLine("s2s-v2", true, "synthetic"),
 				gateResultLine("s2s-v2", true, "synthetic"),
@@ -218,8 +220,8 @@ func TestEvaluateFleetGateDeterministicJSON(t *testing.T) {
 
 func TestEvaluateFleetGateMergesDuplicateSourceNames(t *testing.T) {
 	verdict, err := EvaluateFleetGate([]FleetArtifact{
-		gateArtifact("run-a.jsonl", gateResultLine("s2s-v1", true, "disconnect")),
-		gateArtifact("run-a.jsonl", gateResultLine("s2s-v2", false, "disconnect")),
+		gateArtifact(gateSourceA, gateResultLine("s2s-v1", true, "disconnect")),
+		gateArtifact(gateSourceA, gateResultLine("s2s-v2", false, "disconnect")),
 	})
 	if err != nil {
 		t.Fatalf("EvaluateFleetGate failed: %v", err)

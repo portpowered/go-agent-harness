@@ -16,8 +16,8 @@ import (
 
 func TestLoadReadsExactFrames(t *testing.T) {
 	want := patternSamples()
-	root, _ := writeCorpus(t, "fixture", wavio.Rate16kHz, want)
-	source := load(t, root, "fixture")
+	root, _ := writeCorpus(t, fixtureID, wavio.Rate16kHz, want)
+	source := load(t, root, fixtureID)
 	if source.SampleRate != SampleRate || source.Channels != Channels || len(source.samples) != len(want) || slices.IndexFunc(source.samples, func(v int16) bool { return v != 0 }) < 0 {
 		t.Fatalf("source contract = %#v", source)
 	}
@@ -27,8 +27,8 @@ func TestLoadReadsExactFrames(t *testing.T) {
 		t.Fatalf("Load() = %#v, %v", source, err)
 	}
 	want24 := []int16{0, 3000, -6000, 12000}
-	root24, _ := writeCorpus(t, "fixture", wavio.Rate24kHz, want24)
-	normalized := load(t, root24, "fixture")
+	root24, _ := writeCorpus(t, fixtureID, wavio.Rate24kHz, want24)
+	normalized := load(t, root24, fixtureID)
 	want24, err = wavio.Resample(want24, wavio.Rate24kHz, SampleRate)
 	if err != nil {
 		t.Fatal(err)
@@ -40,12 +40,12 @@ func TestLoadReadsExactFrames(t *testing.T) {
 func TestS4ErrorPaths(t *testing.T) {
 	for _, name := range []string{"unknown ID", "missing file", "unmanifested file", "hash mismatch", "malformed manifest", "invalid audio"} {
 		t.Run(name, func(t *testing.T) {
-			root, want := writeCorpus(t, "fixture", wavio.Rate16kHz, patternSamples())
-			assertFrames(t, load(t, root, "fixture"), want)
+			root, want := writeCorpus(t, fixtureID, wavio.Rate16kHz, patternSamples())
+			assertFrames(t, load(t, root, fixtureID), want)
 			mutateS4(t, name, root)
 			id := map[bool]string{name == "unknown ID": "does-not-exist"}[true]
 			if id == "" {
-				id = "fixture"
+				id = fixtureID
 			}
 			source, err := NewLoader(root).Load(id)
 			if source != nil || err == nil {
@@ -58,19 +58,19 @@ func TestS4ErrorPaths(t *testing.T) {
 func TestMalformedManifestRequiredFields(t *testing.T) {
 	hash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	entry := func(id, path, digest string) []byte {
-		return mustJSON(manifest{SchemaVersion: 1, Files: []manifestEntry{{ID: id, Path: path, SHA256: digest}}})
+		return mustJSON(t, manifest{SchemaVersion: 1, Files: []manifestEntry{{ID: id, Path: path, SHA256: digest}}})
 	}
 	docs := []struct {
 		data  []byte
 		field string
 	}{
-		{[]byte("{"), "json"}, {mustJSON(manifest{SchemaVersion: 2}), "schema_version"}, {mustJSON(manifest{SchemaVersion: 1}), "files"},
-		{entry("", "fixture.wav", hash), "files[0].id"}, {entry("fixture", "../fixture.wav", hash), "files[0].path"}, {entry("fixture", "fixture.wav", "not-a-hash"), "files[0].sha256"},
+		{[]byte("{"), "json"}, {mustJSON(t, manifest{SchemaVersion: 2}), "schema_version"}, {mustJSON(t, manifest{SchemaVersion: 1}), "files"},
+		{entry("", "fixture.wav", hash), "files[0].id"}, {entry(fixtureID, "../fixture.wav", hash), "files[0].path"}, {entry(fixtureID, "fixture.wav", "not-a-hash"), "files[0].sha256"},
 	}
 	for _, doc := range docs {
 		root := t.TempDir()
 		mustOK(t, os.WriteFile(filepath.Join(root, manifestFile), doc.data, 0o600))
-		source, err := NewLoader(root).Load("fixture")
+		source, err := NewLoader(root).Load(fixtureID)
 		typed, ok := err.(*MalformedManifestError)
 		if source != nil || !ok || typed.Field != doc.field {
 			t.Fatalf("Load() = %#v, %v; want field %q", source, err, doc.field)
@@ -85,7 +85,8 @@ func mutateS4(t *testing.T, name, root string) {
 		writeWAV(t, filepath.Join(root, "extra.wav"), wavio.Rate16kHz, []int16{9})
 	case "hash mismatch":
 		path := filepath.Join(root, "fixture.wav")
-		data, _ := os.ReadFile(path)
+		data, err := os.ReadFile(path)
+		mustOK(t, err)
 		data[44]++
 		mustOK(t, os.WriteFile(path, data, 0o600))
 	case "malformed manifest":
@@ -94,7 +95,7 @@ func mutateS4(t *testing.T, name, root string) {
 		data := []byte("not a WAV")
 		digest := sha256.Sum256(data)
 		mustOK(t, os.WriteFile(filepath.Join(root, "fixture.wav"), data, 0o600))
-		writeManifest(t, root, manifest{SchemaVersion: 1, Files: []manifestEntry{{ID: "fixture", Path: "fixture.wav", SHA256: hex.EncodeToString(digest[:])}}})
+		writeManifest(t, root, manifest{SchemaVersion: 1, Files: []manifestEntry{{ID: fixtureID, Path: "fixture.wav", SHA256: hex.EncodeToString(digest[:])}}})
 	}
 }
 func checkS4Error(t *testing.T, name string, err error) {
@@ -107,11 +108,11 @@ func checkS4Error(t *testing.T, name string, err error) {
 	case *UnknownIDError:
 		check(name == "unknown ID" && e.ID == "does-not-exist")
 	case *MissingFileError:
-		check(name == "missing file" && e.ID == "fixture" && e.Path == "fixture.wav")
+		check(name == "missing file" && e.ID == fixtureID && e.Path == "fixture.wav")
 	case *UnmanifestedFileError:
 		check(name == "unmanifested file" && e.Path == "extra.wav")
 	case *HashMismatchError:
-		check(name == "hash mismatch" && e.ID == "fixture" && e.Path == "fixture.wav" && len(e.Expected) == 64 && len(e.Actual) == 64 && e.Expected != e.Actual)
+		check(name == "hash mismatch" && e.ID == fixtureID && e.Path == "fixture.wav" && len(e.Expected) == 64 && len(e.Actual) == 64 && e.Expected != e.Actual)
 	case *MalformedManifestError:
 		check(name == "malformed manifest" && e.Path == manifestFile && e.Field == "json")
 	default:
@@ -152,7 +153,7 @@ func writeCorpus(t *testing.T, id string, rate int, samples []int16) (string, []
 	return root, append([]int16(nil), samples...)
 }
 func writeManifest(t *testing.T, root string, value manifest) {
-	data := mustJSON(value)
+	data := mustJSON(t, value)
 	mustOK(t, os.WriteFile(filepath.Join(root, manifestFile), data, 0o600))
 }
 func writeWAV(t *testing.T, path string, rate int, samples []int16) []byte {
@@ -162,7 +163,8 @@ func writeWAV(t *testing.T, path string, rate int, samples []int16) []byte {
 	return data.Bytes()
 }
 func load(t *testing.T, root, id string) *Source {
-	source, _ := NewLoader(root).Load(id)
+	source, err := NewLoader(root).Load(id)
+	mustOK(t, err)
 	return source
 }
 func mustOK(t *testing.T, err error) {
@@ -170,7 +172,14 @@ func mustOK(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
-func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }
+func mustJSON(t *testing.T, value any) []byte {
+	data, err := json.Marshal(value)
+	mustOK(t, err)
+	return data
+}
+
+const fixtureID = "fixture"
+
 func patternSamples() []int16 {
 	samples := make([]int16, FrameSize+7)
 	for i := range samples {

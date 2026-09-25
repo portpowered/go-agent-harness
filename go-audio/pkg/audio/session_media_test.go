@@ -71,7 +71,7 @@ func TestSessionMediaFramesInboundPCMAndFlushesPartialFrame(t *testing.T) {
 func TestSessionMediaAt24kFramesThirtyMillisecondsAndPreservesPartialResponse(t *testing.T) {
 	media := audio.NewSessionMediaAtRate(func(context.Context, audio.PCMFrame) error { return nil }, 24000)
 	endpoints := media.Endpoints()
-	defer func() { _ = media.Close() }()
+	defer closeForTest(t, media)
 
 	complete := make([]int16, 720)
 	sample := int16(1)
@@ -108,7 +108,7 @@ func TestSessionMediaAt24kFramesThirtyMillisecondsAndPreservesPartialResponse(t 
 
 func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T) {
 	media := audio.NewSessionMediaAtRate(func(context.Context, audio.PCMFrame) error { return nil }, 24000)
-	defer func() { _ = media.Close() }()
+	defer closeForTest(t, media)
 	controlled, ok := media.Endpoints().Inbound.(audio.PlaybackControlledInbound)
 	if !ok {
 		t.Fatal("SessionMedia inbound does not expose playback control")
@@ -186,8 +186,11 @@ func TestSessionMediaServerVADDiscardsBacklogAndReturnsDeviceCursor(t *testing.T
 
 func TestSessionMediaServerVADTargetsAudibleResponseAheadOfQueuedContinuation(t *testing.T) {
 	media := audio.NewSessionMediaAtRate(func(context.Context, audio.PCMFrame) error { return nil }, 24000)
-	defer func() { _ = media.Close() }()
-	controlled := media.Endpoints().Inbound.(audio.PlaybackControlledInbound)
+	defer closeForTest(t, media)
+	controlled, ok := media.Endpoints().Inbound.(audio.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("inbound media does not expose playback control")
+	}
 	controller := &sessionMediaPlaybackController{audioEndMS: 45}
 	controlled.SetPlaybackController(controller)
 
@@ -420,7 +423,7 @@ func TestSessionMediaInboundQueuePreservesFramesBeyondLegacyLimit(t *testing.T) 
 
 func TestSessionMediaInboundBacklogLimitFailsInsteadOfDroppingPCM(t *testing.T) {
 	media := audio.NewSessionMediaAtRate(func(context.Context, audio.PCMFrame) error { return nil }, 24000)
-	defer func() { _ = media.Close() }()
+	defer closeForTest(t, media)
 	frame := make([]int16, 720)
 	for frameIndex := 0; ; frameIndex++ {
 		err := media.PushInbound(frame)
@@ -444,5 +447,13 @@ func TestSessionMediaInboundBacklogLimitFailsInsteadOfDroppingPCM(t *testing.T) 
 	}
 	if !reflect.DeepEqual(first.Samples, frame) {
 		t.Fatal("explicit backlog failure changed already retained PCM")
+	}
+}
+
+// closeForTest closes a test-owned resource and reports an unexpected failure.
+func closeForTest(t testing.TB, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("Close() error = %v", err)
 	}
 }

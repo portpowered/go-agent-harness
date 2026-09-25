@@ -25,7 +25,10 @@ func (m *mockInferencer) Infer(ctx context.Context, req messages.InferenceReques
 
 func (m *mockInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	ch := make(chan messages.StreamMessage, 8)
-	result, _ := m.Infer(ctx, req)
+	result, err := m.Infer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
 	text := result.Message.TextContent()
 	ch <- messages.StreamMessage{Type: messages.StreamTypeTextStart, ActorProvidedIndex: 0, Value: messages.NewTextStartValue()}
 	if text != "" {
@@ -179,7 +182,10 @@ func (r *recordingInferencer) Infer(ctx context.Context, req messages.InferenceR
 }
 
 func (r *recordingInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
-	result, _ := r.Infer(ctx, req)
+	result, err := r.Infer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
 	ch := make(chan messages.StreamMessage, 8)
 	text := result.Message.TextContent()
 	ch <- messages.StreamMessage{Type: messages.StreamTypeTextStart, ActorProvidedIndex: 0, Value: messages.NewTextStartValue()}

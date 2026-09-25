@@ -2,7 +2,6 @@ package sysinfo
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -18,10 +17,11 @@ type Info struct {
 	Time     time.Time
 }
 
-// Collect gathers current system information. model and provider describe the active
-// model configuration and are included when non-empty.
-func Collect(model, provider string) Info {
-	cwd, _ := os.Getwd()
+// Collect gathers current system information. cwd is the working directory
+// resolved by the host boundary; an empty value is omitted from the formatted
+// section. model and provider describe the active model configuration and are
+// included when non-empty.
+func Collect(cwd, model, provider string) Info {
 	return Info{
 		OS:       runtime.GOOS,
 		Arch:     runtime.GOARCH,

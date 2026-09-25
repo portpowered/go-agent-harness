@@ -118,7 +118,7 @@ func TestConnectSession_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// Verify dial URL and auth header.
 	if dialer.capturedURL != "wss://mock.example.com/v1/realtime" {
@@ -223,7 +223,7 @@ func TestConnectSession_CustomConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// Parse the session.update message and verify all config fields.
 	msgs := waitForGrokClientMessages(t, conn, 1, "custom session.update")
@@ -280,7 +280,7 @@ func TestConnectSession_DefaultBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if dialer.capturedURL != "https://api.x.ai/v1/realtime" {
 		t.Errorf("default URL: got %q, want %q", dialer.capturedURL, "https://api.x.ai/v1/realtime")

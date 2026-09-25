@@ -32,13 +32,13 @@ func TestStatefulBrokerKeepsExactSelectionUsableWhenActivationFails(t *testing.T
 			testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
 		)},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	selected, err := broker.SelectWithOptions(context.Background(), webmcp.TargetSelector{
 		BrowserID: candidate.ID,
@@ -90,12 +90,12 @@ func TestStatefulBrokerActivateReportsLiveOperationFailureWithoutReconnect(t *te
 		ActivateError: errors.New("activation operation rejected"),
 		Targets:       []testkit.TargetConfig{testkit.NewTargetConfig(target)},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	err := broker.Activate(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID})
 	if err == nil {
@@ -257,7 +257,7 @@ func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
 			)},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
@@ -265,7 +265,7 @@ func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
 		IDs:        ids,
 		Clock:      clock,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-navigation"}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open fixture browser: %v", err)
 	}
-	session := value.(*testkit.ScriptedBrowserHandle).TargetSession("tab-navigation")
+	session := mustAs[*testkit.ScriptedBrowserHandle](t, value).TargetSession("tab-navigation")
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -345,7 +345,7 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 			)},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:           runtime,
@@ -354,7 +354,7 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 		Clock:             clock,
 		InvocationTimeout: time.Minute,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-storm"}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestStatefulBrokerNavigationStormRetiresRefsAndLateResponses(t *testing.T) 
 	if err != nil {
 		t.Fatalf("open fixture browser: %v", err)
 	}
-	session := value.(*testkit.ScriptedBrowserHandle).TargetSession("tab-storm")
+	session := mustAs[*testkit.ScriptedBrowserHandle](t, value).TargetSession("tab-storm")
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -465,7 +465,7 @@ func TestStatefulBrokerRetiresRefsWhenSelectionSwitches(t *testing.T) {
 		},
 	)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select tab-a: %v", err)
 	}

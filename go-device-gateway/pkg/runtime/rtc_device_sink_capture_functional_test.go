@@ -58,13 +58,13 @@ func TestRTCDeviceSinkCapturedFirstTurnPreservesPacedVirtualPlayback(t *testing.
 	if !ok {
 		t.Fatalf("loopback observer = %T, want *audio.VirtualStream", openedObserver)
 	}
-	defer func() { _ = observer.Close() }()
+	defer closeForTest(t, "observer", observer)
 
 	sink, err := NewRTCDeviceSinkAtRate(registry, "virtual:output", wavio.Rate24kHz)
 	if err != nil {
 		t.Fatalf("open 24 kHz provider -> 16 kHz device sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 
 	pumpErr := make(chan error, 1)
 	go func() {

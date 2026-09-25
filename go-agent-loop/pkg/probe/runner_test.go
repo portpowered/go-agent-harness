@@ -24,9 +24,21 @@ func passingScenario() Scenario {
 	}
 }
 
+const failingScenarioID = "failing"
+
+// mustAs asserts a decoded JSON value's dynamic type.
+func mustAs[T any](t *testing.T, value any) T {
+	t.Helper()
+	typed, ok := value.(T)
+	if !ok {
+		t.Fatalf("value %#v is %T, want %T", value, value, typed)
+	}
+	return typed
+}
+
 func failingScenario() Scenario {
 	return Scenario{
-		ID: "failing",
+		ID: failingScenarioID,
 		Steps: []Step{
 			{Type: StepSendText, Kind: StepSendText, Text: "hi"},
 			{Type: StepAdvanceTo, Kind: StepAdvanceTo, At: 2, Time: 2},
@@ -129,7 +141,7 @@ func TestRunnerEmitsObservedTerminalTriple(t *testing.T) {
 func TestRunnerSummaryMixedAndEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	runner := Runner{Exec: func(ctx context.Context, s Scenario) (ObservationSnapshot, error) {
-		if s.ID == "failing" {
+		if s.ID == failingScenarioID {
 			return ObservationSnapshot{Transcript: "hi", FrameCount: 3}, nil
 		}
 		return ObservationSnapshot{Transcript: "hello", ObservedTick: 5, HasObservedTick: true, FrameCount: 3}, nil
@@ -213,7 +225,7 @@ func TestRunnerSummaryCountsStuckSeparatelyFromFailures(t *testing.T) {
 func TestRunnerFailingExpectationDetailAndIsolation(t *testing.T) {
 	var buf bytes.Buffer
 	runner := Runner{Exec: func(ctx context.Context, s Scenario) (ObservationSnapshot, error) {
-		if s.ID == "failing" {
+		if s.ID == failingScenarioID {
 			return ObservationSnapshot{Transcript: "hi", FrameCount: 3}, nil
 		}
 		return ObservationSnapshot{Transcript: "hello", ObservedTick: 5, HasObservedTick: true, FrameCount: 3}, nil
@@ -227,13 +239,13 @@ func TestRunnerFailingExpectationDetailAndIsolation(t *testing.T) {
 	}
 	lines := decodeLines(t, buf.String())
 	first := lines[0]
-	if first["name"] != "failing" || first["pass"] != false {
+	if first["name"] != failingScenarioID || first["pass"] != false {
 		t.Fatalf("first result wrong: %v", first)
 	}
-	expectations := first["expectations"].([]any)
+	expectations := mustAs[[]any](t, first["expectations"])
 	failedCount := 0
 	for _, raw := range expectations {
-		outcome := raw.(map[string]any)
+		outcome := mustAs[map[string]any](t, raw)
 		if outcome["passed"] == true {
 			continue
 		}
@@ -350,12 +362,12 @@ func TestRunnerMalformedAndAbortedScenarios(t *testing.T) {
 		if result["pass"] != false {
 			t.Fatalf("line %d should be failed: %v", index, result)
 		}
-		if detail, _ := result["error"].(string); detail == "" {
+		if detail, ok := result["error"].(string); !ok || detail == "" {
 			t.Fatalf("line %d missing failure detail: %v", index, result)
 		}
 		assertNoStuckMarker(t, result)
 	}
-	if !strings.Contains(lines[3]["error"].(string), "panicked") {
+	if !strings.Contains(mustAs[string](t, lines[3]["error"]), "panicked") {
 		t.Fatalf("panic not reported as failure detail: %v", lines[3])
 	}
 }

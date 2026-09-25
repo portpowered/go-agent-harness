@@ -90,7 +90,7 @@ func buildObservabilityReplayFixture(t *testing.T) string {
 	appendWritten := false
 	for _, record := range capture.Records {
 		switch record.Type {
-		case "input_audio_buffer.append":
+		case rtEventInputAudioAppend:
 			if appendWritten {
 				continue
 			}
@@ -99,7 +99,7 @@ func buildObservabilityReplayFixture(t *testing.T) string {
 			}
 			record.Payload = observabilityAudioAppendPayload(t, audioTurn+1)
 			appendWritten = true
-		case "response.created":
+		case rtEventResponseCreated:
 			responseTurn++
 			if responseTurn > observabilityTurnCount {
 				t.Fatalf("observability fixture has more responses than expected: %d", responseTurn)
@@ -113,7 +113,7 @@ func buildObservabilityReplayFixture(t *testing.T) string {
 		}
 
 		records = append(records, record)
-		if record.Type == "input_audio_buffer.commit" {
+		if record.Type == rtEventInputAudioCommit {
 			audioTurn++
 			appendWritten = false
 		}
@@ -145,7 +145,7 @@ func buildObservabilityReplayFixture(t *testing.T) string {
 func observabilityAudioAppendPayload(t *testing.T, turn int) json.RawMessage {
 	t.Helper()
 	return observabilityJSONPayload(t, map[string]any{
-		"type":  "input_audio_buffer.append",
+		"type":  rtEventInputAudioAppend,
 		"audio": base64.StdEncoding.EncodeToString(observabilityReferenceUtterance(t, turn)),
 	})
 }
@@ -154,10 +154,10 @@ func observabilityOutputAudioRecord(t *testing.T, turn int) gwtesting.CapturedSe
 	t.Helper()
 	return gwtesting.CapturedSessionEvent{
 		Direction:   gwtesting.DirectionServerToClient,
-		Type:        "response.output_audio.delta",
+		Type:        rtEventOutputAudioDelta,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload: observabilityJSONPayload(t, map[string]any{
-			"type":        "response.output_audio.delta",
+			"type":        rtEventOutputAudioDelta,
 			"response_id": fmt.Sprintf("resp_turn%d", turn),
 			"delta":       base64.StdEncoding.EncodeToString(observabilityReferenceUtterance(t, turn)),
 		}),
@@ -316,53 +316,68 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 		limit = len(wantReplies)
 	}
 	for index := 0; index < limit; index++ {
-		turn := index + 1
-		entry := entries[index]
-		if entry.TurnIndex != turn {
-			violations = append(violations, fmt.Errorf("turn %d: session log turn_index = %d, want %d", turn, entry.TurnIndex, turn))
-		}
-		if index < len(wantInputs) && entry.Input.Text != wantInputs[index] {
-			violations = append(violations, fmt.Errorf("turn %d: input transcript = %q, want %q", turn, entry.Input.Text, wantInputs[index]))
-		}
-		if !entry.Input.Committed {
-			violations = append(violations, fmt.Errorf("turn %d: session log records no committed user input", turn))
-		}
-		if len(entry.Input.AudioSegments) == 0 {
-			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded input audio segments", turn))
-		} else if index < len(referenceUtterances) {
-			inputAudio, readErr := readListedRecordingRange(root, entry.Input.AudioSegments, entry.Input.AudioOffsetBytes, entry.Input.AudioBytes)
-			if readErr != nil {
-				violations = append(violations, fmt.Errorf("turn %d: input audio: %w", turn, readErr))
-			} else if !bytes.Equal(inputAudio, referenceUtterances[index]) {
-				violations = append(violations, fmt.Errorf("turn %d: recorded utterance audio (%d bytes) does not match the expected spoken utterance (%d bytes)", turn, len(inputAudio), len(referenceUtterances[index])))
-			}
-		}
-		if entry.Response.Text != wantReplies[index] {
-			violations = append(violations, fmt.Errorf("turn %d: session log reply = %q, want %q", turn, entry.Response.Text, wantReplies[index]))
-		}
-		if !entry.Response.Complete {
-			violations = append(violations, fmt.Errorf("turn %d: session log marks the reply incomplete", turn))
-		}
-		if len(entry.Response.AudioSegments) == 0 {
-			violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded output audio segments", turn))
-			continue
-		}
-		outputAudio, readErr := readListedRecordingRange(root, entry.Response.AudioSegments, entry.Response.AudioOffsetBytes, entry.Response.AudioBytes)
-		if readErr != nil {
-			violations = append(violations, fmt.Errorf("turn %d: output audio: %w", turn, readErr))
-			continue
-		}
-		if len(outputAudio) == 0 {
-			violations = append(violations, fmt.Errorf("turn %d: no recorded output audio found; the reply was not captured", turn))
-		} else if rms := pcm16LERMS(outputAudio); rms <= observabilityRMSThreshold {
-			violations = append(violations, fmt.Errorf("turn %d: recorded reply RMS = %.1f, want > %.1f (silence threshold)", turn, rms, observabilityRMSThreshold))
-		}
+		violations = append(violations, checkObservabilityTurn(root, index, entries[index], wantInputs, wantReplies, referenceUtterances)...)
 	}
 
 	if manifestErr := verifyManifestHashes(root); manifestErr != nil {
 		violations = append(violations, fmt.Errorf("recording manifest: %w", manifestErr))
 	}
 	return errors.Join(violations...)
+}
+
+// checkObservabilityTurn verifies one session-log turn against the driven
+// input transcript, spoken utterance audio, and scripted reply.
+func checkObservabilityTurn(root string, index int, entry observabilityLogEntry, wantInputs, wantReplies []string, referenceUtterances [][]byte) []error {
+	turn := index + 1
+	var violations []error
+	if entry.TurnIndex != turn {
+		violations = append(violations, fmt.Errorf("turn %d: session log turn_index = %d, want %d", turn, entry.TurnIndex, turn))
+	}
+	if index < len(wantInputs) && entry.Input.Text != wantInputs[index] {
+		violations = append(violations, fmt.Errorf("turn %d: input transcript = %q, want %q", turn, entry.Input.Text, wantInputs[index]))
+	}
+	if !entry.Input.Committed {
+		violations = append(violations, fmt.Errorf("turn %d: session log records no committed user input", turn))
+	}
+	if len(entry.Input.AudioSegments) == 0 {
+		violations = append(violations, fmt.Errorf("turn %d: session log lists no recorded input audio segments", turn))
+	} else if index < len(referenceUtterances) {
+		inputAudio, readErr := readListedRecordingRange(root, entry.Input.AudioSegments, entry.Input.AudioOffsetBytes, entry.Input.AudioBytes)
+		if readErr != nil {
+			violations = append(violations, fmt.Errorf("turn %d: input audio: %w", turn, readErr))
+		} else if !bytes.Equal(inputAudio, referenceUtterances[index]) {
+			violations = append(violations, fmt.Errorf("turn %d: recorded utterance audio (%d bytes) does not match the expected spoken utterance (%d bytes)", turn, len(inputAudio), len(referenceUtterances[index])))
+		}
+	}
+	if entry.Response.Text != wantReplies[index] {
+		violations = append(violations, fmt.Errorf("turn %d: session log reply = %q, want %q", turn, entry.Response.Text, wantReplies[index]))
+	}
+	if !entry.Response.Complete {
+		violations = append(violations, fmt.Errorf("turn %d: session log marks the reply incomplete", turn))
+	}
+	if err := checkObservabilityReplyAudio(root, entry); err != nil {
+		violations = append(violations, fmt.Errorf("turn %d: %w", turn, err))
+	}
+	return violations
+}
+
+// checkObservabilityReplyAudio requires the turn's recorded reply audio to be
+// listed, readable, and audible.
+func checkObservabilityReplyAudio(root string, entry observabilityLogEntry) error {
+	if len(entry.Response.AudioSegments) == 0 {
+		return errors.New("session log lists no recorded output audio segments")
+	}
+	outputAudio, err := readListedRecordingRange(root, entry.Response.AudioSegments, entry.Response.AudioOffsetBytes, entry.Response.AudioBytes)
+	if err != nil {
+		return fmt.Errorf("output audio: %w", err)
+	}
+	if len(outputAudio) == 0 {
+		return errors.New("no recorded output audio found; the reply was not captured")
+	}
+	if rms := pcm16LERMS(outputAudio); rms <= observabilityRMSThreshold {
+		return fmt.Errorf("recorded reply RMS = %.1f, want > %.1f (silence threshold)", rms, observabilityRMSThreshold)
+	}
+	return nil
 }
 
 // readListedRecordingRange joins the listed recording segments and selects the

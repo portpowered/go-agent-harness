@@ -22,6 +22,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -56,11 +57,9 @@ func buildSpokenReadImageFixture(t *testing.T, committedPath string, wavPath str
 	records := make([]gatewaytesting.CapturedSessionEvent, 0, len(capture.Records)+len(frames)+2)
 	seedReplaced := false
 	seedResponseCreateSkipped := false
-	responseCreated := 0
-	responseDone := 0
-	continuationStarted := false
+	rewriter := &failedContinuationRewriter{}
 	for _, record := range capture.Records {
-		if record.Direction == gatewaytesting.DirectionServerToClient && record.Type == "session.closed" {
+		if record.Direction == gatewaytesting.DirectionServerToClient && record.Type == rtEventSessionClosed {
 			// The finite audio session owns its completion boundary. Leaving a
 			// provider close in the capture would let a close-only path mask a
 			// failed or empty continuation.
@@ -69,23 +68,10 @@ func buildSpokenReadImageFixture(t *testing.T, committedPath string, wavPath str
 
 		if !seedReplaced && isReadImageSeedMessage(record) {
 			seedReplaced = true
-			for _, frame := range frames {
-				records = append(records, readImageSpokenClientEvent(t, "input_audio_buffer.append", map[string]string{
-					"type":  "input_audio_buffer.append",
-					"audio": base64.StdEncoding.EncodeToString(frame),
-				}))
-			}
-			records = append(records,
-				readImageSpokenClientEvent(t, "input_audio_buffer.commit", map[string]string{
-					"type": "input_audio_buffer.commit",
-				}),
-				readImageSpokenClientEvent(t, "response.create", map[string]string{
-					"type": "response.create",
-				}),
-			)
+			records = append(records, spokenSeedReplacement(t, frames)...)
 			continue
 		}
-		if seedReplaced && !seedResponseCreateSkipped && record.Direction == gatewaytesting.DirectionClientToServer && record.Type == "response.create" {
+		if seedReplaced && !seedResponseCreateSkipped && record.Direction == gatewaytesting.DirectionClientToServer && record.Type == rtEventResponseCreate {
 			// The text-seeded capture owns a response.create for the removed
 			// conversation item. The audio end-of-turn above supplies its one
 			// replacement; retain only the later tool continuation request.
@@ -94,22 +80,9 @@ func buildSpokenReadImageFixture(t *testing.T, committedPath string, wavPath str
 		}
 
 		if failed && record.Direction == gatewaytesting.DirectionServerToClient {
-			switch record.Type {
-			case "response.created":
-				responseCreated++
-				if responseCreated == 2 {
-					continuationStarted = true
-				}
-			case "response.output_text.delta", "response.output_text.done":
-				if continuationStarted {
-					continue
-				}
-			case "response.done":
-				responseDone++
-				if responseDone == 2 {
-					record.Payload = json.RawMessage(readImageSpokenFailedResponse)
-					record.Data = nil
-				}
+			var keep bool
+			if record, keep = rewriter.rewrite(record); !keep {
+				continue
 			}
 		}
 		records = append(records, record)
@@ -117,8 +90,8 @@ func buildSpokenReadImageFixture(t *testing.T, committedPath string, wavPath str
 	if !seedReplaced {
 		t.Fatal("read_image capture has no seed message to replace with spoken input")
 	}
-	if failed && (responseCreated != 2 || responseDone != 2) {
-		t.Fatalf("failed spoken fixture saw response.created=%d response.done=%d, want two of each", responseCreated, responseDone)
+	if failed && (rewriter.responseCreated != 2 || rewriter.responseDone != 2) {
+		t.Fatalf("failed spoken fixture saw response.created=%d response.done=%d, want two of each", rewriter.responseCreated, rewriter.responseDone)
 	}
 
 	sequence := 0
@@ -138,7 +111,7 @@ func buildSpokenReadImageFixture(t *testing.T, committedPath string, wavPath str
 }
 
 func isReadImageSeedMessage(record gatewaytesting.CapturedSessionEvent) bool {
-	if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+	if record.Direction != gatewaytesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
 		return false
 	}
 	var payload struct {
@@ -149,7 +122,7 @@ func isReadImageSeedMessage(record gatewaytesting.CapturedSessionEvent) bool {
 	if err := json.Unmarshal(readImageSpokenRecordPayload(record), &payload); err != nil {
 		return false
 	}
-	return payload.Item.Type == "message"
+	return payload.Item.Type == rtItemMessage
 }
 
 func readImageSpokenRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
@@ -183,68 +156,14 @@ func assertSpokenReadImageWireContract(t *testing.T, fixturePath, wavPath, image
 
 	frames := multiturnAudioFrames(t, wavPath)
 	capture := captureCopy(t, fixturePath)
-	appendCount := 0
-	commitCount := 0
-	responseCreates := make([]int, 0, 2)
-	lastAppend := -1
-	commitIndex := -1
-	functionOutputIndex := -1
-	imageIndex := -1
+	wire := spokenWireIndices{lastAppend: -1, commitIndex: -1, functionOutputIndex: -1, imageIndex: -1}
 	for index, record := range capture.Records {
-		payload := readImageSpokenRecordPayload(record)
-		if record.Direction != gatewaytesting.DirectionClientToServer {
-			continue
-		}
-		switch record.Type {
-		case "input_audio_buffer.append":
-			var event struct {
-				Audio string `json:"audio"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode spoken audio append %d: %v", appendCount+1, err)
-			}
-			if appendCount >= len(frames) {
-				t.Fatalf("spoken audio append count exceeded WAV frame count %d", len(frames))
-			}
-			decoded, err := base64.StdEncoding.DecodeString(event.Audio)
-			if err != nil {
-				t.Fatalf("decode spoken audio append %d: %v", appendCount+1, err)
-			}
-			if string(decoded) != string(frames[appendCount]) {
-				t.Fatalf("spoken audio frame %d changed before provider delivery", appendCount+1)
-			}
-			appendCount++
-			lastAppend = index
-		case "input_audio_buffer.commit":
-			commitCount++
-			commitIndex = index
-		case "response.create":
-			responseCreates = append(responseCreates, index)
-		case "conversation.item.create":
-			var event struct {
-				Item struct {
-					Type   string `json:"type"`
-					CallID string `json:"call_id"`
-					Output string `json:"output"`
-					ID     string `json:"id"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				t.Fatalf("decode spoken conversation item: %v", err)
-			}
-			switch event.Item.Type {
-			case "function_call_output":
-				functionOutputIndex = index
-				if len(event.Item.Output) > readImageSpokenTextBudget {
-					t.Fatalf("spoken function output is %d bytes, want <= %d", len(event.Item.Output), readImageSpokenTextBudget)
-				}
-			case "message":
-				if event.Item.ID == readImageToolImageItemID(readImageCallID) {
-					imageIndex = index
-				}
-			}
+		if record.Direction == gatewaytesting.DirectionClientToServer {
+			wire.observe(t, index, record, frames)
 		}
 	}
+	appendCount, commitCount, lastAppend, commitIndex := wire.appendCount, wire.commitCount, wire.lastAppend, wire.commitIndex
+	responseCreates, functionOutputIndex, imageIndex := wire.responseCreates, wire.functionOutputIndex, wire.imageIndex
 	if appendCount != len(frames) {
 		t.Fatalf("spoken audio append count = %d, want exactly %d WAV frames", appendCount, len(frames))
 	}
@@ -270,40 +189,21 @@ func assertReadImageFailedContinuationFixture(t *testing.T, fixturePath string) 
 			continue
 		}
 		switch record.Type {
-		case "response.created":
+		case rtEventResponseCreated:
 			if continuationStarted {
 				t.Fatalf("failed continuation fixture contains more than two response.created events")
 			}
 			if !continuationStarted {
 				continuationStarted = responseDone == 1
 			}
-		case "response.output_text.delta", "response.output_text.done":
+		case rtEventOutputTextDelta, rtEventOutputTextDone:
 			if continuationStarted {
 				continuationOutput = true
 			}
-		case "response.done":
+		case rtEventResponseDone:
 			responseDone++
 			if responseDone == 2 {
-				var payload struct {
-					Response struct {
-						Status        string `json:"status"`
-						StatusDetails struct {
-							Type    string `json:"type"`
-							Reason  string `json:"reason"`
-							Code    string `json:"code"`
-							Message string `json:"message"`
-						} `json:"status_details"`
-					} `json:"response"`
-				}
-				if err := json.Unmarshal(readImageSpokenRecordPayload(record), &payload); err != nil {
-					t.Fatalf("decode failed continuation terminal: %v", err)
-				}
-				if payload.Response.Status != "failed" || payload.Response.StatusDetails.Type != "token_limit" || payload.Response.StatusDetails.Code != "token_limit_exceeded" {
-					t.Fatalf("failed continuation terminal = %#v, want token-limit failure", payload.Response)
-				}
-				if !strings.Contains(payload.Response.StatusDetails.Reason, "max_output_tokens") || !strings.Contains(payload.Response.StatusDetails.Message, "token limit") {
-					t.Fatalf("failed continuation details = %#v, want actionable token-limit details", payload.Response.StatusDetails)
-				}
+				assertTokenLimitFailedTerminal(t, record)
 			}
 		}
 	}
@@ -365,7 +265,7 @@ func assertReadImageContinuationFailure(t *testing.T, run readImageSpokenRun) {
 	if len(continuationErr.CallIDs) != 1 || continuationErr.CallIDs[0] != readImageCallID {
 		t.Fatalf("failed continuation call IDs = %v, want [%s]", continuationErr.CallIDs, readImageCallID)
 	}
-	if continuationErr.ProviderStatuses[readImageCallID] != "failed" {
+	if continuationErr.ProviderStatuses[readImageCallID] != rtStatusFailed {
 		t.Fatalf("failed continuation status = %q, want failed", continuationErr.ProviderStatuses[readImageCallID])
 	}
 	if !strings.Contains(continuationErr.ProviderDetails[readImageCallID], "token_limit") && !strings.Contains(continuationErr.ProviderDetails[readImageCallID], "max_output_tokens") {
@@ -379,7 +279,7 @@ func assertReadImageContinuationFailure(t *testing.T, run readImageSpokenRun) {
 	if strings.Contains(strings.ToLower(run.stdout+"\n"+run.stderr), "[session closed: client_close]") {
 		t.Fatalf("failed empty continuation was reported as clean client_close:\nstdout:\n%s\nstderr:\n%s", run.stdout, run.stderr)
 	}
-	if !strings.Contains(run.err.Error(), readImageCallID) || !strings.Contains(run.err.Error(), "failed") {
+	if !strings.Contains(run.err.Error(), readImageCallID) || !strings.Contains(run.err.Error(), rtStatusFailed) {
 		t.Fatalf("failed empty continuation diagnostic = %v, want call identity and failed status", run.err)
 	}
 }
@@ -395,7 +295,7 @@ func assertReadImageSpokenSuccessLifecycle(t *testing.T, events []messages.Strea
 	for index, event := range events {
 		switch event.Type {
 		case messages.StreamTypeToolCallEnd:
-			if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == "read_image" {
+			if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == rtToolReadImage {
 				toolCalls++
 			}
 		case messages.StreamTypeImageStart:
@@ -416,7 +316,7 @@ func assertReadImageSpokenSuccessLifecycle(t *testing.T, events []messages.Strea
 				continue
 			}
 			terminal, ok := event.Value.(*messages.MessageEndValue)
-			if !ok || terminal == nil || terminal.Status != "completed" {
+			if !ok || terminal == nil || terminal.Status != rtStatusCompleted {
 				continue
 			}
 			finalAssistantEnd = index
@@ -443,7 +343,7 @@ func assertReadImageSpokenFailureLifecycle(t *testing.T, events []messages.Strea
 	for index, event := range events {
 		switch event.Type {
 		case messages.StreamTypeToolCallEnd:
-			if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == "read_image" {
+			if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == rtToolReadImage {
 				toolCalls++
 			}
 		case messages.StreamTypeImageStart:
@@ -460,7 +360,7 @@ func assertReadImageSpokenFailureLifecycle(t *testing.T, events []messages.Strea
 			}
 		case messages.StreamTypeMessageEnd:
 			terminal, ok := event.Value.(*messages.MessageEndValue)
-			if ok && terminal != nil && terminal.Status == "failed" {
+			if ok && terminal != nil && terminal.Status == rtStatusFailed {
 				failedTerminal = index
 			}
 		case messages.StreamTypeTextDelta, messages.StreamTypeTranscriptDelta, messages.StreamTypeAudioDelta:
@@ -562,7 +462,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 		{
 			name: "pixels duplicated in function output",
 			mutate: func(item map[string]any) {
-				item["output"] = item["output"].(string) + dataURL
+				item["output"] = mustAs[string](t, item["output"]) + dataURL
 			},
 		},
 	} {
@@ -582,4 +482,107 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 			}
 		})
 	}
+}
+
+// failedContinuationRewriter drops assistant output after the continuation
+// response.created and turns the second response.done into a bounded
+// token-limit failure.
+type failedContinuationRewriter struct {
+	responseCreated, responseDone int
+	continuationStarted           bool
+}
+
+func (r *failedContinuationRewriter) rewrite(record gatewaytesting.CapturedSessionEvent) (gatewaytesting.CapturedSessionEvent, bool) {
+	switch record.Type {
+	case rtEventResponseCreated:
+		r.responseCreated++
+		r.continuationStarted = r.continuationStarted || r.responseCreated == 2
+	case rtEventOutputTextDelta, rtEventOutputTextDone:
+		return record, !r.continuationStarted
+	case rtEventResponseDone:
+		r.responseDone++
+		if r.responseDone == 2 {
+			record.Payload = json.RawMessage(readImageSpokenFailedResponse)
+			record.Data = nil
+		}
+	}
+	return record, true
+}
+
+// spokenSeedReplacement is the --audio-in client exchange that replaces the
+// text seed: every WAV frame, one commit, and one response request.
+func spokenSeedReplacement(t *testing.T, frames [][]byte) []gatewaytesting.CapturedSessionEvent {
+	t.Helper()
+	records := make([]gatewaytesting.CapturedSessionEvent, 0, len(frames)+2)
+	for _, frame := range frames {
+		records = append(records, readImageSpokenClientEvent(t, rtEventInputAudioAppend, map[string]string{
+			"type":  rtEventInputAudioAppend,
+			"audio": base64.StdEncoding.EncodeToString(frame),
+		}))
+	}
+	return append(records,
+		readImageSpokenClientEvent(t, rtEventInputAudioCommit, map[string]string{"type": rtEventInputAudioCommit}),
+		readImageSpokenClientEvent(t, rtEventResponseCreate, map[string]string{"type": rtEventResponseCreate}),
+	)
+}
+
+// assertTokenLimitFailedTerminal requires the failed continuation terminal to
+// be an actionable token-limit failure.
+func assertTokenLimitFailedTerminal(t *testing.T, record gatewaytesting.CapturedSessionEvent) {
+	t.Helper()
+	var payload struct {
+		Response struct {
+			Status        string `json:"status"`
+			StatusDetails struct {
+				Type    string `json:"type"`
+				Reason  string `json:"reason"`
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"status_details"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(readImageSpokenRecordPayload(record), &payload); err != nil {
+		t.Fatalf("decode failed continuation terminal: %v", err)
+	}
+	if payload.Response.Status != rtStatusFailed || payload.Response.StatusDetails.Type != "token_limit" || payload.Response.StatusDetails.Code != "token_limit_exceeded" {
+		t.Fatalf("failed continuation terminal = %#v, want token-limit failure", payload.Response)
+	}
+	if !strings.Contains(payload.Response.StatusDetails.Reason, "max_output_tokens") || !strings.Contains(payload.Response.StatusDetails.Message, "token limit") {
+		t.Fatalf("failed continuation details = %#v, want actionable token-limit details", payload.Response.StatusDetails)
+	}
+}
+
+// missingReadImageStreamOrder locates the single read_image call and the
+// assistant continuation around it, failing on any tool image event.
+func missingReadImageStreamOrder(t *testing.T, events []messages.StreamMessage) (toolCallIndex, assistantMessageStarts, continuationMessageStart, finalAssistantEnd int) {
+	t.Helper()
+	toolCallIndex, continuationMessageStart, finalAssistantEnd = -1, -1, -1
+	for index, event := range events {
+		if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == tools.ReadImageToolID {
+			if toolCallIndex >= 0 {
+				t.Fatalf("missing read_image observed duplicate tool call: %#v", events)
+			}
+			toolCallIndex = index
+		}
+		if isReadImageToolImageEvent(event) {
+			t.Fatalf("missing read_image emitted image result event: %#v", event)
+		}
+		if event.Type == messages.StreamTypeMessageStart && event.Role != messages.RoleTool {
+			assistantMessageStarts++
+			if assistantMessageStarts == 2 {
+				continuationMessageStart = index
+			}
+		}
+		if event.Type == messages.StreamTypeMessageEnd && event.Role != messages.RoleTool && continuationMessageStart >= 0 {
+			finalAssistantEnd = index
+		}
+	}
+	return toolCallIndex, assistantMessageStarts, continuationMessageStart, finalAssistantEnd
+}
+
+// isReadImageToolImageEvent reports whether an image stream event belongs to
+// the read_image tool result.
+func isReadImageToolImageEvent(event messages.StreamMessage) bool {
+	isImage := event.Type == messages.StreamTypeImageStart || event.Type == messages.StreamTypeImageDelta || event.Type == messages.StreamTypeImageEnd
+	return isImage && (event.Role == messages.RoleTool || event.ToolCallId == readImageCallID)
 }

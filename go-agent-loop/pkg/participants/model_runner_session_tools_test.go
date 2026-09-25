@@ -439,11 +439,11 @@ func TestModelRunner_SendLatestSessionToolResultsFallsBackForStreamOnlySession(t
 			t.Fatalf("sent[%d] call ID = %q, want %q", index, value.ToolCallID, wantID)
 		}
 	}
-	first, _ := sent[0].Value.(*messages.ToolCallEndValue)
+	first := toolCallEndValue(t, sent[0].Value)
 	if first.Arguments != "text result" || first.Name != "text_tool" {
 		t.Fatalf("text fallback = %#v, want correlated text result", first)
 	}
-	second, _ := sent[1].Value.(*messages.ToolCallEndValue)
+	second := toolCallEndValue(t, sent[1].Value)
 	if second.Arguments != "" || second.Name != "read_image" {
 		t.Fatalf("image fallback = %#v, want correlated empty flat output", second)
 	}

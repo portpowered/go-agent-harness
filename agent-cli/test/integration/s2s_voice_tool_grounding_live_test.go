@@ -259,7 +259,7 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 
 		if record.Direction == gwtesting.DirectionClientToServer {
 			switch record.Type {
-			case "session.update":
+			case rtEventSessionUpdate:
 				observation.SessionUpdateCount++
 				var event struct {
 					Session struct {
@@ -280,11 +280,11 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 				for _, tool := range event.Session.Tools {
 					observation.AdvertisedTools = append(observation.AdvertisedTools, tool.Name)
 				}
-			case "input_audio_buffer.append":
+			case rtEventInputAudioAppend:
 				if observation.FirstInputIndex < 0 {
 					observation.FirstInputIndex = index
 				}
-			case "conversation.item.create":
+			case rtEventConversationItemCreate:
 				var event struct {
 					Item struct {
 						Type   string `json:"type"`
@@ -295,10 +295,10 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 				if err := json.Unmarshal(payload, &event); err != nil {
 					return observation, fmt.Errorf("decode conversation.item.create: %w", err)
 				}
-				if event.Item.Type == "function_call_output" {
+				if event.Item.Type == rtItemFunctionCallOutput {
 					outputs = append(outputs, functionOutput{index: index, callID: event.Item.CallID, output: event.Item.Output})
 				}
-			case "response.create":
+			case rtEventResponseCreate:
 				responseCreateIndices = append(responseCreateIndices, index)
 			}
 			continue
@@ -308,7 +308,7 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 		}
 
 		switch record.Type {
-		case "response.output_item.added":
+		case rtEventOutputItemAdded:
 			var event struct {
 				Item struct {
 					Type   string `json:"type"`
@@ -319,10 +319,10 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 			if err := json.Unmarshal(payload, &event); err != nil {
 				return observation, fmt.Errorf("decode response.output_item.added: %w", err)
 			}
-			if event.Item.Type == "function_call" {
+			if event.Item.Type == rtItemFunctionCall {
 				calls = append(calls, functionCall{index: index, name: event.Item.Name, callID: event.Item.CallID})
 			}
-		case "response.function_call_arguments.done":
+		case rtEventFunctionCallArgumentsDone:
 			var event struct {
 				Name      string `json:"name"`
 				CallID    string `json:"call_id"`
@@ -355,7 +355,7 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 					text  string
 				}{index: index, text: event.Transcript})
 			}
-		case "response.output_audio.delta", "response.audio.delta":
+		case rtEventOutputAudioDelta, "response.audio.delta":
 			var event struct {
 				Delta string `json:"delta"`
 			}
@@ -372,7 +372,7 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 					bytes int
 				}{index: index, bytes: len(decoded)})
 			}
-		case "response.done":
+		case rtEventResponseDone:
 			var event struct {
 				Status   string `json:"status"`
 				Response struct {
@@ -446,7 +446,7 @@ func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, test
 		observation.TerminalIndex = done.index
 		observation.TerminalStatus = done.status
 		if observation.TerminalStatus == "" {
-			observation.TerminalStatus = "completed"
+			observation.TerminalStatus = rtStatusCompleted
 		}
 		break
 	}
@@ -491,7 +491,7 @@ func validateLiveVoiceToolGroundingObservation(observation liveVoiceToolGroundin
 	if observation.TerminalIndex <= observation.SpokenReplyIndex {
 		return fmt.Errorf("terminal response.done is absent or precedes the spoken reply")
 	}
-	if observation.TerminalStatus == "failed" || observation.TerminalStatus == "cancelled" || observation.TerminalStatus == "incomplete" {
+	if observation.TerminalStatus == rtStatusFailed || observation.TerminalStatus == rtStatusCancelled || observation.TerminalStatus == "incomplete" {
 		return fmt.Errorf("terminal response status=%q", observation.TerminalStatus)
 	}
 	if observation.AudioBytesAfterTool == 0 {

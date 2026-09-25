@@ -50,12 +50,12 @@ func TestSessionCLIRejectsCorruptCaptureBeforeProviderOrDerivedArtifacts(t *test
 	if err != nil {
 		t.Fatalf("listen for provider connection sentinel: %v", err)
 	}
-	defer listener.Close()
+	defer closeForTest(t, listener.Close)
 	connected := make(chan struct{}, 1)
 	go func() {
 		conn, acceptErr := listener.Accept()
 		if acceptErr == nil {
-			_ = conn.Close()
+			releaseForTest(conn.Close)
 			connected <- struct{}{}
 		}
 	}()

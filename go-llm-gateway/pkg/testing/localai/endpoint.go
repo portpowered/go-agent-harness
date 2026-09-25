@@ -82,12 +82,13 @@ func probe(endpoint string) bool {
 	dialer := websocket.Dialer{HandshakeTimeout: probeTimeout}
 	conn, response, err := dialer.DialContext(ctx, endpoint, http.Header{})
 	if response != nil && response.Body != nil {
-		_ = response.Body.Close()
+		// Gorilla buffers the handshake body in memory; releasing it cannot fail after a successful dial.
+		err = joinOnFailure(err, response.Body.Close())
 	}
 	if err != nil || conn == nil {
 		return false
 	}
-	defer func() { _ = conn.Close() }()
+	defer discardClose(conn)
 
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return false

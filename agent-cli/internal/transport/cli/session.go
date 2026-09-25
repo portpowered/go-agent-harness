@@ -33,7 +33,7 @@ func sessionToolDiagnosticSink(out io.Writer) serviceSession.SessionToolDiagnost
 		if diagnostic.Error == nil {
 			return
 		}
-		_, _ = fmt.Fprintf(out, "tool diagnostic: tool=%q call_id=%q source=%q error_code=%q detail=%s\n", diagnostic.ToolName, diagnostic.ToolCallID, diagnostic.Source, diagnostic.ErrorCode, diagnostic.Error)
+		writeAdvisory(out, "tool diagnostic: tool=%q call_id=%q source=%q error_code=%q detail=%s\n", diagnostic.ToolName, diagnostic.ToolCallID, diagnostic.Source, diagnostic.ErrorCode, diagnostic.Error)
 	})
 }
 
@@ -51,7 +51,7 @@ func sessionAudioDiagnosticSink(out io.Writer) serviceSession.SessionDiagnosticS
 		if record.Event != serviceSession.SessionDiagnosticEventPlaybackOverflow {
 			return
 		}
-		_, _ = fmt.Fprintf(out, "playback diagnostic: event=%q device=%q sample_rate=%s dropped_samples=%s overflow_events=%s peak_queued_samples=%s capacity_samples=%s latency_target_ms=%s\n",
+		writeAdvisory(out, "playback diagnostic: event=%q device=%q sample_rate=%s dropped_samples=%s overflow_events=%s peak_queued_samples=%s capacity_samples=%s latency_target_ms=%s\n",
 			record.Event,
 			record.Fields[serviceSession.SessionDiagnosticFieldPlaybackDeviceID],
 			record.Fields[serviceSession.SessionDiagnosticFieldPlaybackSampleRate],

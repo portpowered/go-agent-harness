@@ -52,28 +52,15 @@ func (l *Loader) List() ([]Skill, error) {
 			if _, ok := seen[name]; ok {
 				continue
 			}
-			skillPath := filepath.Join(dir, name, SkillFileName)
-			if _, err := os.Stat(skillPath); err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
+			skill, found, err := loadSkillEntry(dir, name)
+			if err != nil {
 				return nil, err
 			}
-			meta, err := ParseSkillFileMetadataOnly(skillPath)
-			if err != nil {
-				continue // skip invalid skills
-			}
-			if err := ValidateName(meta.Name, name); err != nil {
+			if !found {
 				continue
 			}
 			seen[name] = struct{}{}
-			absDir, _ := filepath.Abs(filepath.Join(dir, name))
-			absPath, _ := filepath.Abs(skillPath)
-			out = append(out, Skill{
-				Meta:      meta,
-				Dir:       absDir,
-				SkillPath: absPath,
-			})
+			out = append(out, skill)
 		}
 	}
 	return out, nil
@@ -140,11 +127,51 @@ func (l *Loader) LoadSkillWithPath(name, resourcePath string) (content string, e
 
 // GetSkillDir returns the absolute directory path for a skill by name, or empty if not found.
 func (l *Loader) GetSkillDir(name string) string {
-	list, _ := l.List()
+	list, err := l.List()
+	if err != nil {
+		// Skills that cannot be listed cannot be found.
+		return ""
+	}
 	for _, s := range list {
 		if s.Meta.Name == name {
 			return s.Dir
 		}
 	}
 	return ""
+}
+
+// loadSkillEntry loads the skill in directory name under dir. found is false
+// for a directory without a skill file and for an invalid skill, which are
+// skipped rather than reported.
+func loadSkillEntry(dir, name string) (skill Skill, found bool, err error) {
+	skillPath := filepath.Join(dir, name, SkillFileName)
+	if _, err := os.Stat(skillPath); err != nil {
+		if os.IsNotExist(err) {
+			return Skill{}, false, nil
+		}
+		return Skill{}, false, err
+	}
+	meta, valid := validSkillMeta(skillPath, name)
+	if !valid {
+		return Skill{}, false, nil
+	}
+	absDir, err := filepath.Abs(filepath.Join(dir, name))
+	if err != nil {
+		return Skill{}, false, err
+	}
+	absPath, err := filepath.Abs(skillPath)
+	if err != nil {
+		return Skill{}, false, err
+	}
+	return Skill{Meta: meta, Dir: absDir, SkillPath: absPath}, true, nil
+}
+
+// validSkillMeta parses a skill file's metadata and reports whether it is a
+// valid skill for directory name.
+func validSkillMeta(skillPath, name string) (Meta, bool) {
+	meta, err := ParseSkillFileMetadataOnly(skillPath)
+	if err != nil {
+		return Meta{}, false
+	}
+	return meta, ValidateName(meta.Name, name) == nil
 }

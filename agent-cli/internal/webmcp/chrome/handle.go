@@ -398,7 +398,7 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 			session.transportLost()
 			return nil, h.disconnectError(targetID, "attach", nil)
 		}
-		_ = session.Close()
+		discardCleanupError(session.Close)
 		return nil, webmcp.ErrClosed
 	}
 	if h.sessions == nil {

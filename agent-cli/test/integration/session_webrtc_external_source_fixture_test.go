@@ -3,9 +3,12 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -131,145 +134,171 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 		if err != nil {
 			return
 		}
-		defer conn.Close()
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-		var offer struct {
-			Type  string `json:"type"`
-			Value string `json:"value"`
-		}
-		if err := json.Unmarshal(data, &offer); err != nil || offer.Type != "webrtc/offer" {
-			return
-		}
-
-		mediaEngine := &webrtc.MediaEngine{}
-		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1},
-			PayloadType:        0,
-		}, webrtc.RTPCodecTypeAudio); err != nil {
-			return
-		}
-		if opts.withVideo {
-			if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-				RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000},
-				PayloadType:        96,
-			}, webrtc.RTPCodecTypeVideo); err != nil {
-				return
-			}
-		}
-		pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine)).NewPeerConnection(webrtc.Configuration{})
-		if err != nil {
-			return
-		}
-		defer pc.Close()
-		connected := make(chan struct{})
-		var connectedOnce sync.Once
-		pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-			if state == webrtc.PeerConnectionStateConnected {
-				connectedOnce.Do(func() { close(connected) })
-			}
-		})
-
-		audio, err := webrtc.NewTrackLocalStaticRTP(
-			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1},
-			"audio", "v10-camera-fixture")
-		if err != nil {
-			return
-		}
-		if _, err = pc.AddTrack(audio); err != nil {
-			return
-		}
-		var video *webrtc.TrackLocalStaticRTP
-		if opts.withVideo {
-			video, err = webrtc.NewTrackLocalStaticRTP(
-				webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000},
-				"video", "v10-camera-fixture")
-			if err != nil {
-				return
-			}
-			if _, err = pc.AddTrack(video); err != nil {
-				return
-			}
-		}
-
-		if err = pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer.Value}); err != nil {
-			return
-		}
-		answer, err := pc.CreateAnswer(nil)
-		if err != nil {
-			return
-		}
-		if err = pc.SetLocalDescription(answer); err != nil {
-			return
-		}
-		select {
-		case <-webrtc.GatheringCompletePromise(pc):
-		case <-handlerContext.Done():
-			return
-		}
-		answerSDP := pc.LocalDescription().SDP
-		if !opts.withVideo {
-			// An audio-only source answers without any video m-line, exactly
-			// as go2rtc fronts a camera that exposes no video stream. pion
-			// always echoes rejected m-lines into JSEP answers, so the video
-			// section is removed before the answer reaches the wire; the
-			// production client accepts the reduced answer (verified against
-			// pion v4.2.18) and parseSDP reports no negotiated video track.
-			answerSDP = stripSDPMediaSection(answerSDP, "video")
-		}
-		observed.recordNegotiation(offer.Value, answerSDP)
-		if err = conn.WriteJSON(struct {
-			Type  string `json:"type"`
-			Value string `json:"value"`
-		}{Type: "webrtc/answer", Value: answerSDP}); err != nil {
-			return
-		}
-		observed.negotiatedOnce.Do(func() { close(observed.negotiated) })
-		select {
-		case <-connected:
-		case <-handlerContext.Done():
-			return
-		}
-		if opts.sendFrames {
-			streamFixtureAudio(t, audio, video, opts.packets, observed)
-		}
-		<-handlerContext.Done()
+		defer discardCloseError(conn)
+		serveWebrtcSource(t, handlerContext, conn, opts, observed) //nolint:contextcheck // handlerContext derives from r.Context() and also ends with the fixture.
 	}))
-	u, _ := url.Parse(server.URL)
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse go2rtc fixture URL %q: %v", server.URL, err)
+	}
 	rawURL := "go2rtc://" + u.Host + "/api/ws?src=v10-tuya-main"
 	var cleanupOnce sync.Once
 	cleanup := func() {
-		cleanupOnce.Do(func() {
-			cancelFixture()
-			server.CloseClientConnections()
-			handlersDone := make(chan struct{})
-			go func() {
-				handlers.Wait()
-				close(handlersDone)
-			}()
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			select {
-			case <-handlersDone:
-			case <-ctx.Done():
-				t.Errorf("go2rtc fixture handlers did not close: %v", ctx.Err())
-			}
-			serverClosed := make(chan struct{})
-			go func() {
-				server.Close()
-				close(serverClosed)
-			}()
-			select {
-			case <-serverClosed:
-			case <-ctx.Done():
-				t.Errorf("go2rtc fixture server did not close: %v", ctx.Err())
-			}
-		})
+		cleanupOnce.Do(func() { closeWebrtcSourceFixture(t, cancelFixture, server, &handlers) })
 	}
 	t.Cleanup(cleanup)
 	return rawURL, observed, cleanup
+}
+
+// serveWebrtcSource answers one go2rtc WebRTC offer with PCMU audio (and
+// optional H.264 video) and streams fixture frames once connected.
+func serveWebrtcSource(t *testing.T, ctx context.Context, conn *websocket.Conn, opts webrtcSourceOptions, observed *webrtcSourceObservation) {
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		return
+	}
+	var offer struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(data, &offer); err != nil || offer.Type != "webrtc/offer" {
+		return
+	}
+	pc, audio, video, err := newWebrtcSourcePeer(opts.withVideo)
+	if err != nil {
+		return
+	}
+	defer discardCloseError(pc)
+	connected := make(chan struct{})
+	var connectedOnce sync.Once
+	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state == webrtc.PeerConnectionStateConnected {
+			connectedOnce.Do(func() { close(connected) })
+		}
+	})
+	answerSDP, ok := answerWebrtcOffer(ctx, pc, offer.Value, opts.withVideo)
+	if !ok {
+		return
+	}
+	observed.recordNegotiation(offer.Value, answerSDP)
+	if err = conn.WriteJSON(struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}{Type: "webrtc/answer", Value: answerSDP}); err != nil {
+		return
+	}
+	observed.negotiatedOnce.Do(func() { close(observed.negotiated) })
+	select {
+	case <-connected:
+	case <-ctx.Done():
+		return
+	}
+	if opts.sendFrames {
+		streamFixtureAudio(t, audio, video, opts.packets, observed)
+	}
+	<-ctx.Done()
+}
+
+// newWebrtcSourcePeer builds the camera-side peer connection with its PCMU
+// audio track and, when requested, an H.264 video track.
+func newWebrtcSourcePeer(withVideo bool) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticRTP, *webrtc.TrackLocalStaticRTP, error) {
+	mediaEngine := &webrtc.MediaEngine{}
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1},
+		PayloadType:        0,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		return nil, nil, nil, err
+	}
+	if withVideo {
+		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000},
+			PayloadType:        96,
+		}, webrtc.RTPCodecTypeVideo); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine)).NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	audio, err := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1},
+		"audio", "v10-camera-fixture")
+	if err == nil {
+		_, err = pc.AddTrack(audio)
+	}
+	var video *webrtc.TrackLocalStaticRTP
+	if err == nil && withVideo {
+		video, err = webrtc.NewTrackLocalStaticRTP(
+			webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000},
+			"video", "v10-camera-fixture")
+		if err == nil {
+			_, err = pc.AddTrack(video)
+		}
+	}
+	if err != nil {
+		return nil, nil, nil, errors.Join(err, pc.Close())
+	}
+	return pc, audio, video, nil
+}
+
+// answerWebrtcOffer applies the offer and returns the gathered answer SDP.
+// An audio-only source answers without any video m-line, exactly as go2rtc
+// fronts a camera that exposes no video stream. pion always echoes rejected
+// m-lines into JSEP answers, so the video section is removed before the
+// answer reaches the wire; the production client accepts the reduced answer
+// (verified against pion v4.2.18) and parseSDP reports no negotiated video
+// track.
+func answerWebrtcOffer(ctx context.Context, pc *webrtc.PeerConnection, offerSDP string, withVideo bool) (string, bool) {
+	if err := pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offerSDP}); err != nil {
+		return "", false
+	}
+	answer, err := pc.CreateAnswer(nil)
+	if err != nil {
+		return "", false
+	}
+	if err := pc.SetLocalDescription(answer); err != nil {
+		return "", false
+	}
+	select {
+	case <-webrtc.GatheringCompletePromise(pc):
+	case <-ctx.Done():
+		return "", false
+	}
+	answerSDP := pc.LocalDescription().SDP
+	if !withVideo {
+		answerSDP = stripSDPMediaSection(answerSDP, "video")
+	}
+	return answerSDP, true
+}
+
+// closeWebrtcSourceFixture cancels live handlers and closes the server, each
+// within a one-second bound.
+func closeWebrtcSourceFixture(t *testing.T, cancelFixture context.CancelFunc, server *httptest.Server, handlers *sync.WaitGroup) {
+	cancelFixture()
+	server.CloseClientConnections()
+	handlersDone := make(chan struct{})
+	go func() {
+		handlers.Wait()
+		close(handlersDone)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	select {
+	case <-handlersDone:
+	case <-ctx.Done():
+		t.Errorf("go2rtc fixture handlers did not close: %v", ctx.Err())
+	}
+	serverClosed := make(chan struct{})
+	go func() {
+		server.Close()
+		close(serverClosed)
+	}()
+	select {
+	case <-serverClosed:
+	case <-ctx.Done():
+		t.Errorf("go2rtc fixture server did not close: %v", ctx.Err())
+	}
 }
 
 // streamFixtureAssets writes every precomputed audio packet once, then a small
@@ -313,4 +342,53 @@ func streamFixtureAudio(t *testing.T, audio, video *webrtc.TrackLocalStaticRTP, 
 		}
 		observed.recordVideoFrame()
 	}
+}
+
+// mediaObservationParser accumulates the public media CLI report fields and
+// which required ones were present.
+type mediaObservationParser struct {
+	observation                                                  mediaObservation
+	sourceSet, codecSet, rateSet, channelsSet, videoSet, lookSet bool
+}
+
+func (p *mediaObservationParser) field(key, value string) error {
+	var err error
+	switch key {
+	case "Source":
+		if !p.sourceSet {
+			p.observation.source = value
+		}
+		p.sourceSet = true
+	case "Audio codec":
+		p.observation.codec, p.codecSet = value, true
+	case "Sample rate":
+		p.observation.sampleRate, err = strconv.Atoi(value)
+		p.rateSet = true
+		err = wrapMediaFieldError("sample rate", value, err)
+	case "Channels":
+		p.observation.channels, err = strconv.Atoi(value)
+		p.channelsSet = true
+		err = wrapMediaFieldError("channels", value, err)
+	case "Video presence":
+		p.observation.videoPresence, err = strconv.ParseBool(value)
+		p.videoSet = true
+		err = wrapMediaFieldError("video presence", value, err)
+	case "Look status":
+		p.observation.lookStatus, p.lookSet = value, true
+	case "Reason":
+		p.observation.lookReason = value
+	case "Media type":
+		p.observation.mediaType = value
+	case "Observation bytes":
+		p.observation.observationBytes, err = strconv.Atoi(value)
+		err = wrapMediaFieldError("observation bytes", value, err)
+	}
+	return err
+}
+
+func wrapMediaFieldError(name, value string, err error) error {
+	if err != nil {
+		return fmt.Errorf("parse %s %q: %w", name, value, err)
+	}
+	return nil
 }

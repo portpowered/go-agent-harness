@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	"sync"
 )
 
 // Replay validates the complete evidence before exposing any frame. Stepping
@@ -250,4 +251,14 @@ func (r *Replay) Next() (Event, *audio.PCMFrame, error) {
 	samples := r.streams[event.Tap][event.StartSample : event.StartSample+uint64(event.SampleCount)]
 	frame := &audio.PCMFrame{Samples: append([]int16(nil), samples...), Format: audio.PCM16DeviceFormat(event.SampleRate), StreamID: event.Tap, Sequence: event.Sequence, StartSample: event.StartSample}
 	return event, frame, nil
+}
+
+// pooledSamples returns a pooled sample buffer. The trace pool only stores
+// *[]int16; any other value is replaced by an empty buffer that the caller
+// grows to the required size.
+func pooledSamples(pool *sync.Pool) *[]int16 {
+	if buffer, ok := pool.Get().(*[]int16); ok {
+		return buffer
+	}
+	return new([]int16)
 }

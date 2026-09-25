@@ -76,8 +76,13 @@ type HashMismatchError struct {
 
 func findLegacyF16(modelsRoot string) []string {
 	var found []string
-	_ = filepath.WalkDir(modelsRoot, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !entry.Type().IsRegular() {
+	// The scan is best effort: an unreadable root or directory is skipped, so
+	// the walk itself never fails and only reports what it could read.
+	walkErr := filepath.WalkDir(modelsRoot, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return fs.SkipDir
+		}
+		if entry.IsDir() || !entry.Type().IsRegular() {
 			return nil
 		}
 		if strings.EqualFold(entry.Name(), LegacyF16Filename) {
@@ -85,5 +90,9 @@ func findLegacyF16(modelsRoot string) []string {
 		}
 		return nil
 	})
+	if walkErr != nil {
+		// Unreachable: the callback returns only nil or fs.SkipDir.
+		return found
+	}
 	return found
 }

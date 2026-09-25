@@ -165,7 +165,7 @@ func (p *crossProcessCommand) stop() {
 	default:
 	}
 	if p.cmd.Process != nil {
-		_ = p.cmd.Process.Kill()
+		killProbeProcess(p.cmd.Process)
 	}
 	<-p.done
 }

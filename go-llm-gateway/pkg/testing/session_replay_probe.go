@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -82,8 +83,7 @@ func runSessionReplayProbe(ctx context.Context, fixture string, capture SessionC
 	}
 
 	fail := func(format string, args ...any) (SessionReplayProbeReport, error) {
-		_ = conn.Close()
-		return SessionReplayProbeReport{}, fmt.Errorf(format, args...)
+		return SessionReplayProbeReport{}, errors.Join(fmt.Errorf(format, args...), conn.Close())
 	}
 
 	for _, record := range capture.Records {

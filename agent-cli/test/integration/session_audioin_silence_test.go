@@ -120,32 +120,32 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		end := min(start+audio.FrameSize, len(samples))
 		frame := samples[start:end]
 		payload, marshalErr := json.Marshal(map[string]string{
-			"type":  "input_audio_buffer.append",
+			"type":  rtEventInputAudioAppend,
 			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(frame)),
 		})
 		if marshalErr != nil {
 			t.Fatalf("marshal append event: %v", marshalErr)
 		}
-		clientEvent("input_audio_buffer.append", payload)
+		clientEvent(rtEventInputAudioAppend, payload)
 	}
 
 	if expectTurn {
-		clientEvent("input_audio_buffer.commit", json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
-		clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
-		serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_silence_lane"}}`)
-		serverEvent("response.output_audio_transcript.delta", `{"type":"response.output_audio_transcript.delta","delta":"Hello"}`)
-		serverEvent("response.output_audio_transcript.delta", `{"type":"response.output_audio_transcript.delta","delta":" there."}`)
+		clientEvent(rtEventInputAudioCommit, json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
+		clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
+		serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_silence_lane"}}`)
+		serverEvent(rtEventOutputAudioTranscriptDelta, `{"type":"response.output_audio_transcript.delta","delta":"Hello"}`)
+		serverEvent(rtEventOutputAudioTranscriptDelta, `{"type":"response.output_audio_transcript.delta","delta":" there."}`)
 		serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Hello there."}`)
 		audioDelta, marshalErr := json.Marshal(map[string]string{
-			"type":  "response.output_audio.delta",
+			"type":  rtEventOutputAudioDelta,
 			"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples(samples))),
 		})
 		if marshalErr != nil {
 			t.Fatalf("marshal audio delta: %v", marshalErr)
 		}
-		serverEvent("response.output_audio.delta", string(audioDelta))
+		serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 		serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
-		serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_silence_lane","status":"completed"}}`)
+		serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_silence_lane","status":"completed"}}`)
 	}
 
 	baseCapture.Session.ID = "sess_audio_in_silence_lane"
@@ -154,7 +154,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
-		Type:        "session.closed",
+		Type:        rtEventSessionClosed,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_audio_in_silence_lane","reason":"fixture_complete"}`),
 	})

@@ -54,7 +54,7 @@ func newCrossProcessFixture() (*crossProcessFixture, error) {
 		}
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = writer.Write(html)
+		writeFixtureBody(writer, html)
 	})
 	mux.HandleFunc("/__watch/state", fixture.handleState)
 	fixture.server = httptest.NewServer(mux)
@@ -87,7 +87,7 @@ func (f *crossProcessFixture) handleState(writer http.ResponseWriter, request *h
 		f.mu.Unlock()
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(state)
+		writeFixtureJSON(writer, state)
 	case http.MethodPost:
 		var state crossProcessPageState
 		decoder := json.NewDecoder(io.LimitReader(request.Body, 64<<10))

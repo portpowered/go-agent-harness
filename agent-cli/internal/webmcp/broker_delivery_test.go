@@ -20,14 +20,14 @@ func TestStatefulBrokerWatchOverflowReportsBoundedFailure(t *testing.T) {
 			)},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:     runtime,
 		Discoverer:  staticDiscoverer{candidate},
 		WatchBuffer: 1,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	watch := broker.Watch(context.Background())
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-watch"}); err != nil {
@@ -62,14 +62,14 @@ func TestStatefulBrokerBrowserEventWatchFansOutIndependentCopies(t *testing.T) {
 			)},
 		},
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:     runtime,
 		Discoverer:  staticDiscoverer{candidate},
 		WatchBuffer: 8,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	first := broker.WatchBrowserEvents(context.Background())
 	second := broker.WatchBrowserEvents(context.Background())

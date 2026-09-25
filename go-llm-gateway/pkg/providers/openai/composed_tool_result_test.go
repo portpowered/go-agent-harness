@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -125,7 +126,7 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		callID: {ToolCallID: callID, Name: toolName, Content: toolOut},
 	}, []messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}})
 
-	go func() { _ = al.Run(ctx) }()
+	runLoopUntilCleanup(t, ctx, al)
 
 	// Turn 1: audio-only user input (no text message enters history).
 	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
@@ -154,10 +155,10 @@ func TestComposed_LoopDeliversToolResultOnOpenAIRealtimeWire(t *testing.T) {
 		t.Fatalf("observed %d function_call_output frames before reply turn, want exactly 1", len(fcoIdx))
 	}
 	fco := frames[fcoIdx[0]].Item
-	if got, _ := fco["call_id"].(string); got != callID {
+	if got := itemString(fco, "call_id"); got != callID {
 		t.Errorf("function_call_output call_id = %q, want %q", got, callID)
 	}
-	if got, _ := fco["output"].(string); got != toolOut {
+	if got := itemString(fco, "output"); got != toolOut {
 		t.Errorf("function_call_output output = %q, want serialized result %q", got, toolOut)
 	}
 	if frames[3].Type != string(models.SessionEventResponseCreate) {
@@ -219,7 +220,7 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 	conn, _, al, ctx := startComposedToolLoop(t, map[string]messages.ToolCallResponse{
 		callID: {ToolCallID: callID, Name: toolName, Content: timeoutOut},
 	}, []messages.ToolDefinition{{Name: toolName, Description: "weather lookup"}})
-	go func() { _ = al.Run(ctx) }()
+	runLoopUntilCleanup(t, ctx, al)
 	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
 		t.Fatalf("SendAudioInput: %v", err)
 	}
@@ -245,10 +246,10 @@ func TestComposed_LoopDeliversTimeoutToolErrorOnceBeforeContinuation(t *testing.
 		t.Fatalf("timeout output index = %d in wire sequence %#v, want response.create immediately after it", outputIndex, frames)
 	}
 	item := frames[outputIndex].Item
-	if got, _ := item["call_id"].(string); got != callID {
+	if got := itemString(item, "call_id"); got != callID {
 		t.Fatalf("timeout function_call_output call_id = %q, want %q", got, callID)
 	}
-	if got, _ := item["output"].(string); got != timeoutOut {
+	if got := itemString(item, "output"); got != timeoutOut {
 		t.Fatalf("timeout function_call_output output = %q, want %q", got, timeoutOut)
 	}
 	if !strings.Contains(timeoutOut, "classification=interactive_tool_timeout") || !strings.Contains(timeoutOut, "tool execution timed out after 20s") {
@@ -321,7 +322,7 @@ func TestComposed_LoopDeliversMixedToolBatchExactlyOnceOnOpenAIRealtimeWire(t *t
 		{Name: imageTool, Description: "image lookup"},
 	})
 
-	go func() { _ = al.Run(ctx) }()
+	runLoopUntilCleanup(t, ctx, al)
 	if err := al.SendAudioInput(ctx, []byte{1, 2, 3, 4}); err != nil {
 		t.Fatalf("SendAudioInput: %v", err)
 	}
@@ -460,7 +461,7 @@ func assertComposedUserTextItem(t *testing.T, textItem map[string]any, userReply
 		t.Fatalf("text turn item.content = %#v, want one part", textItem["content"])
 	}
 	part, isMap := content[0].(map[string]any)
-	if !isMap || part["type"] != "input_text" || part["text"] != userReply {
+	if !isMap || part["type"] != "input_text" || part[contentTypeText] != userReply {
 		t.Errorf("text turn content part = %#v, want input_text %q", content[0], userReply)
 	}
 }
@@ -503,4 +504,29 @@ func countComposedImageParts(t *testing.T, item map[string]any, wantURL string) 
 		}
 	}
 	return imageItems
+}
+
+// runLoopUntilCleanup runs the agent loop in the background and stops it at
+// cleanup, before the session and context cleanups registered earlier.
+func runLoopUntilCleanup(t *testing.T, ctx context.Context, al *agentloop.AgentLoop) {
+	t.Helper()
+	runCtx, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- al.Run(runCtx) }()
+	t.Cleanup(func() {
+		stop()
+		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("agent loop Run: %v", err)
+		}
+	})
+}
+
+// itemString returns a string field of a decoded wire item, or "" when the
+// field is absent or not a string.
+func itemString(item map[string]any, key string) string {
+	value, ok := item[key].(string)
+	if !ok {
+		return ""
+	}
+	return value
 }

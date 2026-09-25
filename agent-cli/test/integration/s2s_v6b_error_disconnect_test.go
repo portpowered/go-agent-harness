@@ -157,14 +157,14 @@ func TestProbeRunV6BDisconnectSuiteOfflineExitZero(t *testing.T) {
 	}
 	byName := make(map[string]map[string]any, len(results))
 	for _, result := range results {
-		byName[result["name"].(string)] = result
+		byName[mustAs[string](t, result["name"])] = result
 	}
 	assertV6BResult(t, byName[probe.ScenarioIDS2SV6BDisconnectMidSession], probe.ScenarioIDS2SV6BDisconnectMidSession, "disconnect", "provider", "partial")
 	assertV6BResult(t, byName[probe.ScenarioIDS2SV6BHealthyControl], probe.ScenarioIDS2SV6BHealthyControl, "complete", "provider", "complete")
 
 	summary := readV6BSummary(t, summaryPath)
 	for field, want := range map[string]any{
-		"total": float64(2), "passed": float64(2), "failed": float64(0), "status": "pass",
+		"total": float64(2), "passed": float64(2), rtStatusFailed: float64(0), "status": "pass",
 	} {
 		if summary[field] != want {
 			t.Fatalf("summary %s = %v, want %v", field, summary[field], want)
@@ -203,9 +203,9 @@ func writeV6BCorruptedScenario(t *testing.T, kind, value string) string {
 	if err := json.Unmarshal([]byte(document), &raw); err != nil {
 		t.Fatalf("decode corrupted scenario template: %v", err)
 	}
-	expectations := raw["expectations"].([]any)
+	expectations := mustAs[[]any](t, raw["expectations"])
 	index := map[string]int{"terminal_reason": 0, "terminal_provenance": 1, "output_state": 2}[kind]
-	expectations[index].(map[string]any)["value"] = value
+	mustAs[map[string]any](t, expectations[index])["value"] = value
 	data, err := json.Marshal(raw)
 	if err != nil {
 		t.Fatalf("encode corrupted scenario: %v", err)
@@ -244,8 +244,8 @@ func TestProbeRunV6BTerminalTripleRejectsEveryCorruptedExpectation(t *testing.T)
 				t.Fatalf("corrupted %s did not expose observed triple: %v", test.kind, result)
 			}
 			var failed map[string]any
-			for _, raw := range result["expectations"].([]any) {
-				outcome := raw.(map[string]any)
+			for _, raw := range mustAs[[]any](t, result["expectations"]) {
+				outcome := mustAs[map[string]any](t, raw)
 				if outcome["kind"] == strings.ReplaceAll(test.kind, "_", "-") {
 					failed = outcome
 				}

@@ -21,7 +21,6 @@ const (
 	probeV2ReadStateTool    = "read_state"
 	probeV2FixtureFrameID   = "frame-1"
 	probeV2BrowserEvents    = "browser.events.jsonl"
-	probeV2StatusFail       = "fail"
 	probeV2EvidenceKey      = "evidence"
 	probeV2BrowserEventsKey = "browser_events_path"
 	probeV2FixtureOrigin    = "https://fixture.test"
@@ -132,7 +131,7 @@ func TestProbeRunScenarioV2ExecutesBrowserFixtureWithoutReplayFlag(t *testing.T)
 	if results[0]["id"] != "fixture-browser-happy" || results[0]["schema_version"] != probe.ScenarioV2Version || results[0]["pass"] != true {
 		t.Fatalf("unexpected v2 result: %v", results[0])
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(1) {
 		t.Fatalf("unexpected v2 summary: %v", summary)
 	}
 	if objective, ok := results[0]["objective_evidence"].(map[string]any); !ok || objective["verified"] != true {
@@ -299,7 +298,7 @@ func TestProbeRunScenarioV2ReportsBrowserFixtureFailureAsResult(t *testing.T) {
 	if results[0]["pass"] != false || !isText || !strings.Contains(errorText, "browser fixture") {
 		t.Fatalf("missing browser fixture failure result: %v", results[0])
 	}
-	if summary["status"] != probeV2StatusFail || summary["failed"] != float64(1) {
+	if summary["status"] != probeStatusFail || summary["failed"] != float64(1) {
 		t.Fatalf("unexpected failure summary: %v", summary)
 	}
 }
@@ -335,7 +334,7 @@ func TestProbeRunScenarioV2ReportsSafeFirstObjectiveDivergenceAndCleansUp(t *tes
 	}
 	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
 	result := results[0]
-	if result["pass"] != false || summary["status"] != probeV2StatusFail {
+	if result["pass"] != false || summary["status"] != probeStatusFail {
 		t.Fatalf("divergent result = %v summary=%v", result, summary)
 	}
 	assertProbeV2SafeDivergenceError(t, result)

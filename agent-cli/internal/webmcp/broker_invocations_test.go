@@ -35,7 +35,7 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 		IDs:        ids,
 		Clock:      clock,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
@@ -222,7 +222,7 @@ func TestStatefulBrokerBoundsSerializedInvocationResults(t *testing.T) {
 		Clock:          clock,
 		MaxResultBytes: 128,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}

@@ -8,8 +8,44 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"time"
+
+	"github.com/chromedp/chromedp"
 )
+
+// writeFixtureBody serves a fixture response. A failed write means the browser
+// dropped the connection mid-response; the probe observes that through its own
+// navigation or oracle result, so the handler has nothing further to report.
+func writeFixtureBody(writer io.Writer, body []byte) {
+	if _, err := writer.Write(body); err != nil {
+		return
+	}
+}
+
+// writeFixtureJSON serves a JSON fixture state with the same disconnect rule.
+func writeFixtureJSON(writer io.Writer, value any) {
+	if err := json.NewEncoder(writer).Encode(value); err != nil {
+		return
+	}
+}
+
+// cancelProbeTarget closes the probe-owned temporary target on cleanup. The
+// probe result is already decided and the launcher owns the browser, so a
+// failed target close cannot change the reported outcome.
+func cancelProbeTarget(target context.Context) {
+	if err := chromedp.Cancel(target); err != nil {
+		return
+	}
+}
+
+// killProbeProcess stops a helper process during teardown. Kill fails only when
+// the process already exited, which the caller observes through its done channel.
+func killProbeProcess(process *os.Process) {
+	if err := process.Kill(); err != nil {
+		return
+	}
+}
 
 const (
 	crossProcessHTTPTimeout      = 2 * time.Second

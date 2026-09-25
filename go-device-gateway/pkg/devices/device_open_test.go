@@ -20,12 +20,12 @@ func TestDeviceAdaptersResolveDirectionalDefaultsAndExposeIDs(t *testing.T) {
 
 	sink, err := NewDeviceSink(registry, "")
 	if err != nil {
-		_ = source.Close()
+		closeForTest(t, "source", source)
 		t.Fatalf("NewDeviceSink(default) = %v", err)
 	}
 	if got, want := sink.DeviceID(), DeviceID("virtual:output"); got != want {
-		_ = source.Close()
-		_ = sink.Close()
+		closeForTest(t, "source", source)
+		closeForTest(t, "sink", sink)
 		t.Fatalf("sink DeviceID() = %q, want %q", got, want)
 	}
 	if err := source.Close(); err != nil {

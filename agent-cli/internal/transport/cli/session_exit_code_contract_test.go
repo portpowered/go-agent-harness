@@ -44,7 +44,7 @@ func TestSessionHasExplicitModeMatrix(t *testing.T) {
 		{name: "record-dir flag", args: []string{"--record-dir", "dir"}, want: true},
 		{name: "audio-in-turn flag", args: []string{"--audio-in-turn", "turn.wav"}, want: true},
 		{name: "audio-interrupt flag", args: []string{"--audio-interrupt", "in.wav"}, want: true},
-		{name: "browser-cdp-url alone is not session content", args: []string{"--browser-cdp-url", "http://127.0.0.1:9222"}, want: false},
+		{name: "browser-cdp-url alone is not session content", args: []string{"--browser-cdp-url", testCDPURL}, want: false},
 		{name: "browser-tools alone is not session content", args: []string{"--browser-tools", "webmcp"}, want: false},
 		{name: "browser-headless alone is not session content", args: []string{"--browser-headless"}, want: false},
 	}
@@ -128,7 +128,7 @@ func TestSessionBareAndBrowserNonAdmissionStillExitZero(t *testing.T) {
 		configYAML string
 		args       []string
 	}{
-		{name: "endpoint only", args: []string{"--browser-cdp-url", "http://127.0.0.1:9222"}},
+		{name: "endpoint only", args: []string{"--browser-cdp-url", testCDPURL}},
 		{name: "managed control only", args: []string{"--browser-headless"}},
 		{
 			name: "config only",

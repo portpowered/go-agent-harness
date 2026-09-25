@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"sync"
 )
 
@@ -224,6 +225,25 @@ func discardTargetHandle(ctx context.Context, handle *TargetHandle) {
 	if err := handle.Detach(context.WithoutCancel(ctx)); err != nil {
 		return
 	}
+}
+
+// discardRelease closes a detach-only handle on a superseded, failing, or
+// abandoned path; the release error cannot change that decided outcome.
+func discardRelease(handle interface{ Close() error }) {
+	if err := handle.Close(); err != nil {
+		return
+	}
+}
+
+// rememberedBrowserIdentity returns the identity recorded for an accepted
+// candidate's endpoint. An unparsable debugger URL leaves the identity empty:
+// the candidate itself was already validated, so there is nothing to record.
+func rememberedBrowserIdentity(version BrowserVersion, fallback *url.URL) BrowserIdentity {
+	identity, failure := browserIdentityFromVersion(version, fallback)
+	if failure != nil {
+		return BrowserIdentity{}
+	}
+	return identity
 }
 
 func applyProbedCapabilities(target *Target, capabilities TargetCapabilities) {

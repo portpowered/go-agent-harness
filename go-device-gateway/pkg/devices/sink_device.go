@@ -62,11 +62,10 @@ func newDeviceSinkFromOpened(handle OpenedDevice, resolvedID DeviceID, format au
 	samples, hasSamples := handle.(deviceSampleWriter)
 	bytes, hasBytes := handle.(deviceByteWriter)
 	if !hasFrames && !hasSamples && !hasBytes {
-		_ = handle.Close()
-		return nil, &DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}
+		return nil, withCleanupError(&DeviceCapabilityError{ID: resolvedID, Direction: DirectionOutput, Operation: "write", Kind: ErrDeviceCapabilityMismatch}, handle.Close())
 	}
-	waiter, _ := handle.(devicePlaybackWaiter)
-	capacityWaiter, _ := handle.(devicePlaybackCapacityWaiter)
+	waiter := optionalCapability[devicePlaybackWaiter](handle)
+	capacityWaiter := optionalCapability[devicePlaybackCapacityWaiter](handle)
 	return &DeviceSink{adapter: newDeviceAdapter(handle, resolvedID, DirectionOutput), frameWriter: frames, sampleWriter: samples, byteWriter: bytes, playbackWaiter: waiter, capacityWaiter: capacityWaiter, format: format}, nil
 }
 
@@ -157,7 +156,7 @@ func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 		return s.adapter.finish("write", s.sampleWriter.WriteSamples(ctx, append([]int16(nil), frame...)))
 	}
 	encoded := make([]byte, audio.FrameSize*2)
-	_ = codec.EncodePCM16Into(encoded, frame)
+	copy(encoded, codec.EncodePCM16(frame))
 	return s.adapter.finish("write", s.byteWriter.Write(ctx, encoded))
 }
 
@@ -210,9 +209,7 @@ func (s *DeviceSink) WriteSamples(ctx context.Context, samples []int16) error {
 		return s.adapter.finish("write", s.sampleWriter.WriteSamples(ctx, append([]int16(nil), samples...)))
 	}
 	if s.byteWriter != nil {
-		encoded := make([]byte, len(samples)*2)
-		_ = codec.EncodePCM16Into(encoded, samples)
-		return s.adapter.finish("write", s.byteWriter.Write(ctx, encoded))
+		return s.adapter.finish("write", s.byteWriter.Write(ctx, codec.EncodePCM16(samples)))
 	}
 	return s.adapter.finish("write", &audio.FrameSizeError{Operation: "device write samples", Got: len(samples), Want: audio.FrameSize})
 }
@@ -222,4 +219,14 @@ func (s *DeviceSink) Close() error {
 		return nil
 	}
 	return s.adapter.close()
+}
+
+// optionalCapability returns handle's implementation of an optional device
+// capability, or the zero value when the handle does not provide it.
+func optionalCapability[T any](handle OpenedDevice) T {
+	if capability, ok := handle.(T); ok {
+		return capability
+	}
+	var none T
+	return none
 }

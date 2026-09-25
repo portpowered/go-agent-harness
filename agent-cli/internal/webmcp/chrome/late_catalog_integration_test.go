@@ -487,7 +487,7 @@ func (f *lateCatalogFixture) writeHTML(writer http.ResponseWriter, request *http
 	} else {
 		writer.Header().Set("Permissions-Policy", "tools=(self)")
 	}
-	_, _ = writer.Write(page)
+	writeFixtureBody(writer, page)
 }
 
 func (f *lateCatalogFixture) handleLoadingBlock(writer http.ResponseWriter, request *http.Request) {
@@ -500,7 +500,7 @@ func (f *lateCatalogFixture) handleLoadingBlock(writer http.ResponseWriter, requ
 	case <-f.releaseLoading:
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "application/javascript")
-		_, _ = writer.Write([]byte("// released by the deterministic test gate\n"))
+		writeFixtureBody(writer, []byte("// released by the deterministic test gate\n"))
 	case <-request.Context().Done():
 	}
 }
@@ -528,7 +528,7 @@ func (f *lateCatalogFixture) handleState(writer http.ResponseWriter, request *ht
 		f.mu.Unlock()
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(oracle)
+		encodeFixtureJSON(writer, oracle)
 	case http.MethodPost:
 		var oracle lateCatalogOracle
 		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&oracle); err != nil {

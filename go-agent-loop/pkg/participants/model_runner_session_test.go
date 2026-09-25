@@ -445,7 +445,7 @@ func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.
 	if sent.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("silence outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
 	}
-	if got := sent.Value.(*messages.AudioDeltaValue).Content; string(got) != string(silence) {
+	if got := audioDeltaContent(t, sent.Value); string(got) != string(silence) {
 		t.Fatalf("forwarded silence = %v, want %v", got, silence)
 	}
 	if got := len(session.sentMessages()); got != 1 {
@@ -665,7 +665,7 @@ func TestSessionModelRunner_DropsProviderOutputAfterBargeInCancel(t *testing.T) 
 		Role:  messages.RoleAssistant,
 		Value: messages.NewAudioDeltaValue([]byte{4, 5, 6}),
 	})
-	if got := waitForDelta(t, ctx, runner, messages.StreamTypeAudioDelta); len(got.Value.(*messages.AudioDeltaValue).Content) != 3 {
+	if got := waitForDelta(t, ctx, runner, messages.StreamTypeAudioDelta); len(audioDeltaContent(t, got.Value)) != 3 {
 		t.Fatalf("continuation output was not delivered after cancellation window")
 	}
 }
@@ -732,7 +732,7 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("provider sends after queued MESSAGE.END = %#v, want one AUDIO.DELTA and no RESPONSE.CANCEL", sent)
 	}
-	if got := sent[0].Value.(*messages.AudioDeltaValue).Content; string(got) != string([]byte{1, 2, 3}) {
+	if got := audioDeltaContent(t, sent[0].Value); string(got) != string([]byte{1, 2, 3}) {
 		t.Fatalf("peer audio = %v, want it forwarded unchanged", got)
 	}
 	if delta, ok := runner.DeltaOutbox.Read(); !ok || delta.Type != messages.StreamTypeMessageEnd {

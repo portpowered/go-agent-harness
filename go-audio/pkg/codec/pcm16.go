@@ -38,7 +38,7 @@ func EncodePCM16(samples []int16) []byte {
 	encoded := make([]byte, len(samples)*2)
 	// This lossless convenience API intentionally does not apply the remote
 	// payload limit. Use EncodePCM16WithLimit for network input boundaries.
-	_ = encodePCM16Into(encoded, samples)
+	putPCM16(encoded, samples)
 	return encoded
 }
 
@@ -70,10 +70,15 @@ func encodePCM16Into(destination []byte, samples []int16) error {
 	if len(destination) < len(samples)*2 {
 		return fmt.Errorf("%w: got %d bytes, want %d", ErrPCM16BufferTooSmall, len(destination), len(samples)*2)
 	}
+	putPCM16(destination, samples)
+	return nil
+}
+
+// putPCM16 writes samples into a destination already sized for them.
+func putPCM16(destination []byte, samples []int16) {
 	for index, sample := range samples {
 		binary.LittleEndian.PutUint16(destination[index*2:], uint16(sample))
 	}
-	return nil
 }
 
 // DecodePCM16 validates alignment and returns fresh signed little-endian

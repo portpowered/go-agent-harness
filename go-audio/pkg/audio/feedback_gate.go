@@ -129,8 +129,7 @@ func NewPCM16FeedbackGate(config selfhearing.PCM16SelfHearingConfig, warning io.
 	// moderately similar synthetic/user speech as echo in a one-frame window.
 	probe, err := selfhearing.NewPCM16SelfHearingDetector(probeConfig)
 	if err != nil {
-		_ = detector.Close()
-		return nil, err
+		return nil, errors.Join(err, detector.Close())
 	}
 	return &PCM16FeedbackGate{
 		detector:     detector,
@@ -590,6 +589,6 @@ func (g *PCM16FeedbackGate) warnOnceLocked() {
 	// writer supplied by an embedding may block or fail; neither condition can
 	// hold the gate or affect provider delivery.
 	go func() {
-		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning)
+		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning) //nolint:errcheck // detached best-effort warning; its failure must not hold the gate or affect delivery.
 	}()
 }

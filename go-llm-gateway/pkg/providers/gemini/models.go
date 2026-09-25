@@ -127,18 +127,27 @@ func assistantMessageToParts(msg models.Message) []*genai.Part {
 
 	// Tool calls become FunctionCall parts
 	for _, tc := range msg.ToolCalls {
-		args := map[string]any{}
-		if tc.Arguments != "" {
-			_ = json.Unmarshal([]byte(tc.Arguments), &args)
-		}
 		parts = append(parts, &genai.Part{
 			FunctionCall: &genai.FunctionCall{
 				Name: tc.Name,
-				Args: args,
+				Args: toolCallArgs(tc.Arguments),
 			},
 		})
 	}
 	return parts
+}
+
+// toolCallArgs decodes model-produced tool arguments. Absent or malformed
+// arguments are forwarded as an empty argument object.
+func toolCallArgs(arguments string) map[string]any {
+	args := map[string]any{}
+	if arguments == "" {
+		return args
+	}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return map[string]any{}
+	}
+	return args
 }
 
 // toolMessageToPart converts a gateway tool result message to a Gemini FunctionResponse part.

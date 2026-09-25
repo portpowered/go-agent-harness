@@ -35,7 +35,7 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new device server: %v", err)
 	}
-	defer func() { _ = server.Close() }()
+	defer closeTestResource(t, "server", server)
 	httpServer := httptest.NewServer(server.Handler())
 	defer httpServer.Close()
 	endpoint := strings.TrimPrefix(httpServer.URL, "http://")
@@ -60,12 +60,12 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open remote source: %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeTestResource(t, "source", source)
 	sink, err := devicegw.NewDeviceSinkAtRate(remote, output.ID, 16000)
 	if err != nil {
 		t.Fatalf("open remote sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeTestResource(t, "sink", sink)
 
 	want := make([]int16, audio.FrameSize)
 	for index := range want {
@@ -153,7 +153,7 @@ func TestRemoteDeviceServerBackpressureUnblocksOnAdvanceAndDiscard(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = server.Close() }()
+	defer closeTestResource(t, "server", server)
 	httpServer := httptest.NewServer(server.Handler())
 	defer httpServer.Close()
 	endpoint := strings.TrimPrefix(httpServer.URL, "http://")
@@ -165,7 +165,7 @@ func TestRemoteDeviceServerBackpressureUnblocksOnAdvanceAndDiscard(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeTestResource(t, "sink", sink)
 
 	frame := make([]int16, audio.FrameSize)
 	for sink.PlaybackStats().QueuedSamples < sink.PlaybackStats().CapacitySamples-audio.FrameSize {
@@ -219,7 +219,7 @@ func TestRemoteDeviceServerPreservesTypedFormatErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = server.Close() }()
+	defer closeTestResource(t, "server", server)
 	httpServer := httptest.NewServer(server.Handler())
 	defer httpServer.Close()
 	remote, err := devicegw.NewRemoteDeviceRegistry(strings.TrimPrefix(httpServer.URL, "http://"))
@@ -245,7 +245,7 @@ func TestRemoteDeviceServerRejectsAmbiguousAndOversizedRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = server.Close() }()
+	defer closeTestResource(t, "server", server)
 	httpServer := httptest.NewServer(server.Handler())
 	defer httpServer.Close()
 
@@ -295,7 +295,7 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = server.Close() }()
+	defer closeTestResource(t, "server", server)
 	httpServer := httptest.NewServer(server.Handler())
 	defer httpServer.Close()
 	base := httpServer.URL + "/v1/audio-device"
@@ -312,8 +312,8 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 		}
 		defer closeResponseBodyForTest(t, response.Body)
 		if response.StatusCode != http.StatusOK {
-			data, _ := io.ReadAll(response.Body)
-			t.Fatalf("open %s status=%d body=%q", deviceID, response.StatusCode, data)
+			data, readErr := io.ReadAll(response.Body)
+			t.Fatalf("open %s status=%d body=%q read=%v", deviceID, response.StatusCode, data, readErr)
 		}
 		var result struct {
 			HandleID string `json:"handle_id"`
@@ -326,7 +326,7 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 	inputHandle := openHandle(t, "simulated-duplex:input")
 	outputHandle := openHandle(t, "simulated-duplex:output")
 
-	format, _ := json.Marshal(audio.PCM16DeviceFormat(16000))
+	format := marshalJSONForTest(t, audio.PCM16DeviceFormat(16000))
 	tests := []struct {
 		name   string
 		method string
@@ -359,8 +359,8 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 			}
 			defer closeResponseBodyForTest(t, response.Body)
 			if response.StatusCode != test.status {
-				data, _ := io.ReadAll(response.Body)
-				t.Fatalf("status = %d, want %d; body=%q", response.StatusCode, test.status, data)
+				data, readErr := io.ReadAll(response.Body)
+				t.Fatalf("status = %d, want %d; body=%q read=%v", response.StatusCode, test.status, data, readErr)
 			}
 		})
 	}
@@ -406,4 +406,22 @@ func closeResponseBodyForTest(t *testing.T, body io.Closer) {
 	if err := body.Close(); err != nil {
 		t.Errorf("close response body: %v", err)
 	}
+}
+
+// closeTestResource closes a test-owned device resource and reports a close
+// failure without aborting the remaining deferred cleanup.
+func closeTestResource(t *testing.T, name string, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close %s: %v", name, err)
+	}
+}
+
+func marshalJSONForTest(t *testing.T, value any) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("encode %T: %v", value, err)
+	}
+	return encoded
 }

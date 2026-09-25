@@ -13,7 +13,7 @@ import (
 
 type targetHTTPClient struct {
 	requests  []*http.Request
-	responses []*http.Response
+	responses []*cannedResponse
 }
 
 func (c *targetHTTPClient) Do(request *http.Request) (*http.Response, error) {
@@ -23,15 +23,29 @@ func (c *targetHTTPClient) Do(request *http.Request) (*http.Response, error) {
 	}
 	response := c.responses[0]
 	c.responses = c.responses[1:]
-	return response, nil
+	return response.httpResponse(), nil
 }
 
-func targetJSONResponse(body string, status int) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     make(http.Header),
+// cannedResponse describes a fake HTTP response. The fake clients build the
+// *http.Response once, on first use, and the code under test owns closing it.
+type cannedResponse struct {
+	body   string
+	status int
+	built  *http.Response
+}
+
+func (c *cannedResponse) httpResponse() *http.Response {
+	if c == nil {
+		return nil
 	}
+	if c.built == nil {
+		c.built = &http.Response{StatusCode: c.status, Body: io.NopCloser(strings.NewReader(c.body)), Header: make(http.Header)}
+	}
+	return c.built
+}
+
+func targetJSONResponse(body string, status int) *cannedResponse {
+	return &cannedResponse{body: body, status: status}
 }
 
 func targetDescriptor(rawID, title, pageURL string, tools int) TargetDescriptor {
@@ -55,7 +69,7 @@ func TestListTargetsNormalizesJSONListAndRedactsTransportData(t *testing.T) {
   {"id":"internal","type":"page","title":"Settings","url":"chrome://settings","webSocketDebuggerUrl":"ws://127.0.0.1:9222/devtools/page/internal","webmcpSupported":true,"toolCount":1},
   {"id":"no-websocket","type":"page","title":"No socket","url":"https://socketless.test","webmcpSupported":true,"toolCount":1}
 ]`
-	client := &targetHTTPClient{responses: []*http.Response{
+	client := &targetHTTPClient{responses: []*cannedResponse{
 		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/browser-secret"), http.StatusOK),
 		targetJSONResponse(listJSON, http.StatusOK),
 	}}
@@ -219,7 +233,7 @@ func TestListTargetsReturnsNoEligibleAndUnsupportedClassifications(t *testing.T)
 }
 
 func TestDiscoverAndListTargetsRequiresExactBrowserWhenSeveralConfigured(t *testing.T) {
-	client := &targetHTTPClient{responses: []*http.Response{
+	client := &targetHTTPClient{responses: []*cannedResponse{
 		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/one"), http.StatusOK),
 		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9223/devtools/browser/two"), http.StatusOK),
 	}}

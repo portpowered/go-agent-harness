@@ -30,100 +30,85 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	candidate := webmcp.BrowserCandidate{
-		ID:       "browser-cube",
-		Source:   webmcp.DiscoverySourceExplicit,
-		Product:  "scripted",
-		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9222",
-		Loopback: true,
-		Explicit: true,
-	}
-	cubeTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-cube",
-		Type:                  "page",
-		Title:                 "Cubecade",
-		URL:                   "https://cube.example.test/",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	getCubeState := webmcp.ToolDescriptor{
-		Name:        "get_cube_state",
-		Description: "Read the current cube state.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	queueCubeMoves := webmcp.ToolDescriptor{
-		Name:        "queue_cube_moves",
-		Description: "Queue rotation moves on the cube.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
-	}
+	candidate := scriptedExplicitCandidate("browser-cube", testCDPURL)
+	cubeTarget := ambiguousFixtureTarget(candidate.ID, "tab-cube", "Cubecade", "cube")
+	getCubeState, queueCubeMoves := wireCubeTools()
+	runtime := newWireScriptedRuntime(t, candidate,
+		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState, queueCubeMoves), testkit.WithAutoResponse(json.RawMessage(`{"ok":true}`))),
+	)
+	discoveryService := &singlePageWireDiscovery{candidate: wireLaneCandidate(candidate), target: ambiguousSessionLaneTarget(cubeTarget, 2)}
+	cfg, capabilities := newWirePageToolsCapabilities(t, candidate.HTTPURL, runtime, discoveryService)
 
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(cubeTarget,
-			testkit.WithInitialCatalog(getCubeState, queueCubeMoves),
-			testkit.WithAutoResponse(json.RawMessage(`{"ok":true}`)),
-		),
-	))
-	defer func() {
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Errorf("close scripted browser runtime: %v", closeErr)
+	surface := resolveSessionToolSurface(ctx, capabilities)
+	if surface.browserState != webmcp.BrowserCapabilitySelected {
+		t.Fatalf("browser capability state = %q, want selected for a single eligible page", surface.browserState)
+	}
+	wire, runErr := startWirePageToolsSession(t, ctx, cfg, capabilities)
+	advertised := waitForWireSessionUpdateTools(t, ctx, runErr, wire)
+	for _, want := range []string{getCubeState.Name, queueCubeMoves.Name} {
+		if !advertised[want] {
+			t.Fatalf("session.update advertised tools = %v, want the connected page tool %q on the provider wire", sortedWireToolNames(advertised), want)
 		}
-	}()
-	discoveryService := &singlePageWireDiscovery{
-		candidate: discovery.BrowserCandidate{
-			ID:       string(candidate.ID),
-			Source:   discovery.SourceExplicitCDPHTTP,
-			Product:  candidate.Product,
-			Protocol: candidate.Protocol,
-			Loopback: true,
-		},
-		target: ambiguousSessionLaneTarget(cubeTarget, 2),
 	}
+}
 
+func scriptedExplicitCandidate(id webmcp.BrowserID, httpURL string) webmcp.BrowserCandidate {
+	return webmcp.BrowserCandidate{ID: id, Source: webmcp.DiscoverySourceExplicit, Product: "scripted", Protocol: "1.3", HTTPURL: httpURL, Loopback: true, Explicit: true}
+}
+
+func wireLaneCandidate(candidate webmcp.BrowserCandidate) discovery.BrowserCandidate {
+	return discovery.BrowserCandidate{ID: string(candidate.ID), Source: discovery.SourceExplicitCDPHTTP, Product: candidate.Product, Protocol: candidate.Protocol, Loopback: true}
+}
+
+// wireCubeTools returns the Cubecade read and move page tools.
+func wireCubeTools() (getCubeState, queueCubeMoves webmcp.ToolDescriptor) {
+	getCubeState = ambiguousFixtureTool("get_cube_state", "Read the current cube state.", "cube-frame")
+	queueCubeMoves = ambiguousFixtureTool("queue_cube_moves", "Queue rotation moves on the cube.", "cube-frame")
+	queueCubeMoves.InputSchema = json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`)
+	return getCubeState, queueCubeMoves
+}
+
+func newWireScriptedRuntime(t *testing.T, candidate webmcp.BrowserCandidate, targets ...testkit.TargetConfig) *testkit.ScriptedBrowserRuntime {
+	t.Helper()
+	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate, targets...))
+	t.Cleanup(func() { closeForTest(t, runtime.Close) })
+	return runtime
+}
+
+// newWirePageToolsCapabilities composes production session capabilities for
+// an OpenAI realtime session over the scripted browser and discovery lane.
+func newWirePageToolsCapabilities(t *testing.T, cdpURL string, runtime *testkit.ScriptedBrowserRuntime, discoveryService WebMCPDiscoveryService, configure ...func(*config.BrowserConfig)) (*config.Config, SessionToolCapabilities) {
+	t.Helper()
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = true
-	browser.Connection.CDPURL = candidate.HTTPURL
+	browser.Connection.CDPURL = cdpURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
+	for _, apply := range configure {
+		apply(&browser)
+	}
 	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
-	cfg.Model = config.ModelConfig{
-		Provider: config.ProviderOpenAI,
-		OpenAI:   &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "unused"},
-	}
-
-	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
-	)
+	cfg.Model = config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "unused"}}
+	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(runtime), WithWebMCPProductionDiscovery(discoveryService))
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
 	})(cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}
-	defer func() {
-		if closeErr := capabilities.Close(); closeErr != nil {
-			t.Errorf("close session capabilities: %v", closeErr)
-		}
-	}()
+	t.Cleanup(func() { closeForTest(t, capabilities.Close) })
+	return cfg, capabilities
+}
 
-	surface := resolveSessionToolSurface(ctx, capabilities)
-	if surface.browserState != webmcp.BrowserCapabilitySelected {
-		t.Fatalf("browser capability state = %q, want selected for a single eligible page", surface.browserState)
-	}
-
+// startWirePageToolsSession runs the live session against the session.update
+// wire double and stops it when the test ends.
+func startWirePageToolsSession(t *testing.T, ctx context.Context, cfg *config.Config, capabilities SessionToolCapabilities) (*sessionUpdateWire, <-chan error) {
+	t.Helper()
 	wire := newSessionUpdateWire()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
-	defer func() {
+	t.Cleanup(func() {
 		cancelSession()
 		select {
 		case err := <-runErr:
@@ -133,14 +118,22 @@ func TestSessionAdvertisesConnectedPageToolsOnTheProviderWire(t *testing.T) {
 		case <-time.After(10 * time.Second):
 			t.Error("session did not stop after cancellation")
 		}
-	}()
+	})
+	return wire, runErr
+}
 
-	advertised := waitForWireSessionUpdateTools(t, ctx, runErr, wire)
-	for _, want := range []string{getCubeState.Name, queueCubeMoves.Name} {
-		if !advertised[want] {
-			t.Fatalf("session.update advertised tools = %v, want the connected page tool %q on the provider wire", sortedWireToolNames(advertised), want)
+// waitForWireToolAdvertised reads session.update frames until one advertises
+// want, and returns that frame's tool names.
+func waitForWireToolAdvertised(t *testing.T, ctx context.Context, runErr <-chan error, wire *sessionUpdateWire, want, failure string) map[string]bool {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !time.Now().After(deadline) {
+		if advertised := waitForWireSessionUpdateTools(t, ctx, runErr, wire); advertised[want] {
+			return advertised
 		}
 	}
+	t.Fatal(failure)
+	return nil
 }
 
 // waitForWireSessionUpdateTools returns the tool names carried by the first
@@ -328,109 +321,17 @@ var _ transport.Conn = (*sessionUpdateWire)(nil)
 func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	candidate := webmcp.BrowserCandidate{
-		ID:       "browser-cube-late",
-		Source:   webmcp.DiscoverySourceExplicit,
-		Product:  "scripted",
-		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9223",
-		Loopback: true,
-		Explicit: true,
-	}
-	cubeTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-cube-late",
-		Type:                  "page",
-		Title:                 "Cubecade",
-		URL:                   "https://cube.example.test/",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	getCubeState := webmcp.ToolDescriptor{
-		Name:        "get_cube_state",
-		Description: "Read the current cube state.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	queueCubeMoves := webmcp.ToolDescriptor{
-		Name:        "queue_cube_moves",
-		Description: "Queue rotation moves on the cube.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
-	}
-
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(cubeTarget,
-			testkit.WithInitialCatalog(getCubeState),
-			testkit.WithAutoResponse(json.RawMessage(`{"ok":true}`)),
-		),
-	))
-	defer func() {
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Errorf("close scripted browser runtime: %v", closeErr)
-		}
-	}()
-
-	discoveryService := &singlePageWireDiscovery{
-		candidate: discovery.BrowserCandidate{
-			ID:       string(candidate.ID),
-			Source:   discovery.SourceExplicitCDPHTTP,
-			Product:  candidate.Product,
-			Protocol: candidate.Protocol,
-			Loopback: true,
-		},
-		target: ambiguousSessionLaneTarget(cubeTarget, 1),
-	}
-
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Connection.CDPURL = candidate.HTTPURL
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(t, true)
-	cfg.Browser = browser
-	cfg.Model = config.ModelConfig{
-		Provider: config.ProviderOpenAI,
-		OpenAI:   &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "unused"},
-	}
-
-	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
+	candidate := scriptedExplicitCandidate("browser-cube-late", "http://127.0.0.1:9223")
+	cubeTarget := ambiguousFixtureTarget(candidate.ID, "tab-cube-late", "Cubecade", "cube")
+	getCubeState, queueCubeMoves := wireCubeTools()
+	runtime := newWireScriptedRuntime(t, candidate,
+		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState), testkit.WithAutoResponse(json.RawMessage(`{"ok":true}`))),
 	)
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
-		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
-	if err != nil {
-		t.Fatalf("construct session capabilities: %v", err)
-	}
-	defer func() {
-		if closeErr := capabilities.Close(); closeErr != nil {
-			t.Errorf("close session capabilities: %v", closeErr)
-		}
-	}()
-
+	discoveryService := &singlePageWireDiscovery{candidate: wireLaneCandidate(candidate), target: ambiguousSessionLaneTarget(cubeTarget, 1)}
+	cfg, capabilities := newWirePageToolsCapabilities(t, candidate.HTTPURL, runtime, discoveryService)
 	resolveSessionToolSurface(ctx, capabilities)
 
-	wire := newSessionUpdateWire()
-	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
-	defer func() {
-		cancelSession()
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
-				t.Errorf("session shutdown: %v", err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("session did not stop after cancellation")
-		}
-	}()
-
+	wire, runErr := startWirePageToolsSession(t, ctx, cfg, capabilities)
 	initial := waitForWireSessionUpdateTools(t, ctx, runErr, wire)
 	if !initial[getCubeState.Name] {
 		t.Fatalf("initial session.update tools = %v, want %q", sortedWireToolNames(initial), getCubeState.Name)
@@ -440,7 +341,7 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 	if err != nil {
 		t.Fatalf("open scripted browser: %v", err)
 	}
-	targetSession := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession(cubeTarget.ID)
+	targetSession := scriptedBrowserHandle(t, handleValue).TargetSession(cubeTarget.ID)
 	if targetSession == nil {
 		t.Fatal("scripted target session is nil")
 	}
@@ -448,18 +349,9 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 		t.Fatalf("emit late page tool: %v", err)
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if time.Now().After(deadline) {
-			t.Fatalf("no session.update frame ever advertised the late page tool %q", queueCubeMoves.Name)
-		}
-		advertised := waitForWireSessionUpdateTools(t, ctx, runErr, wire)
-		if advertised[queueCubeMoves.Name] {
-			if !advertised[getCubeState.Name] {
-				t.Fatalf("republished session.update dropped %q: %v", getCubeState.Name, sortedWireToolNames(advertised))
-			}
-			return
-		}
+	advertised := waitForWireToolAdvertised(t, ctx, runErr, wire, queueCubeMoves.Name, "no session.update frame ever advertised the late page tool "+queueCubeMoves.Name)
+	if !advertised[getCubeState.Name] {
+		t.Fatalf("republished session.update dropped %q: %v", getCubeState.Name, sortedWireToolNames(advertised))
 	}
 }
 
@@ -472,138 +364,26 @@ func TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire(t *testing.T)
 func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	candidate := webmcp.BrowserCandidate{
-		ID:       "browser-cube-switch",
-		Source:   webmcp.DiscoverySourceExplicit,
-		Product:  "scripted",
-		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9224",
-		Loopback: true,
-		Explicit: true,
-	}
-	cubeTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-cube-switch",
-		Type:                  "page",
-		Title:                 "Cubecade",
-		URL:                   "https://cube.example.test/",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	marginTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-margin-switch",
-		Type:                  "page",
-		Title:                 "Margin",
-		URL:                   "https://margin.example.test/",
-		Origin:                "https://margin.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	getCubeState := webmcp.ToolDescriptor{
-		Name:        "get_cube_state",
-		Description: "Read the current cube state.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	queueCubeMoves := webmcp.ToolDescriptor{
-		Name:        "queue_cube_moves",
-		Description: "Queue rotation moves on the cube.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
-	}
-	marginTool := webmcp.ToolDescriptor{
-		Name:        "get_document",
-		Description: "Read the Margin document.",
-		FrameID:     "margin-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(cubeTarget,
-			testkit.WithInitialCatalog(getCubeState, queueCubeMoves),
-			testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`)),
-		),
-		testkit.NewTargetConfig(marginTarget,
-			testkit.WithInitialCatalog(marginTool),
-			testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`)),
-		),
-	))
-	defer func() {
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Errorf("close scripted browser runtime: %v", closeErr)
-		}
-	}()
-
-	discoveryService := &ambiguousSessionDiscovery{
-		candidate: discovery.BrowserCandidate{
-			ID:       string(candidate.ID),
-			Source:   discovery.SourceExplicitCDPHTTP,
-			Product:  candidate.Product,
-			Protocol: candidate.Protocol,
-			Loopback: true,
-		},
-		targets: []discovery.Target{
-			ambiguousSessionLaneTarget(cubeTarget, 2),
-			ambiguousSessionLaneTarget(marginTarget, 1),
-		},
-	}
-
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Connection.CDPURL = candidate.HTTPURL
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(t, true)
-	cfg.Browser = browser
-	cfg.Model = config.ModelConfig{
-		Provider: config.ProviderOpenAI,
-		OpenAI:   &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "unused"},
-	}
-
-	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
+	candidate := scriptedExplicitCandidate("browser-cube-switch", "http://127.0.0.1:9224")
+	cubeTarget := ambiguousFixtureTarget(candidate.ID, "tab-cube-switch", "Cubecade", "cube")
+	marginTarget := ambiguousFixtureTarget(candidate.ID, "tab-margin-switch", "Margin", "margin")
+	getCubeState, queueCubeMoves := wireCubeTools()
+	marginTool := ambiguousFixtureTool("get_document", "Read the Margin document.", "margin-frame")
+	runtime := newWireScriptedRuntime(t, candidate,
+		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState, queueCubeMoves), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
+		testkit.NewTargetConfig(marginTarget, testkit.WithInitialCatalog(marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
 	)
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
-		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
-	if err != nil {
-		t.Fatalf("construct session capabilities: %v", err)
+	discoveryService := &ambiguousSessionDiscovery{
+		candidate: wireLaneCandidate(candidate),
+		targets:   []discovery.Target{ambiguousSessionLaneTarget(cubeTarget, 2), ambiguousSessionLaneTarget(marginTarget, 1)},
 	}
-	defer func() {
-		if closeErr := capabilities.Close(); closeErr != nil {
-			t.Errorf("close session capabilities: %v", closeErr)
-		}
-	}()
+	cfg, capabilities := newWirePageToolsCapabilities(t, candidate.HTTPURL, runtime, discoveryService)
 
 	surface := resolveSessionToolSurface(ctx, capabilities)
 	if surface.browserState != webmcp.BrowserCapabilityConnectedUnselected {
 		t.Fatalf("browser capability state = %q, want connected_unselected for two eligible pages", surface.browserState)
 	}
-
-	wire := newSessionUpdateWire()
-	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
-	defer func() {
-		cancelSession()
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
-				t.Errorf("session shutdown: %v", err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("session did not stop after cancellation")
-		}
-	}()
-
+	wire, runErr := startWirePageToolsSession(t, ctx, cfg, capabilities)
 	initial := waitForWireSessionUpdateTools(t, ctx, runErr, wire)
 	if initial[getCubeState.Name] {
 		t.Fatalf("unselected session.update already advertised page tools: %v", sortedWireToolNames(initial))
@@ -618,21 +398,12 @@ func TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection(t *testing.
 		t.Fatalf("exact mid-session Cubecade selection failed: %+v", selectEnvelope.Error)
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if time.Now().After(deadline) {
-			t.Fatalf("no session.update frame advertised the selected page tools after an exact mid-session selection")
-		}
-		advertised := waitForWireSessionUpdateTools(t, ctx, runErr, wire)
-		if advertised[getCubeState.Name] {
-			if !advertised[queueCubeMoves.Name] {
-				t.Fatalf("session.update advertised %v, want both selected Cubecade page tools", sortedWireToolNames(advertised))
-			}
-			if advertised[marginTool.Name] {
-				t.Fatalf("session.update advertised the unselected page's tool: %v", sortedWireToolNames(advertised))
-			}
-			return
-		}
+	advertised := waitForWireToolAdvertised(t, ctx, runErr, wire, getCubeState.Name, "no session.update frame advertised the selected page tools after an exact mid-session selection")
+	if !advertised[queueCubeMoves.Name] {
+		t.Fatalf("session.update advertised %v, want both selected Cubecade page tools", sortedWireToolNames(advertised))
+	}
+	if advertised[marginTool.Name] {
+		t.Fatalf("session.update advertised the unselected page's tool: %v", sortedWireToolNames(advertised))
 	}
 }
 

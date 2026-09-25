@@ -282,7 +282,7 @@ func (s *grokSession) readLoop(ctx context.Context) {
 			return
 		}
 
-		_ = s.publishRTCMedia(event)
+		s.publishRTCMediaWithLog(event)
 		msgs := translateInbound(event)
 		for _, m := range msgs {
 			if !s.recvBuf.Write(ctx, m) {
@@ -305,7 +305,7 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			_ = s.Close()
+			s.closeWithLog()
 			return
 		case <-s.done:
 			return
@@ -318,7 +318,7 @@ func (s *grokSession) writeLoop(ctx context.Context) {
 				}
 				s.setTerminalError(err)
 				s.logger.Error("grok: websocket write error", logging.Field{Key: "error", Value: err})
-				_ = s.Close()
+				s.closeWithLog()
 				return
 			}
 			s.outbound.Complete()
@@ -363,10 +363,7 @@ func (s *grokSession) Close() error {
 	var closeErr error
 	s.closeOnce.Do(func() {
 		close(s.done)
-		if media := s.currentRTCMedia(); media != nil {
-			_ = media.Close()
-		}
-		closeErr = s.conn.Close()
+		closeErr = errors.Join(s.currentRTCMedia().Close(), s.conn.Close())
 	})
 	return closeErr
 }

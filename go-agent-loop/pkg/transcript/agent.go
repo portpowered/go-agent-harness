@@ -103,7 +103,7 @@ func (capture *AgentCapture) Inbound(stream Stream, payload []byte, live any) (i
 	if capture == nil || capture.sink == nil {
 		return callAgentBoundary(consumer, payload, len(payload))
 	}
-	_ = capture.capture(DirectionIn, stream, payload)
+	_ = capture.capture(DirectionIn, stream, payload) //nolint:errcheck // Transcript failures go to the degradation reporter; the live result is the contract.
 	return callAgentBoundary(consumer, payload, len(payload))
 }
 
@@ -137,7 +137,7 @@ func (capture *AgentCapture) Outbound(stream Stream, payload []byte, live any) (
 		return 0, liveErr
 	})
 	tee := capture.newTee(teeLive)
-	_, _ = tee.Write(record)
+	_, _ = tee.Write(record) //nolint:errcheck // Tee reports transcript failures; the live result was captured above.
 	return accepted, liveErr
 }
 

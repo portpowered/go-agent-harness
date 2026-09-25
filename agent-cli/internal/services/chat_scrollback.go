@@ -3,6 +3,7 @@
 package services
 
 import (
+	"errors"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -235,8 +236,8 @@ func wrapSingleLine(s string, width int) []string {
 
 // finishTurn finalizes the session handle, commits the turn's lines to the
 // scrollback, and clears streaming state.
-func (m *ChatModel) finishTurn() tea.Cmd {
-	cleanupErr := finalizeChatHandle(m.handle, m.askFlags.RecordCapturePath)
+func (m *ChatModel) finishTurn(streamCloseErr error) tea.Cmd {
+	cleanupErr := errors.Join(streamCloseErr, finalizeChatHandle(m.handle, m.askFlags.RecordCapturePath))
 	reportChatHandleError(m, "finalizing session", cleanupErr)
 	// Flush any remaining tool text (in case TEXT.END was not received), then commit current turn
 	if m.toolTextPartial != "" {

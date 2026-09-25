@@ -52,25 +52,7 @@ func TestSessionManagedDefaultUsesSingleTargetAndFirstClassPageTools(t *testing.
 		testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool), testkit.WithAutoResponse(json.RawMessage(`{"managed":true}`))),
 	))
 
-	laneTarget := discovery.Target{
-		BrowserID:             string(candidate.ID),
-		ID:                    string(target.ID),
-		Type:                  target.Type,
-		Title:                 target.Title,
-		URL:                   target.URL,
-		Origin:                target.Origin,
-		Generation:            target.Generation,
-		WebSocketPresent:      true,
-		WebMCP:                true,
-		WebMCPKnown:           true,
-		WebMCPDomainSupported: true,
-		WebMCPDomainKnown:     true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		ToolCount:             1,
-		ToolCountKnown:        true,
-		Eligible:              true,
-	}
+	laneTarget := managedReadyLaneTarget(target)
 	selected := discovery.Selection{
 		BrowserID:  string(candidate.ID),
 		TargetID:   string(target.ID),
@@ -109,11 +91,40 @@ func TestSessionManagedDefaultUsesSingleTargetAndFirstClassPageTools(t *testing.
 		t.Fatalf("construct managed session broker: %v", err)
 	}
 	defer func() {
-		_ = broker.Close()
-		_ = runtime.Close()
+		closeForTest(t, broker.Close)
+		closeForTest(t, runtime.Close)
 	}()
 
 	toolSet := webmcpTools.NewBrokerToolSet(broker)
+	contextData := executeManagedContext(t, toolSet)
+	if contextData.BrowserID != string(candidate.ID) || contextData.TargetID != string(target.ID) || !contextData.Ready {
+		t.Fatalf("managed context = %+v, want one ready target", contextData)
+	}
+	discoveryService.assertSingleManagedReconnect(t)
+	if starts.Load() != 1 {
+		t.Fatalf("managed browser starts = %d, want one", starts.Load())
+	}
+	assertManagedPageToolInvocation(t, toolSet, tool.Name)
+}
+
+// managedReadyLaneTarget is the discovery view of a ready WebMCP page target.
+func managedReadyLaneTarget(target webmcp.Target) discovery.Target {
+	return discovery.Target{
+		BrowserID: string(target.BrowserID), ID: string(target.ID), Type: target.Type, Title: target.Title,
+		URL: target.URL, Origin: target.Origin, Generation: target.Generation,
+		WebSocketPresent: true, WebMCP: true, WebMCPKnown: true, WebMCPDomainSupported: true, WebMCPDomainKnown: true,
+		PageToolsReady: true, PageToolsKnown: true, ToolCount: 1, ToolCountKnown: true, Eligible: true,
+	}
+}
+
+type managedContextData struct {
+	BrowserID string `json:"browser_id"`
+	TargetID  string `json:"target_id"`
+	Ready     bool   `json:"ready"`
+}
+
+func executeManagedContext(t *testing.T, toolSet *webmcpTools.BrokerToolSet) managedContextData {
+	t.Helper()
 	contextResponse, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "managed-context",
 		Name:      webmcp.GetContextToolName,
@@ -129,22 +140,21 @@ func TestSessionManagedDefaultUsesSingleTargetAndFirstClassPageTools(t *testing.
 	if !contextEnvelope.OK {
 		t.Fatalf("managed context failed: %+v", contextEnvelope.Error)
 	}
-	var contextData struct {
-		BrowserID string `json:"browser_id"`
-		TargetID  string `json:"target_id"`
-		Ready     bool   `json:"ready"`
-	}
+	var contextData managedContextData
 	if err := json.Unmarshal(contextEnvelope.Data, &contextData); err != nil {
 		t.Fatalf("decode managed context data: %v", err)
 	}
-	if contextData.BrowserID != string(candidate.ID) || contextData.TargetID != string(target.ID) || !contextData.Ready {
-		t.Fatalf("managed context = %+v, want one ready target", contextData)
-	}
+	return contextData
+}
 
-	discoveryService.mu.Lock()
-	reconnectOptions := append([]discovery.ReconnectOptions(nil), discoveryService.reconnectOptions...)
-	discoveryInputs := append([]discovery.ConnectionInputs(nil), discoveryService.reconnectInputs...)
-	discoveryService.mu.Unlock()
+// assertSingleManagedReconnect requires one single-target reconnect that saw
+// only the manager-owned CDP endpoint.
+func (d *managedSessionDiscovery) assertSingleManagedReconnect(t *testing.T) {
+	t.Helper()
+	d.mu.Lock()
+	reconnectOptions := append([]discovery.ReconnectOptions(nil), d.reconnectOptions...)
+	discoveryInputs := append([]discovery.ConnectionInputs(nil), d.reconnectInputs...)
+	d.mu.Unlock()
 	if len(reconnectOptions) != 1 || reconnectOptions[0].AutoSelect != discovery.AutoSelectSingle {
 		t.Fatalf("managed reconnect options = %+v, want one single-target reconnect", reconnectOptions)
 	}
@@ -156,20 +166,20 @@ func TestSessionManagedDefaultUsesSingleTargetAndFirstClassPageTools(t *testing.
 			t.Fatalf("managed discovery inputs = %+v, want manager endpoint only", discoveryInputs)
 		}
 	}
-	if starts.Load() != 1 {
-		t.Fatalf("managed browser starts = %d, want one", starts.Load())
-	}
+}
 
+func assertManagedPageToolInvocation(t *testing.T, toolSet *webmcpTools.BrokerToolSet, toolName string) {
+	t.Helper()
 	pageDefinitions, err := toolSet.PageToolDefinitionsWithError(context.Background())
 	if err != nil {
 		t.Fatalf("publish managed page tools: %v", err)
 	}
-	if len(pageDefinitions) != 1 || pageDefinitions[0].Name != tool.Name {
-		t.Fatalf("managed page definitions = %+v, want %q", pageDefinitions, tool.Name)
+	if len(pageDefinitions) != 1 || pageDefinitions[0].Name != toolName {
+		t.Fatalf("managed page definitions = %+v, want %q", pageDefinitions, toolName)
 	}
 	pageResponse, err := toolSet.Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "managed-page-call",
-		Name:      tool.Name,
+		Name:      toolName,
 		Arguments: `{}`,
 	})
 	if err != nil {

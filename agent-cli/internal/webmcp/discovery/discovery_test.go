@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,13 +13,13 @@ import (
 
 type fakeHTTPClient struct {
 	calls    []*http.Request
-	response *http.Response
+	response *cannedResponse
 	err      error
 }
 
 func (f *fakeHTTPClient) Do(request *http.Request) (*http.Response, error) {
 	f.calls = append(f.calls, request)
-	return f.response, f.err
+	return f.response.httpResponse(), f.err
 }
 
 type fakeWebSocketProbe struct {
@@ -64,12 +63,8 @@ func (r *eventRecorder) Emit(event Event) {
 	r.events = append(r.events, event)
 }
 
-func versionResponse(body string, status int) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     make(http.Header),
-	}
+func versionResponse(body string, status int) *cannedResponse {
+	return &cannedResponse{body: body, status: status}
 }
 
 func validVersionJSON(ws string) string {

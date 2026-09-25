@@ -24,9 +24,11 @@ func (s *Session) Receive() *messages.TypedBuffer[messages.StreamMessage] { retu
 func (s *Session) Done() <-chan struct{}                                  { return s.done }
 
 func (s *Session) Close() error {
-	s.once.Do(func() { close(s.done) })
+	s.closeDone()
 	return nil
 }
+
+func (s *Session) closeDone() { s.once.Do(func() { close(s.done) }) }
 
 // Inferencer is a test double for session-mode inference.
 type Inferencer struct {
@@ -80,7 +82,7 @@ func (m *Inferencer) SimulateDisconnect() {
 	sess := m.session
 	m.mu.Unlock()
 	if sess != nil {
-		_ = sess.Close()
+		sess.closeDone()
 	}
 }
 

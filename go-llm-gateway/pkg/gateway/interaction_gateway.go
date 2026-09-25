@@ -39,14 +39,16 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 		}
 
 		if err := validateInteractionToolResults(req); err != nil {
-			_ = emitter.emitTerminal(ctx, InteractionEvent{
+			if err := emitter.emitTerminal(ctx, InteractionEvent{
 				Type: InteractionEventError,
 				Error: &InteractionError{
 					Code:           "tool_result_validation_error",
 					Message:        err.Error(),
 					Classification: providers.ErrorClassInvalidRequest,
 				},
-			})
+			}); err != nil {
+				return // the caller cancelled before accepting the terminal event
+			}
 			return
 		}
 
@@ -185,7 +187,8 @@ func (e *interactionEventEmitter) emitTerminal(ctx context.Context, event Intera
 	if event.Type == InteractionEventEnd {
 		return nil
 	}
-	return e.emitRaw(InteractionEvent{Type: InteractionEventEnd})
+	e.emitRaw(InteractionEvent{Type: InteractionEventEnd})
+	return nil
 }
 
 func (e *interactionEventEmitter) emitTerminalForErr(err error) {
@@ -193,7 +196,7 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		return
 	}
 	if errors.Is(err, context.Canceled) {
-		_ = e.emitTerminalRaw(InteractionEvent{
+		e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventCancellation,
 			Cancellation: &InteractionCancellation{
 				Reason:         "caller_cancelled",
@@ -205,7 +208,7 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		return
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		_ = e.emitTerminalRaw(InteractionEvent{
+		e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventError,
 			Error: &InteractionError{
 				Code:           "provider_timeout",
@@ -218,7 +221,7 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 	}
 	var unsupported *providers.UnsupportedFeatureError
 	if errors.As(err, &unsupported) {
-		_ = e.emitTerminalRaw(InteractionEvent{
+		e.emitTerminalRaw(InteractionEvent{
 			Type: InteractionEventError,
 			Error: &InteractionError{
 				Code:    "unsupported_feature",
@@ -235,7 +238,7 @@ func (e *interactionEventEmitter) emitTerminalForErr(err error) {
 		})
 		return
 	}
-	_ = e.emitTerminalRaw(InteractionEvent{
+	e.emitTerminalRaw(InteractionEvent{
 		Type: InteractionEventError,
 		Error: &InteractionError{
 			Code:           "provider_error",
@@ -283,17 +286,14 @@ func (e *interactionEventEmitter) outputStateForTerminal() string {
 	return ""
 }
 
-func (e *interactionEventEmitter) emitTerminalRaw(event InteractionEvent) error {
-	if err := e.emitRaw(event); err != nil {
-		return err
+func (e *interactionEventEmitter) emitTerminalRaw(event InteractionEvent) {
+	e.emitRaw(event)
+	if event.Type != InteractionEventEnd {
+		e.emitRaw(InteractionEvent{Type: InteractionEventEnd})
 	}
-	if event.Type == InteractionEventEnd {
-		return nil
-	}
-	return e.emitRaw(InteractionEvent{Type: InteractionEventEnd})
 }
 
-func (e *interactionEventEmitter) emitRaw(event InteractionEvent) error {
+func (e *interactionEventEmitter) emitRaw(event InteractionEvent) {
 	e.sequence++
 	now := time.Now().UTC()
 	event.InteractionID = e.interactionID
@@ -302,7 +302,6 @@ func (e *interactionEventEmitter) emitRaw(event InteractionEvent) error {
 	event.Model = e.model
 	event.CreatedAt = &now
 	e.out <- event
-	return nil
 }
 
 func mustRawJSON(v any) json.RawMessage {

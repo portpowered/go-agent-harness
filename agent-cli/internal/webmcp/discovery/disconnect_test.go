@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -21,7 +22,7 @@ func TestDisconnectDuringDiscoveryReturnsSafeClassifiedFailure(t *testing.T) {
 		CDPURL: "http://127.0.0.1:9222?token=http-secret#fragment",
 	})
 	disconnected := discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
-	if !publicIDPattern.MatchString(disconnected.Details["browser_id"].(string)) {
+	if !publicIDPattern.MatchString(fmt.Sprint(disconnected.Details["browser_id"])) {
 		t.Fatalf("browser ID = %#v, want normalized identifier", disconnected.Details["browser_id"])
 	}
 	if disconnected.Details["phase"] != "version" || disconnected.Details["reconnect_required"] != true || disconnected.Retryable {

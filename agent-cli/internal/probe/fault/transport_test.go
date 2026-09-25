@@ -412,7 +412,7 @@ func TestGrokTransportFaultRemainsObservableWithFullReceiveBuffer(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeFaultedSession(session)
 
 	select {
 	case <-session.Done():
@@ -497,7 +497,7 @@ func runFaultScenarioWithConn(t *testing.T, rawConn transport.Conn, options ...O
 	if err != nil {
 		return faultScenarioResult{faultConn: faultConn, err: err}
 	}
-	defer func() { _ = session.Close() }()
+	defer closeFaultedSession(session)
 
 	result := faultScenarioResult{faultConn: faultConn}
 	for {

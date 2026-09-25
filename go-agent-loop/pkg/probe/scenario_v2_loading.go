@@ -290,7 +290,7 @@ func (s ScenarioV2) openFixture(reference, fieldName string) (io.ReadCloser, err
 	// caller believe an out-of-root target was opened as a contained fixture.
 	resolved, resolveErr := resolveScenarioV2FixturePathFromRoot(s.FixtureRoot, reference)
 	if resolveErr != nil || resolved != path {
-		_ = file.Close()
+		discardRejectedFixture(file)
 		if resolveErr != nil {
 			return nil, wrapScenarioV2Error(fieldName, resolveErr)
 		}
@@ -328,11 +328,20 @@ func OpenScenarioV2Fixture(scenarioPath, reference string) (io.ReadCloser, error
 	}
 	resolved, resolveErr := ResolveScenarioV2FixturePath(scenarioPath, reference)
 	if resolveErr != nil || resolved != path {
-		_ = file.Close()
+		discardRejectedFixture(file)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
 		return nil, newScenarioV2Error("fixture", "fixture target changed during open")
 	}
 	return file, nil
+}
+
+// discardRejectedFixture closes a fixture file the loader is rejecting. The
+// rejection is the reported outcome; a close failure on the abandoned
+// read-only handle cannot change it.
+func discardRejectedFixture(file *os.File) {
+	if err := file.Close(); err != nil {
+		return
+	}
 }

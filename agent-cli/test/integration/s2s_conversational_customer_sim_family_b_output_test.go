@@ -15,13 +15,13 @@ func (f *familyBProviderFixture) sendOriginalOutput(connection *websocket.Conn) 
 	// distinct assistant response without leaving the tool continuation
 	// observer in a partial state.
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-original-tool-continuation"},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_audio.delta", "response_id": "response-original-tool-continuation", "delta": base64.StdEncoding.EncodeToString([]byte{9, 0x42, 0x52, 0x42}), "format": "pcm16",
+		"type": rtEventOutputAudioDelta, "response_id": "response-original-tool-continuation", "delta": base64.StdEncoding.EncodeToString([]byte{9, 0x42, 0x52, 0x42}), "format": "pcm16",
 	}); err != nil {
 		return err
 	}
@@ -32,8 +32,8 @@ func (f *familyBProviderFixture) sendOriginalOutput(connection *websocket.Conn) 
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": "response-original-tool-continuation", "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": "response-original-tool-continuation", "status": rtStatusCompleted},
 	}); err != nil {
 		return err
 	}
@@ -49,12 +49,12 @@ func (f *familyBProviderFixture) sendOriginalOutput(connection *websocket.Conn) 
 	text := "Created draft/brief.md and kept the original draft while I explained the next step."
 	f.recordProductTranscript(probe.TranscriptEvent{ID: "product-turn-1", TurnID: "turn-1", Speaker: probe.TranscriptProduct, Text: text, At: startedAt, Final: true})
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-original-output"},
 	}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.delta", "response_id": "response-original-output", "delta": text}); err != nil {
+	if err := f.send(connection, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "response_id": "response-original-output", "delta": text}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "response_id": "response-original-output", "transcript": text}); err != nil {
@@ -62,7 +62,7 @@ func (f *familyBProviderFixture) sendOriginalOutput(connection *websocket.Conn) 
 	}
 	audio := []byte{1, 0x42, 0x52, 0x42}
 	return f.send(connection, map[string]any{
-		"type": "response.output_audio.delta", "response_id": "response-original-output", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
+		"type": rtEventOutputAudioDelta, "response_id": "response-original-output", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
 	})
 }
 
@@ -81,12 +81,12 @@ func (f *familyBProviderFixture) finishCancelledOriginalResponse(connection *web
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": responseID, "status": "cancelled"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": responseID, "status": rtStatusCancelled},
 	}); err != nil {
 		return err
 	}
-	f.recordResponseTerminal("cancelled")
+	f.recordResponseTerminal(rtStatusCancelled)
 	return nil
 }
 
@@ -98,12 +98,12 @@ func (f *familyBProviderFixture) sendReplacementOutput(connection *websocket.Con
 	text := "Created final/brief.md as the corrected release note."
 	f.recordProductTranscript(probe.TranscriptEvent{ID: "product-turn-2", TurnID: "turn-2", Speaker: probe.TranscriptProduct, Text: text, At: startedAt, Final: true})
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-replacement-output"},
 	}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.delta", "response_id": "response-replacement-output", "delta": text}); err != nil {
+	if err := f.send(connection, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "response_id": "response-replacement-output", "delta": text}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "response_id": "response-replacement-output", "transcript": text}); err != nil {
@@ -111,7 +111,7 @@ func (f *familyBProviderFixture) sendReplacementOutput(connection *websocket.Con
 	}
 	audio := []byte{2, 0x42, 0x52, 0x42}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_audio.delta", "response_id": "response-replacement-output", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
+		"type": rtEventOutputAudioDelta, "response_id": "response-replacement-output", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
 	}); err != nil {
 		return err
 	}
@@ -119,22 +119,22 @@ func (f *familyBProviderFixture) sendReplacementOutput(connection *websocket.Con
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": "response-replacement-output", "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": "response-replacement-output", "status": rtStatusCompleted},
 	}); err != nil {
 		return err
 	}
 	f.mu.Lock()
 	f.replacementOutputEnded = f.elapsedLocked()
 	f.mu.Unlock()
-	f.recordResponseTerminal("completed")
+	f.recordResponseTerminal(rtStatusCompleted)
 	time.Sleep(25 * time.Millisecond)
-	return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_b_correction_complete"})
+	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_b_correction_complete"})
 }
 
 func (f *familyBProviderFixture) sendSessionReady(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
-		"type":    "session.created",
+		"type":    rtEventSessionCreated,
 		"session": map[string]string{"id": "family-b", "model": "gpt-realtime"},
 	}); err != nil {
 		return err

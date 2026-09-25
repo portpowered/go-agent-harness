@@ -151,7 +151,10 @@ func TestBrowserScriptAdapterRejectsWrongEndpoint(t *testing.T) {
 	if _, err := adapter.Discover(context.Background(), webmcp.DiscoverOptions{BrowserID: "other-browser"}); !errors.Is(err, webmcp.ErrBrowserNotFound) {
 		t.Fatalf("Discover wrong browser = %v, want ErrBrowserNotFound", err)
 	}
-	_ = runtime.Close()
+	var incomplete *FixtureIncompleteError
+	if err := runtime.Close(); !errors.As(err, &incomplete) {
+		t.Fatalf("runtime Close = %v, want FixtureIncompleteError for the unconsumed script", err)
+	}
 }
 
 func browserScriptAdapterScript(cancellable bool) BrowserScript {
@@ -187,4 +190,31 @@ func browserScriptAdapterScript(cancellable bool) BrowserScript {
 		},
 		Operations: operations,
 	}
+}
+
+// closeForTest closes a fixture resource at test end and reports an
+// unexpected close failure.
+func closeForTest(t testing.TB, closer interface{ Close() error }) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close: %v", err)
+	}
+}
+
+// requireNoError fails the test when a required step returns an error.
+func requireNoError(t testing.TB, err error, step string) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("%s: %v", step, err)
+	}
+}
+
+// mustType asserts the dynamic type of value and fails the test otherwise.
+func mustType[T any](t testing.TB, value any) T {
+	t.Helper()
+	typed, ok := value.(T)
+	if !ok {
+		t.Fatalf("value has type %T, want %T", value, typed)
+	}
+	return typed
 }

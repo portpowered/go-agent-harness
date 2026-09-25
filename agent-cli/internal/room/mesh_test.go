@@ -25,7 +25,7 @@ func TestMeshJoinCreatesOnePairPerUnorderedParticipantPair(t *testing.T) {
 		return loopbackFactory(ctx, spec)
 	}
 	mesh := NewMesh(MeshConfig{PairFactory: factory})
-	defer func() { _ = mesh.Close() }()
+	defer releaseTestResource(mesh)
 
 	for _, id := range []string{"zeta", "alpha", "beta"} {
 		if err := mesh.Join(context.Background(), id); err != nil {
@@ -119,7 +119,7 @@ func TestLoopbackPairClosesPeerAndBothSignalingEndpoints(t *testing.T) {
 
 func TestMeshRejectsDuplicateAndUnknownMembershipOperations(t *testing.T) {
 	mesh := NewMesh()
-	defer func() { _ = mesh.Close() }()
+	defer releaseTestResource(mesh)
 	if err := mesh.Join(context.Background(), "alpha"); err != nil {
 		t.Fatalf("first Join: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors(t *testing.T) {
 		return resource, nil
 	}
 	mesh := NewMesh(MeshConfig{PairFactory: factory})
-	defer func() { _ = mesh.Close() }()
+	defer releaseTestResource(mesh)
 	for _, id := range []string{"a", "b", "c"} {
 		if err := mesh.Join(context.Background(), id); err != nil {
 			t.Fatalf("Join(%q): %v", id, err)
@@ -533,7 +533,7 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 			return pair, nil
 		},
 	})
-	t.Cleanup(func() { _ = mesh.Close() })
+	t.Cleanup(func() { releaseTestResource(mesh) })
 	t.Cleanup(pair.releaseClose)
 	if err := mesh.Join(context.Background(), "first"); err != nil {
 		t.Fatalf("first Join: %v", err)
@@ -600,7 +600,7 @@ func TestMeshCancellationUnblocksAnInFlightJoinAndClosesPendingPair(t *testing.T
 	pending := &blockingPair{started: make(chan struct{})}
 	factory := func(_ context.Context, _ PairSpec) (PairResource, error) { return pending, nil }
 	mesh := NewMesh(MeshConfig{Context: ctx, PairFactory: factory})
-	defer func() { _ = mesh.Close() }()
+	defer releaseTestResource(mesh)
 	if err := mesh.Join(context.Background(), "first"); err != nil {
 		t.Fatalf("first Join: %v", err)
 	}
@@ -716,7 +716,7 @@ func newConnectedAndPendingMesh(t *testing.T, parent context.Context, connectedE
 		}
 	}
 	mesh := NewMesh(MeshConfig{Context: parent, PairFactory: factory})
-	t.Cleanup(func() { _ = mesh.Close() })
+	t.Cleanup(func() { releaseTestResource(mesh) })
 	t.Cleanup(pending.releaseClose)
 	t.Cleanup(connected.releaseClose)
 	if err := mesh.Join(context.Background(), "a"); err != nil {

@@ -204,7 +204,7 @@ func runFailure(t *testing.T, h ConformanceHarness, failure FailureCase, operati
 		t.Fatalf("failure fixture Dial = (%v, %v), want a usable connection", conn, err)
 	}
 	if operation != "close" {
-		defer func() { _ = conn.Close() }()
+		defer releaseFailedConn(conn)
 	}
 	switch operation {
 	case "read":
@@ -250,4 +250,13 @@ func sameHeaders(a, b map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// releaseFailedConn closes a connection after an injected read or write
+// failure. The failure identity is what the case asserts, and a broken
+// connection may legitimately fail to close, so that result is not reported.
+func releaseFailedConn(conn transport.Conn) {
+	if err := conn.Close(); err != nil {
+		return
+	}
 }

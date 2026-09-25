@@ -116,9 +116,9 @@ func splitAsyncCollisionServerEvents(events []gwtesting.CapturedSessionEvent) (a
 	var current *[]gwtesting.CapturedSessionEvent
 	for _, event := range events {
 		switch event.Type {
-		case "session.created":
+		case rtEventSessionCreated:
 			groups.handshake = append(groups.handshake, event)
-		case "response.created":
+		case rtEventResponseCreated:
 			var payload struct {
 				Response struct {
 					ID string `json:"id"`
@@ -138,7 +138,7 @@ func splitAsyncCollisionServerEvents(events []gwtesting.CapturedSessionEvent) (a
 				return asyncCollisionServerGroups{}, fmt.Errorf("unexpected response.created ID %q in async collision fixture", payload.Response.ID)
 			}
 			*current = append(*current, event)
-		case "session.closed":
+		case rtEventSessionClosed:
 			groups.terminal = append(groups.terminal, event)
 		default:
 			if current == nil {
@@ -153,7 +153,7 @@ func splitAsyncCollisionServerEvents(events []gwtesting.CapturedSessionEvent) (a
 
 	firstAudio := -1
 	for i, event := range groups.collisionHead {
-		if event.Type == "response.output_audio.delta" {
+		if event.Type == rtEventOutputAudioDelta {
 			firstAudio = i
 			break
 		}
@@ -275,7 +275,7 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 		return fmt.Errorf("async collision replay rejected outbound event: %w", err)
 	}
 	switch envelope.Type {
-	case "conversation.item.create":
+	case rtEventConversationItemCreate:
 		if err := validateAsyncOutboundConversationItem(payload); err != nil {
 			return err
 		}
@@ -288,7 +288,7 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 			}
 			c.control.trace.record("provider_result_sent")
 		}
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		select {
 		case <-c.control.continuationCompleted:
 		default:
@@ -297,10 +297,10 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 		if err := validateAsyncOutboundInputAudio(payload, c.control.expectedInputAudio); err != nil {
 			return err
 		}
-	case "input_audio_buffer.commit":
+	case rtEventInputAudioCommit:
 		// The exact audio frame is validated on append; the commit is the
 		// distinct second-turn boundary that precedes response.create.
-	case "session.update", "response.create":
+	case rtEventSessionUpdate, rtEventResponseCreate:
 	default:
 		return fmt.Errorf("async collision replay rejected unexpected outbound event type %q", envelope.Type)
 	}
@@ -319,10 +319,10 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 	c.mu.Unlock()
 
 	switch envelope.Type {
-	case "session.update":
+	case rtEventSessionUpdate:
 		c.control.signals.markSessionUpdate()
-	case "response.create":
-		if count := c.countOutboundType("response.create"); count == 1 {
+	case rtEventResponseCreate:
+		if count := c.countOutboundType(rtEventResponseCreate); count == 1 {
 			c.control.signals.markInitialResponse()
 		} else if count == 2 {
 			c.control.trace.record("continuation_requested")
@@ -333,7 +333,7 @@ func (c *asyncCollisionReplayConn) WriteMessage(_ int, payload []byte) error {
 		} else {
 			return fmt.Errorf("async collision replay received %d response.create events, want exactly three", count)
 		}
-	case "conversation.item.create", "input_audio_buffer.append", "input_audio_buffer.commit":
+	case rtEventConversationItemCreate, rtEventInputAudioAppend, rtEventInputAudioCommit:
 		// The payload was validated before it was recorded.
 	}
 	return nil
@@ -355,11 +355,11 @@ func validateAsyncOutboundConversationItem(payload []byte) error {
 		return fmt.Errorf("decode outbound conversation.item.create: %w", err)
 	}
 	switch envelope.Item.Type {
-	case "message":
-		if envelope.Item.Role != "user" || len(envelope.Item.Content) != 1 || envelope.Item.Content[0].Text != asyncCollisionPrompt {
+	case rtItemMessage:
+		if envelope.Item.Role != rtRoleUser || len(envelope.Item.Content) != 1 || envelope.Item.Content[0].Text != asyncCollisionPrompt {
 			return fmt.Errorf("outbound user turn payload = %+v, want one user message carrying %q", envelope.Item, asyncCollisionPrompt)
 		}
-	case "function_call_output":
+	case rtItemFunctionCallOutput:
 		if envelope.Item.CallID != asyncCollisionCallID || envelope.Item.Output != asyncCollisionResult {
 			return fmt.Errorf("outbound function_call_output = {call_id:%q output:%q}, want original ID %q and sentinel %q", envelope.Item.CallID, envelope.Item.Output, asyncCollisionCallID, asyncCollisionResult)
 		}
@@ -375,7 +375,7 @@ func isAsyncCollisionFunctionCallOutput(payload []byte) bool {
 			Type string `json:"type"`
 		} `json:"item"`
 	}
-	return json.Unmarshal(payload, &envelope) == nil && envelope.Item.Type == "function_call_output"
+	return json.Unmarshal(payload, &envelope) == nil && envelope.Item.Type == rtItemFunctionCallOutput
 }
 
 func (c *asyncCollisionReplayConn) countOutboundType(eventType string) int {

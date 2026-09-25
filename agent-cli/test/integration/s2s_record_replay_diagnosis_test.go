@@ -59,9 +59,9 @@ func TestSessionCommand_RecordThenReplayPromptUsesShippedCLI(t *testing.T) {
 	initial := firstSessionUpdateRecord(t, capture)
 	assertSessionUpdateHasInstructionsAndExec(t, initial)
 	assertOutboundWireTypes(t, capture, []string{
-		"session.update",
-		"conversation.item.create",
-		"response.create",
+		rtEventSessionUpdate,
+		rtEventConversationItemCreate,
+		rtEventResponseCreate,
 	})
 }
 
@@ -124,10 +124,10 @@ func TestSessionCommand_RecordThenReplayScheduledAudioUsesShippedCLI(t *testing.
 
 func TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface(t *testing.T) {
 	fixture := newRecordReplayWebSocketFixture(true, 1)
-	fixture.inputTranscriptDelta = "heard "
-	fixture.inputTranscriptCompleted = "heard clearly"
-	fixture.assistantTranscriptDelta = "answering "
-	fixture.assistantTranscriptCompleted = "answering now"
+	fixture.inputTranscriptDelta = replayHeardPrefix
+	fixture.inputTranscriptCompleted = replayHeardClearly
+	fixture.assistantTranscriptDelta = replayAnsweringPrefix
+	fixture.assistantTranscriptCompleted = replayAnsweringNow
 	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
 	defer server.Close()
 
@@ -163,10 +163,10 @@ func TestSessionCommand_ScriptedInputTranscriptionReachesEverySurface(t *testing
 
 func TestSessionCommand_ReplayInputTranscriptionCapturePreservesEverySurface(t *testing.T) {
 	fixture := newRecordReplayWebSocketFixture(true, 1)
-	fixture.inputTranscriptDelta = "heard "
-	fixture.inputTranscriptCompleted = "heard clearly"
-	fixture.assistantTranscriptDelta = "answering "
-	fixture.assistantTranscriptCompleted = "answering now"
+	fixture.inputTranscriptDelta = replayHeardPrefix
+	fixture.inputTranscriptCompleted = replayHeardClearly
+	fixture.assistantTranscriptDelta = replayAnsweringPrefix
+	fixture.assistantTranscriptCompleted = replayAnsweringNow
 	server := httptest.NewServer(http.HandlerFunc(fixture.handle))
 	defer server.Close()
 
@@ -258,9 +258,9 @@ func assertRecordedInputTranscripts(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("open client transcript: %v", err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 
-	var userDelta, userEnd, assistantDelta, assistantEnd int
+	var counts recordedTranscriptCounts
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		record, decodeErr := transcript.Decode(scanner.Bytes())
@@ -271,34 +271,45 @@ func assertRecordedInputTranscripts(t *testing.T, path string) {
 		if unmarshalErr != nil {
 			t.Fatalf("decode client transcript payload: %v", unmarshalErr)
 		}
-		switch value := message.Value.(type) {
-		case *messages.TranscriptDeltaValue:
-			if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
-				t.Fatalf("transcript delta role = %q, want user or assistant", message.Role)
-			}
-			if message.Role == messages.RoleUser && value.Text == "heard " {
-				userDelta++
-			}
-			if message.Role == messages.RoleAssistant && value.Text == "answering " {
-				assistantDelta++
-			}
-		case *messages.TranscriptEndValue:
-			if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
-				t.Fatalf("transcript end role = %q, want user or assistant", message.Role)
-			}
-			if message.Role == messages.RoleUser && value.FullText == "heard clearly" {
-				userEnd++
-			}
-			if message.Role == messages.RoleAssistant && value.FullText == "answering now" {
-				assistantEnd++
-			}
-		}
+		counts.observe(t, message)
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scan client transcript: %v", err)
 	}
-	if userDelta != 1 || userEnd != 1 || assistantDelta != 1 || assistantEnd != 1 {
-		t.Fatalf("client transcript user_delta=%d user_end=%d assistant_delta=%d assistant_end=%d; want one of each role-preserved record", userDelta, userEnd, assistantDelta, assistantEnd)
+	if counts != (recordedTranscriptCounts{userDelta: 1, userEnd: 1, assistantDelta: 1, assistantEnd: 1}) {
+		t.Fatalf("client transcript user_delta=%d user_end=%d assistant_delta=%d assistant_end=%d; want one of each role-preserved record", counts.userDelta, counts.userEnd, counts.assistantDelta, counts.assistantEnd)
+	}
+}
+
+// recordedTranscriptCounts tallies the role-preserved scripted transcript
+// records in the client transcript.
+type recordedTranscriptCounts struct {
+	userDelta, userEnd, assistantDelta, assistantEnd int
+}
+
+func (c *recordedTranscriptCounts) observe(t *testing.T, message messages.StreamMessage) {
+	t.Helper()
+	switch value := message.Value.(type) {
+	case *messages.TranscriptDeltaValue:
+		if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
+			t.Fatalf("transcript delta role = %q, want user or assistant", message.Role)
+		}
+		if message.Role == messages.RoleUser && value.Text == replayHeardPrefix {
+			c.userDelta++
+		}
+		if message.Role == messages.RoleAssistant && value.Text == replayAnsweringPrefix {
+			c.assistantDelta++
+		}
+	case *messages.TranscriptEndValue:
+		if message.Role != messages.RoleUser && message.Role != messages.RoleAssistant {
+			t.Fatalf("transcript end role = %q, want user or assistant", message.Role)
+		}
+		if message.Role == messages.RoleUser && value.FullText == replayHeardClearly {
+			c.userEnd++
+		}
+		if message.Role == messages.RoleAssistant && value.FullText == replayAnsweringNow {
+			c.assistantEnd++
+		}
 	}
 }
 
@@ -308,7 +319,7 @@ func assertRecordedInputTranscriptSessionLog(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("open session log: %v", err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 
 	type recordingEntry struct {
 		TurnIndex int `json:"turn_index"`
@@ -340,7 +351,7 @@ func assertRecordedInputTranscriptSessionLog(t *testing.T, path string) {
 		t.Fatalf("session log entries = %d, want one: %#v", len(entries), entries)
 	}
 	entry := entries[0]
-	if entry.TurnIndex != 1 || entry.Input.Text != "heard clearly" || entry.Input.AudioBytes == 0 || !entry.Input.Committed || len(entry.Input.AudioSegments) != 1 || entry.Response.Text != "answering now" || !entry.Response.Complete || entry.Response.AudioBytes == 0 {
+	if entry.TurnIndex != 1 || entry.Input.Text != replayHeardClearly || entry.Input.AudioBytes == 0 || !entry.Input.Committed || len(entry.Input.AudioSegments) != 1 || entry.Response.Text != replayAnsweringNow || !entry.Response.Complete || entry.Response.AudioBytes == 0 {
 		t.Fatalf("session log entry = %#v, want authoritative input transcript with retained audio/response fields", entry)
 	}
 }
@@ -377,7 +388,7 @@ func assertRawInputTranscriptEvents(t *testing.T, path string) {
 	if err := json.Unmarshal(matched[1].Payload, &completed); err != nil {
 		t.Fatalf("decode raw input transcription completed: %v", err)
 	}
-	if delta.Type != matched[0].Type || delta.ItemID != "item_record_replay_1" || delta.Delta != "heard " || completed.Type != matched[1].Type || completed.ItemID != delta.ItemID || completed.Transcript != "heard clearly" {
+	if delta.Type != matched[0].Type || delta.ItemID != "item_record_replay_1" || delta.Delta != replayHeardPrefix || completed.Type != matched[1].Type || completed.ItemID != delta.ItemID || completed.Transcript != replayHeardClearly {
 		t.Fatalf("raw input transcription payloads = delta:%#v completed:%#v", delta, completed)
 	}
 }
@@ -509,7 +520,7 @@ func writeRecordReplayAudio(t *testing.T, name string, sample int16) string {
 func corruptPromptPayload(t *testing.T, path string, capture gwtesting.SessionCapture) (int, string) {
 	t.Helper()
 	for index, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
 			continue
 		}
 		var payload map[string]any
@@ -565,7 +576,7 @@ func assertRecordedResponseAudioIdentity(t *testing.T, capture gwtesting.Session
 	t.Helper()
 	responses := 0
 	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionServerToClient || record.Type != "response.output_audio.delta" {
+		if record.Direction != gwtesting.DirectionServerToClient || record.Type != rtEventOutputAudioDelta {
 			continue
 		}
 		responses++
@@ -587,13 +598,13 @@ func assertRecordedResponseAudioIdentity(t *testing.T, capture gwtesting.Session
 func assertScheduledAudioOutboundWireTypes(t *testing.T, capture gwtesting.SessionCapture) {
 	t.Helper()
 	assertOutboundWireTypes(t, capture, []string{
-		"session.update",
-		"input_audio_buffer.append",
-		"input_audio_buffer.commit",
-		"response.create",
-		"input_audio_buffer.append",
-		"input_audio_buffer.commit",
-		"response.create",
+		rtEventSessionUpdate,
+		rtEventInputAudioAppend,
+		rtEventInputAudioCommit,
+		rtEventResponseCreate,
+		rtEventInputAudioAppend,
+		rtEventInputAudioCommit,
+		rtEventResponseCreate,
 	})
 }
 
@@ -622,7 +633,7 @@ func (f *recordReplayWebSocketFixture) handle(writer http.ResponseWriter, reques
 	if err != nil {
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 
 	sessionCreated := false
 	for {
@@ -637,12 +648,12 @@ func (f *recordReplayWebSocketFixture) handle(writer http.ResponseWriter, reques
 			return
 		}
 		switch event.Type {
-		case "session.update":
+		case rtEventSessionUpdate:
 			if sessionCreated {
 				continue
 			}
 			if err := connection.WriteJSON(map[string]any{
-				"type":    "session.created",
+				"type":    rtEventSessionCreated,
 				"session": map[string]string{"id": "sess_record_replay", "model": "gpt-realtime"},
 			}); err != nil {
 				return
@@ -654,7 +665,7 @@ func (f *recordReplayWebSocketFixture) handle(writer http.ResponseWriter, reques
 				return
 			}
 			sessionCreated = true
-		case "response.create":
+		case rtEventResponseCreate:
 			f.mu.Lock()
 			f.responseCount++
 			responseNumber := f.responseCount
@@ -668,91 +679,49 @@ func (f *recordReplayWebSocketFixture) handle(writer http.ResponseWriter, reques
 
 func (f *recordReplayWebSocketFixture) writeResponse(connection *websocket.Conn, responseNumber int, closeAfter bool) error {
 	responseID := fmt.Sprintf("resp_record_replay_%d", responseNumber)
-	if err := connection.WriteJSON(map[string]any{
-		"type":     "response.created",
-		"response": map[string]string{"id": responseID},
-	}); err != nil {
-		return err
-	}
+	frames := []any{map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": responseID}}}
 	if f.audio {
-		transcript := fmt.Sprintf("response turn %d", responseNumber)
-		if f.inputTranscriptDelta != "" || f.inputTranscriptCompleted != "" {
-			itemID := fmt.Sprintf("item_record_replay_%d", responseNumber)
-			if f.inputTranscriptDelta != "" {
-				if err := connection.WriteJSON(map[string]string{
-					"type":    "conversation.item.input_audio_transcription.delta",
-					"item_id": itemID,
-					"delta":   f.inputTranscriptDelta,
-				}); err != nil {
-					return err
-				}
-			}
-			if err := connection.WriteJSON(map[string]string{
-				"type":       "conversation.item.input_audio_transcription.completed",
-				"item_id":    itemID,
-				"transcript": f.inputTranscriptCompleted,
-			}); err != nil {
-				return err
-			}
-		}
-		if f.assistantTranscriptDelta != "" {
-			if err := connection.WriteJSON(map[string]string{
-				"type":        "response.output_audio_transcript.delta",
-				"response_id": responseID,
-				"delta":       f.assistantTranscriptDelta,
-			}); err != nil {
-				return err
-			}
-		}
-		assistantTranscript := f.assistantTranscriptCompleted
-		if assistantTranscript == "" {
-			assistantTranscript = transcript
-		}
-		if err := connection.WriteJSON(map[string]string{
-			"type":        "response.output_audio_transcript.done",
-			"response_id": responseID,
-			"transcript":  assistantTranscript,
-		}); err != nil {
-			return err
-		}
-		audio := base64.StdEncoding.EncodeToString([]byte{byte(responseNumber), 0, byte(responseNumber + 10), 0})
-		if err := connection.WriteJSON(map[string]string{
-			"type":        "response.output_audio.delta",
-			"response_id": responseID,
-			"delta":       audio,
-			"format":      "pcm16",
-		}); err != nil {
-			return err
-		}
-		if err := connection.WriteJSON(map[string]string{"type": "response.output_audio.done", "response_id": responseID}); err != nil {
-			return err
-		}
+		frames = append(frames, f.audioResponseFrames(responseID, responseNumber)...)
 	} else {
-		if err := connection.WriteJSON(map[string]string{
-			"type":        "response.output_text.delta",
-			"response_id": responseID,
-			"delta":       "prompt response",
-		}); err != nil {
-			return err
-		}
-		if err := connection.WriteJSON(map[string]string{"type": "response.output_text.done", "response_id": responseID}); err != nil {
-			return err
-		}
+		frames = append(frames,
+			map[string]string{"type": rtEventOutputTextDelta, "response_id": responseID, "delta": "prompt response"},
+			map[string]string{"type": rtEventOutputTextDone, "response_id": responseID},
+		)
 	}
-	if err := connection.WriteJSON(map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": responseID, "status": "completed"},
-	}); err != nil {
-		return err
-	}
+	frames = append(frames, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": responseID, "status": rtStatusCompleted}})
 	if closeAfter {
-		if err := connection.WriteJSON(map[string]string{
-			"type":       "session.closed",
-			"session_id": "sess_record_replay",
-			"reason":     "fixture_complete",
-		}); err != nil {
+		frames = append(frames, map[string]string{"type": rtEventSessionClosed, "session_id": "sess_record_replay", "reason": "fixture_complete"})
+	}
+	for _, frame := range frames {
+		if err := connection.WriteJSON(frame); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// audioResponseFrames scripts one audio response: optional input
+// transcription, assistant transcript, and one PCM16 audio delta.
+func (f *recordReplayWebSocketFixture) audioResponseFrames(responseID string, responseNumber int) []any {
+	var frames []any
+	if f.inputTranscriptDelta != "" || f.inputTranscriptCompleted != "" {
+		itemID := fmt.Sprintf("item_record_replay_%d", responseNumber)
+		if f.inputTranscriptDelta != "" {
+			frames = append(frames, map[string]string{"type": "conversation.item.input_audio_transcription.delta", "item_id": itemID, "delta": f.inputTranscriptDelta})
+		}
+		frames = append(frames, map[string]string{"type": "conversation.item.input_audio_transcription.completed", "item_id": itemID, "transcript": f.inputTranscriptCompleted})
+	}
+	if f.assistantTranscriptDelta != "" {
+		frames = append(frames, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "response_id": responseID, "delta": f.assistantTranscriptDelta})
+	}
+	assistantTranscript := f.assistantTranscriptCompleted
+	if assistantTranscript == "" {
+		assistantTranscript = fmt.Sprintf("response turn %d", responseNumber)
+	}
+	audio := base64.StdEncoding.EncodeToString([]byte{byte(responseNumber), 0, byte(responseNumber + 10), 0})
+	return append(frames,
+		map[string]string{"type": "response.output_audio_transcript.done", "response_id": responseID, "transcript": assistantTranscript},
+		map[string]string{"type": rtEventOutputAudioDelta, "response_id": responseID, "delta": audio, "format": "pcm16"},
+		map[string]string{"type": "response.output_audio.done", "response_id": responseID},
+	)
 }

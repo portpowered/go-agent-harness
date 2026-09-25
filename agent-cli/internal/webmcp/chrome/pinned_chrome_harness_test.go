@@ -489,3 +489,54 @@ func failClosingBroker(t *testing.T, broker *webmcp.StatefulBroker, format strin
 func describeOptionalError(err error) string {
 	return fmt.Sprint(err)
 }
+
+// mustRepositoryRoot resolves the repository root for child processes. The
+// lookup only fails when the Go runtime cannot report this source file.
+func mustRepositoryRoot() string {
+	root, err := repositoryRoot()
+	if err != nil {
+		panic(err)
+	}
+	return root
+}
+
+// mustFixtureJSON encodes a test-owned fixture value. Fixture types are plain
+// data, so an encoding failure is a programming error in the test itself.
+func mustFixtureJSON(value any) []byte {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("encode fixture %T: %v", value, err))
+	}
+	return encoded
+}
+
+// writeFixtureBody serves a fixture HTTP response. A failed write means the
+// client abandoned the request, which the client-side assertion reports.
+func writeFixtureBody(writer io.Writer, body []byte) {
+	if _, err := writer.Write(body); err != nil {
+		return
+	}
+}
+
+// encodeFixtureJSON serves a JSON fixture response; see writeFixtureBody.
+func encodeFixtureJSON(writer io.Writer, value any) {
+	writeFixtureBody(writer, append(mustFixtureJSON(value), '\n'))
+}
+
+// closeForTest closes a resource whose close is expected to succeed.
+func closeForTest(t testing.TB, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close: %v", err)
+	}
+}
+
+// mustType asserts the dynamic type of value and fails the test otherwise.
+func mustType[T any](t testing.TB, value any) T {
+	t.Helper()
+	typed, ok := value.(T)
+	if !ok {
+		t.Fatalf("value has type %T, want %T", value, typed)
+	}
+	return typed
+}

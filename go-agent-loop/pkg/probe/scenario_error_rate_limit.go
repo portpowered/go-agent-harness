@@ -48,6 +48,24 @@ func registerS2SV6CErrorRateLimitScenario(register func(Scenario, ...DeadSession
 	}
 }
 
-func init() {
-	registerS2SV6CErrorRateLimitScenario(RegisterScenario)
+// newBuiltinScenarioRegistry builds the live registry with every built-in
+// scenario registered explicitly and in a fixed order. It runs during package
+// variable initialization, so the built-ins are present before any caller can
+// observe the live registry.
+func newBuiltinScenarioRegistry() *ScenarioRegistry {
+	registry := NewScenarioRegistry()
+	for _, registerBuiltin := range []func(func(Scenario, ...DeadSessionControl) error){
+		registerS2SV1TextInAudioOutScenario,
+		registerS2SV3ABargeInBasicScenarios,
+		registerS2SV3BBargeInToolResultScenarios,
+		registerS2SV3CBargeInRepeatedScenarios,
+		registerErrorAuthScenarios,
+		registerErrorDisconnectScenarios,
+		registerErrorMalformedResponseScenarios,
+		registerS2SV6CErrorRateLimitScenario,
+		registerS2SV7AMetricsModalityScenarios,
+	} {
+		registerBuiltin(registry.Register)
+	}
+	return registry
 }

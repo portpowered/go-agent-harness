@@ -445,7 +445,7 @@ func WriteRecordingBundle(config RecordingConfig) error {
 	committed := false
 	defer func() {
 		if !committed {
-			_ = os.RemoveAll(staging)
+			_ = os.RemoveAll(staging) //nolint:errcheck // Best-effort removal of an uncommitted staging directory; the recording error is already the outcome.
 		}
 	}()
 

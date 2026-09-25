@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -39,8 +40,8 @@ func run(stdout, stderr io.Writer, args []string) error {
 	preflightResult := runCommand(ctx, timeoutDuration, *goCommand, "test", "./...", "-run", "^$", "-count=1", "-timeout", *timeout)
 	preflightDuration := time.Since(preflightStarted)
 	if preflightResult.err != nil {
-		_, _ = stderr.Write(preflightResult.combined)
-		return fmt.Errorf("preflight no-test go test failed: %w", preflightResult.err)
+		_, writeErr := stderr.Write(preflightResult.combined)
+		return errors.Join(fmt.Errorf("preflight no-test go test failed: %w", preflightResult.err), writeErr)
 	}
 
 	suiteStarted := time.Now()
@@ -55,8 +56,8 @@ func run(stdout, stderr io.Writer, args []string) error {
 		return fmt.Errorf("write timing report: %w", err)
 	}
 	if suiteResult.err != nil {
-		_, _ = stderr.Write(suiteResult.combined)
-		return fmt.Errorf("suite go test failed: %w", suiteResult.err)
+		_, writeErr := stderr.Write(suiteResult.combined)
+		return errors.Join(fmt.Errorf("suite go test failed: %w", suiteResult.err), writeErr)
 	}
 	return nil
 }

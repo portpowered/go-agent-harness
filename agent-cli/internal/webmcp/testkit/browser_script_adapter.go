@@ -321,7 +321,7 @@ func (h *BrowserScriptHandle) Attach(ctx context.Context, targetID webmcp.Target
 		At:         fixtureEventTime(0),
 		Reason:     "fixture_attach",
 	}); err != nil {
-		_ = session.Close()
+		discardCleanupError(session.Close)
 		return nil, err
 	}
 	return session, nil

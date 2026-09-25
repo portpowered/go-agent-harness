@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
 
 const DuplexCapsuleSchemaVersion = 2
@@ -221,7 +222,11 @@ func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err err
 		return nil, err
 	}
 	defer func() { joinCleanupError(&err, opened.Close()) }()
-	if err := opened.(*SimulatedDuplexStream).WriteSamples(context.Background(), capsule.ProviderInput); err != nil {
+	stream, ok := opened.(*SimulatedDuplexStream)
+	if !ok {
+		return nil, fmt.Errorf("simulated duplex registry opened %T", opened)
+	}
+	if err := stream.WriteSamples(context.Background(), capsule.ProviderInput); err != nil {
 		return nil, err
 	}
 	if err := registry.Advance(capsule.Manifest.CallbackCount); err != nil {
@@ -237,9 +242,7 @@ func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err err
 }
 
 func encodeSamples(samples []int16) []byte {
-	out := make([]byte, len(samples)*2)
-	_ = codec.EncodePCM16Into(out, samples)
-	return out
+	return codec.EncodePCM16(samples)
 }
 func marshalJSONLines(events []DeviceTraceEvent) ([]byte, error) {
 	var out bytes.Buffer
@@ -254,3 +257,15 @@ func marshalJSONLines(events []DeviceTraceEvent) ([]byte, error) {
 
 // duplexTapRender is the trace tap name for playback render callbacks.
 const duplexTapRender = "render"
+
+// sample records simulated device telemetry. Observability is best effort:
+// TrySample already isolates sampler panics, and a failing sampler must not
+// change simulated device behavior.
+func (r *SimulatedDuplexRegistry) sample(ctx context.Context, sampler observability.MetricSampler, sample observability.MetricSample) {
+	_ = observability.TrySample(ctx, sampler, sample) //nolint:errcheck // best-effort telemetry must not change simulated device behavior.
+}
+
+// log records a simulated device diagnostic with the same best-effort policy.
+func (r *SimulatedDuplexRegistry) log(ctx context.Context, logger observability.Logger, record observability.LogRecord) {
+	_ = observability.TryLog(ctx, logger, record) //nolint:errcheck // best-effort diagnostics must not change simulated device behavior.
+}

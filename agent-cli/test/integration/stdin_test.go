@@ -145,7 +145,7 @@ func TestAskStdinStreamedInput(t *testing.T) {
 				return
 			}
 		}
-		_ = pw.Close()
+		closeForTest(t, pw)
 	}()
 
 	testWriter := NewTestWriter()
@@ -361,7 +361,7 @@ func TestAskStdinStreamedAudio(t *testing.T) {
 				return
 			}
 		}
-		_ = pw.Close()
+		closeForTest(t, pw)
 	}()
 
 	testWriter := NewTestWriter()
@@ -408,7 +408,7 @@ func TestAskStdinStreamedImage(t *testing.T) {
 				return
 			}
 		}
-		_ = pw.Close()
+		closeForTest(t, pw)
 	}()
 
 	testWriter := NewTestWriter()

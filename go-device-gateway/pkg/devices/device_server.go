@@ -248,10 +248,8 @@ func (s *DeviceServer) handleRead(w http.ResponseWriter, r *http.Request, handle
 		writeDeviceServerError(w, http.StatusConflict, err)
 		return
 	}
-	data := make([]byte, len(samples)*2)
-	_ = codec.EncodePCM16Into(data, samples)
 	w.Header().Set("Content-Type", "application/octet-stream")
-	_, _ = w.Write(data)
+	_, _ = w.Write(codec.EncodePCM16(samples)) //nolint:errcheck // the response status is committed; a failed body write means the client went away.
 }
 
 func (s *DeviceServer) handleWrite(w http.ResponseWriter, r *http.Request, handle OpenedDevice) {
@@ -485,7 +483,7 @@ func writeDeviceServerError(w http.ResponseWriter, status int, err error) {
 		// the RTC pump owner because errors.Is could no longer recognize it.
 		payload.Kind = "closed"
 	}
-	_ = json.NewEncoder(w).Encode(payload)
+	_ = json.NewEncoder(w).Encode(payload) //nolint:errcheck // the error status is committed; a failed body write means the client went away.
 }
 
 // RemoteDeviceRegistry connects production audio adapters to a loopback server.
@@ -592,11 +590,7 @@ func (r *RemoteDeviceRegistry) do(req *http.Request, response any) (err error) {
 	}
 	defer func() { joinCleanupErrorOnFailure(&err, result.Body.Close()) }()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
-		var payload remoteErrorResponse
-		_ = json.NewDecoder(io.LimitReader(result.Body, 1<<20)).Decode(&payload)
-		if payload.Error == "" {
-			payload.Error = result.Status
-		}
+		payload := readRemoteErrorPayload(result)
 		if payload.Kind == "device_format" {
 			return &DeviceFormatError{
 				ID: payload.DeviceID, Direction: payload.Direction, Requested: payload.Requested,
@@ -606,7 +600,7 @@ func (r *RemoteDeviceRegistry) do(req *http.Request, response any) (err error) {
 		return fmt.Errorf("audio-device server %s: %w", req.URL.Host, remoteDeviceError(payload))
 	}
 	if response == nil {
-		_, _ = io.Copy(io.Discard, result.Body)
+		_, _ = io.Copy(io.Discard, result.Body) //nolint:errcheck // draining a successful response only enables connection reuse; it cannot change the result.
 		return nil
 	}
 	if err := json.NewDecoder(io.LimitReader(result.Body, 16<<20)).Decode(response); err != nil {
@@ -671,8 +665,7 @@ func (d *remoteOpenedDevice) WriteSamples(ctx context.Context, samples []int16) 
 }
 
 func (d *remoteOpenedDevice) writeSamples(ctx context.Context, samples []int16) error {
-	data := make([]byte, len(samples)*2)
-	_ = codec.EncodePCM16Into(data, samples)
+	data := codec.EncodePCM16(samples)
 	req, err := http.NewRequestWithContext(contextOrBackground(ctx), http.MethodPost, d.path("write"), bytes.NewReader(data))
 	if err != nil {
 		return err
@@ -747,12 +740,7 @@ func contextOrBackground(ctx context.Context) context.Context {
 }
 
 func decodeRemoteDeviceError(response *http.Response) error {
-	var payload remoteErrorResponse
-	_ = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&payload)
-	if payload.Error == "" {
-		payload.Error = response.Status
-	}
-	return remoteDeviceError(payload)
+	return remoteDeviceError(readRemoteErrorPayload(response))
 }
 
 func remoteDeviceError(payload remoteErrorResponse) error {
@@ -768,7 +756,10 @@ func AdvanceRemoteDeviceServer(ctx context.Context, endpoint string, callbacks i
 	if err != nil {
 		return err
 	}
-	data, _ := json.Marshal(remoteAdvanceRequest{Callbacks: callbacks})
+	data, err := json.Marshal(remoteAdvanceRequest{Callbacks: callbacks})
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(contextOrBackground(ctx), http.MethodPost, registry.baseURL+"/control/advance", bytes.NewReader(data))
 	if err != nil {
 		return err
@@ -802,8 +793,7 @@ func InjectRemoteDeviceServerCapture(ctx context.Context, endpoint string, sampl
 	if err != nil {
 		return err
 	}
-	data := make([]byte, len(samples)*2)
-	_ = codec.EncodePCM16Into(data, samples)
+	data := codec.EncodePCM16(samples)
 	req, err := http.NewRequestWithContext(contextOrBackground(ctx), http.MethodPost, registry.baseURL+"/control/inject-capture", bytes.NewReader(data))
 	if err != nil {
 		return err

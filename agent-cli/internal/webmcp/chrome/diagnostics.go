@@ -158,7 +158,7 @@ func classifyCancellationError(session *targetSession, invocationID string, caus
 	}
 	if session != nil && session.handle != nil && session.handle.isDisconnected() {
 		failure := browserDisconnectedError(session.Context(), "cancel", cause)
-		failure.(*webmcp.ClassifiedError).Details["invocation_id"] = invocationID
+		failure.Details["invocation_id"] = invocationID
 		return failure
 	}
 
@@ -223,7 +223,7 @@ func classifyTargetCleanupError(session *targetSession, phase string, cause erro
 	}
 }
 
-func browserDisconnectedError(page webmcp.PageContext, phase string, cause error) error {
+func browserDisconnectedError(page webmcp.PageContext, phase string, cause error) *webmcp.ClassifiedError {
 	return &webmcp.ClassifiedError{
 		Code:      webmcp.ErrorBrowserDisconnected,
 		Message:   webmcp.DefaultErrorMessage(webmcp.ErrorBrowserDisconnected),

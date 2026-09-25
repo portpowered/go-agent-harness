@@ -712,7 +712,7 @@ func TestSessionModelRunner_SessionDoneEmitsSessionClose(t *testing.T) {
 	ap.Start(ctx)
 	defer ap.Stop()
 
-	_ = session.Close()
+	closeSessionForTest(t, session)
 
 	delta, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
 	if !ok {

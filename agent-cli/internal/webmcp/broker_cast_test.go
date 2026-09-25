@@ -17,9 +17,9 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 			testkit.WithInitialCatalog(pageTool("read_second", "frame-2", `{"type":"object","additionalProperties":false}`)),
 			testkit.WithCastDevices(webmcp.CastDevice{Name: livingRoomCastDevice, ID: "sink-2"})),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: secondaryTargetID}); err != nil {
 		t.Fatalf("select second tab: %v", err)
@@ -66,4 +66,23 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 	if castOperations[1].DeviceName != livingRoomCastDevice || castOperations[2].Kind != testkit.OperationCastMedia || castOperations[2].DeviceName != livingRoomCastDevice || castOperations[3].URL != "https://www.google.com/" || castOperations[4].DeviceName != livingRoomCastDevice {
 		t.Fatalf("device routing = %+v", castOperations)
 	}
+}
+
+// closeAtTestEnd releases a broker or browser fixture when a test finishes.
+// Scripted fixtures close cleanly, so a close failure is a real teardown defect.
+func closeAtTestEnd(t testing.TB, closer interface{ Close() error }) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close test fixture: %v", err)
+	}
+}
+
+// mustAs asserts a fixture value's concrete type and fails the test otherwise.
+func mustAs[T any](t testing.TB, value any) T {
+	t.Helper()
+	typed, ok := value.(T)
+	if !ok {
+		t.Fatalf("fixture value = %T, want %T", value, typed)
+	}
+	return typed
 }

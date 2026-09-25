@@ -27,64 +27,79 @@ func TestInteractionReplayS2FlagMatrix(t *testing.T) {
 		name     string
 		args     []string
 		wantErr  string
+		checkErr func(*testing.T, error)
 		wantHelp bool
 	}{
 		{name: "group help", args: []string{"interaction"}, wantHelp: true},
 		{name: "replay ordered events", args: []string{"interaction", "replay", fixturePath}},
-		{name: "missing replay argument", args: []string{"interaction", "replay"}, wantErr: "accepts 1 arg(s), received 0"},
-		{name: "extra replay argument", args: []string{"interaction", "replay", fixturePath, "extra"}, wantErr: "accepts 1 arg(s), received 2"},
-		{name: "missing fixture", args: []string{"interaction", "replay", missingPath}, wantErr: "replay interaction fixture"},
-		{name: "invalid fixture payload", args: []string{"interaction", "replay", invalidPath}, wantErr: "replay interaction fixture"},
+		{name: "missing replay argument", args: []string{"interaction", "replay"}, wantErr: "accepts 1 arg(s), received 0", checkErr: requireExactInteractionArgumentError("accepts 1 arg(s), received 0")},
+		{name: "extra replay argument", args: []string{"interaction", "replay", fixturePath, "extra"}, wantErr: "accepts 1 arg(s), received 2", checkErr: requireExactInteractionArgumentError("accepts 1 arg(s), received 2")},
+		{name: "missing fixture", args: []string{"interaction", "replay", missingPath}, wantErr: "replay interaction fixture", checkErr: requireInteractionPathError(missingPath)},
+		{name: "invalid fixture payload", args: []string{"interaction", "replay", invalidPath}, wantErr: "replay interaction fixture", checkErr: requireInteractionValidationError(invalidPath)},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := executeGeneratedCLI(context.Background(), t.TempDir(), tc.args...)
 			if tc.wantErr != "" {
-				if got.err == nil {
-					t.Fatalf("expected error containing %q", tc.wantErr)
+				if got.err == nil || !strings.Contains(got.err.Error(), tc.wantErr) {
+					t.Fatalf("error = %v, want context %q", got.err, tc.wantErr)
 				}
-				if !strings.Contains(got.err.Error(), tc.wantErr) {
-					t.Fatalf("error = %q, want context %q", got.err, tc.wantErr)
-				}
-				if tc.name == "missing replay argument" || tc.name == "extra replay argument" {
-					if got.err.Error() != tc.wantErr {
-						t.Fatalf("argument error = %q, want exact %q", got.err, tc.wantErr)
-					}
-				}
-				if tc.name == "missing fixture" {
-					var pathErr *os.PathError
-					if !errors.As(got.err, &pathErr) || pathErr.Path != missingPath {
-						t.Fatalf("error = %v, want wrapped PathError for %q", got.err, missingPath)
-					}
-				}
-				if tc.name == "invalid fixture payload" {
-					var validationErr gateway.InteractionFixtureValidationError
-					if !errors.As(got.err, &validationErr) {
-						t.Fatalf("error = %v, want InteractionFixtureValidationError", got.err)
-					}
-					if validationErr.File != invalidPath || validationErr.FieldPath != "events[0].textDelta" {
-						t.Fatalf("validation error = %+v, want file and textDelta field", validationErr)
-					}
+				if tc.checkErr != nil {
+					tc.checkErr(t, got.err)
 				}
 				return
 			}
-			if got.err != nil {
-				t.Fatalf("execute %s: %v", tc.name, got.err)
-			}
-			if got.stderr != "" {
-				t.Fatalf("stderr = %q, want empty", got.stderr)
+			if got.err != nil || got.stderr != "" {
+				t.Fatalf("execute %s: err=%v stderr=%q", tc.name, got.err, got.stderr)
 			}
 			if tc.wantHelp {
-				for _, want := range []string{"Usage:", "replay", "one JSON object per line", "without provider credentials"} {
-					if !strings.Contains(got.stdout, want) {
-						t.Fatalf("help missing %q:\n%s", want, got.stdout)
-					}
-				}
+				assertInteractionHelp(t, got.stdout)
 				return
 			}
 			assertReplayedEvents(t, got.stdout, fixture.Events)
 		})
+	}
+}
+
+func requireExactInteractionArgumentError(want string) func(*testing.T, error) {
+	return func(t *testing.T, err error) {
+		t.Helper()
+		if err.Error() != want {
+			t.Fatalf("argument error = %q, want exact %q", err, want)
+		}
+	}
+}
+
+func requireInteractionPathError(path string) func(*testing.T, error) {
+	return func(t *testing.T, err error) {
+		t.Helper()
+		var pathErr *os.PathError
+		if !errors.As(err, &pathErr) || pathErr.Path != path {
+			t.Fatalf("error = %v, want wrapped PathError for %q", err, path)
+		}
+	}
+}
+
+func requireInteractionValidationError(file string) func(*testing.T, error) {
+	return func(t *testing.T, err error) {
+		t.Helper()
+		var validationErr gateway.InteractionFixtureValidationError
+		if !errors.As(err, &validationErr) {
+			t.Fatalf("error = %v, want InteractionFixtureValidationError", err)
+		}
+		if validationErr.File != file || validationErr.FieldPath != "events[0].textDelta" {
+			t.Fatalf("validation error = %+v, want file and textDelta field", validationErr)
+		}
+	}
+}
+
+func assertInteractionHelp(t *testing.T, stdout string) {
+	t.Helper()
+	for _, want := range []string{"Usage:", "replay", "one JSON object per line", "without provider credentials"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("help missing %q:\n%s", want, stdout)
+		}
 	}
 }
 

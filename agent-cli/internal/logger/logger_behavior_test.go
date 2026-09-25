@@ -299,7 +299,9 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	os.Stderr = processStderr
 	t.Cleanup(func() {
 		os.Stderr = previousStderr
-		_ = processStderr.Close()
+		if err := processStderr.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("close process stderr capture: %v", err)
+		}
 	})
 	withConsoleWriteSyncer(t, func() zapcore.WriteSyncer { return sink })
 

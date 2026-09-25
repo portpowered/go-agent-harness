@@ -716,7 +716,7 @@ func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedC
 }
 
 func recoveryInput(message string) json.RawMessage {
-	value, _ := json.Marshal(map[string]string{"message": message})
+	value := mustFixtureJSON(map[string]string{"message": message})
 	return value
 }
 

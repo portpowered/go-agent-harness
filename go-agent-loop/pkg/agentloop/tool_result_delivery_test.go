@@ -2,6 +2,7 @@ package agentloop
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +10,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+// londonWeatherReply is the scripted assistant reply shared by weather tests.
+const londonWeatherReply = "The weather in London is sunny."
 
 // recordingToolSession records everything sent to the provider and lets tests
 // feed scripted inbound session events through its Receive buffer.
@@ -246,7 +250,8 @@ func TestDuplexSession_ZeroToolResultsDeliverNothing(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = al.Run(ctx) }()
+	runErr := make(chan error, 1)
+	go func() { runErr <- al.Run(ctx) }()
 
 	// A plain text model turn with no tool calls must not deliver anything to
 	// the session sink as a tool result.
@@ -268,4 +273,12 @@ func TestDuplexSession_ZeroToolResultsDeliverNothing(t *testing.T) {
 	}
 
 	cancel()
+	select {
+	case err := <-runErr:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return after cancellation")
+	}
 }

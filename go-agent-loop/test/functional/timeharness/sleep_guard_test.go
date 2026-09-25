@@ -12,15 +12,15 @@ func TestDiagnosticsChild(t *testing.T) {
 	s := New(time.Unix(0, 0).UTC(), time.Millisecond)
 	switch os.Getenv("TIMEHARNESS_CHILD") {
 	case "sleep":
-		sleeper, observer := register(s, "sleeper"), register(s, "observer")
+		sleeper, observer := register(t, s, "sleeper"), register(t, s, "observer")
 		sleeper.Run(func() { time.Sleep(time.Hour) })
-		observer.Run(func() { _, _ = observer.Observe(1); observer.Complete() })
+		observer.Run(func() { _, _ = observer.Observe(1); observer.Complete() }) //nolint:errcheck // The observer only needs to reach the barrier; the test asserts the outcome.
 		if _, err := s.AdvanceTo(1); err != nil {
 			t.Fatal(err)
 		}
 		t.Fatal("sleeping participant unexpectedly crossed the barrier")
 	case "stuck":
-		register(s, "stuck-peer")
+		register(t, s, "stuck-peer")
 		if _, err := s.AdvanceTo(3); err != nil {
 			t.Fatal(err)
 		}

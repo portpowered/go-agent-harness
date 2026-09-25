@@ -552,7 +552,7 @@ func newCubecadeSharedBrowserFixture() *cubecadeSharedBrowserFixture {
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		writer.Header().Set("Origin-Agent-Cluster", "?1")
 		writer.Header().Set("Permissions-Policy", "tools=(self)")
-		_, _ = writer.Write(cubecadeSharedBrowserFixtureHTML)
+		writeFixtureBody(writer, cubecadeSharedBrowserFixtureHTML)
 	}))
 	return fixture
 }

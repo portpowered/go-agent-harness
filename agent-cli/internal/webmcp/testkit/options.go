@@ -66,3 +66,21 @@ func WithClock(value any) clockOption {
 func WithSessionClock(clock webmcp.Clock) ScriptedTargetSessionOption {
 	return WithClock(clock)
 }
+
+// discardCleanupError runs a release on an abandon or cleanup path whose
+// outcome is already decided. The resource is dropped either way, so its
+// release error cannot change the result reported to the caller.
+func discardCleanupError(release func() error) {
+	if err := release(); err != nil {
+		return
+	}
+}
+
+// emitAdvisoryEvent publishes a local notification whose delivery cannot change
+// the operation result: a session closed concurrently already reports its own
+// terminal state to every subscriber.
+func emitAdvisoryEvent(session *ScriptedTargetSession, event webmcp.BrowserEvent) {
+	if err := session.emitLocal(event); err != nil {
+		return
+	}
+}

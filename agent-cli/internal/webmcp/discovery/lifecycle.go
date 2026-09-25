@@ -56,7 +56,7 @@ func (s *Service) HandleLifecycle(ctx context.Context, event LifecycleEvent) (Se
 	// adapter reported a close is still detach-only and idempotent; importantly,
 	// this package never receives a close-target or browser-process operation.
 	if release != nil {
-		_ = release.Close()
+		discardRelease(release)
 	}
 	if lifecycleFailure != nil {
 		return selection, lifecycleFailure

@@ -219,14 +219,14 @@ func TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance(t *testing.T) {
 	if result["terminal_reason"] != "disconnect" {
 		t.Fatalf("terminal reason = %v, want disconnect", result["terminal_reason"])
 	}
-	for _, expectation := range result["expectations"].([]any) {
-		if expectation.(map[string]any)["passed"] != true {
+	for _, expectation := range mustAs[[]any](t, result["expectations"]) {
+		if mustAs[map[string]any](t, expectation)["passed"] != true {
 			t.Fatalf("every segmentation expectation must pass on the happy path: %v", expectation)
 		}
 	}
 
 	summary := decodeS2SV2DJSONL(t, readFile(t, summaryPath))
-	if len(summary) != 1 || summary[0]["status"] != "pass" || summary[0]["passed"] != float64(1) || summary[0]["failed"] != float64(0) {
+	if len(summary) != 1 || summary[0]["status"] != "pass" || summary[0]["passed"] != float64(1) || summary[0][rtStatusFailed] != float64(0) {
 		t.Fatalf("summary artifact must count the case as passed: %v", summary)
 	}
 }
@@ -251,10 +251,10 @@ func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
 		t.Fatalf("mis-segmented scenario must fail: %v", results)
 	}
 	failedKinds := map[string]bool{}
-	for _, expectation := range results[0]["expectations"].([]any) {
-		outcome := expectation.(map[string]any)
+	for _, expectation := range mustAs[[]any](t, results[0]["expectations"]) {
+		outcome := mustAs[map[string]any](t, expectation)
 		if outcome["passed"] == false {
-			failedKinds[outcome["kind"].(string)] = true
+			failedKinds[mustAs[string](t, outcome["kind"])] = true
 			if outcome["expected"] == "" || outcome["actual"] == "" {
 				t.Fatalf("failed expectation lacks expected/actual detail: %v", outcome)
 			}
@@ -265,7 +265,7 @@ func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
 	}
 
 	summary := decodeS2SV2DJSONL(t, readFile(t, summaryPath))
-	if len(summary) != 1 || summary[0]["status"] != "fail" || summary[0]["failed"] != float64(1) {
+	if len(summary) != 1 || summary[0]["status"] != "fail" || summary[0][rtStatusFailed] != float64(1) {
 		t.Fatalf("summary artifact must reflect the failure: %v", summary)
 	}
 }
@@ -287,7 +287,7 @@ func TestS2SV2DSuiteSelectsEachFixtureByNameAndBothPassOrFailCorrectly(t *testin
 	}
 	byName := map[string]map[string]any{}
 	for _, result := range results {
-		byName[result["name"].(string)] = result
+		byName[mustAs[string](t, result["name"])] = result
 	}
 	if byName["s2s_v2d_multi_utterance"]["pass"] != true {
 		t.Fatalf("happy-path case must still pass in the combined run: %v", byName["s2s_v2d_multi_utterance"])
@@ -297,7 +297,7 @@ func TestS2SV2DSuiteSelectsEachFixtureByNameAndBothPassOrFailCorrectly(t *testin
 	}
 	summary := s2sV2DSummaryLine(t, run.stderr)
 	if summary == nil || summary["status"] != "fail" ||
-		summary["total"] != float64(2) || summary["passed"] != float64(1) || summary["failed"] != float64(1) {
+		summary["total"] != float64(2) || summary["passed"] != float64(1) || summary[rtStatusFailed] != float64(1) {
 		t.Fatalf("unexpected combined-run summary on stderr: %q", run.stderr)
 	}
 }

@@ -27,7 +27,7 @@ func TestWebMCPDoctorReadyJSONUsesRealBrokerStateAndRedactsEndpoints(t *testing.
 		Source:       webmcp.DiscoverySourceExplicit,
 		Product:      "Chrome/Test",
 		Protocol:     "1.3",
-		HTTPURL:      "http://127.0.0.1:9222",
+		HTTPURL:      testCDPURL,
 		BrowserWSURL: "ws://127.0.0.1/devtools/browser/secret-browser-token",
 		Loopback:     true,
 	}
@@ -123,7 +123,7 @@ browser:
 }
 
 func TestWebMCPDoctorHumanOutputIsDeterministic(t *testing.T) {
-	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: "http://127.0.0.1:9222", Loopback: true}
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: testCDPURL, Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
 		testkit.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true},
 			testkit.WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventCatalogReady})),
@@ -174,7 +174,7 @@ func TestWebMCPDoctorUnselectedTargetIsNotReadyAndLeavesPageToolsUnchecked(t *te
 		ID:       webmcp.BrowserID(browserID),
 		Product:  "Chrome/Test",
 		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9222",
+		HTTPURL:  testCDPURL,
 		Loopback: true,
 	}
 	target := webmcp.Target{
@@ -291,7 +291,7 @@ func assertUnselectedDoctorReport(t *testing.T, report WebMCPDoctorReport, brows
 }
 
 func TestWebMCPDoctorReportsSupportedDomainButUnverifiedPageTools(t *testing.T) {
-	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: "http://127.0.0.1:9222", Loopback: true}
+	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", HTTPURL: testCDPURL, Loopback: true}
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
 		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Origin: "https://fixture.test", Eligible: true}),
 	))
@@ -667,7 +667,7 @@ func TestWebMCPDoctorDisconnectAtProbeAndCatalogStagesIsBounded(t *testing.T) {
 		ID:       "browser-a",
 		Product:  "Chrome/Test",
 		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9222",
+		HTTPURL:  testCDPURL,
 		Loopback: true,
 	}
 	target := webmcp.Target{
@@ -699,7 +699,7 @@ func TestWebMCPDoctorDisconnectAtProbeAndCatalogStagesIsBounded(t *testing.T) {
 				Candidate: candidate,
 				Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target)},
 			})
-			defer func() { _ = runtime.Close() }()
+			defer closeForTest(t, runtime.Close)
 			handle := runtime.Browser(candidate.ID)
 			if handle == nil {
 				t.Fatal("scripted browser handle is nil")

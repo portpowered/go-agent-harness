@@ -86,7 +86,9 @@ func BenchmarkReadTick(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_ = ordering.ReadTick(ctx, ls)
+				if err := ordering.ReadTick(ctx, ls); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}
@@ -147,7 +149,9 @@ func BenchmarkFullTickCycle(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = eng.Tick(ctx)
+		if err := eng.Tick(ctx); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

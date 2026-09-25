@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -19,6 +20,7 @@ type ActiveParticipant struct {
 	runner ParticipantRunner
 	cancel context.CancelFunc
 	done   chan struct{}
+	err    error
 }
 
 // NewActiveParticipant creates a participant backed by a runner goroutine.
@@ -41,7 +43,7 @@ func (p *ActiveParticipant) Start(ctx context.Context) {
 
 	go func() {
 		defer close(p.done)
-		_ = p.runner.Run(rctx)
+		p.err = p.runner.Run(rctx)
 	}()
 }
 
@@ -53,4 +55,28 @@ func (p *ActiveParticipant) Stop() {
 	if p.done != nil {
 		<-p.done
 	}
+}
+
+// Err returns the error the runner returned. It is valid after Stop returns
+// and is nil while the runner is still active or was never started.
+func (p *ActiveParticipant) Err() error {
+	if p.done == nil {
+		return nil
+	}
+	select {
+	case <-p.done:
+		return p.err
+	default:
+		return nil
+	}
+}
+
+// joinOnFailure attaches cleanupErr only to an operation that already failed.
+// A cleanup failure after a successful operation does not turn that success
+// into a failure, and a nil cleanup error leaves err's identity unchanged.
+func joinOnFailure(err, cleanupErr error) error {
+	if err == nil || cleanupErr == nil {
+		return err
+	}
+	return errors.Join(err, cleanupErr)
 }

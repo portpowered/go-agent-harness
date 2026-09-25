@@ -1,8 +1,11 @@
 package devices
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"sort"
 	"strings"
 )
@@ -34,7 +37,7 @@ type DeviceNotFoundError struct {
 
 func (e *DeviceNotFoundError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("device %q not found; run agent devices list", e.ID)
 }
@@ -56,7 +59,7 @@ type AmbiguousDeviceNameError struct {
 
 func (e *AmbiguousDeviceNameError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	parts := make([]string, len(e.Candidates))
 	for i, candidate := range e.Candidates {
@@ -102,7 +105,7 @@ type NoDefaultDeviceError struct {
 
 func (e *NoDefaultDeviceError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("no default %s device; run agent devices list", e.Direction)
 }
@@ -121,7 +124,7 @@ type DeviceInUseError struct {
 
 func (e *DeviceInUseError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("device %q is in use", e.ID)
 }
@@ -138,7 +141,7 @@ type InvalidDirectionError struct {
 
 func (e *InvalidDirectionError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("%q is not a valid audio direction; want input or output", e.Direction)
 }
@@ -156,7 +159,7 @@ type InvalidDeviceIDError struct {
 
 func (e *InvalidDeviceIDError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Reason == "" {
 		return "invalid device ID"
@@ -175,7 +178,7 @@ type InvalidDeviceError struct {
 
 func (e *InvalidDeviceError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Reason == "" {
 		return "invalid device metadata"
@@ -205,6 +208,14 @@ type DeviceHandle = OpenedDevice
 
 // joinCleanupError reports a failed deferred cleanup alongside the operation
 // result. A nil cleanup result leaves the result, including its identity, as is.
+// withCleanupError returns primary unchanged when cleanup succeeded and joins a
+// failed cleanup into it otherwise, so a successful release keeps the primary
+// error's identity.
+func withCleanupError(primary, cleanupErr error) error {
+	joinCleanupError(&primary, cleanupErr)
+	return primary
+}
+
 func joinCleanupError(result *error, cleanupErr error) {
 	if cleanupErr != nil {
 		*result = errors.Join(*result, cleanupErr)
@@ -220,4 +231,23 @@ func joinCleanupErrorOnFailure(result *error, cleanupErr error) {
 	if *result != nil && cleanupErr != nil {
 		*result = errors.Join(*result, cleanupErr)
 	}
+}
+
+// nilErrorText is what the typed device errors report for a nil receiver.
+const nilErrorText = "<nil>"
+
+// maxRemoteErrorPayloadBytes bounds how much of a remote error body is decoded.
+const maxRemoteErrorPayloadBytes = 1 << 20
+
+// readRemoteErrorPayload decodes a bounded remote error body. A body that is
+// not a valid error payload is reported by the HTTP status alone.
+func readRemoteErrorPayload(response *http.Response) remoteErrorResponse {
+	var payload remoteErrorResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxRemoteErrorPayloadBytes)).Decode(&payload); err != nil {
+		return remoteErrorResponse{Error: response.Status}
+	}
+	if payload.Error == "" {
+		payload.Error = response.Status
+	}
+	return payload
 }

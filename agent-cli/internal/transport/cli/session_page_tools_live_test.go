@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -27,23 +28,14 @@ func TestSessionPageToolsFirstClassAgainstLiveChrome(t *testing.T) {
 		t.Skip("set WEBMCP_PAGETOOLS_LIVE_CDP_URL to a live Chrome DevTools HTTP endpoint to run the live page-tools proof")
 	}
 
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Tools.Backend = "webmcp"
-	browser.Connection.CDPURL = cdpURL
-	browser.Selection.AutoSelect = "single"
-	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-	for _, id := range config.DefaultToolIDs {
-		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
-	}
-
+	cfg := livePageToolsConfig(t, cdpURL)
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
 	t.Cleanup(func() {
 		if capabilities.Close != nil {
-			_ = capabilities.Close()
+			closeForTest(t, capabilities.Close)
 		}
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -118,52 +110,7 @@ func TestSessionPageToolsConcurrentColdSessions(t *testing.T) {
 	for index, cdpURL := range urls {
 		go func(index int, cdpURL string) {
 			started := time.Now()
-			err := func() error {
-				browser := config.DefaultBrowserConfig()
-				browser.Tools.Enabled = true
-				browser.Tools.Backend = "webmcp"
-				browser.Connection.CDPURL = strings.TrimSpace(cdpURL)
-				browser.Selection.AutoSelect = "single"
-				cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-				for _, id := range config.DefaultToolIDs {
-					cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
-				}
-				capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
-				if err != nil {
-					return fmt.Errorf("factory: %w", err)
-				}
-				defer func() {
-					if capabilities.Close != nil {
-						_ = capabilities.Close()
-					}
-				}()
-				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-				defer cancel()
-				if capabilities.Initialize != nil {
-					if err := capabilities.Initialize(ctx); err != nil {
-						return fmt.Errorf("bootstrap: %w", err)
-					}
-				}
-				refreshed := capabilities.RefreshDefinitions(ctx)
-				if len(refreshed) <= len(capabilities.Definitions) {
-					return fmt.Errorf("no page tools advertised")
-				}
-				name := refreshed[len(capabilities.Definitions)].Name
-				// The first page-tool call runs under the bounded long-running
-				// interactive budget, exactly as the session executor applies it.
-				callContext, cancelCall := context.WithTimeout(ctx, config.DefaultInteractiveLongRunningTimeout)
-				defer cancelCall()
-				callStarted := time.Now()
-				response, err := capabilities.Executor.Execute(callContext, messages.ToolCall{ID: "cold-" + name, Name: name, Arguments: `{}`})
-				if err != nil {
-					return fmt.Errorf("first page-tool call: %w", err)
-				}
-				var envelope webmcp.ToolResultEnvelope
-				if err := json.Unmarshal([]byte(response.Content), &envelope); err != nil || !envelope.OK {
-					return fmt.Errorf("first page-tool call after %s: %s", time.Since(callStarted), response.Content)
-				}
-				return nil
-			}()
+			err := runColdPageToolSession(livePageToolsConfig(t, strings.TrimSpace(cdpURL)))
 			results <- outcome{index: index, duration: time.Since(started), err: err}
 		}(index, cdpURL)
 	}
@@ -174,4 +121,59 @@ func TestSessionPageToolsConcurrentColdSessions(t *testing.T) {
 		}
 		t.Logf("session %d first page-tool call served (total %s)", result.index, result.duration)
 	}
+}
+
+// livePageToolsConfig enables WebMCP browser tools against one live endpoint
+// with single-target automatic selection.
+func livePageToolsConfig(t *testing.T, cdpURL string) *config.Config {
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = true
+	browser.Tools.Backend = config.BrowserToolsBackendWebMCP
+	browser.Connection.CDPURL = cdpURL
+	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
+	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
+	for _, id := range config.DefaultToolIDs {
+		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
+	}
+	return cfg
+}
+
+// runColdPageToolSession bootstraps one session's capabilities and serves its
+// first first-class page-tool call under the interactive long-running budget.
+func runColdPageToolSession(cfg *config.Config) (err error) {
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	if err != nil {
+		return fmt.Errorf("factory: %w", err)
+	}
+	defer func() {
+		if capabilities.Close != nil {
+			err = errors.Join(err, capabilities.Close())
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if capabilities.Initialize != nil {
+		if err := capabilities.Initialize(ctx); err != nil {
+			return fmt.Errorf("bootstrap: %w", err)
+		}
+	}
+	refreshed := capabilities.RefreshDefinitions(ctx)
+	if len(refreshed) <= len(capabilities.Definitions) {
+		return fmt.Errorf("no page tools advertised")
+	}
+	name := refreshed[len(capabilities.Definitions)].Name
+	// The first page-tool call runs under the bounded long-running
+	// interactive budget, exactly as the session executor applies it.
+	callContext, cancelCall := context.WithTimeout(ctx, config.DefaultInteractiveLongRunningTimeout)
+	defer cancelCall()
+	callStarted := time.Now()
+	response, err := capabilities.Executor.Execute(callContext, messages.ToolCall{ID: "cold-" + name, Name: name, Arguments: `{}`})
+	if err != nil {
+		return fmt.Errorf("first page-tool call: %w", err)
+	}
+	var envelope webmcp.ToolResultEnvelope
+	if err := json.Unmarshal([]byte(response.Content), &envelope); err != nil || !envelope.OK {
+		return fmt.Errorf("first page-tool call after %s: %s", time.Since(callStarted), response.Content)
+	}
+	return nil
 }

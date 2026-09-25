@@ -1,9 +1,6 @@
 package integration
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -21,7 +17,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
@@ -242,54 +241,10 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	endpoint, stopDevice := startAudioDeviceServerBinary(t, true)
 	defer stopDevice()
 
-	observationPath := ""
-	fixturePath := ""
-	if len(calls) > 0 {
-		observationPath = filepath.Join(t.TempDir(), "tool-observations.jsonl")
-		fixturePath = writeRemoteToolFixture(t, observationPath, calls, toolDelay)
-	}
-	audioOutPath := ""
-	if testCase.deviceWAV {
-		audioOutPath = filepath.Join(t.TempDir(), "device-output.wav")
-	}
-	capturePath := ""
-	if testCase.timingEvidence {
-		capturePath = filepath.Join(t.TempDir(), "session.json")
-	}
+	paths := newRemoteToolAudioPaths(t, testCase, calls, toolDelay)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	arguments := []string{
-		"--config-dir", t.TempDir(),
-		"session",
-		"--provider", "openai",
-		"--model", "gpt-realtime-2.1",
-		"--api-key", "hermetic-key",
-		"--base-url", provider.WebSocketURL(),
-		"--audio-device-server", endpoint,
-		"--audio-out-device=",
-		"--max-duration", "30s",
-	}
-	if inputFrames > 0 {
-		arguments = append(arguments, "--audio-in-device=")
-	}
-	if !testCase.naturalClose {
-		arguments = append(arguments, "--wait-for-close")
-	}
-	binaryPath := agentBinaryPath
-	if len(calls) > 0 {
-		binaryPath = mockToolAgentBinaryPath
-	}
-	command := exec.CommandContext(ctx, binaryPath, arguments...)
-	if audioOutPath != "" {
-		command.Args = append(command.Args, "--audio-out", audioOutPath)
-	}
-	if capturePath != "" {
-		command.Args = append(command.Args, "--record", capturePath)
-	}
-	if prompt != "" {
-		command.Args = append(command.Args, prompt)
-	}
-	command.Env = remoteToolAudioEnvironment(os.Environ(), fixturePath, testCase.holdToneControl)
+	command := remoteToolAudioCommand(ctx, testCase, len(calls) > 0, endpoint, provider.WebSocketURL(), inputFrames > 0, prompt, paths)
 	var stdout, stderr remoteToolAudioBuffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
@@ -305,28 +260,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	clockCtx, stopClock := context.WithCancel(ctx)
 	clockDone := make(chan error, 1)
 	go driveRemoteToolAudioClock(clockCtx, endpoint, provider.firstAudioSent, callbackInterval, &stdout.callbackAdvances, clockDone)
-
-	select {
-	case <-provider.allResponsesSent:
-	case err := <-done:
-		t.Fatalf("agent exited before the complete %s topology: %v; stdout=%q stderr=%q provider=%+v", testCase.name, err, stdout.String(), stderr.String(), provider.Snapshot())
-	case <-ctx.Done():
-		t.Fatalf("timed out receiving the complete %s topology: %v; provider=%+v stderr=%q", testCase.name, ctx.Err(), provider.Snapshot(), stderr.String())
-	}
-	if testCase.providerClose {
-		provider.ReleaseClose()
-	}
-
-	if testCase.naturalClose || testCase.providerClose {
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatalf("naturally closing mock-tool agent failed: %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
-			}
-		case <-ctx.Done():
-			t.Fatalf("mock-tool agent did not close after its final response: %v; stderr=%q", ctx.Err(), stderr.String())
-		}
-	}
+	awaitRemoteToolAudioTopology(t, ctx, testCase, provider, done, &stdout, &stderr)
 	stopClock()
 	select {
 	case err := <-clockDone:
@@ -358,55 +292,19 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	if snapshot.Playback.DroppedSamples != 0 || snapshot.Playback.OverflowEvents != 0 || snapshot.Playback.DiscardedSamples != 0 || snapshot.Playback.DiscardEvents != 0 {
 		t.Fatalf("%s remote playback reported loss: %+v", testCase.name, snapshot.Playback)
 	}
-
 	if !testCase.naturalClose && !testCase.providerClose {
 		provider.ReleaseClose()
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatalf("mock-tool agent exited: %v; stdout=%q stderr=%q", err, stdout.String(), stderr.String())
-			}
-		case <-ctx.Done():
-			t.Fatalf("agent did not close after verified device playback: %v; stderr=%q", ctx.Err(), stderr.String())
-		}
+		awaitRemoteToolAudioExit(t, ctx, done, &stdout, &stderr, "agent did not close after verified device playback", "mock-tool agent exited")
 	}
-	observed := provider.Snapshot()
-	wantInitialRequest := 0
-	if prompt != "" {
-		wantInitialRequest = 1
-	}
-	wantInputHistory := 0
-	if inputFrames > 0 {
-		wantInputHistory = 1
-	}
-	if observed.protocolError != "" || observed.responsesSent != len(responses) || observed.responseCreates != len(calls) || observed.toolResults != len(calls) || observed.initialRequests != wantInitialRequest || observed.inputHistories != wantInputHistory {
-		t.Fatalf("provider edge observation = %+v, want responses=%d continuations=%d", observed, len(responses), len(calls))
-	}
-	if audioOutPath != "" {
-		wavBytes, err := os.ReadFile(audioOutPath)
-		if err != nil {
-			t.Fatalf("read secondary device WAV: %v", err)
-		}
-		rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-		if err != nil {
-			t.Fatalf("parse secondary device WAV: %v", err)
-		}
-		if rate != audio.SampleRate {
-			t.Fatalf("secondary device WAV sample rate = %d, want negotiated device rate %d", rate, audio.SampleRate)
-		}
-		wavSamples := nonzeroRemoteToolAudio(samples)
-		if testCase.deviceWAV {
-			wavSamples = trimRemoteToolAudioEdgeSilence(samples)
-		}
-		if err := verifyRemoteToolAudio(wavSamples, want); err != nil {
-			t.Fatalf("secondary device WAV differs from remote device edge: %v", err)
-		}
+	assertRemoteToolAudioProviderEdge(t, provider.Snapshot(), len(responses), len(calls), prompt != "", inputFrames > 0)
+	if paths.audioOut != "" {
+		assertRemoteToolAudioDeviceWAV(t, paths.audioOut, testCase.deviceWAV, want)
 	}
 	if len(calls) > 0 {
-		assertRemoteToolObservations(t, observationPath, calls)
+		assertRemoteToolObservations(t, paths.observation, calls)
 	}
-	if capturePath != "" {
-		assertRemoteToolTimingEvidence(t, capturePath, len(calls))
+	if paths.capture != "" {
+		assertRemoteToolTimingEvidence(t, paths.capture, len(calls))
 	}
 }
 
@@ -675,7 +573,7 @@ func (p *remoteToolAudioProvider) Snapshot() remoteToolAudioProviderSnapshot {
 }
 
 func (p *remoteToolAudioProvider) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		p.fail("missing hermetic authorization")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -685,12 +583,12 @@ func (p *remoteToolAudioProvider) handle(writer http.ResponseWriter, request *ht
 		p.fail("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	closeWriterDone := make(chan struct{})
 	go func() {
 		select {
 		case <-p.releaseClose:
-			_ = p.send(connection, map[string]string{"type": "session.closed", "session_id": "sess-tool-audio-e2e", "reason": "fixture_complete"})
+			_ = p.send(connection, map[string]string{"type": rtEventSessionClosed, "session_id": "sess-tool-audio-e2e", "reason": "fixture_complete"}) //nolint:errcheck // send records write failures through p.fail
 		case <-closeWriterDone:
 		}
 	}()
@@ -717,90 +615,115 @@ func (p *remoteToolAudioProvider) handle(writer http.ResponseWriter, request *ht
 			p.fail("decode client event: " + err.Error())
 			return
 		}
+		var keepReading bool
 		switch event.Type {
-		case "session.update":
-			p.mu.Lock()
-			alreadyStarted := p.started
-			p.started = true
-			p.mu.Unlock()
-			if alreadyStarted {
-				continue
-			}
-			if err := p.send(connection, map[string]any{"type": "session.created", "session": map[string]string{"id": "sess-tool-audio-e2e", "model": "gpt-realtime-2.1"}}); err != nil {
-				return
-			}
-			p.sessionReadyOnce.Do(func() { close(p.sessionReady) })
-			if p.expectedPrompt == "" && p.expectedInputSamples == 0 {
-				if err := p.sendReadyResponses(connection); err != nil {
-					return
-				}
-			}
-		case "input_audio_buffer.append":
-			decoded, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil || len(decoded)%2 != 0 {
-				p.fail("decode prior input audio")
-				return
-			}
-			p.mu.Lock()
-			p.inputSamplesSeen += len(decoded) / 2
-			ready := p.expectedInputSamples > 0 && p.inputSamplesSeen >= p.expectedInputSamples && p.nextResponse == 0
-			if ready {
-				p.inputHistories++
-				p.expectedInputSamples = 0
-			}
-			p.mu.Unlock()
-			if ready {
-				if err := p.sendReadyResponses(connection); err != nil {
-					return
-				}
-			}
-		case "conversation.item.create":
-			if event.Item.Type == "message" {
-				if len(event.Item.Content) != 1 || event.Item.Content[0].Text != p.expectedPrompt {
-					p.fail("large preamble did not reach the provider intact")
-					return
-				}
-				p.mu.Lock()
-				p.userPromptSeen = true
-				p.mu.Unlock()
-				continue
-			}
-			if event.Item.Type != "function_call_output" {
-				continue
-			}
-			if err := p.acceptToolResult(event.Item.CallID, event.Item.Output); err != nil {
-				p.fail(err.Error())
-				return
-			}
-		case "response.create":
-			p.mu.Lock()
-			if p.nextResponse == 0 && p.expectedPrompt != "" {
-				if !p.userPromptSeen {
-					p.mu.Unlock()
-					p.fail("initial response.create preceded the large preamble")
-					return
-				}
-				p.initialRequests++
-				p.mu.Unlock()
-				if err := p.sendReadyResponses(connection); err != nil {
-					return
-				}
-				continue
-			}
-			if p.pendingCall < 0 || !p.pendingResult {
-				p.mu.Unlock()
-				p.fail("response.create arrived without its correlated mock tool result")
-				return
-			}
-			p.responseCreates++
-			p.pendingCall = -1
-			p.pendingResult = false
-			p.mu.Unlock()
-			if err := p.sendReadyResponses(connection); err != nil {
-				return
-			}
+		case rtEventSessionUpdate:
+			keepReading = p.handleSessionUpdate(connection)
+		case rtEventInputAudioAppend:
+			keepReading = p.handleInputAudio(connection, event.Audio)
+		case rtEventConversationItemCreate:
+			keepReading = p.handleItem(event.Item.Type, event.Item.CallID, event.Item.Output, event.Item.Content)
+		case rtEventResponseCreate:
+			keepReading = p.handleResponseCreate(connection)
+		default:
+			keepReading = true
+		}
+		if !keepReading {
+			return
 		}
 	}
+}
+
+// handleSessionUpdate opens the session once and, without a prompt or input
+// history to wait for, starts the scripted responses.
+func (p *remoteToolAudioProvider) handleSessionUpdate(connection *websocket.Conn) bool {
+	p.mu.Lock()
+	alreadyStarted := p.started
+	p.started = true
+	p.mu.Unlock()
+	if alreadyStarted {
+		return true
+	}
+	if err := p.send(connection, map[string]any{"type": rtEventSessionCreated, "session": map[string]string{"id": "sess-tool-audio-e2e", "model": "gpt-realtime-2.1"}}); err != nil {
+		return false
+	}
+	p.sessionReadyOnce.Do(func() { close(p.sessionReady) })
+	if p.expectedPrompt == "" && p.expectedInputSamples == 0 {
+		return p.sendReadyResponses(connection) == nil
+	}
+	return true
+}
+
+// handleInputAudio counts prior input history and starts the responses once
+// the expected input has arrived.
+func (p *remoteToolAudioProvider) handleInputAudio(connection *websocket.Conn, encoded string) bool {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(decoded)%2 != 0 {
+		p.fail("decode prior input audio")
+		return false
+	}
+	p.mu.Lock()
+	p.inputSamplesSeen += len(decoded) / 2
+	ready := p.expectedInputSamples > 0 && p.inputSamplesSeen >= p.expectedInputSamples && p.nextResponse == 0
+	if ready {
+		p.inputHistories++
+		p.expectedInputSamples = 0
+	}
+	p.mu.Unlock()
+	if ready {
+		return p.sendReadyResponses(connection) == nil
+	}
+	return true
+}
+
+// handleItem accepts the large preamble message and correlated tool results.
+func (p *remoteToolAudioProvider) handleItem(itemType, callID, output string, content []struct {
+	Text string `json:"text"`
+}) bool {
+	if itemType == rtItemMessage {
+		if len(content) != 1 || content[0].Text != p.expectedPrompt {
+			p.fail("large preamble did not reach the provider intact")
+			return false
+		}
+		p.mu.Lock()
+		p.userPromptSeen = true
+		p.mu.Unlock()
+		return true
+	}
+	if itemType != rtItemFunctionCallOutput {
+		return true
+	}
+	if err := p.acceptToolResult(callID, output); err != nil {
+		p.fail(err.Error())
+		return false
+	}
+	return true
+}
+
+// handleResponseCreate answers the initial prompt request or a continuation
+// that follows exactly one correlated tool result.
+func (p *remoteToolAudioProvider) handleResponseCreate(connection *websocket.Conn) bool {
+	p.mu.Lock()
+	if p.nextResponse == 0 && p.expectedPrompt != "" {
+		if !p.userPromptSeen {
+			p.mu.Unlock()
+			p.fail("initial response.create preceded the large preamble")
+			return false
+		}
+		p.initialRequests++
+		p.mu.Unlock()
+		return p.sendReadyResponses(connection) == nil
+	}
+	if p.pendingCall < 0 || !p.pendingResult {
+		p.mu.Unlock()
+		p.fail("response.create arrived without its correlated mock tool result")
+		return false
+	}
+	p.responseCreates++
+	p.pendingCall = -1
+	p.pendingResult = false
+	p.mu.Unlock()
+	return p.sendReadyResponses(connection) == nil
 }
 
 func (p *remoteToolAudioProvider) acceptToolResult(callID, output string) error {
@@ -858,7 +781,7 @@ func (p *remoteToolAudioProvider) sendReadyResponses(connection *websocket.Conn)
 func (p *remoteToolAudioProvider) sendResponse(connection *websocket.Conn, index, callIndex int) error {
 	responseID := fmt.Sprintf("resp-tool-audio-%d", index)
 	itemID := fmt.Sprintf("item-tool-audio-%d", index)
-	if err := p.send(connection, map[string]any{"type": "response.created", "response": map[string]string{"id": responseID}}); err != nil {
+	if err := p.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": responseID}}); err != nil {
 		return err
 	}
 	for offset := 0; offset < len(p.responses[index]); offset += remoteToolAudioDeltaSamples {
@@ -882,19 +805,19 @@ func (p *remoteToolAudioProvider) sendResponse(connection *websocket.Conn, index
 	if callIndex >= 0 {
 		call := p.calls[callIndex]
 		if err := p.send(connection, map[string]any{
-			"type": "response.output_item.added", "response_id": responseID, "output_index": 1,
-			"item": map[string]string{"type": "function_call", "call_id": call.ID, "name": call.Name},
+			"type": rtEventOutputItemAdded, "response_id": responseID, "output_index": 1,
+			"item": map[string]string{"type": rtItemFunctionCall, "call_id": call.ID, "name": call.Name},
 		}); err != nil {
 			return err
 		}
 		if err := p.send(connection, map[string]any{
-			"type": "response.function_call_arguments.done", "response_id": responseID,
+			"type": rtEventFunctionCallArgumentsDone, "response_id": responseID,
 			"call_id": call.ID, "name": call.Name, "arguments": call.Arguments,
 		}); err != nil {
 			return err
 		}
 	}
-	return p.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": responseID, "status": "completed"}})
+	return p.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": responseID, "status": rtStatusCompleted}})
 }
 
 func (p *remoteToolAudioProvider) send(connection *websocket.Conn, event any) error {
@@ -935,7 +858,7 @@ func writeRemoteToolFixture(t *testing.T, observationPath string, calls []remote
 
 func remoteToolAudioDelta(responseID, itemID string, samples []int16) map[string]any {
 	return map[string]any{
-		"type": "response.output_audio.delta", "response_id": responseID, "item_id": itemID, "content_index": 0,
+		"type": rtEventOutputAudioDelta, "response_id": responseID, "item_id": itemID, "content_index": 0,
 		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(samples)),
 	}
 }

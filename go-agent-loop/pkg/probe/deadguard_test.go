@@ -3,11 +3,14 @@ package probe
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
 
-func init() {
+// TestMain registers the live-suite smoke scenario before any test observes
+// the live registry.
+func TestMain(m *testing.M) {
 	if err := RegisterScenario(Scenario{
 		ID:   "live-probe-suite-smoke",
 		Name: "live probe suite smoke",
@@ -23,6 +26,7 @@ func init() {
 	}); err != nil {
 		panic(err)
 	}
+	os.Exit(m.Run())
 }
 
 func TestDeadSessionGuardCoversLiveRegistry(t *testing.T) {

@@ -34,7 +34,7 @@ func reconcileTargetLossLocked(invocation *brokerInvocation, cause error) error 
 	// operation phase that observed the loss (for example, list_targets).
 	// Session state is the fallback for adapters that only report ErrClosed or
 	// return a stale-selection error after the terminal event raced the call.
-	if _, ok := lifecycleClassifiedError(cause); ok {
+	if isLifecycleClassifiedError(cause) {
 		return cause
 	}
 	if failure := sessionLifecycleFailure(invocation.selected); failure != nil {
@@ -68,7 +68,7 @@ func targetSessionEnded(session TargetSession) bool {
 }
 
 func targetAttachError(selector TargetSelector, phase string, cause error) error {
-	if _, lifecycle := lifecycleClassifiedError(cause); lifecycle {
+	if isLifecycleClassifiedError(cause) {
 		return cause
 	}
 	return classified(ErrorTargetAttachFailed, "the selected browser target could not be initialized", map[string]any{

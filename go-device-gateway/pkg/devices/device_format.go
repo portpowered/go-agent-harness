@@ -48,7 +48,7 @@ type DeviceFormatError struct {
 
 func (e *DeviceFormatError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	message := fmt.Sprintf("device %q cannot open %s format %s", e.ID, e.Direction, e.Requested)
 	if len(e.Available) > 0 {
@@ -74,4 +74,16 @@ func (e *DeviceFormatError) Unwrap() error {
 		return errors.Join(audio.ErrUnsupportedDeviceFormat, e.Err)
 	}
 	return audio.ErrUnsupportedDeviceFormat
+}
+
+// playbackQueueOrNil builds the playback queue for a device format. Invalid
+// formats fall back to the default device format, so construction only fails
+// for an unsatisfiable latency budget; callers then run without a playback
+// queue, exactly as when no queue is configured.
+func playbackQueueOrNil(format audio.DeviceFormat) *audio.PlaybackQueue {
+	queue, err := audio.PlaybackQueueForFormat(format)
+	if err != nil {
+		return nil
+	}
+	return queue
 }

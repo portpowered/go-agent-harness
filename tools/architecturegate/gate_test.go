@@ -335,7 +335,7 @@ func TestSizeMetricsAndDeletionOnlyBaseline(t *testing.T) {
 
 func TestBaselineRenameIsOneToOne(t *testing.T) {
 	old := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app/services/a", File: "old.go", Symbol: "Run", Value: 81, Rationale: "extraction holder", Phase: "P0"}
-	current := Issue{Rule: old.Rule, Module: old.Module, Package: old.Package, File: "new.go", Symbol: old.Symbol, Value: old.Value, Message: "same"}
+	current := Issue{Rule: old.Rule, Module: old.Module, Package: old.Package, File: newFixtureFile, Symbol: old.Symbol, Value: old.Value, Message: "same"}
 	oldKey := baselineIssue(old).Key()
 	newKey := current.Key()
 	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{old}, Renames: []BaselineRename{{From: oldKey, To: newKey}}}

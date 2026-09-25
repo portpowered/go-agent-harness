@@ -223,3 +223,13 @@ func (c BufferControl) Snapshot() BufferStats {
 }
 
 func (q *frameBuffer) notifyLocked() { close(q.changed); q.changed = make(chan struct{}) }
+
+// pooledInt16Buffer returns a pooled sample buffer. The pools in this package
+// only store *[]int16; any other value is replaced by an empty buffer, which
+// callers grow to the size they need.
+func pooledInt16Buffer(pool *sync.Pool) *[]int16 {
+	if buffer, ok := pool.Get().(*[]int16); ok {
+		return buffer
+	}
+	return new([]int16)
+}

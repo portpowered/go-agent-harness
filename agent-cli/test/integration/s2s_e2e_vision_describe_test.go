@@ -139,29 +139,9 @@ func buildVisionDescribeFixture(t *testing.T, transcript []string) string {
 	transcriptDelta := 0
 	for _, record := range capture.Records {
 		switch record.Type {
-		case "conversation.item.create":
-			record.Payload = visionRewritePayload(t, record.Payload, func(payload map[string]any) {
-				item, ok := payload["item"].(map[string]any)
-				if !ok {
-					t.Fatalf("fixture conversation.item.create payload missing item: %s", record.Payload)
-				}
-				content, ok := item["content"].([]any)
-				if !ok || len(content) == 0 {
-					t.Fatalf("fixture conversation.item.create payload missing content: %s", record.Payload)
-				}
-				part, ok := content[0].(map[string]any)
-				if !ok || part["type"] != "input_image" {
-					t.Fatalf("fixture first content part is not an image part: %s", record.Payload)
-				}
-				part["image_url"] = dataURL
-				item["content"] = append([]any{
-					map[string]any{
-						"type": "input_text",
-						"text": visionDescribeDeferredInstruction,
-					},
-				}, content...)
-			})
-		case "input_audio_buffer.append":
+		case rtEventConversationItemCreate:
+			record.Payload = injectVisionImagePart(t, record.Payload, dataURL)
+		case rtEventInputAudioAppend:
 			for _, frame := range frames {
 				frameRecord := record
 				frameRecord.Payload = visionRewritePayload(t, record.Payload, func(payload map[string]any) {
@@ -170,11 +150,11 @@ func buildVisionDescribeFixture(t *testing.T, transcript []string) string {
 				records = append(records, frameRecord)
 			}
 			continue
-		case "response.output_audio.delta":
+		case rtEventOutputAudioDelta:
 			record.Payload = visionRewritePayload(t, record.Payload, func(payload map[string]any) {
 				payload["delta"] = replyAudio
 			})
-		case "response.output_audio_transcript.delta":
+		case rtEventOutputAudioTranscriptDelta:
 			if transcript != nil {
 				if transcriptDelta >= len(transcript) {
 					t.Fatalf("transcript override shorter than fixture delta count")
@@ -266,6 +246,33 @@ func assertVisionDescribeGrounded(output string) error {
 	return nil
 }
 
+// injectVisionImagePart replaces the committed redacted image part with the
+// runtime data URL and prepends the deferred instruction text part.
+func injectVisionImagePart(t *testing.T, raw json.RawMessage, dataURL string) json.RawMessage {
+	t.Helper()
+	return visionRewritePayload(t, raw, func(payload map[string]any) {
+		item, ok := payload["item"].(map[string]any)
+		if !ok {
+			t.Fatalf("fixture conversation.item.create payload missing item: %s", raw)
+		}
+		content, ok := item["content"].([]any)
+		if !ok || len(content) == 0 {
+			t.Fatalf("fixture conversation.item.create payload missing content: %s", raw)
+		}
+		part, ok := content[0].(map[string]any)
+		if !ok || part["type"] != rtContentInputImage {
+			t.Fatalf("fixture first content part is not an image part: %s", raw)
+		}
+		part["image_url"] = dataURL
+		item["content"] = append([]any{
+			map[string]any{
+				"type": "input_text",
+				"text": visionDescribeDeferredInstruction,
+			},
+		}, content...)
+	})
+}
+
 // TestVisionDescribeFixtureIsWellFormed proves the committed fixture passes
 // the shared capture validation surface, carries an image part on the first
 // user turn, keeps raw audio redacted behind a runtime re-injection marker,
@@ -280,68 +287,87 @@ func TestVisionDescribeFixtureIsWellFormed(t *testing.T) {
 		t.Fatalf("load committed vision describe fixture: %v", err)
 	}
 
-	imageTurns, appendMarkers, responseCreates, closed := 0, 0, 0, false
-	audioAppendSeen := false
+	counts := visionFixtureCounts{}
 	for _, record := range capture.Records {
-		switch record.Type {
-		case "conversation.item.create":
-			var payload struct {
-				Item struct {
-					Content []struct {
-						Type     string          `json:"type"`
-						ImageURL json.RawMessage `json:"image_url"`
-					} `json:"content"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(record.Payload, &payload); err != nil {
-				t.Fatalf("decode conversation.item.create payload: %v", err)
-			}
-			for _, part := range payload.Item.Content {
-				if part.Type == "input_image" {
-					imageTurns++
-					var imageURL struct {
-						Redacted bool `json:"redacted"`
-					}
-					if err := json.Unmarshal(part.ImageURL, &imageURL); err != nil || !imageURL.Redacted {
-						t.Fatalf("committed image part must keep the data URL redacted for hygiene, got %s", part.ImageURL)
-					}
-				}
-			}
-		case "input_audio_buffer.append":
-			appendMarkers++
-			audioAppendSeen = true
-			var payload struct {
-				Audio struct {
-					Redacted bool `json:"redacted"`
-				} `json:"audio"`
-			}
-			if err := json.Unmarshal(record.Payload, &payload); err != nil || !payload.Audio.Redacted {
-				t.Fatalf("committed append record must redact raw audio, got %s", record.Payload)
-			}
-		case "response.create":
-			responseCreates++
-			if !audioAppendSeen {
-				t.Fatalf("committed fixture requests response.create before the voice turn; image and audio would be separate turns")
-			}
-		case "session.closed":
-			closed = true
-			if !strings.Contains(string(record.Payload), "fixture_complete") {
-				t.Fatalf("session.closed payload missing fixture_complete reason: %s", record.Payload)
-			}
-		}
+		counts.observe(t, record)
 	}
-	if imageTurns != 1 {
-		t.Fatalf("fixture carries %d image turns, want exactly 1 on the first user turn", imageTurns)
+	if counts.imageTurns != 1 {
+		t.Fatalf("fixture carries %d image turns, want exactly 1 on the first user turn", counts.imageTurns)
 	}
-	if appendMarkers != 1 {
-		t.Fatalf("fixture carries %d audio append markers, want exactly 1 re-injection marker", appendMarkers)
+	if counts.appendMarkers != 1 {
+		t.Fatalf("fixture carries %d audio append markers, want exactly 1 re-injection marker", counts.appendMarkers)
 	}
-	if responseCreates != 1 {
-		t.Fatalf("fixture carries %d response.create events, want exactly one after audio begins", responseCreates)
+	if counts.responseCreates != 1 {
+		t.Fatalf("fixture carries %d response.create events, want exactly one after audio begins", counts.responseCreates)
 	}
-	if !closed {
+	if !counts.closed {
 		t.Fatalf("fixture never terminates with session.closed")
 	}
+}
+
+// visionFixtureCounts tallies the committed fixture's hygiene-relevant records.
+type visionFixtureCounts struct {
+	imageTurns, appendMarkers, responseCreates int
+	closed                                     bool
+}
+
+func (c *visionFixtureCounts) observe(t *testing.T, record gwtesting.CapturedSessionEvent) {
+	t.Helper()
+	switch record.Type {
+	case rtEventConversationItemCreate:
+		c.imageTurns += countRedactedVisionImageParts(t, record.Payload)
+	case rtEventInputAudioAppend:
+		c.appendMarkers++
+		var payload struct {
+			Audio struct {
+				Redacted bool `json:"redacted"`
+			} `json:"audio"`
+		}
+		if err := json.Unmarshal(record.Payload, &payload); err != nil || !payload.Audio.Redacted {
+			t.Fatalf("committed append record must redact raw audio, got %s", record.Payload)
+		}
+	case rtEventResponseCreate:
+		c.responseCreates++
+		if c.appendMarkers == 0 {
+			t.Fatalf("committed fixture requests response.create before the voice turn; image and audio would be separate turns")
+		}
+	case rtEventSessionClosed:
+		c.closed = true
+		if !strings.Contains(string(record.Payload), "fixture_complete") {
+			t.Fatalf("session.closed payload missing fixture_complete reason: %s", record.Payload)
+		}
+	}
+}
+
+// countRedactedVisionImageParts counts input_image parts in one committed
+// conversation item and requires each to keep its data URL redacted.
+func countRedactedVisionImageParts(t *testing.T, raw json.RawMessage) int {
+	t.Helper()
+	var payload struct {
+		Item struct {
+			Content []struct {
+				Type     string          `json:"type"`
+				ImageURL json.RawMessage `json:"image_url"`
+			} `json:"content"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode conversation.item.create payload: %v", err)
+	}
+	images := 0
+	for _, part := range payload.Item.Content {
+		if part.Type != rtContentInputImage {
+			continue
+		}
+		images++
+		var imageURL struct {
+			Redacted bool `json:"redacted"`
+		}
+		if err := json.Unmarshal(part.ImageURL, &imageURL); err != nil || !imageURL.Redacted {
+			t.Fatalf("committed image part must keep the data URL redacted for hygiene, got %s", part.ImageURL)
+		}
+	}
+	return images
 }
 
 // TestVisionDescribePNGIsDeterministicWithKnownContent proves the synthetic
@@ -370,7 +396,7 @@ func TestVisionDescribePNGIsDeterministicWithKnownContent(t *testing.T) {
 
 func visionAssertPixel(t *testing.T, img image.Image, x, y int, want color.NRGBA) {
 	t.Helper()
-	got := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+	got := mustAs[color.NRGBA](t, color.NRGBAModel.Convert(img.At(x, y)))
 	if got != want {
 		t.Fatalf("pixel (%d,%d) = %v, want %v", x, y, got, want)
 	}

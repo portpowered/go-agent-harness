@@ -177,7 +177,7 @@ func (t *Trace) captureBlock(tap int, sampleRate int, samples []int16) {
 		t.droppedSamples[tap].Add(uint64(len(samples)))
 		return
 	}
-	pooled := t.samplePool.Get().(*[]int16)
+	pooled := pooledSamples(&t.samplePool)
 	buffer := *pooled
 	if cap(buffer) < len(samples) {
 		buffer = make([]int16, len(samples))

@@ -57,10 +57,13 @@ type GatewayError struct {
 	Err      error
 }
 
+// nilErrorText is the Error text of a nil typed gateway error receiver.
+const nilErrorText = "<nil>"
+
 // Error returns the operator-readable gateway error message.
 func (e *GatewayError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	msg := e.Message
 	if msg == "" && e.Class != nil {
@@ -115,7 +118,7 @@ type ProviderHTTPStatusError struct {
 // Error returns a readable provider HTTP status error message.
 func (e *ProviderHTTPStatusError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	provider := e.Provider
 	if provider == "" {
@@ -189,7 +192,7 @@ type TransportError struct {
 // Error returns a readable transport error message.
 func (e *TransportError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Provider != "" && e.Operation != "" {
 		return fmt.Sprintf("%s: %s transport failed: %v", e.Provider, e.Operation, e.Err)
@@ -237,7 +240,7 @@ type ReplayMismatchError struct {
 // Error returns a readable replay mismatch error message.
 func (e *ReplayMismatchError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	var message string
 	if e.Expected != "" || e.Actual != "" {
@@ -287,7 +290,7 @@ type ReplayPayloadDivergenceError struct {
 // Error returns the bounded, operator-readable payload divergence.
 func (e *ReplayPayloadDivergenceError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("%s: expected %s, actual %s", e.Location, e.ExpectedExcerpt, e.ActualExcerpt)
 }
@@ -313,7 +316,7 @@ type ReplayIncompleteError struct {
 // Error returns a readable replay incomplete error message.
 func (e *ReplayIncompleteError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Expected != "" || e.Actual != "" {
 		return fmt.Sprintf("replay incomplete: expected %s, actual %s", e.Expected, e.Actual)

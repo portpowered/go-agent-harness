@@ -338,7 +338,7 @@ func TestReplayWebSocketDialer_EndsWithDisconnectReturnsEOFAfterReplayExhausted(
 	data, err := json.MarshalIndent(SessionCapture{
 		Version: SessionCaptureVersion,
 		Provider: SessionProviderMetadata{
-			Name:  "grok",
+			Name:  testProviderGrok,
 			Model: "grok-replay",
 		},
 		Session: SessionMetadata{
@@ -397,7 +397,7 @@ func TestRecordingWebSocketDialer_RecordsInboundAndOutboundWireMessages(t *testi
 			inbound: [][]byte{[]byte(`{"type":"session.created","session_id":"sess-1"}`)},
 		},
 	}
-	dialer := NewRecordingWebSocketDialer(live, "grok", "grok-record")
+	dialer := NewRecordingWebSocketDialer(live, testProviderGrok, "grok-record")
 
 	conn, err := dialer.Dial("wss://live.example.invalid", map[string]string{"Authorization": "Bearer secret"})
 	if err != nil {
@@ -411,7 +411,7 @@ func TestRecordingWebSocketDialer_RecordsInboundAndOutboundWireMessages(t *testi
 	}
 
 	capture := dialer.Capture()
-	if capture.Provider.Name != "grok" || capture.Provider.Model != "grok-record" {
+	if capture.Provider.Name != testProviderGrok || capture.Provider.Model != "grok-record" {
 		t.Fatalf("provider metadata = %+v", capture.Provider)
 	}
 	if len(capture.Records) != 2 {
@@ -510,7 +510,7 @@ func writeWebSocketCapture(t *testing.T, path string, records []CapturedSessionE
 	data, err := json.MarshalIndent(SessionCapture{
 		Version: SessionCaptureVersion,
 		Provider: SessionProviderMetadata{
-			Name:  "grok",
+			Name:  testProviderGrok,
 			Model: "grok-replay",
 		},
 		Session: SessionMetadata{

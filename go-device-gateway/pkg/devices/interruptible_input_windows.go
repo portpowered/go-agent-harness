@@ -38,8 +38,7 @@ func openInterruptibleInput(file *os.File) (*os.File, error) {
 	}
 	dup := os.NewFile(uintptr(duplicate), file.Name())
 	if dup == nil {
-		_ = syscall.CloseHandle(duplicate)
-		return nil, fmt.Errorf("create duplicated input %q", file.Name())
+		return nil, withCleanupError(fmt.Errorf("create duplicated input %q", file.Name()), syscall.CloseHandle(duplicate))
 	}
 	return dup, nil
 }

@@ -78,19 +78,8 @@ func writeV8ViewArtifacts(t *testing.T, view *v8RecordingView, terminal v8Termin
 }
 
 func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
-	if len(run.harnesses) != 2 {
-		return fmt.Errorf("expected two CLI harness results, observed %d", len(run.harnesses))
-	}
-	aHarness, aOK := run.harnesses["A"]
-	bHarness, bOK := run.harnesses["B"]
-	if !aOK || !bOK {
-		return fmt.Errorf("expected harness results for A and B")
-	}
-	if aHarness.Instruction == bHarness.Instruction {
-		return fmt.Errorf("harness instructions are not distinct: %q", aHarness.Instruction)
-	}
-	if aHarness.Instruction != v8HarnessAInstruction || bHarness.Instruction != v8HarnessBInstruction {
-		return fmt.Errorf("harness instructions do not match the two scripted profiles")
+	if err := verifyV8Harnesses(run); err != nil {
+		return err
 	}
 	if len(run.crossings) != 2 {
 		return fmt.Errorf("expected two retained PCM crossings, observed %d", len(run.crossings))
@@ -100,45 +89,8 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		if crossing.Sequence != i+1 || crossing.Direction != wantDirections[i] {
 			return fmt.Errorf("crossing order mismatch at index %d: got sequence=%d direction=%s", i, crossing.Sequence, crossing.Direction)
 		}
-		if crossing.Tick != v8OverlapTick {
-			return fmt.Errorf("%s crossing recorded at logical tick %d, want %d", crossing.Direction, crossing.Tick, v8OverlapTick)
-		}
-		wantTime := run.base.Add(time.Duration(crossing.Tick) * v8TickDuration)
-		if !crossing.Timestamp.Equal(wantTime) {
-			return fmt.Errorf("%s tick %d timestamp=%s, want deterministic timestamp %s", crossing.Direction, crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano), wantTime.Format(time.RFC3339Nano))
-		}
-		want := expected[crossing.Direction]
-		if !bytes.Equal(crossing.Emitted, want) {
-			return v8PCMFailure(crossing, want, crossing.Emitted, "CLI output")
-		}
-		_, deliveredRMS := v8PCMStats(crossing.Delivered)
-		if !bytes.Equal(crossing.Delivered, want) || deliveredRMS <= v8VADThreshold {
-			return v8PCMFailure(crossing, want, crossing.Delivered, "peer input")
-		}
-
-		sender, receiver := "A", "B"
-		if crossing.Direction == v8DirectionBToA {
-			sender, receiver = "B", "A"
-		}
-		outputObservation, err := v8RuntimeObservation(run.harnesses[sender].Runtime, runtimecontract.SessionRuntimeObservationAudioOutput)
-		if err != nil {
-			return fmt.Errorf("harness %s output runtime observation: %w", sender, err)
-		}
-		if outputObservation.Tick != crossing.Tick || !outputObservation.Timestamp.Equal(crossing.Timestamp) {
-			return fmt.Errorf("%s runtime output timing differs from crossing: runtime tick=%d timestamp=%s, crossing tick=%d timestamp=%s", crossing.Direction, outputObservation.Tick, outputObservation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
-		}
-		if !bytes.Equal(outputObservation.Payload, crossing.Emitted) {
-			return v8PCMFailure(crossing, crossing.Emitted, outputObservation.Payload, "runtime output")
-		}
-		inputObservation, err := v8RuntimeObservation(run.harnesses[receiver].Runtime, runtimecontract.SessionRuntimeObservationAudioInput)
-		if err != nil {
-			return fmt.Errorf("harness %s input runtime observation: %w", receiver, err)
-		}
-		if inputObservation.Tick != crossing.Tick || !inputObservation.Timestamp.Equal(crossing.Timestamp) {
-			return fmt.Errorf("%s runtime input timing differs from crossing: runtime tick=%d timestamp=%s, crossing tick=%d timestamp=%s", crossing.Direction, inputObservation.Tick, inputObservation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
-		}
-		if !bytes.Equal(inputObservation.Payload, crossing.Delivered) {
-			return v8PCMFailure(crossing, crossing.Delivered, inputObservation.Payload, "runtime input")
+		if err := verifyV8Crossing(run, crossing, expected[crossing.Direction]); err != nil {
+			return err
 		}
 	}
 
@@ -158,35 +110,8 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 	}
 
 	for name, terminal := range run.terminal {
-		if !terminal.Clean || !terminal.InputEOF || !terminal.OutputFrame {
-			return fmt.Errorf("harness %s terminal facts are not clean: %+v", name, terminal)
-		}
-		if terminal.Turns > run.turnsBound || terminal.FinalTick > v8OverlapTickLimit {
-			return fmt.Errorf("harness %s exceeded turn/tick bounds: %+v", name, terminal)
-		}
-		turnObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, runtimecontract.SessionRuntimeObservationTurnCompleted)
-		if err != nil {
-			return fmt.Errorf("harness %s turn runtime observation: %w", name, err)
-		}
-		if turnObservation.TurnsCompleted != terminal.Turns {
-			return fmt.Errorf("harness %s completed-turn observation = %d, terminal observation = %d", name, turnObservation.TurnsCompleted, terminal.Turns)
-		}
-		if terminal.Turns == 0 {
-			return fmt.Errorf("harness %s terminal observation reported no completed turns", name)
-		}
-		terminalObservation, err := v8RuntimeObservation(run.harnesses[name].Runtime, runtimecontract.SessionRuntimeObservationTerminal)
-		if err != nil {
-			return fmt.Errorf("harness %s terminal runtime observation: %w", name, err)
-		}
-		if terminalObservation.Tick != terminal.FinalTick || !terminalObservation.Timestamp.Equal(terminal.FinalTimestamp) {
-			return fmt.Errorf("harness %s terminal fact differs from runtime observation", name)
-		}
-		wantTerminalTime := run.base.Add(time.Duration(terminal.FinalTick) * v8TickDuration)
-		if !terminal.FinalTimestamp.Equal(wantTerminalTime) {
-			return fmt.Errorf("harness %s terminal tick %d timestamp=%s, want deterministic timestamp %s", name, terminal.FinalTick, terminal.FinalTimestamp.Format(time.RFC3339Nano), wantTerminalTime.Format(time.RFC3339Nano))
-		}
-		if (run.harnesses[name].Err == nil) != terminalObservation.Clean {
-			return fmt.Errorf("harness %s runtime clean=%t disagrees with CLI error=%v", name, terminalObservation.Clean, run.harnesses[name].Err)
+		if err := verifyV8Terminal(run, name, terminal); err != nil {
+			return err
 		}
 	}
 	aTerminal, aTerminalOK := run.terminal["A"]
@@ -276,30 +201,8 @@ func verifyV8InputCommitLedger(harness string, result v8HarnessResult, crossings
 	direction := v8InputDirection(harness)
 	commits := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationInputCommit)
 	markers := v8StreamTextMarkers(result.Stream)
-	observedOrdinals := make([]int, 0, len(commits))
-	for turnIndex, observation := range commits {
-		turn := turnIndex + 1
-		observedOrdinals = append(observedOrdinals, observation.InputCommit)
-		if observation.InputCommit != turn {
-			return fmt.Errorf("multi-turn harness %s direction %s %s turn %d input commit ordinal mismatch: expected=%d observed=%d", harness, direction, v8MultiTurnKey(direction, turn), turn, turn, observation.InputCommit)
-		}
-	}
-	if len(commits) != v8MultiTurnCount {
-		missingTurn := 0
-		seen := make(map[int]struct{}, len(commits))
-		for _, ordinal := range observedOrdinals {
-			seen[ordinal] = struct{}{}
-		}
-		for turn := 1; turn <= v8MultiTurnCount; turn++ {
-			if _, ok := seen[turn]; !ok {
-				missingTurn = turn
-				break
-			}
-		}
-		if missingTurn == 0 {
-			return fmt.Errorf("multi-turn harness %s input commit ledger has %d commits, want %d; duplicate or unexpected commit ordinals=%v", harness, len(commits), v8MultiTurnCount, observedOrdinals)
-		}
-		return fmt.Errorf("multi-turn harness %s input commit ledger has %d commits, want %d; missing stable %s turn %d; observed ordinals=%v", harness, len(commits), v8MultiTurnCount, v8MultiTurnKey(direction, missingTurn), missingTurn, observedOrdinals)
+	if err := verifyV8InputCommitOrdinals(harness, direction, commits); err != nil {
+		return err
 	}
 	if len(markers) != v8MultiTurnCount {
 		return fmt.Errorf("multi-turn harness %s input commit ledger cannot bind transcript markers: expected %d, observed %d", harness, v8MultiTurnCount, len(markers))
@@ -307,28 +210,18 @@ func verifyV8InputCommitLedger(harness string, result v8HarnessResult, crossings
 	for turnIndex, observation := range commits {
 		turn := turnIndex + 1
 		crossing := crossings[v8InputCrossingIndex(harness, turn)]
-		turnKey := v8MultiTurnKey(direction, turn)
-		completion := completions[turnIndex]
-		wantTimestamp := base.Add(time.Duration(observation.Tick) * v8TickDuration)
-		if !observation.Timestamp.Equal(wantTimestamp) {
-			return fmt.Errorf("multi-turn harness %s %s turn %d input commit timestamp=%s is not deterministic for tick %d", harness, turnKey, turn, observation.Timestamp.Format(time.RFC3339Nano), observation.Tick)
-		}
-		if observation.Tick < crossing.Tick || (observation.Tick == crossing.Tick && observation.Timestamp.Before(crossing.Timestamp)) {
-			return fmt.Errorf("multi-turn harness %s %s turn %d input commit precedes its audio crossing: commit tick=%d timestamp=%s; crossing tick=%d timestamp=%s", harness, turnKey, turn, observation.Tick, observation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
-		}
-		if completion.TurnsCompleted != turn || completion.Tick < observation.Tick || (completion.Tick == observation.Tick && completion.Timestamp.Before(observation.Timestamp)) {
-			return fmt.Errorf("multi-turn harness %s %s turn %d input commit is not bound to completed turn: commit tick=%d timestamp=%s; completion turns=%d tick=%d timestamp=%s", harness, turnKey, turn, observation.Tick, observation.Timestamp.Format(time.RFC3339Nano), completion.TurnsCompleted, completion.Tick, completion.Timestamp.Format(time.RFC3339Nano))
+		if err := verifyV8InputCommitTurn(harness, v8MultiTurnKey(direction, turn), turn, observation, crossing, completions[turnIndex], base); err != nil {
+			return err
 		}
 		if !bytes.Equal(observation.Payload, expected[turnIndex]) || !bytes.Equal(observation.Payload, crossing.Delivered) {
 			return v8InputCommitFailure(harness, crossing, expected[turnIndex], observation.Payload)
 		}
-		_, rms := v8PCMStats(observation.Payload)
-		if rms <= v8VADThreshold {
+		if _, rms := v8PCMStats(observation.Payload); rms <= v8VADThreshold {
 			return v8InputCommitFailure(harness, crossing, expected[turnIndex], observation.Payload)
 		}
 		expectedMarker := fmt.Sprintf("%s transcript turn %d", harness, turn)
 		if markers[turnIndex] != expectedMarker {
-			return fmt.Errorf("multi-turn harness %s %s turn %d input commit transcript attribution mismatch: expected=%q observed=%q", harness, turnKey, turn, expectedMarker, markers[turnIndex])
+			return fmt.Errorf("multi-turn harness %s %s turn %d input commit transcript attribution mismatch: expected=%q observed=%q", harness, v8MultiTurnKey(direction, turn), turn, expectedMarker, markers[turnIndex])
 		}
 	}
 	return nil
@@ -375,115 +268,27 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 		return fmt.Errorf("multi-turn verifier expected %d scheduled crossings, observed %d", len(v8MultiTurnSchedule()), len(run.crossings))
 	}
 	schedule := v8MultiTurnSchedule()
-	overlapTurns := make(map[int]struct{})
-	for _, entry := range schedule {
-		if entry.Overlapping {
-			overlapTurns[entry.Turn] = struct{}{}
-		}
-	}
-	if len(overlapTurns) < 2 {
-		return fmt.Errorf("multi-turn schedule has %d overlap turns, want at least two distinct overlap boundaries", len(overlapTurns))
-	}
-	if schedule[4].Overlapping || schedule[5].Overlapping || schedule[4].Tick == schedule[5].Tick {
-		return fmt.Errorf("multi-turn schedule lacks the required sequential turn-3 boundary: entries=%+v", schedule[4:])
-	}
-	for direction, frames := range map[string][][]byte{v8DirectionAToB: aToB, v8DirectionBToA: bToA} {
-		seen := make(map[string]int, len(frames))
-		for turn, frame := range frames {
-			hash := v8PCMHash(frame)
-			if previous, ok := seen[hash]; ok && bytes.Equal(frames[previous], frame) {
-				return fmt.Errorf("multi-turn %s scripted PCM identity is duplicated between turns %d and %d (hash=%s)", direction, previous+1, turn+1, hash)
-			}
-			seen[hash] = turn
-		}
+	if err := verifyV8MultiTurnScript(schedule, aToB, bToA); err != nil {
+		return err
 	}
 	for index, entry := range schedule {
-		crossing := run.crossings[index]
-		if crossing.Sequence != index+1 || crossing.Schedule != index || crossing.Direction != entry.Direction || crossing.Turn != entry.Turn || crossing.TurnKey != v8MultiTurnKey(entry.Direction, entry.Turn) {
-			return fmt.Errorf("multi-turn crossing %d identity mismatch: got sequence=%d schedule=%d direction=%s turn=%d key=%s; want direction=%s turn=%d key=%s", index+1, crossing.Sequence, crossing.Schedule, crossing.Direction, crossing.Turn, crossing.TurnKey, entry.Direction, entry.Turn, v8MultiTurnKey(entry.Direction, entry.Turn))
-		}
-		if crossing.Tick != entry.Tick {
-			return fmt.Errorf("multi-turn %s turn %d recorded at logical tick %d, want %d", crossing.Direction, crossing.Turn, crossing.Tick, entry.Tick)
-		}
-		wantTimestamp := run.base.Add(time.Duration(entry.Tick) * v8TickDuration)
-		if !crossing.Timestamp.Equal(wantTimestamp) {
-			return fmt.Errorf("multi-turn %s turn %d timestamp=%s, want %s", crossing.Direction, crossing.Turn, crossing.Timestamp.Format(time.RFC3339Nano), wantTimestamp.Format(time.RFC3339Nano))
-		}
 		want := aToB[entry.Turn-1]
 		if entry.Direction == v8DirectionBToA {
 			want = bToA[entry.Turn-1]
 		}
-		if !bytes.Equal(crossing.Emitted, want) || !bytes.Equal(crossing.Delivered, want) {
-			return v8PCMFailure(crossing, want, crossing.Delivered, "multi-turn bridge delivery")
-		}
-		_, rms := v8PCMStats(crossing.Delivered)
-		if rms <= v8VADThreshold {
-			return v8PCMFailure(crossing, want, crossing.Delivered, "multi-turn bridge delivery")
-		}
-	}
-
-	for _, name := range []string{"A", "B"} {
-		result := run.harnesses[name]
-		if result.Err != nil {
-			return fmt.Errorf("multi-turn harness %s CLI failed after %s: %w", name, result.Elapsed, result.Err)
-		}
-		if result.Instruction != map[string]string{"A": v8HarnessAInstruction, "B": v8HarnessBInstruction}[name] {
-			return fmt.Errorf("multi-turn harness %s instruction = %q, want its distinct scripted instruction", name, result.Instruction)
-		}
-		if result.Elapsed > v8MultiTurnCommandMaxDuration+500*time.Millisecond {
-			return fmt.Errorf("multi-turn harness %s exceeded command bound: %s", name, result.Elapsed)
-		}
-		outputObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationAudioOutput)
-		inputObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationAudioInput)
-		turnObservations := v8RuntimeObservations(result.Runtime, runtimecontract.SessionRuntimeObservationTurnCompleted)
-		if len(outputObservations) != v8MultiTurnCount || len(inputObservations) != v8MultiTurnCount || len(turnObservations) != v8MultiTurnCount {
-			return fmt.Errorf("multi-turn harness %s runtime counts output=%d input=%d completed=%d, want %d each", name, len(outputObservations), len(inputObservations), len(turnObservations), v8MultiTurnCount)
-		}
-		for index, observation := range turnObservations {
-			if observation.TurnsCompleted != index+1 {
-				return fmt.Errorf("multi-turn harness %s completed-turn observation %d reports %d, want %d", name, index+1, observation.TurnsCompleted, index+1)
-			}
-		}
-		if err := verifyV8TranscriptMarkers(name, result.Stream); err != nil {
+		if err := verifyV8MultiTurnCrossing(run, index, entry, want); err != nil {
 			return err
 		}
+	}
+	for _, name := range []string{"A", "B"} {
 		inputExpected := aToB
 		if name == "A" {
 			inputExpected = bToA
 		}
-		if err := verifyV8InputCommitLedger(name, result, run.crossings, turnObservations, inputExpected, run.base); err != nil {
+		if err := verifyV8MultiTurnHarness(run, name, inputExpected); err != nil {
 			return err
 		}
-		for index, observation := range outputObservations {
-			entryIndex := index * 2
-			if name == "B" {
-				entryIndex++
-			}
-			crossing := run.crossings[entryIndex]
-			if observation.Tick != crossing.Tick || !observation.Timestamp.Equal(crossing.Timestamp) || !bytes.Equal(observation.Payload, crossing.Emitted) {
-				return fmt.Errorf("multi-turn harness %s output observation %d does not match %s turn %d timing or PCM", name, index+1, crossing.TurnKey, crossing.Turn)
-			}
-		}
-		for index, observation := range inputObservations {
-			entryIndex := index * 2
-			if name == "A" {
-				entryIndex++
-			}
-			crossing := run.crossings[entryIndex]
-			if observation.Tick != crossing.Tick || !observation.Timestamp.Equal(crossing.Timestamp) || !bytes.Equal(observation.Payload, crossing.Delivered) {
-				return fmt.Errorf("multi-turn harness %s input observation %d does not match %s turn %d timing or PCM", name, index+1, crossing.TurnKey, crossing.Turn)
-			}
-		}
-		terminal, ok := run.terminal[name]
-		if !ok || !terminal.Clean || !terminal.InputEOF || !terminal.OutputFrame || terminal.Turns != v8MultiTurnCount || terminal.FinalTick != v8MultiTurnFinalTick {
-			return fmt.Errorf("multi-turn harness %s terminal facts are not clean or complete: %+v", name, terminal)
-		}
-		wantTerminalTime := run.base.Add(time.Duration(terminal.FinalTick) * v8TickDuration)
-		if !terminal.FinalTimestamp.Equal(wantTerminalTime) {
-			return fmt.Errorf("multi-turn harness %s terminal timestamp=%s, want %s", name, terminal.FinalTimestamp.Format(time.RFC3339Nano), wantTerminalTime.Format(time.RFC3339Nano))
-		}
 	}
-
 	for _, expectation := range []struct {
 		name      string
 		direction string
@@ -498,18 +303,8 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 			return err
 		}
 	}
-
-	for _, pair := range [][2]string{{"A/client", "B/agent"}, {"B/client", "A/agent"}} {
-		left := run.views[pair[0]].snapshot()
-		right := run.views[pair[1]].snapshot()
-		if len(left) != v8MultiTurnCount || len(right) != v8MultiTurnCount {
-			return fmt.Errorf("multi-turn recording parity %s vs %s has %d and %d records, want %d each", pair[0], pair[1], len(left), len(right), v8MultiTurnCount)
-		}
-		for index := range left {
-			if err := compareV8ViewRecords(fmt.Sprintf("%s turn %d", pair[0], index+1), left[index], fmt.Sprintf("%s turn %d", pair[1], index+1), right[index]); err != nil {
-				return err
-			}
-		}
+	if err := verifyV8MultiTurnParity(run); err != nil {
+		return err
 	}
 	if run.finalTick != v8MultiTurnFinalTick {
 		return fmt.Errorf("multi-turn final logical tick = %d, want %d", run.finalTick, v8MultiTurnFinalTick)
@@ -528,51 +323,16 @@ func verifyV8Artifacts(run v8DuplexRun) error {
 		if !jsonOK || !wavOK {
 			return fmt.Errorf("artifacts missing for %s", viewName)
 		}
-		data, err := os.ReadFile(jsonPath)
-		if err != nil {
-			return fmt.Errorf("read %s JSON artifact: %w", viewName, err)
-		}
-		var artifact v8ViewArtifact
-		if err := json.Unmarshal(data, &artifact); err != nil {
-			return fmt.Errorf("decode %s JSON artifact: %w", viewName, err)
-		}
 		view := run.views[viewName]
 		if view == nil {
 			return fmt.Errorf("recording view %s is missing", viewName)
 		}
-		if artifact.Harness != view.Harness || artifact.Role != view.Role || artifact.SampleRate != audio.SampleRate {
-			return fmt.Errorf("%s artifact metadata is invalid: %+v", viewName, artifact)
-		}
 		liveRecords := view.snapshot()
-		if len(artifact.Records) != len(liveRecords) || len(artifact.Records) == 0 {
-			return fmt.Errorf("%s artifact has %d records, live view has %d; want the same non-empty per-turn ledger", viewName, len(artifact.Records), len(liveRecords))
+		if err := verifyV8JSONArtifact(run, viewName, jsonPath, view, liveRecords); err != nil {
+			return err
 		}
-		for index := range artifact.Records {
-			if err := compareV8ViewRecords(fmt.Sprintf("%s artifact turn %d", viewName, index+1), artifact.Records[index], fmt.Sprintf("%s live turn %d", viewName, index+1), liveRecords[index]); err != nil {
-				return err
-			}
-		}
-		if wantTerminal, ok := run.terminal[view.Harness]; !ok || artifact.Terminal != wantTerminal {
-			return fmt.Errorf("%s artifact terminal facts do not match the harness terminal facts", viewName)
-		}
-
-		wavData, err := os.ReadFile(wavPath)
-		if err != nil {
-			return fmt.Errorf("read %s WAV artifact: %w", viewName, err)
-		}
-		rate, samples, err := wavio.Read(bytes.NewReader(wavData))
-		if err != nil {
-			return fmt.Errorf("decode %s WAV artifact: %w", viewName, err)
-		}
-		livePayload := []byte{}
-		for _, record := range liveRecords {
-			livePayload = append(livePayload, record.Payload...)
-		}
-		if rate != audio.SampleRate || len(samples) != len(livePayload)/2 {
-			return fmt.Errorf("%s WAV artifact shape is rate=%d samples=%d, want rate=%d samples=%d", viewName, rate, len(samples), audio.SampleRate, len(livePayload)/2)
-		}
-		if !bytes.Equal(v8PCM16Bytes(samples), livePayload) {
-			return fmt.Errorf("%s WAV artifact payload differs from the recorded PCM", viewName)
+		if err := verifyV8WAVArtifact(viewName, wavPath, liveRecords); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -721,5 +481,99 @@ func dropV8InputCommit(run *v8DuplexRun, harness string, turn int) error {
 	}
 	result.Runtime = filtered
 	run.harnesses[harness] = result
+	return nil
+}
+
+// verifyV8InputCommitOrdinals requires one input commit per turn with
+// ordinals 1..N in order, naming the first missing turn otherwise.
+func verifyV8InputCommitOrdinals(harness, direction string, commits []runtimecontract.SessionRuntimeObservation) error {
+	observedOrdinals := make([]int, 0, len(commits))
+	for turnIndex, observation := range commits {
+		turn := turnIndex + 1
+		observedOrdinals = append(observedOrdinals, observation.InputCommit)
+		if observation.InputCommit != turn {
+			return fmt.Errorf("multi-turn harness %s direction %s %s turn %d input commit ordinal mismatch: expected=%d observed=%d", harness, direction, v8MultiTurnKey(direction, turn), turn, turn, observation.InputCommit)
+		}
+	}
+	if len(commits) == v8MultiTurnCount {
+		return nil
+	}
+	seen := make(map[int]struct{}, len(commits))
+	for _, ordinal := range observedOrdinals {
+		seen[ordinal] = struct{}{}
+	}
+	for turn := 1; turn <= v8MultiTurnCount; turn++ {
+		if _, ok := seen[turn]; !ok {
+			return fmt.Errorf("multi-turn harness %s input commit ledger has %d commits, want %d; missing stable %s turn %d; observed ordinals=%v", harness, len(commits), v8MultiTurnCount, v8MultiTurnKey(direction, turn), turn, observedOrdinals)
+		}
+	}
+	return fmt.Errorf("multi-turn harness %s input commit ledger has %d commits, want %d; duplicate or unexpected commit ordinals=%v", harness, len(commits), v8MultiTurnCount, observedOrdinals)
+}
+
+// verifyV8InputCommitTurn requires the turn's commit to be deterministic,
+// after its audio crossing, and bound to the matching completed turn.
+func verifyV8InputCommitTurn(harness, turnKey string, turn int, observation runtimecontract.SessionRuntimeObservation, crossing v8Crossing, completion runtimecontract.SessionRuntimeObservation, base time.Time) error {
+	wantTimestamp := base.Add(time.Duration(observation.Tick) * v8TickDuration)
+	if !observation.Timestamp.Equal(wantTimestamp) {
+		return fmt.Errorf("multi-turn harness %s %s turn %d input commit timestamp=%s is not deterministic for tick %d", harness, turnKey, turn, observation.Timestamp.Format(time.RFC3339Nano), observation.Tick)
+	}
+	if observation.Tick < crossing.Tick || (observation.Tick == crossing.Tick && observation.Timestamp.Before(crossing.Timestamp)) {
+		return fmt.Errorf("multi-turn harness %s %s turn %d input commit precedes its audio crossing: commit tick=%d timestamp=%s; crossing tick=%d timestamp=%s", harness, turnKey, turn, observation.Tick, observation.Timestamp.Format(time.RFC3339Nano), crossing.Tick, crossing.Timestamp.Format(time.RFC3339Nano))
+	}
+	if completion.TurnsCompleted != turn || completion.Tick < observation.Tick || (completion.Tick == observation.Tick && completion.Timestamp.Before(observation.Timestamp)) {
+		return fmt.Errorf("multi-turn harness %s %s turn %d input commit is not bound to completed turn: commit tick=%d timestamp=%s; completion turns=%d tick=%d timestamp=%s", harness, turnKey, turn, observation.Tick, observation.Timestamp.Format(time.RFC3339Nano), completion.TurnsCompleted, completion.Tick, completion.Timestamp.Format(time.RFC3339Nano))
+	}
+	return nil
+}
+
+// verifyV8JSONArtifact requires the view's JSON artifact to carry the live
+// per-turn ledger and the harness terminal facts.
+func verifyV8JSONArtifact(run v8DuplexRun, viewName, jsonPath string, view *v8RecordingView, liveRecords []v8ViewRecord) error {
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return fmt.Errorf("read %s JSON artifact: %w", viewName, err)
+	}
+	var artifact v8ViewArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		return fmt.Errorf("decode %s JSON artifact: %w", viewName, err)
+	}
+	if artifact.Harness != view.Harness || artifact.Role != view.Role || artifact.SampleRate != audio.SampleRate {
+		return fmt.Errorf("%s artifact metadata is invalid: %+v", viewName, artifact)
+	}
+	if len(artifact.Records) != len(liveRecords) || len(artifact.Records) == 0 {
+		return fmt.Errorf("%s artifact has %d records, live view has %d; want the same non-empty per-turn ledger", viewName, len(artifact.Records), len(liveRecords))
+	}
+	for index := range artifact.Records {
+		if err := compareV8ViewRecords(fmt.Sprintf("%s artifact turn %d", viewName, index+1), artifact.Records[index], fmt.Sprintf("%s live turn %d", viewName, index+1), liveRecords[index]); err != nil {
+			return err
+		}
+	}
+	if wantTerminal, ok := run.terminal[view.Harness]; !ok || artifact.Terminal != wantTerminal {
+		return fmt.Errorf("%s artifact terminal facts do not match the harness terminal facts", viewName)
+	}
+	return nil
+}
+
+// verifyV8WAVArtifact requires the view's WAV artifact to hold exactly the
+// recorded PCM at the session sample rate.
+func verifyV8WAVArtifact(viewName, wavPath string, liveRecords []v8ViewRecord) error {
+	wavData, err := os.ReadFile(wavPath)
+	if err != nil {
+		return fmt.Errorf("read %s WAV artifact: %w", viewName, err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavData))
+	if err != nil {
+		return fmt.Errorf("decode %s WAV artifact: %w", viewName, err)
+	}
+	livePayload := []byte{}
+	for _, record := range liveRecords {
+		livePayload = append(livePayload, record.Payload...)
+	}
+	if rate != audio.SampleRate || len(samples) != len(livePayload)/2 {
+		return fmt.Errorf("%s WAV artifact shape is rate=%d samples=%d, want rate=%d samples=%d", viewName, rate, len(samples), audio.SampleRate, len(livePayload)/2)
+	}
+	if !bytes.Equal(v8PCM16Bytes(samples), livePayload) {
+		return fmt.Errorf("%s WAV artifact payload differs from the recorded PCM", viewName)
+	}
 	return nil
 }

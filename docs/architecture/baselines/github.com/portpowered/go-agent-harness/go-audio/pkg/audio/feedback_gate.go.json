@@ -7,7 +7,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-audio",
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/audio",
       "file": "pkg/audio/feedback_gate.go",
-      "value": 595,
+      "value": 594,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

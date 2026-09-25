@@ -28,13 +28,11 @@ func openInterruptibleInput(file *os.File) (*os.File, error) {
 	// descriptors. This matters for inherited Darwin pipes, where closing the
 	// original os.Stdin does not wake a goroutine blocked in syscall.Read.
 	if err := syscall.SetNonblock(fd, true); err != nil {
-		_ = syscall.Close(fd)
-		return nil, fmt.Errorf("configure duplicated input %q: %w", file.Name(), err)
+		return nil, withCleanupError(fmt.Errorf("configure duplicated input %q: %w", file.Name(), err), syscall.Close(fd))
 	}
 	dup := os.NewFile(uintptr(fd), file.Name())
 	if dup == nil {
-		_ = syscall.Close(fd)
-		return nil, fmt.Errorf("create duplicated input %q", file.Name())
+		return nil, withCleanupError(fmt.Errorf("create duplicated input %q", file.Name()), syscall.Close(fd))
 	}
 	return dup, nil
 }

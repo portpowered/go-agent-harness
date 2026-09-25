@@ -482,7 +482,7 @@ func safeID(value string) string {
 }
 
 func safeIDValue(value any) string {
-	text, _ := value.(string)
+	text := optionalAs[string](value)
 	return safeID(text)
 }
 
@@ -511,7 +511,7 @@ func safeIDList(value any) []string {
 }
 
 func safeLabel(value any, max int) string {
-	text, _ := value.(string)
+	text := optionalAs[string](value)
 	if strings.Contains(text, "://") || strings.ContainsAny(text, "?#@") {
 		return redactedValue
 	}

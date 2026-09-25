@@ -2,7 +2,6 @@ package chrome
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -241,7 +240,7 @@ func TestAttachUsesCallerTargetIDAndNormalizedTargetMetadata(t *testing.T) {
 			return
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`[
+		writeFixtureBody(writer, []byte(`[
 			{"id":"other-target","type":"page","title":"Other","url":"https://example.test/other","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/other-target","attached":false},
 			{"id":"wanted-target","type":"page","title":"Wanted","url":"https://example.test/wanted","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/wanted-target","attached":true}
 		]`))
@@ -314,7 +313,7 @@ func TestAttachKeepsTargetReaderAliveUntilTransportLoss(t *testing.T) {
 			return
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`[{"id":"target-reader","type":"page","title":"Reader","url":"https://example.test/reader","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-reader"}]`))
+		writeFixtureBody(writer, []byte(`[{"id":"target-reader","type":"page","title":"Reader","url":"https://example.test/reader","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-reader"}]`))
 	}))
 	defer server.Close()
 	handle.candidate.HTTPURL = server.URL
@@ -344,7 +343,7 @@ func TestAttachKeepsTargetReaderAliveUntilTransportLoss(t *testing.T) {
 func TestAttachFailureCleansUpPartialExternalAttachmentWithoutCloseTarget(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`[{"id":"wanted-target","type":"page","title":"Wanted","url":"https://example.test/wanted","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/wanted-target"}]`))
+		writeFixtureBody(writer, []byte(`[{"id":"wanted-target","type":"page","title":"Wanted","url":"https://example.test/wanted","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/wanted-target"}]`))
 	}))
 	defer server.Close()
 
@@ -402,7 +401,7 @@ func TestAttachFailureCleansUpPartialExternalAttachmentWithoutCloseTarget(t *tes
 func TestAttachMissingExactTargetDoesNotInvokeAttacher(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode([]targetInfo{{
+		encodeFixtureJSON(writer, []targetInfo{{
 			ID: "present-target", Type: pageTargetType, Title: "Present", URL: "https://example.test/present",
 			WSURL: "ws://127.0.0.1/devtools/page/present-target",
 		}})

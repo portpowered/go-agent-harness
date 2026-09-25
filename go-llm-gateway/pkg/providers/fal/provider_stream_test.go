@@ -1,8 +1,10 @@
 package fal
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"testing"
 
@@ -52,4 +54,18 @@ func TestFalProvider_InferStream_ReturnsUnsupportedFeatureError(t *testing.T) {
 	if transport.lastReq != nil {
 		t.Fatal("InferStream() attempted HTTP request for unsupported streaming")
 	}
+}
+
+// replayableRequestBody captures a request body and restores it so the
+// request can still be read after the mock transport records it.
+func replayableRequestBody(req *http.Request) ([]byte, error) {
+	if req.Body == nil {
+		return nil, nil
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	return body, nil
 }

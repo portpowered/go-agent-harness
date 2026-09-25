@@ -102,24 +102,24 @@ func TestAutocomplete_KeyboardNavigationAndStateTransitions(t *testing.T) {
 	ac := NewAutocomplete()
 	ac.SetSuggestions(items)
 	ac.SetFilter("")
-	if !ac.IsActive() || ac.Selected() != "item-a" {
+	if !ac.IsActive() || ac.Selected() != firstAutocompleteItem {
 		t.Fatalf("initial autocomplete state = active %t, selected %q", ac.IsActive(), ac.Selected())
 	}
 
 	updated, cmd := ac.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
-	if cmd != nil || updated.Selected() != "item-a" || !updated.IsActive() {
+	if cmd != nil || updated.Selected() != firstAutocompleteItem || !updated.IsActive() {
 		t.Fatalf("non-key update = selected %q, active %t, cmd %v", updated.Selected(), updated.IsActive(), cmd)
 	}
 	ac = updated
 
 	updated, _ = ac.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
-	if updated.Selected() != "item-a" {
+	if updated.Selected() != firstAutocompleteItem {
 		t.Fatalf("unhandled key changed selection to %q", updated.Selected())
 	}
 	ac = updated
 
 	updated, _ = ac.Update(tea.KeyMsg{Type: tea.KeyUp})
-	if updated.Selected() != "item-a" {
+	if updated.Selected() != firstAutocompleteItem {
 		t.Fatalf("up at first candidate selected %q", updated.Selected())
 	}
 	ac = updated
@@ -141,12 +141,12 @@ func TestAutocomplete_KeyboardNavigationAndStateTransitions(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		ac, _ = ac.Update(tea.KeyMsg{Type: tea.KeyUp})
 	}
-	if ac.Selected() != "item-a" {
+	if ac.Selected() != firstAutocompleteItem {
 		t.Fatalf("selection after moving up = %q, want item-a", ac.Selected())
 	}
 
 	ac, _ = ac.Update(tea.KeyMsg{Type: tea.KeyTab})
-	if !ac.IsActive() || ac.Selected() != "item-a" {
+	if !ac.IsActive() || ac.Selected() != firstAutocompleteItem {
 		t.Fatalf("tab changed state to active %t, selected %q", ac.IsActive(), ac.Selected())
 	}
 
@@ -223,3 +223,6 @@ func sameStrings(got, want []string) bool {
 	}
 	return true
 }
+
+// firstAutocompleteItem is the first label of the generated suggestion list.
+const firstAutocompleteItem = "item-a"

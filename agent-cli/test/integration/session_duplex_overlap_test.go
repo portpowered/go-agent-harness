@@ -392,7 +392,7 @@ func (f *startupAnnouncementFixture) Snapshot() startupAnnouncementObservation {
 }
 
 func (f *startupAnnouncementFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -433,11 +433,11 @@ func (f *startupAnnouncementFixture) handleMessage(connection *websocket.Conn, c
 		return err
 	}
 	switch event.Type {
-	case "session.update":
+	case rtEventSessionUpdate:
 		return f.handleSessionUpdate(connection, conversation)
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		return f.handleAudioAppend(connection, conversation, event.Audio)
-	case "conversation.item.create":
+	case rtEventConversationItemCreate:
 		return f.handleFunctionCallOutput(connection, conversation, event.Item)
 	default:
 		return nil
@@ -457,7 +457,7 @@ func (f *startupAnnouncementFixture) handleSessionUpdate(connection *websocket.C
 
 func (f *startupAnnouncementFixture) sendSessionReady(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
-		"type":    "session.created",
+		"type":    rtEventSessionCreated,
 		"session": map[string]string{"id": "startup-routing", "model": "gpt-realtime"},
 	}); err != nil {
 		return err
@@ -486,7 +486,7 @@ func (f *startupAnnouncementFixture) handleFunctionCallOutput(connection *websoc
 	CallID string `json:"call_id"`
 	Output string `json:"output"`
 }) error {
-	if item.Type != "function_call_output" {
+	if item.Type != rtItemFunctionCallOutput {
 		return nil
 	}
 	if strings.TrimSpace(item.Output) == "" {
@@ -506,15 +506,15 @@ func (f *startupAnnouncementFixture) handleFunctionCallOutput(connection *websoc
 func (f *startupAnnouncementFixture) sendToolCall(connection *websocket.Conn) error {
 	callID := "call-startup-routing"
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-startup-tool"},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_item.added",
+		"type": rtEventOutputItemAdded,
 		"item": map[string]string{
-			"type": "function_call", "id": callID, "call_id": callID,
+			"type": rtItemFunctionCall, "id": callID, "call_id": callID,
 			"name": "write_file", "arguments": "",
 		},
 	}); err != nil {
@@ -522,26 +522,26 @@ func (f *startupAnnouncementFixture) sendToolCall(connection *websocket.Conn) er
 	}
 	arguments := fmt.Sprintf(`{"path":%q,"content":%q}`, f.toolPath, f.toolContent)
 	if err := f.send(connection, map[string]any{
-		"type": "response.function_call_arguments.done", "call_id": callID,
+		"type": rtEventFunctionCallArgumentsDone, "call_id": callID,
 		"name": "write_file", "arguments": arguments,
 	}); err != nil {
 		return err
 	}
 	return f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": "response-startup-tool", "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": "response-startup-tool", "status": rtStatusCompleted},
 	})
 }
 
 func (f *startupAnnouncementFixture) sendFinalResponse(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-startup-final"},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":   "response.output_audio.delta",
+		"type":   rtEventOutputAudioDelta,
 		"delta":  base64.StdEncoding.EncodeToString(startupAnnouncementPCM()),
 		"format": "pcm16",
 	}); err != nil {
@@ -554,8 +554,8 @@ func (f *startupAnnouncementFixture) sendFinalResponse(connection *websocket.Con
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": "response-startup-final", "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": "response-startup-final", "status": rtStatusCompleted},
 	}); err != nil {
 		return err
 	}
@@ -563,7 +563,7 @@ func (f *startupAnnouncementFixture) sendFinalResponse(connection *websocket.Con
 	f.finalResponses++
 	f.mu.Unlock()
 	time.Sleep(20 * time.Millisecond)
-	return f.send(connection, map[string]string{"type": "session.closed", "reason": "startup_routing_complete"})
+	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "startup_routing_complete"})
 }
 
 func (f *startupAnnouncementFixture) send(connection *websocket.Conn, event any) error {

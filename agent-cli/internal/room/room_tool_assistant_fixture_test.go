@@ -19,7 +19,7 @@ func TestReadManifest_ToolAssistantFixtureDefinesBoundedIsolatedParticipants(t *
 	manifestPath := filepath.Join(filepath.Dir(sourcePath), "..", "..", "docs", "room-tool-assistant.json")
 	manifest, err := ReadManifest(manifestPath, ValidationOptions{
 		LookupCredential: func(name string) (string, bool) {
-			return "fixture-credential", name == "OPENAI_API_KEY"
+			return "fixture-credential", name == fixtureCredentialEnv
 		},
 	})
 	if err != nil {
@@ -37,7 +37,7 @@ func TestReadManifest_ToolAssistantFixtureDefinesBoundedIsolatedParticipants(t *
 	}
 
 	customer := manifest.Participants[0]
-	if customer.ID != "customer" || customer.Provider != "openai" || customer.Model != "gpt-realtime-2.1-mini" || customer.APIKeyEnv != "OPENAI_API_KEY" || customer.Voice != "marin" {
+	if customer.ID != "customer" || customer.Provider != fixtureProvider || customer.Model != "gpt-realtime-2.1-mini" || customer.APIKeyEnv != fixtureCredentialEnv || customer.Voice != "marin" {
 		t.Fatalf("customer participant = %+v", customer)
 	}
 	if customer.Tools == nil || len(customer.Tools) != 0 {
@@ -51,7 +51,7 @@ func TestReadManifest_ToolAssistantFixtureDefinesBoundedIsolatedParticipants(t *
 	}
 
 	assistant := manifest.Participants[1]
-	if assistant.ID != "assistant" || assistant.Provider != "openai" || assistant.Model != "gpt-realtime-2.1-mini" || assistant.APIKeyEnv != "OPENAI_API_KEY" || assistant.Voice != "cedar" {
+	if assistant.ID != "assistant" || assistant.Provider != fixtureProvider || assistant.Model != "gpt-realtime-2.1-mini" || assistant.APIKeyEnv != fixtureCredentialEnv || assistant.Voice != "cedar" {
 		t.Fatalf("assistant participant = %+v", assistant)
 	}
 	if len(assistant.Tools) != 1 || assistant.Tools[0] != "exec" {
@@ -65,3 +65,8 @@ func TestReadManifest_ToolAssistantFixtureDefinesBoundedIsolatedParticipants(t *
 		t.Fatalf("fixture disappeared after loading: %v", err)
 	}
 }
+
+const (
+	fixtureCredentialEnv = "OPENAI_API_KEY"
+	fixtureProvider      = "openai"
+)

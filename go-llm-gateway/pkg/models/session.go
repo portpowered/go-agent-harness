@@ -180,8 +180,7 @@ type SessionEvent struct {
 
 // NewAudioBufferAppendEvent creates an event that sends base64-encoded audio to the server.
 func NewAudioBufferAppendEvent(audioBase64 string) SessionEvent {
-	data, _ := json.Marshal(map[string]string{"audio": audioBase64})
-	return SessionEvent{Type: SessionEventInputAudioBufferAppend, Data: data}
+	return SessionEvent{Type: SessionEventInputAudioBufferAppend, Data: encodeEventData(map[string]string{"audio": audioBase64})}
 }
 
 // NewAudioBufferCommitEvent creates an event that commits the current audio buffer.
@@ -206,7 +205,7 @@ func NewResponseCreateEventWithInstructions(instructions string) SessionEvent {
 	if instructions == "" {
 		return NewResponseCreateEvent()
 	}
-	data, _ := json.Marshal(map[string]any{
+	data := encodeEventData(map[string]any{
 		"response": map[string]string{
 			"instructions": instructions,
 		},
@@ -222,7 +221,7 @@ func NewResponseCancelEvent() SessionEvent {
 // NewConversationItemTruncateEvent truncates one assistant audio content part
 // at the duration actually rendered by the client device.
 func NewConversationItemTruncateEvent(itemID string, contentIndex, audioEndMS int) SessionEvent {
-	data, _ := json.Marshal(map[string]any{
+	data := encodeEventData(map[string]any{
 		"item_id":       itemID,
 		"content_index": contentIndex,
 		"audio_end_ms":  audioEndMS,
@@ -233,4 +232,15 @@ func NewConversationItemTruncateEvent(itemID string, contentIndex, audioEndMS in
 // NewSessionUpdateEvent creates an event that updates the session configuration.
 func NewSessionUpdateEvent(config json.RawMessage) SessionEvent {
 	return SessionEvent{Type: SessionEventSessionUpdate, Data: config}
+}
+
+// encodeEventData encodes constructor payloads built only from strings and
+// integers, which encoding/json always encodes. A nil result keeps the event
+// data-less should that invariant ever be broken.
+func encodeEventData(payload any) json.RawMessage {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return data
 }

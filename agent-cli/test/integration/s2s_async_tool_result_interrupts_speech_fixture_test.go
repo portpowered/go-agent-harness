@@ -88,8 +88,8 @@ func validateAsyncOutboundInputAudio(payload []byte, want []byte) error {
 }
 
 func audioDeltaPayload(samples []int16) string {
-	payload, _ := json.Marshal(map[string]string{
-		"type":  "response.output_audio.delta",
+	payload := mustMarshalFixture(map[string]string{
+		"type":  rtEventOutputAudioDelta,
 		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(samples)),
 	})
 	return string(payload)
@@ -144,18 +144,18 @@ func writeAsyncCollisionInputWAV(t *testing.T, path string, inputAudio []byte) {
 }
 
 func inputAudioPayload(audioBytes []byte) string {
-	payload, _ := json.Marshal(map[string]string{
-		"type":  "input_audio_buffer.append",
+	payload := mustMarshalFixture(map[string]string{
+		"type":  rtEventInputAudioAppend,
 		"audio": base64.StdEncoding.EncodeToString(audioBytes),
 	})
 	return string(payload)
 }
 
 func functionCallOutputPayload() string {
-	payload, _ := json.Marshal(map[string]any{
-		"type": "conversation.item.create",
+	payload := mustMarshalFixture(map[string]any{
+		"type": rtEventConversationItemCreate,
 		"item": map[string]string{
-			"type":    "function_call_output",
+			"type":    rtItemFunctionCallOutput,
 			"call_id": asyncCollisionCallID,
 			"output":  asyncCollisionResult,
 		},
@@ -183,11 +183,11 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 			Payload:     json.RawMessage(payload),
 		})
 	}
-	userPayload, _ := json.Marshal(map[string]any{
-		"type": "conversation.item.create",
+	userPayload := mustMarshalFixture(map[string]any{
+		"type": rtEventConversationItemCreate,
 		"item": map[string]any{
-			"type":    "message",
-			"role":    "user",
+			"type":    rtItemMessage,
+			"role":    rtRoleUser,
 			"content": []map[string]string{{"type": "input_text", "text": asyncCollisionPrompt}},
 		},
 	})
@@ -195,39 +195,39 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 	// tool call. The CLI delays --audio-in-turn input until this response ends,
 	// making the second response a real later turn rather than an unsolicited
 	// provider frame.
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", string(userPayload))
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
-	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseOne+`"}}`)
-	add(gwtesting.DirectionServerToClient, "response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`"}}`)
-	add(gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`","arguments":`+strconvQuote(asyncCollisionToolArgs)+`}`)
-	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseOne+`","status":"completed"}}`)
+	add(gwtesting.DirectionClientToServer, rtEventConversationItemCreate, string(userPayload))
+	add(gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"`+asyncCollisionResponseOne+`"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventOutputItemAdded, `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventFunctionCallArgumentsDone, `{"type":"response.function_call_arguments.done","call_id":"`+asyncCollisionCallID+`","name":"`+asyncCollisionToolName+`","arguments":`+strconvQuote(asyncCollisionToolArgs)+`}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"`+asyncCollisionResponseOne+`","status":"completed"}}`)
 
 	// The result is the only outbound work eligible after the tool-call response.
 	// The grounded continuation must complete before the scheduled audio turn is
 	// allowed onto the provider wire.
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", functionCallOutputPayload())
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
+	add(gwtesting.DirectionClientToServer, rtEventConversationItemCreate, functionCallOutputPayload())
+	add(gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`)
 
-	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseThree+`"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"`+asyncCollisionResponseThree+`"}}`)
 	for _, delta := range continuation {
-		add(gwtesting.DirectionServerToClient, "response.output_audio.delta", audioDeltaPayload(delta))
+		add(gwtesting.DirectionServerToClient, rtEventOutputAudioDelta, audioDeltaPayload(delta))
 	}
 	add(gwtesting.DirectionServerToClient, "response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseThree+`","status":"completed"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"`+asyncCollisionResponseThree+`","status":"completed"}}`)
 
 	// The scheduled audio is a distinct later user turn. Its provider-facing
 	// append is rejected by the gated connection if it arrives before the
 	// result-driven continuation's terminal MESSAGE.END.
-	add(gwtesting.DirectionClientToServer, "input_audio_buffer.append", inputAudioPayload(inputAudio))
-	add(gwtesting.DirectionClientToServer, "input_audio_buffer.commit", `{"type":"input_audio_buffer.commit"}`)
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
-	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"`+asyncCollisionResponseTwo+`"}}`)
+	add(gwtesting.DirectionClientToServer, rtEventInputAudioAppend, inputAudioPayload(inputAudio))
+	add(gwtesting.DirectionClientToServer, rtEventInputAudioCommit, `{"type":"input_audio_buffer.commit"}`)
+	add(gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"`+asyncCollisionResponseTwo+`"}}`)
 	for _, delta := range collision {
-		add(gwtesting.DirectionServerToClient, "response.output_audio.delta", audioDeltaPayload(delta))
+		add(gwtesting.DirectionServerToClient, rtEventOutputAudioDelta, audioDeltaPayload(delta))
 	}
 	add(gwtesting.DirectionServerToClient, "response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"`+asyncCollisionResponseTwo+`","status":"completed"}}`)
-	add(gwtesting.DirectionServerToClient, "session.closed", `{"type":"session.closed","session_id":"`+asyncCollisionSessionID+`","reason":"`+asyncCollisionCloseReason+`"}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"`+asyncCollisionResponseTwo+`","status":"completed"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventSessionClosed, `{"type":"session.closed","session_id":"`+asyncCollisionSessionID+`","reason":"`+asyncCollisionCloseReason+`"}`)
 
 	base.Session.ID = asyncCollisionSessionID
 	base.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -244,4 +244,73 @@ func buildAsyncCollisionFixture(t *testing.T, collision, continuation [][]int16,
 		t.Fatalf("validate async collision fixture with shared replay validator: %v", err)
 	}
 	return path, base
+}
+
+// asyncContinuationIndices records where each continuation-relevant outbound
+// event sits in the provider exchange.
+type asyncContinuationIndices struct {
+	userTurns, responseCreates, providerResults []int
+	inputAppend, inputCommit                    int
+}
+
+func collectAsyncContinuationIndices(outbound []asyncCollisionOutbound, expectedInputAudio []byte) (asyncContinuationIndices, error) {
+	indices := asyncContinuationIndices{inputAppend: -1, inputCommit: -1}
+	for index, event := range outbound {
+		switch event.Type {
+		case rtEventConversationItemCreate:
+			if err := indices.observeItem(index, event.Payload); err != nil {
+				return indices, err
+			}
+		case rtEventResponseCreate:
+			indices.responseCreates = append(indices.responseCreates, index)
+		case rtEventInputAudioAppend:
+			if indices.inputAppend >= 0 {
+				return indices, fmt.Errorf("provider exchange contains multiple input_audio_buffer.append events")
+			}
+			if err := validateAsyncOutboundInputAudio(event.Payload, expectedInputAudio); err != nil {
+				return indices, err
+			}
+			indices.inputAppend = index
+		case rtEventInputAudioCommit:
+			if indices.inputCommit >= 0 {
+				return indices, fmt.Errorf("provider exchange contains multiple input_audio_buffer.commit events")
+			}
+			indices.inputCommit = index
+		}
+	}
+	return indices, nil
+}
+
+func (indices *asyncContinuationIndices) observeItem(index int, raw []byte) error {
+	var payload struct {
+		Item struct {
+			Type   string `json:"type"`
+			CallID string `json:"call_id"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("decode outbound continuation item: %w", err)
+	}
+	if payload.Item.Type == rtItemMessage {
+		indices.userTurns = append(indices.userTurns, index)
+	} else if payload.Item.Type == rtItemFunctionCallOutput && payload.Item.CallID == asyncCollisionCallID {
+		indices.providerResults = append(indices.providerResults, index)
+	}
+	return nil
+}
+
+func validateAsyncProviderResultPlacement(indices asyncContinuationIndices, expectProviderResult bool) error {
+	if !expectProviderResult {
+		if len(indices.providerResults) != 0 {
+			return fmt.Errorf("result-loss control still carried %d provider results for %q", len(indices.providerResults), asyncCollisionCallID)
+		}
+		return nil
+	}
+	if len(indices.providerResults) != 1 {
+		return fmt.Errorf("%s provider result for %q was correlated %d times, want exactly one", asyncCollisionDisposition, asyncCollisionCallID, len(indices.providerResults))
+	}
+	if !strictlyIncreasing(indices.responseCreates[0], indices.providerResults[0], indices.responseCreates[1]) {
+		return fmt.Errorf("%s provider result for %q was not sent between the initial tool response and its continuation response.create", asyncCollisionDisposition, asyncCollisionCallID)
+	}
+	return nil
 }

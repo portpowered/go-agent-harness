@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"io"
 	"math"
@@ -110,7 +111,7 @@ func openLoopbackTap(t *testing.T, registry *devicegw.VirtualRegistry, nativeID 
 	if !ok {
 		t.Fatalf("virtual tap %q = %T, want *audio.VirtualStream", nativeID, opened)
 	}
-	t.Cleanup(func() { _ = stream.Close() })
+	t.Cleanup(func() { closeForTest(t, stream.Close) })
 	return stream
 }
 
@@ -329,12 +330,12 @@ func (s *loopbackSession) Receive() *messages.TypedBuffer[messages.StreamMessage
 func (s *loopbackSession) Done() <-chan struct{} { return s.done }
 
 func (s *loopbackSession) Close() error {
+	var err error
 	s.closeOnce.Do(func() {
 		close(s.done)
-		_ = s.inbound.Close()
-		_ = s.outbound.Close()
+		err = errors.Join(s.inbound.Close(), s.outbound.Close())
 	})
-	return nil
+	return err
 }
 
 type loopbackInferencer struct {

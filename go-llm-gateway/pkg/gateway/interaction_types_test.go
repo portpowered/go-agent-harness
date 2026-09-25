@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// testToolCallA is the first tool-call identifier used by interaction tests.
+const testToolCallA = "call-a"
+
 func TestInteractionRequestJSONRoundTrip(t *testing.T) {
 	t.Parallel()
 

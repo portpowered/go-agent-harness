@@ -27,7 +27,7 @@ func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 	if err != nil {
 		return nil, closeAfterFailure(ws, sourceError(SourceErrorUnreachable, s.identity, err))
 	}
-	inbound := newPionInbound(func() error { _ = ws.Close(); return pc.Close() }, s.identity)
+	inbound := newPionInbound(func() error { return errors.Join(ws.Close(), pc.Close()) }, s.identity)
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeAudio:
@@ -60,6 +60,16 @@ func closeAfterFailure(owned io.Closer, failure error) error {
 		return errors.Join(failure, closeErr)
 	}
 	return failure
+}
+
+// atoiOrZero parses a decimal SDP or RTSP header field. Absent or malformed
+// numbers carry no information and are treated as zero, i.e. unspecified.
+func atoiOrZero(text string) int {
+	value, err := strconv.Atoi(text)
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 // releaseTemporaryStream closes a stream opened only for one Probe or Look
@@ -181,10 +191,10 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 				continue
 			}
 			codec = strings.ToUpper(values[0])
-			rate, _ = strconv.Atoi(values[1])
+			rate = atoiOrZero(values[1])
 			channels = 1
 			if len(values) > 2 {
-				channels, _ = strconv.Atoi(values[2])
+				channels = atoiOrZero(values[2])
 			}
 		}
 	}

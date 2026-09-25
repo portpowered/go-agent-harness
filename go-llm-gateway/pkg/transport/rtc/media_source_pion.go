@@ -193,11 +193,12 @@ func (m *pionInbound) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, erro
 	}
 }
 func (m *pionInbound) Close() error {
+	var err error
 	m.once.Do(func() {
 		close(m.done)
 		if m.close != nil {
-			_ = m.close()
+			err = m.close()
 		}
 	})
-	return nil
+	return err
 }

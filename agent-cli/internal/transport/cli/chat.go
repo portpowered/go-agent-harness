@@ -39,7 +39,7 @@ var newMicrophoneSource = func() (audio.AudioSource, error) {
 }
 
 //lint:ignore ST1005 the terminal admission message is an exact customer-facing CLI contract.
-var errChatRequiresInteractiveTerminal = errors.New(chatInteractiveTerminalMessage)
+var errChatRequiresInteractiveTerminal = errors.New(chatInteractiveTerminalMessage) //nolint:staticcheck // ST1005: exact customer-facing CLI contract; the lint:ignore above serves standalone staticcheck.
 
 // NewChatCommand composes the interactive transport with the runtime-owned
 // durable store used by loop trace steering.

@@ -82,7 +82,7 @@ func (c *ProbeAcceptanceCommand) run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
 	verdict, runErr := c.Runner.Run(ctx, input)
-	if verdict.Goal != "" || verdict.ScenarioResult.Name != "" {
+	if verdict.Goal != "" || verdict.Name != "" {
 		if err := json.NewEncoder(cmd.OutOrStdout()).Encode(verdict); err != nil {
 			return fmt.Errorf("write acceptance probe verdict: %w", err)
 		}

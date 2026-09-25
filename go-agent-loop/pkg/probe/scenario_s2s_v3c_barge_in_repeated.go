@@ -79,7 +79,7 @@ func v3cExpectations(positive bool) []ExpectedBehavior {
 	return expectations
 }
 
-func init() {
+func registerS2SV3CBargeInRepeatedScenarios(register func(Scenario, ...DeadSessionControl) error) {
 	for _, registration := range []struct {
 		id          string
 		description string
@@ -112,18 +112,8 @@ func init() {
 			Expected:         v3cExpectations(registration.positive),
 			ExpectedBehavior: v3cExpectations(registration.positive),
 		}
-		if err := RegisterScenario(scenario); err != nil {
+		if err := register(scenario); err != nil {
 			panic(err)
 		}
 	}
-}
-
-// The two v3c expectation kinds join the scenario validator's per-kind field
-// whitelist here rather than in scenario.go: that file already sits at the
-// configured file-length lint ceiling on main, and the lane must not add new
-// violations. Package-level variables are initialized before any init runs,
-// so these entries are in place for every validation below.
-func init() {
-	typedExpectationFieldsByKind[ExpectBargeInCancelOnce] = map[string]bool{}
-	typedExpectationFieldsByKind[ExpectMessageCountsReconcile] = map[string]bool{"value": true}
 }

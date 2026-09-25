@@ -318,4 +318,7 @@ func websocketPayloadType(payload []byte) string {
 }
 
 // jsonNullLiteral is the JSON encoding of null.
-const jsonNullLiteral = "null"
+const (
+	jsonNullLiteral = "null"
+	jsonObjectType  = "object"
+)

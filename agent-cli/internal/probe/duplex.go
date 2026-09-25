@@ -223,14 +223,11 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	}
 	stdout, err := child.StdoutPipe()
 	if err != nil {
-		_ = stdin.Close()
-		return result, duplexProcessError(ErrDuplexProcessStart, "open child stdout", err)
+		return result, duplexProcessError(ErrDuplexProcessStart, "open child stdout", errors.Join(err, stdin.Close()))
 	}
 	stderr, err := child.StderrPipe()
 	if err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		return result, duplexProcessError(ErrDuplexProcessStart, "open child stderr", err)
+		return result, duplexProcessError(ErrDuplexProcessStart, "open child stderr", errors.Join(err, stdin.Close(), stdout.Close()))
 	}
 
 	startedAt := time.Now()
@@ -238,8 +235,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 		normalized.OnStart(startedAt)
 	}
 	if err := child.Start(); err != nil {
-		_ = stdin.Close()
-		return result, duplexProcessError(ErrDuplexProcessStart, "start child", err)
+		return result, duplexProcessError(ErrDuplexProcessStart, "start child", errors.Join(err, stdin.Close()))
 	}
 	result.PID = child.Process.Pid
 

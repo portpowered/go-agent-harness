@@ -76,7 +76,7 @@ func gatewayCommittedFixtureRoots() []string {
 // paths, so the working-directory walk is preferred and the caller filename is
 // used only when it is an absolute path.
 func repositoryRootPath() string {
-	workingDirectory, _ := os.Getwd()
+	workingDirectory := currentDirectoryOrEmpty()
 	var callerFile string
 	if _, currentFile, _, ok := runtime.Caller(0); ok {
 		callerFile = currentFile

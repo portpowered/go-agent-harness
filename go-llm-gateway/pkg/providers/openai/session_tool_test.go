@@ -23,7 +23,7 @@ func TestRealtimeSession_SendWithOutcomeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	sender, ok := session.(messages.SessionSendOutcomeSender)
 	if !ok {
@@ -80,7 +80,7 @@ func TestRealtimeSession_RuntimeSessionUpdatesIncludeRealtimeType(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	sender, ok := session.(messages.SessionSendOutcomeSender)
 	if !ok {
@@ -91,7 +91,7 @@ func TestRealtimeSession_RuntimeSessionUpdatesIncludeRealtimeType(t *testing.T) 
 		Value: &messages.SessionUpdateValue{
 			Model:        "gpt-realtime-2.1-mini",
 			Instructions: "Use the selected page.",
-			Modalities:   []string{"text", "audio"},
+			Modalities:   []string{contentTypeText, "audio"},
 			Tools: []messages.ToolDefinition{{
 				Name:        "lookup_weather",
 				Description: "Look up weather.",
@@ -167,7 +167,7 @@ func TestRealtimeSession_ToolCallEndSendsSingleFunctionCallOutput(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	sender, ok := session.(messages.SessionSendOutcomeSender)
 	if !ok {
@@ -194,10 +194,10 @@ func TestRealtimeSession_ToolCallEndSendsSingleFunctionCallOutput(t *testing.T) 
 	if err := json.Unmarshal(clientMessages[1], &event); err != nil {
 		t.Fatalf("unmarshal client event: %v", err)
 	}
-	if event.Type != "conversation.item.create" {
+	if event.Type != conversationItemCreateType {
 		t.Errorf("event type = %q, want conversation.item.create", event.Type)
 	}
-	assertStringField(t, event.Item, "type", "function_call_output")
+	assertStringField(t, event.Item, "type", realtimeFunctionCallOutputType)
 	assertStringField(t, event.Item, "call_id", "call-1")
 	assertStringField(t, event.Item, "output", "result text")
 }
@@ -216,7 +216,7 @@ func TestRealtimeSession_ToolCallEndInvalidValueFailsWithoutFrames(t *testing.T)
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	sender, ok := session.(messages.SessionSendOutcomeSender)
 	if !ok {

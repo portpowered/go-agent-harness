@@ -70,7 +70,7 @@ func requireTypedToolError(events []streamEventLine) error {
 		if json.Unmarshal(evt.Value, &value) != nil {
 			continue
 		}
-		if value.Type == "error" && strings.Contains(value.Message, "v4c_unknown_tool") && strings.Contains(value.Message, "failed") {
+		if value.Type == "error" && strings.Contains(value.Message, "v4c_unknown_tool") && strings.Contains(value.Message, rtStatusFailed) {
 			return nil
 		}
 	}
@@ -315,7 +315,7 @@ func TestNegativeControlUnhandledPanicDetectedByParent(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(60 * time.Second):
-		_ = cmd.Process.Kill()
+		killForCleanup(cmd.Process)
 		t.Fatalf("panic control timed out instead of failing fast with a detected panic")
 	}
 

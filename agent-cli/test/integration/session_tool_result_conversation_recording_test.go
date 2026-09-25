@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"os"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 type recordedConversationToolEvent struct {
@@ -117,7 +121,7 @@ func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 			t.Fatalf("browser recording=%t reflection failed: %v", enabled, err)
 		}
 		evidence := readRecordedConversationToolEvents(t, recordDir)
-		if len(evidence) != 2 || evidence[0].Type != "tool_call" || evidence[1].Type != "tool_result" || evidence[0].ToolCallID != toolConversationCallID || evidence[1].ToolCallID != toolConversationCallID || evidence[0].Arguments != toolCallScenarioArguments || evidence[1].Content != toolResultPositive || evidence[1].Status != "completed" {
+		if len(evidence) != 2 || evidence[0].Type != "tool_call" || evidence[1].Type != "tool_result" || evidence[0].ToolCallID != toolConversationCallID || evidence[1].ToolCallID != toolConversationCallID || evidence[0].Arguments != toolCallScenarioArguments || evidence[1].Content != toolResultPositive || evidence[1].Status != rtStatusCompleted {
 			t.Fatalf("browser recording=%t session-log tool evidence = %#v, want one exact call/result pair", enabled, evidence)
 		}
 		output, err := os.ReadFile(outputPath)
@@ -141,11 +145,47 @@ func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 	t.Logf("browser recording parity: disabled and --browser-record/--browser-record-arguments/--browser-record-results enabled each dispatched %s once, accepted one correlated output before response.create, and retained identical sanitized call/result evidence; recording flags do not affect delivery", toolConversationCallID)
 }
 
-func mustJSON(t *testing.T, value any) []byte {
+// realtimeToolFixturePrelude loads the smoke capture's session handshake and
+// appends the client exchange for one spoken turn: every input WAV frame as
+// input_audio_buffer.append, one commit, and one response.create.
+func realtimeToolFixturePrelude(t *testing.T, wavPath string) (gwtesting.SessionCapture, []gwtesting.CapturedSessionEvent) {
 	t.Helper()
-	data, err := json.Marshal(value)
+	wavBytes, err := os.ReadFile(wavPath)
 	if err != nil {
-		t.Fatalf("marshal parity value: %v", err)
+		t.Fatalf("read input WAV fixture: %v", err)
 	}
-	return data
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse input WAV fixture: %v", err)
+	}
+	if rate != audio.SampleRate {
+		t.Fatalf("input WAV rate = %d, want %d", rate, audio.SampleRate)
+	}
+	baseCapture, err := gwtesting.LoadSessionCapture(filepath.Join("testdata", "openai_realtime_smoke.session.json"))
+	if err != nil {
+		t.Fatalf("load replay base fixture: %v", err)
+	}
+	records := []gwtesting.CapturedSessionEvent{baseCapture.Records[0], baseCapture.Records[1]}
+	clientEvent := func(eventType string, payload json.RawMessage) {
+		records = append(records, gwtesting.CapturedSessionEvent{
+			Sequence:    len(records) + 1,
+			Direction:   gwtesting.DirectionClientToServer,
+			TimestampMs: int64(len(records)),
+			Type:        eventType,
+			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
+			Payload:     payload,
+		})
+	}
+	frame := make([]int16, audio.FrameSize)
+	for start := 0; start < len(samples); start += audio.FrameSize {
+		clear(frame)
+		copy(frame, samples[start:])
+		clientEvent(rtEventInputAudioAppend, mustJSON(t, map[string]string{
+			"type":  rtEventInputAudioAppend,
+			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(frame)),
+		}))
+	}
+	clientEvent(rtEventInputAudioCommit, json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
+	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
+	return baseCapture, records
 }

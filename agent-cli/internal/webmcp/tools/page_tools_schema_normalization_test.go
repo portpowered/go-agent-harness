@@ -85,7 +85,7 @@ func TestPageToolAnyOfSchemaIsFlattenedToAnAcceptedShape(t *testing.T) {
 			t.Fatalf("normalized schema dropped property %q (meaning lost): %s", want, definition.ParameterSchema)
 		}
 	}
-	required, _ := normalized["required"].([]any)
+	required := optionalAs[[]any](normalized["required"])
 	if len(required) != 1 || required[0] != "content" {
 		t.Fatalf("normalized required = %v, want exactly [\"content\"] (the only field common to every anyOf branch)", required)
 	}
@@ -195,7 +195,7 @@ func TestPageToolSkippedSchemaWarningNamesToolAndReason(t *testing.T) {
 	if fields["tool"] != "broken_tool" {
 		t.Fatalf("warning does not name the skipped tool: %#v", fields)
 	}
-	reason, _ := fields["reason"].(string)
+	reason := optionalAs[string](fields["reason"])
 	if reason == "" {
 		t.Fatalf("warning does not carry a reason the tool could not be normalized: %#v", fields)
 	}

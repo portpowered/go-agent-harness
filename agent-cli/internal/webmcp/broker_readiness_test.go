@@ -19,7 +19,7 @@ func TestStatefulBrokerDoesNotTreatSuccessfulDomainEnableAsPageToolReadiness(t *
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -53,7 +53,7 @@ func TestStatefulBrokerAcceptsExplicitEmptyCatalogEvidence(t *testing.T) {
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	selected, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID})
 	if err != nil {

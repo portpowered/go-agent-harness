@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -93,7 +92,7 @@ func collectExternalSourceAudio(rawURL string, wantPackets int, frameWait time.D
 	if err != nil {
 		return nil, fmt.Errorf("open external source: %w", err)
 	}
-	defer stream.Close()
+	defer discardCloseError(stream)
 	pcm := make([]byte, 0, wantPackets*externalSourcePacketSamples*2)
 	for packet := 0; packet < wantPackets; packet++ {
 		ctx, cancel := context.WithTimeout(context.Background(), frameWait)
@@ -147,16 +146,16 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 	}
 	for _, frame := range appendFrames {
 		payload, marshalErr := json.Marshal(map[string]string{
-			"type":  "input_audio_buffer.append",
+			"type":  rtEventInputAudioAppend,
 			"audio": base64.StdEncoding.EncodeToString(frame),
 		})
 		if marshalErr != nil {
 			t.Fatalf("marshal append event: %v", marshalErr)
 		}
-		clientEvent("input_audio_buffer.append", payload)
+		clientEvent(rtEventInputAudioAppend, payload)
 	}
-	clientEvent("input_audio_buffer.commit", json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
-	clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
+	clientEvent(rtEventInputAudioCommit, json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
+	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
 
 	serverEvent := func(eventType string, payload string) {
 		records = append(records, gwtesting.CapturedSessionEvent{
@@ -169,34 +168,34 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 		})
 	}
 	audioDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  "response.output_audio.delta",
+		"type":  rtEventOutputAudioDelta,
 		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytesOf(replySamples)),
 	})
 	if marshalErr != nil {
 		t.Fatalf("marshal audio delta: %v", marshalErr)
 	}
 	fullTranscript := strings.Join(transcriptDeltas, "")
-	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_v10_external_source"}}`)
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_v10_external_source"}}`)
 	// The deterministic replayed agent response is carried in both
 	// modalities: text deltas are what the shipped CLI renders to stdout,
 	// while the audio delta is captured by --audio-out and verified as a
 	// non-silent spoken reply.
 	for _, delta := range transcriptDeltas {
-		textPayload, _ := json.Marshal(map[string]string{"type": "response.output_text.delta", "delta": delta})
-		serverEvent("response.output_text.delta", string(textPayload))
+		textPayload := mustMarshalFixture(map[string]string{"type": rtEventOutputTextDelta, "delta": delta})
+		serverEvent(rtEventOutputTextDelta, string(textPayload))
 	}
-	textDone, _ := json.Marshal(map[string]string{"type": "response.output_text.done", "text": fullTranscript})
-	serverEvent("response.output_text.done", string(textDone))
+	textDone := mustMarshalFixture(map[string]string{"type": rtEventOutputTextDone, "text": fullTranscript})
+	serverEvent(rtEventOutputTextDone, string(textDone))
 	for _, delta := range transcriptDeltas {
-		encoded, _ := json.Marshal(map[string]string{"type": "response.output_audio_transcript.delta", "delta": delta})
-		serverEvent("response.output_audio_transcript.delta", string(encoded))
+		encoded := mustMarshalFixture(map[string]string{"type": rtEventOutputAudioTranscriptDelta, "delta": delta})
+		serverEvent(rtEventOutputAudioTranscriptDelta, string(encoded))
 	}
-	donePayload, _ := json.Marshal(map[string]string{"type": "response.output_audio_transcript.done", "transcript": fullTranscript})
+	donePayload := mustMarshalFixture(map[string]string{"type": "response.output_audio_transcript.done", "transcript": fullTranscript})
 	serverEvent("response.output_audio_transcript.done", string(donePayload))
-	serverEvent("response.output_audio.delta", string(audioDelta))
+	serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	serverEvent("session.closed", `{"type":"session.closed","session_id":"`+externalSourceSessionID+`","reason":"fixture_complete"}`)
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_v10_external_source","status":"completed"}}`)
+	serverEvent(rtEventSessionClosed, `{"type":"session.closed","session_id":"`+externalSourceSessionID+`","reason":"fixture_complete"}`)
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_v10_external_source","status":"completed"}}`)
 
 	baseCapture.Session.ID = externalSourceSessionID
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -279,71 +278,23 @@ func assertRootCLIMediaSuccess(t *testing.T, result rootCLIResult, cfgDir, wantO
 	}
 }
 
-// parseMediaCLIObservation converts the two human-readable reports emitted by
-// the public media commands into the values used by the shared camera
-// predicate. Every field is derived from command output, including the
-// audio-only unavailable look result.
 func parseMediaCLIObservation(probeOutput, lookOutput string) (mediaObservation, error) {
-	var observation mediaObservation
-	var sourceSet, codecSet, rateSet, channelsSet, videoSet, lookSet bool
-	parse := func(output string) error {
+	parser := &mediaObservationParser{}
+	for _, output := range []string{probeOutput, lookOutput} {
 		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
 			key, value, ok := strings.Cut(line, ": ")
 			if !ok {
 				continue
 			}
-			switch key {
-			case "Source":
-				if !sourceSet {
-					observation.source = value
-				}
-				sourceSet = true
-			case "Audio codec":
-				observation.codec, codecSet = value, true
-			case "Sample rate":
-				rate, err := strconv.Atoi(value)
-				if err != nil {
-					return fmt.Errorf("parse sample rate %q: %w", value, err)
-				}
-				observation.sampleRate, rateSet = rate, true
-			case "Channels":
-				channels, err := strconv.Atoi(value)
-				if err != nil {
-					return fmt.Errorf("parse channels %q: %w", value, err)
-				}
-				observation.channels, channelsSet = channels, true
-			case "Video presence":
-				video, err := strconv.ParseBool(value)
-				if err != nil {
-					return fmt.Errorf("parse video presence %q: %w", value, err)
-				}
-				observation.videoPresence, videoSet = video, true
-			case "Look status":
-				observation.lookStatus, lookSet = value, true
-			case "Reason":
-				observation.lookReason = value
-			case "Media type":
-				observation.mediaType = value
-			case "Observation bytes":
-				count, err := strconv.Atoi(value)
-				if err != nil {
-					return fmt.Errorf("parse observation bytes %q: %w", value, err)
-				}
-				observation.observationBytes = count
+			if err := parser.field(key, value); err != nil {
+				return mediaObservation{}, err
 			}
 		}
-		return nil
 	}
-	if err := parse(probeOutput); err != nil {
-		return mediaObservation{}, err
+	if !parser.sourceSet || !parser.codecSet || !parser.rateSet || !parser.channelsSet || !parser.videoSet || !parser.lookSet {
+		return mediaObservation{}, fmt.Errorf("incomplete public media observation: source=%t codec=%t rate=%t channels=%t video=%t look=%t", parser.sourceSet, parser.codecSet, parser.rateSet, parser.channelsSet, parser.videoSet, parser.lookSet)
 	}
-	if err := parse(lookOutput); err != nil {
-		return mediaObservation{}, err
-	}
-	if !sourceSet || !codecSet || !rateSet || !channelsSet || !videoSet || !lookSet {
-		return mediaObservation{}, fmt.Errorf("incomplete public media observation: source=%t codec=%t rate=%t channels=%t video=%t look=%t", sourceSet, codecSet, rateSet, channelsSet, videoSet, lookSet)
-	}
-	return observation, nil
+	return parser.observation, nil
 }
 
 func boolExitStatus(err error) int {

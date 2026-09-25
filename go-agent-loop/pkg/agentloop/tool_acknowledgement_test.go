@@ -11,6 +11,24 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+const finalResponseID = "response-final"
+
+// streamValue asserts a stream message payload's type on the test goroutine.
+func streamValue[T any](t *testing.T, msg messages.StreamMessage) T {
+	t.Helper()
+	value, ok := msg.Value.(T)
+	if !ok {
+		t.Fatalf("stream %s value is %T, want %T", msg.Type, msg.Value, value)
+	}
+	return value
+}
+
+// isContinuationCreate reports an ordinary (non-acknowledgement) response.create.
+func isContinuationCreate(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.ResponseCreateValue)
+	return msg.Type == messages.StreamTypeResponseCreate && ok && value.Purpose == ""
+}
+
 type acknowledgementSession struct {
 	mu                   sync.Mutex
 	sent                 []messages.StreamMessage
@@ -51,8 +69,8 @@ func (s *acknowledgementSession) Send(_ context.Context, msg messages.StreamMess
 
 	switch msg.Type {
 	case messages.StreamTypeResponseCreate:
-		value, _ := msg.Value.(*messages.ResponseCreateValue)
-		if value != nil && value.IsToolAcknowledgement() {
+		value, ok := msg.Value.(*messages.ResponseCreateValue)
+		if ok && value != nil && value.IsToolAcknowledgement() {
 			s.mu.Lock()
 			s.acknowledgementOpen = s.answerAcknowledgement == nil
 			s.mu.Unlock()
@@ -154,31 +172,31 @@ func (s *acknowledgementSession) emitFinalResponse() {
 		{
 			Type:       messages.StreamTypeMessageStart,
 			Role:       messages.RoleAssistant,
-			ResponseID: "response-final",
+			ResponseID: finalResponseID,
 			Value:      messages.NewMessageStartValue(),
 		},
 		{
 			Type:       messages.StreamTypeTextStart,
 			Role:       messages.RoleAssistant,
-			ResponseID: "response-final",
+			ResponseID: finalResponseID,
 			Value:      messages.NewTextStartValue(),
 		},
 		{
 			Type:       messages.StreamTypeTextDelta,
 			Role:       messages.RoleAssistant,
-			ResponseID: "response-final",
+			ResponseID: finalResponseID,
 			Value:      messages.NewTextDeltaValue("done"),
 		},
 		{
 			Type:       messages.StreamTypeTextEnd,
 			Role:       messages.RoleAssistant,
-			ResponseID: "response-final",
+			ResponseID: finalResponseID,
 			Value:      messages.NewTextEndValue(),
 		},
 		{
 			Type:       messages.StreamTypeMessageEnd,
 			Role:       messages.RoleAssistant,
-			ResponseID: "response-final",
+			ResponseID: finalResponseID,
 			Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
 		},
 	} {
@@ -310,23 +328,23 @@ func TestDuplexSession_LongRunningToolAcknowledgementPrecedesGroundedContinuatio
 		value, ok := msg.Value.(*messages.ResponseCreateValue)
 		return msg.Type == messages.StreamTypeResponseCreate && ok && value.IsToolAcknowledgement()
 	})
-	ackValue := ack.Value.(*messages.ResponseCreateValue)
+	ackValue := streamValue[*messages.ResponseCreateValue](t, ack)
 	if ackValue.Instructions == "" {
 		t.Fatal("acknowledgement request omitted instructions")
 	}
 	ackAudio := waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
 		return msg.Type == messages.StreamTypeAudioDelta && msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
 	})
-	if len(ackAudio.Value.(*messages.AudioDeltaValue).Content) == 0 {
+	if len(streamValue[*messages.AudioDeltaValue](t, ackAudio).Content) == 0 {
 		t.Fatal("acknowledgement audio was empty")
 	}
 
 	close(executor.release)
 	waitForAcknowledgementSent(t, session, func(msg messages.StreamMessage) bool {
-		return msg.Type == messages.StreamTypeResponseCreate && msg.Value.(*messages.ResponseCreateValue).Purpose == ""
+		return isContinuationCreate(msg)
 	})
 	waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
-		return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "response-final"
+		return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == finalResponseID
 	})
 
 	sent := session.sentMessages()
@@ -343,10 +361,10 @@ func TestDuplexSession_LongRunningToolAcknowledgementPrecedesGroundedContinuatio
 	if len(responseCreates) != 2 {
 		t.Fatalf("response.create sends = %d, want acknowledgement plus one continuation (%#v)", len(responseCreates), sent)
 	}
-	if responseCreates[0].Value.(*messages.ResponseCreateValue).Purpose != messages.ResponsePurposeToolAcknowledgement {
+	if streamValue[*messages.ResponseCreateValue](t, responseCreates[0]).Purpose != messages.ResponsePurposeToolAcknowledgement {
 		t.Fatalf("first response.create = %#v, want acknowledgement", responseCreates[0].Value)
 	}
-	if responseCreates[1].Value.(*messages.ResponseCreateValue).Purpose != "" {
+	if streamValue[*messages.ResponseCreateValue](t, responseCreates[1]).Purpose != "" {
 		t.Fatalf("second response.create = %#v, want ordinary continuation", responseCreates[1].Value)
 	}
 	if toolResultIndex < 0 || indexOfSentMessage(sent, responseCreates[1]) <= toolResultIndex {
@@ -404,10 +422,10 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 
 	close(executor.release)
 	waitForAcknowledgementSent(t, session, func(msg messages.StreamMessage) bool {
-		return msg.Type == messages.StreamTypeResponseCreate && msg.Value.(*messages.ResponseCreateValue).Purpose == ""
+		return isContinuationCreate(msg)
 	})
 	waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
-		return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "response-final"
+		return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == finalResponseID
 	})
 
 	sent := session.sentMessages()
@@ -417,7 +435,7 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 	for _, msg := range sent {
 		switch msg.Type {
 		case messages.StreamTypeResponseCreate:
-			if msg.Value.(*messages.ResponseCreateValue).IsToolAcknowledgement() {
+			if streamValue[*messages.ResponseCreateValue](t, msg).IsToolAcknowledgement() {
 				ackCount++
 			}
 		case messages.StreamTypeResponseCancel:
@@ -517,7 +535,7 @@ func TestDuplexSession_RejectedAcknowledgementKeepsServerResponseOrdinary(t *tes
 			}
 			close(executor.release)
 			waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
-				return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "response-final"
+				return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == finalResponseID
 			})
 			select {
 			case err := <-runErr:

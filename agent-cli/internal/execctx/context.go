@@ -16,8 +16,10 @@ func WithWorkspaceDir(ctx context.Context, dir string) context.Context {
 
 // WorkspaceDir returns the workspace directory from the context, or empty string.
 func WorkspaceDir(ctx context.Context) string {
-	v, _ := ctx.Value(keyWorkspaceDir).(string)
-	return v
+	if v, ok := ctx.Value(keyWorkspaceDir).(string); ok {
+		return v
+	}
+	return ""
 }
 
 // WithConfigDir returns a context with the config directory set.
@@ -27,6 +29,8 @@ func WithConfigDir(ctx context.Context, dir string) context.Context {
 
 // ConfigDir returns the config directory from the context, or empty string.
 func ConfigDir(ctx context.Context) string {
-	v, _ := ctx.Value(keyConfigDir).(string)
-	return v
+	if v, ok := ctx.Value(keyConfigDir).(string); ok {
+		return v
+	}
+	return ""
 }

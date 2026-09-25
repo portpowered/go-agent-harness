@@ -181,7 +181,7 @@ func (f *sigintRealtimeFixture) Snapshot() sigintRealtimeFixtureSnapshot {
 	}
 }
 func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.fail("authorization header did not arrive through the child process")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -191,7 +191,7 @@ func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http
 		f.fail("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -213,70 +213,22 @@ func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http
 			return
 		}
 		switch event.Type {
-		case "session.update":
-			f.mu.Lock()
-			f.sessionUpdates++
-			f.mu.Unlock()
-			if err := f.send(connection, map[string]any{
-				"type":    "session.created",
-				"session": map[string]string{"id": "sigint-session", "model": "gpt-realtime"},
-			}); err != nil {
+		case rtEventSessionUpdate:
+			if !f.acknowledgeSessionUpdate(connection) {
 				return
 			}
-			if err := f.send(connection, map[string]any{
-				"type":    "session.updated",
-				"session": map[string]string{"id": "sigint-session"},
-			}); err != nil {
-				return
-			}
-		case "conversation.item.create":
-			if event.Item.Type != "function_call_output" {
+		case rtEventConversationItemCreate:
+			if event.Item.Type != rtItemFunctionCallOutput {
 				continue
 			}
 			f.mu.Lock()
 			f.functionCallOutputCount++
 			f.mu.Unlock()
-		case "response.create":
-			f.mu.Lock()
-			f.responseCreates++
-			responseNumber := f.responseCreates
-			mode := f.mode
-			outputCount := f.functionCallOutputCount
-			f.mu.Unlock()
-			switch mode {
-			case sigintToolContinuationFixture:
-				if responseNumber == 1 {
-					if err := f.sendToolCall(connection); err != nil {
-						return
-					}
-					continue
-				}
-				if responseNumber != 2 || outputCount != 1 {
-					f.fail(fmt.Sprintf("unexpected continuation boundary response=%d output_count=%d", responseNumber, outputCount))
-					return
-				}
-				f.mu.Lock()
-				f.continuationRequested = true
-				f.mu.Unlock()
-				f.readyOnce.Do(func() { close(f.ready) })
-			case sigintInFlightToolFixture:
-				if responseNumber != 1 {
-					f.fail(fmt.Sprintf("unexpected in-flight response.create count %d", responseNumber))
-					return
-				}
-				if err := f.sendInFlightToolCall(connection); err != nil {
-					return
-				}
-			case sigintNoToolFixture:
-				if responseNumber != 1 {
-					f.fail(fmt.Sprintf("unexpected no-tool response.create count %d", responseNumber))
-					return
-				}
-				if err := f.sendNoToolOutput(connection); err != nil {
-					return
-				}
+		case rtEventResponseCreate:
+			if !f.respondToCreate(connection) {
+				return
 			}
-		case "response.cancel":
+		case rtEventResponseCancel:
 			// The session may close the provider directly when its context is
 			// canceled. Both that close and an explicit response.cancel are valid
 			// fixture observations; the terminal boundary is asserted from the
@@ -287,20 +239,68 @@ func (f *sigintRealtimeFixture) handle(writer http.ResponseWriter, request *http
 		}
 	}
 }
+
+// acknowledgeSessionUpdate answers the client's session.update and reports
+// whether the connection is still writable.
+func (f *sigintRealtimeFixture) acknowledgeSessionUpdate(connection *websocket.Conn) bool {
+	f.mu.Lock()
+	f.sessionUpdates++
+	f.mu.Unlock()
+	return f.send(connection, map[string]any{"type": rtEventSessionCreated, "session": map[string]string{"id": "sigint-session", "model": "gpt-realtime"}}) == nil &&
+		f.send(connection, map[string]any{"type": "session.updated", "session": map[string]string{"id": "sigint-session"}}) == nil
+}
+
+// respondToCreate plays the mode's scripted response for one response.create
+// and reports whether the session should keep reading.
+func (f *sigintRealtimeFixture) respondToCreate(connection *websocket.Conn) bool {
+	f.mu.Lock()
+	f.responseCreates++
+	responseNumber := f.responseCreates
+	mode := f.mode
+	outputCount := f.functionCallOutputCount
+	f.mu.Unlock()
+	switch mode {
+	case sigintToolContinuationFixture:
+		if responseNumber == 1 {
+			return f.sendToolCall(connection) == nil
+		}
+		if responseNumber != 2 || outputCount != 1 {
+			f.fail(fmt.Sprintf("unexpected continuation boundary response=%d output_count=%d", responseNumber, outputCount))
+			return false
+		}
+		f.mu.Lock()
+		f.continuationRequested = true
+		f.mu.Unlock()
+		f.readyOnce.Do(func() { close(f.ready) })
+	case sigintInFlightToolFixture:
+		if responseNumber != 1 {
+			f.fail(fmt.Sprintf("unexpected in-flight response.create count %d", responseNumber))
+			return false
+		}
+		return f.sendInFlightToolCall(connection) == nil
+	case sigintNoToolFixture:
+		if responseNumber != 1 {
+			f.fail(fmt.Sprintf("unexpected no-tool response.create count %d", responseNumber))
+			return false
+		}
+		return f.sendNoToolOutput(connection) == nil
+	}
+	return true
+}
 func (f *sigintRealtimeFixture) sendToolCall(connection *websocket.Conn) error {
 	const responseID = "response-tool"
 	const callID = "call-sigint-tool"
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": responseID},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_item.added",
+		"type": rtEventOutputItemAdded,
 		"item": map[string]string{
 			"id":        "item-sigint-tool",
-			"type":      "function_call",
+			"type":      rtItemFunctionCall,
 			"call_id":   callID,
 			"name":      "read_file",
 			"arguments": "",
@@ -309,7 +309,7 @@ func (f *sigintRealtimeFixture) sendToolCall(connection *websocket.Conn) error {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":      "response.function_call_arguments.done",
+		"type":      rtEventFunctionCallArgumentsDone,
 		"call_id":   callID,
 		"name":      "read_file",
 		"arguments": `{"path":"sigint-fixture.txt"}`,
@@ -317,8 +317,8 @@ func (f *sigintRealtimeFixture) sendToolCall(connection *websocket.Conn) error {
 		return err
 	}
 	return f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": responseID, "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": responseID, "status": rtStatusCompleted},
 	})
 }
 func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn) error {
@@ -328,16 +328,16 @@ func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn)
 	f.toolCallObserved = true
 	f.mu.Unlock()
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": responseID},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_item.added",
+		"type": rtEventOutputItemAdded,
 		"item": map[string]string{
 			"id":        "item-sigint-exec",
-			"type":      "function_call",
+			"type":      rtItemFunctionCall,
 			"call_id":   callID,
 			"name":      "exec",
 			"arguments": "",
@@ -346,7 +346,7 @@ func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn)
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":      "response.function_call_arguments.done",
+		"type":      rtEventFunctionCallArgumentsDone,
 		"call_id":   callID,
 		"name":      "exec",
 		"arguments": fmt.Sprintf(`{"command":"touch %s && sleep 30"}`, shellQuote(f.inFlightMarker)),
@@ -354,8 +354,8 @@ func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn)
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": responseID, "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": responseID, "status": rtStatusCompleted},
 	}); err != nil {
 		return err
 	}
@@ -364,13 +364,13 @@ func (f *sigintRealtimeFixture) sendInFlightToolCall(connection *websocket.Conn)
 }
 func (f *sigintRealtimeFixture) sendNoToolOutput(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-no-tool"},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type":  "response.output_text.delta",
+		"type":  rtEventOutputTextDelta,
 		"delta": "partial no-tool output",
 	}); err != nil {
 		return err
@@ -471,7 +471,7 @@ func runSIGINTAgent(t *testing.T, fixture *sigintRealtimeFixture, workDir, recor
 	case err := <-wait:
 		return sigintProcessResult{exitCode: sigintExitCode(err), stdout: stdout.String(), stderr: stderr.String()}
 	case <-time.After(10 * time.Second):
-		_ = command.Process.Kill()
+		killForCleanup(command.Process)
 		<-wait
 		t.Fatalf("agent process did not exit within 10s after SIGINT\nstdout=%q\nstderr=%q", stdout.String(), stderr.String())
 		return sigintProcessResult{}
@@ -484,22 +484,22 @@ func waitForSIGINTFixture(t *testing.T, command *exec.Cmd, ready <-chan struct{}
 	case err := <-wait:
 		t.Fatalf("agent exited before the SIGINT gate: %v", err)
 	case <-time.After(10 * time.Second):
-		_ = command.Process.Kill()
+		killForCleanup(command.Process)
 		<-wait
 		t.Fatal("agent did not reach the fixture SIGINT gate within 10s")
 	}
 	if mode == sigintInFlightToolFixture && !waitForSIGINTFile(inFlightMarker, 5*time.Second) {
-		_ = command.Process.Kill()
+		killForCleanup(command.Process)
 		<-wait
 		t.Fatalf("agent did not enter the in-flight tool before the SIGINT gate; stdout=%q", stdout.String())
 	}
 	if stdout != nil && mode == sigintNoToolFixture && !stdout.waitFor("partial no-tool output", 5*time.Second) {
-		_ = command.Process.Kill()
+		killForCleanup(command.Process)
 		<-wait
 		t.Fatalf("agent did not flush the no-tool output gate\nstdout=%q", stdout.String())
 	}
 	if err := command.Process.Signal(os.Interrupt); err != nil {
-		_ = command.Process.Kill()
+		killForCleanup(command.Process)
 		<-wait
 		t.Fatalf("send SIGINT to agent: %v", err)
 	}
@@ -654,7 +654,7 @@ func assertSIGINTProviderCapture(t *testing.T, recordDir string) {
 	seenSessionUpdated := false
 	for _, record := range providerCapture.Records {
 		switch record.Type {
-		case "session.created":
+		case rtEventSessionCreated:
 			seenSessionCreated = true
 		case "session.updated":
 			seenSessionUpdated = true
@@ -691,7 +691,7 @@ func assertSIGINTTranscriptJSONL(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("open transcript artifact %q: %v", path, err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 	scanner := bufio.NewScanner(file)
 	count := 0
 	for scanner.Scan() {
@@ -713,7 +713,7 @@ func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolC
 	if err != nil {
 		t.Fatalf("open session log %q: %v", path, err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 	scanner := bufio.NewScanner(file)
 	lineCount := 0
 	toolCalls := 0
@@ -741,7 +741,7 @@ func assertSIGINTSessionLog(t *testing.T, path string, wantToolResult, wantToolC
 				toolCalls++
 			case "tool_result":
 				toolResults++
-				if event.Status == "failed" {
+				if event.Status == rtStatusFailed {
 					failedResults++
 				}
 				if strings.Contains(strings.ToLower(event.Content), "canceled") {

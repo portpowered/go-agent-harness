@@ -65,7 +65,7 @@ func TestRealtimeInboundMessages_InactiveCancelRejectionIsNonTerminalDiagnostic(
 	}
 	if value.Classification != providers.ErrorClassResponseCancelNotActive ||
 		value.Message != "Can only cancel an active response." ||
-		value.ErrorType != "invalid_request_error" ||
+		value.ErrorType != realtimeInvalidRequestErrorType ||
 		value.Code != "response_cancel_not_active" ||
 		value.Param != "response.cancel" ||
 		value.EventID != "evt-cancel-1" {
@@ -83,8 +83,8 @@ func TestRealtimeInboundMessages_InactiveCancelHandlingRequiresExactProviderFiel
 		code        string
 		nonTerminal bool
 	}{
-		{name: "exact", errorType: "invalid_request_error", code: "response_cancel_not_active", nonTerminal: true},
-		{name: "different code", errorType: "invalid_request_error", code: "response_cancel_not_active_other"},
+		{name: "exact", errorType: realtimeInvalidRequestErrorType, code: "response_cancel_not_active", nonTerminal: true},
+		{name: "different code", errorType: realtimeInvalidRequestErrorType, code: "response_cancel_not_active_other"},
 		{name: "different type", errorType: "server_error", code: "response_cancel_not_active"},
 	}
 	for _, tc := range cases {

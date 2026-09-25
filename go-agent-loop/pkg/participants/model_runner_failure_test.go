@@ -265,3 +265,74 @@ func TestSessionModelRunner_InferenceRequestAfterSessionCloseSendsNothing(t *tes
 		})
 	}
 }
+
+func audioDeltaContent(t *testing.T, value any) []byte {
+	t.Helper()
+	delta, ok := value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("value = %T, want *messages.AudioDeltaValue", value)
+	}
+	return delta.Content
+}
+
+func toolCallEndValue(t *testing.T, value any) *messages.ToolCallEndValue {
+	t.Helper()
+	end, ok := value.(*messages.ToolCallEndValue)
+	if !ok {
+		t.Fatalf("value = %T, want *messages.ToolCallEndValue", value)
+	}
+	return end
+}
+
+func closeSessionForTest(t *testing.T, session interface{ Close() error }) {
+	t.Helper()
+	if err := session.Close(); err != nil {
+		t.Fatalf("session Close() error = %v", err)
+	}
+}
+
+// closeFailingSession reports a transport close failure after an otherwise
+// clean session, like a websocket whose close handshake fails.
+type closeFailingSession struct {
+	*recordingSession
+	closeErr error
+}
+
+func (s *closeFailingSession) Close() error {
+	if err := s.recordingSession.Close(); err != nil {
+		return err
+	}
+	return s.closeErr
+}
+
+func TestSessionModelRunnerCleanStopIgnoresSessionCloseError(t *testing.T) {
+	session := &closeFailingSession{recordingSession: newRecordingSession(), closeErr: errors.New("websocket close failed")}
+	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- runner.Run(ctx) }()
+	close(runner.UserAudioInbox)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run after clean stop with close error = %v, want nil", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Run did not return after UserAudioInbox closed")
+	}
+}
+
+func TestJoinOnFailureOnlyAttachesCleanupToFailures(t *testing.T) {
+	primary := errors.New("run failed")
+	cleanup := errors.New("close failed")
+	if err := joinOnFailure(nil, cleanup); err != nil {
+		t.Fatalf("joinOnFailure(nil, cleanup) = %v, want nil", err)
+	}
+	if err := joinOnFailure(primary, nil); err != primary { //nolint:errorlint // Identity must be preserved when there is no cleanup error.
+		t.Fatalf("joinOnFailure(primary, nil) = %v, want the primary error itself", err)
+	}
+	if err := joinOnFailure(primary, cleanup); !errors.Is(err, primary) || !errors.Is(err, cleanup) {
+		t.Fatalf("joinOnFailure(primary, cleanup) = %v, want both errors", err)
+	}
+}

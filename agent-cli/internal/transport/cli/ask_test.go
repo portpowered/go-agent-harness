@@ -190,12 +190,7 @@ func TestAskCommandS2FlagMatrix(t *testing.T) {
 			}
 			err := runAskTestCommand(t, tc.args, tc.stdin, inf, stdout, stderr)
 			if tc.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("error = %v, want message containing %q", err, tc.wantErr)
-				}
-				if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
-					t.Fatalf("error = %v, want wrapped identity %v", err, tc.wantIs)
-				}
+				assertAskFlagError(t, err, tc.wantErr, tc.wantIs)
 				return
 			}
 			if err != nil {
@@ -372,7 +367,7 @@ func TestAskCommandRejectsUnreadableAttachmentBeforeInference(t *testing.T) {
 	if err := os.Chmod(path, 0); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(path, 0o600)
+	defer closeForTest(t, func() error { return os.Chmod(path, 0o600) })
 
 	inf := &askTestInferencer{}
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}

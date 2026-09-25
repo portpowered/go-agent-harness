@@ -50,7 +50,8 @@ type streamEventMsg struct {
 
 // streamDoneMsg is sent when the stream is exhausted; runData is used to save session and flush.
 type streamDoneMsg struct {
-	handle session.SessionHandle
+	handle   session.SessionHandle
+	closeErr error
 }
 
 // FocusInputMsg is sent by Init() so that Update can call input.Focus() on the
@@ -154,7 +155,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if rawInput == "exit" || rawInput == "quit" {
-				_, _ = fmt.Fprintln(m.out, "Goodbye!")
+				m.writeChatTerminal(m.out, "Goodbye!\n")
 				m.quitting = true
 				return m, tea.Quit
 			}
@@ -175,7 +176,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamReadyMsg:
 		if msg.err != nil {
-			_, _ = fmt.Fprintf(m.errOut, "Error: %v\n", msg.err)
+			m.writeChatTerminal(m.errOut, "Error: %v\n", msg.err)
 			return m, nil
 		}
 		m.stream = msg.stream
@@ -190,7 +191,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamEventMsg:
 		if msg.evt.Type == messages.StreamTypeError {
 			if v, ok := msg.evt.Value.(*messages.ErrorValue); ok {
-				_, _ = fmt.Fprintf(m.errOut, "Error: %s\n", v.Message)
+				m.writeChatTerminal(m.errOut, "Error: %s\n", v.Message)
 			}
 		} else {
 			m.applyStreamEvent(msg.evt)
@@ -202,7 +203,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case streamDoneMsg:
-		cmd := m.finishTurn()
+		cmd := m.finishTurn(msg.closeErr)
 		return m, cmd
 	}
 
@@ -322,8 +323,7 @@ func consumeOneStreamEvent(stream agentloop.Stream, handle session.SessionHandle
 		if stream.HasNext() {
 			return streamEventMsg{evt: stream.Response()}
 		}
-		_ = stream.Close()
-		return streamDoneMsg{handle: handle}
+		return streamDoneMsg{handle: handle, closeErr: stream.Close()}
 	}
 }
 

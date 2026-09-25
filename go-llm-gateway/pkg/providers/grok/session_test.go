@@ -91,7 +91,7 @@ func TestSession_SendAudioBufferAppend(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// Send audio via Send() which translates StreamMessage → wire event.
 	audioData := []byte{0x01, 0x02, 0x03}
@@ -137,7 +137,7 @@ func TestSession_SendMessageEndCommitsAndRequestsResponse(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}) {
 		t.Fatal("Send returned false for MESSAGE.END")
@@ -175,7 +175,7 @@ func TestSession_SendMessageEndRequestsResponseAndCompletesTurn(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if !session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeAudioDelta,
@@ -218,7 +218,7 @@ func TestSession_SendExplicitResponseCreate(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if !session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
@@ -253,7 +253,7 @@ func TestSession_ReceiveAudioDelta(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeAudioDelta {
@@ -279,7 +279,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	endpoints := owner.RTCMedia()
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	want := make([]int16, 720)
 	for index := range want {
@@ -329,8 +329,8 @@ func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
-	if session.(*grokSession).currentRTCMedia() == nil {
+	defer closeForTest(t, session)
+	if grokSessionForTest(t, session).currentRTCMedia() == nil {
 		t.Fatal("RTC media was not prepared before ConnectSession returned")
 	}
 }
@@ -344,7 +344,7 @@ func TestSession_ReceiveTranscriptDelta(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeTranscriptDelta {
@@ -361,7 +361,7 @@ func TestSession_ReceiveInputAudioTranscriptWithUserRole(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeTranscriptDelta || got.Role != messages.RoleUser {
@@ -384,7 +384,7 @@ func TestSession_ReceiveFunctionCallDone(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeToolCallEnd {
@@ -397,7 +397,7 @@ func TestSession_SendTextCreatesConversationItem(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// Send text which should map to conversation.item.create outbound.
 	msg := messages.StreamMessage{
@@ -469,7 +469,7 @@ func TestSession_CloseStopsDone(t *testing.T) {
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
 
-	_ = session.Close()
+	closeForTest(t, session)
 	waitForGrokSignal(t, session.Done(), "session Done after Close")
 }
 
@@ -500,7 +500,7 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session)
 	if got.Type != messages.StreamTypeError {
@@ -533,7 +533,7 @@ func TestSession_SessionCreatedEmitsSessionOpen(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session, "SESSION.OPEN")
 	if got.Type != messages.StreamTypeSessionOpen {
@@ -546,14 +546,14 @@ func TestSession_SessionCreatedEmitsSessionOpen(t *testing.T) {
 func TestSession_SessionCreatedEmitsSessionCreated(t *testing.T) {
 	conn := newMockConn()
 	conn.addServerEvent("session.created", map[string]any{
-		"session_id": "sess-xyz",
+		"session_id": testGrokSessionID,
 		"model":      "grok-3-mini",
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// First event should be SESSION.OPEN.
 	first := readFromSession(t, ctx, session, "first SESSION.OPEN")
@@ -570,8 +570,8 @@ func TestSession_SessionCreatedEmitsSessionCreated(t *testing.T) {
 	if !ok || v == nil {
 		t.Fatal("expected SessionCreatedValue")
 	}
-	if v.SessionID != "sess-xyz" {
-		t.Errorf("session_id: got %q, want %q", v.SessionID, "sess-xyz")
+	if v.SessionID != testGrokSessionID {
+		t.Errorf("session_id: got %q, want %q", v.SessionID, testGrokSessionID)
 	}
 	if v.Model != "grok-3-mini" {
 		t.Errorf("model: got %q, want %q", v.Model, "grok-3-mini")
@@ -583,13 +583,13 @@ func TestSession_SessionCreatedEmitsSessionCreated(t *testing.T) {
 func TestSession_SessionUpdatedEmitsSessionUpdated(t *testing.T) {
 	conn := newMockConn()
 	conn.addServerEvent("session.updated", map[string]any{
-		"session_id": "sess-xyz",
+		"session_id": testGrokSessionID,
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session, "SESSION.UPDATED")
 	if got.Type != messages.StreamTypeSessionUpdated {
@@ -599,22 +599,22 @@ func TestSession_SessionUpdatedEmitsSessionUpdated(t *testing.T) {
 	if !ok || v == nil {
 		t.Fatal("expected SessionUpdatedValue")
 	}
-	if v.SessionID != "sess-xyz" {
-		t.Errorf("session_id: got %q, want %q", v.SessionID, "sess-xyz")
+	if v.SessionID != testGrokSessionID {
+		t.Errorf("session_id: got %q, want %q", v.SessionID, testGrokSessionID)
 	}
 }
 
 func TestSession_SessionClosedEmitsTerminalMetadata(t *testing.T) {
 	conn := newMockConn()
 	conn.addServerEvent("session.closed", map[string]any{
-		"session_id": "sess-xyz",
+		"session_id": testGrokSessionID,
 		"reason":     "fixture_complete",
 	})
 
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session, "SESSION.CLOSE")
 	if got.Type != messages.StreamTypeSessionClose {
@@ -624,7 +624,7 @@ func TestSession_SessionClosedEmitsTerminalMetadata(t *testing.T) {
 	if !ok || v == nil {
 		t.Fatal("expected SessionCloseValue")
 	}
-	if v.SessionID != "sess-xyz" || v.Reason != "fixture_complete" {
+	if v.SessionID != testGrokSessionID || v.Reason != "fixture_complete" {
 		t.Fatalf("session close value: got %#v", v)
 	}
 	if v.Classification != providers.ErrorClassTransport ||
@@ -645,7 +645,7 @@ func TestSession_SessionErrorEmitsClassifiedFailure(t *testing.T) {
 	session := newGrokSession(conn, logging.DummyLogger())
 	ctx := newGrokTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := readFromSession(t, ctx, session, "provider ERROR")
 	if got.Type != messages.StreamTypeError {
@@ -697,7 +697,7 @@ func TestSession_SendWithOutcomeLifecycle(t *testing.T) {
 	}
 
 	// After the session is closed, sends report closed.
-	_ = session.Close()
+	closeForTest(t, session)
 	waitForGrokSignal(t, session.Done(), "session termination after Close")
 	outcome = session.SendWithOutcome(ctx, textInput)
 	if outcome.Status != messages.SessionSendClosed {
@@ -706,7 +706,7 @@ func TestSession_SendWithOutcomeLifecycle(t *testing.T) {
 
 	// A successful text-delta send maps to a wire event.
 	open := newGrokSession(newMockConn(), logging.DummyLogger())
-	defer func() { _ = open.Close() }()
+	defer closeForTest(t, open)
 	outcome = open.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hi")})
 	if outcome.Status != messages.SessionSendSucceeded {
 		t.Fatalf("successful send status = %q, want succeeded", outcome.Status)

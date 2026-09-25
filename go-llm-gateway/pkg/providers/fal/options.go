@@ -1,6 +1,9 @@
 package fal
 
-import "net/http"
+import (
+	"io"
+	"net/http"
+)
 
 // Option configures the FalProvider.
 type Option func(*FalProvider)
@@ -24,4 +27,23 @@ func WithHTTPClient(client *http.Client) Option {
 	return func(p *FalProvider) {
 		p.httpClient = client
 	}
+}
+
+// closeResponseBody releases an HTTP response body whose content has already
+// been consumed or abandoned. The response outcome is decided by then, so a
+// close failure cannot change it and is intentionally not reported.
+func closeResponseBody(body io.Closer) {
+	if err := body.Close(); err != nil {
+		return
+	}
+}
+
+// readErrorBody reads a failed response's diagnostic body. The HTTP status is
+// the primary error; a body read failure is appended to the diagnostic text.
+func readErrorBody(body io.Reader) string {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return string(data) + " (read error body: " + err.Error() + ")"
+	}
+	return string(data)
 }

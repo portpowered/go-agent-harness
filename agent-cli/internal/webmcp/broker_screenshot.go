@@ -159,7 +159,7 @@ func (b *StatefulBroker) captureSelectionStateErrorLocked(selected *brokerSessio
 		return browserDisconnectedErrorForSession(selected, phase, cause)
 	}
 	if failure := sessionLifecycleFailure(selected); failure != nil {
-		if _, lifecycle := lifecycleClassifiedError(failure); lifecycle {
+		if isLifecycleClassifiedError(failure) {
 			return failure
 		}
 	}

@@ -90,6 +90,8 @@ func FuzzDecodePCM16Base64NeverPanics(f *testing.F) {
 	f.Add("AAAA")
 	f.Add("not base64")
 	f.Fuzz(func(t *testing.T, encoded string) {
-		_, _ = DecodePCM16Base64WithLimit(encoded, 1024)
+		if decoded, err := DecodePCM16Base64WithLimit(encoded, 1024); err == nil && len(decoded) > 1024 {
+			t.Fatalf("decoded %d samples past the 1024-byte limit", len(decoded))
+		}
 	})
 }

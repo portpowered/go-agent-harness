@@ -7,6 +7,7 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -36,10 +37,7 @@ func TestCoreAudioVoiceProcessingDeviceLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open AUVoiceIO duplex graph: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = inputHandle.Close()
-		_ = outputHandle.Close()
-	})
+	t.Cleanup(func() { closeDuplexGraph(t, inputHandle, outputHandle) })
 	for name, handle := range map[string]devicegw.OpenedDevice{"input": inputHandle, "output": outputHandle} {
 		provider, ok := handle.(devicegw.VoiceProcessingProvider)
 		if !ok || !provider.VoiceProcessingActive() {
@@ -84,5 +82,13 @@ func TestCoreAudioVoiceProcessingDeviceLoop(t *testing.T) {
 	}
 	if err := outputHandle.Close(); err != nil {
 		t.Fatalf("idempotent output close: %v", err)
+	}
+}
+
+// closeDuplexGraph closes both halves of an opened duplex device graph.
+func closeDuplexGraph(t *testing.T, input, output io.Closer) {
+	t.Helper()
+	if err := errors.Join(input.Close(), output.Close()); err != nil {
+		t.Errorf("close AUVoiceIO duplex graph: %v", err)
 	}
 }

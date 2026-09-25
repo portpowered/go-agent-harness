@@ -182,7 +182,7 @@ func (c *cliLiveRecordDirConn) WriteMessage(_ int, payload []byte) error {
 	c.server.mu.Lock()
 	c.server.timeline = append(c.server.timeline, "out:"+envelope.Type)
 	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio, payload: append([]byte(nil), payload...)})
-	if envelope.Type == "response.create" {
+	if envelope.Type == rtEventResponseCreate {
 		c.server.nextTurn++
 		turn := c.server.nextTurn
 		c.server.mu.Unlock()
@@ -432,7 +432,7 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 	c.server.timeline = append(c.server.timeline, "out:"+envelope.Type)
 	c.server.outbound = append(c.server.outbound, cliLiveOutbound{typeName: envelope.Type, audio: audio, payload: append([]byte(nil), payload...)})
 	switch envelope.Type {
-	case "session.update":
+	case rtEventSessionUpdate:
 		c.server.sessionUpdates = append(c.server.sessionUpdates, append(json.RawMessage(nil), envelope.Session...))
 		if enabled, present := scheduledServerVADSetting(envelope.Session); present {
 			c.server.serverVADEnabled = enabled
@@ -441,34 +441,13 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 		case c.server.sessionUpdateObserved <- struct{}{}:
 		default:
 		}
-	case "response.cancel":
+	case rtEventResponseCancel:
 		if c.server.bargeIn && c.server.firstResponseCancel != nil {
 			c.server.firstCancelOnce.Do(func() { close(c.server.firstResponseCancel) })
 		}
-	case "input_audio_buffer.append":
-		c.server.turnHasAudio = true
-		if !c.server.turnObserved {
-			c.server.turnObserved = true
-			if hasNonZeroPCM(audio) {
-				c.server.turnHasSpeech = true
-				if c.server.serverVADEnabled {
-					observations = append(observations, `{"type":"input_audio_buffer.speech_started"}`)
-				}
-			}
-		} else if hasNonZeroPCM(audio) {
-			c.server.turnHasSpeech = true
-		}
-		if c.server.serverVADEnabled && c.server.turnHasSpeech && !c.server.turnAutoCommitted {
-			// A finite test append represents the provider having observed the
-			// speech stop for that input. Server VAD commits and clears its
-			// buffer before the later client boundary arrives, even when
-			// create_response is false.
-			observations = append(observations, `{"type":"input_audio_buffer.speech_stopped"}`)
-			c.server.turnAutoCommitted = true
-			c.server.turnHasAudio = false
-			c.server.providerAutoCommits++
-		}
-	case "input_audio_buffer.commit":
+	case rtEventInputAudioAppend:
+		observations = append(observations, c.observeAppendLocked(audio)...)
+	case rtEventInputAudioCommit:
 		if c.server.turnAutoCommitted || !c.server.turnHasAudio {
 			// The client commit is redundant after provider VAD has already
 			// committed and cleared the input buffer.
@@ -477,7 +456,7 @@ func (c *cliLiveScheduledBoundaryConn) WriteMessage(_ int, payload []byte) error
 			c.server.turnHasAudio = false
 			c.server.clientCommitted = true
 		}
-	case "response.create":
+	case rtEventResponseCreate:
 		c.server.nextTurn++
 		responseTurn = c.server.nextTurn
 		responseAccepted = c.server.clientCommitted && !c.server.serverVADEnabled
@@ -559,7 +538,7 @@ func assertScheduledBoundaryOrder(t *testing.T, timeline []string, turns int) []
 			t.Fatalf("scheduled turn %d is missing its boundary from %v", turn+1, timeline)
 		}
 		first, count := scheduledAppendRange(timeline, start, commit)
-		if first < 0 || !(first < commit && commit < response && response < done) {
+		if first < 0 || !strictlyIncreasing(first, commit, response, done) {
 			t.Fatalf("scheduled turn %d lifecycle order = %v, want append < commit < response.create < response.done", turn+1, timeline)
 		}
 		for _, event := range timeline[commit+1 : done+1] {

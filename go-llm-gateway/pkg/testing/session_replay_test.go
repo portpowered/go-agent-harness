@@ -538,7 +538,7 @@ func TestSessionReplayer_OutcomeReportsSuccessfulReplayCompletion(t *testing.T) 
 
 func TestSessionReplayer_ReplaysFlushedCaptureToCompletionOutcome(t *testing.T) {
 	fake := newFakeSession()
-	rec := NewSessionRecorder(fake, WithSessionCaptureProvider("grok", "grok-realtime"))
+	rec := NewSessionRecorder(fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"))
 
 	fake.inbound.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
@@ -713,7 +713,7 @@ func TestSessionReplayer_CancellationWakesExpectedOutboundWait(t *testing.T) {
 
 func makeCapture(dir SessionEventDirection, tsMs int64, msgType messages.StreamMessageType, val messages.StreamMessageValue) CapturedSessionEvent {
 	msg := messages.StreamMessage{Type: msgType, Value: val}
-	data, _ := MarshalStreamMessage(msg)
+	data := mustMarshalStreamMessage(msg)
 	return CapturedSessionEvent{
 		Direction:   dir,
 		TimestampMs: tsMs,
@@ -730,7 +730,7 @@ func writeCapture(t *testing.T, path string, events []CapturedSessionEvent) {
 	}
 	data, err := json.MarshalIndent(SessionCapture{
 		Version:  SessionCaptureVersion,
-		Provider: SessionProviderMetadata{Name: "grok", Model: "grok-realtime"},
+		Provider: SessionProviderMetadata{Name: testProviderGrok, Model: "grok-realtime"},
 		Session:  SessionMetadata{StartedAtUTC: time.Now().UTC().Format(time.RFC3339Nano)},
 		Records:  events,
 	}, "", "  ")

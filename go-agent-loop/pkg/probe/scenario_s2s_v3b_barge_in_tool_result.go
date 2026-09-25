@@ -25,7 +25,7 @@ const (
 // v3bToolCallID is the provider-issued call id shared by every v3b fixture.
 const v3bToolCallID = "call_v3b_weather"
 
-func init() {
+func registerS2SV3BBargeInToolResultScenarios(register func(Scenario, ...DeadSessionControl) error) {
 	for _, registration := range []struct {
 		id           string
 		name         string
@@ -71,7 +71,7 @@ func init() {
 			Expected:         registration.expectations,
 			ExpectedBehavior: registration.expectations,
 		}
-		if err := RegisterScenario(scenario); err != nil {
+		if err := register(scenario); err != nil {
 			panic(err)
 		}
 	}
