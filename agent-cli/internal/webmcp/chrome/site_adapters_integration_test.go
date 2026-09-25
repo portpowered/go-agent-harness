@@ -72,7 +72,7 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	if err != nil {
 		t.Fatalf("launch stock Chrome: %v", err)
 	}
-	t.Cleanup(func() { _ = browser.Close() })
+	t.Cleanup(func() { discardSecondaryError(browser.Close) })
 	target, err := waitForFixturePageTarget(ctx, browserHTTPURL(browser.Endpoint().BrowserWSEndpoint), server.URL+"/")
 	if err != nil {
 		t.Fatalf("discover fixture target: %v", err)
@@ -82,13 +82,13 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	if err != nil {
 		t.Fatalf("open browser runtime: %v", err)
 	}
-	t.Cleanup(func() { _ = handle.Close() })
+	t.Cleanup(func() { discardSecondaryError(handle.Close) })
 	session, err := handle.Attach(ctx, webmcp.TargetID(target.ID), webmcp.TargetOwnershipHarnessOwned)
 	if err != nil {
 		t.Fatalf("attach fixture target: %v", err)
 	}
-	t.Cleanup(func() { _ = session.Close() })
-	targetSession := session.(*targetSession)
+	t.Cleanup(func() { discardSecondaryError(session.Close) })
+	targetSession := mustType[*targetSession](t, session)
 	testSource := strings.Replace(source, guard, `if (location.hostname !== "127.0.0.1") return;`, 1)
 	if testSource == source {
 		t.Fatalf("test-only loopback origin substitution did not match %s source", name)
@@ -191,7 +191,7 @@ func testWikipediaAdapterJourney(t *testing.T) {
 		case "/wiki/Go_(programming_language)":
 			body = `<h1 id="firstHeading">Go (programming language)</h1><div class="mw-parser-output"><p>Go is a statically typed programming language designed at Google.</p><h2>History</h2></div>`
 		}
-		_, _ = fmt.Fprint(writer, `<!doctype html><body>`+body+`</body>`)
+		writeFixtureBody(writer, []byte(`<!doctype html><body>`+body+`</body>`))
 	}
 	fixture := newAdapterFixture(t, "wikipedia", "https://en.wikipedia.org/", source, `if (location.protocol !== "https:" || !(host === "wikipedia.org" || host.endsWith(".wikipedia.org"))) return;`, handler)
 	invokeAdapterTool(t, fixture, "wikipedia_search", `{"query":"Go programming language"}`)
@@ -205,7 +205,9 @@ func testWikipediaAdapterJourney(t *testing.T) {
 			} `json:"results"`
 		} `json:"data"`
 	}
-	_ = json.Unmarshal(output, &listed)
+	if err := json.Unmarshal(output, &listed); err != nil {
+		t.Fatalf("decode Wikipedia results %s: %v", output, err)
+	}
 	if listed.Data.Generation != 1 || len(listed.Data.Results) != 1 {
 		t.Fatalf("Wikipedia results = %s", output)
 	}
@@ -230,7 +232,7 @@ func testRedditAdapterJourney(t *testing.T) {
 		} else if strings.Contains(request.URL.Path, "/comments/post123/") {
 			body = `<main><article><h1>Go concurrency patterns</h1><div data-post-click-location="text-body">Useful discussion of goroutines and channels.</div></article></main>`
 		}
-		_, _ = fmt.Fprint(writer, `<!doctype html><body>`+body+`</body>`)
+		writeFixtureBody(writer, []byte(`<!doctype html><body>`+body+`</body>`))
 	}
 	fixture := newAdapterFixture(t, "reddit", "https://www.reddit.com/", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
 	invokeAdapterTool(t, fixture, "reddit_search", `{"query":"Go concurrency"}`)
@@ -255,7 +257,7 @@ func testSpotifyAdapterJourney(t *testing.T) {
 	handler := func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/tone.wav" {
 			writer.Header().Set("Content-Type", "audio/wav")
-			_, _ = writer.Write(tone)
+			writeFixtureBody(writer, tone)
 			return
 		}
 		adapterFixtureHeaders(writer)
@@ -265,7 +267,7 @@ func testSpotifyAdapterJourney(t *testing.T) {
 		} else if strings.HasPrefix(request.URL.Path, "/embed/track/") {
 			body = `<h1 data-testid="track-name">Fixture Song</h1><audio src="/tone.wav"></audio><button data-testid="play-pause-button" aria-label="Play">Play</button><script>const audio=document.querySelector("audio"),control=document.querySelector("[data-testid=play-pause-button]");const sync=()=>control.setAttribute("aria-label",audio.paused?"Play":"Pause");control.onclick=async()=>{audio.paused?await audio.play():audio.pause();sync()}</script>`
 		}
-		_, _ = fmt.Fprint(writer, `<!doctype html><body>`+body+`</body>`)
+		writeFixtureBody(writer, []byte(`<!doctype html><body>`+body+`</body>`))
 	}
 	fixture := newAdapterFixture(t, "spotify", "https://open.spotify.com/", source, `if (location.protocol !== "https:" || location.hostname.toLowerCase() !== "open.spotify.com") return;`, handler)
 	invokeAdapterTool(t, fixture, "spotify_search_tracks", `{"query":"Fixture Song"}`)
@@ -300,7 +302,7 @@ func testGoogleMapsAdapterJourney(t *testing.T) {
 		} else if strings.HasPrefix(request.URL.Path, "/maps/dir/") {
 			body = `<main><div id="directions-searchbox-0"><input aria-label="Starting point" value="Current location"></div><div id="directions-searchbox-1"><input aria-label="Destination" value="Golden Gate Bridge"></div><div data-trip-index="0">Fastest route 20 min via US-101</div></main>`
 		}
-		_, _ = fmt.Fprint(writer, `<!doctype html><body>`+body+`</body>`)
+		writeFixtureBody(writer, []byte(`<!doctype html><body>`+body+`</body>`))
 	}
 	fixture := newAdapterFixture(t, "google-maps", "https://www.google.com/maps/", source, `if (location.protocol !== "https:" || !((host === "www.google.com" && (location.pathname === "/maps" || location.pathname.startsWith("/maps/"))) || host === "maps.google.com")) return;`, handler)
 	invokeAdapterTool(t, fixture, "google_maps_search_place", `{"query":"Golden Gate Bridge"}`)
@@ -325,7 +327,7 @@ func testCapitalOneShoppingAdapterJourney(t *testing.T) {
 	source = strings.Replace(source, "Date.now() + 4000", "Date.now() + 250", 1)
 	handler := func(writer http.ResponseWriter, _ *http.Request) {
 		adapterFixtureHeaders(writer)
-		_, _ = fmt.Fprint(writer, capitalOneShoppingAdapterFixtureHTML)
+		writeFixtureBody(writer, []byte(capitalOneShoppingAdapterFixtureHTML))
 	}
 	fixture := newAdapterFixture(t, "capital-one-shopping", "https://capitaloneshopping.com/", source, `if (location.protocol !== "https:" || !ALLOWED_HOSTS.has(location.hostname.toLowerCase())) return;`, handler)
 

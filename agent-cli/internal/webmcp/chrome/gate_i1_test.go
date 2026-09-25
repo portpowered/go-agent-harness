@@ -392,7 +392,7 @@ func startGateCommandWithEnvironment(parent context.Context, binaryPath, configD
 	commandContext, cancel := context.WithCancel(parent)
 	fullArgs := append([]string{"--config-dir", configDir}, args...)
 	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
-	command.Dir, _ = repositoryRoot()
+	command.Dir = mustRepositoryRoot()
 	command.Env = gateChildEnvironment()
 	for _, extra := range extraEnvironment {
 		key, _, ok := strings.Cut(extra, "=")

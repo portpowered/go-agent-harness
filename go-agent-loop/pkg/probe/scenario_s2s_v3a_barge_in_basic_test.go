@@ -194,7 +194,7 @@ func runV3AScenario(t *testing.T, runner *Runner, scenario Scenario) map[string]
 	if err != nil {
 		t.Fatalf("runner error: %v", err)
 	}
-	lines := strings.Split(strings.TrimSpace(runner.Out.(*strings.Builder).String()), "\n")
+	lines := strings.Split(strings.TrimSpace(mustAs[*strings.Builder](t, runner.Out).String()), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("runner emitted %d lines, want result+summary", len(lines))
 	}
@@ -227,8 +227,8 @@ func outcomeKinds(t *testing.T, result map[string]any) []ExpectationKind {
 	}
 	kinds := make([]ExpectationKind, 0, len(outcomes))
 	for _, raw := range outcomes {
-		outcome := raw.(map[string]any)
-		kinds = append(kinds, ExpectationKind(outcome["kind"].(string)))
+		outcome := mustAs[map[string]any](t, raw)
+		kinds = append(kinds, ExpectationKind(mustAs[string](t, outcome["kind"])))
 	}
 	return kinds
 }
@@ -240,10 +240,10 @@ func firstFailedOutcomeError(t *testing.T, result map[string]any) string {
 		t.Fatalf("result carries no expectation outcomes to inspect: %v", result)
 	}
 	for _, raw := range outcomes {
-		outcome := raw.(map[string]any)
+		outcome := mustAs[map[string]any](t, raw)
 		if outcome["passed"] == false {
-			message, _ := outcome["error"].(string)
-			if message == "" {
+			message, ok := outcome["error"].(string)
+			if !ok || message == "" {
 				t.Fatalf("failed outcome lacks an error reason: %v", outcome)
 			}
 			return message

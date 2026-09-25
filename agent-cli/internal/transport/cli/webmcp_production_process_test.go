@@ -43,16 +43,7 @@ func TestProductionWebMCPDirectCommandsCancelAcrossOSProcessesAndRecover(t *test
 
 	fixture := newOSProcessWebMCPFixture(t)
 	defer fixture.Close()
-	configDir := writeDoctorConfig(t, fmt.Sprintf(`
-browser:
-  tools:
-    enabled: true
-    backend: webmcp
-  connection:
-    cdp_url: %q
-  selection:
-    persist: true
-`, fixture.server.URL+"/json/version"))
+	configDir := writePersistedProductionConfig(t, fixture.server.URL)
 	store := NewFileWebMCPSelectionStore(configDir)
 
 	factory := osProcessFixtureFactory(fixture.server.URL)
@@ -71,20 +62,12 @@ browser:
 	invokeAlive := true
 	defer func() {
 		if invokeAlive {
-			_ = invoke.command.Process.Kill()
-			_, _ = invoke.command.Process.Wait()
+			releaseForTest(invoke.command.Process.Kill)
+			releaseForTest(func() error { _, err := invoke.command.Process.Wait(); return err })
 		}
 	}()
 
-	var receipt WebMCPDirectInvocationReceipt
-	select {
-	case line := <-invoke.stderr.firstLine:
-		if err := json.Unmarshal([]byte(line), &receipt); err != nil {
-			t.Fatalf("decode cross-process dispatch receipt: %v; stderr=%q", err, line)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("invoke child did not emit a dispatch receipt")
-	}
+	receipt := awaitOSProcessDispatchReceipt(t, invoke)
 	if receipt.InvocationID == "" || receipt.InvocationID != string(fixture.firstInvocationID()) || receipt.ToolRef != toolRef || receipt.State != string(webmcp.InvocationDispatched) {
 		t.Fatalf("cross-process receipt = %+v, want the exact first browser invocation", receipt)
 	}
@@ -99,7 +82,7 @@ browser:
 	}
 	var cancelData WebMCPDirectCancelData
 	decodeDirectData(t, cancelEnvelope.Data, &cancelData)
-	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != "canceled" || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
+	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != testCanceledStatus || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
 		t.Fatalf("cross-process cancel data = %+v", cancelData)
 	}
 	if cancel.stderr.String() != "" {
@@ -111,14 +94,8 @@ browser:
 	if invokeErr == nil {
 		t.Fatal("invoke child exited successfully after cancellation")
 	}
-	invokeEnvelope := decodeDirectEnvelope(t, invoke.stdout.String())
-	if invokeEnvelope.OK || invokeEnvelope.Error == nil || invokeEnvelope.Error.Code != string(webmcp.ErrorInvocationCanceled) {
-		t.Fatalf("canceled invoke envelope = %+v", invokeEnvelope)
-	}
-	if invokeEnvelope.Error.Details["invocation_id"] != receipt.InvocationID {
-		t.Fatalf("canceled invoke ID = %#v, want %q", invokeEnvelope.Error.Details["invocation_id"], receipt.InvocationID)
-	}
-	if strings.TrimSpace(strings.TrimPrefix(invoke.stderr.String(), receiptLine(receipt))) != "" {
+	assertCanceledInvokeEnvelope(t, invoke.stdout.String(), receipt.InvocationID)
+	if strings.TrimSpace(strings.TrimPrefix(invoke.stderr.String(), receiptLine(t, receipt))) != "" {
 		t.Fatalf("invoke child wrote unexpected stderr = %q", invoke.stderr.String())
 	}
 
@@ -152,9 +129,8 @@ browser:
 	}
 }
 
-func receiptLine(receipt WebMCPDirectInvocationReceipt) string {
-	encoded, _ := json.Marshal(receipt)
-	return string(append(encoded, '\n'))
+func receiptLine(t *testing.T, receipt WebMCPDirectInvocationReceipt) string {
+	return string(append(mustJSONMarshal(t, receipt), '\n'))
 }
 
 type osProcessWebMCPChild struct {
@@ -324,12 +300,12 @@ func (f *osProcessWebMCPFixture) handle(writer http.ResponseWriter, request *htt
 	switch request.URL.Path {
 	case "/json/version":
 		browserWS := "ws" + strings.TrimPrefix(f.server.URL, "http") + "/devtools/browser/cross-process"
-		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Fixture","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWS)
+		writeFixtureText(writer, `{"Browser":"Chrome/Fixture","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWS)
 	case "/fixture/targets":
 		f.mu.Lock()
 		target := f.target
 		f.mu.Unlock()
-		_ = json.NewEncoder(writer).Encode([]osProcessFixtureTarget{{
+		encodeFixtureJSON(writer, []osProcessFixtureTarget{{
 			ID:               string(target.ID),
 			Type:             target.Type,
 			Title:            target.Title,
@@ -346,7 +322,7 @@ func (f *osProcessWebMCPFixture) handle(writer http.ResponseWriter, request *htt
 		f.mu.Lock()
 		f.next++
 		id := webmcp.InvocationID(fmt.Sprintf("browser-os-%d", f.next))
-		status := "pending"
+		status := testPendingStatus
 		var output json.RawMessage
 		if f.next > 1 {
 			status = "completed"
@@ -354,7 +330,7 @@ func (f *osProcessWebMCPFixture) handle(writer http.ResponseWriter, request *htt
 		}
 		f.invocations[id] = &osProcessFixtureInvocation{status: status, output: output}
 		f.mu.Unlock()
-		_ = json.NewEncoder(writer).Encode(osProcessFixtureInvokeResponse{InvocationID: id, Status: status, Output: output})
+		encodeFixtureJSON(writer, osProcessFixtureInvokeResponse{InvocationID: id, Status: status, Output: output})
 	case "/fixture/cancel":
 		var requestBody osProcessFixtureCancelRequest
 		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&requestBody); err != nil {
@@ -363,14 +339,14 @@ func (f *osProcessWebMCPFixture) handle(writer http.ResponseWriter, request *htt
 		}
 		f.mu.Lock()
 		invocation := f.invocations[webmcp.InvocationID(requestBody.InvocationID)]
-		if invocation == nil || invocation.status != "pending" {
+		if invocation == nil || invocation.status != testPendingStatus {
 			f.mu.Unlock()
 			http.Error(writer, "invocation is not pending", http.StatusConflict)
 			return
 		}
-		invocation.status = "canceled"
+		invocation.status = testCanceledStatus
 		f.mu.Unlock()
-		_ = json.NewEncoder(writer).Encode(map[string]string{"status": "cancel_requested"})
+		encodeFixtureJSON(writer, map[string]string{"status": "cancel_requested"})
 	case "/fixture/status":
 		invocationID := webmcp.InvocationID(request.URL.Query().Get("invocation_id"))
 		f.mu.Lock()
@@ -382,7 +358,7 @@ func (f *osProcessWebMCPFixture) handle(writer http.ResponseWriter, request *htt
 		}
 		response := osProcessFixtureInvokeResponse{InvocationID: invocationID, Status: invocation.status, Output: append(json.RawMessage(nil), invocation.output...)}
 		f.mu.Unlock()
-		_ = json.NewEncoder(writer).Encode(response)
+		encodeFixtureJSON(writer, response)
 	default:
 		http.NotFound(writer, request)
 	}
@@ -633,11 +609,11 @@ func (s *osProcessWebMCPFixtureSession) watchInvocation(invocationID webmcp.Invo
 		if err := s.runtime.doJSON(context.Background(), http.MethodGet, "/fixture/status?invocation_id="+url.QueryEscape(string(invocationID)), nil, &response); err != nil {
 			continue
 		}
-		if response.Status == "pending" {
+		if response.Status == testPendingStatus {
 			continue
 		}
 		status := "Completed"
-		if response.Status == "canceled" {
+		if response.Status == testCanceledStatus {
 			status = "Canceled"
 		}
 		s.send(webmcp.BrowserEvent{Type: webmcp.EventToolResponded, InvocationID: invocationID, Status: status, Output: append(json.RawMessage(nil), response.Output...)})
@@ -690,10 +666,10 @@ func (r *osProcessWebMCPRuntime) doJSON(ctx context.Context, method, path string
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() { discardCloseError(response.Body.Close()) }()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		message, _ := io.ReadAll(io.LimitReader(response.Body, 4<<10))
-		return fmt.Errorf("fixture HTTP status %s: %s", response.Status, strings.TrimSpace(string(message)))
+		message, readErr := io.ReadAll(io.LimitReader(response.Body, 4<<10))
+		return errors.Join(fmt.Errorf("fixture HTTP status %s: %s", response.Status, strings.TrimSpace(string(message))), readErr)
 	}
 	if output == nil {
 		return nil

@@ -62,7 +62,7 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 	}
 	sink, err := NewFileSink(outputPath, nil)
 	if err != nil {
-		_ = source.Close()
+		closeForTest(t, source)
 		t.Fatalf("NewFileSink() error = %v", err)
 	}
 	for {
@@ -72,13 +72,13 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 			break
 		}
 		if err != nil {
-			_ = source.Close()
-			_ = sink.Close()
+			closeForTest(t, source)
+			closeForTest(t, sink)
 			t.Fatalf("ReadFrame() error = %v", err)
 		}
 		if err := sink.WriteFrame(context.Background(), frame); err != nil {
-			_ = source.Close()
-			_ = sink.Close()
+			closeForTest(t, source)
+			closeForTest(t, sink)
 			t.Fatalf("WriteFrame() error = %v", err)
 		}
 	}
@@ -103,7 +103,7 @@ func TestFileSinkOwnedHandleRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSink() error = %v", err)
 	}
-	t.Cleanup(func() { _ = sink.Close() })
+	t.Cleanup(func() { closeForTest(t, sink) })
 	opened := processOpenHandleCount(t)
 	if opened <= before {
 		t.Fatalf("open-handle count after sink open = %d, before = %d; owned handle was not observed", opened, before)
@@ -149,7 +149,7 @@ func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	}
 	sink, err := NewFileSink(outputPath, nil)
 	if err != nil {
-		_ = source.Close()
+		closeForTest(t, source)
 		t.Fatal(err)
 	}
 	for {
@@ -247,7 +247,7 @@ func TestFileSinkStandardStreamAndValidation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = sink.Close() }()
+		defer closeForTest(t, sink)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		if err := sink.WriteFrame(ctx, make([]int16, FrameSize)); !errors.Is(err, context.Canceled) {

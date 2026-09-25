@@ -24,7 +24,7 @@ func TestRTCDeviceSourceDefaultPumpsFixedFramesToOutboundMedia(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open output default: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	if got := sink.DeviceID(); got != "virtual:output" {
 		t.Fatalf("sink DeviceID = %q, want virtual:output", got)
 	}
@@ -33,7 +33,7 @@ func TestRTCDeviceSourceDefaultPumpsFixedFramesToOutboundMedia(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open input default: %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	if got := source.DeviceID(); got != "virtual:input" {
 		t.Fatalf("source DeviceID = %q, want virtual:input", got)
 	}
@@ -87,7 +87,7 @@ func TestRTCDeviceSourceConvertsSupportedCaptureRateToProviderRate(t *testing.T)
 	if err != nil {
 		t.Fatalf("open 16 kHz fallback source for 24 kHz provider: %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	if source.SourceSampleRate() != audio.SampleRate || source.ProviderSampleRate() != providerRate {
 		t.Fatalf("source rates = %d -> %d, want %d -> %d", source.SourceSampleRate(), source.ProviderSampleRate(), audio.SampleRate, providerRate)
 	}
@@ -96,7 +96,7 @@ func TestRTCDeviceSourceConvertsSupportedCaptureRateToProviderRate(t *testing.T)
 	if err != nil {
 		t.Fatalf("open capture feed: %v", err)
 	}
-	defer func() { _ = feed.Close() }()
+	defer closeForTest(t, "feed", feed)
 	wantCapture := make([]int16, audio.FrameSize)
 	for index := range wantCapture {
 		wantCapture[index] = int16(index*19 - 3000) //nolint:gosec // bounded test signal
@@ -147,12 +147,12 @@ func TestRTCDeviceSourceKeepsMatchedProviderRateIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open matched-rate source: %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	feed, err := devicegw.NewDeviceSinkAtRate(registry, "virtual:output", providerRate)
 	if err != nil {
 		t.Fatalf("open matched-rate feed: %v", err)
 	}
-	defer func() { _ = feed.Close() }()
+	defer closeForTest(t, "feed", feed)
 
 	want := make([]int16, audio.FrameSize)
 	for index := range want {
@@ -292,12 +292,12 @@ func TestRTCDeviceSourcePreservesOutboundWriteError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	source, err := NewRTCDeviceSource(registry, "virtual:input")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, "source", source)
 	if err := sink.WriteFrame(context.Background(), make([]int16, audio.FrameSize)); err != nil {
 		t.Fatal(err)
 	}

@@ -21,13 +21,13 @@ func TestRTCDeviceSinkConvertsProviderRateToSupportedPlaybackRate(t *testing.T) 
 	if err != nil {
 		t.Fatalf("open playback observer: %v", err)
 	}
-	defer func() { _ = observe.Close() }()
+	defer closeForTest(t, "observe", observe)
 
 	sink, err := NewRTCDeviceSinkAtRate(registry, "virtual:output", wavio.Rate24kHz)
 	if err != nil {
 		t.Fatalf("open 16 kHz fallback sink for 24 kHz provider: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	if sink.ProviderSampleRate() != wavio.Rate24kHz || sink.DeviceSampleRate() != audio.SampleRate {
 		t.Fatalf("sink rates = %d -> %d, want %d -> %d", sink.ProviderSampleRate(), sink.DeviceSampleRate(), wavio.Rate24kHz, audio.SampleRate)
 	}
@@ -78,14 +78,14 @@ func assertShort24kSessionMediaPlayback(t *testing.T, responseDone bool) {
 	if err != nil {
 		t.Fatalf("open 16 kHz fallback sink for 24 kHz provider: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 
 	providerSamples := make([]int16, 480)
 	for index := range providerSamples {
 		providerSamples[index] = int16(index%401 - 200)
 	}
 	media := audio.NewSessionMediaAtRate(nil, wavio.Rate24kHz)
-	defer func() { _ = media.Close() }()
+	defer closeForTest(t, "media", media)
 	if err := media.PushInbound(providerSamples); err != nil {
 		t.Fatalf("push short provider response: %v", err)
 	}
@@ -124,12 +124,12 @@ func TestRTCDeviceSinkKeepsMatchedPlaybackRateIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open playback observer: %v", err)
 	}
-	defer func() { _ = observe.Close() }()
+	defer closeForTest(t, "observe", observe)
 	sink, err := NewRTCDeviceSinkAtRate(registry, "virtual:output", wavio.Rate24kHz)
 	if err != nil {
 		t.Fatalf("open matched-rate sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 
 	want := make([]int16, audio.FrameSize)
 	for index := range want {

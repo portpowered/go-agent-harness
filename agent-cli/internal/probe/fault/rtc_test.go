@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -207,3 +208,11 @@ func (loopbackStubSignaling) Close() error                                     {
 var _ rtc.ContextDialer = (*loopbackPeerDialer)(nil)
 var _ rtc.Conn = loopbackConn{}
 var _ rtc.Signaling = loopbackStubSignaling{}
+
+// closeFaultedSession releases a session whose transport was deliberately
+// faulted. Its close error reflects the injected fault and is not asserted.
+func closeFaultedSession(session io.Closer) {
+	if err := session.Close(); err != nil {
+		return
+	}
+}

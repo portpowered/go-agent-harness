@@ -75,7 +75,7 @@ func startHermeticFixture() *httptest.Server {
 		}
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = writer.Write(contents)
+		writeFixtureBody(writer, contents)
 	}))
 }
 
@@ -142,7 +142,7 @@ func runHermeticProbe(endpoint string) (report hermeticProbeReport, err error) {
 	defer func() {
 		// This temporary target belongs to this probe. The remote allocator and
 		// browser process remain owned by the launcher.
-		_ = chromedp.Cancel(targetContext)
+		cancelProbeTarget(targetContext)
 		cancelTarget()
 	}()
 

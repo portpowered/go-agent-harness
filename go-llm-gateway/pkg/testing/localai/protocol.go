@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"time"
@@ -55,7 +56,8 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 	dialer := websocket.Dialer{HandshakeTimeout: realtimeOperationTimeout}
 	conn, response, err := dialer.DialContext(ctx, endpoint, http.Header{})
 	if response != nil && response.Body != nil {
-		_ = response.Body.Close()
+		// Gorilla buffers the handshake body in memory; releasing it cannot fail after a successful dial.
+		err = errors.Join(err, response.Body.Close())
 	}
 	if err != nil {
 		return proof, fmt.Errorf("dial realtime endpoint %s: %w", endpoint, err)
@@ -63,7 +65,7 @@ func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeA
 	if conn == nil {
 		return proof, errors.New("realtime WebSocket dial returned a nil connection")
 	}
-	defer func() { _ = conn.Close() }()
+	defer discardClose(conn)
 
 	if err := waitForRealtimeEvent(ctx, conn, "session.created"); err != nil {
 		return proof, fmt.Errorf("wait for session.created: %w", err)
@@ -338,4 +340,14 @@ func pcm16RMS(audio []byte) (float64, error) {
 		sumSquares += sample * sample
 	}
 	return math.Sqrt(sumSquares / float64(len(samples))), nil
+}
+
+// discardClose releases a probe resource whose outcome is already decided:
+// the handshake body is buffered in memory and the realtime connection is
+// closed only after its result has been recorded, so a close failure cannot
+// change the probe or proof reported to the caller.
+func discardClose(resource io.Closer) {
+	if err := resource.Close(); err != nil {
+		return
+	}
 }

@@ -72,7 +72,7 @@ func TestStreamAnthropicToGateway_EmitsToolCallEvents(t *testing.T) {
 	stream := &mockStream{
 		events: []anthropic.MessageStreamEventUnion{
 			{Type: "message_start", Message: anthropic.Message{}},
-			{Type: "content_block_start", Index: 0, ContentBlock: anthropic.ContentBlockStartEventContentBlockUnion{Type: "tool_use", ID: "call_1", Name: "get_weather"}},
+			{Type: "content_block_start", Index: 0, ContentBlock: anthropic.ContentBlockStartEventContentBlockUnion{Type: "tool_use", ID: "call_1", Name: testToolGetWeather}},
 			{Type: "content_block_delta", Index: 0, Delta: anthropic.MessageStreamEventUnionDelta{Type: "input_json_delta", PartialJSON: `{"city":"NYC"}`}},
 			{Type: "content_block_stop", Index: 0},
 			{Type: "message_delta", Usage: anthropic.MessageDeltaUsage{InputTokens: 10, OutputTokens: 5}},

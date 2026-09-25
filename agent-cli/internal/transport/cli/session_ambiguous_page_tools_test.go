@@ -24,106 +24,9 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	candidate := webmcp.BrowserCandidate{
-		ID:       "browser-ambiguous",
-		Source:   webmcp.DiscoverySourceExplicit,
-		Product:  "scripted",
-		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9222",
-		Loopback: true,
-		Explicit: true,
-	}
-	cubeTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-cube",
-		Type:                  "page",
-		Title:                 "Cubecade",
-		URL:                   "https://cube.example.test/",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	marginTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-margin",
-		Type:                  "page",
-		Title:                 "Margin",
-		URL:                   "https://margin.example.test/",
-		Origin:                "https://margin.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	cubeTool := webmcp.ToolDescriptor{
-		Name:        ambiguousCubeStateTool,
-		Description: "Read the Cubecade state.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	marginTool := webmcp.ToolDescriptor{
-		Name:        "get_margin_state",
-		Description: "Read the Margin state.",
-		FrameID:     "margin-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(cubeTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
-		testkit.NewTargetConfig(marginTarget, testkit.WithInitialCatalog(marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
-	))
-	discoveryService := &ambiguousSessionDiscovery{
-		candidate: discovery.BrowserCandidate{
-			ID:       string(candidate.ID),
-			Source:   discovery.SourceExplicitCDPHTTP,
-			Product:  candidate.Product,
-			Protocol: candidate.Protocol,
-			Loopback: true,
-		},
-		targets: []discovery.Target{
-			ambiguousSessionLaneTarget(cubeTarget, 1),
-			ambiguousSessionLaneTarget(marginTarget, 1),
-		},
-	}
-
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Connection.CDPURL = candidate.HTTPURL
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(t, true)
-	cfg.Browser = browser
-	cfg.Model = config.ModelConfig{
-		Provider: config.ProviderGrok,
-		Grok:     &config.GrokConfig{Model: "ambiguous-session", APIKey: "unused"},
-	}
-	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
-	)
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
-		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
-	if err != nil {
-		t.Fatalf("construct session capabilities: %v", err)
-	}
-	defer func() {
-		if closeErr := capabilities.Close(); closeErr != nil {
-			t.Errorf("close session capabilities: %v", closeErr)
-		}
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Errorf("close scripted browser runtime: %v", closeErr)
-		}
-	}()
-
-	surface := resolveSessionToolSurface(ctx, capabilities)
-	if surface.browserState != webmcp.BrowserCapabilityConnectedUnselected {
-		t.Fatalf("initial browser state = %q, want connected_unselected", surface.browserState)
-	}
-	assertAmbiguousPageSurface(t, surface.definitions, surface.base, nil, "initial CLI surface")
+	cubeTool := ambiguousFixtureTool(ambiguousCubeStateTool, "Read the Cubecade state.", "cube-frame")
+	fixture := newAmbiguousBrowserFixture(t, ctx, cubeTool)
+	surface := fixture.surface
 	unselectedRefresh, err := surface.refresh(ctx)
 	if err != nil {
 		t.Fatalf("unselected page refresh: %v", err)
@@ -135,27 +38,199 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- newTestSessionCommand(nil, nil, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}).runSessionRequest(sessionCtx, io.Discard, io.Discard, serviceSession.Request{
+		runErr <- newTestSessionCommand(nil, nil, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(fixture.capabilities)}).runSessionRequest(sessionCtx, io.Discard, io.Discard, serviceSession.Request{
 			Provider: config.ProviderGrok, Model: "ambiguous-session", APIKey: "unused",
-			LoadedConfig: cfg, BrowserToolsEnabled: true, WaitForClose: true,
+			LoadedConfig: fixture.cfg, BrowserToolsEnabled: true, WaitForClose: true,
 		})
 	}()
-	defer func() {
-		cancelSession()
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) {
-				t.Errorf("session loop shutdown: %v", err)
-			}
-		case <-time.After(time.Second):
-			t.Error("session loop did not stop after cancellation")
-		}
-	}()
+	defer stopAmbiguousSession(t, cancelSession, runErr, nil)
 
 	initialDefinitions := readAmbiguousPageToolsSessionUpdate(t, ctx, runErr, providerSession)
 	assertAmbiguousPageSurface(t, initialDefinitions, surface.base, nil, "initial provider surface")
 
-	listEnvelope := executeAmbiguousPageToolsCall(t, ctx, surface.executor, webmcp.ListTabsToolName, `{"include_zero_tool_pages":true}`)
+	listed := listAmbiguousTabs(t, ctx, surface.executor, fixture.candidate.ID)
+	if listed[fixture.cubeTarget.Title] == "" || listed[fixture.marginTarget.Title] == "" {
+		t.Fatalf("listed ambiguous target identities = %#v, want Cubecade and Margin", listed)
+	}
+	assertRuntimeHasNoOperation(t, fixture.runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
+
+	selectEnvelope := executeAmbiguousPageToolsCall(t, ctx, surface.executor, webmcp.SelectTabToolName, `{"browser_id":"`+string(fixture.candidate.ID)+`","target_id":"`+listed[fixture.cubeTarget.Title]+`"}`)
+	if !selectEnvelope.OK {
+		t.Fatalf("exact Cubecade selection failed: %+v", selectEnvelope.Error)
+	}
+	selectedDefinitions := readAmbiguousPageToolsSessionUpdate(t, ctx, runErr, providerSession)
+	assertAmbiguousPageSurface(t, selectedDefinitions, surface.base, []string{cubeTool.Name}, "selected provider surface")
+
+	assertCubePageToolCompleted(t, executeAmbiguousPageToolsCall(t, ctx, surface.executor, cubeTool.Name, `{}`))
+	if provider.connections() != 1 {
+		t.Fatalf("provider connections = %d, want one session connection", provider.connections())
+	}
+	fixture.assertOnlySelectedCubeOperations(t, cubeTool.Name)
+}
+
+func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	cubeTool := ambiguousFixtureTool(ambiguousCubeStateTool, "Read the Cubecade state.", "cube-frame")
+	cubeMoveTool := ambiguousFixtureTool("queue_cube_moves", "Queue moves on the Cubecade.", "cube-frame")
+	fixture := newAmbiguousBrowserFixture(t, ctx, cubeTool, cubeMoveTool)
+	surface := fixture.surface
+
+	providerSession := newAmbiguousCubeConversationSession()
+	provider := &ambiguousCubeConversationInferencer{session: providerSession}
+	sessionCtx, cancelSession := context.WithCancel(ctx)
+	conversation := startTestLiveConversation(t, sessionCtx, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(fixture.capabilities)}, serviceSession.Request{
+		Provider: config.ProviderGrok, Model: "ambiguous-session", APIKey: "unused", ConfigDir: t.TempDir(),
+		Prompt: "Inspect the cube on the connected browser.", PromptProvided: true, LoadedConfig: fixture.cfg,
+		BrowserToolsEnabled: true, WaitForClose: true, SystemPrompt: "You are a careful cube assistant.",
+	})
+	runErr, runComplete := conversation.runErr, conversation.runComplete
+	defer stopAmbiguousSession(t, cancelSession, runErr, runComplete)
+
+	initialUpdate := readAmbiguousCubeConversationUpdate(t, ctx, runComplete, providerSession, func(update *messages.SessionUpdateValue) bool {
+		return update.Instructions != ""
+	})
+	assertAmbiguousPageSurface(t, initialUpdate.Tools, surface.base, nil, "initial provider surface")
+	assertAmbiguousChoiceInstructions(t, initialUpdate, cubeTool.Name, cubeMoveTool.Name, fixture.marginTool.Name)
+
+	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.questionSent, "provider choice question")
+	assistantCalls := providerSession.assistantCallsSnapshot()
+	if len(assistantCalls) != 1 || assistantCalls[0].Name != webmcp.ListTabsToolName {
+		t.Fatalf("assistant calls before customer choice = %#v, want one list-tabs call", assistantCalls)
+	}
+	toolResults := providerSession.toolResultsSnapshot()
+	if len(toolResults) == 0 || !strings.Contains(toolResults[0].Arguments, "tab-cube") || !strings.Contains(toolResults[0].Arguments, "tab-margin") {
+		t.Fatalf("list-tabs result = %#v, want both exact tab identities", toolResults)
+	}
+	assertRuntimeHasNoOperation(t, fixture.runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
+
+	conversation.commitCustomerTurn(t, ctx)
+	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.selectionCallSent, "exact tab selection call")
+	assistantCalls = providerSession.assistantCallsSnapshot()
+	if len(assistantCalls) != 2 || assistantCalls[1].Name != webmcp.SelectTabToolName {
+		t.Fatalf("assistant calls after customer choice = %#v, want list-tabs then select-tab", assistantCalls)
+	}
+	fixture.assertExactCubeSelection(t, assistantCalls[1].Arguments)
+
+	selectedUpdate := readAmbiguousCubeConversationUpdate(t, ctx, runComplete, providerSession, func(update *messages.SessionUpdateValue) bool {
+		return containsAmbiguousDefinition(update.Tools, cubeTool.Name)
+	})
+	assertAmbiguousPageSurface(t, selectedUpdate.Tools, surface.base, []string{cubeTool.Name, cubeMoveTool.Name}, "selected provider surface")
+	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.pageCallSent, "selected page tool call")
+	assistantCalls = providerSession.assistantCallsSnapshot()
+	if len(assistantCalls) != 3 || assistantCalls[2].Name != cubeTool.Name {
+		t.Fatalf("assistant calls after selection = %#v, want list-tabs, select-tab, get-cube-state", assistantCalls)
+	}
+	if containsAmbiguousCall(assistantCalls, fixture.marginTool.Name) {
+		t.Fatalf("assistant called unselected Margin tool: %#v", assistantCalls)
+	}
+
+	select {
+	case <-runComplete:
+		if err := <-runErr; err != nil {
+			t.Fatalf("ambiguous cube conversation returned an error: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("waiting for ambiguous cube conversation completion: %v", ctx.Err())
+	}
+	assertAmbiguousConversationOutput(t, conversation.output.String())
+	if provider.connections() != 1 {
+		t.Fatalf("provider connections = %d, want one session connection", provider.connections())
+	}
+	fixture.assertOnlySelectedCubeOperations(t, cubeTool.Name)
+}
+
+// ambiguousBrowserFixture is a scripted browser with two eligible tabs,
+// Cubecade and Margin, composed into session capabilities with no page
+// selected yet.
+type ambiguousBrowserFixture struct {
+	candidate                webmcp.BrowserCandidate
+	cubeTarget, marginTarget webmcp.Target
+	marginTool               webmcp.ToolDescriptor
+	runtime                  *testkit.ScriptedBrowserRuntime
+	cfg                      *config.Config
+	capabilities             SessionToolCapabilities
+	surface                  resolvedSessionToolSurface
+}
+
+func newAmbiguousBrowserFixture(t *testing.T, ctx context.Context, cubeTools ...webmcp.ToolDescriptor) *ambiguousBrowserFixture {
+	t.Helper()
+	candidate := webmcp.BrowserCandidate{ID: "browser-ambiguous", Source: webmcp.DiscoverySourceExplicit, Product: "scripted", Protocol: "1.3", HTTPURL: testCDPURL, Loopback: true, Explicit: true}
+	f := &ambiguousBrowserFixture{
+		candidate:    candidate,
+		cubeTarget:   ambiguousFixtureTarget(candidate.ID, "tab-cube", "Cubecade", "cube"),
+		marginTarget: ambiguousFixtureTarget(candidate.ID, "tab-margin", "Margin", "margin"),
+		marginTool:   ambiguousFixtureTool("get_margin_state", "Read the Margin state.", "margin-frame"),
+	}
+	f.runtime = testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
+		testkit.NewTargetConfig(f.cubeTarget, testkit.WithInitialCatalog(cubeTools...), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
+		testkit.NewTargetConfig(f.marginTarget, testkit.WithInitialCatalog(f.marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
+	))
+	discoveryService := &ambiguousSessionDiscovery{
+		candidate: discovery.BrowserCandidate{ID: string(candidate.ID), Source: discovery.SourceExplicitCDPHTTP, Product: candidate.Product, Protocol: candidate.Protocol, Loopback: true},
+		targets:   []discovery.Target{ambiguousSessionLaneTarget(f.cubeTarget, len(cubeTools)), ambiguousSessionLaneTarget(f.marginTarget, 1)},
+	}
+	browser := config.DefaultBrowserConfig()
+	browser.Tools.Enabled = true
+	browser.Connection.CDPURL = candidate.HTTPURL
+	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
+	browser.Selection.Persist = false
+	f.cfg = browserCapabilityConfig(t, true)
+	f.cfg.Browser = browser
+	f.cfg.Model = config.ModelConfig{Provider: config.ProviderGrok, Grok: &config.GrokConfig{Model: "ambiguous-session", APIKey: "unused"}}
+	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(f.runtime), WithWebMCPProductionDiscovery(discoveryService))
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
+		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
+	})(f.cfg)
+	if err != nil {
+		t.Fatalf("construct session capabilities: %v", err)
+	}
+	f.capabilities = capabilities
+	t.Cleanup(func() {
+		closeForTest(t, capabilities.Close)
+		closeForTest(t, f.runtime.Close)
+	})
+	f.surface = resolveSessionToolSurface(ctx, capabilities)
+	if f.surface.browserState != webmcp.BrowserCapabilityConnectedUnselected {
+		t.Fatalf("initial browser state = %q, want connected_unselected", f.surface.browserState)
+	}
+	assertAmbiguousPageSurface(t, f.surface.definitions, f.surface.base, nil, "initial CLI surface")
+	return f
+}
+
+func ambiguousFixtureTarget(browserID webmcp.BrowserID, id webmcp.TargetID, title, host string) webmcp.Target {
+	return webmcp.Target{
+		BrowserID: browserID, ID: id, Type: "page", Title: title,
+		URL: "https://" + host + ".example.test/", Origin: "https://" + host + ".example.test", Generation: 1,
+		WebMCPDomainSupported: true, PageToolsReady: true, PageToolsKnown: true, Eligible: true,
+	}
+}
+
+func ambiguousFixtureTool(name, description string, frameID webmcp.FrameID) webmcp.ToolDescriptor {
+	return webmcp.ToolDescriptor{Name: name, Description: description, FrameID: frameID, InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)}
+}
+
+// stopAmbiguousSession cancels the session loop and requires it to stop
+// cleanly; runComplete reports that a final assertion already consumed runErr.
+func stopAmbiguousSession(t *testing.T, cancelSession context.CancelFunc, runErr <-chan error, runComplete <-chan struct{}) {
+	t.Helper()
+	cancelSession()
+	select {
+	case err := <-runErr:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("session loop shutdown: %v", err)
+		}
+	case <-runComplete:
+	case <-time.After(time.Second):
+		t.Error("session loop did not stop after cancellation")
+	}
+}
+
+// listAmbiguousTabs lists both eligible tabs and returns target IDs by title.
+func listAmbiguousTabs(t *testing.T, ctx context.Context, executor messages.ToolExecutor, browserID webmcp.BrowserID) map[string]string {
+	t.Helper()
+	listEnvelope := executeAmbiguousPageToolsCall(t, ctx, executor, webmcp.ListTabsToolName, `{"include_zero_tool_pages":true}`)
 	if !listEnvelope.OK {
 		t.Fatalf("list ambiguous tabs failed: %+v", listEnvelope.Error)
 	}
@@ -175,24 +250,16 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	}
 	listed := make(map[string]string, len(tabs.Targets))
 	for _, target := range tabs.Targets {
-		if !target.Eligible || target.BrowserID != string(candidate.ID) {
-			t.Fatalf("listed ambiguous target = %+v, want eligible target on %q", target, candidate.ID)
+		if !target.Eligible || target.BrowserID != string(browserID) {
+			t.Fatalf("listed ambiguous target = %+v, want eligible target on %q", target, browserID)
 		}
 		listed[target.Title] = target.TargetID
 	}
-	if listed[cubeTarget.Title] == "" || listed[marginTarget.Title] == "" {
-		t.Fatalf("listed ambiguous target identities = %#v, want Cubecade and Margin", listed)
-	}
-	assertRuntimeHasNoOperation(t, runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
+	return listed
+}
 
-	selectEnvelope := executeAmbiguousPageToolsCall(t, ctx, surface.executor, webmcp.SelectTabToolName, `{"browser_id":"`+string(candidate.ID)+`","target_id":"`+listed[cubeTarget.Title]+`"}`)
-	if !selectEnvelope.OK {
-		t.Fatalf("exact Cubecade selection failed: %+v", selectEnvelope.Error)
-	}
-	selectedDefinitions := readAmbiguousPageToolsSessionUpdate(t, ctx, runErr, providerSession)
-	assertAmbiguousPageSurface(t, selectedDefinitions, surface.base, []string{cubeTool.Name}, "selected provider surface")
-
-	pageEnvelope := executeAmbiguousPageToolsCall(t, ctx, surface.executor, cubeTool.Name, `{}`)
+func assertCubePageToolCompleted(t *testing.T, pageEnvelope webmcp.ToolResultEnvelope) {
+	t.Helper()
 	if !pageEnvelope.OK {
 		t.Fatalf("selected Cubecade page tool failed: %+v", pageEnvelope.Error)
 	}
@@ -206,175 +273,10 @@ func TestSessionAmbiguousTabsPublishOnlySelectedPageTools(t *testing.T) {
 	if pageData.Status != string(webmcp.InvocationCompleted) || string(pageData.Output) != `{"page":"cube"}` {
 		t.Fatalf("selected Cubecade page result = %+v, want one completed cube response", pageData)
 	}
-	if provider.connections() != 1 {
-		t.Fatalf("provider connections = %d, want one session connection", provider.connections())
-	}
-
-	operations := runtime.Operations()
-	var attaches, enables, invokes []testkit.Operation
-	for _, operation := range operations {
-		switch operation.Kind {
-		case testkit.OperationAttach:
-			attaches = append(attaches, operation)
-		case testkit.OperationEnableWebMCP:
-			enables = append(enables, operation)
-		case testkit.OperationInvoke:
-			invokes = append(invokes, operation)
-		}
-	}
-	if len(attaches) != 1 || attaches[0].TargetID != cubeTarget.ID {
-		t.Fatalf("attach operations = %#v, want exactly selected Cubecade target", attaches)
-	}
-	if len(enables) != 1 || enables[0].TargetID != cubeTarget.ID {
-		t.Fatalf("WebMCP enable operations = %#v, want exactly selected Cubecade target", enables)
-	}
-	if len(invokes) != 1 || invokes[0].TargetID != cubeTarget.ID || invokes[0].ToolName != cubeTool.Name {
-		t.Fatalf("invoke operations = %#v, want exactly one selected Cubecade call", invokes)
-	}
-	for _, operation := range append(append(attaches, enables...), invokes...) {
-		if operation.TargetID == marginTarget.ID {
-			t.Fatalf("unchosen Margin target received browser operation: %#v", operation)
-		}
-	}
 }
 
-func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-
-	candidate := webmcp.BrowserCandidate{
-		ID:       "browser-ambiguous",
-		Source:   webmcp.DiscoverySourceExplicit,
-		Product:  "scripted",
-		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9222",
-		Loopback: true,
-		Explicit: true,
-	}
-	cubeTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-cube",
-		Type:                  "page",
-		Title:                 "Cubecade",
-		URL:                   "https://cube.example.test/",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	marginTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-margin",
-		Type:                  "page",
-		Title:                 "Margin",
-		URL:                   "https://margin.example.test/",
-		Origin:                "https://margin.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	cubeTool := webmcp.ToolDescriptor{
-		Name:        ambiguousCubeStateTool,
-		Description: "Read the Cubecade state.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	cubeMoveTool := webmcp.ToolDescriptor{
-		Name:        "queue_cube_moves",
-		Description: "Queue moves on the Cubecade.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	marginTool := webmcp.ToolDescriptor{
-		Name:        "get_margin_state",
-		Description: "Read the Margin state.",
-		FrameID:     "margin-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(cubeTool, cubeMoveTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
-		testkit.NewTargetConfig(marginTarget, testkit.WithInitialCatalog(marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
-	))
-	discoveryService := &ambiguousSessionDiscovery{
-		candidate: discovery.BrowserCandidate{
-			ID:       string(candidate.ID),
-			Source:   discovery.SourceExplicitCDPHTTP,
-			Product:  candidate.Product,
-			Protocol: candidate.Protocol,
-			Loopback: true,
-		},
-		targets: []discovery.Target{
-			ambiguousSessionLaneTarget(cubeTarget, 2),
-			ambiguousSessionLaneTarget(marginTarget, 1),
-		},
-	}
-
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Connection.CDPURL = candidate.HTTPURL
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	browser.Selection.Persist = false
-	cfg := browserCapabilityConfig(t, true)
-	cfg.Browser = browser
-	cfg.Model = config.ModelConfig{
-		Provider: config.ProviderGrok,
-		Grok:     &config.GrokConfig{Model: "ambiguous-session", APIKey: "unused"},
-	}
-	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
-	)
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
-		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
-	if err != nil {
-		t.Fatalf("construct session capabilities: %v", err)
-	}
-	defer func() {
-		if closeErr := capabilities.Close(); closeErr != nil {
-			t.Errorf("close session capabilities: %v", closeErr)
-		}
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Errorf("close scripted browser runtime: %v", closeErr)
-		}
-	}()
-
-	surface := resolveSessionToolSurface(ctx, capabilities)
-	if surface.browserState != webmcp.BrowserCapabilityConnectedUnselected {
-		t.Fatalf("initial browser state = %q, want connected_unselected", surface.browserState)
-	}
-	assertAmbiguousPageSurface(t, surface.definitions, surface.base, nil, "initial CLI surface")
-
-	providerSession := newAmbiguousCubeConversationSession()
-	provider := &ambiguousCubeConversationInferencer{session: providerSession}
-	sessionCtx, cancelSession := context.WithCancel(ctx)
-	conversation := startTestLiveConversation(t, sessionCtx, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}, serviceSession.Request{
-		Provider: config.ProviderGrok, Model: "ambiguous-session", APIKey: "unused", ConfigDir: t.TempDir(),
-		Prompt: "Inspect the cube on the connected browser.", PromptProvided: true, LoadedConfig: cfg,
-		BrowserToolsEnabled: true, WaitForClose: true, SystemPrompt: "You are a careful cube assistant.",
-	})
-	runErr, runComplete := conversation.runErr, conversation.runComplete
-	defer func() {
-		cancelSession()
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) {
-				t.Errorf("session loop shutdown: %v", err)
-			}
-		case <-runComplete: // Final assertion consumed the result.
-		case <-time.After(time.Second):
-			t.Error("session loop did not stop after cancellation")
-		}
-	}()
-
-	initialUpdate := readAmbiguousCubeConversationUpdate(t, ctx, runComplete, providerSession, func(update *messages.SessionUpdateValue) bool {
-		return update.Instructions != ""
-	})
-	assertAmbiguousPageSurface(t, initialUpdate.Tools, surface.base, nil, "initial provider surface")
+func assertAmbiguousChoiceInstructions(t *testing.T, update *messages.SessionUpdateValue, unselectedTools ...string) {
+	t.Helper()
 	for _, required := range []string{
 		"browser endpoint is connected",
 		"no page is selected",
@@ -383,67 +285,33 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 		"exact browser_id and target_id",
 		"do not invoke page tools",
 	} {
-		if !strings.Contains(initialUpdate.Instructions, required) {
-			t.Fatalf("initial provider instructions missing %q: %s", required, initialUpdate.Instructions)
+		if !strings.Contains(update.Instructions, required) {
+			t.Fatalf("initial provider instructions missing %q: %s", required, update.Instructions)
 		}
 	}
-	for _, name := range []string{cubeTool.Name, cubeMoveTool.Name, marginTool.Name} {
-		if containsAmbiguousDefinition(initialUpdate.Tools, name) {
-			t.Fatalf("initial provider surface advertised an unselected page tool %q: %#v", name, initialUpdate.Tools)
+	for _, name := range unselectedTools {
+		if containsAmbiguousDefinition(update.Tools, name) {
+			t.Fatalf("initial provider surface advertised an unselected page tool %q: %#v", name, update.Tools)
 		}
 	}
+}
 
-	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.questionSent, "provider choice question")
-	assistantCalls := providerSession.assistantCallsSnapshot()
-	if len(assistantCalls) != 1 || assistantCalls[0].Name != webmcp.ListTabsToolName {
-		t.Fatalf("assistant calls before customer choice = %#v, want one list-tabs call", assistantCalls)
-	}
-	toolResults := providerSession.toolResultsSnapshot()
-	if len(toolResults) == 0 || !strings.Contains(toolResults[0].Arguments, "tab-cube") || !strings.Contains(toolResults[0].Arguments, "tab-margin") {
-		t.Fatalf("list-tabs result = %#v, want both exact tab identities", toolResults)
-	}
-	assertRuntimeHasNoOperation(t, runtime, testkit.OperationAttach, testkit.OperationEnableWebMCP, testkit.OperationInvoke)
-
-	conversation.commitCustomerTurn(t, ctx)
-	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.selectionCallSent, "exact tab selection call")
-	assistantCalls = providerSession.assistantCallsSnapshot()
-	if len(assistantCalls) != 2 || assistantCalls[1].Name != webmcp.SelectTabToolName {
-		t.Fatalf("assistant calls after customer choice = %#v, want list-tabs then select-tab", assistantCalls)
-	}
+func (f *ambiguousBrowserFixture) assertExactCubeSelection(t *testing.T, arguments string) {
+	t.Helper()
 	var selectionArgs struct {
 		BrowserID string `json:"browser_id"`
 		TargetID  string `json:"target_id"`
 	}
-	if err := json.Unmarshal([]byte(assistantCalls[1].Arguments), &selectionArgs); err != nil {
+	if err := json.Unmarshal([]byte(arguments), &selectionArgs); err != nil {
 		t.Fatalf("decode exact selection arguments: %v", err)
 	}
-	if selectionArgs.BrowserID != string(candidate.ID) || selectionArgs.TargetID != string(cubeTarget.ID) {
-		t.Fatalf("selection arguments = %+v, want browser %q and target %q", selectionArgs, candidate.ID, cubeTarget.ID)
+	if selectionArgs.BrowserID != string(f.candidate.ID) || selectionArgs.TargetID != string(f.cubeTarget.ID) {
+		t.Fatalf("selection arguments = %+v, want browser %q and target %q", selectionArgs, f.candidate.ID, f.cubeTarget.ID)
 	}
+}
 
-	selectedUpdate := readAmbiguousCubeConversationUpdate(t, ctx, runComplete, providerSession, func(update *messages.SessionUpdateValue) bool {
-		return containsAmbiguousDefinition(update.Tools, cubeTool.Name)
-	})
-	assertAmbiguousPageSurface(t, selectedUpdate.Tools, surface.base, []string{cubeTool.Name, cubeMoveTool.Name}, "selected provider surface")
-	waitAmbiguousConversationSignal(t, ctx, runComplete, providerSession.pageCallSent, "selected page tool call")
-	assistantCalls = providerSession.assistantCallsSnapshot()
-	if len(assistantCalls) != 3 || assistantCalls[2].Name != cubeTool.Name {
-		t.Fatalf("assistant calls after selection = %#v, want list-tabs, select-tab, get-cube-state", assistantCalls)
-	}
-	if containsAmbiguousCall(assistantCalls, marginTool.Name) {
-		t.Fatalf("assistant called unselected Margin tool: %#v", assistantCalls)
-	}
-
-	select {
-	case <-runComplete:
-		if err := <-runErr; err != nil {
-			t.Fatalf("ambiguous cube conversation returned an error: %v", err)
-		}
-	case <-ctx.Done():
-		t.Fatalf("waiting for ambiguous cube conversation completion: %v", ctx.Err())
-	}
-
-	outputText := conversation.output.String()
+func assertAmbiguousConversationOutput(t *testing.T, outputText string) {
+	t.Helper()
 	for _, expected := range []string{"Cubecade", "https://cube.example.test", "Margin", "https://margin.example.test", "Use Cubecade", "Cubecade is ready for inspection."} {
 		if !strings.Contains(outputText, expected) {
 			t.Fatalf("conversation output missing %q: %s", expected, outputText)
@@ -455,13 +323,14 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 			t.Fatalf("conversation output fabricated a workaround %q: %s", forbidden, outputText)
 		}
 	}
-	if provider.connections() != 1 {
-		t.Fatalf("provider connections = %d, want one session connection", provider.connections())
-	}
+}
 
-	operations := runtime.Operations()
+// assertOnlySelectedCubeOperations requires exactly one attach, enable, and
+// page-tool invoke, all on the selected Cubecade tab and none on Margin.
+func (f *ambiguousBrowserFixture) assertOnlySelectedCubeOperations(t *testing.T, toolName string) {
+	t.Helper()
 	var attaches, enables, invokes []testkit.Operation
-	for _, operation := range operations {
+	for _, operation := range f.runtime.Operations() {
 		switch operation.Kind {
 		case testkit.OperationAttach:
 			attaches = append(attaches, operation)
@@ -471,17 +340,17 @@ func TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork(t *testing
 			invokes = append(invokes, operation)
 		}
 	}
-	if len(attaches) != 1 || attaches[0].TargetID != cubeTarget.ID {
+	if len(attaches) != 1 || attaches[0].TargetID != f.cubeTarget.ID {
 		t.Fatalf("attach operations = %#v, want exactly selected Cubecade target", attaches)
 	}
-	if len(enables) != 1 || enables[0].TargetID != cubeTarget.ID {
+	if len(enables) != 1 || enables[0].TargetID != f.cubeTarget.ID {
 		t.Fatalf("WebMCP enable operations = %#v, want exactly selected Cubecade target", enables)
 	}
-	if len(invokes) != 1 || invokes[0].TargetID != cubeTarget.ID || invokes[0].ToolName != cubeTool.Name {
+	if len(invokes) != 1 || invokes[0].TargetID != f.cubeTarget.ID || invokes[0].ToolName != toolName {
 		t.Fatalf("invoke operations = %#v, want exactly one selected Cubecade call", invokes)
 	}
 	for _, operation := range append(append(attaches, enables...), invokes...) {
-		if operation.TargetID == marginTarget.ID {
+		if operation.TargetID == f.marginTarget.ID {
 			t.Fatalf("unchosen Margin target received browser operation: %#v", operation)
 		}
 	}
@@ -592,82 +461,100 @@ func (s *ambiguousCubeConversationSession) Send(ctx context.Context, message mes
 		return false
 	default:
 	}
-
-	var emitList, emitQuestion, emitSelection, emitFinal bool
-	var emitPageCall bool
 	s.mu.Lock()
+	emits := s.advanceLocked(message)
+	s.mu.Unlock()
+	s.emit(ctx, emits)
+	return true
+}
+
+// ambiguousCubeConversationEmits names the scripted provider outputs one
+// client message triggers; they are emitted after the phase lock is released.
+type ambiguousCubeConversationEmits struct {
+	list, question, selection, pageCall, final bool
+}
+
+func (s *ambiguousCubeConversationSession) advanceLocked(message messages.StreamMessage) ambiguousCubeConversationEmits {
+	var emits ambiguousCubeConversationEmits
 	switch message.Type {
 	case messages.StreamTypeSessionUpdate:
-		value, ok := message.Value.(*messages.SessionUpdateValue)
-		if ok && value != nil {
-			update := *value
-			update.Tools = append([]messages.ToolDefinition(nil), value.Tools...)
-			select {
-			case s.updates <- &update:
-			default:
-			}
-			if containsAmbiguousDefinition(update.Tools, ambiguousCubeStateTool) {
-				s.pageToolsReadyOnce.Do(func() { close(s.pageToolsReady) })
-			}
-		}
+		s.recordSessionUpdateLocked(message.Value)
 	case messages.StreamTypeTextDelta:
 		if s.phase == ambiguousCubeConversationInitial {
 			s.phase = ambiguousCubeConversationAwaitingListResult
-			emitList = true
+			emits.list = true
 		}
 	case messages.StreamTypeToolCallEnd:
-		value, ok := message.Value.(*messages.ToolCallEndValue)
-		if ok && value != nil {
-			s.lastToolResult = value.Name
-			s.toolResults = append(s.toolResults, *value)
-			switch value.Name {
-			case webmcp.ListTabsToolName:
-				if s.phase == ambiguousCubeConversationAwaitingListResult {
-					s.phase = ambiguousCubeConversationAwaitingChoice
-				}
-			case webmcp.SelectTabToolName:
-				if s.phase == ambiguousCubeConversationAwaitingSelectionResult {
-					s.phase = ambiguousCubeConversationWaitingForPageTools
-				}
-			}
-		}
+		s.recordToolResultLocked(message.Value)
 	case messages.StreamTypeResponseCreate:
 		switch {
 		case s.phase == ambiguousCubeConversationAwaitingChoice && s.lastToolResult == webmcp.ListTabsToolName:
-			emitQuestion = true
+			emits.question = true
 		case s.phase == ambiguousCubeConversationWaitingForPageTools && s.lastToolResult == webmcp.SelectTabToolName:
-			emitPageCall = true
+			emits.pageCall = true
 		case s.phase == ambiguousCubeConversationAwaitingPageResult && s.lastToolResult == ambiguousCubeStateTool:
 			s.phase = ambiguousCubeConversationComplete
-			emitFinal = true
+			emits.final = true
 		}
 	case messages.StreamTypeMessageEnd:
 		if s.phase == ambiguousCubeConversationAwaitingChoice {
 			s.phase = ambiguousCubeConversationAwaitingSelectionResult
-			emitSelection = true
+			emits.selection = true
 		}
 	case messages.StreamTypeSessionClose:
 		s.closeOnce.Do(func() { close(s.done) })
 	}
-	s.mu.Unlock()
+	return emits
+}
 
-	if emitList {
+func (s *ambiguousCubeConversationSession) recordSessionUpdateLocked(raw any) {
+	value, ok := raw.(*messages.SessionUpdateValue)
+	if !ok || value == nil {
+		return
+	}
+	update := *value
+	update.Tools = append([]messages.ToolDefinition(nil), value.Tools...)
+	select {
+	case s.updates <- &update:
+	default:
+	}
+	if containsAmbiguousDefinition(update.Tools, ambiguousCubeStateTool) {
+		s.pageToolsReadyOnce.Do(func() { close(s.pageToolsReady) })
+	}
+}
+
+func (s *ambiguousCubeConversationSession) recordToolResultLocked(raw any) {
+	value, ok := raw.(*messages.ToolCallEndValue)
+	if !ok || value == nil {
+		return
+	}
+	s.lastToolResult = value.Name
+	s.toolResults = append(s.toolResults, *value)
+	switch {
+	case value.Name == webmcp.ListTabsToolName && s.phase == ambiguousCubeConversationAwaitingListResult:
+		s.phase = ambiguousCubeConversationAwaitingChoice
+	case value.Name == webmcp.SelectTabToolName && s.phase == ambiguousCubeConversationAwaitingSelectionResult:
+		s.phase = ambiguousCubeConversationWaitingForPageTools
+	}
+}
+
+func (s *ambiguousCubeConversationSession) emit(ctx context.Context, emits ambiguousCubeConversationEmits) {
+	if emits.list {
 		s.emitAssistantToolCall("call-list-tabs", webmcp.ListTabsToolName, `{"include_zero_tool_pages":true}`)
 	}
-	if emitQuestion {
+	if emits.question {
 		s.emitChoiceQuestion()
 	}
-	if emitSelection {
+	if emits.selection {
 		s.emitSelectionTurn()
 	}
-	if emitPageCall {
+	if emits.pageCall {
 		go s.emitPageToolWhenReady(ctx)
 	}
-	if emitFinal {
+	if emits.final {
 		s.emitAssistantText("Cubecade is ready for inspection.")
 		s.write(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("ambiguous-session", "complete")})
 	}
-	return true
 }
 
 func (s *ambiguousCubeConversationSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {

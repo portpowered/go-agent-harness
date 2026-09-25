@@ -2,11 +2,19 @@ package inference
 
 import (
 	"encoding/json"
+	"io"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+)
+
+// Fixture values shared by the session inferencer tests.
+const (
+	testMutatedValue    = "mutated"
+	testServerVAD       = "server_vad"
+	testSnapshotMutated = "snapshot-mutated"
 )
 
 func TestLoopInteractionEventFromGateway(t *testing.T) {
@@ -86,5 +94,14 @@ func TestLoopInteractionEventFromGatewayMapsUsageAndTerminalPayloads(t *testing.
 	}
 	if got.Cancellation.OutputState != providers.ErrorClassPartialOutput {
 		t.Fatalf("cancellation output state = %q, want %q", got.Cancellation.OutputState, providers.ErrorClassPartialOutput)
+	}
+}
+
+// closeForTest closes a test-owned resource and reports an unexpected close
+// failure without stopping the test.
+func closeForTest(t testing.TB, resource io.Closer) {
+	t.Helper()
+	if err := resource.Close(); err != nil {
+		t.Errorf("close %T: %v", resource, err)
 	}
 }

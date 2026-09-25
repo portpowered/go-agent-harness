@@ -52,7 +52,10 @@ func TestStreamWriterCheckpointAndExactTail(t *testing.T) {
 	if w.BytesWritten() != uint64(len(samples)*2) {
 		t.Fatal(w.BytesWritten())
 	}
-	data, _ := os.ReadFile(f.Name())
+	data, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
 	var want bytes.Buffer
 	if err := Write(&want, Rate24kHz, samples); err != nil {
 		t.Fatal(err)

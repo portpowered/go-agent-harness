@@ -45,7 +45,7 @@ func TestPlaybackCommandReceiptIsIndependentOfFullPCMBuffer(t *testing.T) {
 	}
 }
 func TestPlaybackCommandCloseReleasesOutstandingReceipt(t *testing.T) {
-	commands, _ := NewPlaybackCommands(1)
+	commands := newPlaybackCommandsForTest(t)
 	done := make(chan PlaybackReceipt, 1)
 	go func() { done <- commands.Exchange(context.Background(), PlaybackResume, PlaybackResponse{}) }()
 	req, err := commands.Receive(context.Background())
@@ -61,7 +61,7 @@ func TestPlaybackCommandCloseReleasesOutstandingReceipt(t *testing.T) {
 	req.Complete(PlaybackReceipt{Applied: true})
 }
 func TestPlaybackCommandPreCancelledRequestIsNotAdmitted(t *testing.T) {
-	commands, _ := NewPlaybackCommands(1)
+	commands := newPlaybackCommandsForTest(t)
 	defer commands.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -313,4 +313,13 @@ func TestDeviceFormatValuesRemainComparableAndFresh(t *testing.T) {
 	if defaultFormat.Equal(PCM16DeviceFormat(24_000)) {
 		t.Fatal("formats with different rates compare equal")
 	}
+}
+
+func newPlaybackCommandsForTest(t *testing.T) *PlaybackCommands {
+	t.Helper()
+	commands, err := NewPlaybackCommands(1)
+	if err != nil {
+		t.Fatalf("NewPlaybackCommands() error = %v", err)
+	}
+	return commands
 }

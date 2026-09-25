@@ -42,12 +42,12 @@ func laneBStringValue(values map[string]any, name string) string {
 	if values == nil {
 		return ""
 	}
-	value, _ := values[name].(string)
+	value := optionalAs[string](values[name])
 	return value
 }
 
 func laneBBoolValue(values map[string]any, name string) bool {
-	value, _ := values[name].(bool)
+	value := optionalAs[bool](values[name])
 	return value
 }
 
@@ -60,4 +60,24 @@ func laneBBoolValueDefault(values map[string]any, name string, fallback bool) bo
 		return fallback
 	}
 	return value
+}
+
+// optionalAs returns value as T, or T's zero value when value is absent or has
+// another shape. Schemas and arguments are decoded JSON, so an optional field
+// of the wrong shape is treated exactly like a missing one.
+func optionalAs[T any](value any) T {
+	if typed, ok := value.(T); ok {
+		return typed
+	}
+	var zero T
+	return zero
+}
+
+// decodeBestEffort decodes an advisory schema fragment into target. A fragment
+// of an unexpected shape keeps whatever fields did decode; callers fall back
+// to defaults for the rest.
+func decodeBestEffort(raw []byte, target any) {
+	if err := json.Unmarshal(raw, target); err != nil {
+		return
+	}
 }

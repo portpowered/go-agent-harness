@@ -8,7 +8,7 @@ import (
 
 func TestSessionMediaFailClassifiesPendingTailWhenFrameQueueIsFull(t *testing.T) {
 	media := NewSessionMedia(func(context.Context, PCMFrame) error { return nil })
-	defer func() { _ = media.Close() }()
+	defer closeForTest(t, media)
 
 	frame := make([]int16, DefaultSessionMediaFrameSamples)
 	for index := 0; index < sessionMediaMaxQueuedFrames; index++ {

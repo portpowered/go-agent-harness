@@ -3,6 +3,7 @@ package chrome
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -277,7 +278,7 @@ func TestManagedBrowserManagerRecoversLiveStaleProfileOwner(t *testing.T) {
 	chromeExecutable, version := findQualifiedStockChromeForIntegration(t)
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = fmt.Fprint(writer, "<!doctype html><title>Managed recovery</title><main>managed recovery ready</main>")
+		writeFixtureBody(writer, []byte("<!doctype html><title>Managed recovery</title><main>managed recovery ready</main>"))
 	}))
 	t.Cleanup(fixture.Close)
 
@@ -500,7 +501,7 @@ func waitForManagedLaunchTarget(ctx context.Context, cdpURL, wantURL string) err
 					URL  string `json:"url"`
 				}
 				decodeErr := json.NewDecoder(response.Body).Decode(&targets)
-				_ = response.Body.Close()
+				decodeErr = errors.Join(decodeErr, response.Body.Close())
 				lastObservation = fmt.Sprintf("status=%s targets=%v decode=%v want=%q", response.Status, targets, decodeErr, wantURL)
 				pageTargets := 0
 				matchingPages := 0

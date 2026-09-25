@@ -19,7 +19,7 @@ func newWireSeamSession(t *testing.T) (*realtimeSession, *mockWebSocketConn) {
 	conn := newMockWebSocketConn()
 	session := newRealtimeSession(conn, nopLogger())
 	session.start(context.Background())
-	t.Cleanup(func() { _ = session.Close() })
+	t.Cleanup(func() { closeForTest(t, session) })
 	return session, conn
 }
 
@@ -59,7 +59,7 @@ func TestRealtimeSessionSendMessage_WireOrderAndFidelity(t *testing.T) {
 	if err := json.Unmarshal(written[0], &item); err != nil {
 		t.Fatalf("unmarshal conversation.item.create: %v", err)
 	}
-	if item.Type != "conversation.item.create" || item.Item.Type != "message" || item.Item.Role != "user" {
+	if item.Type != conversationItemCreateType || item.Item.Type != "message" || item.Item.Role != requestRoleUser {
 		t.Fatalf("first event = %#v, want user message item create", item)
 	}
 	wantParts := []struct {
@@ -97,7 +97,7 @@ func TestRealtimeSessionSendMessage_WireOrderAndFidelity(t *testing.T) {
 	if err := json.Unmarshal(written[1], &response); err != nil {
 		t.Fatalf("unmarshal response.create: %v", err)
 	}
-	if response.Type != "response.create" {
+	if response.Type != wireResponseCreate {
 		t.Fatalf("second event = %q, want response.create", response.Type)
 	}
 }
@@ -125,7 +125,7 @@ func TestRealtimeSessionSendMessageWithoutResponse_QueuesOnlyMessageItem(t *test
 	if err := json.Unmarshal(written[0], &item); err != nil {
 		t.Fatalf("unmarshal conversation.item.create: %v", err)
 	}
-	if item.Type != "conversation.item.create" {
+	if item.Type != conversationItemCreateType {
 		t.Fatalf("queued event type = %q, want conversation.item.create", item.Type)
 	}
 }
@@ -160,7 +160,7 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if err := json.Unmarshal(written[0], &functionOutput); err != nil {
 		t.Fatalf("unmarshal function_call_output: %v", err)
 	}
-	if functionOutput.Type != "conversation.item.create" || functionOutput.Item.Type != "function_call_output" || functionOutput.Item.CallID != msg.ToolCallID {
+	if functionOutput.Type != conversationItemCreateType || functionOutput.Item.Type != realtimeFunctionCallOutputType || functionOutput.Item.CallID != msg.ToolCallID {
 		t.Fatalf("function output event = %#v, want correlated function_call_output", functionOutput)
 	}
 	if functionOutput.Item.Output == "" {
@@ -201,7 +201,7 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if err := json.Unmarshal(written[1], &imageItem); err != nil {
 		t.Fatalf("unmarshal tool image item: %v", err)
 	}
-	if imageItem.Type != "conversation.item.create" || imageItem.Item.Type != "message" || imageItem.Item.Role != string(messages.RoleUser) || len(imageItem.Item.Content) != 1 {
+	if imageItem.Type != conversationItemCreateType || imageItem.Item.Type != "message" || imageItem.Item.Role != string(messages.RoleUser) || len(imageItem.Item.Content) != 1 {
 		t.Fatalf("tool image event = %#v, want one user image message", imageItem)
 	}
 	if imageItem.Item.ID != realtimeToolImageItemID(msg.ToolCallID) {
@@ -217,7 +217,7 @@ func TestRealtimeSessionSendMessage_ToolImagePreservesCallAndImageOrder(t *testi
 	if err := json.Unmarshal(written[2], &response); err != nil {
 		t.Fatalf("unmarshal response.create: %v", err)
 	}
-	if response.Type != "response.create" {
+	if response.Type != wireResponseCreate {
 		t.Fatalf("third event type = %q, want response.create", response.Type)
 	}
 	encodedImage := base64.StdEncoding.EncodeToString(imageBytes)
@@ -343,7 +343,7 @@ func TestRealtimeSessionSendMessage_AcceptsWebMCPPageImageEnvelope(t *testing.T)
 	if err := json.Unmarshal(written[0], &functionOutput); err != nil {
 		t.Fatalf("decode page function output: %v", err)
 	}
-	if functionOutput.Item.Type != "function_call_output" || functionOutput.Item.CallID != "call-page-image" || functionOutput.Item.Output != encoded {
+	if functionOutput.Item.Type != realtimeFunctionCallOutputType || functionOutput.Item.CallID != "call-page-image" || functionOutput.Item.Output != encoded {
 		t.Fatalf("page function output = %#v, want one correlated outer envelope", functionOutput)
 	}
 	var imageItem struct {
@@ -362,7 +362,7 @@ func TestRealtimeSessionSendMessage_AcceptsWebMCPPageImageEnvelope(t *testing.T)
 	var continuation struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(written[2], &continuation); err != nil || continuation.Type != "response.create" {
+	if err := json.Unmarshal(written[2], &continuation); err != nil || continuation.Type != wireResponseCreate {
 		t.Fatalf("page continuation = %s, err = %v, want one response.create", written[2], err)
 	}
 }
@@ -396,7 +396,7 @@ func TestRealtimeSessionSendMessage_EmptyToolResultPreservesCorrelation(t *testi
 	if err := json.Unmarshal(written[0], &output); err != nil {
 		t.Fatalf("unmarshal empty function_call_output: %v", err)
 	}
-	if output.Type != "conversation.item.create" || output.Item.Type != "function_call_output" || output.Item.CallID != msg.ToolCallID || output.Item.Output != "" {
+	if output.Type != conversationItemCreateType || output.Item.Type != realtimeFunctionCallOutputType || output.Item.CallID != msg.ToolCallID || output.Item.Output != "" {
 		t.Fatalf("empty function_call_output = %#v, want correlated empty output", output)
 	}
 
@@ -406,7 +406,7 @@ func TestRealtimeSessionSendMessage_EmptyToolResultPreservesCorrelation(t *testi
 	if err := json.Unmarshal(written[1], &response); err != nil {
 		t.Fatalf("unmarshal empty-result response.create: %v", err)
 	}
-	if response.Type != "response.create" {
+	if response.Type != wireResponseCreate {
 		t.Fatalf("empty-result second event = %q, want response.create", response.Type)
 	}
 }

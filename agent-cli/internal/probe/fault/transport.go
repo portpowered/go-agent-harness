@@ -769,7 +769,7 @@ func (d *Dialer) Dial(endpoint string, headers map[string]string) (transport.Con
 	wrapped, err := WrapConn(conn, optionFromConfig(d.cfg))
 	if err != nil {
 		if conn != nil {
-			_ = conn.Close()
+			err = errors.Join(err, conn.Close())
 		}
 		return nil, err
 	}

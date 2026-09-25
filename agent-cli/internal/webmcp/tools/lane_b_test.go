@@ -35,7 +35,7 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 		}
 	}
 
-	listProperties := StableToolDefinitions()[1].Parameters["properties"].(map[string]any)
+	listProperties := mustAs[map[string]any](t, StableToolDefinitions()[1].Parameters["properties"])
 	defaults := map[string]any{
 		"browser_id":              "",
 		"origin_contains":         "",
@@ -43,7 +43,7 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 		"include_zero_tool_pages": false,
 	}
 	for name, want := range defaults {
-		property := listProperties[name].(map[string]any)
+		property := mustAs[map[string]any](t, listProperties[name])
 		if property["default"] != want {
 			t.Fatalf("list %s default = %#v, want %#v", name, property["default"], want)
 		}
@@ -53,15 +53,15 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 	if !ok || !equalStrings(required, []string{"browser_id", "target_id"}) {
 		t.Fatalf("select required = %#v, want browser_id,target_id", selectDefinition.Parameters["required"])
 	}
-	activate := selectDefinition.Parameters["properties"].(map[string]any)["activate"].(map[string]any)
+	activate := mustAs[map[string]any](t, mustAs[map[string]any](t, selectDefinition.Parameters["properties"])["activate"])
 	if activate["default"] != false {
 		t.Fatalf("activate default = %#v, want false", activate["default"])
 	}
 
 	// Fresh schemas prevent a provider adapter from changing later calls.
 	first := StableToolSchemas()
-	first[0]["function"].(map[string]any)["parameters"].(map[string]any)["additionalProperties"] = true
-	if StableToolSchemas()[0]["function"].(map[string]any)["parameters"].(map[string]any)["additionalProperties"] != false {
+	mustAs[map[string]any](t, mustAs[map[string]any](t, first[0]["function"])["parameters"])["additionalProperties"] = true
+	if mustAs[map[string]any](t, mustAs[map[string]any](t, StableToolSchemas()[0]["function"])["parameters"])["additionalProperties"] != false {
 		t.Fatal("stable schemas share mutable state")
 	}
 }

@@ -17,9 +17,9 @@ func TestParseManifest_NormalizesValidJSONAndYAMLWithoutCredentials(t *testing.T
 	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
 
 	jsonData := validManifestData(t, func(document map[string]any) {
-		document["participants"].([]any)[0].(map[string]any)["provider"] = " OPENAI "
-		document["participants"].([]any)[0].(map[string]any)["voice"] = nil
-		document["participants"].([]any)[0].(map[string]any)["opening_prompt"] = "  Start the room  "
+		manifestParticipant(document, 0)["provider"] = " OPENAI "
+		manifestParticipant(document, 0)["voice"] = nil
+		manifestParticipant(document, 0)["opening_prompt"] = "  Start the room  "
 	})
 	manifest, err := ParseManifest(jsonData)
 	if err != nil {
@@ -215,7 +215,7 @@ func TestParseManifest_RejectsMissingCredentialWithoutEchoingSecret(t *testing.T
 	const pastedSecret = "sk-pasted-secret"
 	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
 	manifestData := validManifestData(t, func(document map[string]any) {
-		document["participants"].([]any)[1].(map[string]any)["api_key_env"] = pastedSecret
+		manifestParticipant(document, 1)["api_key_env"] = pastedSecret
 	})
 	// The value is deliberately an env-name-shaped string but is not set. The
 	// error must identify the field without reflecting the pasted credential.
@@ -243,7 +243,7 @@ func TestParseManifest_RejectsAllAgentRoomWithNoDesignatedOpener(t *testing.T) {
 	manifestData := validManifestData(t, func(document map[string]any) {
 		// The shared fixture normally designates "customer" as the opener;
 		// strip it so neither participant has one.
-		delete(document["participants"].([]any)[0].(map[string]any), "opening_prompt")
+		delete(manifestParticipant(document, 0), "opening_prompt")
 	})
 	_, err := ParseManifest(manifestData)
 	assertManifestError(t, err, "participants", ErrNoRoomOpener)
@@ -280,11 +280,10 @@ func TestParseManifest_UsesAvailableProviderModelToolAndVoiceRegistries(t *testi
 	).Options()
 	options.LookupCredential = func(string) (string, bool) { return "secret-that-must-not-escape", true }
 	valid := validManifestData(t, func(document map[string]any) {
-		for _, raw := range document["participants"].([]any) {
-			raw.(map[string]any)["provider"] = "openai"
-			raw.(map[string]any)["model"] = "gpt-realtime"
-			raw.(map[string]any)["tools"] = []any{"sleep"}
-			raw.(map[string]any)["voice"] = "alloy"
+		for index := range fixtureAs[[]any](document["participants"]) {
+			participant := manifestParticipant(document, index)
+			participant["provider"], participant["model"] = "openai", "gpt-realtime"
+			participant["tools"], participant["voice"] = []any{"sleep"}, "alloy"
 		}
 	})
 	if _, err := ParseManifest(valid, options); err != nil {
@@ -302,7 +301,7 @@ func TestParseManifest_UsesAvailableProviderModelToolAndVoiceRegistries(t *testi
 			field: "participants[1].provider",
 			cause: ErrUnknownProvider,
 			mutate: func(document map[string]any) {
-				document["participants"].([]any)[1].(map[string]any)["provider"] = "unknown-provider"
+				manifestParticipant(document, 1)["provider"] = "unknown-provider"
 			},
 		},
 		{
@@ -310,7 +309,7 @@ func TestParseManifest_UsesAvailableProviderModelToolAndVoiceRegistries(t *testi
 			field: "participants[1].model",
 			cause: ErrUnknownModel,
 			mutate: func(document map[string]any) {
-				document["participants"].([]any)[1].(map[string]any)["model"] = "unknown-model"
+				manifestParticipant(document, 1)["model"] = "unknown-model"
 			},
 		},
 		{
@@ -318,7 +317,7 @@ func TestParseManifest_UsesAvailableProviderModelToolAndVoiceRegistries(t *testi
 			field: "participants[1].tools[0]",
 			cause: ErrUnknownTool,
 			mutate: func(document map[string]any) {
-				document["participants"].([]any)[1].(map[string]any)["tools"] = []any{"unknown-tool"}
+				manifestParticipant(document, 1)["tools"] = []any{"unknown-tool"}
 			},
 		},
 		{
@@ -326,7 +325,7 @@ func TestParseManifest_UsesAvailableProviderModelToolAndVoiceRegistries(t *testi
 			field: "participants[1].voice",
 			cause: ErrUnknownVoice,
 			mutate: func(document map[string]any) {
-				document["participants"].([]any)[1].(map[string]any)["voice"] = "unknown-voice"
+				manifestParticipant(document, 1)["voice"] = "unknown-voice"
 			},
 		},
 	}
@@ -408,7 +407,7 @@ func TestParseManifest_RequiresDeviceSelectorsForHumanParticipants(t *testing.T)
 			name:  "input device",
 			field: "participants[0].input_device",
 			mutate: func(document map[string]any) {
-				participant := document["participants"].([]any)[0].(map[string]any)
+				participant := manifestParticipant(document, 0)
 				participant["kind"] = "human"
 				delete(participant, "provider")
 				delete(participant, "model")
@@ -420,7 +419,7 @@ func TestParseManifest_RequiresDeviceSelectorsForHumanParticipants(t *testing.T)
 			name:  "output device",
 			field: "participants[0].output_device",
 			mutate: func(document map[string]any) {
-				participant := document["participants"].([]any)[0].(map[string]any)
+				participant := manifestParticipant(document, 0)
 				participant["kind"] = "human"
 				delete(participant, "provider")
 				delete(participant, "model")
@@ -441,7 +440,7 @@ func TestParseManifest_PreservesRecordingPolicyAndDestination(t *testing.T) {
 	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
 	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
 	manifest, err := ParseManifest(validManifestData(t, func(document map[string]any) {
-		document["room"].(map[string]any)["recording"] = map[string]any{
+		manifestRoom(document)["recording"] = map[string]any{
 			"enabled":   true,
 			"directory": "  /tmp/room-evidence  ",
 		}
@@ -465,7 +464,7 @@ func TestParseManifest_RecordingDisabledDoesNotCreateEvidencePolicy(t *testing.T
 	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
 	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
 	manifest, err := ParseManifest(validManifestData(t, func(document map[string]any) {
-		document["room"].(map[string]any)["recording"] = map[string]any{"enabled": false}
+		manifestRoom(document)["recording"] = map[string]any{"enabled": false}
 	}))
 	if err != nil {
 		t.Fatalf("ParseManifest: %v", err)
@@ -480,7 +479,7 @@ func TestParseManifest_RecordingDisabledDoesNotCreateEvidencePolicy(t *testing.T
 
 func TestParseManifest_RejectsRecordingDestinationWhenDisabled(t *testing.T) {
 	err := parseFixtureError(t, func(document map[string]any) {
-		document["room"].(map[string]any)["recording"] = map[string]any{
+		manifestRoom(document)["recording"] = map[string]any{
 			"enabled":   false,
 			"directory": "room-evidence",
 		}

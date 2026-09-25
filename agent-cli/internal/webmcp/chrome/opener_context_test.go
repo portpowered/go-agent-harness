@@ -73,7 +73,7 @@ func TestPinnedChromeConnectionSurvivesOpenerContextCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open adapter handle: %v", err)
 	}
-	t.Cleanup(func() { _ = handleValue.Close() })
+	t.Cleanup(func() { discardSecondaryError(handleValue.Close) })
 	cancelOpen()
 
 	// Give a lifetime regression time to surface: the old binding delivered
@@ -105,7 +105,7 @@ func TestPinnedChromeConnectionSurvivesOpenerContextCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("attach after opener ctx cancel: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer discardSecondaryError(session.Close)
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("enable WebMCP after opener ctx cancel: %v", err)
 	}

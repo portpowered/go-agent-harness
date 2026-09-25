@@ -112,7 +112,7 @@ func TestFileSourceRawEndOfTurnMarkerDoesNotExhaustStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, source)
 
 	got := make([]int16, FrameSize)
 	if err := source.ReadFrame(context.Background(), got); err != nil {
@@ -148,7 +148,7 @@ func TestFileSourceEmptyAndTruncatedRaw(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = source.Close() }()
+		defer closeForTest(t, source)
 		if err := source.ReadFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, io.EOF) {
 			t.Fatalf("ReadFrame() = %v, want io.EOF", err)
 		}
@@ -164,7 +164,7 @@ func TestFileSourceEmptyAndTruncatedRaw(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = source.Close() }()
+		defer closeForTest(t, source)
 		readErr := source.ReadFrame(context.Background(), make([]int16, FrameSize))
 		var truncErr *TruncatedPCMError
 		if !errors.As(readErr, &truncErr) || !errors.Is(readErr, ErrTruncatedPCM) || truncErr.Bytes != 1 {
@@ -185,7 +185,7 @@ func TestFileSourceUnreadableInput(t *testing.T) {
 			assertSourceStreamError(t, err, "open", path, "raw PCM16")
 			return
 		}
-		defer func() { _ = source.Close() }()
+		defer closeForTest(t, source)
 
 		err = source.ReadFrame(context.Background(), make([]int16, FrameSize))
 		assertSourceStreamError(t, err, "read", path, "raw PCM16")
@@ -205,7 +205,7 @@ func TestFileSourceUnreadableInput(t *testing.T) {
 
 		source, err := NewFileSource(path, nil)
 		if err == nil {
-			_ = source.Close()
+			closeForTest(t, source)
 			t.Skip("permission-denied fixture skipped: this runner can read mode-zero files")
 		}
 		assertSourceStreamError(t, err, "open", path, "raw PCM16")
@@ -223,7 +223,7 @@ func TestFileSourceOwnedHandleRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
 	}
-	t.Cleanup(func() { _ = source.Close() })
+	t.Cleanup(func() { closeForTest(t, source) })
 	opened := processOpenHandleCount(t)
 	if opened <= before {
 		t.Fatalf("open-handle count after source open = %d, before = %d; owned handle was not observed", opened, before)
@@ -267,7 +267,7 @@ func TestFileSourceWAVValidationAndFraming(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = source.Close() }()
+		defer closeForTest(t, source)
 		assertSourceFrames(t, source, samples)
 	})
 
@@ -312,7 +312,7 @@ func TestFileSourceContextAndFrameErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = source.Close() }()
+	defer closeForTest(t, source)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

@@ -720,12 +720,12 @@ func openConversationalCustomerObserver(ctx context.Context, browserID string, t
 	}
 	session, err := handle.Attach(ctx, targetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
-		_ = handle.Close()
+		discardSecondaryError(handle.Close)
 		return nil, nil, err
 	}
 	if err := session.EnableWebMCP(ctx); err != nil {
-		_ = session.Close()
-		_ = handle.Close()
+		discardSecondaryError(session.Close)
+		discardSecondaryError(handle.Close)
 		return nil, nil, err
 	}
 	closeObserver := func() error {
@@ -742,7 +742,7 @@ func navigateConversationalCustomerTarget(ctx context.Context, endpoint string, 
 	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
 	targetContext, cancelTarget := chromedp.NewContext(allocatorContext, chromedp.WithTargetID(cdpTarget.ID(targetID)))
 	defer func() {
-		_ = detachExternalIntegrationTarget(targetContext, cancelTarget)
+		discardSecondaryError(func() error { return detachExternalIntegrationTarget(targetContext, cancelTarget) })
 		cancelAllocator()
 	}()
 	return chromedp.Run(targetContext, chromedp.Navigate(pageURL))
@@ -793,7 +793,7 @@ func inspectConversationalCustomerTarget(ctx context.Context, endpoint, browserI
 	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
 	targetContext, cancelTarget := chromedp.NewContext(allocatorContext, chromedp.WithTargetID(cdpTarget.ID(targetID)))
 	defer func() {
-		_ = detachExternalIntegrationTarget(targetContext, cancelTarget)
+		discardSecondaryError(func() error { return detachExternalIntegrationTarget(targetContext, cancelTarget) })
 		cancelAllocator()
 	}()
 	if err := chromedp.Run(targetContext, chromedp.WaitReady("#state")); err != nil {
@@ -858,7 +858,7 @@ func waitForConversationalCustomerOracle(ctx context.Context, endpoint string, m
 }
 
 func conversationalCustomerOracleState(oracle conversationalCustomerOracle) json.RawMessage {
-	state, _ := json.Marshal(conversationalCustomerPageState{Page: oracle.Page, Ready: oracle.Ready, Label: oracle.Label, Theme: oracle.Theme, Priority: oracle.Priority, Pending: oracle.Pending, VisibleText: oracle.VisibleText})
+	state := mustFixtureJSON(conversationalCustomerPageState{Page: oracle.Page, Ready: oracle.Ready, Label: oracle.Label, Theme: oracle.Theme, Priority: oracle.Priority, Pending: oracle.Pending, VisibleText: oracle.VisibleText})
 	return state
 }
 

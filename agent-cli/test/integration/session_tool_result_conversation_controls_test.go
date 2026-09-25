@@ -8,6 +8,7 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -112,13 +113,13 @@ func mutateConversationCallIdentity(t *testing.T, capture *gwtesting.SessionCapt
 			continue
 		}
 		switch record.Type {
-		case "response.output_item.added":
+		case rtEventOutputItemAdded:
 			payload := conversationPayloadMap(t, record)
 			item := conversationItemMap(t, payload)
 			item["name"] = name
 			marshalConversationPayload(t, record, payload)
 			seenAdded = true
-		case "response.function_call_arguments.done":
+		case rtEventFunctionCallArgumentsDone:
 			payload := conversationPayloadMap(t, record)
 			payload["name"] = name
 			if args != "" {
@@ -143,10 +144,10 @@ func duplicateConversationCall(t *testing.T, capture *gwtesting.SessionCapture) 
 			continue
 		}
 		switch record.Type {
-		case "response.output_item.added":
+		case rtEventOutputItemAdded:
 			copy := record
 			added = &copy
-		case "response.function_call_arguments.done":
+		case rtEventFunctionCallArgumentsDone:
 			copy := record
 			arguments = &copy
 		}
@@ -157,7 +158,7 @@ func duplicateConversationCall(t *testing.T, capture *gwtesting.SessionCapture) 
 	var records []gwtesting.CapturedSessionEvent
 	for _, record := range capture.Records {
 		records = append(records, record)
-		if record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" {
+		if record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventFunctionCallArgumentsDone {
 			records = append(records, *added, *arguments)
 		}
 	}
@@ -173,7 +174,7 @@ func mutateConversationTranscript(t *testing.T, capture *gwtesting.SessionCaptur
 			continue
 		}
 		switch record.Type {
-		case "response.output_audio_transcript.delta":
+		case rtEventOutputAudioTranscriptDelta:
 			payload := conversationPayloadMap(t, record)
 			payload["delta"] = transcript
 			marshalConversationPayload(t, record, payload)
@@ -192,12 +193,12 @@ func mutateConversationTranscript(t *testing.T, capture *gwtesting.SessionCaptur
 
 func functionCallOutputRecord(t *testing.T, record *gwtesting.CapturedSessionEvent) bool {
 	t.Helper()
-	if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+	if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
 		return false
 	}
 	payload := conversationPayloadMap(t, record)
 	item := conversationItemMap(t, payload)
-	return item["type"] == "function_call_output"
+	return item["type"] == rtItemFunctionCallOutput
 }
 
 func mutateExpectedConversationResult(t *testing.T, capture *gwtesting.SessionCapture, callID, output string) {
@@ -251,7 +252,7 @@ func removeConversationFollowUp(t *testing.T, capture *gwtesting.SessionCapture)
 			filtered = append(filtered, record)
 			continue
 		}
-		if record.Type == "response.done" {
+		if record.Type == rtEventResponseDone {
 			if firstResponseDone {
 				continue
 			}
@@ -259,7 +260,7 @@ func removeConversationFollowUp(t *testing.T, capture *gwtesting.SessionCapture)
 			filtered = append(filtered, record)
 			continue
 		}
-		if firstResponseDone && record.Type != "session.closed" {
+		if firstResponseDone && record.Type != rtEventSessionClosed {
 			continue
 		}
 		filtered = append(filtered, record)
@@ -317,7 +318,7 @@ func assertConversationResultGateFailure(t *testing.T, control string, runErr er
 		t.Fatalf("%s control took %s; invalid result pairing must fail within the explicit 4s control bound: %v", control, elapsed, runErr)
 	}
 	errText := runErr.Error()
-	if !strings.Contains(errText, "replay mismatch") || !strings.Contains(errText, "conversation.item.create") {
+	if !strings.Contains(errText, "replay mismatch") || !strings.Contains(errText, rtEventConversationItemCreate) {
 		t.Fatalf("%s control failed with %q, want strict conversation.item.create replay mismatch", control, errText)
 	}
 	if strings.Contains(errText, "context deadline exceeded") && !strings.Contains(errText, "replay mismatch") {
@@ -338,7 +339,7 @@ func assertConversationMissingResultFailure(t *testing.T, runErr error, elapsed 
 		if !strings.Contains(errText, toolConversationCallID) {
 			t.Fatalf("missing-result control failed with an unresolved-result diagnostic that lost call ID %q: %q", toolConversationCallID, errText)
 		}
-	} else if !strings.Contains(errText, "replay mismatch") || !strings.Contains(errText, "conversation.item.create") {
+	} else if !strings.Contains(errText, "replay mismatch") || !strings.Contains(errText, rtEventConversationItemCreate) {
 		t.Fatalf("missing-result control failed with %q, want an unresolved-result diagnostic naming %q or strict result-gate mismatch", errText, toolConversationCallID)
 	}
 	if strings.Contains(errText, "context deadline exceeded") && !strings.Contains(errText, "replay mismatch") {
@@ -521,4 +522,50 @@ func TestSessionToolCallConversationContradictoryGroundingIsRejected(t *testing.
 	if !strings.Contains(stdout, "99 degrees") || !strings.Contains(stdout, "stormy skies") {
 		t.Fatalf("grounding control did not deliver its fluent contradictory transcript; stdout=%q", stdout)
 	}
+}
+
+// checkParallelToolDeltaIDs requires every tool-result text delta to carry a
+// known call ID and every parallel call to be represented.
+func checkParallelToolDeltaIDs(toolDeltas []messages.StreamMessage) error {
+	seenDeltaIDs := map[string]int{}
+	for _, delta := range toolDeltas {
+		switch delta.Value.(type) {
+		case *messages.TextStartValue, *messages.TextDeltaValue, *messages.TextEndValue:
+			if delta.ToolCallId == "" {
+				return fmt.Errorf("observed %s tool-result delta has no ToolCallID", delta.Type)
+			}
+			if _, expected := parallelResultContent[delta.ToolCallId]; !expected {
+				return fmt.Errorf("observed %s tool-result delta has unknown ToolCallID %q", delta.Type, delta.ToolCallId)
+			}
+			seenDeltaIDs[delta.ToolCallId]++
+		}
+	}
+	if len(seenDeltaIDs) != len(parallelRequestOrder) {
+		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder)
+	}
+	return nil
+}
+
+// checkParallelResultMessage requires one reconstructed tool message to be a
+// first, known result carrying exactly its own call's content.
+func checkParallelResultMessage(observed messages.Message, contentByCall map[string]string) error {
+	if observed.Role != messages.RoleTool {
+		return fmt.Errorf("reconstructed message has role %q, want %q", observed.Role, messages.RoleTool)
+	}
+	id := observed.ToolCallID
+	if _, expected := parallelResultContent[id]; !expected {
+		return fmt.Errorf("reconstructed result has unknown ToolCallID %q", id)
+	}
+	if _, duplicate := contentByCall[id]; duplicate {
+		return fmt.Errorf("reconstructed duplicate result for call %q", id)
+	}
+	content := observed.TextContent()
+	want := parallelResultContent[id]
+	if content == want {
+		return nil
+	}
+	if owner := parallelContentOwner(content); owner != "" && owner != id {
+		return fmt.Errorf("observed result for call %q carries content owned by call %q (%q), want its own content %q", id, owner, content, want)
+	}
+	return fmt.Errorf("observed result for call %q carries content %q, want its own content %q", id, content, want)
 }

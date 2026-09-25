@@ -34,11 +34,11 @@ func windowsCursorPosition() (int, int, error) {
 
 func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	t.Helper()
-	h, _, err := procGetDC.Call(0)
+	h, _, err := user32dll.NewProc("GetDC").Call(0)
 	if h == 0 {
 		t.Skipf("%s: unavailable capability: desktop device context (%v)", runtime.GOOS, err)
 	}
-	procReleaseDC.Call(0, h)
+	user32dll.NewProc("ReleaseDC").Call(0, h)
 	bounds := screenDisplayBounds(0)
 	if bounds.Dx() < 64 || bounds.Dy() < 64 {
 		t.Skipf("%s: unavailable capability: usable display bounds (%v)", runtime.GOOS, bounds)
@@ -57,13 +57,19 @@ func TestS12WindowsScreenCaptureAndRecord(t *testing.T) {
 	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
 		t.Fatalf("screenshot result shape = %#v", msgs)
 	}
-	part := assertScreenResult(t, msgs[0], "image/jpeg", bounds.Dx(), bounds.Dy())
+	assertScreenResult(t, msgs[0], "image/jpeg", bounds.Dx(), bounds.Dy())
 
 	msgs, err = tool.Execute(context.Background(), map[string]any{"action": "record", "duration": float64(1), "fps": float64(1)})
 	if err != nil {
 		t.Fatalf("live recording failed on a capable desktop: %v", err)
 	}
-	recording := msgs[0].ContentParts[1].(messages.ImagePart)
+	if len(msgs) != 1 || len(msgs[0].ContentParts) != 2 {
+		t.Fatalf("recording result shape = %#v", msgs)
+	}
+	recording, ok := msgs[0].ContentParts[1].(messages.ImagePart)
+	if !ok {
+		t.Fatalf("recording content part = %T, want messages.ImagePart", msgs[0].ContentParts[1])
+	}
 	if recording.MediaType != "image/gif" || len(recording.Bytes) == 0 {
 		t.Fatalf("recording image = %#v", recording)
 	}
@@ -81,8 +87,12 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 		t.Skipf("%s: unavailable capability: cursor position query (%v)", runtime.GOOS, err)
 	}
 	t.Cleanup(func() {
-		_ = mouseButtonUp(originalX, originalY, "left")
-		_ = mouseMove(originalX, originalY)
+		if err := mouseButtonUp(originalX, originalY, "left"); err != nil {
+			t.Logf("%s: cursor cleanup release failed: %v", runtime.GOOS, err)
+		}
+		if err := mouseMove(originalX, originalY); err != nil {
+			t.Logf("%s: cursor cleanup restore failed: %v", runtime.GOOS, err)
+		}
 	})
 	targetX, targetY := bounds.Min.X+bounds.Dx()/2, bounds.Min.Y+bounds.Dy()/2
 	assertWindowsCursorMove(t, targetX, targetY)

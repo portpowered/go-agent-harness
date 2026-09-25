@@ -110,7 +110,7 @@ func TestStreamGeminiToGateway_ToolCallStream(t *testing.T) {
 			Candidates: []*genai.Candidate{{Content: &genai.Content{Parts: []*genai.Part{
 				{FunctionCall: &genai.FunctionCall{
 					ID:   "call_1",
-					Name: "get_weather",
+					Name: testToolGetWeather,
 					Args: map[string]any{"city": "NYC"},
 				}},
 			}}}},
@@ -137,7 +137,7 @@ func TestStreamGeminiToGateway_ToolCallStream(t *testing.T) {
 	// Verify tool call start.
 	for _, m := range msgs {
 		if v, ok := m.Value.(*messages.ToolCallStartValue); ok {
-			if v.ToolCallID != "call_1" || v.Name != "get_weather" {
+			if v.ToolCallID != "call_1" || v.Name != testToolGetWeather {
 				t.Errorf("expected tool call call_1/get_weather, got %s/%s", v.ToolCallID, v.Name)
 			}
 		}
@@ -146,7 +146,7 @@ func TestStreamGeminiToGateway_ToolCallStream(t *testing.T) {
 	// Verify tool call end has full arguments.
 	for _, m := range msgs {
 		if v, ok := m.Value.(*messages.ToolCallEndValue); ok {
-			if v.ToolCallID != "call_1" || v.Name != "get_weather" || v.Arguments != `{"city":"NYC"}` {
+			if v.ToolCallID != "call_1" || v.Name != testToolGetWeather || v.Arguments != `{"city":"NYC"}` {
 				t.Errorf("expected tool call end call_1/get_weather with args, got %+v", v)
 			}
 		}

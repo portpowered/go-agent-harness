@@ -159,7 +159,7 @@ func (c *ClientCapture) observe(direction Direction, stream Stream, payload []by
 		c.sink,
 		WithTeeReporter(c.reportTranscriptFailure),
 	)
-	_, _ = tee.Write(record)
+	_, _ = tee.Write(record) //nolint:errcheck // Tee reports transcript failures through reportTranscriptFailure; capture never alters the live result.
 }
 
 func (c *ClientCapture) reportTranscriptFailure(err error) {

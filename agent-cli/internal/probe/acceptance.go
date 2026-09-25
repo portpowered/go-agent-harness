@@ -483,8 +483,7 @@ func prepareRunDirectories(workdir, artifactRoot string) (string, string, func()
 	if workdir == "" {
 		workdir = filepath.Join(root, "workdir")
 		if err := os.Mkdir(workdir, 0o700); err != nil {
-			_ = os.RemoveAll(root)
-			return "", "", func() {}, fmt.Errorf("create acceptance probe working directory: %w", err)
+			return "", "", func() {}, errors.Join(fmt.Errorf("create acceptance probe working directory: %w", err), os.RemoveAll(root))
 		}
 	}
 	return root, workdir, cleanup, nil

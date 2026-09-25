@@ -73,8 +73,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(stdout, "coverage gate passed: %d registered packages checked across %d profiles\n", len(manifest.Packages), len(profilePaths))
-	return nil
+	_, err = fmt.Fprintf(stdout, "coverage gate passed: %d registered packages checked across %d profiles\n", len(manifest.Packages), len(profilePaths))
+	return err
 }
 
 func runRegistration(manifestPath, goBinary string, moduleDirs []string, stdout io.Writer) error {
@@ -97,8 +97,8 @@ func runRegistration(manifestPath, goBinary string, moduleDirs []string, stdout 
 		return err
 	}
 
-	_, _ = fmt.Fprintf(stdout, "coverage registration passed: %d workspace packages checked across %d modules\n", len(discovered), len(moduleDirs))
-	return nil
+	_, err = fmt.Fprintf(stdout, "coverage registration passed: %d workspace packages checked across %d modules\n", len(discovered), len(moduleDirs))
+	return err
 }
 
 type stringList []string

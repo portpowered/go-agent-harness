@@ -24,7 +24,7 @@ func TestDeviceSinkVirtualFramesAndLoss(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close(); _ = source.Close() }()
+	defer func() { closeForTest(t, "sink", sink); closeForTest(t, "source", source) }()
 	var sinkContract audio.AudioSink = sink
 	var sourceContract audio.AudioSource = source
 	wants := make([][]int16, 3)
@@ -63,7 +63,7 @@ func TestDeviceSinkFrameHandleConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 	for i := 1; i <= 3; i++ {
 		frame := make([]int16, audio.FrameSize)
 		frame[0], frame[audio.FrameSize-1] = int16(i), int16(32767-i)
@@ -90,7 +90,7 @@ func TestDeviceSinkWriteSamplesQueuesExactPartialChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -122,7 +122,7 @@ func TestDeviceSinkWriteSamplesQueuesExactPartialChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = frameSink.Close() }()
+	defer closeForTest(t, "frameSink", frameSink)
 	if err := frameSink.WriteSamples(context.Background(), make([]int16, 320)); !errors.Is(err, audio.ErrInvalidFrameSize) {
 		t.Fatalf("partial write to frame-only device = %v, want ErrInvalidFrameSize", err)
 	}
@@ -288,7 +288,7 @@ func TestDeviceAdaptersS9LifecycleBaseline(t *testing.T) {
 		}
 		sink, err := NewDeviceSink(r, "virtual:output")
 		if err != nil {
-			_ = source.Close()
+			closeForTest(t, "source", source)
 			t.Fatal(err)
 		}
 		if err := source.Close(); err != nil {

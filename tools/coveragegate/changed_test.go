@@ -217,8 +217,7 @@ func appendTestFile(t *testing.T, path, contents string) {
 		t.Fatalf("open %s for append: %v", path, err)
 	}
 	if _, err := file.WriteString(contents); err != nil {
-		_ = file.Close()
-		t.Fatalf("append %s: %v", path, err)
+		t.Fatalf("append %s: %v", path, errors.Join(err, file.Close()))
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("close %s after append: %v", path, err)

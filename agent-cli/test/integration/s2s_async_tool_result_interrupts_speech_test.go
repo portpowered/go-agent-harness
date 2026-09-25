@@ -494,7 +494,7 @@ func validateAsyncCollisionTrace(events []string) error {
 func countAsyncProviderResults(outbound []asyncCollisionOutbound) (int, error) {
 	count := 0
 	for _, event := range outbound {
-		if event.Type != "conversation.item.create" {
+		if event.Type != rtEventConversationItemCreate {
 			continue
 		}
 		var payload struct {
@@ -507,7 +507,7 @@ func countAsyncProviderResults(outbound []asyncCollisionOutbound) (int, error) {
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			return 0, fmt.Errorf("decode outbound conversation.item.create: %w", err)
 		}
-		if payload.Item.Type != "function_call_output" {
+		if payload.Item.Type != rtItemFunctionCallOutput {
 			continue
 		}
 		count++
@@ -560,10 +560,6 @@ func validateAsyncCollisionProviderBoundary(events []string, outbound []asyncCol
 }
 
 func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expectedInputAudio []byte, expectProviderResult bool) error {
-	userTurnIndices := make([]int, 0, 1)
-	responseCreateIndices := make([]int, 0, 3)
-	providerResultIndices := make([]int, 0, 1)
-	inputAppendIndex, inputCommitIndex := -1, -1
 	providerResultCount, err := countAsyncProviderResults(outbound)
 	if err != nil {
 		return err
@@ -575,63 +571,23 @@ func validateAsyncCollisionContinuation(outbound []asyncCollisionOutbound, expec
 	if providerResultCount != wantProviderResultCount {
 		return fmt.Errorf("%s provider result for outstanding call %q: observed %d function_call_output events, want %d", asyncCollisionDisposition, asyncCollisionCallID, providerResultCount, wantProviderResultCount)
 	}
-	for index, event := range outbound {
-		switch event.Type {
-		case "conversation.item.create":
-			var payload struct {
-				Item struct {
-					Type   string `json:"type"`
-					CallID string `json:"call_id"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				return fmt.Errorf("decode outbound continuation item: %w", err)
-			}
-			if payload.Item.Type == "message" {
-				userTurnIndices = append(userTurnIndices, index)
-			} else if payload.Item.Type == "function_call_output" && payload.Item.CallID == asyncCollisionCallID {
-				providerResultIndices = append(providerResultIndices, index)
-			}
-		case "response.create":
-			responseCreateIndices = append(responseCreateIndices, index)
-		case "input_audio_buffer.append":
-			if inputAppendIndex >= 0 {
-				return fmt.Errorf("provider exchange contains multiple input_audio_buffer.append events")
-			}
-			if err := validateAsyncOutboundInputAudio(event.Payload, expectedInputAudio); err != nil {
-				return err
-			}
-			inputAppendIndex = index
-		case "input_audio_buffer.commit":
-			if inputCommitIndex >= 0 {
-				return fmt.Errorf("provider exchange contains multiple input_audio_buffer.commit events")
-			}
-			inputCommitIndex = index
-		}
+	indices, err := collectAsyncContinuationIndices(outbound, expectedInputAudio)
+	if err != nil {
+		return err
 	}
-	if len(userTurnIndices) != 1 {
-		return fmt.Errorf("provider exchange contains %d text user turns, want only the seeded prompt", len(userTurnIndices))
+	if len(indices.userTurns) != 1 {
+		return fmt.Errorf("provider exchange contains %d text user turns, want only the seeded prompt", len(indices.userTurns))
 	}
-	if len(responseCreateIndices) != 3 {
-		return fmt.Errorf("provider exchange contains %d response.create events, want the initial audio turn, later collision turn, and result-driven continuation", len(responseCreateIndices))
+	if len(indices.responseCreates) != 3 {
+		return fmt.Errorf("provider exchange contains %d response.create events, want the initial audio turn, later collision turn, and result-driven continuation", len(indices.responseCreates))
 	}
-	if inputAppendIndex < 0 || inputCommitIndex < 0 {
+	if indices.inputAppend < 0 || indices.inputCommit < 0 {
 		return fmt.Errorf("provider exchange is missing the later-turn input audio append/commit boundary")
 	}
-	if userTurnIndices[0] >= responseCreateIndices[0] || responseCreateIndices[0] >= responseCreateIndices[1] || responseCreateIndices[1] >= inputAppendIndex || inputAppendIndex >= inputCommitIndex || inputCommitIndex >= responseCreateIndices[2] {
-		return fmt.Errorf("initial text/tool continuation/later-turn audio boundary is out of order: user=%d initial response.create=%d continuation response.create=%d append=%d commit=%d later response.create=%d", userTurnIndices[0], responseCreateIndices[0], responseCreateIndices[1], inputAppendIndex, inputCommitIndex, responseCreateIndices[2])
+	if !strictlyIncreasing(indices.userTurns[0], indices.responseCreates[0], indices.responseCreates[1], indices.inputAppend, indices.inputCommit, indices.responseCreates[2]) {
+		return fmt.Errorf("initial text/tool continuation/later-turn audio boundary is out of order: user=%d initial response.create=%d continuation response.create=%d append=%d commit=%d later response.create=%d", indices.userTurns[0], indices.responseCreates[0], indices.responseCreates[1], indices.inputAppend, indices.inputCommit, indices.responseCreates[2])
 	}
-	if expectProviderResult {
-		if len(providerResultIndices) != 1 {
-			return fmt.Errorf("%s provider result for %q was correlated %d times, want exactly one", asyncCollisionDisposition, asyncCollisionCallID, len(providerResultIndices))
-		}
-		if providerResultIndices[0] <= responseCreateIndices[0] || providerResultIndices[0] >= responseCreateIndices[1] {
-			return fmt.Errorf("%s provider result for %q was not sent between the initial tool response and its continuation response.create", asyncCollisionDisposition, asyncCollisionCallID)
-		}
-	} else if len(providerResultIndices) != 0 {
-		return fmt.Errorf("result-loss control still carried %d provider results for %q", len(providerResultIndices), asyncCollisionCallID)
-	}
-	return nil
+	return validateAsyncProviderResultPlacement(indices, expectProviderResult)
 }
 
 func validateAsyncCollisionTerminal(sessionOutput string, runErr error) error {
@@ -704,7 +660,7 @@ func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	}
 	cancelCount := 0
 	for _, event := range run.outbound {
-		if event.Type == "response.cancel" {
+		if event.Type == rtEventResponseCancel {
 			cancelCount++
 		}
 	}

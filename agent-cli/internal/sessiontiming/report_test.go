@@ -51,18 +51,7 @@ func TestAnalyzeCaptureReconstructsToolChainAndResetsPlaybackAtUserTurn(t *testi
 	if got := report.Responses[3]; got.EstimatedAudibleGapMS != 0 || got.TurnIndex != 2 {
 		t.Fatalf("new user turn retained stale playback timeline: %+v", got)
 	}
-	if got := report.Tools[0]; got.ExecutionMS == nil || *got.ExecutionMS != 20 || got.ResultToFirstOutputMS == nil || *got.ResultToFirstOutputMS != 120 {
-		t.Fatalf("first tool timing = %+v", got)
-	}
-	if got := report.Tools[0]; got.ResultToRequestMS == nil || *got.ResultToRequestMS != 1 || got.RequestToCreatedMS == nil || *got.RequestToCreatedMS != 69 || got.CreatedToFirstOutputMS == nil || *got.CreatedToFirstOutputMS != 50 {
-		t.Fatalf("first tool attribution = %+v", got)
-	}
-	if got := report.Tools[1]; got.ExecutionMS == nil || *got.ExecutionMS != 50 || got.ResultToFirstOutputMS == nil || *got.ResultToFirstOutputMS != 800 {
-		t.Fatalf("second tool timing = %+v", got)
-	}
-	if got := report.Tools[1]; got.ResultToFirstAudioMS == nil || *got.ResultToFirstAudioMS != 800 {
-		t.Fatalf("second tool audio continuation = %+v", got)
-	}
+	assertToolChainToolTiming(t, report)
 	if got := report.Summary.InputToFirstOutputMS; got.Count != 2 || got.P95MS != 100 {
 		t.Fatalf("input latency summary = %+v", got)
 	}
@@ -117,4 +106,22 @@ func payload(value any) string {
 		panic(err)
 	}
 	return string(encoded)
+}
+
+// assertToolChainToolTiming checks the per-tool timing attribution of the
+// two-tool chain fixture.
+func assertToolChainToolTiming(t *testing.T, report runtimeReplay.CaptureTimingReport) {
+	t.Helper()
+	if got := report.Tools[0]; got.ExecutionMS == nil || *got.ExecutionMS != 20 || got.ResultToFirstOutputMS == nil || *got.ResultToFirstOutputMS != 120 {
+		t.Fatalf("first tool timing = %+v", got)
+	}
+	if got := report.Tools[0]; got.ResultToRequestMS == nil || *got.ResultToRequestMS != 1 || got.RequestToCreatedMS == nil || *got.RequestToCreatedMS != 69 || got.CreatedToFirstOutputMS == nil || *got.CreatedToFirstOutputMS != 50 {
+		t.Fatalf("first tool attribution = %+v", got)
+	}
+	if got := report.Tools[1]; got.ExecutionMS == nil || *got.ExecutionMS != 50 || got.ResultToFirstOutputMS == nil || *got.ResultToFirstOutputMS != 800 {
+		t.Fatalf("second tool timing = %+v", got)
+	}
+	if got := report.Tools[1]; got.ResultToFirstAudioMS == nil || *got.ResultToFirstAudioMS != 800 {
+		t.Fatalf("second tool audio continuation = %+v", got)
+	}
 }

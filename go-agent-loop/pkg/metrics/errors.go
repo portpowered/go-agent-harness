@@ -47,7 +47,7 @@ type ValidationError struct {
 // Error returns the stable diagnostic message for the validation failure.
 func (e *ValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return e.Message
 }
@@ -81,7 +81,7 @@ type CounterOverflowError struct {
 // Error returns the operator-readable overflow message.
 func (e *CounterOverflowError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("metrics: counter overflow for %s %s", e.Key, e.Field)
 }
@@ -90,6 +90,9 @@ func (e *CounterOverflowError) Error() string {
 func (e *CounterOverflowError) Is(target error) bool {
 	return e != nil && target == ErrCounterOverflow
 }
+
+// nilErrorText is the diagnostic for a nil typed error pointer.
+const nilErrorText = "<nil>"
 
 func validationError(kind error, message string) error {
 	return &ValidationError{Kind: kind, Message: message}

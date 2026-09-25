@@ -135,20 +135,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 		}
 	}
 
-	toolsReady := server.waitForSessionUpdates(2*time.Second, func(updates []json.RawMessage) bool {
-		for _, raw := range updates {
-			var update struct {
-				Instructions string `json:"instructions"`
-				Tools        []struct {
-					Name string `json:"name"`
-				} `json:"tools"`
-			}
-			if json.Unmarshal(raw, &update) == nil && update.Instructions == "" && len(update.Tools) > 0 {
-				return true
-			}
-		}
-		return false
-	})
+	toolsReady := server.waitForSessionUpdates(2*time.Second, scheduledUpdatesAdvertiseToolsWithoutInstructions)
 	if !toolsReady {
 		timeline, _, _, _, _ := server.snapshots()
 		updates := server.sessionUpdatesSnapshot()
@@ -157,40 +144,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 
 	timeline, _, _, _, _ = server.snapshots()
 	updates := server.sessionUpdatesSnapshot()
-	groundedUpdateIndex := -1
-	for index, raw := range updates {
-		var update struct {
-			Instructions string `json:"instructions"`
-			Tools        []struct {
-				Name string `json:"name"`
-			} `json:"tools"`
-		}
-		if err := json.Unmarshal(raw, &update); err != nil {
-			t.Fatalf("decode no-prompt scheduled session.update %d: %v", index, err)
-		}
-		if len(update.Tools) == 0 {
-			continue
-		}
-		if groundedUpdateIndex >= 0 {
-			t.Fatalf("no-prompt scheduled route sent grounding more than once: updates=%v", updates)
-		}
-		groundedUpdateIndex = index
-		if update.Instructions != "" {
-			t.Fatalf("no-prompt scheduled route synthesized instructions: %q", update.Instructions)
-		}
-		advertised := make(map[string]bool, len(update.Tools))
-		for _, tool := range update.Tools {
-			advertised[tool.Name] = true
-		}
-		for _, name := range []string{"read_file", "exec"} {
-			if !advertised[name] {
-				t.Fatalf("no-prompt scheduled session.update omitted %q: %#v", name, update.Tools)
-			}
-		}
-	}
-	if groundedUpdateIndex < 0 {
-		t.Fatalf("no-prompt scheduled route sent no tool update: %v", updates)
-	}
+	groundedUpdateIndex := scheduledGroundedToolUpdateIndex(t, updates)
 	groundedWireIndex := indexOfTimeline(timeline, "out:session.update", groundedUpdateIndex)
 	if groundedWireIndex < 0 {
 		t.Fatalf("no-prompt grounding update is absent from outbound timeline: %v", timeline)
@@ -221,7 +175,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 	firstAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 0)
 	firstCommit := indexOfTimeline(timeline, "out:input_audio_buffer.commit", 0)
 	firstResponse := indexOfTimeline(timeline, "out:response.create", 0)
-	if firstAppend < 0 || firstCommit < 0 || firstResponse < 0 || !(groundedWireIndex < firstAppend && groundedWireIndex < firstCommit && groundedWireIndex < firstResponse) {
+	if firstAppend < 0 || firstCommit < 0 || firstResponse < 0 || groundedWireIndex >= min(firstAppend, firstCommit, firstResponse) {
 		t.Fatalf("no-prompt configuration did not precede the first spoken turn: update=%d append=%d commit=%d response=%d timeline=%v", groundedWireIndex, firstAppend, firstCommit, firstResponse, timeline)
 	}
 }
@@ -288,73 +242,68 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 	firstDone := indexOfTimeline(timeline, "in:response.done", 0)
 	secondAppend := indexOfTimeline(timeline, "out:input_audio_buffer.append", 1)
 	if imageIndex < 0 || firstAppend < 0 || firstResponse < 0 || firstDone < 0 || secondAppend < 0 ||
-		!(imageIndex < firstAppend && firstAppend < firstResponse && firstResponse < firstDone && firstDone < secondAppend) {
+		!strictlyIncreasing(imageIndex, firstAppend, firstResponse, firstDone, secondAppend) {
 		t.Fatalf("image scheduled wire order = %v, want image < first append < response.create < response.done < second append", timeline)
 	}
 
-	var imageItems []struct {
-		Item struct {
-			Type    string `json:"type"`
-			Role    string `json:"role"`
-			Content []struct {
-				Type     string `json:"type"`
-				ImageURL string `json:"image_url"`
-				Text     string `json:"text"`
-			} `json:"content"`
-		} `json:"item"`
-	}
-	for _, event := range outbound {
-		if event.typeName != "conversation.item.create" {
-			continue
-		}
-		var payload struct {
-			Item struct {
-				Type    string `json:"type"`
-				Role    string `json:"role"`
-				Content []struct {
-					Type     string `json:"type"`
-					ImageURL string `json:"image_url"`
-					Text     string `json:"text"`
-				} `json:"content"`
-			} `json:"item"`
-		}
-		if err := json.Unmarshal(event.payload, &payload); err != nil {
-			t.Fatalf("decode first-turn image item: %v", err)
-		}
-		imageItems = append(imageItems, payload)
-	}
-	if len(imageItems) != 1 {
-		t.Fatalf("decoded image items = %d, want one", len(imageItems))
-	}
-	item := imageItems[0].Item
-	if item.Type != "message" || item.Role != "user" {
-		t.Fatalf("first-turn image item = %#v, want one user message", item)
-	}
-	imageParts := make([]struct {
-		Type     string `json:"type"`
-		ImageURL string `json:"image_url"`
-		Text     string `json:"text"`
-	}, 0, len(item.Content))
-	instructionCount := 0
-	for _, part := range item.Content {
-		if part.Type == "input_text" {
-			if strings.TrimSpace(part.Text) != "" {
-				instructionCount++
-			}
-			continue
-		}
-		imageParts = append(imageParts, part)
-	}
-	if instructionCount != 1 || len(imageParts) != 2 {
-		t.Fatalf("first-turn image content = %#v, want one context instruction and two image parts", item.Content)
-	}
-	for index, wantMIME := range []string{"data:image/png;", "data:image/jpeg;"} {
-		part := imageParts[index]
-		if part.Type != "input_image" || !strings.HasPrefix(part.ImageURL, wantMIME) {
-			t.Fatalf("first-turn image part %d = %#v, want input_image with %q URL", index, part, wantMIME)
-		}
-	}
+	assertScheduledFirstTurnImageItem(t, outbound)
 	assertCLILiveRecordingBundle(t, recordDir, 2)
+}
+
+// scheduledSessionUpdate is the session.update subset the scheduled-boundary
+// tests inspect.
+type scheduledSessionUpdate struct {
+	Instructions string `json:"instructions"`
+	Tools        []struct {
+		Name string `json:"name"`
+	} `json:"tools"`
+}
+
+func scheduledUpdatesAdvertiseToolsWithoutInstructions(updates []json.RawMessage) bool {
+	for _, raw := range updates {
+		var update scheduledSessionUpdate
+		if json.Unmarshal(raw, &update) == nil && update.Instructions == "" && len(update.Tools) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// scheduledGroundedToolUpdateIndex returns the index of the single tool
+// session.update, which must carry no synthesized instructions and must
+// advertise the default read_file and exec tools.
+func scheduledGroundedToolUpdateIndex(t *testing.T, updates []json.RawMessage) int {
+	t.Helper()
+	groundedUpdateIndex := -1
+	for index, raw := range updates {
+		var update scheduledSessionUpdate
+		if err := json.Unmarshal(raw, &update); err != nil {
+			t.Fatalf("decode no-prompt scheduled session.update %d: %v", index, err)
+		}
+		if len(update.Tools) == 0 {
+			continue
+		}
+		if groundedUpdateIndex >= 0 {
+			t.Fatalf("no-prompt scheduled route sent grounding more than once: updates=%v", updates)
+		}
+		groundedUpdateIndex = index
+		if update.Instructions != "" {
+			t.Fatalf("no-prompt scheduled route synthesized instructions: %q", update.Instructions)
+		}
+		advertised := make(map[string]bool, len(update.Tools))
+		for _, tool := range update.Tools {
+			advertised[tool.Name] = true
+		}
+		for _, name := range []string{"read_file", "exec"} {
+			if !advertised[name] {
+				t.Fatalf("no-prompt scheduled session.update omitted %q: %#v", name, update.Tools)
+			}
+		}
+	}
+	if groundedUpdateIndex < 0 {
+		t.Fatalf("no-prompt scheduled route sent no tool update: %v", updates)
+	}
+	return groundedUpdateIndex
 }
 
 func equalDuration24kSilenceFixture(t *testing.T, speechPath string) string {
@@ -619,7 +568,7 @@ func assertScheduledServerVADCreateResponseFalse(t *testing.T, session json.RawM
 func audioPayloadsFromOutbound(outbound []cliLiveOutbound) [][]byte {
 	audio := make([][]byte, 0, len(outbound))
 	for _, event := range outbound {
-		if event.typeName == "input_audio_buffer.append" {
+		if event.typeName == rtEventInputAudioAppend {
 			audio = append(audio, append([]byte(nil), event.audio...))
 		}
 	}
@@ -636,4 +585,33 @@ func readScheduledWAVSamples(t *testing.T, path string) []int16 {
 		t.Fatalf("decode scheduled WAV %q: %v", path, err)
 	}
 	return samples
+}
+
+// observeAppendLocked tracks one client audio append and returns the server
+// VAD observations it triggers. The caller holds c.server.mu.
+func (c *cliLiveScheduledBoundaryConn) observeAppendLocked(audio []byte) []string {
+	var observations []string
+	c.server.turnHasAudio = true
+	if !c.server.turnObserved {
+		c.server.turnObserved = true
+		if hasNonZeroPCM(audio) {
+			c.server.turnHasSpeech = true
+			if c.server.serverVADEnabled {
+				observations = append(observations, `{"type":"input_audio_buffer.speech_started"}`)
+			}
+		}
+	} else if hasNonZeroPCM(audio) {
+		c.server.turnHasSpeech = true
+	}
+	if c.server.serverVADEnabled && c.server.turnHasSpeech && !c.server.turnAutoCommitted {
+		// A finite test append represents the provider having observed the
+		// speech stop for that input. Server VAD commits and clears its
+		// buffer before the later client boundary arrives, even when
+		// create_response is false.
+		observations = append(observations, `{"type":"input_audio_buffer.speech_stopped"}`)
+		c.server.turnAutoCommitted = true
+		c.server.turnHasAudio = false
+		c.server.providerAutoCommits++
+	}
+	return observations
 }

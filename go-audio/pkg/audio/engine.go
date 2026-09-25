@@ -76,7 +76,7 @@ func (e *RouteEngine) Run(ctx context.Context) (runErr error) {
 		FrameProducer{q: e.input.q}.Close()
 		if runErr != nil {
 			e.Invalidate(e.outControl.Snapshot().Epoch + 1)
-			_, _ = e.processor.Reset()
+			runErr = errors.Join(runErr, e.resetProcessor())
 		}
 		e.output.Close()
 		e.mu.Lock()
@@ -144,4 +144,11 @@ func (e *RouteEngine) Invalidate(epoch uint64) int {
 
 func (e *RouteEngine) Snapshot() (ingress, egress BufferStats) {
 	return e.inControl.Snapshot(), e.outControl.Snapshot()
+}
+
+// resetProcessor discards the processor tail after a failed run. A reset
+// failure is joined into the run error so it is not silently lost.
+func (e *RouteEngine) resetProcessor() error {
+	_, err := e.processor.Reset()
+	return err
 }

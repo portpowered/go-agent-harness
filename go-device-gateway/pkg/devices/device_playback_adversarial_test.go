@@ -322,14 +322,14 @@ func adversarialVirtualPair(t *testing.T, rate int) (*VirtualRegistry, *VirtualS
 	}
 	openedInput, err := registry.OpenWithFormat("virtual:input", audio.PCM16DeviceFormat(rate))
 	if err != nil {
-		_ = openedOutput.Close()
+		closeForTest(t, "output", openedOutput)
 		t.Fatal(err)
 	}
-	output := openedOutput.(*VirtualStream)
-	input := openedInput.(*VirtualStream)
+	output := virtualStreamForTest(t, openedOutput)
+	input := virtualStreamForTest(t, openedInput)
 	t.Cleanup(func() {
-		_ = output.Close()
-		_ = input.Close()
+		closeForTest(t, "output", output)
+		closeForTest(t, "input", input)
 	})
 	return registry, output, input
 }

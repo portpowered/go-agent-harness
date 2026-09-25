@@ -229,7 +229,9 @@ func TestRecorder_TickCounterAccumulates(t *testing.T) {
 
 	// 3 ticks → 1 record (at tick 3)
 	for i := 0; i < 3; i++ {
-		_ = r.Execute(context.Background(), ls)
+		if err := r.Execute(context.Background(), ls); err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
 	}
 	if len(mock.calls) != 1 {
 		t.Fatalf("after 3 ticks: expected 1 call, got %d", len(mock.calls))
@@ -237,7 +239,9 @@ func TestRecorder_TickCounterAccumulates(t *testing.T) {
 
 	// 3 more ticks → 1 more record (at tick 6)
 	for i := 0; i < 3; i++ {
-		_ = r.Execute(context.Background(), ls)
+		if err := r.Execute(context.Background(), ls); err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
 	}
 	if len(mock.calls) != 2 {
 		t.Fatalf("after 6 ticks: expected 2 calls, got %d", len(mock.calls))

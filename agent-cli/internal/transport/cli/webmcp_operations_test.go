@@ -66,7 +66,7 @@ func TestWebMCPDirectSelectReplacesStalePersistedSelectionAndActivateRestoresIt(
 	// recovery shape after a browser restart. The stale file must not be
 	// loaded as a prerequisite for this explicit select operation.
 	selected := executeDirectCommand(t, configDir, store, directFactory(replacement),
-		"select", "--cdp-url", "http://127.0.0.1:9222", "--auto-select", "single", "--json")
+		"select", "--cdp-url", testCDPURL, "--auto-select", "single", "--json")
 	requireDirectSuccess(t, selected)
 	updated, err := store.Load()
 	if err != nil {
@@ -418,7 +418,7 @@ func TestWebMCPDirectBrowserAndTabListingsRemainBoundedOnChurn(t *testing.T) {
 			Candidate: candidate,
 			Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target)},
 		})
-		defer func() { _ = runtime.Close() }()
+		defer closeForTest(t, runtime.Close)
 		handle := runtime.Browser(candidate.ID)
 		if handle == nil {
 			t.Fatal("scripted browser handle is nil")
@@ -552,7 +552,7 @@ func TestWebMCPDirectFailedSelectionPreservesPriorSelection(t *testing.T) {
 		Candidate: candidate,
 		Targets:   []testkit.TargetConfig{testkit.NewTargetConfig(target, testkit.WithContext(page), testkit.WithBlockedEnable())},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeForTest(t, runtime.Close)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: directDiscoverer{candidates: []webmcp.BrowserCandidate{candidate}},
@@ -569,7 +569,7 @@ func TestWebMCPDirectFailedSelectionPreservesPriorSelection(t *testing.T) {
 	if _, err := runtime.WaitForOperationAdmitted(waitCtx, testkit.OperationEnableWebMCP); err != nil {
 		t.Fatalf("wait for enable admission: %v", err)
 	}
-	_ = runtime.Disconnect(candidate.ID, "transport_lost")
+	requireFixtureStep(t, "disconnect scripted browser", runtime.Disconnect(candidate.ID, "transport_lost"))
 	resultCtx, cancelResult := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancelResult()
 	var result directCommandResult

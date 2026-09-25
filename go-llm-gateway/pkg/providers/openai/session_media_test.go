@@ -38,7 +38,7 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	endpoints := owner.RTCMedia()
 	ctx := newRealtimeTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	want := make([]int16, 720)
 	for index := range want {
@@ -94,7 +94,7 @@ func TestRealtimeSession_ServerVADTruncatesAtDevicePlaybackCursor(t *testing.T) 
 	controlled.SetPlaybackController(controller)
 	ctx := newRealtimeTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	want := make([]int16, 24000*2)
 	conn.addServerEvent("response.output_audio.delta", map[string]any{
@@ -142,11 +142,14 @@ func TestRealtimeSession_ServerVADNeverTruncatesBeyondReceivedAudio(t *testing.T
 	session := newRealtimeSession(conn, logging.DummyLogger())
 	session.mediaSampleRate = 24000
 	endpoints := session.RTCMedia()
-	controlled := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+	if !ok {
+		t.Fatalf("RTC inbound %T is not playback controlled", endpoints.Inbound)
+	}
 	controlled.SetPlaybackController(&openAIPlaybackController{audioEndMS: 3300})
 	ctx := newRealtimeTestContext(t)
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	providerPCM := make([]int16, 24000*2200/1000)
 	conn.addServerEvent("response.output_audio.delta", map[string]any{

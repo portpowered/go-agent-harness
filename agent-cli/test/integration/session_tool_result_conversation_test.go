@@ -37,7 +37,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -115,23 +114,7 @@ func (e *conversationResultExecutor) snapshot() (calls []messages.ToolCall, retu
 // replay dialer before use.
 func buildToolResultConversationFixture(t *testing.T, wavPath string, replySamples []int16, toolResultOutput string, includeToolCall bool) string {
 	t.Helper()
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read input WAV fixture: %v", err)
-	}
-	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse input WAV fixture: %v", err)
-	}
-	if rate != audio.SampleRate {
-		t.Fatalf("input WAV rate = %d, want %d", rate, audio.SampleRate)
-	}
-
-	baseCapture, err := gwtesting.LoadSessionCapture(filepath.Join("testdata", "openai_realtime_smoke.session.json"))
-	if err != nil {
-		t.Fatalf("load replay base fixture: %v", err)
-	}
-	records := []gwtesting.CapturedSessionEvent{baseCapture.Records[0], baseCapture.Records[1]}
+	baseCapture, records := realtimeToolFixturePrelude(t, wavPath)
 
 	clientEvent := func(eventType string, payload json.RawMessage) {
 		records = append(records, gwtesting.CapturedSessionEvent{
@@ -143,22 +126,6 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 			Payload:     payload,
 		})
 	}
-
-	frame := make([]int16, audio.FrameSize)
-	for start := 0; start < len(samples); start += audio.FrameSize {
-		clear(frame)
-		copy(frame, samples[start:])
-		payload, marshalErr := json.Marshal(map[string]string{
-			"type":  "input_audio_buffer.append",
-			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(frame)),
-		})
-		if marshalErr != nil {
-			t.Fatalf("marshal append event: %v", marshalErr)
-		}
-		clientEvent("input_audio_buffer.append", payload)
-	}
-	clientEvent("input_audio_buffer.commit", json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
-	clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
 
 	serverEvent := func(eventType string, payload string) {
 		records = append(records, gwtesting.CapturedSessionEvent{
@@ -173,40 +140,37 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 
 	spokenReply := spokenReplyFor(parseToolResult(t, toolResultOutput))
 
-	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_result_conversation"}}`)
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_result_conversation"}}`)
 	if includeToolCall {
-		serverEvent("response.output_item.added",
+		serverEvent(rtEventOutputItemAdded,
 			`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+toolConversationCallID+`","name":"`+toolCallScenarioName+`"}}`)
-		serverEvent("response.function_call_arguments.done",
+		serverEvent(rtEventFunctionCallArgumentsDone,
 			`{"type":"response.function_call_arguments.done","call_id":"`+toolConversationCallID+`","name":"`+toolCallScenarioName+`","arguments":`+strconvQuote(toolCallScenarioArguments)+`}`)
 		// The tool-call response terminates with the call pending; the
 		// spoken follow-up response exists only after the executed result is
 		// delivered back to the provider.
-		serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_result_conversation","status":"completed"}}`)
+		serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_result_conversation","status":"completed"}}`)
 
 		// The gating frame: replay validation blocks every later inbound
 		// record until the live session sends this exact function_call_output
 		// carrying the executor's runtime return value. A differing executor
 		// result diverges the replay here, deterministically withholding the
 		// spoken reply.
-		outputPayload, outputMarshalErr := json.Marshal(map[string]any{
-			"type": "conversation.item.create",
+		outputPayload := mustJSON(t, map[string]any{
+			"type": rtEventConversationItemCreate,
 			"item": map[string]string{
-				"type":    "function_call_output",
+				"type":    rtItemFunctionCallOutput,
 				"call_id": toolConversationCallID,
 				"output":  toolResultOutput,
 			},
 		})
-		if outputMarshalErr != nil {
-			t.Fatalf("marshal function_call_output event: %v", outputMarshalErr)
-		}
-		clientEvent("conversation.item.create", outputPayload)
+		clientEvent(rtEventConversationItemCreate, outputPayload)
 		// The function_call_output item is not itself a response boundary.
 		// Realtime must receive one explicit response.create after the complete
 		// result batch before the grounded spoken continuation can begin.
-		clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
+		clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
 
-		serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_result_conversation_reply"}}`)
+		serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_result_conversation_reply"}}`)
 	}
 
 	// Server-side transcript deltas authored from the executor's runtime
@@ -216,38 +180,22 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 	if splitAt < 0 {
 		t.Fatalf("spoken reply %q has no word boundary to split at", spokenReply)
 	}
-	firstDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  "response.output_audio_transcript.delta",
-		"delta": spokenReply[:splitAt],
-	})
-	if marshalErr != nil {
-		t.Fatalf("marshal first transcript delta: %v", marshalErr)
+	for _, delta := range []string{spokenReply[:splitAt], spokenReply[splitAt:]} {
+		serverEvent(rtEventOutputAudioTranscriptDelta, string(mustJSON(t, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "delta": delta})))
 	}
-	secondDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  "response.output_audio_transcript.delta",
-		"delta": spokenReply[splitAt:],
-	})
-	if marshalErr != nil {
-		t.Fatalf("marshal second transcript delta: %v", marshalErr)
-	}
-	serverEvent("response.output_audio_transcript.delta", string(firstDelta))
-	serverEvent("response.output_audio_transcript.delta", string(secondDelta))
 	serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":`+strconvQuote(spokenReply)+`}`)
 
-	audioDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  "response.output_audio.delta",
+	audioDelta := mustJSON(t, map[string]string{
+		"type":  rtEventOutputAudioDelta,
 		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples)),
 	})
-	if marshalErr != nil {
-		t.Fatalf("marshal audio delta: %v", marshalErr)
-	}
-	serverEvent("response.output_audio.delta", string(audioDelta))
+	serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
 	finalResponseID := "resp_tool_result_conversation"
 	if includeToolCall {
 		finalResponseID = "resp_tool_result_conversation_reply"
 	}
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"`+finalResponseID+`","status":"completed"}}`)
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"`+finalResponseID+`","status":"completed"}}`)
 
 	baseCapture.Session.ID = "sess_tool_result_conversation"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -255,22 +203,11 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
-		Type:        "session.closed",
+		Type:        rtEventSessionClosed,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_result_conversation","reason":"fixture_complete"}`),
 	})
-	wirePath := filepath.Join(t.TempDir(), "tool-result-conversation.session.json")
-	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal wire fixture: %v", err)
-	}
-	if err := os.WriteFile(wirePath, wireData, 0o600); err != nil {
-		t.Fatalf("write wire fixture: %v", err)
-	}
-	if _, err := gwtesting.NewReplayWebSocketDialer(wirePath); err != nil {
-		t.Fatalf("replay fixture rejected by the session replayer dialer: %v", err)
-	}
-	return wirePath
+	return writeReplayCaptureFixture(t, baseCapture, "tool-result-conversation.session.json")
 }
 
 // runToolResultConversation drives the real 'agent session' command surface —
@@ -367,7 +304,7 @@ func functionCallOutputsInExchange(t *testing.T, wirePath string) []providerFunc
 	}
 	var outputs []providerFunctionCallOutput
 	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != "conversation.item.create" {
+		if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
 			continue
 		}
 		var payload struct {
@@ -380,7 +317,7 @@ func functionCallOutputsInExchange(t *testing.T, wirePath string) []providerFunc
 		if err := json.Unmarshal(record.Payload, &payload); err != nil {
 			t.Fatalf("decode provider function_call_output at sequence %d: %v", record.Sequence, err)
 		}
-		if payload.Item.Type == "function_call_output" {
+		if payload.Item.Type == rtItemFunctionCallOutput {
 			outputs = append(outputs, providerFunctionCallOutput{
 				Sequence: record.Sequence,
 				CallID:   payload.Item.CallID,
@@ -409,11 +346,11 @@ func assertToolResultFollowUpOrdering(t *testing.T, wirePath string, resultSeque
 			continue
 		}
 		switch record.Type {
-		case "response.output_audio_transcript.delta":
+		case rtEventOutputAudioTranscriptDelta:
 			if transcriptSequence == 0 {
 				transcriptSequence = record.Sequence
 			}
-		case "response.output_audio.delta":
+		case rtEventOutputAudioDelta:
 			if audioSequence == 0 {
 				audioSequence = record.Sequence
 			}

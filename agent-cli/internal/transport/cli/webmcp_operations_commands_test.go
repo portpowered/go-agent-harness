@@ -16,11 +16,15 @@ import (
 
 // Fixture values shared by the direct invoke and cancel command tests.
 const (
-	testBrowserInvocationID = "browser-invocation-9"
-	testDirectInvocationID  = "inv-23"
-	testCanceledStatus      = "canceled"
-	testConfirmedOutcome    = "confirmed_canceled"
-	testTerminalPhase       = "terminal"
+	testBrowserInvocationID  = "browser-invocation-9"
+	testDirectInvocationID   = "inv-23"
+	testCanceledStatus       = "canceled"
+	testPendingStatus        = "pending"
+	testCDPURL               = "http://127.0.0.1:9222"
+	go2rtcFixtureWSPath      = "/api/ws"
+	v9WebRTCDeviceScenarioID = "s2s-v9-webrtc-device-roundtrip"
+	testConfirmedOutcome     = "confirmed_canceled"
+	testTerminalPhase        = "terminal"
 )
 
 func TestWebMCPDirectInvokeReceiptUsesBrowserIDAndOnlyHandoffFields(t *testing.T) {

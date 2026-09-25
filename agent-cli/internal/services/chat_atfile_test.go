@@ -237,7 +237,11 @@ func TestChatAtFile_PathBoundaryAndInlineLimitRemainExplicitGaps(t *testing.T) {
 	if err := os.WriteFile(outside, []byte("outside-only-content"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Remove(outside) })
+	t.Cleanup(func() {
+		if err := os.Remove(outside); err != nil {
+			t.Errorf("remove outside-workspace fixture: %v", err)
+		}
+	})
 
 	_, parts, errMsg := parseAtReferences("@" + filepath.ToSlash(filepath.Join("..", filepath.Base(outside))))
 	if errMsg != "" || len(parts) == 0 {

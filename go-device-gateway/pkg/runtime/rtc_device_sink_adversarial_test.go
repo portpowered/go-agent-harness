@@ -25,7 +25,7 @@ func TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite(t *tes
 	if err != nil {
 		t.Fatalf("open adversarial sink: %v", err)
 	}
-	defer func() { _ = sink.Close() }()
+	defer closeForTest(t, "sink", sink)
 
 	const producers = 24
 	start := make(chan struct{})

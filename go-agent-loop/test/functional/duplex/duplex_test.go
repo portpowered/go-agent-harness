@@ -297,7 +297,9 @@ func runDuplexScenario(t *testing.T, run int) duplexRun {
 	stopped := false
 	defer func() {
 		if !stopped {
-			_ = session.Stop(3 * time.Second)
+			if err := session.Stop(3 * time.Second); err != nil {
+				t.Errorf("cleanup Stop: %v", err)
+			}
 		}
 	}()
 	if err := capture.awaitRecordCount(2); err != nil {

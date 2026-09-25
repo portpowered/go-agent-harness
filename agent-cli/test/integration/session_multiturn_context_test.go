@@ -58,15 +58,15 @@ func multiturnSliceFixture(t *testing.T, fixturePath string, turn int) string {
 	var turns [][]gwtesting.CapturedSessionEvent
 	for _, record := range capture.Records {
 		switch record.Type {
-		case "session.update", "session.created":
+		case rtEventSessionUpdate, rtEventSessionCreated:
 			prefix = append(prefix, record)
-		case "session.closed":
+		case rtEventSessionClosed:
 			suffix = append(suffix, record)
 		default:
 			if len(turns) == 0 || hasTurnTerminated(turns[len(turns)-1]) {
 				turns = append(turns, nil)
 			}
-			if record.Type == "response.done" {
+			if record.Type == rtEventResponseDone {
 				turns[len(turns)-1] = append(turns[len(turns)-1], record)
 				continue
 			}
@@ -99,7 +99,7 @@ func multiturnSliceFixture(t *testing.T, fixturePath string, turn int) string {
 
 func hasTurnTerminated(records []gwtesting.CapturedSessionEvent) bool {
 	for _, record := range records {
-		if record.Type == "response.done" {
+		if record.Type == rtEventResponseDone {
 			return true
 		}
 	}
@@ -150,7 +150,7 @@ func injectMultiturnAudioFrames(t *testing.T, capture *gwtesting.SessionCapture)
 	turn, frame := 0, 0
 	for i := range capture.Records {
 		record := &capture.Records[i]
-		if record.Type != "input_audio_buffer.append" {
+		if record.Type != rtEventInputAudioAppend {
 			continue
 		}
 		if turn >= len(framesPerTurn) || frame >= len(framesPerTurn[turn]) {
@@ -346,18 +346,18 @@ func TestMultiturnZephyrFixtureIsWellFormed(t *testing.T) {
 	turnThreePlusText := ""
 	for _, record := range capture.Records {
 		switch record.Type {
-		case "input_audio_buffer.append":
+		case rtEventInputAudioAppend:
 			appends++
-		case "input_audio_buffer.commit":
+		case rtEventInputAudioCommit:
 			commits++
 			commitsSeen++
-		case "response.output_item.added":
+		case rtEventOutputItemAdded:
 			itemAdded++
 			if record.Sequence <= lastItemSequence {
 				t.Fatalf("conversation item event at sequence %d did not accumulate monotonically (previous %d)", record.Sequence, lastItemSequence)
 			}
 			lastItemSequence = record.Sequence
-		case "response.output_text.delta":
+		case rtEventOutputTextDelta:
 			if commitsSeen >= 3 {
 				turnThreePlusText += jsonStringField(record.Payload, "delta")
 			}
@@ -449,7 +449,7 @@ func assertSameShapeExceptLaterResponses(t *testing.T, positivePath, negativePat
 		if posRecord.Type != negRecord.Type || posRecord.Direction != negRecord.Direction {
 			t.Fatalf("record %d structure diverged: %s/%s vs %s/%s", i, posRecord.Type, posRecord.Direction, negRecord.Type, negRecord.Direction)
 		}
-		if posRecord.Type != "response.output_text.delta" {
+		if posRecord.Type != rtEventOutputTextDelta {
 			continue
 		}
 		deltasSeen++
@@ -483,4 +483,77 @@ func jsonStringField(raw json.RawMessage, field string) string {
 		return ""
 	}
 	return payload[field]
+}
+
+// spokenWireIndices records where the spoken read_image client events sit.
+type spokenWireIndices struct {
+	appendCount, commitCount                                 int
+	responseCreates                                          []int
+	lastAppend, commitIndex, functionOutputIndex, imageIndex int
+}
+
+func (w *spokenWireIndices) observe(t *testing.T, index int, record gwtesting.CapturedSessionEvent, frames [][]byte) {
+	t.Helper()
+	payload := readImageSpokenRecordPayload(record)
+	switch record.Type {
+	case rtEventInputAudioAppend:
+		assertSpokenAppendFrame(t, payload, frames, w.appendCount)
+		w.appendCount++
+		w.lastAppend = index
+	case rtEventInputAudioCommit:
+		w.commitCount++
+		w.commitIndex = index
+	case rtEventResponseCreate:
+		w.responseCreates = append(w.responseCreates, index)
+	case rtEventConversationItemCreate:
+		w.observeItem(t, index, payload)
+	}
+}
+
+func (w *spokenWireIndices) observeItem(t *testing.T, index int, payload []byte) {
+	t.Helper()
+	var event struct {
+		Item struct {
+			Type   string `json:"type"`
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+			ID     string `json:"id"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		t.Fatalf("decode spoken conversation item: %v", err)
+	}
+	switch event.Item.Type {
+	case rtItemFunctionCallOutput:
+		w.functionOutputIndex = index
+		if len(event.Item.Output) > readImageSpokenTextBudget {
+			t.Fatalf("spoken function output is %d bytes, want <= %d", len(event.Item.Output), readImageSpokenTextBudget)
+		}
+	case rtItemMessage:
+		if event.Item.ID == readImageToolImageItemID(readImageCallID) {
+			w.imageIndex = index
+		}
+	}
+}
+
+// assertSpokenAppendFrame requires the ordinal-th append to carry the
+// matching WAV frame unchanged.
+func assertSpokenAppendFrame(t *testing.T, payload []byte, frames [][]byte, ordinal int) {
+	t.Helper()
+	var event struct {
+		Audio string `json:"audio"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		t.Fatalf("decode spoken audio append %d: %v", ordinal+1, err)
+	}
+	if ordinal >= len(frames) {
+		t.Fatalf("spoken audio append count exceeded WAV frame count %d", len(frames))
+	}
+	decoded, err := base64.StdEncoding.DecodeString(event.Audio)
+	if err != nil {
+		t.Fatalf("decode spoken audio append %d: %v", ordinal+1, err)
+	}
+	if string(decoded) != string(frames[ordinal]) {
+		t.Fatalf("spoken audio frame %d changed before provider delivery", ordinal+1)
+	}
 }

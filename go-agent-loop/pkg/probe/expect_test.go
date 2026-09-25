@@ -332,8 +332,12 @@ func TestEvaluationDoesNotMutateInputs(t *testing.T) {
 		PCM16Samples: append([]int16(nil), o.PCM16Samples...),
 		ToolCalls:    append([]string(nil), o.ToolCalls...),
 	}
-	_ = Evaluate(e, o)
-	_ = EvaluateExpectations([]ExpectedBehavior{e}, o)
+	if err := Evaluate(e, o); !errors.Is(err, ErrExpectationMismatch) {
+		t.Fatalf("missing tool call must mismatch: %v", err)
+	}
+	if results := EvaluateExpectations([]ExpectedBehavior{e}, o); len(results) != 1 || results[0].Passed {
+		t.Fatalf("missing tool call must fail: %#v", results)
+	}
 	if !reflect.DeepEqual(e, wantE) || !reflect.DeepEqual(o, wantO) {
 		t.Fatalf("evaluation mutated inputs: got %#v / %#v", e, o)
 	}
@@ -409,7 +413,7 @@ func TestEvaluateResponseCancelVariants(t *testing.T) {
 	if !errors.As(err, &mismatchErr) || !errors.Is(err, ErrExpectationMismatch) {
 		t.Fatalf("observed cancel must violate absence: %v", err)
 	}
-	if !strings.Contains(mismatchErr.Actual.(string), "tick 3") {
+	if !strings.Contains(mustAs[string](t, mismatchErr.Actual), "tick 3") {
 		t.Fatalf("absence violation must carry the cancel tick: %v", mismatchErr.Error())
 	}
 

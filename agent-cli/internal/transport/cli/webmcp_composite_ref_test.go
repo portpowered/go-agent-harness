@@ -25,7 +25,7 @@ func TestProductionWebMCPCLISelectAcceptsListedCompositeReference(t *testing.T) 
 		}
 		browserWebSocket := "ws" + strings.TrimPrefix(server.URL, "http") + "/devtools/browser/stable"
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
+		writeFixtureText(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q}`, browserWebSocket)
 	}))
 	t.Cleanup(server.Close)
 

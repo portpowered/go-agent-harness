@@ -57,7 +57,10 @@ func (t *ReplayRoundTripper) findMatchingCapture(req *http.Request, captures []C
 	reqMethod := req.Method
 	var reqBody []byte
 	if req.Body != nil {
-		reqBody, _ = io.ReadAll(req.Body)
+		var err error
+		if reqBody, err = io.ReadAll(req.Body); err != nil {
+			return nil // an unreadable request body cannot match any capture
+		}
 		req.Body = io.NopCloser(bytes.NewReader(reqBody))
 	}
 	reqShape := extractChatCompletionShape(reqBody)

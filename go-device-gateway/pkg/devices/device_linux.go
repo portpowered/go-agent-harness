@@ -195,7 +195,7 @@ func enumerateLinuxBackend(backend malgo.Backend, name string) (records []linuxD
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cleanupLinuxContext(ctx) }()
+	defer func() { joinCleanupErrorOnFailure(&err, cleanupLinuxContext(ctx)) }()
 	for _, request := range []struct {
 		kind      malgo.DeviceType
 		direction Direction
@@ -389,7 +389,7 @@ func (d *linuxOpenedDevice) WriteSamples(ctx context.Context, samples []int16) e
 
 func (d *linuxOpenedDevice) ensurePlaybackQueueLocked() *audio.PlaybackQueue {
 	if d.playback == nil {
-		d.playback, _ = audio.PlaybackQueueForFormat(d.format)
+		d.playback = playbackQueueOrNil(d.format)
 	}
 	return d.playback
 }

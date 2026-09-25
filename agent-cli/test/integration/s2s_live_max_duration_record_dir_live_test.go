@@ -70,11 +70,11 @@ func TestLiveSession_MaxDurationRecordDirTerminalAgreement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load live raw capture: %v", err)
 	}
-	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, "response.output_text.delta") && !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, "response.output_audio.delta") {
+	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, rtEventOutputTextDelta) && !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, rtEventOutputAudioDelta) {
 		t.Fatalf("live raw capture omitted observed provider output")
 	}
 	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == "response.done" || record.Type == "session.closed") {
+		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == rtEventResponseDone || record.Type == rtEventSessionClosed) {
 			t.Fatalf("live raw capture contains a provider terminal before the planned cutoff: %q", record.Type)
 		}
 	}

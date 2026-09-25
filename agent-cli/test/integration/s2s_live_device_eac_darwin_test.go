@@ -87,17 +87,17 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 			t.Fatalf("provider emitted error during device EAC round trip: %+v", record)
 		}
 	}
-	if counts["input_audio_buffer.append"] == 0 {
+	if counts[rtEventInputAudioAppend] == 0 {
 		t.Fatal("physical microphone produced no provider-bound PCM")
 	}
-	if counts["response.output_audio.delta"] == 0 || counts["response.output_audio.done"] == 0 {
-		t.Fatalf("physical replay evidence = deltas:%d done:%d, want completed assistant audio", counts["response.output_audio.delta"], counts["response.output_audio.done"])
+	if counts[rtEventOutputAudioDelta] == 0 || counts["response.output_audio.done"] == 0 {
+		t.Fatalf("physical replay evidence = deltas:%d done:%d, want completed assistant audio", counts[rtEventOutputAudioDelta], counts["response.output_audio.done"])
 	}
-	if counts["response.created"] != 1 {
-		t.Fatalf("response.created count=%d, want exactly one; speaker echo may have retriggered the model", counts["response.created"])
+	if counts[rtEventResponseCreated] != 1 {
+		t.Fatalf("response.created count=%d, want exactly one; speaker echo may have retriggered the model", counts[rtEventResponseCreated])
 	}
 	if !strings.Contains(stdout.String(), "Assistant:") {
 		t.Fatalf("physical far-field turn produced no assistant transcript: %q", stdout.String())
 	}
-	t.Logf("live device EAC: model=gpt-realtime-2.1-mini input_appends=%d output_deltas=%d responses=1", counts["input_audio_buffer.append"], counts["response.output_audio.delta"])
+	t.Logf("live device EAC: model=gpt-realtime-2.1-mini input_appends=%d output_deltas=%d responses=1", counts[rtEventInputAudioAppend], counts[rtEventOutputAudioDelta])
 }

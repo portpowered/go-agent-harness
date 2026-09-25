@@ -156,16 +156,16 @@ func NewSimulatedDuplexRegistryWithObservability(s DuplexScenario, sampler obser
 		}
 	}
 	if s.CaptureQueue.DropPolicy == "" {
-		s.CaptureQueue.DropPolicy = "drop_oldest"
+		s.CaptureQueue.DropPolicy = captureDropOldest
 	}
-	if s.CaptureQueue.DropPolicy != "drop_oldest" && s.CaptureQueue.DropPolicy != "drop_newest" {
+	if s.CaptureQueue.DropPolicy != captureDropOldest && s.CaptureQueue.DropPolicy != captureDropNewest {
 		return nil, fmt.Errorf("capture drop policy %q is unsupported", s.CaptureQueue.DropPolicy)
 	}
 	if s.Acoustic.GainQ15 == 0 {
 		s.Acoustic.GainQ15 = 32768
 	}
-	input, _ := NewDevice(SimulatedDuplexBackendName, "input", "Simulated Duplex Input", DirectionInput)
-	output, _ := NewDevice(SimulatedDuplexBackendName, "output", "Simulated Duplex Output", DirectionOutput)
+	input := constantDevice(SimulatedDuplexBackendName, "input", "Simulated Duplex Input", DirectionInput)
+	output := constantDevice(SimulatedDuplexBackendName, "output", "Simulated Duplex Output", DirectionOutput)
 	return &SimulatedDuplexRegistry{
 		scenario: s, format: format, input: input, output: output,
 		playback: playback, captureCapacity: captureCapacity,
@@ -303,7 +303,7 @@ func (s *SimulatedDuplexStream) Read(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	out := make([]byte, audio.FrameSize*2)
-	_ = codec.EncodePCM16Into(out, frame)
+	copy(out, codec.EncodePCM16(frame))
 	return out, nil
 }
 func (s *SimulatedDuplexStream) Write(ctx context.Context, raw []byte) error {
@@ -423,10 +423,10 @@ func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
 			"clock_epoch": strconv.FormatUint(uint64(event.ClockEpoch), 10),
 			"sample_rate": strconv.Itoa(event.SampleRate),
 		}
-		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
 			Name: "audio.device.callbacks", Kind: "counter", Value: 1, Unit: "callbacks", Fields: fields,
 		})
-		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
 			Name: "audio.device.queue.depth", Kind: "gauge", Value: float64(event.QueueAfter), Unit: "samples", Fields: fields,
 		})
 		if len(event.Flags) == 0 {
@@ -439,10 +439,10 @@ func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
 			"flags":       strings.Join(event.Flags, ","),
 			"fault_id":    event.FaultID,
 		}
-		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
 			Name: "audio.device.faults", Kind: "counter", Value: 1, Unit: "events", Fields: faultFields,
 		})
-		_ = observability.TryLog(context.Background(), r.logger, observability.LogRecord{
+		r.log(context.Background(), r.logger, observability.LogRecord{
 			Level: "warn", Message: "simulated audio device callback fault", Fields: faultFields,
 		})
 	}
@@ -470,12 +470,12 @@ func (r *SimulatedDuplexRegistry) observeQueueDeltas(playback, previousPlayback 
 			continue
 		}
 		loss = true
-		_ = observability.TrySample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
 			Name: metric.name, Kind: "counter", Value: float64(metric.value), Unit: metric.unit, Fields: fields,
 		})
 	}
 	if loss {
-		_ = observability.TryLog(context.Background(), r.logger, observability.LogRecord{
+		r.log(context.Background(), r.logger, observability.LogRecord{
 			Level: "warn", Message: "simulated audio buffer loss", Fields: fields,
 		})
 	}
@@ -564,7 +564,7 @@ func (r *SimulatedDuplexRegistry) enqueueCaptureLocked(block []int16) {
 		r.captureStats.DroppedSamples += uint64(overflow)
 		r.captureStats.DroppedFrames++
 		r.captureStats.SequenceGaps++
-		if r.captureStats.DropPolicy == "drop_newest" {
+		if r.captureStats.DropPolicy == captureDropNewest {
 			block = block[:audio.MaxIntValue(0, len(block)-overflow)]
 		} else if overflow >= len(r.capture) {
 			fromBlock := overflow - len(r.capture)

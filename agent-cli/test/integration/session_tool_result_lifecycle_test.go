@@ -338,3 +338,99 @@ func (b *lockedBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buffer.String()
 }
+
+// followOnToolObserver holds the second assistant response.done until the
+// test releases it and counts client closes.
+type followOnToolObserver struct {
+	secondAssistantObserved, releaseSecondAssistant, clientCloseObserved chan struct{}
+
+	mu                    sync.Mutex
+	session               *sessionToolBargeInSession
+	assistantResponses    int
+	closes                int
+	secondOnce, closeOnce sync.Once
+}
+
+func (o *followOnToolObserver) setSession(session *sessionToolBargeInSession) {
+	o.mu.Lock()
+	o.session = session
+	o.mu.Unlock()
+}
+
+func (o *followOnToolObserver) clientCloses() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.closes
+}
+
+func (o *followOnToolObserver) observe(msg messages.StreamMessage) {
+	if msg.Type == messages.StreamTypeSessionClose {
+		o.mu.Lock()
+		session := o.session
+		o.closes++
+		o.mu.Unlock()
+		if session != nil {
+			session.recordLifecycle("client_close")
+		}
+		o.closeOnce.Do(func() { close(o.clientCloseObserved) })
+		return
+	}
+	if msg.Type != messages.StreamTypeMessageEnd || msg.Role != messages.RoleAssistant {
+		return
+	}
+	o.mu.Lock()
+	o.assistantResponses++
+	response := o.assistantResponses
+	o.mu.Unlock()
+	if response == 2 {
+		o.secondOnce.Do(func() { close(o.secondAssistantObserved) })
+		<-o.releaseSecondAssistant
+	}
+}
+
+// newActiveScheduledToolObserver drives the active scheduled session from its
+// stream: it releases the pending barge-in continuation on the ready session
+// update, marks the final grounded response, and records the client close.
+func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) func(messages.StreamMessage) {
+	var finalResponseTextObserved bool
+	return func(msg messages.StreamMessage) {
+		session := inferencer.connectedSession()
+		switch {
+		case msg.Type == messages.StreamTypeSessionUpdated:
+			value, ok := msg.Value.(*messages.SessionUpdatedValue)
+			if ok && value != nil && value.SessionID == sessionToolBargeInContinuationReadyID && session != nil {
+				session.emitPendingBargeInContinuation()
+			}
+		case msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeTextDelta:
+			value, ok := msg.Value.(*messages.TextDeltaValue)
+			if ok && value != nil && msg.ResponseID == sessionToolBargeInFinalResponseID && value.Content == sessionToolBargeInFinalResponseText {
+				finalResponseTextObserved = true
+			}
+		case msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeMessageEnd:
+			if msg.ResponseID == sessionToolBargeInFinalResponseID && finalResponseTextObserved && session != nil {
+				session.markFinalResponseObserved()
+			}
+		case msg.Type == messages.StreamTypeSessionClose:
+			if session != nil {
+				session.recordLifecycle("client_close")
+			}
+		}
+	}
+}
+
+// countSessionToolBargeInSent counts the correlated tool results and response
+// cancellations the client sent to the provider.
+func countSessionToolBargeInSent(session *sessionToolBargeInSession) (results, cancels int) {
+	for _, msg := range session.sentSnapshot() {
+		switch msg.Type {
+		case messages.StreamTypeToolCallEnd:
+			value, ok := msg.Value.(*messages.ToolCallEndValue)
+			if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
+				results++
+			}
+		case messages.StreamTypeResponseCancel:
+			cancels++
+		}
+	}
+	return results, cancels
+}

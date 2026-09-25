@@ -81,7 +81,12 @@ const defaultRTCDeviceHoldToneTick = 20 * time.Millisecond
 // so a caller can defer it ahead of releasing the underlying device without
 // racing a last hold-tone write against device teardown.
 func (s *RTCDeviceSink) startHoldTone(ctx context.Context) func() {
-	stop, _ := s.startHoldToneChecked(ctx)
+	stop, err := s.startHoldToneChecked(ctx)
+	if err != nil {
+		// An invalid injected timing domain disables only the cue; playback of
+		// real provider audio continues without a hold tone.
+		return func() {}
+	}
 	return stop
 }
 

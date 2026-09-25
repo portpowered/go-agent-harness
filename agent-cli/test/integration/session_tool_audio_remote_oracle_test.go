@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -441,5 +445,134 @@ func remoteToolAudioDeliveries() []remoteToolAudioDelivery {
 		{name: "slow_device", toolDelay: 3 * time.Millisecond, callbackInterval: 45 * time.Millisecond, deviceCadence: true},
 		{name: "large_text_and_tool_results", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, promptBytes: 64 << 10, toolResultBytes: 64 << 10},
 		{name: "long_prior_input_61s", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, inputFrames: 2048},
+	}
+}
+
+// remoteToolAudioPaths are the optional per-scenario artifact paths.
+type remoteToolAudioPaths struct {
+	configDir, observation, fixture, audioOut, capture string
+}
+
+func newRemoteToolAudioPaths(t *testing.T, testCase remoteToolAudioCase, calls []remoteToolCallFixture, toolDelay time.Duration) remoteToolAudioPaths {
+	t.Helper()
+	paths := remoteToolAudioPaths{configDir: t.TempDir()}
+	if len(calls) > 0 {
+		paths.observation = filepath.Join(t.TempDir(), "tool-observations.jsonl")
+		paths.fixture = writeRemoteToolFixture(t, paths.observation, calls, toolDelay)
+	}
+	if testCase.deviceWAV {
+		paths.audioOut = filepath.Join(t.TempDir(), "device-output.wav")
+	}
+	if testCase.timingEvidence {
+		paths.capture = filepath.Join(t.TempDir(), "session.json")
+	}
+	return paths
+}
+
+// remoteToolAudioCommand builds the shipped agent session command wired to
+// the hermetic provider and the remote audio-device server.
+func remoteToolAudioCommand(ctx context.Context, testCase remoteToolAudioCase, withTools bool, endpoint, providerURL string, withInput bool, prompt string, paths remoteToolAudioPaths) *exec.Cmd {
+	arguments := []string{
+		"--config-dir", paths.configDir,
+		"session",
+		"--provider", "openai",
+		"--model", "gpt-realtime-2.1",
+		"--api-key", "hermetic-key",
+		"--base-url", providerURL,
+		"--audio-device-server", endpoint,
+		"--audio-out-device=",
+		"--max-duration", "30s",
+	}
+	if withInput {
+		arguments = append(arguments, "--audio-in-device=")
+	}
+	if !testCase.naturalClose {
+		arguments = append(arguments, "--wait-for-close")
+	}
+	binaryPath := agentBinaryPath
+	if withTools {
+		binaryPath = mockToolAgentBinaryPath
+	}
+	if paths.audioOut != "" {
+		arguments = append(arguments, "--audio-out", paths.audioOut)
+	}
+	if paths.capture != "" {
+		arguments = append(arguments, "--record", paths.capture)
+	}
+	if prompt != "" {
+		arguments = append(arguments, prompt)
+	}
+	command := exec.CommandContext(ctx, binaryPath, arguments...)
+	command.Env = remoteToolAudioEnvironment(os.Environ(), paths.fixture, testCase.holdToneControl)
+	return command
+}
+
+// awaitRemoteToolAudioTopology waits until the provider sent every scripted
+// response, then lets naturally or provider-closed scenarios exit.
+func awaitRemoteToolAudioTopology(t *testing.T, ctx context.Context, testCase remoteToolAudioCase, provider *remoteToolAudioProvider, done <-chan error, stdout, stderr *remoteToolAudioBuffer) {
+	t.Helper()
+	select {
+	case <-provider.allResponsesSent:
+	case err := <-done:
+		t.Fatalf("agent exited before the complete %s topology: %v; stdout=%q stderr=%q provider=%+v", testCase.name, err, stdout.String(), stderr.String(), provider.Snapshot())
+	case <-ctx.Done():
+		t.Fatalf("timed out receiving the complete %s topology: %v; provider=%+v stderr=%q", testCase.name, ctx.Err(), provider.Snapshot(), stderr.String())
+	}
+	if testCase.providerClose {
+		provider.ReleaseClose()
+	}
+	if testCase.naturalClose || testCase.providerClose {
+		awaitRemoteToolAudioExit(t, ctx, done, stdout, stderr, "mock-tool agent did not close after its final response", "naturally closing mock-tool agent failed")
+	}
+}
+
+func awaitRemoteToolAudioExit(t *testing.T, ctx context.Context, done <-chan error, stdout, stderr *remoteToolAudioBuffer, timeoutMessage, failureMessage string) {
+	t.Helper()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("%s: %v; stdout=%q stderr=%q", failureMessage, err, stdout.String(), stderr.String())
+		}
+	case <-ctx.Done():
+		t.Fatalf("%s: %v; stderr=%q", timeoutMessage, ctx.Err(), stderr.String())
+	}
+}
+
+func assertRemoteToolAudioProviderEdge(t *testing.T, observed remoteToolAudioProviderSnapshot, responses, calls int, withPrompt, withInput bool) {
+	t.Helper()
+	wantInitialRequest := 0
+	if withPrompt {
+		wantInitialRequest = 1
+	}
+	wantInputHistory := 0
+	if withInput {
+		wantInputHistory = 1
+	}
+	if observed.protocolError != "" || observed.responsesSent != responses || observed.responseCreates != calls || observed.toolResults != calls || observed.initialRequests != wantInitialRequest || observed.inputHistories != wantInputHistory {
+		t.Fatalf("provider edge observation = %+v, want responses=%d continuations=%d", observed, responses, calls)
+	}
+}
+
+// assertRemoteToolAudioDeviceWAV requires the secondary device WAV to carry
+// the same audio the remote device rendered.
+func assertRemoteToolAudioDeviceWAV(t *testing.T, path string, deviceWAV bool, want []int16) {
+	t.Helper()
+	wavBytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read secondary device WAV: %v", err)
+	}
+	rate, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse secondary device WAV: %v", err)
+	}
+	if rate != audio.SampleRate {
+		t.Fatalf("secondary device WAV sample rate = %d, want negotiated device rate %d", rate, audio.SampleRate)
+	}
+	wavSamples := nonzeroRemoteToolAudio(samples)
+	if deviceWAV {
+		wavSamples = trimRemoteToolAudioEdgeSilence(samples)
+	}
+	if err := verifyRemoteToolAudio(wavSamples, want); err != nil {
+		t.Fatalf("secondary device WAV differs from remote device edge: %v", err)
 	}
 }

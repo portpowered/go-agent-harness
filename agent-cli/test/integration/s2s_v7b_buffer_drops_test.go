@@ -145,7 +145,7 @@ func TestS2SV7BForcedOverflowBothDirectionsReconcilesWithReportedCounts(t *testi
 
 	// Force input-path overflow: one more send than the queue holds.
 	for range dropProbeCapacity + 1 {
-		session.Send(ctx, msg) //nolint:errcheck // final send deliberately drops
+		session.Send(ctx, msg) // the final send deliberately drops
 	}
 	if got := session.InputDrops(); got != 1 {
 		t.Fatalf("forced input overflow produced InputDrops()=%d, want 1", got)
@@ -153,7 +153,7 @@ func TestS2SV7BForcedOverflowBothDirectionsReconcilesWithReportedCounts(t *testi
 
 	// Force output-path overflow: one more receive-side write than fits.
 	for range dropProbeCapacity + 1 {
-		session.Receive().Write(ctx, msg) //nolint:errcheck // final write deliberately drops
+		session.Receive().Write(ctx, msg) // the final write deliberately drops
 	}
 	if got := session.OutputDrops(); got != 1 {
 		t.Fatalf("forced output overflow produced OutputDrops()=%d, want 1", got)
@@ -203,7 +203,7 @@ func TestS2SV7BForcedOverflowBothDirectionsReconcilesWithReportedCounts(t *testi
 	directions := map[string]bool{}
 	for i, record := range records {
 		if msgValue, ok := dropRecordField(record, "direction"); ok {
-			directions[msgValue.(string)] = true
+			directions[mustAs[string](t, msgValue)] = true
 		} else {
 			t.Errorf("drop line %d has no direction field", i)
 		}

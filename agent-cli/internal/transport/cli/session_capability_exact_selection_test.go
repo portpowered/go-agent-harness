@@ -58,25 +58,7 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 			Origin:    target.url[:len(target.url)-1],
 			Eligible:  true,
 		}, testkit.WithInitialCatalog(pageTool)))
-		laneTargets = append(laneTargets, discovery.Target{
-			BrowserID:             string(candidate.ID),
-			ID:                    string(publicID),
-			Type:                  "page",
-			Title:                 target.title,
-			URL:                   target.url,
-			Origin:                target.url[:len(target.url)-1],
-			Generation:            1,
-			WebSocketPresent:      true,
-			WebMCP:                true,
-			WebMCPKnown:           true,
-			WebMCPDomainSupported: true,
-			WebMCPDomainKnown:     true,
-			PageToolsReady:        true,
-			PageToolsKnown:        true,
-			ToolCount:             1,
-			ToolCountKnown:        true,
-			Eligible:              true,
-		})
+		laneTargets = append(laneTargets, exactSelectionLaneTarget(candidate.ID, string(publicID), target.title, target.url))
 	}
 
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate, runtimeTargets...))
@@ -93,8 +75,8 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 	}
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = true
-	browser.Tools.Backend = "webmcp"
-	browser.Connection.CDPURL = "http://127.0.0.1:9222"
+	browser.Tools.Backend = config.BrowserToolsBackendWebMCP
+	browser.Connection.CDPURL = testCDPURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
 	factory := NewProductionWebMCPDoctorFactory(
@@ -114,13 +96,38 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 		}
 	})
 
-	arguments, err := json.Marshal(map[string]string{
-		"browser_id": string(candidate.ID),
-		"target_id":  publicIDs[1],
-	})
-	if err != nil {
-		t.Fatalf("marshal exact selector: %v", err)
+	selected := executeExactTabSelection(t, broker, candidate.ID, publicIDs[1])
+	if selected.BrowserID != candidate.ID || selected.TargetID != webmcp.TargetID(publicIDs[1]) || !selected.Connected || !selected.Ready {
+		t.Fatalf("selected context = %+v, want exact connected ready target %s", selected, publicIDs[1])
 	}
+	if discoveryService.reconnectCount() != 1 {
+		t.Fatalf("automatic reconnect calls = %d, want one", discoveryService.reconnectCount())
+	}
+
+	assertExactSelectionOperations(t, runtime.Operations(), "raw-tab-b")
+}
+
+func exactSelectionLaneTarget(browserID webmcp.BrowserID, publicID, title, url string) discovery.Target {
+	return discovery.Target{
+		BrowserID: string(browserID), ID: publicID, Type: "page", Title: title, URL: url, Origin: url[:len(url)-1],
+		Generation: 1, WebSocketPresent: true, WebMCP: true, WebMCPKnown: true,
+		WebMCPDomainSupported: true, WebMCPDomainKnown: true, PageToolsReady: true, PageToolsKnown: true,
+		ToolCount: 1, ToolCountKnown: true, Eligible: true,
+	}
+}
+
+type exactTabSelection struct {
+	BrowserID webmcp.BrowserID `json:"browser_id"`
+	TargetID  webmcp.TargetID  `json:"target_id"`
+	Connected bool             `json:"connected"`
+	Ready     bool             `json:"ready"`
+}
+
+// executeExactTabSelection runs the first-class select-tab tool with an exact
+// browser and target and requires a successful result.
+func executeExactTabSelection(t *testing.T, broker webmcp.Broker, browserID webmcp.BrowserID, targetID string) exactTabSelection {
+	t.Helper()
+	arguments := mustJSONMarshal(t, map[string]string{"browser_id": string(browserID), "target_id": targetID})
 	response, err := webmcpTools.NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "exact-selection",
 		Name:      webmcp.SelectTabToolName,
@@ -136,28 +143,22 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 	if !envelope.OK {
 		t.Fatalf("exact selection failed after automatic ambiguity: %+v", envelope.Error)
 	}
-	var selected struct {
-		BrowserID webmcp.BrowserID `json:"browser_id"`
-		TargetID  webmcp.TargetID  `json:"target_id"`
-		Connected bool             `json:"connected"`
-		Ready     bool             `json:"ready"`
-	}
+	var selected exactTabSelection
 	if err := json.Unmarshal(envelope.Data, &selected); err != nil {
 		t.Fatalf("decode selected data: %v", err)
 	}
-	if selected.BrowserID != candidate.ID || selected.TargetID != webmcp.TargetID(publicIDs[1]) || !selected.Connected || !selected.Ready {
-		t.Fatalf("selected context = %+v, want exact connected ready target %s", selected, publicIDs[1])
-	}
-	if discoveryService.reconnectCount() != 1 {
-		t.Fatalf("automatic reconnect calls = %d, want one", discoveryService.reconnectCount())
-	}
+	return selected
+}
 
-	operations := runtime.Operations()
+// assertExactSelectionOperations requires one open, list, and attach, with
+// the attach on the exact raw target and no activation.
+func assertExactSelectionOperations(t *testing.T, operations []testkit.Operation, rawTargetID webmcp.TargetID) {
+	t.Helper()
 	counts := make(map[testkit.OperationKind]int)
 	for _, operation := range operations {
 		counts[operation.Kind]++
-		if operation.Kind == testkit.OperationAttach && operation.TargetID != webmcp.TargetID("raw-tab-b") {
-			t.Fatalf("attached target = %q, want exact raw target raw-tab-b", operation.TargetID)
+		if operation.Kind == testkit.OperationAttach && operation.TargetID != rawTargetID {
+			t.Fatalf("attached target = %q, want exact raw target %s", operation.TargetID, rawTargetID)
 		}
 	}
 	if counts[testkit.OperationOpen] != 1 || counts[testkit.OperationListTargets] != 1 || counts[testkit.OperationAttach] != 1 {

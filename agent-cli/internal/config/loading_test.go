@@ -34,7 +34,7 @@ func TestLoad_FromFile(t *testing.T) {
 		t.Fatalf("Load(): %v", err)
 	}
 
-	if cfg.Model.Provider != "openrouter" {
+	if cfg.Model.Provider != ProviderOpenRouter {
 		t.Errorf("Model.Provider: got %q, want openrouter", cfg.Model.Provider)
 	}
 	if cfg.Model.OpenRouter == nil {
@@ -74,7 +74,7 @@ func TestLoad_BasePathOverride(t *testing.T) {
 		t.Fatalf("Load(): %v", err)
 	}
 
-	if cfg.Model.Provider != "openrouter" {
+	if cfg.Model.Provider != ProviderOpenRouter {
 		t.Errorf("Model.Provider: got %q, want openrouter", cfg.Model.Provider)
 	}
 	if cfg.Model.OpenRouter == nil || cfg.Model.OpenRouter.APIKey != "file-openrouter-key" {
@@ -126,7 +126,7 @@ func TestLoad_EnvOverrides_OpenRouter(t *testing.T) {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	setEnv(t, "AGENT_MODEL__PROVIDER", "openrouter")
+	setEnv(t, "AGENT_MODEL__PROVIDER", ProviderOpenRouter)
 	setEnv(t, "AGENT_MODEL__OPENROUTER__MODEL", "env-openrouter-model")
 	setEnv(t, "AGENT_MODEL__OPENROUTER__API_KEY", "env-openrouter-key")
 	setEnv(t, "AGENT_MODEL__OPENROUTER__BASE_URL", "https://env.openrouter.example.com")
@@ -138,7 +138,7 @@ func TestLoad_EnvOverrides_OpenRouter(t *testing.T) {
 		t.Fatalf("Load(): %v", err)
 	}
 
-	if cfg.Model.Provider != "openrouter" {
+	if cfg.Model.Provider != ProviderOpenRouter {
 		t.Errorf("Model.Provider: got %q, want openrouter", cfg.Model.Provider)
 	}
 	if cfg.Model.OpenRouter == nil {
@@ -375,19 +375,19 @@ func TestValidate_RequiresAPIKey(t *testing.T) {
 		t.Error("Validate() with empty API key should error")
 	}
 
-	c.Model.OpenAI.APIKey = "sk-xxx"
+	c.Model.OpenAI.APIKey = testAPIKey
 	if err := c.Validate(); err != nil {
 		t.Errorf("Validate() with API key set: %v", err)
 	}
 }
 
 func TestValidate_OpenRouter(t *testing.T) {
-	c := Config{Model: ModelConfig{Provider: "openrouter"}}
+	c := Config{Model: ModelConfig{Provider: ProviderOpenRouter}}
 	if err := c.Validate(); err == nil {
 		t.Error("Validate() with openrouter but no openrouter config should error")
 	}
 
-	c.Model.OpenRouter = &OpenAIConfig{APIKey: "sk-xxx"}
+	c.Model.OpenRouter = &OpenAIConfig{APIKey: testAPIKey}
 	if err := c.Validate(); err != nil {
 		t.Errorf("Validate() with openrouter API key: %v", err)
 	}
@@ -422,15 +422,15 @@ func TestValidateGrokSession_RequiresLiveCredentials(t *testing.T) {
 func TestActiveOpenAIConfig_OpenRouter(t *testing.T) {
 	cfg := Config{
 		Model: ModelConfig{
-			Provider:   "openrouter",
-			OpenRouter: &OpenAIConfig{Model: "z-ai/glm-4.7", APIKey: "sk-xxx"},
+			Provider:   ProviderOpenRouter,
+			OpenRouter: &OpenAIConfig{Model: "z-ai/glm-4.7", APIKey: testAPIKey},
 		},
 	}
 	active, err := cfg.ActiveOpenAIConfig()
 	if err != nil {
 		t.Fatalf("ActiveOpenAIConfig: %v", err)
 	}
-	if active.Model != "z-ai/glm-4.7" || active.APIKey != "sk-xxx" {
+	if active.Model != "z-ai/glm-4.7" || active.APIKey != testAPIKey {
 		t.Errorf("ActiveOpenAIConfig: got %+v", active)
 	}
 }
@@ -439,14 +439,14 @@ func TestActiveOpenAIConfig_OpenAI(t *testing.T) {
 	cfg := Config{
 		Model: ModelConfig{
 			Provider: "openai",
-			OpenAI:   &OpenAIConfig{Model: "gpt-4", APIKey: "sk-xxx"},
+			OpenAI:   &OpenAIConfig{Model: "gpt-4", APIKey: testAPIKey},
 		},
 	}
 	active, err := cfg.ActiveOpenAIConfig()
 	if err != nil {
 		t.Fatalf("ActiveOpenAIConfig: %v", err)
 	}
-	if active.Model != "gpt-4" || active.APIKey != "sk-xxx" {
+	if active.Model != "gpt-4" || active.APIKey != testAPIKey {
 		t.Errorf("ActiveOpenAIConfig: got %+v", active)
 	}
 }
@@ -455,14 +455,14 @@ func TestActiveOpenAIConfig_Local(t *testing.T) {
 	cfg := Config{
 		Model: ModelConfig{
 			Provider: "local",
-			Local:    &OpenAIConfig{Model: "llama3", BaseURL: "http://localhost:11434/v1"},
+			Local:    &OpenAIConfig{Model: testLocalModel, BaseURL: testLocalBaseURL},
 		},
 	}
 	active, err := cfg.ActiveOpenAIConfig()
 	if err != nil {
 		t.Fatalf("ActiveOpenAIConfig: %v", err)
 	}
-	if active.Model != "llama3" || active.BaseURL != "http://localhost:11434/v1" {
+	if active.Model != testLocalModel || active.BaseURL != testLocalBaseURL {
 		t.Errorf("ActiveOpenAIConfig: got %+v", active)
 	}
 }
@@ -479,7 +479,7 @@ func TestValidate_Local_NoAPIKeyRequired(t *testing.T) {
 	c := Config{
 		Model: ModelConfig{
 			Provider: "local",
-			Local:    &OpenAIConfig{Model: "llama3", BaseURL: "http://localhost:11434/v1"},
+			Local:    &OpenAIConfig{Model: testLocalModel, BaseURL: testLocalBaseURL},
 		},
 	}
 	if err := c.Validate(); err != nil {
@@ -491,7 +491,7 @@ func TestValidate_Local_WithAPIKeyAlsoValid(t *testing.T) {
 	c := Config{
 		Model: ModelConfig{
 			Provider: "local",
-			Local:    &OpenAIConfig{Model: "llama3", BaseURL: "http://localhost:11434/v1", APIKey: "optional-key"},
+			Local:    &OpenAIConfig{Model: testLocalModel, BaseURL: testLocalBaseURL, APIKey: "optional-key"},
 		},
 	}
 	if err := c.Validate(); err != nil {
@@ -576,10 +576,10 @@ model:
 	if cfg.Model.Local == nil {
 		t.Fatal("Model.Local: expected non-nil")
 	}
-	if cfg.Model.Local.Model != "llama3" {
+	if cfg.Model.Local.Model != testLocalModel {
 		t.Errorf("Model.Local.Model: got %q, want llama3", cfg.Model.Local.Model)
 	}
-	if cfg.Model.Local.BaseURL != "http://localhost:11434/v1" {
+	if cfg.Model.Local.BaseURL != testLocalBaseURL {
 		t.Errorf("Model.Local.BaseURL: got %q", cfg.Model.Local.BaseURL)
 	}
 	if cfg.Model.Local.APIKey != "" {
@@ -596,7 +596,7 @@ func TestValidate_Local_RequiresBaseURL(t *testing.T) {
 	c := Config{
 		Model: ModelConfig{
 			Provider: "local",
-			Local:    &OpenAIConfig{Model: "llama3"},
+			Local:    &OpenAIConfig{Model: testLocalModel},
 		},
 	}
 	if err := c.Validate(); err == nil {
@@ -607,21 +607,21 @@ func TestValidate_Local_RequiresBaseURL(t *testing.T) {
 func TestApplyOverrides_LocalProvider(t *testing.T) {
 	base := Config{
 		Model: ModelConfig{
-			Provider:   "openrouter",
-			OpenRouter: &OpenAIConfig{Model: "z-ai/glm-4.7", APIKey: "sk-xxx"},
+			Provider:   ProviderOpenRouter,
+			OpenRouter: &OpenAIConfig{Model: "z-ai/glm-4.7", APIKey: testAPIKey},
 		},
 	}
-	out := base.ApplyOverrides("", "llama3", "local", "http://localhost:11434/v1")
+	out := base.ApplyOverrides("", testLocalModel, "local", testLocalBaseURL)
 	if out.Model.Provider != "local" {
 		t.Errorf("Provider: got %q, want local", out.Model.Provider)
 	}
 	if out.Model.Local == nil {
 		t.Fatal("Model.Local: expected non-nil")
 	}
-	if out.Model.Local.Model != "llama3" {
+	if out.Model.Local.Model != testLocalModel {
 		t.Errorf("Model: got %q, want llama3", out.Model.Local.Model)
 	}
-	if out.Model.Local.BaseURL != "http://localhost:11434/v1" {
+	if out.Model.Local.BaseURL != testLocalBaseURL {
 		t.Errorf("BaseURL: got %q", out.Model.Local.BaseURL)
 	}
 	if out.Model.Local.APIKey != "" {
@@ -633,7 +633,7 @@ func TestApplyOverrides_GrokProvider(t *testing.T) {
 	base := Config{
 		Model: ModelConfig{
 			Provider:   ProviderOpenRouter,
-			OpenRouter: &OpenAIConfig{Model: "z-ai/glm-4.7", APIKey: "sk-xxx"},
+			OpenRouter: &OpenAIConfig{Model: "z-ai/glm-4.7", APIKey: testAPIKey},
 		},
 	}
 	out := base.ApplyOverrides("xai-key", "grok-session-model", ProviderGrok, "wss://grok.example.test/realtime")
@@ -658,7 +658,7 @@ func TestApplyOverrides_LocalProvider_PreservesExisting(t *testing.T) {
 	base := Config{
 		Model: ModelConfig{
 			Provider: "local",
-			Local:    &OpenAIConfig{Model: "llama3", BaseURL: "http://localhost:11434/v1"},
+			Local:    &OpenAIConfig{Model: testLocalModel, BaseURL: testLocalBaseURL},
 		},
 	}
 	// Override only model
@@ -666,7 +666,7 @@ func TestApplyOverrides_LocalProvider_PreservesExisting(t *testing.T) {
 	if out.Model.Local.Model != "mistral" {
 		t.Errorf("Model: got %q, want mistral", out.Model.Local.Model)
 	}
-	if out.Model.Local.BaseURL != "http://localhost:11434/v1" {
+	if out.Model.Local.BaseURL != testLocalBaseURL {
 		t.Errorf("BaseURL should be preserved: got %q", out.Model.Local.BaseURL)
 	}
 }
@@ -675,7 +675,7 @@ func TestApplyOverrides_BaseURL_OnOpenAI(t *testing.T) {
 	base := Config{
 		Model: ModelConfig{
 			Provider: "openai",
-			OpenAI:   &OpenAIConfig{Model: "gpt-4", APIKey: "sk-xxx"},
+			OpenAI:   &OpenAIConfig{Model: "gpt-4", APIKey: testAPIKey},
 		},
 	}
 	out := base.ApplyOverrides("", "", "", "http://custom-endpoint/v1")

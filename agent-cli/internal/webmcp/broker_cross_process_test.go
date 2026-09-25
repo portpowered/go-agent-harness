@@ -128,7 +128,7 @@ func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (we
 	requireBrokerStep(t, err, "open external client")
 	externalSessionValue, err := externalHandleValue.Attach(context.Background(), primaryTargetID, webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach external client")
-	externalSession := externalSessionValue.(*testkit.ScriptedTargetSession)
+	externalSession := mustAs[*testkit.ScriptedTargetSession](t, externalSessionValue)
 	if externalSession == nil {
 		t.Fatal("external session is nil")
 	}
@@ -274,7 +274,7 @@ func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch
 	t.Helper()
 	otherTargetValue, err := externalHandle.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach other target")
-	otherTarget := otherTargetValue.(*testkit.ScriptedTargetSession)
+	otherTarget := mustAs[*testkit.ScriptedTargetSession](t, otherTargetValue)
 	requireBrokerStep(t, otherTarget.EmitToolsAdded(pageTool("other_target_tool", "frame-1", `{}`)), "emit other-target catalog event")
 	assertNoBrokerEvent(t, watch.events, "other-target catalog event")
 
@@ -282,7 +282,7 @@ func assertCrossProcessOtherTargetsIgnored(t *testing.T, watch crossProcessWatch
 	requireBrokerStep(t, err, "open other browser client")
 	otherBrowserSessionValue, err := otherBrowserHandle.Attach(context.Background(), "tab-other", webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach other browser target")
-	otherBrowserSession := otherBrowserSessionValue.(*testkit.ScriptedTargetSession)
+	otherBrowserSession := mustAs[*testkit.ScriptedTargetSession](t, otherBrowserSessionValue)
 	requireBrokerStep(t, otherBrowserSession.EmitToolsAdded(pageTool("other_browser_tool", "frame-1", `{}`)), "emit other-browser catalog event")
 	assertNoBrokerEvent(t, watch.events, "other-browser catalog event")
 }

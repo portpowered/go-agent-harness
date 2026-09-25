@@ -33,13 +33,13 @@ func TestWebMCPCastFunctionRoutesMediaAndTabModes(t *testing.T) {
 			testkit.WithCastDevices(webmcp.CastDevice{Name: "Office TV", ID: "sink-office"}),
 		),
 	))
-	t.Cleanup(func() { _ = runtime.Close() })
+	t.Cleanup(func() { closeForTest(t, runtime) })
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: webMCPDeviceDiscoverer{candidate: candidate},
 		IDs:        testkit.NewDeterministicIDs(),
 	})
-	t.Cleanup(func() { _ = broker.Close() })
+	t.Cleanup(func() { closeForTest(t, broker) })
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
 		t.Fatalf("select YouTube fixture: %v", err)
 	}

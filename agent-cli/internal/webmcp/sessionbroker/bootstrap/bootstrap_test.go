@@ -168,7 +168,7 @@ func TestBootstrapReturnsCallerCancellation(t *testing.T) {
 	if err := New(externalBrowser(), plainDiscovery{}, &baseBroker{}, nil)(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled bootstrap error = %v, want context.Canceled", err)
 	}
-	//nolint:staticcheck // A nil context is part of the legacy bootstrap contract.
+	// A nil context is part of the legacy bootstrap contract.
 	if err := New(externalBrowser(), plainDiscovery{}, &baseBroker{}, nil)(nil); err != nil {
 		t.Fatalf("nil-context bootstrap: %v", err)
 	}

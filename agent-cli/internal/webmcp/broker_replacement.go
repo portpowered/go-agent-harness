@@ -54,10 +54,10 @@ func (b *StatefulBroker) retireBrowserReplacementLocked(browserID BrowserID) bro
 func closeBrowserReplacementCleanups(cleanups []browserReplacementCleanup) {
 	for _, cleanup := range cleanups {
 		if cleanup.session != nil {
-			_ = cleanup.session.Close()
+			discardCloseError(cleanup.session.Close)
 		}
 		if cleanup.handle != nil {
-			_ = cleanup.handle.Close()
+			discardCloseError(cleanup.handle.Close)
 		}
 	}
 }

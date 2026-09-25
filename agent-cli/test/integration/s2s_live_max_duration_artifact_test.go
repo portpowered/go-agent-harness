@@ -72,18 +72,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 		t.Fatalf("CLI output did not report the bounded partial response: %q", stdout)
 	}
 
-	capture, err := gwtesting.LoadSessionCapture(recordPath)
-	if err != nil {
-		t.Fatalf("load raw provider capture: %v", err)
-	}
-	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, "response.output_text.delta") {
-		t.Fatalf("raw capture omitted the observed response delta: %+v", capture.Records)
-	}
-	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == "response.done" || record.Type == "session.closed") {
-			t.Fatalf("raw capture fabricated provider terminal %q: %+v", record.Type, record)
-		}
-	}
+	assertRawCaptureWithoutFabricatedTerminal(t, recordPath)
 
 	sidecarPath := strings.TrimSuffix(recordPath, filepath.Ext(recordPath)) + ".jsonl"
 	terminal := readSessionDurationSidecarTerminal(t, sidecarPath)
@@ -127,24 +116,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 	manifestTerminal := assertMaxDurationTerminalJSONFields(t, "record-dir manifest", terminalFields)
 	assertTerminalFieldAgreement(t, "duration sidecar vs record-dir manifest", terminal.fields, manifestTerminal)
 
-	if len(manifest.Artifacts) == 0 {
-		t.Fatal("record-dir manifest has no artifacts")
-	}
-	seenArtifacts := make(map[string]struct{}, len(manifest.Artifacts))
-	for _, artifact := range manifest.Artifacts {
-		if _, duplicate := seenArtifacts[artifact.Path]; duplicate {
-			t.Fatalf("record-dir manifest repeats artifact %q", artifact.Path)
-		}
-		seenArtifacts[artifact.Path] = struct{}{}
-		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(artifact.Path)))
-		if err != nil {
-			t.Fatalf("read record-dir artifact %q: %v", artifact.Path, err)
-		}
-		digest := sha256.Sum256(data)
-		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
-			t.Fatalf("record-dir artifact hash for %q = %s, want %s", artifact.Path, got, artifact.SHA256)
-		}
-	}
+	assertRecordDirArtifactHashes(t, recordDir, manifest)
 }
 
 func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T) {
@@ -189,18 +161,7 @@ func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T)
 		t.Fatalf("record-only max-duration CLI returned an error: %v; stdout=%q stderr=%q", err, testWriter.StdoutString(), testWriter.StderrString())
 	}
 
-	capture, err := gwtesting.LoadSessionCapture(recordPath)
-	if err != nil {
-		t.Fatalf("load raw provider capture: %v", err)
-	}
-	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, "response.output_text.delta") {
-		t.Fatalf("raw capture omitted the observed response delta: %+v", capture.Records)
-	}
-	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == "response.done" || record.Type == "session.closed") {
-			t.Fatalf("raw capture fabricated provider terminal %q: %+v", record.Type, record)
-		}
-	}
+	assertRawCaptureWithoutFabricatedTerminal(t, recordPath)
 
 	sidecarPath := strings.TrimSuffix(recordPath, filepath.Ext(recordPath)) + ".jsonl"
 	terminal := readSessionDurationSidecarTerminal(t, sidecarPath)
@@ -276,6 +237,63 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 	if len(manifest.Artifacts) != len(wantArtifacts) {
 		t.Fatalf("prompt-only manifest artifact count = %d, want %d", len(manifest.Artifacts), len(wantArtifacts))
 	}
+	assertPromptOnlyManifestArtifacts(t, recordDir, manifest, wantArtifacts)
+
+	logBytes, err := os.ReadFile(filepath.Join(recordDir, "session-log.jsonl"))
+	if err != nil {
+		t.Fatalf("read prompt-only session log: %v", err)
+	}
+	if !strings.Contains(string(logBytes), responseText) || !strings.Contains(string(logBytes), "prompt-only request") {
+		t.Fatalf("prompt-only session log = %q, want input and response text", logBytes)
+	}
+}
+
+// assertRawCaptureWithoutFabricatedTerminal requires the raw provider capture
+// to keep the observed delta and never invent a provider terminal.
+func assertRawCaptureWithoutFabricatedTerminal(t *testing.T, recordPath string) {
+	t.Helper()
+	capture, err := gwtesting.LoadSessionCapture(recordPath)
+	if err != nil {
+		t.Fatalf("load raw provider capture: %v", err)
+	}
+	if !captureHasWireRecord(capture, gwtesting.DirectionServerToClient, rtEventOutputTextDelta) {
+		t.Fatalf("raw capture omitted the observed response delta: %+v", capture.Records)
+	}
+	for _, record := range capture.Records {
+		if record.Direction == gwtesting.DirectionServerToClient && (record.Type == rtEventResponseDone || record.Type == rtEventSessionClosed) {
+			t.Fatalf("raw capture fabricated provider terminal %q: %+v", record.Type, record)
+		}
+	}
+}
+
+// assertRecordDirArtifactHashes requires every listed artifact to be unique,
+// readable, and hash-consistent with the manifest.
+func assertRecordDirArtifactHashes(t *testing.T, recordDir string, manifest transcript.RecordingManifest) {
+	t.Helper()
+	if len(manifest.Artifacts) == 0 {
+		t.Fatal("record-dir manifest has no artifacts")
+	}
+	seenArtifacts := make(map[string]struct{}, len(manifest.Artifacts))
+	for _, artifact := range manifest.Artifacts {
+		if _, duplicate := seenArtifacts[artifact.Path]; duplicate {
+			t.Fatalf("record-dir manifest repeats artifact %q", artifact.Path)
+		}
+		seenArtifacts[artifact.Path] = struct{}{}
+		data, err := os.ReadFile(filepath.Join(recordDir, filepath.FromSlash(artifact.Path)))
+		if err != nil {
+			t.Fatalf("read record-dir artifact %q: %v", artifact.Path, err)
+		}
+		digest := sha256.Sum256(data)
+		if got := hex.EncodeToString(digest[:]); got != artifact.SHA256 {
+			t.Fatalf("record-dir artifact hash for %q = %s, want %s", artifact.Path, got, artifact.SHA256)
+		}
+	}
+}
+
+// assertPromptOnlyManifestArtifacts requires the manifest to list exactly the
+// expected prompt-only artifacts with matching hashes and no input audio.
+func assertPromptOnlyManifestArtifacts(t *testing.T, recordDir string, manifest transcript.RecordingManifest, wantArtifacts []string) {
+	t.Helper()
 	wantArtifactSet := make(map[string]struct{}, len(wantArtifacts))
 	for _, path := range wantArtifacts {
 		wantArtifactSet[path] = struct{}{}
@@ -306,14 +324,6 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 			t.Fatalf("prompt-only manifest omits artifact %q", path)
 		}
 	}
-
-	logBytes, err := os.ReadFile(filepath.Join(recordDir, "session-log.jsonl"))
-	if err != nil {
-		t.Fatalf("read prompt-only session log: %v", err)
-	}
-	if !strings.Contains(string(logBytes), responseText) || !strings.Contains(string(logBytes), "prompt-only request") {
-		t.Fatalf("prompt-only session log = %q, want input and response text", logBytes)
-	}
 }
 
 type maxDurationWebSocketFixture struct {
@@ -334,7 +344,7 @@ func (f *maxDurationWebSocketFixture) handle(writer http.ResponseWriter, request
 	if err != nil {
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 
 	sessionCreated := false
 	responseStarted := false
@@ -350,27 +360,27 @@ func (f *maxDurationWebSocketFixture) handle(writer http.ResponseWriter, request
 			return
 		}
 		switch event.Type {
-		case "session.update":
+		case rtEventSessionUpdate:
 			if sessionCreated {
 				continue
 			}
 			if err := connection.WriteJSON(map[string]any{
-				"type":    "session.created",
+				"type":    rtEventSessionCreated,
 				"session": map[string]string{"id": "sess_max_duration", "model": "gpt-realtime"},
 			}); err != nil {
 				return
 			}
 			sessionCreated = true
-		case "response.create":
+		case rtEventResponseCreate:
 			if responseStarted {
 				continue
 			}
 			responseStarted = true
-			if err := connection.WriteJSON(map[string]string{"type": "response.created"}); err != nil {
+			if err := connection.WriteJSON(map[string]string{"type": rtEventResponseCreated}); err != nil {
 				return
 			}
 			if err := connection.WriteJSON(map[string]string{
-				"type":  "response.output_text.delta",
+				"type":  rtEventOutputTextDelta,
 				"delta": "partial response",
 			}); err != nil {
 				return
@@ -453,7 +463,7 @@ func readSessionDurationSidecarTerminal(t *testing.T, path string) durationSidec
 	if err != nil {
 		t.Fatalf("open duration sidecar %q: %v", path, err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 
 	terminal := durationSidecarTerminal{fields: make(map[string]string)}
 	scanner := bufio.NewScanner(file)

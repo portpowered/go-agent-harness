@@ -243,7 +243,7 @@ func serveDetachFixture() (err error) {
 		}
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = writer.Write(html)
+		writeFixtureBody(writer, html)
 	})
 	server := &http.Server{Handler: mux}
 	serverErrors := make(chan error, 1)

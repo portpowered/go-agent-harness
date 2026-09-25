@@ -6,6 +6,7 @@ import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -40,7 +41,7 @@ func NewMicrophoneSource() (*MicrophoneSource, error) {
 		malgoCtx: malgoCtx,
 		// Buffer up to 64 frames (~1.9 s) before dropping.
 		frameCh: make(chan []int16, 64),
-		stats:   audio.CaptureQueueStats{DropPolicy: "drop_oldest"},
+		stats:   audio.CaptureQueueStats{DropPolicy: captureDropOldest},
 	}
 
 	cfg := malgo.DefaultDeviceConfig(malgo.Capture)
@@ -55,17 +56,17 @@ func NewMicrophoneSource() (*MicrophoneSource, error) {
 		},
 	})
 	if err != nil {
-		_ = malgoCtx.Uninit()
+		uninitErr := malgoCtx.Uninit()
 		malgoCtx.Free()
-		return nil, fmt.Errorf("init capture device: %w", err)
+		return nil, withCleanupError(fmt.Errorf("init capture device: %w", err), uninitErr)
 	}
 	m.device = device
 
 	if err := device.Start(); err != nil {
 		device.Uninit()
-		_ = malgoCtx.Uninit()
+		uninitErr := malgoCtx.Uninit()
 		malgoCtx.Free()
-		return nil, fmt.Errorf("start microphone: %w", err)
+		return nil, withCleanupError(fmt.Errorf("start microphone: %w", err), uninitErr)
 	}
 	return m, nil
 }
@@ -159,10 +160,10 @@ func (m *MicrophoneSource) Close() error {
 
 	// Stop() is synchronous: waits for any in-flight callback to complete,
 	// so it is safe to close the channel immediately after.
-	_ = m.device.Stop()
+	stopErr := m.device.Stop()
 	m.device.Uninit()
 	close(m.frameCh)
-	_ = m.malgoCtx.Uninit()
+	uninitErr := m.malgoCtx.Uninit()
 	m.malgoCtx.Free()
-	return nil
+	return errors.Join(stopErr, uninitErr)
 }

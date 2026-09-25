@@ -228,7 +228,10 @@ func fallbackRealtimeImageResult(part messages.ImagePart) string {
 		SHA256:          hex.EncodeToString(digest[:]),
 		TypedProjection: realtimeImageTypedProjection,
 	}
-	encoded, _ := json.Marshal(result)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return ""
+	}
 	return string(encoded)
 }
 

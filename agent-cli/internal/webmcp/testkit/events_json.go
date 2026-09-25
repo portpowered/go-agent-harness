@@ -145,3 +145,10 @@ func validateScriptID(value string) error {
 	}
 	return nil
 }
+
+// jsonObjectFields decodes raw as a JSON object and reports false for every
+// other JSON shape, so callers can leave non-object payloads untouched.
+func jsonObjectFields(raw []byte) (map[string]json.RawMessage, bool) {
+	fields, err := decodeJSONObject(raw)
+	return fields, err == nil
+}

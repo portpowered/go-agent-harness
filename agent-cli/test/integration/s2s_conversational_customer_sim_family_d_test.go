@@ -108,23 +108,37 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 		t.Fatalf("Family D %q filesystem checkpoint: %v", method, err)
 	}
 	process := probe.ProcessFactsFromDuplexResult(result)
-	responseStatus := "completed"
-	terminationStatus := "completed"
-	confirmed := true
-	disposition := probe.DispositionCompleted
-	satisfactionDeclared := true
-	// Provider fixture timestamps and runner timestamps have different clock
-	// origins. Use the runner's observed output interval for termination
-	// evidence so SIGINT can be checked against the same clock as SignalAt.
-	activeResponseStartedAt := result.Output[0].At
-	activeResponseEndedAt := result.Duration
-	satisfactionAt := activeResponseEndedAt
 	if observation.OutputEndedAt <= observation.OutputStartedAt {
 		// SIGINT leaves the provider response open; retain a positive fixture
 		// interval on the fixture's own clock (result.Duration starts later, at
 		// process start, and could precede the fixture's output start).
 		observation.OutputEndedAt = time.Since(startedAt)
 	}
+	termination, actionResult := familyDTerminationEvidence(t, method, result, process, checkpoint)
+	mechanical, err := probe.EvaluateCustomerSimulationTermination(scenario, []probe.ActionResult{actionResult}, []probe.FilesystemCheckpoint{checkpoint}, nil, observation.ProductTranscript, termination)
+	if err != nil {
+		t.Fatalf("Family D %q mechanical evaluation: %v; result=%+v observation=%+v termination=%+v", method, err, result, observation, termination)
+	}
+	return familyDProcessRun{
+		scenario: scenario, sandbox: sandbox, recordDir: recordDir, result: result, checkpoint: checkpoint,
+		observation: observation, process: process, termination: termination, mechanical: mechanical,
+	}
+}
+
+// familyDTerminationEvidence derives the termination evidence and the single
+// action result for one Family D run. Provider fixture timestamps and runner
+// timestamps have different clock origins, so the runner's observed output
+// interval is used and SIGINT is checked against the same clock as SignalAt.
+func familyDTerminationEvidence(t *testing.T, method probe.TerminationMethod, result probe.DuplexRunResult, process probe.ProcessFacts, checkpoint probe.FilesystemCheckpoint) (probe.TerminationEvidence, probe.ActionResult) {
+	t.Helper()
+	responseStatus := rtStatusCompleted
+	terminationStatus := rtStatusCompleted
+	confirmed := true
+	disposition := probe.DispositionCompleted
+	satisfactionDeclared := true
+	activeResponseStartedAt := result.Output[0].At
+	activeResponseEndedAt := result.Duration
+	satisfactionAt := activeResponseEndedAt
 	if method == probe.TerminationSIGINT {
 		responseStatus = "interrupted"
 		terminationStatus = "interrupted"
@@ -161,14 +175,7 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 	} else {
 		actionResult.OutcomeReason = "SIGINT interrupted the active response before natural satisfaction; no side effect was left behind"
 	}
-	mechanical, err := probe.EvaluateCustomerSimulationTermination(scenario, []probe.ActionResult{actionResult}, []probe.FilesystemCheckpoint{checkpoint}, nil, observation.ProductTranscript, termination)
-	if err != nil {
-		t.Fatalf("Family D %q mechanical evaluation: %v; result=%+v observation=%+v termination=%+v", method, err, result, observation, termination)
-	}
-	return familyDProcessRun{
-		scenario: scenario, sandbox: sandbox, recordDir: recordDir, result: result, checkpoint: checkpoint,
-		observation: observation, process: process, termination: termination, mechanical: mechanical,
-	}
+	return termination, actionResult
 }
 
 // familyDSegments scripts the customer's PCM. For SIGINT, stdin stays open
@@ -215,6 +222,21 @@ func assertFamilyDProcessRun(t *testing.T, run familyDProcessRun) {
 	if !bytes.Contains(run.result.Stdout, []byte{0xd1, 0x44, 0x44, 0x50}) {
 		t.Fatalf("Family D stdout = %x, want provider response audio marker", run.result.Stdout)
 	}
+	assertFamilyDTerminationFacts(t, run)
+	if !run.mechanical.Pass || len(run.mechanical.Findings) != 0 {
+		t.Fatalf("Family D mechanical verdict = %+v, want pass without findings", run.mechanical)
+	}
+	entries, err := os.ReadDir(run.recordDir)
+	if err != nil {
+		t.Fatalf("read Family D record directory: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("Family D product record directory is empty")
+	}
+}
+
+func assertFamilyDTerminationFacts(t *testing.T, run familyDProcessRun) {
+	t.Helper()
 	if run.scenario.Termination == probe.TerminationSIGINT {
 		if run.result.ExitClassification != "sigint" || !run.process.SignalSent || run.process.Signal != probe.DuplexSIGINTName || run.process.SignalAt <= run.process.StartedAt {
 			t.Fatalf("SIGINT result/process = %+v / %+v, want sent signal and sigint classification", run.result, run.process)
@@ -232,16 +254,6 @@ func assertFamilyDProcessRun(t *testing.T, run familyDProcessRun) {
 		if run.observation.ResponseTerminals != 1 || run.observation.SessionClosed != 1 {
 			t.Fatalf("natural provider terminals = responses:%d sessions:%d, want one response and session close", run.observation.ResponseTerminals, run.observation.SessionClosed)
 		}
-	}
-	if !run.mechanical.Pass || len(run.mechanical.Findings) != 0 {
-		t.Fatalf("Family D mechanical verdict = %+v, want pass without findings", run.mechanical)
-	}
-	entries, err := os.ReadDir(run.recordDir)
-	if err != nil {
-		t.Fatalf("read Family D record directory: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Fatal("Family D product record directory is empty")
 	}
 }
 
@@ -381,7 +393,7 @@ func (f *familyDProviderFixture) Snapshot() familyDProviderObservation {
 }
 
 func (f *familyDProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -391,7 +403,7 @@ func (f *familyDProviderFixture) handle(writer http.ResponseWriter, request *htt
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -410,43 +422,28 @@ func (f *familyDProviderFixture) handle(writer http.ResponseWriter, request *htt
 			return
 		}
 		switch event.Type {
-		case "session.update":
+		case rtEventSessionUpdate:
 			f.mu.Lock()
 			f.sessionUpdates++
 			f.mu.Unlock()
 			if err := f.sendSessionReady(connection); err != nil {
 				return
 			}
-		case "input_audio_buffer.append":
-			audio, decodeErr := base64.StdEncoding.DecodeString(event.Audio)
-			if decodeErr != nil {
-				f.failProtocol("decode input audio: " + decodeErr.Error())
+		case rtEventInputAudioAppend:
+			if !f.handleInputAudio(connection, event.Audio) {
 				return
 			}
-			if familyDSilent(audio) {
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {
-					return
-				}
-				if err := f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}); err != nil {
-					return
-				}
-				continue
-			}
-			if err := f.handleCustomerUtterance(connection); err != nil {
-				f.failProtocol(err.Error())
-				return
-			}
-		case "input_audio_buffer.commit":
+		case rtEventInputAudioCommit:
 			// The finite source's explicit end-of-turn is the natural completion
 			// trigger. SIGINT runs close before this event reaches the fixture.
-		case "response.create":
+		case rtEventResponseCreate:
 			if f.method == probe.TerminationNatural {
 				if err := f.finishNatural(connection); err != nil {
 					f.failProtocol(err.Error())
 					return
 				}
 			}
-		case "response.cancel":
+		case rtEventResponseCancel:
 			// A SIGINT run may emit a provider cancellation before the websocket
 			// closes. Do not fabricate response.done for the interrupted response.
 		default:
@@ -465,20 +462,20 @@ func (f *familyDProviderFixture) handleCustomerUtterance(connection *websocket.C
 	f.customerTranscript = append(f.customerTranscript, probe.TranscriptEvent{ID: "customer-turn-1", TurnID: probe.FamilyDActiveTurnID, Speaker: probe.TranscriptCustomer, Text: probe.FamilyDSpokenScript()[0].Text, At: startedAt, Final: true})
 	f.outputStartedAt = startedAt
 	f.mu.Unlock()
-	if err := f.send(connection, map[string]any{"type": "response.created", "response": map[string]string{"id": probe.FamilyDActiveResponseID}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": probe.FamilyDActiveResponseID}}); err != nil {
 		return err
 	}
 	text := probe.FamilyDResponseText
 	f.mu.Lock()
 	f.productTranscript = append(f.productTranscript, probe.TranscriptEvent{ID: "product-turn-1", TurnID: probe.FamilyDActiveTurnID, Speaker: probe.TranscriptProduct, Text: text, At: f.outputStartedAt, Final: true})
 	f.mu.Unlock()
-	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.delta", "delta": text}); err != nil {
+	if err := f.send(connection, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "delta": text}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "transcript": text}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]any{"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString([]byte{0xd1, 0x44, 0x44, 0x50}), "format": "pcm16"}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventOutputAudioDelta, "delta": base64.StdEncoding.EncodeToString([]byte{0xd1, 0x44, 0x44, 0x50}), "format": "pcm16"}); err != nil {
 		return err
 	}
 	if f.method == probe.TerminationNatural {
@@ -493,7 +490,7 @@ func (f *familyDProviderFixture) handleCustomerUtterance(connection *websocket.C
 		if err := f.send(connection, map[string]string{"type": "response.output_audio.done"}); err != nil {
 			return err
 		}
-		if err := f.send(connection, map[string]any{"type": "response.done", "response": map[string]string{"id": probe.FamilyDActiveResponseID, "status": "completed"}}); err != nil {
+		if err := f.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": probe.FamilyDActiveResponseID, "status": rtStatusCompleted}}); err != nil {
 			return err
 		}
 	}
@@ -507,11 +504,11 @@ func (f *familyDProviderFixture) finishNatural(connection *websocket.Conn) error
 	f.mu.Lock()
 	f.sessionClosed++
 	f.mu.Unlock()
-	return f.send(connection, map[string]string{"type": "session.closed", "reason": "family_d_natural_satisfaction"})
+	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_d_natural_satisfaction"})
 }
 
 func (f *familyDProviderFixture) sendSessionReady(connection *websocket.Conn) error {
-	if err := f.send(connection, map[string]any{"type": "session.created", "session": map[string]string{"id": "family-d", "model": "gpt-realtime"}}); err != nil {
+	if err := f.send(connection, map[string]any{"type": rtEventSessionCreated, "session": map[string]string{"id": "family-d", "model": "gpt-realtime"}}); err != nil {
 		return err
 	}
 	return f.send(connection, map[string]any{"type": "session.updated", "session": map[string]string{"id": "family-d"}})
@@ -544,11 +541,22 @@ func familyDFrame(seed byte) []byte {
 	return frame
 }
 
-func familyDSilent(audio []byte) bool {
-	for _, value := range audio {
-		if value != 0 {
-			return false
-		}
+// handleInputAudio answers one appended frame and reports whether the
+// session should keep reading. Silent frames get the server-VAD boundary
+// events; a write failure there means the child already hung up.
+func (f *familyDProviderFixture) handleInputAudio(connection *websocket.Conn, encoded string) bool {
+	audio, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		f.failProtocol("decode input audio: " + err.Error())
+		return false
+	}
+	if customerSimulationSilent(audio) {
+		return f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}) == nil &&
+			f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}) == nil
+	}
+	if err := f.handleCustomerUtterance(connection); err != nil {
+		f.failProtocol(err.Error())
+		return false
 	}
 	return true
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 func grokToolDefinitions(tools []messages.ToolDefinition) []map[string]any {
@@ -48,4 +49,21 @@ func grokToolParameters(tool messages.ToolDefinition) map[string]any {
 		parameters["additionalProperties"] = false
 	}
 	return parameters
+}
+
+// encodeTypedSessionEvent encodes an outbound payload as a SessionEvent of the
+// given wire type. A payload that cannot be encoded is not transmittable.
+func encodeTypedSessionEvent(eventType models.SessionEventType, payload any) (models.SessionEvent, bool) {
+	return encodeSessionEvent(func(data json.RawMessage) models.SessionEvent {
+		return models.SessionEvent{Type: eventType, Data: data}
+	}, payload)
+}
+
+// encodeSessionEvent encodes an outbound payload and wraps it with build.
+func encodeSessionEvent(build func(json.RawMessage) models.SessionEvent, payload any) (models.SessionEvent, bool) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return models.SessionEvent{}, false
+	}
+	return build(data), true
 }

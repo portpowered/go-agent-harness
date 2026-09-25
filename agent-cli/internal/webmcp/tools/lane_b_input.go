@@ -29,11 +29,11 @@ func laneBDecodeArguments(raw []byte, spec laneBToolSpec) (map[string]any, []Too
 	if len(issues) > 0 && object == nil {
 		return nil, issues
 	}
-	properties, _ := spec.definition.Parameters["properties"].(map[string]any)
+	properties := optionalAs[map[string]any](spec.definition.Parameters["properties"])
 	propertyNames := schemaOrder(spec.definition.Name)
 	allowed := make(map[string]map[string]any, len(properties))
 	for name, value := range properties {
-		property, _ := value.(map[string]any)
+		property := optionalAs[map[string]any](value)
 		allowed[name] = property
 	}
 	unknown := make([]string, 0)
@@ -65,7 +65,7 @@ func laneBDecodeArguments(raw []byte, spec laneBToolSpec) (map[string]any, []Too
 			issues = append(issues, ToolResultIssue{Path: laneBPointerPath(name), Code: "invalid_type"})
 			continue
 		}
-		valueType, _ := property["type"].(string)
+		valueType := optionalAs[string](property["type"])
 		switch valueType {
 		case schemaTypeString:
 			var value string
@@ -137,7 +137,7 @@ func laneBDecodeJSONObject(raw []byte) (map[string]json.RawMessage, []ToolResult
 }
 
 func requiredPropertyName(schema map[string]any, name string) bool {
-	required, _ := schema["required"].([]string)
+	required := optionalAs[[]string](schema["required"])
 	for _, value := range required {
 		if value == name {
 			return true

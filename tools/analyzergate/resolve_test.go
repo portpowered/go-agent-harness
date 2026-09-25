@@ -263,13 +263,13 @@ func writeFakeInstaller(t *testing.T, root, binaryName, source string, installEr
 		script.WriteString(shellQuote(source))
 		script.WriteString(" \"$GOBIN/")
 		script.WriteString(binaryName)
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == windowsGOOS {
 			script.WriteString(".exe")
 		}
 		script.WriteString("\"\n")
 		script.WriteString("chmod +x \"$GOBIN/")
 		script.WriteString(binaryName)
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == windowsGOOS {
 			script.WriteString(".exe")
 		}
 		script.WriteString("\"\n")

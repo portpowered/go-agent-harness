@@ -2,6 +2,7 @@ package webmcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -105,7 +106,7 @@ func TestResultErrorForAddsSafeAmbiguityRecoveryAndChoices(t *testing.T) {
 		}
 	}
 	recovery, ok := result.Details["recovery"].(map[string]any)
-	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" || !strings.Contains(recovery["instruction"].(string), "do not repeat") {
+	if !ok || recovery["action"] != "ask_customer" || recovery["retry_after"] != "customer_input" || !strings.Contains(fmt.Sprint(recovery["instruction"]), "do not repeat") {
 		t.Fatalf("recovery = %#v", result.Details["recovery"])
 	}
 }

@@ -188,27 +188,43 @@ func imageMediaType(path string) string {
 // have a trailing "/" in their label. Paths are relative to workDir.
 func scanFileSuggestions(workDir string) []Suggestion {
 	var suggestions []Suggestion
-	_ = filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip unreadable entries
+	visit := func(path string, d os.DirEntry, entryErr error) error {
+		label, skipDir := fileSuggestionLabel(workDir, path, d, entryErr)
+		if skipDir {
+			return filepath.SkipDir
 		}
-		rel, relErr := filepath.Rel(workDir, path)
-		if relErr != nil || rel == "." {
-			return nil
+		if label != "" {
+			suggestions = append(suggestions, Suggestion{Label: label})
 		}
-		// Use forward slashes for consistent display.
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			if excludedDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-			suggestions = append(suggestions, Suggestion{Label: rel + "/"})
-			return nil
-		}
-		suggestions = append(suggestions, Suggestion{Label: rel})
 		return nil
-	})
+	}
+	if err := filepath.WalkDir(workDir, visit); err != nil {
+		// visit never returns a walk error; keep whatever was gathered.
+		return suggestions
+	}
 	return suggestions
+}
+
+// fileSuggestionLabel returns the display label for one walked entry, or an
+// empty label for an entry that is skipped (unreadable entries and the root).
+// Directories carry a trailing "/"; excluded directories are pruned.
+func fileSuggestionLabel(workDir, path string, d os.DirEntry, entryErr error) (label string, skipDir bool) {
+	if entryErr != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(workDir, path)
+	if err != nil || rel == "." {
+		return "", false
+	}
+	// Use forward slashes for consistent display.
+	rel = filepath.ToSlash(rel)
+	if !d.IsDir() {
+		return rel, false
+	}
+	if excludedDirs[d.Name()] {
+		return "", true
+	}
+	return rel + "/", false
 }
 
 // extractAtPrefix returns the prefix typed after the last @ token in the input,

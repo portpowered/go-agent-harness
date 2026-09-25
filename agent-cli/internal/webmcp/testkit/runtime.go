@@ -357,17 +357,17 @@ func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.Brow
 	controlDisconnected := control.disconnected
 	control.mu.Unlock()
 	if controlDisconnected {
-		_ = handle.Close()
+		discardCleanupError(handle.Close)
 		return nil, disconnectedError(candidate.ID, "", "open", "browser_disconnected")
 	}
 	if openBlocked {
 		select {
 		case <-ctx.Done():
-			_ = handle.Close()
+			discardCleanupError(handle.Close)
 			return nil, ctx.Err()
 		case <-openChanges:
 		case <-r.closeDone:
-			_ = handle.Close()
+			discardCleanupError(handle.Close)
 			return nil, webmcp.ErrClosed
 		}
 	}
@@ -375,7 +375,7 @@ func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.Brow
 	controlDisconnected = control.disconnected
 	control.mu.Unlock()
 	if controlDisconnected {
-		_ = handle.Close()
+		discardCleanupError(handle.Close)
 		return nil, disconnectedError(candidate.ID, "", "open", "browser_disconnected")
 	}
 	return handle, nil

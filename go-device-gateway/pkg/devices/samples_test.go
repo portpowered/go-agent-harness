@@ -1,3 +1,5 @@
+//go:build windows || (cgo && !nomicrophone && (linux || darwin))
+
 package devices
 
 import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -10,14 +12,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
-
-func int16Samples(start, count int) []int16 {
-	samples := make([]int16, count)
-	for index := range samples {
-		samples[index] = int16(start + index)
-	}
-	return samples
-}
 
 type pacedPlaybackBackendForTest interface {
 	WaitForPlaybackCapacity(context.Context, int) error

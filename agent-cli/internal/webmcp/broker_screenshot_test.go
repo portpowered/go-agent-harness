@@ -32,9 +32,9 @@ func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.
 			),
 		),
 	)
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: secondaryTargetID}); err != nil {
 		t.Fatalf("select exact target: %v", err)
@@ -82,9 +82,9 @@ func TestStatefulBrokerCaptureClassifiesSelectionLifecycleFailures(t *testing.T)
 					testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: screenshotPNG(t, color.RGBA{B: 0xff, A: 0xff})}),
 				),
 			))
-			defer func() { _ = runtime.Close() }()
+			defer closeAtTestEnd(t, runtime)
 			broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
-			defer func() { _ = broker.Close() }()
+			defer closeAtTestEnd(t, broker)
 			if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 				t.Fatalf("select: %v", err)
 			}
@@ -116,13 +116,13 @@ func TestStatefulBrokerCaptureIsolatedAcrossConcurrentSelections(t *testing.T) {
 			testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{"type":"object","additionalProperties":false}`)),
 			testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: secondImage})),
 	))
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	newBroker := func() *webmcp.StatefulBroker {
 		return webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
 	}
 	firstBroker, secondBroker := newBroker(), newBroker()
-	defer func() { _ = firstBroker.Close() }()
-	defer func() { _ = secondBroker.Close() }()
+	defer closeAtTestEnd(t, firstBroker)
+	defer closeAtTestEnd(t, secondBroker)
 	if _, err := firstBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select tab-a: %v", err)
 	}

@@ -203,20 +203,27 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			if got.stderr != tt.wantStderr {
 				t.Fatalf("stderr = %q, want %q", got.stderr, tt.wantStderr)
 			}
-			if tt.wantErr == "" {
-				if got.err != nil {
-					t.Fatalf("ExecuteContext() error = %v", got.err)
-				}
-				return
-			}
-			if got.err == nil || !strings.Contains(got.err.Error(), tt.wantErr) {
-				t.Fatalf("error = %v, want substring %q", got.err, tt.wantErr)
-			}
-			var typed *chatFlagParseError
-			if !errors.As(got.err, &typed) {
-				t.Fatalf("error type = %T, want *chatFlagParseError", got.err)
-			}
+			assertChatFlagParseError(t, got.err, tt.wantErr)
 		})
+	}
+}
+
+// assertChatFlagParseError requires success when wantErr is empty, and
+// otherwise a typed flag parse error carrying wantErr.
+func assertChatFlagParseError(t *testing.T, err error, wantErr string) {
+	t.Helper()
+	if wantErr == "" {
+		if err != nil {
+			t.Fatalf("ExecuteContext() error = %v", err)
+		}
+		return
+	}
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("error = %v, want substring %q", err, wantErr)
+	}
+	var typed *chatFlagParseError
+	if !errors.As(err, &typed) {
+		t.Fatalf("error type = %T, want *chatFlagParseError", err)
 	}
 }
 

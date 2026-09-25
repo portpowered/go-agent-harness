@@ -149,6 +149,15 @@ func resolveAudioFormat(path string) (audioFormat, error) {
 	}
 }
 
+// withStreamCloseError joins a failed cleanup close into the primary error.
+// A successful close leaves the primary error unchanged.
+func withStreamCloseError(primary error, path string, format audioFormat, closeErr error) error {
+	if closeErr == nil {
+		return primary
+	}
+	return errors.Join(primary, newStreamError("close", path, format, closeErr))
+}
+
 func newStreamError(operation string, path string, format audioFormat, err error) error {
 	return &StreamError{Operation: operation, Path: path, Format: format.String(), Err: err}
 }
@@ -210,8 +219,7 @@ func NewFileSource(path string, stdin io.Reader) (*FileSource, error) {
 	if format == formatWAV {
 		wav, readErr := newFileWAVSource(path, file)
 		if readErr != nil {
-			_ = file.Close()
-			return nil, newStreamError("read", path, format, readErr)
+			return nil, withStreamCloseError(newStreamError("read", path, format, readErr), path, format, file.Close())
 		}
 		if wav.SampleRate() != SampleRate {
 			formatErr := fileWAVSampleRateError(path, format, wav.SampleRate())

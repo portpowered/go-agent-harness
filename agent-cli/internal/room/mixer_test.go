@@ -131,7 +131,7 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mixer: %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() { releaseTestResource(mixer) })
 	for _, id := range []string{"alpha", "beta"} {
 		if err := mixer.AddInput(id); err != nil {
 			t.Fatalf("add %s: %v", id, err)
@@ -186,7 +186,7 @@ func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new manual mixer: %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() { releaseTestResource(mixer) })
 	for _, id := range []string{"alpha", "beta"} {
 		if err := mixer.AddInput(id); err != nil {
 			t.Fatalf("add %s: %v", id, err)
@@ -236,7 +236,7 @@ func TestPCM16MixerReadFrameWithSourcesTracksContributors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mixer: %v", err)
 	}
-	t.Cleanup(func() { _ = mixer.Close() })
+	t.Cleanup(func() { releaseTestResource(mixer) })
 	for _, id := range []string{"beta", "alpha"} {
 		if err := mixer.AddInput(id); err != nil {
 			t.Fatalf("add input %s: %v", id, err)
@@ -292,7 +292,7 @@ func TestPCM16MixerCancellationStopsDeterministicCadence(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		cancel()
-		_ = mixer.Close()
+		releaseTestResource(mixer)
 	})
 
 	select {

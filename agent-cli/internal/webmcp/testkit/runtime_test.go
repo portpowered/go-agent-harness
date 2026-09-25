@@ -309,7 +309,7 @@ func TestScriptedSessionCloseOrphansBlockedWorkAndWakesWaiters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("attach target: %v", err)
 	}
-	session := sessionValue.(*ScriptedTargetSession)
+	session := mustType[*ScriptedTargetSession](t, sessionValue)
 	session.BlockInvocations()
 	if _, err := session.InvokeWebMCP(context.Background(), "frame-1", "write_state", []byte(`{}`)); err != nil {
 		t.Fatalf("invoke blocked work: %v", err)

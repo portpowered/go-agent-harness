@@ -67,9 +67,9 @@ func v3cOutcomeKindsPass(t *testing.T, result map[string]any, kinds ...string) {
 		want[kind] = true
 	}
 	seen := map[string]bool{}
-	for _, raw := range result["expectations"].([]any) {
-		outcome := raw.(map[string]any)
-		kind := outcome["kind"].(string)
+	for _, raw := range mustAs[[]any](t, result["expectations"]) {
+		outcome := mustAs[map[string]any](t, raw)
+		kind := mustAs[string](t, outcome["kind"])
 		if want[kind] && outcome["passed"] != true {
 			t.Fatalf("expectation %s must pass: %v", kind, outcome)
 		}
@@ -84,8 +84,8 @@ func v3cOutcomeKindsPass(t *testing.T, result map[string]any, kinds ...string) {
 
 func v3cOutcomeKindFailsWithDetail(t *testing.T, result map[string]any, kind, detail string) {
 	t.Helper()
-	for _, raw := range result["expectations"].([]any) {
-		outcome := raw.(map[string]any)
+	for _, raw := range mustAs[[]any](t, result["expectations"]) {
+		outcome := mustAs[map[string]any](t, raw)
 		if outcome["kind"] != kind || outcome["passed"] != false {
 			continue
 		}
@@ -235,7 +235,7 @@ func v3cRecordIndexes(records []map[string]any, eventType string) []int {
 func TestS2SV3CMutatingFixtureToDuplicateDeliveredMessageFails(t *testing.T) {
 	source := filepath.Join(v3cFixtureDir, "s2s-v3c-barge-in-repeated.session.json")
 	fixture := writeMutatedV3CFixture(t, source, func(records []map[string]any) []map[string]any {
-		done := v3cRecordIndexes(records, "response.done")
+		done := v3cRecordIndexes(records, rtEventResponseDone)
 		last := done[len(done)-1]
 		block := []map[string]any{
 			deepCopyV3CRecord(records[last-2]), // response.created
@@ -270,7 +270,7 @@ func deepCopyV3CRecord(record map[string]any) map[string]any {
 func TestS2SV3CMutatingFixtureToDropCommittedMessageFails(t *testing.T) {
 	source := filepath.Join(v3cFixtureDir, "s2s-v3c-barge-in-repeated.session.json")
 	fixture := writeMutatedV3CFixture(t, source, func(records []map[string]any) []map[string]any {
-		commits := v3cRecordIndexes(records, "input_audio_buffer.commit")
+		commits := v3cRecordIndexes(records, rtEventInputAudioCommit)
 		drop := commits[len(commits)-1]
 		return append(append([]map[string]any{}, records[:drop]...), records[drop+1:]...)
 	})
@@ -287,7 +287,7 @@ func TestS2SV3CMutatingFixtureToDropCommittedMessageFails(t *testing.T) {
 func TestS2SV3CMutatingFixtureToDoubleCancelResponseFails(t *testing.T) {
 	source := filepath.Join(v3cFixtureDir, "s2s-v3c-barge-in-repeated.session.json")
 	fixture := writeMutatedV3CFixture(t, source, func(records []map[string]any) []map[string]any {
-		cancels := v3cRecordIndexes(records, "response.cancel")
+		cancels := v3cRecordIndexes(records, rtEventResponseCancel)
 		target := cancels[0]
 		doubled := append(append([]map[string]any{}, records[:target+1]...), deepCopyV3CRecord(records[target]))
 		return append(doubled, records[target+1:]...)

@@ -71,7 +71,7 @@ func (c *ProbeFleetCommand) Generate() *cobra.Command {
 	cmd.Flags().StringVar(&c.Model, "model", "", "Live session model ID (config is used when omitted)")
 	cmd.Flags().StringVar(&c.APIKey, "api-key", "", "Live session provider API key (config is used when omitted)")
 	cmd.Flags().StringVar(&c.BaseURL, "base-url", "", "Live session provider base URL override")
-	_ = cmd.MarkFlagRequired("manifest")
+	requireFlags(cmd, "manifest")
 	return cmd
 }
 
@@ -160,11 +160,17 @@ func (c *ProbeFleetCommand) runLiveSession(ctx context.Context, out io.Writer, r
 	return c.sessionService.Run(ctx, out, request)
 }
 
+// Fleet and probe result status words shared by the line and JSON renderers.
+const (
+	probeStatusPass = "pass"
+	probeStatusFail = "fail"
+)
+
 func writeFleetLines(out io.Writer, results []fleet.EntryResult) error {
 	for _, result := range results {
-		status := "pass"
+		status := probeStatusPass
 		if !result.Pass {
-			status = "fail"
+			status = probeStatusFail
 		}
 		if _, err := fmt.Fprintf(out, "fleet: %s scenario=%s transport=%s repeat=%d id=%s", status, result.ScenarioID, result.Transport, result.RepeatIndex, result.ID); err != nil {
 			return fmt.Errorf("write fleet entry %q: %w", result.ID, err)

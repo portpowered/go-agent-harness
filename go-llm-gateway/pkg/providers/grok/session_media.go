@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -71,7 +72,9 @@ func (s *grokSession) releaseUnclaimedRTCMedia() {
 	s.media = nil
 	s.mediaContinuous = false
 	s.mediaMu.Unlock()
-	_ = media.Close()
+	if err := media.Close(); err != nil {
+		s.logger.Warn("grok: release unclaimed RTC media", logging.Field{Key: "error", Value: err})
+	}
 }
 
 func (s *grokSession) currentRTCMedia() *sharedaudio.SessionMedia {
@@ -124,6 +127,14 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 		media.FailInbound(err)
 	}
 	return err
+}
+
+// publishRTCMediaWithLog forwards provider audio to the RTC media path. The
+// media path records its own failure; the read loop keeps translating events.
+func (s *grokSession) publishRTCMediaWithLog(event models.SessionEvent) {
+	if err := s.publishRTCMedia(event); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
+		s.logger.Warn("grok: RTC media event failed", logging.Field{Key: "error", Value: err})
+	}
 }
 
 func decodeGrokAudioDelta(data []byte) ([]byte, error) {

@@ -91,7 +91,7 @@ func loadTest6OpenAIBargeInAudio(t *testing.T) [][]byte {
 	if err != nil {
 		t.Fatalf("open test6 OpenAI audio fixture: %v", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer closeForTest(t, file.Close)
 
 	wantBytes := []int{7200, 2400}
 	wantSHA := []string{

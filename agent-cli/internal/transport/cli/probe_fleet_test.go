@@ -215,7 +215,7 @@ func TestProbeFleetJSONReconcilesEveryManifestEntry(t *testing.T) {
 	if result.Passed != wantTotal-1 || result.Failed != 1 || result.Passed+result.Failed != result.Total {
 		t.Fatalf("counts = passed %d failed %d total %d, want %d/%d/%d", result.Passed, result.Failed, result.Total, wantTotal-1, 1, wantTotal)
 	}
-	if result.Status != "fail" {
+	if result.Status != probeStatusFail {
 		t.Fatalf("status = %q, want fail", result.Status)
 	}
 	if len(result.Entries) != manifest.EntryCount() {

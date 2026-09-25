@@ -346,7 +346,7 @@ func (s *exactStagedImageSession) emitToolCall() {
 	path := s.advertisedPath
 	s.toolCallPath = path
 	s.mu.Unlock()
-	arguments, _ := json.Marshal(map[string]string{"path": path})
+	arguments := mustMarshalFixture(map[string]string{"path": path})
 	callID := "exact-staged-image-call"
 	if err := s.capture.server(fmt.Sprintf(`{"type":"response.output_item.added","item":{"type":"function_call","call_id":%q,"name":%q}}`, callID, runtimeTools.ReadImageToolID)); err != nil {
 		s.recordFailure(err)
@@ -465,3 +465,61 @@ var _ interface {
 	SupportsCompleteMessages() bool
 	SupportsCompleteMessagesWithoutResponse() bool
 } = (*exactStagedImageSession)(nil)
+
+type scheduledImagePart struct {
+	Type     string `json:"type"`
+	ImageURL string `json:"image_url"`
+	Text     string `json:"text"`
+}
+
+type scheduledImageItem struct {
+	Item struct {
+		Type    string               `json:"type"`
+		Role    string               `json:"role"`
+		Content []scheduledImagePart `json:"content"`
+	} `json:"item"`
+}
+
+// assertScheduledFirstTurnImageItem requires exactly one first-turn user
+// message carrying one context instruction and the PNG then JPEG images.
+func assertScheduledFirstTurnImageItem(t *testing.T, outbound []cliLiveOutbound) {
+	t.Helper()
+	var imageItems []scheduledImageItem
+	for _, event := range outbound {
+		if event.typeName != rtEventConversationItemCreate {
+			continue
+		}
+		var payload scheduledImageItem
+		if err := json.Unmarshal(event.payload, &payload); err != nil {
+			t.Fatalf("decode first-turn image item: %v", err)
+		}
+		imageItems = append(imageItems, payload)
+	}
+	if len(imageItems) != 1 {
+		t.Fatalf("decoded image items = %d, want one", len(imageItems))
+	}
+	item := imageItems[0].Item
+	if item.Type != rtItemMessage || item.Role != rtRoleUser {
+		t.Fatalf("first-turn image item = %#v, want one user message", item)
+	}
+	imageParts := make([]scheduledImagePart, 0, len(item.Content))
+	instructionCount := 0
+	for _, part := range item.Content {
+		if part.Type == "input_text" {
+			if strings.TrimSpace(part.Text) != "" {
+				instructionCount++
+			}
+			continue
+		}
+		imageParts = append(imageParts, part)
+	}
+	if instructionCount != 1 || len(imageParts) != 2 {
+		t.Fatalf("first-turn image content = %#v, want one context instruction and two image parts", item.Content)
+	}
+	for index, wantMIME := range []string{"data:image/png;", "data:image/jpeg;"} {
+		part := imageParts[index]
+		if part.Type != rtContentInputImage || !strings.HasPrefix(part.ImageURL, wantMIME) {
+			t.Fatalf("first-turn image part %d = %#v, want input_image with %q URL", index, part, wantMIME)
+		}
+	}
+}

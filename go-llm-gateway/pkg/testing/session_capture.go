@@ -366,7 +366,7 @@ func captureJSONType(raw json.RawMessage) string {
 	}
 	switch trimmed[0] {
 	case '{':
-		return "object"
+		return jsonObjectType
 	case '[':
 		return "array"
 	case '"':
@@ -374,7 +374,7 @@ func captureJSONType(raw json.RawMessage) string {
 	case 't', 'f':
 		return "boolean"
 	case 'n':
-		return "null"
+		return jsonNullLiteral
 	default:
 		return "number"
 	}
@@ -413,7 +413,7 @@ func validateSessionCapturePath(path string, data []byte) (SessionCapture, error
 		if !exists {
 			return SessionCapture{}, newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, "/"+field, 0, "", "present", "missing", ErrSessionCaptureStructure)
 		}
-		want := "object"
+		want := jsonObjectType
 		if field == "records" {
 			want = "array"
 		}
@@ -423,11 +423,11 @@ func validateSessionCapturePath(path string, data []byte) (SessionCapture, error
 	}
 
 	integrityRaw, ok := fields["integrity"]
-	if !ok || captureJSONType(integrityRaw) == "null" {
+	if !ok || captureJSONType(integrityRaw) == jsonNullLiteral {
 		return SessionCapture{}, newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", "object with algorithm, coverage, and digest", "missing", ErrSessionCaptureIntegrity)
 	}
-	if captureJSONType(integrityRaw) != "object" {
-		return SessionCapture{}, newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", "object", captureJSONType(integrityRaw), ErrSessionCaptureIntegrity)
+	if captureJSONType(integrityRaw) != jsonObjectType {
+		return SessionCapture{}, newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", jsonObjectType, captureJSONType(integrityRaw), ErrSessionCaptureIntegrity)
 	}
 
 	integrity, err := parseSessionCaptureIntegrity(path, integrityRaw)
@@ -476,7 +476,7 @@ func validateSessionCaptureIntegrityMetadata(path string, raw json.RawMessage, i
 func parseSessionCaptureIntegrity(path string, raw json.RawMessage) (SessionCaptureIntegrity, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
-		return SessionCaptureIntegrity{}, newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", "object", captureJSONType(raw), ErrSessionCaptureIntegrity)
+		return SessionCaptureIntegrity{}, newSessionCaptureValidationError(path, SessionCaptureErrorClassIntegrityMetadata, "/integrity", 0, "", jsonObjectType, captureJSONType(raw), ErrSessionCaptureIntegrity)
 	}
 	for _, field := range []string{"algorithm", "coverage", "digest"} {
 		value, ok := fields[field]

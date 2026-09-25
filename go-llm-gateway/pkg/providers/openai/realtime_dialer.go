@@ -39,7 +39,12 @@ func (d *gorillaDialer) Dial(url string, headers map[string]string) (transport.C
 		h.Set(k, v)
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, h)
+	conn, response, err := websocket.DefaultDialer.Dial(url, h)
+	if response != nil {
+		// Gorilla replaces the handshake body with an in-memory reader, so
+		// closing it releases nothing and cannot fail after a successful dial.
+		err = errors.Join(err, response.Body.Close())
+	}
 	if err != nil {
 		return nil, err
 	}

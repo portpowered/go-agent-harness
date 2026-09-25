@@ -23,9 +23,9 @@ type mockTransport struct {
 
 func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	m.lastReq = req
-	if req.Body != nil {
-		m.lastBody, _ = io.ReadAll(req.Body)
-		req.Body = io.NopCloser(strings.NewReader(string(m.lastBody)))
+	var err error
+	if m.lastBody, err = replayableRequestBody(req); err != nil {
+		return nil, err
 	}
 	return &http.Response{
 		StatusCode: m.statusCode,

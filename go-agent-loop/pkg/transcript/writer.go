@@ -208,8 +208,7 @@ func NewWriterWithConfig(path string, config WriterConfig) (*Writer, error) {
 	}
 	info, err := file.Stat()
 	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("transcript: stat %q: %w", path, err)
+		return nil, errors.Join(fmt.Errorf("transcript: stat %q: %w", path, err), file.Close())
 	}
 
 	return &Writer{
@@ -480,7 +479,7 @@ func notifyDegradation(reporter func(error), err error) {
 	if reporter == nil || err == nil {
 		return
 	}
-	defer func() { _ = recover() }()
+	defer func() { _ = recover() }() //nolint:errcheck // A panicking degradation reporter must not break the transcript write path.
 	reporter(err)
 }
 
@@ -496,8 +495,7 @@ func (w *Writer) rotateLocked() error {
 	w.file = nil
 	if syncable, ok := file.(syncer); ok {
 		if err := syncable.Sync(); err != nil {
-			_ = file.Close()
-			return fmt.Errorf("transcript: sync before rotation: %w", err)
+			return errors.Join(fmt.Errorf("transcript: sync before rotation: %w", err), file.Close())
 		}
 	}
 	if err := file.Close(); err != nil {

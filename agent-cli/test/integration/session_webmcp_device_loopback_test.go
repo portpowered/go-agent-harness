@@ -150,8 +150,8 @@ func openWebMCPVirtualStream(t *testing.T, registry *devicegw.VirtualRegistry, n
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream := opened.(*devicegw.VirtualStream)
-	t.Cleanup(func() { _ = stream.Close() })
+	stream := mustAs[*devicegw.VirtualStream](t, opened)
+	t.Cleanup(func() { discardCloseError(stream) })
 	return stream
 }
 
@@ -188,7 +188,7 @@ func newWebMCPCubeBroker(t *testing.T) (*webmcp.StatefulBroker, *testkit.Scripte
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := handle.(*testkit.ScriptedBrowserHandle).TargetSession(target.ID)
+	page := mustAs[*testkit.ScriptedBrowserHandle](t, handle).TargetSession(target.ID)
 	if page == nil {
 		t.Fatal("cube target session is nil")
 	}
@@ -298,9 +298,9 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 }
 func (s *webMCPDeviceSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
 func (s *webMCPDeviceSession) Done() <-chan struct{}                                  { return s.done }
-func (s *webMCPDeviceSession) Close() error {
-	s.closeOnce.Do(func() { close(s.done); _ = s.inbound.Close() })
-	return nil
+func (s *webMCPDeviceSession) Close() (err error) {
+	s.closeOnce.Do(func() { close(s.done); err = s.inbound.Close() })
+	return err
 }
 func (s *webMCPDeviceSession) emitCubeCall() {
 	ctx := context.Background()

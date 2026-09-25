@@ -16,6 +16,7 @@ import (
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -63,7 +64,7 @@ func TestDeviceProbeWithDevicesExecutesReadyPath(t *testing.T) {
 		if availability.Status != serviceDevices.DeviceProbeStatusReady || availability.InputDevices[0].ID != input.ID || availability.OutputDevices[0].ID != output.ID {
 			t.Fatalf("ready availability = %#v, want the enumerated input/output IDs", availability)
 		}
-		if scenario.ID != "s2s-v9-webrtc-device-roundtrip" {
+		if scenario.ID != v9WebRTCDeviceScenarioID {
 			t.Fatalf("scenario = %q, want v9 scenario", scenario.ID)
 		}
 		samples := make([]int16, audio.FrameSize)
@@ -90,7 +91,7 @@ func TestDeviceProbeWithDevicesExecutesReadyPath(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &result); err != nil {
 		t.Fatalf("decode ready result %q: %v", stdout.String(), err)
 	}
-	if result["pass"] != true || result["name"] != "s2s-v9-webrtc-device-roundtrip" {
+	if result["pass"] != true || result["name"] != v9WebRTCDeviceScenarioID {
 		t.Fatalf("ready result = %v, want a passing v9 result", result)
 	}
 	if strings.Contains(stdout.String()+stderr.String(), `"status":"skip"`) {
@@ -100,7 +101,7 @@ func TestDeviceProbeWithDevicesExecutesReadyPath(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(stderr.String())), &summary); err != nil {
 		t.Fatalf("decode ready summary %q: %v", stderr.String(), err)
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(1) || summary["failed"] != float64(0) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(1) || summary["failed"] != float64(0) {
 		t.Fatalf("ready summary = %v, want one passed scenario", summary)
 	}
 }
@@ -153,21 +154,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 		t.Fatalf("load device scenario: %v", err)
 	}
 	inputPlan := authoredDeviceProbeInput(t, scenario)
-	corpusPath, err := replayCorpusPath(inputPlan.CorpusID)
-	if err != nil {
-		t.Fatalf("locate authored input corpus: %v", err)
-	}
-	corpusWAV, err := os.ReadFile(corpusPath)
-	if err != nil {
-		t.Fatalf("read authored input corpus: %v", err)
-	}
-	rate, corpusSamples, err := wavio.Read(bytes.NewReader(corpusWAV))
-	if err != nil {
-		t.Fatalf("decode authored input corpus: %v", err)
-	}
-	if rate != wavio.Rate16kHz {
-		t.Fatalf("authored input corpus rate = %d, want %d", rate, wavio.Rate16kHz)
-	}
+	corpusSamples := readDeviceProbeCorpus(t, inputPlan.CorpusID)
 	input, err := registry.Default(devicegw.DirectionInput)
 	if err != nil {
 		t.Fatalf("select input: %v", err)
@@ -183,25 +170,11 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open seeded input source: %v", err)
 	}
-	defer func() { _ = seed.Close() }()
+	// The seed is closed and checked explicitly below; this deferred close only
+	// releases it on an early failure, where a repeat close error is expected.
+	defer releaseForTest(seed.Close)
 	const seededDeviceFrameCount = 8
-	corpusStart := -1
-	for offset := 0; offset+seededDeviceFrameCount*audio.FrameSize <= len(corpusSamples); offset += audio.FrameSize {
-		if audio.PCM16RMSEnergy(corpusSamples[offset:offset+audio.FrameSize]) > audio.DefaultVADConfig.EnergyThreshold {
-			corpusStart = offset
-			break
-		}
-	}
-	if corpusStart < 0 {
-		t.Fatalf("authored input corpus has no voiced frame window")
-	}
-	for i := 0; i < seededDeviceFrameCount; i++ {
-		frameStart := corpusStart + i*audio.FrameSize
-		frame := append([]int16(nil), corpusSamples[frameStart:frameStart+audio.FrameSize]...)
-		if err := seed.WriteFrame(context.Background(), frame); err != nil {
-			t.Fatalf("seed authored microphone frame %d: %v", i, err)
-		}
-	}
+	seedVoicedDeviceProbeFrames(t, seed, corpusSamples, seededDeviceFrameCount)
 
 	session := newDeviceProbeSession()
 	if !session.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen}) {
@@ -221,33 +194,7 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	var observedInstructions string
 	runContext, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	go func() {
-		for {
-			select {
-			case message := <-session.sent:
-				if recordProbeAudioDelta(message, audioObserved) {
-					continue
-				}
-				if message.Type != messages.StreamTypeMessageEnd {
-					continue
-				}
-				for _, responseMessage := range []messages.StreamMessage{
-					{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device round trip")},
-					{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("device round trip")},
-					{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
-					{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
-					{Type: messages.StreamTypeMessageEnd},
-				} {
-					if !session.receive.Write(runContext, responseMessage) {
-						return
-					}
-				}
-				return
-			case <-runContext.Done():
-				return
-			}
-		}
-	}()
+	go answerDeviceProbeTurn(runContext, session, audioObserved, responsePCM)
 
 	observation, err := servicewire.NewDeviceProbeService(registry, nil).Run(runContext, serviceDevices.DeviceProbeRequest{
 		Scenario:             scenario,
@@ -258,31 +205,8 @@ func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run device probe runtime: %v", err)
 	}
-	var capturedAudio []byte
-drainAudio:
-	for {
-		select {
-		case chunk := <-audioObserved:
-			capturedAudio = append(capturedAudio, chunk...)
-		default:
-			break drainAudio
-		}
-	}
-	if len(capturedAudio) == 0 || len(capturedAudio)%2 != 0 {
-		t.Fatalf("runtime forwarded microphone audio payload of %d bytes, want non-empty PCM16", len(capturedAudio))
-	}
 	wantProviderFrames := seededDeviceFrameCount * audio.FrameSize / deviceProbeInputFrameSamples
-	wantAudioBytes := wantProviderFrames * deviceProbeProviderFrameSamples * 2
-	if len(capturedAudio) != wantAudioBytes {
-		t.Fatalf("runtime forwarded %d authored PCM bytes, want %d bytes from %d seeded device frames", len(capturedAudio), wantAudioBytes, seededDeviceFrameCount)
-	}
-	capturedSamples := make([]int16, len(capturedAudio)/2)
-	for i := range capturedSamples {
-		capturedSamples[i] = int16(binary.LittleEndian.Uint16(capturedAudio[i*2:]))
-	}
-	if audio.PCM16RMSEnergy(capturedSamples) <= audio.DefaultVADConfig.EnergyThreshold {
-		t.Fatalf("runtime forwarded authored input RMS = %.2f, want voiced corpus input above %.2f", audio.PCM16RMSEnergy(capturedSamples), audio.DefaultVADConfig.EnergyThreshold)
-	}
+	assertForwardedDeviceProbeAudio(t, drainDeviceProbeAudio(audioObserved), wantProviderFrames*deviceProbeProviderFrameSamples*2)
 	if !strings.Contains(observedInstructions, inputPlan.CorpusID) || !strings.Contains(observedInstructions, inputPlan.Text) {
 		t.Fatalf("session instructions = %q, want authored corpus %q and utterance %q", observedInstructions, inputPlan.CorpusID, inputPlan.Text)
 	}
@@ -297,6 +221,109 @@ drainAudio:
 	}
 	if got := registry.Observations(); got.OpenCount != 3 || got.ReleaseCount != 3 {
 		t.Fatalf("device lifecycle observations = %+v, want seed plus bound input/output", got)
+	}
+}
+
+// readDeviceProbeCorpus decodes the authored 16 kHz input corpus.
+func readDeviceProbeCorpus(t *testing.T, corpusID string) []int16 {
+	t.Helper()
+	corpusPath, err := replayCorpusPath(corpusID)
+	if err != nil {
+		t.Fatalf("locate authored input corpus: %v", err)
+	}
+	corpusWAV, err := os.ReadFile(corpusPath)
+	if err != nil {
+		t.Fatalf("read authored input corpus: %v", err)
+	}
+	rate, corpusSamples, err := wavio.Read(bytes.NewReader(corpusWAV))
+	if err != nil {
+		t.Fatalf("decode authored input corpus: %v", err)
+	}
+	if rate != wavio.Rate16kHz {
+		t.Fatalf("authored input corpus rate = %d, want %d", rate, wavio.Rate16kHz)
+	}
+	return corpusSamples
+}
+
+// seedVoicedDeviceProbeFrames writes frameCount consecutive corpus frames,
+// starting at the first voiced window, into the seeded input device.
+func seedVoicedDeviceProbeFrames(t *testing.T, seed audio.AudioSink, corpusSamples []int16, frameCount int) {
+	t.Helper()
+	corpusStart := -1
+	for offset := 0; offset+frameCount*audio.FrameSize <= len(corpusSamples); offset += audio.FrameSize {
+		if audio.PCM16RMSEnergy(corpusSamples[offset:offset+audio.FrameSize]) > audio.DefaultVADConfig.EnergyThreshold {
+			corpusStart = offset
+			break
+		}
+	}
+	if corpusStart < 0 {
+		t.Fatalf("authored input corpus has no voiced frame window")
+	}
+	for i := 0; i < frameCount; i++ {
+		frameStart := corpusStart + i*audio.FrameSize
+		frame := append([]int16(nil), corpusSamples[frameStart:frameStart+audio.FrameSize]...)
+		if err := seed.WriteFrame(context.Background(), frame); err != nil {
+			t.Fatalf("seed authored microphone frame %d: %v", i, err)
+		}
+	}
+}
+
+// answerDeviceProbeTurn records forwarded microphone audio and answers the
+// first completed user turn with a scripted transcript and audio response.
+func answerDeviceProbeTurn(ctx context.Context, session *deviceProbeSession, audioObserved chan<- []byte, responsePCM []byte) {
+	for {
+		select {
+		case message := <-session.sent:
+			if recordProbeAudioDelta(message, audioObserved) || message.Type != messages.StreamTypeMessageEnd {
+				continue
+			}
+			for _, responseMessage := range []messages.StreamMessage{
+				{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device round trip")},
+				{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("device round trip")},
+				{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
+				{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+				{Type: messages.StreamTypeMessageEnd},
+			} {
+				if !session.receive.Write(ctx, responseMessage) {
+					return
+				}
+			}
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// drainDeviceProbeAudio concatenates every audio chunk already observed.
+func drainDeviceProbeAudio(audioObserved <-chan []byte) []byte {
+	var capturedAudio []byte
+	for {
+		select {
+		case chunk := <-audioObserved:
+			capturedAudio = append(capturedAudio, chunk...)
+		default:
+			return capturedAudio
+		}
+	}
+}
+
+// assertForwardedDeviceProbeAudio requires the exact voiced PCM16 payload the
+// seeded device frames produce after provider-rate conversion.
+func assertForwardedDeviceProbeAudio(t *testing.T, capturedAudio []byte, wantAudioBytes int) {
+	t.Helper()
+	if len(capturedAudio) == 0 || len(capturedAudio)%2 != 0 {
+		t.Fatalf("runtime forwarded microphone audio payload of %d bytes, want non-empty PCM16", len(capturedAudio))
+	}
+	if len(capturedAudio) != wantAudioBytes {
+		t.Fatalf("runtime forwarded %d authored PCM bytes, want %d bytes", len(capturedAudio), wantAudioBytes)
+	}
+	capturedSamples := make([]int16, len(capturedAudio)/2)
+	for i := range capturedSamples {
+		capturedSamples[i] = int16(binary.LittleEndian.Uint16(capturedAudio[i*2:]))
+	}
+	if audio.PCM16RMSEnergy(capturedSamples) <= audio.DefaultVADConfig.EnergyThreshold {
+		t.Fatalf("runtime forwarded authored input RMS = %.2f, want voiced corpus input above %.2f", audio.PCM16RMSEnergy(capturedSamples), audio.DefaultVADConfig.EnergyThreshold)
 	}
 }
 
@@ -407,4 +434,90 @@ func recordProbeAudioDelta(message messages.StreamMessage, observed chan<- []byt
 		observed <- append([]byte(nil), value.Content...)
 	}
 	return true
+}
+
+// openReadyDeviceProbePair opens the registry's default input and output
+// devices after requiring the registry to report ready.
+func openReadyDeviceProbePair(t *testing.T, registry devicegw.DeviceRegistry) (*devicegw.DeviceSource, *devicegw.DeviceSink) {
+	t.Helper()
+	availability, err := devicegw.ProbeDeviceAvailability(registry)
+	if err != nil {
+		t.Fatalf("probe device availability: %v", err)
+	}
+	if availability.Status != devicegw.DeviceProbeStatusReady {
+		t.Fatalf("virtual device probe status = %s, want ready (reason=%s)", availability.Status, availability.Reason)
+	}
+	input, err := registry.Default(devicegw.DirectionInput)
+	if err != nil {
+		t.Fatalf("select default input device: %v", err)
+	}
+	output, err := registry.Default(devicegw.DirectionOutput)
+	if err != nil {
+		t.Fatalf("select default output device: %v", err)
+	}
+	source, err := devicegw.NewDeviceSource(registry, input.ID)
+	if err != nil {
+		t.Fatalf("open selected input %q: %v", input.ID, err)
+	}
+	t.Cleanup(func() { closeForTest(t, source.Close) })
+	sink, err := devicegw.NewDeviceSink(registry, output.ID)
+	if err != nil {
+		t.Fatalf("open selected output %q: %v", output.ID, err)
+	}
+	t.Cleanup(func() { closeForTest(t, sink.Close) })
+	return source, sink
+}
+
+// sendDeviceProbeUserTurn delivers captured audio and the turn boundary to
+// the session runner and requires both to reach the provider session in order.
+func sendDeviceProbeUserTurn(t *testing.T, ctx context.Context, runner *participants.ModelRunner, session *deviceProbeSession, pcm []byte) {
+	t.Helper()
+	select {
+	case runner.UserAudioInbox <- pcm:
+	case <-ctx.Done():
+		t.Fatalf("send captured audio to session: %v", ctx.Err())
+	}
+	audioMessage := readDeviceProbeSessionMessage(t, ctx, session.sent)
+	if audioMessage.Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("session audio message type = %s, want %s", audioMessage.Type, messages.StreamTypeAudioDelta)
+	}
+	audioValue, ok := audioMessage.Value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("session audio message value = %T, want *messages.AudioDeltaValue", audioMessage.Value)
+	}
+	if !bytes.Equal(audioValue.Content, pcm) {
+		t.Fatalf("session audio bytes differ from active input track: got %d bytes, want %d", len(audioValue.Content), len(pcm))
+	}
+	select {
+	case runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd}:
+	case <-ctx.Done():
+		t.Fatalf("send captured turn boundary to session: %v", ctx.Err())
+	}
+	turnMessage := readDeviceProbeSessionMessage(t, ctx, session.sent)
+	if turnMessage.Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("session turn message type = %s, want %s after audio", turnMessage.Type, messages.StreamTypeMessageEnd)
+	}
+}
+
+// assertDeviceProbeSpeakerEmission writes the session response to the output
+// device and requires the virtual loopback to observe the exact frame.
+func assertDeviceProbeSpeakerEmission(t *testing.T, ctx context.Context, sink *devicegw.DeviceSink, source *devicegw.DeviceSource, responseSamples []int16, responsePCM []byte) {
+	t.Helper()
+	outputTap := &deviceProbeOutputTap{sink: sink}
+	if err := outputTap.WriteFrame(ctx, responseSamples); err != nil {
+		t.Fatalf("write session response to selected output device: %v", err)
+	}
+	emitted := make([]int16, audio.FrameSize)
+	if err := source.ReadFrame(ctx, emitted); err != nil {
+		t.Fatalf("tap selected output device emission: %v", err)
+	}
+	if !bytes.Equal(pcm16ProbeBytes(emitted), responsePCM) {
+		t.Fatalf("emitted speaker frame changed: got %d bytes, want %d", len(pcm16ProbeBytes(emitted)), len(responsePCM))
+	}
+	if err := assertDeviceProbeEnergy("speaker output", emitted); err != nil {
+		t.Fatal(err)
+	}
+	if got := outputTap.LastRMS(); got != pcm16ProbeRMS(emitted) {
+		t.Fatalf("speaker tap RMS = %.2f, loopback RMS = %.2f, want equal measurements", got, pcm16ProbeRMS(emitted))
+	}
 }

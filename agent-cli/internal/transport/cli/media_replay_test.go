@@ -3,14 +3,20 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
@@ -370,4 +376,165 @@ func TestLiveHostReportsUnadmittedWAVFinalizationFailure(t *testing.T) {
 			t.Fatalf("invocation failure lost during file cleanup: %v", err)
 		}
 	}
+}
+
+// cliGo2RTCFixtureHandler serves one go2rtc WebSocket signaling session and
+// streams a few RTP packets once the peer connection is established.
+type cliGo2RTCFixtureHandler struct {
+	observed             *cliGo2RTCObservation
+	fixtureContext       context.Context
+	upgrader             websocket.Upgrader
+	sendAudio, sendVideo bool
+	handlerDone          chan struct{}
+}
+
+type cliGo2RTCFixtureTracks struct {
+	audio, video *webrtc.TrackLocalStaticRTP
+}
+
+func (h *cliGo2RTCFixtureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer close(h.handlerDone)
+	handlerContext, cancelHandler := context.WithCancel(r.Context())
+	defer cancelHandler()
+	go func() {
+		select {
+		case <-h.fixtureContext.Done():
+			cancelHandler()
+		case <-handlerContext.Done():
+		}
+	}()
+	h.observed.Lock()
+	h.observed.path = r.URL.Path
+	h.observed.source = r.URL.Query().Get("src")
+	h.observed.Unlock()
+	if r.URL.Path != go2rtcFixtureWSPath {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	conn, err := h.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer releaseForTest(conn.Close)
+	offer, ok := readCLIGo2RTCOffer(conn)
+	if !ok {
+		return
+	}
+	pc, tracks, err := newCLIGo2RTCFixturePeer(h.sendVideo)
+	if err != nil {
+		return
+	}
+	defer releaseForTest(pc.Close)
+	connected := make(chan struct{})
+	var once sync.Once
+	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state == webrtc.PeerConnectionStateConnected {
+			once.Do(func() { close(connected) })
+		}
+	})
+	if !answerCLIGo2RTCOffer(handlerContext, conn, pc, offer) {
+		return
+	}
+	h.observed.negotiatedOnce.Do(func() { close(h.observed.negotiated) })
+	select {
+	case <-connected:
+	case <-handlerContext.Done():
+		return
+	}
+	if h.streamFrames(tracks) != nil {
+		return
+	}
+	<-handlerContext.Done()
+}
+
+func readCLIGo2RTCOffer(conn *websocket.Conn) (string, bool) {
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		return "", false
+	}
+	var offer struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(data, &offer); err != nil || offer.Type != "webrtc/offer" {
+		return "", false
+	}
+	return offer.Value, true
+}
+
+func newCLIGo2RTCFixturePeer(sendVideo bool) (*webrtc.PeerConnection, cliGo2RTCFixtureTracks, error) {
+	var tracks cliGo2RTCFixtureTracks
+	mediaEngine := &webrtc.MediaEngine{}
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1}, PayloadType: 0}, webrtc.RTPCodecTypeAudio); err != nil {
+		return nil, tracks, err
+	}
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, PayloadType: 96}, webrtc.RTPCodecTypeVideo); err != nil {
+		return nil, tracks, err
+	}
+	pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine)).NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		return nil, tracks, err
+	}
+	if tracks.audio, err = addCLIGo2RTCFixtureTrack(pc, webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1}, "audio"); err != nil {
+		return nil, tracks, errors.Join(err, pc.Close())
+	}
+	if sendVideo {
+		if tracks.video, err = addCLIGo2RTCFixtureTrack(pc, webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, "video"); err != nil {
+			return nil, tracks, errors.Join(err, pc.Close())
+		}
+	}
+	return pc, tracks, nil
+}
+
+func addCLIGo2RTCFixtureTrack(pc *webrtc.PeerConnection, capability webrtc.RTPCodecCapability, id string) (*webrtc.TrackLocalStaticRTP, error) {
+	track, err := webrtc.NewTrackLocalStaticRTP(capability, id, "cli-fixture")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pc.AddTrack(track); err != nil {
+		return nil, err
+	}
+	return track, nil
+}
+
+func answerCLIGo2RTCOffer(ctx context.Context, conn *websocket.Conn, pc *webrtc.PeerConnection, offer string) bool {
+	if err := pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
+		return false
+	}
+	answer, err := pc.CreateAnswer(nil)
+	if err != nil {
+		return false
+	}
+	if err := pc.SetLocalDescription(answer); err != nil {
+		return false
+	}
+	select {
+	case <-webrtc.GatheringCompletePromise(pc):
+	case <-ctx.Done():
+		return false
+	}
+	return conn.WriteJSON(struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}{Type: "webrtc/answer", Value: pc.LocalDescription().SDP}) == nil
+}
+
+func (h *cliGo2RTCFixtureHandler) streamFrames(tracks cliGo2RTCFixtureTracks) error {
+	for i := 0; i < 3; i++ {
+		if h.sendAudio {
+			packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}
+			if err := tracks.audio.WriteRTP(packet); err != nil {
+				return err
+			}
+			h.observed.recordFrame(len(packet.Payload))
+		}
+		if h.sendVideo {
+			packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 3000)}, Payload: []byte{0x65, byte(i + 1), 0x01, 0x02}}
+			if err := tracks.video.WriteRTP(packet); err != nil {
+				return err
+			}
+			h.observed.recordVideoFrame(len(packet.Payload))
+		}
+	}
+	return nil
 }

@@ -112,7 +112,9 @@ func TestAttachDefaultDropObserverNoopOnNil(t *testing.T) {
 	if !buf.Write(context.Background(), "first") {
 		t.Fatal("initial write failed")
 	}
-	buf.Write(context.Background(), "dropped") //nolint:errcheck // deliberate overflow
+	if buf.Write(context.Background(), "dropped") {
+		t.Fatal("overflow write must be dropped")
+	}
 	if got := buf.Drops(); got != 1 {
 		t.Fatalf("Drops() = %d, want 1 even without observer wiring", got)
 	}

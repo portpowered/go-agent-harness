@@ -23,7 +23,7 @@ import (
 
 func TestSessionBrowserBrokerForwardsTerminalResultsAndFixtureMutation(t *testing.T) {
 	broker, runtime, candidate, target, pageTool := newScriptedSessionBroker(t)
-	defer func() { _ = broker.Close() }()
+	defer closeForTest(t, broker.Close)
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}); err != nil {
 		t.Fatalf("select session fixture: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSessionBrowserBrokerRestoresPersistedSelectionBeforeFirstToolCall(t *te
 	if err != nil {
 		t.Fatalf("construct session broker: %v", err)
 	}
-	defer func() { _ = sessionBroker.Close() }()
+	defer closeForTest(t, sessionBroker.Close)
 
 	initializer, ok := sessionBroker.(SessionCapabilityInitializer)
 	if !ok {
@@ -216,7 +216,7 @@ func TestSessionBrowserBrokerKeepsBrowserUsableWhenPersistedTargetIsGone(t *test
 	if err != nil {
 		t.Fatalf("construct stale session broker: %v", err)
 	}
-	defer func() { _ = broker.Close() }()
+	defer closeForTest(t, broker.Close)
 
 	executor := webmcpTools.NewBrokerToolSet(broker).Executor()
 	response, err := executor.Execute(context.Background(), messages.ToolCall{
@@ -289,7 +289,7 @@ func TestSessionBrowserBrokerSharesInitializationAcrossConcurrentFirstUse(t *tes
 	if err != nil {
 		t.Fatalf("construct concurrent session broker: %v", err)
 	}
-	defer func() { _ = broker.Close() }()
+	defer closeForTest(t, broker.Close)
 	toolSet := webmcpTools.NewBrokerToolSet(broker)
 	const callers = 6
 	responses := make(chan messages.ToolCallResponse, callers)
@@ -519,7 +519,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesCastControlsOnlyWhenEnabled(t *
 	if err != nil {
 		t.Fatalf("enabled cast factory: %v", err)
 	}
-	defer func() { _ = enabled.Close() }()
+	defer closeForTest(t, enabled.Close)
 	want := map[string]bool{
 		webmcp.ListCastDevicesToolName: false,
 		webmcp.CastTabToolName:         false,
@@ -878,7 +878,7 @@ func newScriptedSessionBroker(t *testing.T) (webmcp.Broker, *testkit.ScriptedBro
 	}
 	browserConfig := config.DefaultBrowserConfig()
 	browserConfig.Tools.Enabled = true
-	browserConfig.Connection.CDPURL = "http://127.0.0.1:9222"
+	browserConfig.Connection.CDPURL = testCDPURL
 	productionFactory := NewProductionWebMCPDoctorFactory(
 		WithWebMCPProductionRuntime(runtime),
 		WithWebMCPProductionDiscovery(sessionBrokerDiscovery{candidate: laneCandidate, target: laneTarget}),

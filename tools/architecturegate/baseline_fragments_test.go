@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+// newFixtureFile is the file a fixture entry moves to or is added in.
+const newFixtureFile = "new.go"
+
 func TestBaselineDirectoryLoadsFragmentsAndRejectsDuplicates(t *testing.T) {
 	root := t.TempDir()
 	first := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app/a", File: "a/a.go", Symbol: "A", Value: 81, Rationale: "legacy", Phase: "P0"}

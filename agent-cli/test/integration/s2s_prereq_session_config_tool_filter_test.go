@@ -26,15 +26,7 @@ func TestSessionConfigToolFilterThroughRealCLI(t *testing.T) {
 		t.Fatalf("write isolated tool input: %v", err)
 	}
 
-	cases := []struct {
-		name             string
-		configYAML       string
-		calls            []sessionConfigToolCall
-		commandArgs      []string
-		wantSleep        bool
-		wantReadFile     bool
-		wantSleepSuccess bool
-	}{
+	cases := []sessionConfigToolFilterCase{
 		{
 			name: "empty tools list enables opted-in experimental sleep",
 			configYAML: `
@@ -82,91 +74,112 @@ tools:
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			configDir := t.TempDir()
-			if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(tc.configYAML), 0o600); err != nil {
-				t.Fatalf("write session config: %v", err)
-			}
-
-			sessionInferencer := newSessionConfigToolInferencer(tc.calls)
-			var resultMu sync.Mutex
-			var advertised map[string]bool
-			var resultText strings.Builder
-			results := make([]sessionConfigToolResult, 0, len(tc.calls))
-			currentResult := make(map[string]string)
-			agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
-				wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
-			)
-			if err != nil {
-				t.Fatalf("initialize composed CLI: %v", err)
-			}
-			agentCLI.SetSessionStreamObserver(sessionConfigToolResultObserver(
-				sessionInferencer, &resultMu, &resultText, &results, currentResult,
-			))
-
-			root := agentCLI.Generate()
-			root.SetOut(io.Discard)
-			root.SetErr(io.Discard)
-			args := []string{
-				"--config-dir", configDir,
-				"--workdir", filepath.Dir(toolInput),
-				"--api-key", "unused",
-				"session",
-			}
-			args = append(args, tc.commandArgs...)
-			args = append(args,
-				"--wait-for-close",
-				"invoke", "scripted", "tool",
-			)
-			root.SetArgs(args)
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-			if err := root.ExecuteContext(ctx); err != nil {
-				t.Fatalf("execute real session CLI: %v", err)
-			}
-
-			observedCalls := sessionInferencer.callsObserved()
-			advertised = sessionInferencer.advertisedToolNames()
-			if len(observedCalls) != len(tc.calls) {
-				t.Fatalf("observed tool calls = %#v, want %#v", observedCalls, tc.calls)
-			}
-			for i := range tc.calls {
-				if observedCalls[i] != tc.calls[i] {
-					t.Fatalf("tool call %d = %#v, want %#v", i, observedCalls[i], tc.calls[i])
-				}
-			}
-
-			resultMu.Lock()
-			defer resultMu.Unlock()
-			if advertised["sleep"] != tc.wantSleep {
-				t.Fatalf("sleep advertised = %v, want %v; advertised=%v", advertised["sleep"], tc.wantSleep, advertised)
-			}
-			if advertised["read_file"] != tc.wantReadFile {
-				t.Fatalf("read_file advertised = %v, want %v; advertised=%v", advertised["read_file"], tc.wantReadFile, advertised)
-			}
-			if len(results) != len(tc.calls) {
-				t.Fatalf("tool results = %#v, want %d results", results, len(tc.calls))
-			}
-			for i, wantCall := range tc.calls {
-				if results[i].ToolCallID != wantCall.ID {
-					t.Fatalf("tool result %d correlated ID = %q, want %q", i, results[i].ToolCallID, wantCall.ID)
-				}
-			}
-			if tc.wantSleepSuccess {
-				if len(results) != 1 || results[0].Content != "Slept for 0s (no-op)." {
-					t.Fatalf("default sleep result = %#v, want one successful no-op result", results)
-				}
-			} else {
-				if strings.Contains(resultText.String(), "Slept for 0s (no-op).") {
-					t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText.String())
-				}
-				if len(results) == 0 || !isRejectedSleepResult(results[0]) {
-					t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
-				}
-				if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
-					t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
-				}
-			}
+			runSessionConfigToolFilterCase(t, tc, toolInput, toolInputContents)
 		})
+	}
+}
+
+type sessionConfigToolFilterCase struct {
+	name             string
+	configYAML       string
+	calls            []sessionConfigToolCall
+	commandArgs      []string
+	wantSleep        bool
+	wantReadFile     bool
+	wantSleepSuccess bool
+}
+
+// runSessionConfigToolFilterCase drives the real session CLI with one config
+// and checks the advertised tools and correlated tool results.
+func runSessionConfigToolFilterCase(t *testing.T, tc sessionConfigToolFilterCase, toolInput, toolInputContents string) {
+	t.Helper()
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(tc.configYAML), 0o600); err != nil {
+		t.Fatalf("write session config: %v", err)
+	}
+
+	sessionInferencer := newSessionConfigToolInferencer(tc.calls)
+	var resultMu sync.Mutex
+	var resultText strings.Builder
+	results := make([]sessionConfigToolResult, 0, len(tc.calls))
+	currentResult := make(map[string]string)
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
+	)
+	if err != nil {
+		t.Fatalf("initialize composed CLI: %v", err)
+	}
+	agentCLI.SetSessionStreamObserver(sessionConfigToolResultObserver(
+		sessionInferencer, &resultMu, &resultText, &results, currentResult,
+	))
+
+	root := agentCLI.Generate()
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+	args := []string{
+		"--config-dir", configDir,
+		"--workdir", filepath.Dir(toolInput),
+		"--api-key", "unused",
+		"session",
+	}
+	args = append(args, tc.commandArgs...)
+	args = append(args,
+		"--wait-for-close",
+		"invoke", "scripted", "tool",
+	)
+	root.SetArgs(args)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := root.ExecuteContext(ctx); err != nil {
+		t.Fatalf("execute real session CLI: %v", err)
+	}
+
+	observedCalls := sessionInferencer.callsObserved()
+	advertised := sessionInferencer.advertisedToolNames()
+	if len(observedCalls) != len(tc.calls) {
+		t.Fatalf("observed tool calls = %#v, want %#v", observedCalls, tc.calls)
+	}
+	for i := range tc.calls {
+		if observedCalls[i] != tc.calls[i] {
+			t.Fatalf("tool call %d = %#v, want %#v", i, observedCalls[i], tc.calls[i])
+		}
+	}
+
+	resultMu.Lock()
+	defer resultMu.Unlock()
+	if advertised["sleep"] != tc.wantSleep {
+		t.Fatalf("sleep advertised = %v, want %v; advertised=%v", advertised["sleep"], tc.wantSleep, advertised)
+	}
+	if advertised["read_file"] != tc.wantReadFile {
+		t.Fatalf("read_file advertised = %v, want %v; advertised=%v", advertised["read_file"], tc.wantReadFile, advertised)
+	}
+	if len(results) != len(tc.calls) {
+		t.Fatalf("tool results = %#v, want %d results", results, len(tc.calls))
+	}
+	for i, wantCall := range tc.calls {
+		if results[i].ToolCallID != wantCall.ID {
+			t.Fatalf("tool result %d correlated ID = %q, want %q", i, results[i].ToolCallID, wantCall.ID)
+		}
+	}
+	assertSessionConfigSleepResults(t, tc, results, resultText.String(), toolInputContents)
+}
+
+func assertSessionConfigSleepResults(t *testing.T, tc sessionConfigToolFilterCase, results []sessionConfigToolResult, resultText, toolInputContents string) {
+	t.Helper()
+	if tc.wantSleepSuccess {
+		if len(results) != 1 || results[0].Content != "Slept for 0s (no-op)." {
+			t.Fatalf("default sleep result = %#v, want one successful no-op result", results)
+		}
+	} else {
+		if strings.Contains(resultText, "Slept for 0s (no-op).") {
+			t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText)
+		}
+		if len(results) == 0 || !isRejectedSleepResult(results[0]) {
+			t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
+		}
+		if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
+			t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
+		}
 	}
 }
 
@@ -292,7 +305,7 @@ func (i *sessionConfigToolInferencer) advertisedToolNames() map[string]bool {
 
 func (i *sessionConfigToolInferencer) close() {
 	if i.sess != nil {
-		_ = i.sess.Close()
+		discardCloseError(i.sess)
 	}
 }
 

@@ -171,23 +171,7 @@ func writeV8ReplayCapture(t *testing.T, path, sessionID, instruction string, out
 			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 		}),
 	}
-	capture := gwtesting.SessionCapture{
-		Version:  gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{Name: "synthetic-t1", Model: "session-replay"},
-		Session: gwtesting.SessionMetadata{
-			ID:                sessionID,
-			StartedAtUTC:      "2026-08-26T00:00:00Z",
-			FixtureProvenance: gwtesting.SessionFixtureProvenanceSynthetic,
-		},
-		Records: records,
-	}
-	data, err := json.MarshalIndent(capture, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal v8 replay capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write v8 replay capture: %v", err)
-	}
+	writeV8SyntheticCapture(t, path, sessionID, "v8 replay capture", records)
 }
 
 func writeV8MultiTurnReplayCapture(t *testing.T, path, sessionID, instruction, harness string, outputs, expectedInputs [][]byte) {
@@ -275,6 +259,12 @@ func writeV8MultiTurnReplayCapture(t *testing.T, path, sessionID, instruction, h
 		Type:  messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValue(sessionID, "provider_closed"),
 	}))
+	writeV8SyntheticCapture(t, path, sessionID, "v8 multi-turn replay capture "+harness, records)
+}
+
+// writeV8SyntheticCapture writes a synthetic session-replay capture.
+func writeV8SyntheticCapture(t *testing.T, path, sessionID, label string, records []gwtesting.CapturedSessionEvent) {
+	t.Helper()
 	capture := gwtesting.SessionCapture{
 		Version:  gwtesting.SessionCaptureVersion,
 		Provider: gwtesting.SessionProviderMetadata{Name: "synthetic-t1", Model: "session-replay"},
@@ -287,9 +277,9 @@ func writeV8MultiTurnReplayCapture(t *testing.T, path, sessionID, instruction, h
 	}
 	data, err := json.MarshalIndent(capture, "", "  ")
 	if err != nil {
-		t.Fatalf("marshal v8 multi-turn replay capture %s: %v", harness, err)
+		t.Fatalf("marshal %s: %v", label, err)
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write v8 multi-turn replay capture %s: %v", harness, err)
+		t.Fatalf("write %s: %v", label, err)
 	}
 }

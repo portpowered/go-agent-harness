@@ -139,7 +139,7 @@ func (r *Runtime) Version(ctx context.Context, candidate webmcp.BrowserCandidate
 	if err != nil {
 		return webmcp.BrowserVersion{}, err
 	}
-	defer func() { _ = handleValue.Close() }()
+	defer discardCleanupError(handleValue.Close)
 
 	handle, ok := handleValue.(*handle)
 	if !ok {
@@ -179,7 +179,7 @@ func (r *Runtime) ListTargets(ctx context.Context, candidate webmcp.BrowserCandi
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = handle.Close() }()
+	defer discardCleanupError(handle.Close)
 	return handle.ListTargets(ctx)
 }
 

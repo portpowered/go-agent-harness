@@ -14,9 +14,9 @@ import (
 
 const (
 	familyBOriginalCallID      = "call-family-b-original"
-	familyBAuthorizationHeader = "Bearer hermetic-key"
-	familyBResponseCancelEvent = "response.cancel"
-	familyBSessionUpdateEvent  = "session.update"
+	familyBAuthorizationHeader = rtAuthorizationHeader
+	familyBResponseCancelEvent = rtEventResponseCancel
+	familyBSessionUpdateEvent  = rtEventSessionUpdate
 )
 
 func (f *familyBProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
@@ -73,15 +73,15 @@ func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, e
 		f.sessionUpdates++
 		f.mu.Unlock()
 		return f.sendSessionReady(connection)
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		return f.handleInputAudio(connection, event.Audio)
-	case "conversation.item.create":
-		if event.Item.Type == "function_call_output" {
+	case rtEventConversationItemCreate:
+		if event.Item.Type == rtItemFunctionCallOutput {
 			return f.handleToolResult(connection, event.Item.CallID, event.Item.Output)
 		}
 	case familyBResponseCancelEvent:
 		f.recordCancellation()
-	case "input_audio_buffer.commit", "response.create":
+	case rtEventInputAudioCommit, rtEventResponseCreate:
 		// The fixture models the two customer turns from the continuously
 		// open stream and accepts the client's explicit end-of-input controls.
 	default:
@@ -170,29 +170,29 @@ func (f *familyBProviderFixture) handleCustomerUtterance(connection *websocket.C
 
 func (f *familyBProviderFixture) sendToolCall(connection *websocket.Conn, responseID string, call familyBFunctionCall) error {
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": responseID},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_item.added",
+		"type": rtEventOutputItemAdded,
 		"item": map[string]string{
-			"type": "function_call", "id": call.ID, "call_id": call.ID,
+			"type": rtItemFunctionCall, "id": call.ID, "call_id": call.ID,
 			"name": call.Name, "arguments": "",
 		},
 	}); err != nil {
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": "response.function_call_arguments.done", "call_id": call.ID,
+		"type": rtEventFunctionCallArgumentsDone, "call_id": call.ID,
 		"name": call.Name, "arguments": call.Args,
 	}); err != nil {
 		return err
 	}
 	return f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": responseID, "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": responseID, "status": rtStatusCompleted},
 	})
 }
 
@@ -224,7 +224,7 @@ func (f *familyBProviderFixture) handleToolResult(connection *websocket.Conn, ca
 	now := f.elapsedLocked()
 	observation := probe.ToolObservation{
 		ID: "tool-" + strings.TrimPrefix(callID, "call-family-b-"), ActionID: actionID,
-		TurnID: turnID, Tool: "write_file", Status: "completed", At: toolStarted,
+		TurnID: turnID, Tool: "write_file", Status: rtStatusCompleted, At: toolStarted,
 		Duration: now - toolStarted, ResultSeen: true, Summary: output,
 	}
 	f.toolObservations = append(f.toolObservations, observation)

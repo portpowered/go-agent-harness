@@ -446,7 +446,7 @@ func (s *sessionCapture) clientToAgent(stream transcript.Stream, payload []byte)
 		return
 	}
 	agent := transcript.NewAgentCapture(s.sink, snapshot)
-	_, _ = agent.Inbound(stream, payload, func(data []byte) (int, error) {
+	_, _ = agent.Inbound(stream, payload, func(data []byte) (int, error) { //nolint:errcheck // The capture-only live consumer cannot fail; the sink records the frame.
 		return len(data), nil
 	})
 }
@@ -463,14 +463,14 @@ func (s *sessionCapture) agentToClient(delta messages.StreamMessage) {
 	defer s.crossingMu.Unlock()
 	snapshot := s.snapshot()
 	agent := transcript.NewAgentCapture(s.sink, snapshot)
-	_, _ = agent.Outbound(streamForDelta(delta), payload, func(data []byte) (int, error) {
+	_, _ = agent.Outbound(streamForDelta(delta), payload, func(data []byte) (int, error) { //nolint:errcheck // The capture-only live consumer cannot fail; the sink records the frame.
 		return len(data), nil
 	})
 	wire := &sessionCaptureWebSocket{readPayload: append([]byte(nil), payload...)}
 	client := transcript.NewClientCapture(&sessionClientStreamSink{sink: s.sink, stream: streamForDelta(delta)}, func() (uint64, time.Time) {
 		return snapshot.tick, snapshot.timestamp
 	})
-	_, _, _ = client.WrapWebSocket(wire).ReadMessage()
+	_, _, _ = client.WrapWebSocket(wire).ReadMessage() //nolint:errcheck // The in-memory capture wire replays the payload; only the recorded frame matters.
 }
 
 type sessionCaptureWebSocket struct {

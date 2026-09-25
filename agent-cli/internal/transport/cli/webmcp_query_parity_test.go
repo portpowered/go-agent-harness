@@ -192,8 +192,8 @@ func newQueryParityFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) que
 		ToolRefFactory: webmcp.StableToolRef,
 	})
 	t.Cleanup(func() {
-		_ = broker.Close()
-		_ = runtime.Close()
+		closeForTest(t, broker.Close)
+		closeForTest(t, runtime.Close)
 	})
 	selected, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID})
 	if err != nil {
@@ -228,7 +228,7 @@ func newQueryParityFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) que
 func (f queryParityFixture) liveExecutor(t *testing.T) messages.ToolExecutor {
 	t.Helper()
 	capabilityConfig := browserCapabilityConfig(t, true)
-	capabilityConfig.Browser.Connection.CDPURL = "http://127.0.0.1:9222"
+	capabilityConfig.Browser.Connection.CDPURL = testCDPURL
 	capabilityConfig.Browser.Selection.Persist = false
 	capabilityFactory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return f.broker, nil

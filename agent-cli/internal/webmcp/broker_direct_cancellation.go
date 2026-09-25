@@ -276,7 +276,7 @@ func directCancellationDispatchFailure(operation *directCancellation, cause erro
 	// cancellation—so convert it to bounded, non-retryable uncertainty here.
 	var classifiedErr *ClassifiedError
 	if errors.As(cause, &classifiedErr) && classifiedErr != nil {
-		if _, lifecycle := lifecycleClassifiedError(classifiedErr); lifecycle {
+		if isLifecycleClassifiedError(classifiedErr) {
 			return cause
 		}
 		if classifiedErr.Code != ErrorInvocationCanceled || classifiedErr.Details["cancel_source"] == "caller" {

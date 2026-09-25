@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -94,6 +93,19 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	if runErr != nil || observation.ProtocolError != "" {
 		t.Fatalf("Family A shipped-process run failed: run=%v provider=%+v\nresult=%+v\nstdout=%x\nstderr=%s", runErr, observation, result, result.Stdout, result.Stderr)
 	}
+	assertFamilyAObservation(t, scenario, observation)
+
+	assertFamilyAProcessEvidence(t, result)
+	checkpointMu.Lock()
+	checkpointCopy := append([]probe.FilesystemCheckpoint(nil), checkpoints...)
+	checkpointMu.Unlock()
+	evaluateFamilyARun(t, scenario, observation, checkpointCopy)
+	if observation.FinalSummary != observation.ProductTranscript[len(observation.ProductTranscript)-1].Text {
+		t.Fatalf("final summary evidence = %q, want final product transcript", observation.FinalSummary)
+	}
+}
+func assertFamilyAObservation(t *testing.T, scenario probe.CustomerScenario, observation familyAProviderObservation) {
+	t.Helper()
 	if observation.ConnectionCount != 1 || observation.SessionUpdates != 1 {
 		t.Fatalf("provider lifecycle = connections:%d session_updates:%d, want one open session and one update", observation.ConnectionCount, observation.SessionUpdates)
 	}
@@ -108,7 +120,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 	}
 	wantTools := []string{"exec", "write_file", "edit_file"}
 	for index, want := range wantTools {
-		if observation.ToolObservations[index].Tool != want || observation.ToolObservations[index].Status != "completed" || !observation.ToolObservations[index].ResultSeen {
+		if observation.ToolObservations[index].Tool != want || observation.ToolObservations[index].Status != rtStatusCompleted || !observation.ToolObservations[index].ResultSeen {
 			t.Fatalf("tool observation %d = %+v, want completed %q with a result", index, observation.ToolObservations[index], want)
 		}
 	}
@@ -120,68 +132,8 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 			t.Fatalf("function call %d action = %q, want %q", index, call.ActionID, scenario.Actions[index].ID)
 		}
 	}
-
-	if result.ExitCode != 0 || !result.ChildWaited || !result.InputFinished || !result.InputClosed || !result.StdoutClosed || !result.StderrClosed {
-		t.Fatalf("process lifecycle result = %+v, want a fully reaped normal run", result)
-	}
-	if len(result.Input) != 8 {
-		t.Fatalf("input frame evidence = %d, want speech and silence for all four turns", len(result.Input))
-	}
-	if len(result.Output) == 0 || len(result.Stdout) < 16 {
-		t.Fatalf("output evidence reads=%d bytes=%d, want four streamed confirmation audio markers", len(result.Output), len(result.Stdout))
-	}
-	for marker := byte(1); marker <= 4; marker++ {
-		if !bytes.Contains(result.Stdout, []byte{marker, 0x41, 0x52, 0x50}) {
-			t.Fatalf("captured stdout = %x, missing confirmation marker %x", result.Stdout, []byte{marker, 0x41, 0x52, 0x50})
-		}
-	}
-
-	checkpointMu.Lock()
-	checkpointCopy := append([]probe.FilesystemCheckpoint(nil), checkpoints...)
-	checkpointMu.Unlock()
-	if len(checkpointCopy) != len(scenario.Actions) {
-		t.Fatalf("filesystem checkpoints = %d, want one per action", len(checkpointCopy))
-	}
-	for index, checkpoint := range checkpointCopy {
-		if checkpoint.ActionID != scenario.Actions[index].ID {
-			t.Fatalf("checkpoint %d action = %q, want %q", index, checkpoint.ActionID, scenario.Actions[index].ID)
-		}
-	}
-
-	actionResults := make([]probe.ActionResult, 0, len(scenario.Actions))
-	for index, action := range scenario.Actions {
-		productEvent := observation.ProductTranscript[index]
-		result := probe.ActionResult{
-			ActionID:      action.ID,
-			TurnID:        productEvent.TurnID,
-			Confirmed:     true,
-			ConfirmedAt:   productEvent.At,
-			Disposition:   probe.DispositionCompleted,
-			EvidenceRefs:  []string{"filesystem-checkpoints.jsonl", "tool-observations.jsonl", "transcripts/product.jsonl"},
-			CheckpointIDs: []string{checkpointCopy[index].ID},
-		}
-		if index < len(observation.ToolObservations) {
-			result.ToolObservationIDs = []string{observation.ToolObservations[index].ID}
-		}
-		actionResults = append(actionResults, result)
-	}
-	mechanical, err := probe.EvaluateCustomerSimulation(
-		scenario,
-		actionResults,
-		checkpointCopy,
-		observation.ToolObservations,
-		observation.ProductTranscript,
-	)
-	if err != nil {
-		t.Fatalf("mechanical oracle evaluation: %v", err)
-	}
-	if !mechanical.Pass || len(mechanical.Findings) != 0 {
-		t.Fatalf("Family A mechanical verdict = %+v, want pass without findings", mechanical)
-	}
-	if observation.FinalSummary != observation.ProductTranscript[len(observation.ProductTranscript)-1].Text {
-		t.Fatalf("final summary evidence = %q, want final product transcript", observation.FinalSummary)
-	}
 }
+
 func loadFamilyAScenario(t *testing.T) probe.CustomerScenario {
 	t.Helper()
 	path := filepath.Join(agentCLIRoot(t), "testdata", "customer-simulation", "family-a.scenario.json")
@@ -263,7 +215,7 @@ func (f *familyAProviderFixture) Snapshot() familyAProviderObservation {
 	}
 }
 func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *http.Request) {
-	if request.Header.Get("Authorization") != "Bearer hermetic-key" {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
 		f.failProtocol("authorization header did not arrive through the supported child environment")
 		writer.WriteHeader(http.StatusUnauthorized)
 		return
@@ -273,7 +225,7 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 		f.failProtocol("upgrade websocket: " + err.Error())
 		return
 	}
-	defer connection.Close()
+	defer discardCloseError(connection)
 	f.mu.Lock()
 	f.connectionCount++
 	f.mu.Unlock()
@@ -301,35 +253,31 @@ func (f *familyAProviderFixture) handle(writer http.ResponseWriter, request *htt
 		if closed {
 			continue
 		}
-		if event.Type != "" {
-			if familyAEventTypeHandled(event.Type) {
-				switch event.Type {
-				case "session.update":
-					f.mu.Lock()
-					f.sessionUpdates++
-					f.mu.Unlock()
-					if err := f.sendSessionReady(connection); err != nil {
-						f.failProtocol(err.Error())
-						return
-					}
-				case "input_audio_buffer.append":
-					if err := f.handleAudioAppend(connection, event.Audio); err != nil {
-						f.failProtocol(err.Error())
-						return
-					}
-				case "conversation.item.create":
-					if err := f.handleToolResultEvent(event.Item.Type, event.Item.CallID, event.Item.Output); err != nil {
-						f.failProtocol(err.Error())
-						return
-					}
-				case "input_audio_buffer.commit":
-					f.handleAudioCommit(connection)
-				case "response.create":
-					if err := f.handleContinuation(connection); err != nil {
-						f.failProtocol(err.Error())
-						return
-					}
-				}
+		switch event.Type {
+		case rtEventSessionUpdate:
+			f.mu.Lock()
+			f.sessionUpdates++
+			f.mu.Unlock()
+			if err := f.sendSessionReady(connection); err != nil {
+				f.failProtocol(err.Error())
+				return
+			}
+		case rtEventInputAudioAppend:
+			if err := f.handleAudioAppend(connection, event.Audio); err != nil {
+				f.failProtocol(err.Error())
+				return
+			}
+		case rtEventConversationItemCreate:
+			if err := f.handleToolResultEvent(event.Item.Type, event.Item.CallID, event.Item.Output); err != nil {
+				f.failProtocol(err.Error())
+				return
+			}
+		case rtEventInputAudioCommit:
+			f.handleAudioCommit(connection)
+		case rtEventResponseCreate:
+			if err := f.handleContinuation(connection); err != nil {
+				f.failProtocol(err.Error())
+				return
 			}
 		}
 	}
@@ -369,12 +317,12 @@ func (f *familyAProviderFixture) handleAudioCommit(connection *websocket.Conn) {
 	if !finalSilenceSeen {
 		return
 	}
-	if err := f.send(connection, map[string]string{"type": "session.closed", "reason": "family_a_complete"}); err != nil {
+	if err := f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_a_complete"}); err != nil {
 		f.failProtocol(fmt.Errorf("send terminal session.closed after final input commit: %w", err).Error())
 	}
 }
 func (f *familyAProviderFixture) handleToolResultEvent(itemType, callID, output string) error {
-	if itemType != "function_call_output" {
+	if itemType != rtItemFunctionCallOutput {
 		return nil
 	}
 	return f.handleToolResult(callID, output)
@@ -408,29 +356,29 @@ func (f *familyAProviderFixture) handleCustomerUtterance(connection *websocket.C
 		f.functionCalls = append(f.functionCalls, call)
 		f.mu.Unlock()
 		if err := f.send(connection, map[string]any{
-			"type":     "response.created",
+			"type":     rtEventResponseCreated,
 			"response": map[string]string{"id": "response-" + turnID + "-tool"},
 		}); err != nil {
 			return err
 		}
 		if err := f.send(connection, map[string]any{
-			"type": "response.output_item.added",
+			"type": rtEventOutputItemAdded,
 			"item": map[string]string{
-				"type": "function_call", "id": call.ID, "call_id": call.ID,
+				"type": rtItemFunctionCall, "id": call.ID, "call_id": call.ID,
 				"name": call.Name, "arguments": "",
 			},
 		}); err != nil {
 			return err
 		}
 		if err := f.send(connection, map[string]any{
-			"type": "response.function_call_arguments.done", "call_id": call.ID,
+			"type": rtEventFunctionCallArgumentsDone, "call_id": call.ID,
 			"name": call.Name, "arguments": call.Args,
 		}); err != nil {
 			return err
 		}
 		return f.send(connection, map[string]any{
-			"type":     "response.done",
-			"response": map[string]string{"id": "response-" + turnID + "-tool", "status": "completed"},
+			"type":     rtEventResponseDone,
+			"response": map[string]string{"id": "response-" + turnID + "-tool", "status": rtStatusCompleted},
 		})
 	}
 	return f.sendConfirmation(connection, turnID, "The final project contains project/README.md with status ready for review; no other files were created.", 4)
@@ -452,7 +400,7 @@ func (f *familyAProviderFixture) handleToolResult(callID, output string) error {
 	f.pendingResult = true
 	toolObservation := probe.ToolObservation{
 		ID: "tool-" + fmt.Sprintf("%d", index+1), ActionID: pending.ActionID,
-		TurnID: fmt.Sprintf("turn-%d", index+1), Tool: pending.Name, Status: "completed",
+		TurnID: fmt.Sprintf("turn-%d", index+1), Tool: pending.Name, Status: rtStatusCompleted,
 		At: startedAt, Duration: f.elapsedLocked() - startedAt, ResultSeen: true, Summary: output,
 	}
 	f.toolObservations = append(f.toolObservations, toolObservation)
@@ -485,7 +433,7 @@ func (f *familyAProviderFixture) handleContinuation(connection *websocket.Conn) 
 }
 func (f *familyAProviderFixture) sendSessionReady(connection *websocket.Conn) error {
 	if err := f.send(connection, map[string]any{
-		"type":    "session.created",
+		"type":    rtEventSessionCreated,
 		"session": map[string]string{"id": "family-a", "model": "gpt-realtime"},
 	}); err != nil {
 		return err
@@ -506,7 +454,7 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		f.mu.Unlock()
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.created",
+		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": "response-" + turnID + "-confirmation"},
 	}); err != nil {
 		return err
@@ -516,7 +464,7 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		transcript = []string{text[:len(text)/2], text[len(text)/2:]}
 	}
 	for _, delta := range transcript {
-		if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.delta", "delta": delta}); err != nil {
+		if err := f.send(connection, map[string]string{"type": rtEventOutputAudioTranscriptDelta, "delta": delta}); err != nil {
 			return err
 		}
 	}
@@ -525,7 +473,7 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 	}
 	audio := []byte{marker, 0x41, 0x52, 0x50}
 	if err := f.send(connection, map[string]any{
-		"type": "response.output_audio.delta", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
+		"type": rtEventOutputAudioDelta, "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
 	}); err != nil {
 		return err
 	}
@@ -540,8 +488,8 @@ func (f *familyAProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		f.mu.Unlock()
 	}
 	if err := f.send(connection, map[string]any{
-		"type":     "response.done",
-		"response": map[string]string{"id": "response-" + turnID + "-confirmation", "status": "completed"},
+		"type":     rtEventResponseDone,
+		"response": map[string]string{"id": "response-" + turnID + "-confirmation", "status": rtStatusCompleted},
 	}); err != nil {
 		return err
 	}
@@ -602,7 +550,4 @@ func familyAToolArguments(index int) string {
 }
 func familyAToolOutput(index int) string {
 	return []string{"(no output)", "File written: project/README.md", "File edited: project/README.md"}[index]
-}
-func familyAEventTypeHandled(eventType string) bool {
-	return eventType == "session.update" || eventType == "input_audio_buffer.append" || eventType == "conversation.item.create" || eventType == "response.create" || eventType == "input_audio_buffer.commit" || eventType == familyBResponseCancelEvent
 }

@@ -62,7 +62,7 @@ func TestStatefulBrokerUsesLoadingAwareFirstCatalogAllowance(t *testing.T) {
 				CatalogWait:        10 * time.Millisecond,
 				LoadingCatalogWait: 50 * time.Millisecond,
 			})
-			defer func() { _ = broker.Close() }()
+			defer closeAtTestEnd(t, broker)
 
 			selectContext, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()

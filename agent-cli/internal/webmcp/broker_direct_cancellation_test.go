@@ -257,7 +257,7 @@ func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, c
 			)},
 		},
 	)
-	t.Cleanup(func() { _ = runtime.Close() })
+	t.Cleanup(func() { closeAtTestEnd(t, runtime) })
 
 	original := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:           runtime,
@@ -266,7 +266,7 @@ func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, c
 		Clock:             clock,
 		InvocationTimeout: 30 * time.Second,
 	})
-	t.Cleanup(func() { _ = original.Close() })
+	t.Cleanup(func() { closeAtTestEnd(t, original) })
 	if _, err := original.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: `tab-a`}); err != nil {
 		t.Fatalf(`original select: %v`, err)
 	}
@@ -281,7 +281,7 @@ func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, c
 	if err != nil {
 		t.Fatalf(`open fixture handle: %v`, err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession(`tab-a`)
+	session := mustAs[*testkit.ScriptedBrowserHandle](t, handleValue).TargetSession(`tab-a`)
 	if session == nil {
 		t.Fatal(`fixture session is nil`)
 	}
@@ -293,7 +293,7 @@ func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, c
 		Clock:             clock,
 		InvocationTimeout: 30 * time.Second,
 	})
-	t.Cleanup(func() { _ = fresh.Close() })
+	t.Cleanup(func() { closeAtTestEnd(t, fresh) })
 	if _, err := fresh.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: `tab-a`}); err != nil {
 		t.Fatalf(`fresh select: %v`, err)
 	}

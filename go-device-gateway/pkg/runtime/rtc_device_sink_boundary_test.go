@@ -37,7 +37,7 @@ func TestRTCDeviceSinkResetsResamplerAtResponseBoundary(t *testing.T) {
 	firstResponse := audio.PlaybackResponse{ResponseID: "response-1", ItemID: "item-1"}
 	secondResponse := audio.PlaybackResponse{ResponseID: "response-2", ItemID: "item-2"}
 	media := audio.NewSessionMediaAtRate(nil, wavio.Rate24kHz)
-	defer func() { _ = media.Close() }()
+	defer closeForTest(t, "media", media)
 	media.StartInboundResponse(firstResponse)
 	if err := media.PushInbound(first); err != nil {
 		t.Fatalf("push first response: %v", err)

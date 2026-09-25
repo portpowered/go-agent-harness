@@ -81,7 +81,7 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 	if !ok {
 		t.Fatalf("loopback observer = %T, want *audio.VirtualStream", openedObserver)
 	}
-	defer func() { _ = observer.Close() }()
+	defer closeForTest(t, observer.Close)
 
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
@@ -124,7 +124,7 @@ func loadTest13ProviderPackets(t *testing.T) ([]string, []byte) {
 	if err != nil {
 		t.Fatalf("open test13 OpenAI audio fixture: %v", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer closeForTest(t, file.Close)
 
 	var seeds [][]byte
 	var encoded strings.Builder

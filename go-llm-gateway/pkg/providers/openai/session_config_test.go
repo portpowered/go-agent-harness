@@ -290,8 +290,7 @@ func TestBuildRealtimeSessionUpdateInputAudioTranscriptionDoesNotChangeOtherFiel
 	if err := json.Unmarshal(with.Data, &withEnvelope); err != nil {
 		t.Fatalf("decode configured session.update: %v", err)
 	}
-	withAudio := withEnvelope.Session["audio"].(map[string]any)
-	withInput := withAudio["input"].(map[string]any)
+	withInput := objectFieldForTest(t, objectFieldForTest(t, withEnvelope.Session, "audio"), "input")
 	delete(withInput, "transcription")
 	if !reflect.DeepEqual(withoutEnvelope.Session, withEnvelope.Session) {
 		t.Fatalf("configured session.update changed fields beyond transcription:\nwithout=%#v\nwith=%#v", withoutEnvelope.Session, withEnvelope.Session)

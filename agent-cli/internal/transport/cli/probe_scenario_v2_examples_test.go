@@ -29,13 +29,13 @@ func TestProbeRunCommittedWebMCPExamples(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
 	}
 	results, summary := decodeProbeLines(t, len(paths), run.stdout, run.stderr)
-	if summary["status"] != "pass" || summary["total"] != float64(2) || summary["passed"] != float64(2) || summary["failed"] != float64(0) {
+	if summary["status"] != probeStatusPass || summary["total"] != float64(2) || summary["passed"] != float64(2) || summary["failed"] != float64(0) {
 		t.Fatalf("unexpected WebMCP example summary: %v", summary)
 	}
 
 	byID := make(map[string]map[string]any, len(results))
 	for _, result := range results {
-		id, _ := result["id"].(string)
+		id := jsonText(result["id"])
 		byID[id] = result
 		if result["schema_version"] != probe.ScenarioV2Version || result["pass"] != true {
 			t.Fatalf("unexpected WebMCP example result: %v", result)
@@ -98,14 +98,14 @@ func assertProbeScenarioV2ExampleEvidence(t *testing.T, result map[string]any) {
 		if !ok {
 			t.Fatalf("%q manifest artifact = %T", result["id"], rawArtifact)
 		}
-		path, _ := artifact["path"].(string)
+		path := jsonText(artifact["path"])
 		if path == "" || artifactPaths[path] {
 			t.Fatalf("%q manifest has duplicate or empty artifact path: %v", result["id"], artifact)
 		}
 		artifactPaths[path] = true
 	}
 	for _, key := range []string{"provider_capture_path", "browser_events_path", "page_state_path", "workspace_snapshot_path", "objective_evidence_path"} {
-		path, _ := evidence[key].(string)
+		path := jsonText(evidence[key])
 		if path == "" {
 			t.Fatalf("%q evidence %s is empty: %v", result["id"], key, evidence)
 		}
@@ -124,8 +124,8 @@ func assertProbeScenarioV2ExampleEvidence(t *testing.T, result map[string]any) {
 
 func readProbeScenarioV2ExampleArtifact(t *testing.T, result map[string]any, key string) string {
 	t.Helper()
-	evidence := result["evidence"].(map[string]any)
-	path := evidence[key].(string)
+	evidence := jsonObject(t, result["evidence"])
+	path := jsonString(t, evidence[key])
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %q artifact %s: %v", result["id"], key, err)

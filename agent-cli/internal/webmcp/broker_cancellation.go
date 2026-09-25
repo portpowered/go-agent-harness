@@ -42,7 +42,9 @@ func performTargetCancellation(action *targetCancellation) {
 	// Cancellation is best effort after the broker has claimed the request.
 	// A target that has already detached or replied is still
 	// reconciled by the broker's bounded browser-terminal cache.
-	_ = action.session.CancelWebMCP(action.ctx, action.id)
+	if err := action.session.CancelWebMCP(action.ctx, action.id); err != nil {
+		return
+	}
 }
 
 func cloneInvokeResult(result InvokeResult) InvokeResult {

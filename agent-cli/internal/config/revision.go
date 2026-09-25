@@ -174,7 +174,7 @@ func writeConfigAtomically(path string, data []byte, mode fs.FileMode) (err erro
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(temporaryPath) }()
+	defer joinTemporaryRemoval(&err, temporaryPath)
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("rename private temporary file: %w", err)
 	}
@@ -185,17 +185,32 @@ func writeConfigAtomically(path string, data []byte, mode fs.FileMode) (err erro
 // replacing a file that another process published after the initial absence
 // check. The hard-link publication is same-directory and fails atomically when
 // the destination already exists.
-func writeConfigIfAbsentAtomically(path string, data []byte, mode fs.FileMode) error {
+func writeConfigIfAbsentAtomically(path string, data []byte, mode fs.FileMode) (err error) {
 	temporaryPath, err := prepareConfigTemp(path, data, mode)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(temporaryPath) }()
+	defer joinTemporaryRemoval(&err, temporaryPath)
 	if err := os.Link(temporaryPath, path); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return nil
 		}
 		return fmt.Errorf("publish default config: %w", err)
+	}
+	return nil
+}
+
+// joinTemporaryRemoval removes a staging file once publication has finished
+// and records a removal failure in the caller's result.
+func joinTemporaryRemoval(err *error, temporaryPath string) {
+	*err = errors.Join(*err, removeTemporary(temporaryPath))
+}
+
+// removeTemporary deletes a staging file. A file already consumed by a rename
+// is not an error.
+func removeTemporary(temporaryPath string) error {
+	if err := os.Remove(temporaryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove private temporary file: %w", err)
 	}
 	return nil
 }
@@ -215,7 +230,7 @@ func prepareConfigTemp(path string, data []byte, mode fs.FileMode) (temporaryPat
 			}
 		}
 		if err != nil {
-			_ = os.Remove(temporaryPath)
+			err = errors.Join(err, removeTemporary(temporaryPath))
 			temporaryPath = ""
 		}
 	}()

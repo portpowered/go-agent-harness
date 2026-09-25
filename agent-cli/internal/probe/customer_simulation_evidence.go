@@ -415,22 +415,10 @@ func (b *CustomerEvidenceBundle) RegisterArtifact(path string, kind ArtifactKind
 	if err != nil {
 		return err
 	}
-	info, statErr := os.Lstat(absolute)
-	if errors.Is(statErr, os.ErrNotExist) {
-		b.upsertArtifact(ArtifactEntry{Path: path, Kind: kind, Required: required, State: ArtifactStateMissing, Size: -1, Reason: "artifact was not produced"})
-		return nil
-	}
-	if statErr != nil {
-		b.upsertArtifact(ArtifactEntry{Path: path, Kind: kind, Required: required, State: ArtifactStateFailed, Size: -1, Reason: statErr.Error()})
-		return nil
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		b.upsertArtifact(ArtifactEntry{Path: path, Kind: kind, Required: required, State: ArtifactStateFailed, Size: -1, Reason: "artifact is not a regular file"})
-		return nil
-	}
-	data, err := os.ReadFile(absolute)
-	if err != nil {
-		b.upsertArtifact(ArtifactEntry{Path: path, Kind: kind, Required: required, State: ArtifactStateFailed, Size: -1, Reason: err.Error()})
+	// An unreadable artifact is recorded evidence, not a registration failure.
+	data, state, reason := readRegularArtifact(absolute)
+	if state != ArtifactStateAvailable {
+		b.upsertArtifact(ArtifactEntry{Path: path, Kind: kind, Required: required, State: state, Size: -1, Reason: reason})
 		return nil
 	}
 	if err := b.checkCredentialFree(data); err != nil {
@@ -458,27 +446,7 @@ func (b *CustomerEvidenceBundle) AddArtifactBytes(path string, kind ArtifactKind
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(absolute), 0o700); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(absolute), ".evidence-*.tmp")
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	defer removeTemporaryEvidenceFile(name)
-	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, absolute); err != nil {
+	if err := writePrivateFile(absolute, ".evidence-*.tmp", data); err != nil {
 		return err
 	}
 	return b.RegisterArtifact(path, kind, required)
@@ -614,7 +582,7 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 	if err != nil {
 		add(err)
 	} else {
-		add(writePrivateFile(filepath.Join(b.root, "manifest.json"), append(data, '\n')))
+		add(writePrivateFile(filepath.Join(b.root, "manifest.json"), ".manifest-*.tmp", append(data, '\n')))
 	}
 	if validationErr != nil {
 		add(validationErr)
@@ -876,29 +844,47 @@ func safeEvidencePath(root, relative string) (string, error) {
 // removeTemporaryEvidenceFile is deferred after an atomic write. Once the
 // rename succeeds the temporary name no longer exists, so a removal failure is
 // expected and must not turn a successful write into an error.
+// readRegularArtifact reads a regular, non-symlink artifact file and reports
+// the artifact state with a reason when it cannot be used.
+func readRegularArtifact(absolute string) ([]byte, ArtifactState, string) {
+	info, err := os.Lstat(absolute)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, ArtifactStateMissing, "artifact was not produced"
+	}
+	if err != nil {
+		return nil, ArtifactStateFailed, err.Error()
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, ArtifactStateFailed, "artifact is not a regular file"
+	}
+	data, err := os.ReadFile(absolute)
+	if err != nil {
+		return nil, ArtifactStateFailed, err.Error()
+	}
+	return data, ArtifactStateAvailable, ""
+}
+
 func removeTemporaryEvidenceFile(name string) {
 	if err := os.Remove(name); err != nil {
 		return
 	}
 }
 
-func writePrivateFile(path string, data []byte) error {
+func writePrivateFile(path, temporaryPattern string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".manifest-*.tmp")
+	temporary, err := os.CreateTemp(filepath.Dir(path), temporaryPattern)
 	if err != nil {
 		return err
 	}
 	name := temporary.Name()
 	defer removeTemporaryEvidenceFile(name)
 	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
-		return err
+		return errors.Join(err, temporary.Close())
 	}
 	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
+		return errors.Join(err, temporary.Close())
 	}
 	if err := temporary.Close(); err != nil {
 		return err

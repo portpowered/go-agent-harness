@@ -41,7 +41,7 @@ func TestRealtimeReadLoop_BackpressuresBurstWithoutDroppingAudioOrToolCall(t *te
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	var gotAudio []byte
 	gotToolEnd := false
@@ -52,7 +52,7 @@ func TestRealtimeReadLoop_BackpressuresBurstWithoutDroppingAudioOrToolCall(t *te
 		}
 		switch msg.Type {
 		case messages.StreamTypeAudioDelta:
-			gotAudio = append(gotAudio, msg.Value.(*messages.AudioDeltaValue).Content...)
+			gotAudio = append(gotAudio, audioDeltaContentForTest(t, msg)...)
 		case messages.StreamTypeToolCallEnd:
 			gotToolEnd = true
 		}
@@ -92,7 +92,7 @@ func (c *mockWebSocketConn) addServerEvent(eventType string, fields map[string]a
 	for key, value := range fields {
 		message[key] = value
 	}
-	data, _ := json.Marshal(message)
+	data := mustMarshalFixture(message)
 	c.mu.Lock()
 	c.serverMessages = append(c.serverMessages, data)
 	c.mu.Unlock()
@@ -229,7 +229,7 @@ func TestConnectSession_OpenAIRealtimeSessionCreatedThroughGateway(t *testing.T)
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if dialer.capturedURL != "wss://mock.openai.test/v1/realtime?model=gpt-realtime" {
 		t.Errorf("dial URL: got %q", dialer.capturedURL)
@@ -303,7 +303,7 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	clientMessages := conn.getClientMessages()
 	if len(clientMessages) != 1 {
@@ -329,7 +329,7 @@ func TestConnectSession_SendsGARealtimeSessionUpdateBeforeUserInput(t *testing.T
 	assertStringField(t, sessionPayload, "type", "realtime")
 	assertStringField(t, sessionPayload, "model", "gpt-realtime")
 	assertStringField(t, sessionPayload, "instructions", "Keep responses concise.")
-	assertStringSliceField(t, sessionPayload, "output_modalities", []string{"text", "audio"})
+	assertStringSliceField(t, sessionPayload, "output_modalities", []string{contentTypeText, "audio"})
 	if _, ok := sessionPayload["input_audio_format"]; ok {
 		t.Fatal("default OpenAI realtime session.update should not use legacy flat input_audio_format")
 	}
@@ -491,7 +491,7 @@ func TestConnectSession_SendsGARealtimeG711AudioFormatValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	clientMessages := conn.getClientMessages()
 	if len(clientMessages) == 0 {
@@ -549,7 +549,7 @@ func TestConnectSession_LegacyRealtimeSessionUpdateIsExplicit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	clientMessages := conn.getClientMessages()
 	if len(clientMessages) == 0 {
@@ -580,7 +580,7 @@ func TestConnectSession_SendsResponseCreateAfterTextInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if !session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
@@ -619,7 +619,7 @@ func TestConnectSession_SendsExplicitResponseCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if !session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
@@ -651,7 +651,7 @@ func TestConnectSession_VADObservationsDoNotCreateAnOutboundTurnBoundary(t *test
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	for i, want := range []messages.StreamMessageType{messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped} {
 		got, ok := session.Receive().ReadBlockingContext(ctx)

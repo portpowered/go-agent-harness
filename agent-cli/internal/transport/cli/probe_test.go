@@ -108,7 +108,7 @@ func TestProbeRunAllPassExitZero(t *testing.T) {
 			t.Fatalf("scenario result not passing: %v", result)
 		}
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(3) || summary["failed"] != float64(0) || summary["total"] != float64(3) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(3) || summary["failed"] != float64(0) || summary["total"] != float64(3) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -143,11 +143,11 @@ func TestProbeRunFailureExitsNonZeroAndContinues(t *testing.T) {
 	if !ok || len(expectations) != 1 {
 		t.Fatalf("failed scenario expectation outcomes missing: %v", failedResult)
 	}
-	outcome := expectations[0].(map[string]any)
+	outcome := jsonObject(t, expectations[0])
 	if outcome["passed"] != false || outcome["expected"] == "" || outcome["actual"] == "" {
 		t.Fatalf("failed expectation lacks expected/actual detail: %v", outcome)
 	}
-	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+	if summary["status"] != probeStatusFail || summary["failed"] != float64(1) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -230,7 +230,7 @@ func TestProbeRunRoutesOutSummaryFilesAndDecoration(t *testing.T) {
 		t.Fatalf("read --summary file: %v", err)
 	}
 	var summary map[string]any
-	if json.Unmarshal(summaryBytes, &summary) != nil || summary["status"] != "fail" {
+	if json.Unmarshal(summaryBytes, &summary) != nil || summary["status"] != probeStatusFail {
 		t.Fatalf("--summary file content unexpected: %q", summaryBytes)
 	}
 }
@@ -464,7 +464,7 @@ func TestProbeRunErrorAuthSuiteOfflineExitZero(t *testing.T) {
 	results, summary := decodeProbeLines(t, 2, run.stdout, run.stderr)
 	byName := map[string]map[string]any{}
 	for _, result := range results {
-		byName[result["name"].(string)] = result
+		byName[jsonString(t, result["name"])] = result
 	}
 	authCase, ok := byName["s2s-v6a-error-auth-invalid-credentials"]
 	if !ok || authCase["pass"] != true {
@@ -480,7 +480,7 @@ func TestProbeRunErrorAuthSuiteOfflineExitZero(t *testing.T) {
 	if healthy["terminal_reason"] != "disconnect" {
 		t.Fatalf("healthy control terminal reason = %v, want disconnect", healthy["terminal_reason"])
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(2) || summary["failed"] != float64(0) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(2) || summary["failed"] != float64(0) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -505,12 +505,12 @@ func TestProbeRunMisclassifiedAuthExitsNonZero(t *testing.T) {
 	if results[0]["pass"] != false {
 		t.Fatalf("misclassified auth case must fail: %v", results[0])
 	}
-	outcomes := results[0]["expectations"].([]any)
-	outcome := outcomes[0].(map[string]any)
+	outcomes := jsonSlice(t, results[0]["expectations"])
+	outcome := jsonObject(t, outcomes[0])
 	if outcome["passed"] != false || !strings.Contains(fmt.Sprint(outcome["actual"]), "error:authentication") {
 		t.Fatalf("failed outcome lacks misclassification detail: %v", outcome)
 	}
-	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+	if summary["status"] != probeStatusFail || summary["failed"] != float64(1) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -537,12 +537,12 @@ func TestProbeRunS2SV1TextInAudioOutHappyPathExitZero(t *testing.T) {
 	if results[0]["name"] != "s2s_v1_text_in_audio_out" || results[0]["pass"] != true {
 		t.Fatalf("happy-path scenario did not pass: %v", results[0])
 	}
-	for _, expectation := range results[0]["expectations"].([]any) {
-		if expectation.(map[string]any)["passed"] != true {
+	for _, expectation := range jsonSlice(t, results[0]["expectations"]) {
+		if jsonObject(t, expectation)["passed"] != true {
 			t.Fatalf("all expectations should pass on happy path: %v", expectation)
 		}
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(1) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -616,12 +616,12 @@ func TestProbeRunErrorMalformedResponseSuiteOfflineExitZero(t *testing.T) {
 	for _, result := range results {
 		switch result["name"] {
 		case "s2s-v6d-error-malformed-response-malformed":
-			delete(malformed, result["name"].(string))
+			delete(malformed, jsonString(t, result["name"]))
 			if result["pass"] != true || result["terminal_reason"] != "error:invalid_request" {
 				t.Fatalf("malformed case must pass with error:invalid_request: %v", result)
 			}
 		case "s2s-v6d-error-malformed-response-healthy-control":
-			delete(healthy, result["name"].(string))
+			delete(healthy, jsonString(t, result["name"]))
 			if result["pass"] != true || result["terminal_reason"] != "disconnect" {
 				t.Fatalf("healthy control must pass with disconnect: %v", result)
 			}
@@ -630,7 +630,7 @@ func TestProbeRunErrorMalformedResponseSuiteOfflineExitZero(t *testing.T) {
 	if len(malformed) != 0 || len(healthy) != 0 {
 		t.Fatalf("missing expected cases: %v", results)
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(2) || summary["failed"] != float64(0) || summary["total"] != float64(2) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(2) || summary["failed"] != float64(0) || summary["total"] != float64(2) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -669,15 +669,15 @@ func TestProbeRunV2AAudioInBasicPassesOffline(t *testing.T) {
 	if results[0]["pass"] != true || results[0]["name"] != "s2s-v2a-audio-in-basic" {
 		t.Fatalf("unexpected result line: %v", results[0])
 	}
-	outcomes := results[0]["expectations"].([]any)
+	outcomes := jsonSlice(t, results[0]["expectations"])
 	if len(outcomes) != 1 {
 		t.Fatalf("expectation outcome count = %d, want 1", len(outcomes))
 	}
-	outcome := outcomes[0].(map[string]any)
+	outcome := jsonObject(t, outcomes[0])
 	if outcome["passed"] != true || outcome["kind"] != "transcript-contains" {
 		t.Fatalf("transcript expectation outcome unexpected: %v", outcome)
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(1) || summary["failed"] != float64(0) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(1) || summary["failed"] != float64(0) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -709,10 +709,10 @@ func TestProbeRunS2SV1TextInAudioOutEmptyResponseFails(t *testing.T) {
 		t.Fatalf("empty-response scenario must fail: %v", result)
 	}
 	failedKinds := map[string]bool{}
-	for _, expectation := range result["expectations"].([]any) {
-		outcome := expectation.(map[string]any)
+	for _, expectation := range jsonSlice(t, result["expectations"]) {
+		outcome := jsonObject(t, expectation)
 		if outcome["passed"] == false {
-			failedKinds[outcome["kind"].(string)] = true
+			failedKinds[jsonString(t, outcome["kind"])] = true
 		}
 	}
 	if !failedKinds["frame-count"] {
@@ -724,7 +724,7 @@ func TestProbeRunS2SV1TextInAudioOutEmptyResponseFails(t *testing.T) {
 		t.Fatalf("read summary artifact: %v", readErr)
 	}
 	var summary map[string]any
-	if json.Unmarshal(summaryBytes, &summary) != nil || summary["status"] != "fail" || summary["failed"] != float64(1) {
+	if json.Unmarshal(summaryBytes, &summary) != nil || summary["status"] != probeStatusFail || summary["failed"] != float64(1) {
 		t.Fatalf("summary artifact must record the failure: %q", summaryBytes)
 	}
 }
@@ -738,18 +738,18 @@ func TestProbeRunV2AAudioInBasicFailsWithoutResponse(t *testing.T) {
 	if results[0]["pass"] != false || results[0]["name"] != "s2s-v2a-audio-in-basic-no-response" {
 		t.Fatalf("unexpected result line: %v", results[0])
 	}
-	outcomes := results[0]["expectations"].([]any)
+	outcomes := jsonSlice(t, results[0]["expectations"])
 	if len(outcomes) != 1 {
 		t.Fatalf("expectation outcome count = %d, want 1", len(outcomes))
 	}
-	outcome := outcomes[0].(map[string]any)
+	outcome := jsonObject(t, outcomes[0])
 	if outcome["passed"] != false {
 		t.Fatalf("unmet expectation did not fail: %v", outcome)
 	}
 	if !strings.Contains(fmt.Sprint(outcome["expected"]), v2aExpectedReplies) {
 		t.Fatalf("failure does not name the unmet expectation: %v", outcome)
 	}
-	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+	if summary["status"] != probeStatusFail || summary["failed"] != float64(1) {
 		t.Fatalf("summary does not reflect the failure: %v", summary)
 	}
 }
@@ -787,11 +787,11 @@ func TestProbeRunV2EAudioInTruncated16kCommitsPartialUtterance(t *testing.T) {
 	if results[0]["pass"] != true || results[0]["name"] != "s2s-v2e-audio-in-truncated-16k" {
 		t.Fatalf("unexpected result line: %v", results[0])
 	}
-	disposition := outcomeByKind(t, results[0]["expectations"].([]any), "buffer-disposition")
+	disposition := outcomeByKind(t, jsonSlice(t, results[0]["expectations"]), "buffer-disposition")
 	if disposition["passed"] != true {
 		t.Fatalf("buffer disposition expectation did not pass: %v (stdout=%q)", disposition, run.stdout)
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(1) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -805,7 +805,7 @@ func TestProbeRunV2EAudioInTruncated24kDiscardsPartialUtterance(t *testing.T) {
 	if results[0]["pass"] != true || results[0]["name"] != "s2s-v2e-audio-in-truncated-24k" {
 		t.Fatalf("unexpected result line: %v", results[0])
 	}
-	disposition := outcomeByKind(t, results[0]["expectations"].([]any), "buffer-disposition")
+	disposition := outcomeByKind(t, jsonSlice(t, results[0]["expectations"]), "buffer-disposition")
 	if disposition["passed"] != true {
 		t.Fatalf("buffer disposition expectation did not pass: %v (stdout=%q)", disposition, run.stdout)
 	}
@@ -820,7 +820,7 @@ func TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer(t *testing.T) {
 	if results[0]["pass"] != false || results[0]["name"] != "s2s-v2e-audio-in-truncated-uncommitted-negative" {
 		t.Fatalf("unexpected result line: %v", results[0])
 	}
-	disposition := outcomeByKind(t, results[0]["expectations"].([]any), "buffer-disposition")
+	disposition := outcomeByKind(t, jsonSlice(t, results[0]["expectations"]), "buffer-disposition")
 	if disposition["passed"] != false {
 		t.Fatalf("uncommitted buffer must fail the proof: %v", disposition)
 	}
@@ -831,7 +831,7 @@ func TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer(t *testing.T) {
 	if !strings.Contains(fmt.Sprint(disposition["expected"]), "committed") {
 		t.Fatalf("failure does not name the expected disposition: %v", disposition)
 	}
-	if summary["status"] != "fail" || summary["failed"] != float64(1) {
+	if summary["status"] != probeStatusFail || summary["failed"] != float64(1) {
 		t.Fatalf("summary does not reflect the failure: %v", summary)
 	}
 }
@@ -874,7 +874,7 @@ func TestProbeRunV3ANoInterruptionControlCompletesWithoutCancel(t *testing.T) {
 	if cancelOutcomes[0]["passed"] != true {
 		t.Fatalf("asserted absence must pass on an uninterrupted session: %v", cancelOutcomes[0])
 	}
-	if summary["status"] != "pass" || summary["failed"] != float64(0) {
+	if summary["status"] != probeStatusPass || summary["failed"] != float64(0) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -947,10 +947,10 @@ func assertV3ACancelledRun(t *testing.T, run cliExecution, name string, wantCanc
 	if len(latencyOutcomes) != 1 || latencyOutcomes[0]["passed"] != true {
 		t.Fatalf("%s latency expectation failed despite an in-flight cancellation: %v", name, latencyOutcomes)
 	}
-	if got := results[0]["ticks"]; got.(float64) < float64(wantCancelTicks) {
+	if got, ok := results[0]["ticks"].(float64); !ok || got < float64(wantCancelTicks) {
 		t.Fatalf("%s final tick count = %v, want at least cancel tick %d", name, got, wantCancelTicks)
 	}
-	if summary["status"] != "pass" || summary["passed"] != float64(1) {
+	if summary["status"] != probeStatusPass || summary["passed"] != float64(1) {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }
@@ -964,7 +964,7 @@ func v3aOutcomesByKind(t *testing.T, result map[string]any, kind string) []map[s
 	}
 	outcomes := make([]map[string]any, 0, len(raw))
 	for _, candidate := range raw {
-		outcome := candidate.(map[string]any)
+		outcome := jsonObject(t, candidate)
 		if outcome["kind"] == kind {
 			outcomes = append(outcomes, outcome)
 		}

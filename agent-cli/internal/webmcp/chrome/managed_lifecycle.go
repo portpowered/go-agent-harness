@@ -340,7 +340,7 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 		return nil, err
 	}
 	if browser.PID() <= 0 {
-		_ = browser.Close()
+		discardCleanupError(browser.Close)
 		return nil, newManagedBrowserLifecycleError("state", errors.New("managed browser process has no stable identity"))
 	}
 	state := ManagedBrowserState{
@@ -353,19 +353,19 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 	}
 	info, err := m.options.ProcessInspector.Inspect(ctx, state)
 	if err != nil || (info.PID != 0 && info.PID != state.PID) || strings.TrimSpace(info.Identity) == "" {
-		_ = browser.Close()
+		discardCleanupError(browser.Close)
 		if err == nil {
 			err = errors.New("managed browser process identity is unavailable")
 		}
 		return nil, newManagedBrowserLifecycleError("state", err)
 	}
 	if info.ProfileDir != "" && filepath.Clean(info.ProfileDir) != filepath.Clean(profileDir) {
-		_ = browser.Close()
+		discardCleanupError(browser.Close)
 		return nil, newManagedBrowserLifecycleError("state", errors.New("managed browser process profile does not match"))
 	}
 	state.ProcessIdentity = info.Identity
 	if err := writeManagedBrowserState(statePath, state); err != nil {
-		_ = browser.Close()
+		discardCleanupError(browser.Close)
 		return nil, newManagedBrowserLifecycleError("state", err)
 	}
 	m.trackManagedBrowser(browser, statePath, state) //nolint:contextcheck // Close outlives the launch request by design.
@@ -467,7 +467,7 @@ func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, sta
 	if err != nil || !present || !managedBrowserStatesMatch(current, expected) {
 		return
 	}
-	_ = removeManagedBrowserState(statePath)
+	removeBestEffort(removeManagedBrowserState, statePath)
 }
 
 func validateManagedBrowserState(state ManagedBrowserState, expectedProfile string) error {
@@ -538,7 +538,7 @@ func fetchManagedBrowserEndpoint(ctx context.Context, client *http.Client, rawCD
 	}
 	if response.Request != nil && response.Request.URL != nil && response.Request.URL.String() != request.URL.String() {
 		if response.Body != nil {
-			_ = response.Body.Close()
+			closeAfterRead(response.Body)
 		}
 		return ManagedBrowserEndpoint{}, errors.New("managed browser endpoint redirected")
 	}
@@ -595,19 +595,19 @@ func writeManagedBrowserState(path string, state ManagedBrowserState) error {
 	removeTemporary := true
 	defer func() {
 		if removeTemporary {
-			_ = os.Remove(temporaryPath)
+			removeBestEffort(os.Remove, temporaryPath)
 		}
 	}()
 	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
+		discardCleanupError(temporary.Close)
 		return err
 	}
 	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
+		discardCleanupError(temporary.Close)
 		return err
 	}
 	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
+		discardCleanupError(temporary.Close)
 		return err
 	}
 	if err := temporary.Close(); err != nil {
@@ -647,9 +647,7 @@ func acquireManagedBrowserLease(ctx context.Context, path string, timeout, poll,
 	for {
 		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err == nil {
-			_, _ = io.WriteString(file, strconv.Itoa(os.Getpid()))
-			_ = file.Close()
-			return &managedBrowserLease{path: path}, nil
+			return recordManagedBrowserLeaseOwner(path, file)
 		}
 		if !errors.Is(err, os.ErrExist) {
 			return nil, err
@@ -676,7 +674,7 @@ func (l *managedBrowserLease) release() {
 	if l == nil || strings.TrimSpace(l.path) == "" {
 		return
 	}
-	_ = os.Remove(l.path)
+	removeBestEffort(os.Remove, l.path)
 }
 
 func managedBrowserLockStale(path string, staleAfter time.Duration) bool {
@@ -684,9 +682,9 @@ func managedBrowserLockStale(path string, staleAfter time.Duration) bool {
 	if err != nil {
 		return false
 	}
-	data, _ := os.ReadFile(path)
+	data, readErr := os.ReadFile(path)
 	pid, pidErr := strconv.Atoi(strings.TrimSpace(string(data)))
-	if pidErr == nil && pid > 0 && managedProcessAlive(pid) {
+	if readErr == nil && pidErr == nil && pid > 0 && managedProcessAlive(pid) {
 		return false
 	}
 	return staleAfter <= 0 || time.Since(info.ModTime()) >= staleAfter
@@ -726,7 +724,7 @@ func managedCommandLineMatches(commandLine []string, state ManagedBrowserState) 
 	hasProfile := false
 	hasLoopback := false
 	hasPort := false
-	port, _ := managedBrowserCDPPort(state.CDPURL)
+	port, portErr := managedBrowserCDPPort(state.CDPURL)
 	for index, argument := range commandLine {
 		if argument == "--user-data-dir" && index+1 < len(commandLine) {
 			hasProfile = filepath.Clean(commandLine[index+1]) == profile
@@ -737,7 +735,7 @@ func managedCommandLineMatches(commandLine []string, state ManagedBrowserState) 
 		if argument == "--remote-debugging-address=127.0.0.1" {
 			hasLoopback = true
 		}
-		if argument == "--remote-debugging-port="+strconv.Itoa(port) {
+		if portErr == nil && argument == "--remote-debugging-port="+strconv.Itoa(port) {
 			hasPort = true
 		}
 	}
@@ -831,23 +829,11 @@ func defaultManagedBrowserProfileOwnerResolver(inspector ManagedBrowserProcessIn
 		if err != nil || pid <= 0 || pid == os.Getpid() {
 			return nil, err
 		}
-		commandLine, err := managedProcessCommandLine(ctx, pid)
-		if err != nil {
-			// Failure to prove ownership must never become permission to signal a
-			// process. Leave the existing launch error as the operator-visible
-			// result instead.
-			return nil, nil
-		}
-		state, ok := managedBrowserProfileOwnerState(pid, profileDir, commandLine)
-		if !ok {
-			return nil, nil
-		}
-		identity, err := managedProcessIdentity(ctx, pid, commandLine)
-		if err != nil || strings.TrimSpace(identity) == "" {
-			return nil, nil
-		}
-		state.ProcessIdentity = identity
-		if _, err := inspector.Inspect(ctx, state); err != nil {
+		// Failure to prove ownership must never become permission to signal a
+		// process. Leave the existing launch error as the operator-visible
+		// result instead.
+		state, proven := proveManagedBrowserProfileOwner(ctx, inspector, pid, profileDir)
+		if !proven {
 			return nil, nil
 		}
 		return &reattachedManagedBrowserProcess{state: state, inspector: inspector}, nil
@@ -872,11 +858,7 @@ func managedBrowserSingletonPID(profileDir string) (int, error) {
 	if separator < 0 || separator+1 >= len(base) {
 		return 0, nil
 	}
-	pid, err := strconv.Atoi(base[separator+1:])
-	if err != nil || pid <= 0 {
-		return 0, nil
-	}
-	return pid, nil
+	return positivePIDOrZero(base[separator+1:]), nil
 }
 
 func managedBrowserProfileOwnerState(pid int, profileDir string, commandLine []string) (ManagedBrowserState, bool) {

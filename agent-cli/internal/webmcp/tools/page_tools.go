@@ -70,7 +70,10 @@ func (s *BrokerToolSet) SetReservedToolNames(names []string) {
 // flat agent-loop parameter view. A broker without a connected catalog yields
 // no page tools and no error; the stable broker tools remain available.
 func (s *BrokerToolSet) PageToolDefinitions(ctx context.Context) []messages.ToolDefinition {
-	definitions, _ := s.PageToolDefinitionsWithError(ctx)
+	definitions, err := s.PageToolDefinitionsWithError(ctx)
+	if err != nil {
+		return nil
+	}
 	return definitions
 }
 
@@ -220,7 +223,7 @@ func pageToolParameters(schema json.RawMessage) ([]messages.ToolParameter, bool)
 			Items       json.RawMessage `json:"items"`
 			Enum        []any           `json:"enum"`
 		}
-		_ = json.Unmarshal(parsed.Properties[name], &property)
+		decodeBestEffort(parsed.Properties[name], &property)
 		parameterType := property.Type
 		if parameterType == "" {
 			parameterType = schemaTypeObject
@@ -325,7 +328,7 @@ func (s *BrokerToolSet) executePageTool(ctx context.Context, call messages.ToolC
 	}
 	if !json.Valid([]byte(input)) {
 		var schema map[string]any
-		_ = json.Unmarshal(descriptor.InputSchema, &schema)
+		decodeBestEffort(descriptor.InputSchema, &schema)
 		return invalidEnvelope(schema, string(descriptor.Ref), []webmcp.ToolResultIssue{{Path: "", Code: "invalid_json"}})
 	}
 	return s.invokeToolRef(ctx, webmcp.InvokeRequest{

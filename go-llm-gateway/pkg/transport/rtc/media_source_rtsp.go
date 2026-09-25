@@ -51,37 +51,30 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	c := &rtspClient{conn: conn, reader: bufio.NewReader(conn), uri: s.requestURI, user: s.username, pass: s.password}
 	response, err := c.request(ctx, "DESCRIBE", c.uri, map[string]string{"Accept": "application/sdp"})
 	if err != nil {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err))
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err)))
 	}
 	if response.code == 401 {
 		if c.user == "" {
-			_ = conn.Close()
-			return nil, sourceError(SourceErrorAuthentication, s.identity, nil)
+			return nil, closeAfterFailure(conn, sourceError(SourceErrorAuthentication, s.identity, nil))
 		}
 		c.auth = true
 		response, err = c.request(ctx, "DESCRIBE", c.uri, map[string]string{"Accept": "application/sdp"})
 	}
 	if err != nil {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err))
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err)))
 	}
 	if response.code == 401 {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorAuthentication, s.identity, nil)
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorAuthentication, s.identity, nil))
 	}
 	if response.code == 404 {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnknown, s.identity, nil)
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnknown, s.identity, nil))
 	}
 	if response.code < 200 || response.code >= 300 {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, fmt.Errorf("RTSP status %d", response.code))
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, fmt.Errorf("RTSP status %d", response.code)))
 	}
 	audio, video, codec, rate, channels := parseSDP(string(response.body))
 	if !audio {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorNoAudio, s.identity, nil)
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorNoAudio, s.identity, nil))
 	}
 	tracks := parseRTSPTracks(string(response.body), response.headers["content-base"], c.uri)
 	if len(tracks) == 0 {
@@ -92,8 +85,7 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	for i := range tracks {
 		setup, setupErr := c.request(ctx, "SETUP", tracks[i].control, map[string]string{"Transport": fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)})
 		if setupErr != nil || setup.code < 200 || setup.code >= 300 {
-			_ = conn.Close()
-			return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, setupErr))
+			return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, setupErr)))
 		}
 		if c.session == "" {
 			c.session = strings.Split(setup.headers["session"], ";")[0]
@@ -106,17 +98,14 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 		}
 	}
 	if audioChannel < 0 {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorNoAudio, s.identity, nil)
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorNoAudio, s.identity, nil))
 	}
 	play, err := c.request(ctx, "PLAY", c.uri, map[string]string{"Session": c.session})
 	if err != nil || play.code < 200 || play.code >= 300 {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err))
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err)))
 	}
 	if err = conn.SetDeadline(time.Time{}); err != nil {
-		_ = conn.Close()
-		return nil, sourceError(SourceErrorUnreachable, s.identity, err)
+		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, err))
 	}
 	inbound := &rtspInbound{client: c, audioChannel: audioChannel, codec: codec, videoChannel: videoChannel, videoMediaType: videoMediaType, source: s.identity}
 	caps := (MediaCapabilities{Source: s.identity, AudioCodec: codec, SampleRate: rate, Channels: channels, Video: video}).normalized()
@@ -126,7 +115,9 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 func (c *rtspClient) request(ctx context.Context, method, uri string, headers map[string]string) (rtspResponse, error) {
 	c.cseq++
 	if deadline, ok := ctx.Deadline(); ok {
-		_ = c.conn.SetDeadline(deadline)
+		if err := c.conn.SetDeadline(deadline); err != nil {
+			return rtspResponse{}, err
+		}
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s RTSP/1.0\r\nCSeq: %d\r\n", method, uri, c.cseq)
@@ -173,7 +164,7 @@ func (c *rtspClient) readResponse() (rtspResponse, error) {
 			r.headers[strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(value)
 		}
 	}
-	if n, _ := strconv.Atoi(r.headers["content-length"]); n > 0 {
+	if n := atoiOrZero(r.headers["content-length"]); n > 0 {
 		r.body = make([]byte, n)
 		_, err = io.ReadFull(c.reader, r.body)
 	}
@@ -336,7 +327,9 @@ func (r *rtspInbound) readPacketContext(ctx context.Context) (int, []byte, error
 		go func() {
 			select {
 			case <-ctx.Done():
-				_ = r.client.conn.SetReadDeadline(time.Now())
+				if err := r.client.conn.SetReadDeadline(time.Now()); err != nil {
+					return // a connection that rejects deadlines is closed, which also ends the read
+				}
 			case <-stop:
 			}
 		}()
@@ -368,10 +361,11 @@ func (r *rtspInbound) readPacket() (int, []byte, error) {
 	return int(header[0]), packet.Payload, nil
 }
 func (r *rtspInbound) Close() error {
+	var err error
 	r.once.Do(func() {
 		if r.client != nil && r.client.conn != nil {
-			_ = r.client.conn.Close()
+			err = r.client.conn.Close()
 		}
 	})
-	return nil
+	return err
 }

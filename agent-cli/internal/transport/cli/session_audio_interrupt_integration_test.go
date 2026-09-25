@@ -59,7 +59,7 @@ func TestSessionCommandAudioInterruptOrdering(t *testing.T) {
 func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudioInterruptScenario) {
 	t.Helper()
 	broker, targetSession, refs := newSessionAudioInterruptFixture(t)
-	defer func() { _ = broker.Close() }()
+	defer closeForTest(t, broker.Close)
 	targetSession.BlockInvocations()
 
 	// Run-long: the session's own watch ends at close and could miss a terminal.
@@ -271,7 +271,7 @@ func newSessionAudioInterruptFixture(t *testing.T) (*webmcp.StatefulBroker, *tes
 	if err != nil {
 		t.Fatalf("open scripted WebMCP browser: %v", err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession(target.ID)
+	session := scriptedBrowserHandle(t, handleValue).TargetSession(target.ID)
 	if session == nil {
 		t.Fatal("scripted WebMCP target session is nil")
 	}
@@ -821,7 +821,7 @@ func (w *sessionAudioInterruptWire) toolSequence() []string {
 func (w *sessionAudioInterruptWire) sendPageTool(call sessionAudioInterruptPageCall) {
 	ref := w.refs[call.toolName]
 	responseID := "response-" + call.id
-	arguments, _ := json.Marshal(map[string]string{
+	arguments := fixtureJSON(map[string]string{
 		"tool_ref":   string(ref),
 		"input_json": `{}`,
 		"reason":     "s2s interruption ordering fixture",

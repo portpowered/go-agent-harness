@@ -186,17 +186,13 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 	for start := 0; start < len(inputSamples); start += audio.FrameSize {
 		clear(frame)
 		copy(frame, inputSamples[start:])
-		payload, marshalErr := json.Marshal(map[string]string{
-			"type":  "input_audio_buffer.append",
+		clientEvent(rtEventInputAudioAppend, mustJSON(t, map[string]string{
+			"type":  rtEventInputAudioAppend,
 			"audio": base64.StdEncoding.EncodeToString(toolDuringAudioPCM16LEBytes(frame)),
-		})
-		if marshalErr != nil {
-			t.Fatalf("marshal append event: %v", marshalErr)
-		}
-		clientEvent("input_audio_buffer.append", payload)
+		}))
 	}
-	clientEvent("input_audio_buffer.commit", json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
-	clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
+	clientEvent(rtEventInputAudioCommit, json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
+	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
 
 	serverEvent := func(eventType string, payload string) {
 		records = append(records, gwtesting.CapturedSessionEvent{
@@ -210,42 +206,38 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 	}
 
 	audioDeltaPayload := func(samples []int16) string {
-		payload, marshalErr := json.Marshal(map[string]string{
-			"type":  "response.output_audio.delta",
+		return string(mustJSON(t, map[string]string{
+			"type":  rtEventOutputAudioDelta,
 			"delta": base64.StdEncoding.EncodeToString(toolDuringAudioPCM16LEBytes(samples)),
-		})
-		if marshalErr != nil {
-			t.Fatalf("marshal audio delta: %v", marshalErr)
-		}
-		return string(payload)
+		}))
 	}
 
-	serverEvent("response.created", `{"type":"response.created","response":{"id":"`+toolDuringAudioResponseID+`"}}`)
-	serverEvent("response.output_audio_transcript.delta", `{"type":"response.output_audio_transcript.delta","delta":"Checking the weather now."}`)
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"`+toolDuringAudioResponseID+`"}}`)
+	serverEvent(rtEventOutputAudioTranscriptDelta, `{"type":"response.output_audio_transcript.delta","delta":"Checking the weather now."}`)
 	for _, samples := range pre {
-		serverEvent("response.output_audio.delta", audioDeltaPayload(samples))
+		serverEvent(rtEventOutputAudioDelta, audioDeltaPayload(samples))
 	}
-	serverEvent("response.output_item.added",
+	serverEvent(rtEventOutputItemAdded,
 		`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"call_weather_1","name":"`+toolDuringAudioToolName+`"}}`)
-	serverEvent("response.function_call_arguments.done",
+	serverEvent(rtEventFunctionCallArgumentsDone,
 		`{"type":"response.function_call_arguments.done","call_id":"call_weather_1","name":"`+toolDuringAudioToolName+`","arguments":`+strconvQuote(toolDuringAudioToolArguments)+`}`)
 	for _, samples := range post {
-		serverEvent("response.output_audio.delta", audioDeltaPayload(samples))
+		serverEvent(rtEventOutputAudioDelta, audioDeltaPayload(samples))
 	}
 	serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Checking the weather now."}`)
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"`+toolDuringAudioResponseID+`","status":"completed"}}`)
-	clientEvent("conversation.item.create", observabilityJSONPayload(t, map[string]any{
-		"type": "conversation.item.create",
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"`+toolDuringAudioResponseID+`","status":"completed"}}`)
+	clientEvent(rtEventConversationItemCreate, observabilityJSONPayload(t, map[string]any{
+		"type": rtEventConversationItemCreate,
 		"item": map[string]string{
-			"type": "function_call_output", "call_id": "call_weather_1", "output": toolSingleCallResultContent,
+			"type": rtItemFunctionCallOutput, "call_id": "call_weather_1", "output": toolSingleCallResultContent,
 		},
 	}))
-	clientEvent("response.create", json.RawMessage(`{"type":"response.create"}`))
-	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_during_audio_followup"}}`)
-	serverEvent("response.output_text.delta", `{"type":"response.output_text.delta","delta":"Forecast delivered."}`)
-	serverEvent("response.output_text.done", `{"type":"response.output_text.done"}`)
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_during_audio_followup","status":"completed"}}`)
+	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_during_audio_followup"}}`)
+	serverEvent(rtEventOutputTextDelta, `{"type":"response.output_text.delta","delta":"Forecast delivered."}`)
+	serverEvent(rtEventOutputTextDone, `{"type":"response.output_text.done"}`)
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_during_audio_followup","status":"completed"}}`)
 
 	baseCapture.Session.ID = toolDuringAudioSessionID
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -253,23 +245,12 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
-		Type:        "session.closed",
+		Type:        rtEventSessionClosed,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"` + toolDuringAudioSessionID + `","reason":"fixture_complete"}`),
 	})
 
-	wirePath := filepath.Join(t.TempDir(), "tool-during-audio.session.json")
-	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal wire fixture: %v", err)
-	}
-	if err := os.WriteFile(wirePath, wireData, 0o600); err != nil {
-		t.Fatalf("write wire fixture: %v", err)
-	}
-	if _, err := gwtesting.NewReplayWebSocketDialer(wirePath); err != nil {
-		t.Fatalf("replay fixture rejected by the session replayer dialer: %v", err)
-	}
-	return wirePath
+	return writeReplayCaptureFixture(t, baseCapture, "tool-during-audio.session.json")
 }
 
 // runToolDuringAudio drives the real 'agent session' command surface over the
@@ -332,7 +313,7 @@ func observeToolDuringAudioExchange(t *testing.T, wirePath string) toolDuringAud
 			continue
 		}
 		switch record.Type {
-		case "response.output_audio.delta":
+		case rtEventOutputAudioDelta:
 			var payload struct {
 				Delta string `json:"delta"`
 			}
@@ -346,7 +327,7 @@ func observeToolDuringAudioExchange(t *testing.T, wirePath string) toolDuringAud
 			exchange.audioDeltaIndices = append(exchange.audioDeltaIndices, i)
 			exchange.streamedCount++
 			exchange.streamedDeltas = append(exchange.streamedDeltas, pcm)
-		case "response.function_call_arguments.done":
+		case rtEventFunctionCallArgumentsDone:
 			var payload struct {
 				Name      string `json:"name"`
 				Arguments string `json:"arguments"`
@@ -359,7 +340,7 @@ func observeToolDuringAudioExchange(t *testing.T, wirePath string) toolDuringAud
 				exchange.argumentsMatched++
 			}
 			exchange.toolCallIndex = i
-		case "response.done":
+		case rtEventResponseDone:
 			var payload struct {
 				Response struct {
 					Status string `json:"status"`
@@ -368,7 +349,7 @@ func observeToolDuringAudioExchange(t *testing.T, wirePath string) toolDuringAud
 			if json.Unmarshal(record.Payload, &payload) != nil {
 				continue
 			}
-			if payload.Response.Status == "completed" {
+			if payload.Response.Status == rtStatusCompleted {
 				exchange.completedDoneSeen = true
 				exchange.completedDoneIndex = i
 			}

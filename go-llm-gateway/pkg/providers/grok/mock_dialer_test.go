@@ -1,7 +1,6 @@
 package grok
 
 import (
-	"encoding/json"
 	"errors"
 	"sync"
 
@@ -55,7 +54,7 @@ func (c *mockWebSocketConn) addServerEvent(eventType string, fields map[string]a
 	for k, v := range fields {
 		m[k] = v
 	}
-	data, _ := json.Marshal(m)
+	data := mustMarshalFixture(m)
 	c.addServerMessage(data)
 }
 

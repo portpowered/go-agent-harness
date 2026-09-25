@@ -62,7 +62,7 @@ func TestSessionCommandReplaysEAC8OpenAIAudioTo16kLoopback(t *testing.T) {
 	if !ok {
 		t.Fatalf("loopback observer = %T, want *audio.VirtualStream", openedObserver)
 	}
-	defer func() { _ = observer.Close() }()
+	defer closeForTest(t, observer.Close)
 
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
@@ -107,7 +107,7 @@ func loadEAC8OpenAIAudioDeltas(t *testing.T) ([]string, []byte) {
 	if err != nil {
 		t.Fatalf("open eac8 OpenAI audio fixture: %v", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer closeForTest(t, file.Close)
 
 	var deltas []string
 	var pcm []byte

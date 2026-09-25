@@ -5,7 +5,9 @@ package services
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
@@ -28,6 +30,15 @@ func closeChatHandle(handle session.SessionHandle) error {
 		return nil
 	}
 	return handle.Close()
+}
+
+// writeChatTerminal writes a status line to a chat terminal writer. A failed
+// terminal write has no other channel to report through, so the line is kept
+// in the chat history instead of being lost.
+func (m *ChatModel) writeChatTerminal(w io.Writer, format string, args ...any) {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		m.lines = append(m.lines, chatLine{kind: chatLineSystem, content: strings.TrimSpace(fmt.Sprintf(format, args...))})
+	}
 }
 
 func reportChatHandleError(model *ChatModel, operation string, err error) {
@@ -58,12 +69,25 @@ type ChatCommand struct {
 
 // chatCommands is the ordered registry of built-in chat commands; dispatch
 // resolves tokens in slice order, so precedence follows this ordering.
-// Populated in init because the help handler renders from this registry,
-// which would otherwise form an initialization cycle.
-var chatCommands []ChatCommand
+// It is built on first use by registeredChatCommands because the help handler
+// renders from this registry, which would otherwise form an initialization
+// cycle.
+var chatCommands chatCommandRegistry
 
-func init() {
-	chatCommands = []ChatCommand{
+type chatCommandRegistry struct {
+	once     sync.Once
+	commands []ChatCommand
+}
+
+// registeredChatCommands returns the ordered command registry, building the
+// built-in commands on first use.
+func registeredChatCommands() []ChatCommand {
+	chatCommands.once.Do(func() { chatCommands.commands = builtinChatCommands() })
+	return chatCommands.commands
+}
+
+func builtinChatCommands() []ChatCommand {
+	return []ChatCommand{
 		{
 			Name:                    "system",
 			Summary:                 "Show the system prompt for this session",
@@ -88,7 +112,7 @@ func init() {
 // lookupChatCommand resolves a trimmed post-'/'-prefix token by case-sensitive
 // exact match against the ordered registry.
 func lookupChatCommand(token string) (ChatCommand, bool) {
-	for _, cmd := range chatCommands {
+	for _, cmd := range registeredChatCommands() {
 		if cmd.Name == token {
 			return cmd, true
 		}
@@ -137,7 +161,7 @@ const chatHelpSyntaxLines = `/skill   — Load a skill's instructions (e.g. /my-
 // padding each command token so the em-dash separators align.
 func renderChatHelp() string {
 	var b strings.Builder
-	for _, cmd := range chatCommands {
+	for _, cmd := range registeredChatCommands() {
 		if cmd.Hidden {
 			continue
 		}
@@ -309,8 +333,8 @@ func (m *ChatModel) updateCmdAutocomplete() {
 // available skills. Both command surfaces consume the same ordered registry;
 // skills retain the loader's existing order and follow the built-ins.
 func (m *ChatModel) buildCmdSuggestions() []Suggestion {
-	suggestions := make([]Suggestion, 0, len(chatCommands))
-	for _, cmd := range chatCommands {
+	suggestions := make([]Suggestion, 0, len(registeredChatCommands()))
+	for _, cmd := range registeredChatCommands() {
 		if cmd.Hidden {
 			continue
 		}

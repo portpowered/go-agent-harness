@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"io"
+	"testing"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -37,3 +38,12 @@ func (m *recordingRTCInboundMedia) ReadFrame(context.Context) (audio.PCMFrame, e
 func (m *recordingRTCInboundMedia) Close() error { return nil }
 
 var _ audio.InboundMedia = (*recordingRTCInboundMedia)(nil)
+
+// closeForTest closes a test-owned resource and reports a close failure
+// without aborting the remaining deferred cleanup.
+func closeForTest(t testing.TB, name string, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close %s: %v", name, err)
+	}
+}

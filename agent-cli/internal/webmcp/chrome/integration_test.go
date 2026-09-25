@@ -186,7 +186,7 @@ func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request)
 		}
 	}
 	writer.WriteHeader(response.StatusCode)
-	_, _ = io.Copy(writer, response.Body)
+	discardSecondaryError(func() error { _, err := io.Copy(writer, response.Body); return err })
 }
 
 func closeLiveCDPProxyConnection(writer http.ResponseWriter) {
@@ -196,7 +196,7 @@ func closeLiveCDPProxyConnection(writer http.ResponseWriter) {
 	}
 	connection, _, err := hijacker.Hijack()
 	if err == nil {
-		_ = connection.Close()
+		discardSecondaryError(connection.Close)
 	}
 }
 
@@ -572,7 +572,7 @@ func newFixtureServer() *fixtureServer {
 			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 			writer.Header().Set("Origin-Agent-Cluster", "?1")
 			writer.Header().Set("Permissions-Policy", "tools=(self)")
-			_, _ = writer.Write(chromeAdapterFixtureHTML)
+			writeFixtureBody(writer, chromeAdapterFixtureHTML)
 		case "/__test/state":
 			fixture.handleOracle(writer, request)
 		default:
@@ -603,7 +603,7 @@ func (f *fixtureServer) handleOracle(writer http.ResponseWriter, request *http.R
 	case http.MethodGet:
 		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(f.oracle)
+		encodeFixtureJSON(writer, f.oracle)
 	case http.MethodPost:
 		var oracle fixtureOracle
 		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&oracle); err != nil {

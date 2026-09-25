@@ -31,7 +31,7 @@ func TestStatefulBrokerOpenTabCreatesSelectsAndActivatesTarget(t *testing.T) {
 	var openedURL string
 	runtime := openTabRuntime{BrowserRuntime: base, opened: opened, last: &openedURL}
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	page, err := broker.OpenTab(context.Background(), webmcp.OpenTabRequest{URL: opened.URL, Activate: true})
 	if err != nil {
@@ -47,7 +47,7 @@ func TestStatefulBrokerOpenTabCreatesSelectsAndActivatesTarget(t *testing.T) {
 
 func TestStatefulBrokerOpenTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T) {
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	_, err := broker.OpenTab(context.Background(), webmcp.OpenTabRequest{URL: "file:///private/notes"})
 	classified, ok := err.(*webmcp.ClassifiedError)
 	if !ok || classified.Code != webmcp.ErrorInvalidToolInput {
@@ -57,7 +57,7 @@ func TestStatefulBrokerOpenTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T
 
 func TestStatefulBrokerNavigateSelectedTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T) {
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 	_, err := broker.NavigateSelectedTab(context.Background(), "file:///private/notes")
 	classified, ok := err.(*webmcp.ClassifiedError)
 	if !ok || classified.Code != webmcp.ErrorInvalidToolInput {
@@ -85,7 +85,7 @@ func TestStatefulBrokerOpenTabReportsSelectedWhileCatalogIsLate(t *testing.T) {
 		Discoverer:  staticDiscoverer{candidate},
 		CatalogWait: 10 * time.Millisecond,
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	page, err := broker.OpenTab(context.Background(), webmcp.OpenTabRequest{URL: opened.URL, Activate: true})
 	if err != nil {

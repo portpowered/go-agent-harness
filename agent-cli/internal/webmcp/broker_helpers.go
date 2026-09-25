@@ -99,6 +99,13 @@ func lifecycleClassifiedError(err error) (*ClassifiedError, bool) {
 	}
 }
 
+// isLifecycleClassifiedError reports whether err carries one of the
+// transport/lifecycle outcomes that lifecycleClassifiedError preserves.
+func isLifecycleClassifiedError(err error) bool {
+	classified, lifecycle := lifecycleClassifiedError(err)
+	return lifecycle && classified != nil
+}
+
 func sessionLifecycleFailure(selected *brokerSession) error {
 	if selected == nil || selected.session == nil {
 		return nil

@@ -74,7 +74,7 @@ func TestStatefulBrokerRedialsDisconnectedCachedHandle(t *testing.T) {
 			testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
 		)},
 	})
-	defer func() { _ = scripted.Close() }()
+	defer closeAtTestEnd(t, scripted)
 
 	firstLost := &atomic.Bool{}
 	runtime := &redialProbeRuntime{inner: scripted, firstLost: firstLost}
@@ -82,7 +82,7 @@ func TestStatefulBrokerRedialsDisconnectedCachedHandle(t *testing.T) {
 		Runtime:    runtime,
 		Discoverer: staticDiscoverer{candidate},
 	})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	// The session shape: a first read-only call opens and caches the handle.
 	if _, err := broker.ListTargets(context.Background(), webmcp.BrowserSelector{BrowserID: candidate.ID}); err != nil {

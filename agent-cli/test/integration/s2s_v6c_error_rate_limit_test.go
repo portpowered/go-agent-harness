@@ -156,8 +156,7 @@ func v6cOutcome(t *testing.T, result map[string]any) map[string]any {
 	if !ok || len(outcomes) != 1 {
 		t.Fatalf("result must carry exactly one expectation outcome: %v", result)
 	}
-	outcome, _ := outcomes[0].(map[string]any)
-	return outcome
+	return mustAs[map[string]any](t, outcomes[0])
 }
 
 func TestV6CErrorRateLimitThrottledExitsZeroOffline(t *testing.T) {
@@ -186,7 +185,7 @@ func TestV6CErrorRateLimitThrottledExitsZeroOffline(t *testing.T) {
 		t.Fatalf("terminal-reason outcome must pass: %v", outcome)
 	}
 	_, summary := v6cDecodeResults(t, run)
-	if summary["status"] != "pass" || summary["passed"] != float64(1) || summary["failed"] != float64(0) {
+	if summary["status"] != "pass" || summary["passed"] != float64(1) || summary[rtStatusFailed] != float64(0) {
 		t.Fatalf("summary must report status=pass passed=1 failed=0: %v", summary)
 	}
 }

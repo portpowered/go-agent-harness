@@ -157,7 +157,7 @@ func TestSessionBrowserNonAdmissionReturnsHelpWithoutSetup(t *testing.T) {
 	}{
 		{
 			name: "endpoint only",
-			args: []string{"--browser-cdp-url", "http://127.0.0.1:9222"},
+			args: []string{"--browser-cdp-url", testCDPURL},
 		},
 		{
 			name: "managed control only",
@@ -429,7 +429,7 @@ func (i *browserAdmissionInferencer) ConnectSession(ctx context.Context) (messag
 
 func (i *browserAdmissionInferencer) Close() {
 	if i.session != nil {
-		_ = i.session.Close()
+		releaseForTest(i.session.Close)
 	}
 }
 
@@ -460,13 +460,14 @@ func (s *browserAdmissionSession) RTCMedia() sharedaudio.MediaEndpoints {
 }
 
 func (s *browserAdmissionSession) Close() error {
+	var err error
 	s.closeOnce.Do(func() {
 		close(s.done)
 		if s.media != nil {
-			_ = s.media.Close()
+			err = s.media.Close()
 		}
 	})
-	return nil
+	return err
 }
 
 type browserAdmissionMedia struct {

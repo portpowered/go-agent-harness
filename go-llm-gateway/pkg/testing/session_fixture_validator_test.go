@@ -140,7 +140,7 @@ func TestValidateSessionCapture_FailsProviderWireEventEncodedAsStreamMessage(t *
 func validFixtureCapture(provenance string, records ...CapturedSessionEvent) SessionCapture {
 	return SessionCapture{
 		Version:  SessionCaptureVersion,
-		Provider: SessionProviderMetadata{Name: "grok", Model: "grok-realtime"},
+		Provider: SessionProviderMetadata{Name: testProviderGrok, Model: "grok-realtime"},
 		Session: SessionMetadata{
 			ID:                "sess_sanitized",
 			StartedAtUTC:      time.Now().UTC().Format(time.RFC3339Nano),

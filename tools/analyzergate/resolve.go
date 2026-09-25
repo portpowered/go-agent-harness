@@ -245,7 +245,7 @@ func verifyInstalled(ctx context.Context, cfg config, cachePath, attempted strin
 
 func candidateExecutable(cfg config) (string, error) {
 	candidate := cfg.candidate
-	if strings.ContainsRune(candidate, os.PathSeparator) || (runtime.GOOS == "windows" && strings.ContainsAny(candidate, `/\\`)) {
+	if strings.ContainsRune(candidate, os.PathSeparator) || (runtime.GOOS == windowsGOOS && strings.ContainsAny(candidate, `/\\`)) {
 		if !filepath.IsAbs(candidate) {
 			candidate = filepath.Join(cfg.workingDirectory, candidate)
 		}
@@ -278,8 +278,11 @@ func installedPath(cfg config) string {
 	)
 }
 
+// windowsGOOS is the GOOS value whose executables and paths need special handling.
+const windowsGOOS = "windows"
+
 func runtimeExecutableSuffix() string {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsGOOS {
 		return ".exe"
 	}
 	return ""
@@ -293,7 +296,7 @@ func executableFile(path string) bool {
 	if err != nil || info.IsDir() {
 		return false
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsGOOS {
 		return true
 	}
 	return info.Mode()&0o111 != 0

@@ -490,7 +490,7 @@ func TestInteract_EmitsToolCallRequestsAndPausesForHandoff(t *testing.T) {
 				Role:         models.RoleAssistant,
 				ContentParts: []models.ContentPart{models.TextPart{Text: "I need current data."}},
 				ToolCalls: []models.ToolCall{
-					{ID: "call-a", Name: "lookup", Arguments: `{"query":"a"}`},
+					{ID: testToolCallA, Name: "lookup", Arguments: `{"query":"a"}`},
 					{ID: "", Name: "forecast", Arguments: `{"city":"Boston"}`},
 				},
 			},
@@ -524,13 +524,13 @@ func TestInteract_EmitsToolCallRequestsAndPausesForHandoff(t *testing.T) {
 	if got := interactionEventTypes(events); !reflect.DeepEqual(got, wantTypes) {
 		t.Fatalf("event types = %v, want %v", got, wantTypes)
 	}
-	if events[2].ToolCall == nil || events[2].ToolCall.ID != "call-a" || events[2].ToolCall.Name != "lookup" {
+	if events[2].ToolCall == nil || events[2].ToolCall.ID != testToolCallA || events[2].ToolCall.Name != "lookup" {
 		t.Fatalf("first tool call = %#v", events[2].ToolCall)
 	}
 	if string(events[2].ToolCall.Arguments) != `{"query":"a"}` {
 		t.Fatalf("first tool args = %s", events[2].ToolCall.Arguments)
 	}
-	if events[2].Correlation.ToolCallID != "call-a" {
+	if events[2].Correlation.ToolCallID != testToolCallA {
 		t.Fatalf("first correlation = %#v", events[2].Correlation)
 	}
 	if events[3].ToolCall == nil || events[3].ToolCall.ID != "tool-call-2" || events[3].ToolCall.Name != "forecast" {
@@ -567,13 +567,13 @@ func TestInteract_AcceptsToolResultsAndContinuesSequence(t *testing.T) {
 			{
 				Role: InteractionRoleAssistant,
 				ToolCalls: []InteractionToolCall{
-					{ID: "call-a", Name: "lookup", Arguments: json.RawMessage(`{"query":"a"}`)},
+					{ID: testToolCallA, Name: "lookup", Arguments: json.RawMessage(`{"query":"a"}`)},
 					{ID: "call-b", Name: "forecast", Arguments: json.RawMessage(`{"city":"Boston"}`)},
 				},
 			},
 		},
 		ToolResults: []InteractionToolResult{
-			{ToolCallID: "call-a", Name: "lookup", Payload: json.RawMessage(`{"value":"alpha"}`)},
+			{ToolCallID: testToolCallA, Name: "lookup", Payload: json.RawMessage(`{"value":"alpha"}`)},
 			{ToolCallID: "call-b", Name: "forecast", Content: "sunny"},
 		},
 	})
@@ -595,10 +595,10 @@ func TestInteract_AcceptsToolResultsAndContinuesSequence(t *testing.T) {
 			t.Fatalf("events[%d].Sequence = %d, want %d", i, event.Sequence, wantSequence)
 		}
 	}
-	if events[1].ToolResult == nil || events[1].ToolResult.ToolCallID != "call-a" {
+	if events[1].ToolResult == nil || events[1].ToolResult.ToolCallID != testToolCallA {
 		t.Fatalf("first accepted result = %#v", events[1].ToolResult)
 	}
-	if events[1].Correlation.ToolCallID != "call-a" || events[2].Correlation.ToolCallID != "call-b" {
+	if events[1].Correlation.ToolCallID != testToolCallA || events[2].Correlation.ToolCallID != "call-b" {
 		t.Fatalf("accepted correlations = %#v %#v", events[1].Correlation, events[2].Correlation)
 	}
 
@@ -608,7 +608,7 @@ func TestInteract_AcceptsToolResultsAndContinuesSequence(t *testing.T) {
 	if len(provider.captured.Messages) != 4 {
 		t.Fatalf("provider messages = %#v, want user + assistant + 2 tool results", provider.captured.Messages)
 	}
-	if provider.captured.Messages[2].Role != models.RoleTool || provider.captured.Messages[2].ToolCallID != "call-a" {
+	if provider.captured.Messages[2].Role != models.RoleTool || provider.captured.Messages[2].ToolCallID != testToolCallA {
 		t.Fatalf("first provider tool result = %#v", provider.captured.Messages[2])
 	}
 	if provider.captured.Messages[2].TextContent() != `{"value":"alpha"}` {
@@ -633,22 +633,22 @@ func TestInteract_RejectsInvalidToolResultsBeforeProviderContinuation(t *testing
 		{
 			name: "missing",
 			results: []InteractionToolResult{
-				{ToolCallID: "call-a", Name: "lookup", Content: "alpha"},
+				{ToolCallID: testToolCallA, Name: "lookup", Content: "alpha"},
 			},
 			wantMessage: `missing tool result for tool call "call-b"`,
 		},
 		{
 			name: "duplicate",
 			results: []InteractionToolResult{
-				{ToolCallID: "call-a", Name: "lookup", Content: "alpha"},
-				{ToolCallID: "call-a", Name: "lookup", Content: "alpha again"},
+				{ToolCallID: testToolCallA, Name: "lookup", Content: "alpha"},
+				{ToolCallID: testToolCallA, Name: "lookup", Content: "alpha again"},
 			},
 			wantMessage: `duplicate tool result for tool call "call-a"`,
 		},
 		{
 			name: "unknown",
 			results: []InteractionToolResult{
-				{ToolCallID: "call-a", Name: "lookup", Content: "alpha"},
+				{ToolCallID: testToolCallA, Name: "lookup", Content: "alpha"},
 				{ToolCallID: "call-c", Name: "unknown", Content: "gamma"},
 			},
 			wantMessage: `unknown tool result "call-c"`,
@@ -676,7 +676,7 @@ func TestInteract_RejectsInvalidToolResultsBeforeProviderContinuation(t *testing
 					{
 						Role: InteractionRoleAssistant,
 						ToolCalls: []InteractionToolCall{
-							{ID: "call-a", Name: "lookup", Arguments: json.RawMessage(`{"query":"a"}`)},
+							{ID: testToolCallA, Name: "lookup", Arguments: json.RawMessage(`{"query":"a"}`)},
 							{ID: "call-b", Name: "forecast", Arguments: json.RawMessage(`{"city":"Boston"}`)},
 						},
 					},

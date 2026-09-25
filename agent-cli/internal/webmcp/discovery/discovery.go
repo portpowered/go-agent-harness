@@ -561,7 +561,7 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 	}
 	candidate, failure := s.candidateFromVersion(version, source, kind, parsed, allowRemote, true)
 	if candidate.ID != "" {
-		identity, _ := browserIdentityFromVersion(version, nil)
+		identity := rememberedBrowserIdentity(version, nil)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
 			httpURL:     targetListBaseURL(parsed),
 			addressKey:  browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port()),
@@ -593,7 +593,7 @@ func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source
 	}
 	candidate, failure := s.candidateFromVersion(version, source, kind, normalized.url, allowRemote, false)
 	if candidate.ID != "" {
-		identity, _ := browserIdentityFromVersion(version, normalized.url)
+		identity := rememberedBrowserIdentity(version, normalized.url)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
 			browserWS:   normalized.url.String(),
 			addressKey:  browserAddressKey(normalized.url.Scheme, normalized.url.Hostname(), normalized.url.Port()),
@@ -675,7 +675,7 @@ func (s *Service) unlockDiscovery() {
 	s.mu.Unlock()
 	for _, handle := range releases {
 		if handle != nil {
-			_ = handle.Close()
+			discardRelease(handle)
 		}
 	}
 }

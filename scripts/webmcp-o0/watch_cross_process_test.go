@@ -89,9 +89,9 @@ func TestCrossProcessFixtureProvidesAnIndependentHTTPStateOracle(t *testing.T) {
 		t.Fatalf("post fixture state: %v", err)
 	}
 	if response.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(response.Body)
+		body, readErr := io.ReadAll(response.Body)
 		closeResponseBody(t, response)
-		t.Fatalf("post fixture state status = %s body=%q", response.Status, body)
+		t.Fatalf("post fixture state status = %s body=%q read_err=%v", response.Status, body, readErr)
 	}
 	closeResponseBody(t, response)
 

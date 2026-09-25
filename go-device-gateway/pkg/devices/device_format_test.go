@@ -52,7 +52,7 @@ func TestDeviceFormatValidationAndErrorDetails(t *testing.T) {
 		t.Fatalf("cause-free format error unwrap = %v, want ErrUnsupportedDeviceFormat", withoutCause.Unwrap())
 	}
 	var nilFormatErr *DeviceFormatError
-	if nilFormatErr.Error() != "<nil>" || nilFormatErr.Unwrap() != nil {
+	if nilFormatErr.Error() != nilErrorText || nilFormatErr.Unwrap() != nil {
 		t.Fatalf("nil format error = %q/%v, want <nil>/nil", nilFormatErr.Error(), nilFormatErr.Unwrap())
 	}
 }

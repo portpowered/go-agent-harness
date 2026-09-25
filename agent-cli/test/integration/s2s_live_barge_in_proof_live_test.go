@@ -231,7 +231,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 	server := record.Direction == gwtesting.DirectionServerToClient
 	client := record.Direction == gwtesting.DirectionClientToServer
 	switch record.Type {
-	case "session.created":
+	case rtEventSessionCreated:
 		if server {
 			a.facts.SessionCreated++
 		}
@@ -239,7 +239,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		if server {
 			a.facts.SessionUpdated++
 		}
-	case "session.closed":
+	case rtEventSessionClosed:
 		if server {
 			a.facts.SessionClosed++
 		}
@@ -252,7 +252,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			}
 			a.facts.ProviderCodes = append(a.facts.ProviderCodes, code)
 		}
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		if !client {
 			return
 		}
@@ -276,7 +276,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:         len(decoded),
 			NonEmpty:      len(decoded) > 0,
 		})
-	case "input_audio_buffer.commit":
+	case rtEventInputAudioCommit:
 		if !client {
 			return
 		}
@@ -293,7 +293,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		}
 		a.currentInput = ""
 	case "conversation.item.created":
-		if !server || liveBargeInJSONField(payload, "item.role") != "user" {
+		if !server || liveBargeInJSONField(payload, "item.role") != rtRoleUser {
 			return
 		}
 		a.observeUserTurn(liveBargeInJSONField(payload, "item.id"))
@@ -314,7 +314,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		// identity through conversation.item.created above. Both are one logical
 		// user-turn representation and are deduplicated by item ID.
 		a.observeUserTurn(liveBargeInJSONField(payload, "item_id", "item.id"))
-	case "response.created":
+	case rtEventResponseCreated:
 		if !server {
 			return
 		}
@@ -353,7 +353,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 				ResponseID: stableID,
 			})
 		}
-	case "response.output_audio.delta", "response.audio.delta":
+	case rtEventOutputAudioDelta, "response.audio.delta":
 		if !server {
 			return
 		}
@@ -382,7 +382,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:      len(decoded),
 			NonEmpty:   len(decoded) > 0,
 		})
-	case "response.output_text.delta", "response.text.delta", "response.output_audio_transcript.delta", "response.audio_transcript.delta", "response.output_audio_transcript.done", "response.audio_transcript.done":
+	case rtEventOutputTextDelta, "response.text.delta", rtEventOutputAudioTranscriptDelta, "response.audio_transcript.delta", "response.output_audio_transcript.done", "response.audio_transcript.done":
 		if !server {
 			return
 		}
@@ -405,7 +405,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:      len(text),
 			NonEmpty:   text != "",
 		})
-	case "response.cancel":
+	case rtEventResponseCancel:
 		if !client {
 			return
 		}
@@ -431,7 +431,7 @@ func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			TurnID:     liveBargeInTurnID(interruptingInput),
 			ResponseID: identity.stable,
 		})
-	case "response.done":
+	case rtEventResponseDone:
 		if !server {
 			return
 		}
@@ -533,16 +533,16 @@ func liveBargeInTurnID(inputID string) string {
 
 func liveBargeInDisposition(status, reason string, wasCancelled bool) probe.BargeInDisposition {
 	switch strings.ToLower(status) {
-	case "completed":
+	case rtStatusCompleted:
 		return probe.BargeInDispositionCompleted
-	case "cancelled", "canceled":
+	case rtStatusCancelled, "canceled":
 		return probe.BargeInDispositionCancelled
 	case "incomplete":
 		if wasCancelled || strings.Contains(strings.ToLower(reason), "cancel") || strings.EqualFold(reason, "turn_detected") {
 			return probe.BargeInDispositionCancelled
 		}
 		return probe.BargeInDispositionFailed
-	case "failed":
+	case rtStatusFailed:
 		return probe.BargeInDispositionFailed
 	default:
 		return probe.BargeInDisposition(status)
@@ -826,9 +826,9 @@ func liveBargeInSanitizedLedger(facts liveBargeInCaptureFacts, trace *liveBargeI
 	}
 	parts := make([]string, 0, liveBargeInTurns)
 	for ordinal := 1; ordinal <= liveBargeInTurns; ordinal++ {
-		status := "completed"
+		status := rtStatusCompleted
 		if ordinal <= 2 {
-			status = "cancelled"
+			status = rtStatusCancelled
 		}
 		parts = append(parts, fmt.Sprintf("T%d{append_group=1,commit=1,user_turn=1} R%d{%s,audio_bytes=%d,text_bytes=%d}",
 			ordinal, ordinal, status, audioByResponse[ordinal], textByResponse[ordinal]))

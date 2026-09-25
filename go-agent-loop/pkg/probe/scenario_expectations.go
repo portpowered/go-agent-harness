@@ -232,6 +232,10 @@ var typedExpectationFieldsByKind = map[ExpectationKind]map[string]bool{
 	ExpectBufferDisposition:  {"value": true},
 	ExpectMetricsReconcile:   {},
 	ExpectResponseCancel:     {"value": true, "at": true},
+
+	// Repeated barge-in (v3c) expectation kinds.
+	ExpectBargeInCancelOnce:      {},
+	ExpectMessageCountsReconcile: {"value": true},
 }
 
 func rejectTypedExpectationFields(value ExpectedBehavior, location string, hasAt bool) error {

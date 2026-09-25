@@ -328,8 +328,8 @@ func validateSessionCaptureRecord(path string, index int, record CapturedSession
 	if !json.Valid(payload) {
 		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload", record.Sequence, "", "valid JSON value", "invalid JSON", ErrSessionCaptureStructure)
 	}
-	if captureJSONType(payload) == "null" {
-		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload", record.Sequence, "", "non-null JSON value", "null", ErrSessionCaptureStructure)
+	if captureJSONType(payload) == jsonNullLiteral {
+		return newSessionCaptureValidationError(path, SessionCaptureErrorClassStructure, fieldPrefix+"/payload", record.Sequence, "", "non-null JSON value", jsonNullLiteral, ErrSessionCaptureStructure)
 	}
 	return nil
 }

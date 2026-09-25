@@ -37,12 +37,12 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/tone.wav" {
 			writer.Header().Set("Content-Type", "audio/wav")
-			_, _ = writer.Write(tone)
+			writeFixtureBody(writer, tone)
 			return
 		}
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		writer.Header().Set("Permissions-Policy", "tools=(self)")
-		_, _ = fmt.Fprint(writer, youtubeAdapterFixtureHTML)
+		writeFixtureBody(writer, []byte(youtubeAdapterFixtureHTML))
 	}))
 	t.Cleanup(fixture.Close)
 
@@ -62,7 +62,7 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("launch stock Chrome: %v", err)
 	}
-	t.Cleanup(func() { _ = browser.Close() })
+	t.Cleanup(func() { discardSecondaryError(browser.Close) })
 
 	target, err := waitForFixturePageTarget(ctx, browserHTTPURL(browser.Endpoint().BrowserWSEndpoint), fixture.URL+"/")
 	if err != nil {
@@ -76,12 +76,12 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open browser runtime: %v", err)
 	}
-	t.Cleanup(func() { _ = handle.Close() })
+	t.Cleanup(func() { discardSecondaryError(handle.Close) })
 	session, err := handle.Attach(ctx, webmcp.TargetID(target.ID), webmcp.TargetOwnershipHarnessOwned)
 	if err != nil {
 		t.Fatalf("attach fixture target: %v", err)
 	}
-	t.Cleanup(func() { _ = session.Close() })
+	t.Cleanup(func() { discardSecondaryError(session.Close) })
 	targetSession, ok := session.(*targetSession)
 	if !ok {
 		t.Fatalf("session type = %T", session)

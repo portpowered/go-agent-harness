@@ -359,7 +359,7 @@ func TestMessagesToParams_AssistantMessageWithToolCalls(t *testing.T) {
 		Role:         models.RoleAssistant,
 		ContentParts: []models.ContentPart{models.TextPart{Text: "Calling a tool."}},
 		ToolCalls: []models.ToolCall{
-			{ID: "call_1", Name: "get_weather", Arguments: `{"city":"NYC"}`},
+			{ID: "call_1", Name: testToolGetWeather, Arguments: `{"city":"NYC"}`},
 		},
 	}})
 	if err != nil {
@@ -374,7 +374,7 @@ func TestMessagesToParams_AssistantMessageWithToolCalls(t *testing.T) {
 	if params[0].Content[1].OfToolUse == nil {
 		t.Fatal("expected tool_use block")
 	}
-	if params[0].Content[1].OfToolUse.Name != "get_weather" {
+	if params[0].Content[1].OfToolUse.Name != testToolGetWeather {
 		t.Errorf("expected tool name get_weather, got %q", params[0].Content[1].OfToolUse.Name)
 	}
 }
@@ -452,7 +452,7 @@ func TestResponseToMessage_WithToolCalls(t *testing.T) {
 	msg := anthropic.Message{
 		Content: []anthropic.ContentBlockUnion{
 			{Type: "text", Text: "Calling get_weather."},
-			{Type: "tool_use", ID: "call_abc", Name: "get_weather", Input: []byte(`{"city":"NYC"}`)},
+			{Type: "tool_use", ID: "call_abc", Name: testToolGetWeather, Input: []byte(`{"city":"NYC"}`)},
 		},
 	}
 	result := responseToMessage(msg)
@@ -463,7 +463,7 @@ func TestResponseToMessage_WithToolCalls(t *testing.T) {
 		t.Fatalf("expected 1 tool call, got %d", len(result.ToolCalls))
 	}
 	tc := result.ToolCalls[0]
-	if tc.ID != "call_abc" || tc.Name != "get_weather" || tc.Arguments != `{"city":"NYC"}` {
+	if tc.ID != "call_abc" || tc.Name != testToolGetWeather || tc.Arguments != `{"city":"NYC"}` {
 		t.Errorf("expected tool call, got ID=%q Name=%q Args=%q", tc.ID, tc.Name, tc.Arguments)
 	}
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
+// testToolGetWeather is the tool name used by the Gemini fixtures.
+const testToolGetWeather = "get_weather"
+
 func TestToolsToGeminiToolsPreservesCompletePageSchema(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"object","properties":{"face":{"type":"string","enum":["R","U"]},"turns":{"type":"integer","minimum":1}},"required":["face","turns"],"additionalProperties":false}}},"required":["moves"],"additionalProperties":false}`)
 	tools := toolsToGeminiTools([]models.ToolDefinition{{Name: "queue_cube_moves", ParameterSchema: schema}})

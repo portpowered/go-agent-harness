@@ -52,7 +52,7 @@ func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) fresh
 		Clock:             clock,
 		InvocationTimeout: 5 * time.Second,
 	})
-	t.Cleanup(func() { _ = broker.Close() })
+	t.Cleanup(func() { closeAtTestEnd(t, broker) })
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestStatefulBrokerDoesNotRecommendRetryForUnprovenMutation(t *testing.T) {
 	if envelope.Error.Retryable {
 		t.Fatalf("mutation freshness error = %#v, want non-retryable side-effect uncertainty", envelope.Error)
 	}
-	recovery, _ := envelope.Error.Details["recovery"].(string)
+	recovery := mustAs[string](t, envelope.Error.Details["recovery"])
 	if !strings.Contains(strings.ToLower(recovery), "do not retry") || !strings.Contains(strings.ToLower(recovery), "reconcile") {
 		t.Fatalf("mutation recovery = %q, want explicit no-retry reconciliation guidance", recovery)
 	}

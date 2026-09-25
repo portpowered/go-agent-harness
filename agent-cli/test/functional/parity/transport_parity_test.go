@@ -237,7 +237,8 @@ func runParityScenario(t *testing.T, scenario committedScenario, capture gateway
 	if err != nil {
 		t.Fatalf("dial %s transport: %v", kind, err)
 	}
-	t.Cleanup(func() { _ = conn.Close() })
+	// Safety net for early failures; the explicit close below asserts the result.
+	t.Cleanup(func() { releaseParityConn(conn) })
 
 	logicalClock := clock.NewDeterministic(time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), parityClockTick)
 	observed := driveScenario(ctx, t, scenario, capture, conn, logicalClock)
@@ -653,8 +654,7 @@ func newRTCDataConn(events []gatewaytesting.CapturedSessionEvent) (_ *rtcDataCon
 	if err != nil {
 		return nil, fmt.Errorf("create RTC loopback signaling pair: %w", err)
 	}
-	defer offerer.Close()
-	defer answerer.Close()
+	defer func() { err = errors.Join(err, offerer.Close(), answerer.Close()) }()
 
 	api := parityRTCAPI()
 	clientPeer, err := api.NewPeerConnection(webrtc.Configuration{})
@@ -663,15 +663,13 @@ func newRTCDataConn(events []gatewaytesting.CapturedSessionEvent) (_ *rtcDataCon
 	}
 	serverPeer, err := api.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
-		_ = clientPeer.Close()
-		return nil, fmt.Errorf("create RTC server peer: %w", err)
+		return nil, errors.Join(fmt.Errorf("create RTC server peer: %w", err), clientPeer.Close())
 	}
 	setupComplete := false
 	defer func() {
 		if !setupComplete {
 			state.markClosed()
-			_ = clientPeer.Close()
-			_ = serverPeer.Close()
+			err = errors.Join(err, clientPeer.Close(), serverPeer.Close())
 		}
 	}()
 
@@ -681,36 +679,12 @@ func newRTCDataConn(events []gatewaytesting.CapturedSessionEvent) (_ *rtcDataCon
 	serverOpen := make(chan struct{})
 	var clientOpenOnce, serverSeenOnce, serverOpenOnce sync.Once
 
-	clientPeer.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
-		if connectionState == webrtc.PeerConnectionStateFailed || connectionState == webrtc.PeerConnectionStateClosed {
-			if !state.isClosed() {
-				state.fail(fmt.Errorf("RTC client peer reached %s", connectionState))
-			}
-		}
-	})
-	serverPeer.OnConnectionStateChange(func(connectionState webrtc.PeerConnectionState) {
-		if connectionState == webrtc.PeerConnectionStateFailed || connectionState == webrtc.PeerConnectionStateClosed {
-			if !state.isClosed() {
-				state.fail(fmt.Errorf("RTC server peer reached %s", connectionState))
-			}
-		}
-	})
+	watchRTCPeerState(clientPeer, state, "client")
+	watchRTCPeerState(serverPeer, state, "server")
 	serverPeer.OnDataChannel(func(dataChannel *webrtc.DataChannel) {
-		if dataChannel.Label() != parityDataChannelLabel {
-			state.fail(fmt.Errorf("RTC server received unexpected data channel %q", dataChannel.Label()))
-			return
-		}
-		serverSeenOnce.Do(func() { close(serverSeen) })
-		dataChannel.OnOpen(func() { serverOpenOnce.Do(func() { close(serverOpen) }) })
-		dataChannel.OnMessage(func(message webrtc.DataChannelMessage) { state.receive(dataChannel, message) })
-		dataChannel.OnError(func(dataChannelErr error) {
-			state.failIfOpen(fmt.Errorf("RTC server data channel: %w", dataChannelErr))
-		})
-		dataChannel.OnClose(func() {
-			if !state.isClosed() {
-				state.fail(errors.New("RTC server data channel closed before replay completed"))
-			}
-		})
+		acceptRTCServerDataChannel(dataChannel, state,
+			func() { serverSeenOnce.Do(func() { close(serverSeen) }) },
+			func() { serverOpenOnce.Do(func() { close(serverOpen) }) })
 	})
 
 	clientDataChannel, err := clientPeer.CreateDataChannel(parityDataChannelLabel, nil)

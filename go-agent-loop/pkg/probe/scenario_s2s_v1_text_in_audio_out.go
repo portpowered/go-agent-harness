@@ -1,7 +1,7 @@
 package probe
 
-func init() {
-	if err := RegisterScenario(Scenario{
+func registerS2SV1TextInAudioOutScenario(register func(Scenario, ...DeadSessionControl) error) {
+	if err := register(Scenario{
 		ID:          "s2s-v1-text-in-audio-out",
 		Name:        "s2s_v1_text_in_audio_out",
 		Description: "Vertical probe v1 baseline: a text prompt enters over the session path and an audio (or audio-transcript) response arrives before the session closes.",

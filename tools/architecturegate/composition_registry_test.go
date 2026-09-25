@@ -106,7 +106,7 @@ func TestBaselineHistoryRejectsGrowthThroughRename(t *testing.T) {
 	gitTestCommand(t, root, "commit", "-m", "baseline")
 
 	newEntry := old
-	newEntry.File = "new.go"
+	newEntry.File = newFixtureFile
 	newEntry.Value = old.Value + 1
 	current := Baseline{Version: baselineVersion, Entries: []BaselineEntry{newEntry}, Renames: []BaselineRename{{From: oldKey, To: baselineIssue(newEntry).Key()}}}
 	issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", current)
@@ -285,7 +285,7 @@ func TestBaselineHistoryRejectsAddedExemptionAndMissingRenameTarget(t *testing.T
 
 	added := initial
 	added.Entries = append([]BaselineEntry(nil), initial.Entries...)
-	added.Entries = append(added.Entries, BaselineEntry{Rule: "function-lines", Module: old.Module, Package: old.Package, File: "new.go", Symbol: "New", Value: 81, Rationale: "unreviewed holder", Phase: "P0"})
+	added.Entries = append(added.Entries, BaselineEntry{Rule: "function-lines", Module: old.Module, Package: old.Package, File: newFixtureFile, Symbol: "New", Value: 81, Rationale: "unreviewed holder", Phase: "P0"})
 	if issues := compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", added); !hasRule(issues, "baseline-history-add") {
 		t.Fatalf("issues = %#v; added exemption was accepted", issues)
 	}
@@ -303,7 +303,7 @@ func TestBaselineHistoryRejectsGrowthOfPersistedRename(t *testing.T) {
 	baselinePath := filepath.Join(root, "baseline.json")
 	old := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app/services/a", File: "old.go", Symbol: "Run", Value: 81, Rationale: "extraction holder", Phase: "P0"}
 	target := old
-	target.File = "new.go"
+	target.File = newFixtureFile
 	rename := BaselineRename{From: baselineIssue(old).Key(), To: baselineIssue(target).Key()}
 	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{target}, Renames: []BaselineRename{rename}}
 	data, err := baselineJSON(initial)
@@ -352,7 +352,7 @@ func TestBaselineHistoryRejectsRetainedOrUnknownRenameSource(t *testing.T) {
 
 	t.Run("retained source", func(t *testing.T) {
 		target := old
-		target.File = "new.go"
+		target.File = newFixtureFile
 		current := initial
 		current.Entries = []BaselineEntry{old, target}
 		current.Renames = []BaselineRename{{From: baselineIssue(old).Key(), To: baselineIssue(target).Key()}}
@@ -452,7 +452,7 @@ func Large() {
 		t.Fatalf("bootstrap issues = %#v", issues)
 	}
 
-	baseline.Entries = append(baseline.Entries, BaselineEntry{Rule: "function-lines", Module: module.Path, Package: module.Path, File: "new.go", Symbol: "New", Value: 81, Rationale: "unrelated", Phase: "P0"})
+	baseline.Entries = append(baseline.Entries, BaselineEntry{Rule: "function-lines", Module: module.Path, Package: module.Path, File: newFixtureFile, Symbol: "New", Value: 81, Rationale: "unrelated", Phase: "P0"})
 	issues = compareBaselineHistory(context.Background(), "git", root, baselinePath, "HEAD", baseline, policy)
 	if !hasRule(issues, "baseline-history-add") {
 		t.Fatalf("bootstrap accepted an issue absent at merge base: %#v", issues)
@@ -572,7 +572,7 @@ func TestInventoryIncludesUntrackedSourceViolations(t *testing.T) {
 	// miss an untracked file before the first commit.
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.com/untracked\n\ngo 1.26.7\n")
-	writeFixture(t, root, "new.go", `package untracked
+	writeFixture(t, root, newFixtureFile, `package untracked
 
 func NewViolation() {
 	_ = 1

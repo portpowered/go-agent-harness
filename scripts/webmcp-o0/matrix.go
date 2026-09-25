@@ -257,7 +257,7 @@ func startNativeFixture() *httptest.Server {
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		writer.Header().Set("Origin-Agent-Cluster", "?1")
 		writer.Header().Set("Permissions-Policy", "tools=(self)")
-		_, _ = writer.Write(nativeFixtureHTML)
+		writeFixtureBody(writer, nativeFixtureHTML)
 	}))
 }
 
@@ -465,7 +465,7 @@ func runWebMCPMatrix(endpoint string) (webmcpMatrixReport, error) {
 	defer func() {
 		// The remote allocator never owns Chrome. Cancel only the temporary
 		// client target; the launcher owns the browser process.
-		_ = chromedp.Cancel(targetContext)
+		cancelProbeTarget(targetContext)
 		cancelTarget()
 	}()
 

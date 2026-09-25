@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,12 +176,12 @@ func (a *toolBargeInCaptureAdapter) flushPendingUserTurns() {
 func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEvent) {
 	payload := plainSpeechRecordPayload(record)
 	switch record.Type {
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
 		inputID := a.activeInputID()
-		decoded, _ := base64.StdEncoding.DecodeString(plainSpeechJSONField(payload, "audio"))
+		decoded := decodeObservedAudio(plainSpeechJSONField(payload, "audio"))
 		a.ledger.Observe(probe.BargeInEvent{
 			Sequence:      a.nextEventSequence(),
 			Kind:          probe.BargeInEventInputAppend,
@@ -192,7 +191,7 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:         len(decoded),
 			NonEmpty:      len(decoded) > 0,
 		})
-	case "input_audio_buffer.commit":
+	case rtEventInputAudioCommit:
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
@@ -211,67 +210,16 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		a.lastCommittedInput = inputID
 		a.flushPendingUserTurns()
 	case "conversation.item.created":
-		if record.Direction != gwtesting.DirectionServerToClient || plainSpeechJSONField(payload, "item.role") != "user" {
-			return
-		}
-		inputIndex := a.nextUserTurnInputIndex()
-		if inputIndex < 0 {
-			// Keep an explicit malformed observation so a duplicate or orphan
-			// acknowledgement fails the ledger instead of being silently ignored.
-			a.ledger.Observe(probe.BargeInEvent{
-				Sequence: a.nextEventSequence(),
-				Kind:     probe.BargeInEventUserTurn,
-			})
-			return
-		}
-		if !a.inputs[inputIndex].committed {
-			// A recording transport can observe the provider acknowledgement
-			// before the successful client commit has been appended to the
-			// capture. Retain the stable FIFO identity and emit the normalized
-			// user-turn event immediately after its commit boundary.
-			a.inputs[inputIndex].userTurnPending = true
-			return
-		}
-		a.emitUserTurn(inputIndex)
-	case "response.created":
-		if record.Direction != gwtesting.DirectionServerToClient {
-			return
-		}
-		a.responseOrdinal++
-		providerID := plainSpeechJSONField(payload, "response.id", "response_id")
-		stableID := toolBargeInResponseID(a.responseOrdinal)
-		owner := a.lastCommittedInput
-		identity := toolBargeInResponseIdentity{
-			stable:  stableID,
-			inputID: owner,
-			turnID:  plainSpeechTurnID(owner),
-			ordinal: a.responseOrdinal,
-		}
-		a.providerResponses[providerID] = identity
-		a.responseByProvider[providerID] = stableID
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventResponseCreated,
-			InputID:    owner,
-			TurnID:     identity.turnID,
-			ResponseID: stableID,
-		})
-		if a.responseOrdinal > 1 {
-			a.ledger.Observe(probe.BargeInEvent{
-				Sequence:   a.nextEventSequence(),
-				Kind:       probe.BargeInEventContinuation,
-				InputID:    owner,
-				TurnID:     identity.turnID,
-				ResponseID: stableID,
-			})
-		}
-	case "response.output_audio.delta":
+		a.observeUserTurnAck(record, payload)
+	case rtEventResponseCreated:
+		a.observeResponseCreated(record, payload)
+	case rtEventOutputAudioDelta:
 		if record.Direction != gwtesting.DirectionServerToClient {
 			return
 		}
 		providerID := plainSpeechJSONField(payload, "response_id", "response.id")
 		stableID := a.responseByProvider[providerID]
-		decoded, _ := base64.StdEncoding.DecodeString(plainSpeechJSONField(payload, "delta"))
+		decoded := decodeObservedAudio(plainSpeechJSONField(payload, "delta"))
 		a.ledger.Observe(probe.BargeInEvent{
 			Sequence:   a.nextEventSequence(),
 			Kind:       probe.BargeInEventResponseOutput,
@@ -279,23 +227,9 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:      len(decoded),
 			NonEmpty:   len(decoded) > 0,
 		})
-	case "response.output_item.added":
-		if record.Direction != gwtesting.DirectionServerToClient || plainSpeechJSONField(payload, "item.type") != "function_call" {
-			return
-		}
-		providerResponseID := plainSpeechJSONField(payload, "response_id", "response.id")
-		stableResponseID := a.responseByProvider[providerResponseID]
-		identity := a.providerResponses[providerResponseID]
-		callID := plainSpeechJSONField(payload, "item.call_id", "item.id")
-		a.tools[callID] = toolBargeInToolIdentity{responseID: stableResponseID, turnID: identity.turnID}
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventToolCall,
-			ResponseID: stableResponseID,
-			TurnID:     identity.turnID,
-			ToolCallID: callID,
-		})
-	case "response.cancel":
+	case rtEventOutputItemAdded:
+		a.observeToolCall(record, payload)
+	case rtEventResponseCancel:
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
@@ -311,7 +245,7 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			TurnID:     plainSpeechTurnID(interruptingInput),
 			ResponseID: identity.stable,
 		})
-	case "response.done":
+	case rtEventResponseDone:
 		if record.Direction != gwtesting.DirectionServerToClient {
 			return
 		}
@@ -328,20 +262,8 @@ func (a *toolBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		})
 		identity.terminal = true
 		a.providerResponses[providerID] = identity
-	case "conversation.item.create":
-		if record.Direction != gwtesting.DirectionClientToServer || plainSpeechJSONField(payload, "item.type") != "function_call_output" {
-			return
-		}
-		callID := plainSpeechJSONField(payload, "item.call_id")
-		tool := a.tools[callID]
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:    a.nextEventSequence(),
-			Kind:        probe.BargeInEventToolResult,
-			ResponseID:  tool.responseID,
-			TurnID:      tool.turnID,
-			ToolCallID:  callID,
-			Disposition: probe.BargeInDispositionDelivered,
-		})
+	case rtEventConversationItemCreate:
+		a.observeToolResult(record, payload)
 	}
 }
 
@@ -378,12 +300,12 @@ func toolBargeInResponseRecordIndex(capture gwtesting.SessionCapture, eventType,
 
 func toolBargeInResultRecordIndex(capture gwtesting.SessionCapture, occurrence int) int {
 	return toolBargeInRecordIndex(capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionClientToServer && record.Type == "conversation.item.create" && plainSpeechJSONField(plainSpeechRecordPayload(record), "item.type") == "function_call_output"
+		return record.Direction == gwtesting.DirectionClientToServer && record.Type == rtEventConversationItemCreate && plainSpeechJSONField(plainSpeechRecordPayload(record), "item.type") == rtItemFunctionCallOutput
 	}, occurrence)
 }
 
 func toolBargeInResponseDoneWithStatus(capture *gwtesting.SessionCapture, responseID, status string) bool {
-	index := toolBargeInResponseRecordIndex(*capture, "response.done", responseID)
+	index := toolBargeInResponseRecordIndex(*capture, rtEventResponseDone, responseID)
 	if index < 0 {
 		return false
 	}
@@ -391,8 +313,8 @@ func toolBargeInResponseDoneWithStatus(capture *gwtesting.SessionCapture, respon
 	if json.Unmarshal(plainSpeechRecordPayload(capture.Records[index]), &value) != nil {
 		return false
 	}
-	response, _ := value["response"].(map[string]any)
-	if response == nil {
+	response, ok := value["response"].(map[string]any)
+	if !ok {
 		response = map[string]any{}
 		value["response"] = response
 	}
@@ -407,14 +329,14 @@ func toolBargeInResponseDoneWithStatus(capture *gwtesting.SessionCapture, respon
 
 func toolBargeInInsertCancellationBeforeTerminal(capture *gwtesting.SessionCapture) bool {
 	callIndex := toolBargeInRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.function_call_arguments.done" && plainSpeechRecordResponseID(record) == toolBargeInResponseOne
+		return record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventFunctionCallArgumentsDone && plainSpeechRecordResponseID(record) == toolBargeInResponseOne
 	}, 0)
 	if callIndex < 0 {
 		return false
 	}
 	cancel := gwtesting.CapturedSessionEvent{
 		Direction:   gwtesting.DirectionClientToServer,
-		Type:        "response.cancel",
+		Type:        rtEventResponseCancel,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"response.cancel"}`),
 	}
@@ -489,11 +411,11 @@ func TestS2SLiveBargeInOutstandingToolCallThroughCLI(t *testing.T) {
 	}
 
 	toolCallIndex := toolBargeInRecordIndex(run.capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_item.added" && plainSpeechJSONField(plainSpeechRecordPayload(record), "item.type") == "function_call"
+		return record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventOutputItemAdded && plainSpeechJSONField(plainSpeechRecordPayload(record), "item.type") == rtItemFunctionCall
 	}, 0)
-	overlapAppendIndex := toolBargeInClientRecordIndex(run.capture, "input_audio_buffer.append", 1)
-	firstTerminalIndex := toolBargeInResponseRecordIndex(run.capture, "response.done", toolBargeInResponseOne)
-	if toolCallIndex < 0 || overlapAppendIndex < 0 || firstTerminalIndex < 0 || !(toolCallIndex < firstTerminalIndex && firstTerminalIndex < overlapAppendIndex) {
+	overlapAppendIndex := toolBargeInClientRecordIndex(run.capture, rtEventInputAudioAppend, 1)
+	firstTerminalIndex := toolBargeInResponseRecordIndex(run.capture, rtEventResponseDone, toolBargeInResponseOne)
+	if toolCallIndex < 0 || overlapAppendIndex < 0 || firstTerminalIndex < 0 || !strictlyIncreasing(toolCallIndex, firstTerminalIndex, overlapAppendIndex) {
 		t.Fatalf("wire collision order = tool_call:%d first_terminal:%d overlap_append:%d; want tool call < owning terminal < non-empty interrupting speech", toolCallIndex, firstTerminalIndex, overlapAppendIndex)
 	}
 }
@@ -513,7 +435,7 @@ func TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations(t *testing.T) {
 			name: "premature clean close",
 			mutate: func(capture *gwtesting.SessionCapture) {
 				removePlainSpeechRecords(capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.done" && plainSpeechRecordResponseID(record) == toolBargeInResponseThree
+					return record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventResponseDone && plainSpeechRecordResponseID(record) == toolBargeInResponseThree
 				})
 			},
 			want: `response "response-tool-barge-in-3" has unresolved terminal disposition`,
@@ -522,7 +444,7 @@ func TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations(t *testing.T) {
 			name: "lost result",
 			mutate: func(capture *gwtesting.SessionCapture) {
 				removePlainSpeechRecords(capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionClientToServer && record.Type == "conversation.item.create" && plainSpeechJSONField(plainSpeechRecordPayload(record), "item.type") == "function_call_output"
+					return record.Direction == gwtesting.DirectionClientToServer && record.Type == rtEventConversationItemCreate && plainSpeechJSONField(plainSpeechRecordPayload(record), "item.type") == rtItemFunctionCallOutput
 				})
 			},
 			want: `tool call "call-tool-barge-in" has unresolved result disposition`,
@@ -538,10 +460,9 @@ func TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations(t *testing.T) {
 				if json.Unmarshal(plainSpeechRecordPayload(capture.Records[index]), &value) != nil {
 					return
 				}
-				item, _ := value["item"].(map[string]any)
+				item := mustAs[map[string]any](t, value["item"])
 				item["call_id"] = "call-orphaned"
-				encoded, _ := json.Marshal(value)
-				capture.Records[index].Payload = encoded
+				capture.Records[index].Payload = mustJSON(t, value)
 			},
 			want: `tool result references unknown call "call-orphaned"`,
 		},
@@ -561,7 +482,7 @@ func TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations(t *testing.T) {
 				if !toolBargeInInsertCancellationBeforeTerminal(capture) {
 					return
 				}
-				toolBargeInResponseDoneWithStatus(capture, toolBargeInResponseOne, "cancelled")
+				toolBargeInResponseDoneWithStatus(capture, toolBargeInResponseOne, rtStatusCancelled)
 			},
 			contract: func() probe.BargeInContract {
 				contract := toolBargeInContract()

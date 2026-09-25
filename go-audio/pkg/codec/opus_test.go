@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"math"
 	"testing"
 	"time"
@@ -18,8 +19,8 @@ func TestOpusRoundTripProducesNovelPCM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = encoder.Close() }()
-	defer func() { _ = decoder.Close() }()
+	defer closeForTest(t, encoder)
+	defer closeForTest(t, decoder)
 
 	var previousPayload []byte
 	for frameIndex := range 3 {
@@ -61,8 +62,8 @@ func TestOpusPLCUsesVoicedHistoryAndResumesDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = encoder.Close() }()
-	defer func() { _ = decoder.Close() }()
+	defer closeForTest(t, encoder)
+	defer closeForTest(t, decoder)
 
 	first, err := encoder.Encode(context.Background(), voicedFrame(0, 330))
 	if err != nil {
@@ -186,9 +187,9 @@ func TestOpusOutputOwnershipAndIndependentHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = encoder.Close() }()
-	defer func() { _ = decoderA.Close() }()
-	defer func() { _ = decoderB.Close() }()
+	defer closeForTest(t, encoder)
+	defer closeForTest(t, decoderA)
+	defer closeForTest(t, decoderB)
 
 	source := voicedFrame(0, 440)
 	payload, err := encoder.Encode(context.Background(), source)
@@ -344,4 +345,12 @@ func int16Bytes(samples []int16) []byte {
 		binary.LittleEndian.PutUint16(bytes[i*2:], uint16(sample))
 	}
 	return bytes
+}
+
+// closeForTest closes a test-owned resource and reports an unexpected failure.
+func closeForTest(t testing.TB, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("Close() error = %v", err)
+	}
 }

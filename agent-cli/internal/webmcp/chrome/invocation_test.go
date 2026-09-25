@@ -64,10 +64,10 @@ func (e *invocationExecutor) Execute(ctx context.Context, method string, params,
 		call.frameID = params.FrameID
 		call.toolName = params.ToolName
 		call.input = jsontext.Value(bytes.Clone(params.Input))
-		call.wireParams, _ = json.Marshal(params)
+		call.wireParams = mustFixtureJSON(params)
 	case *cdpWebMCP.CancelInvocationParams:
 		call.invocationID = params.InvocationID
-		call.wireParams, _ = json.Marshal(params)
+		call.wireParams = mustFixtureJSON(params)
 	}
 
 	e.mu.Lock()

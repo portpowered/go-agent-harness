@@ -506,8 +506,8 @@ func (r *Redactor) redactToolPayload(raw json.RawMessage, eventType EventType, t
 		// page-owned JSON merely because a name happens to match.
 		return raw, redactionTrace{rules: map[string]bool{}}, nil
 	}
-	fields, err := decodeJSONObject(raw)
-	if err != nil {
+	fields, isObject := jsonObjectFields(raw)
+	if !isObject {
 		return raw, redactionTrace{rules: map[string]bool{}}, nil
 	}
 	trace := redactionTrace{rules: map[string]bool{}}
@@ -752,8 +752,8 @@ func replaceJSONPointerTokens(raw json.RawMessage, tokens []string, replacement 
 		if err != nil {
 			return nil, false, err
 		}
-		index, err := parseJSONPointerArrayIndex(tokens[0])
-		if err != nil || index >= len(values) {
+		index, valid := jsonPointerArrayIndex(tokens[0])
+		if !valid || index >= len(values) {
 			return normalized, false, nil
 		}
 		updated, changed, err := replaceJSONPointerTokens(values[index], tokens[1:], replacement)
@@ -771,15 +771,15 @@ func replaceJSONPointerTokens(raw json.RawMessage, tokens []string, replacement 
 	}
 }
 
-func parseJSONPointerArrayIndex(token string) (int, error) {
+func jsonPointerArrayIndex(token string) (int, bool) {
 	if token == "" || (len(token) > 1 && token[0] == '0') {
-		return 0, errors.New("invalid array index")
+		return 0, false
 	}
 	value, err := strconv.ParseUint(token, 10, 64)
 	if err != nil || value > uint64(^uint(0)>>1) {
-		return 0, errors.New("invalid array index")
+		return 0, false
 	}
-	return int(value), nil
+	return int(value), true
 }
 
 func isRawCDPField(name string) bool {

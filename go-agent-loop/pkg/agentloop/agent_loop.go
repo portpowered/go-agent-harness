@@ -447,7 +447,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			// the lifecycle signal that releases that worker; natural engine errors
 			// still drain it to preserve the publication barrier.
 			forwardCancel()
-			_ = finish(nil, false)
+			_ = finish(nil, false) //nolint:errcheck // Caller cancellation is the reported outcome; the drained engine error is its consequence.
 			return ctx.Err()
 
 		case err := <-errCh:
@@ -462,12 +462,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 			// The model has produced a text response for this turn. Forward it to
 			// any configured output writers.
 			al.logInfo("agentloop: received model response, forwarding to outputs")
-			text := req.Message.TextContent()
-			al.mu.Lock()
-			for _, out := range al.outputs {
-				_, _ = out.Writer.Write([]byte(text))
-			}
-			al.mu.Unlock()
+			al.forwardToOutputs(req.Message.TextContent())
 		}
 	}
 }

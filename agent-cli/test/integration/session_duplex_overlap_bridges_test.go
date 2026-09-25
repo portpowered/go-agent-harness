@@ -155,38 +155,6 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 	// overlap observable: the next user's PCM starts while the response remains
 	// in the bridge without RESPONSE.CANCEL. The final response also waits for
 	// peer input acceptance; its EOF is released after the peer's second turn.
-	finalSchedule := len(v8MultiTurnSchedule()) - 1
-	if crossing.Schedule == finalSchedule {
-		select {
-		case <-ack:
-		case <-b.coordinator.abort:
-			return 0, context.Canceled
-		}
-		if err := b.waitForRuntimeInput(crossing); err != nil {
-			return 0, err
-		}
-		b.mu.Lock()
-		b.writes++
-		writes := b.writes
-		b.mu.Unlock()
-		if writes == v8MultiTurnCount {
-			if err := b.waitForEOF(); err != nil {
-				return 0, err
-			}
-			select {
-			case b.packets <- v8MultiTurnBridgePacket{eof: true}:
-			case <-b.coordinator.abort:
-				return 0, context.Canceled
-			}
-			select {
-			case <-b.eofSeen:
-			case <-b.coordinator.abort:
-				return 0, context.Canceled
-			default:
-			}
-		}
-		return len(data), nil
-	}
 	select {
 	case <-ack:
 	case <-b.coordinator.abort:

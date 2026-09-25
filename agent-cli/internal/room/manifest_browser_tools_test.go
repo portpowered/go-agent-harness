@@ -12,7 +12,7 @@ func TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints(t *t
 	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
 	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
 	data := validManifestData(t, func(document map[string]any) {
-		document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
+		manifestParticipant(document, 0)["browserTools"] = map[string]any{
 			"backend": "webmcp",
 			"connection": map[string]any{
 				"cdp_url":            " http://127.0.0.1:9222/json/version?token=cdp-secret#fragment-secret ",
@@ -217,7 +217,7 @@ func TestParseManifest_BrowserToolsRejectsUnknownNestedFields(t *testing.T) {
 	t.Setenv("ROOM_CUSTOMER_KEY", "customer-secret")
 	t.Setenv("ROOM_ASSISTANT_KEY", "assistant-secret")
 	data := validManifestData(t, func(document map[string]any) {
-		document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
+		manifestParticipant(document, 0)["browserTools"] = map[string]any{
 			"connection": map[string]any{"unknown": true},
 		}
 	})

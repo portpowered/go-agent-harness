@@ -340,19 +340,13 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		if !ok || v == nil {
 			return nil, false
 		}
-		data, _ := json.Marshal(map[string]any{
-			"item": map[string]any{
-				"type": "message",
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "input_text", "text": v.Content},
-				},
+		return conversationItemCreateEvents(map[string]any{
+			"type": "message",
+			"role": requestRoleUser,
+			"content": []map[string]any{
+				{"type": "input_text", "text": v.Content},
 			},
-		})
-		return []models.SessionEvent{
-			{Type: conversationItemCreateEvent, Data: data},
-			models.NewResponseCreateEvent(),
-		}, true
+		}, models.NewResponseCreateEvent())
 	case messages.StreamTypeSessionUpdate:
 		v, ok := msg.Value.(*messages.SessionUpdateValue)
 		if !ok || v == nil {
@@ -385,16 +379,11 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		if !ok || v == nil {
 			return nil, false
 		}
-		data, _ := json.Marshal(map[string]any{
-			"item": map[string]any{
-				"type":    realtimeFunctionCallOutputType,
-				"call_id": v.ToolCallID,
-				"output":  v.Arguments,
-			},
+		return conversationItemCreateEvents(map[string]any{
+			"type":    realtimeFunctionCallOutputType,
+			"call_id": v.ToolCallID,
+			"output":  v.Arguments,
 		})
-		return []models.SessionEvent{
-			{Type: conversationItemCreateEvent, Data: data},
-		}, true
 	default:
 		return nil, false
 	}
@@ -435,4 +424,14 @@ func stringField(data json.RawMessage, path []string) string {
 		}
 	}
 	return ""
+}
+
+// conversationItemCreateEvents encodes item as a conversation.item.create
+// event followed by any control events. An unencodable item is not sendable.
+func conversationItemCreateEvents(item map[string]any, follow ...models.SessionEvent) ([]models.SessionEvent, bool) {
+	data, err := json.Marshal(map[string]any{"item": item})
+	if err != nil {
+		return nil, false
+	}
+	return append([]models.SessionEvent{{Type: conversationItemCreateEvent, Data: data}}, follow...), true
 }

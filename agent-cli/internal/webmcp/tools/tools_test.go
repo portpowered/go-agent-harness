@@ -69,9 +69,9 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 		})
 	}
 
-	first := schemas[0]["function"].(map[string]any)["parameters"].(map[string]any)
+	first := mustAs[map[string]any](t, mustAs[map[string]any](t, schemas[0]["function"])["parameters"])
 	first["additionalProperties"] = true
-	second := NewToolSet(nil).DefinitionSchemas()[0]["function"].(map[string]any)["parameters"].(map[string]any)
+	second := mustAs[map[string]any](t, mustAs[map[string]any](t, NewToolSet(nil).DefinitionSchemas()[0]["function"])["parameters"])
 	if second["additionalProperties"] != false {
 		t.Fatal("stable definitions share mutable schema state")
 	}
@@ -314,7 +314,7 @@ func TestShowPagePreservesCancellationAndDeadlineClassification(t *testing.T) {
 
 func TestGetContextReportsNoPageSelectedBeforeStaleSelection(t *testing.T) {
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "no-page-call",
@@ -598,12 +598,12 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 			testkit.NewTargetConfig(target, testkit.WithInitialCatalog(tool)),
 		},
 	})
-	defer func() { _ = runtime.Close() }()
+	defer closeAtTestEnd(t, runtime)
 	browser := webmcp.NewBroker(webmcp.BrokerOptions{
 		Runtime:    runtime,
 		Discoverer: staticToolTestDiscoverer{candidate: candidate},
 	})
-	defer func() { _ = browser.Close() }()
+	defer closeAtTestEnd(t, browser)
 	executor := NewExecutor(browser)
 
 	selected, err := executor.Execute(context.Background(), messages.ToolCall{

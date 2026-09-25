@@ -168,6 +168,6 @@ func TestLinuxPlaybackBurstPreservesFIFO(t *testing.T) {
 }
 
 func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaulted bool) linuxDeviceRecord {
-	device, _ := NewDevice(backend, direction.String()+":"+nativeID, name, direction)
+	device := constantDevice(backend, direction.String()+":"+nativeID, name, direction)
 	return linuxDeviceRecord{Device: device, defaulted: defaulted}
 }

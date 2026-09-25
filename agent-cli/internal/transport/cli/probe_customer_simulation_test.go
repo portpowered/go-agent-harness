@@ -136,7 +136,10 @@ func TestCustomerSimulationCommandRejectsNonPassingResultWithNilRunnerError(t *t
 func TestCustomerSimulationCommandCleansValidatorCredentialOnPrimaryFailure(t *testing.T) {
 	const primaryEnv = "CUSTOMER_SIMULATION_PRIMARY_MISSING_KEY"
 	const validatorEnv = "CUSTOMER_SIMULATION_VALIDATOR_LEFTOVER_KEY"
-	_ = os.Unsetenv(primaryEnv)
+	t.Setenv(primaryEnv, "")
+	if err := os.Unsetenv(primaryEnv); err != nil {
+		t.Fatalf("unset %s: %v", primaryEnv, err)
+	}
 	t.Setenv(validatorEnv, "validator-secret")
 
 	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())

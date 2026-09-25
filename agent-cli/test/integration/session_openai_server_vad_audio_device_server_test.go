@@ -108,16 +108,12 @@ func startAudioDeviceServerBinary(t *testing.T, manualClock bool) (string, func(
 		t.Fatalf("start audio-device server: %v", err)
 	}
 	ready := make(chan []byte, 1)
-	go func() {
-		line, _ := bufio.NewReader(stdout).ReadBytes('\n')
-		ready <- line
-	}()
+	go func() { ready <- readAnnouncementLine(stdout) }()
 	var line []byte
 	select {
 	case line = <-ready:
 	case <-time.After(30 * time.Second): // absorbs a fresh binary's first exec on a loaded host
-		cancel()
-		_ = command.Wait()
+		cancelAndReap(cancel, command)
 		t.Fatalf("audio-device server did not become ready; stderr=%q", stderr.String())
 	}
 	var announcement struct {
@@ -126,13 +122,11 @@ func startAudioDeviceServerBinary(t *testing.T, manualClock bool) (string, func(
 		Output   string `json:"output_device"`
 	}
 	if err := json.Unmarshal(line, &announcement); err != nil {
-		cancel()
-		_ = command.Wait()
+		cancelAndReap(cancel, command)
 		t.Fatalf("decode audio-device server ready line %q: %v; stderr=%q", line, err, stderr.String())
 	}
 	if announcement.Endpoint == "" || announcement.Input != "simulated-duplex:input" || announcement.Output != "simulated-duplex:output" {
-		cancel()
-		_ = command.Wait()
+		cancelAndReap(cancel, command)
 		t.Fatalf("audio-device server announcement = %+v", announcement)
 	}
 	return announcement.Endpoint, func() {
@@ -185,28 +179,28 @@ func writeServerVADBargeInCapture(t *testing.T, path, delta string) {
 		})
 	}
 	add(gwtesting.DirectionClientToServer, map[string]any{
-		"type": "session.update", "session": map[string]any{
+		"type": rtEventSessionUpdate, "session": map[string]any{
 			"model": "gpt-realtime-2.1-mini",
 			"audio": map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}}},
 		},
 	})
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "session.created", "session": map[string]any{
+		"type": rtEventSessionCreated, "session": map[string]any{
 			"id": "sess-server-vad-binary", "type": "realtime", "model": "gpt-realtime-2.1-mini",
 			"audio": map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}}},
 		},
 	})
 	add(gwtesting.DirectionClientToServer, map[string]any{
-		"type": "conversation.item.create", "item": map[string]any{
-			"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": "replay server VAD barge in"}},
+		"type": rtEventConversationItemCreate, "item": map[string]any{
+			"type": rtItemMessage, "role": rtRoleUser, "content": []map[string]any{{"type": "input_text", "text": "replay server VAD barge in"}},
 		},
 	})
-	add(gwtesting.DirectionClientToServer, map[string]any{"type": "response.create"})
+	add(gwtesting.DirectionClientToServer, map[string]any{"type": rtEventResponseCreate})
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.created", "response": map[string]any{"id": "resp-server-vad-binary", "status": "in_progress"},
+		"type": rtEventResponseCreated, "response": map[string]any{"id": "resp-server-vad-binary", "status": "in_progress"},
 	})
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.output_audio.delta", "response_id": "resp-server-vad-binary", "item_id": "item-server-vad-binary",
+		"type": rtEventOutputAudioDelta, "response_id": "resp-server-vad-binary", "item_id": "item-server-vad-binary",
 		"output_index": 0, "content_index": 0, "delta": delta,
 	})
 	add(gwtesting.DirectionServerToClient, map[string]any{
@@ -220,8 +214,8 @@ func writeServerVADBargeInCapture(t *testing.T, path, delta string) {
 		"output_index": 0, "content_index": 0,
 	})
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.done", "response": map[string]any{
-			"id": "resp-server-vad-binary", "status": "cancelled", "status_details": map[string]any{"type": "cancelled"},
+		"type": rtEventResponseDone, "response": map[string]any{
+			"id": "resp-server-vad-binary", "status": rtStatusCancelled, "status_details": map[string]any{"type": rtStatusCancelled},
 		},
 	})
 	capture := gwtesting.SessionCapture{
@@ -236,5 +230,25 @@ func writeServerVADBargeInCapture(t *testing.T, path, delta string) {
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("write server-VAD replay capture: %v", err)
+	}
+}
+
+// readAnnouncementLine reads the server's one-line readiness announcement. A
+// read failure yields the read error text, which the caller's decode step
+// rejects and reports together with the captured stderr.
+func readAnnouncementLine(stdout io.Reader) []byte {
+	line, err := bufio.NewReader(stdout).ReadBytes('\n')
+	if err != nil {
+		return []byte(fmt.Sprintf("%s (read error: %v)", line, err))
+	}
+	return line
+}
+
+// cancelAndReap stops a server that failed readiness and reaps the process.
+// The cancellation kills it, so the wait's kill-signal error is expected.
+func cancelAndReap(cancel context.CancelFunc, command *exec.Cmd) {
+	cancel()
+	if err := command.Wait(); err != nil {
+		return
 	}
 }

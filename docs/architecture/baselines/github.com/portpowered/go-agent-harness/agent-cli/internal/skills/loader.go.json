@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/skills",
       "file": "internal/skills/loader.go",
       "symbol": "*Loader.List",
-      "value": 29,
+      "value": 22,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

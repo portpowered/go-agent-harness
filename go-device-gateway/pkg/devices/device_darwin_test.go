@@ -249,7 +249,7 @@ func TestCoreAudioPlaybackBurstPreservesFIFO(t *testing.T) {
 }
 
 func coreAudioTestEndpoint(uid, name string, direction Direction, defaulted bool) coreAudioEndpoint {
-	device, _ := NewDevice(coreAudioBackend, coreAudioNativeID(uid, direction), name, direction)
+	device := constantDevice(coreAudioBackend, coreAudioNativeID(uid, direction), name, direction)
 	return coreAudioEndpoint{device: device, defaultDevice: defaulted}
 }
 

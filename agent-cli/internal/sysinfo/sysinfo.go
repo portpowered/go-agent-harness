@@ -21,7 +21,11 @@ type Info struct {
 // Collect gathers current system information. model and provider describe the active
 // model configuration and are included when non-empty.
 func Collect(model, provider string) Info {
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		// An unknown working directory is omitted from the formatted section.
+		cwd = ""
+	}
 	return Info{
 		OS:       runtime.GOOS,
 		Arch:     runtime.GOARCH,

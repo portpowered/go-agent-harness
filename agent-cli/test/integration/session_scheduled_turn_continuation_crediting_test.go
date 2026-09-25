@@ -312,6 +312,34 @@ func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 		t.Fatalf("timed out waiting for second scheduled continuation: %v", ctx.Err())
 	}
 
+	assertScheduledContinuationDelivery(t, inferencer, executor)
+
+	observedMu.Lock()
+	defer observedMu.Unlock()
+	assertScheduledContinuationTerminals(t, observed)
+}
+
+var _ messages.Session = (*scheduledContinuationSession)(nil)
+var _ messages.SessionInferencer = (*scheduledContinuationInferencer)(nil)
+var _ messages.ToolExecutor = (*scheduledContinuationExecutor)(nil)
+
+// assertExpectedSemanticLiveRunResult preserves the semantic assertions for
+// injected provider doubles while acknowledging their deliberate recording
+// boundary: without a raw provider recorder, audio evidence is a partial bundle
+// whose missing provider artifact is the expected result.
+func assertExpectedSemanticLiveRunResult(t testing.TB, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	if errors.Is(err, os.ErrNotExist) && strings.Contains(err.Error(), "finalize provider evidence") {
+		return
+	}
+	t.Fatalf("semantic live command returned an unrelated error: %v", err)
+}
+
+func assertScheduledContinuationDelivery(t *testing.T, inferencer *scheduledContinuationInferencer, executor *scheduledContinuationExecutor) {
+	t.Helper()
 	sent, inputTurns, responseCreates, results, thirdInputBeforeContinuation := inferencer.session.snapshot()
 	if inputTurns != 3 {
 		t.Fatalf("provider observed %d scheduled input turns, want 3; sent=%v", inputTurns, sent)
@@ -335,9 +363,10 @@ func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 	if calls[0].ID != scheduledContinuationCallOne || calls[1].ID != scheduledContinuationCallTwo {
 		t.Fatalf("executor call order = %q, %q; want %q, %q", calls[0].ID, calls[1].ID, scheduledContinuationCallOne, scheduledContinuationCallTwo)
 	}
+}
 
-	observedMu.Lock()
-	defer observedMu.Unlock()
+func assertScheduledContinuationTerminals(t *testing.T, observed []messages.StreamMessage) {
+	t.Helper()
 	terminalResponses := make([]string, 0, 3)
 	for _, msg := range observed {
 		if msg.Type == messages.StreamTypeMessageEnd && msg.Role == messages.RoleAssistant &&
@@ -360,23 +389,4 @@ func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 			t.Fatalf("assistant terminal response %d = %q, want %q", index, terminalResponses[index], wantTerminals[index])
 		}
 	}
-}
-
-var _ messages.Session = (*scheduledContinuationSession)(nil)
-var _ messages.SessionInferencer = (*scheduledContinuationInferencer)(nil)
-var _ messages.ToolExecutor = (*scheduledContinuationExecutor)(nil)
-
-// assertExpectedSemanticLiveRunResult preserves the semantic assertions for
-// injected provider doubles while acknowledging their deliberate recording
-// boundary: without a raw provider recorder, audio evidence is a partial bundle
-// whose missing provider artifact is the expected result.
-func assertExpectedSemanticLiveRunResult(t testing.TB, err error) {
-	t.Helper()
-	if err == nil {
-		return
-	}
-	if errors.Is(err, os.ErrNotExist) && strings.Contains(err.Error(), "finalize provider evidence") {
-		return
-	}
-	t.Fatalf("semantic live command returned an unrelated error: %v", err)
 }

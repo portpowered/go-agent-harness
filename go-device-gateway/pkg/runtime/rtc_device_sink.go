@@ -145,7 +145,7 @@ func newRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.Device
 }
 func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, playbackObserver RTCDevicePlaybackObserver) *RTCDeviceSink {
 	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
-	commands, _ := audio.NewPlaybackCommands(32)
+	commands := newRTCDevicePlaybackCommands()
 	result := &RTCDeviceSink{
 		sink:             sink,
 		commands:         commands,

@@ -95,7 +95,7 @@ func TestFrequencyPenaltyAppearsInJSON(t *testing.T) {
 	penalty := 1.5
 	req := chatRequest{
 		Model:            "gpt-4o",
-		Messages:         []requestMsg{{Role: "user", Content: strContent("hello")}},
+		Messages:         []requestMsg{{Role: requestRoleUser, Content: strContent("hello")}},
 		FrequencyPenalty: &penalty,
 	}
 
@@ -113,7 +113,7 @@ func TestFrequencyPenaltyAppearsInJSON(t *testing.T) {
 	if !ok {
 		t.Fatal("frequency_penalty missing from JSON payload")
 	}
-	if fp.(float64) != 1.5 {
+	if got, ok := fp.(float64); !ok || got != 1.5 {
 		t.Errorf("frequency_penalty: got %v, want 1.5", fp)
 	}
 }
@@ -121,7 +121,7 @@ func TestFrequencyPenaltyAppearsInJSON(t *testing.T) {
 func TestFrequencyPenaltyOmittedFromJSONWhenNil(t *testing.T) {
 	req := chatRequest{
 		Model:    "gpt-4o",
-		Messages: []requestMsg{{Role: "user", Content: strContent("hello")}},
+		Messages: []requestMsg{{Role: requestRoleUser, Content: strContent("hello")}},
 	}
 
 	data, err := json.Marshal(req)

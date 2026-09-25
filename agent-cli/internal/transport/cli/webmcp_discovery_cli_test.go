@@ -94,50 +94,58 @@ browser:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fixture := newCLIProductionDiscoveryFixture()
-			runtime := &productionFakeRuntime{}
-			factory := NewProductionWebMCPDoctorFactory(
-				WithWebMCPProductionRuntime(runtime),
-				WithWebMCPProductionHTTPClient(fixture.http),
-				WithWebMCPProductionActivePortReader(fixture.activePort),
-				WithWebMCPProductionProcessEnumerator(fixture.process),
-				WithWebMCPProductionIDMapper(cliProductionIDMapper{}),
-				WithWebMCPProductionClock(cliProductionClock{now: time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC)}),
-			)
-			configDir := writeDoctorConfig(t, tc.config)
-			result := executeShippedWebMCPCommand(t, configDir, factory, tc.args...)
-			if result.err != nil {
-				t.Fatalf("CLI exit status = 1, want 0: %v\nstdout=%s\nstderr=%s", result.err, result.stdout, result.stderr)
-			}
-			if result.stderr != "" {
-				t.Fatalf("CLI stderr = %q, want empty", result.stderr)
-			}
-			envelope := requireDirectSuccess(t, result)
-			var data WebMCPDirectBrowsersData
-			decodeDirectData(t, envelope.Data, &data)
-			if len(data.Browsers) != 1 {
-				t.Fatalf("browser count = %d, want one: %+v", len(data.Browsers), data)
-			}
-			browser := data.Browsers[0]
-			if browser.ID != tc.wantID || browser.Source != string(tc.wantSource) || browser.Product != tc.wantProduct {
-				t.Fatalf("browser = %+v, want id=%q source=%q product=%q", browser, tc.wantID, tc.wantSource, tc.wantProduct)
-			}
-			if browser.Scope != "loopback" || browser.Endpoint != "http://127.0.0.1:"+strings.TrimPrefix(tc.wantHTTPHost, "127.0.0.1:")+"/json/version" {
-				t.Fatalf("browser endpoint/scope = %q/%q, want redacted loopback endpoint for %s", browser.Endpoint, browser.Scope, tc.wantHTTPHost)
-			}
-			if got := fixture.http.requestHosts(); len(got) != 1 || got[0] != tc.wantHTTPHost {
-				t.Fatalf("version request hosts = %v, want [%s]", got, tc.wantHTTPHost)
-			}
-			if len(fixture.activePort.calls) != tc.wantActiveCalls {
-				t.Fatalf("active-port calls = %d, want %d", len(fixture.activePort.calls), tc.wantActiveCalls)
-			}
-			if len(fixture.process.calls) != tc.wantProcessCalls {
-				t.Fatalf("process discovery calls = %d, want %d", len(fixture.process.calls), tc.wantProcessCalls)
-			}
-			if got := runtime.count("open"); got != 0 {
-				t.Fatalf("test assertion runtime unexpectedly opened %d handles", got)
-			}
+			runDiscoveryShapeCase(t, tc.config, tc.args, discoveredBrowserWant{
+				id: tc.wantID, source: tc.wantSource, product: tc.wantProduct, httpHost: tc.wantHTTPHost,
+				activeCalls: tc.wantActiveCalls, processCalls: tc.wantProcessCalls,
+			})
 		})
+	}
+}
+
+type discoveredBrowserWant struct {
+	id                        string
+	source                    webmcp.DiscoverySource
+	product, httpHost         string
+	activeCalls, processCalls int
+}
+
+// runDiscoveryShapeCase runs `webmcp browsers` through the shipped CLI over
+// the hermetic discovery fixture and requires exactly the wanted browser.
+func runDiscoveryShapeCase(t *testing.T, doctorConfig string, args []string, want discoveredBrowserWant) {
+	t.Helper()
+	fixture := newCLIProductionDiscoveryFixture()
+	runtime := &productionFakeRuntime{}
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(fixture.http),
+		WithWebMCPProductionActivePortReader(fixture.activePort),
+		WithWebMCPProductionProcessEnumerator(fixture.process),
+		WithWebMCPProductionIDMapper(cliProductionIDMapper{}),
+		WithWebMCPProductionClock(cliProductionClock{now: time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC)}),
+	)
+	result := executeShippedWebMCPCommand(t, writeDoctorConfig(t, doctorConfig), factory, args...)
+	if result.err != nil {
+		t.Fatalf("CLI exit status = 1, want 0: %v\nstdout=%s\nstderr=%s", result.err, result.stdout, result.stderr)
+	}
+	if result.stderr != "" {
+		t.Fatalf("CLI stderr = %q, want empty", result.stderr)
+	}
+	envelope := requireDirectSuccess(t, result)
+	var data WebMCPDirectBrowsersData
+	decodeDirectData(t, envelope.Data, &data)
+	if len(data.Browsers) != 1 {
+		t.Fatalf("browser count = %d, want one: %+v", len(data.Browsers), data)
+	}
+	browser := data.Browsers[0]
+	if browser.ID != want.id || browser.Source != string(want.source) || browser.Product != want.product {
+		t.Fatalf("browser = %+v, want id=%q source=%q product=%q", browser, want.id, want.source, want.product)
+	}
+	if browser.Scope != "loopback" || browser.Endpoint != "http://127.0.0.1:"+strings.TrimPrefix(want.httpHost, "127.0.0.1:")+"/json/version" {
+		t.Fatalf("browser endpoint/scope = %q/%q, want redacted loopback endpoint for %s", browser.Endpoint, browser.Scope, want.httpHost)
+	}
+	fixture.assertDiscoveryCalls(t, want.httpHost, want.activeCalls, want.processCalls)
+	if got := runtime.count("open"); got != 0 {
+		t.Fatalf("test assertion runtime unexpectedly opened %d handles", got)
 	}
 }
 
@@ -222,28 +230,36 @@ browser:
 				WithWebMCPProductionIDMapper(cliProductionIDMapper{}),
 			)
 			result := executeShippedWebMCPCommand(t, writeDoctorConfig(t, tc.config), factory, "browsers", "--json")
-			if result.err == nil {
-				t.Fatalf("CLI exit status = 0, want 1; stdout=%s", result.stdout)
-			}
-			if result.stderr != "" {
-				t.Fatalf("CLI stderr = %q, want empty", result.stderr)
-			}
-			envelope := decodeDirectEnvelope(t, result.stdout)
-			if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(tc.wantCode) {
-				t.Fatalf("error envelope = %+v, want code %q", envelope, tc.wantCode)
-			}
-			if tc.wantDetail != "" && envelope.Error.Details["phase"] != tc.wantDetail {
-				t.Fatalf("error details = %+v, want phase %q", envelope.Error.Details, tc.wantDetail)
-			}
-			for _, forbidden := range tc.forbiddenText {
-				if strings.Contains(result.stdout, forbidden) {
-					t.Fatalf("error output exposed %q: %s", forbidden, result.stdout)
-				}
-			}
-			if strings.Contains(result.stdout, "Lane B") || strings.Contains(result.stdout, "Lane D") {
-				t.Fatalf("error output exposed an internal lane name: %s", result.stdout)
-			}
+			assertClassifiedDiscoveryFailure(t, result, tc.wantCode, tc.wantDetail, tc.forbiddenText)
 		})
+	}
+}
+
+// assertClassifiedDiscoveryFailure requires a failed command whose JSON error
+// envelope carries the classified code and never exposes endpoint secrets or
+// internal lane names.
+func assertClassifiedDiscoveryFailure(t *testing.T, result directCommandResult, wantCode webmcp.ErrorCode, wantDetail string, forbiddenText []string) {
+	t.Helper()
+	if result.err == nil {
+		t.Fatalf("CLI exit status = 0, want 1; stdout=%s", result.stdout)
+	}
+	if result.stderr != "" {
+		t.Fatalf("CLI stderr = %q, want empty", result.stderr)
+	}
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(wantCode) {
+		t.Fatalf("error envelope = %+v, want code %q", envelope, wantCode)
+	}
+	if wantDetail != "" && envelope.Error.Details["phase"] != wantDetail {
+		t.Fatalf("error details = %+v, want phase %q", envelope.Error.Details, wantDetail)
+	}
+	for _, forbidden := range forbiddenText {
+		if strings.Contains(result.stdout, forbidden) {
+			t.Fatalf("error output exposed %q: %s", forbidden, result.stdout)
+		}
+	}
+	if strings.Contains(result.stdout, "Lane B") || strings.Contains(result.stdout, "Lane D") {
+		t.Fatalf("error output exposed an internal lane name: %s", result.stdout)
 	}
 }
 
@@ -298,6 +314,21 @@ type cliProductionDiscoveryFixture struct {
 	http       *cliProductionHTTPClient
 	activePort *cliProductionActivePortReader
 	process    *cliProductionProcessEnumerator
+}
+
+// assertDiscoveryCalls requires exactly one version request to wantHost and
+// the expected active-port and process discovery call counts.
+func (f *cliProductionDiscoveryFixture) assertDiscoveryCalls(t *testing.T, wantHost string, wantActiveCalls, wantProcessCalls int) {
+	t.Helper()
+	if got := f.http.requestHosts(); len(got) != 1 || got[0] != wantHost {
+		t.Fatalf("version request hosts = %v, want [%s]", got, wantHost)
+	}
+	if len(f.activePort.calls) != wantActiveCalls {
+		t.Fatalf("active-port calls = %d, want %d", len(f.activePort.calls), wantActiveCalls)
+	}
+	if len(f.process.calls) != wantProcessCalls {
+		t.Fatalf("process discovery calls = %d, want %d", len(f.process.calls), wantProcessCalls)
+	}
 }
 
 func newCLIProductionDiscoveryFixture() *cliProductionDiscoveryFixture {

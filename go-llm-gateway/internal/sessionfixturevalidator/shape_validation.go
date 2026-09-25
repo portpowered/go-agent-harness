@@ -12,6 +12,11 @@ import (
 const (
 	shapePayloadTypeStreamMessage = gatewaytesting.SessionPayloadTypeStreamMessage
 	shapePayloadTypeWebSocket     = gatewaytesting.SessionPayloadTypeWebSocketMessage
+
+	streamToolCallStart           = "TOOLCALL.START"
+	streamToolCallEnd             = "TOOLCALL.END"
+	wireOutputItemAdded           = "response.output_item.added"
+	wireFunctionCallArgumentsDone = "response.function_call_arguments.done"
 )
 
 type toolObservation struct {
@@ -176,7 +181,7 @@ func recognizedToolObservation(record gatewaytesting.CapturedSessionEvent, recor
 	switch record.PayloadType {
 	case shapePayloadTypeStreamMessage:
 		switch record.Type {
-		case "TOOLCALL.START", "TOOLCALL.END":
+		case streamToolCallStart, streamToolCallEnd:
 			id, fieldPath := streamToolCallID(payload, base)
 			return toolObservation{kind: "tool call", id: id, fieldPath: fieldPath, recordIdx: recordIndex, eventType: record.Type}, true
 		case "SYSTEM.FULL_MESSAGE":
@@ -191,14 +196,14 @@ func recognizedToolObservation(record gatewaytesting.CapturedSessionEvent, recor
 		}
 	case shapePayloadTypeWebSocket:
 		switch record.Type {
-		case "response.output_item.added":
+		case wireOutputItemAdded:
 			item, ok := objectField(payload, "item")
 			if !ok || !hasStringValue(item, "type", "function_call") {
 				return toolObservation{}, false
 			}
 			id, _ := stringField(item, "call_id")
 			return toolObservation{kind: "tool call", id: id, fieldPath: base + ".item.call_id", recordIdx: recordIndex, eventType: record.Type}, true
-		case "response.function_call_arguments.done":
+		case wireFunctionCallArgumentsDone:
 			id, _ := stringField(payload, "call_id")
 			return toolObservation{kind: "tool call", id: id, fieldPath: base + ".call_id", recordIdx: recordIndex, eventType: record.Type}, true
 		case "conversation.item.create":
@@ -345,21 +350,21 @@ func deduplicateToolCallFragments(occurrences []toolObservation) []toolObservati
 	for _, occurrence := range occurrences {
 		replaced := false
 		for i, prior := range unique {
-			if prior.eventType == "TOOLCALL.START" && occurrence.eventType == "TOOLCALL.END" {
+			if prior.eventType == streamToolCallStart && occurrence.eventType == streamToolCallEnd {
 				unique[i] = occurrence
 				replaced = true
 				break
 			}
-			if prior.eventType == "TOOLCALL.END" && occurrence.eventType == "TOOLCALL.START" {
+			if prior.eventType == streamToolCallEnd && occurrence.eventType == streamToolCallStart {
 				replaced = true
 				break
 			}
-			if prior.eventType == "response.output_item.added" && occurrence.eventType == "response.function_call_arguments.done" {
+			if prior.eventType == wireOutputItemAdded && occurrence.eventType == wireFunctionCallArgumentsDone {
 				unique[i] = occurrence
 				replaced = true
 				break
 			}
-			if prior.eventType == "response.function_call_arguments.done" && occurrence.eventType == "response.output_item.added" {
+			if prior.eventType == wireFunctionCallArgumentsDone && occurrence.eventType == wireOutputItemAdded {
 				replaced = true
 				break
 			}

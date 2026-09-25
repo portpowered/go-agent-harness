@@ -95,6 +95,9 @@ func (c *CoordinatorDelta) TickGroup() TickGroup {
 	return TickGroupCoordinatorDelta
 }
 
+// sessionCloseReasonStop is the close reason for an explicit stop request.
+const sessionCloseReasonStop = "stop"
+
 // extractSessionCloseReason returns a reason string from a control plane message.
 func extractSessionCloseReason(msg messages.Message) string {
 	for _, part := range msg.ContentParts {
@@ -103,7 +106,7 @@ func extractSessionCloseReason(msg messages.Message) string {
 			case messages.ControlPlaneMessageTypeSessionClose:
 				return "client_close"
 			case messages.ControlPlaneMessageTypeStop:
-				return "stop"
+				return sessionCloseReasonStop
 			}
 		}
 	}
@@ -112,7 +115,7 @@ func extractSessionCloseReason(msg messages.Message) string {
 
 func newLoopSessionCloseValue(sessionID, reason string) *messages.SessionCloseValue {
 	terminalReason := messages.TerminalReasonSessionClose
-	if reason == "stop" {
+	if reason == sessionCloseReasonStop {
 		terminalReason = messages.TerminalReasonCancellation
 	}
 	return messages.NewSessionCloseValueWithTerminal(

@@ -22,9 +22,9 @@ func TestInspectValidatesExtentWithoutReadingPayload(t *testing.T) {
 		if reader.bytes != 44 || layout.SampleRate != rate || layout.DataBytes != 96000 || layout.DataOffset != 44 {
 			t.Fatalf("layout=%+v metadata bytes=%d", layout, reader.bytes)
 		}
-		pos, _ := reader.Seek(0, io.SeekCurrent)
-		if pos != layout.DataOffset {
-			t.Fatalf("position=%d", pos)
+		pos, err := reader.Seek(0, io.SeekCurrent)
+		if err != nil || pos != layout.DataOffset {
+			t.Fatalf("position=%d err=%v", pos, err)
 		}
 		_, err = Inspect(bytes.NewReader(wav.Bytes()[:wav.Len()-1]))
 		if !errors.Is(err, ErrTruncated) {

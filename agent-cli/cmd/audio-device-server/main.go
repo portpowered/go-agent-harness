@@ -4,8 +4,10 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -28,33 +30,28 @@ func main() {
 	}
 	host, _, err := net.SplitHostPort(listener.Addr().String())
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
-		_ = listener.Close()
-		fatal(fmt.Errorf("audio-device server must listen on loopback, got %q", listener.Addr()))
+		fatal(errors.Join(fmt.Errorf("audio-device server must listen on loopback, got %q", listener.Addr()), listener.Close()))
 	}
 	registry, err := devicegw.NewSimulatedDuplexRegistry(devicegw.DuplexScenario{
 		Render:  devicegw.ClockSpec{NominalRate: *sampleRate, Quanta: []int{*renderQuantum}},
 		Capture: devicegw.ClockSpec{NominalRate: *sampleRate, Quanta: []int{*captureQuantum}},
 	})
 	if err != nil {
-		_ = listener.Close()
-		fatal(err)
+		fatal(errors.Join(err, listener.Close()))
 	}
 	server, err := devicegw.NewDeviceServer(registry)
 	if err != nil {
-		_ = listener.Close()
-		fatal(err)
+		fatal(errors.Join(err, listener.Close()))
 	}
-	defer func() { _ = server.Close() }()
+	defer closeOrFatal(server)
 	if !*manualClock {
 		if *sampleRate <= 0 || *renderQuantum <= 0 || *captureQuantum <= 0 {
-			_ = listener.Close()
-			fatal(fmt.Errorf("sample rate and callback quanta must be positive"))
+			fatal(errors.Join(fmt.Errorf("sample rate and callback quanta must be positive"), listener.Close()))
 		}
 		period := time.Duration(*renderQuantum) * time.Second / time.Duration(*sampleRate)
 		capturePeriod := time.Duration(*captureQuantum) * time.Second / time.Duration(*sampleRate)
 		if period <= 0 || capturePeriod <= 0 || period != capturePeriod {
-			_ = listener.Close()
-			fatal(fmt.Errorf("realtime render and capture callback periods must be equal and non-zero; use --manual-clock for asymmetric clocks"))
+			fatal(errors.Join(fmt.Errorf("realtime render and capture callback periods must be equal and non-zero; use --manual-clock for asymmetric clocks"), listener.Close()))
 		}
 		go runRealtimeClock(registry, period)
 	}
@@ -65,8 +62,7 @@ func main() {
 		Output   string `json:"output_device"`
 	}{Endpoint: listener.Addr().String(), Input: "simulated-duplex:input", Output: "simulated-duplex:output"}
 	if err := json.NewEncoder(os.Stdout).Encode(ready); err != nil {
-		_ = listener.Close()
-		fatal(err)
+		fatal(errors.Join(err, listener.Close()))
 	}
 
 	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second}
@@ -82,6 +78,14 @@ func runRealtimeClock(registry *devicegw.SimulatedDuplexRegistry, period time.Du
 		if err := registry.Advance(1); err != nil {
 			fatal(fmt.Errorf("advance realtime device clock: %w", err))
 		}
+	}
+}
+
+// closeOrFatal closes a resource at process exit and reports a close failure
+// as a fatal process error instead of silently dropping it.
+func closeOrFatal(closer io.Closer) {
+	if err := closer.Close(); err != nil {
+		fatal(err)
 	}
 }
 

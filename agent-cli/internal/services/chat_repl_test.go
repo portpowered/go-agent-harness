@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -107,7 +108,7 @@ func newChatTestHarness(t *testing.T, responses ...string) *chatTestHarness {
 	model := NewChatModel(executor, sessionID, globalFlags, askFlags, context.Background(), out, errOut)
 	updated, _ := model.Update(FocusInputMsg{})
 	return &chatTestHarness{
-		model:       updated.(ChatModel),
+		model:       chatModelOf(updated),
 		globalFlags: globalFlags,
 		askFlags:    askFlags,
 		out:         out,
@@ -123,7 +124,7 @@ func typeChatInput(model ChatModel, input string) ChatModel {
 			keyType = tea.KeySpace
 		}
 		updated, _ := model.Update(tea.KeyMsg{Type: keyType, Runes: []rune{r}})
-		model = updated.(ChatModel)
+		model = chatModelOf(updated)
 	}
 	return model
 }
@@ -131,7 +132,7 @@ func typeChatInput(model ChatModel, input string) ChatModel {
 func submitChatInput(model ChatModel, input string) ChatModel {
 	model = typeChatInput(model, input)
 	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	return drainChatCommands(model, cmd)
 }
 
@@ -152,7 +153,7 @@ func drainChatCommands(model ChatModel, first tea.Cmd) ChatModel {
 			continue
 		}
 		updated, next := model.Update(msg)
-		model = updated.(ChatModel)
+		model = chatModelOf(updated)
 		if next != nil {
 			commands = append(commands, next)
 		}
@@ -207,17 +208,17 @@ func TestChatREPL_KeyboardAndStreamBranches(t *testing.T) {
 		t.Fatal("new chat model did not initialize with a live session")
 	}
 	updated, _ := model.Update(FocusInputMsg{})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	if !model.InputFocused() {
 		t.Fatal("FocusInputMsg did not focus the input")
 	}
 	updated, _ = model.Update(tea.WindowSizeMsg{Width: 10, Height: 4})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	if model.width != 20 {
 		t.Fatalf("narrow terminal width = %d, want 20", model.width)
 	}
 	updated, _ = model.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	if model.width != 100 || model.height != 20 {
 		t.Fatalf("window size = (%d, %d), want (100, 20)", model.width, model.height)
 	}
@@ -225,16 +226,16 @@ func TestChatREPL_KeyboardAndStreamBranches(t *testing.T) {
 	model.input.SetValue("/")
 	model.updateCmdAutocomplete()
 	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	if !strings.HasPrefix(model.input.Value(), "/") {
 		t.Fatalf("command completion changed input to %q", model.input.Value())
 	}
 	model.input.SetValue("/")
 	model.updateCmdAutocomplete()
 	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	model.input.SetValue("plain text")
 	model.updateCmdAutocomplete()
 	if model.cmdAutocomplete.IsActive() {
@@ -258,7 +259,7 @@ func TestChatREPL_KeyboardAndStreamBranches(t *testing.T) {
 
 	ctrlC := newChatTestHarness(t).model
 	updated, cmd := ctrlC.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	ctrlC = updated.(ChatModel)
+	ctrlC = chatModelOf(updated)
 	if !ctrlC.IsQuitting() || cmd == nil {
 		t.Fatal("Ctrl+C did not quit with a command")
 	}
@@ -296,7 +297,7 @@ func TestChatREPL_ApplyStreamEventsAndDrain(t *testing.T) {
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 	}}
 	updated, cmd := model.Update(streamReadyMsg{stream: stream})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	model = drainChatCommands(model, cmd)
 	if stream.closed == false || !strings.Contains(model.ViewHistory(), "drained") {
 		t.Fatalf("stream was not drained and committed: closed=%t history=%s", stream.closed, model.ViewHistory())
@@ -304,7 +305,7 @@ func TestChatREPL_ApplyStreamEventsAndDrain(t *testing.T) {
 
 	errorMessage := errors.New("stream startup failed")
 	updated, cmd = model.Update(streamReadyMsg{err: errorMessage})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	if cmd != nil || !strings.Contains(harness.errOut.String(), errorMessage.Error()) {
 		t.Fatalf("stream-ready error = cmd %v stderr %q", cmd, harness.errOut.String())
 	}
@@ -333,14 +334,14 @@ func TestChatREPL_ErrorEventAndEmptyDoneBranches(t *testing.T) {
 	model := harness.model
 	stream := &chatTestStream{events: []messages.StreamMessage{{Type: messages.StreamTypeError, Value: messages.NewErrorValue("event failed")}}}
 	updated, cmd := model.Update(streamReadyMsg{stream: stream})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	model = drainChatCommands(model, cmd)
 	if !strings.Contains(harness.errOut.String(), "event failed") {
 		t.Fatalf("stream error event was not reported: %q", harness.errOut.String())
 	}
 
 	updated, cmd = model.Update(streamDoneMsg{})
-	model = updated.(ChatModel)
+	model = chatModelOf(updated)
 	if cmd != nil || model.stream != nil || model.assistantPartial != "" {
 		t.Fatalf("empty stream completion left state behind: cmd=%v stream=%v assistant=%q", cmd, model.stream, model.assistantPartial)
 	}
@@ -369,4 +370,14 @@ func (s *chatTestStream) Outcome() agentloop.StreamOutcome {
 func (s *chatTestStream) Close() error {
 	s.closed = true
 	return nil
+}
+
+// chatModelOf returns the ChatModel produced by an Update call. ChatModel.Update
+// always returns a ChatModel, so any other type is a test failure.
+func chatModelOf(updated tea.Model) ChatModel {
+	model, ok := updated.(ChatModel)
+	if !ok {
+		panic(fmt.Sprintf("ChatModel.Update returned %T", updated))
+	}
+	return model
 }

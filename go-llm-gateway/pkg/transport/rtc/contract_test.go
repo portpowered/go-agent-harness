@@ -15,6 +15,14 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest"
 )
 
+// Transport operation names shared by the contract fixtures.
+const (
+	opDial  = "dial"
+	opRead  = "read"
+	opWrite = "write"
+	opClose = "close"
+)
+
 var (
 	_ transport.Dialer          = (*dataDialer)(nil)
 	_ transport.Conn            = (*dataConn)(nil)
@@ -27,10 +35,10 @@ var (
 func TestRTCDataS11Conformance(t *testing.T) { transporttest.RunS11(t, s11Harness()) }
 
 func s11Harness() transporttest.ConformanceHarness {
-	dialErr := &operationError{"dial"}
-	readErr := &operationError{"read"}
-	writeErr := &operationError{"write"}
-	closeErr := &operationError{"close"}
+	dialErr := &operationError{opDial}
+	readErr := &operationError{opRead}
+	writeErr := &operationError{opWrite}
+	closeErr := &operationError{opClose}
 	h := transporttest.ConformanceHarness{
 		Endpoint: "rtc://memory/s11",
 		Headers:  map[string]string{"Authorization": "test", "X-Trace": "s11"},
@@ -38,20 +46,20 @@ func s11Harness() transporttest.ConformanceHarness {
 		Outbound: []transporttest.Message{{Type: 3, Payload: []byte{9, 0, 8}}, {Type: 11, Payload: []byte("outbound-second")}},
 	}
 	h.NewValid = func() (transport.Dialer, transporttest.Observer) { return newData(h.Inbound, nil, nil, nil, nil) }
-	h.DialFailure, h.ReadFailure, h.WriteFailure, h.CloseFailure = failure("dial", dialErr), failure("read", readErr), failure("write", writeErr), failure("close", closeErr)
+	h.DialFailure, h.ReadFailure, h.WriteFailure, h.CloseFailure = failure(opDial, dialErr), failure(opRead, readErr), failure(opWrite, writeErr), failure(opClose, closeErr)
 	return h
 }
 
 func failure(op string, want error) transporttest.FailureCase {
 	var dErr, rErr, wErr, cErr error
 	switch op {
-	case "dial":
+	case opDial:
 		dErr = want
-	case "read":
+	case opRead:
 		rErr = want
-	case "write":
+	case opWrite:
 		wErr = want
-	case "close":
+	case opClose:
 		cErr = want
 	}
 	return transporttest.FailureCase{
@@ -77,21 +85,21 @@ func TestRTCDataS11NegativeControlRejectsNoOp(t *testing.T) {
 }
 
 func TestRTCS4OperationErrorIdentity(t *testing.T) {
-	cases := []struct{ name string }{{"dial"}, {"read"}, {"write"}}
+	cases := []struct{ name string }{{opDial}, {opRead}, {opWrite}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			want := &operationError{tc.name}
 			var dErr, rErr, wErr error
 			switch tc.name {
-			case "dial":
+			case opDial:
 				dErr = want
-			case "read":
+			case opRead:
 				rErr = want
-			case "write":
+			case opWrite:
 				wErr = want
 			}
 			conn, err := newDataOnly(nil, dErr, rErr, wErr, nil).Dial("rtc://memory/s4", map[string]string{"X-Test": "s4"})
-			if tc.name == "dial" {
+			if tc.name == opDial {
 				if conn != nil {
 					t.Fatal("failed Dial returned a connection")
 				}
@@ -99,8 +107,8 @@ func TestRTCS4OperationErrorIdentity(t *testing.T) {
 				if err != nil || conn == nil {
 					t.Fatalf("setup Dial = (%v, %v)", conn, err)
 				}
-				defer func() { _ = conn.Close() }()
-				if tc.name == "read" {
+				defer closeForTest(t, conn)
+				if tc.name == opRead {
 					_, _, err = conn.ReadMessage()
 				} else {
 					err = conn.WriteMessage(4, []byte("s4-write"))
@@ -234,4 +242,11 @@ func cloneHeaders(headers map[string]string) map[string]string {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func closeForTest(t *testing.T, conn io.Closer) {
+	t.Helper()
+	if err := conn.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
 }

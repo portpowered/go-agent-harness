@@ -74,7 +74,7 @@ func TestStatefulBrokerValidatesNestedPageInputWithoutChangingNumberTokens(t *te
 func TestStatefulBrokerRejectsPageInputWithSelectedSchemaAndStableIssues(t *testing.T) {
 	schema := `{"type":"object","properties":{"profile":{"type":"object","properties":{"count":{"type":"integer","minimum":1},"mode":{"enum":["fast","safe"]}},"required":["count"],"additionalProperties":false}},"required":["profile"],"additionalProperties":false}`
 	broker, runtime := newInputValidationBroker(t, schema, 0)
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
@@ -162,7 +162,7 @@ func assertDetailsDoNotEcho(t *testing.T, classified *webmcp.ClassifiedError, no
 func TestStatefulBrokerBoundsInvalidUTF8AndOversizedPageInputBeforeDispatch(t *testing.T) {
 	schema := `{"type":"object","properties":{"value":{"type":"string"}},"additionalProperties":false}`
 	broker, runtime := newInputValidationBroker(t, schema, 4)
-	defer func() { _ = broker.Close() }()
+	defer closeAtTestEnd(t, broker)
 
 	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)

@@ -702,7 +702,7 @@ func (h *ScriptedBrowserHandle) Attach(ctx context.Context, targetID webmcp.Targ
 		}
 		return nil, disconnectedError(h.candidate.ID, targetID, "attach", "browser_disconnected")
 	}
-	_ = session.emitLocal(webmcp.BrowserEvent{Type: webmcp.EventTargetAttached, Generation: page.Generation})
+	emitAdvisoryEvent(session, webmcp.BrowserEvent{Type: webmcp.EventTargetAttached, Generation: page.Generation})
 	return session, nil
 }
 

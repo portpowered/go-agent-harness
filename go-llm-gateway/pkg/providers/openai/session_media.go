@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -71,7 +72,9 @@ func (s *realtimeSession) releaseUnclaimedRTCMedia() {
 	s.media = nil
 	s.mediaContinuous = false
 	s.mediaMu.Unlock()
-	_ = media.Close()
+	if err := media.Close(); err != nil {
+		s.logger.Warn("openai realtime: release unclaimed RTC media", logging.Field{Key: "error", Value: err})
+	}
 }
 
 func (s *realtimeSession) currentRTCMedia() *sharedaudio.SessionMedia {
@@ -265,3 +268,11 @@ func realtimeAudioMediaType(data json.RawMessage) string {
 
 // realtimePCMAudioFormat is the realtime wire name for raw PCM16 audio.
 const realtimePCMAudioFormat = "audio/pcm"
+
+// closeWithLog closes the session from a background loop that has no caller
+// to return the close result to; a failure is reported through the logger.
+func (s *realtimeSession) closeWithLog() {
+	if err := s.Close(); err != nil {
+		s.logger.Warn("openai realtime: session close error", logging.Field{Key: "error", Value: err})
+	}
+}

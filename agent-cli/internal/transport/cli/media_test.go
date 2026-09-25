@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -22,7 +21,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
@@ -120,7 +118,10 @@ func TestMediaProbeCommandRunsAgainstBothProtocolStubs(t *testing.T) {
 	if strings.Join(gotMethods, ",") != "DESCRIBE,DESCRIBE,SETUP,SETUP,PLAY" {
 		t.Fatalf("RTSP methods = %v", gotMethods)
 	}
-	parsedRTSP, _ := url.Parse(rtspURL)
+	parsedRTSP, err := url.Parse(rtspURL)
+	if err != nil {
+		t.Fatalf("parse RTSP URL: %v", err)
+	}
 	parsedRTSP.User = nil
 	baseURI := parsedRTSP.String()
 	audioURI := *parsedRTSP
@@ -136,7 +137,7 @@ func TestMediaProbeCommandRunsAgainstBothProtocolStubs(t *testing.T) {
 	go2rtcObserved.Lock()
 	gotPath, gotSource, goFrameCount := go2rtcObserved.path, go2rtcObserved.source, go2rtcObserved.frameCount
 	go2rtcObserved.Unlock()
-	if gotPath != "/api/ws" || gotSource != "cli-tuya-main" || goFrameCount == 0 {
+	if gotPath != go2rtcFixtureWSPath || gotSource != "cli-tuya-main" || goFrameCount == 0 {
 		t.Fatalf("go2rtc path/source/frame count = %q/%q/%d", gotPath, gotSource, goFrameCount)
 	}
 }
@@ -164,7 +165,7 @@ func TestMediaProbeCommandRejectsFrameLessGo2RTC(t *testing.T) {
 	observed.Lock()
 	gotPath, gotSource, frameCount := observed.path, observed.source, observed.frameCount
 	observed.Unlock()
-	if gotPath != "/api/ws" || gotSource != "cli-tuya-main" || frameCount != 0 {
+	if gotPath != go2rtcFixtureWSPath || gotSource != "cli-tuya-main" || frameCount != 0 {
 		t.Fatalf("frame-less path/source/frame count = %q/%q/%d", gotPath, gotSource, frameCount)
 	}
 }
@@ -261,7 +262,7 @@ func TestMediaProbeCredentialRedactionAcrossArtifacts(t *testing.T) {
 	}
 	frame, err := stream.ReadFrame(context.Background())
 	caps := stream.Capabilities
-	_ = stream.Close()
+	releaseForTest(stream.Close)
 	cleanupMedia()
 	if err != nil || len(frame.Samples) == 0 {
 		t.Fatalf("media frame = %#v, error = %v", frame, err)
@@ -353,7 +354,7 @@ func startCLIRTSPFixture(t *testing.T, password string) (string, *cliRTSPObserva
 	go func() { done <- serveCLIRTSPFixture(listener, observed, password) }()
 	rawURL := fmt.Sprintf("rtsp://camera:%s@%s/camera/stream?profile=main", password, listener.Addr())
 	cleanup := func() {
-		_ = listener.Close()
+		releaseForTest(listener.Close)
 		select {
 		case <-done:
 		case <-time.After(time.Second):
@@ -368,7 +369,7 @@ func serveCLIRTSPFixture(listener net.Listener, observed *cliRTSPObservation, pa
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer releaseForTest(conn.Close)
 	reader := bufio.NewReader(conn)
 	challenged := false
 	for {
@@ -384,22 +385,22 @@ func serveCLIRTSPFixture(listener net.Listener, observed *cliRTSPObservation, pa
 		case "DESCRIBE":
 			if !challenged {
 				challenged = true
-				fmt.Fprint(conn, "RTSP/1.0 401 Unauthorized\r\nCSeq: "+headers["cseq"]+"\r\nWWW-Authenticate: Basic realm=cli-fixture\r\nContent-Length: 0\r\n\r\n")
+				writeFixtureText(conn, "%s", "RTSP/1.0 401 Unauthorized\r\nCSeq: "+headers["cseq"]+"\r\nWWW-Authenticate: Basic realm=cli-fixture\r\nContent-Length: 0\r\n\r\n")
 				continue
 			}
 			wantAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("camera:"+password))
 			if headers["authorization"] != wantAuth {
-				fmt.Fprint(conn, "RTSP/1.0 401 Unauthorized\r\nCSeq: "+headers["cseq"]+"\r\nContent-Length: 0\r\n\r\n")
+				writeFixtureText(conn, "%s", "RTSP/1.0 401 Unauthorized\r\nCSeq: "+headers["cseq"]+"\r\nContent-Length: 0\r\n\r\n")
 				continue
 			}
 			body := "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=cli-fixture\r\nt=0 0\r\nm=audio 0 RTP/AVP 0\r\na=rtpmap:0 PCMU/8000/1\r\na=control:trackID=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=control:trackID=1\r\n"
-			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nContent-Base: %s\r\nContent-Length: %d\r\n\r\n%s", headers["cseq"], path, len(body), body)
+			writeFixtureText(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nContent-Base: %s\r\nContent-Length: %d\r\n\r\n%s", headers["cseq"], path, len(body), body)
 		case "SETUP":
 			transport := strings.TrimPrefix(headers["transport"], "RTP/AVP/TCP;unicast;interleaved=")
 			transport = strings.Split(transport, ";")[0]
-			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: cli-session\r\nTransport: RTP/AVP/TCP;unicast;interleaved=%s\r\nContent-Length: 0\r\n\r\n", headers["cseq"], transport)
+			writeFixtureText(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: cli-session\r\nTransport: RTP/AVP/TCP;unicast;interleaved=%s\r\nContent-Length: 0\r\n\r\n", headers["cseq"], transport)
 		case "PLAY":
-			fmt.Fprintf(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: cli-session\r\nContent-Length: 0\r\n\r\n", headers["cseq"])
+			writeFixtureText(conn, "RTSP/1.0 200 OK\r\nCSeq: %s\r\nSession: cli-session\r\nContent-Length: 0\r\n\r\n", headers["cseq"])
 			packet, err := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: 1, Timestamp: 1}, Payload: []byte{0x80, 0x00, 0x55}}).Marshal()
 			if err != nil {
 				return err
@@ -470,126 +471,17 @@ func startCLIGo2RTCFixtureWithMedia(t *testing.T, sendAudio, sendVideo bool) (st
 		frameDelivered:      make(chan struct{}),
 		videoFrameDelivered: make(chan struct{}),
 	}
-	handlerDone := make(chan struct{})
 	fixtureContext, cancelFixture := context.WithCancel(context.Background())
-	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer close(handlerDone)
-		handlerContext, cancelHandler := context.WithCancel(r.Context())
-		defer cancelHandler()
-		go func() {
-			select {
-			case <-fixtureContext.Done():
-				cancelHandler()
-			case <-handlerContext.Done():
-			}
-		}()
-		observed.Lock()
-		observed.path = r.URL.Path
-		observed.source = r.URL.Query().Get("src")
-		observed.Unlock()
-		if r.URL.Path != "/api/ws" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		_, data, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-		var offer struct {
-			Type  string `json:"type"`
-			Value string `json:"value"`
-		}
-		if err := json.Unmarshal(data, &offer); err != nil || offer.Type != "webrtc/offer" {
-			return
-		}
-		mediaEngine := &webrtc.MediaEngine{}
-		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1}, PayloadType: 0}, webrtc.RTPCodecTypeAudio); err != nil {
-			return
-		}
-		if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, PayloadType: 96}, webrtc.RTPCodecTypeVideo); err != nil {
-			return
-		}
-		pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine)).NewPeerConnection(webrtc.Configuration{})
-		if err != nil {
-			return
-		}
-		defer pc.Close()
-		connected := make(chan struct{})
-		var once sync.Once
-		pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-			if state == webrtc.PeerConnectionStateConnected {
-				once.Do(func() { close(connected) })
-			}
-		})
-		audio, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU, ClockRate: 8000, Channels: 1}, "audio", "cli-fixture")
-		if err != nil {
-			return
-		}
-		if _, err = pc.AddTrack(audio); err != nil {
-			return
-		}
-		var video *webrtc.TrackLocalStaticRTP
-		if sendVideo {
-			video, err = webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000}, "video", "cli-fixture")
-			if err != nil {
-				return
-			}
-			if _, err = pc.AddTrack(video); err != nil {
-				return
-			}
-		}
-		if err = pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offer.Value}); err != nil {
-			return
-		}
-		answer, err := pc.CreateAnswer(nil)
-		if err != nil {
-			return
-		}
-		if err = pc.SetLocalDescription(answer); err != nil {
-			return
-		}
-		select {
-		case <-webrtc.GatheringCompletePromise(pc):
-		case <-handlerContext.Done():
-			return
-		}
-		if err = conn.WriteJSON(struct {
-			Type  string `json:"type"`
-			Value string `json:"value"`
-		}{Type: "webrtc/answer", Value: pc.LocalDescription().SDP}); err != nil {
-			return
-		}
-		observed.negotiatedOnce.Do(func() { close(observed.negotiated) })
-		select {
-		case <-connected:
-		case <-handlerContext.Done():
-			return
-		}
-		for i := 0; i < 3; i++ {
-			if sendAudio {
-				packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}
-				if err = audio.WriteRTP(packet); err != nil {
-					return
-				}
-				observed.recordFrame(len(packet.Payload))
-			}
-			if sendVideo {
-				packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 3000)}, Payload: []byte{0x65, byte(i + 1), 0x01, 0x02}}
-				if err = video.WriteRTP(packet); err != nil {
-					return
-				}
-				observed.recordVideoFrame(len(packet.Payload))
-			}
-		}
-		<-handlerContext.Done()
-	}))
-	u, _ := url.Parse(server.URL)
+	handler := &cliGo2RTCFixtureHandler{
+		observed: observed, fixtureContext: fixtureContext, sendAudio: sendAudio, sendVideo: sendVideo,
+		handlerDone: make(chan struct{}),
+		upgrader:    websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+	}
+	server := httptest.NewServer(handler)
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse go2rtc fixture URL: %v", err)
+	}
 	rawURL := "go2rtc://" + u.Host + "/api/ws?src=cli-tuya-main"
 	var cleanupOnce sync.Once
 	cleanup := func() {
@@ -609,7 +501,7 @@ func startCLIGo2RTCFixtureWithMedia(t *testing.T, sendAudio, sendVideo bool) (st
 				t.Errorf("go2rtc fixture server did not close: %v", ctx.Err())
 			}
 			select {
-			case <-handlerDone:
+			case <-handler.handlerDone:
 			case <-ctx.Done():
 				t.Errorf("go2rtc fixture handler did not close: %v", ctx.Err())
 			}

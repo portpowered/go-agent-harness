@@ -314,9 +314,9 @@ func (c *plainSpeechConn) WriteMessage(_ int, payload []byte) error {
 	s := c.server
 	s.mu.Lock()
 	switch envelope.Type {
-	case "session.update":
+	case rtEventSessionUpdate:
 		// The collision is independent of session instruction composition.
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		decoded, err := base64.StdEncoding.DecodeString(envelope.Audio)
 		if envelope.Audio == "" {
 			s.protocolErrs = append(s.protocolErrs, "empty input_audio_buffer.append")
@@ -332,7 +332,7 @@ func (c *plainSpeechConn) WriteMessage(_ int, payload []byte) error {
 			s.pendingCancel = nil
 			events = append(events, fmt.Sprintf(`{"type":"response.done","response":{"id":%q,"status":"cancelled"}}`, response.ID))
 		}
-	case "input_audio_buffer.commit":
+	case rtEventInputAudioCommit:
 		if !s.turnHasAudio {
 			s.protocolErrs = append(s.protocolErrs, "input commit without non-empty audio")
 		}
@@ -343,7 +343,7 @@ func (c *plainSpeechConn) WriteMessage(_ int, payload []byte) error {
 			`{"type":"input_audio_buffer.committed"}`,
 			fmt.Sprintf(`{"type":"conversation.item.created","item":{"id":"item-plain-%d","role":"user"}}`, s.commits),
 		)
-	case "response.create":
+	case rtEventResponseCreate:
 		if s.active != nil {
 			s.protocolErrs = append(s.protocolErrs, fmt.Sprintf("response.create while %q is active", s.active.ID))
 		}
@@ -366,7 +366,7 @@ func (c *plainSpeechConn) WriteMessage(_ int, payload []byte) error {
 			response.TerminalSent = true
 			s.active = nil
 		}
-	case "response.cancel":
+	case rtEventResponseCancel:
 		if s.active == nil {
 			s.protocolErrs = append(s.protocolErrs, "response.cancel without active response")
 			break
@@ -513,7 +513,7 @@ type plainSpeechCaptureAdapter struct {
 func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEvent) {
 	payload := plainSpeechRecordPayload(record)
 	switch record.Type {
-	case "input_audio_buffer.append":
+	case rtEventInputAudioAppend:
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
@@ -521,7 +521,7 @@ func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			a.inputOrdinal++
 			a.currentInput = plainSpeechInputID(a.inputOrdinal)
 		}
-		decoded, _ := base64.StdEncoding.DecodeString(plainSpeechJSONField(payload, "audio"))
+		decoded := decodeObservedAudio(plainSpeechJSONField(payload, "audio"))
 		a.ledger.Observe(probe.BargeInEvent{
 			Sequence:      a.nextEventSequence(),
 			Kind:          probe.BargeInEventInputAppend,
@@ -531,7 +531,7 @@ func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:         len(decoded),
 			NonEmpty:      len(decoded) > 0,
 		})
-	case "input_audio_buffer.commit":
+	case rtEventInputAudioCommit:
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
@@ -543,7 +543,7 @@ func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 		})
 		a.lastCommittedInput = a.currentInput
 	case "conversation.item.created":
-		if record.Direction != gwtesting.DirectionServerToClient || plainSpeechJSONField(payload, "item.role") != "user" {
+		if record.Direction != gwtesting.DirectionServerToClient || plainSpeechJSONField(payload, "item.role") != rtRoleUser {
 			return
 		}
 		a.ledger.Observe(probe.BargeInEvent{
@@ -553,45 +553,17 @@ func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			TurnID:   plainSpeechTurnID(a.currentInput),
 		})
 		a.currentInput = ""
-	case "response.created":
-		if record.Direction != gwtesting.DirectionServerToClient {
-			return
+	case rtEventResponseCreated:
+		if record.Direction == gwtesting.DirectionServerToClient {
+			a.observeResponseCreated(payload)
 		}
-		a.responseOrdinal++
-		providerID := plainSpeechJSONField(payload, "response.id", "response_id")
-		stableID := plainSpeechResponseID(a.responseOrdinal)
-		owner := a.lastCommittedInput
-		identity := plainSpeechResponseIdentity{
-			stable:  stableID,
-			inputID: owner,
-			turnID:  plainSpeechTurnID(owner),
-			ordinal: a.responseOrdinal,
-		}
-		a.providerResponses[providerID] = identity
-		a.responseByProvider[providerID] = stableID
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventResponseCreated,
-			InputID:    owner,
-			TurnID:     identity.turnID,
-			ResponseID: stableID,
-		})
-		if a.responseOrdinal > 1 && stableID != a.omitContinuationFor {
-			a.ledger.Observe(probe.BargeInEvent{
-				Sequence:   a.nextEventSequence(),
-				Kind:       probe.BargeInEventContinuation,
-				InputID:    owner,
-				TurnID:     identity.turnID,
-				ResponseID: stableID,
-			})
-		}
-	case "response.output_audio.delta":
+	case rtEventOutputAudioDelta:
 		if record.Direction != gwtesting.DirectionServerToClient {
 			return
 		}
 		providerID := plainSpeechJSONField(payload, "response_id", "response.id")
 		stableID := a.responseByProvider[providerID]
-		decoded, _ := base64.StdEncoding.DecodeString(plainSpeechJSONField(payload, "delta"))
+		decoded := decodeObservedAudio(plainSpeechJSONField(payload, "delta"))
 		a.ledger.Observe(probe.BargeInEvent{
 			Sequence:   a.nextEventSequence(),
 			Kind:       probe.BargeInEventResponseOutput,
@@ -599,7 +571,7 @@ func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			Bytes:      len(decoded),
 			NonEmpty:   len(decoded) > 0,
 		})
-	case "response.cancel":
+	case rtEventResponseCancel:
 		if record.Direction != gwtesting.DirectionClientToServer {
 			return
 		}
@@ -615,7 +587,7 @@ func (a *plainSpeechCaptureAdapter) observe(record gwtesting.CapturedSessionEven
 			TurnID:     plainSpeechTurnID(interruptingInput),
 			ResponseID: identity.stable,
 		})
-	case "response.done":
+	case rtEventResponseDone:
 		if record.Direction != gwtesting.DirectionServerToClient {
 			return
 		}
@@ -653,11 +625,11 @@ func (a *plainSpeechCaptureAdapter) activeResponse() plainSpeechResponseIdentity
 
 func plainSpeechDisposition(status string) probe.BargeInDisposition {
 	switch strings.ToLower(status) {
-	case "completed":
+	case rtStatusCompleted:
 		return probe.BargeInDispositionCompleted
-	case "cancelled", "canceled":
+	case rtStatusCancelled, "canceled":
 		return probe.BargeInDispositionCancelled
-	case "failed", "incomplete":
+	case rtStatusFailed, "incomplete":
 		return probe.BargeInDispositionFailed
 	default:
 		return probe.BargeInDisposition(status)
@@ -782,21 +754,21 @@ func TestS2SLiveBargeInPlainSpeechCLIUsesObservedAudioGate(t *testing.T) {
 	}
 
 	firstAudio := plainSpeechRecordIndex(run.capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_audio.delta" && plainSpeechJSONField(plainSpeechRecordPayload(record), "response_id") == "response-plain-1"
+		return record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventOutputAudioDelta && plainSpeechJSONField(plainSpeechRecordPayload(record), "response_id") == rtPlainResponseID
 	}, 0)
 	secondAppend := plainSpeechRecordIndex(run.capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionClientToServer && record.Type == "input_audio_buffer.append"
+		return record.Direction == gwtesting.DirectionClientToServer && record.Type == rtEventInputAudioAppend
 	}, 1)
 	firstCancel := plainSpeechRecordIndex(run.capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionClientToServer && record.Type == "response.cancel"
+		return record.Direction == gwtesting.DirectionClientToServer && record.Type == rtEventResponseCancel
 	}, 0)
 	firstTerminal := plainSpeechRecordIndex(run.capture, func(record gwtesting.CapturedSessionEvent) bool {
-		return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.done" && plainSpeechJSONField(plainSpeechRecordPayload(record), "response.id") == "response-plain-1"
+		return record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventResponseDone && plainSpeechJSONField(plainSpeechRecordPayload(record), "response.id") == rtPlainResponseID
 	}, 0)
 	if firstAudio < 0 || secondAppend < 0 || firstCancel < 0 || firstTerminal < 0 {
 		t.Fatalf("plain-speech collision boundary is incomplete: first_audio=%d second_append=%d cancel=%d terminal=%d records=%v", firstAudio, secondAppend, firstCancel, firstTerminal, run.capture.Records)
 	}
-	if !(firstAudio < secondAppend && secondAppend < firstTerminal && firstAudio < firstCancel && firstCancel < firstTerminal) {
+	if !strictlyIncreasing(firstAudio, secondAppend, firstTerminal) || !strictlyIncreasing(firstAudio, firstCancel, firstTerminal) {
 		t.Fatalf("interrupting input was not released after active response audio and before its terminal: first_audio=%d second_append=%d cancel=%d terminal=%d", firstAudio, secondAppend, firstCancel, firstTerminal)
 	}
 
@@ -829,13 +801,7 @@ func TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations(t *testing.T) {
 		{
 			name: "dropped input",
 			mutate: func(capture *gwtesting.SessionCapture) {
-				index := plainSpeechRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionClientToServer && record.Type == "input_audio_buffer.append"
-				}, 1)
-				if index >= 0 {
-					capture.Records = append(capture.Records[:index], capture.Records[index+1:]...)
-					renumberPlainSpeechCapture(capture)
-				}
+				dropPlainSpeechRecord(capture, gwtesting.DirectionClientToServer, rtEventInputAudioAppend, 1)
 			},
 			want: `missing input "input-3"`,
 		},
@@ -843,7 +809,7 @@ func TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations(t *testing.T) {
 			name: "duplicate cancellation",
 			mutate: func(capture *gwtesting.SessionCapture) {
 				index := plainSpeechRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionClientToServer && record.Type == "response.cancel"
+					return record.Direction == gwtesting.DirectionClientToServer && record.Type == rtEventResponseCancel
 				}, 0)
 				if index < 0 {
 					return
@@ -856,10 +822,10 @@ func TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations(t *testing.T) {
 			name: "stale output",
 			mutate: func(capture *gwtesting.SessionCapture) {
 				cancelIndex := plainSpeechRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionClientToServer && record.Type == "response.cancel"
+					return record.Direction == gwtesting.DirectionClientToServer && record.Type == rtEventResponseCancel
 				}, 0)
 				outputIndex := plainSpeechRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.output_audio.delta" && plainSpeechJSONField(plainSpeechRecordPayload(record), "response_id") == "response-plain-1"
+					return record.Direction == gwtesting.DirectionServerToClient && record.Type == rtEventOutputAudioDelta && plainSpeechJSONField(plainSpeechRecordPayload(record), "response_id") == rtPlainResponseID
 				}, 0)
 				if cancelIndex < 0 || outputIndex < 0 {
 					return
@@ -871,24 +837,7 @@ func TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations(t *testing.T) {
 		{
 			name: "misattributed response",
 			mutate: func(capture *gwtesting.SessionCapture) {
-				index := plainSpeechRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.done"
-				}, 1)
-				if index < 0 {
-					return
-				}
-				payload := map[string]any{}
-				if json.Unmarshal(plainSpeechRecordPayload(capture.Records[index]), &payload) != nil {
-					return
-				}
-				response, _ := payload["response"].(map[string]any)
-				if response == nil {
-					response = map[string]any{}
-					payload["response"] = response
-				}
-				response["id"] = "response-plain-1"
-				encoded, _ := json.Marshal(payload)
-				capture.Records[index].Payload = encoded
+				misattributePlainSpeechTerminal(t, capture)
 			},
 			want: `response "response-1" received duplicate terminal disposition`,
 		},
@@ -909,13 +858,7 @@ func TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations(t *testing.T) {
 		{
 			name: "clean unresolved close",
 			mutate: func(capture *gwtesting.SessionCapture) {
-				index := plainSpeechRecordIndex(*capture, func(record gwtesting.CapturedSessionEvent) bool {
-					return record.Direction == gwtesting.DirectionServerToClient && record.Type == "response.done"
-				}, 2)
-				if index >= 0 {
-					capture.Records = append(capture.Records[:index], capture.Records[index+1:]...)
-					renumberPlainSpeechCapture(capture)
-				}
+				dropPlainSpeechRecord(capture, gwtesting.DirectionServerToClient, rtEventResponseDone, 2)
 			},
 			want: `response "response-3" has unresolved terminal disposition`,
 		},

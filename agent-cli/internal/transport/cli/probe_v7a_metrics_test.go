@@ -36,12 +36,12 @@ func TestProbeRunS2SV7AMetricsModalityReconcilesOffline(t *testing.T) {
 		t.Fatalf("unexpected result line: %v", result)
 	}
 	kinds := map[string]bool{}
-	for _, expectation := range result["expectations"].([]any) {
-		outcome := expectation.(map[string]any)
+	for _, expectation := range jsonSlice(t, result["expectations"]) {
+		outcome := jsonObject(t, expectation)
 		if outcome["passed"] != true {
 			t.Fatalf("expectation must pass: %v", outcome)
 		}
-		kinds[outcome["kind"].(string)] = true
+		kinds[jsonString(t, outcome["kind"])] = true
 	}
 	if !kinds["metrics-reconcile"] || !kinds["transcript-contains"] {
 		t.Fatalf("result must carry passing metrics-reconcile and transcript-contains outcomes: %v", kinds)
@@ -59,7 +59,7 @@ func TestProbeRunS2SV7AOvercountFailsNamingOutputTool(t *testing.T) {
 		t.Fatalf("exit code = 0, want non-zero; stdout=%q stderr=%q", run.stdout, run.stderr)
 	}
 	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
-	if summary["status"] != "fail" {
+	if summary["status"] != probeStatusFail {
 		t.Fatalf("summary must record failure: %v", summary)
 	}
 	result := results[0]
@@ -67,10 +67,10 @@ func TestProbeRunS2SV7AOvercountFailsNamingOutputTool(t *testing.T) {
 		t.Fatalf("unexpected result line: %v", result)
 	}
 	failed := map[string]map[string]any{}
-	for _, expectation := range result["expectations"].([]any) {
-		outcome := expectation.(map[string]any)
+	for _, expectation := range jsonSlice(t, result["expectations"]) {
+		outcome := jsonObject(t, expectation)
 		if outcome["passed"] == false {
-			failed[outcome["kind"].(string)] = outcome
+			failed[jsonString(t, outcome["kind"])] = outcome
 		} else if outcome["kind"] == "transcript-contains" {
 			continue
 		} else {
@@ -82,13 +82,13 @@ func TestProbeRunS2SV7AOvercountFailsNamingOutputTool(t *testing.T) {
 		t.Fatalf("injected overcount must fail the metrics-reconcile kind: %v", result["expectations"])
 	}
 	for _, field := range []string{"expected", "actual"} {
-		value, _ := outcome[field].(string)
+		value := jsonText(outcome[field])
 		if !strings.Contains(value, "output/tool") {
 			t.Fatalf("%s detail must name output/tool, got %q", field, value)
 		}
 	}
-	expected, _ := outcome["expected"].(string)
-	actual, _ := outcome["actual"].(string)
+	expected := jsonText(outcome["expected"])
+	actual := jsonText(outcome["actual"])
 	if !strings.Contains(expected, "16") || !strings.Contains(actual, "17") {
 		t.Fatalf("detail must show observed sum 16 vs reported total 17, got expected=%q actual=%q", expected, actual)
 	}

@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// octetStreamMediaType is the generic binary media type.
+const octetStreamMediaType = "application/octet-stream"
+
 // DetectMimeType detects the MIME type of the file at path using both magic
 // bytes (first 512 bytes via net/http.DetectContentType) and file extension.
 // When both methods produce a result, magic bytes take precedence — except when
@@ -30,7 +33,7 @@ func detectMimeTypeFromBytes(data []byte, ext string) string {
 	extType := mimeByExt[strings.ToLower(ext)]
 
 	switch {
-	case magic != "" && magic != "application/octet-stream" && magic != "text/plain":
+	case magic != "" && magic != octetStreamMediaType && magic != "text/plain":
 		// Specific magic-byte detection (e.g. image/jpeg, image/png) wins.
 		return magic
 	case extType != "":
@@ -40,7 +43,7 @@ func detectMimeTypeFromBytes(data []byte, ext string) string {
 	case magic != "":
 		return magic
 	default:
-		return "application/octet-stream"
+		return octetStreamMediaType
 	}
 }
 

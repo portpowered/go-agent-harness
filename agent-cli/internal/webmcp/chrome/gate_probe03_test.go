@@ -468,7 +468,7 @@ func (f *probe03Fixture) writePage(writer http.ResponseWriter, page string) {
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.Header().Set("Origin-Agent-Cluster", "?1")
 	writer.Header().Set("Permissions-Policy", "tools=(self)")
-	_, _ = io.WriteString(writer, renderProbe03Page(page, f.ToolName(page), f.StateURL(page)))
+	writeFixtureBody(writer, []byte(renderProbe03Page(page, f.ToolName(page), f.StateURL(page))))
 }
 
 func (f *probe03Fixture) handleState(writer http.ResponseWriter, request *http.Request, page string) {
@@ -480,7 +480,7 @@ func (f *probe03Fixture) handleState(writer http.ResponseWriter, request *http.R
 		writer.Header().Set("Content-Type", "application/json")
 		state := f.states[page]
 		state.Invocations = append([]string(nil), state.Invocations...)
-		_ = json.NewEncoder(writer).Encode(state)
+		encodeFixtureJSON(writer, state)
 	case http.MethodPost:
 		var state probe03PageState
 		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&state); err != nil || state.Page != page {
@@ -578,7 +578,7 @@ func writeProbe03Config(configDir, userDataDir, origin string) error {
 }
 
 func probe03Input(message string) string {
-	encoded, _ := json.Marshal(map[string]string{"message": message})
+	encoded := mustFixtureJSON(map[string]string{"message": message})
 	return string(encoded)
 }
 
@@ -592,7 +592,7 @@ func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir 
 		fullArgs = append([]string{"--config-dir", configDir}, fullArgs...)
 	}
 	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
-	command.Dir, _ = repositoryRoot()
+	command.Dir = mustRepositoryRoot()
 	command.Env = probe03ChildEnvironment(homeDir)
 	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
 	command.Stdout = &process.stdout

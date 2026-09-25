@@ -119,7 +119,7 @@ func readCDPVersion(endpoint string) (cdpVersionReport, error) {
 		// NewRemoteAllocator never owns the browser process. Cancel the remote
 		// client context so only the temporary tab created by this probe is
 		// detached and closed; the shell launcher owns browser termination.
-		_ = chromedp.Cancel(browserContext)
+		cancelProbeTarget(browserContext)
 		cancelBrowser()
 	}()
 

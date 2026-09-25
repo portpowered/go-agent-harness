@@ -30,8 +30,8 @@ func EnsureAgentsMD(workspaceDir string, toolDefs []messages.ToolDefinition) err
 		return os.WriteFile(path, []byte(generateAgentsMD(workspaceDir, toolDefs)), 0644)
 	}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
+	content, readable := readExistingAgentsMD(path)
+	if !readable {
 		// Preserve the historical behavior for an existing but unreadable
 		// AGENTS.md. Prompt loading treats its subsequent read failure as an
 		// empty prompt, and reconciliation cannot safely modify bytes it could
@@ -264,4 +264,11 @@ func availableToolsSectionBounds(content string) (int, int, bool) {
 		offset = lineEnd
 	}
 	return 0, 0, false
+}
+
+// readExistingAgentsMD reads an existing AGENTS.md and reports whether its
+// bytes could be read.
+func readExistingAgentsMD(path string) ([]byte, bool) {
+	content, err := os.ReadFile(path)
+	return content, err == nil
 }

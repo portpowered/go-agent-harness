@@ -231,7 +231,7 @@ func (r *ScenarioRegistry) Snapshot() []Scenario {
 	return scenarios
 }
 
-var liveScenarioRegistry = NewScenarioRegistry()
+var liveScenarioRegistry = newBuiltinScenarioRegistry()
 
 // LiveRegistry and DefaultScenarioRegistry are aliases to the package's
 // ordinary live registry seam. Guard construction captures the pointer, not
@@ -604,19 +604,18 @@ func DefaultDeadSessionSubjectFactory(control DeadSessionControl, _ Scenario) (D
 	}
 }
 
+// The built-in controls always resolve to the deterministic subject that
+// DefaultDeadSessionSubjectFactory returns for them.
 func NewNullSubject() DeadSessionSubject {
-	subject, _ := DefaultDeadSessionSubjectFactory(ControlNull, Scenario{})
-	return subject
+	return &deterministicDeadSessionSubject{control: ControlNull}
 }
 
 func NewEchoSubject() DeadSessionSubject {
-	subject, _ := DefaultDeadSessionSubjectFactory(ControlEcho, Scenario{})
-	return subject
+	return &deterministicDeadSessionSubject{control: ControlEcho}
 }
 
 func NewSilenceSubject() DeadSessionSubject {
-	subject, _ := DefaultDeadSessionSubjectFactory(ControlSilence, Scenario{})
-	return subject
+	return &deterministicDeadSessionSubject{control: ControlSilence}
 }
 
 type deterministicDeadSessionSubject struct {

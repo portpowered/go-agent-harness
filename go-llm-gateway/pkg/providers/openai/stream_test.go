@@ -3,7 +3,6 @@ package openai
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -443,7 +442,7 @@ func TestStreamSSEToGateway_UsageInLastChunk(t *testing.T) {
 func TestStreamSSEToGateway_LargeToolCallArguments(t *testing.T) {
 	// Build a JSON argument payload >64KB to verify the increased scanner buffer handles it.
 	bigValue := strings.Repeat("x", 70*1024) // 70KB string
-	argsJSON, _ := json.Marshal(map[string]string{"data": bigValue})
+	argsJSON := mustMarshalFixture(map[string]string{"data": bigValue})
 	argsStr := string(argsJSON)
 
 	// Split the arguments across two SSE chunks to mimic real streaming.
@@ -574,7 +573,7 @@ func TestStreamSSEToGateway_NoRefusalEventWhenEmpty(t *testing.T) {
 
 // escapeJSON escapes a string for embedding inside a JSON string value.
 func escapeJSON(s string) string {
-	b, _ := json.Marshal(s)
+	b := mustMarshalFixture(s)
 	// json.Marshal returns "\"...\"", strip the outer quotes.
 	return string(b[1 : len(b)-1])
 }

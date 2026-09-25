@@ -650,7 +650,7 @@ func ensureVirtualPlaybackQueue(queue *audio.PlaybackQueue, format audio.DeviceF
 	if queue != nil {
 		return queue
 	}
-	queue, _ = audio.PlaybackQueueForFormat(format)
+	queue = playbackQueueOrNil(format)
 	return queue
 }
 

@@ -342,34 +342,6 @@ func (t *deterministicTimer) fire(at time.Time) {
 	}
 }
 
-type deterministicTimerHeap []*deterministicTimer
-
-func (h deterministicTimerHeap) Len() int { return len(h) }
-func (h deterministicTimerHeap) Less(i, j int) bool {
-	if h[i].deadlineElapsed != h[j].deadlineElapsed {
-		return h[i].deadlineElapsed < h[j].deadlineElapsed
-	}
-	return h[i].sequence < h[j].sequence
-}
-func (h deterministicTimerHeap) Swap(i, j int) {
-	h[i], h[j] = h[j], h[i]
-	h[i].index, h[j].index = i, j
-}
-func (h *deterministicTimerHeap) Push(value any) {
-	timer := value.(*deterministicTimer)
-	timer.index = len(*h)
-	*h = append(*h, timer)
-}
-func (h *deterministicTimerHeap) Pop() any {
-	old := *h
-	n := len(old)
-	timer := old[n-1]
-	old[n-1] = nil
-	timer.index = -1
-	*h = old[:n-1]
-	return timer
-}
-
 // Ensure returns source unchanged when it is supplied, or a Real source when
 // source is nil. This compatibility helper is intentionally separate from
 // RequireTimerSource: deterministic callers should use the latter so a source

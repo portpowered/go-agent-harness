@@ -491,7 +491,7 @@ func readCLIRecordingEntries(t *testing.T, destination string, turns int) []cliL
 	if err != nil {
 		t.Fatalf("open finalized session log: %v", err)
 	}
-	defer logFile.Close()
+	defer closeForTest(t, logFile)
 	entries := make([]cliLiveRecordingEntry, 0, turns)
 	scanner := bufio.NewScanner(logFile)
 	for scanner.Scan() {
@@ -574,7 +574,7 @@ func audioLengths(audio [][]byte) []int {
 func audioLengthsFromOutbound(outbound []cliLiveOutbound) []int {
 	lengths := make([]int, 0, len(outbound))
 	for _, event := range outbound {
-		if event.typeName == "input_audio_buffer.append" {
+		if event.typeName == rtEventInputAudioAppend {
 			lengths = append(lengths, len(event.audio))
 		}
 	}

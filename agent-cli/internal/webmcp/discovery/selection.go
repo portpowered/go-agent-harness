@@ -154,7 +154,7 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	}
 	if failure := s.persistSelectionLocked(ctx, browser, target, selected.SelectedAt); failure != nil {
 		if handle != nil {
-			_ = handle.Close()
+			discardRelease(handle)
 		}
 		s.mu.Unlock()
 		return Selection{}, failure
@@ -177,7 +177,7 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	// remains an independent snapshot, so an in-flight caller cannot be
 	// redirected to the newly selected target.
 	if previous != nil && previous.Handle != nil && previous.Handle != handle {
-		_ = previous.Handle.Close()
+		discardRelease(previous.Handle)
 	}
 	return selected, nil
 }

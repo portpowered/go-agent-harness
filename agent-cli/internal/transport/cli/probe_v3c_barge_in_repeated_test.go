@@ -25,7 +25,7 @@ func TestProbeRunS2SV3CBargeInRepeatedReconcilesOffline(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
 	}
 	results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
-	if summary["status"] != "pass" {
+	if summary["status"] != probeStatusPass {
 		t.Fatalf("summary must record pass: %v", summary)
 	}
 	result := results[0]
@@ -33,12 +33,12 @@ func TestProbeRunS2SV3CBargeInRepeatedReconcilesOffline(t *testing.T) {
 		t.Fatalf("unexpected result line: %v", result)
 	}
 	kinds := map[string]bool{}
-	for _, expectation := range result["expectations"].([]any) {
-		outcome := expectation.(map[string]any)
+	for _, expectation := range jsonSlice(t, result["expectations"]) {
+		outcome := jsonObject(t, expectation)
 		if outcome["passed"] != true {
 			t.Fatalf("expectation must pass: %v", outcome)
 		}
-		kinds[outcome["kind"].(string)] = true
+		kinds[jsonString(t, outcome["kind"])] = true
 	}
 	if !kinds["barge-in-cancel-once"] || !kinds["message-counts-reconcile"] || !kinds["terminal-reason"] {
 		t.Fatalf("result must carry passing cancel-once, reconciliation, and terminal-reason outcomes: %v", kinds)
@@ -84,7 +84,7 @@ func TestProbeRunS2SV3CNegativeControlsFailNamingTheirInvariant(t *testing.T) {
 			t.Fatalf("%s: exit code = 0, want non-zero; stderr=%q", testCase.name, run.stderr)
 		}
 		results, summary := decodeProbeLines(t, 1, run.stdout, run.stderr)
-		if summary["status"] != "fail" {
+		if summary["status"] != probeStatusFail {
 			t.Fatalf("%s: summary must record failure: %v", testCase.name, summary)
 		}
 		result := results[0]
@@ -92,14 +92,14 @@ func TestProbeRunS2SV3CNegativeControlsFailNamingTheirInvariant(t *testing.T) {
 			t.Fatalf("%s: negative control must fail: %v", testCase.name, result)
 		}
 		found := false
-		for _, expectation := range result["expectations"].([]any) {
-			outcome := expectation.(map[string]any)
+		for _, expectation := range jsonSlice(t, result["expectations"]) {
+			outcome := jsonObject(t, expectation)
 			if outcome["kind"] != testCase.failingKind || outcome["passed"] != false {
 				continue
 			}
 			found = true
-			actual, _ := outcome["actual"].(string)
-			if !strings.Contains(actual, testCase.detail) && !strings.Contains(outcome["error"].(string), testCase.detail) {
+			actual := jsonText(outcome["actual"])
+			if !strings.Contains(actual, testCase.detail) && !strings.Contains(jsonString(t, outcome["error"]), testCase.detail) {
 				t.Fatalf("%s: failure detail must name %q, got actual=%q error=%q",
 					testCase.name, testCase.detail, actual, outcome["error"])
 			}
@@ -138,7 +138,7 @@ func TestProbeRunS2SV3CSuiteSelectionSplitsPositiveFromControls(t *testing.T) {
 	if passed != 1 || failed != 3 {
 		t.Fatalf("expected 1 passing positive and 3 failing controls, got %d/%d: %v", passed, failed, results)
 	}
-	if summary["total"] != float64(4) || summary["status"] != "fail" {
+	if summary["total"] != float64(4) || summary["status"] != probeStatusFail {
 		t.Fatalf("unexpected summary: %v", summary)
 	}
 }

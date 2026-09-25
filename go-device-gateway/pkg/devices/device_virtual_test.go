@@ -16,11 +16,14 @@ import (
 
 func TestVirtualConformance(t *testing.T) { devicegw.RunDeviceRegistryConformance(t, virtualFixture) }
 func virtualFixture() devicegw.DeviceRegistryConformanceFixture {
-	r := registry(devicegw.DefaultVirtualBackendConfig())
+	r, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
+	if err != nil {
+		panic(err) // the default virtual configuration is a fixed, valid fixture
+	}
 	return devicegw.DeviceRegistryConformanceFixture{Registry: r, InputDefault: "virtual:input", OutputDefault: "virtual:output", ExclusiveID: "virtual:exclusive", RemoveDevice: func(id devicegw.DeviceID) { r.RemoveDevice(id) }, Observations: r.Observations}
 }
 func TestVirtualLoopbackLifecycle(t *testing.T) {
-	_, out, in := openPair()
+	_, out, in := openPair(t)
 	wants := [][]byte{{1, 2}, {7, 8, 9}, {42}}
 	for _, want := range wants {
 		write := append([]byte(nil), want...)
@@ -37,14 +40,15 @@ func TestVirtualLoopbackLifecycle(t *testing.T) {
 	require.NoError(t, out.Close())
 }
 func TestVirtualFaults(t *testing.T) {
-	r := registry(devicegw.VirtualBackendConfig{Devices: []devicegw.VirtualDeviceConfig{{ID: "a", Name: "Same", Direction: devicegw.DirectionInput}, {ID: "b", Name: "Same", Direction: devicegw.DirectionInput}}})
-	list, _ := r.List()
+	r := registry(t, devicegw.VirtualBackendConfig{Devices: []devicegw.VirtualDeviceConfig{{ID: "a", Name: "Same", Direction: devicegw.DirectionInput}, {ID: "b", Name: "Same", Direction: devicegw.DirectionInput}}})
+	list, err := r.List()
+	require.NoError(t, err)
 	amb := devicegw.NewAmbiguousDeviceNameError("Same", list)
 	require.ErrorIs(t, amb, devicegw.ErrAmbiguousDeviceName)
 	require.Equal(t, []devicegw.DeviceID{"virtual:a", "virtual:b"}, []devicegw.DeviceID{amb.Candidates[0].ID, amb.Candidates[1].ID})
-	r, out, _ := openPair()
+	r, out, _ := openPair(t)
 	r.RemoveDevice("virtual:output")
-	_, err := r.Open("virtual:output")
+	_, err = r.Open("virtual:output")
 	require.ErrorIs(t, err, devicegw.ErrDeviceNotFound)
 	err = out.Write(context.Background(), []byte{1})
 	var lost *devicegw.DeviceLostError
@@ -64,7 +68,8 @@ func TestVirtualProductionConfiguration(t *testing.T) {
 	require.Equal(t, []string{devicegw.VirtualBackendName}, production.Names())
 	registry, err := production.New(devicegw.VirtualBackendName, c)
 	require.NoError(t, err)
-	virtual := registry.(*devicegw.VirtualRegistry)
+	virtual, ok := registry.(*devicegw.VirtualRegistry)
+	require.True(t, ok, "production virtual backend type")
 	caps[0].Channels = 9
 	got, err := virtual.Capabilities("virtual:input")
 	require.NoError(t, err)
@@ -196,7 +201,7 @@ func TestVirtualTypedPlaybackQueueMatchedRateDoesNotDrop(t *testing.T) {
 }
 
 func TestVirtualTypedPlaybackDiscardAndUnpairedStats(t *testing.T) {
-	r, out, in := openPair()
+	r, out, in := openPair(t)
 	t.Cleanup(func() {
 		require.NoError(t, out.Close())
 		require.NoError(t, in.Close())
@@ -226,7 +231,8 @@ func TestVirtualTypedPlaybackDiscardAndUnpairedStats(t *testing.T) {
 	opened, err := unpaired.Open("virtual:output")
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, opened.Close()) })
-	unpairedStream := opened.(*devicegw.VirtualStream)
+	unpairedStream, ok := opened.(*devicegw.VirtualStream)
+	require.True(t, ok, "virtual registry returned %T", opened)
 	require.Equal(t, audio.DefaultDeviceFormat(), unpairedStream.PlaybackStats().Format)
 	require.Equal(t, 0, unpairedStream.DiscardPlayback())
 
@@ -316,7 +322,7 @@ func TestVirtualLoopbackPreservesDelayBeyondPlaybackQueueCapacity(t *testing.T) 
 }
 
 func TestVirtualUnsupportedExplicitRateNamesAvailableCapability(t *testing.T) {
-	registry := registry(devicegw.DefaultVirtualBackendConfig())
+	registry := registry(t, devicegw.DefaultVirtualBackendConfig())
 	_, err := devicegw.NewDeviceSinkAtRate(registry, "virtual:output", 24000)
 	var formatErr *devicegw.DeviceFormatError
 	require.ErrorAs(t, err, &formatErr)
@@ -363,7 +369,7 @@ func TestVirtualPCMRecorderDisabledWaitAndAcousticValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, recorded)
 
-	registry := registry(devicegw.DefaultVirtualBackendConfig())
+	registry := registry(t, devicegw.DefaultVirtualBackendConfig())
 	recorded, err = registry.WaitForPCMObservations(context.Background(), 0)
 	require.NoError(t, err)
 	require.Empty(t, recorded)
@@ -394,7 +400,7 @@ func TestVirtualPCMRecorderDisabledWaitAndAcousticValidation(t *testing.T) {
 }
 
 func TestVirtualS8Accounting(t *testing.T) {
-	r, out, in := openPair()
+	r, out, in := openPair(t)
 	const frames, attempts = 24, 20
 	start, done := make(chan struct{}), make(chan struct{}, 4)
 	var accepted, delivered, opened, rejected atomic.Int64
@@ -412,7 +418,9 @@ func TestVirtualS8Accounting(t *testing.T) {
 		runS8(start, done, attempts, func(_ int) {
 			if h, err := r.Open("virtual:exclusive"); err == nil {
 				opened.Add(1)
-				_ = h.Close()
+				if closeErr := h.Close(); closeErr != nil {
+					t.Error(closeErr)
+				}
 			} else if errors.Is(err, devicegw.ErrDeviceInUse) {
 				rejected.Add(1)
 			}
@@ -450,15 +458,24 @@ func pendingReadCloses(t *testing.T, in *devicegw.VirtualStream) {
 	require.NoError(t, in.Close())
 	require.ErrorIs(t, <-result, audio.ErrClosed)
 }
-func registry(c devicegw.VirtualBackendConfig) *devicegw.VirtualRegistry {
-	r, _ := devicegw.NewVirtualRegistry(c)
+func registry(t *testing.T, c devicegw.VirtualBackendConfig) *devicegw.VirtualRegistry {
+	t.Helper()
+	r, err := devicegw.NewVirtualRegistry(c)
+	require.NoError(t, err)
 	return r
 }
-func openPair() (*devicegw.VirtualRegistry, *devicegw.VirtualStream, *devicegw.VirtualStream) {
-	r := registry(devicegw.DefaultVirtualBackendConfig())
-	out, _ := r.Open("virtual:output")
-	in, _ := r.Open("virtual:input")
-	return r, out.(*devicegw.VirtualStream), in.(*devicegw.VirtualStream)
+func openPair(t *testing.T) (*devicegw.VirtualRegistry, *devicegw.VirtualStream, *devicegw.VirtualStream) {
+	t.Helper()
+	r := registry(t, devicegw.DefaultVirtualBackendConfig())
+	return r, openVirtualStream(t, r, "virtual:output"), openVirtualStream(t, r, "virtual:input")
+}
+func openVirtualStream(t *testing.T, r *devicegw.VirtualRegistry, id devicegw.DeviceID) *devicegw.VirtualStream {
+	t.Helper()
+	opened, err := r.Open(id)
+	require.NoError(t, err)
+	stream, ok := opened.(*devicegw.VirtualStream)
+	require.True(t, ok, "virtual registry returned %T", opened)
+	return stream
 }
 
 type readyContext struct {

@@ -59,7 +59,7 @@ func New(opts ...Option) *OpenAIProvider {
 	return p
 }
 
-func (p *OpenAIProvider) Name() string { return "openai" }
+func (p *OpenAIProvider) Name() string { return openAIProviderName }
 
 // Capabilities reports the features this wrapper can prove from its local
 // request/response translation behavior without contacting OpenAI.
@@ -134,13 +134,13 @@ func (p *OpenAIProvider) Infer(ctx context.Context, req providers.InferenceReque
 		}
 		return providers.InferenceResponse{}, gateway.NewTransportError(p.Name(), "chat completions", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer releaseResponseBody(resp)
 
 	if resp.StatusCode != http.StatusOK {
-		errBody, _ := io.ReadAll(resp.Body)
+		errBody := readErrorBody(resp.Body)
 		return providers.InferenceResponse{}, errors.Join(
-			gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil),
-			providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody)),
+			gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, errBody, nil),
+			providers.NewProviderHTTPError(openAIProviderName, resp.StatusCode, errBody),
 		)
 	}
 
@@ -205,12 +205,12 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 		return nil, gateway.NewTransportError(p.Name(), "chat completions stream", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer func() { _ = resp.Body.Close() }()
-		errBody, _ := io.ReadAll(resp.Body)
-		p.logger.Error("openai: api error", logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "error_body", Value: string(errBody)})
+		defer func() { releaseResponseBody(resp) }() // closure form keeps bodyclose aware of the release
+		errBody := readErrorBody(resp.Body)
+		p.logger.Error("openai: api error", logging.Field{Key: "status_code", Value: resp.StatusCode}, logging.Field{Key: "error_body", Value: errBody})
 		return nil, errors.Join(
-			gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, string(errBody), nil),
-			providers.NewProviderHTTPError("openai", resp.StatusCode, string(errBody)),
+			gateway.NewProviderHTTPStatusError(p.Name(), resp.StatusCode, errBody, nil),
+			providers.NewProviderHTTPError(openAIProviderName, resp.StatusCode, errBody),
 		)
 	}
 
@@ -220,4 +220,23 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 		streamSSEToGateway(resp.Body, ch, resp.Body.Close)
 	}()
 	return ch, nil
+}
+
+// releaseResponseBody releases an HTTP response body whose content has already
+// been consumed or abandoned. The response outcome is decided by then, so a
+// close failure cannot change it and is intentionally not reported.
+func releaseResponseBody(resp *http.Response) {
+	if err := resp.Body.Close(); err != nil {
+		return
+	}
+}
+
+// readErrorBody reads a failed response's diagnostic body. The HTTP status is
+// the primary error; a body read failure is appended to the diagnostic text.
+func readErrorBody(body io.Reader) string {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return string(data) + " (read error body: " + err.Error() + ")"
+	}
+	return string(data)
 }

@@ -71,7 +71,7 @@ func TestHandleTransportLossUnblocksTargetListing(t *testing.T) {
 func TestHandleTransportLossUnblocksTargetAttach(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`[{"id":"target-attach","type":"page","title":"Attach","url":"https://example.test/attach","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-attach"}]`))
+		writeFixtureBody(writer, []byte(`[{"id":"target-attach","type":"page","title":"Attach","url":"https://example.test/attach","webSocketDebuggerUrl":"ws://127.0.0.1/devtools/page/target-attach"}]`))
 	}))
 	defer server.Close()
 

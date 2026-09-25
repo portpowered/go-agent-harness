@@ -87,7 +87,7 @@ func TestSessionGatewayInferencer_ConnectSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if gw.capturedConfig.Model != "grok-3-mini" {
 		t.Errorf("model: got %q, want %q", gw.capturedConfig.Model, "grok-3-mini")
@@ -111,7 +111,7 @@ func TestSessionGatewayInferencer_WithSessionToolsDefensivelyCopies(t *testing.T
 	}}
 	si := NewSessionGatewayInferencer(&mockSessionGateway{session: newMockSession()}, WithSessionTools(tools))
 
-	tools[0].Name = "mutated"
+	tools[0].Name = testMutatedValue
 	tools[0].Parameters[0].Name = "mutated-path"
 
 	got := si.Request().Config.Tools
@@ -164,7 +164,7 @@ func TestSessionGatewayInferencer_SetSessionAudioFormatsAndRates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = connected.Close() }()
+	defer closeForTest(t, connected)
 	if gw.capturedConfig.InputAudioSampleRate != models.SampleRate24000 || gw.capturedConfig.OutputAudioSampleRate != models.SampleRate24000 {
 		t.Fatalf("provider audio rates = %d/%d, want 24000/24000", gw.capturedConfig.InputAudioSampleRate, gw.capturedConfig.OutputAudioSampleRate)
 	}
@@ -201,7 +201,7 @@ func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *tes
 				}},
 			}},
 			TurnDetection: &models.TurnDetectionConfig{
-				Type:              "server_vad",
+				Type:              testServerVAD,
 				Threshold:         0.6,
 				PrefixPaddingMs:   120,
 				SilenceDurationMs: 240,
@@ -215,7 +215,7 @@ func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *tes
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got := gw.capturedConfig
 	if got.Model != req.Config.Model || got.Voice != req.Config.Voice || got.Instructions != req.Config.Instructions {
@@ -233,7 +233,7 @@ func TestSessionGatewayInferencer_ConnectSessionUsesFullPersistentRequest(t *tes
 	if len(got.Tools) != 1 || got.Tools[0].Name != "lookup" || len(got.Tools[0].Parameters) != 1 || got.Tools[0].Parameters[0].Name != "query" {
 		t.Fatalf("tools = %#v", got.Tools)
 	}
-	if got.TurnDetection == nil || got.TurnDetection.Type != "server_vad" || got.TurnDetection.SilenceDurationMs != 240 {
+	if got.TurnDetection == nil || got.TurnDetection.Type != testServerVAD || got.TurnDetection.SilenceDurationMs != 240 {
 		t.Fatalf("turn detection = %#v", got.TurnDetection)
 	}
 	if string(got.Config) != `{"vendor":"specific"}` {
@@ -252,7 +252,7 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 				Parameters: []models.ToolParameter{{Name: "original-param"}},
 			}},
 			TurnDetection: &models.TurnDetectionConfig{
-				Type:           "server_vad",
+				Type:           testServerVAD,
 				CreateResponse: &createResponse,
 			},
 			Config: []byte(`{"mode":"original"}`),
@@ -260,11 +260,11 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 	}
 	si := NewSessionGatewayInferencer(&mockSessionGateway{session: newMockSession()}, WithSessionRequest(req))
 
-	req.Config.Model = "mutated"
+	req.Config.Model = testMutatedValue
 	req.Config.Modalities[0] = models.SessionModalityAudio
 	req.Config.Tools[0].Name = "mutated-tool"
 	req.Config.Tools[0].Parameters[0].Name = "mutated-param"
-	req.Config.TurnDetection.Type = "mutated"
+	req.Config.TurnDetection.Type = testMutatedValue
 	*req.Config.TurnDetection.CreateResponse = false
 	req.Config.Config[9] = 'X'
 
@@ -273,17 +273,17 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 		snapshot.Config.Modalities[0] != models.SessionModalityText ||
 		snapshot.Config.Tools[0].Name != "original-tool" ||
 		snapshot.Config.Tools[0].Parameters[0].Name != "original-param" ||
-		snapshot.Config.TurnDetection.Type != "server_vad" ||
+		snapshot.Config.TurnDetection.Type != testServerVAD ||
 		snapshot.Config.TurnDetection.CreateResponse == nil ||
 		!*snapshot.Config.TurnDetection.CreateResponse ||
 		string(snapshot.Config.Config) != `{"mode":"original"}` {
 		t.Fatalf("request was not defensively copied: %#v", snapshot.Config)
 	}
 
-	snapshot.Config.Model = "snapshot-mutated"
+	snapshot.Config.Model = testSnapshotMutated
 	snapshot.Config.Modalities[0] = models.SessionModalityAudio
-	snapshot.Config.Tools[0].Parameters[0].Name = "snapshot-mutated"
-	snapshot.Config.TurnDetection.Type = "snapshot-mutated"
+	snapshot.Config.Tools[0].Parameters[0].Name = testSnapshotMutated
+	snapshot.Config.TurnDetection.Type = testSnapshotMutated
 	*snapshot.Config.TurnDetection.CreateResponse = false
 	snapshot.Config.Config[9] = 'Y'
 
@@ -291,7 +291,7 @@ func TestSessionGatewayInferencer_RequestIsDefensivelyCopied(t *testing.T) {
 	if again.Config.Model != "original" ||
 		again.Config.Modalities[0] != models.SessionModalityText ||
 		again.Config.Tools[0].Parameters[0].Name != "original-param" ||
-		again.Config.TurnDetection.Type != "server_vad" ||
+		again.Config.TurnDetection.Type != testServerVAD ||
 		again.Config.TurnDetection.CreateResponse == nil ||
 		!*again.Config.TurnDetection.CreateResponse ||
 		string(again.Config.Config) != `{"mode":"original"}` {
@@ -307,7 +307,7 @@ func TestSessionGatewayInferencer_ConnectSessionClonesTurnDetectionCreateRespons
 		Config: models.SessionConfig{
 			Model: "gpt-realtime",
 			TurnDetection: &models.TurnDetectionConfig{
-				Type:           "server_vad",
+				Type:           testServerVAD,
 				CreateResponse: &createResponse,
 			},
 		},
@@ -330,7 +330,7 @@ func TestSessionGatewayInferencer_ConnectSessionClonesTurnDetectionCreateRespons
 	if err != nil {
 		t.Fatalf("first ConnectSession: %v", err)
 	}
-	defer func() { _ = firstSession.Close() }()
+	defer closeForTest(t, firstSession)
 
 	firstConfig := gateway.capturedConfig
 	if firstConfig.TurnDetection == nil || firstConfig.TurnDetection.CreateResponse == nil || !*firstConfig.TurnDetection.CreateResponse {
@@ -343,7 +343,7 @@ func TestSessionGatewayInferencer_ConnectSessionClonesTurnDetectionCreateRespons
 	if err != nil {
 		t.Fatalf("second ConnectSession: %v", err)
 	}
-	defer func() { _ = secondSession.Close() }()
+	defer closeForTest(t, secondSession)
 
 	secondConfig := gateway.capturedConfig
 	if secondConfig.TurnDetection == nil || secondConfig.TurnDetection.CreateResponse == nil || !*secondConfig.TurnDetection.CreateResponse {
@@ -375,7 +375,7 @@ func TestSessionGatewayInferencer_CancelledConnectDoesNotMutatePersistentRequest
 	if err != nil {
 		t.Fatalf("second ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if len(gw.capturedConfigs) != 2 {
 		t.Fatalf("captured configs = %d, want 2", len(gw.capturedConfigs))
@@ -435,7 +435,7 @@ func TestSessionGatewayInferencer_ReturnedSessionIsUsable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// Inject an inbound StreamMessage via the mock's recvBuf.
 	msg := messages.StreamMessage{
@@ -466,7 +466,7 @@ func TestSessionGatewayInferencer_SendRouted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	// Send a StreamMessage via the session.
 	sent := messages.StreamMessage{
@@ -496,7 +496,7 @@ func TestSessionGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testin
 	if err != nil {
 		t.Fatalf("ConnectSession via messages.SessionInferencer: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if session != sess {
 		t.Fatal("ConnectSession should expose the loop-owned session contract without wrapping it in a second shared session surface")
@@ -505,11 +505,11 @@ func TestSessionGatewayInferencer_ImplementsLoopOwnedContractAtRuntime(t *testin
 
 func TestSessionGatewayInferencer_SetSessionTurnDetectionCopiesAndClearsPolicy(t *testing.T) {
 	var nilInferencer *SessionGatewayInferencer
-	nilInferencer.SetSessionTurnDetection(&models.TurnDetectionConfig{Type: "server_vad"})
+	nilInferencer.SetSessionTurnDetection(&models.TurnDetectionConfig{Type: testServerVAD})
 
 	createResponse := true
 	policy := &models.TurnDetectionConfig{
-		Type:              "server_vad",
+		Type:              testServerVAD,
 		Threshold:         0.45,
 		PrefixPaddingMs:   300,
 		SilenceDurationMs: 500,
@@ -518,10 +518,10 @@ func TestSessionGatewayInferencer_SetSessionTurnDetectionCopiesAndClearsPolicy(t
 	inferencer := NewSessionGatewayInferencer(&mockSessionGateway{})
 	inferencer.SetSessionTurnDetection(policy)
 
-	policy.Type = "mutated"
+	policy.Type = testMutatedValue
 	createResponse = false
 	stored := inferencer.Request().Config.TurnDetection
-	if stored == nil || stored.Type != "server_vad" {
+	if stored == nil || stored.Type != testServerVAD {
 		t.Fatalf("stored turn detection = %#v, want copied server_vad policy", stored)
 	}
 	if stored.CreateResponse == nil || !*stored.CreateResponse {

@@ -29,8 +29,8 @@ func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
-	realtime := session.(*realtimeSession)
+	defer closeForTest(t, session)
+	realtime := realtimeSessionForTest(t, session)
 	if realtime.currentRTCMedia() == nil {
 		t.Fatal("RTC media was not prepared before ConnectSession returned")
 	}
@@ -209,7 +209,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 	conn := newMockWebSocketConn()
 	conn.addServerEvent("error", map[string]any{
 		"error": map[string]any{
-			"type":     "invalid_request_error",
+			"type":     realtimeInvalidRequestErrorType,
 			"code":     "invalid_event",
 			"param":    "event.type",
 			"event_id": "client-event-123",
@@ -230,7 +230,7 @@ func TestConnectSession_NormalizesOpenAIRealtimeErrorDetails(t *testing.T) {
 		t.Fatalf("value: got %T, want *messages.ErrorValue", got.Value)
 	}
 	if value.Message != "Invalid realtime event." ||
-		value.ErrorType != "invalid_request_error" ||
+		value.ErrorType != realtimeInvalidRequestErrorType ||
 		value.Code != "invalid_event" ||
 		value.Param != "event.type" ||
 		value.EventID != "client-event-123" {
@@ -276,7 +276,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 
 	conn.addServerEvent("error", map[string]any{
 		"error": map[string]any{
-			"type":     "invalid_request_error",
+			"type":     realtimeInvalidRequestErrorType,
 			"code":     "response_cancel_not_active",
 			"param":    wireResponseCancel,
 			"event_id": "evt-cancel-1",
@@ -292,7 +292,7 @@ func TestConnectSession_IgnoresInactiveCancelRejectionAndContinuesResponse(t *te
 		t.Fatalf("diagnostic value = %T, want *messages.ErrorValue", got.Value)
 	}
 	if diagnostic.IsTerminal() || diagnostic.Classification != providers.ErrorClassResponseCancelNotActive ||
-		diagnostic.ErrorType != "invalid_request_error" || diagnostic.Code != "response_cancel_not_active" ||
+		diagnostic.ErrorType != realtimeInvalidRequestErrorType || diagnostic.Code != "response_cancel_not_active" ||
 		diagnostic.Param != wireResponseCancel || diagnostic.EventID != "evt-cancel-1" {
 		t.Fatalf("inactive-cancel diagnostic = %#v", diagnostic)
 	}
@@ -637,7 +637,7 @@ func TestRealtimeSession_CancelWaitsForPoppedContinuationAdmission(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	session.start(ctx)
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	if outcome := session.RequestResponse(ctx); !outcome.OK() {
 		t.Fatalf("initial response admission: %#v", outcome)
@@ -781,7 +781,7 @@ func TestRealtimeSession_CancelRejectionInvalidatesQueuedContinuation(t *testing
 	}
 	waitForClientMessage(t, ctx, conn, wireResponseCancel)
 	conn.addServerEvent("error", map[string]any{"error": map[string]any{
-		"type": "invalid_request_error", "code": "response_cancel_not_active",
+		"type": realtimeInvalidRequestErrorType, "code": "response_cancel_not_active",
 		"param": wireResponseCancel, "message": "Can only cancel an active response.",
 	}})
 	if got := readRealtimeMessage(t, session, ctx, "response.cancel rejection"); got.Type != messages.StreamTypeError {
@@ -815,7 +815,7 @@ func TestRealtimeSession_RetriesOwnedCreateAfterActiveResponseRejection(t *testi
 	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-auto"}})
 	readRealtimeMessage(t, session, ctx, "automatic response.created")
 	conn.addServerEvent("error", map[string]any{"error": map[string]any{
-		"type": "invalid_request_error", "code": realtimeResponseCreateActiveCode,
+		"type": realtimeInvalidRequestErrorType, "code": realtimeResponseCreateActiveCode,
 		"message": "Conversation already has an active response.",
 	}})
 	if got := readRealtimeMessage(t, session, ctx, "active-response rejection"); got.Type != messages.StreamTypeError {
@@ -843,7 +843,7 @@ func TestConnectSession_SurfacesUnexpectedWebSocketReadError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	got, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {
@@ -880,7 +880,7 @@ func TestConnectSession_ReplaysOpenAIRealtimeTextFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectSession: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	defer closeForTest(t, session)
 
 	openMsg, ok := session.Receive().ReadBlockingContext(ctx)
 	if !ok {

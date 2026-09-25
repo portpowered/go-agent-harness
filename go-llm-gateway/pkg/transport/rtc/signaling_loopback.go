@@ -2,6 +2,8 @@ package rtc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -142,7 +144,7 @@ func await[T any](e *LoopbackEndpoint, ctx context.Context, mode int, want strin
 			if v == nil {
 				return zero, err
 			}
-			return v.(T), err
+			return signalValue[T](v, err)
 		}
 		select {
 		case <-x.done:
@@ -249,4 +251,14 @@ func validDescription(d SessionDescription, want string) bool {
 		return false
 	}
 	return strings.Contains(sdp, "\no=") && !strings.Contains(sdp, "\no=\n") && strings.Contains(sdp, "\ns=") && !strings.Contains(sdp, "\ns=\n") && strings.Contains(sdp, "\nt=") && !strings.Contains(sdp, "\nt=\n")
+}
+
+// signalValue narrows a stored signaling value to the awaited type. A value of
+// another type is a signaling-order defect and is reported with err.
+func signalValue[T any](v any, err error) (T, error) {
+	typed, ok := v.(T)
+	if !ok {
+		return typed, errors.Join(err, fmt.Errorf("%w: unexpected signaling value %T", ErrInvalidSignalingOrder, v))
+	}
+	return typed, err
 }

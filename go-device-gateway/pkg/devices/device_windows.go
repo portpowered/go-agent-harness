@@ -138,7 +138,7 @@ func (r *wasapiDeviceRegistry) List() ([]Device, error) {
 func (r *wasapiDeviceRegistry) listFlow(enumerator wasapiCOM, flow wasapiFlow) ([]Device, error) {
 	collection, err := enumerateEndpoints(enumerator, flow.value)
 	if err != nil {
-		hr, _ := wasapiErrorCode(err)
+		hr := wasapiErrorCode(err)
 		if isNoDeviceHRESULT(hr) {
 			return nil, nil
 		}
@@ -274,7 +274,7 @@ func (r *wasapiDeviceRegistry) findDirection(nativeID string) (Direction, error)
 	for _, flow := range wasapiFlows {
 		collection, err := enumerateEndpoints(enumerator, flow.value)
 		if err != nil {
-			hr, _ := wasapiErrorCode(err)
+			hr := wasapiErrorCode(err)
 			if isNoDeviceHRESULT(hr) {
 				continue
 			}
@@ -373,65 +373,58 @@ func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
 		return err
 	}
 	defer cleanup()
-
 	if d.direction == DirectionInput {
-		if d.formatErr != nil {
-			return fmt.Errorf("inspect WASAPI capture format: %w", d.formatErr)
-		}
-		var observedFrames uint64
-		var observedEnergy float64
-		for attempt := 0; attempt < 40; attempt++ {
-			var packets uint32
-			if _, err := d.service.call(audioCaptureClientVTableGetNextPacketSize, uintptr(unsafe.Pointer(&packets))); err != nil {
-				return fmt.Errorf("read WASAPI capture packet size: %w", err)
-			}
-			if packets == 0 {
-				time.Sleep(25 * time.Millisecond)
-				continue
-			}
-
-			var data unsafe.Pointer
-			var frames uint32
-			var flags uint32
-			if _, err := d.service.call(
-				audioCaptureClientVTableGetBuffer,
-				uintptr(unsafe.Pointer(&data)),
-				uintptr(unsafe.Pointer(&frames)),
-				uintptr(unsafe.Pointer(&flags)),
-				0,
-				0,
-			); err != nil {
-				return fmt.Errorf("acquire WASAPI capture buffer: %w", err)
-			}
-			if frames == 0 {
-				continue
-			}
-			energy, energyErr := wasapiCapturePacketEnergy(data, frames, flags, d.format)
-			_, releaseErr := d.service.call(audioCaptureClientVTableReleaseBuffer, uintptr(frames))
-			if releaseErr != nil {
-				return fmt.Errorf("release WASAPI capture buffer: %w", releaseErr)
-			}
-			if energyErr != nil {
-				return energyErr
-			}
-			observedFrames += uint64(frames)
-			if energy > observedEnergy {
-				observedEnergy = energy
-			}
-			if observedFrames > 0 {
-				// A non-empty packet is the positive data-path signal. Energy is
-				// still measured for every packet so a real non-silent signal is
-				// detected, while a valid but currently silent microphone remains
-				// a usable capture capability.
-				return nil
-			}
-			// A valid silent packet proves that the capture buffer is being
-			// serviced; keep polling until a non-empty packet is available.
-			time.Sleep(10 * time.Millisecond)
-		}
-		return fmt.Errorf("WASAPI capture produced no positive signal: frames=%d max-energy=%g", observedFrames, observedEnergy)
+		return d.verifyCaptureDataPath()
 	}
+	return d.verifyRenderDataPath()
+}
 
+// verifyCaptureDataPath polls until the capture client exposes a non-empty
+// packet. Energy is measured for every packet so a malformed buffer fails,
+// while a valid but currently silent microphone remains a usable capability.
+func (d *wasapiOpenedDevice) verifyCaptureDataPath() error {
+	if d.formatErr != nil {
+		return fmt.Errorf("inspect WASAPI capture format: %w", d.formatErr)
+	}
+	for attempt := 0; attempt < 40; attempt++ {
+		var packets uint32
+		if _, err := d.service.call(audioCaptureClientVTableGetNextPacketSize, uintptr(unsafe.Pointer(&packets))); err != nil {
+			return fmt.Errorf("read WASAPI capture packet size: %w", err)
+		}
+		if packets == 0 {
+			time.Sleep(25 * time.Millisecond)
+			continue
+		}
+		frames, err := d.consumeCapturePacket()
+		if err != nil || frames > 0 {
+			// A non-empty packet is the positive data-path signal.
+			return err
+		}
+	}
+	return fmt.Errorf("WASAPI capture produced no positive signal: frames=0 max-energy=0")
+}
+
+// consumeCapturePacket acquires, measures, and releases one capture packet and
+// returns its frame count.
+func (d *wasapiOpenedDevice) consumeCapturePacket() (uint32, error) {
+	var data unsafe.Pointer
+	var frames, flags uint32
+	if _, err := d.service.call(audioCaptureClientVTableGetBuffer, uintptr(unsafe.Pointer(&data)), uintptr(unsafe.Pointer(&frames)), uintptr(unsafe.Pointer(&flags)), 0, 0); err != nil {
+		return 0, fmt.Errorf("acquire WASAPI capture buffer: %w", err)
+	}
+	if frames == 0 {
+		return 0, nil
+	}
+	_, energyErr := wasapiCapturePacketEnergy(data, frames, flags, d.format)
+	if _, releaseErr := d.service.call(audioCaptureClientVTableReleaseBuffer, uintptr(frames)); releaseErr != nil {
+		return 0, fmt.Errorf("release WASAPI capture buffer: %w", releaseErr)
+	}
+	return frames, energyErr
+}
+
+// verifyRenderDataPath feeds an explicit silent packet and requires the audio
+// engine to consume the submitted frames.
+func (d *wasapiOpenedDevice) verifyRenderDataPath() error {
 	var bufferSize uint32
 	if _, err := d.client.call(audioClientVTableGetBufferSize, uintptr(unsafe.Pointer(&bufferSize))); err != nil {
 		return fmt.Errorf("read WASAPI render buffer size: %w", err)
@@ -441,26 +434,18 @@ func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
 	}
 	var lastBefore, lastAfter, lastSubmitted uint32
 	for attempt := 0; attempt < 40; attempt++ {
-		var padding uint32
-		if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&padding))); err != nil {
-			return fmt.Errorf("read WASAPI render padding: %w", err)
+		padding, err := d.renderPadding("read WASAPI render padding")
+		if err != nil {
+			return err
 		}
 		if padding >= bufferSize {
 			time.Sleep(25 * time.Millisecond)
 			continue
 		}
 		frames := bufferSize - padding
-		var buffer unsafe.Pointer
-		if _, err := d.service.call(audioRenderClientVTableGetBuffer, uintptr(frames), uintptr(unsafe.Pointer(&buffer))); err != nil {
-			return fmt.Errorf("acquire WASAPI render buffer: %w", err)
-		}
-		if _, err := d.service.call(audioRenderClientVTableReleaseBuffer, uintptr(frames), audclntBufferFlagsSilent); err != nil {
-			return fmt.Errorf("release WASAPI render buffer: %w", err)
-		}
-
-		var submittedPadding uint32
-		if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&submittedPadding))); err != nil {
-			return fmt.Errorf("read WASAPI render padding after submission: %w", err)
+		submittedPadding, err := d.submitSilentRenderPacket(frames)
+		if err != nil {
+			return err
 		}
 		lastBefore, lastAfter, lastSubmitted = padding, submittedPadding, frames
 		if submittedPadding <= padding {
@@ -469,19 +454,44 @@ func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
 			time.Sleep(25 * time.Millisecond)
 			continue
 		}
-		for consumeAttempt := 0; consumeAttempt < 40; consumeAttempt++ {
-			time.Sleep(25 * time.Millisecond)
-			var consumedPadding uint32
-			if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&consumedPadding))); err != nil {
-				return fmt.Errorf("read WASAPI render padding during consumption: %w", err)
-			}
-			if consumedPadding < submittedPadding {
-				return nil
-			}
-		}
-		return fmt.Errorf("WASAPI render engine did not consume submitted frames: before=%d after=%d submitted=%d", padding, submittedPadding, frames)
+		return d.awaitRenderConsumption(padding, submittedPadding, frames)
 	}
 	return fmt.Errorf("WASAPI render submission was not observable: before=%d after=%d submitted=%d", lastBefore, lastAfter, lastSubmitted)
+}
+
+func (d *wasapiOpenedDevice) renderPadding(operation string) (uint32, error) {
+	var padding uint32
+	if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&padding))); err != nil {
+		return 0, fmt.Errorf("%s: %w", operation, err)
+	}
+	return padding, nil
+}
+
+// submitSilentRenderPacket submits frames of silence and returns the padding
+// observed immediately after submission.
+func (d *wasapiOpenedDevice) submitSilentRenderPacket(frames uint32) (uint32, error) {
+	var buffer unsafe.Pointer
+	if _, err := d.service.call(audioRenderClientVTableGetBuffer, uintptr(frames), uintptr(unsafe.Pointer(&buffer))); err != nil {
+		return 0, fmt.Errorf("acquire WASAPI render buffer: %w", err)
+	}
+	if _, err := d.service.call(audioRenderClientVTableReleaseBuffer, uintptr(frames), audclntBufferFlagsSilent); err != nil {
+		return 0, fmt.Errorf("release WASAPI render buffer: %w", err)
+	}
+	return d.renderPadding("read WASAPI render padding after submission")
+}
+
+func (d *wasapiOpenedDevice) awaitRenderConsumption(padding, submittedPadding, frames uint32) error {
+	for consumeAttempt := 0; consumeAttempt < 40; consumeAttempt++ {
+		time.Sleep(25 * time.Millisecond)
+		consumedPadding, err := d.renderPadding("read WASAPI render padding during consumption")
+		if err != nil {
+			return err
+		}
+		if consumedPadding < submittedPadding {
+			return nil
+		}
+	}
+	return fmt.Errorf("WASAPI render engine did not consume submitted frames: before=%d after=%d submitted=%d", padding, submittedPadding, frames)
 }
 
 func (d *wasapiOpenedDevice) Close() error {
@@ -602,8 +612,8 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 }
 
 func mapWASAPIOpenError(id DeviceID, operation string, err error) error {
-	var coded wasapiHRESULTWithCode
-	if !asWASAPIHRESULT(err, &coded) {
+	coded, ok := err.(wasapiHRESULTWithCode)
+	if !ok {
 		return fmt.Errorf("WASAPI %s %q: %w", operation, id, err)
 	}
 	switch coded.hr {
@@ -628,23 +638,12 @@ type wasapiHRESULTWithCode struct {
 func (e wasapiHRESULTWithCode) Error() string { return e.err.Error() }
 func (e wasapiHRESULTWithCode) Unwrap() error { return e.err }
 
-func asWASAPIHRESULT(err error, target *wasapiHRESULTWithCode) bool {
-	if err == nil {
-		return false
-	}
+// wasapiErrorCode returns the HRESULT carried by a WASAPI call error, or zero.
+func wasapiErrorCode(err error) uint32 {
 	if coded, ok := err.(wasapiHRESULTWithCode); ok {
-		*target = coded
-		return true
+		return coded.hr
 	}
-	return false
-}
-
-func wasapiErrorCode(err error) (uint32, bool) {
-	var coded wasapiHRESULTWithCode
-	if !asWASAPIHRESULT(err, &coded) {
-		return 0, false
-	}
-	return coded.hr, true
+	return 0
 }
 
 func isNoDeviceHRESULT(hr uint32) bool {

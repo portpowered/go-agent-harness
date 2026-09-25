@@ -104,30 +104,28 @@ var parallelRequestOrder = []string{parallelCallAlphaID, parallelCallBravoID}
 // the payload with the event type injected, again over sorted map keys.
 func parallelUserItemCreatePayload(text string) json.RawMessage {
 	payload := map[string]any{
-		"type": "conversation.item.create",
+		"type": rtEventConversationItemCreate,
 		"item": map[string]any{
-			"type": "message",
-			"role": "user",
+			"type": rtItemMessage,
+			"role": rtRoleUser,
 			"content": []map[string]any{
 				{"type": "input_text", "text": text},
 			},
 		},
 	}
-	data, _ := json.Marshal(payload)
-	return data
+	return mustMarshalFixture(payload)
 }
 
 func parallelToolResultPayload(callID, output string) json.RawMessage {
 	payload := map[string]any{
-		"type": "conversation.item.create",
+		"type": rtEventConversationItemCreate,
 		"item": map[string]any{
-			"type":    "function_call_output",
+			"type":    rtItemFunctionCallOutput,
 			"call_id": callID,
 			"output":  output,
 		},
 	}
-	data, _ := json.Marshal(payload)
-	return data
+	return mustMarshalFixture(payload)
 }
 
 // buildParallelToolCallsFixture writes a synthetic record/replay capture in
@@ -171,48 +169,48 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 	}
 
 	// Initial provider turn opened by the seeded user text.
-	clientEvent("conversation.item.create", parallelUserItemCreatePayload(parallelPrompt))
-	clientEventRaw("response.create", `{"type":"response.create"}`)
+	clientEvent(rtEventConversationItemCreate, parallelUserItemCreatePayload(parallelPrompt))
+	clientEventRaw(rtEventResponseCreate, `{"type":"response.create"}`)
 
-	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_parallel_1"}}`)
-	serverEvent("response.output_item.added",
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_parallel_1"}}`)
+	serverEvent(rtEventOutputItemAdded,
 		`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+parallelCallAlphaID+`","name":"`+parallelCallAlphaName+`"}}`)
-	serverEvent("response.function_call_arguments.done",
+	serverEvent(rtEventFunctionCallArgumentsDone,
 		`{"type":"response.function_call_arguments.done","call_id":"`+parallelCallAlphaID+`","name":"`+parallelCallAlphaName+`","arguments":`+strconvQuote(parallelCallAlphaArgs)+`}`)
-	serverEvent("response.output_item.added",
+	serverEvent(rtEventOutputItemAdded,
 		`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+parallelCallBravoID+`","name":"`+parallelCallBravoName+`"}}`)
-	serverEvent("response.function_call_arguments.done",
+	serverEvent(rtEventFunctionCallArgumentsDone,
 		`{"type":"response.function_call_arguments.done","call_id":"`+parallelCallBravoID+`","name":"`+parallelCallBravoName+`","arguments":`+strconvQuote(parallelCallBravoArgs)+`}`)
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_parallel_1","status":"completed"}}`)
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_parallel_1","status":"completed"}}`)
 
 	// The session loop forwards both completed results and then emits one
 	// explicit provider continuation boundary. The strict replay keeps the
 	// continuation behind those exact correlated function_call_output frames.
-	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallAlphaID, parallelResultContent[parallelCallAlphaID]))
-	clientEvent("conversation.item.create", parallelToolResultPayload(parallelCallBravoID, parallelResultContent[parallelCallBravoID]))
-	clientEventRaw("response.create", `{"type":"response.create"}`)
+	clientEvent(rtEventConversationItemCreate, parallelToolResultPayload(parallelCallAlphaID, parallelResultContent[parallelCallAlphaID]))
+	clientEvent(rtEventConversationItemCreate, parallelToolResultPayload(parallelCallBravoID, parallelResultContent[parallelCallBravoID]))
+	clientEventRaw(rtEventResponseCreate, `{"type":"response.create"}`)
 
-	serverEvent("response.created", `{"type":"response.created","response":{"id":"resp_tool_parallel_2"}}`)
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_parallel_2"}}`)
 	transcriptDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  "response.output_audio_transcript.delta",
+		"type":  rtEventOutputAudioTranscriptDelta,
 		"delta": "Both tools finished; here is your answer.",
 	})
 	if marshalErr != nil {
 		t.Fatalf("marshal transcript delta: %v", marshalErr)
 	}
-	serverEvent("response.output_audio_transcript.delta", string(transcriptDelta))
+	serverEvent(rtEventOutputAudioTranscriptDelta, string(transcriptDelta))
 	serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Both tools finished; here is your answer."}`)
 
 	audioDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  "response.output_audio.delta",
+		"type":  rtEventOutputAudioDelta,
 		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples)),
 	})
 	if marshalErr != nil {
 		t.Fatalf("marshal audio delta: %v", marshalErr)
 	}
-	serverEvent("response.output_audio.delta", string(audioDelta))
+	serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	serverEvent("response.done", `{"type":"response.done","response":{"id":"resp_tool_parallel_2","status":"completed"}}`)
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_parallel_2","status":"completed"}}`)
 
 	baseCapture.Session.ID = "sess_tool_parallel_calls"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -220,7 +218,7 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
-		Type:        "session.closed",
+		Type:        rtEventSessionClosed,
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_parallel_calls","reason":"fixture_complete"}`),
 	})
@@ -422,21 +420,8 @@ func validateObservedParallelToolResults(allDeltas []messages.StreamMessage) err
 		return fmt.Errorf("session loop emitted no RoleTool deltas")
 	}
 
-	seenDeltaIDs := map[string]int{}
-	for _, delta := range toolDeltas {
-		switch delta.Value.(type) {
-		case *messages.TextStartValue, *messages.TextDeltaValue, *messages.TextEndValue:
-			if delta.ToolCallId == "" {
-				return fmt.Errorf("observed %s tool-result delta has no ToolCallID", delta.Type)
-			}
-			if _, expected := parallelResultContent[delta.ToolCallId]; !expected {
-				return fmt.Errorf("observed %s tool-result delta has unknown ToolCallID %q", delta.Type, delta.ToolCallId)
-			}
-			seenDeltaIDs[delta.ToolCallId]++
-		}
-	}
-	if len(seenDeltaIDs) != len(parallelRequestOrder) {
-		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder)
+	if err := checkParallelToolDeltaIDs(toolDeltas); err != nil {
+		return err
 	}
 
 	observedMessages := messages.ReconstructToolMessagesFromDeltas(toolDeltas)
@@ -445,26 +430,10 @@ func validateObservedParallelToolResults(allDeltas []messages.StreamMessage) err
 	}
 	contentByCall := map[string]string{}
 	for _, observed := range observedMessages {
-		if observed.Role != messages.RoleTool {
-			return fmt.Errorf("reconstructed message has role %q, want %q", observed.Role, messages.RoleTool)
+		if err := checkParallelResultMessage(observed, contentByCall); err != nil {
+			return err
 		}
-		id := observed.ToolCallID
-		if _, expected := parallelResultContent[id]; !expected {
-			return fmt.Errorf("reconstructed result has unknown ToolCallID %q", id)
-		}
-		if _, duplicate := contentByCall[id]; duplicate {
-			return fmt.Errorf("reconstructed duplicate result for call %q", id)
-		}
-		content := observed.TextContent()
-		want := parallelResultContent[id]
-		if content != want {
-			owner := parallelContentOwner(content)
-			if owner != "" && owner != id {
-				return fmt.Errorf("observed result for call %q carries content owned by call %q (%q), want its own content %q", id, owner, content, want)
-			}
-			return fmt.Errorf("observed result for call %q carries content %q, want its own content %q", id, content, want)
-		}
-		contentByCall[id] = content
+		contentByCall[observed.ToolCallID] = observed.TextContent()
 	}
 	for _, id := range parallelRequestOrder {
 		if _, paired := contentByCall[id]; !paired {
@@ -569,10 +538,10 @@ func inspectParallelExchange(t *testing.T, wirePath string) ([]parallelExchangeT
 			continue
 		}
 		switch payload.Type {
-		case "response.function_call_arguments.done":
+		case rtEventFunctionCallArgumentsDone:
 			calls = append(calls, parallelExchangeToolCall{CallID: payload.CallID, Name: payload.Name, Arguments: payload.Arguments})
 			lastToolCallIndex = i
-		case "response.output_audio.delta":
+		case rtEventOutputAudioDelta:
 			lastAudioIndex = i
 		}
 	}
@@ -601,9 +570,9 @@ func verifyFollowUpUserTurn(t *testing.T, wirePath string) {
 			continue
 		}
 		switch record.Type {
-		case "response.create":
+		case rtEventResponseCreate:
 			responseCreates = append(responseCreates, i)
-		case "conversation.item.create":
+		case rtEventConversationItemCreate:
 			var payload struct {
 				Item struct {
 					Type    string `json:"type"`
@@ -616,12 +585,12 @@ func verifyFollowUpUserTurn(t *testing.T, wirePath string) {
 			if json.Unmarshal(record.Payload, &payload) != nil {
 				continue
 			}
-			if payload.Item.Type == "function_call_output" {
+			if payload.Item.Type == rtItemFunctionCallOutput {
 				functionOutputCount++
 				lastFunctionOutputIndex = i
 				continue
 			}
-			if payload.Item.Type != "message" || payload.Item.Role != "user" || len(payload.Item.Content) != 1 {
+			if payload.Item.Type != rtItemMessage || payload.Item.Role != rtRoleUser || len(payload.Item.Content) != 1 {
 				continue
 			}
 			if payload.Item.Content[0].Text != parallelPrompt {
@@ -664,7 +633,7 @@ func countOutboundFunctionCallOutputs(t *testing.T, wirePath string, executedCon
 		if json.Unmarshal(record.Payload, &payload) != nil {
 			continue
 		}
-		if payload.Item.Type != "function_call_output" {
+		if payload.Item.Type != rtItemFunctionCallOutput {
 			continue
 		}
 		delivered++

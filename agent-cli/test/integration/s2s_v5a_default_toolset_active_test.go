@@ -140,21 +140,21 @@ func writeV5ADefaultSleepCapture(t *testing.T) string {
 		})
 	}
 
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"`+v5aDefaultSleepPrompt+`"}]}}`)
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
-	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp_v5a_default_sleep"}}`)
-	add(gwtesting.DirectionServerToClient, "response.output_item.added", `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+v5aDefaultSleepCallID+`","name":"sleep"}}`)
-	add(gwtesting.DirectionServerToClient, "response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"`+v5aDefaultSleepCallID+`","name":"sleep","arguments":`+strconv.Quote(v5aDefaultSleepArgs)+`}`)
-	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp_v5a_default_sleep","status":"completed"}}`)
-	add(gwtesting.DirectionClientToServer, "conversation.item.create", `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"`+v5aDefaultSleepCallID+`","output":"`+v5aDefaultSleepResult+`"}}`)
+	add(gwtesting.DirectionClientToServer, rtEventConversationItemCreate, `{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"`+v5aDefaultSleepPrompt+`"}]}}`)
+	add(gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_v5a_default_sleep"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventOutputItemAdded, `{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+v5aDefaultSleepCallID+`","name":"sleep"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventFunctionCallArgumentsDone, `{"type":"response.function_call_arguments.done","call_id":"`+v5aDefaultSleepCallID+`","name":"sleep","arguments":`+strconv.Quote(v5aDefaultSleepArgs)+`}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_v5a_default_sleep","status":"completed"}}`)
+	add(gwtesting.DirectionClientToServer, rtEventConversationItemCreate, `{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"`+v5aDefaultSleepCallID+`","output":"`+v5aDefaultSleepResult+`"}}`)
 	// The flat result is followed by one explicit provider response boundary;
 	// no duplicate user message is needed to ground the continuation.
-	add(gwtesting.DirectionClientToServer, "response.create", `{"type":"response.create"}`)
-	add(gwtesting.DirectionServerToClient, "response.created", `{"type":"response.created","response":{"id":"resp_v5a_default_sleep_continuation"}}`)
-	add(gwtesting.DirectionServerToClient, "response.output_text.delta", `{"type":"response.output_text.delta","delta":"Sleep tool result reinjected."}`)
-	add(gwtesting.DirectionServerToClient, "response.output_text.done", `{"type":"response.output_text.done"}`)
-	add(gwtesting.DirectionServerToClient, "response.done", `{"type":"response.done","response":{"id":"resp_v5a_default_sleep_continuation","status":"completed"}}`)
-	add(gwtesting.DirectionServerToClient, "session.closed", `{"type":"session.closed","session_id":"sess_v5a_default_sleep","reason":"`+v5aSessionClosedReason+`"}`)
+	add(gwtesting.DirectionClientToServer, rtEventResponseCreate, `{"type":"response.create"}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_v5a_default_sleep_continuation"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventOutputTextDelta, `{"type":"response.output_text.delta","delta":"Sleep tool result reinjected."}`)
+	add(gwtesting.DirectionServerToClient, rtEventOutputTextDone, `{"type":"response.output_text.done"}`)
+	add(gwtesting.DirectionServerToClient, rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_v5a_default_sleep_continuation","status":"completed"}}`)
+	add(gwtesting.DirectionServerToClient, rtEventSessionClosed, `{"type":"session.closed","session_id":"sess_v5a_default_sleep","reason":"`+v5aSessionClosedReason+`"}`)
 
 	capture := gwtesting.SessionCapture{
 		Version:  gwtesting.SessionCaptureVersion,

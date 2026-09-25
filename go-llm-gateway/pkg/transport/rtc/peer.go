@@ -120,8 +120,8 @@ func (p *Peer) PeerLost(cause error) error {
 	if err != nil || !owner {
 		return err
 	}
-	_ = closeConn(op.old)
-	go func() { _ = p.finish(op, p.run(op.ctx)) }()
+	abandonConn(op.old)
+	go func() { p.complete(op, p.run(op.ctx)) }()
 	return nil
 }
 func (p *Peer) begin(reconnect bool, cause error, parent context.Context) (*operation, bool, error) {
@@ -215,7 +215,7 @@ func (p *Peer) run(ctx context.Context) error {
 				err = ErrNilConnection
 			}
 		}
-		_ = closeConn(conn)
+		abandonConn(conn)
 		last = err
 		if err = ctx.Err(); err != nil {
 			return p.terminal(err, attempt, false)
@@ -253,14 +253,14 @@ func (p *Peer) accept(conn Conn, attempt int) error {
 	p.mu.Lock()
 	if p.state == StateClosed {
 		p.mu.Unlock()
-		_ = closeConn(conn)
+		abandonConn(conn)
 		return ErrPeerClosed
 	}
 	old := p.conn
 	p.conn, p.terminalErr = conn, nil
 	p.transitionLocked(StateConnected, nil, attempt)
 	p.mu.Unlock()
-	_ = closeConn(old)
+	abandonConn(old)
 	return nil
 }
 func (p *Peer) terminal(cause error, attempts int, exhausted bool) error {
@@ -281,6 +281,12 @@ func (p *Peer) terminal(cause error, attempts int, exhausted bool) error {
 	return err
 }
 func (p *Peer) finish(op *operation, err error) error {
+	p.complete(op, err)
+	return op.err
+}
+
+// complete publishes an operation's result; waiters read it from op.err.
+func (p *Peer) complete(op *operation, err error) {
 	op.cancel()
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -292,7 +298,6 @@ func (p *Peer) finish(op *operation, err error) error {
 	}
 	op.err = err
 	close(op.done)
-	return err
 }
 func waitOperation(ctx context.Context, op *operation) error {
 	ctx = contextOrBackground(ctx)
@@ -321,4 +326,13 @@ func closeConn(conn Conn) error {
 		return nil
 	}
 	return conn.Close()
+}
+
+// abandonConn closes a connection the peer no longer owns: a failed attempt,
+// a replaced or lost link, or one accepted after Close. The operation outcome
+// is already decided, so a close failure cannot change it.
+func abandonConn(conn Conn) {
+	if err := closeConn(conn); err != nil {
+		return
+	}
 }

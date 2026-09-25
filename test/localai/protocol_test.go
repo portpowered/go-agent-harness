@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -145,12 +146,10 @@ func (e endpointConfig) connect(ctx context.Context, settings sessionSettings) (
 		return nil, err
 	}
 	if err := writeEvent(ctx, conn, sessionUpdateEvent(e, settings)); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("send session.update: %w", err)
+		return nil, errors.Join(fmt.Errorf("send session.update: %w", err), conn.Close())
 	}
 	if err := waitForEvent(ctx, conn, "session.updated"); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("wait for session.updated: %w", err)
+		return nil, errors.Join(fmt.Errorf("wait for session.updated: %w", err), conn.Close())
 	}
 	return conn, nil
 }
@@ -163,7 +162,9 @@ func dialRealtime(ctx context.Context, endpoint endpointConfig) (*websocket.Conn
 	dialer := websocket.Dialer{HandshakeTimeout: operationTimeout}
 	conn, response, err := dialer.DialContext(ctx, endpoint.url, requestHeaders)
 	if response != nil && response.Body != nil {
-		_ = response.Body.Close()
+		if closeErr := response.Body.Close(); closeErr != nil && err != nil {
+			err = errors.Join(err, closeErr)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("dial websocket %s: %w", safeEndpoint(endpoint.url), err)
@@ -560,7 +561,7 @@ func probeLocalEndpoint(endpoint endpointConfig) bool {
 	if err != nil {
 		return false
 	}
-	defer func() { _ = conn.Close() }()
+	defer discardClose(conn)
 	if err := writeEvent(ctx, conn, sessionUpdateEvent(endpoint, sessionSettings{modalities: []string{"text"}})); err != nil {
 		return false
 	}
@@ -656,9 +657,6 @@ func mapAt(data map[string]any, path ...string) map[string]any {
 }
 
 func stringAt(data map[string]any, path ...string) string {
-	if len(path) == 0 {
-		return ""
-	}
 	current := data
 	for index, part := range path {
 		value, ok := current[part]
@@ -666,8 +664,10 @@ func stringAt(data map[string]any, path ...string) string {
 			return ""
 		}
 		if index == len(path)-1 {
-			text, _ := value.(string)
-			return text
+			if text, isText := value.(string); isText {
+				return text
+			}
+			return ""
 		}
 		next, ok := value.(map[string]any)
 		if !ok {

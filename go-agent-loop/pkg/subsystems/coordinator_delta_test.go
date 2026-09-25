@@ -280,7 +280,7 @@ func TestCoordinatorDelta_DuplexSessionStopHasCancellationMetadata(t *testing.T)
 	if value.Classification != string(messages.TerminalReasonCancellation) {
 		t.Fatalf("classification = %q, want %q", value.Classification, messages.TerminalReasonCancellation)
 	}
-	if value.Reason != "stop" {
+	if value.Reason != sessionCloseReasonStop {
 		t.Fatalf("reason = %q, want stop", value.Reason)
 	}
 }

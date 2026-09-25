@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -440,4 +441,60 @@ func (b *selectionOrderingWatchBroker) SelectWithOptions(ctx context.Context, se
 	b.stream <- webmcp.BrokerEvent{Version: webmcp.BrowserEventsVersion, Type: webmcp.BrokerEventCatalogChanged, Sequence: 2, BrowserID: selector.BrowserID, TargetID: selector.TargetID, Generation: page.Generation, Reason: "tools_added"}
 	close(b.stream)
 	return page, nil
+}
+
+// newPersistedProductionDirectCLI composes the production direct-command
+// factory over a fixture endpoint with persisted selection enabled.
+func newPersistedProductionDirectCLI(t *testing.T, server *httptest.Server, runtime webmcp.BrowserRuntime) (string, *FileWebMCPSelectionStore, WebMCPDoctorFactory) {
+	t.Helper()
+	configDir := writePersistedProductionConfig(t, server.URL)
+	store := NewFileWebMCPSelectionStore(configDir)
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+		WithWebMCPProductionSelectionStore(store),
+	)
+	return configDir, store, factory
+}
+
+// writePersistedProductionConfig enables WebMCP browser tools against the
+// fixture endpoint with persisted selection.
+func writePersistedProductionConfig(t *testing.T, serverURL string) string {
+	t.Helper()
+	return writeDoctorConfig(t, fmt.Sprintf(`
+browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: %q
+  selection:
+    persist: true
+`, serverURL+"/json/version"))
+}
+
+// awaitOSProcessDispatchReceipt decodes the invoke child's first stderr line.
+func awaitOSProcessDispatchReceipt(t *testing.T, invoke *osProcessWebMCPChild) WebMCPDirectInvocationReceipt {
+	t.Helper()
+	var receipt WebMCPDirectInvocationReceipt
+	select {
+	case line := <-invoke.stderr.firstLine:
+		if err := json.Unmarshal([]byte(line), &receipt); err != nil {
+			t.Fatalf("decode cross-process dispatch receipt: %v; stderr=%q", err, line)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("invoke child did not emit a dispatch receipt")
+	}
+	return receipt
+}
+
+func assertCanceledInvokeEnvelope(t *testing.T, stdout, invocationID string) {
+	t.Helper()
+	invokeEnvelope := decodeDirectEnvelope(t, stdout)
+	if invokeEnvelope.OK || invokeEnvelope.Error == nil || invokeEnvelope.Error.Code != string(webmcp.ErrorInvocationCanceled) {
+		t.Fatalf("canceled invoke envelope = %+v", invokeEnvelope)
+	}
+	if invokeEnvelope.Error.Details["invocation_id"] != invocationID {
+		t.Fatalf("canceled invoke ID = %#v, want %q", invokeEnvelope.Error.Details["invocation_id"], invocationID)
+	}
 }

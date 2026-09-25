@@ -72,9 +72,9 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 	for _, record := range capture.Records {
 		if record.Direction == gwtesting.DirectionClientToServer {
 			switch record.Type {
-			case "input_audio_buffer.commit":
+			case rtEventInputAudioCommit:
 				commitSent = true
-			case "response.create":
+			case rtEventResponseCreate:
 				responseCreateSent = true
 			}
 			continue
@@ -85,7 +85,7 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 		switch {
 		case record.Type == "response.output_audio_transcript.done":
 			transcriptDone = true
-		case record.Type == "response.output_audio.delta" || record.Type == "response.audio.delta":
+		case record.Type == rtEventOutputAudioDelta || record.Type == "response.audio.delta":
 			var payload struct {
 				Delta string `json:"delta"`
 			}

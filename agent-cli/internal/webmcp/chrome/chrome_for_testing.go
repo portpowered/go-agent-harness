@@ -337,11 +337,11 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	markerTempName := markerTemp.Name()
 	defer removeBestEffort(os.Remove, markerTempName)
 	if chmodErr := markerTemp.Chmod(0o600); chmodErr != nil {
-		_ = markerTemp.Close()
+		discardCleanupError(markerTemp.Close)
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", chmodErr)
 	}
 	if _, err := markerTemp.Write(markerBytes); err != nil {
-		_ = markerTemp.Close()
+		discardCleanupError(markerTemp.Close)
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	if err := markerTemp.Close(); err != nil {
@@ -405,13 +405,13 @@ func acquireChromeForTestingLock(ctx context.Context, lockPath string) (func(), 
 	for {
 		err := os.Mkdir(lockPath, 0o700)
 		if err == nil {
-			return func() { _ = os.Remove(lockPath) }, nil
+			return func() { removeBestEffort(os.Remove, lockPath) }, nil
 		}
 		if !os.IsExist(err) {
 			return nil, err
 		}
 		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) > chromeForTestingLockStaleAfter {
-			_ = os.Remove(lockPath)
+			removeBestEffort(os.Remove, lockPath)
 			continue
 		}
 		timer := time.NewTimer(50 * time.Millisecond)

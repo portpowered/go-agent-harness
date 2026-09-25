@@ -192,7 +192,7 @@ func TestTypedErrorsAndSeriesKeyFormatting(t *testing.T) {
 	}
 
 	var validation *ValidationError
-	if got := validation.Error(); got != "<nil>" {
+	if got := validation.Error(); got != nilErrorText {
 		t.Fatalf("nil validation error: got %q", got)
 	}
 	if validation.Is(ErrInvalidObservation) {
@@ -213,7 +213,7 @@ func TestTypedErrorsAndSeriesKeyFormatting(t *testing.T) {
 	}
 
 	var overflow *CounterOverflowError
-	if got := overflow.Error(); got != "<nil>" {
+	if got := overflow.Error(); got != nilErrorText {
 		t.Fatalf("nil overflow error: got %q", got)
 	}
 	if overflow.Is(ErrCounterOverflow) {

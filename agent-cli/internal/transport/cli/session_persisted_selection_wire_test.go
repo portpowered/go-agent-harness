@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -30,136 +29,28 @@ import (
 func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	candidate := webmcp.BrowserCandidate{
-		ID:       "browser-cube-persisted",
-		Source:   webmcp.DiscoverySourceExplicit,
-		Product:  "scripted",
-		Protocol: "1.3",
-		HTTPURL:  "http://127.0.0.1:9225",
-		Loopback: true,
-		Explicit: true,
-	}
-	cubeTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-cube-persisted",
-		Type:                  "page",
-		Title:                 "Cubecade",
-		URL:                   "https://cube.example.test/",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	marginTarget := webmcp.Target{
-		BrowserID:             candidate.ID,
-		ID:                    "tab-margin-persisted",
-		Type:                  "page",
-		Title:                 "Margin",
-		URL:                   "https://cube.example.test/margin",
-		Origin:                "https://cube.example.test",
-		Generation:            1,
-		WebMCPDomainSupported: true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		Eligible:              true,
-	}
-	getCubeState := webmcp.ToolDescriptor{
-		Name:        "get_cube_state",
-		Description: "Read the current cube state.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-	queueCubeMoves := webmcp.ToolDescriptor{
-		Name:        "queue_cube_moves",
-		Description: "Queue rotation moves on the cube.",
-		FrameID:     "cube-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"moves":{"type":"array","items":{"type":"string"}}},"required":["moves"],"additionalProperties":false}`),
-	}
-	marginTool := webmcp.ToolDescriptor{
-		Name:        "get_document",
-		Description: "Read the Margin document.",
-		FrameID:     "margin-frame",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	}
-
-	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(cubeTarget,
-			testkit.WithInitialCatalog(getCubeState, queueCubeMoves),
-			testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`)),
-		),
-		testkit.NewTargetConfig(marginTarget,
-			testkit.WithInitialCatalog(marginTool),
-			testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`)),
-		),
-	))
-	defer func() {
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Errorf("close scripted browser runtime: %v", closeErr)
-		}
-	}()
-
+	candidate := scriptedExplicitCandidate("browser-cube-persisted", "http://127.0.0.1:9225")
+	cubeTarget := ambiguousFixtureTarget(candidate.ID, "tab-cube-persisted", "Cubecade", "cube")
+	marginTarget := ambiguousFixtureTarget(candidate.ID, "tab-margin-persisted", "Margin", "cube")
+	marginTarget.URL = "https://cube.example.test/margin"
+	getCubeState, queueCubeMoves := wireCubeTools()
+	marginTool := ambiguousFixtureTool("get_document", "Read the Margin document.", "margin-frame")
+	runtime := newWireScriptedRuntime(t, candidate,
+		testkit.NewTargetConfig(cubeTarget, testkit.WithInitialCatalog(getCubeState, queueCubeMoves), testkit.WithAutoResponse(json.RawMessage(`{"page":"cube"}`))),
+		testkit.NewTargetConfig(marginTarget, testkit.WithInitialCatalog(marginTool), testkit.WithAutoResponse(json.RawMessage(`{"page":"margin"}`))),
+	)
 	discoveryService := &stalePersistedSelectionDiscovery{
-		candidate: discovery.BrowserCandidate{
-			ID:       string(candidate.ID),
-			Source:   discovery.SourceExplicitCDPHTTP,
-			Product:  candidate.Product,
-			Protocol: candidate.Protocol,
-			Loopback: true,
-		},
-		targets: []discovery.Target{
-			ambiguousSessionLaneTarget(cubeTarget, 2),
-			ambiguousSessionLaneTarget(marginTarget, 1),
-		},
+		candidate:         wireLaneCandidate(candidate),
+		targets:           []discovery.Target{ambiguousSessionLaneTarget(cubeTarget, 2), ambiguousSessionLaneTarget(marginTarget, 1)},
 		persistedTargetID: "tab-cube-closed",
 	}
-
 	// The shipped default: no explicit selector, auto-select off, persistence on.
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Connection.CDPURL = candidate.HTTPURL
-	browser.Selection.AutoSelect = config.BrowserAutoSelectOff
-	browser.Selection.Persist = true
-	cfg := browserCapabilityConfig(t, true)
-	cfg.Browser = browser
-	cfg.Model = config.ModelConfig{
-		Provider: config.ProviderOpenAI,
-		OpenAI:   &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "unused"},
-	}
-
-	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
-	)
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
-		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
-	if err != nil {
-		t.Fatalf("construct session capabilities: %v", err)
-	}
-	defer func() {
-		if closeErr := capabilities.Close(); closeErr != nil {
-			t.Errorf("close session capabilities: %v", closeErr)
-		}
-	}()
-
+	cfg, capabilities := newWirePageToolsCapabilities(t, candidate.HTTPURL, runtime, discoveryService, func(browser *config.BrowserConfig) {
+		browser.Selection.AutoSelect = config.BrowserAutoSelectOff
+		browser.Selection.Persist = true
+	})
 	surface := resolveSessionToolSurface(ctx, capabilities)
-
-	wire := newSessionUpdateWire()
-	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
-	defer func() {
-		cancelSession()
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
-				t.Errorf("session shutdown: %v", err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("session did not stop after cancellation")
-		}
-	}()
+	wire, runErr := startWirePageToolsSession(t, ctx, cfg, capabilities)
 
 	initial := readWireSessionUpdate(t, ctx, runErr, wire)
 	// The wire must never present a browser-enabled session as one with no
@@ -178,7 +69,6 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	if !listEnvelope.OK {
 		t.Fatalf("webmcp_list_tabs after a stale persisted selection failed: %+v", listEnvelope.Error)
 	}
-
 	selectEnvelope := executeAmbiguousPageToolsCall(t, ctx, surface.executor, webmcp.SelectTabToolName,
 		`{"browser_id":"`+string(candidate.ID)+`","target_id":"`+string(cubeTarget.ID)+`"}`)
 	if !selectEnvelope.OK {
@@ -186,17 +76,15 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 	}
 
 	deadline := time.Now().Add(10 * time.Second)
-	for {
+	update := readWireSessionUpdate(t, ctx, runErr, wire)
+	for !update.tools[getCubeState.Name] {
 		if time.Now().After(deadline) {
 			t.Fatal("no session.update frame advertised the selected page tools")
 		}
-		update := readWireSessionUpdate(t, ctx, runErr, wire)
-		if update.tools[getCubeState.Name] {
-			if !update.tools[queueCubeMoves.Name] {
-				t.Fatalf("session.update advertised %v, want both Cubecade page tools", sortedWireToolNames(update.tools))
-			}
-			return
-		}
+		update = readWireSessionUpdate(t, ctx, runErr, wire)
+	}
+	if !update.tools[queueCubeMoves.Name] {
+		t.Fatalf("session.update advertised %v, want both Cubecade page tools", sortedWireToolNames(update.tools))
 	}
 }
 

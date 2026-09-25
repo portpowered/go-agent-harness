@@ -72,7 +72,7 @@ func TestDeviceServerDefensiveRegistryAndCapabilityBranches(t *testing.T) {
 		server.Handler().ServeHTTP(recorder, httpRequest)
 		return recorder
 	}
-	openBody, _ := json.Marshal(remoteOpenRequest{DeviceID: output.ID, Format: audio.DefaultDeviceFormat()})
+	openBody := marshalForTest(t, remoteOpenRequest{DeviceID: output.ID, Format: audio.DefaultDeviceFormat()})
 	opened := request(http.MethodPost, deviceServerAPIPrefix+"/open", openBody)
 	if opened.Code != http.StatusOK {
 		t.Fatalf("fallback open status = %d body=%q", opened.Code, opened.Body.String())
@@ -107,7 +107,7 @@ func TestDeviceServerDefensiveRegistryAndCapabilityBranches(t *testing.T) {
 			}
 		})
 	}
-	nondefault, _ := json.Marshal(remoteOpenRequest{DeviceID: output.ID, Format: audio.PCM16DeviceFormat(24000)})
+	nondefault := marshalForTest(t, remoteOpenRequest{DeviceID: output.ID, Format: audio.PCM16DeviceFormat(24000)})
 	if got := request(http.MethodPost, deviceServerAPIPrefix+"/open", nondefault).Code; got != http.StatusConflict {
 		t.Fatalf("non-default fallback open status = %d", got)
 	}
@@ -130,11 +130,11 @@ func TestRemoteDeviceRegistryRejectsInvalidServerResponses(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case deviceServerAPIPrefix + "/devices":
-			_ = json.NewEncoder(w).Encode([]Device{{ID: "invalid"}})
+			writeJSONForTest(t, w, []Device{{ID: "invalid"}})
 		case deviceServerAPIPrefix + "/open":
-			_ = json.NewEncoder(w).Encode(remoteOpenResponse{HandleID: "", Format: audio.DefaultDeviceFormat()})
+			writeJSONForTest(t, w, remoteOpenResponse{HandleID: "", Format: audio.DefaultDeviceFormat()})
 		case deviceServerAPIPrefix + "/default":
-			_, _ = w.Write([]byte("not-json"))
+			writeJSONForTest(t, w, json.RawMessage("not-json"))
 		default:
 			http.NotFound(w, r)
 		}
@@ -260,5 +260,27 @@ func TestRemoteDeviceFailureJoinsBodyCloseFailure(t *testing.T) {
 	var sizeErr *audio.FrameSizeError
 	if !errors.As(err, &sizeErr) || !errors.As(err, &closeErr) {
 		t.Fatalf("ReadFrame short body error = %v, want FrameSizeError joined with body close failure", err)
+	}
+}
+
+func marshalForTest(t *testing.T, value any) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("encode %T: %v", value, err)
+	}
+	return encoded
+}
+
+// writeJSONForTest writes a fixture response from an HTTP handler goroutine.
+func writeJSONForTest(t *testing.T, w http.ResponseWriter, value any) {
+	if raw, ok := value.(json.RawMessage); ok {
+		if _, err := w.Write(raw); err != nil {
+			t.Errorf("write fixture body: %v", err)
+		}
+		return
+	}
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		t.Errorf("encode fixture %T: %v", value, err)
 	}
 }

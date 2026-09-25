@@ -38,7 +38,10 @@ func (w wireEvent) MarshalJSON() ([]byte, error) {
 	for k, v := range w.Extra {
 		m[k] = v
 	}
-	typeBytes, _ := json.Marshal(w.Type)
+	typeBytes, err := json.Marshal(w.Type)
+	if err != nil {
+		return nil, err
+	}
 	m["type"] = typeBytes
 	return json.Marshal(m)
 }
@@ -340,7 +343,7 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		if !ok || v == nil {
 			return models.SessionEvent{}, false
 		}
-		data, _ := json.Marshal(map[string]any{
+		return encodeTypedSessionEvent("conversation.item.create", map[string]any{
 			"type": "conversation.item.create",
 			"item": map[string]any{
 				"type": "message",
@@ -350,7 +353,6 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 				},
 			},
 		})
-		return models.SessionEvent{Type: "conversation.item.create", Data: data}, true
 
 	case messages.StreamTypeSessionUpdate:
 		// Outbound session update: send as session.update wire event.
@@ -371,10 +373,9 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		if len(v.Tools) > 0 {
 			update["tools"] = grokToolDefinitions(v.Tools)
 		}
-		data, _ := json.Marshal(map[string]any{
+		return encodeSessionEvent(models.NewSessionUpdateEvent, map[string]any{
 			"session": update,
 		})
-		return models.NewSessionUpdateEvent(data), true
 
 	case messages.StreamTypeToolCallEnd:
 		// Tool result: send as conversation.item.create with function_call_output.
@@ -382,7 +383,7 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 		if !ok || v == nil {
 			return models.SessionEvent{}, false
 		}
-		data, _ := json.Marshal(map[string]any{
+		return encodeTypedSessionEvent("conversation.item.create", map[string]any{
 			"type": "conversation.item.create",
 			"item": map[string]any{
 				"type":    "function_call_output",
@@ -390,7 +391,6 @@ func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
 				"output":  v.Arguments,
 			},
 		})
-		return models.SessionEvent{Type: "conversation.item.create", Data: data}, true
 
 	default:
 		return models.SessionEvent{}, false

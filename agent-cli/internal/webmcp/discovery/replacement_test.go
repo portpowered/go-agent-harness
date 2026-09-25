@@ -38,7 +38,7 @@ func TestSameAddressFreshBrowserIdentityRetiresLiveAndPersistedSelection(t *test
 	descriptor := targetDescriptor(rawTargetID, targetTitle, targetPageURL, 1)
 	descriptors := []TargetDescriptor{descriptor}
 	store := NewMemorySelectionStore()
-	client := &targetHTTPClient{responses: []*http.Response{
+	client := &targetHTTPClient{responses: []*cannedResponse{
 		targetJSONResponse(versionJSONWithBrowserInstance(browserWS, oldInstance), http.StatusOK),
 		targetJSONResponse(versionJSONWithBrowserInstance(browserWS, newInstance), http.StatusOK),
 	}}
@@ -58,7 +58,7 @@ func TestSameAddressFreshBrowserIdentityRetiresLiveAndPersistedSelection(t *test
 			return detacher, nil
 		}),
 	})
-	t.Cleanup(func() { _ = service.Close() })
+	t.Cleanup(func() { closeServiceForTest(t, service) })
 
 	inputs := ConnectionInputs{CDPURL: cdpURL}
 	oldBrowser, err := service.Discover(context.Background(), inputs)
@@ -141,12 +141,7 @@ type replacementFixture struct {
 func newReplacementVersionClient(t *testing.T, browserWS, newInstance string) *targetHTTPClient {
 	t.Helper()
 	response := targetJSONResponse(versionJSONWithBrowserInstance(browserWS, newInstance), http.StatusOK)
-	t.Cleanup(func() {
-		if err := response.Body.Close(); err != nil {
-			t.Errorf("close replacement version response: %v", err)
-		}
-	})
-	return &targetHTTPClient{responses: []*http.Response{response}}
+	return &targetHTTPClient{responses: []*cannedResponse{response}}
 }
 
 func assertBrowserReplacementRetiresOldBrowser(t *testing.T, service *Service, oldBrowser, newBrowser BrowserCandidate, targetID string, oldDetachCalls int) {
@@ -234,5 +229,14 @@ func assertPersistedReplacementRejected(t *testing.T, fixture replacementFixture
 	}
 	if unchanged != oldRecord {
 		t.Fatalf("stale reconnect rewrote persisted selection: before=%#v after=%#v", oldRecord, unchanged)
+	}
+}
+
+// closeServiceForTest releases the service's selection at test end; a failed
+// release is a real teardown defect.
+func closeServiceForTest(t *testing.T, service *Service) {
+	t.Helper()
+	if err := service.Close(); err != nil {
+		t.Errorf("close discovery service: %v", err)
 	}
 }
