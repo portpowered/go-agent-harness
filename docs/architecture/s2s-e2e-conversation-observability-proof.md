@@ -56,8 +56,9 @@ assertion — and proves:
 
 ## Negative control proves non-vacuous coverage
 
-`TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArtifacts`
-copies the positive artifact set, truncates `session-log.jsonl` to three
+The `negative control fails truncated artifacts` subtest of
+`TestSessionCommandConversationObservabilityProvesConversationFromArtifactsOnly`
+copies the positive run's artifact set (no second session run), truncates `session-log.jsonl` to three
 entries, and replaces the second reply segment (`audio/out-001.pcm`) with
 digital silence. It then runs the IDENTICAL assertion. It fails while naming
 both missing evidence classes — the truncated session log and, for turn 2,

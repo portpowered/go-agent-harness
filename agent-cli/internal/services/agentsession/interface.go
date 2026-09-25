@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sessiontracewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -77,6 +78,7 @@ type Request struct {
 	AudioTurns                    []string
 	AudioInterrupts               []string
 	AudioInterruptTool            string
+	AudioInputPacing              runtimeDevices.FilePacing
 	AudioInputDevice              string
 	AudioOutputDevice             string
 	AudioInputDevicePresent       bool

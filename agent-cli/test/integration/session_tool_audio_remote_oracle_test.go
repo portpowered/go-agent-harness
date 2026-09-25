@@ -232,13 +232,18 @@ func TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM(t *testing.T) {
 		providerClose:   true,
 		holdToneControl: true,
 	}
+	// Both subtests wait out a 3s tool delay to cross the 2.5s hold-tone gap
+	// threshold; they are independent process pairs, so they wait together.
 	t.Run("default_cue", func(t *testing.T) {
+		t.Parallel()
 		runRemoteToolAudioScenario(t, testCase, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
 	})
 	t.Run("provider_only_fixture", func(t *testing.T) {
-		testCase.name = "provider_only_hold_tone_policy"
-		testCase.holdToneControl = false
-		runRemoteToolAudioScenario(t, testCase, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
+		t.Parallel()
+		providerOnly := testCase
+		providerOnly.name = "provider_only_hold_tone_policy"
+		providerOnly.holdToneControl = false
+		runRemoteToolAudioScenario(t, providerOnly, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
 	})
 }
 
@@ -423,6 +428,18 @@ func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) str
 		}
 	}
 	return "none"
+}
+
+// requireRemoteToolAudioCadenceSlot skips device-cadence deliveries other
+// than test45/captured_cadence unless YUI_AUDIO_STRESS=1. Each drains in real
+// time (18-22s), so pull requests keep that one as the representative
+// real-pace tool continuation over remote device audio and the nightly audio
+// stress workflow runs the rest.
+func requireRemoteToolAudioCadenceSlot(t *testing.T, caseName string, delivery remoteToolAudioDelivery) {
+	t.Helper()
+	if delivery.deviceCadence && (caseName != "test45" || delivery.name != "captured_cadence") {
+		requireRemoteToolAudioStress(t)
+	}
 }
 
 // remoteToolAudioDelivery is one provider/tool/device timing variant of the

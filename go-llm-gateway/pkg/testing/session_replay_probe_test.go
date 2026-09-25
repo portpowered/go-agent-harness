@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 func TestRunSessionReplayProbeFullPassOverRecordedFixture(t *testing.T) {
@@ -101,4 +103,34 @@ func containsAll(haystack string, needles ...string) bool {
 		}
 	}
 	return true
+}
+
+// TestSessionReplayer_CommittedClientFirstCaptureCompletesAfterExpectedOutbound
+// replays the committed capture whose first record is a client event: nothing
+// is delivered until the expected outbound event is sent, after which the
+// provider response arrives and the replay completes successfully.
+func TestSessionReplayer_CommittedClientFirstCaptureCompletesAfterExpectedOutbound(t *testing.T) {
+	replayer := mustNewSessionReplayer(t, SharedSessionFixturePath("session_outbound_then_inbound.session.json"))
+
+	select {
+	case msg := <-replayer.Receive().Chan():
+		t.Fatalf("received %s before the capture's first client event was sent", msg.Type)
+	default:
+	}
+	if !replayer.Send(newSessionTestContext(t), messages.StreamMessage{
+		Type:  messages.StreamTypeTextDelta,
+		Value: messages.NewTextDeltaValue("start with client input"),
+	}) {
+		t.Fatalf("Send returned false for the expected first client event: %v", replayer.Err())
+	}
+
+	msg := readReplayMessage(t, replayer)
+	delta, ok := msg.Value.(*messages.TextDeltaValue)
+	if !ok || delta.Content != "provider response after first client input" {
+		t.Fatalf("first delivered event = %+v, want the provider response after the client event", msg.Value)
+	}
+	<-replayer.Done()
+	if outcome := replayer.Outcome(); outcome.Status != SessionReplayCompleted || !outcome.OK() {
+		t.Fatalf("outcome = %+v, want a completed successful replay", outcome)
+	}
 }

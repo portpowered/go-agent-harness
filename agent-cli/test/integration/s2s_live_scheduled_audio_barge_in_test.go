@@ -61,8 +61,8 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 	capturePath := filepath.Join(workDir, "scheduled-audio-barge-in.session.json")
 	recordDir := filepath.Join(workDir, "recording")
 	audioOutPath := filepath.Join(workDir, "assistant.wav")
-	firstAudio := locateCLIFixture(t, "multiturn_turn1.wav")
-	secondAudio := locateCLIFixture(t, "multiturn_turn2.wav")
+	firstAudio := multiturnTurnSliceWAV(t, "multiturn_turn1.wav")
+	secondAudio := multiturnTurnSliceWAV(t, "multiturn_turn2.wav")
 
 	root := agentCLI.Generate()
 	root.SetOut(io.Discard)

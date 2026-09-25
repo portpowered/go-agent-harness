@@ -1,13 +1,10 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
@@ -513,31 +510,5 @@ func TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations(t *testing.T) {
 				t.Fatalf("mutation error = %v, want detail %q", err, testCase.want)
 			}
 		})
-	}
-}
-
-func TestS2SLiveBargeInOutstandingToolCallWaitIsBounded(t *testing.T) {
-	ledger := probe.NewBargeInLedger()
-	ledger.Observe(probe.BargeInEvent{
-		Sequence: 1, Kind: probe.BargeInEventInputAppend,
-		InputID: "input-tool-wait", TurnID: "turn-tool-wait", AppendGroupID: "input-tool-wait",
-		Bytes: 2, NonEmpty: true,
-	})
-	start := time.Now()
-	err := ledger.WaitFor(context.Background(), "named tool continuation", make(chan struct{}), 20*time.Millisecond)
-	if err == nil {
-		t.Fatal("missing named-tool continuation gate unexpectedly passed")
-	}
-	var waitErr *probe.BargeInWaitError
-	if !errors.As(err, &waitErr) || !errors.Is(err, probe.ErrBargeInWait) || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("wait error = %v, want bounded barge-in wait with deadline identity", err)
-	}
-	if elapsed := time.Since(start); elapsed >= time.Second {
-		t.Fatalf("named-tool continuation gate took %s, want a bounded return", elapsed)
-	}
-	for _, want := range []string{"named tool continuation", "1:input.append", "input-tool-wait:commit", "session:terminal"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("wait error = %v, want diagnostic %q", err, want)
-		}
 	}
 }

@@ -1,19 +1,18 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+
 	"io"
 	"os"
 	"path/filepath"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 )
 
 func (s *cliLiveRecordDirServer) shutdown() {
@@ -74,9 +75,9 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	}
 
 	recordDir := filepath.Join(t.TempDir(), "recording")
-	firstAudio := locateCLIFixture(t, "multiturn_turn1.wav")
-	secondAudio := locateCLIFixture(t, "multiturn_turn2.wav")
-	thirdAudio := locateCLIFixture(t, "multiturn_turn1.wav")
+	firstAudio := multiturnTurnSliceWAV(t, "multiturn_turn1.wav")
+	secondAudio := multiturnTurnSliceWAV(t, "multiturn_turn2.wav")
+	thirdAudio := multiturnTurnSliceWAV(t, "multiturn_turn1.wav")
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
@@ -149,6 +150,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 		observedMu.Unlock()
 	})
 
+	// The representative real-pace barge-in: full-length corpus turns.
 	recordDir := filepath.Join(t.TempDir(), "barge-recording")
 	args := scheduledBoundaryArgs(
 		t.TempDir(),
@@ -258,9 +260,9 @@ func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 		"--api-key", "test-key",
 		"--system-prompt", "none",
 		"--max-duration", "5s",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn2.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -326,7 +328,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
 		"--system-prompt", "none",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -370,7 +372,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 		"--model", "gpt-realtime",
 		"--api-key", "invalid-test-key",
 		"--system-prompt", "none",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -417,7 +419,7 @@ func TestSessionCommand_LiveScheduledAudioSplitsLargeTurnAtProviderBudget(t *tes
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)
 	rootCmd.SetErr(io.Discard)
-	rootCmd.SetArgs(scheduledBoundaryArgs(t.TempDir(), recordDir, inputPath))
+	rootCmd.SetArgs(append(scheduledBoundaryArgs(t.TempDir(), recordDir, inputPath), "--audio-in-pacing", "unpaced"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

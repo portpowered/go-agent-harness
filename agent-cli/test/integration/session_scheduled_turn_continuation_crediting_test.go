@@ -289,9 +289,9 @@ func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 		"--model", "gpt-realtime-2.1-mini",
 		"--api-key", "test-key",
 		"--system-prompt", "none",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn2.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)

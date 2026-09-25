@@ -3,8 +3,11 @@ package livehost
 import (
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
@@ -46,6 +49,31 @@ func TestDurationExitTranslationPreservesTypedScheduleEvidence(t *testing.T) {
 		var retained *runtimeSession.LiveScheduledAudioIncompleteError
 		if !errors.As(got, &retained) || retained != schedule {
 			t.Fatalf("process exit lost typed schedule evidence: %v", got)
+		}
+	}
+}
+
+type capturingFileMediaService struct {
+	requests []runtimeDevices.FileMediaRequest
+}
+
+func (s *capturingFileMediaService) OpenFileMedia(request runtimeDevices.FileMediaRequest) (runtimeDevices.FileMediaHandle, error) {
+	s.requests = append(s.requests, request)
+	return nil, nil
+}
+
+// TestOpenFileMediaCarriesTheRequestedInputPacing proves the host maps the
+// session's file-input pacing onto the runtime file media request unchanged,
+// so the zero value keeps real-time delivery.
+func TestOpenFileMediaCarriesTheRequestedInputPacing(t *testing.T) {
+	for _, pacing := range []runtimeDevices.FilePacing{{}, {Unpaced: true}, {Speed: 20}} {
+		service := &capturingFileMediaService{}
+		request := serviceSession.Request{AudioTurns: []string{"turn.wav"}, AudioInputPacing: pacing}
+		if _, err := openFileMedia(request, io.Discard, runtimeSession.LiveRequest{}, Dependencies{FileMediaService: service}, nil); err != nil {
+			t.Fatalf("open file media with pacing %+v: %v", pacing, err)
+		}
+		if len(service.requests) != 1 || service.requests[0].Pacing != pacing {
+			t.Fatalf("file media requests = %+v, want one carrying pacing %+v", service.requests, pacing)
 		}
 	}
 }
