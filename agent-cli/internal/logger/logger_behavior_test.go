@@ -342,10 +342,6 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	}
 }
 
-func TestS5LoggerRotationIsSkippedWhenTheDefectIsAbsent(t *testing.T) {
-	t.Skip("defect: current logger has no rotation implementation or injectable clock seam; the coverage lane must not invent production rotation")
-}
-
 func TestLoggerContextRequestIDAndDefaultBehavior(t *testing.T) {
 	core, observed := observer.New(zapcore.DebugLevel)
 	base := zap.New(core)

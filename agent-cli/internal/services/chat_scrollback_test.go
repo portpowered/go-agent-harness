@@ -125,7 +125,3 @@ func TestChatScrollback_PlainLineKindsAndWrapping(t *testing.T) {
 		t.Fatalf("default-width markdown = %q", got)
 	}
 }
-
-func TestChatScrollback_BoundedEvictionContractIsNotPresent(t *testing.T) {
-	t.Skip("the current chat split flushes committed lines to terminal scrollback and exposes no bounded buffer capacity or eviction counter")
-}
