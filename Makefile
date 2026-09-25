@@ -28,6 +28,11 @@ LINT_JOBS ?= 4
 # Parallel module runs share the analysis cache; skip the start-up lock.
 LINT_RUN_FLAGS := --allow-parallel-runners
 BUILD_CGO_ENABLED ?= 0
+# `make build` also compiles every library package and tools/analyzergate.
+# CI sets 0: the coverage libraries shard compiles every library package
+# (-cover builds packages without tests too) and test-tools compiles
+# analyzergate, so the unit job only links the agent-cli binaries.
+BUILD_LIBRARY_PACKAGES ?= 1
 AGENT_CLI_OUTPUT ?= agent-cli/bin/yui
 AGENT_AUDIO_DEVICE_SERVER_OUTPUT ?= agent-cli/bin/audio-device-server
 GO_TEST_TIMEOUT ?= 300s
@@ -429,6 +434,10 @@ build: ## Build the agent-cli binary and compile library packages.
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_CLI_OUTPUT) ./cmd/yui); \
 	echo "==> build deterministic audio-device server"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build -o ../$(AGENT_AUDIO_DEVICE_SERVER_OUTPUT) ./cmd/audio-device-server); \
+	if [ "$(BUILD_LIBRARY_PACKAGES)" != "1" ]; then \
+		echo "==> build library packages skipped (BUILD_LIBRARY_PACKAGES=$(BUILD_LIBRARY_PACKAGES))"; \
+		exit 0; \
+	fi; \
 	for module in $(filter-out agent-cli,$(MODULES)); do \
 		echo "==> build $$module packages"; \
 		(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) build ./...); \

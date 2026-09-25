@@ -1,0 +1,73 @@
+name: Set up Go with a per-job build cache
+description: >-
+  Install the pinned Go toolchain and restore this job's own Go build and
+  module caches. setup-go's built-in cache is one entry per go.sum hash shared
+  by every job: it is written once by whichever job finishes first and never
+  refreshed, so its build cache goes stale and rarely holds what a given job
+  compiles. This cache is keyed per job and per commit, falls back to the
+  job's newest cache, and is saved by go-cache-save as the job's exact working
+  set.
+
+inputs:
+  cache-name:
+    description: Stable per-job cache name, e.g. coverage-libraries.
+    required: true
+
+outputs:
+  primary-key:
+    description: Cache key for this commit.
+    value: ${{ steps.restore.outputs.cache-primary-key }}
+  matched-key:
+    description: Key that was restored, empty when nothing matched.
+    value: ${{ steps.restore.outputs.cache-matched-key }}
+  gocache:
+    description: GOCACHE directory.
+    value: ${{ steps.paths.outputs.gocache }}
+  gomodcache:
+    description: GOMODCACHE directory.
+    value: ${{ steps.paths.outputs.gomodcache }}
+
+runs:
+  using: composite
+  steps:
+    # Linux images do not ship this Go release, and setup-go's download plus
+    # extraction took ~11s per job. macOS images ship it. Windows is left to
+    # setup-go: its tool cache entry is a symlink that a restored copy breaks.
+    - name: Cache Go toolchain
+      if: runner.os == 'Linux'
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: ${{ runner.tool_cache }}/go/1.26.7
+        key: go-toolchain-1.26.7-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.26.7"
+        cache: false
+
+    - name: Resolve Go cache directories
+      id: paths
+      shell: bash
+      run: |
+        echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Go build and module caches
+      id: restore
+      uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      with:
+        path: |
+          ${{ steps.paths.outputs.gocache }}
+          ${{ steps.paths.outputs.gomodcache }}
+        key: go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-${{ hashFiles('go.work.sum', '*/go.sum', 'tests/embedding/go.sum', 'tools/*/go.sum') }}-
+          go-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-go1.26.7-
+
+    - name: Backdate restored build cache entries
+      if: steps.restore.outputs.cache-matched-key != ''
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+        "$python" "$GITHUB_ACTION_PATH/gocache_working_set.py" age "${{ steps.paths.outputs.gocache }}"

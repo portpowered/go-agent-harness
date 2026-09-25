@@ -216,31 +216,33 @@ jobs:
           test "$GATES_RESULT" = success
           test "$LINT_RESULT" = success
 
-  # Fast unit-level checks and the compile gate. No analyzer binaries needed.
+  # Fast unit-level checks and the agent-cli link gate. No analyzer binaries
+  # needed. Library packages are not compiled here: the coverage libraries
+  # shard compiles every one of them.
   unit:
     name: CI (unit)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: unit
 
       - name: Run repository helper module tests
         if: always()
@@ -250,21 +252,21 @@ jobs:
         if: always()
         run: make test-factory-scripts
 
-      - name: Build agent-cli binary and library packages
+      - name: Build agent-cli binaries
         if: always()
-        run: make build
+        run: make build BUILD_LIBRARY_PACKAGES=0
 
       - name: Verify standalone checkout dependency graph
         if: always()
-        working-directory: agent-cli
-        env:
-          GOWORK: "off"
-        run: |
-          # This coordinated multi-module change uses adjacent checkout modules
-          # even without go.work; published module releases are versioned separately.
-          test "$(go list -m -f '{{.Replace.Dir}}' github.com/portpowered/go-agent-harness/go-agent-loop)" = "$(cd ../go-agent-loop && pwd)"
-          test "$(go list -m -f '{{.Replace.Dir}}' github.com/portpowered/go-agent-harness/go-llm-gateway)" = "$(cd ../go-llm-gateway && pwd)"
-          go build -o "$RUNNER_TEMP/yui-standalone" ./cmd/yui
+        run: scripts/verify-standalone-checkout.sh
+
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
 
   # The Linux package corpus has one owner: coverage. agent-cli is isolated
   # because its deterministic integration and replay tests are the long pole;
@@ -316,30 +318,34 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # The unit, coverage libraries, coverage, race and OS jobs skip docs/temp
+  # (about 90% of the checkout's bytes; no Go package, helper-module or
+  # factory-script test reads it): a blobless clone fetches only the sparse
+  # tree's blobs.
   coverage-libraries:
     name: CI (coverage libraries)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: coverage-libraries
 
       - name: Run hermetic library and embedding tests with coverage
         run: make coverage-ci-libraries
@@ -352,6 +358,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
   # Preserve the existing required-check name while aggregating the two
   # disjoint profile shards. `always()` ensures a failed shard reports this
   # check as failed rather than leaving it skipped.
@@ -363,6 +377,10 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Verify coverage shards completed
@@ -375,22 +393,18 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: coverage-gate
 
       - name: Download coverage profiles
         uses: actions/download-artifact@v4
@@ -402,6 +416,14 @@ jobs:
       - name: Run coverage gate
         run: make coverage-gate
 
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
   # Focused race-detector acceptance tests. Kept together on one runner
   # (rather than split further) to avoid adding more concurrent
   # load-sensitive test processes across additional runners.
@@ -409,26 +431,26 @@ jobs:
     name: CI (race)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: race
 
       - name: Run focused RTC race acceptance
         if: always()
@@ -442,64 +464,44 @@ jobs:
         if: always()
         run: make test-sessions-race
 
-  webmcp-chrome:
-    name: CI (WebMCP Chrome)
-    # The locked WebMCP Chrome artifact is mac-arm64. Keep this behavioral
-    # check required alongside hermetic coverage so skipped opt-in coverage
-    # cannot make a pull request appear complete.
-    runs-on: macos-14
-    timeout-minutes: 20
-    env:
-      WEBMCP_CLI_CHROME_INTEGRATION: "1"
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-      - name: Run production-binary cross-process cancellation acceptance
-        working-directory: agent-cli
-        run: go test ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v
-
+  # One macOS runner owns every macOS check: the arm64 agent build is shared
+  # by the release inspection and the WebMCP proof, and the runner is set up
+  # once. `webmcp-chrome` below keeps the required "CI (WebMCP Chrome)" check
+  # name and reports the WebMCP step's own outcome.
   macos-audio-release:
     name: CI (macOS audio release)
     runs-on: macos-14
     timeout-minutes: 25
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
+    outputs:
+      webmcp: ${{ steps.webmcp.outcome }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: macos
 
       - name: Run package-adjacent macOS audio units
         run: go test ./go-audio/... ./go-device-gateway/... -count=1
@@ -535,30 +537,72 @@ jobs:
           fi
           "$goreleaser_dir/goreleaser" check --config .goreleaser.yaml
 
+      # The locked WebMCP Chrome artifact is mac-arm64. Runs even when an
+      # audio step failed so its required check always has a real outcome.
+      - name: Run production-binary cross-process cancellation acceptance
+        id: webmcp
+        if: ${{ !cancelled() && steps.go.outcome == 'success' }}
+        working-directory: agent-cli
+        env:
+          WEBMCP_CLI_CHROME_INTEGRATION: "1"
+        run: go test ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v
+
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
+  # Keep this behavioral check required alongside hermetic coverage so skipped
+  # opt-in coverage cannot make a pull request appear complete. It runs on the
+  # macOS audio release runner and reports that step's outcome here.
+  webmcp-chrome:
+    name: CI (WebMCP Chrome)
+    needs: macos-audio-release
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify WebMCP Chrome acceptance passed
+        env:
+          WEBMCP_RESULT: ${{ needs.macos-audio-release.outputs.webmcp }}
+        run: test "$WEBMCP_RESULT" = success
+
   windows-audio-portable:
     name: CI (Windows audio portable)
     runs-on: windows-latest
     timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: windows
 
       - name: Run Windows audio queue regressions
         run: go test ./go-audio/... ./go-device-gateway/... -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1
+
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
