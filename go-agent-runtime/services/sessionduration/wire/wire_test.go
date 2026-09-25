@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewServiceReturnsPublicContract(t *testing.T) {
-	var service sessionduration.Service = NewService()
+	service := NewService()
 	if service == nil {
 		t.Fatal("NewService returned nil")
 	}
