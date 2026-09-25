@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
-	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -215,40 +216,53 @@ func TestSanitizeDuplexArgsRedactsFlagValuesAndSecrets(t *testing.T) {
 	}
 }
 
-func buildDuplexTestChild(t *testing.T) string {
-	t.Helper()
-	source := filepath.Join(t.TempDir(), "duplex-child.go")
-	binary := filepath.Join(t.TempDir(), "duplex-child")
-	const program = `package main
-
-import (
-	"io"
-	"os"
-	"time"
+// The duplex children are this test binary re-executed under a linked name:
+// TestMain dispatches on that name before any test runs, so no child program
+// is compiled or linked per test.
+const (
+	duplexChildName       = "duplex-child"
+	duplexSIGINTChildName = "duplex-sigint-child"
 )
 
-func main() {
-	hold := false
-	exitImmediately := false
-	for _, arg := range os.Args[1:] {
-		if arg == "--duplex-hold" {
-			hold = true
-		}
-		if arg == "--duplex-exit-immediately" {
-			exitImmediately = true
-		}
+func TestMain(m *testing.M) {
+	switch strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") {
+	case duplexChildName:
+		runDuplexTestChild(os.Args[1:])
+		os.Exit(0)
+	case duplexSIGINTChildName:
+		runDuplexSIGINTChild()
+		os.Exit(0)
 	}
-	if exitImmediately {
-		return
+	os.Exit(m.Run())
+}
+
+// writeDuplexChildMarker writes the two bytes a duplex child emits per
+// received frame.
+func writeDuplexChildMarker() error {
+	_, err := os.Stdout.Write([]byte{0xa1, 0xb2})
+	return err
+}
+
+// runDuplexTestChild echoes a two-byte marker per 960-byte stdin frame until
+// stdin closes; --duplex-hold blocks after the first frame and
+// --duplex-exit-immediately exits before reading.
+func runDuplexTestChild(args []string) {
+	hold := false
+	for _, arg := range args {
+		switch arg {
+		case "--duplex-hold":
+			hold = true
+		case "--duplex-exit-immediately":
+			return
+		}
 	}
 	frame := make([]byte, 960)
-	frames := 0
 	for {
 		n, err := io.ReadFull(os.Stdin, frame)
 		if n > 0 {
-			frames++
-			_, _ = os.Stdout.Write([]byte{0xa1, 0xb2})
-			_ = os.Stdout.Sync()
+			if writeDuplexChildMarker() != nil {
+				return
+			}
 		}
 		if hold && n > 0 {
 			time.Sleep(time.Hour)
@@ -259,55 +273,44 @@ func main() {
 		}
 	}
 }
-`
-	if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
-		t.Fatalf("write child source: %v", err)
-	}
-	command := exec.Command("go", "build", "-o", binary, source)
-	command.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("build child: %v\n%s", err, output)
-	}
-	// Pay the first exec of the fresh binary outside the timed session.
-	if output, err := exec.Command(binary, "--duplex-exit-immediately").CombinedOutput(); err != nil {
-		t.Fatalf("warm up child: %v\n%s", err, output)
-	}
-	return binary
-}
 
-func buildDuplexSIGINTChild(t *testing.T) string {
-	t.Helper()
-	source := filepath.Join(t.TempDir(), "duplex-sigint-child.go")
-	binary := filepath.Join(t.TempDir(), "duplex-sigint-child")
-	const program = `package main
-
-import (
-	"io"
-	"os"
-	"os/signal"
-)
-
-func main() {
+// runDuplexSIGINTChild echoes one marker for its first frame and exits on
+// SIGINT.
+func runDuplexSIGINTChild() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	frame := make([]byte, 960)
 	if n, err := io.ReadFull(os.Stdin, frame); n > 0 {
-		_, _ = os.Stdout.Write([]byte{0xa1, 0xb2})
-		_ = os.Stdout.Sync()
-		if err != nil {
+		if writeDuplexChildMarker() != nil || err != nil {
 			return
 		}
 	}
 	<-interrupt
 }
-`
-	if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
-		t.Fatalf("write SIGINT child source: %v", err)
+
+func buildDuplexTestChild(t *testing.T) string {
+	t.Helper()
+	return linkDuplexChild(t, duplexChildName)
+}
+
+func buildDuplexSIGINTChild(t *testing.T) string {
+	t.Helper()
+	return linkDuplexChild(t, duplexSIGINTChildName)
+}
+
+// linkDuplexChild links the running test binary under name: a hard link, or
+// a symbolic link when the temporary directory is on another device.
+func linkDuplexChild(t *testing.T, name string) string {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("locate test binary: %v", err)
 	}
-	command := exec.Command("go", "build", "-o", binary, source)
-	command.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("build SIGINT child: %v\n%s", err, output)
+	binary := filepath.Join(t.TempDir(), name)
+	if linkErr := os.Link(executable, binary); linkErr != nil {
+		if err := os.Symlink(executable, binary); err != nil {
+			t.Fatalf("link duplex child: %v; symlink: %v", linkErr, err)
+		}
 	}
 	return binary
 }
