@@ -7,26 +7,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectAmbiguousBrowserReturnsSortedCandidatesWithoutFallback",
-      "value": 40,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection",
-      "value": 71,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
       "symbol": "TestWebMCPDirectBrowserAndTabListingsRemainBoundedOnChurn",
       "value": 28,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -47,98 +27,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectDiscoveryUsesOnlyExactPageTargets",
-      "value": 35,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
       "symbol": "TestWebMCPDirectMalformedInputReturnsSelectedSchema",
       "value": 22,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectNoEligibleTabUsesC0DetailsInHumanAndJSONModes",
-      "value": 36,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations",
-      "value": 42,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectSelectBrowserDeathAtEveryStage",
-      "value": 87,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectStaleSelectionRendersOnceAndOffersSelectRecovery",
-      "value": 40,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@1722:16",
-      "value": 26,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@529:24",
-      "value": 34,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection",
-      "value": 29,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectDiscoveryUsesOnlyExactPageTargets",
-      "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -157,48 +47,8 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations",
-      "value": 33,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
       "symbol": "TestWebMCPDirectRetainedSelectionDistinguishesFreshReplacementFromEndpointLoss",
       "value": 25,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectSelectBrowserDeathAtEveryStage",
-      "value": 27,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@1722:16",
-      "value": 24,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "func-literal@529:24",
-      "value": 28,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -207,47 +57,9 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/webmcp_operations_test.go",
-      "value": 2279,
+      "value": 833,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations",
-      "value": 133,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/webmcp_operations_test.go",
-      "symbol": "TestWebMCPDirectSelectBrowserDeathAtEveryStage",
-      "value": 128,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    }
-  ],
-  "renames": [
-    {
-      "from": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1834:16",
-      "to": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1722:16"
-    },
-    {
-      "from": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@641:24",
-      "to": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@529:24"
-    },
-    {
-      "from": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1834:16",
-      "to": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@1722:16"
-    },
-    {
-      "from": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@641:24",
-      "to": "cyclomatic-complexity\u0000github.com/portpowered/go-agent-harness/agent-cli\u0000github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli\u0000internal/transport/cli/webmcp_operations_test.go\u0000func-literal@529:24"
     }
   ]
 }

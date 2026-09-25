@@ -143,6 +143,20 @@ func checkEndpointPolicy(browser config.BrowserConfig, report *Report) error {
 	return nil
 }
 
+// CheckEndpointPolicy validates the configured endpoints and denies a
+// non-loopback endpoint unless remote CDP is explicitly permitted. It is
+// the policy the doctor's endpoint check reports, for callers that need
+// only the verdict.
+func CheckEndpointPolicy(browser config.BrowserConfig) error {
+	if err := ValidateEndpoints(browser); err != nil {
+		return err
+	}
+	if EndpointFor(browser).Scope == scopeNonLoopback && !browser.Connection.AllowRemoteCDP {
+		return remoteEndpointDeniedError(browser)
+	}
+	return nil
+}
+
 func remoteEndpointDeniedError(browser config.BrowserConfig) error {
 	return webmcp.NewClassifiedError(webmcp.ErrorRemoteEndpointDenied, messageRemoteCDP, map[string]any{
 		"endpoint_kind": direct.EndpointKind(browser),

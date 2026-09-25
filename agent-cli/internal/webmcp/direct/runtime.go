@@ -134,6 +134,22 @@ func RunOperation(ctx context.Context, operation Operation, broker webmcp.Broker
 	}
 }
 
+// Run constructs one runtime for browser, runs operation against its
+// broker, and always closes the runtime within CleanupTimeout. A
+// browser_disconnected cause is preferred over construction, operation, and
+// cleanup failures.
+func Run(ctx context.Context, factory Factory, browser config.BrowserConfig, operation Operation) (any, error) {
+	runtime, err := ConstructRuntime(ctx, factory, browser)
+	if err != nil {
+		return nil, PreferBrowserDisconnected(errors.Join(RuntimeFactoryFailure(err), CloseRuntimeBounded(runtime)))
+	}
+	if runtime.Broker == nil {
+		return nil, PreferBrowserDisconnected(errors.Join(RuntimeUnavailableError(phaseRuntimeFactory), CloseRuntimeBounded(runtime)))
+	}
+	data, err := RunOperation(ctx, operation, runtime.Broker, browser)
+	return data, PreferBrowserDisconnected(errors.Join(err, CloseRuntimeBounded(runtime)))
+}
+
 // CloseRuntimeBounded closes runtime, giving up after CleanupTimeout.
 func CloseRuntimeBounded(runtime Runtime) error {
 	if !runtime.Owned() {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	directops "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 )
 
@@ -86,10 +87,9 @@ browser:
 	}
 
 	watch := executeDirectCommand(t, configDir, store, factory, "watch", "--once", "--json")
-	watchEnvelope := requireDirectSuccess(t, watch)
 	var watchData WebMCPDirectWatchData
-	decodeDirectData(t, watchEnvelope.Data, &watchData)
-	if watchData.Status != webmcpDirectWatchStatusOnce || len(watchData.Events) != 1 || watchData.Events[0].Type != string(webmcp.BrokerEventSelected) || watchData.Events[0].Version != webmcp.BrowserEventsVersion || watchData.Events[0].BrowserID != browserID || watchData.Events[0].TargetID != targetID || watchData.Events[0].Sequence == 0 {
+	decodeDirectData(t, requireDirectSuccess(t, watch).Data, &watchData)
+	if watchData.Status != directops.WatchStatusOnce || len(watchData.Events) != 1 || watchData.Events[0].Type != string(webmcp.BrokerEventSelected) || watchData.Events[0].Version != webmcp.BrowserEventsVersion || watchData.Events[0].BrowserID != browserID || watchData.Events[0].TargetID != targetID || watchData.Events[0].Sequence == 0 {
 		t.Fatalf("live watch = %+v", watchData)
 	}
 
