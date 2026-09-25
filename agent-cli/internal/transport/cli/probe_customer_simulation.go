@@ -1,43 +1,21 @@
 package cli
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customersim"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/spf13/cobra"
-)
-
-const (
-	defaultCustomerSimulationProvider          = config.ProviderOpenAI
-	defaultCustomerSimulationModel             = "gpt-realtime-2.1-mini"
-	defaultCustomerSimulationValidatorProvider = config.ProviderOpenAI
-	defaultCustomerSimulationValidatorModel    = "gpt-4o-mini"
-	defaultCustomerSimulationAPIKeyEnv         = "OPENAI_API_KEY"
-	defaultCustomerSimulationSecretFile        = "~/.you-agent-factory/secrets/OPENAPI_API_KEY"
 )
 
 // CustomerSimulationSuiteRunner is the process seam; tests may replace the
 // production suite runner with a credential-free fake.
-type CustomerSimulationSuiteRunner func(context.Context, probe.CustomerSimulationSuiteOptions) (probe.CustomerSimulationSuiteResult, error)
+type CustomerSimulationSuiteRunner = customersim.SuiteRunner
 
 // CustomerSimulationCommand exposes the opt-in billed process-boundary suite.
 type CustomerSimulationCommand struct {
@@ -78,20 +56,21 @@ type CustomerSimulationCommand struct {
 // NewCustomerSimulationCommand constructs the opt-in command without I/O before
 // Execute is called with --live.
 func NewCustomerSimulationCommand(globalFlags *flags.GlobalFlags) *CustomerSimulationCommand {
+	defaults := customersim.DefaultRequest()
 	return &CustomerSimulationCommand{
-		Provider:            defaultCustomerSimulationProvider,
-		Model:               defaultCustomerSimulationModel,
-		ValidatorProvider:   defaultCustomerSimulationValidatorProvider,
-		APIKeyEnv:           defaultCustomerSimulationAPIKeyEnv,
-		SecretFile:          defaultCustomerSimulationSecretFile,
-		ValidatorModel:      defaultCustomerSimulationValidatorModel,
-		ValidatorAPIKeyEnv:  defaultCustomerSimulationAPIKeyEnv,
-		ValidatorSecretFile: defaultCustomerSimulationSecretFile,
-		ValidatorTimeout:    probe.DefaultCustomerSimulationValidatorTimeout,
-		MaxDuration:         probe.DefaultCustomerSimulationMaxDuration,
-		FrameDuration:       probe.DefaultCustomerSimulationFrame,
-		SilenceDuration:     probe.DefaultCustomerSimulationSilence,
-		ShutdownGrace:       probe.DefaultCustomerSimulationShutdown,
+		Provider:            defaults.Provider,
+		Model:               defaults.Model,
+		ValidatorProvider:   defaults.ValidatorProvider,
+		APIKeyEnv:           defaults.APIKeyEnv,
+		SecretFile:          defaults.SecretFile,
+		ValidatorModel:      defaults.ValidatorModel,
+		ValidatorAPIKeyEnv:  defaults.ValidatorAPIKeyEnv,
+		ValidatorSecretFile: defaults.ValidatorSecretFile,
+		ValidatorTimeout:    defaults.ValidatorTimeout,
+		MaxDuration:         defaults.MaxDuration,
+		FrameDuration:       defaults.FrameDuration,
+		SilenceDuration:     defaults.SilenceDuration,
+		ShutdownGrace:       defaults.ShutdownGrace,
 		globalFlags:         globalFlags,
 		run:                 probe.RunCustomerSimulationSuite,
 	}
@@ -160,536 +139,46 @@ func (c *CustomerSimulationCommand) runCommand(cmd *cobra.Command, positional []
 	if c == nil {
 		return errors.New("customer simulation command is not configured")
 	}
-	if !c.Live {
-		return errors.New("customer simulation is opt-in and may incur provider charges; pass --live to continue")
-	}
-	if c.MaxDuration <= 0 || c.MaxDuration > probe.DefaultCustomerSimulationMaxDuration {
-		return fmt.Errorf("--max-duration must be positive and no greater than %s", probe.DefaultCustomerSimulationMaxDuration)
-	}
-	if c.FrameDuration <= 0 || c.SilenceDuration < 0 || c.ShutdownGrace <= 0 || c.ValidatorTimeout <= 0 {
-		return errors.New("--frame-duration, --shutdown-grace, and --validator-timeout must be positive; --silence-duration must not be negative")
-	}
-
-	selectors := customerSimulationSelectors(c.Families)
-	scenarioPaths := append([]string(nil), c.ScenarioPaths...)
-	scenarioPaths = append(scenarioPaths, positional...)
-	if c.Required {
-		if len(selectors) > 0 || len(scenarioPaths) > 0 {
-			return errors.New("--required cannot be combined with --family or scenario paths")
-		}
-		selectors = []string{"A", "B", "D-SIGINT", "D-NATURAL"}
-	}
-	if len(selectors) == 0 && len(scenarioPaths) == 0 {
-		return errors.New("no customer simulation selected; pass --family, --required, or scenario paths")
-	}
-
-	scenarios, err := customerSimulationLoadScenarios(selectors, scenarioPaths)
-	if err != nil {
-		return err
-	}
-	if err := ensureCustomerSimulationRunRootOutsideCheckout(c.RunRoot); err != nil {
-		return err
-	}
-
-	// Register cleanup for both credential variables before resolving either
-	// credential. This covers failures where the primary key is absent but a
-	// separately configured validator key was already exported by the caller.
-	credentialEnvNames := uniqueNonEmptyStrings(c.APIKeyEnv, c.ValidatorAPIKeyEnv)
-	defer cleanupCustomerSimulationEnvironment(credentialEnvNames)
-	apiKey, _, err := readCustomerSimulationCredential(c.APIKeyEnv, c.SecretFile)
-	if err != nil {
-		return err
-	}
-	validatorAPIKey := apiKey
-	if c.ValidatorAPIKeyEnv != c.APIKeyEnv || c.ValidatorSecretFile != c.SecretFile {
-		validatorAPIKey, _, err = readCustomerSimulationCredential(c.ValidatorAPIKeyEnv, c.ValidatorSecretFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	binaryPath, binaryCleanup, err := locateCustomerSimulationBinary(cmd.Context(), c.BinaryPath)
-	if err != nil {
-		return err
-	}
-	defer binaryCleanup()
-
-	runs, err := customerSimulationRunSpecs(scenarios, c.AudioPaths, c.AudioDir, c.PatienceRepromptAudioPath)
-	if err != nil {
-		return err
-	}
-
-	validator := c.validator
-	if validator == nil {
-		validator, err = buildCustomerSimulationValidator(c.ValidatorProvider, c.ValidatorModel, c.ValidatorBaseURL, validatorAPIKey)
-		if err != nil {
-			return err
-		}
-	}
-	runner := c.run
-	if runner == nil {
-		runner = probe.RunCustomerSimulationSuite
-	}
-	result, runErr := runner(cmd.Context(), probe.CustomerSimulationSuiteOptions{
-		BinaryPath: binaryPath, RunRoot: c.RunRoot, Provider: c.Provider, Model: c.Model, BaseURL: c.BaseURL, APIKey: apiKey, SystemPrompt: c.SystemPrompt,
-		Runs: runs, Validator: validator, ValidatorTimeout: c.ValidatorTimeout, MaxDuration: c.MaxDuration, FrameDuration: c.FrameDuration, SilenceDuration: c.SilenceDuration, ShutdownGrace: c.ShutdownGrace,
+	outcome, err := customersim.Run(cmd.Context(), c.request(), positional, customersim.Dependencies{
+		Host:          customerSimulationHost(),
+		Runner:        c.run,
+		Validator:     c.validator,
 		ReplayService: c.ReplayService,
 	})
-	if writeErr := writeCustomerSimulationReport(cmd, c.ReportPath, result, apiKey, validatorAPIKey); writeErr != nil {
-		return writeErr
-	}
-	passed := 0
-	for _, run := range result.Runs {
-		if run.Validator.Pass() {
-			passed++
-		}
-	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "customer-simulation: %d/%d validator verdicts WORKED; evidence root %s\n", passed, len(result.Runs), result.Root)
-	resultErr := validateCustomerSimulationCommandResult(result, scenarios)
-	return errors.Join(runErr, resultErr)
-}
-
-// validateCustomerSimulationCommandResult is the CLI's final fail-closed
-// boundary. The production runner already returns an aggregate error, but the
-// command must also reject incomplete or contradictory results from any
-// runner implementation before it reports success to an operator.
-func validateCustomerSimulationCommandResult(result probe.CustomerSimulationSuiteResult, scenarios []probe.CustomerScenario) error {
-	var failures []error
-	if strings.TrimSpace(result.Root) == "" {
-		failures = append(failures, errors.New("customer simulation result has no evidence root"))
-	}
-	if len(result.Runs) != len(scenarios) {
-		failures = append(failures, fmt.Errorf("customer simulation returned %d run results, want %d", len(result.Runs), len(scenarios)))
-	}
-	expected := make(map[string]probe.CustomerScenario, len(scenarios))
-	for _, scenario := range scenarios {
-		expected[scenario.ID] = scenario
-	}
-	seen := make(map[string]struct{}, len(result.Runs))
-	for index, run := range result.Runs {
-		label := fmt.Sprintf("customer simulation result %d", index+1)
-		if strings.TrimSpace(run.RunID) == "" {
-			failures = append(failures, fmt.Errorf("%s has no run ID", label))
-		}
-		scenario, ok := expected[run.ScenarioID]
-		if !ok {
-			failures = append(failures, fmt.Errorf("%s identifies unexpected scenario %q", label, run.ScenarioID))
-			continue
-		}
-		if _, duplicate := seen[run.ScenarioID]; duplicate {
-			failures = append(failures, fmt.Errorf("scenario %q appears more than once in the result", run.ScenarioID))
-		}
-		seen[run.ScenarioID] = struct{}{}
-		if run.Family != scenario.Family || run.Termination != scenario.Termination {
-			failures = append(failures, fmt.Errorf("scenario %q returned contradictory family or termination facts", run.ScenarioID))
-		}
-		if strings.TrimSpace(run.BundleRoot) == "" || strings.TrimSpace(run.RecordRoot) == "" || strings.TrimSpace(run.WorkspaceRoot) == "" {
-			failures = append(failures, fmt.Errorf("scenario %q is incomplete: evidence, record, and workspace roots are required", run.ScenarioID))
-		}
-		if !run.Mechanical.Pass || !run.Validator.Mechanical.Pass || !run.Validator.Pass() {
-			status := string(run.Validator.Status)
-			if status == "" {
-				status = "missing"
-			}
-			failures = append(failures, fmt.Errorf("scenario %q did not produce an accepted WORKED verdict (status %s)", run.ScenarioID, status))
-		}
-	}
-	for _, scenario := range scenarios {
-		if _, ok := seen[scenario.ID]; !ok {
-			failures = append(failures, fmt.Errorf("selected scenario %q has no result", scenario.ID))
-		}
-	}
-	return errors.Join(failures...)
-}
-
-func customerSimulationSelectors(raw []string) []string {
-	var selectors []string
-	for _, value := range raw {
-		for _, selector := range strings.Split(value, ",") {
-			if strings.TrimSpace(selector) != "" {
-				selectors = append(selectors, strings.TrimSpace(selector))
-			}
-		}
-	}
-	return selectors
-}
-
-func customerSimulationLoadScenarios(selectors, paths []string) ([]probe.CustomerScenario, error) {
-	var scenarios []probe.CustomerScenario
-	if len(selectors) > 0 {
-		selected, err := probe.CustomerSimulationScenariosForSelectors(selectors...)
-		if err != nil {
-			return nil, err
-		}
-		scenarios = append(scenarios, selected...)
-	}
-	seen := make(map[string]struct{}, len(scenarios))
-	for _, scenario := range scenarios {
-		seen[scenario.ID] = struct{}{}
-	}
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read customer simulation scenario %q: %w", path, err)
-		}
-		scenario, err := probe.ParseCustomerScenario(data)
-		if err != nil {
-			return nil, fmt.Errorf("load customer simulation scenario %q: %w", path, err)
-		}
-		if _, duplicate := seen[scenario.ID]; duplicate {
-			return nil, fmt.Errorf("customer simulation scenario %q was selected more than once", scenario.ID)
-		}
-		seen[scenario.ID] = struct{}{}
-		scenarios = append(scenarios, scenario)
-	}
-	return scenarios, nil
-}
-
-func customerSimulationRunSpecs(scenarios []probe.CustomerScenario, audioPaths []string, audioDir string, patienceRepromptAudioPaths ...string) ([]probe.CustomerSimulationRunSpec, error) {
-	if len(audioPaths) > 0 && strings.TrimSpace(audioDir) != "" {
-		return nil, errors.New("--audio and --audio-dir cannot be combined")
-	}
-	if len(patienceRepromptAudioPaths) > 1 {
-		return nil, errors.New("only one --patience-reprompt-audio path is supported")
-	}
-	patienceRepromptAudioPath := ""
-	if len(patienceRepromptAudioPaths) == 1 {
-		patienceRepromptAudioPath = strings.TrimSpace(patienceRepromptAudioPaths[0])
-	}
-	hasFamilyE := false
-	for _, scenario := range scenarios {
-		if scenario.Family == probe.ScenarioFamilyE {
-			hasFamilyE = true
-			break
-		}
-	}
-	if hasFamilyE && patienceRepromptAudioPath == "" {
-		return nil, errors.New("family E requires --patience-reprompt-audio with a natural check-in recording")
-	}
-	if !hasFamilyE && patienceRepromptAudioPath != "" {
-		return nil, errors.New("--patience-reprompt-audio is only valid when Family E is selected")
-	}
-	var patienceRepromptAudio []byte
-	if patienceRepromptAudioPath != "" {
-		data, err := readCustomerSimulationPCM16(patienceRepromptAudioPath)
-		if err != nil {
-			return nil, fmt.Errorf("load Family E patience re-prompt audio: %w", err)
-		}
-		patienceRepromptAudio = data
-	}
-	totalTurns := 0
-	for _, scenario := range scenarios {
-		totalTurns += len(probe.CustomerSimulationScenarioScript(scenario))
-	}
-	if len(audioPaths) > 0 && len(audioPaths) != totalTurns {
-		return nil, fmt.Errorf("--audio needs exactly one file per selected customer turn: got %d, want %d", len(audioPaths), totalTurns)
-	}
-	runs := make([]probe.CustomerSimulationRunSpec, 0, len(scenarios))
-	audioIndex := 0
-	for _, scenario := range scenarios {
-		script := probe.CustomerSimulationScenarioScript(scenario)
-		paths := make([]string, len(script))
-		if len(audioPaths) > 0 {
-			copy(paths, audioPaths[audioIndex:audioIndex+len(script)])
-			audioIndex += len(script)
-		} else if strings.TrimSpace(audioDir) != "" {
-			resolved, err := resolveCustomerSimulationAudioPaths(audioDir, scenario, script)
-			if err != nil {
-				return nil, err
-			}
-			paths = resolved
-		} else {
-			return nil, fmt.Errorf("audio is required for scenario %q; pass --audio once per turn or --audio-dir", scenario.ID)
-		}
-		pcm := make([][]byte, len(paths))
-		for index, path := range paths {
-			data, err := readCustomerSimulationPCM16(path)
-			if err != nil {
-				return nil, fmt.Errorf("load audio for scenario %q turn %d: %w", scenario.ID, index+1, err)
-			}
-			pcm[index] = data
-		}
-		spec := probe.CustomerSimulationRunSpec{Scenario: scenario, Script: script, Audio: pcm}
-		if scenario.Family == probe.ScenarioFamilyE {
-			spec.PatienceRepromptAudio = append([]byte(nil), patienceRepromptAudio...)
-		}
-		runs = append(runs, spec)
-	}
-	return runs, nil
-}
-
-func resolveCustomerSimulationAudioPaths(root string, scenario probe.CustomerScenario, script []probe.CustomerScriptTurn) ([]string, error) {
-	paths := make([]string, len(script))
-	for index, turn := range script {
-		candidates := make([]string, 0, 12)
-		bases := []string{
-			filepath.Join(root, scenario.ID, turn.ActionID),
-			filepath.Join(root, scenario.ID, fmt.Sprintf("%02d", index+1)),
-			filepath.Join(root, scenario.ID+"-"+turn.ActionID),
-			filepath.Join(root, turn.ActionID),
-		}
-		for _, base := range bases {
-			for _, extension := range []string{".wav", ".pcm", ".raw"} {
-				candidates = append(candidates, base+extension)
-			}
-		}
-		found := ""
-		for _, candidate := range candidates {
-			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
-				found = candidate
-				break
-			}
-		}
-		if found == "" {
-			return nil, fmt.Errorf("audio directory %q has no file for scenario %q turn %q; tried scenario/action .wav/.pcm/.raw names", root, scenario.ID, turn.ActionID)
-		}
-		paths[index] = found
-	}
-	return paths, nil
-}
-
-func readCustomerSimulationPCM16(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if strings.EqualFold(filepath.Ext(path), ".wav") {
-		rate, samples, err := wavio.Read(bytes.NewReader(data))
-		if err != nil {
-			return nil, err
-		}
-		if rate != wavio.Rate16kHz {
-			return nil, fmt.Errorf("WAV sample rate is %d Hz; customer simulation requires %d Hz", rate, wavio.Rate16kHz)
-		}
-		data = codec.EncodePCM16(samples)
+	report, err := customersim.EncodeReport(outcome.Result, outcome.Secrets...)
+	if err != nil {
+		return err
 	}
-	if len(data) == 0 || len(data)%2 != 0 {
-		return nil, errors.New("audio must be non-empty, even-length PCM16")
+	if err := customersim.WriteReport(cmd.OutOrStdout(), c.ReportPath, report); err != nil {
+		return err
 	}
-	return append([]byte(nil), data...), nil
+	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "customer-simulation: %d/%d validator verdicts WORKED; evidence root %s\n", customersim.WorkedCount(outcome.Result), len(outcome.Result.Runs), outcome.Result.Root); err != nil {
+		return errors.Join(fmt.Errorf("write customer simulation summary: %w", err), outcome.Err())
+	}
+	return outcome.Err()
 }
 
-func readCustomerSimulationCredential(envName, rawFile string) (string, []string, error) {
-	names := uniqueNonEmptyStrings(envName)
-	for _, name := range names {
-		if value, ok := os.LookupEnv(name); ok {
-			value = strings.ReplaceAll(value, "\n", "")
-			value = strings.ReplaceAll(value, "\r", "")
-			if strings.TrimSpace(value) == "" {
-				continue
-			}
-			return value, names, nil
-		}
-	}
-	files := uniqueNonEmptyStrings(rawFile)
-	for _, rawPath := range files {
-		path, err := expandCustomerSimulationHome(rawPath)
-		if err != nil {
-			return "", names, err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return "", names, fmt.Errorf("read customer simulation secret file %q: %w", path, err)
-		}
-		value := strings.ReplaceAll(string(data), "\n", "")
-		value = strings.ReplaceAll(value, "\r", "")
-		if strings.TrimSpace(value) != "" {
-			return value, names, nil
-		}
-	}
-	return "", names, fmt.Errorf("live customer simulation credentials are required; set %s or provide %s", strings.Join(names, " or "), strings.Join(files, " or "))
-}
-
-func uniqueNonEmptyStrings(values ...string) []string {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
-}
-
-func cleanupCustomerSimulationEnvironment(names []string) {
-	for _, name := range names {
-		_ = os.Unsetenv(name)
+func (c *CustomerSimulationCommand) request() customersim.Request {
+	return customersim.Request{
+		Live: c.Live, Required: c.Required, Families: c.Families, ScenarioPaths: c.ScenarioPaths,
+		AudioPaths: c.AudioPaths, AudioDir: c.AudioDir, PatienceRepromptAudioPath: c.PatienceRepromptAudioPath,
+		BinaryPath: c.BinaryPath, RunRoot: c.RunRoot, Provider: c.Provider, Model: c.Model, BaseURL: c.BaseURL,
+		SystemPrompt: c.SystemPrompt, APIKeyEnv: c.APIKeyEnv, SecretFile: c.SecretFile,
+		ValidatorProvider: c.ValidatorProvider, ValidatorModel: c.ValidatorModel, ValidatorBaseURL: c.ValidatorBaseURL,
+		ValidatorAPIKeyEnv: c.ValidatorAPIKeyEnv, ValidatorSecretFile: c.ValidatorSecretFile, ValidatorTimeout: c.ValidatorTimeout,
+		MaxDuration: c.MaxDuration, FrameDuration: c.FrameDuration, SilenceDuration: c.SilenceDuration, ShutdownGrace: c.ShutdownGrace,
 	}
 }
 
-func expandCustomerSimulationHome(raw string) (string, error) {
-	if !strings.HasPrefix(raw, "~/") && raw != "~" {
-		return raw, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve secret home: %w", err)
-	}
-	if raw == "~" {
-		return home, nil
-	}
-	return filepath.Join(home, strings.TrimPrefix(raw, "~/")), nil
-}
-
-func buildCustomerSimulationValidator(providerName, model, baseURL, apiKey string) (probe.CustomerSimulationValidatorAgent, error) {
-	providerName = strings.ToLower(strings.TrimSpace(providerName))
-	if providerName == config.ProviderGrok {
-		return nil, errors.New("--validator-provider grok is unsupported: the independent validator requires a stateless provider")
-	}
-	if providerName != config.ProviderOpenAI && providerName != config.ProviderOpenRouter && providerName != config.ProviderLocal {
-		return nil, fmt.Errorf("unsupported --validator-provider %q; want openai, openrouter, or local", providerName)
-	}
-	providerService := providerswire.NewService(providerswire.Dependencies{HTTPClient: http.DefaultClient})
-	providerConfig := providers.Config{Provider: providerName, Model: model, APIKey: apiKey, BaseURL: baseURL}
-	built, err := providerService.Build(context.Background(), providerConfig)
-	if err != nil {
-		return nil, fmt.Errorf("build independent validator provider: %w", err)
-	}
-	gw, err := gateway.NewGateway(gateway.WithProvider(built))
-	if err != nil {
-		return nil, fmt.Errorf("build independent validator gateway: %w", err)
-	}
-	return probe.GatewayCustomerSimulationValidator{Gateway: gw, Model: model}, nil
-}
-
-func writeCustomerSimulationReport(cmd *cobra.Command, reportPath string, result probe.CustomerSimulationSuiteResult, secrets ...string) error {
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode customer simulation report: %w", err)
-	}
-	for _, secret := range secrets {
-		if secret = strings.TrimSpace(secret); secret != "" {
-			data = bytes.ReplaceAll(data, []byte(secret), []byte("<redacted>"))
-		}
-	}
-	data = append(data, '\n')
-	if strings.TrimSpace(reportPath) == "" {
-		_, err = cmd.OutOrStdout().Write(data)
-		if err != nil {
-			return fmt.Errorf("write customer simulation report: %w", err)
-		}
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(reportPath), 0o700); err != nil {
-		return fmt.Errorf("create customer simulation report directory: %w", err)
-	}
-	if err := os.WriteFile(reportPath, data, 0o600); err != nil {
-		return fmt.Errorf("write customer simulation report %q: %w", reportPath, err)
-	}
-	return nil
-}
-
-func locateCustomerSimulationBinary(ctx context.Context, explicit string) (string, func(), error) {
-	if strings.TrimSpace(explicit) != "" {
-		path, err := validateCustomerSimulationBinary(explicit)
-		return path, func() {}, err
-	}
-	candidates := []string{}
-	if executable, err := os.Executable(); err == nil && filepath.Base(executable) == "yui" {
-		candidates = append(candidates, executable)
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, "agent-cli", "bin", "yui"), filepath.Join(cwd, "bin", "yui"))
-		if root, rootErr := customerSimulationRepositoryRoot(cwd); rootErr == nil {
-			candidates = append(candidates, filepath.Join(root, "agent-cli", "bin", "yui"), filepath.Join(root, "bin", "yui"))
-		}
-	}
-	for _, candidate := range uniqueNonEmptyStrings(candidates...) {
-		if path, err := validateCustomerSimulationBinary(candidate); err == nil {
-			return path, func() {}, nil
-		}
-	}
-	root, err := customerSimulationRepositoryRootFromWorkingDirectory()
-	if err != nil {
-		return "", func() {}, fmt.Errorf("locate shipped yui binary: %w", err)
-	}
-	temporary, err := os.CreateTemp("", "yui-customer-simulation-binary-")
-	if err != nil {
-		return "", func() {}, fmt.Errorf("create temporary shipped binary: %w", err)
-	}
-	path := temporary.Name()
-	if err := temporary.Close(); err != nil {
-		_ = os.Remove(path)
-		return "", func() {}, fmt.Errorf("prepare temporary shipped binary: %w", err)
-	}
-	build := exec.CommandContext(ctx, "go", "build", "-o", path, "./agent-cli/cmd/yui")
-	build.Dir = root
-	build.Stdout = io.Discard
-	build.Stderr = io.Discard
-	if err := build.Run(); err != nil {
-		_ = os.Remove(path)
-		return "", func() {}, fmt.Errorf("build shipped yui binary: %w", err)
-	}
-	return path, func() { _ = os.Remove(path) }, nil
-}
-
-func validateCustomerSimulationBinary(raw string) (string, error) {
-	path, err := filepath.Abs(raw)
-	if err != nil {
-		return "", err
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return "", err
-	}
-	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("binary %q is not a regular file", path)
-	}
-	if info.Mode().Perm()&0o111 == 0 {
-		return "", fmt.Errorf("binary %q is not executable", path)
-	}
-	return path, nil
-}
-
-func ensureCustomerSimulationRunRootOutsideCheckout(raw string) error {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	root, err := filepath.Abs(raw)
-	if err != nil {
-		return fmt.Errorf("resolve --run-root: %w", err)
-	}
-	repository, err := customerSimulationRepositoryRootFromWorkingDirectory()
-	if err != nil {
-		return nil
-	}
-	relative, err := filepath.Rel(repository, root)
-	if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("--run-root %q must be outside checkout %q", root, repository)
-	}
-	return nil
-}
-
-func customerSimulationRepositoryRootFromWorkingDirectory() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	return customerSimulationRepositoryRoot(cwd)
-}
-
-func customerSimulationRepositoryRoot(start string) (string, error) {
-	current, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Lstat(filepath.Join(current, ".git")); err == nil {
-			return current, nil
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", errors.New("repository root not found")
-		}
-		current = parent
+// customerSimulationHost injects the process working directory, home
+// directory, and executable path into the customer simulation run.
+func customerSimulationHost() customersim.Host {
+	return customersim.Host{
+		WorkingDir: os.Getwd,       //nolint:forbidigo // The CLI transport is the host boundary that injects the working directory.
+		HomeDir:    os.UserHomeDir, //nolint:forbidigo // The CLI transport is the host boundary that injects the home directory.
+		Executable: os.Executable,
 	}
 }

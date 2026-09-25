@@ -2,27 +2,21 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/replay"
+	probescenario "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenario"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	serviceprobes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/spf13/cobra"
 )
-
-// probeScenarioDeadline is the deadguard bound applied to every scenario
-// execution: a session that never terminates within this window yields a
-// failed result with a deadguard indication instead of blocking the runner.
-const probeScenarioDeadline = 30 * time.Second
 
 // ProbeCommand is the probe group (parent command); subcommands are wired in core_router.go.
 type ProbeCommand struct{}
@@ -98,7 +92,7 @@ func newProbeRunCommand(service serviceDevices.DeviceService, probeService servi
 		deviceProbeService:  probeService,
 		Provider:            "openai",
 		CaptureTime:         serviceDevices.DefaultDeviceProbeCaptureDuration,
-		deviceProbeDeadline: probeScenarioDeadline,
+		deviceProbeDeadline: probescenario.DefaultDeadline,
 		BrowserExecutorMode: ProbeScenarioV2BrowserExecutorHermetic,
 		browserFlags:        flags.NewBrowserFlags(),
 		browserFactory:      NewProductionWebMCPDoctorFactory(),
@@ -185,51 +179,58 @@ func (c *ProbeRunCommand) run(cmd *cobra.Command, positional []string) error {
 		return fmt.Errorf("--record is not supported for offline probe runs; use --replay with recorded fixtures")
 	}
 	if c.Devices != "" {
-		if c.Devices != "real" {
-			return fmt.Errorf("unsupported --devices value %q; want real", c.Devices)
-		}
-		if len(probeSelections(positional, c.Scenarios)) == 0 {
-			return fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
-		}
-		availability, err := c.probeDeviceAvailability(cmd.Context())
-		if err != nil {
-			return fmt.Errorf("device probe availability: %w", err)
-		}
-		if availability.Status == serviceDevices.DeviceProbeStatusSkip {
-			return c.writeDeviceProbeSkip(cmd, positional, availability)
-		}
-		if configDir, getErr := cmd.Flags().GetString("config-dir"); getErr == nil {
-			c.ConfigDir = configDir
-		}
-		scenarios, err := buildDeviceProbePlan(positional, c.Scenarios)
-		if err != nil {
-			return err
-		}
-		return c.runScenarios(cmd, scenarios, deadguardExec(func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-			return c.deviceProbeExec(ctx, scenario, availability)
-		}, c.deviceProbeDeadline))
+		return c.runDevices(cmd, positional)
 	}
-	selections := probeSelections(positional, c.Scenarios)
-	if hasV2, err := probeSelectionsContainV2(selections); err != nil {
+	selections := probescenario.Selections(positional, c.Scenarios)
+	if hasV2, err := probescenario.ContainsV2(selections); err != nil {
 		return err
 	} else if hasV2 {
 		return c.runScenarioV2(cmd, selections)
 	}
+	return c.runReplay(cmd, selections)
+}
+
+func (c *ProbeRunCommand) runReplay(cmd *cobra.Command, selections []string) error {
 	if strings.TrimSpace(c.Replay) == "" {
 		return fmt.Errorf("--replay <fixture-path-or-dir> is required to select recorded fixtures")
 	}
-
-	fixtures, err := loadReplayFixtures(c.Replay)
+	fixtures, err := replay.LoadFixtures(c.Replay)
 	if err != nil {
 		return err
 	}
-
-	scenarios, exec, err := buildProbePlan(cmd.Context(), positional, c.Scenarios, fixtures, c.replayService, c.metricsCollector)
+	executor := replay.Executor{Service: c.replayService, Fixtures: fixtures, Metrics: c.metricsCollector, Corpus: probeCorpus()}
+	scenarios, exec, err := probescenario.ReplayPlan(cmd.Context(), selections, executor)
 	if err != nil {
 		return err
 	}
+	return c.runScenarios(cmd, scenarios, probescenario.Deadguard(exec, probescenario.DefaultDeadline))
+}
 
-	return c.runScenarios(cmd, scenarios, deadguardExec(exec, probeScenarioDeadline))
+func (c *ProbeRunCommand) runDevices(cmd *cobra.Command, positional []string) error {
+	if c.Devices != "real" {
+		return fmt.Errorf("unsupported --devices value %q; want real", c.Devices)
+	}
+	selections := probescenario.Selections(positional, c.Scenarios)
+	if len(selections) == 0 {
+		return errors.New(probescenario.NoSelectionMessage)
+	}
+	availability, err := c.probeDeviceAvailability(cmd.Context())
+	if err != nil {
+		return fmt.Errorf("device probe availability: %w", err)
+	}
+	if availability.Status == serviceDevices.DeviceProbeStatusSkip {
+		return c.writeDeviceProbeSkip(cmd, selections, availability)
+	}
+	if configDir, getErr := cmd.Flags().GetString("config-dir"); getErr == nil {
+		c.ConfigDir = configDir
+	}
+	scenarios, err := probescenario.ResolveAll(selections)
+	if err != nil {
+		return err
+	}
+	return c.runScenarios(cmd, scenarios, probescenario.Deadguard(func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
+		return c.deviceProbeExec(ctx, scenario, availability)
+	}, c.deviceProbeDeadline))
 }
 
 func (c *ProbeRunCommand) probeDeviceAvailability(ctx context.Context) (serviceDevices.DeviceProbeAvailability, error) {
@@ -243,241 +244,26 @@ func (c *ProbeRunCommand) probeDeviceAvailability(ctx context.Context) (serviceD
 	return availability, nil
 }
 
-func probeSelectionsContainV2(selections []string) (bool, error) {
-	containsV2 := false
-	for _, selection := range selections {
-		isV2, err := probeScenarioFileIsV2(selection)
-		if err != nil {
-			return false, err
-		}
-		containsV2 = containsV2 || isV2
+func (c *ProbeRunCommand) runScenarios(cmd *cobra.Command, scenarios []probe.Scenario, exec probe.ExecFunc) (err error) {
+	resultsOut, summaryOut, closeOutputs, err := c.openProbeOutputs(cmd)
+	if err != nil {
+		return err
 	}
-	return containsV2, nil
+	defer func() {
+		if closeErr := closeOutputs(); err == nil {
+			err = closeErr
+		}
+	}()
+	runner := probescenario.NewRunner(exec, &probescenario.ResultRouter{Results: resultsOut, Summary: summaryOut})
+	summary, err := runner.Run(cmd.Context(), scenarios)
+	if err != nil {
+		return err
+	}
+	return c.reportProbeSummary(cmd, summary)
 }
 
-func (c *ProbeRunCommand) runScenarios(cmd *cobra.Command, scenarios []probe.Scenario, exec probe.ExecFunc) error {
-	resultsOut := cmd.OutOrStdout()
-	if c.OutPath != "" {
-		file, openErr := os.Create(c.OutPath)
-		if openErr != nil {
-			return fmt.Errorf("open --out %q: %w", c.OutPath, openErr)
-		}
-		defer file.Close()
-		resultsOut = file
-	}
-	summaryOut := io.Writer(cmd.ErrOrStderr())
-	if c.SummaryPath != "" {
-		file, openErr := os.Create(c.SummaryPath)
-		if openErr != nil {
-			return fmt.Errorf("open --summary %q: %w", c.SummaryPath, openErr)
-		}
-		defer file.Close()
-		summaryOut = file
-	}
-
-	runner := &probe.Runner{
-		Exec:          exec,
-		Out:           &resultRouter{results: resultsOut, summary: summaryOut},
-		CorpusLookups: []probe.CorpusLookup{replayCorpusLookup{}},
-	}
-	summary, runErr := runner.Run(cmd.Context(), scenarios)
-	if runErr != nil {
-		return runErr
-	}
-	if !c.JSONOut {
-		fmt.Fprintf(cmd.ErrOrStderr(), "probe: %d/%d scenarios passed (%s)\n", summary.Passed, summary.Total, summary.Status)
-	}
-	if summary.Failed > 0 {
-		return fmt.Errorf("%d of %d probe scenarios failed", summary.Failed, summary.Total)
-	}
-	return nil
-}
-
-func buildDeviceProbePlan(positional []string, flags []string) ([]probe.Scenario, error) {
-	selections := probeSelections(positional, flags)
-	if len(selections) == 0 {
-		return nil, fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
-	}
-	seen := make(map[string]struct{}, len(selections))
-	scenarios := make([]probe.Scenario, 0, len(selections))
-	for _, selection := range selections {
-		resolved, err := resolveProbeSelection(selection)
-		if err != nil {
-			return nil, err
-		}
-		for _, scenario := range resolved {
-			key := scenario.ID + "\x00" + scenario.Name
-			if _, exists := seen[key]; exists {
-				continue
-			}
-			seen[key] = struct{}{}
-			scenarios = append(scenarios, scenario)
-		}
-	}
-	return scenarios, nil
-}
-
-func probeSelections(positional, flags []string) []string {
-	raw := append(append([]string{}, positional...), flags...)
-	selections := make([]string, 0, len(raw))
-	seen := make(map[string]struct{}, len(raw))
-	for _, selection := range raw {
-		if _, exists := seen[selection]; exists {
-			continue
-		}
-		seen[selection] = struct{}{}
-		selections = append(selections, selection)
-	}
-	return selections
-}
-
-// resultRouter routes each verbatim runner line either to the results
-// destination or, when it decodes as a run summary, to the summary destination.
-type resultRouter struct {
-	results io.Writer
-	summary io.Writer
-}
-
-func (r *resultRouter) Write(p []byte) (int, error) {
-	var candidate probe.RunSummary
-	if json.Unmarshal(p, &candidate) == nil && candidate.Status != "" {
-		return r.summary.Write(p)
-	}
-	return r.results.Write(p)
-}
-
-// loadReplayFixtures resolves --replay into named session fixture paths.
-func loadReplayFixtures(replay string) (map[string]string, error) {
-	info, statErr := os.Stat(replay)
-	if statErr != nil {
-		return nil, fmt.Errorf("replay fixture %q is missing or unreadable: %w", replay, statErr)
-	}
-	fixtures := map[string]string{}
-	if !info.IsDir() {
-		fixtures[fixtureStem(replay)] = replay
-		return fixtures, nil
-	}
-	entries, readErr := os.ReadDir(replay)
-	if readErr != nil {
-		return nil, fmt.Errorf("read replay fixture directory %q: %w", replay, readErr)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".session.json") {
-			continue
-		}
-		path := filepath.Join(replay, entry.Name())
-		fixtures[fixtureStem(path)] = path
-	}
-	if len(fixtures) == 0 {
-		return nil, fmt.Errorf("replay fixture directory %q contains no recorded session fixtures", replay)
-	}
-	return fixtures, nil
-}
-
-func fixtureStem(path string) string {
-	base := filepath.Base(path)
-	base = strings.TrimSuffix(base, ".session.json")
-	return strings.TrimSuffix(base, ".json")
-}
-
-// buildProbePlan loads selected scenarios and resolves the fixture-backed
-// execution function. Every unknown selection is reported by name.
-//
-// A selection is resolved in order: (1) a scenario file on disk, (2) an exact
-// match against a registered scenario's ID or name, (3) a suite prefix match
-// that expands to every registered scenario whose ID extends the selection
-// with "-" (e.g. s2s-v6a-error-auth selects both of its cases).
-func buildProbePlan(ctx context.Context, positional []string, flags []string, fixtures map[string]string, replayService runtimeReplay.Service, collectors ...serviceprobes.MetricsCollector) ([]probe.Scenario, probe.ExecFunc, error) {
-	selections := append(append([]string{}, positional...), flags...)
-	if len(selections) == 0 {
-		return nil, nil, fmt.Errorf("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
-	}
-	seen := map[string]bool{}
-	scenarios := make([]probe.Scenario, 0, len(selections))
-	for _, selection := range selections {
-		resolved, err := resolveProbeSelection(selection)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, scenario := range resolved {
-			key := scenario.ID + "\x00" + scenario.Name
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			scenarios = append(scenarios, scenario)
-		}
-	}
-	if replayService == nil {
-		return nil, nil, fmt.Errorf("replay service is not configured")
-	}
-	for _, fixture := range fixtures {
-		if _, err := replayService.InspectCapture(ctx, fixture); err != nil {
-			return nil, nil, fmt.Errorf("invalid replay fixture %q: %w", fixture, err)
-		}
-	}
-	return scenarios, replayExecFunc(replayService, fixtures, collectors...), nil
-}
-
-// resolveProbeSelection resolves one selection into zero or more scenarios,
-// preferring on-disk scenario files over the registered scenario set.
-func resolveProbeSelection(selection string) ([]probe.Scenario, error) {
-	if _, statErr := os.Stat(selection); statErr == nil {
-		scenario, loadErr := loadProbeScenarioFile(selection)
-		if loadErr != nil {
-			return nil, fmt.Errorf("load probe scenario %q: %w", selection, loadErr)
-		}
-		return []probe.Scenario{scenario}, nil
-	}
-	registered := probe.Scenarios()
-	for _, scenario := range registered {
-		if scenario.ID == selection || scenarioName(scenario) == selection {
-			return []probe.Scenario{scenario}, nil
-		}
-	}
-	suite := make([]probe.Scenario, 0)
-	for _, scenario := range registered {
-		if strings.HasPrefix(scenario.ID, selection+"-") {
-			suite = append(suite, scenario)
-		}
-	}
-	sort.Slice(suite, func(i, j int) bool { return suite[i].ID < suite[j].ID })
-	if len(suite) > 0 {
-		return suite, nil
-	}
-	return nil, fmt.Errorf("unknown probe scenario %q: no such file and no registered scenario matches", selection)
-}
-
-// deadguardExec bounds one scenario execution by a wall-clock deadline so a
-// hung session yields a failed result carrying a deadguard indication instead
-// of blocking the runner.
-func deadguardExec(exec probe.ExecFunc, deadline time.Duration) probe.ExecFunc {
-	return func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-		bounded, cancel := context.WithTimeout(ctx, deadline)
-		defer cancel()
-		type outcome struct {
-			snapshot probe.ObservationSnapshot
-			err      error
-		}
-		done := make(chan outcome, 1)
-		go func() {
-			snapshot, execErr := exec(bounded, scenario)
-			done <- outcome{snapshot: snapshot, err: execErr}
-		}()
-		select {
-		case result := <-done:
-			return result.snapshot, result.err
-		case <-bounded.Done():
-			return probe.ObservationSnapshot{}, fmt.Errorf(
-				"deadguard: scenario %q exceeded its %s deadline: %w",
-				scenarioName(scenario), deadline, bounded.Err())
-		}
-	}
-}
-
-func scenarioName(scenario probe.Scenario) string {
-	if scenario.Name != "" {
-		return scenario.Name
-	}
-	return scenario.ID
+// probeCorpus resolves committed audio corpus files from the process working
+// directory.
+func probeCorpus() replay.Corpus {
+	return replay.Corpus{WorkingDir: os.Getwd} //nolint:forbidigo // The CLI transport is the host boundary that injects the working directory.
 }

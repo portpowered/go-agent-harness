@@ -45,45 +45,6 @@ func TestProbeRunS2SV3CBargeInRepeatedReconcilesOffline(t *testing.T) {
 	}
 }
 
-// The derived observation counts the exact composition the positive fixture
-// encodes — the numbers the proof doc records.
-func TestDeriveBargeInObservationCountsV3CComposition(t *testing.T) {
-	fixture := v3cFixture("s2s-v3c-barge-in-repeated.session.json")
-	scenario, err := resolveProbeSelection("s2s-v3c-barge-in-repeated")
-	if err != nil {
-		t.Fatalf("resolve registered scenario: %v", err)
-	}
-	exec := replayExecFunc(newReplayRuntimeServiceForTest(), map[string]string{"s2s-v3c-barge-in-repeated": fixture})
-	observation, err := exec(t.Context(), scenario[0])
-	if err != nil {
-		t.Fatalf("replay execution failed: %v", err)
-	}
-	want := map[string]int{
-		"user_turns":          7,
-		"assistant_delivered": 4,
-		"responses_created":   7,
-		"cancelled_responses": 3,
-		"cancel_events":       3,
-		"post_cancel_deltas":  0,
-	}
-	observed := map[string]int{
-		"user_turns":          observation.UserTurnsCommitted,
-		"assistant_delivered": observation.AssistantTurnsDelivered,
-		"responses_created":   observation.ResponsesCreated,
-		"cancelled_responses": observation.ResponsesCancelled,
-		"cancel_events":       observation.ResponseCancels,
-		"post_cancel_deltas":  observation.PostCancelDeltas,
-	}
-	for key, expected := range want {
-		if got := observed[key]; got != expected {
-			t.Fatalf("%s = %d, want %d", key, got, expected)
-		}
-	}
-	if observation.SpuriousCancels != 0 || observation.InFlightAtEnd {
-		t.Fatalf("clean session must have no stray cancels and nothing in flight: %+v", observation)
-	}
-}
-
 // Negative controls: each violating fixture fails through the same CLI path,
 // naming the invariant it breaks.
 func TestProbeRunS2SV3CNegativeControlsFailNamingTheirInvariant(t *testing.T) {

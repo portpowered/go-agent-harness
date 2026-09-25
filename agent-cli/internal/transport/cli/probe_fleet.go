@@ -1,27 +1,24 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
+	probescenario "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenario"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceProbes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/spf13/cobra"
 )
 
 // FleetLiveSessionRunner is the live session seam; tests can replace it without
 // changing transport dispatch.
-type FleetLiveSessionRunner func(context.Context, io.Writer, serviceSession.Request, serviceSession.AudioInput) error
+type FleetLiveSessionRunner = fleet.LiveSessionRunner
 
 // ProbeFleetCommand executes every entry in a validated fleet manifest.
 // Executor is injectable for hermetic transport and concurrency tests; the
@@ -120,77 +117,27 @@ func (c *ProbeFleetCommand) run(cmd *cobra.Command) error {
 }
 
 func (c *ProbeFleetCommand) newDefaultExecutor(cmd *cobra.Command, manifest fleet.Manifest) (fleet.EntryExecutor, error) {
-	var replayExecutor fleet.EntryExecutor
-	var liveExecutor fleet.EntryExecutor
-	var err error
-	if manifestHasTransport(manifest, fleet.TransportReplay) {
-		replayExecutor, err = c.newReplayExecutor(cmd.Context(), manifest)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if manifestHasTransport(manifest, fleet.TransportLive) {
-		liveExecutor = c.newLiveExecutor(cmd)
-	}
-	return func(ctx context.Context, entry fleet.Entry) (fleet.EntryOutcome, error) {
-		switch entry.Transport {
-		case fleet.TransportReplay:
-			return replayExecutor(ctx, entry)
-		case fleet.TransportLive:
-			return liveExecutor(ctx, entry)
-		default:
-			return fleet.EntryOutcome{}, fmt.Errorf("fleet entry %q has unsupported transport %q", entry.ID, entry.Transport)
-		}
-	}, nil
-}
-
-func manifestHasTransport(manifest fleet.Manifest, want fleet.Transport) bool {
-	for _, entry := range manifest.Entries {
-		if entry.Transport == want {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *ProbeFleetCommand) newReplayExecutor(ctx context.Context, manifest fleet.Manifest) (fleet.EntryExecutor, error) {
-	if strings.TrimSpace(c.Replay) == "" {
-		return nil, fmt.Errorf("--replay <fixture-path-or-dir> is required for replay fleet entries")
-	}
-	if c.replayService == nil {
-		return nil, fmt.Errorf("fleet replay service is required")
-	}
-	fixtures, err := loadReplayFixtures(c.Replay)
-	if err != nil {
-		return nil, err
-	}
-	for name, fixture := range fixtures {
-		if _, err := c.replayService.InspectCapture(ctx, fixture); err != nil {
-			return nil, fmt.Errorf("invalid replay fixture %q (%s): %w", fixture, name, err)
-		}
-	}
-	replayExec := replayExecFunc(c.replayService, fixtures, c.metricsCollector)
-	return func(ctx context.Context, entry fleet.Entry) (fleet.EntryOutcome, error) {
-		return runReplayFleetEntry(ctx, entry, replayExec)
-	}, nil
-}
-
-func (c *ProbeFleetCommand) newLiveExecutor(cmd *cobra.Command) fleet.EntryExecutor {
 	runner := c.LiveSessionRunner
 	if runner == nil {
 		runner = c.runLiveSession
 	}
-	options := serviceSession.Request{
-		Provider:      c.Provider,
-		Model:         c.Model,
-		ModelProvided: cmd.Flags().Changed("model"),
-		APIKey:        c.APIKey,
-		BaseURL:       c.BaseURL,
-		ConfigDir:     commandFlagValue(cmd, "config-dir"),
-	}
-	return func(ctx context.Context, entry fleet.Entry) (fleet.EntryOutcome, error) {
-		return runLiveFleetEntry(ctx, entry, options, runner, c.replayService, c.metricsCollector)
-	}
+	return fleet.NewDefaultExecutor(cmd.Context(), manifest, fleet.DefaultExecutorConfig{
+		ReplayPath: c.Replay,
+		Replay:     c.replayService,
+		Metrics:    c.metricsCollector,
+		Corpus:     probeCorpus(),
+		Live: fleet.LiveExecutor{
+			Options: serviceSession.Request{
+				Provider:      c.Provider,
+				Model:         c.Model,
+				ModelProvided: cmd.Flags().Changed("model"),
+				APIKey:        c.APIKey,
+				BaseURL:       c.BaseURL,
+				ConfigDir:     commandFlagValue(cmd, "config-dir"),
+			},
+			Run: runner,
+		},
+	})
 }
 
 func commandFlagValue(cmd *cobra.Command, name string) string {
@@ -208,186 +155,9 @@ func (c *ProbeFleetCommand) runLiveSession(ctx context.Context, out io.Writer, r
 	}
 	request.AudioInput = input
 	if input.Present {
-		request.MaxDuration = probeScenarioDeadline
+		request.MaxDuration = probescenario.DefaultDeadline
 	}
 	return c.sessionService.Run(ctx, out, request)
-}
-
-func runLiveFleetEntry(ctx context.Context, entry fleet.Entry, options serviceSession.Request, runSession FleetLiveSessionRunner, replayService runtimeReplay.Service, metricsCollector serviceProbes.MetricsCollector) (fleet.EntryOutcome, error) {
-	scenario, err := loadFleetScenario(entry)
-	if err != nil {
-		return fleet.EntryOutcome{}, err
-	}
-
-	var output bytes.Buffer
-	runner := &probe.Runner{
-		Exec: deadguardExec(func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-			return executeLiveScenario(ctx, scenario, options, runSession, replayService, metricsCollector)
-		}, probeScenarioDeadline),
-		Out:           &output,
-		CorpusLookups: []probe.CorpusLookup{replayCorpusLookup{}},
-	}
-	summary, err := runner.Run(ctx, []probe.Scenario{scenario})
-	if err != nil {
-		return fleet.EntryOutcome{}, err
-	}
-	result, err := decodeSingleProbeResult(output.Bytes())
-	if err != nil {
-		return fleet.EntryOutcome{}, err
-	}
-	if summary.Total != 1 {
-		return fleet.EntryOutcome{}, fmt.Errorf("probe runner returned total %d for fleet entry %q", summary.Total, entry.ID)
-	}
-	if result.Pass {
-		return fleet.EntryOutcome{Pass: true}, nil
-	}
-	return fleet.EntryOutcome{Err: probeResultError(result)}, nil
-}
-
-func executeLiveScenario(ctx context.Context, scenario probe.Scenario, baseOptions serviceSession.Request, runSession FleetLiveSessionRunner, replayService runtimeReplay.Service, metricsCollector serviceProbes.MetricsCollector) (probe.ObservationSnapshot, error) {
-	prompt, audioPath, err := liveScenarioInputs(scenario)
-	if err != nil {
-		return probe.ObservationSnapshot{}, err
-	}
-	captureDir, err := os.MkdirTemp("", "agent-probe-fleet-live-")
-	if err != nil {
-		return probe.ObservationSnapshot{}, fmt.Errorf("create live fleet capture directory: %w", err)
-	}
-	defer os.RemoveAll(captureDir)
-
-	capturePath := filepath.Join(captureDir, "session.json")
-	options := baseOptions
-	options.RecordPath = capturePath
-	options.Prompt = prompt
-	audioInput := serviceSession.AudioInput{Path: audioPath, Present: audioPath != ""}
-	if err := runSession(ctx, io.Discard, options, audioInput); err != nil {
-		return probe.ObservationSnapshot{}, fmt.Errorf("run live fleet scenario %q: %w", scenarioName(scenario), err)
-	}
-	return observationFromSessionCapture(ctx, scenario, replayService, runtimeReplay.CaptureProbeRequest{
-		SourcePath: capturePath,
-	}, metricsCollector)
-}
-
-func liveScenarioInputs(scenario probe.Scenario) (prompt, audioPath string, err error) {
-	audioSeen := false
-	inputSeen := false
-	for index, step := range scenario.Steps {
-		kind := step.Kind
-		if kind == "" {
-			kind = step.Type
-		}
-		switch kind {
-		case probe.StepSendText:
-			if audioSeen {
-				return "", "", fmt.Errorf("live fleet scenario %q step %d sends text after audio; the live session path supports text before one audio input", scenarioName(scenario), index)
-			}
-			if inputSeen {
-				return "", "", fmt.Errorf("live fleet scenario %q step %d has more than one input", scenarioName(scenario), index)
-			}
-			prompt = step.Text
-			inputSeen = true
-		case probe.StepSendAudio:
-			if audioSeen {
-				return "", "", fmt.Errorf("live fleet scenario %q step %d has more than one audio input", scenarioName(scenario), index)
-			}
-			corpusID := step.CorpusID
-			if corpusID == "" {
-				corpusID = step.Corpus.CorpusID
-			}
-			audioPath, err = replayCorpusPath(corpusID)
-			if err != nil {
-				return "", "", fmt.Errorf("live fleet scenario %q step %d: %w", scenarioName(scenario), index, err)
-			}
-			audioSeen = true
-			inputSeen = true
-		case probe.StepClose:
-			// The existing session runtime closes after the response for the
-			// supported one-turn text/audio shape.
-		default:
-			return "", "", fmt.Errorf("live fleet scenario %q step %d uses %q; the existing live session path supports send_text, send_audio, and close", scenarioName(scenario), index, kind)
-		}
-	}
-	if !inputSeen {
-		return "", "", fmt.Errorf("live fleet scenario %q has no send_text or send_audio input", scenarioName(scenario))
-	}
-	return prompt, audioPath, nil
-}
-
-func loadFleetScenario(entry fleet.Entry) (probe.Scenario, error) {
-	scenario, err := loadProbeScenarioFile(entry.ScenarioPath)
-	if err != nil {
-		return probe.Scenario{}, fmt.Errorf("load scenario %q: %w", entry.ScenarioPath, err)
-	}
-	if !scenarioMatchesEntry(scenario, entry) {
-		return probe.Scenario{}, fmt.Errorf("scenario %q does not match manifest entry %q", entry.ScenarioPath, entry.ID)
-	}
-	return scenario, nil
-}
-
-func runReplayFleetEntry(ctx context.Context, entry fleet.Entry, exec probe.ExecFunc) (fleet.EntryOutcome, error) {
-	scenario, err := loadFleetScenario(entry)
-	if err != nil {
-		return fleet.EntryOutcome{}, err
-	}
-
-	var output bytes.Buffer
-	runner := &probe.Runner{
-		Exec:          deadguardExec(exec, probeScenarioDeadline),
-		Out:           &output,
-		CorpusLookups: []probe.CorpusLookup{replayCorpusLookup{}},
-	}
-	summary, err := runner.Run(ctx, []probe.Scenario{scenario})
-	if err != nil {
-		return fleet.EntryOutcome{}, err
-	}
-	result, err := decodeSingleProbeResult(output.Bytes())
-	if err != nil {
-		return fleet.EntryOutcome{}, err
-	}
-	if summary.Total != 1 {
-		return fleet.EntryOutcome{}, fmt.Errorf("probe runner returned total %d for fleet entry %q", summary.Total, entry.ID)
-	}
-	if result.Pass {
-		return fleet.EntryOutcome{Pass: true}, nil
-	}
-	return fleet.EntryOutcome{Err: probeResultError(result)}, nil
-}
-
-func scenarioMatchesEntry(scenario probe.Scenario, entry fleet.Entry) bool {
-	return strings.TrimSpace(scenario.ID) == entry.ScenarioID || strings.TrimSpace(scenario.Name) == entry.ScenarioID
-}
-
-func decodeSingleProbeResult(data []byte) (probe.ScenarioResult, error) {
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var result probe.ScenarioResult
-		if err := json.Unmarshal([]byte(line), &result); err != nil {
-			return probe.ScenarioResult{}, fmt.Errorf("decode fleet probe result: %w", err)
-		}
-		if result.Name == "" {
-			continue
-		}
-		return result, nil
-	}
-	return probe.ScenarioResult{}, errors.New("probe runner returned no scenario result for fleet entry")
-}
-
-func probeResultError(result probe.ScenarioResult) error {
-	if result.Error != "" {
-		return errors.New(result.Error)
-	}
-	for _, outcome := range result.ScenarioExpectationOutcomes {
-		if !outcome.Passed {
-			if outcome.Error != "" {
-				return errors.New(outcome.Error)
-			}
-			return fmt.Errorf("probe expectation %d failed", outcome.Index)
-		}
-	}
-	return errors.New("probe expectations failed")
 }
 
 func writeFleetLines(out io.Writer, results []fleet.EntryResult) error {

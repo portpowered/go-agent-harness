@@ -6,18 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
+	probescenario "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenario"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -25,6 +23,18 @@ const probeSessionFixture = "../../../../go-llm-gateway/pkg/testing/testdata/ses
 
 func newReplayRuntimeServiceForTest() runtimeReplay.Service {
 	return replaywire.NewService()
+}
+
+// loadProbeScenario parses a committed legacy scenario document the same way
+// the probe command does.
+func loadProbeScenario(data []byte) (probe.Scenario, error) {
+	return probescenario.Parse(data)
+}
+
+// replayCorpusPath locates a committed audio corpus file the same way the
+// probe command does.
+func replayCorpusPath(id string) (string, error) {
+	return probeCorpus().Path(id)
 }
 
 func probeFixtureObservation(t *testing.T) gatewaytesting.SessionReplayProbeReport {
@@ -642,41 +652,6 @@ func TestProbeRunMalformedNegativeControlExitsNonZero(t *testing.T) {
 	}
 }
 
-func TestDeadguardBoundsHungScenarioExecution(t *testing.T) {
-	block := make(chan struct{})
-	defer close(block)
-	hungExec := func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-		<-ctx.Done()
-		return probe.ObservationSnapshot{}, ctx.Err()
-	}
-	exec := deadguardExec(hungExec, 50*time.Millisecond)
-
-	scenario := probe.Scenario{ID: "hung", Name: "hung"}
-	snapshot, err := exec(context.Background(), scenario)
-	if err == nil {
-		t.Fatalf("deadguard must fail a hung scenario execution")
-	}
-	if !strings.Contains(err.Error(), "deadguard") || !strings.Contains(err.Error(), "context deadline exceeded") {
-		t.Fatalf("deadguard error lacks indication: %v", err)
-	}
-	if snapshot.FrameCount != 0 || snapshot.TerminalReason != "" {
-		t.Fatalf("hung scenario must not produce an observation: %+v", snapshot)
-	}
-}
-
-func TestDeadguardDoesNotFireForQuickHealthyExecution(t *testing.T) {
-	quickExec := func(ctx context.Context, scenario probe.Scenario) (probe.ObservationSnapshot, error) {
-		return probe.ObservationSnapshot{FrameCount: 2, HasObservedTick: true, ObservedTick: 1, TerminalReason: "disconnect"}, nil
-	}
-	snapshot, err := deadguardExec(quickExec, 5*time.Second)(context.Background(), probe.Scenario{ID: "quick", Name: "quick"})
-	if err != nil {
-		t.Fatalf("deadguard fired spuriously for quick execution: %v", err)
-	}
-	if snapshot.FrameCount != 2 || snapshot.TerminalReason != "disconnect" {
-		t.Fatalf("unexpected snapshot through deadguard: %+v", snapshot)
-	}
-}
-
 const (
 	v2aHappyFixture    = "testdata/probe-fixtures/s2s_v2a_audio_in_basic.session.json"
 	v2aSilentFixture   = "testdata/probe-fixtures/s2s_v2a_audio_in_basic_no_response.session.json"
@@ -861,15 +836,6 @@ func TestProbeRunV2ENegativeControlFailsOnUncommittedBuffer(t *testing.T) {
 	}
 }
 
-func TestV2EScenariosReferenceCommittedTruncatedCorpus(t *testing.T) {
-	for _, name := range []string{"truncated_16k.wav", "truncated_24k.wav"} {
-		path := filepath.Join("..", "..", "..", "..", "go-agent-loop", "testdata", "audio", name)
-		if _, err := os.Stat(path); err != nil {
-			t.Fatalf("committed truncated corpus fixture %s must be reused by the v2e scenarios: %v", path, err)
-		}
-	}
-}
-
 const (
 	v3aFixture16k            = "testdata/probe-fixtures/s2s-v3a-barge-in-basic-cancelled-16k.session.json"
 	v3aFixture24k            = "testdata/probe-fixtures/s2s-v3a-barge-in-basic-cancelled-24k.session.json"
@@ -957,106 +923,6 @@ func TestProbeRunV3ANegativeControlFailsWhenCancelSuppressed(t *testing.T) {
 		if !strings.Contains(message, `probe expectation "response-cancel" mismatch`) ||
 			!strings.Contains(message, "RESPONSE.CANCEL observed") {
 			t.Fatalf("failure must name the missing cancel clearly: %v", outcome)
-		}
-	}
-}
-
-// TestV3AScenariosReferenceCommittedOverlapCorpus proves both sample-rate
-// variants of the interrupting barge-in input load from the committed corpus
-// at go-agent-loop/testdata/audio and carry real speech energy at their
-// recorded rates — the same overlap_* utterances the scenarios reference.
-func TestV3AScenariosReferenceCommittedOverlapCorpus(t *testing.T) {
-	for _, variant := range []struct {
-		name         string
-		wantRate     int
-		wantSilentAt float64
-	}{
-		{name: "overlap_16k.wav", wantRate: 16000},
-		{name: "overlap_24k.wav", wantRate: 24000},
-	} {
-		path := filepath.Join("..", "..", "..", "..", "go-agent-loop", "testdata", "audio", variant.name)
-		file, err := os.Open(path)
-		if err != nil {
-			t.Fatalf("committed overlap corpus %s must load: %v", path, err)
-		}
-		rate, samples, err := wavio.Read(file)
-		closeErr := file.Close()
-		if err != nil {
-			t.Fatalf("decode overlap corpus %s: %v", path, err)
-		}
-		if closeErr != nil {
-			t.Fatalf("close overlap corpus %s: %v", path, closeErr)
-		}
-		if rate != variant.wantRate {
-			t.Fatalf("overlap corpus %s sample rate = %d, want %d", variant.name, rate, variant.wantRate)
-		}
-		if len(samples) == 0 {
-			t.Fatalf("overlap corpus %s decodes to no PCM16 samples", variant.name)
-		}
-		var sum float64
-		for _, sample := range samples {
-			sum += float64(sample) * float64(sample)
-		}
-		rms := math.Sqrt(sum / float64(len(samples)))
-		if rms <= probe.AudioEnergyThreshold {
-			t.Fatalf("overlap corpus %s RMS = %.2f must exceed the VAD threshold %.2f to plausibly barge in",
-				variant.name, rms, probe.AudioEnergyThreshold)
-		}
-	}
-}
-
-// TestV3AReplayServiceInjectsOverlapCorpus preserves the provider cancel's
-// recorded logical position while the service replays the full committed WAV.
-func TestV3AReplayServiceInjectsOverlapCorpus(t *testing.T) {
-	tests := []struct {
-		name       string
-		fixture    string
-		corpusID   string
-		wantRate   int
-		wantCancel probe.LogicalTime
-	}{
-		{name: "16k", fixture: v3aFixture16k, corpusID: "overlap_16k", wantRate: wavio.Rate16kHz, wantCancel: v3aCancelTick16k},
-		{name: "24k", fixture: v3aFixture24k, corpusID: "overlap_24k", wantRate: wavio.Rate24kHz, wantCancel: v3aCancelTick24k},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			samples, rate, err := replayCorpusSamples(test.corpusID)
-			if err != nil {
-				t.Fatalf("load corpus: %v", err)
-			}
-			if rate != test.wantRate {
-				t.Fatalf("corpus rate = %d, want %d", rate, test.wantRate)
-			}
-			observation, err := newReplayRuntimeServiceForTest().AnalyzeProbe(t.Context(), runtimeReplay.CaptureProbeRequest{
-				SourcePath:           test.fixture,
-				CorpusID:             test.corpusID,
-				AudioSamples:         samples,
-				SampleRateHz:         rate,
-				ExpectedSampleRateHz: test.wantRate,
-			})
-			if err != nil {
-				t.Fatalf("replay injected corpus: %v", err)
-			}
-			if !observation.HasInterruptTick || observation.InterruptTick != 2 {
-				t.Fatalf("interrupt tick = %d (present=%t), want actual first append tick 2", observation.InterruptTick, observation.HasInterruptTick)
-			}
-			if !observation.HasResponseCancel || probe.LogicalTime(observation.ResponseCancelTick) != test.wantCancel {
-				t.Fatalf("cancel tick = %d (present=%t), want %d", observation.ResponseCancelTick, observation.HasResponseCancel, test.wantCancel)
-			}
-		})
-	}
-}
-
-func TestReplayCorpusLookupRejectsUnknownIDs(t *testing.T) {
-	lookup := replayCorpusLookup{}
-	for _, id := range []string{"", "made-up-corpus", "overlap_16k.wav"} {
-		if lookup.Has(id) {
-			t.Fatalf("unknown corpus ID %q was accepted", id)
-		}
-	}
-	for _, id := range []string{"overlap_16k", "overlap_24k", "truncated_16k", "truncated_24k", "utterance-hello-there", "v3c-utterance-1"} {
-		if !lookup.Has(id) {
-			t.Fatalf("known corpus ID %q was rejected", id)
 		}
 	}
 }

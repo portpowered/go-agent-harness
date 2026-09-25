@@ -143,7 +143,7 @@ func repositoryImportCases() []repositoryImportCase {
 		{"device contract private", cli, devices, "internal/services/devices/interface.go", private, true},
 		{"device validation file", cli, devices, "internal/services/devices/validation.go", gateway, false},
 		{"device list transport", cli, transport, "internal/transport/cli/devices.go", gateway, true},
-		{"device probe transport", cli, transport, "internal/transport/cli/device_probe.go", gateway, true},
+		{"device probe transport", cli, transport, "internal/transport/cli/probe_output.go", gateway, true},
 		{"probe transport", cli, transport, "internal/transport/cli/probe.go", gateway, true},
 		{"session transport gateway", cli, transport, "internal/transport/cli/session.go", gateway, false},
 		{"cli transport private", cli, transport + "/internal/livehost", "internal/transport/cli/internal/livehost/files.go", private, true},

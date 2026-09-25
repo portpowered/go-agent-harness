@@ -243,33 +243,6 @@ func TestProbeAcceptanceCLIControlsUseRecordedArtifacts(t *testing.T) {
 	}
 }
 
-func TestProbeAcceptanceHelpDoesNotLeakFixtureOrInternalHints(t *testing.T) {
-	root := newTestRootCommandWithAcceptance(acceptanceCommandRunnerFunc(func(context.Context, loopprobe.AcceptanceInput) (loopprobe.AcceptanceVerdict, error) {
-		t.Fatal("help invoked the runner")
-		return loopprobe.AcceptanceVerdict{}, nil
-	}))
-	var stdout, stderr bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetErr(&stderr)
-	root.SetArgs([]string{"probe", "acceptance", "--help"})
-
-	if err := root.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("help error = %v", err)
-	}
-	help := stdout.String()
-	if !strings.Contains(help, "plain-English goal") || !strings.Contains(help, "fresh empty working directory") {
-		t.Fatalf("help = %q, want blind-input description", help)
-	}
-	for _, leaked := range []string{"--scenario", "--replay", "ObjectiveVerifier", "fixture"} {
-		if strings.Contains(help, leaked) {
-			t.Fatalf("help leaks internal hint %q: %q", leaked, help)
-		}
-	}
-	if stderr.Len() != 0 {
-		t.Fatalf("help stderr = %q, want empty", stderr.String())
-	}
-}
-
 func TestProbeAcceptanceCLIErrorIdentityTable(t *testing.T) {
 	tests := []struct {
 		name string
@@ -312,5 +285,32 @@ func TestDefaultProbeAcceptanceCLIReportsMissingBinary(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "binary") {
 		t.Fatalf("error = %v, want actionable binary context", err)
+	}
+}
+
+func TestProbeAcceptanceHelpDoesNotLeakFixtureOrInternalHints(t *testing.T) {
+	root := newTestRootCommandWithAcceptance(acceptanceCommandRunnerFunc(func(context.Context, loopprobe.AcceptanceInput) (loopprobe.AcceptanceVerdict, error) {
+		t.Fatal("help invoked the runner")
+		return loopprobe.AcceptanceVerdict{}, nil
+	}))
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"probe", "acceptance", "--help"})
+
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("help error = %v", err)
+	}
+	help := stdout.String()
+	if !strings.Contains(help, "plain-English goal") || !strings.Contains(help, "fresh empty working directory") {
+		t.Fatalf("help = %q, want blind-input description", help)
+	}
+	for _, leaked := range []string{"--scenario", "--replay", "ObjectiveVerifier", "fixture"} {
+		if strings.Contains(help, leaked) {
+			t.Fatalf("help leaks internal hint %q: %q", leaked, help)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("help stderr = %q, want empty", stderr.String())
 	}
 }
