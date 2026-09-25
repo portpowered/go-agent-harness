@@ -184,10 +184,6 @@ func TestLivenessClockAndTraceObserverPoliciesUseServiceContracts(t *testing.T) 
 	}
 }
 
-type sourceOnlyClock struct{}
-
-func (sourceOnlyClock) Now() time.Time { return time.Unix(0, 0) }
-
 func TestTraceDeviceServiceBindsCaptureAndPlaybackObservers(t *testing.T) {
 	var preGate, uploaded, rendered []int16
 	playbackSamples := []int16(nil)

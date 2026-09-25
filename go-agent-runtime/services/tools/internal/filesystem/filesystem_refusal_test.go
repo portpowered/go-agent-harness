@@ -365,8 +365,8 @@ func TestFilesystemRefusalRoundTripsThroughContent(t *testing.T) {
 	if err != nil || decoded != refusal {
 		t.Fatalf("decoded = %+v (%v), want %+v", decoded, err, refusal)
 	}
-	if _, err := DecodeFilesystemRefusal([]byte("{not json")); err == nil {
-		t.Fatal("DecodeFilesystemRefusal accepted invalid JSON")
+	if rejected, err := DecodeFilesystemRefusal([]byte("{not json")); err == nil {
+		t.Fatalf("DecodeFilesystemRefusal accepted invalid JSON as %+v", rejected)
 	}
 	wrapped, err := json.Marshal(map[string]any{"refusal": refusal})
 	if err != nil {
@@ -382,8 +382,8 @@ func TestFilesystemRefusalRoundTripsThroughContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, content := range []string{"plain text result", `{"refusal":null}`, string(invalidWrapped)} {
-		if _, ok := FilesystemRefusalFromContent(content); ok {
-			t.Fatalf("FilesystemRefusalFromContent(%q) recognized a non-refusal", content)
+		if recognized, ok := FilesystemRefusalFromContent(content); ok {
+			t.Fatalf("FilesystemRefusalFromContent(%q) recognized a non-refusal: %+v", content, recognized)
 		}
 	}
 }
