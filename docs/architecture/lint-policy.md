@@ -170,8 +170,10 @@ Every CI job must finish within three minutes even with a cold build cache
 | `CI (static lint darwin support)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support` |
 
 `make lint-darwin-cgo` needs the macOS SDK, so it runs in the required
-`CI (WebMCP Chrome)` job, which already runs on macOS (91-113s cold for
-both), rather than on a macOS lane of its own.
+`CI (WebMCP Chrome)` job, which already runs on macOS (124-141s cold for
+both in real CI runs), rather than on a macOS lane of its own. The job caches
+the golangci-lint directory through `extra-paths`, which changed its cache
+version: the first run after that change restored nothing and ran cold.
 
 Merged lanes were measured cold in #591 and later and do not fit: `make lint
 LINT_SHARD=libraries` 131-223s, `make lint-cross LINT_CROSS_GOOS=windows
