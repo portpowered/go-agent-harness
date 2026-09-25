@@ -131,6 +131,11 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 // assertion sees only network protocol observations, process-owned tool
 // observations, and device-rendered PCM; it does not inspect a session queue,
 // sink generation, or any other playback implementation state.
+//
+// A device-cadence run drains in real time (18-22s each), so pull requests
+// run one of them, test45/captured_cadence, as the representative real-pace
+// tool continuation over remote device audio; the other device-cadence runs
+// need YUI_AUDIO_STRESS=1 and run in the nightly audio stress workflow.
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	cases := []remoteToolAudioCase{
@@ -168,6 +173,9 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
 				// Bound real process/device pairs so callback clocks retain CPU under the full package.
 				t.Parallel()
+				if delivery.deviceCadence && (testCase.name != "test45" || delivery.name != "captured_cadence") {
+					requireRemoteToolAudioStress(t)
+				}
 				scenarioSlots <- struct{}{}
 				defer func() { <-scenarioSlots }()
 				scenario := testCase

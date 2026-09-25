@@ -466,18 +466,20 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 # The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
-# trials each per repetition) skip unless YUI_AUDIO_STRESS=1. They hunt rare
+# trials each per repetition) and the real-time device-cadence deliveries of
+# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio other than
+# test45/captured_cadence skip unless YUI_AUDIO_STRESS=1. They hunt rare
 # races rather than prove behavior, so pull requests do not run them (their
-# test45/test46 topologies run once per delivery in
+# test45/test46 topologies run once per remaining delivery in
 # TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio); the scheduled
 # Nightly audio stress workflow runs this target with the coverage job's
 # build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
 AUDIO_STRESS_COUNT ?= 1
 test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
 	@set -euo pipefail; \
-	echo "==> test-audio-stress Test45/Test46 high-rate tool audio, $(AUDIO_STRESS_COUNT) repetition(s) of 20 trials each"; \
+	echo "==> test-audio-stress Test45/Test46 high-rate tool audio (20 trials each) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone \
-		-run '^TestAgentBinaryTest4[56]HighRateToolAudioRegression$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+		-run '^TestAgentBinary(Test4[56]HighRateToolAudioRegression|ToolContinuationPreservesRemoteDeviceAudio)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
