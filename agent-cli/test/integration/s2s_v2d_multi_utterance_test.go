@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // The v2d vertical is verified exclusively through the actual agent binary:
@@ -43,16 +45,32 @@ func runIntegrationTests(m *testing.M) int {
 		return m.Run()
 	}
 
-	dir, err := os.MkdirTemp("", "s2s-v2d-agent-binary")
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err := os.RemoveAll(dir); err != nil {
-			fmt.Fprintf(os.Stderr, "remove integration binary directory: %v\n", err)
+	// A shared directory (scripts/go-test-shards.sh --shared-dir-env) lets
+	// every shard process of one run reuse a single build of the binaries.
+	dir := os.Getenv(sharedBinaryDirEnv)
+	if dir == "" {
+		var err error
+		dir, err = os.MkdirTemp("", "s2s-v2d-agent-binary")
+		if err != nil {
+			panic(err)
 		}
-	}()
+		defer func() {
+			if err := os.RemoveAll(dir); err != nil {
+				fmt.Fprintf(os.Stderr, "remove integration binary directory: %v\n", err)
+			}
+		}()
+	}
+	if err := buildIntegrationBinaries(dir); err != nil {
+		panic(err.Error())
+	}
+	return m.Run()
+}
 
+// sharedBinaryDirEnv names a directory holding the process-boundary binaries
+// for this package. Missing binaries are built into it and kept for reuse.
+const sharedBinaryDirEnv = "AGENT_CLI_INTEGRATION_SHARED_DIR"
+
+func buildIntegrationBinaries(dir string) error {
 	agentBinaryPath = filepath.Join(dir, "agent")
 	audioDeviceServerBinaryPath = filepath.Join(dir, "audio-device-server")
 	mockToolAgentBinaryPath = filepath.Join(dir, "mock-tool-agent")
@@ -66,21 +84,39 @@ func runIntegrationTests(m *testing.M) int {
 	errs := make([]error, len(builds))
 	var wg sync.WaitGroup
 	for index, build := range builds {
+		if _, err := os.Stat(build.output); err == nil {
+			continue
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			cmd := exec.Command("go", "build", "-o", build.output, build.source)
+			// Link to a temporary name and rename, so a concurrent reader of
+			// the shared directory never executes a partially written binary.
+			partial := fmt.Sprintf("%s.partial-%d", build.output, os.Getpid())
+			cmd := exec.Command("go", "build", "-o", partial, build.source)
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
 				errs[index] = fmt.Errorf("build %s binary: %w", build.name, err)
+				return
 			}
+			if err := os.Rename(partial, build.output); err != nil {
+				errs[index] = fmt.Errorf("install %s binary: %w", build.name, err)
+				return
+			}
+			warmBinary(build.output)
 		}()
 	}
 	wg.Wait()
-	if err := errors.Join(errs...); err != nil {
-		panic(err.Error())
-	}
-	return m.Run()
+	return errors.Join(errs...)
+}
+
+// warmBinary executes a freshly linked binary once. The first exec of a new
+// binary on macOS waits for a code assessment that can take seconds on a
+// loaded machine; paying it here keeps it out of tests' readiness bounds.
+func warmBinary(path string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_ = exec.CommandContext(ctx, path, "--help").Run()
 }
 
 var (

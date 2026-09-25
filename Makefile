@@ -15,9 +15,28 @@ AGENT_CLI_INTEGRATION_TIMEOUT ?= 480s
 AGENT_CLI_INTEGRATION_SHARDS ?= 5
 # Recorded test durations that balance the shards (path relative to agent-cli).
 AGENT_CLI_INTEGRATION_WEIGHTS := test/integration/testdata/shard-weights.txt
-# Local runs of every shard execute at most this many at once so timing-bound
-# tests stay reliable on a loaded workstation.
-AGENT_CLI_INTEGRATION_JOBS ?= 3
+# Local runs of every shard execute at most this many at once. All shards run
+# together: with the shared pre-warmed binaries and the accelerated audio
+# drain they pass on a workstation at load average ~25; lower it if a
+# timing-bound test is starved on a smaller machine.
+AGENT_CLI_INTEGRATION_JOBS ?= $(AGENT_CLI_INTEGRATION_SHARDS)
+# Every shard process of one run reuses a single build of the integration
+# package's process-boundary binaries (agent, audio-device-server, mock tool
+# agent) through this directory instead of linking them once per shard.
+AGENT_CLI_INTEGRATION_SHARED_DIR_ENV := AGENT_CLI_INTEGRATION_SHARED_DIR
+AGENT_CLI_INTEGRATION_SHARD_ARGS = --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) --shared-dir-env $(AGENT_CLI_INTEGRATION_SHARED_DIR_ENV)
+# Independent module test runs (make test, test-hermetic, coverage) execute at
+# most this many at once, longest first: agent-cli takes one slot and the
+# library modules rotate through the others.
+TEST_MODULE_JOBS ?= 3
+MODULE_SCHEDULE := agent-cli go-agent-runtime go-agent-loop go-llm-gateway go-audio go-device-gateway
+# scheduled_modules orders a module list longest-first for scripts/run-bounded.sh.
+scheduled_modules = $(filter $(1),$(MODULE_SCHEDULE)) $(filter-out $(MODULE_SCHEDULE),$(1))
+# Local coverage runs may reuse Go's test result cache (coverage profiles are
+# cacheable), so an unchanged package is not re-run on every prepush. CI and
+# COVERAGE_COUNT=1 force a fresh run of every package.
+COVERAGE_COUNT ?= $(if $(filter true 1,$(CI)),1,)
+COVERAGE_COUNT_FLAG = $(if $(COVERAGE_COUNT),-count=$(COVERAGE_COUNT),)
 # Which part of the agent-cli coverage corpus to run: all, unit (every package
 # except test/integration), or integration-K for shard K of the integration
 # package. CI runs each part as a separate matrix job.
@@ -70,14 +89,14 @@ define agent_cli_split_tests
 	packages="$$($(2) $(GO) list $(1) ./... | grep -v '/test/integration$$')"; \
 	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli packages" -- $(GO) test $$packages $(1) -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" & unit_pid=$$!; \
 	integration_status=0; \
-	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli integration shards" -- bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) $(foreach flag,$(1),--build-flag $(flag)) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT) || integration_status=$$?; \
+	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli integration shards" -- bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) $(foreach flag,$(1),--build-flag $(flag)) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT) || integration_status=$$?; \
 	wait "$$unit_pid"; \
 	exit "$$integration_status")
 endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -183,21 +202,22 @@ staticcheck: ## Run staticcheck across all workspace modules.
 
 test: ## Run deterministic Go tests across all workspace modules.
 	@set -euo pipefail; \
-	for module in $(MODULES); do \
-		effective_timeout="$(GO_TEST_TIMEOUT)"; \
-		timeout_scope="general package timeout"; \
-		if [ "$$module" = "agent-cli" ]; then \
-			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
-			timeout_scope="target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE)"; \
-		fi; \
-		echo "==> test $$module ($$timeout_scope: $$effective_timeout)"; \
-		if [ "$$module" = "agent-cli" ]; then \
-			$(call agent_cli_split_tests,,); \
-		else \
-			(cd "$$module" && $(GO) test ./... -timeout "$$effective_timeout"); \
-		fi; \
-	done; \
+	echo "==> test $(MODULES) (at most $(TEST_MODULE_JOBS) modules at once)"; \
+	bash scripts/run-bounded.sh --jobs $(TEST_MODULE_JOBS) -- $(foreach module,$(call scheduled_modules,$(MODULES)),'test $(module)::$(MAKE) --no-print-directory test-module TEST_MODULE=$(module)'); \
 	$(MAKE) test-tools
+
+# test-module runs one module's tests for test (TEST_HERMETIC unset) or
+# test-hermetic (TEST_HERMETIC=1: CGO disabled and the microphone stub).
+test-module:
+	@set -euo pipefail; \
+	module="$(TEST_MODULE)"; \
+	if [ "$$module" = "agent-cli" ]; then \
+		echo "==> test agent-cli (target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE): $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
+		$(if $(TEST_HERMETIC),$(call agent_cli_split_tests,-tags=nomicrophone,CGO_ENABLED=0),$(call agent_cli_split_tests,,)); \
+	else \
+		echo "==> test $$module (general package timeout: $(GO_TEST_TIMEOUT))"; \
+		(cd "$$module" && $(if $(TEST_HERMETIC),CGO_ENABLED=0 )$(GO) test ./... $(if $(TEST_HERMETIC),-tags=nomicrophone )-timeout "$(GO_TEST_TIMEOUT)"); \
+	fi
 
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
@@ -288,10 +308,10 @@ test-factory-scripts: ## Run deterministic factory script tests without writing 
 
 test-integration: ## Run deterministic integration tests for agent-cli and go-agent-loop without live credentials.
 	@set -euo pipefail; \
-	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
-	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
-	echo "==> test-integration go-agent-loop ($(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE), timeout $(GO_TEST_TIMEOUT))"; \
-	(cd go-agent-loop && $(GO) test $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE) -timeout "$(GO_TEST_TIMEOUT)")
+	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT)) and go-agent-loop ($(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE), timeout $(GO_TEST_TIMEOUT)) concurrently"; \
+	bash scripts/run-bounded.sh -- \
+		'test-integration agent-cli::cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)' \
+		'test-integration go-agent-loop::cd go-agent-loop && $(GO) test $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE) -timeout "$(GO_TEST_TIMEOUT)"'
 
 test-regressions: ## Run committed replay and fixture regression tests suitable for CI.
 	@set -euo pipefail; \
@@ -337,27 +357,28 @@ typecheck: build ## Backward-compatible alias for root compile validation.
 coverage: ## Write per-module coverage profiles under coverage/.
 	@set -euo pipefail; \
 	mkdir -p "$(COVERAGE_DIR)"; \
-	for module in $(COVERAGE_MODULES); do \
-		effective_timeout="$(GO_TEST_TIMEOUT)"; \
-		timeout_scope="general package timeout"; \
-		if [ "$$module" = "agent-cli" ]; then \
-			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
-			timeout_scope="target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE)"; \
-		fi; \
-		echo "==> coverage $$module ($$timeout_scope: $$effective_timeout)"; \
-		if [ "$$module" = "agent-cli" ]; then \
-			$(MAKE) --no-print-directory coverage-agent-cli-shard AGENT_CLI_COVERAGE_SHARD="$(AGENT_CLI_COVERAGE_SHARD)"; \
-		else \
-			(cd "$$module" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... -count=1 -tags=nomicrophone -timeout "$$effective_timeout" -coverpkg=./... -coverprofile="../$(COVERAGE_DIR)/$$module.out"); \
-		fi; \
-	done; \
-	if [ "$(COVERAGE_INCLUDE_EMBEDDING)" = "1" ]; then \
-		echo "==> embedded runtime coverage"; \
-		(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test -mod=readonly ./... -count=1 -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="../../$(COVERAGE_DIR)/embedding.out"); \
-	fi; \
+	echo "==> coverage $(COVERAGE_MODULES)$(if $(filter 1,$(COVERAGE_INCLUDE_EMBEDDING)), embedding) (at most $(TEST_MODULE_JOBS) at once, test count flag '$(COVERAGE_COUNT_FLAG)')"; \
+	bash scripts/run-bounded.sh --jobs $(TEST_MODULE_JOBS) -- \
+		$(foreach module,$(call scheduled_modules,$(COVERAGE_MODULES)),'coverage $(module)::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=$(module)') \
+		$(if $(filter 1,$(COVERAGE_INCLUDE_EMBEDDING)),'coverage embedding::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=embedding'); \
 	if [ "$(COVERAGE_RUN_GATE)" = "1" ]; then \
 		$(MAKE) coverage-gate; \
 	fi
+
+# coverage-module writes one module's profile for coverage.
+coverage-module:
+	@set -euo pipefail; \
+	case "$(COVERAGE_MODULE)" in \
+		agent-cli) \
+			echo "==> coverage agent-cli (target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE): $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
+			$(MAKE) --no-print-directory coverage-agent-cli-shard AGENT_CLI_COVERAGE_SHARD="$(AGENT_CLI_COVERAGE_SHARD)" ;; \
+		embedding) \
+			echo "==> embedded runtime coverage"; \
+			(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test -mod=readonly ./... $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="$(abspath $(COVERAGE_DIR))/embedding.out") ;; \
+		*) \
+			echo "==> coverage $(COVERAGE_MODULE) (general package timeout: $(GO_TEST_TIMEOUT))"; \
+			(cd "$(COVERAGE_MODULE)" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=./... -coverprofile="$(abspath $(COVERAGE_DIR))/$(COVERAGE_MODULE).out") ;; \
+	esac
 
 coverage-ci-agent-cli: ## Write the hermetic agent-cli profile(s) for AGENT_CLI_COVERAGE_SHARD (CI matrix shard).
 	@$(MAKE) coverage COVERAGE_MODULES=agent-cli COVERAGE_INCLUDE_EMBEDDING=0 COVERAGE_RUN_GATE=0 AGENT_CLI_COVERAGE_SHARD="$(AGENT_CLI_COVERAGE_SHARD)"
@@ -373,11 +394,11 @@ coverage-agent-cli-shard:
 	run_unit() { \
 		(cd agent-cli && packages="$$(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone ./... | grep -v '/test/integration$$')" && \
 			CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
-			$(GO) test $$packages -count=1 -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG) -coverprofile="$(abspath $(COVERAGE_DIR))/agent-cli.out"); \
+			$(GO) test $$packages $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG) -coverprofile="$(abspath $(COVERAGE_DIR))/agent-cli.out"); \
 	}; \
 	run_integration() { \
 		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \
-			bash ../scripts/go-test-shards.sh --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) $${1:+--shard "$$1"} \
+			bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) $${1:+--shard "$$1"} \
 			--build-flag -tags=nomicrophone --build-flag -coverpkg=$(AGENT_CLI_COVERPKG) --cover-prefix "$(abspath $(COVERAGE_DIR))/agent-cli-integration" -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
 	}; \
 	echo "==> coverage agent-cli shard $$shard"; \
@@ -531,17 +552,5 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 
 test-hermetic: ## Run all Go tests with CGO disabled and the microphone stub.
 	@set -euo pipefail; \
-	for module in $(MODULES); do \
-		effective_timeout="$(GO_TEST_TIMEOUT)"; \
-		timeout_scope="general package timeout"; \
-		if [ "$$module" = "agent-cli" ]; then \
-			effective_timeout="$(AGENT_CLI_INTEGRATION_TIMEOUT)"; \
-			timeout_scope="target-wide timeout for $(AGENT_CLI_INTEGRATION_PACKAGE)"; \
-		fi; \
-		echo "==> test-hermetic $$module (CGO_ENABLED=0, tags=nomicrophone, $$timeout_scope: $$effective_timeout)"; \
-		if [ "$$module" = "agent-cli" ]; then \
-			$(call agent_cli_split_tests,-tags=nomicrophone,CGO_ENABLED=0); \
-		else \
-			(cd "$$module" && CGO_ENABLED=0 $(GO) test ./... -tags=nomicrophone -timeout "$$effective_timeout"); \
-		fi; \
-	done
+	echo "==> test-hermetic $(MODULES) (CGO_ENABLED=0, tags=nomicrophone, at most $(TEST_MODULE_JOBS) modules at once)"; \
+	bash scripts/run-bounded.sh --jobs $(TEST_MODULE_JOBS) -- $(foreach module,$(call scheduled_modules,$(MODULES)),'test-hermetic $(module)::$(MAKE) --no-print-directory test-module TEST_MODULE=$(module) TEST_HERMETIC=1')
