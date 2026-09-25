@@ -64,7 +64,12 @@ AGENT_CLI_INTEGRATION_JOBS ?= $(AGENT_CLI_INTEGRATION_SHARDS)
 # package's process-boundary binaries (agent, audio-device-server, mock tool
 # agent) through this directory instead of linking them once per shard.
 AGENT_CLI_INTEGRATION_SHARED_DIR_ENV := AGENT_CLI_INTEGRATION_SHARED_DIR
-AGENT_CLI_INTEGRATION_SHARD_ARGS = --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) --shared-dir-env $(AGENT_CLI_INTEGRATION_SHARED_DIR_ENV)
+# The same binaries, built into that directory while the test binary
+# compiles (the package's TestMain builds any that are missing, with the same
+# `go build -o NAME SOURCE` from the package directory, so a name that drifts
+# from TestMain's costs a rebuild, never correctness).
+AGENT_CLI_INTEGRATION_PREBUILDS := agent=../../cmd/agent audio-device-server=../../cmd/audio-device-server mock-tool-agent=./testcmd/mock-tool-agent
+AGENT_CLI_INTEGRATION_SHARD_ARGS = --go "$(GO)" --dir . --package $(AGENT_CLI_INTEGRATION_PACKAGE) --shards $(AGENT_CLI_INTEGRATION_SHARDS) --weights $(AGENT_CLI_INTEGRATION_WEIGHTS) --jobs $(AGENT_CLI_INTEGRATION_JOBS) --shared-dir-env $(AGENT_CLI_INTEGRATION_SHARED_DIR_ENV) $(foreach prebuild,$(AGENT_CLI_INTEGRATION_PREBUILDS),--prebuild $(prebuild))
 # Independent module test runs (make test, test-hermetic, coverage) execute at
 # most this many at once, longest first: agent-cli takes one slot and the
 # library modules rotate through the others.

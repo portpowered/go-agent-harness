@@ -12,7 +12,8 @@
 # Usage:
 #   scripts/go-test-shards.sh --dir MODULE_DIR --package PKG --shards N \
 #     [--shard K] [--jobs J] [--weights FILE] [--cover-prefix PATH] [--go GO] \
-#     [--shared-dir-env NAME] [--build-flag FLAG]... [-- TEST_BINARY_FLAGS...]
+#     [--shared-dir-env NAME [--prebuild BINARY=SOURCE]...] \
+#     [--build-flag FLAG]... [-- TEST_BINARY_FLAGS...]
 #
 # Without --shard every shard runs, at most J at a time (default: all); with
 # --shard only shard K runs (used by CI matrix jobs). With --cover-prefix,
@@ -20,12 +21,16 @@
 # --build-flag). With --shared-dir-env, every run of the test binary sees
 # NAME set to one scratch directory, and the binary first runs once with no
 # tests selected so its TestMain can prepare shared state (e.g. build helper
-# binaries) there before the shards start. A passing shard prints its tests
-# slower than SLOW_TEST_SECONDS (default 5) and its summed test time.
+# binaries) there before the shards start. Each --prebuild runs
+# `go build -o SHARED_DIR/BINARY SOURCE` from the package directory while the
+# test binary compiles, so helper binaries a TestMain would otherwise build
+# after the compile (and skips when present) overlap it instead. A passing
+# shard prints its tests slower than SLOW_TEST_SECONDS (default 5) and its
+# summed test time.
 set -euo pipefail
 
 usage() {
-	sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' >&2
+	sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//' >&2
 	exit 2
 }
 
@@ -40,6 +45,7 @@ shared_dir_env=""
 go_binary="${GO:-go}"
 build_flags=()
 run_flags=()
+prebuilds=()
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -53,6 +59,7 @@ while [ "$#" -gt 0 ]; do
 	--shared-dir-env) shared_dir_env="$2"; shift 2 ;;
 	--go) go_binary="$2"; shift 2 ;;
 	--build-flag) build_flags+=("$2"); shift 2 ;;
+	--prebuild) prebuilds+=("$2"); shift 2 ;;
 	--) shift; run_flags=("$@"); break ;;
 	*) echo "go-test-shards: unknown argument $1" >&2; usage ;;
 	esac
@@ -93,16 +100,70 @@ fi
 if [ -n "$cover_prefix" ]; then
 	cover_prefix="$(absolute "$cover_prefix")"
 fi
+if [ "${#prebuilds[@]}" -gt 0 ] && [ -z "$shared_dir_env" ]; then
+	echo "go-test-shards: --prebuild requires --shared-dir-env" >&2
+	exit 2
+fi
+for prebuild in ${prebuilds[@]+"${prebuilds[@]}"}; do
+	case "$prebuild" in
+	*/*=* | =* | *=) echo "go-test-shards: --prebuild must be BINARY=SOURCE with a plain binary name, got '$prebuild'" >&2; exit 2 ;;
+	*=*) ;;
+	*) echo "go-test-shards: --prebuild must be BINARY=SOURCE, got '$prebuild'" >&2; exit 2 ;;
+	esac
+done
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 test_binary="$work_dir/package.test"
 
 package_dir="$(cd "$module_dir" && "$go_binary" list -f '{{.Dir}}' "$package")"
+if [ -n "$shared_dir_env" ]; then
+	mkdir "$work_dir/shared"
+	export "$shared_dir_env=$work_dir/shared"
+fi
+
+# Build each helper to a temporary name and rename it, so a reader of the
+# shared directory never sees a partial binary, then execute it once: the
+# first exec of a fresh binary on macOS waits for a code assessment that
+# would otherwise land inside a test's readiness bound.
+prebuild() {
+	local name="${1%%=*}" source="${1#*=}"
+	local output="$work_dir/shared/$name"
+	(cd "$package_dir" && "$go_binary" build -o "$output.partial" "$source") &&
+		mv "$output.partial" "$output" &&
+		{ "$output" --help >/dev/null 2>&1 || true; }
+}
+prebuild_pids=()
+if [ "${#prebuilds[@]}" -gt 0 ]; then
+	echo "==> go-test-shards building ${#prebuilds[@]} helper binaries alongside the compile"
+	for index in "${!prebuilds[@]}"; do
+		prebuild "${prebuilds[$index]}" >"$work_dir/prebuild-$index.log" 2>&1 &
+		prebuild_pids+=("$!")
+	done
+fi
+
 echo "==> go-test-shards compiling $module_dir/$package once for $shards shard(s)"
 phase_started=$SECONDS
-(cd "$module_dir" && "$go_binary" test -c -o "$test_binary" ${build_flags[@]+"${build_flags[@]}"} "$package")
+compile_status=0
+(cd "$module_dir" && "$go_binary" test -c -o "$test_binary" ${build_flags[@]+"${build_flags[@]}"} "$package") || compile_status=$?
 echo "==> go-test-shards compiled in $((SECONDS - phase_started))s"
+prebuild_status=0
+for index in "${!prebuild_pids[@]}"; do
+	if ! wait "${prebuild_pids[$index]}"; then
+		echo "go-test-shards: helper build ${prebuilds[$index]} failed:" >&2
+		cat "$work_dir/prebuild-$index.log" >&2
+		prebuild_status=1
+	fi
+done
+if [ "${#prebuild_pids[@]}" -gt 0 ]; then
+	echo "==> go-test-shards helper builds finished $((SECONDS - phase_started))s after the compile started"
+fi
+if [ "$compile_status" -ne 0 ]; then
+	exit "$compile_status"
+fi
+if [ "$prebuild_status" -ne 0 ]; then
+	exit 1
+fi
 
 # -test.list runs TestMain, so list from the package directory like a run.
 tests_file="$work_dir/tests"
@@ -113,8 +174,6 @@ if [ ! -s "$tests_file" ]; then
 fi
 
 if [ -n "$shared_dir_env" ]; then
-	mkdir "$work_dir/shared"
-	export "$shared_dir_env=$work_dir/shared"
 	echo "==> go-test-shards preparing shared state in \$$shared_dir_env"
 	phase_started=$SECONDS
 	(cd "$package_dir" && GOCOVERDIR="$work_dir" "$test_binary" -test.run '^$' ${run_flags[@]+"${run_flags[@]}"}) >"$work_dir/prepare.log" 2>&1 || {
