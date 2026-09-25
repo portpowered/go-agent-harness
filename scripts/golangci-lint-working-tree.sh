@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
 	cat >&2 <<'USAGE'
-usage: scripts/golangci-lint-working-tree.sh --analyzer PATH [--repo DIR] [--base REF] [--module DIR] [--config FILE] [--all-code] [-- ARG ...]
+usage: scripts/golangci-lint-working-tree.sh --analyzer PATH [--repo DIR] [--base REF] [--module DIR] [--config FILE] [--all-code] [--run-if-changed PATH]... [-- ARG ...]
 
 Run the pinned golangci-lint binary for one module.
 
@@ -13,7 +13,11 @@ includes the current module's Go working tree and passes --new-from-rev, so
 modified, deleted, and non-ignored untracked Go files are compared with the
 base without changing the user's index or writing unrelated working-tree
 blobs to the repository. A module with no Go file in that diff is skipped
-without running the analyzer, because no issue could pass the filter.
+without running the analyzer, because no issue could pass the filter. The
+module still runs when its go.mod or go.sum, the --config file, or any
+repository-relative --run-if-changed path (for example the lint tooling)
+differs from the base, so a broken configuration or tooling change is always
+loaded and reported.
 
 --all-code lints every file in the module with no new-from-rev filter. This is
 the hard pass that enforces .golangci.yml on legacy and new code alike.
@@ -28,6 +32,7 @@ base_ref="${LINT_BASE:-origin/main}"
 analyzer=""
 config_file=""
 all_code=0
+run_if_changed=()
 run_args=()
 
 while (($# > 0)); do
@@ -60,6 +65,11 @@ while (($# > 0)); do
 		--all-code)
 			all_code=1
 			shift
+			;;
+		--run-if-changed)
+			(($# >= 2)) || { usage; exit 2; }
+			run_if_changed+=("$2")
+			shift 2
 			;;
 		--)
 			shift
@@ -166,11 +176,18 @@ if ((all_code == 0)); then
 	# --new-from-rev reports only issues on lines that `git diff <base>` shows
 	# as added or changed, and this temporary index is what that diff sees.
 	# When the module has no such Go file, no issue can survive the filter, so
-	# skip loading and analyzing the module. An unresolvable base still runs so
-	# golangci-lint reports the bad revision itself.
+	# skip loading and analyzing the module, unless an input that decides
+	# whether the run itself is valid changed: the module's go.mod/go.sum, the
+	# configuration, or a --run-if-changed path. An unresolvable base still
+	# runs so golangci-lint reports the bad revision itself.
 	if git -C "$repo_root" rev-parse --verify --quiet "${base_ref}^{commit}" >/dev/null; then
 		changed_go="$(git -C "$repo_root" diff --name-only --no-renames "$base_ref" -- "$module_dir" | grep -E '\.go$' || true)"
-		if [[ -z "$changed_go" ]]; then
+		run_inputs=("$module_dir/go.mod" "$module_dir/go.sum" ${run_if_changed[@]+"${run_if_changed[@]}"})
+		if [[ "$config_file" == "$repo_root"/* ]]; then
+			run_inputs+=("${config_file#"$repo_root"/}")
+		fi
+		changed_inputs="$(git -C "$repo_root" diff --name-only --no-renames "$base_ref" -- "${run_inputs[@]}")"
+		if [[ -z "$changed_go" && -z "$changed_inputs" ]]; then
 			echo "no Go changes in $module_dir since $base_ref; new-code lint has nothing to check"
 			exit 0
 		fi

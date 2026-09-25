@@ -91,9 +91,17 @@ or `support` (the gateways, tools and scripts).
 
 The new-code pass skips a module that has no Go file in `git diff
 $(LINT_BASE)`, untracked files included. `--new-from-rev` reports only issues
-on lines in that diff, so such a module cannot report anything. On a `main`
-push, where `origin/main` is the checked-out commit, the pass has nothing to
-check.
+on lines in that diff, so such a module cannot report anything. The module
+still runs when its `go.mod` or `go.sum`, either configuration, the `Makefile`
+or the lint scripts differ from the base, so a broken configuration or tooling
+change is always loaded. On a `main` push, where `origin/main` is the
+checked-out commit, the pass has nothing to check.
+
+Every lint entry point (`make lint`, `make lint-cross`, `make
+lint-darwin-cgo`) first checks both configurations, including on `main`
+pushes. `golangci-lint config verify` validates them against the pinned
+version's JSON schema, which it downloads from GitHub. `golangci-lint linters`
+loads them and rejects unknown linters.
 
 ## go vet and staticcheck
 
@@ -146,7 +154,7 @@ different version, so use the Makefile resolver.
 ## CI lanes
 
 Every static CI job must finish within three minutes even with a cold build
-cache, so the lanes are sized for a cold run:
+cache (target: 2.5 minutes), so the lanes are sized for a cold run:
 
 | Lane | Command |
 | --- | --- |
@@ -154,14 +162,18 @@ cache, so the lanes are sized for a cold run:
 | `CI (static lint linux runtime)` | `make lint LINT_SHARD=runtime` |
 | `CI (static lint linux support)` | `make lint LINT_SHARD=support` |
 | `CI (static lint windows agent-cli)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=agent-cli` |
-| `CI (static lint windows libraries)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=libraries` |
+| `CI (static lint windows runtime)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=runtime` |
+| `CI (static lint windows support)` | `make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=support` |
 | `CI (static lint darwin agent-cli)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli` |
-| `CI (static lint darwin libraries)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=libraries` |
+| `CI (static lint darwin runtime)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=runtime` |
+| `CI (static lint darwin support)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support` |
 | `CI (static lint darwin cgo)` | `make lint-darwin-cgo` on macOS |
 
-`CI (static gates)` runs `make fmt`, `make wire-check`, `make
-check-ci-test-partition` and `make architecture-size-check`. The required
-`CI (static)` check aggregates all of them.
+`CI (static gates)` runs `make fmt`, `make wire-check` and `make
+check-ci-test-partition`, and `CI (static architecture)` runs `make
+architecture-size-check`. The required `CI (static)` check aggregates all of
+them. `make lint` and `make lint-cross` start the modules with the longest
+cold lint first (`LINT_SCHEDULE`).
 
 Each lane restores its own Go build, module and golangci-lint caches through
 `.github/actions/go-cache` (the golangci-lint cache is passed as

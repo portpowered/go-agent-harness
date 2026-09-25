@@ -352,6 +352,30 @@ print(\"0 issues.\")
             all_code = run("alpha", "--all-code")
             self.assertEqual(all_code.returncode, 0, all_code.stdout + all_code.stderr)
             self.assertEqual(recorded.read_text(encoding="utf-8").splitlines(), ["beta", "alpha"])
+
+            # A change to the configuration, a --run-if-changed input or the
+            # module's go.mod forces the new-code pass even without Go changes.
+            (root / "new.yml").write_text('version: "2"\n', encoding="utf-8")
+            (root / "tool.sh").write_text("true\n", encoding="utf-8")
+            self._git(root, "add", "new.yml", "tool.sh")
+            self._git(root, "commit", "-qm", "lint inputs")
+            recorded.unlink()
+            unchanged = run("alpha", "--config", "new.yml", "--run-if-changed", "tool.sh")
+            self.assertEqual(unchanged.returncode, 0, unchanged.stdout + unchanged.stderr)
+            self.assertIn("no Go changes in alpha", unchanged.stdout)
+            self.assertFalse(recorded.exists())
+            for path, content in (
+                ("new.yml", 'version: "2"\nlinters:\n  default: none\n'),
+                ("tool.sh", "false\n"),
+                ("alpha/go.mod", "module example.com/alpha\n\ngo 1.25\n"),
+            ):
+                original = (root / path).read_text(encoding="utf-8")
+                (root / path).write_text(content, encoding="utf-8")
+                forced = run("alpha", "--config", "new.yml", "--run-if-changed", "tool.sh")
+                self.assertEqual(forced.returncode, 0, forced.stdout + forced.stderr)
+                self.assertNotIn("no Go changes", forced.stdout, path)
+                (root / path).write_text(original, encoding="utf-8")
+            self.assertEqual(recorded.read_text(encoding="utf-8").splitlines(), ["alpha"] * 3)
             self.assertEqual(self._git(root, "diff", "--cached", "--quiet").returncode, 0)
             self.assertEqual(list(index_dir.iterdir()), [])
 

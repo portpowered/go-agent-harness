@@ -23,6 +23,10 @@ LINT_SHARD_MODULES_libraries := $(LINT_LIBRARY_MODULES)
 LINT_SHARD_MODULES_runtime := $(LINT_RUNTIME_MODULES)
 LINT_SHARD_MODULES_support := $(LINT_SUPPORT_MODULES)
 LINT_SELECTED_MODULES = $(or $(LINT_SHARD_MODULES_$(LINT_SHARD)),$(error unknown LINT_SHARD '$(LINT_SHARD)'; use all, agent-cli, libraries, runtime or support))
+# Parallel lint runs start the modules with the longest cold lint first so the
+# slowest module does not start last.
+LINT_SCHEDULE := agent-cli go-llm-gateway go-agent-runtime go-agent-loop go-device-gateway go-audio tests/embedding tools/architecturegate
+LINT_SCHEDULED_MODULES = $(filter $(LINT_SELECTED_MODULES),$(LINT_SCHEDULE)) $(filter-out $(LINT_SCHEDULE),$(LINT_SELECTED_MODULES))
 # Operating systems cross-linted by `make lint-cross` with cgo disabled.
 LINT_CROSS_GOOS ?= windows darwin
 # Extra build tags appended to the configured ones for one cross GOOS.
@@ -213,6 +217,20 @@ golangci_resolve = if [ "$${SKIP_LINT:-0}" = "1" ]; then \
 	fi
 # golangci_run runs the working-tree lint script for $$module.
 golangci_run = GOWORK=off scripts/golangci-lint-working-tree.sh --analyzer "$$analyzer" --module "$$module" --repo "$(CURDIR)"
+# Inputs whose change forces the new-code pass to lint every module even when
+# a module has no Go change: the configurations and the lint tooling.
+LINT_NEW_RUN_INPUTS := $(LINT_CONFIG) $(LINT_NEW_CONFIG) Makefile scripts/golangci-lint-working-tree.sh scripts/run-bounded.sh
+# golangci_new_run runs the new-code pass for $$module.
+golangci_new_run = $(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" $(foreach input,$(LINT_NEW_RUN_INPUTS),--run-if-changed $(input))
+# golangci_config_check validates both configurations: `config verify` checks
+# them against the pinned version's JSON schema (fetched from GitHub) and
+# `linters` loads them, which rejects unknown linters. It runs on every lint
+# entry point, so a configuration error fails even when no module is linted.
+golangci_config_check = for config in "$(LINT_CONFIG)" "$(LINT_NEW_CONFIG)"; do \
+		echo "==> lint config $$config"; \
+		"$$analyzer" config verify --config "$$config"; \
+		"$$analyzer" linters --config "$$config" >/dev/null; \
+	done
 # golangci_tagged_dirs prints ./dir for each package directory in the current
 # module holding a Go file whose build constraint matches the ERE $(1).
 golangci_tagged_dirs = { git grep -l -E '^//go:build .*$(1)' -- '*.go' ':!:**/testdata/**' || true; } | sed -E 's\#(^|/)[^/]*$$\#\#; s\#^\#./\#' | sort -u
@@ -220,8 +238,9 @@ golangci_tagged_dirs = { git grep -l -E '^//go:build .*$(1)' -- '*.go' ':!:**/te
 lint: ## Run golangci-lint (default and opt-in test build tags, then wireinject) on LINT_SHARD modules, LINT_JOBS at once.
 	@set -euo pipefail; \
 	$(golangci_resolve); \
+	$(golangci_config_check); \
 	export LINT_ANALYZER="$$analyzer"; \
-	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach module,$(LINT_SELECTED_MODULES),'lint $(module)::$(MAKE) --no-print-directory lint-module LINT_MODULE=$(module)'); \
+	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach module,$(LINT_SCHEDULED_MODULES),'lint $(module)::$(MAKE) --no-print-directory lint-module LINT_MODULE=$(module)'); \
 	$(MAKE) --no-print-directory lint-wireinject
 
 # lint-module runs both lint passes for one LINT_MODULE (used by `make lint`).
@@ -232,7 +251,7 @@ lint-module:
 	echo "==> lint $$module (hard limits, all code: $(LINT_CONFIG))"; \
 	$(golangci_run) --all-code --config "$(LINT_CONFIG)" -- $(LINT_RUN_FLAGS) ./...; \
 	echo "==> lint $$module (new code since $(LINT_BASE): $(LINT_NEW_CONFIG))"; \
-	$(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" -- $(LINT_RUN_FLAGS) ./...
+	$(golangci_new_run) -- $(LINT_RUN_FLAGS) ./...
 
 # Wire injector files (//go:build wireinject) replace their package's
 # !wireinject files, so they load in a separate pass restricted to the
@@ -246,14 +265,15 @@ lint-wireinject: ## Run golangci-lint on Wire injector (wireinject) packages of 
 		echo "==> lint $$module wireinject packages (hard limits, all code: $(LINT_CONFIG))"; \
 		$(golangci_run) --all-code --config "$(LINT_CONFIG)" -- --build-tags wireinject $$packages; \
 		echo "==> lint $$module wireinject packages (new code since $(LINT_BASE): $(LINT_NEW_CONFIG))"; \
-		$(golangci_run) --config "$(LINT_NEW_CONFIG)" --base "$(LINT_BASE)" -- --build-tags wireinject $$packages; \
+		$(golangci_new_run) -- --build-tags wireinject $$packages; \
 	done
 
 lint-cross: ## Run the hard golangci-lint pass for each LINT_CROSS_GOOS (cgo disabled) on LINT_SHARD modules, LINT_JOBS at once.
 	@set -euo pipefail; \
 	$(golangci_resolve); \
+	$(golangci_config_check); \
 	export LINT_ANALYZER="$$analyzer"; \
-	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach goos,$(LINT_CROSS_GOOS),$(foreach module,$(LINT_SELECTED_MODULES),'lint $(module) GOOS=$(goos)::$(MAKE) --no-print-directory lint-cross-module LINT_MODULE=$(module) LINT_CROSS_TARGET=$(goos)'))
+	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach goos,$(LINT_CROSS_GOOS),$(foreach module,$(LINT_SCHEDULED_MODULES),'lint $(module) GOOS=$(goos)::$(MAKE) --no-print-directory lint-cross-module LINT_MODULE=$(module) LINT_CROSS_TARGET=$(goos)'))
 
 # lint-cross-module runs the hard pass for one LINT_MODULE and LINT_CROSS_TARGET
 # GOOS with cgo disabled (used by `make lint-cross`).
@@ -268,6 +288,7 @@ lint-darwin-cgo: ## On macOS, run the hard golangci-lint pass with cgo on packag
 	@set -euo pipefail; \
 	if [ "$$(uname -s)" != "Darwin" ]; then echo "lint-darwin-cgo must run on macOS (cgo needs the Darwin SDK)." >&2; exit 1; fi; \
 	$(golangci_resolve); \
+	$(golangci_config_check); \
 	for module in $(LINT_MODULES); do \
 		packages="$$(cd "$$module" && $(call golangci_tagged_dirs,cgo))"; \
 		if [ -z "$$packages" ]; then continue; fi; \
