@@ -46,8 +46,11 @@ func TestStreamingResamplerLongRunSampleCountAndReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 2,000 odd-sized chunks (~40s of 24kHz audio) cross the 3:2 rational
+	// cycle hundreds of times, which is enough to expose position drift.
+	const chunks = 2000
 	var count int
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < chunks; i++ {
 		out, err := r.Process(make([]int16, 479), false)
 		if err != nil {
 			t.Fatal(err)
@@ -59,7 +62,7 @@ func TestStreamingResamplerLongRunSampleCountAndReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	count += len(out)
-	want := (10000*479*Rate16kHz + Rate24kHz - 1) / Rate24kHz
+	want := (chunks*479*Rate16kHz + Rate24kHz - 1) / Rate24kHz
 	if count != want {
 		t.Fatalf("long-run count=%d want=%d", count, want)
 	}

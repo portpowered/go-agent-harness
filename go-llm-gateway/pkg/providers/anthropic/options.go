@@ -25,3 +25,16 @@ func WithAPIKey(key string) Option {
 		p.apiKey = key
 	}
 }
+
+// WithMaxRetries sets how many times a failed request is retried after the
+// first attempt. The SDK waits between attempts with exponential backoff (or
+// the server's Retry-After), so tests that exercise error responses set 0 to
+// avoid sleeping. Negative values are ignored. The default is
+// DefaultMaxRetries.
+func WithMaxRetries(retries int) Option {
+	return func(p *AnthropicProvider) {
+		if retries >= 0 {
+			p.maxRetries = retries
+		}
+	}
+}

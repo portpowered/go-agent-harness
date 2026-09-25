@@ -81,6 +81,9 @@ var _ cdp.Executor = (*castExecutor)(nil)
 func TestTargetSessionWaitsPastInitialEmptyCastSnapshot(t *testing.T) {
 	executor := &castExecutor{notify: make(chan string, 1)}
 	session := newInvocationTestSession(t, executor)
+	// The settle window must outlast the 20ms negative checks below; it is
+	// still a fifth of the production default.
+	session.castTiming.settle = 100 * time.Millisecond
 	type listResult struct {
 		devices []webmcp.CastDevice
 		err     error

@@ -151,6 +151,10 @@ func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
 
 func TestPionInboundLookReturnsUnavailableAfterObservationTimeout(t *testing.T) {
 	inbound := newPionInbound(nil, "timeout")
+	if inbound.observationTimeout != DefaultVisualObservationTimeout {
+		t.Fatalf("observation timeout = %v, want DefaultVisualObservationTimeout", inbound.observationTimeout)
+	}
+	inbound.observationTimeout = 10 * time.Millisecond
 	inbound.setVideoNegotiated(true)
 	defer requireClosed(t, "inbound", inbound)
 	started := time.Now()

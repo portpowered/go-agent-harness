@@ -37,8 +37,11 @@ type Mixer struct {
 	streamID  string
 	frameSize int
 	inputCap  int
-	sequence  uint64
-	start     uint64
+	// sourceLimit is MaxPCM16MixSources in production; in-package tests
+	// lower it to exercise the rejection path without a million inputs.
+	sourceLimit int
+	sequence    uint64
+	start       uint64
 
 	mu     sync.Mutex
 	inputs map[string]*input
@@ -66,7 +69,7 @@ func New(ctx context.Context, scheduler clock.TimerSource, config Config) (*Mixe
 	m := &Mixer{
 		ctx: runCtx, cancel: cancel, scheduler: scheduler, format: config.Format,
 		streamID:  config.StreamID,
-		frameSize: samples, inputCap: config.InputQueueFrames,
+		frameSize: samples, inputCap: config.InputQueueFrames, sourceLimit: MaxPCM16MixSources,
 		inputs: make(map[string]*input), output: make(chan MixedFrame, config.OutputQueueFrames), done: make(chan struct{}),
 	}
 	go m.run()
@@ -128,6 +131,12 @@ func (m *Mixer) snapshotMixInputs() ([]string, error) {
 	if m.closed {
 		m.mu.Unlock()
 		return nil, ErrClosed
+	}
+	// Reject an over-limit source set before copying and sorting its IDs, and
+	// before any queued input frame is consumed.
+	if count := len(m.inputs); count > m.sourceLimit {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("%w: got %d sources, want at most %d", ErrPCM16MixSourceLimit, count, m.sourceLimit)
 	}
 	ids := make([]string, 0, len(m.inputs))
 	for id := range m.inputs {

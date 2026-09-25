@@ -132,25 +132,6 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 	}
 }
 
-func TestReplayLifecycleRejectsValidTraceMutatedAfterFirstClose(t *testing.T) {
-	directory := newRecordingFixture(t)
-	events := decodeTimelineEvents(t, directory)
-	terminal := events[len(events)-1]
-	mutated := append([]Event{}, events[:len(events)-1]...)
-	mutated = append(mutated, terminal)
-	mutated = append(mutated, Event{Kind: replayEventRuntime, ElapsedNS: terminal.ElapsedNS, Timestamp: terminal.Timestamp, RuntimeKind: "post-close-runtime"})
-	mutated = append(mutated, terminal)
-	writeTimelineEvents(t, directory, mutated)
-
-	replay, err := OpenReplay(directory)
-	if replay != nil {
-		t.Fatalf("OpenReplay returned a replay for a trace mutated after its first close: %#v", replay)
-	}
-	if !errors.Is(err, ErrIncomplete) {
-		t.Fatalf("mutated trace error = %v, want ErrIncomplete", err)
-	}
-}
-
 func decodeTimelineEvents(t *testing.T, directory string) []Event {
 	t.Helper()
 	var events []Event

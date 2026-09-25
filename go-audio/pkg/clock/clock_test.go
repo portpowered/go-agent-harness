@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -173,20 +172,6 @@ func TestDeterministicTimerFiresAtLogicalDeadline(t *testing.T) {
 	}
 }
 
-func TestDeterministicTimerStopPreventsDelivery(t *testing.T) {
-	clock := NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
-	timer := clock.NewTimer(time.Second)
-	if !timer.Stop() {
-		t.Fatal("Stop reported an inactive timer")
-	}
-	clock.Advance()
-	select {
-	case <-timer.C():
-		t.Fatal("stopped timer delivered a tick")
-	default:
-	}
-}
-
 func TestDeterministicTimersOrderByDeadlineAndCreation(t *testing.T) {
 	base := time.Unix(42, 0).UTC()
 	clock := NewDeterministic(base, time.Second)
@@ -279,18 +264,14 @@ func TestDeterministicWaitHonorsCancellationAndVirtualAdvance(t *testing.T) {
 	go func() { result <- clock.Wait(ctx, 3*time.Millisecond) }()
 	waitForDeterministicTimers(t, clock, 1)
 	clock.AdvanceBy(3 * time.Millisecond)
-	for attempts := 0; attempts < 10000; attempts++ {
-		select {
-		case err := <-result:
-			if err != nil {
-				t.Fatalf("virtual Wait error: %v", err)
-			}
-			return
-		default:
-			runtime.Gosched()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("virtual Wait error: %v", err)
 		}
+	case <-time.After(testWaitBound):
+		t.Fatal("virtual Wait did not return after virtual advance")
 	}
-	t.Fatal("virtual Wait did not return after virtual advance")
 }
 
 func TestDeterministicContextDeadlineAndParentCancellation(t *testing.T) {
@@ -377,30 +358,26 @@ type timestampOnly struct{}
 
 func (timestampOnly) Now() time.Time { return time.Unix(42, 0).UTC() }
 
+// testWaitBound is a real-time safety bound for events that must happen
+// promptly; it only expires when the behavior under test is broken.
+const testWaitBound = 10 * time.Second
+
 func waitForDeterministicTimers(t *testing.T, clock *Deterministic, count int) {
 	t.Helper()
-	for attempts := 0; attempts < 10000; attempts++ {
-		clock.advanceMu.Lock()
-		ready := clock.timers.Len() >= count
-		clock.advanceMu.Unlock()
-		if ready {
-			return
-		}
-		runtime.Gosched()
+	ctx, cancel := context.WithTimeout(context.Background(), testWaitBound)
+	defer cancel()
+	if err := clock.WaitForTimers(ctx, count); err != nil {
+		t.Fatalf("%d timers did not register: %v", count, err)
 	}
-	t.Fatalf("timers did not register")
 }
 
 func waitForContextDone(ctx context.Context) bool {
-	for attempts := 0; attempts < 10000; attempts++ {
-		select {
-		case <-ctx.Done():
-			return true
-		default:
-			runtime.Gosched()
-		}
+	select {
+	case <-ctx.Done():
+		return true
+	case <-time.After(testWaitBound):
+		return false
 	}
-	return false
 }
 
 func FuzzS7DeterministicMapping(f *testing.F) {

@@ -520,27 +520,6 @@ func TestSession_MalformedServerEvent(t *testing.T) {
 	waitForGrokSignal(t, session.Done(), "session termination after malformed server frame")
 }
 
-// TestSession_SessionCreatedEmitsSessionOpen is the acceptance criterion test:
-// GrokSessionProvider.ConnectSession returns a Session whose typed buffer receives
-// a SESSION.OPEN event when the server sends session.created. The test deadline
-// is a diagnostic safety bound rather than an expected event latency.
-func TestSession_SessionCreatedEmitsSessionOpen(t *testing.T) {
-	conn := newMockConn()
-	conn.addServerEvent("session.created", map[string]any{
-		"session_id": "test-session-abc",
-	})
-
-	session := newGrokSession(conn, logging.DummyLogger())
-	ctx := newGrokTestContext(t)
-	session.start(ctx)
-	defer closeForTest(t, session)
-
-	got := readFromSession(t, ctx, session, "SESSION.OPEN")
-	if got.Type != messages.StreamTypeSessionOpen {
-		t.Errorf("type: got %q, want %q", got.Type, messages.StreamTypeSessionOpen)
-	}
-}
-
 // TestSession_SessionCreatedEmitsSessionCreated verifies that session.created also
 // emits SESSION.CREATED with the session config (model, session_id).
 func TestSession_SessionCreatedEmitsSessionCreated(t *testing.T) {

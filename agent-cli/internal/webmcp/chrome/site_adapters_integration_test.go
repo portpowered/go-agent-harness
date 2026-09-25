@@ -16,7 +16,6 @@ import (
 )
 
 const siteAdaptersIntegrationEnv = "WEBMCP_SITE_ADAPTER_INTEGRATION"
-const capitalOneShoppingAdapterIntegrationEnv = "WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_INTEGRATION"
 const xAdapterIntegrationEnv = "WEBMCP_X_ADAPTER_INTEGRATION"
 
 func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
@@ -29,20 +28,6 @@ func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	t.Run("google_maps", testGoogleMapsAdapterJourney)
 	t.Run("capital_one_shopping", testCapitalOneShoppingAdapterJourney)
 	t.Run("x", testXAdapterJourney)
-}
-
-func TestCapitalOneShoppingAdapterStockChromeJourney(t *testing.T) {
-	if os.Getenv(capitalOneShoppingAdapterIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the stock-Chrome Capital One Shopping adapter journey", capitalOneShoppingAdapterIntegrationEnv)
-	}
-	testCapitalOneShoppingAdapterJourney(t)
-}
-
-func TestXAdapterStockChromeJourney(t *testing.T) {
-	if os.Getenv(xAdapterIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the stock-Chrome X adapter journey", xAdapterIntegrationEnv)
-	}
-	testXAdapterJourney(t)
 }
 
 type adapterFixture struct {

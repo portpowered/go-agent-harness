@@ -20,6 +20,9 @@ func TestApplyInferenceRequestOptions_Defaults(t *testing.T) {
 	if req.Stop != nil {
 		t.Error("Stop should be nil when not set")
 	}
+	if req.FrequencyPenalty != nil {
+		t.Errorf("FrequencyPenalty should be nil when not set, got %v", req.FrequencyPenalty)
+	}
 }
 
 func TestApplyInferenceRequestOptions_MaxTokens(t *testing.T) {
@@ -79,15 +82,6 @@ func TestApplyInferenceRequestOptions_FrequencyPenalty(t *testing.T) {
 
 	if req.FrequencyPenalty == nil || *req.FrequencyPenalty != 1.5 {
 		t.Errorf("FrequencyPenalty: got %v, want 1.5", req.FrequencyPenalty)
-	}
-}
-
-func TestApplyInferenceRequestOptions_FrequencyPenaltyNil(t *testing.T) {
-	req := chatRequest{Model: "gpt-4o"}
-	applyInferenceRequestOptions(&req, providers.InferenceRequest{})
-
-	if req.FrequencyPenalty != nil {
-		t.Errorf("FrequencyPenalty should be nil when not set, got %v", req.FrequencyPenalty)
 	}
 }
 

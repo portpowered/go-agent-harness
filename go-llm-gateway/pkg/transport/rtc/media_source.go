@@ -138,17 +138,11 @@ func classifyDialError(err error) SourceErrorKind {
 	return SourceErrorUnreachable
 }
 
-func errString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
-
 type MediaSource struct {
 	kind                                SourceKind
 	identity, dialURL, requestURI, host string
 	username, password                  string
+	dialer                              contextDialer // nil: see rtspDialer
 }
 
 // ParseMediaSource accepts only go2rtc://host/api/ws?src=name and

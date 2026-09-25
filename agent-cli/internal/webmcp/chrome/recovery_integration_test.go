@@ -1,3 +1,5 @@
+//go:build live
+
 package chrome
 
 import (
@@ -21,9 +23,7 @@ import (
 const chromeRecoveryEnv = "WEBMCP_CHROME_RECOVERY"
 
 // TestPinnedChromeTopologyRecoverySuite is the browser-real Lane H proof. It
-// is deliberately separate from the ordinary adapter and CLI integration
-// tests: the first check is the only pre-acquisition observable operation, so
-// the default package test run remains hermetic and offline.
+// builds only with the live tag, and its env check runs before acquisition.
 func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
 	if os.Getenv(chromeRecoveryEnv) != "1" {
 		t.Skipf("set %s=1 to run the pinned Chrome topology recovery suite", chromeRecoveryEnv)

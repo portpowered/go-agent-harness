@@ -328,3 +328,18 @@ func eventJSON(t *testing.T, action, testName, output string) string {
 	}
 	return string(data) + "\n"
 }
+
+func TestPrintRunPatternPrintsGatedTestsWithoutRunningGo(t *testing.T) {
+	var stdout, stderr strings.Builder
+	if err := run([]string{"-print-run-pattern", "-go", "/nonexistent/go"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run -print-run-pattern: %v (stderr %q)", err, stderr.String())
+	}
+	if got := strings.TrimSpace(stdout.String()); got != sessionsRunPattern {
+		t.Fatalf("printed pattern %q, want %q", got, sessionsRunPattern)
+	}
+	for _, name := range requiredTests {
+		if !strings.Contains(stdout.String(), name) {
+			t.Fatalf("printed pattern %q does not select required test %s", stdout.String(), name)
+		}
+	}
+}

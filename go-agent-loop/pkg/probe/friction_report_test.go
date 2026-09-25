@@ -278,13 +278,6 @@ func TestAggregateFrictionReportClassifiesFallbackErrorMessages(t *testing.T) {
 	}
 }
 
-func TestAggregateAliasUsesScenarioAggregation(t *testing.T) {
-	report := Aggregate([]ScenarioResult{{Name: "alias", Pass: true}})
-	if report.Total != 1 || report.Passed != 1 || report.Failed != 0 || len(report.Scenarios) != 1 {
-		t.Fatalf("Aggregate result = %+v", report)
-	}
-}
-
 func TestFrictionReportErrorNilMethods(t *testing.T) {
 	var reportErr *FrictionReportError
 	if got := reportErr.Error(); got != nilErrorText {

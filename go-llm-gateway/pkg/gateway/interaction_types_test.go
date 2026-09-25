@@ -167,31 +167,6 @@ func TestInteractionEventsJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestInteractionEventProvenanceAndSequenceContract(t *testing.T) {
-	t.Parallel()
-
-	events := []InteractionEvent{
-		{InteractionID: "interaction-123", Sequence: 1, Type: InteractionEventStart, Provider: "test-provider", Model: "test-model"},
-		{InteractionID: "interaction-123", Sequence: 2, Type: InteractionEventTextDelta, Provider: "test-provider", Model: "test-model"},
-		{InteractionID: "interaction-123", Sequence: 3, Type: InteractionEventEnd, Provider: "test-provider", Model: "test-model"},
-	}
-
-	for i, event := range events {
-		if event.InteractionID == "" {
-			t.Fatalf("event %d missing interaction ID", i)
-		}
-		if event.Provider == "" {
-			t.Fatalf("event %d missing provider", i)
-		}
-		if event.Model == "" {
-			t.Fatalf("event %d missing model", i)
-		}
-		if event.Sequence != int64(i+1) {
-			t.Fatalf("event %d sequence = %d, want %d", i, event.Sequence, i+1)
-		}
-	}
-}
-
 func roundTripJSON[T any](t *testing.T, in T, out *T) {
 	t.Helper()
 

@@ -326,9 +326,9 @@ virtualization, deduplication, known and unknown costs, reward caps, qualifying
 spend, bounded paging, stale generations, reset, and invalid inputs:
 
 ```bash
-WEBMCP_CAPITAL_ONE_SHOPPING_ADAPTER_INTEGRATION=1 \
+WEBMCP_SITE_ADAPTER_INTEGRATION=1 \
   go test ./agent-cli/internal/webmcp/chrome \
-  -run '^TestCapitalOneShoppingAdapterStockChromeJourney$' -count=1 -v
+  -run '^TestBundledSiteAdaptersStockChromeJourneys$/^capital_one_shopping$' -count=1 -v
 ```
 
 Run the opt-in read-only live-site gate against a temporary Chrome profile. It

@@ -48,11 +48,13 @@ func recvResponseCreate(t *testing.T, ch <-chan messages.StreamMessage) messages
 	}
 }
 
+// assertNoSessionSend reports whether nothing was sent. Execute delivers
+// synchronously, so anything it sent is already buffered when it returns.
 func assertNoSessionSend(ch chan messages.StreamMessage) bool {
 	select {
 	case <-ch:
 		return false
-	case <-time.After(100 * time.Millisecond):
+	default:
 		return true
 	}
 }

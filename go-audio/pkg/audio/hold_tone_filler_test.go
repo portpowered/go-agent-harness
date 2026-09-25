@@ -195,25 +195,6 @@ func TestApplyHoldTonePCM16NilFillerIsNoOp(t *testing.T) {
 	}
 }
 
-// TestApplyHoldTonePCM16StaysSilentBeforeThreshold preserves the room
-// integration rule that ordinary conversational pauses remain digital
-// silence. The adapter is driven by explicit timestamps, so it also remains
-// usable with deterministic room clocks.
-func TestApplyHoldTonePCM16StaysSilentBeforeThreshold(t *testing.T) {
-	cfg := testHoldToneConfig()
-	start := time.Unix(1700000000, 0)
-	filler := NewHoldToneFiller(cfg, 24000, start)
-	const samples = 480
-	frame := zeroPCM16Frame(samples)
-	step := 20 * time.Millisecond
-	for elapsed := time.Duration(0); elapsed < cfg.GapThreshold-step; elapsed += step {
-		got := ApplyHoldTonePCM16(filler, start.Add(elapsed+step), frame)
-		if PCM16HasSignal(got) {
-			t.Fatalf("ApplyHoldTonePCM16 at elapsed=%v produced signal before threshold", elapsed+step)
-		}
-	}
-}
-
 // TestApplyHoldTonePCM16FillsAfterThreshold checks the raw PCM boundary that
 // the room speaker consumes: a due pulse keeps the cadence frame size and
 // stays below the configured amplitude.

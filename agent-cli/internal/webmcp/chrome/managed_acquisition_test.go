@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -218,7 +219,7 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: fixtureChromeVersionHangBound})
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionQuery: extractedChromeVersionQuery(t, executableRelative, version)})
 	request := PinnedChromeRequest{Platform: platform, RequiredMajor: MinimumManagedChromeMajor, LockPath: lockPath, CacheDir: cacheDir, HTTPClient: client}
 
 	first, err := acquirer.AcquirePinnedChrome(context.Background(), request)
@@ -241,12 +242,38 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 	}
 }
 
-// fixtureChromeVersionHangBound bounds the fixture executable's --version
-// run. The first exec of a freshly extracted executable waits for macOS code
-// assessment: 5.3s on an idle workstation and over 10s while other packages
-// test in parallel, which failed both acquirer tests as version_unverified.
-// Nothing asserts elapsed time, so this is only a hang bound.
-const fixtureChromeVersionHangBound = time.Minute
+// extractedChromeVersionQuery answers the acquirer's version query only for
+// the executable extracted from the fixture archive. Executing the fresh
+// fixture would wait for macOS code assessment (over 5s under load);
+// TestQueryChromeVersionRunsTheExecutable covers the real query.
+func extractedChromeVersionQuery(t *testing.T, executableRelative, version string) VersionQuery {
+	t.Helper()
+	return func(_ context.Context, path string) (string, error) {
+		if !strings.HasSuffix(filepath.ToSlash(path), "/"+chromeForTestingExtractedName+"/"+executableRelative) {
+			return "", fmt.Errorf("version query for %q, want the extracted fixture executable", path)
+		}
+		if err := checkChromeExecutable(path); err != nil {
+			return "", err
+		}
+		return "Google Chrome for Testing " + version + "\n", nil
+	}
+}
+
+// TestQueryChromeVersionRunsTheExecutable runs the production version query
+// against a system binary, which needs no first-run code assessment.
+func TestQueryChromeVersionRunsTheExecutable(t *testing.T) {
+	const echo = "/bin/echo"
+	if _, err := os.Stat(echo); err != nil {
+		t.Skipf("%s is unavailable: %v", echo, err)
+	}
+	output, err := queryChromeVersion(context.Background(), echo)
+	if err != nil || strings.TrimSpace(output) == "" {
+		t.Fatalf("queryChromeVersion(%s) = %q, %v; want the executable's output", echo, output, err)
+	}
+	if _, err := queryChromeVersion(context.Background(), filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Fatal("queryChromeVersion succeeded for a missing executable")
+	}
+}
 
 func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testing.T) {
 	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
@@ -276,7 +303,7 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: fixtureChromeVersionHangBound})
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionQuery: extractedChromeVersionQuery(t, executableRelative, version)})
 	request := PinnedChromeRequest{Platform: platform, RequiredMajor: MinimumManagedChromeMajor, LockPath: lockPath, CacheDir: cacheDir, HTTPClient: client}
 
 	const callers = 6

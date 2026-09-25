@@ -12,6 +12,7 @@ import (
 // This is the integration-level counterpart to the direct subsystem tests in
 // pkg/subsystems/ping_pong_test.go.
 func TestSessionPingPong_FullLoop(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -58,6 +59,7 @@ func TestSessionPingPong_FullLoop(t *testing.T) {
 
 // TestSessionPingDuringAudio tests that ping works alongside audio in session mode.
 func TestSessionPingDuringAudio(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -91,5 +93,17 @@ func TestSessionPingDuringAudio(t *testing.T) {
 	}
 	if !hasAudio {
 		t.Error("expected AUDIO.DELTA")
+	}
+}
+
+// assertSessionStillLive proves the loop is still serving the session: a
+// ping sent now is answered with PONG only by a live loop, and that PONG is
+// ordered after anything earlier input could have caused. It replaces fixed
+// "does not terminate" sleeps with an event barrier.
+func assertSessionStillLive(t *testing.T, scenario *SessionScenario) {
+	t.Helper()
+	scenario.SendControlPlane(messages.ControlPlaneMessageTypePing)
+	if !scenario.WaitForEvent(messages.StreamTypePong, 3*time.Second) {
+		t.Fatal("session stopped answering pings: the loop terminated")
 	}
 }

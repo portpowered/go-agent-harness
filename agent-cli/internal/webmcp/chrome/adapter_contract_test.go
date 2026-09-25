@@ -16,29 +16,11 @@ import (
 	"testing"
 	"time"
 
-	cdpWebMCP "github.com/chromedp/cdproto/webmcp"
 	"github.com/chromedp/chromedp"
 	webmcp "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 var _ webmcp.BrowserRuntime = (*Runtime)(nil)
-
-func TestPinnedBindingsContainRequiredWebMCPSurface(t *testing.T) {
-	_ = cdpWebMCP.Enable
-	_ = cdpWebMCP.Disable
-	_ = cdpWebMCP.InvokeTool
-	_ = cdpWebMCP.CancelInvocation
-	_ = cdpWebMCP.EventToolsAdded{}
-	_ = cdpWebMCP.EventToolsRemoved{}
-	_ = cdpWebMCP.EventToolInvoked{}
-	_ = cdpWebMCP.EventToolResponded{}
-}
-
-func TestRuntimeSatisfiesNeutralBrowserRuntime(t *testing.T) {
-	if NewRuntime() == nil {
-		t.Fatal("NewRuntime returned a nil neutral runtime")
-	}
-}
 
 func TestExportedChromeAPIDoesNotLeakProtocolTypes(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)

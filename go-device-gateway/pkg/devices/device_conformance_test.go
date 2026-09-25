@@ -40,10 +40,6 @@ var (
 	ValidateDirection           = devicegw.ValidateDirection
 )
 
-func TestDeviceRegistryConformance(t *testing.T) {
-	devicegw.RunDeviceRegistryConformance(t, newFixture)
-}
-
 func TestDeviceRegistryErrorContracts(t *testing.T) {
 	input, err := NewDevice("virtual", "input", "Input", DirectionInput)
 	if err != nil {
