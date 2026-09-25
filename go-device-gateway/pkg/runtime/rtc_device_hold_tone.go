@@ -287,6 +287,32 @@ func (s *RTCDeviceSink) playbackFallbackSpanLocked(current uint64) (rtcDevicePla
 	return rtcDevicePlaybackSpan{}, false
 }
 
+// blockInterruptedPlaybackLocked blocks playback and remembers the response it
+// cut off. That response's frames can still reach Pump afterwards: a buffered
+// media bridge between the provider and this sink may already hold them when
+// the interruption lands, and the next response's StartPlayback unblocks
+// playback in a new generation. playbackStateFor reports those frames as
+// blocked, so interrupted audio never plays again and never reaches the
+// converter ahead of the next response ("stream identity changed without a
+// reset"). Caller holds playbackMu.
+func (s *RTCDeviceSink) blockInterruptedPlaybackLocked(active rtcDevicePlaybackSpan, found bool) {
+	switch {
+	case found && active.response.hasItemID:
+		s.interruptedResponse = active.response
+	case s.playbackResponse.hasItemID:
+		s.interruptedResponse = s.playbackResponse
+	}
+	s.blockPlaybackLocked()
+}
+
+// playbackResponseInterruptedLocked reports whether response is the one most
+// recently cut off by an interruption. Any other identity, including a
+// prefetched continuation, is not stale: interruption changes generation.
+// Caller holds playbackMu.
+func (s *RTCDeviceSink) playbackResponseInterruptedLocked(response audio.PlaybackResponse) bool {
+	return s.interruptedResponse.hasItemID && s.interruptedResponse.equal(newRTCDevicePlaybackIdentity(response))
+}
+
 func (s *RTCDeviceSink) blockPlaybackLocked() {
 	s.playbackBlocked = true
 	s.playbackGeneration++

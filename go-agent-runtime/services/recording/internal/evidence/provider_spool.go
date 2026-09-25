@@ -16,11 +16,13 @@ import (
 )
 
 const (
-	providerCaptureQueueCapacity  = 256
 	providerCaptureControlReserve = 16
 	providerCaptureQueueMaxBytes  = 16 << 20
 	providerCaptureQueueMaxItems  = 4096
 	providerCaptureMaxEventBytes  = 4 << 20
+	// Room for every mutation the budget admits (appends, their settlements,
+	// control reserve): 256 slots failed sessions on a ~120-event burst.
+	providerCaptureQueueCapacity = 2*providerCaptureQueueMaxItems + providerCaptureControlReserve
 )
 
 type providerCaptureError string
