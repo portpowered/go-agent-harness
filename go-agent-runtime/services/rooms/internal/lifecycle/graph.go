@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -32,8 +31,9 @@ type roomGraph struct {
 	err      error
 	recorder audioRecorder
 	// delivery observes peer hand-offs so a reached max_turns stop can wait
-	// for the final responses' audio. It is attached after the workers start.
-	delivery atomic.Pointer[finalTurnDelivery]
+	// for the final responses' audio. It is set before the workers start so
+	// no hand-off is missed.
+	delivery *finalTurnDelivery
 
 	workers sync.WaitGroup
 	close   sync.Once
@@ -67,7 +67,7 @@ type latencyRecorder interface {
 	ObservePeerAudio(string, string, audio.PCMFrame)
 }
 
-func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, participants []*activeParticipant, onError func(error), recorders ...audioRecorder) (*roomGraph, error) {
+func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, participants []*activeParticipant, onError func(error), delivery *finalTurnDelivery, recorders ...audioRecorder) (*roomGraph, error) {
 	if scheduler == nil {
 		return nil, mixer.ErrClockUnavailable
 	}
@@ -82,6 +82,7 @@ func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format ro
 		return nil, err
 	}
 	graph := newGraph(parent, recorders)
+	graph.delivery = delivery
 	if err := graph.initOutputs(scheduler, format, frameSamples, participants); err != nil {
 		return graph.closeWithError(err)
 	}
@@ -283,7 +284,7 @@ func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
 			}
 			return
 		}
-		g.delivery.Load().handedOff(output.target.participant.ID, mixed.Sources, frame.EndOfResponse)
+		g.delivery.handedOff(output.target.participant.ID, mixed.Sources, frame.EndOfResponse)
 	}
 }
 

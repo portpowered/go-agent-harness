@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -426,3 +427,144 @@ func parityPlaybackForTest(t *testing.T, value rooms.MediaPlayback) *parityPlayb
 var _ session.LiveService = (*parityLiveService)(nil)
 var _ session.LiveHandle = (*parityLiveHandle)(nil)
 var _ rooms.MediaFactory = (*parityMediaFactory)(nil)
+
+// finalTurnFixture is a room whose final-turn ledger runs on a frozen room
+// clock, so a held stop can only end on delivery or an explicit release rule.
+type finalTurnFixture struct {
+	delivery *finalTurnDelivery
+	state    *runState
+	graph    *roomGraph
+	inbound  *graphInbound
+	peer     *graphOutbound
+	stopped  chan error
+}
+
+// newFinalTurnFixture reaches alice's max_turns bound after she produced
+// audio for her final response; bob is her only peer.
+func newFinalTurnFixture(t *testing.T, peerKind rooms.ParticipantKind, attachBeforeBound bool) *finalTurnFixture {
+	t.Helper()
+	manifest := rooms.Manifest{Room: rooms.Room{MaxTurns: 1}, Participants: []rooms.Participant{
+		{ID: "alice", Kind: rooms.ParticipantKindAgent}, {ID: "bob", Kind: peerKind},
+	}}
+	f := &finalTurnFixture{
+		delivery: newFinalTurnDelivery(platformclock.NewDeterministic(time.Unix(1700000000, 0).UTC(), time.Millisecond), manifest),
+		inbound:  &graphInbound{frames: make(chan audio.PCMFrame, 1)},
+		peer:     &graphOutbound{frames: make(chan audio.PCMFrame, 64)},
+		stopped:  make(chan error, 1),
+	}
+	f.state = newRunState(manifest, func(cause error) { f.stopped <- cause })
+	f.state.delivery, f.state.deliveryCtx = f.delivery, context.Background()
+	participants := []*activeParticipant{
+		{participant: manifest.Participants[0], endpoints: audio.MediaEndpoints{Inbound: f.inbound}, finished: make(chan struct{})},
+		{participant: manifest.Participants[1], endpoints: audio.MediaEndpoints{Outbound: f.peer}, finished: make(chan struct{})},
+	}
+	graph, err := newRoomGraph(context.Background(), platformclock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, f.delivery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.graph = graph
+	t.Cleanup(func() { _ = graph.Close() })
+	if attachBeforeBound {
+		f.delivery.attach(graph)
+	}
+	f.delivery.observe("alice", liveStreamEvent("alice", messages.StreamMessage{
+		Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "resp", Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0}),
+	}))
+	f.delivery.observe("alice", assistantTurnEndEvent("alice"))
+	f.state.noteTurn("alice")
+	return f
+}
+
+func (f *finalTurnFixture) assertHeld(t *testing.T, when string) {
+	t.Helper()
+	select {
+	case cause := <-f.stopped:
+		t.Fatalf("room stopped (%v) %s, before alice's final audio reached bob", cause, when)
+	default:
+	}
+}
+
+// deliverFinalFrame hands alice's in-flight final response frame to the graph
+// and requires the held stop to release only after bob received it.
+func (f *finalTurnFixture) deliverFinalFrame(t *testing.T) {
+	t.Helper()
+	f.inbound.frames <- audio.PCMFrame{Samples: []int16{7, 9}, EndOfResponse: true}
+	f.waitStop(t, "held max_turns stop was not released after delivery")
+	for {
+		select {
+		case frame := <-f.peer.frames:
+			if frame.EndOfResponse && len(frame.Samples) == 2 && frame.Samples[0] == 7 {
+				return
+			}
+		default:
+			t.Fatal("room stopped before bob received alice's final response frame")
+		}
+	}
+}
+
+func (f *finalTurnFixture) waitStop(t *testing.T, failure string) {
+	t.Helper()
+	select {
+	case cause := <-f.stopped:
+		if !errors.Is(cause, errTurnsBound) {
+			t.Fatalf("stop cause = %v, want turn bound", cause)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("%s (graph error: %v)", failure, f.graph.Err())
+	}
+}
+
+// TestFinalTurnDeliveryHoldsBoundReachedBeforeGraphAttach pins the race that
+// made the max_turns hold flaky: agents stream while the room graph is still
+// being built, so the bound can be reached before the ledger is attached. The
+// stop must then wait for attach and the delivery, not release unheld.
+func TestFinalTurnDeliveryHoldsBoundReachedBeforeGraphAttach(t *testing.T) {
+	f := newFinalTurnFixture(t, rooms.ParticipantKindHuman, false)
+	f.assertHeld(t, "when the bound was reached before the graph attached")
+	f.delivery.attach(f.graph)
+	f.assertHeld(t, "when the graph attached")
+	f.deliverFinalFrame(t)
+}
+
+// TestFinalTurnDeliveryWithoutGraphReleasesOnAttach keeps headless rooms from
+// holding a stop: with no media plane there is no peer audio to wait for.
+func TestFinalTurnDeliveryWithoutGraphReleasesOnAttach(t *testing.T) {
+	released := make(chan struct{})
+	delivery := newFinalTurnDelivery(platformclock.NewDeterministic(time.Time{}, time.Millisecond), testManifest())
+	delivery.begin(context.Background(), func() { close(released) })
+	select {
+	case <-released:
+		t.Fatal("stop released before the media plane was known")
+	default:
+	}
+	delivery.attach(nil)
+	select {
+	case <-released:
+	default:
+		t.Fatal("headless room held its stop after attach")
+	}
+}
+
+// TestFinalTurnDeliveryDrainsEndedAgentAudioToRemainingPeer pins the
+// all-agents-ended release: an agent whose session ends right after
+// MESSAGE.END, with its final audio still in flight, must not truncate that
+// audio for a peer that is still listening.
+func TestFinalTurnDeliveryDrainsEndedAgentAudioToRemainingPeer(t *testing.T) {
+	f := newFinalTurnFixture(t, rooms.ParticipantKindHuman, true)
+	f.assertHeld(t, "at the turn bound")
+	f.state.finish(rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, rooms.ParticipantTerminationEnded, nil)
+	f.assertHeld(t, "when alice's session ended after MESSAGE.END")
+	f.deliverFinalFrame(t)
+}
+
+// TestFinalTurnDeliveryReleasesWhenNoPeerCanReceive keeps the immediate
+// release when every agent ended and no live peer is left to hear the audio.
+func TestFinalTurnDeliveryReleasesWhenNoPeerCanReceive(t *testing.T) {
+	f := newFinalTurnFixture(t, rooms.ParticipantKindAgent, true)
+	f.state.noteTurn("bob")
+	f.assertHeld(t, "at the turn bound")
+	for _, id := range []string{"alice", "bob"} {
+		f.state.finish(rooms.Participant{ID: id, Kind: rooms.ParticipantKindAgent}, rooms.ParticipantTerminationEnded, nil)
+	}
+	f.waitStop(t, "room held its stop with no live peer left to receive audio")
+}

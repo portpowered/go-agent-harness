@@ -23,7 +23,7 @@ func TestRoomGraphRoutesEachSourceToPeersOnly(t *testing.T) {
 		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: aliceInbound, Outbound: aliceOutbound}, finished: make(chan struct{})},
 		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: bobInbound, Outbound: bobOutbound}, finished: make(chan struct{})},
 	}
-	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil)
+	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestRoomGraphRetiresFailedSourceAndKeepsSurvivorMesh(t *testing.T) {
 		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: bobInbound, Outbound: bobOutbound}, finished: make(chan struct{})},
 		{participant: rooms.Participant{ID: "charlie", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: charlieInbound, Outbound: charlieOutbound}, finished: make(chan struct{})},
 	}
-	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil)
+	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestRoomGraphRecordsReceivedOnlyAfterProviderAdmission(t *testing.T) {
 		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: source}, finished: make(chan struct{})},
 		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Outbound: &failingGraphOutbound{err: failure}}, finished: make(chan struct{}), onMediaError: func(err error) { failed <- err }},
 	}
-	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, probe)
+	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, nil, probe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestRoomGraphStampsPeerAudioBeforeProviderHandOff(t *testing.T) {
 		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: source}, finished: make(chan struct{})},
 		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Outbound: outbound}, finished: make(chan struct{})},
 	}
-	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, probe)
+	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, nil, probe)
 	if err != nil {
 		t.Fatal(err)
 	}

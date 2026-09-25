@@ -7,10 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	roommanifest "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/manifest"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
@@ -177,17 +175,30 @@ type finalTurnDelivery struct {
 	audioOpen map[string]bool
 	delivered map[string]map[string]int
 	graph     *roomGraph
+	attached  bool
+	ended     map[string]struct{}
 	draining  bool
 	need      map[string]int
+	start     time.Time
 	lastAudio time.Time
 	changed   chan struct{}
+	// pending is a reached bound whose wait starts once the media plane is
+	// attached: agents stream (and may finish their turns) while the room
+	// graph is still being built.
+	pending *finalTurnWait
+}
+
+type finalTurnWait struct {
+	ctx     context.Context
+	release func()
 }
 
 func newFinalTurnDelivery(clock platformclock.TimerSource, manifest rooms.Manifest) *finalTurnDelivery {
 	delivery := &finalTurnDelivery{
 		clock: clock, agents: make(map[string]struct{}),
 		expected: make(map[string]int), audioOpen: make(map[string]bool),
-		delivered: make(map[string]map[string]int), changed: make(chan struct{}, 1),
+		delivered: make(map[string]map[string]int), ended: make(map[string]struct{}),
+		changed: make(chan struct{}, 1),
 	}
 	for _, participant := range manifest.Participants {
 		if roommanifest.NormalizeParticipantKind(participant.Kind) == rooms.ParticipantKindAgent {
@@ -197,53 +208,43 @@ func newFinalTurnDelivery(clock platformclock.TimerSource, manifest rooms.Manife
 	return delivery
 }
 
-// attach binds the room media plane. Without a graph there is no peer audio
-// to wait for, so a reached bound stops immediately.
+// attach binds the room media plane once it is built and starts a wait
+// whose bound was reached while the graph was still being built. Without a
+// graph there is no peer audio to wait for, so a reached bound stops
+// immediately. The graph reports hand-offs to the ledger from the moment its
+// workers start (newRoomGraph), so no boundary is missed before attach.
 func (d *finalTurnDelivery) attach(graph *roomGraph) {
-	if d == nil || graph == nil {
+	if d == nil {
 		return
 	}
 	d.mu.Lock()
-	d.graph = graph
+	d.graph, d.attached = graph, true
+	pending := d.pending
+	d.pending = nil
 	d.mu.Unlock()
-	graph.delivery.Store(d)
+	if pending != nil {
+		d.startWait(pending.ctx, pending.release)
+	}
 }
 
-// observe counts assistant responses that produced audio. An interrupted
-// response's queued audio is discarded by the session, so it no longer
-// expects a delivered boundary.
-func (d *finalTurnDelivery) observe(participantID string, event session.LiveEvent) {
-	if d == nil || event.Message == nil {
-		return
-	}
-	if _, agent := d.agents[participantID]; !agent {
-		return
-	}
-	message := event.Message
-	if message.Role != "" && message.Role != messages.RoleAssistant {
+// participantEnded stops awaiting delivery to a participant whose session
+// ended: it can no longer receive audio. Audio already queued for the
+// remaining peers keeps draining through the graph until they have it.
+func (d *finalTurnDelivery) participantEnded(participantID string) {
+	if d == nil {
 		return
 	}
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	if message.Type == messages.StreamTypeMessageEnd {
-		if d.audioOpen[participantID] && responseInterrupted(message) {
-			d.expected[participantID]--
-		}
-		d.audioOpen[participantID] = false
-		return
-	}
-	if message.Type != messages.StreamTypeAudioDelta || d.audioOpen[participantID] {
-		return
-	}
-	if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil && len(value.Content) > 0 {
-		d.audioOpen[participantID] = true
-		d.expected[participantID]++
-	}
+	d.ended[participantID] = struct{}{}
+	d.mu.Unlock()
+	d.notify()
 }
 
-func responseInterrupted(message *messages.StreamMessage) bool {
-	end, ok := message.Value.(*messages.MessageEndValue)
-	return ok && end != nil && end.TerminalReason == messages.TerminalReasonPartialOutput
+func (d *finalTurnDelivery) notify() {
+	select {
+	case d.changed <- struct{}{}:
+	default:
+	}
 }
 
 // handedOff records one mixed frame delivered to target. A response boundary
@@ -272,24 +273,22 @@ func (d *finalTurnDelivery) handedOff(targetID string, sources []string, boundar
 	}
 	d.mu.Unlock()
 	if draining {
-		select {
-		case d.changed <- struct{}{}:
-		default:
-		}
+		d.notify()
 	}
 }
 
 // begin freezes the audio responses produced so far and calls release once
 // they have reached every peer, the pending speakers go quiet, or the grace
 // expires. Responses started after the bound are not awaited. ctx ends the
-// wait when the room stops for another reason.
+// wait when the room stops for another reason. A bound reached before the
+// media plane is attached waits for attach instead of stopping unheld.
 func (d *finalTurnDelivery) begin(ctx context.Context, release func()) {
 	if d == nil || d.clock == nil {
 		release()
 		return
 	}
 	d.mu.Lock()
-	if d.graph == nil || d.draining {
+	if d.draining {
 		d.mu.Unlock()
 		release()
 		return
@@ -301,15 +300,32 @@ func (d *finalTurnDelivery) begin(ctx context.Context, release func()) {
 			d.need[id] = count
 		}
 	}
-	start := d.clock.Now()
-	d.lastAudio = start
+	d.start = d.clock.Now()
+	d.lastAudio = d.start
+	if !d.attached {
+		d.pending = &finalTurnWait{ctx: ctx, release: release}
+		d.mu.Unlock()
+		return
+	}
+	d.mu.Unlock()
+	d.startWait(ctx, release)
+}
+
+func (d *finalTurnDelivery) startWait(ctx context.Context, release func()) {
+	d.mu.Lock()
+	if d.graph == nil {
+		d.mu.Unlock()
+		release()
+		return
+	}
 	satisfied := d.satisfiedLocked()
+	deadline := d.start.Add(finalTurnDeliveryGrace)
 	d.mu.Unlock()
 	if satisfied {
 		release()
 		return
 	}
-	go d.wait(ctx, start.Add(finalTurnDeliveryGrace), release)
+	go d.wait(ctx, deadline, release)
 }
 
 func (d *finalTurnDelivery) wait(ctx context.Context, deadline time.Time, release func()) {
@@ -343,29 +359,17 @@ func (d *finalTurnDelivery) wait(ctx context.Context, deadline time.Time, releas
 }
 
 // satisfiedLocked reports whether every awaited response boundary reached
-// every live peer of its speaker.
+// every live peer of its speaker. A peer whose session ended is not awaited.
 func (d *finalTurnDelivery) satisfiedLocked() bool {
 	for source, need := range d.need {
 		for _, target := range d.graph.deliveryTargets(source) {
+			if _, ended := d.ended[target]; ended {
+				continue
+			}
 			if d.delivered[source][target] < need {
 				return false
 			}
 		}
 	}
 	return true
-}
-
-// deliveryEventSink feeds live events to the final-turn ledger before the
-// host sink, so a turn boundary is always counted after its audio events.
-type deliveryEventSink struct {
-	host     rooms.EventSink
-	delivery *finalTurnDelivery
-}
-
-func (s deliveryEventSink) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
-	s.delivery.observe(participantID, event)
-	if s.host == nil {
-		return nil
-	}
-	return s.host.Publish(ctx, participantID, event)
 }

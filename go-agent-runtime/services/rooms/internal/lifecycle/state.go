@@ -326,7 +326,9 @@ func (s *runState) finish(participant rooms.Participant, reason rooms.Participan
 	if _, exists := s.results[participant.ID]; !exists {
 		s.results[participant.ID] = value
 	}
+	delivery := s.delivery
 	s.mu.Unlock()
+	delivery.participantEnded(participant.ID)
 	s.stopWhenAgentsDone()
 }
 
@@ -350,8 +352,9 @@ func (s *runState) stopWhenAgentsDone() {
 		}
 	}
 	if s.boundReason != "" {
-		// No agent is left to deliver audio for a held turn stop.
-		s.releaseTurnStopLocked()
+		// A held turn stop keeps draining ended agents' in-flight audio to
+		// the peers still listening; the delivery wait releases (bounded on
+		// the room clock) once nothing deliverable is left.
 		s.mu.Unlock()
 		return
 	}

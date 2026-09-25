@@ -325,3 +325,55 @@ func terminalLivenessFailure(event session.LiveEvent) error {
 	}
 	return fmt.Errorf("%s: provider response produced no observable output", classification)
 }
+
+// observe counts assistant responses that produced audio. An interrupted
+// response's queued audio is discarded by the session, so it no longer
+// expects a delivered boundary.
+func (d *finalTurnDelivery) observe(participantID string, event session.LiveEvent) {
+	if d == nil || event.Message == nil {
+		return
+	}
+	if _, agent := d.agents[participantID]; !agent {
+		return
+	}
+	message := event.Message
+	if message.Role != "" && message.Role != messages.RoleAssistant {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if message.Type == messages.StreamTypeMessageEnd {
+		if d.audioOpen[participantID] && responseInterrupted(message) {
+			d.expected[participantID]--
+		}
+		d.audioOpen[participantID] = false
+		return
+	}
+	if message.Type != messages.StreamTypeAudioDelta || d.audioOpen[participantID] {
+		return
+	}
+	if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil && len(value.Content) > 0 {
+		d.audioOpen[participantID] = true
+		d.expected[participantID]++
+	}
+}
+
+func responseInterrupted(message *messages.StreamMessage) bool {
+	end, ok := message.Value.(*messages.MessageEndValue)
+	return ok && end != nil && end.TerminalReason == messages.TerminalReasonPartialOutput
+}
+
+// deliveryEventSink feeds live events to the final-turn ledger before the
+// host sink, so a turn boundary is always counted after its audio events.
+type deliveryEventSink struct {
+	host     rooms.EventSink
+	delivery *finalTurnDelivery
+}
+
+func (s deliveryEventSink) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
+	s.delivery.observe(participantID, event)
+	if s.host == nil {
+		return nil
+	}
+	return s.host.Publish(ctx, participantID, event)
+}
