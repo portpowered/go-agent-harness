@@ -363,6 +363,16 @@ func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
 	h.mu.Unlock()
 }
 
+// controlStamp takes the evidence time of a commit or response request when
+// the caller issues it. Its evidence is emitted only once the provider has
+// accepted it, and the provider may already have answered by then.
+func (h *handle) controlStamp(kind session.LiveControlKind) observations.Stamp {
+	if kind != session.LiveControlAudioCommit && kind != session.LiveControlResponseCreate {
+		return observations.Stamp{}
+	}
+	return h.runtimeTrace.Stamp()
+}
+
 // observeExecutedToolCall registers a dispatched call as owing a provider
 // result before its executor runs, so a terminal path that races the event
 // pump still reports the call as unresolved.

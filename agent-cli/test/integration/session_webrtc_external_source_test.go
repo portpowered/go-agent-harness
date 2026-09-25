@@ -305,9 +305,9 @@ func boolExitStatus(err error) int {
 }
 
 func sourceObservationDiagnostics(observed webrtcSourceObservationSnapshot) string {
-	return fmt.Sprintf("fixture: path=%q source=%q offer_tracks={audio:%d video:%d} answer_tracks={audio:%d video:%d} sent_frames={audio:%d video:%d}",
-		observed.path, observed.source, observed.offerAudioTracks, observed.offerVideoTracks,
-		observed.answerAudioTracks, observed.answerVideoTracks, observed.frameCount, observed.videoFrameCount)
+	return fmt.Sprintf("fixture: path=%q source=%q connections=%d offer_tracks={audio:%d video:%d} answer_tracks={audio:%d video:%d} sent_frames={audio:%d video:%d} video_write_error=%q",
+		observed.path, observed.source, observed.connections, observed.offerAudioTracks, observed.offerVideoTracks,
+		observed.answerAudioTracks, observed.answerVideoTracks, observed.frameCount, observed.videoFrameCount, observed.videoWriteErr)
 }
 
 // assertCameraMediaEvidence is the shared camera-shape assertion: the public
@@ -430,13 +430,13 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 
 	// Public media leg 1 — the real root `agent media probe` command reports
 	// the negotiated camera tracks. One audio packet is enough for probe to
-	// return while leaving the fixture free to deliver all three video packets
-	// for the independent activity assertion.
-	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1]})
+	// return; the fixture writes its three video packets first, because probe
+	// disconnects once it holds that audio packet.
+	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1], videoFirst: true})
 	probeResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "probe", probeURL)
 	waitForExternalSourceEvent(t, probeObserved.negotiated, "camera media probe offer/answer completion")
 	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "camera media probe audio frame delivery")
-	waitForExternalSourceEvent(t, probeObserved.videoFrameDelivered, "camera media probe video frame delivery")
+	waitForVideoDelivery(t, probeObserved, "camera media probe video frame delivery")
 	probeSnapshot := probeObserved.snapshot()
 	probeCleanup()
 	assertRootCLIMediaSuccess(t, probeResult, cfgDir, "probe", probeURL)
@@ -458,7 +458,7 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	lookURL, lookObserved, lookCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1]})
 	lookResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "look", lookURL)
 	waitForExternalSourceEvent(t, lookObserved.negotiated, "camera media look offer/answer completion")
-	waitForExternalSourceEvent(t, lookObserved.videoFrameDelivered, "camera media look video frame delivery")
+	waitForVideoDelivery(t, lookObserved, "camera media look video frame delivery")
 	lookSnapshot := lookObserved.snapshot()
 	lookCleanup()
 	assertRootCLIMediaSuccess(t, lookResult, cfgDir, "look", lookURL)
@@ -484,11 +484,11 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 
 	// Leg 1 — the camera's audio reaches us over WebRTC through the
 	// production inbound path, non-silent and complete.
-	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets})
+	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets, videoFirst: true})
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "camera offer/answer completion")
-	waitForExternalSourceEvent(t, bridgeObserved.videoFrameDelivered, "camera video frame delivery")
-	bridgeSnapshot := bridgeObserved.snapshot()
+	waitForVideoDelivery(t, bridgeObserved, "camera video frame delivery")
+	bridgeSnapshot := bridgeObserved.streamedSnapshot(t, "camera")
 	bridgeCleanup()
 	if bridgeSnapshot.offerAudioTracks != 1 || bridgeSnapshot.answerAudioTracks != 1 || bridgeSnapshot.offerVideoTracks != 1 || bridgeSnapshot.answerVideoTracks != 1 {
 		t.Fatalf("camera fixture negotiated tracks = offer audio/video %d/%d, answer audio/video %d/%d; want 1/1 in both", bridgeSnapshot.offerAudioTracks, bridgeSnapshot.offerVideoTracks, bridgeSnapshot.answerAudioTracks, bridgeSnapshot.answerVideoTracks)
@@ -578,7 +578,7 @@ func TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy(t *testing.T) {
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "audio-only offer/answer completion")
 	waitForExternalSourceEvent(t, bridgeObserved.frameDelivered, "audio-only audio frame delivery")
-	bridgeSnapshot := bridgeObserved.snapshot()
+	bridgeSnapshot := bridgeObserved.streamedSnapshot(t, "audio-only")
 	bridgeCleanup()
 	if bridgeSnapshot.answerAudioTracks != 1 || bridgeSnapshot.answerVideoTracks != 0 || bridgeSnapshot.videoFrameCount != 0 {
 		t.Fatalf("audio-only fixture negotiated/sent tracks = answer audio/video %d/%d, video frames %d; want 1/0 and 0 video frames", bridgeSnapshot.answerAudioTracks, bridgeSnapshot.answerVideoTracks, bridgeSnapshot.videoFrameCount)
