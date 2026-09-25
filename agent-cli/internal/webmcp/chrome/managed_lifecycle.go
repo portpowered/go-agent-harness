@@ -433,29 +433,23 @@ func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, sta
 	return stopErr
 }
 
-// trackManagedBrowser installs the explicit close path and the exit watcher
-// for one managed browser handle. Close joins the watcher before returning, so
-// once Close returns no goroutine of this handle touches the profile directory
-// (lock or state file) any more; callers may then remove the directory.
+// trackManagedBrowser installs Close and the exit watcher. Close joins the
+// watcher, so a closed handle never touches the profile directory afterwards.
 func (m *ManagedBrowserManager) trackManagedBrowser(browser *ManagedBrowser, statePath string, state ManagedBrowserState) {
-	closing := make(chan struct{})
-	watcherDone := make(chan struct{})
+	closing, watcherDone := make(chan struct{}), make(chan struct{})
 	browser.closeHook = func() error {
 		err := m.closeManagedBrowser(browser, statePath, state)
 		close(closing)
 		<-watcherDone
 		return err
 	}
-	go func() {
-		defer close(watcherDone)
-		m.watchManagedBrowser(browser, statePath, state, closing)
-	}()
+	go m.watchManagedBrowser(browser, statePath, state, closing, watcherDone)
 }
 
-// watchManagedBrowser removes the exact state record once the process exits on
-// its own. It stops without touching the profile when the handle is closed
-// explicitly, because closeManagedBrowser already owns that cleanup.
-func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState, closing <-chan struct{}) {
+// watchManagedBrowser removes the exact state record once the process exits
+// on its own; an explicit Close owns that cleanup instead.
+func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState, closing <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
 	if browser == nil || browser.Done() == nil {
 		return
 	}
@@ -935,22 +929,6 @@ func managedBrowserProfileOwnerState(pid int, profileDir string, commandLine []s
 		ProfileDir: profile,
 		CDPURL:     fmt.Sprintf("http://127.0.0.1:%d/json/version", port),
 	}, true
-}
-
-func stringSetContains(values []string, expected string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) == expected {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizedManagedShutdown(timeout time.Duration) time.Duration {
-	if timeout <= 0 {
-		return defaultManagedBrowserShutdownTimeout
-	}
-	return timeout
 }
 
 func newManagedBrowserLifecycleError(phase string, cause error) error {

@@ -62,10 +62,7 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	defer func() { _ = broker.Close() }()
 	targetSession.BlockInvocations()
 
-	// The ledger owns its own broker subscription for the whole run. It used
-	// to observe through the session's BrowserWatch, whose context ends at
-	// session close, so a terminal published just before close could be
-	// missed ("dispatched ... invocation had no terminal broker event").
+	// Run-long: the session's own watch ends at close and could miss a terminal.
 	ledger := newSessionAudioInterruptEventLedger(broker)
 	toolSet := webmcpTools.NewBrokerToolSet(broker)
 	executor := &sessionAudioInterruptRecordingExecutor{inner: toolSet.Executor()}
@@ -100,10 +97,10 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	globalFlags.ConfigDirPath = filepath.Join(tempDir, "config")
 	capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{
-			Executor:    executor,
-			Definitions: toolSet.Definitions(),
+			Executor:     executor,
+			Definitions:  toolSet.Definitions(),
 			BrowserWatch: broker.Watch,
-			Close: broker.Close,
+			Close:        broker.Close,
 		}, nil
 	}
 	command := newTestLiveSessionCommand(
@@ -133,9 +130,7 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 		t.Fatalf("scripted provider protocol: %v\nclient writes: %s\nprovider events: %v", err, wire.writeSummary(), wire.eventsSnapshot())
 	}
 
-	// Closing the broker ends the ledger's subscription after every event
-	// published so far; the ledger drains its buffer before reporting done.
-	if err := broker.Close(); err != nil {
+	if err := broker.Close(); err != nil { // ends the ledger subscription
 		t.Fatalf("close broker: %v", err)
 	}
 	assertSessionAudioInterruptScenario(t, scenario, wire.writesSnapshot(), ledger.completeEvents(t))
@@ -366,8 +361,7 @@ func newSessionAudioInterruptEventLedger(broker webmcp.Broker) *sessionAudioInte
 	return ledger
 }
 
-// completeEvents waits until the broker closed the ledger's subscription and
-// returns every recorded event. The bound only converts a hang into a failure.
+// completeEvents returns every event once the broker closed the subscription.
 func (l *sessionAudioInterruptEventLedger) completeEvents(t *testing.T) []sessionAudioInterruptEventObservation {
 	t.Helper()
 	select {
