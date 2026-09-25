@@ -5,6 +5,7 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -293,15 +294,12 @@ func stopSessionScenario(t *testing.T, scenario *SessionScenario) {
 	t.Helper()
 	scenario.Inf.Close()
 	scenario.cancel()
-	deadline := time.NewTimer(3 * time.Second)
-	defer deadline.Stop()
-	select {
-	case err := <-scenario.errCh:
-		if err != nil && err != context.Canceled {
-			t.Fatalf("session loop stopped with error: %v", err)
-		}
-	case <-deadline.C:
+	exited, err := scenario.awaitRunExit(3 * time.Second)
+	if !exited {
 		t.Fatal("timed out stopping session loop")
+	}
+	if err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("session loop stopped with error: %v", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -88,10 +89,15 @@ type SessionScenario struct {
 	capture    *sessionCapture
 	Transcript *SessionTranscript
 
-	cancel   context.CancelFunc
-	errCh    chan error
+	cancel  context.CancelFunc
+	runDone chan struct{} // closed when Loop.Run returns
+	runErr  error         // Loop.Run's result; read only after runDone closes
+
 	deltasMu sync.Mutex
 	deltas   []messages.StreamMessage
+	// deltasChanged is closed and replaced each time a delta is collected,
+	// so waiters block on it instead of polling the slice.
+	deltasChanged chan struct{}
 }
 
 // NewSessionScenario creates a SessionScenario with the given mock inferencer
@@ -126,11 +132,12 @@ func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockTool
 
 	resolvedClock := clock.Ensure(options.Clock)
 	scenario := &SessionScenario{
-		t:     t,
-		Loop:  loop,
-		Inf:   inf,
-		Tool:  tool,
-		clock: resolvedClock,
+		t:             t,
+		Loop:          loop,
+		Inf:           inf,
+		Tool:          tool,
+		clock:         resolvedClock,
+		deltasChanged: make(chan struct{}),
 	}
 	if options.Capture != nil {
 		scenario.capture = newSessionCapture(resolvedClock, options.Capture)
@@ -147,7 +154,7 @@ func (s *SessionScenario) Start() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
-	s.errCh = make(chan error, 1)
+	s.runDone = make(chan struct{})
 
 	// Collect deltas from the loop's consumer-facing Deltas() buffer in background.
 	go func() {
@@ -161,12 +168,30 @@ func (s *SessionScenario) Start() {
 			}
 			s.deltasMu.Lock()
 			s.deltas = append(s.deltas, delta)
+			close(s.deltasChanged)
+			s.deltasChanged = make(chan struct{})
 			s.deltasMu.Unlock()
 		}
 	}()
 
-	go func() { s.errCh <- s.Loop.Run(ctx) }()
+	go func() {
+		s.runErr = s.Loop.Run(ctx)
+		close(s.runDone)
+	}()
 	s.WaitForEvent(messages.StreamTypeSessionOpen, sessionOpenWait)
+}
+
+// awaitRunExit waits up to timeout for Loop.Run to return. exited is false
+// on timeout; otherwise err is Loop.Run's result.
+func (s *SessionScenario) awaitRunExit(timeout time.Duration) (exited bool, err error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-s.runDone:
+		return true, s.runErr
+	case <-timer.C:
+		return false, nil
+	}
 }
 
 const (
@@ -227,16 +252,15 @@ func (s *SessionScenario) Stop(timeout time.Duration) error {
 	// Cancel context to stop the engine hot loop.
 	s.cancel()
 
-	select {
-	case err := <-s.errCh:
-		// context.Canceled is expected — the loop was cancelled by us.
-		if err == context.Canceled {
-			return nil
-		}
-		return err
-	case <-time.After(timeout):
+	exited, err := s.awaitRunExit(timeout)
+	if !exited {
 		return context.DeadlineExceeded
 	}
+	// context.Canceled is expected — the loop was cancelled by us.
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }
 
 // Deltas returns a copy of all collected delta events.
@@ -297,22 +321,27 @@ func (s *SessionScenario) AgentRecords() []transcript.Record {
 }
 
 // WaitForEvent blocks until a delta event with the given type appears or times out.
+// It wakes on each collected delta rather than polling.
 func (s *SessionScenario) WaitForEvent(eventType messages.StreamMessageType, timeout time.Duration) bool {
-	deadline := time.After(timeout)
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	scanned := 0
 	for {
 		s.deltasMu.Lock()
-		for _, d := range s.deltas {
+		for _, d := range s.deltas[scanned:] {
 			if d.Type == eventType {
 				s.deltasMu.Unlock()
 				return true
 			}
 		}
+		scanned = len(s.deltas)
+		changed := s.deltasChanged
 		s.deltasMu.Unlock()
 
 		select {
-		case <-deadline:
+		case <-deadline.C:
 			return false
-		case <-time.After(time.Millisecond):
+		case <-changed:
 		}
 	}
 }

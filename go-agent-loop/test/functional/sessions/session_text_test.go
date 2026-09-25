@@ -147,8 +147,9 @@ func TestSessionTextDoesNotTerminate(t *testing.T) {
 		t.Fatal("timed out waiting for MESSAGE.END")
 	}
 
-	// Wait to confirm loop does NOT terminate.
-	time.Sleep(500 * time.Millisecond)
+	// A later ping is answered only by a live loop, and its PONG is emitted
+	// after anything the completed turn could have triggered.
+	assertSessionStillLive(t, scenario)
 
 	deltas := scenario.Deltas()
 	for _, d := range deltas {

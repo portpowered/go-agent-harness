@@ -34,13 +34,12 @@ func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x03, 0x04}), Role: messages.RoleAssistant},
 	})
 
-	// Wait for audio streaming to begin in the delta output.
+	// Wait for audio streaming to begin in the delta output. The model runner
+	// marks the response in flight before it publishes AUDIO.START, so once
+	// the delta is observed the barge-in below is guaranteed to see it.
 	if !scenario.WaitForEvent(messages.StreamTypeAudioStart, 3*time.Second) {
 		t.Fatal("timed out waiting for AUDIO.START to appear in delta stream")
 	}
-
-	// Give the model runner time to process AUDIO.START (sets audioStreaming=true).
-	time.Sleep(50 * time.Millisecond)
 
 	// Barge-in: user sends audio while the model is streaming.
 	bargInPayload := []byte{0xAA, 0xBB, 0xCC}

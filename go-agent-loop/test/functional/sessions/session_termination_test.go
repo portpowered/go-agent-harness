@@ -1,11 +1,16 @@
 package sessions
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+// Stop returns only after LOOP.END was collected, so the delta stream is
+// complete when these tests read it.
 
 func TestSessionGracefulClose(t *testing.T) {
 	inf := NewMockSessionInferencer()
@@ -21,11 +26,8 @@ func TestSessionGracefulClose(t *testing.T) {
 		t.Fatalf("Stop: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
-	deltas := scenario.Deltas()
-
 	// Verify lifecycle: SESSION.OPEN first, SESSION.CLOSE + LOOP.END last.
-	AssertSessionLifecycle(t, deltas)
+	AssertSessionLifecycle(t, scenario.Deltas())
 }
 
 func TestSessionStopTermination(t *testing.T) {
@@ -38,33 +40,20 @@ func TestSessionStopTermination(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	// Send stop instead of session_close.
+	// Send stop instead of session_close: it must still close the session.
 	scenario.SendControlPlane(messages.ControlPlaneMessageTypeStop)
-	time.Sleep(200 * time.Millisecond)
+	if !scenario.WaitForEvent(messages.StreamTypeSessionClose, 3*time.Second) {
+		t.Fatal("expected SESSION.CLOSE after stop")
+	}
+
 	inf.Close()
 	scenario.cancel()
-
-	select {
-	case err := <-scenario.errCh:
-		if err != nil && err.Error() != "context canceled" {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	case <-time.After(5 * time.Second):
+	exited, err := scenario.awaitRunExit(5 * time.Second)
+	if !exited {
 		t.Fatal("timed out waiting for loop exit")
 	}
-
-	time.Sleep(100 * time.Millisecond)
-	deltas := scenario.Deltas()
-
-	// Should have SESSION.CLOSE with reason derived from stop.
-	hasClose := false
-	for _, d := range deltas {
-		if d.Type == messages.StreamTypeSessionClose {
-			hasClose = true
-		}
-	}
-	if !hasClose {
-		t.Error("expected SESSION.CLOSE after stop")
+	if err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -95,9 +84,6 @@ func TestSessionLifecycleOrder(t *testing.T) {
 		t.Fatalf("Stop: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
-	deltas := scenario.Deltas()
-
 	// Verify full lifecycle ordering.
-	AssertSessionLifecycle(t, deltas)
+	AssertSessionLifecycle(t, scenario.Deltas())
 }

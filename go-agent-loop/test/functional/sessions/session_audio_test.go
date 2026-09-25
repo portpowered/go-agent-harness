@@ -179,8 +179,6 @@ func TestSessionConcurrentAudioBidirectional(t *testing.T) {
 		t.Fatal("timed out waiting for MESSAGE.END")
 	}
 
-	time.Sleep(200 * time.Millisecond) // Let both paths settle.
-
 	if err := scenario.Stop(5 * time.Second); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}

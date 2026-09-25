@@ -73,8 +73,9 @@ func TestSessionToolCallDoesNotTerminate(t *testing.T) {
 		t.Fatal("timed out waiting for TOOLCALL.END")
 	}
 
-	// Wait a bit more — the loop should NOT terminate.
-	time.Sleep(500 * time.Millisecond)
+	// A later ping is answered only by a live loop, and its PONG is emitted
+	// after anything the completed tool call could have triggered.
+	assertSessionStillLive(t, scenario)
 
 	deltas := scenario.Deltas()
 

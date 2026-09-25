@@ -93,3 +93,15 @@ func TestSessionPingDuringAudio(t *testing.T) {
 		t.Error("expected AUDIO.DELTA")
 	}
 }
+
+// assertSessionStillLive proves the loop is still serving the session: a
+// ping sent now is answered with PONG only by a live loop, and that PONG is
+// ordered after anything earlier input could have caused. It replaces fixed
+// "does not terminate" sleeps with an event barrier.
+func assertSessionStillLive(t *testing.T, scenario *SessionScenario) {
+	t.Helper()
+	scenario.SendControlPlane(messages.ControlPlaneMessageTypePing)
+	if !scenario.WaitForEvent(messages.StreamTypePong, 3*time.Second) {
+		t.Fatal("session stopped answering pings: the loop terminated")
+	}
+}
