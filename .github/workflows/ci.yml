@@ -59,11 +59,6 @@ jobs:
         uses: ./.github/actions/go-cache
         with:
           cache-name: static
-          # Before this job existed its checks ran in two jobs; the
-          # architecture gate's cache holds most of what it compiles.
-          fallback-cache-names: |
-            static-architecture
-            static-gates
 
       - name: Run gofmt check
         if: always()
@@ -86,29 +81,35 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
+      # Every lane is an ubuntu runner, so the wait never sits behind the
+      # macOS runner queue. --min-matches is the lane count below: a lane
+      # dropped from the matrix by mistake fails the wait.
       - name: Wait for the lint lanes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/ci-await-jobs.sh "CI (static lint *"
+        run: scripts/ci-await-jobs.sh --min-matches 9 "CI (static lint *"
 
   # golangci-lint lanes. CI (static) waits for every job whose name starts
-  # with "CI (static lint ", so lanes are merged or split here alone: change
-  # a lane's LINT_SHARD (agent-cli, runtime, support, libraries, all) or
-  # LINT_CROSS_GOOS (e.g. "windows darwin") once the merged lane fits the
-  # cold budget. golangci-lint loads dependencies from compiled export data,
-  # so a cold lane spends most of its time compiling: every lane here takes
-  # 80-140s cold, while the merged lanes measured in #591 (linux libraries,
-  # windows all, darwin all) took 130-225s cold, over the three-minute budget.
+  # with "CI (static lint ", so lanes are merged or split here, plus the
+  # lane count in its --min-matches: change a lane's LINT_SHARD (agent-cli,
+  # runtime, support, libraries, all) or LINT_CROSS_GOOS (e.g. "windows
+  # darwin") once the merged lane fits the cold budget. golangci-lint loads
+  # dependencies from compiled export data, so a cold lane spends most of
+  # its time compiling: every lane here takes 80-140s cold, while the merged
+  # lanes measured in #591 and in run 36195053824 (linux libraries, windows
+  # all, darwin all, and windows+darwin agent-cli 158-163s or support
+  # 144-180s) took up to 225s cold, too close to or over the budget.
   #
   # Every lane enforces the hard limits in .golangci.yml (which also loads the
   # opt-in live/e2e/e2e_internal/stress/sessioncapacityramp test tags). The
   # linux lanes add the new-code pass and the wireinject pass; the windows
   # and darwin lanes lint with cgo disabled (darwin also with the
-  # nomicrophone tag), and the darwin cgo lane lints cgo-constrained packages
-  # natively on macOS. See docs/architecture/lint-policy.md.
+  # nomicrophone tag). The cgo-constrained darwin packages are linted
+  # natively in CI (WebMCP Chrome), which already runs on macOS. See
+  # docs/architecture/lint-policy.md.
   static-lint:
     name: CI (static lint ${{ matrix.lane }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     # actions: write lets go-cache-save delete superseded main caches.
     permissions:
@@ -120,56 +121,40 @@ jobs:
         include:
           - lane: linux agent-cli
             cache: static-lint-linux-agent-cli
-            runner: ubuntu-latest
             fetch-depth: 0
             command: make lint LINT_SHARD=agent-cli
           - lane: linux runtime
             cache: static-lint-linux-runtime
-            runner: ubuntu-latest
             fetch-depth: 0
             command: make lint LINT_SHARD=runtime
           - lane: linux support
             cache: static-lint-linux-support
-            runner: ubuntu-latest
             fetch-depth: 0
             command: make lint LINT_SHARD=support
           - lane: windows agent-cli
             cache: static-lint-windows-agent-cli
-            runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=agent-cli
           - lane: windows runtime
             cache: static-lint-windows-runtime
-            runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=runtime
           - lane: windows support
             cache: static-lint-windows-support
-            runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=support
           - lane: darwin agent-cli
             cache: static-lint-darwin-agent-cli
-            runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli
           - lane: darwin runtime
             cache: static-lint-darwin-runtime
-            runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=runtime
           - lane: darwin support
             cache: static-lint-darwin-support
-            runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support
-          # cgo-constrained darwin files (CoreAudio capture, display
-          # permission) need the macOS SDK.
-          - lane: darwin cgo
-            cache: static-lint-darwin-cgo
-            runner: macos-14
-            fetch-depth: 1
-            command: make lint-darwin-cgo
 
     steps:
       - name: Check out repository
@@ -273,66 +258,19 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # The Linux package corpus has one owner: coverage, as three disjoint jobs
-  # that run concurrently. agent-cli is isolated because its deterministic
-  # integration and replay tests are the long pole, and split into every
-  # package except test/integration (coverage agent-cli unit) and
-  # test/integration (coverage); the other modules and the embedding consumer
-  # share one runner (coverage libraries).
+  # The Linux package corpus has one owner: coverage, as two disjoint jobs
+  # that run concurrently. agent-cli (CI (coverage)) runs test/integration
+  # and then its unit packages on one runner, so the unit tests reuse the
+  # integration build's coverage-instrumented compiles; the other modules and
+  # the embedding consumer share another runner (coverage libraries). All
+  # three in one job took 194-251s cold (experiment run 36195053824),
+  # over the three-minute budget.
   #
-  # The integration job compiles its coverage-instrumented test binary once
+  # The integration step compiles its coverage-instrumented test binary once
   # (building the helper binaries alongside) and runs
   # AGENT_CLI_INTEGRATION_SHARDS duration-balanced shards of its top-level
   # tests concurrently: the shards mostly wait on paced audio, so one runner
   # overlaps them instead of paying setup and a compile per shard.
-  coverage-agent-cli-unit:
-    name: CI (coverage agent-cli unit)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # actions: write lets go-cache-save delete superseded main caches.
-    permissions:
-      contents: read
-      actions: write
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          filter: blob:none
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /*
-            !/docs/temp/
-
-      # Each coverage job keeps its own build cache: the agent-cli test
-      # binaries are built with coverage instrumentation, which setup-go's
-      # shared cache (written once by whichever job finishes first) never
-      # holds.
-      - name: Set up Go
-        id: go
-        uses: ./.github/actions/go-cache
-        with:
-          cache-name: coverage-agent-cli-unit
-
-      - name: Run hermetic agent-cli unit tests with coverage
-        run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=unit
-
-      - name: Upload agent-cli coverage profile
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-agent-cli-unit
-          path: coverage/agent-cli.out
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Save Go cache
-        uses: ./.github/actions/go-cache-save
-        with:
-          primary-key: ${{ steps.go.outputs.primary-key }}
-          matched-key: ${{ steps.go.outputs.matched-key }}
-          gocache: ${{ steps.go.outputs.gocache }}
-          gomodcache: ${{ steps.go.outputs.gomodcache }}
-
   coverage-libraries:
     name: CI (coverage libraries)
     runs-on: ubuntu-latest
@@ -377,15 +315,16 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # The required "CI (coverage)" check: the agent-cli integration shards, then
-  # the coverage gate over every profile once the two sibling coverage jobs
-  # have succeeded. The gate does not run if the integration tests fail.
+  # The required "CI (coverage)" check: the agent-cli integration shards and
+  # unit packages, then the coverage gate over every profile once
+  # coverage libraries has succeeded. The gate does not run if the agent-cli
+  # tests fail.
   coverage:
     name: CI (coverage)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # actions: write lets go-cache-save delete superseded main caches (and
-    # lets ci-await-jobs read the sibling jobs).
+    # lets ci-await-jobs read coverage libraries).
     permissions:
       contents: read
       actions: write
@@ -404,15 +343,23 @@ jobs:
         id: go
         uses: ./.github/actions/go-cache
         with:
-          cache-name: coverage-agent-cli-integration
+          cache-name: coverage-agent-cli
+          # This job's cache was named after its integration tests alone.
+          fallback-cache-names: coverage-agent-cli-integration
 
+      # The integration shards run first, on a fresh runner as they did in
+      # a job of their own (they are timing-bound); the unit packages then
+      # reuse the integration build's coverage-instrumented compiles.
       - name: Run hermetic agent-cli integration tests with coverage
         run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=integration
 
-      - name: Wait for the other coverage jobs
+      - name: Run hermetic agent-cli unit tests with coverage
+        run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=unit
+
+      - name: Wait for coverage libraries
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/ci-await-jobs.sh "CI (coverage agent-cli unit)" "CI (coverage libraries)"
+        run: scripts/ci-await-jobs.sh "CI (coverage libraries)"
 
       - name: Download coverage profiles
         uses: actions/download-artifact@v4
@@ -570,6 +517,11 @@ jobs:
   # opt-in coverage cannot make a pull request appear complete. The locked
   # WebMCP Chrome artifact is mac-arm64. The test runs in the default build
   # (no build tag), which is where it and every helper it uses live.
+  #
+  # The job also lints the cgo-constrained darwin packages (CoreAudio
+  # capture, display permission), which need the macOS SDK: on its own macOS
+  # runner that lane was mostly setup, and CI (static) had to wait for it
+  # behind the macOS runner queue. Together they took 91-113s cold.
   webmcp-chrome:
     name: CI (WebMCP Chrome)
     runs-on: macos-14
@@ -594,6 +546,18 @@ jobs:
         uses: ./.github/actions/go-cache
         with:
           cache-name: macos-webmcp
+          extra-paths: ${{ runner.temp }}/golangci-lint
+
+      - name: Cache pinned analyzer binaries
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/go-agent-harness/ci-analyzers
+          key: ci-analyzers-${{ runner.os }}-${{ runner.arch }}-golangci-lint-v2.9.0-staticcheck-2026.1
+
+      - name: Install golangci-lint
+        env:
+          GOLANGCI_LINT_VERSION: v2.9.0
+        run: bash scripts/install-ci-analyzer.sh golangci-lint
 
       - name: Run production-binary cross-process cancellation acceptance
         working-directory: agent-cli
@@ -601,13 +565,21 @@ jobs:
           WEBMCP_CLI_CHROME_INTEGRATION: "1"
         run: go test ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v
 
+      - name: Lint cgo-constrained darwin packages
+        if: always()
+        env:
+          GOLANGCI_LINT_CACHE: ${{ runner.temp }}/golangci-lint
+        run: make lint-darwin-cgo
+
       - name: Save Go cache
+        if: always()
         uses: ./.github/actions/go-cache-save
         with:
           primary-key: ${{ steps.go.outputs.primary-key }}
           matched-key: ${{ steps.go.outputs.matched-key }}
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
+          extra-paths: ${{ runner.temp }}/golangci-lint
 
   # The Windows device backend (every TestWindows*/TestWASAPI* test in
   # device_windows_test.go; the WASAPI endpoint tests skip without an audio

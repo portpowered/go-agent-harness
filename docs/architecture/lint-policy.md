@@ -168,23 +168,32 @@ Every CI job must finish within three minutes even with a cold build cache
 | `CI (static lint darwin agent-cli)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli` |
 | `CI (static lint darwin runtime)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=runtime` |
 | `CI (static lint darwin support)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support` |
-| `CI (static lint darwin cgo)` | `make lint-darwin-cgo` on macOS |
 
-Merged lanes were measured cold in #591 and do not fit: `make lint
+`make lint-darwin-cgo` needs the macOS SDK, so it runs in the required
+`CI (WebMCP Chrome)` job, which already runs on macOS (91-113s cold for
+both), rather than on a macOS lane of its own.
+
+Merged lanes were measured cold in #591 and later and do not fit: `make lint
 LINT_SHARD=libraries` 131-223s, `make lint-cross LINT_CROSS_GOOS=windows
 LINT_SHARD=all` 176-225s, `make lint-cross LINT_CROSS_GOOS=darwin
-LINT_SHARD=all` 155-206s, `make lint LINT_SHARD=all` ~250s. Warm, every one
+LINT_SHARD=all` 155-206s, `make lint LINT_SHARD=all` ~250s, and `make
+lint-cross LINT_CROSS_GOOS="windows darwin"` 158-163s for `LINT_SHARD=agent-cli`
+and 144-180s for `LINT_SHARD=support` (too close to the budget). Warm, every one
 of them takes under 35s, so the lanes can merge once cold compiles shrink:
 they are one matrix in `.github/workflows/ci.yml`, and merging two lanes is a
 change to one entry's `LINT_SHARD` or `LINT_CROSS_GOOS` (for example
-`LINT_CROSS_GOOS="windows darwin"`).
+`LINT_CROSS_GOOS="windows darwin"`) plus the lane count in `CI (static)`'s
+`--min-matches`.
 
 The required `CI (static)` check runs `make fmt`, `make
 check-ci-test-partition` and `make architecture-size-check` (75-100s cold;
 `make wire-check`, another 40-55s cold, runs in `CI (unit)`), then
 waits for every job named `CI (static lint *` and fails if any of them failed
-(`scripts/ci-await-jobs.sh`), so adding, removing or merging a lane needs no
-other edit. `make lint` and `make lint-cross` start the modules with the
+or fewer than `--min-matches` lanes exist (`scripts/ci-await-jobs.sh`), so
+adding, removing or merging a lane needs only that count updated. Every lane
+runs on ubuntu, so the wait never sits behind the macOS runner queue; the
+waiter gives up after 25 minutes (`--timeout`), inside the job's 30-minute
+limit. `make lint` and `make lint-cross` start the modules with the
 longest cold lint first (`LINT_SCHEDULE`).
 
 Each lane restores its own Go build, module and golangci-lint caches through

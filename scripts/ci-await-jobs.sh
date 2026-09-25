@@ -19,18 +19,25 @@
 # (default 120) fails the wait: a renamed or removed sibling is a workflow
 # error, not something to wait out for the whole --timeout.
 #
-# Usage: scripts/ci-await-jobs.sh [--timeout SECONDS] [--missing-timeout SECONDS] [--interval SECONDS] JOB_NAME...
+# --min-matches N (default 1) makes each prefix match at least N jobs: with
+# fewer, the prefix counts as missing and fails after --missing-timeout, so a
+# matrix lane dropped by mistake (a bad `include`, a deleted entry) fails the
+# wait instead of passing with the remaining lanes. Pass the lane count.
+#
+# Usage: scripts/ci-await-jobs.sh [--timeout SECONDS] [--missing-timeout SECONDS] [--min-matches N] [--interval SECONDS] JOB_NAME...
 # Env:   GH_TOKEN (actions: read), GITHUB_REPOSITORY, GITHUB_RUN_ID; GH (gh
 #        binary, default gh).
 set -euo pipefail
 
 timeout=1500
 missing_timeout=120
+min_matches=1
 interval=5
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 	--timeout) timeout="$2"; shift 2 ;;
 	--missing-timeout) missing_timeout="$2"; shift 2 ;;
+	--min-matches) min_matches="$2"; shift 2 ;;
 	--interval) interval="$2"; shift 2 ;;
 	--) shift; break ;;
 	-*) echo "ci-await-jobs: unknown option $1" >&2; exit 2 ;;
@@ -38,9 +45,12 @@ while [ "$#" -gt 0 ]; do
 	esac
 done
 if [ "$#" -eq 0 ]; then
-	echo "usage: ci-await-jobs.sh [--timeout SECONDS] [--missing-timeout SECONDS] [--interval SECONDS] JOB_NAME..." >&2
+	echo "usage: ci-await-jobs.sh [--timeout SECONDS] [--missing-timeout SECONDS] [--min-matches N] [--interval SECONDS] JOB_NAME..." >&2
 	exit 2
 fi
+case "$min_matches" in
+'' | *[!0-9]* | 0) echo "ci-await-jobs: --min-matches must be a positive integer, got '$min_matches'" >&2; exit 2 ;;
+esac
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 run_id="${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
 gh="${GH:-gh}"
@@ -72,6 +82,10 @@ while :; do
 			missing+=("$pattern")
 			continue
 		fi
+		if [ "${pattern: -1}" = "*" ] && [ "$(wc -l <<<"$rows")" -lt "$min_matches" ]; then
+			pending+=("$pattern ($(wc -l <<<"$rows" | tr -d ' ') of $min_matches jobs listed)")
+			missing+=("$pattern (fewer than $min_matches jobs)")
+		fi
 		while IFS= read -r row; do
 			name="$(cut -f1 <<<"$row")"
 			status="$(cut -f2 <<<"$row")"
@@ -95,7 +109,7 @@ while :; do
 	fi
 	# A failed listing proves nothing about which jobs exist.
 	if [ -n "$listing" ] && [ "${#missing[@]}" -gt 0 ] && [ "$SECONDS" -ge "$missing_deadline" ]; then
-		echo "::error::no job matched after ${missing_timeout}s: ${missing[*]}"
+		echo "::error::jobs still unmatched after ${missing_timeout}s: ${missing[*]}"
 		exit 1
 	fi
 	if [ "$SECONDS" -ge "$deadline" ]; then
