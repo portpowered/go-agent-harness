@@ -75,6 +75,9 @@ func TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			// Independent agent/device process pairs draining at the real
+			// callback cadence; they wait together.
+			t.Parallel()
 			promptBytes := 0
 			if testCase.naturalClose {
 				promptBytes = 32

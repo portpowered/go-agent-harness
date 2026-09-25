@@ -232,13 +232,18 @@ func TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM(t *testing.T) {
 		providerClose:   true,
 		holdToneControl: true,
 	}
+	// Both subtests wait out a 3s tool delay to cross the 2.5s hold-tone gap
+	// threshold; they are independent process pairs, so they wait together.
 	t.Run("default_cue", func(t *testing.T) {
+		t.Parallel()
 		runRemoteToolAudioScenario(t, testCase, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
 	})
 	t.Run("provider_only_fixture", func(t *testing.T) {
-		testCase.name = "provider_only_hold_tone_policy"
-		testCase.holdToneControl = false
-		runRemoteToolAudioScenario(t, testCase, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
+		t.Parallel()
+		providerOnly := testCase
+		providerOnly.name = "provider_only_hold_tone_policy"
+		providerOnly.holdToneControl = false
+		runRemoteToolAudioScenario(t, providerOnly, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
 	})
 }
 

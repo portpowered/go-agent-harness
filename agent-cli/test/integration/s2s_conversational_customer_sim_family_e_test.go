@@ -146,15 +146,19 @@ func familyEShippedScenario() probe.CustomerScenario {
 	scenario := probe.NewFamilyEScenario()
 	scenario.ID = "family-e-shipped-child"
 	scenario.Name = "Shipped child patience test"
+	// The patience controller runs on the real clock, so these thresholds are
+	// real waits: a quarter of the production-like 3s/4s/6s policy keeps the
+	// same ordering (response start < re-prompt < dead air < deadline) with
+	// enough headroom over child-process startup on a loaded runner.
 	scenario.Patience = probe.PatienceThresholds{
 		ListenBeforeFollowUp: 100 * time.Millisecond,
-		ResponseStart:        3 * time.Second,
-		InProgressWork:       3 * time.Second,
-		Reprompt:             4 * time.Second,
-		AbsoluteDeadAir:      6 * time.Second,
+		ResponseStart:        750 * time.Millisecond,
+		InProgressWork:       750 * time.Millisecond,
+		Reprompt:             time.Second,
+		AbsoluteDeadAir:      1500 * time.Millisecond,
 		MaxReprompts:         1,
 	}
-	scenario.Deadline = 10 * time.Second
+	scenario.Deadline = 5 * time.Second
 	return scenario
 }
 
