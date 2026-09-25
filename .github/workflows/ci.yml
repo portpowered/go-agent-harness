@@ -648,6 +648,10 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
+  # The Windows device backend (every TestWindows*/TestWASAPI* test in
+  # device_windows_test.go; the WASAPI endpoint tests skip without an audio
+  # endpoint), the portable capacity regression and the codec coverage the
+  # Windows cases rely on. Only the two packages that hold them are compiled.
   windows-audio-portable:
     name: CI (Windows audio portable)
     runs-on: windows-latest
@@ -674,7 +678,7 @@ jobs:
           cache-name: windows
 
       - name: Run Windows audio queue regressions
-        run: go test ./go-audio/... ./go-device-gateway/... -run 'TestWindowsPortablePlaybackBurstPreservesFIFO|TestVirtualPlaybackCapacityAdversarial' -count=1
+        run: go test ./go-audio/pkg/codec ./go-device-gateway/pkg/devices -run '^(TestWindowsPortablePlaybackBurstPreservesFIFO.*|TestWASAPI.*|TestVirtualPlaybackCapacityAdversarial|TestPacketEnergyC42Coverage)$' -count=1
 
       - name: Save Go cache
         uses: ./.github/actions/go-cache-save
