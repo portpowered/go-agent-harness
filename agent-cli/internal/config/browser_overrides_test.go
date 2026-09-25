@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
-func TestBrowserConfigApplyBrowserOverridesPreservesUnspecifiedValues(t *testing.T) {
-	base := BrowserConfig{
+// browserOverridesFileBase is a fully populated file-sourced browser config
+// whose values differ from both defaults and the CLI overrides under test.
+func browserOverridesFileBase() BrowserConfig {
+	return BrowserConfig{
 		Tools: BrowserToolsConfig{Enabled: false, Backend: BrowserToolsBackendWebMCP},
 		Connection: BrowserConnectionConfig{
 			CDPURL:           "http://file.example:9222",
@@ -50,6 +52,10 @@ func TestBrowserConfigApplyBrowserOverridesPreservesUnspecifiedValues(t *testing
 		},
 		Replay: BrowserReplayConfig{Path: "/file/replay.jsonl", Strict: false},
 	}
+}
+
+func TestBrowserConfigApplyBrowserOverridesPreservesUnspecifiedValues(t *testing.T) {
+	base := browserOverridesFileBase()
 
 	allowed := []string{"https://cli.example"}
 	maxResultBytes := 99

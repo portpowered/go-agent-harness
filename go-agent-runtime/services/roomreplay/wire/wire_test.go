@@ -16,7 +16,7 @@ func TestNewServiceReturnsIndependentAdmissionServices(t *testing.T) {
 	if first == second {
 		t.Fatal("NewService returned shared service state")
 	}
-	var _ roomreplay.Service = first
+	var _ = roomreplay.Service(first)
 }
 
 func TestServiceValidateOutputRejectsSourceAndAllowsExternalDestination(t *testing.T) {

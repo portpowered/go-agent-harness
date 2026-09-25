@@ -415,8 +415,9 @@ func TestRecordingAdmissionRequiresDependenciesAndLiveContext(t *testing.T) {
 	}
 	configuration.SetSessionAudioInput(models.AudioFormatPCM16, models.SampleRate16000)
 	configuration.SetSessionAudioOutput(models.AudioFormatG711Ulaw, models.SampleRate8000)
-	//lint:ignore SA1012 Exercise the capture owner's nil-context admission rejection.
-	if _, err := owner.ConnectSession(nil); err == nil {
+	// A typed nil exercises the capture owner's nil-context admission rejection.
+	var nilContext context.Context
+	if _, err := owner.ConnectSession(nilContext); err == nil {
 		t.Fatal("nil context admitted")
 	}
 	ctx, cancel := context.WithCancel(t.Context())

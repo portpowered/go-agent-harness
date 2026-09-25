@@ -63,7 +63,11 @@ func TestLoadAskContentPartRejectsUnreadableFile(t *testing.T) {
 	if err := os.Chmod(path, 0); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(path, 0o600)
+	t.Cleanup(func() {
+		if err := os.Chmod(path, 0o600); err != nil {
+			t.Errorf("restore attachment permissions: %v", err)
+		}
+	})
 
 	_, err := LoadAskContentPart(path)
 	if err == nil {

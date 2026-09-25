@@ -136,26 +136,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// When any autocomplete is active, intercept navigation keys.
-		if ac := m.activeAutocomplete(); ac != nil && ac.IsActive() {
-			switch msg.Type {
-			case tea.KeyUp, tea.KeyDown:
-				*ac, _ = ac.Update(msg)
-				return m, nil
-			case tea.KeyTab:
-				selected := ac.Selected()
-				if selected != "" {
-					if ac == &m.fileAutocomplete {
-						m.completeAtSuggestion(selected)
-					} else {
-						m.completeCmdSuggestion(selected)
-					}
-				}
-				ac.Reset()
-				return m, nil
-			case tea.KeyEsc:
-				ac.Reset()
-				return m, nil
-			}
+		if m.interceptAutocompleteKey(msg) {
+			return m, nil
 		}
 
 		switch msg.Type {
@@ -176,26 +158,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.quitting = true
 				return m, tea.Quit
 			}
-			// Slash commands: dispatch locally without sending to the LLM.
-			if strings.HasPrefix(rawInput, "/") {
-				return m.handleSlashCommand(rawInput)
-			}
-			// Parse @file references before sending to the LLM.
-			cleanedText, contentParts, refErr := parseAtReferences(rawInput)
-			if refErr != "" {
-				errLine := chatLine{kind: chatLineSystem, content: refErr}
-				m.lines = append(m.lines, errLine)
-				rendered := strings.TrimSuffix(renderChatLineWrapped(errLine, m.effectiveWidth()), "\n")
-				return m, tea.Println(rendered)
-			}
-			m.lines = append(m.lines, chatLine{kind: chatLineUser, content: rawInput})
-			// Print user message to scrollback so it persists when scrolling up,
-			// then start the agent turn. View() does not render committed lines.
-			userRendered := strings.TrimSuffix(
-				renderChatLineWrapped(chatLine{kind: chatLineUser, content: rawInput}, m.effectiveWidth()), "\n")
-			execInput := agentloop.NewExecuteInput(cleanedText)
-			execInput.ContentParts = contentParts
-			return m, tea.Batch(tea.Println(userRendered), m.runAgentWithInput(execInput))
+			return m.submitInput(rawInput)
 		}
 		// Delegate all other keys to Bubbles textinput (cursor, backspace, runes, etc.)
 		var cmd tea.Cmd
@@ -235,53 +198,12 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, consumeOneStreamEvent(m.stream, m.handle)
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		if m.width < 20 {
-			m.width = 20
-		}
-		w := m.width - 2 // leave room for "> "
-		if w > 0 {
-			m.input.Width = w
-		}
+		m.resize(msg)
 		return m, nil
 
 	case streamDoneMsg:
-		cleanupErr := finalizeChatHandle(m.handle, m.askFlags.RecordCapturePath)
-		reportChatHandleError(&m, "finalizing session", cleanupErr)
-		// Flush any remaining tool text (in case TEXT.END was not received), then commit current turn
-		if m.toolTextPartial != "" {
-			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
-		}
-
-		// Collect lines to commit and flush to scrollback.
-		width := m.effectiveWidth()
-		var cmds []tea.Cmd
-		for _, ln := range m.currentTurnLines {
-			m.lines = append(m.lines, ln)
-			rendered := strings.TrimSuffix(renderChatLineWrapped(ln, width), "\n")
-			cmds = append(cmds, tea.Println(rendered))
-		}
-		if m.assistantPartial != "" {
-			assistantLine := chatLine{kind: chatLineAssistant, content: m.assistantPartial}
-			m.lines = append(m.lines, assistantLine)
-			rendered := strings.TrimSuffix(renderChatLineWrapped(assistantLine, width), "\n")
-			cmds = append(cmds, tea.Println(rendered))
-		}
-
-		// Clear streaming state.
-		m.stream = nil
-		m.handle = nil
-		m.assistantPartial = ""
-		m.toolTextPartial = ""
-		m.reasoningPartial = ""
-		m.thinkingActive = false
-		m.currentTurnLines = nil
-
-		if len(cmds) > 0 {
-			return m, tea.Batch(cmds...)
-		}
-		return m, nil
+		cmd := m.finishTurn()
+		return m, cmd
 	}
 
 	// Pass through to Bubbles textinput (e.g. cursor blink messages from Init).
@@ -318,43 +240,79 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineTool, content: v.Name})
 		}
 	case messages.StreamTypeImageStart:
-		if evt.Role == messages.RoleTool || evt.ToolCallId != "" {
-			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineMedia, content: "[Image returned]"})
-		}
+		m.appendToolMediaLine(evt, "[Image returned]")
 	case messages.StreamTypeAudioStart:
-		if evt.Role == messages.RoleTool || evt.ToolCallId != "" {
-			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineMedia, content: "[Audio returned]"})
-		}
+		m.appendToolMediaLine(evt, "[Audio returned]")
 	case messages.StreamTypeVideoStart:
-		if evt.Role == messages.RoleTool || evt.ToolCallId != "" {
-			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineMedia, content: "[Video returned]"})
-		}
+		m.appendToolMediaLine(evt, "[Video returned]")
 	case messages.StreamTypeFileStart:
-		if evt.Role == messages.RoleTool || evt.ToolCallId != "" {
-			label := "[File returned]"
-			if v, ok := evt.Value.(*messages.FileStartValue); ok && v.Name != "" {
-				label = "[File returned: " + v.Name + "]"
-			}
-			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineMedia, content: label})
-		}
+		m.appendToolMediaLine(evt, toolFileLabel(evt))
 	case messages.StreamTypeTextStart:
 		if isFromTool(evt) {
 			m.toolTextPartial = ""
 		}
 	case messages.StreamTypeTextDelta:
-		if v, ok := evt.Value.(*messages.TextDeltaValue); ok {
-			if isFromTool(evt) {
-				m.toolTextPartial += v.Content
-			} else {
-				m.assistantPartial += v.Content
-			}
-		}
+		m.appendTextDelta(evt)
 	case messages.StreamTypeTextEnd:
 		if isFromTool(evt) && m.toolTextPartial != "" {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
 			m.toolTextPartial = ""
 		}
 	}
+}
+
+// interceptAutocompleteKey applies navigation keys to the active autocomplete
+// popup and reports whether the key was consumed.
+func (m *ChatModel) interceptAutocompleteKey(msg tea.KeyMsg) bool {
+	ac := m.activeAutocomplete()
+	if ac == nil || !ac.IsActive() {
+		return false
+	}
+	if msg.Type == tea.KeyUp || msg.Type == tea.KeyDown {
+		*ac, _ = ac.Update(msg)
+		return true
+	}
+	if msg.Type == tea.KeyTab {
+		if selected := ac.Selected(); selected != "" {
+			if ac == &m.fileAutocomplete {
+				m.completeAtSuggestion(selected)
+			} else {
+				m.completeCmdSuggestion(selected)
+			}
+		}
+		ac.Reset()
+		return true
+	}
+	if msg.Type == tea.KeyEsc {
+		ac.Reset()
+		return true
+	}
+	return false
+}
+
+// submitInput dispatches a non-empty, non-exit input line: slash commands run
+// locally, and anything else starts an agent turn with its @file references.
+func (m ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
+	// Slash commands: dispatch locally without sending to the LLM.
+	if strings.HasPrefix(rawInput, "/") {
+		return m.handleSlashCommand(rawInput)
+	}
+	// Parse @file references before sending to the LLM.
+	cleanedText, contentParts, refErr := parseAtReferences(rawInput)
+	if refErr != "" {
+		errLine := chatLine{kind: chatLineSystem, content: refErr}
+		m.lines = append(m.lines, errLine)
+		rendered := strings.TrimSuffix(renderChatLineWrapped(errLine, m.effectiveWidth()), "\n")
+		return m, tea.Println(rendered)
+	}
+	m.lines = append(m.lines, chatLine{kind: chatLineUser, content: rawInput})
+	// Print user message to scrollback so it persists when scrolling up,
+	// then start the agent turn. View() does not render committed lines.
+	userRendered := strings.TrimSuffix(
+		renderChatLineWrapped(chatLine{kind: chatLineUser, content: rawInput}, m.effectiveWidth()), "\n")
+	execInput := agentloop.NewExecuteInput(cleanedText)
+	execInput.ContentParts = contentParts
+	return m, tea.Batch(tea.Println(userRendered), m.runAgentWithInput(execInput))
 }
 
 // consumeOneStreamEvent returns a Cmd that reads one event from the stream and

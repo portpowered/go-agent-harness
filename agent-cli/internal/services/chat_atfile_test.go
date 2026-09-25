@@ -10,9 +10,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
-	workspace := t.TempDir()
-	t.Chdir(workspace)
+// writeAtReferenceWorkspace creates text, empty, binary, image, and directory
+// fixtures for @reference parsing.
+func writeAtReferenceWorkspace(t *testing.T, workspace string) {
+	t.Helper()
 	if err := os.WriteFile(filepath.Join(workspace, "notes.txt"), []byte("exact file text\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +32,12 @@ func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "dir", "child.txt"), []byte("child"), 0600); err != nil {
 		t.Fatal(err)
 	}
+}
 
+// assertAtTextAndDirectoryReferences checks text-file and directory @references
+// relative to the current working directory.
+func assertAtTextAndDirectoryReferences(t *testing.T) {
+	t.Helper()
 	cleaned, parts, errMsg := parseAtReferences("before @notes.txt after")
 	if errMsg != "" || cleaned != "before after" || len(parts) != 1 {
 		t.Fatalf("text reference = (%q, %#v, %q)", cleaned, parts, errMsg)
@@ -49,8 +55,13 @@ func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
 	if !ok || !strings.Contains(directoryPart.Text, "[Directory: dir]") || !strings.Contains(directoryPart.Text, "child.txt") || !strings.Contains(directoryPart.Text, "nested/") {
 		t.Fatalf("directory part = %#v", parts[0])
 	}
+}
 
-	_, parts, errMsg = parseAtReferences("@photo.PnG")
+// assertAtFileKindReferences checks image, binary, and empty-file @references
+// relative to the current working directory.
+func assertAtFileKindReferences(t *testing.T) {
+	t.Helper()
+	_, parts, errMsg := parseAtReferences("@photo.PnG")
 	if errMsg != "" || len(parts) != 1 {
 		t.Fatalf("image reference = (%#v, %q)", parts, errMsg)
 	}
@@ -76,8 +87,16 @@ func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
 	if !ok || emptyPart.Text != "[File: empty.txt]\n" {
 		t.Fatalf("empty file part = %#v", parts[0])
 	}
+}
 
-	cleaned, parts, errMsg = parseAtReferences("plain @ text")
+func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
+	workspace := t.TempDir()
+	t.Chdir(workspace)
+	writeAtReferenceWorkspace(t, workspace)
+	assertAtTextAndDirectoryReferences(t)
+	assertAtFileKindReferences(t)
+
+	cleaned, parts, errMsg := parseAtReferences("plain @ text")
 	if errMsg != "" || cleaned != "plain @ text" || len(parts) != 0 {
 		t.Fatalf("literal at sign = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}

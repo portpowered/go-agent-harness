@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -166,6 +167,98 @@ func validateManagedOpenURL(raw string) error {
 	}
 	if (strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")) && parsed.Hostname() == "" {
 		return fmt.Errorf("browser.managed.open %q is not a valid startup URL (HTTP URLs require a host)", raw)
+	}
+	return nil
+}
+
+// validateBrowserRawBool accepts native YAML booleans from files and only the
+// strict strings "true" or "false" from environment variables.
+func validateBrowserRawBool(value interface{}, source string, fromEnvironment bool) error {
+	switch typed := value.(type) {
+	case bool:
+		if !fromEnvironment {
+			return nil
+		}
+	case string:
+		if fromEnvironment && (typed == "true" || typed == "false") {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: expected strict boolean true or false", source)
+}
+
+func validateBrowserRawEnum(allowed []string, value interface{}, source string) error {
+	text, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("%s: expected one of %s", source, strings.Join(allowed, ", "))
+	}
+	if !containsString(allowed, text) {
+		return fmt.Errorf("%s: invalid value %q (want one of %s)", source, text, strings.Join(allowed, ", "))
+	}
+	return nil
+}
+
+func validateBrowserRawDuration(value interface{}, source string) error {
+	text, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("%s: expected a positive Go duration such as 30s", source)
+	}
+	duration, err := time.ParseDuration(text)
+	if err != nil {
+		return fmt.Errorf("%s: invalid Go duration %q: %w", source, text, err)
+	}
+	if duration <= 0 {
+		return fmt.Errorf("%s: duration must be positive", source)
+	}
+	return nil
+}
+
+// validateBrowserRawSize accepts decimal strings only from environment
+// variables and non-negative YAML integers from files.
+func validateBrowserRawSize(value interface{}, source string, fromEnvironment bool) error {
+	if text, ok := value.(string); ok {
+		if !fromEnvironment {
+			return fmt.Errorf("%s: expected a non-negative decimal integer", source)
+		}
+		if _, err := parseNonNegativeDecimalSize(text); err != nil {
+			return fmt.Errorf("%s: %w", source, err)
+		}
+		return nil
+	}
+	if err := validateYAMLInteger(value); err != nil {
+		return fmt.Errorf("%s: %w", source, err)
+	}
+	return nil
+}
+
+// validateBrowserRawStringList accepts a JSON array string only from
+// environment variables and a YAML sequence from files.
+func validateBrowserRawStringList(value interface{}, source string, fromEnvironment bool) error {
+	if text, ok := value.(string); ok {
+		if !fromEnvironment {
+			return fmt.Errorf("%s: expected a YAML list of strings", source)
+		}
+		var values []interface{}
+		if err := json.Unmarshal([]byte(text), &values); err != nil {
+			return fmt.Errorf("%s: expected a JSON array of strings: %w", source, err)
+		}
+		if values == nil {
+			return fmt.Errorf("%s: expected a JSON array of strings", source)
+		}
+		return validateBrowserRawStringItems(values, source)
+	}
+	values, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("%s: expected a YAML list of strings", source)
+	}
+	return validateBrowserRawStringItems(values, source)
+}
+
+func validateBrowserRawStringItems(values []interface{}, source string) error {
+	for index, item := range values {
+		if _, ok := item.(string); !ok {
+			return fmt.Errorf("%s: item %d must be a string", source, index)
+		}
 	}
 	return nil
 }

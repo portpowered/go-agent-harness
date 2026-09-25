@@ -72,22 +72,7 @@ func TestAgentsMDWorkspace_FilesystemSandbox(t *testing.T) {
 			{name: "whitespace-only", content: " \t\r\n\n\t "},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				workspaceDir := t.TempDir()
-				writeAgentsMD(t, workspaceDir, tc.content)
-
-				if err := EnsureAgentsMD(workspaceDir, representativeToolDefinitions()); err != nil {
-					t.Fatalf("EnsureAgentsMD: %v", err)
-				}
-				if got := readAgentsMD(t, workspaceDir); got != tc.content {
-					t.Fatalf("existing %s AGENTS.md changed: got %q, want %q", tc.name, got, tc.content)
-				}
-				info, err := os.Stat(filepath.Join(workspaceDir, AgentsMDFileName))
-				if err != nil {
-					t.Fatalf("stat preserved %s AGENTS.md: %v", tc.name, err)
-				}
-				if info.Size() != int64(len(tc.content)) {
-					t.Fatalf("preserved %s AGENTS.md size = %d, want %d", tc.name, info.Size(), len(tc.content))
-				}
+				assertExistingAgentsMDPreserved(t, tc.name, tc.content)
 			})
 		}
 	})
@@ -272,6 +257,28 @@ func TestGenerateAgentsMD_CanonicalizesToolAndParameterOrder(t *testing.T) {
 	zIndex := strings.Index(gotFirst, "| `z` | string")
 	if aIndex < 0 || zIndex < 0 || aIndex > zIndex {
 		t.Fatalf("parameter rows are not canonical: a=%d z=%d", aIndex, zIndex)
+	}
+}
+
+// assertExistingAgentsMDPreserved writes content as an existing AGENTS.md and
+// requires EnsureAgentsMD to leave its bytes and size unchanged.
+func assertExistingAgentsMDPreserved(t *testing.T, name, content string) {
+	t.Helper()
+	workspaceDir := t.TempDir()
+	writeAgentsMD(t, workspaceDir, content)
+
+	if err := EnsureAgentsMD(workspaceDir, representativeToolDefinitions()); err != nil {
+		t.Fatalf("EnsureAgentsMD: %v", err)
+	}
+	if got := readAgentsMD(t, workspaceDir); got != content {
+		t.Fatalf("existing %s AGENTS.md changed: got %q, want %q", name, got, content)
+	}
+	info, err := os.Stat(filepath.Join(workspaceDir, AgentsMDFileName))
+	if err != nil {
+		t.Fatalf("stat preserved %s AGENTS.md: %v", name, err)
+	}
+	if info.Size() != int64(len(content)) {
+		t.Fatalf("preserved %s AGENTS.md size = %d, want %d", name, info.Size(), len(content))
 	}
 }
 

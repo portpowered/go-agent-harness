@@ -110,6 +110,46 @@ func TestBuildExecuteInput_RejectsAttachmentBeforeReadingStdin(t *testing.T) {
 	}
 }
 
+// checkBinaryStdinContentPart requires binary stdin to become a single
+// file part named stdin.
+func checkBinaryStdinContentPart(t *testing.T, input agentloop.ExecuteInput) {
+	t.Helper()
+	if input.Message != "" || len(input.ContentParts) != 1 {
+		t.Fatalf("input = %#v, want one binary content part", input)
+	}
+	part, ok := input.ContentParts[0].(messages.FilePart)
+	if !ok {
+		t.Fatalf("content part type = %T, want messages.FilePart", input.ContentParts[0])
+	}
+	if !bytes.Equal(part.Bytes, []byte{0, 1, 2, 3}) || part.Name != "stdin" {
+		t.Errorf("file part = %#v, want stdin bytes and name", part)
+	}
+}
+
+// checkOrderedFileParts requires first.txt and second.txt as file parts in
+// argument order.
+func checkOrderedFileParts(t *testing.T, input agentloop.ExecuteInput) {
+	t.Helper()
+	if input.Message != "" || len(input.ContentParts) != 2 {
+		t.Fatalf("input = %#v, want two file parts", input)
+	}
+	for i, want := range []struct {
+		name string
+		data string
+	}{
+		{name: "first.txt", data: "first file"},
+		{name: "second.txt", data: "second file"},
+	} {
+		part, ok := input.ContentParts[i].(messages.FilePart)
+		if !ok {
+			t.Fatalf("content part %d type = %T, want messages.FilePart", i, input.ContentParts[i])
+		}
+		if part.Name != want.name || string(part.Bytes) != want.data {
+			t.Errorf("content part %d = %#v, want name %q and data %q", i, part, want.name, want.data)
+		}
+	}
+}
+
 func TestBuildExecuteInput_SuccessShapes(t *testing.T) {
 	tempDir := t.TempDir()
 	firstPath := filepath.Join(tempDir, "first.txt")
@@ -163,44 +203,12 @@ func TestBuildExecuteInput_SuccessShapes(t *testing.T) {
 		{
 			name:  "binary stdin becomes a content part",
 			stdin: bytes.NewReader([]byte{0, 1, 2, 3}),
-			check: func(t *testing.T, input agentloop.ExecuteInput) {
-				t.Helper()
-				if input.Message != "" || len(input.ContentParts) != 1 {
-					t.Fatalf("input = %#v, want one binary content part", input)
-				}
-				part, ok := input.ContentParts[0].(messages.FilePart)
-				if !ok {
-					t.Fatalf("content part type = %T, want messages.FilePart", input.ContentParts[0])
-				}
-				if !bytes.Equal(part.Bytes, []byte{0, 1, 2, 3}) || part.Name != "stdin" {
-					t.Errorf("file part = %#v, want stdin bytes and name", part)
-				}
-			},
+			check: checkBinaryStdinContentPart,
 		},
 		{
 			name:      "multiple files preserve order",
 			filePaths: []string{firstPath, secondPath},
-			check: func(t *testing.T, input agentloop.ExecuteInput) {
-				t.Helper()
-				if input.Message != "" || len(input.ContentParts) != 2 {
-					t.Fatalf("input = %#v, want two file parts", input)
-				}
-				for i, want := range []struct {
-					name string
-					data string
-				}{
-					{name: "first.txt", data: "first file"},
-					{name: "second.txt", data: "second file"},
-				} {
-					part, ok := input.ContentParts[i].(messages.FilePart)
-					if !ok {
-						t.Fatalf("content part %d type = %T, want messages.FilePart", i, input.ContentParts[i])
-					}
-					if part.Name != want.name || string(part.Bytes) != want.data {
-						t.Errorf("content part %d = %#v, want name %q and data %q", i, part, want.name, want.data)
-					}
-				}
-			},
+			check:     checkOrderedFileParts,
 		},
 	}
 
