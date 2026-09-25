@@ -23,6 +23,10 @@ const (
 	DefaultMaxEntries = 10_000
 )
 
+// nilErrorText is what a nil typed error reports from Error, matching fmt's
+// rendering of a nil value.
+const nilErrorText = "<nil>"
+
 // Transport identifies the execution path for one manifest entry.
 type Transport string
 
@@ -85,7 +89,7 @@ type EntryLimitOverrideError struct {
 
 func (e *EntryLimitOverrideError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf(
 		"fleet manifest field %q raises the entry limit to %d above the default %d; set AllowEntryLimitOverride to acknowledge the raised bound",
@@ -106,7 +110,7 @@ func (e *EntryLimitOverrideError) Is(target error) bool {
 
 func (e *EntryLimitError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf(
 		"fleet manifest field %q would drop %d entries: expanded plan has %d entries but the limit is %d; set AllowEntryLimitOverride to compose the full plan",
@@ -127,7 +131,7 @@ func (e *EntryLimitError) Is(target error) bool {
 
 func (e *ValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	message := "fleet manifest field " + fmt.Sprintf("%q", e.Field)
 	if e.Value != "" {

@@ -823,7 +823,7 @@ func (s *patienceFindingSet) addCompletionFindings(scenario CustomerScenario, pr
 	if evidence.ActivityState != PatienceActivityCompleted {
 		s.add("patience_completion_state_mismatch", fmt.Sprintf("completed outcome has activity state %q", evidence.ActivityState))
 	}
-	if evidence.Process.ExitClassification != "normal" {
+	if evidence.Process.ExitClassification != duplexExitNormal {
 		s.add("patience_success_wrong_process_exit", fmt.Sprintf("completed outcome has process exit classification %q", evidence.Process.ExitClassification))
 	}
 	if len(evidence.OutstandingToolIDs) > 0 {

@@ -382,7 +382,7 @@ func (p *customerSimulationStreamParser) finish() {
 		}
 		turnID := customerSimulationTurnID(p.scenario, actionIndex)
 		resultAt, resultSeen := p.completedToolIDs[tool.ID]
-		status := "started"
+		status := toolStatusStarted
 		duration := max(0, resultAt-tool.Start)
 		if resultSeen {
 			status = string(DispositionCompleted)
@@ -438,7 +438,7 @@ func customerSimulationTerminationEvidence(scenario CustomerScenario, product []
 	status := customerSimulationResponseIncomplete
 	if scenario.Termination == TerminationSIGINT {
 		if process.SignalSent {
-			status = "interrupted"
+			status = terminationStatusInterrupted
 			if facts.cancelObserved {
 				status = string(DispositionCancelled)
 			}

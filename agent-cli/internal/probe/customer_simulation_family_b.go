@@ -368,7 +368,7 @@ func (s *correctionFindingSet) addUnresolvedFindings(toolObservations []ToolObse
 		s.add("unresolved_action", actionID, c.OriginalTurnID, "an action remained unresolved at session termination")
 	}
 	for _, observation := range toolObservations {
-		if (observation.ActionID == c.OriginalActionID || observation.ActionID == c.ReplacementActionID) && (observation.Status == "started" || !observation.ResultSeen) {
+		if (observation.ActionID == c.OriginalActionID || observation.ActionID == c.ReplacementActionID) && (observation.Status == toolStatusStarted || !observation.ResultSeen) {
 			s.add("unresolved_tool", observation.ActionID, observation.TurnID, fmt.Sprintf("tool observation %q has status=%q result_seen=%t", observation.ID, observation.Status, observation.ResultSeen))
 		}
 	}
@@ -384,7 +384,7 @@ func (s *correctionFindingSet) addProcessFindings() {
 		{process.DescendantsAlive, "orphan_process", c.ReplacementActionID, c.CorrectionTurnID, "a descendant process remained alive after the corrected run"},
 		{!process.ChildWaited, "child_not_reaped", c.ReplacementActionID, c.CorrectionTurnID, "the shipped child was not reaped"},
 		{!process.InputClosed || !process.OutputClosed, "stream_not_closed", c.ReplacementActionID, c.CorrectionTurnID, fmt.Sprintf("process streams closed input=%t output=%t", process.InputClosed, process.OutputClosed)},
-		{process.ExitClassification != "normal", "unclean_process_termination", c.ReplacementActionID, c.CorrectionTurnID, fmt.Sprintf("corrected run exit classification was %q", process.ExitClassification)},
+		{process.ExitClassification != duplexExitNormal, "unclean_process_termination", c.ReplacementActionID, c.CorrectionTurnID, fmt.Sprintf("corrected run exit classification was %q", process.ExitClassification)},
 	})
 }
 
@@ -393,5 +393,5 @@ func isCorrectionCancelledStatus(status string) bool {
 }
 
 func isCorrectionCompletedStatus(status string) bool {
-	return status == "completed"
+	return status == toolStatusCompleted
 }

@@ -21,7 +21,7 @@ func TestCustomerSimulationResponseBoundariesUseRecordedIdentityAndOutputReads(t
 	}
 	facts := customerSimulationRecordingFacts{responses: responses}
 	ranges := customerSimulationResponseAudioRanges(scenario, responses)
-	if len(ranges) != 3 || ranges[0].TurnID != "turn-1" || ranges[1].TurnID != "turn-1" || ranges[2].TurnID != "turn-2" {
+	if len(ranges) != 3 || ranges[0].TurnID != firstTurnID || ranges[1].TurnID != firstTurnID || ranges[2].TurnID != secondTurnID {
 		t.Fatalf("response audio ranges = %+v, want continuation/original on turn-1 and replacement on turn-2", ranges)
 	}
 	if ranges[0].Start != 0 || ranges[0].End != 2 || ranges[1].Start != 2 || ranges[1].End != 6 || ranges[2].Start != 6 || ranges[2].End != 10 {
@@ -176,7 +176,7 @@ func testCustomerSimulationFamilyEvidenceFallbacks(t *testing.T, product []Trans
 	}
 	sigint := NewFamilyDScenario(TerminationSIGINT)
 	sigintEvidence := customerSimulationTerminationEvidence(sigint, []TranscriptEvent{{At: time.Second}}, ProcessFacts{SignalSent: true, Signal: "SIGINT", SignalAt: 1500 * time.Millisecond}, DuplexRunResult{}, dFacts)
-	if sigintEvidence.ActiveResponseStatus != "interrupted" {
+	if sigintEvidence.ActiveResponseStatus != terminationStatusInterrupted {
 		t.Fatalf("SIGINT termination evidence = %+v, want interrupted", sigintEvidence)
 	}
 	dFacts.cancelObserved = true
@@ -400,7 +400,7 @@ func TestCustomerSimulationOptionsRejectInvalidAudioAndRunRoots(t *testing.T) {
 		t.Fatalf("file run root error = %v, want ErrCustomerSimulationRun", err)
 	}
 	failed := failedCustomerSimulationResult("failed-001", scenario, "bundle", "record", "workspace", errors.New("child failed"))
-	if failed.RunID != "failed-001" || failed.Process.ExitClassification != "failed" || !strings.Contains(failed.Error, "child failed") {
+	if failed.RunID != "failed-001" || failed.Process.ExitClassification != duplexExitFailed || !strings.Contains(failed.Error, "child failed") {
 		t.Fatalf("failed customer simulation result = %+v, want bounded failed result", failed)
 	}
 }
@@ -458,10 +458,10 @@ func TestDuplexProgressExposesOutputAndExpectedCloseBoundaries(t *testing.T) {
 	if isExpectedDuplexWaitClose(result, errors.New("other wait failure")) {
 		t.Fatal("unrelated wait error was recognized as expected cleanup")
 	}
-	if got := duplexExitClassification(result, TerminationNatural, io.ErrClosedPipe); got != "normal" {
+	if got := duplexExitClassification(result, TerminationNatural, io.ErrClosedPipe); got != duplexExitNormal {
 		t.Fatalf("zero-exit close classification = %q, want normal", got)
 	}
-	if got := duplexExitClassification(DuplexRunResult{ExitCode: 1, ChildWaited: true}, TerminationNatural, nil); got != "failed" {
+	if got := duplexExitClassification(DuplexRunResult{ExitCode: 1, ChildWaited: true}, TerminationNatural, nil); got != duplexExitFailed {
 		t.Fatalf("non-zero classification = %q, want failed", got)
 	}
 }

@@ -355,9 +355,9 @@ func (s *terminationFindingSet) addResponseFindings(results []ActionResult) {
 func (s *terminationFindingSet) addProcessFindings() {
 	termination, turnID := s.scenario.Termination, s.evidence.ActiveTurnID
 	process := s.evidence.Process
-	wantClassification := "normal"
+	wantClassification := duplexExitNormal
 	if termination == TerminationSIGINT {
-		wantClassification = "sigint"
+		wantClassification = duplexExitSIGINT
 	}
 	s.addChecks([]findingCheck{
 		{process.ExitClassification != wantClassification, "exit_classification_mismatch", FamilyDActionID, turnID, fmt.Sprintf("process exit classification is %q, want %q", process.ExitClassification, wantClassification)},
@@ -380,7 +380,7 @@ func (s *terminationFindingSet) addUnresolvedFindings(toolObservations []ToolObs
 		s.add("unresolved_action", actionID, turnID, "an action remained unresolved at termination")
 	}
 	for _, observation := range toolObservations {
-		if observation.Status == "started" || !observation.ResultSeen {
+		if observation.Status == toolStatusStarted || !observation.ResultSeen {
 			s.add("unresolved_tool", observation.ActionID, observation.TurnID, fmt.Sprintf("tool observation %q has status=%q result_seen=%t", observation.ID, observation.Status, observation.ResultSeen))
 		}
 	}

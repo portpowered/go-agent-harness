@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// nilErrorText is what a nil typed error reports from Error, matching fmt's
+// rendering of a nil value.
+const nilErrorText = "<nil>"
+
 const duplexProgressOutputWindow = 64 * 1024
 
 type duplexProgressState struct {

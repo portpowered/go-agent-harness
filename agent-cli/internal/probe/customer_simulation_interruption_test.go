@@ -430,7 +430,7 @@ func familyDPositiveEvidence(method TerminationMethod) ([]ActionResult, []Filesy
 		PID: 321, ExitCode: 0, ExitClassification: "normal", ChildWaited: true, WaitCount: 1,
 		InputClosed: true, InputFinished: true, OutputClosed: true, StartedAt: 0, EndedAt: 2 * time.Second,
 	}
-	responseStatus := "completed"
+	responseStatus := terminationStatusCompleted
 	confirmed := true
 	disposition := DispositionCompleted
 	confirmedAt := 1200 * time.Millisecond
@@ -441,12 +441,12 @@ func familyDPositiveEvidence(method TerminationMethod) ([]ActionResult, []Filesy
 	signalAt := time.Duration(0)
 	responseText := FamilyDResponseText
 	if method == TerminationSIGINT {
-		process.ExitClassification = "sigint"
+		process.ExitClassification = duplexExitSIGINT
 		process.SignalSent = true
 		process.Signal = duplexSIGINTName
 		process.SignalAt = 800 * time.Millisecond
 		process.InputFinished = false
-		responseStatus = "interrupted"
+		responseStatus = terminationStatusInterrupted
 		confirmed = false
 		disposition = DispositionCancelled
 		confirmedAt = 0

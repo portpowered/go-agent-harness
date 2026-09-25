@@ -42,7 +42,7 @@ type CustomerContractValidationError struct {
 
 func (e *CustomerContractValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	message := fmt.Sprintf("customer simulation contract field %q", e.Field)
 	if e.Problem != "" {

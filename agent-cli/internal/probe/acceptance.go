@@ -43,7 +43,7 @@ type InputError struct {
 
 func (e *InputError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Cause != nil {
 		return fmt.Sprintf("acceptance probe %s: %v: %v", e.Field, e.Kind, e.Cause)
@@ -70,7 +70,7 @@ type ExecutionError struct {
 
 func (e *ExecutionError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	if e.Kind == nil {
 		if e.Cause == nil {

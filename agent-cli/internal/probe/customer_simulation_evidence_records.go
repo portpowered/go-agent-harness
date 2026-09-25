@@ -204,7 +204,7 @@ func (p ProcessFacts) validate(field string) error {
 	if p.SignalSent && strings.TrimSpace(p.Signal) == "" {
 		return contractFieldError(ErrInvalidCustomerEvidence, field+".signal", "must be present when signal_sent is true")
 	}
-	if p.ExitClassification == "sigint" && !p.SignalSent {
+	if p.ExitClassification == duplexExitSIGINT && !p.SignalSent {
 		return contractFieldError(ErrInvalidCustomerEvidence, field+".signal_sent", "must be true for sigint classification")
 	}
 	if p.SignalAt < 0 || p.WaitCount < 0 {
