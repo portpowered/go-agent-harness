@@ -11,8 +11,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
 
-// LiveSink projects the runtime's bounded live observations into the CLI's
-// ordered room stream. It deliberately owns no session or provider state.
+// LiveSink projects the runtime's bounded live observations into the ordered
+// room stream. It deliberately owns no session or provider state.
 type LiveSink struct {
 	broker *Broker
 
@@ -20,13 +20,13 @@ type LiveSink struct {
 	livenessSent map[string]struct{}
 }
 
-func NewLiveSink(broker *Broker) rooms.EventSink {
-	if broker == nil {
-		return nil
-	}
+// NewLiveSink binds a projection to broker.
+func NewLiveSink(broker *Broker) *LiveSink {
 	return &LiveSink{broker: broker, livenessSent: make(map[string]struct{})}
 }
 
+// Publish projects one live observation. Only transcripts, overflow,
+// liveness, and browser capability events reach subscribers.
 func (s *LiveSink) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -35,7 +35,7 @@ func (s *LiveSink) Publish(ctx context.Context, participantID string, event sess
 		return nil
 	}
 	if classification, ok := livenessClassification(event); ok && s.markLiveness(participantID) {
-		s.broker.Publish(EventParticipantLivenessFault, participantID, classification)
+		s.broker.PublishRoomEvent(rooms.RoomStreamEventParticipantLivenessFault, participantID, classification)
 		return nil
 	}
 	switch strings.ToLower(strings.TrimSpace(event.Kind)) {

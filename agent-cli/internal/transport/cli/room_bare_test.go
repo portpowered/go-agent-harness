@@ -475,3 +475,11 @@ func (r *bareRoomCLIRegistry) Open(id devicegw.DeviceID) (devicegw.OpenedDevice,
 }
 
 var _ devicegw.DeviceRegistry = (*bareRoomCLIRegistry)(nil)
+
+// closeTestResource closes a test-owned listener or response body.
+func closeTestResource(t *testing.T, resource io.Closer) {
+	t.Helper()
+	if err := resource.Close(); err != nil {
+		t.Errorf("close test resource: %v", err)
+	}
+}

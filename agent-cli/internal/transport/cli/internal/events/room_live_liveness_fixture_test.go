@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,10 +32,10 @@ type roomLiveLivenessFixture struct {
 	manifest       runtimeRooms.Manifest
 	destination    string
 	factoryReady   chan struct{}
-	broker         *Broker
+	stream         runtimeRooms.RoomEventStream
 	sink           *releasePeerOnLiveness
-	allReader      *sseReader
-	peerReader     *sseReader
+	allReader      *frameReader
+	peerReader     *frameReader
 	resultChannel  chan roomLiveResult
 	releaseError   error
 
@@ -63,11 +64,11 @@ func newRoomLiveLivenessFixture(t *testing.T, timeoutCase bool) *roomLiveLivenes
 		Evidence: runtimeRoomEvidenceWire.NewService(),
 	})
 	fixture.destination = filepath.Join(t.TempDir(), "evidence")
-	fixture.broker = fixture.newBroker(t)
+	fixture.stream = fixture.newStream(t)
 	fixture.openStreams(t)
 	fixture.sink = fixture.newSink()
 	for _, participant := range fixture.manifest.Participants {
-		fixture.broker.PublishRoomEvent(EventParticipantJoined, participant.ID)
+		fixture.stream.PublishRoomEvent(runtimeRooms.RoomStreamEventParticipantJoined, participant.ID, "")
 	}
 	return fixture
 }
@@ -123,43 +124,31 @@ func (f *roomLiveLivenessFixture) liveService(t *testing.T) session.LiveService 
 	})
 }
 
-func (f *roomLiveLivenessFixture) newBroker(t *testing.T) *Broker {
+func (f *roomLiveLivenessFixture) newStream(t *testing.T) runtimeRooms.RoomEventStream {
 	t.Helper()
-	broker, err := New([]string{roomLiveSilentParticipant, "peer"}, Options{Now: f.clock.Now})
+	stream, err := runtimeRoomWire.NewRoomEventStream(runtimeRooms.RoomEventStreamOptions{ParticipantIDs: []string{roomLiveSilentParticipant, "peer"}, Now: f.clock.Now})
 	if err != nil {
-		t.Fatalf("New broker: %v", err)
+		t.Fatalf("NewRoomEventStream: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := broker.Close(); err != nil {
-			t.Errorf("broker.Close(): %v", err)
+		if err := stream.Close(); err != nil {
+			t.Errorf("stream.Close(): %v", err)
 		}
 	})
-	return broker
+	return stream
 }
 
 func (f *roomLiveLivenessFixture) openStreams(t *testing.T) {
 	t.Helper()
-	server := newTestEventServer(t, f.broker)
+	server := httptest.NewServer(NewHandler(f.stream))
 	t.Cleanup(server.Close)
-	allResponse, allReader := openSSE(t, server, "/events")
-	f.allReader = allReader
-	t.Cleanup(func() {
-		if err := allResponse.Body.Close(); err != nil {
-			t.Errorf("all-events response Close(): %v", err)
-		}
-	})
-	peerResponse, peerReader := openSSE(t, server, "/events?participant=peer")
-	f.peerReader = peerReader
-	t.Cleanup(func() {
-		if err := peerResponse.Body.Close(); err != nil {
-			t.Errorf("peer-events response Close(): %v", err)
-		}
-	})
+	f.allReader = openFrames(t, server, "")
+	f.peerReader = openFrames(t, server, "peer")
 }
 
 func (f *roomLiveLivenessFixture) newSink() *releasePeerOnLiveness {
 	return &releasePeerOnLiveness{
-		delegate: NewLiveSink(f.broker),
+		delegate: f.stream,
 		release: func() {
 			if err := f.provider["peer"].Close(); err != nil {
 				f.diagnosticMu.Lock()
@@ -183,10 +172,10 @@ func (f *roomLiveLivenessFixture) startRoom() {
 				f.recordDiagnostic(record)
 			},
 			OnParticipantTerminated: func(value runtimeRooms.RoomParticipantResult) {
-				f.broker.PublishRoomEvent(EventParticipantTerminated, value.ParticipantID, string(value.TerminationReason))
+				f.stream.PublishRoomEvent(runtimeRooms.RoomStreamEventParticipantTerminated, value.ParticipantID, string(value.TerminationReason))
 			},
 		})
-		f.broker.PublishRoomEvent(EventRunTerminated, RoomParticipantID, string(result.TerminationReason))
+		f.stream.PublishRoomEvent(runtimeRooms.RoomStreamEventRunTerminated, "", string(result.TerminationReason))
 		f.resultChannel <- roomLiveResult{value: result, err: runErr}
 	}()
 }
@@ -238,13 +227,13 @@ func (f *roomLiveLivenessFixture) assertPeerFault(t *testing.T) {
 	t.Helper()
 	for {
 		payload := f.peerReader.next(t)
-		if sseString(t, payload, "event") != EventParticipantLivenessFault {
+		if frameString(t, payload, "event") != runtimeRooms.RoomStreamEventParticipantLivenessFault {
 			continue
 		}
-		if got := sseString(t, payload, "participant_id"); got != roomLiveSilentParticipant {
+		if got := frameString(t, payload, "participant_id"); got != roomLiveSilentParticipant {
 			t.Fatalf("peer-filtered fault participant = %q, want silent", got)
 		}
-		if got := sseString(t, payload, "reason"); got != f.classification {
+		if got := frameString(t, payload, "reason"); got != f.classification {
 			t.Fatalf("peer-filtered fault reason = %q, want %q", got, f.classification)
 		}
 		return
@@ -264,18 +253,18 @@ func (f *roomLiveLivenessFixture) readAllStream(t *testing.T) roomLiveStreamResu
 	for {
 		payload := f.allReader.next(t)
 		result.events = append(result.events, payload)
-		if sseString(t, payload, "type") != EventRoom {
+		if frameString(t, payload, "type") != runtimeRooms.RoomStreamTypeRoom {
 			continue
 		}
-		switch sseString(t, payload, "event") {
-		case EventParticipantLivenessFault:
+		switch frameString(t, payload, "event") {
+		case runtimeRooms.RoomStreamEventParticipantLivenessFault:
 			result.faultCount++
 			result.faultIndex = len(result.events) - 1
-		case EventParticipantTerminated:
-			if sseString(t, payload, "participant_id") == roomLiveSilentParticipant {
+		case runtimeRooms.RoomStreamEventParticipantTerminated:
+			if frameString(t, payload, "participant_id") == roomLiveSilentParticipant {
 				result.terminatedIndex = len(result.events) - 1
 			}
-		case EventRunTerminated:
+		case runtimeRooms.RoomStreamEventRunTerminated:
 			return result
 		}
 	}
@@ -298,17 +287,17 @@ func lifecycleParticipants(t *testing.T, events []map[string]json.RawMessage) (m
 	t.Helper()
 	joined, terminated := map[string]bool{}, map[string]bool{}
 	for _, payload := range events {
-		if sseString(t, payload, "type") != EventRoom {
+		if frameString(t, payload, "type") != runtimeRooms.RoomStreamTypeRoom {
 			continue
 		}
-		participantID := sseString(t, payload, "participant_id")
-		switch sseString(t, payload, "event") {
-		case EventParticipantJoined:
+		participantID := frameString(t, payload, "participant_id")
+		switch frameString(t, payload, "event") {
+		case runtimeRooms.RoomStreamEventParticipantJoined:
 			joined[participantID] = true
-		case EventParticipantTerminated:
+		case runtimeRooms.RoomStreamEventParticipantTerminated:
 			terminated[participantID] = true
-		case EventRunTerminated:
-			if participantID != RoomParticipantID {
+		case runtimeRooms.RoomStreamEventRunTerminated:
+			if participantID != runtimeRooms.RoomStreamParticipantID {
 				t.Fatalf("run terminal participant = %q, want room", participantID)
 			}
 		}
@@ -425,7 +414,7 @@ func (f *roomLiveLivenessFixture) assertTimeline(t *testing.T) {
 		if entry.Event == "live_liveness_fault" && entry.Fields["classification"] == f.classification {
 			timelineFault = index
 		}
-		if entry.Event == EventParticipantTerminated {
+		if entry.Event == runtimeRooms.RoomStreamEventParticipantTerminated {
 			timelineTerminated = index
 		}
 	}

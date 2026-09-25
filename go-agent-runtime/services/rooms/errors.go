@@ -63,6 +63,15 @@ var (
 	// ErrRoomClockUnavailable identifies a live room without the canonical
 	// scheduler required for bounds and diagnostic timestamps.
 	ErrRoomClockUnavailable = errors.New("room lifecycle clock is unavailable")
+
+	// ErrUnknownRoomStreamParticipant identifies a stream subscription for a
+	// participant the room does not contain.
+	ErrUnknownRoomStreamParticipant = errors.New("unknown room stream participant")
+	// ErrInvalidRoomStreamParticipant identifies an empty, reserved, or
+	// duplicate participant identity supplied to a room event stream.
+	ErrInvalidRoomStreamParticipant = errors.New("invalid room stream participant")
+	// ErrRoomEventStreamClosed identifies a subscription to a closed stream.
+	ErrRoomEventStreamClosed = errors.New("room event stream is closed")
 )
 
 // ValidationError identifies the exact non-secret manifest field that failed.
