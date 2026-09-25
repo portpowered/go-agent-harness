@@ -154,13 +154,15 @@ run_shard() {
 	fi
 	# Run verbosely into a log: a failing shard prints the whole log, a passing
 	# shard prints only its result lines, its slow tests, and a time summary.
-	local log="$work_dir/shard-$shard.verbose.log" status=0
+	local log="$work_dir/shard-$shard.verbose.log" status=0 started=$SECONDS
 	(cd "$package_dir" && "$test_binary" -test.v "${flags[@]}" ${run_flags[@]+"${run_flags[@]}"}) >"$log" 2>&1 || status=$?
 	if [ "$status" -ne 0 ]; then
 		cat "$log"
 		return "$status"
 	fi
-	awk -v slow="${SLOW_TEST_SECONDS:-5}" '
+	# Parallel subtests report after their parent, so a parent's own duration
+	# can read 0.00s; the wall time below is the shard's real cost.
+	awk -v slow="${SLOW_TEST_SECONDS:-5}" -v wall=$((SECONDS - started)) '
 		/^--- (PASS|SKIP): / {
 			duration = $NF
 			gsub(/[()s]/, "", duration)
@@ -170,7 +172,7 @@ run_shard() {
 			next
 		}
 		/^(PASS|FAIL|ok|coverage:)/ { print }
-		END { printf "shard summary: %d top-level tests, %.1fs summed test time\n", tests, total }
+		END { printf "shard summary: %d top-level tests, %.1fs summed top-level test time, %ds wall\n", tests, total, wall }
 	' "$log"
 }
 

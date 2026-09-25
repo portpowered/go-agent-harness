@@ -1,15 +1,16 @@
-# Recorded top-level test durations (seconds) for agent-cli/test/integration,
-# used by scripts/go-test-shards.sh --weights to balance shards.
-# Refresh with: go test -json ./test/integration and keep one "TestName seconds" per line;
-# a missing or stale entry only affects balance, never which tests run.
+# Recorded wall time (seconds) per top-level test of agent-cli/test/integration,
+# including parallel subtests, used by scripts/go-test-shards.sh --weights to
+# balance shards. Refresh from `go test -json ./test/integration` (span from a
+# test's run event to its last subtest event); a missing or stale entry only
+# affects balance, never which tests run.
 TestAgentBinaryAudioOutRecordsRemoteDevicePCM 4.89
 TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM 6.60
 TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM 8.26
 TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice 2.17
 TestAgentBinarySerialToolTimingAtProcessEdges 3.97
-TestAgentBinaryTest45HighRateToolAudioRegression 0.00
-TestAgentBinaryTest46HighRateToolAudioRegression 0.00
-TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio 0.00
+TestAgentBinaryTest45HighRateToolAudioRegression 7.25
+TestAgentBinaryTest46HighRateToolAudioRegression 7.62
+TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio 81.74
 TestAskFilesParseArgs 0.00
 TestAskLoadsAGENTSMDFromConfigDir 0.00
 TestAskNoArgsNoStdin 0.00
@@ -68,7 +69,7 @@ TestChatModel_MarkdownRendering 0.00
 TestChatModel_MultiTurn 0.01
 TestChatModel_SessionPersistence 0.01
 TestChatModel_StreamingPartials 0.00
-TestCloseAfterOpenWaitsForAcceptedRichToolResult 0.03
+TestCloseAfterOpenWaitsForAcceptedRichToolResult 0.04
 TestContinuationNudge_EndToEnd 0.00
 TestContinuationNudge_NotTriggeredOnStopWord 0.00
 TestDurationAdmissionCloseAfterOpenWaitsForAcceptedRichToolResult 0.02
@@ -114,7 +115,7 @@ TestReadImageCLI_DefaultLifecycleRejectsEmptyFunctionOutput 0.02
 TestReadImageCLI_DefaultLifecycleWaitsForStrictContinuation 0.01
 TestReadImageCLI_GroundedPositiveAndNoToolNegative 0.01
 TestReadImageGroundingCheckerRejectsMissingOrReplacedPixels 0.00
-TestReadImageSpokenFailedContinuationIsActionable 4.92
+TestReadImageSpokenFailedContinuationIsActionable 4.93
 TestReadImageSpokenProductionComposition 4.91
 TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels 9.86
 TestRecordReplaySession 0.00
@@ -125,13 +126,13 @@ TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries 0.17
 TestS2SLiveBargeInOutstandingToolCallOracleRejectsMutations 0.05
 TestS2SLiveBargeInOutstandingToolCallThroughCLI 0.07
 TestS2SLiveBargeInOutstandingToolCallWaitIsBounded 0.02
-TestS2SLiveBargeInPlainSpeechCLIUsesObservedAudioGate 0.07
+TestS2SLiveBargeInPlainSpeechCLIUsesObservedAudioGate 0.08
 TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations 0.08
-TestS2SLiveBargeInPlainSpeechWaitForNoEventIsBounded 0.02
+TestS2SLiveBargeInPlainSpeechWaitForNoEventIsBounded 0.03
 TestS2SLiveBargeInTurnStartCollisionMatrix 0.05
 TestS2SLiveBargeInTurnStartOracleRejectsNamedMutations 0.08
 TestS2SV2BAudioInLongCLIStaysOneTurn 14.45
-TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation 0.17
+TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation 14.45
 TestS2SV2DMisSegmentedFixtureFailsViaCLI 0.02
 TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance 0.03
 TestS2SV2DSuiteSelectsEachFixtureByNameAndBothPassOrFailCorrectly 0.02
@@ -186,7 +187,7 @@ TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingValidat
 TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput 1.48
 TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverIncompleteSchedule 0.02
 TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle 2.21
-TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated 0.80
+TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated 0.81
 TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl 2.81
 TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence 5.59
 TestSessionCommand_LiveScheduledAudioSplitsLargeTurnAtProviderBudget 2.06
@@ -200,7 +201,7 @@ TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismat
 TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecordedFramesAndReportsCompletion 0.04
 TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnIsByteDeterministic 0.07
 TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration 0.05
-TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsCompletion 0.03
+TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsCompletion 0.04
 TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict 0.01
 TestSessionCommand_OpenAIRealtimeReplayInvalidVoiceFailsBeforeFixtureLoad 0.00
 TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesCompletedArtifact 0.02
