@@ -225,42 +225,8 @@ func (s *SessionScenario) Start() {
 		s.errCh <- s.Loop.Run(ctx)
 	}()
 
-	// Wait for the engine to initialize: SESSION.OPEN proves the loop is
-	// running and connected. The bounded fallback preserves the historical
-	// grace period for scenarios whose session never opens.
-	s.awaitDeltaOrExit(messages.StreamTypeSessionOpen, startGracePeriod)
-}
-
-const (
-	// startGracePeriod bounds how long Start waits for SESSION.OPEN.
-	startGracePeriod = 50 * time.Millisecond
-	// closeGracePeriod bounds how long Stop waits for session_close to be
-	// processed before cancelling the loop.
-	closeGracePeriod = 200 * time.Millisecond
-	// deltaPollInterval is how often awaitDeltaOrExit re-checks collected deltas.
-	deltaPollInterval = time.Millisecond
-)
-
-// awaitDeltaOrExit returns once a delta of eventType has been collected, the
-// loop has exited, or limit elapses. A loop exit result is kept for Stop.
-func (s *SessionScenario) awaitDeltaOrExit(eventType messages.StreamMessageType, limit time.Duration) {
-	deadline := time.NewTimer(limit)
-	defer deadline.Stop()
-	ticker := time.NewTicker(deltaPollInterval)
-	defer ticker.Stop()
-	for {
-		if s.DeltaProgress(func(d messages.StreamMessage) bool { return d.Type == eventType }) > 0 {
-			return
-		}
-		select {
-		case err := <-s.errCh:
-			s.errCh <- err
-			return
-		case <-deadline.C:
-			return
-		case <-ticker.C:
-		}
-	}
+	// SESSION.OPEN proves the loop is running; 50ms bounds scenarios that never open.
+	s.WaitForEvent(messages.StreamTypeSessionOpen, 50*time.Millisecond)
 }
 
 // SendControlPlane sends a control plane message to the session (e.g. session_close, stop, ping).
@@ -308,9 +274,8 @@ func (s *SessionScenario) SendText(text string) {
 func (s *SessionScenario) Stop(timeout time.Duration) error {
 	s.SendControlPlane(messages.ControlPlaneMessageTypeSessionClose)
 
-	// Wait for the engine to process session_close: LOOP.END is the last
-	// delta it publishes, so every earlier delta has already been collected.
-	s.awaitDeltaOrExit(messages.StreamTypeLoopEnd, closeGracePeriod)
+	// LOOP.END is the last delta; 200ms bounds loops that never publish it.
+	s.WaitForEvent(messages.StreamTypeLoopEnd, 200*time.Millisecond)
 
 	// Close the mock session (unblocks runSession if it's blocked on session.Done()).
 	s.Inf.Close()
@@ -403,7 +368,7 @@ func (s *SessionScenario) WaitForEvent(eventType messages.StreamMessageType, tim
 		select {
 		case <-deadline:
 			return false
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(time.Millisecond):
 		}
 	}
 }

@@ -22,10 +22,7 @@ type Engine struct {
 	// snapshots take its read lock so history cannot be copied while a tick is
 	// appending or truncating the conversation buffers.
 	loopMu sync.RWMutex
-	// tickMu serializes whole ticks. A tick waits for participant input
-	// without holding loopMu, so snapshots and AddMessages are not blocked by
-	// an idle loop; tickMu keeps concurrent Tick callers applying inputs in the
-	// order they were received.
+	// tickMu serializes whole ticks; Tick waits for input without loopMu.
 	tickMu    sync.Mutex
 	mode      ExecutionMode
 	logger    logging.Logger
@@ -243,10 +240,7 @@ func (e *Engine) Tick(ctx context.Context) error {
 	e.tickMu.Lock()
 	defer e.tickMu.Unlock()
 
-	// Wait for participant input without holding loopMu: an idle loop must not
-	// block ConversationHistorySnapshot, AddMessages, or TickState callers.
-	input, err := e.ordering.receiveTickInput(ctx)
-
+	input, err := e.ordering.receiveTickInput(ctx) // idle wait must not block readers
 	e.loopMu.Lock()
 	defer e.loopMu.Unlock()
 
