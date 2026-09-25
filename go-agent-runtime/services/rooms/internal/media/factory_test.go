@@ -63,6 +63,14 @@ func TestFactoryLeavesAgentMediaToTheLiveSession(t *testing.T) {
 	}
 }
 
+func TestFactoryWithoutDeviceServiceReportsUnavailable(t *testing.T) {
+	for name, factory := range map[string]*Factory{"nil factory": nil, "nil service": NewFactory(nil)} {
+		if _, err := factory.OpenMedia(context.Background(), rooms.Participant{}, rooms.AudioFormat{}); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
+			t.Fatalf("%s OpenMedia error = %v, want ErrRoomServiceUnavailable", name, err)
+		}
+	}
+}
+
 type fakeService struct {
 	mu       sync.Mutex
 	requests []devices.Request

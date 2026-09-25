@@ -40,22 +40,6 @@ func (t *staticRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	}, nil
 }
 
-func TestBuildProviderHTTPRuntime_LiveModeUsesExplicitDefaultTransport(t *testing.T) {
-	runtime, err := buildProviderHTTPRuntime(&providers.Config{})
-	if err != nil {
-		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
-	}
-	if runtime.Client == nil {
-		t.Fatal("expected HTTP client")
-	}
-	if runtime.Client.Transport != http.DefaultTransport {
-		t.Fatalf("transport = %#v, want http.DefaultTransport", runtime.Client.Transport)
-	}
-	if runtime.Recorder != nil {
-		t.Fatal("expected no recorder in live mode")
-	}
-}
-
 func TestBuildProviderHTTPRuntime_LiveModeUsesInjectedBaseTransport(t *testing.T) {
 	transport := &staticRoundTripper{
 		statusCode: http.StatusAccepted,
@@ -70,6 +54,9 @@ func TestBuildProviderHTTPRuntime_LiveModeUsesInjectedBaseTransport(t *testing.T
 	}
 	if runtime.Client.Transport != transport {
 		t.Fatalf("transport = %#v, want injected transport", runtime.Client.Transport)
+	}
+	if runtime.Recorder != nil {
+		t.Fatal("expected no recorder in live mode")
 	}
 
 	resp, err := runtime.Client.Get("https://example.test/v1/chat/completions")
@@ -89,23 +76,6 @@ func TestBuildProviderHTTPRuntime_LiveModeUsesInjectedBaseTransport(t *testing.T
 	}
 	if transport.calls != 1 {
 		t.Fatalf("transport calls = %d, want 1", transport.calls)
-	}
-}
-
-func TestBuildProviderHTTPRuntime_RecordModeReturnsRecorderBackedClient(t *testing.T) {
-	runtime, err := buildProviderHTTPRuntime(&providers.Config{RecordPath: filepath.Join(t.TempDir(), "capture.json")})
-	if err != nil {
-		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
-	}
-	if runtime.Client == nil {
-		t.Fatal("expected HTTP client")
-	}
-	if runtime.Recorder == nil {
-		t.Fatal("expected recorder in record mode")
-	}
-	recorderTransport, ok := runtime.Recorder.(http.RoundTripper)
-	if !ok || runtime.Client.Transport != recorderTransport {
-		t.Fatal("expected recorder transport to back the client")
 	}
 }
 
@@ -226,31 +196,14 @@ func TestBuildProviderHTTPRuntime_RecordModeCapturesRoundTripAndFlushes(t *testi
 	}
 }
 
-func TestBuildProviderHTTPRuntime_ReplayModeUsesReplayTransport(t *testing.T) {
-	fixturePath := filepath.Join("testdata", "streaming_2_2.json")
-	runtime, err := buildProviderHTTPRuntime(&providers.Config{ReplayPath: fixturePath})
-	if err != nil {
-		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
-	}
-	if runtime.Client == nil {
-		t.Fatal("expected HTTP client")
-	}
-	if runtime.Client.Transport == nil {
-		t.Fatal("expected replay transport")
-	}
-	if runtime.Client.Transport == http.DefaultTransport {
-		t.Fatal("expected replay transport, got http.DefaultTransport")
-	}
-	if runtime.Recorder != nil {
-		t.Fatal("expected no recorder in replay mode")
-	}
-}
-
 func TestBuildProviderHTTPRuntime_ReplayModeServesCapturedResponse(t *testing.T) {
 	fixturePath := filepath.Join("testdata", "streaming_2_2.json")
 	runtime, err := buildProviderHTTPRuntime(&providers.Config{ReplayPath: fixturePath})
 	if err != nil {
 		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
+	}
+	if runtime.Recorder != nil {
+		t.Fatal("expected no recorder in replay mode")
 	}
 
 	reqBody := `{"messages":[{"content":[{"text":"what is 2 + 2?","type":"text"}],"role":"user"}],"model":"z-ai/glm-4.7","tools":[{"function":{"name":"edit_file","description":"Edit a file","parameters":{"properties":{"path":{"type":"string"}},"required":["path"],"type":"object"}},"type":"function"}],"stream":true}`

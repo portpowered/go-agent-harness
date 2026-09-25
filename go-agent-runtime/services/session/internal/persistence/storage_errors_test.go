@@ -132,45 +132,6 @@ func TestStorage_ErrorPaths_unknown_content_part_type(t *testing.T) {
 	t.Skip("defect: unknown content-part conversion has no typed sentinel for errors.As/errors.Is")
 }
 
-func TestStorage_ErrorPaths_unknown_schema_version(t *testing.T) {
-	st := NewStorage(t.TempDir())
-	writeRawSession(t, st, "unknown-schema", `{"schemaVersion":999,"id":"unknown-schema","messages":[]}`)
-	loaded, err := st.Load("unknown-schema")
-	if err != nil {
-		t.Skipf("defect case now has an implementation error; schema-version contract is not owned by this lane: %v", err)
-	}
-	if loaded == nil {
-		t.Fatalf("Load unknown schema: got nil result without error")
-	}
-	t.Skip("defect: StoredSession has no schema-version field or validation and ignores unknown schemaVersion")
-}
-
-func TestStorage_ErrorPaths_missing_session_id(t *testing.T) {
-	st := NewStorage(t.TempDir())
-	writeRawSession(t, st, "missing-id", `{"messages":[]}`)
-	loaded, err := st.Load("missing-id")
-	if err != nil {
-		t.Skipf("defect case now has an implementation error; missing-ID validation is not owned by this lane: %v", err)
-	}
-	if loaded == nil {
-		t.Fatalf("Load missing ID: got nil result without error")
-	}
-	t.Skip("defect: StoredSession does not validate a missing stored session ID")
-}
-
-func TestStorage_ErrorPaths_duplicate_session_id(t *testing.T) {
-	st := NewStorage(t.TempDir())
-	writeRawSession(t, st, "duplicate-id", `{"id":"first","id":"second","messages":[]}`)
-	loaded, err := st.Load("duplicate-id")
-	if err != nil {
-		t.Skipf("defect case now has an implementation error; duplicate-ID validation is not owned by this lane: %v", err)
-	}
-	if loaded == nil {
-		t.Fatalf("Load duplicate ID: got nil result without error")
-	}
-	t.Skip("defect: encoding/json accepts duplicate session ID keys and StoredSession has no duplicate-key validation")
-}
-
 func TestStorage_ErrorPaths_unwritable_storage_root(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows permission bits do not reliably prevent writes; non-directory failures are tested separately")

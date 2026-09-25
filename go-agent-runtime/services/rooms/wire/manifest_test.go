@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -166,18 +165,5 @@ func requireValidationError(t *testing.T, err, cause error, field, label string)
 	var validationErr *rooms.ValidationError
 	if err == nil || !errors.Is(err, cause) || !errors.As(err, &validationErr) || validationErr.Field != field {
 		t.Fatalf("%s error = %v, want typed %s error", label, err, field)
-	}
-}
-
-func TestOtherRoomWireConstructorsRemainInert(t *testing.T) {
-	if NewService(Dependencies{}) == nil {
-		t.Fatal("NewService() returned nil")
-	}
-	factory := NewMediaFactory(nil)
-	if factory == nil {
-		t.Fatal("NewMediaFactory() returned nil")
-	}
-	if _, err := factory.OpenMedia(context.Background(), rooms.Participant{}, rooms.AudioFormat{}); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
-		t.Fatalf("inert media factory error = %v, want service unavailable", err)
 	}
 }
