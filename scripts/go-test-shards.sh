@@ -102,7 +102,24 @@ run_shard() {
 	if [ -n "$cover_prefix" ]; then
 		flags+=(-test.coverprofile "$cover_prefix-$shard.out")
 	fi
-	(cd "$package_dir" && "$test_binary" "${flags[@]}" ${run_flags[@]+"${run_flags[@]}"})
+	# Run verbosely into a log: a failing shard prints the whole log, a passing
+	# shard prints only its result lines and the tests slower than
+	# SLOW_TEST_SECONDS, so every run reports where its time went.
+	local log="$work_dir/shard-$shard.verbose.log" status=0
+	(cd "$package_dir" && "$test_binary" -test.v "${flags[@]}" ${run_flags[@]+"${run_flags[@]}"}) >"$log" 2>&1 || status=$?
+	if [ "$status" -ne 0 ]; then
+		cat "$log"
+		return "$status"
+	fi
+	awk -v slow="${SLOW_TEST_SECONDS:-5}" '
+		/^--- (PASS|SKIP): / {
+			duration = $NF
+			gsub(/[()s]/, "", duration)
+			if (duration + 0 >= slow) print "slow test: " $3 " " $NF
+			next
+		}
+		/^(PASS|FAIL|ok|coverage:)/ { print }
+	' "$log"
 }
 
 if [ -n "$only_shard" ]; then
