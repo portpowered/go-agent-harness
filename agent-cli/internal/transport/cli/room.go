@@ -329,7 +329,7 @@ func (c *RoomRunCommand) roomRunOptions(plan runtimeRooms.RoomRunPlan, outputDir
 	}
 	if !plan.Replay() {
 		configDir := roomConfigDir(roomRunGlobalFlags(c))
-		options.ConfigDir = configDir
+		options.ConfigDir, options.ConfigCredential = configDir, roomhost.ConfigCredential(configDir)
 		options.BrowserCapabilitiesFactory = newRoomParticipantBrowserCapabilitiesFactory(configDir)
 	}
 	return options

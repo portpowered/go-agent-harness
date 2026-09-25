@@ -569,7 +569,7 @@ func (h *embeddedRoomBrowserHandle) Media() audio.MediaEndpoints      { return a
 func (h *embeddedRoomBrowserHandle) Events() <-chan session.LiveEvent { return h.events }
 
 func (h *embeddedRoomBrowserHandle) Start(context.Context) error {
-	h.events <- session.LiveEvent{Kind: "turn_completed"}
+	h.events <- session.LiveEvent{Kind: string(messages.StreamTypeMessageEnd), Role: messages.RoleAssistant}
 	return nil
 }
 

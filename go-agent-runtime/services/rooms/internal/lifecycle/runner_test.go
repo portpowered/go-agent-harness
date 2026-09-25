@@ -150,7 +150,7 @@ func TestRunnerEventSinkErrorFailsRoomAndJoinsParticipants(t *testing.T) {
 
 func TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer(t *testing.T) {
 	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{
-		"silent": func() *fakeLiveHandle {
+		typedLivenessSilentID: func() *fakeLiveHandle {
 			handle := newFakeLiveHandle()
 			handle.startEvents = []session.LiveEvent{{
 				Kind: string(session.LiveEventTerminal),
@@ -169,7 +169,7 @@ func TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer(t *testing.T) {
 		SchemaVersion: rooms.SchemaVersion,
 		Room:          rooms.Room{Interactive: true},
 		Participants: []rooms.Participant{
-			{ID: "silent", SystemPrompt: "silent", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "SILENT", Tools: []string{}},
+			{ID: typedLivenessSilentID, SystemPrompt: typedLivenessSilentID, OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "SILENT", Tools: []string{}},
 			{ID: "peer", SystemPrompt: "peer", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "PEER", Tools: []string{}},
 		},
 	}
@@ -186,7 +186,7 @@ func TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer(t *testing.T) {
 		result, err := runner.Run(ctx, nil, rooms.RoomRunOptions{
 			Manifest: manifest,
 			OnDiagnostic: func(participantID string, record rooms.RoomDiagnosticRecord) {
-				if participantID == "silent" && record.Event == "live_terminal" {
+				if participantID == typedLivenessSilentID && record.Event == "live_terminal" {
 					diagnosticOnce.Do(func() { close(diagnosticSeen) })
 				}
 			},
@@ -207,7 +207,7 @@ func TestRunnerRetainsTypedSilentTerminalAndIsolatesPeer(t *testing.T) {
 		if outcome.err != nil {
 			t.Fatalf("room run error = %v", outcome.err)
 		}
-		silent := outcome.result.Participants["silent"]
+		silent := outcome.result.Participants[typedLivenessSilentID]
 		if silent.Classification != "silent_provider_empty_response" || silent.TerminalReason != string(messages.TerminalReasonPartialOutput) || silent.TerminalProvenance != string(messages.TerminalProvenanceProvider) || silent.OutputState != string(messages.TerminalOutputNone) {
 			t.Fatalf("silent result = %+v, want typed terminal metadata", silent)
 		}
@@ -233,13 +233,13 @@ func TestRunnerRegistersParticipantBeforeSynchronousTerminalEvent(t *testing.T) 
 	}}
 	handle.startEventReady = make(chan struct{})
 	handle.startEventRelease = make(chan struct{})
-	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{"silent": handle, "peer": newFakeLiveHandle()}}
+	service := &fakeLiveService{handles: map[string]*fakeLiveHandle{typedLivenessSilentID: handle, "peer": newFakeLiveHandle()}}
 	runner := New(Dependencies{Live: service, Clock: platformclock.Real{}})
 	manifest := rooms.Manifest{
 		SchemaVersion: rooms.SchemaVersion,
 		Room:          rooms.Room{MaxTurns: 1, Interactive: true},
 		Participants: []rooms.Participant{
-			{ID: "silent", SystemPrompt: "silent", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "SILENT", Tools: []string{}},
+			{ID: typedLivenessSilentID, SystemPrompt: typedLivenessSilentID, OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "SILENT", Tools: []string{}},
 			{ID: "peer", SystemPrompt: "peer", OpeningPrompt: "start", Provider: "p", Model: "m", APIKeyEnv: "PEER", Tools: []string{}},
 		},
 	}
@@ -255,7 +255,7 @@ func TestRunnerRegistersParticipantBeforeSynchronousTerminalEvent(t *testing.T) 
 		_, err := runner.Run(ctx, nil, rooms.RoomRunOptions{
 			Manifest: manifest,
 			OnDiagnostic: func(participantID string, record rooms.RoomDiagnosticRecord) {
-				if participantID == "silent" && record.Event == "live_terminal" {
+				if participantID == typedLivenessSilentID && record.Event == "live_terminal" {
 					diagnosticOnce.Do(func() { close(diagnosticSeen) })
 				}
 			},
@@ -420,7 +420,7 @@ func (h *fakeLiveHandle) Start(context.Context) error {
 		close(h.startEventReady)
 		<-h.startEventRelease
 	}
-	h.events <- session.LiveEvent{Kind: "turn_completed"}
+	h.events <- assistantTurnEndEvent("")
 	return nil
 }
 
