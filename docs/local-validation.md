@@ -105,6 +105,11 @@ the changed scope matters most when a diff does not reach it.
 - CI-only jobs stay CI-only: the race corpus (`test-rtc-race`,
   `test-audio-stability-race`, `test-sessions-race`), `lint-cross`,
   `lint-darwin-cgo`, the WebMCP Chrome and macOS audio release jobs.
+- Neither the prepush gate nor pull-request CI runs the fresh-process
+  Test45/Test46 audio stress trials (`YUI_AUDIO_STRESS=1`). The scheduled
+  Nightly audio stress workflow runs them on main and opens a "Nightly audio
+  stress failed" issue when they fail; run them locally with
+  `make test-audio-stress AUDIO_STRESS_COUNT=N`.
 - `test-cgo-delta` runs the native build of the build-constrained packages;
   packages that merely import them are tested against the microphone stub, as
   in CI.

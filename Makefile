@@ -164,7 +164,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -430,6 +430,20 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 	(cd agent-cli && YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration \
 		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
+# The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
+# trials each per repetition) skip unless YUI_AUDIO_STRESS=1. They hunt rare
+# races rather than prove behavior, so pull requests do not run them (their
+# test45/test46 topologies run once per delivery in
+# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio); the scheduled
+# Nightly audio stress workflow runs this target with the coverage job's
+# build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
+AUDIO_STRESS_COUNT ?= 1
+test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
+	@set -euo pipefail; \
+	echo "==> test-audio-stress Test45/Test46 high-rate tool audio, $(AUDIO_STRESS_COUNT) repetition(s) of 20 trials each"; \
+	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone \
+		-run '^TestAgentBinaryTest4[56]HighRateToolAudioRegression$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
@@ -566,11 +580,11 @@ coverage-agent-cli-shard:
 	run_unit() { \
 		(cd agent-cli && packages="$(AGENT_CLI_COVERAGE_UNIT_PACKAGES)" && \
 			if [ -z "$$packages" ]; then packages="$$(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone ./... | grep -v '/test/integration$$')"; fi && \
-			CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
+			CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
 			$(GO) test $$packages $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG) -coverprofile="$(abspath $(COVERAGE_DIR))/agent-cli.out"); \
 	}; \
 	run_integration() { \
-		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \
+		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \
 			bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) $${1:+--shard "$$1"} \
 			--build-flag -tags=nomicrophone --build-flag -coverpkg=$(AGENT_CLI_COVERPKG) --cover-prefix "$(abspath $(COVERAGE_DIR))/agent-cli-integration" -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)); \
 	}; \

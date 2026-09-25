@@ -31,6 +31,7 @@ TARGET_CORPORA = {
     "embed-check": {"tests/embedding/..."},
     "test": CANONICAL_CORPORA - {"tests/embedding/..."},
     "test-audio-device-server-integration": {"agent-cli/..."},
+    "test-audio-stress": {"agent-cli/..."},
     "test-audio-stability": {
         "agent-cli/...",
         "go-audio/...",
