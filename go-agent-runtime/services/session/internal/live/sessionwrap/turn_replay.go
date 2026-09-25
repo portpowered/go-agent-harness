@@ -141,7 +141,11 @@ func (s *mediaSession) forward(ctx context.Context) {
 				s.fail(fmt.Errorf("flush turn replay media after stream end: %w", err))
 			}
 		}
-		if err := s.TerminalError(); err != nil {
+		// The owner cancels the provider's run context when it stops the
+		// session, gracefully or not; the provider then reports that
+		// cancellation. It is not a media failure: the flushed stream still
+		// ends with EOF so a graceful playback drain completes cleanly.
+		if err := s.TerminalError(); err != nil && !errors.Is(err, context.Canceled) {
 			s.media.FailInbound(err)
 		}
 	}()
