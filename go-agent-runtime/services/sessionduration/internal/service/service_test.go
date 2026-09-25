@@ -408,6 +408,7 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			request := sessionduration.RunRequest{
 				Context:    context.Background(),
 				Inferencer: contractInferencer{session: newContractSession()},
@@ -418,13 +419,14 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 					}
 					return loop, nil
 				},
-				Clock:     testNoopScheduler{},
-				Liveness:  sessionduration.LivenessOptions{Enabled: test.liveness, Timeout: time.Second},
-				Wake:      test.wake,
-				OnWake:    test.onWake,
-				Done:      test.done,
-				DoneError: test.doneError,
-				Drain:     func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+				Clock:       testNoopScheduler{},
+				Liveness:    sessionduration.LivenessOptions{Enabled: test.liveness, Timeout: time.Second},
+				Wake:        test.wake,
+				OnWake:      test.onWake,
+				Done:        test.done,
+				DoneError:   test.doneError,
+				Drain:       func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+				DrainPolicy: sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 			}
 			if err := New().Run(request); !errors.Is(err, test.want) {
 				t.Fatalf("Run() = %v, want %v", err, test.want)
@@ -446,9 +448,10 @@ func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 				return loop, nil
 			},
 			RetryDispatched: func(msg messages.StreamMessage) { dispatched <- msg },
+			DrainPolicy:     sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 		})
 	}(ctx)
-	timer := receiveRetryTimer(t, scheduler)
+	timer := receiveTriggerTimer(t, scheduler)
 	select {
 	case msg := <-loop.sent:
 		t.Fatalf("retry was sent before its delay elapsed: %+v", msg)
@@ -460,7 +463,7 @@ func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 	if !loop.deltas.Write(context.Background(), retryRateLimitTerminal()) {
 		t.Fatal("second rate-limit terminal was not queued")
 	}
-	receiveRetryTimer(t, scheduler)
+	receiveTriggerTimer(t, scheduler)
 	cancel()
 	select {
 	case err := <-result:
@@ -477,13 +480,13 @@ func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 	}
 }
 
-func receiveRetryTimer(t *testing.T, scheduler *triggerScheduler) *triggerTimer {
+func receiveTriggerTimer(t *testing.T, scheduler *triggerScheduler) *triggerTimer {
 	t.Helper()
 	var timer *triggerTimer
 	select {
 	case timer = <-scheduler.created:
 	case <-time.After(time.Second):
-		t.Fatal("retry scheduler was not created")
+		t.Fatal("injected timer was not created")
 	}
 	return timer
 }
@@ -527,16 +530,11 @@ func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}, nil
 			},
-			Drain: func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+			Drain:       func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
+			DrainPolicy: sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 		})
 	}()
-	var timer *triggerTimer
-	select {
-	case timer = <-scheduler.created:
-	case <-time.After(time.Second):
-		t.Fatal("max-duration timer was not created")
-	}
-	timer.events <- time.Now()
+	receiveTriggerTimer(t, scheduler).events <- time.Now()
 	select {
 	case err := <-result:
 		if err != nil {

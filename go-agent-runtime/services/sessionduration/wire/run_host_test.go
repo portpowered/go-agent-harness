@@ -96,6 +96,7 @@ func TestPublicRunBoundsSessionUpdatedAcknowledgement(t *testing.T) {
 			Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, Clock: scheduler,
 			LoopFactory:    publicLoopFactory(queuedPublicLoop(context.Background(), t, open)),
 			SessionUpdated: sessionduration.SessionUpdatedWait{Timeout: time.Second, Pending: func() bool { return true }, Ready: func() bool { return false }, TimeoutError: timeoutErr},
+			DrainPolicy:    sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 		})
 	}()
 	receivePublicTimer(t, scheduler).Fire()
@@ -113,6 +114,7 @@ func TestPublicRunBoundsSessionUpdatedAcknowledgement(t *testing.T) {
 				return sessionduration.MessageResult{}, nil
 			},
 			SessionUpdated: sessionduration.SessionUpdatedWait{Timeout: time.Second, Ready: func() bool { return true }, TimeoutError: timeoutErr},
+			DrainPolicy:    sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 		})
 	}()
 	receivePublicTimer(t, scheduler)
