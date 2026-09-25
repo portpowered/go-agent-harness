@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type testToolExecutor struct {
@@ -382,6 +383,61 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	case calls := <-acknowledgements:
 		t.Fatalf("duplicate acknowledgement = %#v", calls)
 	default:
+	}
+}
+
+// armedTimerSource reports when the acknowledgement timer is armed so the
+// test advances the fake clock only after the runner started measuring.
+type armedTimerSource struct {
+	*clock.Deterministic
+	armed chan struct{}
+	once  sync.Once
+}
+
+func (s *armedTimerSource) NewTimer(duration time.Duration) clock.Timer {
+	timer := s.Deterministic.NewTimer(duration)
+	s.once.Do(func() { close(s.armed) })
+	return timer
+}
+
+func TestToolRunner_AcknowledgementThresholdFollowsConfiguredClock(t *testing.T) {
+	const threshold = 2 * time.Second
+	source := &armedTimerSource{Deterministic: clock.NewDeterministic(time.Unix(100, 0), time.Millisecond), armed: make(chan struct{})}
+	release := make(chan struct{})
+	acknowledged := make(chan []messages.ToolCall, 1)
+	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
+	runner.ConfigureAcknowledgement(threshold, func(name string) bool { return name == "slow" }, func(_ context.Context, calls []messages.ToolCall) {
+		acknowledged <- calls
+	})
+	runner.ConfigureAcknowledgementClock(source)
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := runner.executeBatch(context.Background(), []messages.ToolCall{{ID: "slow-call", Name: "slow"}})
+		errCh <- err
+	}()
+	select {
+	case <-source.armed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("acknowledgement timer was not armed on the configured clock")
+	}
+	source.AdvanceBy(threshold - time.Millisecond)
+	select {
+	case calls := <-acknowledged:
+		t.Fatalf("acknowledged %#v before the configured clock reached the threshold", calls)
+	case <-time.After(20 * time.Millisecond):
+	}
+	source.AdvanceBy(time.Millisecond)
+	select {
+	case calls := <-acknowledged:
+		if len(calls) != 1 || calls[0].ID != "slow-call" {
+			t.Fatalf("acknowledged calls = %#v, want slow-call", calls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("configured clock reaching the threshold did not acknowledge")
+	}
+	close(release)
+	if err := <-errCh; err != nil {
+		t.Fatalf("executeBatch error = %v", err)
 	}
 }
 

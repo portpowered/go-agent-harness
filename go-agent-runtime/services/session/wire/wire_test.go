@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 )
 
 func TestNewServiceAllocatesSessionIDWithoutStartingProvider(t *testing.T) {
@@ -48,13 +47,6 @@ func TestFileStoreFactoryOpensManagedStore(t *testing.T) {
 	}
 	if len(traces) != 0 {
 		t.Fatalf("initial traces = %v, want empty store", traces)
-	}
-}
-
-func TestDuplexLoopFactoryRejectsMissingInferencer(t *testing.T) {
-	_, err := NewDuplexLoopFactory().Build(context.Background(), nil, sessionduration.DuplexLoopOptions{})
-	if err == nil || !strings.Contains(err.Error(), "inferencer is required") {
-		t.Fatalf("Build error = %v, want missing-inferencer failure", err)
 	}
 }
 

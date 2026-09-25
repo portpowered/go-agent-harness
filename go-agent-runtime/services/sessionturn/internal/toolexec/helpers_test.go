@@ -59,7 +59,6 @@ func cliPresentation() sessionturn.ToolPresentation {
 		DisplayPermissionDenied: func(permission tools.DisplayPermission) error {
 			return &deniedError{reason: permission.Reason}
 		},
-		FailedContent:    func(content string) bool { return content == "refused" },
 		PageSightFailure: func() string { return pageSightContent },
 		DisplaySource:    displaySource,
 		PageSightSource:  pageSource,
@@ -95,46 +94,6 @@ func (p fakePolicy) TimeoutForTool(name string) time.Duration {
 }
 func (p fakePolicy) Clone() tools.InteractiveToolPolicy { return p }
 func (p fakePolicy) Validate() error                    { return nil }
-
-// recordingLifecycle records observer order across the three lifecycle roles.
-type recordingLifecycle struct {
-	mu      sync.Mutex
-	events  []string
-	results []bool
-}
-
-func (r *recordingLifecycle) add(event string) {
-	r.mu.Lock()
-	r.events = append(r.events, event)
-	r.mu.Unlock()
-}
-
-func (r *recordingLifecycle) snapshot() []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]string(nil), r.events...)
-}
-
-type namedObserver struct {
-	name string
-	log  *recordingLifecycle
-}
-
-func (o namedObserver) ObserveToolCall(messages.ToolCall) { o.log.add(o.name + ".call") }
-func (o namedObserver) ObserveToolResult(_ messages.ToolCall, _ messages.ToolCallResponse, failed bool) {
-	o.log.add(o.name + ".result")
-	o.log.mu.Lock()
-	o.log.results = append(o.log.results, failed)
-	o.log.mu.Unlock()
-}
-
-type progressObserver struct{ log *recordingLifecycle }
-
-func (o progressObserver) ObserveProviderToolCallWithID(id, _ string) {
-	o.log.add("progress.call." + id)
-}
-func (o progressObserver) BeginLocalToolExecution() { o.log.add("progress.begin") }
-func (o progressObserver) EndLocalToolExecution()   { o.log.add("progress.end") }
 
 type sigintIntent struct{}
 

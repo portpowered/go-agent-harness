@@ -301,38 +301,6 @@ func parseRateLimitRetryDelay(message string, defaultDelay, maxDelay time.Durati
 	return delay
 }
 
-type timedToolExecutor struct {
-	inner     messages.ToolExecutor
-	scheduler platformclock.Scheduler
-	timeout   time.Duration
-}
-
-func newTimedToolExecutor(inner messages.ToolExecutor, scheduler platformclock.Scheduler, timeout time.Duration) messages.ToolExecutor {
-	if inner == nil || timeout <= 0 {
-		return inner
-	}
-	return timedToolExecutor{inner: inner, scheduler: scheduler, timeout: timeout}
-}
-
-func (e timedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return messages.ToolCallResponse{}, err
-	}
-	if e.scheduler == nil {
-		return messages.ToolCallResponse{}, session.ErrLiveSchedulerUnavailable
-	}
-	toolCtx, cancel := e.scheduler.WithTimeout(ctx, e.timeout)
-	defer cancel()
-	response, err := e.inner.Execute(toolCtx, call)
-	if errors.Is(toolCtx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
-		if err == nil {
-			err = context.DeadlineExceeded
-		}
-		return response, errors.Join(session.ErrLiveToolExecutionTimeout, err)
-	}
-	return response, err
-}
-
 func (h *handle) openingAdmissionRequired() bool {
 	return h != nil && len(h.request.OpeningContentParts) > 0
 }

@@ -160,9 +160,10 @@ func (r *RuntimeTrace) ResponseCreate(msg messages.StreamMessage) {
 	r.observe(sessiontrace.SessionRuntimeObservationResponseCreate, nil, 0, 0, msg, true, nil)
 }
 
-// TurnCompleted records assistant completion while excluding tool responses.
+// TurnCompleted records assistant completion while excluding tool responses
+// and spoken tool acknowledgements.
 func (r *RuntimeTrace) TurnCompleted(msg messages.StreamMessage, interrupted bool) {
-	if r == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || interrupted {
+	if r == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement || interrupted {
 		return
 	}
 	turns := int(r.turns.Add(1))

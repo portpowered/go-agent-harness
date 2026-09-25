@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // ToolRunner executes tool calls asynchronously as an active participant.
@@ -44,6 +45,7 @@ type ToolRunner struct {
 	acknowledgementThreshold time.Duration
 	isLongRunningTool        func(string) bool
 	sendAcknowledgement      func(context.Context, []messages.ToolCall)
+	acknowledgementClock     clock.TimerSource
 }
 
 func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunner {
@@ -63,6 +65,13 @@ func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRun
 	r.acknowledgementThreshold = threshold
 	r.isLongRunningTool = isLongRunning
 	r.sendAcknowledgement = send
+}
+
+// ConfigureAcknowledgementClock places the acknowledgement threshold in the
+// owning loop's time domain. Nil selects the real clock. It is configured
+// before Run starts.
+func (r *ToolRunner) ConfigureAcknowledgementClock(source clock.TimerSource) {
+	r.acknowledgementClock = source
 }
 
 func (r *ToolRunner) Run(ctx context.Context) error {
@@ -330,11 +339,15 @@ func (r *ToolRunner) longRunningCalls(calls []messages.ToolCall) map[int]message
 // collectBatch waits for every worker outcome while at most once requesting
 // an acknowledgement for long-running calls that outlive the threshold.
 func (r *ToolRunner) collectBatch(ctx context.Context, batch *toolBatch, resultCh <-chan toolExecutionResult) {
-	var acknowledgementTimer *time.Timer
+	var acknowledgementTimer clock.Timer
 	var acknowledgementCh <-chan time.Time
 	if len(batch.pendingLongRunning) > 0 {
-		acknowledgementTimer = time.NewTimer(r.acknowledgementThreshold)
-		acknowledgementCh = acknowledgementTimer.C
+		source := r.acknowledgementClock
+		if source == nil {
+			source = clock.Real{}
+		}
+		acknowledgementTimer = source.NewTimer(r.acknowledgementThreshold)
+		acknowledgementCh = acknowledgementTimer.C()
 		defer acknowledgementTimer.Stop()
 	}
 	ctxDone := ctx.Done()

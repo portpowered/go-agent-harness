@@ -23,30 +23,6 @@ const (
 	PageSightUnavailableErrorCode = "page_sight_unavailable"
 )
 
-// ToolLifecycleObserver records the exact local call and result boundary.
-type ToolLifecycleObserver interface {
-	ObserveToolCall(messages.ToolCall)
-	ObserveToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool)
-}
-
-// ToolProgress is the participant-liveness boundary. The provider call
-// obligation is recorded before local execution starts so a cancellation
-// cannot outrun stream publication.
-type ToolProgress interface {
-	ObserveProviderToolCallWithID(callID, name string)
-	BeginLocalToolExecution()
-	EndLocalToolExecution()
-}
-
-// ToolLifecycle composes the optional observers of one executor. Calls reach
-// Runtime, Progress, then Recording; results reach Runtime, Recording, then
-// end Progress.
-type ToolLifecycle struct {
-	Recording ToolLifecycleObserver
-	Progress  ToolProgress
-	Runtime   ToolLifecycleObserver
-}
-
 // CancellationIntent reports whether an operator SIGINT ended the run.
 type CancellationIntent interface {
 	SIGINTReceived() bool
@@ -64,8 +40,6 @@ type ToolPresentation struct {
 	// DisplayPermissionDenied converts a denied post-timeout permission
 	// re-check into the host's typed display error.
 	DisplayPermissionDenied func(tools.DisplayPermission) error
-	// FailedContent recognizes host-structured failure content.
-	FailedContent func(content string) bool
 	// PageSightFailure renders the customer-safe page-sight failure.
 	PageSightFailure func() string
 	// DisplaySource and PageSightSource label operator diagnostics.
@@ -80,7 +54,6 @@ type ToolExecutorRequest struct {
 	Inner        messages.ToolExecutor
 	Timeout      time.Duration
 	Policy       tools.InteractiveToolPolicy
-	Lifecycle    ToolLifecycle
 	Cancellation CancellationIntent
 	Diagnostics  sessiontrace.ToolDiagnosticSink
 	Presentation ToolPresentation

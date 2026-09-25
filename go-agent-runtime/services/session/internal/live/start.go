@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -94,9 +95,6 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		options = append(options, agentloop.WithToolExecutionDisabled())
 		return agentloop.New(options...)
 	}
-	if h.request.ToolExecutionTimeout > 0 {
-		toolExecutor = newTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
-	}
 	if h.providerLivenessEnabled() {
 		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
 	}
@@ -106,6 +104,9 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	toolExecutor = restrictToolExecutor(toolExecutor, h.offeredToolDefinitions, explicitCapability)
 	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn, observe: h.observeExecutedToolCall}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
+	if acknowledgement, ok := toolAcknowledgementOption(h.capabilityToolPolicy()); ok {
+		options = append(options, acknowledgement)
+	}
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
 	}
@@ -120,6 +121,36 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		}))
 	}
 	return agentloop.New(options...)
+}
+
+// capabilityToolPolicy is the interactive policy of the admitted capability.
+func (h *handle) capabilityToolPolicy() tools.InteractiveToolPolicy {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.request.Capabilities == nil {
+		return nil
+	}
+	return h.request.Capabilities.ToolPolicy
+}
+
+// toolAcknowledgementOption asks the provider for one spoken progress
+// acknowledgement when a bounded long-running call outlives the policy's
+// acknowledgement threshold. The threshold runs in the loop's clock domain.
+func toolAcknowledgementOption(policy tools.InteractiveToolPolicy) (agentloop.Option, bool) {
+	if policy == nil {
+		return nil, false
+	}
+	snapshot := policy.Clone()
+	threshold := snapshot.Settings().AcknowledgementThreshold
+	if threshold <= 0 {
+		return nil, false
+	}
+	return agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
+		Threshold: threshold,
+		IsLongRunning: func(name string) bool {
+			return snapshot.ClassForTool(name) == tools.InteractiveToolClassBoundedLongRunning
+		},
+	}), true
 }
 
 // activeCaptureToolExecutor keeps tool results behind the next active audio turn.

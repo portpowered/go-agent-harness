@@ -333,6 +333,7 @@ func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceS
 	// covers image preparation as well as the tool itself.
 	return capabilities, interactive.Bind(capabilities, interactive.Binding{
 		Config: cfg, Timeout: request.ToolExecutionTimeout, BrowserToolsEnabled: request.BrowserToolsEnabled, Cancellation: request.CancellationIntent,
+		Diagnostics: request.ToolDiagnostics,
 	})
 }
 

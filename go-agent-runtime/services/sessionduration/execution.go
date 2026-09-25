@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 )
 
 // Loop is the host-neutral portion of a running session loop needed by the
@@ -16,31 +15,6 @@ type Loop interface {
 	Run(context.Context) error
 	Deltas() *messages.TypedBuffer[messages.StreamMessage]
 	Send(context.Context, []messages.Message) error
-}
-
-// DuplexToolAcknowledgementPolicy is the immutable tool-class snapshot used
-// to configure an agent loop. The execution service turns the names into its
-// native lookup without making a policy decision.
-type DuplexToolAcknowledgementPolicy struct {
-	Threshold            time.Duration
-	LongRunningToolNames []string
-}
-
-// DuplexLoopOptions contains host-neutral values needed to construct the
-// session agent loop. It carries already-admitted capabilities and audio
-// buffer ports; it does not accept agentloop options or CLI runtime types.
-type DuplexLoopOptions struct {
-	AudioPorts                *audiosubsystem.Ports
-	ToolExecutor              messages.ToolExecutor
-	ToolDefinitions           []messages.ToolDefinition
-	AdvertiseToolDefinitions  bool
-	ToolAcknowledgementPolicy *DuplexToolAcknowledgementPolicy
-}
-
-// DuplexLoopFactory constructs a session loop under the session execution
-// service. Duration policy remains owned by the sessionduration service.
-type DuplexLoopFactory interface {
-	Build(context.Context, messages.SessionInferencer, DuplexLoopOptions) (Loop, error)
 }
 
 // SessionEventSender is the transport edge used by service-owned retry

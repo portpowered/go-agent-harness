@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
@@ -11,7 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"strings"
 )
 
 func (i *liveInvocation) bindPlaybackController() {
@@ -65,6 +66,10 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 	}
 }
 func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		h.consumeToolAcknowledgement(ctx, msg)
+		return false
+	}
 	if eventcodec.OutputMessage(msg) {
 		h.mu.Lock()
 		h.outputObserved = true
@@ -100,6 +105,16 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	}
 	return responseComplete
 }
+// consumeToolAcknowledgement publishes the spoken progress acknowledgement
+// for an in-flight tool. It is customer-visible output, but not a response of
+// the session's turn accounting: it must not complete a finite response, the
+// first turn, or the pending tool continuation.
+func (h *handle) consumeToolAcknowledgement(ctx context.Context, msg messages.StreamMessage) {
+	h.observeProviderLiveness(ctx, msg)
+	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
+	h.observeRuntimeMessage(msg)
+}
+
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || (msg.Role != "" && msg.Role != messages.RoleAssistant) {
 		return
