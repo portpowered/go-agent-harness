@@ -3,8 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/results"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/spf13/cobra"
 )
@@ -48,23 +48,12 @@ func (c *ProbeGateCommand) run(cmd *cobra.Command) error {
 	if len(c.Artifacts) == 0 {
 		return fmt.Errorf("fleet gate requires at least one result artifact: pass --out <result.jsonl> (repeatable), or --out - for standard input")
 	}
-	artifacts := make([]probe.FleetArtifact, 0, len(c.Artifacts))
-	var opened []*os.File
-	for _, path := range c.Artifacts {
-		if path == "-" {
-			artifacts = append(artifacts, probe.FleetArtifact{Name: "-", Reader: cmd.InOrStdin()})
-			continue
-		}
-		file, openErr := os.Open(path)
-		if openErr != nil {
-			c.closeAll(opened)
-			return fmt.Errorf("read result artifact: %w", openErr)
-		}
-		opened = append(opened, file)
-		artifacts = append(artifacts, probe.FleetArtifact{Name: path, Reader: file})
+	artifacts, closeArtifacts, err := results.OpenGateArtifacts(c.Artifacts, cmd.InOrStdin())
+	if err != nil {
+		return err
 	}
 	verdict, evalErr := probe.EvaluateFleetGate(artifacts)
-	c.closeAll(opened)
+	closeArtifacts()
 	if evalErr != nil {
 		return evalErr
 	}
@@ -78,7 +67,7 @@ func (c *ProbeGateCommand) run(cmd *cobra.Command) error {
 		return fmt.Errorf("write fleet verdict: %w", writeErr)
 	}
 	if c.JSONPath != "" {
-		if writeErr := os.WriteFile(c.JSONPath, line, 0o644); writeErr != nil {
+		if writeErr := results.WriteFile(c.JSONPath, line); writeErr != nil {
 			return fmt.Errorf("write fleet verdict to --json %q: %w", c.JSONPath, writeErr)
 		}
 	}
@@ -88,10 +77,4 @@ func (c *ProbeGateCommand) run(cmd *cobra.Command) error {
 			verdict.Status, notPassing, verdict.Total, len(verdict.Sources))
 	}
 	return nil
-}
-
-func (c *ProbeGateCommand) closeAll(files []*os.File) {
-	for _, file := range files {
-		_ = file.Close()
-	}
 }

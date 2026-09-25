@@ -221,7 +221,7 @@
         "internal/services/devices/interface.go",
         "internal/transport/cli/devices.go",
         "internal/transport/cli/probe.go",
-        "internal/transport/cli/device_probe.go"
+        "internal/transport/cli/probe_output.go"
       ],
       "reason": "the device contract and the device list/probe transports reach devices only through the public device service"
     },

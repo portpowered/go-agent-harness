@@ -1,4 +1,4 @@
-package cli
+package replay
 
 // This file owns the s2s-v7a metrics-reconciliation evidence seam for offline
 // probe runs. The emitted side of every series comes from the production
@@ -18,9 +18,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 )
 
-// scenarioDeclaresMetricsReconciliation reports whether one scenario declares
-// a metrics-reconcile expectation and therefore needs metric evidence.
-func scenarioDeclaresMetricsReconciliation(scenario probe.Scenario) bool {
+// declaresMetricsReconciliation reports whether one scenario declares a
+// metrics-reconcile expectation and therefore needs metric evidence.
+func declaresMetricsReconciliation(scenario probe.Scenario) bool {
 	for _, expectation := range scenario.Expectations {
 		if expectation.Type == probe.ExpectMetricsReconcile || expectation.Kind == probe.ExpectMetricsReconcile {
 			return true
@@ -40,11 +40,10 @@ func scenarioSendText(scenario probe.Scenario) string {
 	return ""
 }
 
-// collectReplayMetricsEvidence drives the real session runner over the
-// recorded fixture with a metrics sink injected and pairs the resulting
-// emitted matrix with an independent wire-level sum of the same fixture's
-// structured deltas.
-func collectReplayMetricsEvidence(ctx context.Context, collector serviceprobes.MetricsCollector, fixture, prompt string) ([]probe.MetricsSeries, error) {
+// collectMetricsEvidence drives the real session runner over the recorded
+// fixture with a metrics sink injected and pairs the resulting emitted matrix
+// with an independent wire-level sum of the same fixture's structured deltas.
+func collectMetricsEvidence(ctx context.Context, collector serviceprobes.MetricsCollector, fixture, prompt string) ([]probe.MetricsSeries, error) {
 	if collector == nil {
 		return nil, fmt.Errorf("metrics collector is not configured")
 	}

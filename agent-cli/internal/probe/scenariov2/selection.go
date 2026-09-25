@@ -14,6 +14,9 @@ import (
 // recordingRootPermission is the mode of a created evidence root directory.
 const recordingRootPermission = 0o755
 
+// NoSelectionMessage is the operator guidance for a run without scenarios.
+const NoSelectionMessage = "no probe scenarios selected; pass scenario paths as arguments or repeat --scenario"
+
 // Selection is one requested scenario document. Err is set when the document
 // carried a v2 envelope but failed to load, so the run still reports a
 // failed result line for it.
@@ -28,7 +31,7 @@ type Selection struct {
 // scenarios is rejected.
 func LoadSelections(selections []string, lookup probe.CorpusLookup) ([]Selection, error) {
 	if len(selections) == 0 {
-		return nil, errors.New("no probe scenarios selected; pass scenario paths as arguments or repeat --scenario")
+		return nil, errors.New(NoSelectionMessage)
 	}
 	result := make([]Selection, 0, len(selections))
 	seen := make(map[string]struct{}, len(selections))

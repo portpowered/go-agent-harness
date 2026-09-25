@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/customersim"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,44 +23,6 @@ func TestCustomerSimulationCommandRequiresExplicitLiveOptIn(t *testing.T) {
 	root.SetArgs([]string{"--family", "A"})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "--live") {
 		t.Fatalf("Execute error = %v, want explicit --live guidance", err)
-	}
-}
-
-func TestCustomerSimulationRunSpecsLoadsFamilyERepromptAudioSeparately(t *testing.T) {
-	scenario := probe.NewFamilyEScenario()
-	temp := t.TempDir()
-	turnPath := filepath.Join(temp, "turn.pcm")
-	repromptPath := filepath.Join(temp, "check-in.pcm")
-	if err := os.WriteFile(turnPath, []byte{1, 0, 2, 0}, 0o600); err != nil {
-		t.Fatalf("write turn audio: %v", err)
-	}
-	if err := os.WriteFile(repromptPath, []byte{3, 0, 4, 0}, 0o600); err != nil {
-		t.Fatalf("write re-prompt audio: %v", err)
-	}
-
-	runs, err := customerSimulationRunSpecs([]probe.CustomerScenario{scenario}, []string{turnPath}, "", repromptPath)
-	if err != nil {
-		t.Fatalf("customerSimulationRunSpecs: %v", err)
-	}
-	if len(runs) != 1 || len(runs[0].Audio) != 1 || len(runs[0].PatienceRepromptAudio) != 4 {
-		t.Fatalf("Family E run audio = %+v, want one action recording plus separate four-byte re-prompt", runs)
-	}
-	if string(runs[0].PatienceRepromptAudio) != string([]byte{3, 0, 4, 0}) {
-		t.Fatalf("Family E re-prompt audio = %x, want 03000400", runs[0].PatienceRepromptAudio)
-	}
-}
-
-func TestCustomerSimulationRunSpecsRejectsMissingOrMisplacedFamilyERepromptAudio(t *testing.T) {
-	temp := t.TempDir()
-	audioPath := filepath.Join(temp, "turn.pcm")
-	if err := os.WriteFile(audioPath, []byte{1, 0}, 0o600); err != nil {
-		t.Fatalf("write audio: %v", err)
-	}
-	if _, err := customerSimulationRunSpecs([]probe.CustomerScenario{probe.NewFamilyEScenario()}, []string{audioPath}, ""); err == nil || !strings.Contains(err.Error(), "patience-reprompt-audio") {
-		t.Fatalf("missing Family E re-prompt error = %v, want explicit flag guidance", err)
-	}
-	if _, err := customerSimulationRunSpecs([]probe.CustomerScenario{probe.NewFamilyAScenario()}, make([]string, 4), "", audioPath); err == nil || !strings.Contains(err.Error(), "only valid") {
-		t.Fatalf("misplaced Family E re-prompt error = %v, want selection-specific failure", err)
 	}
 }
 
@@ -141,7 +104,7 @@ func TestCustomerSimulationCommandRejectsNonPassingResultWithNilRunnerError(t *t
 	t.Setenv(envName, "test-key")
 	// Keep the test hermetic even when the custom flag is not the first
 	// credential source selected by a command implementation under test.
-	t.Setenv(defaultCustomerSimulationAPIKeyEnv, "test-key")
+	t.Setenv(customersim.DefaultAPIKeyEnv, "test-key")
 
 	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
 	command.SetValidator(probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, _ probe.CustomerSimulationValidatorRequest) ([]byte, error) {
@@ -193,7 +156,7 @@ func TestCustomerSimulationCommandCleansValidatorCredentialOnPrimaryFailure(t *t
 }
 
 func TestCustomerSimulationCommandRejectsMissingAudioInsteadOfSkipping(t *testing.T) {
-	t.Setenv(defaultCustomerSimulationAPIKeyEnv, "test-key")
+	t.Setenv(customersim.DefaultAPIKeyEnv, "test-key")
 	command := NewCustomerSimulationCommand(flags.NewGlobalFlags())
 	command.SetRunner(func(_ context.Context, _ probe.CustomerSimulationSuiteOptions) (probe.CustomerSimulationSuiteResult, error) {
 		t.Fatal("runner called despite missing audio")
@@ -202,8 +165,7 @@ func TestCustomerSimulationCommandRejectsMissingAudioInsteadOfSkipping(t *testin
 	command.SetValidator(probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, _ probe.CustomerSimulationValidatorRequest) ([]byte, error) {
 		return nil, nil
 	}))
-	os.Setenv("CUSTOMER_SIMULATION_MISSING_AUDIO_KEY", "test-key")
-	t.Cleanup(func() { _ = os.Unsetenv("CUSTOMER_SIMULATION_MISSING_AUDIO_KEY") })
+	t.Setenv("CUSTOMER_SIMULATION_MISSING_AUDIO_KEY", "test-key")
 	root := command.Generate()
 	root.SetArgs([]string{"--live", "--family", "A", "--binary", os.Args[0], "--api-key-env", "CUSTOMER_SIMULATION_MISSING_AUDIO_KEY", "--secret-file", filepath.Join(t.TempDir(), "missing")})
 	err := root.Execute()

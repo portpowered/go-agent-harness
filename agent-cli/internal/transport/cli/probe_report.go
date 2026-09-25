@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/results"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	"github.com/spf13/cobra"
 )
@@ -51,36 +50,11 @@ func (c *ProbeReportCommand) run(cmd *cobra.Command) error {
 	if len(c.Inputs) == 0 {
 		return fmt.Errorf("at least one --out <result.jsonl> input is required")
 	}
-
-	inputs := make([]probe.FrictionReportInput, 0, len(c.Inputs))
-	files := make([]*os.File, 0, len(c.Inputs))
-	defer func() {
-		for _, file := range files {
-			_ = file.Close()
-		}
-	}()
-
-	for _, inputPath := range c.Inputs {
-		inputPath = strings.TrimSpace(inputPath)
-		if inputPath == "" {
-			return fmt.Errorf("--out input path must not be empty")
-		}
-		if inputPath == "-" {
-			inputs = append(inputs, probe.FrictionReportInput{Name: "-", Reader: cmd.InOrStdin()})
-			continue
-		}
-
-		file, err := os.Open(inputPath)
-		if err != nil {
-			return &probe.FrictionReportError{
-				Source: inputPath,
-				Err:    fmt.Errorf("open input: %w", err),
-			}
-		}
-		files = append(files, file)
-		inputs = append(inputs, probe.FrictionReportInput{Name: inputPath, Reader: file})
+	inputs, closeInputs, err := results.OpenFrictionInputs(c.Inputs, cmd.InOrStdin())
+	defer closeInputs()
+	if err != nil {
+		return err
 	}
-
 	report, err := probe.AggregateFrictionReport(inputs...)
 	if err != nil {
 		return err
@@ -94,8 +68,7 @@ func (c *ProbeReportCommand) run(cmd *cobra.Command) error {
 	if err := writeProbeReportOutput(c.JSONPath, "JSON report", cmd.OutOrStdout(), jsonBytes); err != nil {
 		return err
 	}
-
-	summary := renderFrictionReportSummary(report)
+	summary := results.RenderFrictionSummary(report)
 	if err := writeProbeReportOutput(c.SummaryPath, "summary", cmd.ErrOrStderr(), []byte(summary)); err != nil {
 		return err
 	}
@@ -107,79 +80,14 @@ func (c *ProbeReportCommand) run(cmd *cobra.Command) error {
 }
 
 func writeProbeReportOutput(path, label string, defaultWriter io.Writer, data []byte) error {
-	if path == "" || path == "-" {
+	if path == "" || path == results.StdinSource {
 		if _, err := defaultWriter.Write(data); err != nil {
 			return fmt.Errorf("write %s: %w", label, err)
 		}
 		return nil
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := results.WriteFile(path, data); err != nil {
 		return fmt.Errorf("write %s %q: %w", label, path, err)
 	}
 	return nil
-}
-
-func renderFrictionReportSummary(report probe.FrictionReport) string {
-	var summary strings.Builder
-	fmt.Fprintf(&summary, "Probe friction report\n")
-	fmt.Fprintf(&summary, "Scenarios: %d total, %d passed, %d failed, %d stuck\n", report.Total, report.Passed, report.Failed, report.Stuck)
-
-	summary.WriteString("Scenario rollups:\n")
-	if len(report.Scenarios) == 0 {
-		summary.WriteString("  (none)\n")
-	} else {
-		for _, scenario := range report.Scenarios {
-			fmt.Fprintf(&summary, "  %s: total=%d passed=%d failed=%d stuck=%d\n", scenario.Name, scenario.Total, scenario.Passed, scenario.Failed, scenario.Stuck)
-		}
-	}
-
-	summary.WriteString("Terminal reasons:\n")
-	if len(report.TerminalReasons) == 0 {
-		summary.WriteString("  (none)\n")
-	} else {
-		for _, reason := range report.TerminalReasons {
-			fmt.Fprintf(&summary, "  %s: %d\n", reason.Reason, reason.Count)
-		}
-	}
-
-	summary.WriteString("Error classes:\n")
-	if len(report.ErrorClasses) == 0 {
-		summary.WriteString("  (none)\n")
-	} else {
-		for _, class := range report.ErrorClasses {
-			fmt.Fprintf(&summary, "  %s: %d\n", class.Class, class.Count)
-		}
-	}
-
-	summary.WriteString("Expectation misses:\n")
-	if len(report.ExpectationMisses) == 0 {
-		summary.WriteString("  (none)\n")
-	} else {
-		for _, miss := range report.ExpectationMisses {
-			fmt.Fprintf(&summary, "  %s: %d (scenarios: %s)\n", miss.Kind, miss.Count, reportScenarioNames(miss.Scenarios))
-		}
-	}
-
-	summary.WriteString("Top frictions:\n")
-	if len(report.TopFrictions) == 0 {
-		summary.WriteString("  (none)\n")
-	} else {
-		for _, friction := range report.TopFrictions {
-			fmt.Fprintf(&summary, "  %s/%s: %d (scenarios: %s)\n", friction.Category, friction.Key, friction.Count, reportScenarioNames(friction.Scenarios))
-		}
-	}
-
-	status := "pass"
-	if report.Failed > 0 {
-		status = "fail"
-	}
-	fmt.Fprintf(&summary, "Health: %s\n", status)
-	return summary.String()
-}
-
-func reportScenarioNames(names []string) string {
-	if len(names) == 0 {
-		return "(none)"
-	}
-	return strings.Join(names, ", ")
 }
