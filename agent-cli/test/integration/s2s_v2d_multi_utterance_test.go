@@ -116,7 +116,11 @@ func buildIntegrationBinaries(dir string) error {
 func warmBinary(path string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	_ = exec.CommandContext(ctx, path, "--help").Run()
+	// Only the exec matters; a non-zero help exit status is irrelevant.
+	var exitErr *exec.ExitError
+	if err := exec.CommandContext(ctx, path, "--help").Run(); err != nil && !errors.As(err, &exitErr) {
+		fmt.Fprintf(os.Stderr, "warm %s: %v\n", path, err)
+	}
 }
 
 var (
