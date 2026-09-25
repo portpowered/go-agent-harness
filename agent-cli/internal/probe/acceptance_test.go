@@ -461,27 +461,9 @@ func testAcceptanceProbeGoalAndDeadlineErrorPaths(t *testing.T, binary string) {
 	})
 }
 
-func TestLiveTransportCapturesARealProcess(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell executable fixture is POSIX-specific")
-	}
-	path := filepath.Join(t.TempDir(), "probe-agent.sh")
-	script := "#!/bin/sh\nprintf 'live goal attained\\n' > goal.txt\nprintf '%s\\n' '{\"claimed_success\":true,\"objective_artifact_path\":\"goal.txt\",\"checked_claim\":\"live goal attained\",\"subjective_rating\":\"easy\"}'\n"
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
-		t.Fatalf("write process fixture: %v", err)
-	}
-
-	runner := NewLiveRunner(recordedArtifactVerifier())
-	runner.ArtifactRoot = t.TempDir()
-	verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: path, Goal: "Make the live result"})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if !verdict.Pass || !verdict.ObjectiveEvidence.Verified {
-		t.Fatalf("live verdict = %+v, want artifact-backed pass", verdict)
-	}
-}
-
+// TestLiveTransportDoesNotForwardParentWorkspaceEnvironment is the one live
+// process test: the child writes its objective artifact and report, so it
+// also proves the live transport captures a real process end to end.
 func TestLiveTransportDoesNotForwardParentWorkspaceEnvironment(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell executable fixture is POSIX-specific")
