@@ -10,6 +10,7 @@ import (
 // TestSessionAudioServerToClient verifies that server audio deltas injected via
 // MockSessionInferencer propagate to the delta event stream as AUDIO.DELTA events.
 func TestSessionAudioServerToClient(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -59,6 +60,7 @@ func TestSessionAudioServerToClient(t *testing.T) {
 // TestSessionMultipleAudioChunks sends 10+ sequential audio chunks from the server
 // and verifies all arrive in the delta stream in order.
 func TestSessionMultipleAudioChunks(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -112,6 +114,7 @@ func TestSessionMultipleAudioChunks(t *testing.T) {
 // TestSessionAudioWithMessageLifecycle verifies audio deltas are bracketed by
 // MESSAGE.START and MESSAGE.END in the delta stream.
 func TestSessionAudioWithMessageLifecycle(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -155,6 +158,7 @@ func TestSessionAudioWithMessageLifecycle(t *testing.T) {
 // TestSessionConcurrentAudioBidirectional simultaneously sends a user text message
 // AND injects server audio deltas, verifying both propagate without corruption.
 func TestSessionConcurrentAudioBidirectional(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -178,8 +182,6 @@ func TestSessionConcurrentAudioBidirectional(t *testing.T) {
 	if !scenario.WaitForEvent(messages.StreamTypeMessageEnd, 3*time.Second) {
 		t.Fatal("timed out waiting for MESSAGE.END")
 	}
-
-	time.Sleep(200 * time.Millisecond) // Let both paths settle.
 
 	if err := scenario.Stop(5 * time.Second); err != nil {
 		t.Fatalf("Stop: %v", err)

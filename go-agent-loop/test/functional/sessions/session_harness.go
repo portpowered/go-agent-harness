@@ -3,6 +3,8 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -32,14 +34,6 @@ type SessionTranscript struct {
 // NewSessionTranscript creates an empty both-side transcript collector.
 func NewSessionTranscript() *SessionTranscript { return &SessionTranscript{} }
 
-// NewSessionCapture is a descriptive alias for NewSessionTranscript.
-func NewSessionCapture() *SessionTranscript { return NewSessionTranscript() }
-
-// TranscriptCapture and SessionCapture are compatibility aliases for callers
-// that name the capability rather than the storage implementation.
-type TranscriptCapture = SessionTranscript
-type SessionCapture = SessionTranscript
-
 // Write appends an owned copy of record. Capture failures must never alter the
 // live session path, so the in-memory collector always accepts the record.
 func (c *SessionTranscript) Write(record transcript.Record) error {
@@ -63,9 +57,6 @@ func (c *SessionTranscript) Records() []transcript.Record {
 	return cloneTranscriptRecords(c.records)
 }
 
-// Snapshot is an alias for Records.
-func (c *SessionTranscript) Snapshot() []transcript.Record { return c.Records() }
-
 // ClientRecords returns only client-authored records while preserving order.
 func (c *SessionTranscript) ClientRecords() []transcript.Record {
 	return filterTranscriptRecords(c.Records(), transcript.PeerClient)
@@ -81,44 +72,6 @@ func (c *SessionTranscript) AgentRecords() []transcript.Record {
 type SessionScenarioOptions struct {
 	Clock   clock.Source
 	Capture transcript.RecordSink
-}
-
-// SessionScenarioConfig is a descriptive alias for SessionScenarioOptions.
-type SessionScenarioConfig = SessionScenarioOptions
-
-// SessionScenarioOption configures a SessionScenario without changing the
-// agentloop.Option contract used by existing callers.
-type SessionScenarioOption func(*SessionScenarioOptions)
-
-// WithClock injects the clock used for transcript metadata. Nil is resolved
-// to clock.Real by the scenario constructor.
-func WithClock(source clock.Source) SessionScenarioOption {
-	return func(options *SessionScenarioOptions) { options.Clock = source }
-}
-
-// WithSessionClock is an explicit alias for WithClock.
-func WithSessionClock(source clock.Source) SessionScenarioOption { return WithClock(source) }
-
-// WithCapture enables both-side capture. With no sink it creates a collector
-// that can be read through SessionScenario.CapturedRecords.
-func WithCapture(sinks ...transcript.RecordSink) SessionScenarioOption {
-	return func(options *SessionScenarioOptions) {
-		if len(sinks) == 0 {
-			options.Capture = NewSessionTranscript()
-			return
-		}
-		options.Capture = sinks[0]
-	}
-}
-
-// WithSessionCapture is an explicit alias for WithCapture.
-func WithSessionCapture(sinks ...transcript.RecordSink) SessionScenarioOption {
-	return WithCapture(sinks...)
-}
-
-// WithTranscriptCapture is an explicit alias for WithCapture.
-func WithTranscriptCapture(sink transcript.RecordSink) SessionScenarioOption {
-	return WithCapture(sink)
 }
 
 // ---------------------------------------------------------------------------
@@ -137,10 +90,15 @@ type SessionScenario struct {
 	capture    *sessionCapture
 	Transcript *SessionTranscript
 
-	cancel   context.CancelFunc
-	errCh    chan error
+	cancel  context.CancelFunc
+	runDone chan struct{} // closed when Loop.Run returns
+	runErr  error         // Loop.Run's result; read only after runDone closes
+
 	deltasMu sync.Mutex
 	deltas   []messages.StreamMessage
+	// deltasChanged is closed and replaced each time a delta is collected,
+	// so waiters block on it instead of polling the slice.
+	deltasChanged chan struct{}
 }
 
 // NewSessionScenario creates a SessionScenario with the given mock inferencer
@@ -160,12 +118,6 @@ func NewSessionScenarioWithConfig(t *testing.T, inf *MockSessionInferencer, tool
 	return newSessionScenario(t, inf, tool, options, opts...)
 }
 
-// NewSessionScenarioWithOptions is a naming alias for
-// NewSessionScenarioWithConfig.
-func NewSessionScenarioWithOptions(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
-	return NewSessionScenarioWithConfig(t, inf, tool, options, opts...)
-}
-
 func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
 	allOpts := []agentloop.Option{
 		agentloop.WithSessionInferencer(inf),
@@ -181,11 +133,12 @@ func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockTool
 
 	resolvedClock := clock.Ensure(options.Clock)
 	scenario := &SessionScenario{
-		t:     t,
-		Loop:  loop,
-		Inf:   inf,
-		Tool:  tool,
-		clock: resolvedClock,
+		t:             t,
+		Loop:          loop,
+		Inf:           inf,
+		Tool:          tool,
+		clock:         resolvedClock,
+		deltasChanged: make(chan struct{}),
 	}
 	if options.Capture != nil {
 		scenario.capture = newSessionCapture(resolvedClock, options.Capture)
@@ -202,7 +155,7 @@ func (s *SessionScenario) Start() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
-	s.errCh = make(chan error, 1)
+	s.runDone = make(chan struct{})
 
 	// Collect deltas from the loop's consumer-facing Deltas() buffer in background.
 	go func() {
@@ -216,18 +169,35 @@ func (s *SessionScenario) Start() {
 			}
 			s.deltasMu.Lock()
 			s.deltas = append(s.deltas, delta)
+			close(s.deltasChanged)
+			s.deltasChanged = make(chan struct{})
 			s.deltasMu.Unlock()
 		}
 	}()
 
-	go func() { s.errCh <- s.Loop.Run(ctx) }()
+	go func() {
+		s.runErr = s.Loop.Run(ctx)
+		close(s.runDone)
+	}()
 	s.WaitForEvent(messages.StreamTypeSessionOpen, sessionOpenWait)
 }
 
-const (
-	sessionOpenWait = 50 * time.Millisecond  // Start: bounds sessions that never publish SESSION.OPEN.
-	loopEndWait     = 200 * time.Millisecond // Stop: bounds loops that never publish LOOP.END.
-)
+// awaitRunExit waits up to timeout for Loop.Run to return. exited is false
+// on timeout; otherwise err is Loop.Run's result.
+func (s *SessionScenario) awaitRunExit(timeout time.Duration) (exited bool, err error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-s.runDone:
+		return true, s.runErr
+	case <-timer.C:
+		return false, nil
+	}
+}
+
+// sessionOpenWait bounds Start for sessions that never publish SESSION.OPEN;
+// callers that need the event assert it with their own WaitForEvent.
+const sessionOpenWait = 50 * time.Millisecond
 
 // SendControlPlane sends a control plane message to the session (e.g. session_close, stop, ping).
 func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageType) {
@@ -269,12 +239,15 @@ func (s *SessionScenario) SendText(text string) {
 }
 
 // Stop triggers a graceful session close. It sends session_close, waits
-// for LOOP.END (the last delta), then cancels the context and
-// closes the mock inferencer.
+// for LOOP.END (the last delta) to be collected, then closes the mock
+// inferencer and cancels the context. The LOOP.END wait wakes on the
+// collected delta itself; timeout is only a wall-clock failure bound for
+// each of that wait and the loop exit. A missing LOOP.END is an error, so
+// a nil return guarantees the delta stream is complete.
 func (s *SessionScenario) Stop(timeout time.Duration) error {
 	s.SendControlPlane(messages.ControlPlaneMessageTypeSessionClose)
 
-	s.WaitForEvent(messages.StreamTypeLoopEnd, loopEndWait)
+	loopEnded := s.WaitForEvent(messages.StreamTypeLoopEnd, timeout)
 
 	// Close the mock session (unblocks runSession if it's blocked on session.Done()).
 	s.Inf.Close()
@@ -282,15 +255,17 @@ func (s *SessionScenario) Stop(timeout time.Duration) error {
 	// Cancel context to stop the engine hot loop.
 	s.cancel()
 
-	select {
-	case err := <-s.errCh:
-		// context.Canceled is expected — the loop was cancelled by us.
-		if err == context.Canceled {
-			return nil
-		}
+	exited, err := s.awaitRunExit(timeout)
+	switch {
+	case !loopEnded:
+		return fmt.Errorf("SessionScenario.Stop: LOOP.END was not collected within %v after session_close", timeout)
+	case !exited:
+		return fmt.Errorf("SessionScenario.Stop: loop did not exit within %v after cancellation: %w", timeout, context.DeadlineExceeded)
+	case errors.Is(err, context.Canceled):
+		// Expected: the loop was cancelled by us.
+		return nil
+	default:
 		return err
-	case <-time.After(timeout):
-		return context.DeadlineExceeded
 	}
 }
 
@@ -352,22 +327,27 @@ func (s *SessionScenario) AgentRecords() []transcript.Record {
 }
 
 // WaitForEvent blocks until a delta event with the given type appears or times out.
+// It wakes on each collected delta rather than polling.
 func (s *SessionScenario) WaitForEvent(eventType messages.StreamMessageType, timeout time.Duration) bool {
-	deadline := time.After(timeout)
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	scanned := 0
 	for {
 		s.deltasMu.Lock()
-		for _, d := range s.deltas {
+		for _, d := range s.deltas[scanned:] {
 			if d.Type == eventType {
 				s.deltasMu.Unlock()
 				return true
 			}
 		}
+		scanned = len(s.deltas)
+		changed := s.deltasChanged
 		s.deltasMu.Unlock()
 
 		select {
-		case <-deadline:
+		case <-deadline.C:
 			return false
-		case <-time.After(time.Millisecond):
+		case <-changed:
 		}
 	}
 }

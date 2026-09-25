@@ -8,6 +8,7 @@ import (
 )
 
 func TestSessionVADSpeechStarted(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -41,6 +42,7 @@ func TestSessionVADSpeechStarted(t *testing.T) {
 }
 
 func TestSessionVADSpeechStopped(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -69,6 +71,7 @@ func TestSessionVADSpeechStopped(t *testing.T) {
 }
 
 func TestSessionVADInterleavedWithAudio(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)
@@ -115,6 +118,7 @@ func TestSessionVADInterleavedWithAudio(t *testing.T) {
 }
 
 func TestSessionVADNotInReconstruction(t *testing.T) {
+	t.Parallel()
 	// VAD events should NOT appear as ContentParts in reconstructed messages.
 	deltas := []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0xAA})},
@@ -148,6 +152,7 @@ func TestSessionVADNotInReconstruction(t *testing.T) {
 }
 
 func TestSessionVADMultipleTurns(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	scenario := NewSessionScenario(t, inf, tool)

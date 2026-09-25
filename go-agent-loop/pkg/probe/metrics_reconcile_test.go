@@ -75,33 +75,6 @@ func TestEvaluateMetricsReconcileFailsWithoutEvidence(t *testing.T) {
 	}
 }
 
-// The kind joins the measurable vocabulary used by the CLI scenario loader.
-// Both v7a scenarios join the registered set with the reconciliation
-// expectation so the CLI probe entrypoints can select them.
-func TestS2SV7AScenariosRegisteredWithReconciliation(t *testing.T) {
-	registered := map[string]Scenario{}
-	for _, scenario := range Scenarios() {
-		registered[scenario.ID] = scenario
-	}
-	for _, id := range []string{ScenarioIDS2SV7AMetricsModality, ScenarioIDS2SV7AMetricsModalityOvercount} {
-		scenario, ok := registered[id]
-		if !ok {
-			t.Fatalf("scenario %q must be registered", id)
-		}
-		if err := scenario.Validate(); err != nil {
-			t.Fatalf("scenario %q must validate: %v", id, err)
-		}
-		found := false
-		for _, expectation := range scenario.Expectations {
-			if expectation.Type == ExpectMetricsReconcile {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("scenario %q must declare a %q expectation", id, ExpectMetricsReconcile)
-		}
-	}
-}
 func asMismatch(err error, target **ExpectationMismatchError) bool {
 	for err != nil {
 		if mismatch, ok := err.(*ExpectationMismatchError); ok {

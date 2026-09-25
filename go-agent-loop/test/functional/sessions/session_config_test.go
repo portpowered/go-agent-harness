@@ -15,6 +15,7 @@ import (
 //
 // Flow: SESSION.CREATED (from provider) → model runner intercepts → SESSION.UPDATE (to provider).
 func TestSessionConfigSentOnSessionCreated(t *testing.T) {
+	t.Parallel()
 	const (
 		wantInstructions = "You are a helpful robot vacuum assistant"
 		wantModel        = "grok-3"

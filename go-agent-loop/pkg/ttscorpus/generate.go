@@ -51,12 +51,18 @@ func pinnedRequest(text string) map[string]any {
 	}
 }
 
+// DefaultReadyPollInterval spaces /readyz probes while WaitReady waits.
+const DefaultReadyPollInterval = 500 * time.Millisecond
+
 // Generator drives the pinned LocalAI qwen3-tts-cpp backend.
 type Generator struct {
 	Endpoint        string
 	Client          *http.Client
 	ReadyTimeout    time.Duration
 	GenerateTimeout time.Duration
+	// ReadyPollInterval spaces readiness probes; zero uses
+	// DefaultReadyPollInterval. A wait never extends past ReadyTimeout.
+	ReadyPollInterval time.Duration
 }
 
 // NewGenerator returns a generator for the pinned backend with bounded timeouts.
@@ -92,14 +98,31 @@ func (g *Generator) WaitReady(ctx context.Context) error {
 		} else {
 			lastErr = err
 		}
-		if time.Now().After(deadline) {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
 			return fmt.Errorf("ttscorpus: backend %s not ready within %s: last error: %v", g.Endpoint, g.ReadyTimeout, lastErr)
 		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("ttscorpus: backend %s readiness canceled: %w", g.Endpoint, ctx.Err())
-		case <-time.After(500 * time.Millisecond):
+		if err := g.waitBeforeNextProbe(ctx, remaining); err != nil {
+			return err
 		}
+	}
+}
+
+// waitBeforeNextProbe sleeps one poll interval, clamped to the time left
+// before the readiness deadline so a short ReadyTimeout is honored.
+func (g *Generator) waitBeforeNextProbe(ctx context.Context, remaining time.Duration) error {
+	wait := g.ReadyPollInterval
+	if wait <= 0 {
+		wait = DefaultReadyPollInterval
+	}
+	wait = min(wait, remaining)
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("ttscorpus: backend %s readiness canceled: %w", g.Endpoint, ctx.Err())
+	case <-timer.C:
+		return nil
 	}
 }
 

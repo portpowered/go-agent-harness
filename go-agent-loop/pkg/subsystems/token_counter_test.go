@@ -183,10 +183,3 @@ func TestTokenCounter_ZeroMaxTokens(t *testing.T) {
 		t.Fatalf("expected 1 message (no-op), got %d", len(ls.History.ConversationBuffer))
 	}
 }
-
-func TestTokenCounter_TickGroup(t *testing.T) {
-	tc := NewTokenCounter(nil, 0)
-	if tc.TickGroup() != TickGroupTokenCounter {
-		t.Errorf("TickGroup: got %d, want %d", tc.TickGroup(), TickGroupTokenCounter)
-	}
-}

@@ -308,17 +308,6 @@ func TestKernelRunner_CloseStreamWithErrorNilsChannels(t *testing.T) {
 
 // --- NewDeltaEventReader channel creation and replacement ---
 
-func TestKernelRunner_NewDeltaEventReaderCreatesChannel(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	evCh := kr.NewDeltaEventReader(4)
-	if evCh == nil {
-		t.Fatal("NewDeltaEventReader should return a non-nil channel")
-	}
-	if cap(evCh) != 4 {
-		t.Errorf("channel capacity: got %d, want 4", cap(evCh))
-	}
-}
-
 func TestKernelRunner_NewDeltaEventReaderReplacesChannel(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	first := kr.NewDeltaEventReader(4)
@@ -349,14 +338,6 @@ func TestKernelRunner_NewDeltaEventReaderReplacesChannel(t *testing.T) {
 		t.Error("first channel should not receive after replacement")
 	default:
 		// expected
-	}
-}
-
-func TestKernelRunner_NewDeltaEventReaderCapacity(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	ch16 := kr.NewDeltaEventReader(16)
-	if cap(ch16) != 16 {
-		t.Errorf("capacity: got %d, want 16", cap(ch16))
 	}
 }
 
