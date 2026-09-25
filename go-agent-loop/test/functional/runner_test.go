@@ -1,13 +1,81 @@
 package functional
 
 import (
+	"context"
 	"encoding/json"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+// Discovery lists only concern packages under test/functional (not the root
+// runner package, internal fixtures, or packages without tests) and their
+// sorted top-level tests. The fixture is a standalone module in testdata.
+func TestDiscoverFunctionalInventoryListsConcernPackagesAndTopLevelTests(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	root, err := filepath.Abs(filepath.Join("testdata", "discovery"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory, err := DiscoverFunctionalInventory(context.Background(), root)
+	if err != nil {
+		t.Fatalf("discover fixture inventory: %v", err)
+	}
+	want := Inventory{Packages: []InventoryPackage{
+		{Path: "example.com/discovery/test/functional/alpha", Tests: []string{"TestAlphaOne", "TestAlphaTwo"}},
+		{Path: "example.com/discovery/test/functional/beta", Tests: []string{"TestBeta"}},
+	}}
+	if !reflect.DeepEqual(inventory, want) {
+		t.Fatalf("inventory = %+v, want %+v", inventory, want)
+	}
+
+	if _, err := DiscoverFunctionalInventory(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "discover functional packages") {
+		t.Fatalf("discovery outside a module: err = %v, want a discover functional packages error", err)
+	}
+}
+
+// A package TestMain narrows test.run to the manifest-selected tests that
+// also match the caller's own -run filter, and reports each quarantine.
+func TestApplyPackageSelectionIntersectsManifestWithRunFilter(t *testing.T) {
+	runFlag := flag.CommandLine.Lookup("test.run")
+	original := runFlag.Value.String()
+	t.Cleanup(func() {
+		if err := flag.CommandLine.Set("test.run", original); err != nil {
+			t.Errorf("restore test.run: %v", err)
+		}
+	})
+	selected := []TestSelector{{Package: "p", Test: "TestAlpha"}, {Package: "p", Test: "TestBeta"}}
+	for _, tc := range []struct{ filter, want string }{
+		{filter: "", want: "^(?:TestAlpha|TestBeta)$"},
+		{filter: "Beta", want: "^(?:TestBeta)$"},
+		{filter: "^TestGamma$", want: "a^"},
+	} {
+		if err := flag.CommandLine.Set("test.run", tc.filter); err != nil {
+			t.Fatal(err)
+		}
+		selection := Selection{Selected: selected, Quarantined: []QuarantinedSelector{{
+			Entry: Entry{Package: "p", Test: "TestQuarantined", Bucket: BucketGenuinelyFailing, Reason: "fixture", ExitCondition: "never"},
+			Tests: []TestSelector{{Package: "p", Test: "TestQuarantined"}},
+		}}}
+		if err := applyPackageSelection(selection); err != nil {
+			t.Fatalf("filter %q: %v", tc.filter, err)
+		}
+		if got := runFlag.Value.String(); got != tc.want {
+			t.Fatalf("filter %q: test.run = %q, want %q", tc.filter, got, tc.want)
+		}
+	}
+
+	if err := flag.CommandLine.Set("test.run", "("); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyPackageSelection(Selection{Selected: selected}); err == nil || !strings.Contains(err.Error(), "compile existing test.run filter") {
+		t.Fatalf("invalid -run filter: err = %v", err)
+	}
+}
 
 func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.T) {
 	// Each subprocess reads its own temporary manifest, so the two
