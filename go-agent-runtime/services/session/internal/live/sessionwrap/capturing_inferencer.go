@@ -112,6 +112,20 @@ func (i *CapturingInferencer) FlushCapture() error {
 	return flush()
 }
 
+// SyncReceive forwards a receive barrier to the connected provider session so
+// messages it already queued become visible to the session runner.
+func (i *CapturingInferencer) SyncReceive(ctx context.Context) {
+	if i == nil {
+		return
+	}
+	i.captureMu.Lock()
+	connected := i.connectedSession
+	i.captureMu.Unlock()
+	if syncer, ok := connected.(interface{ SyncReceive(context.Context) }); ok {
+		syncer.SyncReceive(ctx)
+	}
+}
+
 // TerminalError reads joined provider state without waiting for Done scheduling.
 func (i *CapturingInferencer) TerminalError() error {
 	i.captureMu.Lock()

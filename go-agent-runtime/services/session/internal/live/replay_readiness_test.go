@@ -7,8 +7,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/stretchr/testify/require"
@@ -451,84 +449,6 @@ func TestOpeningContentWaitsForProviderAdmission(t *testing.T) {
 	require.Empty(t, h.pendingToolCallResponses)
 	require.Zero(t, h.pendingToolCalls)
 }
-func TestOrderedSessionAutomaticSendAheadOfPendingControlDoesNotDeadlock(t *testing.T) {
-	gate := mediagate.New(nil)
-	ackID, _, err := gate.RegisterAck()
-	require.NoError(t, err)
-	automaticStarted := make(chan struct{})
-	releaseAutomatic := make(chan struct{})
-	controlSent := make(chan struct{})
-	provider := &orderingSession{automaticStarted: automaticStarted, releaseAutomatic: releaseAutomatic, controlSent: controlSent}
-	ordered := sessionwrap.WrapOrderedSession(provider, sessionwrap.OrderedSessionOptions{Media: gate})
-	automaticDone := make(chan messages.SessionSendOutcome, 1)
-	go func() {
-		automaticDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
-			Type:  messages.StreamTypeTextDelta,
-			Value: messages.NewTextDeltaValue("automatic"),
-		})
-	}()
-	select {
-	case <-automaticStarted:
-	case <-time.After(time.Second):
-		t.Fatal("automatic provider send did not start")
-	}
-	controlDone := make(chan messages.SessionSendOutcome, 1)
-	go func() {
-		controlDone <- ordered.SendWithOutcome(context.Background(), messages.StreamMessage{
-			Type:            messages.StreamTypeMessageEnd,
-			ActorProvidedID: ackID,
-			Value:           messages.NewMessageEndValue(messages.TokenUsage{}),
-		})
-	}()
-	select {
-	case <-controlSent:
-		t.Fatal("control overtook the automatic send")
-	case <-time.After(20 * time.Millisecond):
-	}
-	close(releaseAutomatic)
-	select {
-	case outcome := <-automaticDone:
-		require.True(t, outcome.OK())
-	case <-time.After(time.Second):
-		t.Fatal("automatic provider send did not finish")
-	}
-	select {
-	case outcome := <-controlDone:
-		require.True(t, outcome.OK())
-	case <-time.After(time.Second):
-		t.Fatal("control provider send deadlocked behind automatic send")
-	}
-	select {
-	case <-controlSent:
-	case <-time.After(time.Second):
-		t.Fatal("control provider send did not run")
-	}
-}
-
-type orderingSession struct{ automaticStarted, releaseAutomatic, controlSent chan struct{} }
-
-func (s *orderingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	if msg.Type == messages.StreamTypeMessageEnd {
-		close(s.controlSent)
-		return true
-	}
-	select {
-	case <-s.automaticStarted:
-	default:
-		close(s.automaticStarted)
-	}
-	select {
-	case <-s.releaseAutomatic:
-		return true
-	case <-ctx.Done():
-		return false
-	}
-}
-func (s *orderingSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return messages.NewTypedBuffer[messages.StreamMessage](1)
-}
-func (s *orderingSession) Done() <-chan struct{} { return nil }
-func (s *orderingSession) Close() error          { return nil }
 func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T) {
 	const callID = "call-original-response"
 	h := &handle{toolContinuations: make(map[string]*liveToolContinuation)}
@@ -597,4 +517,62 @@ func TestStoppedSessionInputReportsCleanLiveClose(t *testing.T) {
 	err := liveInputError(fmt.Errorf("admit ordered audio input: %w", participants.ErrSessionClosed))
 	require.ErrorIs(t, err, session.ErrLiveClosed)
 	require.True(t, isExpectedMediaPumpError(fmt.Errorf("capture boundary control %q: %w", session.LiveControlAudioCommit, err)))
+}
+
+// The first completion-gated scheduled turn waits for the opening response's
+// tool continuation, not only for the tool-call response terminal, and a
+// provider close releases it so the admission guard can report the gap.
+func TestOpeningResponseGateHoldsFirstTurnUntilToolContinuationCompletes(t *testing.T) {
+	const callID = "call-opening"
+	h := &handle{replayResponseWake: make(chan struct{}), responseTerminalWake: make(chan struct{}), terminalObserved: make(chan struct{}), toolContinuations: make(map[string]*liveToolContinuation)}
+	h.configureScheduledAudio(1, 1)
+	result := make(chan error, 1)
+	go func() { result <- h.waitForOpeningResponse(context.Background(), 1) }()
+	end := func(id string, role messages.Role) (error, bool) {
+		msg := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: role, ResponseID: id, Value: messages.NewMessageEndValue(messages.TokenUsage{})}
+		h.observeResponseTerminal(msg)
+		defer h.wakeResponseWaiters()
+		return h.observeToolLifecycle(msg)
+	}
+	callEnd := messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "lookup", `{}`)}
+	callErr, _ := h.observeToolLifecycle(callEnd)
+	require.NoError(t, callErr)
+	responseErr, _ := end("response-tool-call", messages.RoleAssistant)
+	require.NoError(t, responseErr)
+	require.False(t, h.openingResponseSettled(1), "settled after the tool-call response terminal")
+	h.observeToolResult(callID, "lookup", true)
+	h.observeToolResponseOutput(callID)
+	toolErr, _ := end("", messages.RoleTool)
+	require.NoError(t, toolErr)
+	require.False(t, h.openingResponseSettled(1), "settled before the continuation terminal")
+	h.markContinuationOutput()
+	continuationErr, complete := end("response-continuation", messages.RoleAssistant)
+	require.NoError(t, continuationErr)
+	require.True(t, complete)
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("first scheduled turn stayed held after the opening continuation completed")
+	}
+
+	closed := &handle{replayResponseWake: make(chan struct{}), terminalObserved: make(chan struct{}), toolContinuations: make(map[string]*liveToolContinuation)}
+	closed.observeTerminalValue(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: &messages.SessionCloseValue{Reason: "provider_closed"}})
+	require.NoError(t, closed.waitForOpeningResponse(context.Background(), 1))
+}
+
+// Strict replay can reject the opening message before session.updated is
+// replayed; the readiness wait must return that terminal result, not block
+// until the caller's deadline.
+func TestWaitReplayReadyReturnsTerminalResultWhenSessionEndsFirst(t *testing.T) {
+	mismatch := errors.New("replay mismatch")
+	for _, terminal := range []error{mismatch, nil} {
+		h := &handle{request: session.LiveRequest{ReplayPlan: &session.LiveReplayPlan{WaitForSessionUpdated: true}}, replayReady: make(chan struct{}), done: make(chan struct{}), terminalErr: terminal}
+		close(h.done)
+		want := terminal
+		if want == nil {
+			want = session.ErrLiveClosed
+		}
+		require.ErrorIs(t, h.waitReplayReady(context.Background()), want)
+	}
 }

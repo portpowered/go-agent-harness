@@ -118,7 +118,10 @@ func (i *liveInvocation) completeCaptureTurn(ctx context.Context, index int) err
 }
 
 func (i *liveInvocation) prepareCaptureTurn(ctx context.Context, index int, admission session.AudioTurnAdmission) error {
-	if index == 0 || admission != session.AudioTurnAdmissionBarge {
+	if index == 0 {
+		return i.waitForOpeningCaptureResponse(ctx, admission, captureResponseTarget(i.options.Request))
+	}
+	if admission != session.AudioTurnAdmissionBarge {
 		return nil
 	}
 	if waiter, ok := i.handle.(interface {
@@ -204,6 +207,28 @@ func (i *liveInvocation) waitForNextCaptureTurn(ctx context.Context, index int, 
 	return nil
 }
 
+// waitForOpeningCaptureResponse keeps the first completion-gated scheduled
+// turn behind the response requested by the opening prompt, including any
+// tool continuation that response started. Without this causal boundary the
+// first turn was ordered only by how long the finite source took to pace its
+// frames, so a slow tool let scheduled audio reach the provider while the
+// opening response still owed a tool result.
+func (i *liveInvocation) waitForOpeningCaptureResponse(ctx context.Context, admission session.AudioTurnAdmission, responseTarget int) error {
+	if admission != session.AudioTurnAdmissionCompletionGated || responseTarget <= 0 {
+		return nil
+	}
+	waiter, ok := i.handle.(interface {
+		waitForOpeningResponse(context.Context, int) error
+	})
+	if !ok {
+		return nil
+	}
+	if err := waiter.waitForOpeningResponse(ctx, responseTarget); err != nil {
+		return fmt.Errorf("wait for opening response before finite capture turn 1: %w", err)
+	}
+	return nil
+}
+
 func shouldWaitForCaptureResponse(index int, admission session.AudioTurnAdmission) bool {
 	return admission == session.AudioTurnAdmissionCompletionGated || index > 0
 }
@@ -264,6 +289,14 @@ func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages
 			return err
 		}
 		return session.ErrLiveClosed
+	}
+	// Provider output audio reaches playback without waiting for the relay
+	// that publishes response lifecycle messages to the runner. Input may be
+	// a reaction to that audio, so publish every provider message queued
+	// before it; the runner then evaluates barge-in against the response the
+	// speaker actually heard instead of a stale idle state.
+	if h.providerReceiveSync != nil {
+		h.providerReceiveSync(ctx)
 	}
 	return liveInputError(loop.SendAudioInputWithPolicy(ctx, pcm, policy))
 }

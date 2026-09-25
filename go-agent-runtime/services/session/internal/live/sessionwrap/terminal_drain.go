@@ -43,7 +43,7 @@ func WrapSession(ctx context.Context, inner messages.Session, continuous bool, c
 	}
 	drained := &terminalDrainSession{
 		inner: inner, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity),
-		done: make(chan struct{}), stop: make(chan struct{}),
+		done: make(chan struct{}), stop: make(chan struct{}), syncRequests: make(chan chan struct{}),
 	}
 	go drained.forward(context.WithoutCancel(ctx), source, inner.Done())
 	return drained
@@ -74,8 +74,34 @@ type terminalDrainSession struct {
 	inner      messages.Session
 	receive    *messages.TypedBuffer[messages.StreamMessage]
 	done, stop chan struct{}
-	close      sync.Once
-	closeErr   error
+	// syncRequests carries SyncReceive barriers to the relay goroutine, the
+	// only reader of the provider buffer, so a barrier never reorders frames.
+	syncRequests chan chan struct{}
+	close        sync.Once
+	closeErr     error
+}
+
+// SyncReceive returns once every message the provider had already queued is
+// visible through Receive. Provider output media bypasses this relay, so a
+// caller admitting input that may react to that media (a spoken barge-in)
+// uses the barrier to observe the response lifecycle that preceded it.
+func (s *terminalDrainSession) SyncReceive(ctx context.Context) {
+	if s == nil || s.syncRequests == nil || ctx == nil {
+		return
+	}
+	ack := make(chan struct{})
+	select {
+	case s.syncRequests <- ack:
+	case <-s.done:
+		return
+	case <-ctx.Done():
+		return
+	}
+	select {
+	case <-ack:
+	case <-s.done:
+	case <-ctx.Done():
+	}
 }
 
 func (s *terminalDrainSession) forward(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage], sourceDone <-chan struct{}) {
@@ -89,11 +115,34 @@ func (s *terminalDrainSession) forward(ctx context.Context, source *messages.Typ
 			if !ok || !s.forwardMessage(ctx, msg) {
 				return
 			}
+		case ack := <-s.syncRequests:
+			ok := s.drainAvailable(ctx, source)
+			close(ack)
+			if !ok {
+				return
+			}
 		case <-sourceDone:
 			s.drain(ctx, source)
 			return
 		case <-s.stop:
 			return
+		}
+	}
+}
+
+// drainAvailable forwards the messages already queued by the provider without
+// waiting for more. It reports false when forwarding stopped.
+func (s *terminalDrainSession) drainAvailable(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) bool {
+	if syncer, ok := s.inner.(interface{ SyncReceive(context.Context) }); ok {
+		syncer.SyncReceive(ctx)
+	}
+	for {
+		msg, ok := source.Read()
+		if !ok {
+			return true
+		}
+		if !s.forwardMessage(ctx, msg) {
+			return false
 		}
 	}
 }

@@ -129,6 +129,7 @@ type handle struct {
 	startErr, terminalErr                            error
 	runErr, providerErr                              error
 	providerTerminalError                            func() error
+	providerReceiveSync                              func(context.Context)
 	pumpErr                                          error
 	cancel                                           context.CancelCauseFunc
 	parentCtx                                        context.Context
