@@ -12,7 +12,8 @@ By default the run is limited to new code: it uses a temporary Git index that
 includes the current module's Go working tree and passes --new-from-rev, so
 modified, deleted, and non-ignored untracked Go files are compared with the
 base without changing the user's index or writing unrelated working-tree
-blobs to the repository.
+blobs to the repository. A module with no Go file in that diff is skipped
+without running the analyzer, because no issue could pass the filter.
 
 --all-code lints every file in the module with no new-from-rev filter. This is
 the hard pass that enforces .golangci.yml on legacy and new code alike.
@@ -160,6 +161,19 @@ if ((all_code == 0)); then
 		# Git's normal ignore rules apply. The temporary index captures tracked
 		# modifications, deletions, and non-ignored untracked Go files together.
 		git -C "$repo_root" add --all --pathspec-from-file="$pathspec_file" --pathspec-file-nul
+	fi
+
+	# --new-from-rev reports only issues on lines that `git diff <base>` shows
+	# as added or changed, and this temporary index is what that diff sees.
+	# When the module has no such Go file, no issue can survive the filter, so
+	# skip loading and analyzing the module. An unresolvable base still runs so
+	# golangci-lint reports the bad revision itself.
+	if git -C "$repo_root" rev-parse --verify --quiet "${base_ref}^{commit}" >/dev/null; then
+		changed_go="$(git -C "$repo_root" diff --name-only --no-renames "$base_ref" -- "$module_dir" | grep -E '\.go$' || true)"
+		if [[ -z "$changed_go" ]]; then
+			echo "no Go changes in $module_dir since $base_ref; new-code lint has nothing to check"
+			exit 0
+		fi
 	fi
 fi
 

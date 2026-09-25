@@ -278,6 +278,83 @@ print(\"0 issues.\")
             self.assertEqual(self._git(root, "diff", "--cached", "--quiet").returncode, 0)
             self.assertEqual(list(index_dir.iterdir()), [])
 
+    def test_new_code_pass_skips_module_without_go_changes(self):
+        with tempfile.TemporaryDirectory(prefix="golangci-working-tree-skip-") as temp_dir:
+            root = Path(temp_dir)
+            for module in ("alpha", "beta"):
+                (root / module).mkdir()
+                (root / module / "go.mod").write_text(
+                    f"module example.com/{module}\n\ngo 1.24\n", encoding="utf-8"
+                )
+                (root / module / "base.go").write_text(
+                    f"package {module}\n\nfunc Base() {{}}\n", encoding="utf-8"
+                )
+            index_dir = root / "temporary-indexes"
+            index_dir.mkdir()
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.email", "architecture-gate@example.com")
+            self._git(root, "config", "user.name", "Architecture Gate")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-qm", "fixture baseline")
+            # alpha: only a non-Go change. beta: an untracked Go file.
+            (root / "alpha" / "notes.txt").write_text("notes\n", encoding="utf-8")
+            (root / "beta" / "new.go").write_text(
+                "package beta\n\nfunc New() {}\n", encoding="utf-8"
+            )
+            recorded = root / "invocations.txt"
+            analyzer = root / "fake-recording-analyzer.py"
+            analyzer.write_text(
+                """#!/usr/bin/env python3
+import os
+from pathlib import Path
+
+with open(os.environ[\"FAKE_INVOCATIONS\"], \"a\", encoding=\"utf-8\") as handle:
+    handle.write(Path.cwd().name + \"\\n\")
+print(\"0 issues.\")
+""",
+                encoding="utf-8",
+            )
+            analyzer.chmod(0o755)
+
+            def run(module, *mode):
+                return subprocess.run(
+                    [
+                        str(SCRIPT_PATH),
+                        "--analyzer",
+                        str(analyzer),
+                        "--repo",
+                        str(root),
+                        "--base",
+                        "HEAD",
+                        "--module",
+                        module,
+                        *mode,
+                        "--",
+                        "./...",
+                    ],
+                    cwd=root,
+                    env={**os.environ, "TMPDIR": str(index_dir), "FAKE_INVOCATIONS": str(recorded)},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            skipped = run("alpha")
+            self.assertEqual(skipped.returncode, 0, skipped.stdout + skipped.stderr)
+            self.assertIn("no Go changes in alpha since HEAD", skipped.stdout)
+            self.assertFalse(recorded.exists())
+
+            linted = run("beta")
+            self.assertEqual(linted.returncode, 0, linted.stdout + linted.stderr)
+            self.assertEqual(recorded.read_text(encoding="utf-8").splitlines(), ["beta"])
+
+            # The all-code pass never skips.
+            all_code = run("alpha", "--all-code")
+            self.assertEqual(all_code.returncode, 0, all_code.stdout + all_code.stderr)
+            self.assertEqual(recorded.read_text(encoding="utf-8").splitlines(), ["beta", "alpha"])
+            self.assertEqual(self._git(root, "diff", "--cached", "--quiet").returncode, 0)
+            self.assertEqual(list(index_dir.iterdir()), [])
+
     def test_loader_error_fails_even_when_analyzer_returns_zero(self):
         with tempfile.TemporaryDirectory(prefix="golangci-working-tree-loader-") as temp_dir:
             root = Path(temp_dir)
@@ -296,6 +373,9 @@ print(\"0 issues.\")
             self._git(root, "config", "user.name", "Architecture Gate")
             self._git(root, "add", ".")
             self._git(root, "commit", "-qm", "fixture baseline")
+            (root / "fixture" / "new.go").write_text(
+                "package fixture\n\nfunc New() {}\n", encoding="utf-8"
+            )
 
             analyzer = root / "fake-loader-analyzer.py"
             analyzer.write_text(
