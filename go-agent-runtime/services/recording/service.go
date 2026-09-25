@@ -112,6 +112,30 @@ type ResourceLimits struct {
 	TerminalItems   int64
 	ProviderBytes   int64
 	ProviderItems   int64
+	// SummaryBytes bounds the retained conversation summary projection and
+	// its encoded session log. Raw evidence is not charged to this budget.
+	SummaryBytes int64
+}
+
+// FileSync commits one written evidence file to stable storage before it is
+// closed or published. Nil selects the file's own Sync (fsync), the production default.
+// Tests may substitute a no-op or counting hook; production callers should
+// leave it nil so every artifact stays durable.
+type FileSync func(DurableFile) error
+
+// DurableFile is the surface of an evidence file that a FileSync hook sees;
+// *os.File satisfies it.
+type DurableFile interface {
+	Name() string
+	Sync() error
+}
+
+// Sync applies the hook, falling back to the file's own Sync when it is nil.
+func (s FileSync) Sync(file DurableFile) error {
+	if s == nil {
+		return file.Sync()
+	}
+	return s(file)
 }
 
 // ResourceUsage is an optional read-only snapshot of one invocation's bounded
@@ -180,6 +204,7 @@ const (
 	DefaultProviderItems   int64 = 1 << 20
 	DefaultTerminalBytes   int64 = 128 << 10
 	DefaultTerminalItems   int64 = 16
+	DefaultSummaryBytes    int64 = 2 << 20
 )
 
 // Writer finalizes one capture outside the agent tick. Implementations retain
@@ -194,6 +219,9 @@ type ProviderCaptureOptions struct {
 	// Limits uses the same protected defaults as live semantic evidence.
 	// Smaller values are useful for deterministic overflow tests.
 	Limits ResourceLimits
+	// SyncFile overrides the durability hook for the spool and published
+	// capture. Nil keeps the production fsync.
+	SyncFile FileSync
 }
 
 // ProviderCaptureSink admits raw provider events without doing filesystem
@@ -265,6 +293,9 @@ type LiveEvidenceOptions struct {
 	// finite defaults declared above; larger values are capped at those
 	// defaults so callers cannot disable protection accidentally.
 	Limits ResourceLimits
+	// SyncFile overrides the durability hook for every evidence file this
+	// recording writes. Nil keeps the production fsync.
+	SyncFile FileSync
 }
 
 // LiveAudioObservation is an admitted runtime audio frame. The recording

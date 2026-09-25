@@ -153,7 +153,7 @@ func runRecheckCase(t *testing.T, tc recheckCase) {
 		name = screenTool
 	}
 	begin := time.Now()
-	response, err := New(sessionturn.ToolExecutorRequest{Inner: executor, Timeout: shortTimeout, Presentation: cliPresentation()}).Execute(context.Background(), messages.ToolCall{ID: "screen-" + tc.name, Name: name})
+	response, err := New(sessionturn.ToolExecutorRequest{Inner: executor, Timeout: shortTimeout, Presentation: cliPresentation(), ScreenPermissionRecheckTimeout: shortTimeout}).Execute(context.Background(), messages.ToolCall{ID: "screen-" + tc.name, Name: name})
 	if err != nil || time.Since(begin) > responseBound {
 		t.Fatalf("Execute = %v after %s", err, time.Since(begin))
 	}

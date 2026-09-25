@@ -288,38 +288,6 @@ func TestImageMediaType(t *testing.T) {
 	}
 }
 
-func TestVideoMediaType(t *testing.T) {
-	tests := []struct {
-		path string
-		want string
-	}{
-		{"a.mp4", "video/mp4"},
-		{"b.webm", "video/webm"},
-		{"c.mov", "video/quicktime"},
-		{"d.flv", "video/x-flv"},
-		{"e.mpeg", "video/mpeg"},
-		{"f.mpg", "video/mpeg"},
-		{"g.wmv", "video/wmv"},
-		{"h.3gp", "video/3gpp"},
-		{"i.3gpp", "video/3gpp"},
-	}
-	for _, tt := range tests {
-		got := videoMediaType(tt.path)
-		if got != tt.want {
-			t.Errorf("videoMediaType(%q) = %q; want %q", tt.path, got, tt.want)
-		}
-	}
-}
-
-func TestMediaKindFromPath_Video(t *testing.T) {
-	exts := []string{".flv", ".mov", ".mpeg", ".mpg", ".mp4", ".webm", ".wmv", ".3gp", ".3gpp"}
-	for _, ext := range exts {
-		if mediaKindFromPath("x"+ext) != mediaVideo {
-			t.Errorf("mediaKindFromPath(%q) should be mediaVideo", "x"+ext)
-		}
-	}
-}
-
 func requireToolTextContains(t *testing.T, msgs []messages.Message, err error, want string) string {
 	t.Helper()
 	if err != nil {

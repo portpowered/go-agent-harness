@@ -23,8 +23,10 @@ import (
 )
 
 func TestDirectoryRecorderValidatesDestinationAndInjectedClockBeforeAdmission(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"empty", "file", "populated", "symlink", "no clock"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			target, source := badEvidenceDestination(t, kind)
 			if recorder, err := New(recording.LiveEvidenceOptions{Destination: target}, source); err == nil {
 				if cleanupErr := recorder.Finalize(t.Context(), nil); cleanupErr != nil {
@@ -66,16 +68,17 @@ func badEvidenceDestination(t *testing.T, kind string) (string, clock.Source) {
 }
 
 func TestDirectoryRecorderUsesCanonicalClockAndKeepsForeignClaim(t *testing.T) {
+	t.Parallel()
 	source := clock.NewDeterministic(evidenceTime(), time.Millisecond)
 	options := recording.LiveEvidenceOptions{Destination: filepath.Join(t.TempDir(), "recording")}
-	r, err := newDirectoryRecorder(options, source)
+	r, err := newTestDirectoryRecorder(options, source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.options.ClockBase != evidenceTime() || r.options.WallClockStart != evidenceTime() {
 		t.Fatalf("clock injection lost: %+v", r.options)
 	}
-	if _, err := newDirectoryRecorder(options, source); !errors.Is(err, recording.ErrLiveEvidenceClaimed) {
+	if _, err := newTestDirectoryRecorder(options, source); !errors.Is(err, recording.ErrLiveEvidenceClaimed) {
 		t.Fatalf("concurrent destination claim = %v", err)
 	}
 	recordEvidenceText(t, r, "observation")
@@ -96,8 +99,10 @@ func TestDirectoryRecorderUsesCanonicalClockAndKeepsForeignClaim(t *testing.T) {
 }
 
 func TestDirectoryRecorderUnavailableClockOrFormatAndDroppedEventsRemainPartial(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"timestamp", "format", "overflow event", "invalid message"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			r := newEvidenceRecorder(t)
 			recordEvidenceText(t, r, "observed")
 			recordUnavailableEvidence(t, r, kind)
@@ -136,6 +141,7 @@ func recordUnavailableEvidence(t *testing.T, r *directoryRecorder, kind string) 
 }
 
 func TestDirectoryRecorderEmptyResponseBoundaryDoesNotInventPCM(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	frame := sharedaudio.PCMFrame{Format: sharedaudio.PCM16DeviceFormat(24000), EndOfResponse: true}
 	if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Timestamp: evidenceTime(), Frame: frame}); err != nil {
@@ -151,6 +157,7 @@ func TestDirectoryRecorderEmptyResponseBoundaryDoesNotInventPCM(t *testing.T) {
 }
 
 func TestDirectoryRecorderRejectsCanceledAdmissionAndConflictingTerminal(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -174,6 +181,7 @@ func TestDirectoryRecorderRejectsCanceledAdmissionAndConflictingTerminal(t *test
 }
 
 func TestDirectoryRecorderJoinsProviderCaptureWithoutChangingIntegrity(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	capture := gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion, Records: []gatewaytesting.CapturedSessionEvent{{
 		Sequence: 1, Direction: gatewaytesting.DirectionServerToClient, Type: "session.created", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: []byte(`{"type":"session.created"}`),
@@ -204,6 +212,7 @@ func TestDirectoryRecorderJoinsProviderCaptureWithoutChangingIntegrity(t *testin
 }
 
 func TestDirectoryRecorderDoesNotInvalidateProtectedCaptureToRedactIt(t *testing.T) {
+	t.Parallel()
 	const secret = "fixture-sensitive-value"
 	r := newEvidenceRecorder(t)
 	r.options.Credentials = []string{secret}
@@ -221,6 +230,7 @@ func TestDirectoryRecorderDoesNotInvalidateProtectedCaptureToRedactIt(t *testing
 }
 
 func TestDirectoryRecorderMalformedProviderSourceIsPartial(t *testing.T) {
+	t.Parallel()
 	for _, sourceKind := range []string{"missing", "empty", "directory"} {
 		r := newEvidenceRecorderWithProviderPath(t)
 		if err := os.Remove(r.ProviderCapturePath()); err != nil {
@@ -248,8 +258,9 @@ func TestDirectoryRecorderMalformedProviderSourceIsPartial(t *testing.T) {
 }
 
 func TestDirectoryRecorderPairsAudioBudgetWithTranscriptBoundary(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{Destination: filepath.Join(root, "capture"), ClockBase: evidenceTime(), WallClockStart: evidenceTime(), Limits: recording.ResourceLimits{AudioBytes: 2, AudioItems: 1}}, clock.Real{})
+	r, err := newTestDirectoryRecorder(recording.LiveEvidenceOptions{Destination: filepath.Join(root, "capture"), ClockBase: evidenceTime(), WallClockStart: evidenceTime(), Limits: recording.ResourceLimits{AudioBytes: 2, AudioItems: 1}}, clock.Real{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,6 +291,7 @@ func TestDirectoryRecorderPairsAudioBudgetWithTranscriptBoundary(t *testing.T) {
 }
 
 func TestDirectoryRecorderBoundsOversizedTerminalRuntimeEvent(t *testing.T) {
+	t.Parallel()
 	const wantMaxEventTextBytes = 2048
 
 	r := newEvidenceRecorder(t)
@@ -334,6 +346,7 @@ func TestDirectoryRecorderBoundsOversizedTerminalRuntimeEvent(t *testing.T) {
 }
 
 func TestDirectoryRecorderBoundsFallbackTerminalError(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	recordEvidenceText(t, r, "observed before fallback")
 	runErr := errors.New(strings.Repeat("run failure: ", 30000))
@@ -353,8 +366,9 @@ func TestDirectoryRecorderBoundsFallbackTerminalError(t *testing.T) {
 }
 
 func TestSemanticSidecarBoundsOversizedPublicTerminal(t *testing.T) {
+	t.Parallel()
 	rawPath := filepath.Join(t.TempDir(), "cutoff.session.json")
-	r, err := NewSemanticSidecar(rawPath)
+	r, err := newTestSemanticSidecar(rawPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +401,8 @@ func TestSemanticSidecarBoundsOversizedPublicTerminal(t *testing.T) {
 }
 
 func TestDirectoryRecorderBoundsManifestMetadata(t *testing.T) {
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+	t.Parallel()
+	r, err := newTestDirectoryRecorder(recording.LiveEvidenceOptions{
 		Destination:   filepath.Join(t.TempDir(), "capture"),
 		Provider:      strings.Repeat("provider-", 1<<16),
 		Model:         strings.Repeat("model-", 1<<16),
@@ -422,7 +437,7 @@ func TestDirectoryRecorderBoundsManifestMetadata(t *testing.T) {
 func newEvidenceRecorderWithProviderPath(t *testing.T) *directoryRecorder {
 	t.Helper()
 	root := t.TempDir()
-	r, err := newDirectoryRecorder(recording.LiveEvidenceOptions{
+	r, err := newTestDirectoryRecorder(recording.LiveEvidenceOptions{
 		Destination:         filepath.Join(root, "capture"),
 		ProviderCapturePath: filepath.Join(root, "provider.json"),
 		ClockBase:           evidenceTime(),
@@ -443,6 +458,7 @@ func newEvidenceRecorderWithProviderPath(t *testing.T) *directoryRecorder {
 }
 
 func TestDirectoryRecorderAllowsAbsentImplicitProviderCapture(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	if err := os.Remove(r.ProviderCapturePath()); err != nil {
 		t.Fatal(err)
@@ -465,6 +481,7 @@ func TestDirectoryRecorderAllowsAbsentImplicitProviderCapture(t *testing.T) {
 }
 
 func TestDirectoryRecorderMarksAudioPartialWhenImplicitProviderCaptureIsMissing(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	if err := os.Remove(r.ProviderCapturePath()); err != nil {
 		t.Fatal(err)
@@ -484,6 +501,7 @@ func TestDirectoryRecorderMarksAudioPartialWhenImplicitProviderCaptureIsMissing(
 }
 
 func TestConversationTranscriptCompletionReplacesDeltasPerItemAndRole(t *testing.T) {
+	t.Parallel()
 	var conversation evidenceConversation
 	for _, role := range []messages.Role{messages.RoleUser, messages.RoleAssistant} {
 		conversation.observe(messages.StreamMessage{Type: messages.StreamTypeTranscriptDelta, Role: role, Value: &messages.TranscriptDeltaValue{ItemID: "first", Text: "partial"}}, false, 1)
@@ -496,6 +514,7 @@ func TestConversationTranscriptCompletionReplacesDeltasPerItemAndRole(t *testing
 }
 
 func TestUnprojectableMessagePreservesOriginalAndSubsequentAudio(t *testing.T) {
+	t.Parallel()
 	r := newEvidenceRecorder(t)
 	message := session.LiveRecord{Timestamp: evidenceTime(), Message: messages.StreamMessage{Type: "future-provider-observation", Value: messages.NewTextDeltaValue("preserved payload")}}
 	if err := r.RecordMessage(t.Context(), message); err != nil {

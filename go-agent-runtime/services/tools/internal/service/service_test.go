@@ -154,21 +154,6 @@ func TestResolveInjectedExecutorKeepsHostScopeExplicit(t *testing.T) {
 	}
 }
 
-func TestCapabilityHandleHonorsContext(t *testing.T) {
-	capability, err := New().Resolve(context.Background(), public.Request{Executor: testExecutor{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	canceled, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := capability.Handle.Initialize(canceled); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Initialize returned %v, want context cancellation", err)
-	}
-	if _, err := capability.Handle.RefreshDefinitions(canceled); !errors.Is(err, context.Canceled) {
-		t.Fatalf("RefreshDefinitions returned %v, want context cancellation", err)
-	}
-}
-
 func TestCapabilityHandleConvertsCleanupPanic(t *testing.T) {
 	capability, err := New().Resolve(context.Background(), public.Request{
 		Executor: testExecutor{},

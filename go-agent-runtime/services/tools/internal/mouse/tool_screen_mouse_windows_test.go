@@ -88,23 +88,24 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 	if err != nil {
 		t.Skipf("%s: unavailable capability: cursor position query (%v)", runtime.GOOS, err)
 	}
+	driver := newMouseDriver(MouseToolOptions{})
 	t.Cleanup(func() {
-		if err := mouseButtonUp(originalX, originalY, "left"); err != nil {
+		if err := driver.buttonUp(originalX, originalY, "left"); err != nil {
 			t.Logf("%s: cursor cleanup release failed: %v", runtime.GOOS, err)
 		}
-		if err := mouseMove(originalX, originalY); err != nil {
+		if err := driver.move(originalX, originalY); err != nil {
 			t.Logf("%s: cursor cleanup restore failed: %v", runtime.GOOS, err)
 		}
 	})
 	targetX, targetY := bounds.Min.X+bounds.Dx()/2, bounds.Min.Y+bounds.Dy()/2
-	assertWindowsCursorMove(t, targetX, targetY)
+	assertWindowsCursorMove(t, driver, targetX, targetY)
 	assertWindowsButtonFlags(t)
 	assertWindowsMouseOperations(t, targetX, targetY)
 }
 
-func assertWindowsCursorMove(t *testing.T, targetX, targetY int) {
+func assertWindowsCursorMove(t *testing.T, driver mouseDriver, targetX, targetY int) {
 	t.Helper()
-	if err := mouseMove(targetX, targetY); err != nil {
+	if err := driver.move(targetX, targetY); err != nil {
 		t.Skipf("%s: unavailable capability: cursor input (%v)", runtime.GOOS, err)
 	}
 	if x, y, err := windowsCursorPosition(); err != nil || x != targetX || y != targetY {

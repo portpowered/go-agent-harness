@@ -29,6 +29,7 @@ type Executor struct {
 	cancellation sessionturn.CancellationIntent
 	diagnostics  sessiontrace.ToolDiagnosticSink
 	presentation presentation
+	recheckLimit time.Duration
 }
 
 var _ messages.ToolExecutor = (*Executor)(nil)
@@ -42,6 +43,10 @@ func New(request sessionturn.ToolExecutorRequest) *Executor {
 		cancellation: request.Cancellation,
 		diagnostics:  request.Diagnostics,
 		presentation: presentation{ToolPresentation: request.Presentation},
+		recheckLimit: request.ScreenPermissionRecheckTimeout,
+	}
+	if executor.recheckLimit <= 0 {
+		executor.recheckLimit = sessionturn.ScreenPermissionRecheckTimeout
 	}
 	if request.Policy != nil {
 		executor.policy = request.Policy.Clone()

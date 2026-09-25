@@ -32,7 +32,7 @@ func normalizedFormat(format rooms.AudioFormat) rooms.AudioFormat {
 	return format
 }
 
-func newRecorder(options roomevidence.RecordingRequest) (roomevidence.Recorder, error) {
+func newRecorder(options roomevidence.RecordingRequest, syncFile roomevidence.FileSync) (roomevidence.Recorder, error) {
 	destination := filepath.Clean(strings.TrimSpace(options.Destination))
 	if destination == "." || destination == "" {
 		return nil, fmt.Errorf("%w: directory is required", roomevidence.ErrInvalidOutput)
@@ -63,6 +63,7 @@ func newRecorder(options roomevidence.RecordingRequest) (roomevidence.Recorder, 
 	}
 	r := &recorder{
 		destination:          destination,
+		syncFile:             syncFile,
 		manifest:             cloneManifest(options.Manifest),
 		format:               format,
 		startedAt:            startedAt,
@@ -81,9 +82,9 @@ func newRecorder(options roomevidence.RecordingRequest) (roomevidence.Recorder, 
 	} else if options.Latency != nil {
 		r.latency = options.Latency.NewRecorder(source, format)
 	} else {
-		r.latency = latency.NewService().NewRecorder(source, format)
+		r.latency = latency.NewWithFileSync(source, format, syncFile)
 	}
-	r.timeline, err = newJSONLWriter(filepath.Join(destination, roomevidence.TimelinePath))
+	r.timeline, err = newJSONLWriter(filepath.Join(destination, roomevidence.TimelinePath), syncFile)
 	if err != nil {
 		return nil, fmt.Errorf("create room timeline evidence: %w", err)
 	}
@@ -155,22 +156,22 @@ func (r *recorder) openParticipant(manifest rooms.Participant, stem string) erro
 		return fmt.Errorf("create room participant %q evidence directory: %w", manifest.ID, err)
 	}
 	var err error
-	if participant.wav, err = newWAVWriter(filepath.Join(r.destination, paths.WAV), r.format.SampleRate); err != nil {
+	if participant.wav, err = newWAVWriter(filepath.Join(r.destination, paths.WAV), r.format.SampleRate, r.syncFile); err != nil {
 		return fmt.Errorf("create room participant %q WAV evidence: %w", manifest.ID, err)
 	}
-	if participant.diagnostics, err = newJSONLWriter(filepath.Join(r.destination, paths.Diagnostics)); err != nil {
+	if participant.diagnostics, err = newJSONLWriter(filepath.Join(r.destination, paths.Diagnostics), r.syncFile); err != nil {
 		return fmt.Errorf("create room participant %q diagnostics evidence: %w", manifest.ID, err)
 	}
-	if participant.deltas, err = newJSONLWriter(filepath.Join(r.destination, paths.Deltas)); err != nil {
+	if participant.deltas, err = newJSONLWriter(filepath.Join(r.destination, paths.Deltas), r.syncFile); err != nil {
 		return fmt.Errorf("create room participant %q delta evidence: %w", manifest.ID, err)
 	}
-	if participant.events, err = newJSONLWriter(filepath.Join(r.destination, paths.Events)); err != nil {
+	if participant.events, err = newJSONLWriter(filepath.Join(r.destination, paths.Events), r.syncFile); err != nil {
 		return fmt.Errorf("create room participant %q event evidence: %w", manifest.ID, err)
 	}
-	if participant.sentPCM, err = newPCMWriter(filepath.Join(r.destination, paths.SentPCM)); err != nil {
+	if participant.sentPCM, err = newPCMWriter(filepath.Join(r.destination, paths.SentPCM), r.syncFile); err != nil {
 		return fmt.Errorf("create room participant %q sent-audio evidence: %w", manifest.ID, err)
 	}
-	if participant.receivedPCM, err = newPCMWriter(filepath.Join(r.destination, paths.ReceivedPCM)); err != nil {
+	if participant.receivedPCM, err = newPCMWriter(filepath.Join(r.destination, paths.ReceivedPCM), r.syncFile); err != nil {
 		return fmt.Errorf("create room participant %q received-audio evidence: %w", manifest.ID, err)
 	}
 	return nil

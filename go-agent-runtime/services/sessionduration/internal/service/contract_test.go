@@ -377,10 +377,8 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 			drained = true
 			return nil
 		},
-		Close: func() error {
-			closed = true
-			return nil
-		},
+		Close:       func() error { closed = true; return nil },
+		DrainPolicy: sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)

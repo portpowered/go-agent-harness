@@ -17,8 +17,9 @@ import (
 )
 
 func TestProviderCaptureSpoolMatchesCanonicalCapture(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +58,9 @@ func TestProviderCaptureSpoolMatchesCanonicalCapture(t *testing.T) {
 }
 
 func TestProviderCaptureSpoolResourceUsageReportsQueueAndCommittedPeaks(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +93,9 @@ func TestProviderCaptureSpoolResourceUsageReportsQueueAndCommittedPeaks(t *testi
 }
 
 func TestProviderCaptureSpoolDiscardsFailedReservationWithoutRetainingTombstone(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,8 +140,9 @@ func TestProviderCaptureSpoolDiscardsFailedReservationWithoutRetainingTombstone(
 }
 
 func TestProviderCaptureSpoolRejectsUnsettledOrOversizeEvents(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +158,7 @@ func TestProviderCaptureSpoolRejectsUnsettledOrOversizeEvents(t *testing.T) {
 	}
 
 	oversizeDestination := filepath.Join(t.TempDir(), "oversize.json")
-	oversize, err := NewProviderCapture(oversizeDestination)
+	oversize, err := newTestProviderCapture(oversizeDestination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,8 +172,9 @@ func TestProviderCaptureSpoolRejectsUnsettledOrOversizeEvents(t *testing.T) {
 }
 
 func TestProviderCaptureSpoolRejectsContradictorySettlement(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,8 +197,9 @@ func TestProviderCaptureSpoolRejectsContradictorySettlement(t *testing.T) {
 }
 
 func TestProviderCaptureSpoolCopiesPayloadAndAbortRemovesTemporaryState(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +224,7 @@ func TestProviderCaptureSpoolCopiesPayloadAndAbortRemovesTemporaryState(t *testi
 	}
 
 	abortDestination := filepath.Join(t.TempDir(), "aborted.json")
-	aborted, err := NewProviderCapture(abortDestination)
+	aborted, err := newTestProviderCapture(abortDestination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,12 +237,13 @@ func TestProviderCaptureSpoolCopiesPayloadAndAbortRemovesTemporaryState(t *testi
 }
 
 func TestProviderCaptureSpoolProtectsExistingDestination(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	original := []byte(`{"protected":"bytes"}`)
 	if err := os.WriteFile(destination, original, evidenceFileMode); err != nil {
 		t.Fatal(err)
 	}
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,8 +266,9 @@ func TestProviderCaptureSpoolProtectsExistingDestination(t *testing.T) {
 }
 
 func TestProviderCaptureSpoolBoundsEnvelopeMetadata(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: 1024, ProviderItems: 1})
+	sink, err := newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: 1024, ProviderItems: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,13 +288,14 @@ func TestProviderCaptureSpoolBoundsEnvelopeMetadata(t *testing.T) {
 }
 
 func TestProviderCaptureSpoolCumulativeBudgetAndControlSettlement(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	event := providerSpoolEvents()[0]
 	encoded, err := encodeProviderCaptureEvent(event)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{
+	sink, err := newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{
 		ProviderBytes: int64(len(encoded) + 1), ProviderItems: 1,
 	})
 	if err != nil {
@@ -310,13 +319,14 @@ func TestProviderCaptureSpoolCumulativeBudgetAndControlSettlement(t *testing.T) 
 }
 
 func TestProviderCaptureSpoolRetainsCommittedPrefixDiagnosticAfterBudgetOverflow(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	event := providerSpoolEvents()[0]
 	encoded, err := encodeProviderCaptureEvent(event)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{
+	sink, err := newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{
 		ProviderBytes: int64(len(encoded) + 1), ProviderItems: 1,
 	})
 	if err != nil {
@@ -354,6 +364,7 @@ func TestProviderCaptureSpoolRetainsCommittedPrefixDiagnosticAfterBudgetOverflow
 }
 
 func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	events := providerSpoolEvents()
 	first, err := encodeProviderCaptureEvent(events[0])
@@ -373,7 +384,7 @@ func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testi
 		t.Fatal(err)
 	}
 	limit += overhead
-	sink, err := NewProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: limit, ProviderItems: 1})
+	sink, err := newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: limit, ProviderItems: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,8 +431,9 @@ func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testi
 // full" on a loaded host: the writer goroutine fell behind a burst of a few
 // hundred small events that were far inside the byte and item budgets.
 func TestProviderCaptureSpoolAdmitsBurstWithinBudgetWhileWriterIsDescheduled(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,8 +484,9 @@ func TestProviderCaptureSpoolAdmitsBurstWithinBudgetWhileWriterIsDescheduled(t *
 }
 
 func TestProviderCaptureSpoolBoundsActiveReservationsWhenEarliestWriteBlocks(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := NewProviderCapture(destination)
+	sink, err := newTestProviderCapture(destination)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -537,5 +550,40 @@ func providerSpoolEvents() []gatewaytesting.CapturedSessionEvent {
 	return []gatewaytesting.CapturedSessionEvent{
 		{Sequence: 1, Direction: gatewaytesting.DirectionClientToServer, Type: "session.update", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"session.update","nested":{"line":"a\n\"b"}}`)},
 		{Sequence: 2, Direction: gatewaytesting.DirectionServerToClient, TimestampMs: 12, Type: "session.created", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"session.created","value":[1,true]}`)},
+	}
+}
+
+func newTestProviderCapture(destination string) (recording.ProviderCaptureSink, error) {
+	return newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{})
+}
+
+func newTestProviderCaptureWithLimits(destination string, limits recording.ResourceLimits) (recording.ProviderCaptureSink, error) {
+	return NewProviderCaptureWithOptions(recording.ProviderCaptureOptions{Destination: destination, Limits: limits, SyncFile: skipFileSync})
+}
+
+func TestProviderCaptureSyncsSpoolAndPublishedCapture(t *testing.T) {
+	t.Parallel()
+	counter := &syncRecorder{}
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	sink, err := NewProviderCaptureWithOptions(recording.ProviderCaptureOptions{Destination: destination, SyncFile: counter.sync})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range providerSpoolEvents() {
+		if err := sink.Append(event); err != nil {
+			t.Fatal(err)
+		}
+		if err := sink.Commit(event.Sequence); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}); err != nil {
+		t.Fatal(err)
+	}
+	synced := counter.synced()
+	for _, want := range []string{"provider.json.lock", ".provider.json.provider-spool-", ".provider.json.provider-publish-"} {
+		if !strings.Contains(synced, want) {
+			t.Fatalf("synced files = %s, want %s", synced, want)
+		}
 	}
 }

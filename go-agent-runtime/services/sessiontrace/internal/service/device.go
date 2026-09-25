@@ -235,6 +235,9 @@ type remoteRenderMonitor struct {
 	endpoint string
 	rate     int
 	observer sessiontrace.CaptureSamplesObserver
+	// stopTimeout bounds Stop's join and final poll; zero selects
+	// remoteRenderStopTimeout.
+	stopTimeout time.Duration
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -268,13 +271,14 @@ func newRemoteRenderMonitor(ctx context.Context, request runtimeDevices.Request,
 		rate = audio.SampleRate
 	}
 	return &remoteRenderMonitor{
-		endpoint: strings.TrimSpace(request.RemoteEndpoint),
-		rate:     rate,
-		observer: observer,
-		ctx:      context.Background(),
-		cancel:   func() {},
-		done:     make(chan struct{}),
-		seen:     len(snapshot.RenderedSamples),
+		endpoint:    strings.TrimSpace(request.RemoteEndpoint),
+		rate:        rate,
+		observer:    observer,
+		stopTimeout: remoteRenderStopTimeout,
+		ctx:         context.Background(),
+		cancel:      func() {},
+		done:        make(chan struct{}),
+		seen:        len(snapshot.RenderedSamples),
 	}, nil
 }
 
@@ -341,7 +345,11 @@ func (m *remoteRenderMonitor) Stop() {
 	if m.cancel != nil {
 		m.cancel()
 	}
-	stopContext, stopCancel := context.WithTimeout(context.Background(), remoteRenderStopTimeout)
+	stopTimeout := m.stopTimeout
+	if stopTimeout <= 0 {
+		stopTimeout = remoteRenderStopTimeout
+	}
+	stopContext, stopCancel := context.WithTimeout(context.Background(), stopTimeout)
 	defer stopCancel()
 	select {
 	case <-m.done:

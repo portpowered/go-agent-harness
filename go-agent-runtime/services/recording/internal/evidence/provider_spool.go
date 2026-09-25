@@ -75,6 +75,7 @@ type providerCaptureSpool struct {
 	queue       chan providerCaptureMutation
 	done        chan struct{}
 	limits      recording.ResourceLimits
+	syncFile    recording.FileSync
 
 	mu                sync.Mutex
 	queuedBytes       int64
@@ -95,15 +96,11 @@ type providerCaptureSpool struct {
 	finishErr  error
 }
 
-// NewProviderCapture creates a bounded raw provider capture sink. The
-// destination directory must already exist; host composition owns directory
-// creation and path policy before admission.
-func NewProviderCapture(destination string) (sink recording.ProviderCaptureSink, returnErr error) {
-	return NewProviderCaptureWithLimits(destination, recording.ResourceLimits{})
-}
-
-func NewProviderCaptureWithLimits(destination string, input recording.ResourceLimits) (sink recording.ProviderCaptureSink, returnErr error) {
-	destination = strings.TrimSpace(destination)
+// NewProviderCaptureWithOptions creates a bounded raw provider capture sink.
+// The destination directory must already exist; host composition owns
+// directory creation and path policy before admission.
+func NewProviderCaptureWithOptions(options recording.ProviderCaptureOptions) (sink recording.ProviderCaptureSink, returnErr error) {
+	destination, input := strings.TrimSpace(options.Destination), options.Limits
 	if destination == "" {
 		return nil, errors.New("provider capture destination is required")
 	}
@@ -119,7 +116,7 @@ func NewProviderCaptureWithLimits(destination string, input recording.ResourceLi
 	if !info.IsDir() {
 		return nil, errors.New("provider capture destination directory is not a directory")
 	}
-	admitted, err := Claim(recording.ClaimOptions{Destination: destination, Kind: recording.ClaimKindCapture})
+	admitted, err := claimDestination(recording.ClaimOptions{Destination: destination, Kind: recording.ClaimKindCapture}, options.SyncFile)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +152,7 @@ func NewProviderCaptureWithLimits(destination string, input recording.ResourceLi
 		queue:       make(chan providerCaptureMutation, providerCaptureQueueCapacity),
 		done:        make(chan struct{}),
 		limits:      budget.limits,
+		syncFile:    options.SyncFile,
 	}
 	go spool.run()
 	remove = false
@@ -313,7 +311,7 @@ func (s *providerCaptureSpool) flush(path string, capture gatewaytesting.Session
 		return errors.Join(fmt.Errorf("open provider capture spool for finalization: %w", err), s.removeSpool(), s.releaseDestinationClaim())
 	}
 	reader := &providerCaptureSpoolReader{decoder: json.NewDecoder(bufio.NewReader(file))}
-	writeErr := publishProviderCapture(path, boundedCapture, reader)
+	writeErr := publishProviderCapture(path, boundedCapture, reader, s.syncFile)
 	closeErr := file.Close()
 	removeErr := s.removeSpool()
 	claimErr := s.releaseDestinationClaim()

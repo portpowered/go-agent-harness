@@ -13,10 +13,11 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-func writeProviderCaptureFromReader(path string, capture gatewaytesting.SessionCapture, reader providerCaptureRecordReader) (returnErr error) {
+func writeProviderCaptureFromReader(path string, capture gatewaytesting.SessionCapture, reader providerCaptureRecordReader, syncFile recording.FileSync) (returnErr error) {
 	if reader == nil {
 		return errors.New("provider capture record reader is required")
 	}
@@ -54,7 +55,7 @@ func writeProviderCaptureFromReader(path string, capture gatewaytesting.SessionC
 	if err := writeProviderCaptureFooter(temporary, integrity, capture.EndsWithDisconnect); err != nil {
 		return err
 	}
-	if err := temporary.Sync(); err != nil {
+	if err := syncFile.Sync(temporary); err != nil {
 		return fmt.Errorf("sync provider capture: %w", err)
 	}
 	if err := temporary.Close(); err != nil {

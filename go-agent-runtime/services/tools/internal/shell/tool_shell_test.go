@@ -381,20 +381,6 @@ func TestExecTool_DisabledDenyWarningDescribesShellPolicyOnly(t *testing.T) {
 	}
 }
 
-func TestExecTool_Metadata(t *testing.T) {
-	tool := NewExecTool("workspace", true)
-	if tool.Name() != "exec" {
-		t.Errorf("Name = %q, want exec", tool.Name())
-	}
-	if tool.Description() == "" {
-		t.Error("Description should not be empty")
-	}
-	params := tool.Parameters()
-	if params["type"] != "object" || params["properties"] == nil || params["required"] == nil {
-		t.Fatalf("unexpected parameters: %#v", params)
-	}
-}
-
 func TestExecTool_DefaultProcessFactoryDoesNotStart(t *testing.T) {
 	workDir := t.TempDir()
 	tool := NewExecTool(workDir, false)

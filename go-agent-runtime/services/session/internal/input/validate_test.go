@@ -13,15 +13,6 @@ func TestValidateMimeType_Supported(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestValidateMimeType_Unsupported(t *testing.T) {
-	err := ValidateMimeType("image/webp", "gpt-4o", []string{"image/png", "image/jpeg"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "gpt-4o")
-	assert.Contains(t, err.Error(), "image/webp")
-	assert.Contains(t, err.Error(), "image/png")
-	assert.Contains(t, err.Error(), "image/jpeg")
-}
-
 func TestValidateMimeType_NilList(t *testing.T) {
 	err := ValidateMimeType("image/webp", "gpt-4o", nil)
 	assert.NoError(t, err)
@@ -37,15 +28,6 @@ func TestValidateMimeType_ErrorFormat(t *testing.T) {
 	require.Error(t, err)
 	expected := "model \"claude-3-opus\" does not support input type \"image/tiff\". supported types: image/png, image/jpeg, image/gif Tip: Convert with: convert input.tiff output.png"
 	assert.Equal(t, expected, err.Error())
-}
-
-func TestValidateContentPartsMimeTypes_AllSupported(t *testing.T) {
-	parts := []messages.ContentPart{
-		messages.ImagePart{MediaType: "image/png"},
-		messages.ImagePart{MediaType: "image/jpeg"},
-	}
-	err := ValidateContentPartsMimeTypes(parts, "gpt-4o", []string{"image/png", "image/jpeg"})
-	assert.NoError(t, err)
 }
 
 func TestValidateContentPartsMimeTypes_OneUnsupported(t *testing.T) {

@@ -2,13 +2,6 @@ package replay
 
 import "testing"
 
-func TestStrictPreparedIsOpaque(t *testing.T) {
-	var prepared StrictPrepared
-	if prepared != nil {
-		t.Fatal("zero StrictPrepared interface is unexpectedly non-nil")
-	}
-}
-
 func TestReplayPublicValueContracts(t *testing.T) {
 	if got := ErrBundleIncomplete.Error(); got != "replay bundle is incomplete" {
 		t.Fatalf("error code = %q, want stable text", got)

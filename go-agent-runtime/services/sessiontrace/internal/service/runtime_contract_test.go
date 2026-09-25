@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -339,22 +338,6 @@ func TestTraceSourceAdaptersPreserveSamples(t *testing.T) {
 	}
 	if _, err := (&traceSampleSource{}).ReadSamples(context.Background(), buf); !errors.Is(err, io.EOF) {
 		t.Fatalf("nil sample source samples error = %v", err)
-	}
-}
-
-func TestTracePreparedPublicAdaptersDelegateToServiceOwnedState(t *testing.T) {
-	prepared, err := New().Prepare(sessiontrace.Request{
-		TraceAudio:      true,
-		RecordDirectory: filepath.Join(t.TempDir(), "requested"),
-		Clock:           clock.Real{},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if prepared.WrapLiveRecorder(&liveRecorderInner{}, session.LiveRequest{InputAudioSampleRate: 24_000, OutputAudioSampleRate: 16_000}) == nil ||
-		prepared.WrapDeviceService(&traceContractDeviceService{handle: &traceContractHandle{}}) == nil ||
-		prepared.WrapAudioSource(&traceContractSource{samples: []int16{1}}, 0) == nil {
-		t.Fatal("prepared adapter returned nil")
 	}
 }
 

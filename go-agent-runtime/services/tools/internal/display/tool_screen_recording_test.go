@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func assertScreenResult(t *testing.T, message messages.Message, mediaType string, width, height int) messages.ImagePart {
@@ -79,6 +80,28 @@ func (s *recordingTestSurface) Capture(ctx context.Context, _ image.Rectangle) (
 	}
 	return s.frame, nil
 }
+
+// steppingRecordingClock advances its own time by each requested wait and
+// fires the timer immediately, so frame pacing is observable without sleeping.
+type steppingRecordingClock struct {
+	now   time.Time
+	waits []time.Duration
+}
+
+func (c *steppingRecordingClock) Now() time.Time { return c.now }
+
+func (c *steppingRecordingClock) NewTimer(duration time.Duration) platformclock.Timer {
+	c.waits = append(c.waits, duration)
+	c.now = c.now.Add(duration)
+	fired := make(chan time.Time, 1)
+	fired <- c.now
+	return firedRecordingTimer{c: fired}
+}
+
+type firedRecordingTimer struct{ c chan time.Time }
+
+func (t firedRecordingTimer) C() <-chan time.Time { return t.c }
+func (firedRecordingTimer) Stop() bool            { return false }
 
 func recordingTestFrame() *image.RGBA {
 	frame := image.NewRGBA(image.Rect(0, 0, 4, 3))
@@ -153,7 +176,8 @@ func TestScreenRecordingRejectsOutOfRangeValuesBeforeDisplayProbe(t *testing.T) 
 
 func TestScreenRecordingSuccessIsBoundedAndDecodable(t *testing.T) {
 	surface := &recordingTestSurface{frame: recordingTestFrame()}
-	msgs, err := NewScreenToolWithDisplaySurface(surface).Execute(context.Background(), map[string]any{
+	clock := &steppingRecordingClock{now: time.Unix(1, 0)}
+	msgs, err := NewScreenToolWithOptions(ScreenToolOptions{DisplaySurface: surface, Clock: clock}).Execute(context.Background(), map[string]any{
 		"action":   "record",
 		"duration": 1.0,
 		"fps":      2.0,
@@ -174,6 +198,9 @@ func TestScreenRecordingSuccessIsBoundedAndDecodable(t *testing.T) {
 	}
 	if surface.probes != 1 || surface.boundCalls != 1 || surface.captures != 2 {
 		t.Fatalf("record surface calls = probes:%d bounds:%d captures:%d", surface.probes, surface.boundCalls, surface.captures)
+	}
+	if len(clock.waits) != 1 || clock.waits[0] != 500*time.Millisecond {
+		t.Fatalf("frame waits = %v, want one 500ms wait on the injected clock", clock.waits)
 	}
 }
 

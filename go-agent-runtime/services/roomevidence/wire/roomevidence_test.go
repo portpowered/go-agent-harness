@@ -51,7 +51,7 @@ func openRecorder(t *testing.T) (roomevidence.Recorder, string, *clock.Determini
 	destination := filepath.Join(t.TempDir(), "bundle")
 	base := time.Date(2026, 9, 11, 20, 0, 0, 0, time.UTC)
 	source := clock.NewDeterministic(base, time.Millisecond)
-	recorder, err := NewService().Open(roomevidence.RecordingRequest{
+	recorder, err := newTestService().Open(roomevidence.RecordingRequest{
 		Destination: destination,
 		Manifest:    testManifest(),
 		AudioFormat: rooms.AudioFormat{SampleRate: 24000, Channels: 1, FrameDuration: 20 * time.Millisecond},
@@ -148,6 +148,7 @@ func observeConcurrent(t *testing.T, recorder roomevidence.Recorder, participant
 }
 
 func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
+	t.Parallel()
 	recorder, destination, source := openRecorder(t)
 	pcm := []byte{0x34, 0x12, 0x78, 0x56}
 	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationDelta, ParticipantID: "speaker", StreamMessage: messages.StreamMessage{Type: messages.StreamTypeToolCallStart}}); err != nil {
@@ -207,6 +208,7 @@ func TestServiceRecordsEffectsAndIntegrity(t *testing.T) {
 }
 
 func TestServiceRedactsCredentialFieldsWithoutConfiguredSecrets(t *testing.T) {
+	t.Parallel()
 	destination := filepath.Join(t.TempDir(), "bundle")
 	base := time.Date(2026, 9, 11, 20, 0, 0, 0, time.UTC)
 	source := clock.NewDeterministic(base, time.Millisecond)
@@ -296,6 +298,7 @@ func TestServiceRedactsCredentialFieldsWithoutConfiguredSecrets(t *testing.T) {
 }
 
 func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
+	t.Parallel()
 	recorder, destination, source := openRecorder(t)
 	chunk := make([]byte, 10)
 	for index := 0; index < 5; index++ {
@@ -333,6 +336,7 @@ func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
 }
 
 func TestServiceConcurrentObservationAndFinalize(t *testing.T) {
+	t.Parallel()
 	recorder, _, source := openRecorder(t)
 	pcm := []byte{0x01, 0x00, 0x02, 0x00}
 	var group sync.WaitGroup
@@ -359,6 +363,7 @@ func TestServiceConcurrentObservationAndFinalize(t *testing.T) {
 }
 
 func TestServiceConcurrentCloseIsBoundedAndIdempotent(t *testing.T) {
+	t.Parallel()
 	recorder, destination, _ := openRecorder(t)
 	const callers = 16
 	start := make(chan struct{})
@@ -406,6 +411,7 @@ func TestServiceConcurrentCloseIsBoundedAndIdempotent(t *testing.T) {
 }
 
 func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
+	t.Parallel()
 	recorder, _, source := openRecorder(t)
 	first := errors.New("first sink failure")
 	second := errors.New("second sink failure")
@@ -435,6 +441,7 @@ func TestServiceRejectsPostFinalizeAndRetainsFirstTypedError(t *testing.T) {
 }
 
 func TestServiceOutputSafety(t *testing.T) {
+	t.Parallel()
 	service := NewService()
 	if err := service.ValidateOutput(""); !errors.Is(err, roomevidence.ErrInvalidOutput) {
 		t.Fatalf("empty output error = %v", err)

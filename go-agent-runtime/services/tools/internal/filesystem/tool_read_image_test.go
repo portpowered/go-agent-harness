@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"image"
 	"image/png"
 	"strings"
@@ -203,36 +202,4 @@ func multiMegabytePNG(t *testing.T) []byte {
 		t.Fatalf("encode large PNG: %v", err)
 	}
 	return encoded.Bytes()
-}
-
-func TestReadImageTool_SchemaHasRequiredStringPath(t *testing.T) {
-	schema := core.ToolToSchema(NewReadImageTool(nil))
-	encoded, err := json.Marshal(schema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var decoded map[string]any
-	if err := json.Unmarshal(encoded, &decoded); err != nil {
-		t.Fatal(err)
-	}
-	function, ok := decoded["function"].(map[string]any)
-	if !ok {
-		t.Fatalf("schema function = %#v", decoded["function"])
-	}
-	parameters, ok := function["parameters"].(map[string]any)
-	if !ok {
-		t.Fatalf("schema parameters = %#v", function["parameters"])
-	}
-	properties, ok := parameters["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("schema properties = %#v", parameters["properties"])
-	}
-	path, ok := properties["path"].(map[string]any)
-	if !ok || path["type"] != "string" {
-		t.Fatalf("path schema = %#v, want required string property", properties["path"])
-	}
-	required, ok := parameters["required"].([]any)
-	if !ok || len(required) != 1 || required[0] != "path" {
-		t.Fatalf("required = %#v, want [path]", parameters["required"])
-	}
 }

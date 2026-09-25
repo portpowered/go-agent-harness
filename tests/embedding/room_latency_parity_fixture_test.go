@@ -1,6 +1,7 @@
 package embedding_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -270,23 +271,6 @@ func (p *publicRoomLatencyProvider) acceptAudio(targetID string, frame audio.PCM
 	}
 }
 
-func publicRoomLatencyPCMBytes(samples []int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
-	}
-	return pcm
-}
-
-func publicRoomLatencySamplesSilent(samples []int16) bool {
-	for _, sample := range samples {
-		if sample != 0 {
-			return false
-		}
-	}
-	return true
-}
-
 func (p *publicRoomLatencyProvider) currentResponseID(participantID string) string {
 	participant := p.participant(participantID)
 	if participant == nil {
@@ -314,7 +298,7 @@ func (p *publicRoomLatencyProvider) assertScriptedTurns(t *testing.T, participan
 		t.Fatalf("%s commit count = %d, want %d", participantID, len(commits), len(wantCommits))
 	}
 	for index, want := range wantCommits {
-		if len(commits[index]) == 0 || !bytesEqual(commits[index], want) {
+		if len(commits[index]) == 0 || !bytes.Equal(commits[index], want) {
 			t.Fatalf("%s commit %d = %v, want exact fixture %v", participantID, index+1, commits[index], want)
 		}
 	}
@@ -347,23 +331,11 @@ func (p *publicRoomLatencyProvider) assertInputFrames(t *testing.T, wantCounts m
 			t.Fatalf("%s provider audio input frames = %d, want %d", participantID, len(received), wantCounts[participantID])
 		}
 		for index, pcm := range received {
-			if !bytesEqual(pcm, wantPCM) {
+			if !bytes.Equal(pcm, wantPCM) {
 				t.Fatalf("%s received frame %d = %v, want exact fixture %v", participantID, index+1, pcm, wantPCM)
 			}
 		}
 	}
-}
-
-func bytesEqual(left, right []byte) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
 }
 
 type publicRoomLatencyLiveHandle struct {
@@ -545,9 +517,24 @@ type publicRoomLatencyInbound struct {
 	done          chan struct{}
 	onRead        func(audio.PCMFrame)
 	closeOnce     sync.Once
+
+	// The room's source worker fans a frame out to every peer mixer input
+	// before it reads again, so reads > pushed means each pushed frame is
+	// queued in the peer mixers.
+	admission   sync.Mutex
+	pushed      int
+	reads       int
+	readEntered chan struct{}
 }
 
 func (i *publicRoomLatencyInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
+	i.admission.Lock()
+	i.reads++
+	if i.readEntered != nil {
+		close(i.readEntered)
+		i.readEntered = nil
+	}
+	i.admission.Unlock()
 	select {
 	case frame := <-i.frames:
 		if i.onRead != nil {
@@ -562,6 +549,9 @@ func (i *publicRoomLatencyInbound) ReadFrame(ctx context.Context) (audio.PCMFram
 }
 
 func (i *publicRoomLatencyInbound) push(frame audio.PCMFrame) error {
+	i.admission.Lock()
+	i.pushed++
+	i.admission.Unlock()
 	select {
 	case i.frames <- frame:
 		return nil
