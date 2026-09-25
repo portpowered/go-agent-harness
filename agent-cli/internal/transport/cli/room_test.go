@@ -555,7 +555,7 @@ func TestRoomRunCommandSurfacesAllParticipantsFailedAsNonZeroExit(t *testing.T) 
 	if !errors.Is(err, rooms.ErrAllParticipantsFailed) {
 		t.Fatalf("room run with every participant failing returned %v; want a named non-zero failure; output=%q", err, output.String())
 	}
-	if !strings.Contains(output.String(), `participant roomTestAliceID: error`) {
+	if !strings.Contains(output.String(), `participant "alice": error`) {
 		t.Fatalf("output = %q, want the failed participant results", output.String())
 	}
 	for _, want := range []string{roomTestAliceID, "bob", "all 2 participant"} {
