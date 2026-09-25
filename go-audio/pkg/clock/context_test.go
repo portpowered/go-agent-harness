@@ -3,7 +3,6 @@ package clock
 import (
 	"context"
 	"errors"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -47,14 +46,9 @@ func TestDeterministicContextParentCancellationReportsCauseBeforeDone(t *testing
 
 func waitForDeterministicTimerCount(t *testing.T, clock *Deterministic, count int) {
 	t.Helper()
-	for attempts := 0; attempts < 10000; attempts++ {
-		clock.advanceMu.Lock()
-		ready := clock.timers.Len() == count
-		clock.advanceMu.Unlock()
-		if ready {
-			return
-		}
-		runtime.Gosched()
+	ctx, cancel := context.WithTimeout(context.Background(), testWaitBound)
+	defer cancel()
+	if err := clock.waitForPendingTimers(ctx, func(pending int) bool { return pending == count }); err != nil {
+		t.Fatalf("deterministic timer count did not settle at %d: %v", count, err)
 	}
-	t.Fatalf("deterministic timer count did not settle at %d", count)
 }
