@@ -59,7 +59,7 @@ func TestRunnerKeepsHumanMediaUntilRoomStop(t *testing.T) {
 
 	agent.inbound.frames <- audio.PCMFrame{Samples: paritySignalFrame(frameSamples)}
 	waitForNonSilentSamples(t, playback.received, "agent audio was not routed to human playback")
-	agent.emit(session.LiveEvent{Kind: "turn_completed", SessionID: "agent", ParticipantID: "agent"})
+	agent.emit(assistantTurnEndEvent("agent"))
 
 	select {
 	case outcome := <-resultCh:

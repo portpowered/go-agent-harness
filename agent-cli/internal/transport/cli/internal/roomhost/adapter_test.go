@@ -62,7 +62,7 @@ func TestRunPlanOptionsProjectsHostDevicesAndPaths(t *testing.T) {
 }
 
 func TestConfigCredentialReadsOnlyTheBareRoomKey(t *testing.T) {
-	lookup := configCredential(filepath.Join(t.TempDir(), "config"))
+	lookup := ConfigCredential(filepath.Join(t.TempDir(), "config"))
 	for _, name := range []string{rooms.DefaultOpenAIAPIKeyEnv, "OTHER_KEY"} {
 		if value, err := lookup(name); err != nil || value != "" {
 			t.Fatalf("empty config credential %q = %q / %v, want absent", name, value, err)
