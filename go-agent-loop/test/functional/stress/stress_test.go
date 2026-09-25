@@ -114,63 +114,12 @@ func (si *stressInferencer) InferStream(ctx context.Context, req messages.Infere
 			}
 		}
 
-		// Tool-call response: emit TOOLCALL events.
-		for i, tc := range result.ToolCalls {
-			if !send(messages.StreamMessage{
-				Type: messages.StreamTypeToolCallStart, ActorProvidedIndex: i,
-				Value: messages.NewToolCallStartValue(tc.ID, tc.Name),
-			}) {
-				return
-			}
-			if tc.Arguments != "" {
-				if !send(messages.StreamMessage{
-					Type: messages.StreamTypeToolCallDelta, ActorProvidedIndex: i,
-					Value: messages.NewToolCallDeltaValue(tc.Arguments),
-				}) {
-					return
-				}
-			}
-			if !send(messages.StreamMessage{
-				Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: i,
-				Value: messages.NewToolCallEndValue(tc.ID, tc.Name, tc.Arguments),
-			}) {
-				return
-			}
+		if !emitStressToolCalls(send, result.ToolCalls) {
+			return
 		}
-
 		// Text response (only when there are no tool calls).
-		if len(result.ToolCalls) == 0 {
-			if text := result.Message.TextContent(); text != "" {
-				if !send(messages.StreamMessage{
-					Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant,
-					Value: messages.NewTextStartValue(),
-				}) {
-					return
-				}
-				if len(chunks) > 0 {
-					for i, chunk := range chunks {
-						if !send(messages.StreamMessage{
-							Type: messages.StreamTypeTextDelta, ActorProvidedIndex: i,
-							Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(chunk),
-						}) {
-							return
-						}
-					}
-				} else {
-					if !send(messages.StreamMessage{
-						Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant,
-						Value: messages.NewTextDeltaValue(text),
-					}) {
-						return
-					}
-				}
-				if !send(messages.StreamMessage{
-					Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant,
-					Value: messages.NewTextEndValue(),
-				}) {
-					return
-				}
-			}
+		if len(result.ToolCalls) == 0 && !emitStressText(send, result.Message.TextContent(), chunks) {
+			return
 		}
 
 		send(messages.StreamMessage{
@@ -180,6 +129,68 @@ func (si *stressInferencer) InferStream(ctx context.Context, req messages.Infere
 	}()
 
 	return ch, nil
+}
+
+// emitStressToolCalls emits TOOLCALL start/delta/end events for each call. It
+// reports false when the consumer's context ended before every event was sent.
+func emitStressToolCalls(send func(messages.StreamMessage) bool, calls []messages.ToolCall) bool {
+	for i, tc := range calls {
+		if !send(messages.StreamMessage{
+			Type: messages.StreamTypeToolCallStart, ActorProvidedIndex: i,
+			Value: messages.NewToolCallStartValue(tc.ID, tc.Name),
+		}) {
+			return false
+		}
+		if tc.Arguments != "" {
+			if !send(messages.StreamMessage{
+				Type: messages.StreamTypeToolCallDelta, ActorProvidedIndex: i,
+				Value: messages.NewToolCallDeltaValue(tc.Arguments),
+			}) {
+				return false
+			}
+		}
+		if !send(messages.StreamMessage{
+			Type: messages.StreamTypeToolCallEnd, ActorProvidedIndex: i,
+			Value: messages.NewToolCallEndValue(tc.ID, tc.Name, tc.Arguments),
+		}) {
+			return false
+		}
+	}
+	return true
+}
+
+// emitStressText emits a TEXT start/delta(s)/end sequence. Pre-split chunks are
+// sent as indexed deltas; otherwise the whole text is one delta. Empty text
+// emits nothing. It reports false when the consumer's context ended early.
+func emitStressText(send func(messages.StreamMessage) bool, text string, chunks []string) bool {
+	if text == "" {
+		return true
+	}
+	if !send(messages.StreamMessage{
+		Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant,
+		Value: messages.NewTextStartValue(),
+	}) {
+		return false
+	}
+	if len(chunks) > 0 {
+		for i, chunk := range chunks {
+			if !send(messages.StreamMessage{
+				Type: messages.StreamTypeTextDelta, ActorProvidedIndex: i,
+				Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(chunk),
+			}) {
+				return false
+			}
+		}
+	} else if !send(messages.StreamMessage{
+		Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant,
+		Value: messages.NewTextDeltaValue(text),
+	}) {
+		return false
+	}
+	return send(messages.StreamMessage{
+		Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant,
+		Value: messages.NewTextEndValue(),
+	})
 }
 
 // CallCount returns the total number of inference calls.
@@ -321,6 +332,9 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	var wg sync.WaitGroup
+	// Sends and interrupts race loop shutdown by design; a rejection is not a
+	// failure, but the count is reported so an unexpected surge is visible.
+	var rejected atomic.Int64
 
 	// Sender goroutines.
 	for s := 0; s < numSenders; s++ {
@@ -330,7 +344,9 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 			for m := 0; m < messagesPerSender; m++ {
 				msg := messages.NewTextMessage(messages.RoleUser,
 					fmt.Sprintf("sender-%d-msg-%d", senderID, m))
-				_ = loop.Send(ctx, []messages.Message{msg})
+				if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
+					rejected.Add(1)
+				}
 				// Small jitter to mix sends and interrupts.
 				if m%3 == 0 {
 					time.Sleep(time.Millisecond)
@@ -345,7 +361,9 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < totalMessages/2; i++ {
 			followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
-			_ = loop.SendInterrupt(ctx, &followUp)
+			if err := loop.SendInterrupt(ctx, &followUp); err != nil {
+				rejected.Add(1)
+			}
 			time.Sleep(2 * time.Millisecond)
 		}
 	}()
@@ -367,7 +385,7 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	}
 
 	// The primary assertion is that we reach here without panic, deadlock, or data race.
-	t.Logf("stress test completed: %d inference calls made", inf.CallCount())
+	t.Logf("stress test completed: %d inference calls made, %d sends rejected", inf.CallCount(), rejected.Load())
 }
 
 // TestStress_HighThroughputStreaming verifies that 1500 deltas per response

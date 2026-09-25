@@ -8,6 +8,16 @@ version: "2"
 
 run:
   tests: true
+  # Opt-in build tags are linted with the same limits as default-tag code.
+  # e2e_internal files depend on live helpers, so the tags load together.
+  # wireinject is linted in a separate pass (it swaps out !wireinject files);
+  # see `make lint-wireinject`.
+  build-tags:
+    - live
+    - e2e
+    - e2e_internal
+    - stress
+    - sessioncapacityramp
 
 linters:
   default: none
