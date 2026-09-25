@@ -10,14 +10,108 @@ permissions:
   contents: read
 
 jobs:
-  # Fast static checks: no build artifacts, no test binaries. This is the
-  # only job that needs the pinned golangci-lint/staticcheck binaries, so it
-  # is the only job that installs them. Each check step below runs with
-  # `if: always()` so a gofmt failure does not hide a lint or staticcheck
-  # failure that would otherwise run later in the same job — every static
-  # result is visible in one run instead of stopping at the first failure.
-  static:
-    name: CI (static)
+  # Static checks run as three parallel shards so no shard exceeds the
+  # three-minute test budget; `static` below aggregates them under the
+  # required "CI (static)" check name. Each check step runs with
+  # `if: always()` so an early failure does not hide later results in the
+  # same shard.
+  static-gates:
+    name: CI (static gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
+
+      - name: Run gofmt check
+        if: always()
+        run: make fmt
+
+      - name: Verify generated service composition
+        if: always()
+        run: make wire-check
+
+      - name: Verify CI test partition
+        if: always()
+        run: make check-ci-test-partition
+
+      - name: Verify service architecture and size budgets
+        if: always()
+        run: make architecture-size-check
+
+  static-vet:
+    name: CI (static vet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.7"
+          cache: true
+          cache-dependency-path: |
+            go.work.sum
+            agent-cli/go.sum
+            go-agent-loop/go.sum
+            go-llm-gateway/go.sum
+            go-audio/go.sum
+            go-device-gateway/go.sum
+            go-agent-runtime/go.sum
+            tools/architecturegate/go.sum
+            tests/embedding/go.sum
+
+      - name: Cache pinned analyzer binaries
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/go-agent-harness/ci-analyzers
+          key: ci-analyzers-${{ runner.os }}-${{ runner.arch }}-golangci-lint-v2.9.0-staticcheck-2026.1
+
+      - name: Cache staticcheck analysis
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/staticcheck
+          key: staticcheck-2026.1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            staticcheck-2026.1-${{ runner.os }}-
+
+      - name: Install staticcheck
+        env:
+          STATICCHECK_VERSION: 2026.1
+        run: bash scripts/install-ci-analyzer.sh staticcheck
+
+      - name: Run go vet
+        if: always()
+        run: make vet
+
+      - name: Run staticcheck
+        if: always()
+        run: make staticcheck
+
+  static-lint:
+    name: CI (static lint)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -49,43 +143,45 @@ jobs:
           path: ~/.cache/go-agent-harness/ci-analyzers
           key: ci-analyzers-${{ runner.os }}-${{ runner.arch }}-golangci-lint-v2.9.0-staticcheck-2026.1
 
+      - name: Cache golangci-lint analysis
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-v2.9.0-${{ runner.os }}-${{ hashFiles('.golangci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            golangci-lint-v2.9.0-${{ runner.os }}-${{ hashFiles('.golangci.yml') }}-
+
       - name: Install golangci-lint
         env:
           GOLANGCI_LINT_VERSION: v2.9.0
         run: bash scripts/install-ci-analyzer.sh golangci-lint
 
-      - name: Install staticcheck
-        env:
-          STATICCHECK_VERSION: 2026.1
-        run: bash scripts/install-ci-analyzer.sh staticcheck
-
-      - name: Run gofmt check
-        if: always()
-        run: make fmt
-
-      - name: Verify generated service composition
-        if: always()
-        run: make wire-check
-
-      - name: Verify CI test partition
-        if: always()
-        run: make check-ci-test-partition
-
-      - name: Verify service architecture and size budgets
-        if: always()
-        run: make architecture-size-check
-
-      - name: Run go vet
-        if: always()
-        run: make vet
-
       - name: Run golangci-lint
-        if: always()
         run: make lint
 
-      - name: Run staticcheck
-        if: always()
-        run: make staticcheck
+  # Preserve the required "CI (static)" check name while aggregating the
+  # parallel static shards. `always()` reports a failed shard as a failed
+  # check rather than leaving it skipped.
+  static:
+    name: CI (static)
+    needs:
+      - static-gates
+      - static-vet
+      - static-lint
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify static shards completed
+        env:
+          GATES_RESULT: ${{ needs.static-gates.result }}
+          VET_RESULT: ${{ needs.static-vet.result }}
+          LINT_RESULT: ${{ needs.static-lint.result }}
+        run: |
+          test "$GATES_RESULT" = success
+          test "$VET_RESULT" = success
+          test "$LINT_RESULT" = success
 
   # Fast unit-level checks and the compile gate. No analyzer binaries needed.
   unit:
@@ -140,10 +236,18 @@ jobs:
   # The Linux package corpus has one owner: coverage. agent-cli is isolated
   # because its deterministic integration and replay tests are the long pole;
   # the other modules and embedding consumer run concurrently on one runner.
+  # The agent-cli corpus is further split into disjoint matrix shards: every
+  # package except test/integration, plus AGENT_CLI_INTEGRATION_SHARDS
+  # round-robin shards of test/integration's top-level tests. The coverage
+  # gate unions all shard profiles.
   coverage-agent-cli:
-    name: CI (coverage agent-cli)
+    name: CI (coverage agent-cli ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [unit, integration-1, integration-2, integration-3, integration-4]
 
     steps:
       - name: Check out repository
@@ -166,13 +270,13 @@ jobs:
             tests/embedding/go.sum
 
       - name: Run hermetic agent-cli tests with coverage
-        run: make coverage-ci-agent-cli
+        run: make coverage-ci-agent-cli AGENT_CLI_COVERAGE_SHARD=${{ matrix.shard }}
 
       - name: Upload agent-cli coverage profile
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-agent-cli
-          path: coverage/agent-cli.out
+          name: coverage-agent-cli-${{ matrix.shard }}
+          path: coverage/agent-cli*.out
           if-no-files-found: error
           retention-days: 1
 
@@ -369,13 +473,31 @@ jobs:
 
       - name: Cross-build and inspect native EAC release artifacts
         run: |
-          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS='-arch arm64' CGO_LDFLAGS='-arch arm64' go build -o "$RUNNER_TEMP/agent-darwin-arm64" ./agent-cli/cmd/agent
-          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS='-arch x86_64' CGO_LDFLAGS='-arch x86_64' go build -o "$RUNNER_TEMP/agent-darwin-amd64" ./agent-cli/cmd/agent
+          # The two architectures share no build outputs; build them concurrently.
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CGO_CFLAGS='-arch arm64' CGO_LDFLAGS='-arch arm64' go build -o "$RUNNER_TEMP/agent-darwin-arm64" ./agent-cli/cmd/agent &
+          arm64_build=$!
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CGO_CFLAGS='-arch x86_64' CGO_LDFLAGS='-arch x86_64' go build -o "$RUNNER_TEMP/agent-darwin-amd64" ./agent-cli/cmd/agent &
+          amd64_build=$!
+          wait "$arm64_build"
+          wait "$amd64_build"
           ./scripts/verify-darwin-eac-artifact.sh "$RUNNER_TEMP/agent-darwin-arm64" darwin_arm64
           ./scripts/verify-darwin-eac-artifact.sh "$RUNNER_TEMP/agent-darwin-amd64" darwin_amd64
 
+      # `go run goreleaser@version` recompiled GoReleaser on every run
+      # (100-130s); cache the pinned binary instead.
+      - name: Cache pinned GoReleaser binary
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/go-agent-harness/goreleaser
+          key: goreleaser-v2.17.0-go1.26.7-${{ runner.os }}-${{ runner.arch }}
+
       - name: Validate GoReleaser configuration
-        run: go run github.com/goreleaser/goreleaser/v2@v2.17.0 check --config .goreleaser.yaml
+        run: |
+          goreleaser_dir="$HOME/.cache/go-agent-harness/goreleaser"
+          if [ ! -x "$goreleaser_dir/goreleaser" ]; then
+            GOBIN="$goreleaser_dir" go install github.com/goreleaser/goreleaser/v2@v2.17.0
+          fi
+          "$goreleaser_dir/goreleaser" check --config .goreleaser.yaml
 
   windows-audio-portable:
     name: CI (Windows audio portable)
