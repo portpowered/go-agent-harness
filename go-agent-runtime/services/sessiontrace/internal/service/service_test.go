@@ -38,11 +38,12 @@ func TestRemoteRenderMonitorStopIsBoundedBeforeFinalPoll(t *testing.T) {
 		<-request.Context().Done()
 	}))
 	defer server.Close()
-	monitor := &remoteRenderMonitor{endpoint: strings.TrimPrefix(server.URL, "http://"), observer: func(int, []int16) {}, cancel: func() {}, done: make(chan struct{})}
+	const stopTimeout = 10 * time.Millisecond
+	monitor := &remoteRenderMonitor{endpoint: strings.TrimPrefix(server.URL, "http://"), observer: func(int, []int16) {}, stopTimeout: stopTimeout, cancel: func() {}, done: make(chan struct{})}
 	started := time.Now()
 	monitor.Stop()
-	if elapsed := time.Since(started); elapsed > remoteRenderStopTimeout+50*time.Millisecond {
-		t.Fatalf("remote render stop took %s, want at most %s", elapsed, remoteRenderStopTimeout+50*time.Millisecond)
+	if elapsed := time.Since(started); elapsed > remoteRenderStopTimeout {
+		t.Fatalf("remote render stop took %s, want its %s bound well under the %s default", elapsed, stopTimeout, remoteRenderStopTimeout)
 	}
 	if len(requests) != 0 {
 		t.Fatal("remote render stop polled after its deadline")

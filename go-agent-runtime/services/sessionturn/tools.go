@@ -49,14 +49,17 @@ type ToolPresentation struct {
 
 // ToolExecutorRequest configures one session-owned executor. Timeout takes
 // precedence; otherwise Policy selects a per-tool deadline; otherwise
-// DefaultToolExecutionTimeout applies.
+// DefaultToolExecutionTimeout applies. ScreenPermissionRecheckTimeout bounds
+// the post-timeout display permission re-check; zero selects
+// ScreenPermissionRecheckTimeout.
 type ToolExecutorRequest struct {
-	Inner        messages.ToolExecutor
-	Timeout      time.Duration
-	Policy       tools.InteractiveToolPolicy
-	Cancellation CancellationIntent
-	Diagnostics  sessiontrace.ToolDiagnosticSink
-	Presentation ToolPresentation
+	Inner                          messages.ToolExecutor
+	Timeout                        time.Duration
+	Policy                         tools.InteractiveToolPolicy
+	Cancellation                   CancellationIntent
+	Diagnostics                    sessiontrace.ToolDiagnosticSink
+	Presentation                   ToolPresentation
+	ScreenPermissionRecheckTimeout time.Duration
 }
 
 // InteractivePolicyRequest resolves one session policy. Nil Settings selects
