@@ -316,6 +316,38 @@ func TestV8MultiTurnBridgeReadConsumesEOFPublishedAfterCancellation(t *testing.T
 	}
 }
 
+// TestV8MultiTurnPCMReaderEndsFinalTurnWithEOF pins the reader's turn
+// boundaries: an end-of-turn marker after every earlier turn and the consumed
+// bridge EOF, not a marker, after the final turn.
+func TestV8MultiTurnPCMReaderEndsFinalTurnWithEOF(t *testing.T) {
+	coordinator := &v8MultiTurnCoordinator{abort: make(chan struct{})}
+	bridge := newV8MultiTurnBridge(coordinator, v8DirectionAToB, &v8RecordingView{}, &v8RecordingView{}, nil)
+	go func() {
+		for range v8MultiTurnCount {
+			bridge.packets <- v8MultiTurnBridgePacket{crossing: v8Crossing{Emitted: make([]byte, v8PCMFrameBytes)}, ack: make(chan struct{})}
+		}
+		bridge.packets <- v8MultiTurnBridgePacket{eof: true}
+	}()
+	reader := &v8MultiTurnPCMReader{bridge: bridge}
+	var got []error
+	for len(got) == 0 || !errors.Is(got[len(got)-1], io.EOF) {
+		_, err := reader.ReadContext(context.Background(), make([]byte, v8PCMFrameBytes))
+		got = append(got, err)
+	}
+	want := []error{nil, audio.ErrEndOfTurn, nil, audio.ErrEndOfTurn, nil, io.EOF}
+	if len(got) != len(want) {
+		t.Fatalf("reader boundaries = %v, want %v", got, want)
+	}
+	for index := range want {
+		if !errors.Is(got[index], want[index]) || (want[index] == nil) != (got[index] == nil) {
+			t.Fatalf("reader boundaries = %v, want %v", got, want)
+		}
+	}
+	if !bridge.observedEOF() {
+		t.Fatal("final turn EOF was returned but not recorded as consumed")
+	}
+}
+
 func (b *v8MultiTurnBridge) wroteFrames() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -359,9 +391,15 @@ type v8MultiTurnPCMWriter struct{ bridge *v8MultiTurnBridge }
 
 func (w v8MultiTurnPCMWriter) Write(data []byte) (int, error) { return w.bridge.write(data) }
 
+// v8MultiTurnPCMReader ends each earlier turn with an explicit end-of-turn
+// marker and the final turn with the bridge's EOF. The final commit is then
+// caused by the consumed EOF, so the input stream is always drained before the
+// replay can close the session; a separate marker let the provider close the
+// session after the final commit while the EOF was still unread.
 type v8MultiTurnPCMReader struct {
 	bridge          *v8MultiTurnBridge
 	boundaryPending bool
+	frames          int
 }
 
 func (r *v8MultiTurnPCMReader) Read(data []byte) (int, error) {
@@ -375,7 +413,8 @@ func (r *v8MultiTurnPCMReader) ReadContext(ctx context.Context, data []byte) (in
 	}
 	count, err := r.bridge.read(ctx, data)
 	if err == nil && count > 0 {
-		r.boundaryPending = true
+		r.frames++
+		r.boundaryPending = r.frames < v8MultiTurnCount
 	}
 	return count, err
 }

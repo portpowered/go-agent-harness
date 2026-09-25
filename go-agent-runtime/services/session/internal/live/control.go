@@ -76,6 +76,7 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 		event.Value = nil
 	}
 	event.ActorProvidedID = ackID
+	stamp := h.controlStamp(control.Kind)
 	if err := loop.SendSessionEvent(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
 		return err
@@ -88,10 +89,10 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 		if h.runtimeTrace != nil {
 			switch control.Kind {
 			case session.LiveControlAudioCommit:
-				h.runtimeTrace.InputCommit(false)
-				h.runtimeTrace.ResponseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
+				h.runtimeTrace.InputCommitAt(stamp)
+				h.runtimeTrace.ResponseCreateAt(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}, stamp)
 			case session.LiveControlResponseCreate:
-				h.runtimeTrace.ResponseCreate(event)
+				h.runtimeTrace.ResponseCreateAt(event, stamp)
 			case session.LiveControlText:
 				h.runtimeTrace.UserTextInput(control.Text)
 			case session.LiveControlResponseCancel, session.LiveControlClose:

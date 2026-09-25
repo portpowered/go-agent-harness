@@ -54,15 +54,44 @@ func (r *RuntimeTrace) observe(kind sessiontrace.SessionRuntimeObservationKind, 
 }
 
 func (r *RuntimeTrace) observeFinal(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting) {
+	r.observeAt(Stamp{}, kind, payload, turns, commit, response, clean, runErr, finalAccounting)
+}
+
+// Stamp is the tick and timestamp of one runtime boundary, taken when the
+// boundary happens rather than when its evidence is emitted.
+type Stamp struct {
+	tick uint64
+	at   time.Time
+	set  bool
+}
+
+// Stamp records the current boundary time for an observation emitted later.
+func (r *RuntimeTrace) Stamp() Stamp {
 	if r == nil || r.observer == nil {
-		return
+		return Stamp{}
 	}
+	return r.stampNow()
+}
+
+func (r *RuntimeTrace) stampNow() Stamp {
 	tick := r.sequence.Add(1)
 	if r.tick != nil {
 		tick = r.tick()
 	}
+	return Stamp{tick: tick, at: r.now(), set: true}
+}
+
+// observeAt emits one observation at stamp, or at the current time when stamp
+// was not taken.
+func (r *RuntimeTrace) observeAt(stamp Stamp, kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, commit int, response messages.StreamMessage, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting) {
+	if r == nil || r.observer == nil {
+		return
+	}
+	if !stamp.set {
+		stamp = r.stampNow()
+	}
 	r.observer.ObserveSessionRuntime(sessiontrace.SessionRuntimeObservation{
-		Kind: kind, Tick: tick, Timestamp: r.now(), Payload: append([]byte(nil), payload...),
+		Kind: kind, Tick: stamp.tick, Timestamp: stamp.at, Payload: append([]byte(nil), payload...),
 		TurnsCompleted: turns, InputCommit: commit, ResponseID: response.ResponseID,
 		ResponsePurpose: response.ResponsePurpose, StreamID: response.ActorStreamID,
 		LoopPassID: response.LoopPassID, Clean: clean, Error: runtimeTraceError(runErr), FinalAccounting: finalAccounting,
@@ -127,6 +156,18 @@ func (r *RuntimeTrace) CapturedAudio(frame audio.PCMFrame) {
 
 // InputCommit emits one provider or caller-owned audio commit boundary.
 func (r *RuntimeTrace) InputCommit(providerCreated bool) {
+	r.inputCommitAt(providerCreated, Stamp{})
+}
+
+// InputCommitAt emits a caller-owned audio commit accepted by the provider at
+// the stamp taken when the caller committed. The provider may answer the
+// commit before its acceptance reaches the caller, so stamping at emission
+// could place the commit after the turn it caused.
+func (r *RuntimeTrace) InputCommitAt(stamp Stamp) {
+	r.inputCommitAt(false, stamp)
+}
+
+func (r *RuntimeTrace) inputCommitAt(providerCreated bool, stamp Stamp) {
 	if r == nil {
 		return
 	}
@@ -143,7 +184,7 @@ func (r *RuntimeTrace) InputCommit(providerCreated bool) {
 		commit = r.commits
 	}
 	r.inputMu.Unlock()
-	r.observe(sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, commit, messages.StreamMessage{}, true, nil)
+	r.observeAt(stamp, sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, commit, messages.StreamMessage{}, true, nil, nil)
 }
 
 // UserTextInput accounts caller text admitted to the provider as user input,
@@ -157,7 +198,13 @@ func (r *RuntimeTrace) UserTextInput(text string) {
 
 // ResponseCreate records a response-request control accepted by the provider.
 func (r *RuntimeTrace) ResponseCreate(msg messages.StreamMessage) {
-	r.observe(sessiontrace.SessionRuntimeObservationResponseCreate, nil, 0, 0, msg, true, nil)
+	r.ResponseCreateAt(msg, Stamp{})
+}
+
+// ResponseCreateAt records an accepted response request at stamp, the time
+// the caller requested it.
+func (r *RuntimeTrace) ResponseCreateAt(msg messages.StreamMessage, stamp Stamp) {
+	r.observeAt(stamp, sessiontrace.SessionRuntimeObservationResponseCreate, nil, 0, 0, msg, true, nil, nil)
 }
 
 // TurnCompleted records assistant completion while excluding tool responses
