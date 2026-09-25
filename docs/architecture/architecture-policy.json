@@ -50,12 +50,6 @@
     },
     {
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentruntime",
-      "file": "internal/services/internal/agentruntime/session_test.go",
-      "reason": "runtime host test assembles the public session wire"
-    },
-    {
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/ask_test.go",
       "reason": "CLI transport test assembles the public session wire"
