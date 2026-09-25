@@ -154,8 +154,8 @@ different version, so use the Makefile resolver.
 
 ## CI lanes
 
-Every static CI job must finish within three minutes even with a cold build
-cache (target: 2.5 minutes), so the lanes are sized for a cold run:
+Every CI job must finish within three minutes even with a cold build cache
+(target: 2.5 minutes), so the lanes are sized for a cold run (80-140s each):
 
 | Lane | Command |
 | --- | --- |
@@ -170,11 +170,22 @@ cache (target: 2.5 minutes), so the lanes are sized for a cold run:
 | `CI (static lint darwin support)` | `make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support` |
 | `CI (static lint darwin cgo)` | `make lint-darwin-cgo` on macOS |
 
-`CI (static gates)` runs `make fmt`, `make wire-check` and `make
-check-ci-test-partition`, and `CI (static architecture)` runs `make
-architecture-size-check`. The required `CI (static)` check aggregates all of
-them. `make lint` and `make lint-cross` start the modules with the longest
-cold lint first (`LINT_SCHEDULE`).
+Merged lanes were measured cold in #591 and do not fit: `make lint
+LINT_SHARD=libraries` 131-223s, `make lint-cross LINT_CROSS_GOOS=windows
+LINT_SHARD=all` 176-225s, `make lint-cross LINT_CROSS_GOOS=darwin
+LINT_SHARD=all` 155-206s, `make lint LINT_SHARD=all` ~250s. Warm, every one
+of them takes under 35s, so the lanes can merge once cold compiles shrink:
+they are one matrix in `.github/workflows/ci.yml`, and merging two lanes is a
+change to one entry's `LINT_SHARD` or `LINT_CROSS_GOOS` (for example
+`LINT_CROSS_GOOS="windows darwin"`).
+
+The required `CI (static)` check runs `make fmt`, `make
+check-ci-test-partition` and `make architecture-size-check` (75-100s cold;
+`make wire-check`, another 40-55s cold, runs in `CI (unit)`), then
+waits for every job named `CI (static lint *` and fails if any of them failed
+(`scripts/ci-await-jobs.sh`), so adding, removing or merging a lane needs no
+other edit. `make lint` and `make lint-cross` start the modules with the
+longest cold lint first (`LINT_SCHEDULE`).
 
 Each lane restores its own Go build, module and golangci-lint caches through
 `.github/actions/go-cache` (the golangci-lint cache is passed as
