@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -500,30 +498,27 @@ func TestManagedBrowserCloseJoinsExitWatcherBeforeReturning(t *testing.T) {
 		// A coarse lock poll keeps a watcher that collides with Close's lease
 		// waiting long after Close returns unless Close joins it.
 		manager.options.LockPoll = 20 * time.Millisecond
-		before := managedBrowserWatcherGoroutines()
 		browser, err := manager.Acquire(context.Background(), ManagedBrowserLaunchOptions{})
 		if err != nil {
 			t.Fatalf("iteration %d Acquire(): %v", iteration, err)
 		}
+		if browser.exitWatcherDone == nil {
+			t.Fatalf("iteration %d Acquire() installed no exit watcher", iteration)
+		}
 		if err := browser.Close(); err != nil {
 			t.Fatalf("iteration %d Close(): %v", iteration, err)
 		}
-		if after := managedBrowserWatcherGoroutines(); after > before {
-			t.Fatalf("iteration %d exit watchers after Close = %d, want <= %d (watcher outlived Close)", iteration, after, before)
+		// The watcher closes exitWatcherDone after its last profile access
+		// (its lease is released first). Counting watchManagedBrowser frames
+		// instead is racy: a watcher that has finished still shows that frame
+		// until its goroutine unwinds.
+		select {
+		case <-browser.exitWatcherDone:
+		default:
+			t.Fatalf("iteration %d exit watcher still running after Close returned", iteration)
 		}
 		if err := os.RemoveAll(browser.ProfileDir()); err != nil {
 			t.Fatalf("iteration %d remove profile after Close: %v", iteration, err)
 		}
-	}
-}
-
-func managedBrowserWatcherGoroutines() int {
-	buffer := make([]byte, 1<<20)
-	for {
-		n := runtime.Stack(buffer, true)
-		if n < len(buffer) {
-			return strings.Count(string(buffer[:n]), ").watchManagedBrowser(")
-		}
-		buffer = make([]byte, 2*len(buffer))
 	}
 }
