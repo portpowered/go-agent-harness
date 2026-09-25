@@ -19,6 +19,10 @@ import (
 
 const waitAfterTermination = 2 * time.Second
 
+// descendantsTerminated is the cleanup outcome reported when the process
+// group was terminated without a reported failure.
+const descendantsTerminated = "descendants terminated"
+
 // Config describes one command execution. Timeout must be positive so every
 // production caller has an explicit finite cleanup boundary.
 type Config struct {
@@ -65,7 +69,7 @@ func (e *Error) Error() string {
 	if e.TimedOut {
 		termination := e.Termination
 		if termination == "" {
-			termination = "descendants terminated"
+			termination = descendantsTerminated
 		}
 		return fmt.Sprintf("%s timed out after %s: command=%s pid=%d; %s", label, e.Timeout, e.Command, e.PID, termination)
 	}
@@ -135,7 +139,7 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 	}
 
 	if timedOut || contextCanceled {
-		termination = "descendants terminated"
+		termination = descendantsTerminated
 		cleanupErr := terminateCommand(cmd)
 		if cleanupErr != nil {
 			termination = "descendant termination reported: " + cleanupErr.Error()

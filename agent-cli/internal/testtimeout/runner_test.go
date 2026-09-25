@@ -65,7 +65,7 @@ func testBudgetExpiryFailsClosed(t *testing.T, fixtureBinary string) {
 	if result.Duration < expiryBudget || result.Duration >= expiryBudget+waitAfterTermination {
 		t.Fatalf("expired fixture duration = %s, want the %s budget plus at most one cleanup grace", result.Duration, expiryBudget)
 	}
-	for _, want := range []string{"timed out after " + expiryBudget.String(), "descendants terminated"} {
+	for _, want := range []string{"timed out after " + expiryBudget.String(), descendantsTerminated} {
 		if !strings.Contains(runErr.Error(), want) {
 			t.Fatalf("timeout diagnostic missing %q: %v", want, runErr)
 		}
@@ -105,7 +105,7 @@ func testBlockedChildFailsClosedAndCleansDescendants(t *testing.T, fixtureBinary
 	if result.ExitCode == 0 {
 		t.Fatalf("blocked fixture exit code = 0, want non-zero: %+v", result)
 	}
-	if runnerErr.Termination != "descendants terminated" {
+	if runnerErr.Termination != descendantsTerminated {
 		t.Fatalf("blocked fixture termination = %q, want descendants terminated", runnerErr.Termination)
 	}
 	for _, want := range []string{

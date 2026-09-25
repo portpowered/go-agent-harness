@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	probescenario "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenario"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,18 +22,6 @@ const probeSessionFixture = "../../../../go-llm-gateway/pkg/testing/testdata/ses
 
 func newReplayRuntimeServiceForTest() runtimeReplay.Service {
 	return replaywire.NewService()
-}
-
-// loadProbeScenario parses a committed legacy scenario document the same way
-// the probe command does.
-func loadProbeScenario(data []byte) (probe.Scenario, error) {
-	return probescenario.Parse(data)
-}
-
-// replayCorpusPath locates a committed audio corpus file the same way the
-// probe command does.
-func replayCorpusPath(id string) (string, error) {
-	return probeCorpus().Path(id)
 }
 
 func probeFixtureObservation(t *testing.T) gatewaytesting.SessionReplayProbeReport {

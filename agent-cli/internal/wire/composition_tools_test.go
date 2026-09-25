@@ -68,25 +68,3 @@ func TestToolServicePort_AdvertisesAndExecutesCompleteCustomSurface(t *testing.T
 	}
 	t.Fatalf("custom tool %q was never advertised to the inferencer: %#v", toolName, inferencer.toolRequests)
 }
-
-func assertDefaultConstructorCalls(t *testing.T, definitions []portDefinition, selectedName string, defaultCalls map[string]int) {
-	t.Helper()
-	for _, definition := range definitions {
-		calls := defaultCalls[definition.descriptor.Name]
-		if definition.defaultValue == nil {
-			if calls != 0 {
-				t.Fatalf("graph-provided %q default constructor calls = %d, want zero", definition.descriptor.Name, calls)
-			}
-			continue
-		}
-		if definition.descriptor.Name == selectedName {
-			if calls != 0 {
-				t.Fatalf("displaced %q default constructor calls = %d, want exactly 0", definition.descriptor.Name, calls)
-			}
-			continue
-		}
-		if calls != 1 {
-			t.Fatalf("unswapped %q default constructor calls = %d, want exactly 1", definition.descriptor.Name, calls)
-		}
-	}
-}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -129,25 +128,6 @@ func loopbackTone(n, seed int) []int16 {
 		samples[i] = int16(int32(state>>16)%24000 - 12000) //nolint:gosec // bounded deterministic PCM fixture
 	}
 	return samples
-}
-
-// loopbackAttenuate scales samples by gain, saturating to the PCM16 range.
-// Explicit, named gain (and the caller-chosen frame delay used alongside it)
-// are exactly the sweepable coupling parameters the harness is required to
-// expose.
-func loopbackAttenuate(samples []int16, gain float64) []int16 {
-	out := make([]int16, len(samples))
-	for i, s := range samples {
-		v := math.Round(float64(s) * gain)
-		switch {
-		case v > math.MaxInt16:
-			v = math.MaxInt16
-		case v < math.MinInt16:
-			v = math.MinInt16
-		}
-		out[i] = int16(v)
-	}
-	return out
 }
 
 // mustResampleStream mirrors the stream-owned DSP boundary: phase and filter
