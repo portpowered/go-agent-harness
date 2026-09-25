@@ -362,7 +362,7 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 	}
 	var playbackErr error
 	if shouldDrainPlayback(i.ctx, waitErr) {
-		playbackErr = drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout)
+		playbackErr = i.drainInvocationPlayback()
 	}
 	if i.stopPumps != nil {
 		i.stopPumps()
