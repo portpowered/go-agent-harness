@@ -71,6 +71,10 @@ func newTestSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFl
 	)
 }
 
+// ambiguousCubeStateTool names the cube-state page tool the ambiguous page-tool
+// conversations select.
+const ambiguousCubeStateTool = "get_cube_state"
+
 func newTestReplaySessionCommand(globalFlags *flags.GlobalFlags, registry devicegw.DeviceRegistry) *SessionCommand {
 	return newTestSessionCommand(nil, globalFlags, testSessionDeps{Registry: registry})
 }

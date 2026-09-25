@@ -794,10 +794,7 @@ func (i *ambiguousCubeConversationInferencer) connections() int {
 	return i.connectionN
 }
 
-const (
-	webmcpSelectionCallID  = "call-select-tab"
-	ambiguousCubeStateTool = "get_cube_state"
-)
+const webmcpSelectionCallID = "call-select-tab"
 
 func assertAmbiguousPageSurface(t *testing.T, definitions, base []messages.ToolDefinition, pageNames []string, label string) {
 	t.Helper()
