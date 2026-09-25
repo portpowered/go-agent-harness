@@ -45,15 +45,20 @@ func TestOpenFileMediaAppliesPacingToEveryFileInput(t *testing.T) {
 			})
 			media := handle.Media()
 			for name, file := range map[string]devices.FileInput{"input": *media.Input, "turn": media.InputTurns[0], "interruption": media.Interruptions[0]} {
-				if file.Pace != test.wantPace {
-					t.Fatalf("%s pace = %v, want %v", name, file.Pace, test.wantPace)
-				}
-				_, accelerated := file.Scheduler.(*acceleratedScheduler)
-				if accelerated != test.accelerated || (!accelerated && file.Scheduler != scheduler) {
-					t.Fatalf("%s scheduler = %T, want accelerated=%v over the request scheduler", name, file.Scheduler, test.accelerated)
-				}
+				assertFilePacing(t, name, file, scheduler, test.wantPace, test.accelerated)
 			}
 		})
+	}
+}
+
+func assertFilePacing(t *testing.T, name string, file devices.FileInput, scheduler clock.Scheduler, wantPace, wantAccelerated bool) {
+	t.Helper()
+	if file.Pace != wantPace {
+		t.Fatalf("%s pace = %v, want %v", name, file.Pace, wantPace)
+	}
+	_, accelerated := file.Scheduler.(*acceleratedScheduler)
+	if accelerated != wantAccelerated || (!accelerated && file.Scheduler != scheduler) {
+		t.Fatalf("%s scheduler = %T, want accelerated=%v over the request scheduler", name, file.Scheduler, wantAccelerated)
 	}
 }
 

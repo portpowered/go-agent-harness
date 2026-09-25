@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestParseFilePacingAcceptsHostSpellings(t *testing.T) {
+func TestFilePacingTextAcceptsHostSpellings(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
 		value    string
@@ -21,21 +21,26 @@ func TestParseFilePacingAcceptsHostSpellings(t *testing.T) {
 		{value: "10x", want: FilePacing{Speed: 10}, text: "10x"},
 		{value: "2.5X", want: FilePacing{Speed: 2.5}, text: "2.5x"},
 	} {
-		got, err := ParseFilePacing(test.value)
-		if err != nil {
-			t.Fatalf("ParseFilePacing(%q): %v", test.value, err)
+		var got FilePacing
+		if err := got.UnmarshalText([]byte(test.value)); err != nil {
+			t.Fatalf("UnmarshalText(%q): %v", test.value, err)
+		}
+		text, err := got.MarshalText()
+		if err != nil || string(text) != test.text {
+			t.Fatalf("MarshalText(%+v) = (%q, %v), want %q", got, text, err, test.text)
 		}
 		if got != test.want || got.Realtime() != test.realtime || got.String() != test.text {
-			t.Fatalf("ParseFilePacing(%q) = %+v (realtime %v, %q), want %+v (realtime %v, %q)", test.value, got, got.Realtime(), got.String(), test.want, test.realtime, test.text)
+			t.Fatalf("UnmarshalText(%q) = %+v (realtime %v, %q), want %+v (realtime %v, %q)", test.value, got, got.Realtime(), got.String(), test.want, test.realtime, test.text)
 		}
 	}
 }
 
-func TestParseFilePacingRejectsUnusableSpellings(t *testing.T) {
+func TestFilePacingTextRejectsUnusableSpellings(t *testing.T) {
 	t.Parallel()
 	for _, value := range []string{"fast", "10", "0x", "-2x", "x", "infx", "nanx"} {
-		if got, err := ParseFilePacing(value); !errors.Is(err, ErrInvalidRequest) {
-			t.Fatalf("ParseFilePacing(%q) = (%+v, %v), want ErrInvalidRequest", value, got, err)
+		got := FilePacing{Speed: 3}
+		if err := got.UnmarshalText([]byte(value)); !errors.Is(err, ErrInvalidRequest) || got.Speed != 3 {
+			t.Fatalf("UnmarshalText(%q) = (%+v, %v), want ErrInvalidRequest and an unchanged value", value, got, err)
 		}
 	}
 }
@@ -45,6 +50,9 @@ func TestFilePacingValidateRejectsNonFiniteOrNegativeSpeed(t *testing.T) {
 	for _, speed := range []float64{-0.5, math.NaN(), math.Inf(1), math.Inf(-1)} {
 		if err := (FilePacing{Speed: speed}).Validate(); !errors.Is(err, ErrInvalidRequest) {
 			t.Fatalf("Validate(speed %v) = %v, want ErrInvalidRequest", speed, err)
+		}
+		if _, err := (FilePacing{Speed: speed}).MarshalText(); !errors.Is(err, ErrInvalidRequest) {
+			t.Fatalf("MarshalText(speed %v) = %v, want ErrInvalidRequest", speed, err)
 		}
 	}
 	if err := (FilePacing{}).Validate(); err != nil {

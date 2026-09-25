@@ -41,7 +41,7 @@ func (p FilePacing) Realtime() bool {
 	return !p.Unpaced && (p.Speed == 0 || p.Speed == 1)
 }
 
-// String renders the selection in the spelling ParseFilePacing accepts.
+// String renders the selection in the spelling UnmarshalText accepts.
 func (p FilePacing) String() string {
 	switch {
 	case p.Unpaced:
@@ -58,24 +58,40 @@ const (
 	filePacingUnpaced  = "unpaced"
 )
 
-// ParseFilePacing reads a host option spelling: "" or "realtime" (the
-// default), "unpaced", or a speed multiplier such as "10x" or "2.5x".
-func ParseFilePacing(value string) (FilePacing, error) {
-	value = strings.ToLower(strings.TrimSpace(value))
+// MarshalText renders the selection in the spelling UnmarshalText accepts.
+func (p FilePacing) MarshalText() ([]byte, error) {
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+	return []byte(p.String()), nil
+}
+
+// UnmarshalText reads a host option spelling: "" or "realtime" (the
+// default), "unpaced", or a speed multiplier such as "10x" or "2.5x". It
+// implements encoding.TextUnmarshaler, so a host can bind a command-line
+// flag with flag.TextVar.
+func (p *FilePacing) UnmarshalText(text []byte) error {
+	value := strings.ToLower(strings.TrimSpace(string(text)))
 	switch value {
 	case "", filePacingRealtime:
-		return FilePacing{}, nil
+		*p = FilePacing{}
+		return nil
 	case filePacingUnpaced:
-		return FilePacing{Unpaced: true}, nil
+		*p = FilePacing{Unpaced: true}
+		return nil
 	}
 	number, ok := strings.CutSuffix(value, "x")
 	if !ok {
-		return FilePacing{}, fmt.Errorf("%w: file input pacing %q: want realtime, unpaced, or a speed such as 10x", ErrInvalidRequest, value)
+		return fmt.Errorf("%w: file input pacing %q: want realtime, unpaced, or a speed such as 10x", ErrInvalidRequest, value)
 	}
 	speed, err := strconv.ParseFloat(number, 64)
 	if err != nil || speed <= 0 {
-		return FilePacing{}, fmt.Errorf("%w: file input pacing %q: speed must be a positive number", ErrInvalidRequest, value)
+		return fmt.Errorf("%w: file input pacing %q: speed must be a positive number", ErrInvalidRequest, value)
 	}
 	pacing := FilePacing{Speed: speed}
-	return pacing, pacing.Validate()
+	if err := pacing.Validate(); err != nil {
+		return err
+	}
+	*p = pacing
+	return nil
 }
