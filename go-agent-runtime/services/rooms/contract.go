@@ -165,6 +165,15 @@ type RoomRunOptions struct {
 	// continuous session owner. It is invoked only for admitted agent
 	// participants and its returned Close function is owned by the live handle.
 	LiveCapabilitiesFactory session.LiveCapabilityFactory
+	// CredentialLookup resolves participant credential references (the
+	// manifest's api_key_env names) to the values the live participants use.
+	// The room resolves them only to redact those values from every evidence
+	// artifact and never retains them elsewhere. Nil uses the process
+	// environment, matching launch planning and the live provider edge.
+	CredentialLookup func(string) (string, bool)
+	// ConfigCredential supplies host-configured fallback credentials for the
+	// same references. Their values are likewise redacted from evidence.
+	ConfigCredential        ConfigCredentialLookup
 	OnDiagnostic            func(string, RoomDiagnosticRecord)
 	EventSink               EventSink
 	OnParticipantReady      func(RoomParticipantReady)
