@@ -390,3 +390,11 @@ func (h *handle) consumeToolAcknowledgement(ctx context.Context, msg messages.St
 	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
 	h.observeRuntimeMessage(msg)
 }
+
+// recoversActiveResponseRejection reports whether provider answers a response
+// request made while another response is active with a non-terminal
+// diagnostic. Only such a provider may receive an unsolicited acknowledgement
+// request; Grok terminates the session on any provider error.
+func recoversActiveResponseRejection(provider string) bool {
+	return strings.EqualFold(strings.TrimSpace(provider), "openai")
+}

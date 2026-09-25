@@ -108,7 +108,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	toolExecutor = restrictToolExecutor(toolExecutor, h.offeredToolDefinitions, explicitCapability)
 	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn, observe: h.observeExecutedToolCall}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
-	if toolPolicy != nil {
+	if toolPolicy != nil && recoversActiveResponseRejection(h.request.Provider) {
 		options = append(options, toolAcknowledgementOption(toolPolicy))
 	}
 	if len(toolDefinitions) > 0 {

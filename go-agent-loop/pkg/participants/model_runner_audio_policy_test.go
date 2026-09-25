@@ -255,29 +255,58 @@ func TestSessionModelRunner_AcknowledgementWaitsOutActiveResponse(t *testing.T) 
 }
 
 func TestSessionModelRunner_RejectedAcknowledgementReleasesOrdinaryResponse(t *testing.T) {
+	serverStart := messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "resp-server", Value: messages.NewMessageStartValue()}
+	rejection := messages.StreamMessage{
+		Type: messages.StreamTypeError,
+		Value: &messages.ErrorValue{Type: "error", Message: "active response", NonTerminal: true,
+			Classification: messages.ErrorClassificationResponseCreateActive},
+	}
+	// The provider may announce its own response before or after rejecting
+	// the acknowledgement request; either way that response stays ordinary.
+	for name, order := range map[string][]messages.StreamMessage{
+		"start before rejection": {serverStart, rejection},
+		"rejection before start": {rejection, serverStart},
+	} {
+		t.Run(name, func(t *testing.T) { assertRejectedAcknowledgementReleases(t, order) })
+	}
+}
+
+func assertRejectedAcknowledgementReleases(t *testing.T, order []messages.StreamMessage) {
+	t.Helper()
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := &sessionRunState{}
 	state.ensureMaps()
-
 	runner.forwardQueuedSessionEvent(ctx, session, state, acknowledgementCreate())
 	if !state.acknowledgementOutstanding {
 		t.Fatalf("idle acknowledgement request was not admitted: %+v", state)
 	}
-	// The provider started its own response first and rejects the request.
-	runner.forwardSessionMessageState(ctx, session, state, messages.StreamMessage{
-		Type: messages.StreamTypeError,
-		Value: &messages.ErrorValue{Type: "error", Message: "active response", NonTerminal: true,
-			Classification: messages.ErrorClassificationResponseCreateActive},
-	})
+	for _, msg := range order {
+		runner.forwardSessionMessageState(ctx, session, state, msg)
+	}
 	if state.acknowledgementOutstanding {
 		t.Fatalf("rejected acknowledgement stayed outstanding: %+v", state)
 	}
-	runner.forwardSessionMessageState(ctx, session, state, messages.StreamMessage{
-		Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "resp-server", Value: messages.NewMessageStartValue(),
-	})
+	if start := lastAnnouncedStart(runner); start == nil || start.ResponseID != "resp-server" || start.ResponsePurpose != "" {
+		t.Fatalf("last announced start = %#v, want an ordinary resp-server start", start)
+	}
 	if drainOrdinaryResponse(t, runner, session, state, "resp-server") || !state.responseCompleted {
 		t.Fatalf("ordinary response after rejection was treated as an acknowledgement: %+v", state)
+	}
+}
+
+// lastAnnouncedStart drains the runner's outbox and returns the final
+// response start it announced.
+func lastAnnouncedStart(runner *ModelRunner) *messages.StreamMessage {
+	var last *messages.StreamMessage
+	for {
+		delta, ok := runner.DeltaOutbox.Read()
+		if !ok {
+			return last
+		}
+		if delta.Type == messages.StreamTypeMessageStart {
+			last = &delta
+		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	ackProvider      = "openai"
 	ackSlowTool      = "sleep"
 	ackFastTool      = "read_file"
 	ackCallID        = "call-long"
@@ -214,7 +215,7 @@ type acknowledgementRun struct {
 
 // startAcknowledgementRun opens a finite live session whose provider calls
 // toolName once the opening prompt reaches it.
-func startAcknowledgementRun(t *testing.T, toolName string, policy tools.InteractiveToolPolicy) *acknowledgementRun {
+func startAcknowledgementRun(t *testing.T, providerName, toolName string, policy tools.InteractiveToolPolicy) *acknowledgementRun {
 	t.Helper()
 	clock := platformclock.NewDeterministic(time.Unix(700, 0), time.Millisecond)
 	run := &acknowledgementRun{
@@ -239,7 +240,7 @@ func startAcknowledgementRun(t *testing.T, toolName string, policy tools.Interac
 		Clock: clock.Now, Scheduler: run.scheduler,
 	})
 	handle, err := service.OpenLive(context.Background(), session.LiveRequest{
-		SessionID: "tool-acknowledgement", OpeningPrompt: "wait for me", FinishAfterResponse: true,
+		SessionID: "tool-acknowledgement", Provider: providerName, OpeningPrompt: "wait for me", FinishAfterResponse: true,
 		Capabilities: &session.LiveCapabilities{
 			Executor:    run.tool,
 			Definitions: []messages.ToolDefinition{{Name: ackSlowTool}, {Name: ackFastTool}},
@@ -345,7 +346,7 @@ func TestLongRunningToolRequestsOneSpokenAcknowledgementAtThreshold(t *testing.T
 		"acknowledgement ends after the tool result": true,
 	} {
 		t.Run(name, func(t *testing.T) {
-			run := startAcknowledgementRun(t, ackSlowTool, ackPolicy{})
+			run := startAcknowledgementRun(t, ackProvider, ackSlowTool, ackPolicy{})
 			run.awaitAcknowledgementRequest(t)
 			if toolFinishesFirst {
 				run.releaseTool(t)
@@ -371,14 +372,18 @@ func TestLongRunningToolRequestsOneSpokenAcknowledgementAtThreshold(t *testing.T
 
 func TestFastToolAndPolicylessCapabilityNeverAcknowledge(t *testing.T) {
 	for name, tc := range map[string]struct {
-		tool   string
-		policy tools.InteractiveToolPolicy
+		provider string
+		tool     string
+		policy   tools.InteractiveToolPolicy
 	}{
-		"fast read tool":  {tool: ackFastTool, policy: ackPolicy{}},
-		"no bound policy": {tool: ackSlowTool},
+		"fast read tool":  {provider: ackProvider, tool: ackFastTool, policy: ackPolicy{}},
+		"no bound policy": {provider: ackProvider, tool: ackSlowTool},
+		// Grok terminates the session on any provider error, so a rejected
+		// acknowledgement would end the conversation.
+		"provider without recoverable rejection": {provider: "grok", tool: ackSlowTool, policy: ackPolicy{}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			run := startAcknowledgementRun(t, tc.tool, tc.policy)
+			run := startAcknowledgementRun(t, tc.provider, tc.tool, tc.policy)
 			run.clock.AdvanceBy(10 * ackThreshold)
 			time.Sleep(ackQuietWindow)
 			if acknowledgements, _ := run.provider.responseCreates(); acknowledgements != 0 {
