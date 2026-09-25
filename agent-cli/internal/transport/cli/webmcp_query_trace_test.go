@@ -9,6 +9,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -168,7 +169,7 @@ func TestWebMCPQueryTraceReproducesLiveDirectDivergence(t *testing.T) {
 	}
 
 	var directResult webmcp.InvokeResult
-	directDataValue, directErr := runWebMCPDirectOperation(context.Background(), func(ctx context.Context, directBroker webmcp.Broker, _ config.BrowserConfig) (any, error) {
+	directDataValue, directErr := direct.RunOperation(context.Background(), func(ctx context.Context, directBroker webmcp.Broker, _ config.BrowserConfig) (any, error) {
 		eventCursor := runtime.EventCursor()
 		directResult, err = directBroker.Invoke(ctx, webmcp.InvokeRequest{ToolRef: resolved.Ref, Input: json.RawMessage(`{}`), Reason: "direct query trace"})
 		if err != nil {

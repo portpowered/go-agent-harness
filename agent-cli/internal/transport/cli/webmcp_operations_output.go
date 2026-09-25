@@ -12,6 +12,17 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
+)
+
+// Display bounds for direct-command output text fields.
+const (
+	directMaxTextLength      = 160
+	directMaxProtocolText    = 80
+	directMaxLabelText       = 40
+	directMaxDescriptionText = 500
+	directMaxURLText         = 240
 )
 
 // WebMCPDirectInvocationReceipt is the bounded stderr handoff emitted once a
@@ -101,9 +112,9 @@ func directContextData(page webmcp.PageContext) WebMCPDirectContext {
 	return WebMCPDirectContext{
 		BrowserID:  string(page.Key.BrowserID),
 		TargetID:   string(page.Key.TargetID),
-		Title:      boundedDoctorText(page.Title, 160),
+		Title:      normalize.BoundedText(page.Title, directMaxTextLength),
 		URL:        redactedDirectPageURL(page.URL),
-		Origin:     safeOrigin(page.Origin),
+		Origin:     normalize.RedactedOrigin(page.Origin),
 		Generation: page.Generation,
 		Connected:  page.Connected,
 		Ready:      page.Ready,
@@ -125,7 +136,7 @@ func directContextDataWithCatalog(page webmcp.PageContext, snapshot webmcp.ToolC
 		data.Generation = snapshot.Context.Generation
 	}
 	if data.Origin == "" {
-		data.Origin = safeOrigin(snapshot.Context.Origin)
+		data.Origin = normalize.RedactedOrigin(snapshot.Context.Origin)
 	}
 	return data
 }
@@ -138,11 +149,11 @@ func directTabFromTarget(target webmcp.Target) WebMCPDirectTab {
 	return WebMCPDirectTab{
 		BrowserID:         string(target.BrowserID),
 		TargetID:          string(target.ID),
-		Type:              boundedDoctorText(typeName, 40),
-		Title:             boundedDoctorText(target.Title, 160),
-		Origin:            safeOrigin(target.Origin),
+		Type:              normalize.BoundedText(typeName, directMaxLabelText),
+		Title:             normalize.BoundedText(target.Title, directMaxTextLength),
+		Origin:            normalize.RedactedOrigin(target.Origin),
 		Eligible:          target.Eligible,
-		EligibilityReason: boundedDoctorText(target.EligibilityReason, 160),
+		EligibilityReason: normalize.BoundedText(target.EligibilityReason, directMaxTextLength),
 		Attached:          target.Attached,
 	}
 }
@@ -190,11 +201,11 @@ func directToolFromDescriptor(descriptor webmcp.ToolDescriptor, includeSchemas b
 	}
 	return WebMCPDirectTool{
 		Ref:         string(descriptor.Ref),
-		Name:        boundedDoctorText(descriptor.Name, 160),
-		Description: boundedDoctorText(descriptor.Description, 500),
+		Name:        normalize.BoundedText(descriptor.Name, directMaxTextLength),
+		Description: normalize.BoundedText(descriptor.Description, directMaxDescriptionText),
 		InputSchema: schema,
 		Annotations: annotations,
-		Frame:       WebMCPDirectFrame{ID: string(descriptor.FrameID), Origin: safeOrigin(descriptor.Origin)},
+		Frame:       WebMCPDirectFrame{ID: string(descriptor.FrameID), Origin: normalize.RedactedOrigin(descriptor.Origin)},
 		Generation:  descriptor.Generation,
 	}
 }
@@ -204,10 +215,10 @@ func resolveDirectInvocation(args []string, values *webmcpDirectFlags, broker we
 		return "", nil, errors.New("invoke flags are required")
 	}
 	if values.toolRef != "" && len(args) > 0 {
-		return "", nil, directInvalidInputError("--tool-ref cannot be combined with a positional tool name", "/tool_ref")
+		return "", nil, direct.InvalidInputError("--tool-ref cannot be combined with a positional tool name", "/tool_ref")
 	}
 	if len(args) > 1 && values.inputJSON != "" {
-		return "", nil, directInvalidInputError("--input-json cannot be combined with key=value arguments", "/input_json")
+		return "", nil, direct.InvalidInputError("--input-json cannot be combined with key=value arguments", "/input_json")
 	}
 	input := json.RawMessage(values.inputJSON)
 	if len(bytes.TrimSpace(input)) == 0 {
@@ -263,21 +274,6 @@ func resolveDirectInvocation(args []string, values *webmcpDirectFlags, broker we
 		})
 	}
 	return match.Ref, append(json.RawMessage(nil), input...), nil
-}
-
-func directInvalidInputError(message, path string) error {
-	return webmcp.NewClassifiedError(webmcp.ErrorInvalidToolInput, message, map[string]any{
-		"issues": []webmcp.ToolResultIssue{{Path: path, Code: "invalid"}},
-	})
-}
-
-func directInvocationFailed(state webmcp.InvocationState) bool {
-	switch state {
-	case webmcp.InvocationError, webmcp.InvocationCanceled, webmcp.InvocationTimedOut, webmcp.InvocationOrphaned, webmcp.InvocationPolicyDenied:
-		return true
-	default:
-		return false
-	}
 }
 
 type directInvocationWaiter interface {
@@ -386,7 +382,7 @@ func directEventFrom(event webmcp.BrokerEvent) WebMCPDirectEvent {
 		InvocationID: string(event.InvocationID),
 		ToolRef:      string(event.ToolRef),
 		State:        string(event.State),
-		Reason:       boundedDoctorText(event.Reason, 160),
+		Reason:       normalize.BoundedText(event.Reason, directMaxTextLength),
 	}
 }
 
@@ -424,12 +420,12 @@ func writeWebMCPDirectHuman(out io.Writer, kind string, data any, operationErr e
 		_, err := fmt.Fprintf(out, "Error: %s — %s", resultError.Code, resultError.Message)
 		if err == nil {
 			if invocationID, ok := resultError.Details["invocation_id"].(string); ok && invocationID != "" {
-				_, err = fmt.Fprintf(out, " invocation_id=%s", boundedDoctorText(invocationID, 160))
+				_, err = fmt.Fprintf(out, " invocation_id=%s", normalize.BoundedText(invocationID, directMaxTextLength))
 			}
 		}
 		if err == nil {
 			if cancelSource, ok := resultError.Details["cancel_source"].(string); ok && cancelSource != "" {
-				_, err = fmt.Fprintf(out, " cancel_source=%s", boundedDoctorText(cancelSource, 40))
+				_, err = fmt.Fprintf(out, " cancel_source=%s", normalize.BoundedText(cancelSource, directMaxLabelText))
 			}
 		}
 		if err == nil && resultError.Details["side_effect_unknown"] == true {
@@ -541,20 +537,20 @@ func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResul
 	}
 	switch webmcp.ErrorCode(result.Code) {
 	case webmcp.ErrorAmbiguousBrowser:
-		ids := directSafeIDList(result.Details["candidate_browser_ids"])
-		if len(ids) > directMaxAmbiguityCandidates {
-			ids = ids[:directMaxAmbiguityCandidates]
+		ids := direct.SafeIDList(result.Details["candidate_browser_ids"])
+		if len(ids) > direct.MaxAmbiguityCandidates {
+			ids = ids[:direct.MaxAmbiguityCandidates]
 		}
 		result.Details["candidate_browser_ids"] = ids
 	case webmcp.ErrorAmbiguousTab:
-		browserID := normalizeDirectOpaqueID(stringValue(result.Details["browser_id"]))
-		ids := directSafeIDList(result.Details["candidate_target_ids"])
-		if len(ids) > directMaxAmbiguityCandidates {
-			ids = ids[:directMaxAmbiguityCandidates]
+		browserID := direct.NormalizeOpaqueID(stringValue(result.Details["browser_id"]))
+		ids := direct.SafeIDList(result.Details["candidate_target_ids"])
+		if len(ids) > direct.MaxAmbiguityCandidates {
+			ids = ids[:direct.MaxAmbiguityCandidates]
 		}
 		result.Details["browser_id"] = browserID
 		result.Details["candidate_target_ids"] = ids
-		if choices := directSafeCandidateChoices(result.Details["candidate_choices"], browserID, ids); len(choices) > 0 {
+		if choices := direct.SafeCandidateChoices(result.Details["candidate_choices"], browserID, ids); len(choices) > 0 {
 			result.Details["candidate_choices"] = choices
 		} else {
 			delete(result.Details, "candidate_choices")
@@ -566,14 +562,14 @@ func webmcpDirectErrorFor(err error, fallback webmcp.ErrorCode) webmcp.ToolResul
 func writeDirectAmbiguityDetails(out io.Writer, result webmcp.ToolResultError) error {
 	switch webmcp.ErrorCode(result.Code) {
 	case webmcp.ErrorAmbiguousBrowser:
-		ids := directSafeIDList(result.Details["candidate_browser_ids"])
+		ids := direct.SafeIDList(result.Details["candidate_browser_ids"])
 		if len(ids) > 0 {
 			_, err := fmt.Fprintf(out, " candidate_browser_ids=%s", strings.Join(ids, ","))
 			return err
 		}
 	case webmcp.ErrorAmbiguousTab:
-		browserID := normalizeDirectOpaqueID(stringValue(result.Details["browser_id"]))
-		ids := directSafeIDList(result.Details["candidate_target_ids"])
+		browserID := direct.NormalizeOpaqueID(stringValue(result.Details["browser_id"]))
+		ids := direct.SafeIDList(result.Details["candidate_target_ids"])
 		if browserID != "" {
 			if _, err := fmt.Fprintf(out, " browser_id=%s", browserID); err != nil {
 				return err
@@ -616,11 +612,11 @@ func redactedDirectPageURL(raw string) string {
 		if index := strings.IndexAny(raw, "?#"); index >= 0 {
 			raw = raw[:index]
 		}
-		return boundedDoctorText(raw, 240)
+		return normalize.BoundedText(raw, directMaxURLText)
 	}
 	parsed.User = nil
 	parsed.RawQuery = ""
 	parsed.ForceQuery = false
 	parsed.Fragment = ""
-	return boundedDoctorText(parsed.String(), 240)
+	return normalize.BoundedText(parsed.String(), directMaxURLText)
 }

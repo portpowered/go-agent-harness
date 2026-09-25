@@ -4,16 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"io"
 	"strings"
-)
 
-func doctorErrorDataFor(err error, fallback webmcp.ErrorCode, details map[string]any) *WebMCPDoctorErrorData {
-	err = preferDirectBrowserDisconnected(err)
-	result := webmcp.ResultErrorFor(err, fallback, details)
-	return &WebMCPDoctorErrorData{Code: result.Code, Message: result.Message, Retryable: result.Retryable, Details: result.Details}
-}
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
+)
 
 func writeWebMCPDoctorReport(out io.Writer, report WebMCPDoctorReport, asJSON bool) error {
 	if out == nil {
@@ -51,8 +46,8 @@ func writeWebMCPDoctorHuman(out io.Writer, report WebMCPDoctorReport) error {
 		}
 	}
 	fmt.Fprintf(&builder, "WebMCP domain:   %s\n", report.WebMCP)
-	fmt.Fprintf(&builder, "Page tools:      %s\n", displayDoctorValue(report.PageTools, "not_checked"))
-	catalogStatus := "unverified"
+	fmt.Fprintf(&builder, "Page tools:      %s\n", displayDoctorValue(report.PageTools, doctor.ValueNotChecked))
+	catalogStatus := doctor.ValueUnverified
 	if report.Catalog.Ready {
 		catalogStatus = "ready"
 	}

@@ -74,7 +74,7 @@ func TestOpaqueIDAndCompositeTargetRef(t *testing.T) {
 	if !composite || browserID != "browser-a" || targetID != "target-b" {
 		t.Fatalf("composite = %q/%q/%t", browserID, targetID, composite)
 	}
-	for _, value := range []string{"target-b", "/target-b", "browser-a/", "browser a/target b", "browser-a/target-b/extra"} {
+	for _, value := range []string{"", "target-b", "/target-b", "browser-a/", "browser a/target b", "browser-a/target-b/extra"} {
 		if _, _, composite := SplitCompositeTargetRef(value); composite {
 			t.Fatalf("SplitCompositeTargetRef(%q) reported composite", value)
 		}

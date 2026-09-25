@@ -1,150 +1,69 @@
 package cli
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
 
-type WebMCPDoctorVersionFunc func(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserVersion, error)
+// The doctor diagnosis lives in internal/webmcp/doctor and the direct-command
+// runtime seams in internal/webmcp/direct. These aliases keep the CLI's
+// public names for embedders and command tests.
+
+// WebMCPDoctorVersionFunc supplies the browser version/protocol check.
+type WebMCPDoctorVersionFunc = direct.VersionFunc
 
 // WebMCPDiscoveryService is the discovery service consumed by the production
-// composition. Keeping this interface at the CLI boundary lets
-// command tests inject a discovery fake without importing a browser protocol
-// package or depending on a concrete service implementation.
+// composition. Keeping this interface at the CLI boundary lets command tests
+// inject a discovery fake without importing a browser protocol package or
+// depending on a concrete service implementation.
 type WebMCPDiscoveryService = production.DiscoveryService
 
-// WebMCPDoctorRuntime is the request-scoped set of seams used by doctor.
-// Broker is the real stateful broker in production-capable compositions;
-// VersionFunc or Catalog supplies the endpoint/version check. Close is
-// optional and owns any runtime resources not owned by Broker.
-type WebMCPDoctorRuntime struct {
-	Broker      webmcp.Broker
-	Discovery   WebMCPDiscoveryService
-	VersionFunc WebMCPDoctorVersionFunc
-	Catalog     webmcp.DevToolsCatalog
-	Close       func() error
-	// Navigate and PageState are optional run-scoped browser observations used
-	// by probe.scenario.v2. Keeping them outside BrowserRuntime preserves the
-	// neutral broker contract for callers that do not need probe evidence.
-	Navigate  func(context.Context, string) error
-	PageState func(context.Context) (json.RawMessage, error)
-}
+// WebMCPDoctorRuntime is the request-scoped set of seams used by doctor and
+// the direct commands.
+type WebMCPDoctorRuntime = direct.Runtime
 
 // WebMCPDoctorFactory constructs one diagnostic runtime for a resolved
-// browser configuration. Construction is lazy and is never called when
-// configuration or endpoint policy validation has already failed.
-type WebMCPDoctorFactory func(config.BrowserConfig) (WebMCPDoctorRuntime, error)
+// browser configuration.
+type WebMCPDoctorFactory = direct.Factory
 
 // WebMCPRuntimeFactory and WebMCPDoctorRuntimeFactory are descriptive aliases
 // for callers that name the injected seam after the runtime rather than the
 // command.
-type WebMCPRuntimeFactory = WebMCPDoctorFactory
-type WebMCPDoctorRuntimeFactory = WebMCPDoctorFactory
+type (
+	WebMCPRuntimeFactory       = WebMCPDoctorFactory
+	WebMCPDoctorRuntimeFactory = WebMCPDoctorFactory
+)
 
-// WebMCPDoctorReport is the stable, machine-readable diagnostic result. All
-// URL-bearing fields are reduced to a redacted endpoint or origin-only value;
-// websocket paths, credentials, query strings, fragments, and page URLs are
-// never included.
-type WebMCPDoctorReport struct {
-	Version       string                 `json:"version"`
-	Status        string                 `json:"status"`
-	Endpoint      WebMCPDoctorEndpoint   `json:"endpoint"`
-	Browsers      []WebMCPDoctorBrowser  `json:"browsers"`
-	Targets       []WebMCPDoctorTarget   `json:"targets"`
-	PageTargets   int                    `json:"page_targets"`
-	EligiblePages int                    `json:"eligible_pages"`
-	SelectedPage  *WebMCPDoctorTarget    `json:"selected_page"`
-	WebMCP        string                 `json:"webmcp"`
-	WebMCPDomain  string                 `json:"webmcp_domain"`
-	PageTools     string                 `json:"page_tools"`
-	Catalog       WebMCPDoctorCatalog    `json:"catalog"`
-	Checks        []WebMCPDoctorCheck    `json:"checks"`
-	Warnings      []string               `json:"warnings"`
-	Error         *WebMCPDoctorErrorData `json:"error"`
+// Doctor report shapes; see internal/webmcp/doctor.
+type (
+	WebMCPDoctorReport    = doctor.Report
+	WebMCPDoctorEndpoint  = doctor.Endpoint
+	WebMCPDoctorBrowser   = doctor.Browser
+	WebMCPDoctorTarget    = doctor.Target
+	WebMCPDoctorCatalog   = doctor.Catalog
+	WebMCPDoctorCheck     = doctor.Check
+	WebMCPDoctorErrorData = doctor.ErrorData
+	WebMCPDoctorError     = doctor.Error
+)
+
+// The forwarders below keep the session and probe callers, which are outside
+// this slice, on their existing names. Each delegates to the single
+// implementation in the feature package.
+
+func closeWebMCPDoctorRuntime(runtime WebMCPDoctorRuntime) error {
+	return direct.CloseRuntime(runtime)
 }
 
-// WebMCPDoctorEndpoint describes the configured or discovered endpoint
-// without retaining any credential-bearing or websocket-secret material.
-type WebMCPDoctorEndpoint struct {
-	Source  string `json:"source"`
-	Address string `json:"address"`
-	Scope   string `json:"scope"`
+func webmcpRuntimeUnavailableError(phase string) error {
+	return direct.RuntimeUnavailableError(phase)
 }
 
-type WebMCPDoctorBrowser struct {
-	ID       string `json:"id"`
-	Product  string `json:"product"`
-	Protocol string `json:"protocol"`
-	Scope    string `json:"scope"`
+func splitCompositeTargetRef(value string) (string, string, bool) {
+	return normalize.SplitCompositeTargetRef(value)
 }
 
-type WebMCPDoctorTarget struct {
-	BrowserID             string `json:"browser_id"`
-	TargetID              string `json:"target_id"`
-	Type                  string `json:"type"`
-	Title                 string `json:"title"`
-	Origin                string `json:"origin"`
-	Eligible              bool   `json:"eligible"`
-	EligibilityReason     string `json:"eligibility_reason,omitempty"`
-	Attached              bool   `json:"attached"`
-	Selected              bool   `json:"selected"`
-	WebMCPDomainSupported bool   `json:"webmcp_domain_supported"`
-	PageToolsReady        bool   `json:"page_tools_ready"`
-	PageToolsKnown        bool   `json:"page_tools_known"`
-	PageToolsEvidence     string `json:"page_tools_evidence,omitempty"`
+func normalizeDirectOpaqueID(value string) string {
+	return direct.NormalizeOpaqueID(value)
 }
-
-type WebMCPDoctorCatalog struct {
-	Ready          bool   `json:"ready"`
-	Generation     uint64 `json:"generation"`
-	ToolCount      int    `json:"tool_count"`
-	ToolCountKnown bool   `json:"tool_count_known"`
-	Evidence       string `json:"evidence,omitempty"`
-}
-
-type WebMCPDoctorCheck struct {
-	Name    string         `json:"name"`
-	Status  string         `json:"status"`
-	Message string         `json:"message,omitempty"`
-	Details map[string]any `json:"details,omitempty"`
-}
-
-// WebMCPDoctorErrorData follows the classified error shape used by the
-// broker while allowing doctor-only availability and cleanup classifications.
-type WebMCPDoctorErrorData struct {
-	Code      string         `json:"code"`
-	Message   string         `json:"message"`
-	Retryable bool           `json:"retryable"`
-	Details   map[string]any `json:"details"`
-}
-
-// WebMCPDoctorError is returned after a report has been rendered. Its report
-// is also available to programmatic callers, while Unwrap preserves the
-// original classified cause for errors.Is/errors.As checks.
-type WebMCPDoctorError struct {
-	Report WebMCPDoctorReport
-	Cause  error
-}
-
-func (e *WebMCPDoctorError) Error() string {
-	if e == nil {
-		return "webmcp doctor failed"
-	}
-	if e.Report.Error != nil {
-		return fmt.Sprintf("webmcp doctor: %s: %s", e.Report.Error.Code, e.Report.Error.Message)
-	}
-	return "webmcp doctor failed"
-}
-
-func (e *WebMCPDoctorError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Cause
-}
-
-// WebMCPDoctorCommand implements `yui webmcp doctor`.

@@ -17,6 +17,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
 	"github.com/spf13/cobra"
 )
 
@@ -118,11 +119,11 @@ func (p *xVideoPreparation) run(cmd *cobra.Command, _ []string) error {
 func (p *xVideoPreparation) input() ([]byte, string, error) {
 	p.caption = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(p.caption, "\r\n", "\n"), "\r", "\n"))
 	if !regexp.MustCompile(`^@[A-Za-z0-9_]{1,15}$`).MatchString(p.account) || p.caption == "" || len([]rune(p.caption)) > 280 {
-		return nil, "", directInvalidInputError("provide --account @handle and --text of 1 through 280 characters", "/account")
+		return nil, "", direct.InvalidInputError("provide --account @handle and --text of 1 through 280 characters", "/account")
 	}
 	data, hash, err := readXVideo(p.file)
 	if err != nil {
-		return nil, "", directInvalidInputError(err.Error(), "/file")
+		return nil, "", direct.InvalidInputError(err.Error(), "/file")
 	}
 	return data, hash, nil
 }
@@ -137,7 +138,7 @@ func (p *xVideoPreparation) prepare(ctx context.Context, cmd *cobra.Command, bro
 		return nil, err
 	}
 	if !regexp.MustCompile(`^https://(www\.)?(x\.com|twitter\.com)(/|$)`).MatchString(page.URL) {
-		return nil, directInvalidInputError("select an HTTPS X or Twitter page", "/origin")
+		return nil, direct.InvalidInputError("select an HTTPS X or Twitter page", "/origin")
 	}
 	focus, ok := broker.(webmcp.PageFocusLeaser)
 	if !ok {
@@ -181,7 +182,7 @@ func (p *xVideoPreparation) invoke(ctx context.Context, broker webmcp.Broker, na
 	if err != nil {
 		return WebMCPDirectInvocation{}, xVideoReply{}, err
 	}
-	if result.ErrorCode != "" || directInvocationFailed(result.State) {
+	if result.ErrorCode != "" || result.State.Failed() {
 		return WebMCPDirectInvocation{}, xVideoReply{}, directInvocationResultError(result, ref)
 	}
 	out := WebMCPDirectInvocation{ToolRef: string(ref), Status: string(result.State), Output: result.Output}
