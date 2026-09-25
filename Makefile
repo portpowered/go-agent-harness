@@ -60,8 +60,9 @@ scheduled_modules = $(filter $(1),$(MODULE_SCHEDULE)) $(filter-out $(MODULE_SCHE
 COVERAGE_COUNT ?= $(if $(filter true 1,$(CI)),1,)
 COVERAGE_COUNT_FLAG = $(if $(COVERAGE_COUNT),-count=$(COVERAGE_COUNT),)
 # Which part of the agent-cli coverage corpus to run: all, unit (every package
-# except test/integration), or integration-K for shard K of the integration
-# package. CI runs each part as a separate matrix job.
+# except test/integration), integration (every shard of the integration
+# package, compiled once and run concurrently), or integration-K for shard K
+# alone. CI runs unit and integration as separate matrix jobs.
 AGENT_CLI_COVERAGE_SHARD ?= all
 AGENT_CLI_COVERPKG := github.com/portpowered/go-agent-harness/agent-cli/...,github.com/portpowered/go-agent-harness/go-agent-runtime/...
 AGENT_CLI_INTEGRATION_PROFILES = $(foreach shard,$(shell seq 1 $(AGENT_CLI_INTEGRATION_SHARDS)),$(abspath $(COVERAGE_DIR))/agent-cli-integration-$(shard).out)
@@ -469,9 +470,10 @@ coverage-ci-agent-cli: ## Write the hermetic agent-cli profile(s) for AGENT_CLI_
 	@$(MAKE) coverage COVERAGE_MODULES=agent-cli COVERAGE_INCLUDE_EMBEDDING=0 COVERAGE_RUN_GATE=0 AGENT_CLI_COVERAGE_SHARD="$(AGENT_CLI_COVERAGE_SHARD)"
 
 # unit writes coverage/agent-cli.out; integration-K writes
-# coverage/agent-cli-integration-K.out; all runs the unit packages and then
-# the integration shards (coverage-instrumented runs are too heavy to overlap
-# on a workstation without disturbing timing-bound tests).
+# coverage/agent-cli-integration-K.out; integration writes every shard's
+# profile; all runs the unit packages and then the integration shards
+# (coverage-instrumented runs are too heavy to overlap on a workstation
+# without disturbing timing-bound tests).
 coverage-agent-cli-shard:
 	@set -euo pipefail; \
 	mkdir -p "$(COVERAGE_DIR)"; \
@@ -490,8 +492,9 @@ coverage-agent-cli-shard:
 	case "$$shard" in \
 		all) run_unit; run_integration ;; \
 		unit) run_unit ;; \
+		integration) run_integration ;; \
 		integration-*) run_integration "$${shard#integration-}" ;; \
-		*) echo "AGENT_CLI_COVERAGE_SHARD must be all, unit, or integration-K, got $$shard" >&2; exit 2 ;; \
+		*) echo "AGENT_CLI_COVERAGE_SHARD must be all, unit, integration, or integration-K, got $$shard" >&2; exit 2 ;; \
 	esac
 
 coverage-ci-libraries: ## Write hermetic library and embedding profiles owned by the CI coverage shard.

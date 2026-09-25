@@ -100,7 +100,9 @@ test_binary="$work_dir/package.test"
 
 package_dir="$(cd "$module_dir" && "$go_binary" list -f '{{.Dir}}' "$package")"
 echo "==> go-test-shards compiling $module_dir/$package once for $shards shard(s)"
+phase_started=$SECONDS
 (cd "$module_dir" && "$go_binary" test -c -o "$test_binary" ${build_flags[@]+"${build_flags[@]}"} "$package")
+echo "==> go-test-shards compiled in $((SECONDS - phase_started))s"
 
 # -test.list runs TestMain, so list from the package directory like a run.
 tests_file="$work_dir/tests"
@@ -114,10 +116,12 @@ if [ -n "$shared_dir_env" ]; then
 	mkdir "$work_dir/shared"
 	export "$shared_dir_env=$work_dir/shared"
 	echo "==> go-test-shards preparing shared state in \$$shared_dir_env"
+	phase_started=$SECONDS
 	(cd "$package_dir" && GOCOVERDIR="$work_dir" "$test_binary" -test.run '^$' ${run_flags[@]+"${run_flags[@]}"}) >"$work_dir/prepare.log" 2>&1 || {
 		cat "$work_dir/prepare.log"
 		exit 1
 	}
+	echo "==> go-test-shards prepared shared state in $((SECONDS - phase_started))s"
 fi
 
 # Assign every test to exactly one shard: heaviest first onto the

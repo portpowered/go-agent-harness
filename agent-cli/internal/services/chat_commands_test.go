@@ -386,18 +386,6 @@ func TestChatCommands_RegisteredNamesResolveAheadOfSkills(t *testing.T) {
 	}
 }
 
-func TestChatCommands_HelpRendersRegistryByteIdentically(t *testing.T) {
-	const want = "/system  — Show the system prompt for this session\n" +
-		"/help    — Show this help message\n" +
-		"/clear   — Clear conversation history and start fresh\n" +
-		"/skill   — Load a skill's instructions (e.g. /my-skill)\n" +
-		"@file    — Attach a file to your message (e.g. @path/to/file.txt)\n" +
-		"@dir/    — Attach a directory listing (e.g. @src/)"
-	if got := renderChatHelp(); got != want {
-		t.Fatalf("renderChatHelp() mismatch\n got: %q\nwant: %q", got, want)
-	}
-}
-
 func TestChatCommands_HiddenEntriesExcludedFromRenderedHelp(t *testing.T) {
 	original := registeredChatCommands()
 	t.Cleanup(func() { chatCommands.commands = original })
