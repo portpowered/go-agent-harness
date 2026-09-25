@@ -217,14 +217,14 @@ func TestSanitizeDuplexArgsRedactsFlagValuesAndSecrets(t *testing.T) {
 }
 
 // The duplex children are this test binary re-executed under a linked name:
-// init dispatches on that name before the testing flags are parsed, so no
-// child program is compiled or linked per test.
+// TestMain dispatches on that name before any test runs, so no child program
+// is compiled or linked per test.
 const (
 	duplexChildName       = "duplex-child"
 	duplexSIGINTChildName = "duplex-sigint-child"
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	switch strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") {
 	case duplexChildName:
 		runDuplexTestChild(os.Args[1:])
@@ -233,6 +233,14 @@ func init() {
 		runDuplexSIGINTChild()
 		os.Exit(0)
 	}
+	os.Exit(m.Run())
+}
+
+// writeDuplexChildMarker writes the two bytes a duplex child emits per
+// received frame.
+func writeDuplexChildMarker() error {
+	_, err := os.Stdout.Write([]byte{0xa1, 0xb2})
+	return err
 }
 
 // runDuplexTestChild echoes a two-byte marker per 960-byte stdin frame until
@@ -252,8 +260,9 @@ func runDuplexTestChild(args []string) {
 	for {
 		n, err := io.ReadFull(os.Stdin, frame)
 		if n > 0 {
-			_, _ = os.Stdout.Write([]byte{0xa1, 0xb2})
-			_ = os.Stdout.Sync()
+			if writeDuplexChildMarker() != nil {
+				return
+			}
 		}
 		if hold && n > 0 {
 			time.Sleep(time.Hour)
@@ -272,9 +281,7 @@ func runDuplexSIGINTChild() {
 	signal.Notify(interrupt, os.Interrupt)
 	frame := make([]byte, 960)
 	if n, err := io.ReadFull(os.Stdin, frame); n > 0 {
-		_, _ = os.Stdout.Write([]byte{0xa1, 0xb2})
-		_ = os.Stdout.Sync()
-		if err != nil {
+		if writeDuplexChildMarker() != nil || err != nil {
 			return
 		}
 	}

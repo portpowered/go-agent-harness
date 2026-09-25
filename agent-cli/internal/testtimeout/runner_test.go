@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -93,38 +92,9 @@ func TestTimeoutContractSuccessControlUsesSameBoundary(t *testing.T) {
 	}
 }
 
-// timeoutFixture is the fixture test binary, compiled and warmed once per
-// package run into a directory TestMain removes.
-var timeoutFixture struct {
-	once   sync.Once
-	dir    string
-	binary string
-	err    error
-}
-
-func TestMain(m *testing.M) {
-	code := m.Run()
-	if timeoutFixture.dir != "" {
-		_ = os.RemoveAll(timeoutFixture.dir) //nolint:errcheck // Best-effort removal of the private fixture directory.
-	}
-	os.Exit(code)
-}
-
 func buildTimeoutFixture(t *testing.T, moduleRoot string) string {
 	t.Helper()
-	timeoutFixture.once.Do(func() {
-		timeoutFixture.dir, timeoutFixture.err = os.MkdirTemp("", "testtimeout-fixture-")
-		if timeoutFixture.err == nil {
-			timeoutFixture.binary, timeoutFixture.err = compileTimeoutFixture(moduleRoot, filepath.Join(timeoutFixture.dir, "blockedchild.test"))
-		}
-	})
-	if timeoutFixture.err != nil {
-		t.Fatal(timeoutFixture.err)
-	}
-	return timeoutFixture.binary
-}
-
-func compileTimeoutFixture(moduleRoot, fixtureBinary string) (string, error) {
+	fixtureBinary := filepath.Join(t.TempDir(), "blockedchild.test")
 	result, err := Run(context.Background(), Config{
 		Command: "go",
 		Dir:     moduleRoot,
@@ -136,7 +106,7 @@ func compileTimeoutFixture(moduleRoot, fixtureBinary string) (string, error) {
 		Timeout: fixtureBuildTimeout,
 	})
 	if err != nil {
-		return "", fmt.Errorf("compile timeout fixture: %w\noutput:\n%s", err, result.Output)
+		t.Fatalf("compile timeout fixture: %v\noutput:\n%s", err, result.Output)
 	}
 	// The first exec of a freshly linked binary on macOS waits for a code
 	// assessment that can exceed the fixture budgets on a loaded machine; pay
@@ -148,9 +118,9 @@ func compileTimeoutFixture(moduleRoot, fixtureBinary string) (string, error) {
 		Timeout: time.Minute,
 	})
 	if err != nil {
-		return "", fmt.Errorf("warm up timeout fixture: %w\noutput:\n%s", err, warmup.Output)
+		t.Fatalf("warm up timeout fixture: %v\noutput:\n%s", err, warmup.Output)
 	}
-	return fixtureBinary, nil
+	return fixtureBinary
 }
 
 func runFixture(t *testing.T, fixtureBinary, marker, mode, testName string, timeout time.Duration) (Result, error) {
