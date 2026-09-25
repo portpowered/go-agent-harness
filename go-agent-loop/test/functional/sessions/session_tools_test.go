@@ -10,6 +10,7 @@ import (
 // TestSessionToolCallDuringAudio verifies that tool call events interleave
 // with audio deltas in the delta stream without corruption.
 func TestSessionToolCallDuringAudio(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	tool.AddResult("get_weather", `{"temp": 20}`)
@@ -49,6 +50,7 @@ func TestSessionToolCallDuringAudio(t *testing.T) {
 // TestSessionToolCallDoesNotTerminate verifies that in DuplexSession, completing
 // a tool call does NOT trigger loop termination — the session persists.
 func TestSessionToolCallDoesNotTerminate(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	tool.AddResult("ping", "pong")
@@ -73,8 +75,9 @@ func TestSessionToolCallDoesNotTerminate(t *testing.T) {
 		t.Fatal("timed out waiting for TOOLCALL.END")
 	}
 
-	// Wait a bit more — the loop should NOT terminate.
-	time.Sleep(500 * time.Millisecond)
+	// A later ping is answered only by a live loop, and its PONG is emitted
+	// after anything the completed tool call could have triggered.
+	assertSessionStillLive(t, scenario)
 
 	deltas := scenario.Deltas()
 
@@ -94,6 +97,7 @@ func TestSessionToolCallDoesNotTerminate(t *testing.T) {
 // TestSessionToolCallCompleted verifies the full tool call round-trip:
 // server sends tool call → tool executor runs → result goes back.
 func TestSessionToolCallCompleted(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	tool.AddResult("get_weather", `{"temp": 20, "unit": "celsius"}`)
@@ -131,6 +135,7 @@ func TestSessionToolCallCompleted(t *testing.T) {
 
 // TestSessionMultipleToolCalls verifies multiple sequential tool calls.
 func TestSessionMultipleToolCalls(t *testing.T) {
+	t.Parallel()
 	inf := NewMockSessionInferencer()
 	tool := NewMockToolExecutor()
 	tool.AddResult("tool_a", "result_a")

@@ -92,7 +92,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 	goBinary := flags.String("go", defaultGoBinary, "Go command to execute")
 	moduleDir := flags.String("module-dir", defaultModuleDir, "go-agent-loop module directory")
 	timeout := flags.Duration("timeout", defaultTimeout, "finite go test timeout")
+	printRunPattern := flags.Bool("print-run-pattern", false, "print the -run pattern of the gated tests and exit (other race runs of the package skip them)")
 	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *printRunPattern {
+		_, err := fmt.Fprintln(stdout, sessionsRunPattern)
 		return err
 	}
 	if flags.NArg() != 0 {

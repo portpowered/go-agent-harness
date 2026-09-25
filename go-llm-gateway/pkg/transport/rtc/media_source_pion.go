@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -24,7 +25,10 @@ type pionInbound struct {
 	videoMediaType  string
 	videoReady      chan struct{}
 	videoReadyOnce  sync.Once
-	source          string
+	// observationTimeout bounds how long Look waits for a negotiated video
+	// track; DefaultVisualObservationTimeout unless a test shortens it.
+	observationTimeout time.Duration
+	source             string
 }
 
 type pionVisualFrame struct {
@@ -44,6 +48,8 @@ func newPionInbound(closeFn func() error, source ...string) *pionInbound {
 		close:      closeFn,
 		videoReady: make(chan struct{}),
 		source:     identity,
+
+		observationTimeout: DefaultVisualObservationTimeout,
 	}
 }
 
@@ -133,7 +139,7 @@ func (m *pionInbound) Look(ctx context.Context) (VisualObservation, error) {
 	if err := callerContextError(ctx); err != nil {
 		return VisualObservation{}, err
 	}
-	lookCtx, cancel := context.WithTimeout(ctx, DefaultVisualObservationTimeout)
+	lookCtx, cancel := context.WithTimeout(ctx, m.observationTimeout)
 	defer cancel()
 	if !attached {
 		select {

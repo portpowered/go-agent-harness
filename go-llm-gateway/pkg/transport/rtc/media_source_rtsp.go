@@ -39,12 +39,33 @@ type rtspResponse struct {
 	body    []byte
 }
 
+// contextDialer is the subset of net.Dialer used to open RTSP connections.
+type contextDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
+// rtspDialer returns the injected dialer, or a zero net.Dialer in production.
+// Tests inject one so dial-failure classification does not use host DNS.
+func (s MediaSource) rtspDialer() contextDialer {
+	if s.dialer != nil {
+		return s.dialer
+	}
+	return &net.Dialer{}
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	address := s.host
 	if _, _, err := net.SplitHostPort(address); err != nil {
 		address = net.JoinHostPort(s.host, "554")
 	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", address)
+	conn, err := s.rtspDialer().DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, sourceError(classifyDialError(err), s.identity, operationCause(ctx, err))
 	}

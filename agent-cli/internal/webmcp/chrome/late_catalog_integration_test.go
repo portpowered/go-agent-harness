@@ -1,3 +1,5 @@
+//go:build live
+
 package chrome
 
 import (
@@ -27,10 +29,9 @@ const (
 )
 
 // TestPinnedChromeLateCatalogReevaluation is the real-browser companion to
-// the broker and adapter regressions. It is opt-in because it downloads the
-// locked Chrome for Testing artifact and starts a fresh browser process.
+// the broker and adapter regressions. It downloads the locked Chrome for
+// Testing artifact, so its env gate precedes any lock, network, or browser use.
 func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
-	// Keep the gate before lock-file access, network access, or browser startup.
 	if os.Getenv(lateCatalogIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the pinned late-catalog integration proof", lateCatalogIntegrationEnv)
 	}
@@ -57,8 +58,7 @@ func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
 	t.Logf("WEBMCP_LATE_CATALOG_PASS chrome=%s revision=%s platform=%s target=%s generation=1 registered=true invocations=%d negative_controls=producerless_prompt,empty_ready", lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, run.rawLate.ID, invokedOracle.InvocationCount)
 }
 
-// lateCatalogRun is the pinned browser, gated fixture, and broker shared by
-// the late-catalog phases.
+// lateCatalogRun holds the pinned browser, gated fixture, and phase broker.
 type lateCatalogRun struct {
 	fixture   *lateCatalogFixture
 	lateURL   string

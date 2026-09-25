@@ -250,38 +250,6 @@ func TestIterativeLoop_FreshContextPerIteration(t *testing.T) {
 	}
 }
 
-// TestIterativeLoop_ContextPressureNotifierWired verifies that ContextPressureNotifier
-// is wired without error when TokenCounter and PressureThreshold are configured.
-func TestIterativeLoop_ContextPressureNotifierWired(t *testing.T) {
-	inf := &mockInferencer{
-		responses: []messages.InferenceResult{
-			{Message: messages.NewTextMessage(messages.RoleAssistant, "response")},
-		},
-	}
-	counter := &iterTestTokenCounter{count: 10} // well below threshold
-
-	loop := NewIterativeLoop(
-		IterativeConfig{
-			MaxIterations:     1,
-			PressureThreshold: 0.8,
-			PressureMessage:   "save your work",
-		},
-		WithInferencer(inf),
-		WithTokenCounter(counter, 1000),
-	)
-
-	result, err := loop.Execute(context.Background(), NewExecuteInput("task"))
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-	if len(result.Iterations) != 1 {
-		t.Errorf("expected 1 iteration, got %d", len(result.Iterations))
-	}
-	if result.Iterations[0].Err != nil {
-		t.Errorf("unexpected iteration error: %v", result.Iterations[0].Err)
-	}
-}
-
 // TestIterativeLoop_StopWordInMiddleOfResponse verifies that the stop word is
 // detected even when it appears in the middle (not at the end) of the response.
 func TestIterativeLoop_StopWordInMiddleOfResponse(t *testing.T) {

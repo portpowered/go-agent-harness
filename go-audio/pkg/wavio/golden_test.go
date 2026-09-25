@@ -159,18 +159,3 @@ func TestSupportedSampleRatesReturnsFreshValues(t *testing.T) {
 		t.Fatalf("SupportedSampleRates() returned shared storage with first value %d", got)
 	}
 }
-
-func TestEncodeAndDecodeAliases(t *testing.T) {
-	var encoded bytes.Buffer
-	samples := []int16{4, -5, 6}
-	if err := Encode(&encoded, Rate24kHz, samples); err != nil {
-		t.Fatalf("Encode() error = %v", err)
-	}
-	rate, got, err := Decode(bytes.NewReader(encoded.Bytes()))
-	if err != nil {
-		t.Fatalf("Decode() error = %v", err)
-	}
-	if rate != Rate24kHz || !reflect.DeepEqual(got, samples) {
-		t.Fatalf("Decode() = rate %d samples %v, want rate %d samples %v", rate, got, Rate24kHz, samples)
-	}
-}

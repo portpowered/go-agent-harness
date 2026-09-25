@@ -5,52 +5,6 @@ import (
 	"testing"
 )
 
-func registeredS2SV6CErrorRateLimitScenario(t *testing.T) Scenario {
-	t.Helper()
-	for _, scenario := range Scenarios() {
-		if scenario.ID == ScenarioIDS2SV6CErrorRateLimitThrottled {
-			return scenario
-		}
-	}
-	t.Fatalf("scenario %q is not registered", ScenarioIDS2SV6CErrorRateLimitThrottled)
-	return Scenario{}
-}
-
-func TestS2SV6CErrorRateLimitScenarioRegisteredAndValid(t *testing.T) {
-	scenario := registeredS2SV6CErrorRateLimitScenario(t)
-	if err := scenario.Validate(); err != nil {
-		t.Fatalf("registered scenario does not validate: %v", err)
-	}
-	if scenario.Name != ScenarioIDS2SV6CErrorRateLimitThrottled {
-		t.Fatalf("scenario name = %q, want %q", scenario.Name, ScenarioIDS2SV6CErrorRateLimitThrottled)
-	}
-	if len(scenario.Steps) != 2 || scenario.Steps[0].Type != StepSendText || scenario.Steps[0].Text == "" || scenario.Steps[1].Type != StepClose {
-		t.Fatalf("scenario must send text then close, got %#v", scenario.Steps)
-	}
-	if len(scenario.Expectations) != 1 {
-		t.Fatalf("scenario must declare one terminal-reason expectation, got %d", len(scenario.Expectations))
-	}
-	expectation := scenario.Expectations[0]
-	if expectation.Type != ExpectTerminalReason || expectation.Kind != ExpectTerminalReason || expectation.Value != "error:rate_limited" {
-		t.Fatalf("unexpected terminal-reason expectation: %#v", expectation)
-	}
-	if len(scenario.Expected) != 1 || len(scenario.ExpectedBehavior) != 1 {
-		t.Fatalf("scenario expectation aliases must be populated: expected=%#v expected_behavior=%#v", scenario.Expected, scenario.ExpectedBehavior)
-	}
-
-	var constructed Scenario
-	registerS2SV6CErrorRateLimitScenario(func(got Scenario, controls ...DeadSessionControl) error {
-		if len(controls) != 0 {
-			t.Fatalf("scenario registration unexpectedly supplied controls: %v", controls)
-		}
-		constructed = got
-		return nil
-	})
-	if constructed.ID != scenario.ID || constructed.Description != scenario.Description {
-		t.Fatalf("registration constructed a different scenario: got=%#v registered=%#v", constructed, scenario)
-	}
-}
-
 func TestS2SV6CErrorRateLimitRegistrationFailsFast(t *testing.T) {
 	want := errors.New("registration failed")
 	defer func() {
@@ -62,4 +16,66 @@ func TestS2SV6CErrorRateLimitRegistrationFailsFast(t *testing.T) {
 	registerS2SV6CErrorRateLimitScenario(func(Scenario, ...DeadSessionControl) error {
 		return want
 	})
+}
+
+// anyCorpus accepts every corpus reference so built-in scenarios validate
+// structurally; the CLI supplies the real replay corpus lookup.
+type anyCorpus struct{}
+
+func (anyCorpus) Has(string) bool { return true }
+
+// Every built-in scenario validates, ends by closing the session, and
+// declares at least one expectation. The scenarios the probe entrypoints
+// select by ID are registered and carry the invariants their lanes assert.
+// Registration does not validate, so this is the only registry-wide guard.
+func TestBuiltinScenariosValidateAndDeclareLaneInvariants(t *testing.T) {
+	registered := map[string]Scenario{}
+	for _, scenario := range newBuiltinScenarioRegistry().Snapshot() {
+		registered[scenario.ID] = scenario
+		if err := scenario.Validate(anyCorpus{}); err != nil {
+			t.Errorf("scenario %q does not validate: %v", scenario.ID, err)
+			continue
+		}
+		if last := scenario.Steps[len(scenario.Steps)-1]; last.Type != StepClose {
+			t.Errorf("scenario %q must end with close, got %q", scenario.ID, last.Type)
+		}
+		if len(scenario.Expectations) == 0 {
+			t.Errorf("scenario %q declares no expectations", scenario.ID)
+		}
+	}
+
+	v3c := []ExpectationKind{ExpectBargeInCancelOnce, ExpectMessageCountsReconcile}
+	terminalTriple := []ExpectationKind{ExpectTerminalReason, ExpectTerminalProvenance, ExpectOutputState}
+	required := map[string][]ExpectationKind{
+		"s2s-v1-text-in-audio-out":                    nil,
+		ScenarioIDS2SV3ABargeInBasicCancelled16k:      {ExpectLatencyWithinTicks},
+		ScenarioIDS2SV3ABargeInBasicCancelled24k:      {ExpectLatencyWithinTicks},
+		ScenarioIDS2SV3ABargeInBasicNoInterruption:    nil,
+		ScenarioIDS2SV3CBargeInRepeated:               v3c,
+		ScenarioIDS2SV3CBargeInRepeatedDuplicatedTurn: v3c,
+		ScenarioIDS2SV3CBargeInRepeatedDroppedCommit:  v3c,
+		ScenarioIDS2SV3CBargeInRepeatedDoubleCancel:   v3c,
+		ScenarioIDS2SV6BDisconnectMidSession:          terminalTriple,
+		ScenarioIDS2SV6BHealthyControl:                terminalTriple,
+		ScenarioIDS2SV6CErrorRateLimitThrottled:       {ExpectTerminalReason},
+		ScenarioIDS2SV7AMetricsModality:               {ExpectMetricsReconcile},
+		ScenarioIDS2SV7AMetricsModalityOvercount:      {ExpectMetricsReconcile},
+	}
+	for id, kinds := range required {
+		scenario, ok := registered[id]
+		if !ok {
+			t.Errorf("scenario %q is not registered", id)
+			continue
+		}
+		declared := map[ExpectationKind]bool{}
+		for _, expectation := range scenario.Expectations {
+			declared[expectation.Type] = true
+			declared[expectation.Kind] = true
+		}
+		for _, kind := range kinds {
+			if !declared[kind] {
+				t.Errorf("scenario %q must declare %q", id, kind)
+			}
+		}
+	}
 }

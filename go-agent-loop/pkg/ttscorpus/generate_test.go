@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -86,16 +87,25 @@ func TestSynthesizeNeverFabricatesAudioOnBackendFailure(t *testing.T) {
 	}
 }
 
+// WaitReady surfaces the last observed probe error, and its poll wait is
+// clamped to the readiness deadline: with an hour-long poll interval it
+// still re-probes and fails once the 20ms deadline passes.
 func TestWaitReadySurfacesObservedError(t *testing.T) {
+	var probes atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		probes.Add(1)
 		http.Error(w, "warming up", http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
 	gen := NewGenerator(server.URL)
-	gen.ReadyTimeout = 50 * time.Millisecond
+	gen.ReadyTimeout = 20 * time.Millisecond
+	gen.ReadyPollInterval = time.Hour
 	err := gen.WaitReady(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "503") {
 		t.Fatalf("WaitReady() error = %v; want bounded failure naming observed status", err)
+	}
+	if got := probes.Load(); got < 2 {
+		t.Fatalf("readiness probes = %d, want a re-probe at the clamped deadline", got)
 	}
 }
 

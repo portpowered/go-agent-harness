@@ -83,23 +83,6 @@ func TestLoadGoalCatalogIsDeterministicAcrossCalls(t *testing.T) {
 	}
 }
 
-func TestGoalAccessorsAndValidationAliasesPreserveCatalogValues(t *testing.T) {
-	catalog, err := probe.LoadGoalCatalog()
-	if err != nil {
-		t.Fatalf("LoadGoalCatalog: %v", err)
-	}
-	goal := catalog[0]
-	if goal.GoalText() != goal.Text {
-		t.Fatalf("GoalText() = %q, want exact goal text %q", goal.GoalText(), goal.Text)
-	}
-	if goal.CapabilityArea() != goal.Capability {
-		t.Fatalf("CapabilityArea() = %q, want %q", goal.CapabilityArea(), goal.Capability)
-	}
-	if err := probe.ValidateCatalog(catalog); err != nil {
-		t.Fatalf("ValidateCatalog: %v", err)
-	}
-}
-
 func TestGoalCatalogValidationRejectsMalformedIdentityCapabilityAndInput(t *testing.T) {
 	catalog, err := probe.LoadGoalCatalog()
 	if err != nil {

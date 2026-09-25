@@ -49,6 +49,9 @@ type Scenario struct {
 	advanceCalls int
 	started      bool
 	watchdog     *time.Timer
+	// watchdogTimeout is the wall-clock bound one tick generation may take
+	// before missing and sleeping participants are diagnosed.
+	watchdogTimeout time.Duration
 }
 type Participant struct {
 	scenario *Scenario
@@ -57,14 +60,32 @@ type Participant struct {
 	gid      atomic.Uint64
 }
 
-func New(base time.Time, tickDuration time.Duration) *Scenario {
+// Option configures a Scenario at construction.
+type Option func(*Scenario)
+
+// WithWatchdogTimeout overrides the wall-clock bound a tick generation may
+// take before the watchdog diagnoses it. Non-positive values keep the
+// default. Diagnostics tests shorten it so a deliberately stuck generation
+// fails fast.
+func WithWatchdogTimeout(timeout time.Duration) Option {
+	return func(s *Scenario) {
+		if timeout > 0 {
+			s.watchdogTimeout = timeout
+		}
+	}
+}
+
+func New(base time.Time, tickDuration time.Duration, options ...Option) *Scenario {
 	if base.IsZero() {
 		base = time.Unix(0, 0).UTC()
 	}
 	if tickDuration <= 0 {
 		tickDuration = time.Millisecond
 	}
-	s := &Scenario{clock: clock.NewDeterministic(base, tickDuration), base: base, tickDuration: tickDuration, participants: map[string]*Participant{}}
+	s := &Scenario{clock: clock.NewDeterministic(base, tickDuration), base: base, tickDuration: tickDuration, participants: map[string]*Participant{}, watchdogTimeout: defaultWatchdogTimeout}
+	for _, option := range options {
+		option(s)
+	}
 	s.cond = sync.NewCond(&s.mu)
 	return s
 }
@@ -203,7 +224,7 @@ func (s *Scenario) startLocked(target uint64) {
 	if s.active.remaining == 0 {
 		s.finishLocked()
 	} else {
-		s.watchdog = time.AfterFunc(defaultWatchdogTimeout, func() { s.checkWatchdog(target) })
+		s.watchdog = time.AfterFunc(s.watchdogTimeout, func() { s.checkWatchdog(target) })
 	}
 	s.cond.Broadcast()
 }

@@ -97,6 +97,9 @@ type Deterministic struct {
 	advanceMu sync.Mutex
 	timers    deterministicTimerHeap
 	sequence  uint64
+	// timersChanged is closed (and cleared) whenever the pending timer set
+	// changes, waking WaitForTimers callers without polling.
+	timersChanged chan struct{}
 }
 
 // NewDeterministic creates a clock at tick zero. A zero base uses the Unix
@@ -248,6 +251,7 @@ func (d *Deterministic) NewTimer(duration time.Duration) Timer {
 		sequence: d.sequence, ch: make(chan time.Time, 1), active: true, index: -1,
 	}
 	heap.Push(&d.timers, timer)
+	d.notifyTimersChangedLocked()
 	d.fireDueTimersLocked()
 	d.advanceMu.Unlock()
 	return timer
@@ -294,51 +298,8 @@ func (d *Deterministic) fireDueTimersLocked() {
 			return
 		}
 		heap.Pop(&d.timers)
+		d.notifyTimersChangedLocked()
 		timer.fire(d.base.Add(nowElapsed))
-	}
-}
-
-type deterministicTimer struct {
-	clock           *Deterministic
-	deadline        time.Time
-	deadlineElapsed time.Duration
-	sequence        uint64
-	ch              chan time.Time
-	active          bool
-	index           int
-}
-
-func (t *deterministicTimer) C() <-chan time.Time {
-	if t == nil {
-		return nil
-	}
-	return t.ch
-}
-func (t *deterministicTimer) Stop() bool {
-	if t == nil || t.clock == nil {
-		return false
-	}
-	t.clock.advanceMu.Lock()
-	if !t.active {
-		t.clock.advanceMu.Unlock()
-		return false
-	}
-	t.active = false
-	if t.index >= 0 {
-		heap.Remove(&t.clock.timers, t.index)
-		t.index = -1
-	}
-	t.clock.advanceMu.Unlock()
-	return true
-}
-func (t *deterministicTimer) fire(at time.Time) {
-	if t == nil || !t.active {
-		return
-	}
-	t.active, t.index = false, -1
-	select {
-	case t.ch <- at:
-	default:
 	}
 }
 

@@ -398,3 +398,26 @@ func TestProviderEOFIsCleanMediaCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestInboundPortDeliversAdmittedTailAfterBridgeEOF pins the reader against
+// the bridge's end of stream. The bridge closes the port right after its final
+// push, so a waiting reader can find a queued, observed frame and the closed
+// port ready together; it must deliver the frame, not the terminal error.
+func TestInboundPortDeliversAdmittedTailAfterBridgeEOF(t *testing.T) {
+	for attempt := range 64 {
+		port := newInboundPort(1)
+		frame := sharedaudio.PCMFrame{Samples: []int16{int16(attempt)}}
+		if err := port.push(t.Context(), frame, nil); err != nil {
+			t.Fatalf("push: %v", err)
+		}
+		port.fail(io.EOF)
+		if got, err := port.awaitQueuedFrame(t.Context()); err != nil || !reflect.DeepEqual(got.Samples, frame.Samples) {
+			t.Fatalf("attempt %d: queued tail = %v/%v, want frame %v", attempt, got.Samples, err, frame.Samples)
+		}
+		observed := make(chan struct{})
+		close(observed)
+		if got, err := port.waitObserved(t.Context(), inboundFrame{frame: frame, observed: observed}); err != nil || !reflect.DeepEqual(got.Samples, frame.Samples) {
+			t.Fatalf("attempt %d: observed tail = %v/%v, want frame %v", attempt, got.Samples, err, frame.Samples)
+		}
+	}
+}

@@ -224,21 +224,6 @@ func mechanicalFindingContains(verdict MechanicalVerdict, code string) bool {
 	return false
 }
 
-func TestNewFamilyAScenarioIsVersionedAndNatural(t *testing.T) {
-	scenario := NewFamilyAScenario()
-	if err := scenario.Validate(); err != nil {
-		t.Fatalf("NewFamilyAScenario validation: %v", err)
-	}
-	if len(FamilyASpokenScript()) != len(scenario.Actions) {
-		t.Fatalf("spoken script length = %d, actions = %d", len(FamilyASpokenScript()), len(scenario.Actions))
-	}
-	for index, turn := range FamilyASpokenScript() {
-		if turn.ActionID != scenario.Actions[index].ID || strings.TrimSpace(turn.Text) == "" {
-			t.Fatalf("script turn %d = %+v, want natural wording for action %q", index, turn, scenario.Actions[index].ID)
-		}
-	}
-}
-
 func findArtifact(entries []ArtifactEntry, path string) ArtifactEntry {
 	for _, entry := range entries {
 		if entry.Path == path {

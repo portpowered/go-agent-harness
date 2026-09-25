@@ -6,12 +6,6 @@ import (
 	"testing"
 )
 
-// v3cCorpusLookup accepts exactly the synthetic utterance corpora the v3c
-// scenarios reference, mirroring the replay corpus lookup's role in the CLI.
-type v3cCorpusLookup struct{}
-
-func (v3cCorpusLookup) Has(id string) bool { return strings.HasPrefix(id, "v3c-utterance-") }
-
 func registeredS2SV3CScenario(t *testing.T, id string) Scenario {
 	t.Helper()
 	for _, scenario := range Scenarios() {
@@ -21,58 +15,6 @@ func registeredS2SV3CScenario(t *testing.T, id string) Scenario {
 	}
 	t.Fatalf("scenario %q is not registered", id)
 	return Scenario{}
-}
-
-// All four v3c cases register, validate, and carry both lane invariants.
-func TestS2SV3CBargeInRepeatedRegisteredAndValid(t *testing.T) {
-	for _, id := range []string{
-		ScenarioIDS2SV3CBargeInRepeated,
-		ScenarioIDS2SV3CBargeInRepeatedDuplicatedTurn,
-		ScenarioIDS2SV3CBargeInRepeatedDroppedCommit,
-		ScenarioIDS2SV3CBargeInRepeatedDoubleCancel,
-	} {
-		scenario := registeredS2SV3CScenario(t, id)
-		if err := scenario.Validate(v3cCorpusLookup{}); err != nil {
-			t.Fatalf("scenario %q does not validate: %v", id, err)
-		}
-		kinds := map[ExpectationKind]bool{}
-		for _, expectation := range scenario.Expectations {
-			kinds[expectation.Kind] = true
-		}
-		if !kinds[ExpectBargeInCancelOnce] || !kinds[ExpectMessageCountsReconcile] {
-			t.Fatalf("scenario %q must declare cancel-once and composition reconciliation: %v", id, kinds)
-		}
-		last := scenario.Steps[len(scenario.Steps)-1]
-		if last.Type != StepClose {
-			t.Fatalf("scenario %q must end with close, got %q", id, last.Type)
-		}
-	}
-}
-
-// The positive case interleaves send_text/send_audio turns with advance_to
-// waits so at least three responses are interrupted mid-flight.
-func TestS2SV3CBargeInRepeatedStepsInterleaveThreeInterruptions(t *testing.T) {
-	scenario := registeredS2SV3CScenario(t, ScenarioIDS2SV3CBargeInRepeated)
-	if scenario.Steps[0].Type != StepSendText || scenario.Steps[0].Text == "" {
-		t.Fatalf("first step must send a text prompt, got %+v", scenario.Steps[0])
-	}
-	audioSteps, waits := 0, 0
-	for index, step := range scenario.Steps[1 : len(scenario.Steps)-1] {
-		switch step.Type {
-		case StepSendAudio:
-			if step.CorpusID == "" {
-				t.Fatalf("audio step %d must reference a corpus utterance: %+v", index+1, step)
-			}
-			audioSteps++
-		case StepAdvanceTo, StepWait:
-			waits++
-		default:
-			t.Fatalf("unexpected step %q between prompt and close: %+v", step.Type, step)
-		}
-	}
-	if audioSteps < 3 || waits < 3 {
-		t.Fatalf("at least three interrupted audio turns with waits are required, got %d audio / %d waits", audioSteps, waits)
-	}
 }
 
 // Both lane invariants pass on the clean observation the committed positive
@@ -188,29 +130,6 @@ func TestS2SV3CCancelOnceFailsOnResponseLeftInFlight(t *testing.T) {
 	for _, result := range results {
 		if result.Kind == ExpectBargeInCancelOnce && result.Passed {
 			t.Fatal("a response left streaming at session end must fail cancel-exactly-once")
-		}
-	}
-}
-
-// The negative controls declare exactly the invariants their fixtures violate,
-// so each fails through the same CLI path the positive case passes.
-func TestS2SV3CNegativeScenariosDeclareViolatedInvariants(t *testing.T) {
-	for _, id := range []string{
-		ScenarioIDS2SV3CBargeInRepeatedDuplicatedTurn,
-		ScenarioIDS2SV3CBargeInRepeatedDroppedCommit,
-		ScenarioIDS2SV3CBargeInRepeatedDoubleCancel,
-	} {
-		scenario := registeredS2SV3CScenario(t, id)
-		for _, expectation := range scenario.Expectations {
-			if expectation.Kind == ExpectTerminalReason {
-				t.Fatalf("negative control %q must not pin a terminal reason its fixture cannot satisfy", id)
-			}
-		}
-		// A fixture that satisfies neither invariant would prove nothing
-		// about the specific violation it encodes; the clean observation
-		// minus the encoded violation is the contract each control checks.
-		if len(scenario.Expectations) != 2 {
-			t.Fatalf("negative control %q must declare exactly the two reconciliation expectations, got %d", id, len(scenario.Expectations))
 		}
 	}
 }

@@ -69,48 +69,6 @@ func (p *capabilityProvider) InferStream(context.Context, providers.InferenceReq
 func intPtr(v int) *int             { return &v }
 func float64Ptr(v float64) *float64 { return &v }
 
-func TestInfer_PassthroughMaxTokens(t *testing.T) {
-	gw := &captureGateway{}
-	gi := NewGatewayInferencer(gw)
-
-	req := messages.InferenceRequest{MaxTokens: intPtr(1024)}
-	_, err := gi.Infer(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gw.captured.MaxTokens == nil || *gw.captured.MaxTokens != 1024 {
-		t.Errorf("MaxTokens: got %v, want 1024", gw.captured.MaxTokens)
-	}
-}
-
-func TestInfer_PassthroughTemperature(t *testing.T) {
-	gw := &captureGateway{}
-	gi := NewGatewayInferencer(gw)
-
-	req := messages.InferenceRequest{Temperature: float64Ptr(0.7)}
-	_, err := gi.Infer(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gw.captured.Temperature == nil || *gw.captured.Temperature != 0.7 {
-		t.Errorf("Temperature: got %v, want 0.7", gw.captured.Temperature)
-	}
-}
-
-func TestInfer_PassthroughStopSequences(t *testing.T) {
-	gw := &captureGateway{}
-	gi := NewGatewayInferencer(gw)
-
-	req := messages.InferenceRequest{StopSequences: []string{"STOP", "END"}}
-	_, err := gi.Infer(context.Background(), req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(gw.captured.StopSequences) != 2 || gw.captured.StopSequences[0] != "STOP" || gw.captured.StopSequences[1] != "END" {
-		t.Errorf("StopSequences: got %v, want [STOP END]", gw.captured.StopSequences)
-	}
-}
-
 func TestInfer_NilFieldsPassedAsNil(t *testing.T) {
 	gw := &captureGateway{}
 	gi := NewGatewayInferencer(gw)

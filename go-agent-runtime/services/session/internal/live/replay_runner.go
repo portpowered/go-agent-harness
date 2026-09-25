@@ -164,7 +164,7 @@ const (
 // response tail. Native devices already drain inside the pump; a consumer
 // that stops advancing is abandoned after a bounded stall.
 func (i *liveInvocation) drainInvocationPlayback() error {
-	if err := drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout); err != nil {
+	if err := drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout, i.playbackDone); err != nil {
 		return err
 	}
 	if provider, ok := i.device.(devices.PlaybackStatsProvider); ok {
@@ -189,5 +189,59 @@ func waitForPlaybackQueue(ctx context.Context, provider devices.PlaybackStatsPro
 			progressed = time.Now()
 		}
 		queued = stats.QueuedSamples
+	}
+}
+
+func (i *liveInvocation) startPlaybackPump() {
+	if i.ports.Playback == nil {
+		return
+	}
+	if i.endpoints.Inbound == nil {
+		i.handle.Cancel(errors.New("live provider has no inbound media endpoint"))
+		return
+	}
+	done := make(chan struct{})
+	i.playbackDone = done
+	i.startPump("playback", func(ctx context.Context) error {
+		defer close(done)
+		return i.ports.Playback.Pump(ctx, i.endpoints.Inbound)
+	})
+}
+
+// drainPlayback joins a drain-capable playback pump. The device reports only
+// a pump that has already begun, so pumpDone, which the invocation creates
+// when it schedules the pump, also covers a pump goroutine that has not run
+// yet; without it a fast graceful completion would close the device before
+// the pump read any provider audio.
+func drainPlayback(parent context.Context, playback devices.Playback, timeout time.Duration, pumpDone <-chan struct{}) error {
+	if playback == nil {
+		return nil
+	}
+	if parent == nil {
+		return errors.New("live playback drain context is required")
+	}
+	drainer, ok := playback.(interface{ WaitForPump(context.Context) error })
+	if !ok {
+		return nil
+	}
+	if timeout == 0 {
+		timeout = defaultPlaybackDrainTimeout
+	}
+	if timeout < 0 {
+		return errors.New("live playback drain timeout must not be negative")
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	if err := drainer.WaitForPump(ctx); err != nil {
+		return fmt.Errorf("drain live playback: %w", err)
+	}
+	if pumpDone == nil {
+		return nil
+	}
+	select {
+	case <-pumpDone:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("drain live playback: %w", ctx.Err())
 	}
 }

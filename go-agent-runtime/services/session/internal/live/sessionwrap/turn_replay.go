@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -44,8 +45,11 @@ type mediaSession struct {
 	mediaFlushed bool
 	closeOnce    sync.Once
 	closeErr     error
-	errMu        sync.Mutex
-	terminalErr  error
+	// closing records that the owner asked to stop the provider through
+	// Close; a cancellation the provider reports afterwards is that stop.
+	closing     atomic.Bool
+	errMu       sync.Mutex
+	terminalErr error
 }
 
 func newMediaSession(ctx context.Context, inner messages.Session, sampleRate int, continuous bool) *mediaSession {
@@ -116,6 +120,7 @@ func (s *mediaSession) Close() error {
 		return nil
 	}
 	s.closeOnce.Do(func() {
+		s.closing.Store(true)
 		var innerErr error
 		if s.inner != nil {
 			innerErr = s.inner.Close()
@@ -131,6 +136,18 @@ func (s *mediaSession) Close() error {
 	return s.closeErr
 }
 
+// ownerStopped reports whether err is only the provider's report of a stop
+// the owner requested, by cancelling the run context or closing the session.
+// That is not a media failure: the flushed stream still ends cleanly, so a
+// graceful playback drain completes. A cancellation the owner did not request
+// remains a failure.
+func (s *mediaSession) ownerStopped(ctx context.Context, err error) bool {
+	if !errors.Is(err, context.Canceled) {
+		return false
+	}
+	return ctx.Err() != nil || s.closing.Load()
+}
+
 func (s *mediaSession) forward(ctx context.Context) {
 	defer close(s.forwarded)
 	defer close(s.done)
@@ -141,7 +158,7 @@ func (s *mediaSession) forward(ctx context.Context) {
 				s.fail(fmt.Errorf("flush turn replay media after stream end: %w", err))
 			}
 		}
-		if err := s.TerminalError(); err != nil {
+		if err := s.TerminalError(); err != nil && !s.ownerStopped(ctx, err) {
 			s.media.FailInbound(err)
 		}
 	}()

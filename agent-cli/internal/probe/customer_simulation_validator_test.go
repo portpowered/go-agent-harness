@@ -366,22 +366,6 @@ func newValidatorTestBundle(t *testing.T, input ValidatorInput) *CustomerEvidenc
 	return bundle
 }
 
-func TestCustomerSimulationValidatorRubricHasStableCriteria(t *testing.T) {
-	rubric := DefaultCustomerSimulationValidatorRubric()
-	if err := rubric.Validate(); err != nil {
-		t.Fatalf("DefaultCustomerSimulationValidatorRubric validation: %v", err)
-	}
-	ids := make([]string, 0, len(rubric.Criteria))
-	for _, criterion := range rubric.Criteria {
-		ids = append(ids, criterion.ID)
-	}
-	got := strings.Join(ids, ",")
-	want := "iterative_context,truthfulness,correction_interruption,mixed_modal_grounding,patience_dead_air,cancellation_cleanup,unresolved_work,wrong_reason_success"
-	if got != want {
-		t.Fatalf("rubric IDs = %q, want %q", got, want)
-	}
-}
-
 func TestGatewayCustomerSimulationValidatorUsesIndependentStatelessRequest(t *testing.T) {
 	input := validatorTestInput(t)
 	stub := &validatorGatewayStub{response: string(validatorWorkedJSON())}

@@ -48,11 +48,14 @@ func newFixtureTransport(statusCode int, contentType string, body []byte) http.R
 	})
 }
 
-// newTestProvider creates an Anthropic provider with a fixture-based mock transport.
+// newTestProvider creates an Anthropic provider with a fixture-based mock
+// transport. Retries are disabled so error fixtures do not wait out the SDK's
+// retry backoff; TestReplay_RetryPolicy covers the retry policy itself.
 func newTestProvider(transport http.RoundTripper) *AnthropicProvider {
 	return New(
 		WithAPIKey("test-key"),
 		WithHTTPClient(&http.Client{Transport: transport}),
+		WithMaxRetries(0),
 	)
 }
 
@@ -485,5 +488,46 @@ func TestReplay_Error500_InternalServer(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("expected error to contain status code 500, got: %v", err)
+	}
+}
+
+// TestReplay_RetryPolicy proves the provider keeps the default retry policy
+// for retryable statuses and honors WithMaxRetries. The fixture asks for an
+// immediate retry through retry-after-ms, so the SDK does not back off.
+func TestReplay_RetryPolicy(t *testing.T) {
+	body := loadFixture(t, "error_429.json")
+	cases := []struct {
+		name     string
+		opts     []Option
+		attempts int
+	}{
+		{name: "default", attempts: DefaultMaxRetries + 1},
+		{name: "disabled", opts: []Option{WithMaxRetries(0)}, attempts: 1},
+		{name: "negative ignored", opts: []Option{WithMaxRetries(-1)}, attempts: DefaultMaxRetries + 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			attempts := 0
+			transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				attempts++
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Status:     http.StatusText(http.StatusTooManyRequests),
+					Header:     http.Header{"Content-Type": []string{"application/json"}, "Retry-After-Ms": []string{"0"}},
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Request:    req,
+				}, nil
+			})
+			opts := append([]Option{WithAPIKey("test-key"), WithHTTPClient(&http.Client{Transport: transport})}, tc.opts...)
+			_, err := New(opts...).Infer(context.Background(), providers.InferenceRequest{
+				Messages: []models.Message{models.NewTextMessage(models.RoleUser, "test")},
+			})
+			if err == nil || !strings.Contains(err.Error(), "429") {
+				t.Fatalf("Infer error = %v, want the final 429", err)
+			}
+			if attempts != tc.attempts {
+				t.Fatalf("attempts = %d, want %d", attempts, tc.attempts)
+			}
+		})
 	}
 }

@@ -65,6 +65,11 @@ floor includes external callers, so package-only runs cannot measure it correctl
 This trades local speed for one consistent measurement contract. No additional
 scheduler or policy engine is introduced.
 
+Update: `make coverage-changed` now runs every test package that links a changed
+package (the reverse dependency closure, which includes those external callers)
+and gates only the floors that closure measures exactly; see
+[local validation](../local-validation.md).
+
 ## Verification and acceptance limits
 
 Full local coverage passed for 172 registered packages across seven profiles.
