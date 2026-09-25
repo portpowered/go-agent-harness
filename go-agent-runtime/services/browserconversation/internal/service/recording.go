@@ -41,7 +41,7 @@ func newRecorder(request browserconversation.RecordingRequest) (browserconversat
 	if request.Watch == nil {
 		return nil, errors.New("browser conversation recorder watch is required")
 	}
-	if request.MaxEvents < 0 || request.MaxBytes < 0 {
+	if request.MaxEvents < 0 || request.MaxBytes < 0 || request.CloseTimeout < 0 {
 		return nil, errors.New("browser conversation recorder bounds must not be negative")
 	}
 	if request.MaxEvents == 0 {
@@ -49,6 +49,9 @@ func newRecorder(request browserconversation.RecordingRequest) (browserconversat
 	}
 	if request.MaxBytes == 0 {
 		request.MaxBytes = defaultRecorderBytes
+	}
+	if request.CloseTimeout == 0 {
+		request.CloseTimeout = recorderCloseTimeout
 	}
 	request.Credentials = append([]string(nil), request.Credentials...)
 	return &recorder{request: request}, nil
@@ -95,7 +98,7 @@ func (r *recorder) Close() error {
 	if r.closing {
 		done := r.done
 		r.mu.Unlock()
-		if done != nil && !waitRecorderDone(done) {
+		if done != nil && !waitRecorderDone(done, r.request.CloseTimeout) {
 			r.mu.Lock()
 			r.closed = true
 			r.closing = false
@@ -117,7 +120,7 @@ func (r *recorder) Close() error {
 	if cancel != nil {
 		cancel()
 	}
-	if done != nil && !waitRecorderDone(done) {
+	if done != nil && !waitRecorderDone(done, r.request.CloseTimeout) {
 		r.mu.Lock()
 		r.closed = true
 		r.closing = false
@@ -135,8 +138,8 @@ func (r *recorder) Close() error {
 	return r.err
 }
 
-func waitRecorderDone(done <-chan struct{}) bool {
-	timer := time.NewTimer(recorderCloseTimeout)
+func waitRecorderDone(done <-chan struct{}, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-done:

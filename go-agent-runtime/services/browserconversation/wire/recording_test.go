@@ -168,7 +168,10 @@ func TestServiceRecorderBoundsRawToolDescriptorFieldsBeforeRetention(t *testing.
 
 func TestServiceRecorderCloseIsBounded(t *testing.T) {
 	events := make(chan browserconversation.BrowserEvent)
-	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{Watch: func(context.Context) <-chan browserconversation.BrowserEvent { return events }})
+	recorder, err := NewService().NewRecorder(browserconversation.RecordingRequest{
+		Watch:        func(context.Context) <-chan browserconversation.BrowserEvent { return events },
+		CloseTimeout: 10 * time.Millisecond,
+	})
 	if err != nil {
 		t.Fatalf("NewRecorder: %v", err)
 	}
@@ -177,11 +180,21 @@ func TestServiceRecorderCloseIsBounded(t *testing.T) {
 	if err := recorder.Close(); err == nil {
 		t.Fatal("Close succeeded while watcher ignored cancellation")
 	}
-	if elapsed := time.Since(started); elapsed > 2*time.Second {
+	if elapsed := time.Since(started); elapsed > time.Second {
 		t.Fatalf("Close took %s, want bounded shutdown", elapsed)
 	}
 	close(events)
 	if err := recorder.Close(); err == nil {
 		t.Fatal("second Close omitted bounded-shutdown error")
+	}
+}
+
+func TestServiceRecorderRejectsNegativeCloseTimeout(t *testing.T) {
+	_, err := NewService().NewRecorder(browserconversation.RecordingRequest{
+		Watch:        func(context.Context) <-chan browserconversation.BrowserEvent { return nil },
+		CloseTimeout: -time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("NewRecorder accepted a negative close timeout")
 	}
 }

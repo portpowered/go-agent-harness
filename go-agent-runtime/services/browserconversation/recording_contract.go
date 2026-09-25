@@ -17,6 +17,9 @@ type RecordingRequest struct {
 	MaxEvents         int
 	MaxBytes          int
 	Now               func() time.Time
+	// CloseTimeout bounds how long Close waits for the watcher to stop.
+	// Zero selects the default of one second.
+	CloseTimeout time.Duration
 }
 
 type RecordedBrowserEvent struct {
