@@ -218,7 +218,7 @@ func (h *handle) markCaptureComplete() {
 	if !h.captureComplete {
 		h.captureComplete = true
 		if h.captureSourceActive && h.scheduledAudioCount == 0 && h.request.FinishAfterResponse {
-			h.captureResponseTarget = h.replayResponses + 1
+			h.captureResponseTarget = h.captureResponseBaseLocked() + 1
 		}
 	}
 	shouldFinish := h.canFinishFiniteResponse()

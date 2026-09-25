@@ -313,3 +313,25 @@ func drainPlayback(parent context.Context, playback devices.Playback, timeout ti
 		return fmt.Errorf("drain live playback: %w", ctx.Err())
 	}
 }
+
+// noteCaptureBoundary records how many finite responses completed before a
+// capture turn boundary reaches the provider. The provider may answer that
+// boundary before the capture pump returns and marks capture complete, so the
+// finish target must be taken here rather than at completion time.
+func noteCaptureBoundary(value any) {
+	if h, ok := value.(*handle); ok && h != nil {
+		h.mu.Lock()
+		h.captureBoundaryResponses, h.captureBoundaryNoted = h.replayResponses, true
+		h.mu.Unlock()
+	}
+}
+
+// captureResponseBaseLocked is the response count that precedes the final
+// capture boundary. Without a noted boundary it falls back to the count at
+// completion. The caller holds h.mu.
+func (h *handle) captureResponseBaseLocked() int {
+	if h.captureBoundaryNoted {
+		return h.captureBoundaryResponses
+	}
+	return h.replayResponses
+}

@@ -133,6 +133,7 @@ func installCaptureBoundary(options *session.LiveRunOptions, handle session.Live
 				return err
 			}
 		}
+		noteCaptureBoundary(handle)
 		for _, control := range controls {
 			if err := handle.Send(ctx, control); err != nil {
 				return fmt.Errorf("capture boundary control %q: %w", control.Kind, err)
@@ -298,6 +299,7 @@ func (i *liveInvocation) completeCapturePump(pumpErr error) error {
 		}
 		return nil
 	}
+	noteCaptureBoundary(i.handle)
 	for _, control := range i.options.CaptureCompleteControls {
 		if err := i.handle.Send(i.pumpCtx, control); err != nil {
 			return fmt.Errorf("capture completion control %q: %w", control.Kind, err)

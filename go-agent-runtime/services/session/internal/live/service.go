@@ -144,6 +144,8 @@ type handle struct {
 	responseStartWake                                chan struct{}
 	replayResponses                                  int
 	captureResponseTarget                            int
+	captureBoundaryResponses                         int
+	captureBoundaryNoted                             bool
 	replayResponseWake                               chan struct{}
 	responseTerminalWake                             chan struct{}
 	scheduledAudioCount                              int
