@@ -62,11 +62,20 @@ func (p *inboundPort) readQueuedFrame(ctx context.Context) (sharedaudio.PCMFrame
 		return p.awaitObserved(ctx, admitted)
 	default:
 	}
+	return p.awaitQueuedFrame(ctx)
+}
+
+func (p *inboundPort) awaitQueuedFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	select {
 	case admitted := <-p.frames:
 		p.notifySpace()
 		return p.awaitObserved(ctx, admitted)
 	case <-p.done:
+		// The bridge closes done right after its final push, so both cases
+		// can be ready at once; select picks at random, never drop the tail.
+		if len(p.frames) > 0 {
+			return p.readQueuedFrame(ctx)
+		}
 		return sharedaudio.PCMFrame{}, p.operationError()
 	case <-ctx.Done():
 		return sharedaudio.PCMFrame{}, ctx.Err()

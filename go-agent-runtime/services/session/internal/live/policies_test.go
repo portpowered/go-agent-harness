@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -565,4 +566,35 @@ func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 			t.Fatalf("Wait = %v, want ErrLiveMediaUnavailable", err)
 		}
 	}
+}
+
+// A device reports only a playback pump that has begun, as RTCDeviceSink does,
+// so the graceful drain must also join a pump that is scheduled but not begun.
+func TestGracefulDrainJoinsPlaybackPumpBeforeItBegins(t *testing.T) {
+	playback := &lateStartPlayback{start: make(chan struct{})}
+	invocation := &liveInvocation{ctx: t.Context(), ports: devices.MediaPorts{Playback: playback}, endpoints: sharedaudio.MediaEndpoints{Inbound: playback}}
+	invocation.pumpCtx = t.Context()
+	invocation.startPlaybackPump()
+	require.NoError(t, invocation.drainInvocationPlayback())
+	require.True(t, playback.ran, "graceful drain returned before the scheduled playback pump ran")
+	require.NoError(t, <-invocation.pumps)
+}
+
+// lateStartPlayback's pump begins only after the drain asked whether one runs.
+// The embedded inbound is never read.
+type lateStartPlayback struct {
+	sharedaudio.InboundMedia
+	start chan struct{}
+	once  sync.Once
+	ran   bool
+}
+
+func (p *lateStartPlayback) Pump(context.Context, sharedaudio.InboundMedia) error {
+	<-p.start
+	p.ran = true
+	return nil
+}
+func (p *lateStartPlayback) WaitForPump(context.Context) error {
+	p.once.Do(func() { close(p.start) })
+	return nil
 }

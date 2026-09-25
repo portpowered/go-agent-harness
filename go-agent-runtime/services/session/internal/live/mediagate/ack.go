@@ -20,10 +20,21 @@ func (p *inboundPort) awaitObserved(ctx context.Context, admitted inboundFrame) 
 		return admitted.frame, nil
 	default:
 	}
+	return p.waitObserved(ctx, admitted)
+}
+
+func (p *inboundPort) waitObserved(ctx context.Context, admitted inboundFrame) (sharedaudio.PCMFrame, error) {
 	select {
 	case <-admitted.observed:
 		return admitted.frame, nil
 	case <-p.done:
+		// A frame observed before the port closed is still delivered even
+		// when select picked the closed port first.
+		select {
+		case <-admitted.observed:
+			return admitted.frame, nil
+		default:
+		}
 		return sharedaudio.PCMFrame{}, p.operationError()
 	case <-ctx.Done():
 		return sharedaudio.PCMFrame{}, ctx.Err()
