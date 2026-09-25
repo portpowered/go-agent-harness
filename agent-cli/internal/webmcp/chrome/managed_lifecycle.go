@@ -202,10 +202,7 @@ func (m *ManagedBrowserManager) Acquire(ctx context.Context, request ManagedBrow
 	if present {
 		browser, reusable := m.reuse(ctx, launchOptions, profileDir, state)
 		if reusable {
-			browser.closeHook = func() error {
-				return m.closeManagedBrowser(browser, statePath, state)
-			}
-			go m.watchManagedBrowser(browser, statePath, state)
+			m.trackManagedBrowser(browser, statePath, state)
 			return browser, nil
 		}
 		// State can be stale because the process exited between inspection and
@@ -371,10 +368,7 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 		_ = browser.Close()
 		return nil, newManagedBrowserLifecycleError("state", err)
 	}
-	browser.closeHook = func() error {
-		return m.closeManagedBrowser(browser, statePath, state)
-	}
-	go m.watchManagedBrowser(browser, statePath, state)
+	m.trackManagedBrowser(browser, statePath, state)
 	return browser, nil
 }
 
@@ -439,11 +433,37 @@ func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, sta
 	return stopErr
 }
 
-func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState) {
+// trackManagedBrowser installs the explicit close path and the exit watcher
+// for one managed browser handle. Close joins the watcher before returning, so
+// once Close returns no goroutine of this handle touches the profile directory
+// (lock or state file) any more; callers may then remove the directory.
+func (m *ManagedBrowserManager) trackManagedBrowser(browser *ManagedBrowser, statePath string, state ManagedBrowserState) {
+	closing := make(chan struct{})
+	watcherDone := make(chan struct{})
+	browser.closeHook = func() error {
+		err := m.closeManagedBrowser(browser, statePath, state)
+		close(closing)
+		<-watcherDone
+		return err
+	}
+	go func() {
+		defer close(watcherDone)
+		m.watchManagedBrowser(browser, statePath, state, closing)
+	}()
+}
+
+// watchManagedBrowser removes the exact state record once the process exits on
+// its own. It stops without touching the profile when the handle is closed
+// explicitly, because closeManagedBrowser already owns that cleanup.
+func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState, closing <-chan struct{}) {
 	if browser == nil || browser.Done() == nil {
 		return
 	}
-	<-browser.Done()
+	select {
+	case <-browser.Done():
+	case <-closing:
+		return
+	}
 	lease, err := acquireManagedBrowserLease(context.Background(), filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
 		return
