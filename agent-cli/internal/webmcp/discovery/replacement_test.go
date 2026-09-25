@@ -180,7 +180,7 @@ func assertRetiredSelectionStale(t *testing.T, service *Service, oldBrowser Brow
 		t.Fatal("old live selection validated after browser replacement")
 	} else {
 		stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
-		if stale.Details["browser_id"] != string(oldBrowser.ID) || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != "browser_replaced" {
+		if stale.Details["browser_id"] != string(oldBrowser.ID) || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != staleReasonBrowserReplaced {
 			t.Fatalf("old selection stale details = %#v", stale.Details)
 		}
 	}
@@ -188,7 +188,7 @@ func assertRetiredSelectionStale(t *testing.T, service *Service, oldBrowser Brow
 		t.Fatal("retired browser target catalog remained refreshable")
 	} else {
 		stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
-		if stale.Details["reason"] != "browser_replaced" {
+		if stale.Details["reason"] != staleReasonBrowserReplaced {
 			t.Fatalf("retired catalog stale details = %#v", stale.Details)
 		}
 	}

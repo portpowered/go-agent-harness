@@ -8,9 +8,16 @@ import (
 	"strconv"
 )
 
+// JSON field names shared by fixture decoding, validation and replay
+// divergence paths.
+const (
+	jsonFieldType         = "type"
+	jsonFieldInvocationID = "invocation_id"
+)
+
 func compareReplayOperation(expected OperationExpectation, actual OperationRequest) (string, string) {
 	if expected.Type != actual.Type {
-		return "type", "operation type differs"
+		return jsonFieldType, "operation type differs"
 	}
 	switch expected.Type {
 	case OperationInvokeTool:
@@ -29,7 +36,7 @@ func compareReplayOperation(expected OperationExpectation, actual OperationReque
 		}
 	case OperationCancelTool:
 		if expected.InvocationID != actual.InvocationID {
-			return "invocation_id", "invocation ID differs"
+			return jsonFieldInvocationID, "invocation ID differs"
 		}
 	case OperationNavigate:
 		if expected.URL != actual.URL {
@@ -41,7 +48,7 @@ func compareReplayOperation(expected OperationExpectation, actual OperationReque
 
 func compareReplayEvent(expected EmittedEvent, actual FixtureEvent, replay *BrowserReplay) (string, string) {
 	if expected.Type != actual.Type {
-		return "type", "event type differs"
+		return jsonFieldType, "event type differs"
 	}
 	if actual.BrowserID != "" && actual.BrowserID != replay.browserID {
 		return "browser_id", "browser ID differs"
@@ -62,7 +69,7 @@ func compareReplayEvent(expected EmittedEvent, actual FixtureEvent, replay *Brow
 		}
 	case EmittedToolResponded:
 		if expected.InvocationID != actual.InvocationID {
-			return "invocation_id", "invocation ID differs"
+			return jsonFieldInvocationID, "invocation ID differs"
 		}
 		if expected.Status != actual.Status {
 			return "status", "terminal status differs"

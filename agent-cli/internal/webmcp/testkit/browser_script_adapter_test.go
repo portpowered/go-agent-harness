@@ -54,7 +54,7 @@ func TestBrowserScriptAdapterDrivesBrokerWithoutTransport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WaitInvocation: %v", err)
 	}
-	if terminal.State != webmcp.InvocationCompleted || string(terminal.Output) != `{"ok":true}` {
+	if terminal.State != webmcp.InvocationCompleted || string(terminal.Output) != okJSONOutput {
 		t.Fatalf("terminal result = %+v", terminal)
 	}
 
@@ -174,7 +174,7 @@ func browserScriptAdapterScript(cancellable bool) BrowserScript {
 		)
 	} else {
 		operations = append(operations,
-			BrowserScriptOperation{Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "read_state", Input: json.RawMessage(`{}`)}, Result: json.RawMessage(`{"invocation_id":"browser-invocation"}`), Emit: []EmittedEvent{{Type: EmittedToolResponded, InvocationID: "browser-invocation", Status: "Completed", Output: json.RawMessage(`{"ok":true}`)}}},
+			BrowserScriptOperation{Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "read_state", Input: json.RawMessage(`{}`)}, Result: json.RawMessage(`{"invocation_id":"browser-invocation"}`), Emit: []EmittedEvent{{Type: EmittedToolResponded, InvocationID: "browser-invocation", Status: "Completed", Output: json.RawMessage(okJSONOutput)}}},
 			BrowserScriptOperation{Expect: OperationExpectation{Type: OperationNavigate, URL: "https://fixture.test/next"}},
 		)
 	}

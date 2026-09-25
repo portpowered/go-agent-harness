@@ -14,7 +14,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
 		Targets: []TargetConfig{NewTargetConfig(
-			webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Generation: 1},
+			webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page", Generation: 1},
 		)},
 	})
 	defer func() { _ = runtime.Close() }()
@@ -24,7 +24,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 		t.Fatalf("open browser: %v", err)
 	}
 	handle := handleValue.(*ScriptedBrowserHandle)
-	sessionValue, err := handle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	sessionValue, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach target: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	attached := waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached
 	})
-	if attached.Event.BrowserID != candidate.ID || attached.Event.TargetID != "tab-a" || attached.Event.Generation != 1 || attached.Event.Sequence != 1 {
+	if attached.Event.BrowserID != candidate.ID || attached.Event.TargetID != defaultTargetID || attached.Event.Generation != 1 || attached.Event.Sequence != 1 {
 		t.Fatalf("attached publication = %#v, want producing browser/target/generation/sequence", attached)
 	}
 
@@ -42,7 +42,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	go func() { enableDone <- session.EnableWebMCP(context.Background()) }()
 	if operation, err := runtime.WaitForOperationAdmitted(testContext(t), OperationEnableWebMCP, operationCursor); err != nil {
 		t.Fatalf("wait enable admission: %v", err)
-	} else if operation.BrowserID != candidate.ID || operation.TargetID != "tab-a" || operation.Generation != 1 {
+	} else if operation.BrowserID != candidate.ID || operation.TargetID != defaultTargetID || operation.Generation != 1 {
 		t.Fatalf("enable operation = %#v, want target identity and generation", operation)
 	}
 
@@ -63,7 +63,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 	disconnected := waitPublishedEventAfter(t, runtime, eventCursor, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventBrowserDisconnected
 	})
-	if disconnected.Event.BrowserID != candidate.ID || disconnected.Event.TargetID != "tab-a" || disconnected.Event.Generation != 1 || disconnected.Event.Reason != "transport_lost" {
+	if disconnected.Event.BrowserID != candidate.ID || disconnected.Event.TargetID != defaultTargetID || disconnected.Event.Generation != 1 || disconnected.Event.Reason != "transport_lost" {
 		t.Fatalf("disconnect publication = %#v, want bounded source identity", disconnected)
 	}
 	if session.Err() == nil {
@@ -84,7 +84,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 
 func TestTopologyStageGatesCanBeReleased(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
-	target := webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Generation: 1}
+	target := webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page", Generation: 1}
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
 		Targets:   []TargetConfig{NewTargetConfig(target)},
@@ -196,7 +196,7 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 			kind: OperationActivate,
 			run: func(ctx context.Context, _ *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
 				done := make(chan error, 1)
-				go func() { done <- handle.Activate(ctx, "tab-a") }()
+				go func() { done <- handle.Activate(ctx, defaultTargetID) }()
 				return done
 			},
 		},
@@ -207,7 +207,7 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 			run: func(ctx context.Context, _ *ScriptedBrowserRuntime, handle *ScriptedBrowserHandle) <-chan error {
 				done := make(chan error, 1)
 				go func() {
-					_, err := handle.Attach(ctx, "tab-a", webmcp.TargetOwnershipExternal)
+					_, err := handle.Attach(ctx, defaultTargetID, webmcp.TargetOwnershipExternal)
 					done <- err
 				}()
 				return done
@@ -220,7 +220,7 @@ func TestTopologyStageGatesReleaseOnDisconnect(t *testing.T) {
 			candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
 			runtime := NewScriptedBrowserRuntime(BrowserConfig{
 				Candidate: candidate,
-				Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"})},
+				Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page"})},
 			})
 			defer func() { _ = runtime.Close() }()
 			handleValue, err := runtime.Open(context.Background(), candidate)
@@ -252,8 +252,8 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
 		Targets: []TargetConfig{
-			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"}),
-			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"}),
+			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: defaultTargetID, Type: "page"}),
+			NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: secondTargetID, Type: "page"}),
 		},
 	})
 	defer func() { _ = runtime.Close() }()
@@ -262,21 +262,21 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 		t.Fatalf("open browser: %v", err)
 	}
 	handle := handleValue.(*ScriptedBrowserHandle)
-	firstValue, err := handle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	firstValue, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach first target: %v", err)
 	}
 	first := firstValue.(*ScriptedTargetSession)
-	secondValue, err := handle.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipExternal)
+	secondValue, err := handle.Attach(context.Background(), secondTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach second target: %v", err)
 	}
 	second := secondValue.(*ScriptedTargetSession)
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-a"
+		return event.Type == webmcp.EventTargetAttached && event.TargetID == defaultTargetID
 	})
 	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
-		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-b"
+		return event.Type == webmcp.EventTargetAttached && event.TargetID == secondTargetID
 	})
 
 	first.BlockInvocations()
@@ -299,7 +299,7 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 	if err != nil {
 		t.Fatalf("wait disconnected terminal: %v", err)
 	}
-	if terminal.Invocation.State != webmcp.InvocationOrphaned || terminal.Event.Type != webmcp.EventBrowserDisconnected || terminal.Event.BrowserID != candidate.ID || terminal.Event.TargetID != "tab-a" {
+	if terminal.Invocation.State != webmcp.InvocationOrphaned || terminal.Event.Type != webmcp.EventBrowserDisconnected || terminal.Event.BrowserID != candidate.ID || terminal.Event.TargetID != defaultTargetID {
 		t.Fatalf("terminal observation = %#v, want one orphaned browser event", terminal)
 	}
 	if terminal.PublicationSequence <= eventCursor {

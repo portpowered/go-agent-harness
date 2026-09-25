@@ -16,6 +16,29 @@ import (
 
 const maxActivePortBytes int64 = 4096
 
+// Public placeholder values used where the real value is absent or must not
+// be disclosed.
+const (
+	unknownValue               = "unknown"
+	redactedValue              = "redacted"
+	nilErrorText               = "<nil>"
+	browserDisconnectedMessage = "browser connection disconnected"
+)
+
+// Failure phases, CDP target types and stale/eligibility reasons shared by
+// discovery, selection, lifecycle and persistence.
+const (
+	phaseDisconnect              = "disconnect"
+	phaseTargets                 = "targets"
+	targetTypePage               = "page"
+	urlReasonMalformed           = "malformed_url"
+	staleReasonBrowserReplaced   = "browser_replaced"
+	staleReasonGenerationChanged = "generation_changed"
+	staleReasonContinuityChanged = "continuity_changed"
+	staleReasonTargetClosed      = string(LifecycleTargetClosed)
+	eligibilityUnsupportedWebMCP = string(CodeUnsupportedWebMCP)
+)
+
 // Endpoint URL schemes accepted for the CDP HTTP discovery endpoint.
 const (
 	schemeHTTP  = "http"

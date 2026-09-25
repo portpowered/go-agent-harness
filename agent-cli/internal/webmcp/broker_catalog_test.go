@@ -128,7 +128,7 @@ func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Title: "A", URL: "https://fixture.test/"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Title: "A", URL: "https://fixture.test/"},
 					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","properties":{},"additionalProperties":false}`)),
 				),
 			},
@@ -146,14 +146,14 @@ func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 		}
 	}()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	first := assertInitialCatalogRefBinding(t, broker, candidate.ID)
 
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	requireBrokerStep(t, err, "open fixture handle")
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
+	session := scriptedTargetSession(t, handleValue, primaryTargetID)
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -214,7 +214,7 @@ func assertInitialCatalogRefBinding(t *testing.T, broker *webmcp.StatefulBroker,
 			t.Fatalf("ref %q exposed descriptor value %q", first.Ref, secret)
 		}
 	}
-	if first.BrowserID != browserID || first.TargetID != "tab-a" || first.FrameID != "frame-1" || first.Generation != 1 || first.SchemaDigest == "" {
+	if first.BrowserID != browserID || first.TargetID != primaryTargetID || first.FrameID != "frame-1" || first.Generation != 1 || first.SchemaDigest == "" {
 		t.Fatalf("descriptor binding fields = %#v", first)
 	}
 
@@ -459,14 +459,14 @@ func TestStatefulBrokerRetiresRefsWhenSelectionSwitches(t *testing.T) {
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
-				testkit.NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page"}, testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`))),
+				testkit.NewTargetConfig(webmcp.Target{ID: primaryTargetID, Type: "page"}, testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{}`))),
 				testkit.NewTargetConfig(webmcp.Target{ID: "tab-b", Type: "page"}, testkit.WithInitialCatalog(pageTool("read_b", "frame-b", `{}`))),
 			},
 		},
 	)
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
 	defer func() { _ = broker.Close() }()
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select tab-a: %v", err)
 	}
 	first, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})

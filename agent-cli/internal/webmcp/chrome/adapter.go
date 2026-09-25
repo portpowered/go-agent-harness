@@ -207,7 +207,7 @@ func browserEndpoint(candidate webmcp.BrowserCandidate) (string, error) {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", errors.New("browser endpoint is invalid")
 	}
-	if parsed.Scheme != "ws" && parsed.Scheme != "wss" && parsed.Scheme != "http" && parsed.Scheme != "https" {
+	if parsed.Scheme != "ws" && parsed.Scheme != "wss" && parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
 		return "", errors.New("browser endpoint scheme is unsupported")
 	}
 	return endpoint, nil
@@ -222,9 +222,9 @@ func (r *Runtime) resolveBrowserWebSocket(ctx context.Context, endpoint string) 
 		if strings.Contains(parsed.Path, "/devtools/browser/") {
 			return endpoint, nil
 		}
-		parsed.Scheme = map[string]string{"ws": "http", "wss": "https"}[parsed.Scheme]
+		parsed.Scheme = map[string]string{"ws": schemeHTTP, "wss": schemeHTTPS}[parsed.Scheme]
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+	if parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
 		return "", errors.New("browser endpoint scheme is unsupported")
 	}
 

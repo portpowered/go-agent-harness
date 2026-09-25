@@ -848,7 +848,7 @@ func (b *StatefulBroker) finishLifecycleInvocationLocked(invocation *brokerInvoc
 	switch code {
 	case ErrorTargetDetached:
 		if reason == "" {
-			reason = "target_detached"
+			reason = lifecycleReasonTargetDetached
 		}
 		details = map[string]any{
 			"browser_id": string(invocation.invocation.Tool.BrowserID),

@@ -38,7 +38,7 @@ func targetDescriptor(rawID, title, pageURL string, tools int) TargetDescriptor 
 	webmcp := true
 	return TargetDescriptor{
 		ID:                   rawID,
-		Type:                 "page",
+		Type:                 targetTypePage,
 		Title:                title,
 		URL:                  pageURL,
 		WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/" + rawID,
@@ -77,7 +77,7 @@ func TestListTargetsNormalizesJSONListAndRedactsTransportData(t *testing.T) {
 		t.Fatalf("default target count = %d, want one non-zero eligible page", len(snapshot.Targets))
 	}
 	target := snapshot.Targets[0]
-	if target.Type != "page" || target.Title != "Orders" || target.URL != "https://example.test/orders" || target.Origin != "https://example.test" {
+	if target.Type != targetTypePage || target.Title != "Orders" || target.URL != "https://example.test/orders" || target.Origin != "https://example.test" {
 		t.Fatalf("normalized target = %#v", target)
 	}
 	if !target.WebSocketPresent || !target.WebMCP || !target.Eligible || target.ToolCount != 2 || !target.ToolCountKnown {
@@ -149,7 +149,7 @@ func TestListTargetsAppliesFiltersAndZeroToolDefault(t *testing.T) {
 	zero := 0
 	webmcp := true
 	descriptors := []TargetDescriptor{
-		{ID: "zero", Type: "page", Title: "Zero", URL: "https://zero.test", WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/zero", WebMCPSupported: &webmcp, ToolCount: &zero},
+		{ID: "zero", Type: targetTypePage, Title: "Zero", URL: "https://zero.test", WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/zero", WebMCPSupported: &webmcp, ToolCount: &zero},
 		targetDescriptor("write", "Write", "https://allowed.test/write", 2),
 		targetDescriptor("other", "Other", "https://other.test", 1),
 	}
@@ -191,7 +191,7 @@ func TestListTargetsReturnsNoEligibleAndUnsupportedClassifications(t *testing.T)
 	unsupported := false
 	descriptor := TargetDescriptor{
 		ID:                   "unsupported-page",
-		Type:                 "page",
+		Type:                 targetTypePage,
 		Title:                "Unsupported",
 		URL:                  "https://unsupported.test",
 		WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/unsupported-page",
@@ -269,7 +269,7 @@ func TestTargetCapabilityProbeKeepsDomainAndPageToolEvidenceIndependent(t *testi
 		TargetLister: TargetListerFunc(func(context.Context, BrowserCandidate) ([]TargetDescriptor, error) {
 			return []TargetDescriptor{{
 				ID:                   "page",
-				Type:                 "page",
+				Type:                 targetTypePage,
 				Title:                "Page",
 				URL:                  "https://independent.test",
 				WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/page",
@@ -309,7 +309,7 @@ func TestListTargetsUnknownCapabilityIsNotEligibleWithoutProbe(t *testing.T) {
 	browser := BrowserCandidate{ID: "browser-unknown-capability", Source: SourceConfigured, Loopback: true}
 	descriptor := TargetDescriptor{
 		ID:                   "unknown-capability",
-		Type:                 "page",
+		Type:                 targetTypePage,
 		Title:                "Unknown",
 		URL:                  "https://unknown-capability.test",
 		WebSocketDebuggerURL: "ws://127.0.0.1:9222/devtools/page/unknown-capability",
@@ -328,7 +328,7 @@ func TestListTargetsUnknownCapabilityIsNotEligibleWithoutProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTargets(eligible_only=false): %v", err)
 	}
-	if len(allTargets) != 1 || allTargets[0].WebMCP || allTargets[0].WebMCPKnown || allTargets[0].Eligible || allTargets[0].EligibilityReason != "unsupported_webmcp" {
+	if len(allTargets) != 1 || allTargets[0].WebMCP || allTargets[0].WebMCPKnown || allTargets[0].Eligible || allTargets[0].EligibilityReason != eligibilityUnsupportedWebMCP {
 		t.Fatalf("unknown capability target = %#v, want explicitly unsupported", allTargets)
 	}
 }

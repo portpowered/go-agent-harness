@@ -57,13 +57,13 @@ func assertLifecycleTerminalDetails(t *testing.T, terminal webmcp.InvokeResult, 
 	t.Helper()
 	details := terminal.ErrorDetails
 	if wantCode == webmcp.ErrorTargetDetached {
-		if details["browser_id"] != string(browserID) || details["target_id"] != "tab-a" || details["generation"] != uint64(1) || details["reason"] != wantReason {
+		if details["browser_id"] != string(browserID) || details["target_id"] != primaryTargetID || details["generation"] != uint64(1) || details["reason"] != wantReason {
 			t.Fatalf("detach details = %#v, want frozen safe details", details)
 		}
 		return
 	}
 	if wantCode == webmcp.ErrorBrowserDisconnected {
-		if details["browser_id"] != string(browserID) || details["target_id"] != "tab-a" || details["phase"] != "lifecycle" || details["reconnect_required"] != true {
+		if details["browser_id"] != string(browserID) || details["target_id"] != primaryTargetID || details["phase"] != "lifecycle" || details["reconnect_required"] != true {
 			t.Fatalf("disconnect details = %#v, want frozen safe details", details)
 		}
 	}

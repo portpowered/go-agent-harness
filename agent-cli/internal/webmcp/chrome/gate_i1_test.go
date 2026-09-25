@@ -37,7 +37,7 @@ func TestPinnedChromeWebMCPGateI1ThroughActualBinary(t *testing.T) {
 		t.Skipf("set %s=1 to run the actual-binary Gate I1 proof", chromeIntegrationEnv)
 	}
 
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -257,7 +257,7 @@ func (r *gateI1Run) invokeComplete(t *testing.T, ctx context.Context, toolRef st
 	if err := json.Unmarshal(invokeData.Output, &invokeOutput); err != nil {
 		t.Fatalf("decode invoke output: %v", err)
 	}
-	if invokeOutput["greeting"] != "hello" || invokeOutput["message"] != gateCompleteMessage {
+	if invokeOutput["greeting"] != fixtureGreeting || invokeOutput["message"] != gateCompleteMessage {
 		t.Fatalf("invoke output = %+v, want fixture greeting/message", invokeOutput)
 	}
 	r.record(t, invoke)
@@ -298,7 +298,7 @@ func (r *gateI1Run) watchSecondInvocation(t *testing.T, ctx context.Context, bro
 		t.Fatalf("wait for watch child process: %v", err)
 	}
 	watchData := requireGateSuccessData[gateWatchData](t, watchResult)
-	if watchData.Status != "canceled" {
+	if watchData.Status != invocationStatusCanceled {
 		t.Fatalf("watch status = %q, want bounded canceled status", watchData.Status)
 	}
 	assertGateWatchSequence(t, watchData, browserID, targetID, toolRef)

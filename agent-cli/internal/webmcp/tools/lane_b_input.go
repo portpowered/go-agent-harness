@@ -67,14 +67,14 @@ func laneBDecodeArguments(raw []byte, spec laneBToolSpec) (map[string]any, []Too
 		}
 		valueType, _ := property["type"].(string)
 		switch valueType {
-		case "string":
+		case schemaTypeString:
 			var value string
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, ToolResultIssue{Path: laneBPointerPath(name), Code: "invalid_type"})
 				continue
 			}
 			result[name] = value
-		case "boolean":
+		case schemaTypeBoolean:
 			var value bool
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, ToolResultIssue{Path: laneBPointerPath(name), Code: "invalid_type"})

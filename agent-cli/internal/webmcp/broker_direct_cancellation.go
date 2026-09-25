@@ -288,7 +288,7 @@ func directCancellationDispatchFailure(operation *directCancellation, cause erro
 
 func directCancellationLifecycleError(operation *directCancellation, eventType BrowserEventType, reason, errorCode string) error {
 	code := ErrorInvocationOrphaned
-	outcome := "session_closed"
+	outcome := lifecycleReasonSessionClosed
 	message := "the target session closed before cancellation was confirmed"
 	if eventType == EventSessionClosed {
 		switch ErrorCode(errorCode) {
@@ -307,7 +307,7 @@ func directCancellationLifecycleError(operation *directCancellation, eventType B
 		message = "the page navigated before cancellation was confirmed"
 	case EventTargetDetached:
 		code = ErrorTargetDetached
-		outcome = "target_detached"
+		outcome = lifecycleReasonTargetDetached
 		message = "the target detached before cancellation was confirmed"
 	case EventBrowserDisconnected:
 		code = ErrorBrowserDisconnected

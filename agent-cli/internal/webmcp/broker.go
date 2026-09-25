@@ -851,7 +851,7 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 		code = ErrorInvocationOrphaned
 	}
 	if reason == "" {
-		reason = "session_closed"
+		reason = lifecycleReasonSessionClosed
 	}
 	if selected.invalidatedCode == "" {
 		selected.invalidatedCode = code
@@ -870,7 +870,7 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	selected.context.CatalogEvidence = ""
 	selected.context.Ready = false
 	if reason == "" {
-		reason = "session_closed"
+		reason = lifecycleReasonSessionClosed
 	}
 	// A target detach or browser loss retires the selected session; it does not
 	// create a new document generation. Keep this on the session lifecycle

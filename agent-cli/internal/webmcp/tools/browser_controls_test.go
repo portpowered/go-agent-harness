@@ -10,6 +10,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// Fixture values shared by the tools tests.
+const (
+	testBrowserID = "browser-a"
+	testTargetID  = "tab-a"
+	pngMIMEType   = "image/png"
+)
+
 // schemaObject asserts that a decoded schema value is a JSON object.
 func schemaObject(t *testing.T, value any, what string) map[string]any {
 	t.Helper()
@@ -96,7 +103,7 @@ func TestCastToolRejectsUnknownModeBeforeCallingBroker(t *testing.T) {
 }
 func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
 	want := webmcp.PageContext{
-		Key:       webmcp.PageKey{BrowserID: "browser-a", TargetID: "tab-new"},
+		Key:       webmcp.PageKey{BrowserID: testBrowserID, TargetID: "tab-new"},
 		URL:       "https://notes.example.test/",
 		Origin:    "https://notes.example.test",
 		Connected: true,

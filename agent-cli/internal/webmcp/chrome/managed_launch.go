@@ -39,8 +39,8 @@ var (
 	ErrManagedBrowserLaunch = errors.New("managed browser launch failed")
 
 	managedBrowserURLPattern = map[string]struct{}{
-		"http":  {},
-		"https": {},
+		schemeHTTP:  {},
+		schemeHTTPS: {},
 	}
 )
 
@@ -732,9 +732,9 @@ func managedLoopbackPort(listener net.Listener) (int, error) {
 
 func defaultManagedBrowserDisplayAvailable() bool {
 	switch runtime.GOOS {
-	case "windows", "darwin":
+	case goosWindows, goosDarwin:
 		return true
-	case "linux":
+	case goosLinux:
 		return strings.TrimSpace(os.Getenv("DISPLAY")) != "" || strings.TrimSpace(os.Getenv("WAYLAND_DISPLAY")) != ""
 	default:
 		return false
@@ -781,7 +781,7 @@ func (p *osManagedBrowserProcess) Terminate() error {
 	if p == nil || p.command == nil || p.command.Process == nil {
 		return nil
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		return p.command.Process.Kill()
 	}
 	return p.command.Process.Signal(syscall.SIGTERM)
@@ -857,7 +857,7 @@ func signalManagedBrowserPID(pid int, kill bool) error {
 	if err != nil || process == nil {
 		return os.ErrProcessDone
 	}
-	if kill || runtime.GOOS == "windows" {
+	if kill || runtime.GOOS == goosWindows {
 		return process.Kill()
 	}
 	return process.Signal(syscall.SIGTERM)

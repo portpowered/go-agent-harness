@@ -611,7 +611,7 @@ func validateChromeArchivePathValue(raw string) (string, error) {
 
 func validateOfficialChromeURL(raw, prefix string) error {
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !strings.HasPrefix(raw, prefix) {
+	if err != nil || parsed.Scheme != schemeHTTPS || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || !strings.HasPrefix(raw, prefix) {
 		return errors.New("chrome for testing source is not an official HTTPS URL")
 	}
 	return nil

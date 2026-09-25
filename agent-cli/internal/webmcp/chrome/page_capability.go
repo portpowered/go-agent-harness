@@ -13,6 +13,26 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+// Go platform names used to select managed Chrome builds and
+// platform-specific process handling.
+const (
+	goosDarwin  = "darwin"
+	goosLinux   = "linux"
+	goosWindows = "windows"
+	goarchARM64 = "arm64"
+	goarchAMD64 = "amd64"
+)
+
+const (
+	// jsonListPath is the DevTools HTTP endpoint that lists page targets.
+	jsonListPath = "/json/list"
+	// invocationStatusCanceled is the page's terminal status for a canceled
+	// tool invocation.
+	invocationStatusCanceled = "canceled"
+	// eventReasonPageError classifies a page-reported tool failure.
+	eventReasonPageError = "page_error"
+)
+
 // pageToolCatalogProbeExpression intentionally reads only the page's public
 // WebMCP producer. It does not retain page data or execute a page tool.
 const pageToolCatalogProbeExpression = `(async () => {

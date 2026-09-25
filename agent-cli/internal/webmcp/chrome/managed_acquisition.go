@@ -409,14 +409,14 @@ func DefaultStockChromePaths(goos, goarch string) []string {
 		}
 	}
 	switch goos {
-	case "darwin":
+	case goosDarwin:
 		paths = append(paths,
 			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
 		)
 		joinHome("Applications", "Google Chrome.app", "Contents", "MacOS", "Google Chrome")
 		joinHome("Applications", "Google Chrome Canary.app", "Contents", "MacOS", "Google Chrome Canary")
-	case "linux":
+	case goosLinux:
 		paths = append(paths,
 			"/usr/bin/google-chrome-stable",
 			"/usr/bin/google-chrome",
@@ -424,7 +424,7 @@ func DefaultStockChromePaths(goos, goarch string) []string {
 		)
 		joinHome(".local", "bin", "google-chrome-stable")
 		joinHome(".local", "bin", "google-chrome")
-	case "windows":
+	case goosWindows:
 		for _, root := range []string{os.Getenv("LOCALAPPDATA"), os.Getenv("PROGRAMFILES"), os.Getenv("PROGRAMFILES(X86)"), os.Getenv("ProgramW6432")} {
 			if root == "" {
 				continue
@@ -433,7 +433,7 @@ func DefaultStockChromePaths(goos, goarch string) []string {
 		}
 	}
 	pathNames := []string{"google-chrome-stable", "google-chrome", "chrome", "chrome.exe"}
-	if goos == "windows" {
+	if goos == goosWindows {
 		pathNames = []string{"chrome.exe", "chrome"}
 	}
 	for _, name := range pathNames {
@@ -448,15 +448,15 @@ func DefaultStockChromePaths(goos, goarch string) []string {
 // for Testing download platform names.
 func ChromeForTestingPlatform(goos, goarch string) (string, error) {
 	switch {
-	case goos == "darwin" && goarch == "arm64":
+	case goos == goosDarwin && goarch == goarchARM64:
 		return "mac-arm64", nil
-	case goos == "darwin" && goarch == "amd64":
+	case goos == goosDarwin && goarch == goarchAMD64:
 		return "mac-x64", nil
-	case goos == "linux" && goarch == "amd64":
+	case goos == goosLinux && goarch == goarchAMD64:
 		return "linux64", nil
-	case goos == "windows" && goarch == "amd64":
+	case goos == goosWindows && goarch == goarchAMD64:
 		return "win64", nil
-	case goos == "windows" && goarch == "386":
+	case goos == goosWindows && goarch == "386":
 		return "win32", nil
 	default:
 		return "", fmt.Errorf("chrome for testing has no supported artifact for %s/%s", goos, goarch)

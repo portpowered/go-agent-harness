@@ -340,7 +340,7 @@ func TestDiscoverClassifiesEndpointFailuresWithoutLeakingEndpointData(t *testing
 			wantCode: CodeBrowserProtocolInvalid,
 			wantDetail: map[string]any{
 				"phase":       "version",
-				"protocol":    "unknown",
+				"protocol":    unknownValue,
 				"reason_code": "malformed_json",
 			},
 			wantHTTP: 1,

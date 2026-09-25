@@ -124,15 +124,15 @@ func (s *targetSession) convertToolResponded(value *cdpWebMCP.EventToolResponded
 		event.Reason = "page_exception"
 	} else if strings.TrimSpace(value.ErrorText) != "" {
 		event.ErrorCode = string(webmcp.ErrorInvocationFailed)
-		event.Reason = "page_error"
+		event.Reason = eventReasonPageError
 	} else {
 		switch strings.ToLower(event.Status) {
-		case "canceled", "cancelled":
+		case invocationStatusCanceled, "cancelled":
 			event.ErrorCode = string(webmcp.ErrorInvocationCanceled)
 			event.Reason = "browser_canceled"
 		case "error", "failed":
 			event.ErrorCode = string(webmcp.ErrorInvocationFailed)
-			event.Reason = "page_error"
+			event.Reason = eventReasonPageError
 		}
 	}
 	return event

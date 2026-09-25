@@ -26,7 +26,7 @@ func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.
 				testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: firstImage}),
 			),
 			testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-second", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: secondaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("read_second", "frame-2", `{"type":"object","additionalProperties":false}`)),
 				testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: secondImage}),
 			),
@@ -36,14 +36,14 @@ func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
 	defer func() { _ = broker.Close() }()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-second"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: secondaryTargetID}); err != nil {
 		t.Fatalf("select exact target: %v", err)
 	}
 	got, err := broker.CapturePageScreenshot(context.Background())
 	if err != nil {
 		t.Fatalf("capture exact target: %v", err)
 	}
-	if got.BrowserID != candidate.ID || got.TargetID != "tab-second" || got.MIMEType != "image/png" || !bytes.Equal(got.Bytes, secondImage) {
+	if got.BrowserID != candidate.ID || got.TargetID != secondaryTargetID || got.MIMEType != "image/png" || !bytes.Equal(got.Bytes, secondImage) {
 		t.Fatalf("capture = %+v, want second target and its image", got)
 	}
 
@@ -56,7 +56,7 @@ func TestStatefulBrokerCapturesTheExactSelectedPageWithoutActivation(t *testing.
 			t.Fatalf("capture unexpectedly activated a target: %+v", operation)
 		}
 	}
-	if len(captures) != 1 || captures[0].BrowserID != candidate.ID || captures[0].TargetID != "tab-second" {
+	if len(captures) != 1 || captures[0].BrowserID != candidate.ID || captures[0].TargetID != secondaryTargetID {
 		t.Fatalf("capture operations = %+v, want one exact-target operation", captures)
 	}
 }
@@ -77,7 +77,7 @@ func TestStatefulBrokerCaptureClassifiesSelectionLifecycleFailures(t *testing.T)
 			candidate := webmcp.BrowserCandidate{ID: webmcp.BrowserID("browser-lifecycle-" + testCase.name), Product: "fixture", Loopback: true}
 			runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{"type":"object","additionalProperties":false}`)),
 					testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: screenshotPNG(t, color.RGBA{B: 0xff, A: 0xff})}),
 				),
@@ -85,10 +85,10 @@ func TestStatefulBrokerCaptureClassifiesSelectionLifecycleFailures(t *testing.T)
 			defer func() { _ = runtime.Close() }()
 			broker := webmcp.NewBroker(webmcp.BrokerOptions{Runtime: runtime, Discoverer: staticDiscoverer{candidate}})
 			defer func() { _ = broker.Close() }()
-			if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+			if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 				t.Fatalf("select: %v", err)
 			}
-			session := runtime.Browser(candidate.ID).TargetSession("tab-a")
+			session := runtime.Browser(candidate.ID).TargetSession(primaryTargetID)
 			if session == nil {
 				t.Fatal("selected test session is nil")
 			}
@@ -109,7 +109,7 @@ func TestStatefulBrokerCaptureIsolatedAcrossConcurrentSelections(t *testing.T) {
 	firstImage := screenshotPNG(t, color.RGBA{R: 0xff, A: 0xff})
 	secondImage := screenshotPNG(t, color.RGBA{G: 0xff, A: 0xff})
 	runtime := testkit.NewScriptedBrowserRuntime(testkit.NewBrowserConfig(candidate,
-		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 			testkit.WithInitialCatalog(pageTool("read_a", "frame-a", `{"type":"object","additionalProperties":false}`)),
 			testkit.WithPageScreenshot(webmcp.PageScreenshot{MIMEType: "image/png", Bytes: firstImage})),
 		testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"},
@@ -123,7 +123,7 @@ func TestStatefulBrokerCaptureIsolatedAcrossConcurrentSelections(t *testing.T) {
 	firstBroker, secondBroker := newBroker(), newBroker()
 	defer func() { _ = firstBroker.Close() }()
 	defer func() { _ = secondBroker.Close() }()
-	if _, err := firstBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := firstBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select tab-a: %v", err)
 	}
 	if _, err := secondBroker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-b"}); err != nil {
@@ -153,7 +153,7 @@ func TestStatefulBrokerCaptureIsolatedAcrossConcurrentSelections(t *testing.T) {
 		}
 		seen[result.page.TargetID] = true
 	}
-	if len(seen) != 2 || !seen["tab-a"] || !seen["tab-b"] {
+	if len(seen) != 2 || !seen[primaryTargetID] || !seen["tab-b"] {
 		t.Fatalf("concurrent capture target IDs = %#v, want both isolated targets", seen)
 	}
 }

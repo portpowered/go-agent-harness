@@ -17,6 +17,16 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+// Fixture-page values shared by the pinned-Chrome integration tests: the
+// oracle states the fixture page reports, its greeting output and the
+// page's completed tool status.
+const (
+	fixtureOracleInitial     = "initial"
+	fixtureOraclePendingHold = "pending:hold"
+	fixtureGreeting          = "hello"
+	toolStatusCompleted      = "Completed"
+)
+
 func (s *targetSession) installPageScript(ctx context.Context, source string) error {
 	if source == "" {
 		return errors.New("site adapter source is empty")

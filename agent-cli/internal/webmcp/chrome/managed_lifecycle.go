@@ -488,7 +488,7 @@ func managedBrowserStatesMatch(left, right ManagedBrowserState) bool {
 
 func managedBrowserCDPPort(raw string) (int, error) {
 	parsed, err := urlParseManaged(raw)
-	if err != nil || parsed.Scheme != "http" || parsed.User != nil || parsed.Hostname() == "" || !isManagedLoopbackHost(parsed.Hostname()) || parsed.Path != "/json/version" || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != schemeHTTP || parsed.User != nil || parsed.Hostname() == "" || !isManagedLoopbackHost(parsed.Hostname()) || parsed.Path != "/json/version" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return 0, errors.New("managed browser endpoint is not loopback DevTools")
 	}
 	port, err := strconv.Atoi(parsed.Port())
@@ -731,7 +731,7 @@ func managedCommandLineMatches(commandLine []string, state ManagedBrowserState) 
 }
 
 func managedProcessCommandLine(ctx context.Context, pid int) ([]string, error) {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == goosLinux {
 		data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
 		if err != nil {
 			return nil, err
@@ -754,7 +754,7 @@ func managedProcessCommandLine(ctx context.Context, pid int) ([]string, error) {
 }
 
 func managedProcessIdentity(ctx context.Context, pid int, commandLine []string) (string, error) {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == goosLinux {
 		data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 		if err != nil {
 			return "", err
@@ -770,7 +770,7 @@ func managedProcessIdentity(ctx context.Context, pid int, commandLine []string) 
 		}
 		return "linux-start-" + fields[19], nil
 	}
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != goosWindows {
 		command := exec.CommandContext(ctx, "ps", "-p", strconv.Itoa(pid), "-o", "lstart=")
 		output, err := command.Output()
 		if err == nil && strings.TrimSpace(string(output)) != "" {

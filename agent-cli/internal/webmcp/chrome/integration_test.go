@@ -144,7 +144,7 @@ func (p *liveCDPProxy) Close() {
 func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request) {
 	delay := false
 	dead := false
-	if request.URL.Path == "/json/list" {
+	if request.URL.Path == jsonListPath {
 		p.mu.Lock()
 		delay = p.delayNextList
 		p.delayNextList = false
@@ -209,7 +209,7 @@ func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
 		t.Skipf("set %s=1 to run the pinned Chrome integration proof", chromeIntegrationEnv)
 	}
 
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -355,7 +355,7 @@ func (r *adapterIntegrationRun) attachExternal(t *testing.T, ctx context.Context
 		t.Fatalf("attached target ID = %q, want exact %q", got, r.selectedTarget.ID)
 	}
 	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Ready && oracle.Value == "initial" && oracle.VisibleText == "initial"
+		return oracle.Ready && oracle.Value == fixtureOracleInitial && oracle.VisibleText == fixtureOracleInitial
 	}); err != nil {
 		t.Fatalf("initial independent page-state oracle: %v", err)
 	}
@@ -416,14 +416,14 @@ func (r *adapterIntegrationRun) invokeCompleted(t *testing.T, ctx context.Contex
 	if err != nil {
 		t.Fatal(err)
 	}
-	if completed.Status != "Completed" || !json.Valid(completed.Output) || completed.ErrorCode != "" {
+	if completed.Status != toolStatusCompleted || !json.Valid(completed.Output) || completed.ErrorCode != "" {
 		t.Fatalf("completed response = %+v, want Completed structured output", completed)
 	}
 	var completedOutput map[string]any
 	if err := json.Unmarshal(completed.Output, &completedOutput); err != nil {
 		t.Fatalf("decode completed output: %v", err)
 	}
-	if completedOutput["greeting"] != "hello" || completedOutput["message"] != "complete" {
+	if completedOutput["greeting"] != fixtureGreeting || completedOutput["message"] != "complete" {
 		t.Fatalf("completed output = %v, want greeting/message object", completedOutput)
 	}
 	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
@@ -446,7 +446,7 @@ func (r *adapterIntegrationRun) startPending(t *testing.T, ctx context.Context, 
 		t.Fatal(err)
 	}
 	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Value == "pending:hold" && oracle.VisibleText == "pending:hold" && oracle.Pending
+		return oracle.Value == fixtureOraclePendingHold && oracle.VisibleText == fixtureOraclePendingHold && oracle.Pending
 	}); err != nil {
 		t.Fatalf("page-state oracle before cancellation: %v", err)
 	}
@@ -477,7 +477,7 @@ func (r *adapterIntegrationRun) observeCancellation(t *testing.T, ctx, cancelObs
 	}
 	cancelTrace := r.assertCancelWireTrace(t, pendingID)
 	pendingOracle, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Value == "pending:hold" && oracle.VisibleText == "pending:hold"
+		return oracle.Value == fixtureOraclePendingHold && oracle.VisibleText == fixtureOraclePendingHold
 	})
 	if err != nil {
 		t.Fatalf("page-state oracle after cancellation: %v", err)
@@ -560,7 +560,7 @@ func (r *adapterIntegrationRun) reattachFreshClient(t *testing.T, ctx context.Co
 }
 
 func newFixtureServer() *fixtureServer {
-	fixture := &fixtureServer{oracle: fixtureOracle{Value: "initial", VisibleText: "initial"}}
+	fixture := &fixtureServer{oracle: fixtureOracle{Value: fixtureOracleInitial, VisibleText: fixtureOracleInitial}}
 	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/":
@@ -640,7 +640,7 @@ func assertFixtureHeaders(t *testing.T, ctx context.Context, fixtureURL string) 
 func findFixtureTarget(targets []webmcp.Target, fixtureURL string) (webmcp.Target, error) {
 	var matches []webmcp.Target
 	for _, target := range targets {
-		if target.Type == "page" && target.URL == fixtureURL {
+		if target.Type == pageTargetType && target.URL == fixtureURL {
 			matches = append(matches, target)
 		}
 	}

@@ -57,7 +57,7 @@ func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
 	if os.Getenv(conversationalCustomerLiveEnv) != "1" {
 		t.Skipf("set %s=1 to run the credentialed canonical conversation", conversationalCustomerLiveEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 

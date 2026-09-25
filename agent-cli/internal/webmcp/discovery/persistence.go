@@ -657,7 +657,7 @@ func reconnectContinuityReason(target Target, options ReconnectOptions) string {
 	case options.Origin != "" && target.Origin != options.Origin:
 		return "origin_changed"
 	case target.ContinuityMarker != options.ContinuityMarker:
-		return "continuity_changed"
+		return staleReasonContinuityChanged
 	}
 	return ""
 }

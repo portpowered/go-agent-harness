@@ -44,7 +44,7 @@ func TestPinnedChromeCubecadeTwoIndependentBrokerSessions(t *testing.T) {
 	if os.Getenv(cubecadeSharedBrowserIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the credit-free two-broker Cubecade proof", cubecadeSharedBrowserIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for %s, observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
 	}
 

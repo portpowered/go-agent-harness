@@ -453,7 +453,7 @@ func conversationalCustomerInvocationState(event webmcp.BrowserEvent) webmcp.Inv
 	switch strings.ToLower(strings.TrimSpace(event.Status)) {
 	case "completed":
 		return webmcp.InvocationCompleted
-	case "canceled", "cancelled":
+	case invocationStatusCanceled, "cancelled":
 		return webmcp.InvocationCanceled
 	case "timed_out", "timeout", "timedout":
 		return webmcp.InvocationTimedOut

@@ -27,20 +27,20 @@ func normalizeToolPageURL(raw string) (string, string) {
 		return "", ""
 	}
 	if len(trimmed) > 4096 || hasToolControl(trimmed) {
-		return "redacted", ""
+		return redactedValue, ""
 	}
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed == nil {
-		return "redacted", ""
+		return redactedValue, ""
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
-		return "redacted", ""
+		return redactedValue, ""
 	}
 	if port := parsed.Port(); port != "" {
 		value, err := strconv.Atoi(port)
 		if err != nil || value < 1 || value > 65535 {
-			return "redacted", ""
+			return redactedValue, ""
 		}
 	}
 	host := strings.ToLower(parsed.Hostname())
@@ -59,7 +59,7 @@ func normalizeToolPageURL(raw string) (string, string) {
 	parsed.Fragment = ""
 	safeURL := parsed.String()
 	if safeURL == "" || len(safeURL) > 4096 || hasToolControl(safeURL) {
-		return "redacted", ""
+		return redactedValue, ""
 	}
 	return safeURL, parsed.Scheme + "://" + parsed.Host
 }

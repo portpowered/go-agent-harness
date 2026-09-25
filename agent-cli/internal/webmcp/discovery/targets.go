@@ -480,7 +480,7 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 
 	structuralReason := ""
 	switch {
-	case target.Type != "page":
+	case target.Type != targetTypePage:
 		structuralReason = "not_page"
 	case internal:
 		structuralReason = "internal_url"
@@ -519,7 +519,7 @@ func (s *Service) normalizeTarget(ctx context.Context, browser BrowserCandidate,
 		}
 	}
 	if structuralReason == "" && !target.WebMCP {
-		structuralReason = "unsupported_webmcp"
+		structuralReason = eligibilityUnsupportedWebMCP
 	}
 	target.Eligible = structuralReason == ""
 	target.EligibilityReason = structuralReason
@@ -610,10 +610,10 @@ func descriptorToolCount(descriptor TargetDescriptor) (int, bool) {
 func safeTargetType(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
-		return "unknown"
+		return unknownValue
 	}
 	if len(value) > 32 || hasControl(value) {
-		return "redacted"
+		return redactedValue
 	}
 	return value
 }
@@ -625,22 +625,22 @@ func normalizePageURL(raw string) (safeURL, origin string, internal bool, reason
 	}
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed == nil {
-		return "redacted", "", false, "malformed_url"
+		return redactedValue, "", false, urlReasonMalformed
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "redacted", "", true, "internal_url"
+		return redactedValue, "", true, "internal_url"
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" {
-		return "redacted", "", false, "malformed_url"
+		return redactedValue, "", false, urlReasonMalformed
 	}
 	if parsed.User != nil || hasControl(trimmed) {
-		return "redacted", "", false, "unsafe_url"
+		return redactedValue, "", false, "unsafe_url"
 	}
 	if parsed.Port() != "" {
 		port, parseErr := strconv.Atoi(parsed.Port())
 		if parseErr != nil || port < 1 || port > 65535 {
-			return "redacted", "", false, "malformed_url"
+			return redactedValue, "", false, urlReasonMalformed
 		}
 	}
 	parsed.RawQuery = ""
@@ -648,7 +648,7 @@ func normalizePageURL(raw string) (safeURL, origin string, internal bool, reason
 	parsed.Host = canonicalHost(parsed)
 	safeURL = parsed.String()
 	if len(safeURL) > maxTargetURL {
-		return "redacted", "", false, "url_too_large"
+		return redactedValue, "", false, "url_too_large"
 	}
 	origin = canonicalOrigin(parsed)
 	return safeURL, origin, false, ""
@@ -741,7 +741,7 @@ func filterTargets(targets []Target, options TargetListOptions) ([]Target, *Disc
 		if options.OriginContains != "" && !strings.Contains(target.Origin, options.OriginContains) {
 			continue
 		}
-		if options.TargetID != "" && target.ID == options.TargetID && target.Type == "page" && !target.WebMCP {
+		if options.TargetID != "" && target.ID == options.TargetID && target.Type == targetTypePage && !target.WebMCP {
 			return nil, newUnsupportedWebMCP(target.BrowserID, target.ID)
 		}
 		if eligibleOnly {

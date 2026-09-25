@@ -269,7 +269,7 @@ func (r *BrowserScriptRuntime) Execute(ctx context.Context, request OperationReq
 		return RuntimeExecution{}, r.failLocked(BrowserScriptDiverged, &FixtureOperationError{
 			Kind:     ErrFixtureOperationMismatch,
 			Position: r.position,
-			Path:     "type",
+			Path:     jsonFieldType,
 			Actual:   request,
 			Cause:    errors.New("no expected operation remains"),
 		})
@@ -339,7 +339,7 @@ func (r *BrowserScriptRuntime) applyOperationEffectsLocked(operationType Operati
 		execution.InvocationID = invocationID
 		r.pending[invocationID] = struct{}{}
 		if len(operation.Result) == 0 {
-			execution.Result = MustJSONValue(map[string]any{"invocation_id": invocationID})
+			execution.Result = MustJSONValue(map[string]any{jsonFieldInvocationID: invocationID})
 		}
 	}
 	if operationType == OperationNavigate {
@@ -422,7 +422,7 @@ func validateOperationRequest(request OperationRequest) error {
 
 func compareOperation(expected OperationExpectation, actual OperationRequest) (string, error) {
 	if expected.Type != actual.Type {
-		return "type", fmt.Errorf("expected %q, got %q", expected.Type, actual.Type)
+		return jsonFieldType, fmt.Errorf("expected %q, got %q", expected.Type, actual.Type)
 	}
 	switch expected.Type {
 	case OperationInvokeTool:
@@ -441,7 +441,7 @@ func compareOperation(expected OperationExpectation, actual OperationRequest) (s
 		}
 	case OperationCancelTool:
 		if expected.InvocationID != actual.InvocationID {
-			return "invocation_id", fmt.Errorf("expected invocation %q, got %q", expected.InvocationID, actual.InvocationID)
+			return jsonFieldInvocationID, fmt.Errorf("expected invocation %q, got %q", expected.InvocationID, actual.InvocationID)
 		}
 	case OperationNavigate:
 		if expected.URL != actual.URL {
@@ -519,7 +519,7 @@ func (r *BrowserScriptRuntime) invocationIDForResult(result json.RawMessage) (st
 		if err != nil {
 			return "", err
 		}
-		if raw, ok := fields["invocation_id"]; ok {
+		if raw, ok := fields[jsonFieldInvocationID]; ok {
 			id, err := parseScriptString(raw)
 			if err != nil {
 				return "", err

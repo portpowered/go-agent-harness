@@ -223,7 +223,7 @@ func pageToolParameters(schema json.RawMessage) ([]messages.ToolParameter, bool)
 		_ = json.Unmarshal(parsed.Properties[name], &property)
 		parameterType := property.Type
 		if parameterType == "" {
-			parameterType = "object"
+			parameterType = schemaTypeObject
 		}
 		description := property.Description
 		if parameterType == "array" && len(property.Items) > 0 {

@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+// testContinuityMarkerB is the replacement document marker used by the
+// continuity and stale-selection tests.
+const testContinuityMarkerB = "document-b"
+
 func TestDisconnectDuringDiscoveryReturnsSafeClassifiedFailure(t *testing.T) {
 	httpClient := &fakeHTTPClient{err: NewBrowserDisconnectedError("", "", "version", errors.New("ws://user:secret@127.0.0.1:9222 disconnected"))}
 	recorder := &eventRecorder{}
@@ -83,18 +87,18 @@ func TestDisconnectAliasesAndMarkersRemainSafe(t *testing.T) {
 
 	cause := errors.New("transport cause")
 	marker := NewBrowserDisconnectError("browser-alias", "target-alias", "version", cause)
-	if marker.Error() != "browser connection disconnected" || !errors.Is(marker, cause) || !errors.Is(marker, ErrBrowserDisconnected) || !IsBrowserDisconnected(marker) {
+	if marker.Error() != browserDisconnectedMessage || !errors.Is(marker, cause) || !errors.Is(marker, ErrBrowserDisconnected) || !IsBrowserDisconnected(marker) {
 		t.Fatalf("disconnect marker = %v, want safe cause and classified matching", marker)
 	}
 	var nilMarker *BrowserDisconnectedError
-	if nilMarker.Error() != "browser connection disconnected" || nilMarker.Unwrap() != nil || nilMarker.Is(ErrBrowserDisconnected) {
+	if nilMarker.Error() != browserDisconnectedMessage || nilMarker.Unwrap() != nil || nilMarker.Is(ErrBrowserDisconnected) {
 		t.Fatal("nil disconnect marker did not remain safe")
 	}
 	if IsBrowserDisconnected(nil) || !IsBrowserDisconnected(errors.New("connection closed")) {
 		t.Fatal("disconnect classifier did not handle nil/closed cases")
 	}
 	var nilDiscoveryErr *DiscoveryError
-	if nilDiscoveryErr.Error() != "<nil>" || nilDiscoveryErr.Unwrap() != nil {
+	if nilDiscoveryErr.Error() != nilErrorText || nilDiscoveryErr.Unwrap() != nil {
 		t.Fatal("nil discovery error did not remain safe")
 	}
 	normalDiscoveryErr := &DiscoveryError{Message: "classified", Cause: cause}
@@ -123,7 +127,7 @@ func TestDisconnectDuringRefreshInvalidatesSelectionAndBlocksReuse(t *testing.T)
 	disconnected = true
 	refreshed, err := service.RefreshSelection(context.Background())
 	failure := discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
-	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != "targets" || failure.Details["reconnect_required"] != true {
+	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != phaseTargets || failure.Details["reconnect_required"] != true {
 		t.Fatalf("refresh disconnect details = %#v", failure.Details)
 	}
 	if refreshed.Context().Connected || refreshed.Context().Ready {
@@ -161,7 +165,7 @@ func TestRetainedEndpointLossIsBrowserDisconnectedButInitialLossStaysUnreachable
 	endpointLost = true
 	_, err := service.ListTargets(context.Background(), browser)
 	failure := discoveryErrorWithCode(t, err, CodeEndpointUnreachable)
-	if failure.Details["phase"] != "targets" {
+	if failure.Details["phase"] != phaseTargets {
 		t.Fatalf("initial endpoint failure details = %#v, want target phase", failure.Details)
 	}
 
@@ -172,7 +176,7 @@ func TestRetainedEndpointLossIsBrowserDisconnectedButInitialLossStaysUnreachable
 	endpointLost = true
 	_, err = service.RefreshSelection(context.Background())
 	failure = discoveryErrorWithCode(t, err, CodeBrowserDisconnected)
-	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != "targets" || failure.Details["reconnect_required"] != true {
+	if failure.Details["browser_id"] != browser.ID || failure.Details["target_id"] != targetID || failure.Details["phase"] != phaseTargets || failure.Details["reconnect_required"] != true {
 		t.Fatalf("retained endpoint failure details = %#v", failure.Details)
 	}
 }
@@ -269,10 +273,10 @@ func TestDisconnectedReconnectRejectsChangedContinuityMarker(t *testing.T) {
 		t.Fatal("disconnect returned nil")
 	}
 
-	descriptors[0].ContinuityMarker = "document-b"
+	descriptors[0].ContinuityMarker = testContinuityMarkerB
 	_, err = service.Reconnect(context.Background(), reconnectInputs(), ReconnectOptions{AutoSelect: AutoSelectSingle})
 	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
-	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != selected.Generation || stale.Details["reason"] != "continuity_changed" {
+	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != selected.Generation || stale.Details["reason"] != staleReasonContinuityChanged {
 		t.Fatalf("changed continuity failure = %#v", stale.Details)
 	}
 	current, ok := service.Selected()

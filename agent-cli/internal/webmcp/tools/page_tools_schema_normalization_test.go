@@ -73,8 +73,8 @@ func TestPageToolAnyOfSchemaIsFlattenedToAnAcceptedShape(t *testing.T) {
 	if _, present := normalized["anyOf"]; present {
 		t.Fatalf("normalized schema still carries a top-level anyOf, provider will still reject it: %s", definition.ParameterSchema)
 	}
-	if got, _ := normalized["type"].(string); got != "object" {
-		t.Fatalf("normalized schema type = %q, want %q: %s", got, "object", definition.ParameterSchema)
+	if got, ok := normalized["type"].(string); !ok || got != schemaTypeObject {
+		t.Fatalf("normalized schema type = %q, want %q: %s", got, schemaTypeObject, definition.ParameterSchema)
 	}
 	properties, ok := normalized["properties"].(map[string]any)
 	if !ok {

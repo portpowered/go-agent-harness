@@ -633,7 +633,7 @@ func eventInvocationAndTool(raw json.RawMessage) (string, string) {
 	if err != nil {
 		return "", ""
 	}
-	invocationID := stringField(fields, "invocation_id")
+	invocationID := stringField(fields, jsonFieldInvocationID)
 	tool := stringField(fields, "tool_name")
 	if tool == "" {
 		tool = stringField(fields, "tool_ref")

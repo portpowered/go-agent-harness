@@ -38,7 +38,7 @@ func TestLoadBrowserScriptPreservesPageJSONAndStrictControlShapes(t *testing.T) 
 		{name: "unknown operation type", data: strings.Replace(validBrowserScriptJSON, `"type": "enable_lifecycle"`, `"type": "unknown"`, 1), want: "unknown operation"},
 		{name: "missing invoke input", data: strings.Replace(validBrowserScriptJSON, ",\n        \"input\": {\"count\":9007199254740993}", "", 1), want: "input"},
 		{name: "non-object invoke input", data: strings.Replace(validBrowserScriptJSON, `"input": {"count":9007199254740993}`, `"input": []`, 1), want: "input"},
-		{name: "missing cancel ID", data: missingCancelIDScriptJSON(), want: "invocation_id"},
+		{name: "missing cancel ID", data: missingCancelIDScriptJSON(), want: jsonFieldInvocationID},
 		{name: "unknown emitted event", data: strings.Replace(validBrowserScriptJSON, `"type": "tool_responded"`, `"type": "tool_unknown"`, 1), want: "emitted"},
 		{name: "completed without output", data: strings.Replace(validBrowserScriptJSON, ",\n          \"output\": {\"value\":9007199254740993}", "", 1), want: "output"},
 		{name: "error response with output", data: strings.Replace(validBrowserScriptJSON, "\"status\": \"Completed\",\n          \"output\": {\"value\":9007199254740993}", "\"status\": \"Error\",\n          \"output\": {\"value\":9007199254740993}", 1), want: "error"},
@@ -149,7 +149,7 @@ func TestScriptedBrowserRuntimeUsesInjectedIDsForUnspecifiedInvocation(t *testin
 		},
 		Operations: []BrowserScriptOperation{
 			{Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "read_state", Input: json.RawMessage(`{}`)},
-				Emit: []EmittedEvent{{Type: EmittedToolResponded, InvocationID: "run-invocation-001", Status: "Completed", Output: json.RawMessage(`{"ok":true}`)}}},
+				Emit: []EmittedEvent{{Type: EmittedToolResponded, InvocationID: "run-invocation-001", Status: "Completed", Output: json.RawMessage(okJSONOutput)}}},
 		},
 	}
 	runtime, err := NewScriptedFixtureRuntime(script, WithFixtureIDSource(NewDeterministicIDSource("run")))
@@ -216,7 +216,7 @@ func TestScriptedBrowserRuntimeSupportsCancellationAndCleanupOperations(t *testi
 			{Expect: OperationExpectation{Type: OperationEnableWebMCP}},
 			{Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "write_state", Input: json.RawMessage(`{"value":1}`)}, Result: json.RawMessage(`{"invocation_id":"inv-cancel"}`)},
 			{Expect: OperationExpectation{Type: OperationCancelTool, InvocationID: "inv-cancel"}, Emit: []EmittedEvent{{Type: EmittedToolResponded, InvocationID: "inv-cancel", Status: "Canceled", Error: json.RawMessage(`{"code":"invocation_canceled"}`)}}},
-			{Expect: OperationExpectation{Type: OperationNavigate}, Result: json.RawMessage(`{"ok":true}`)},
+			{Expect: OperationExpectation{Type: OperationNavigate}, Result: json.RawMessage(okJSONOutput)},
 			{Expect: OperationExpectation{Type: OperationCloseTarget}},
 		},
 	}

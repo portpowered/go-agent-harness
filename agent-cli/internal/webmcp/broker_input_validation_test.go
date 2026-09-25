@@ -36,7 +36,7 @@ func TestStatefulBrokerValidatesNestedPageInputWithoutChangingNumberTokens(t *te
 		}
 	}()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
@@ -76,7 +76,7 @@ func TestStatefulBrokerRejectsPageInputWithSelectedSchemaAndStableIssues(t *test
 	broker, runtime := newInputValidationBroker(t, schema, 0)
 	defer func() { _ = broker.Close() }()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
@@ -164,7 +164,7 @@ func TestStatefulBrokerBoundsInvalidUTF8AndOversizedPageInputBeforeDispatch(t *t
 	broker, runtime := newInputValidationBroker(t, schema, 4)
 	defer func() { _ = broker.Close() }()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: "browser-a", TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
@@ -207,7 +207,7 @@ func newInputValidationBroker(t *testing.T, schema string, maxInputBytes int) (*
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", Title: "Fixture", URL: "https://fixture.test/"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", Title: "Fixture", URL: "https://fixture.test/"},
 					testkit.WithInitialCatalog(pageTool("write_state", "frame-1", schema)),
 				),
 			},

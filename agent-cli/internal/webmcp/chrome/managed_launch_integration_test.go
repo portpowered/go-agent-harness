@@ -256,7 +256,7 @@ func invokeManagedLaunchProbe(t *testing.T, ctx context.Context, session webmcp.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if completed.Status != "Completed" || !strings.Contains(string(completed.Output), "actual-browser") {
+	if completed.Status != toolStatusCompleted || !strings.Contains(string(completed.Output), "actual-browser") {
 		t.Fatalf("managed opened-tab WebMCP response = %+v", completed)
 	}
 }
@@ -270,7 +270,7 @@ func TestManagedBrowserManagerRecoversLiveStaleProfileOwner(t *testing.T) {
 	if os.Getenv(managedBrowserLaunchIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the real stock-Chrome stale-profile recovery proof", managedBrowserLaunchIntegrationEnv)
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip("real stale-profile recovery currently requires Chrome's Unix SingletonLock PID symlink")
 	}
 
@@ -455,7 +455,7 @@ func findQualifiedStockChromeForIntegration(t *testing.T) (string, string) {
 		// Windows does not expose POSIX execute bits, and chrome.exe --version
 		// opens the browser instead of writing stdout. Read its version resource
 		// for opt-in stock-browser proofs without touching the user's profile.
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == goosWindows {
 			info, err := os.Stat(candidate)
 			if err != nil || !info.Mode().IsRegular() {
 				continue
@@ -491,7 +491,7 @@ func waitForManagedLaunchTarget(ctx context.Context, cdpURL, wantURL string) err
 	var lastObservation string
 	for {
 		baseURL := strings.TrimSuffix(strings.TrimRight(cdpURL, "/"), "/json/version")
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/json/list", nil)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+jsonListPath, nil)
 		if err == nil {
 			response, requestErr := client.Do(request)
 			if requestErr == nil {
@@ -505,7 +505,7 @@ func waitForManagedLaunchTarget(ctx context.Context, cdpURL, wantURL string) err
 				pageTargets := 0
 				matchingPages := 0
 				for _, target := range targets {
-					if target.Type != "page" {
+					if target.Type != pageTargetType {
 						continue
 					}
 					pageTargets++

@@ -152,7 +152,7 @@ func TestAmbiguousTabChoicesRedactPageDataAndKeepIDs(t *testing.T) {
 	if choices[0]["target_id"] != "target-a" || choices[1]["target_id"] != "target-b" {
 		t.Fatalf("candidate choice order = %#v", choices)
 	}
-	if choices[0]["title"] != "redacted" {
+	if choices[0]["title"] != redactedValue {
 		t.Fatalf("unsafe title = %#v", choices[0]["title"])
 	}
 	if _, exists := choices[0]["origin"]; exists {

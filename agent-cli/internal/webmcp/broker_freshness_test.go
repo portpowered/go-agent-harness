@@ -39,7 +39,7 @@ func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) fresh
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", URL: "https://freshness.fixture/"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", URL: "https://freshness.fixture/"},
 					testkit.WithInitialCatalog(tool),
 				),
 			},
@@ -53,7 +53,7 @@ func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) fresh
 		InvocationTimeout: 5 * time.Second,
 	})
 	t.Cleanup(func() { _ = broker.Close() })
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	catalog, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
@@ -67,7 +67,7 @@ func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) fresh
 	if err != nil {
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
+	session := scriptedTargetSession(t, handleValue, primaryTargetID)
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -181,7 +181,7 @@ func TestStatefulBrokerRejectsEarlyTerminalWithRetryableFreshnessEnvelope(t *tes
 		t.Fatalf("freshness error = %#v, want safe read-only retry", envelope.Error)
 	}
 	details := envelope.Error.Details
-	if details["phase"] != "result_freshness" || details["freshness_phase"] != "terminal_provenance" || details["reason_code"] == "" || details["terminal_observed"] != true || details["tool_ref"] != string(fixture.ref) || details["target_id"] != "tab-a" {
+	if details["phase"] != "result_freshness" || details["freshness_phase"] != "terminal_provenance" || details["reason_code"] == "" || details["terminal_observed"] != true || details["tool_ref"] != string(fixture.ref) || details["target_id"] != primaryTargetID {
 		t.Fatalf("freshness details = %#v, want bounded correlation and recovery metadata", details)
 	}
 	if _, leaked := details["safe_retryable"]; leaked || strings.Contains(response.Content, staleOutput) {

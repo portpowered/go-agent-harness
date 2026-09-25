@@ -191,7 +191,7 @@ func TestPersistedSelectionRejectsQueryAndFragmentOnlyNavigation(t *testing.T) {
 			service := persistenceService(store, &descriptors, probe)
 			_, err := service.Reconnect(context.Background(), inputs, ReconnectOptions{AutoSelect: AutoSelectPersisted})
 			stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
-			if stale.Details["browser_id"] != persistenceBrowser().ID || stale.Details["target_id"] != targetID || stale.Details["reason"] != "continuity_changed" {
+			if stale.Details["browser_id"] != persistenceBrowser().ID || stale.Details["target_id"] != targetID || stale.Details["reason"] != staleReasonContinuityChanged {
 				t.Fatalf("navigation continuity failure = %#v", stale.Details)
 			}
 			if _, ok := service.Selected(); ok {
@@ -231,11 +231,11 @@ func TestPersistedSelectionStaleAndUnsupportedFailuresNeverFallback(t *testing.T
 		{
 			name: "changed continuity",
 			mutate: func(descriptors []TargetDescriptor) []TargetDescriptor {
-				descriptors[0].ContinuityMarker = "document-b"
+				descriptors[0].ContinuityMarker = testContinuityMarkerB
 				return descriptors
 			},
 			wantCode:   CodeStaleSelection,
-			wantReason: "continuity_changed",
+			wantReason: staleReasonContinuityChanged,
 		},
 		{
 			name: "unsupported target",
@@ -583,12 +583,12 @@ func TestLifecycleRefreshUpdatesPersistedContinuityAndGeneration(t *testing.T) {
 		t.Fatalf("selection before lifecycle: %v", err)
 	}
 	oldMarker := selected.Target.ContinuityMarker
-	descriptors[0].ContinuityMarker = "document-b"
+	descriptors[0].ContinuityMarker = testContinuityMarkerB
 	if _, err := service.HandleLifecycle(context.Background(), LifecycleEvent{
 		Type:       LifecycleDocumentReplaced,
 		BrowserID:  selected.BrowserID,
 		TargetID:   selected.TargetID,
-		DocumentID: "document-b",
+		DocumentID: testContinuityMarkerB,
 		EventID:    "document-replaced-1",
 	}); err != nil {
 		t.Fatalf("persisted lifecycle refresh: %v", err)

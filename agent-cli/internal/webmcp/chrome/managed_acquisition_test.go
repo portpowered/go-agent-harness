@@ -24,8 +24,8 @@ func TestManagedChromeAcquirerPrefersQualifiedStockChrome(t *testing.T) {
 	stockPath := writeExecutableFixture(t, "#!/bin/sh\necho 'Google Chrome 151.0.7922.174'\n")
 	pinnedCalls := 0
 	acquirer := NewManagedChromeAcquirer(ManagedChromeAcquisitionOptions{
-		GOOS:       "darwin",
-		GOARCH:     "arm64",
+		GOOS:       goosDarwin,
+		GOARCH:     goarchARM64,
 		StockPaths: []string{stockPath},
 		VersionQuery: func(context.Context, string) (string, error) {
 			return "Google Chrome 151.0.7922.174", nil
@@ -54,8 +54,8 @@ func TestManagedChromeAcquirerFallsBackAfterOldUnusableStockCandidates(t *testin
 	fallbackPath := writeExecutableFixture(t, "#!/bin/sh\necho 'Google Chrome for Testing 152.0.7977.64'\n")
 	var request PinnedChromeRequest
 	acquirer := NewManagedChromeAcquirer(ManagedChromeAcquisitionOptions{
-		GOOS:       "darwin",
-		GOARCH:     "arm64",
+		GOOS:       goosDarwin,
+		GOARCH:     goarchARM64,
 		StockPaths: []string{oldPath, otherPath},
 		VersionQuery: func(_ context.Context, path string) (string, error) {
 			if path == oldPath {
@@ -91,8 +91,8 @@ func TestManagedChromeAcquirerSkipsNonExecutableAndBoundedFailures(t *testing.T)
 	var queried []string
 	var mu sync.Mutex
 	acquirer := NewManagedChromeAcquirer(ManagedChromeAcquisitionOptions{
-		GOOS:           "linux",
-		GOARCH:         "amd64",
+		GOOS:           goosLinux,
+		GOARCH:         goarchAMD64,
 		StockPaths:     []string{nonExecutable, slowPath, validPath},
 		VersionTimeout: 20 * time.Millisecond,
 		VersionQuery: func(ctx context.Context, path string) (string, error) {
@@ -163,12 +163,12 @@ func TestChromeForTestingPlatform(t *testing.T) {
 		want   string
 		valid  bool
 	}{
-		{goos: "darwin", goarch: "arm64", want: "mac-arm64", valid: true},
-		{goos: "darwin", goarch: "amd64", want: "mac-x64", valid: true},
-		{goos: "linux", goarch: "amd64", want: "linux64", valid: true},
-		{goos: "windows", goarch: "amd64", want: "win64", valid: true},
-		{goos: "windows", goarch: "386", want: "win32", valid: true},
-		{goos: "linux", goarch: "arm64", valid: false},
+		{goos: goosDarwin, goarch: goarchARM64, want: "mac-arm64", valid: true},
+		{goos: goosDarwin, goarch: goarchAMD64, want: "mac-x64", valid: true},
+		{goos: goosLinux, goarch: goarchAMD64, want: "linux64", valid: true},
+		{goos: goosWindows, goarch: goarchAMD64, want: "win64", valid: true},
+		{goos: goosWindows, goarch: "386", want: "win32", valid: true},
+		{goos: goosLinux, goarch: goarchARM64, valid: false},
 	}
 	for _, testCase := range tests {
 		got, err := ChromeForTestingPlatform(testCase.goos, testCase.goarch)
@@ -358,8 +358,8 @@ func chromeForTestingPlatformCacheKey(lock ChromeForTestingLock) string {
 func TestManagedChromeAcquirerReturnsOneRedactedFailure(t *testing.T) {
 	secret := "/private/secret/profile?token=do-not-print"
 	acquirer := NewManagedChromeAcquirer(ManagedChromeAcquisitionOptions{
-		GOOS:       "linux",
-		GOARCH:     "amd64",
+		GOOS:       goosLinux,
+		GOARCH:     goarchAMD64,
 		StockPaths: []string{},
 		PinnedAcquirer: PinnedChromeAcquirerFunc(func(context.Context, PinnedChromeRequest) (ChromeExecutable, error) {
 			return ChromeExecutable{}, newChromeForTestingError("download_failed", errors.New(secret))

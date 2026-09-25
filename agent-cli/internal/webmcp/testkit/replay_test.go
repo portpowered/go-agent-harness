@@ -101,7 +101,7 @@ func TestBrowserReplayObserveEventReportsSafeDivergenceAndOrdering(t *testing.T)
 	if !errors.As(err, &mismatch) {
 		t.Fatalf("wrong event error = %T, want *ReplayMismatchError", err)
 	}
-	if mismatch.Path != "type" || mismatch.Position != 2 || mismatch.Expected != "tools_added" || mismatch.Actual != "event tool_responded" {
+	if mismatch.Path != jsonFieldType || mismatch.Position != 2 || mismatch.Expected != "tools_added" || mismatch.Actual != "event tool_responded" {
 		t.Fatalf("mismatch context = %+v", mismatch)
 	}
 	if strings.Contains(err.Error(), secret) {
@@ -150,7 +150,7 @@ func TestBrowserReplayReportsInputAndTerminalDivergenceWithoutValues(t *testing.
 
 	minimal := replayTestScript(BrowserScriptOperation{
 		Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "write_state", Input: MustJSONValue(map[string]any{})},
-		Result: MustJSONValue(map[string]any{"invocation_id": "inv-terminal"}),
+		Result: MustJSONValue(map[string]any{jsonFieldInvocationID: "inv-terminal"}),
 		Emit: []EmittedEvent{{
 			Type:         EmittedToolResponded,
 			InvocationID: "inv-terminal",
@@ -200,7 +200,7 @@ func TestBrowserReplayIncompleteAndPendingErrorsAreDistinct(t *testing.T) {
 
 	pendingScript := replayTestScript(BrowserScriptOperation{
 		Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "write_state", Input: MustJSONValue(map[string]any{})},
-		Result: MustJSONValue(map[string]any{"invocation_id": "inv-pending"}),
+		Result: MustJSONValue(map[string]any{jsonFieldInvocationID: "inv-pending"}),
 	})
 	replay, err = NewBrowserReplay(pendingScript)
 	if err != nil {
@@ -284,7 +284,7 @@ func TestBrowserReplayCleanupLeavesNoPendingInvocation(t *testing.T) {
 	script := replayTestScript(
 		BrowserScriptOperation{
 			Expect: OperationExpectation{Type: OperationInvokeTool, FrameID: "frame-1", ToolName: "write_state", Input: MustJSONValue(map[string]any{})},
-			Result: MustJSONValue(map[string]any{"invocation_id": "inv-clean"}),
+			Result: MustJSONValue(map[string]any{jsonFieldInvocationID: "inv-clean"}),
 			Emit: []EmittedEvent{{
 				Type:         EmittedToolResponded,
 				InvocationID: "inv-clean",

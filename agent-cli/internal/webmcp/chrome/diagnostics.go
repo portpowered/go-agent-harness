@@ -244,7 +244,7 @@ func safeReason(err error) string {
 	}
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "canceled"
+		return invocationStatusCanceled
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline_exceeded"
 	case strings.Contains(strings.ToLower(err.Error()), "method not found"):

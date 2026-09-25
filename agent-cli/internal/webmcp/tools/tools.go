@@ -425,7 +425,7 @@ func decodeArguments(raw []byte, spec toolSpec) (map[string]any, []webmcp.ToolRe
 			continue
 		}
 		switch property.typeName {
-		case "string":
+		case schemaTypeString:
 			var value string
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, webmcp.ToolResultIssue{Path: pointerPath(property.name), Code: "invalid_type"})
@@ -436,7 +436,7 @@ func decodeArguments(raw []byte, spec toolSpec) (map[string]any, []webmcp.ToolRe
 				continue
 			}
 			result[property.name] = value
-		case "boolean":
+		case schemaTypeBoolean:
 			var value bool
 			if err := json.Unmarshal(rawValue, &value); err != nil {
 				issues = append(issues, webmcp.ToolResultIssue{Path: pointerPath(property.name), Code: "invalid_type"})
@@ -533,7 +533,7 @@ func brokerFailure(err error, fallback webmcp.ErrorCode, details map[string]any)
 func brokerContextFailure(err error) ([]byte, error) {
 	resultError := webmcp.ResultErrorFor(err, webmcp.ErrorStaleSelection, map[string]any{"phase": "selected"})
 	if resultError.Code == string(webmcp.ErrorStaleSelection) && noPageSelectedDetails(resultError.Details) {
-		resultError.Message = "no page is selected"
+		resultError.Message = noPageSelectedMessage
 	}
 	return webmcp.EncodeToolResult(nil, &resultError)
 }
@@ -895,7 +895,7 @@ func flatParameters(schema map[string]any) []messages.ToolParameter {
 }
 
 func unknownToolSchema() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
+	return map[string]any{"type": schemaTypeObject, "properties": map[string]any{}, "additionalProperties": false}
 }
 
 func cloneMap(value map[string]any) map[string]any {

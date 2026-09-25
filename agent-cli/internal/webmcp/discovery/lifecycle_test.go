@@ -75,7 +75,7 @@ func TestLifecycleNavigationAdvancesOnceAndRejectsStaleSelection(t *testing.T) {
 
 	_, err = service.ValidateSelection(context.Background(), selected)
 	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
-	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != "generation_changed" {
+	if stale.Details["browser_id"] != browser.ID || stale.Details["target_id"] != targetID || stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != staleReasonGenerationChanged {
 		t.Fatalf("stale selection details = %#v", stale.Details)
 	}
 	if lister.calls != 2 {
@@ -164,7 +164,7 @@ func TestLifecycleTargetCloseInvalidatesAndDetachesOnly(t *testing.T) {
 	}
 	_, err = service.ValidateSelection(context.Background(), selected)
 	stale := discoveryErrorWithCode(t, err, CodeStaleSelection)
-	if stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != "target_closed" {
+	if stale.Details["selected_generation"] != uint64(1) || stale.Details["reason"] != staleReasonTargetClosed {
 		t.Fatalf("closed stale details = %#v", stale.Details)
 	}
 

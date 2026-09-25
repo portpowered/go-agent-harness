@@ -28,7 +28,7 @@ func TestPinnedChromeWebMCPClassificationContractTwice(t *testing.T) {
 	if os.Getenv(classificationIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the live classification probes", classificationIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -303,7 +303,7 @@ func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, confi
 	data := requireGateSuccessData[gateTabsData](t, result)
 	eligible := make([]gateTab, 0, len(data.Tabs))
 	for _, tab := range data.Tabs {
-		if tab.BrowserID == browserID && tab.Type == "page" && tab.Eligible {
+		if tab.BrowserID == browserID && tab.Type == pageTargetType && tab.Eligible {
 			eligible = append(eligible, tab)
 		}
 	}

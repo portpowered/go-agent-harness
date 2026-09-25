@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+// Lifecycle reasons recorded on retired sessions and invocations mirror the
+// browser event names that caused the retirement.
+const (
+	lifecycleReasonSessionClosed  = string(EventSessionClosed)
+	lifecycleReasonTargetDetached = string(EventTargetDetached)
+)
+
 func classifyOperation(descriptor ToolDescriptor) OperationClass {
 	if descriptor.Annotations.ReadOnly == nil {
 		return OperationUnknown
@@ -21,7 +28,7 @@ func lifecycleInvocationErrorCode(reason string, fallback ErrorCode) ErrorCode {
 	switch strings.ToLower(reason) {
 	case "disconnect", "disconnected", "browser_disconnected":
 		return ErrorBrowserDisconnected
-	case "detach", "detached", "target_detached":
+	case "detach", "detached", lifecycleReasonTargetDetached:
 		return ErrorTargetDetached
 	default:
 		return fallback

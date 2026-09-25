@@ -621,7 +621,7 @@ func (h *handle) listTargetsHTTP(ctx context.Context) ([]webmcp.Target, error) {
 	if err != nil {
 		return nil, errHTTPUnavailable
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/json/list", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+jsonListPath, nil)
 	if err != nil {
 		return nil, errHTTPUnavailable
 	}
@@ -684,7 +684,7 @@ func isInternalURL(rawURL string) bool {
 		return true
 	}
 	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
+	case schemeHTTP, schemeHTTPS:
 		return false
 	default:
 		return true

@@ -329,7 +329,7 @@ func chooseSelectionTarget(browserID string, targets []Target, requestedID strin
 			if target.ID != requestedID {
 				continue
 			}
-			if target.Type == "page" && !target.WebMCP {
+			if target.Type == targetTypePage && !target.WebMCP {
 				return Target{}, newUnsupportedWebMCP(browserID, target.ID)
 			}
 			if !target.Eligible {
@@ -393,7 +393,7 @@ func (s *Service) emitTarget(kind EventType, browserID, targetID string, generat
 		Generation:  generation,
 		Payload:     copyPayload,
 		Redaction: Redaction{
-			Mode:  "redacted",
+			Mode:  redactedValue,
 			Rules: []string{"url_query", "url_fragment", "raw_cdp_disabled"},
 		},
 	})

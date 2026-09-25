@@ -267,7 +267,7 @@ func newListenBeforeEnableHarness(t *testing.T) *listenBeforeEnableHarness {
 	h := &listenBeforeEnableHarness{handle: testHandle(baseExecutor)}
 	h.handle.browserExecutor = protocolExecutor
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/list" {
+		if request.URL.Path != jsonListPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -446,7 +446,7 @@ func newLifecycleTestSession(t *testing.T) (*handle, *targetSession, *chromedp.T
 	session := newTargetSession(handle, targetContext, cancelTarget, webmcp.Target{
 		BrowserID: handle.candidate.ID,
 		ID:        webmcp.TargetID(protocolTarget.TargetID),
-		Type:      "page",
+		Type:      pageTargetType,
 		URL:       "https://example.test/lifecycle",
 	}, webmcp.TargetOwnershipExternal)
 	session.setProtocolTarget(protocolTarget)

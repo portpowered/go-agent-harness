@@ -37,7 +37,7 @@ func TestPinnedChromeWebMCPProbe03ThroughActualBinary(t *testing.T) {
 	if os.Getenv(chromeIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the actual-binary Probe 03 proof", chromeIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -259,7 +259,7 @@ func (r *probe03Run) watchNavigationToPageB(t *testing.T, ctx context.Context, i
 	recordProbe03Command(&r.transcript, watchResult, r.cdpURL, r.fixture.Token(), r.profileDir, r.explicitConfigDir, "")
 	assertProbe03SafeOutput(t, watchResult, r.cdpURL, r.fixture.Token())
 	watchData := requireGateSuccessData[gateWatchData](t, watchResult)
-	if watchData.Status != "canceled" {
+	if watchData.Status != invocationStatusCanceled {
 		t.Fatalf("Probe 03 watch = %+v, want bounded canceled status", watchData)
 	}
 	assertProbe03GenerationChanged(t, watchData, r.browserID, r.publicTargetID, initialGeneration)
@@ -617,7 +617,7 @@ func probe03FindTab(t *testing.T, data gateTabsData, browserID, origin, pageURL 
 	var match *gateTab
 	for index := range data.Tabs {
 		candidate := data.Tabs[index]
-		if candidate.BrowserID != browserID || candidate.Type != "page" || candidate.Origin != origin || !candidate.Eligible {
+		if candidate.BrowserID != browserID || candidate.Type != pageTargetType || candidate.Origin != origin || !candidate.Eligible {
 			continue
 		}
 		if match != nil {

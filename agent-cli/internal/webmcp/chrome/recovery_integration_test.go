@@ -28,7 +28,7 @@ func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
 	if os.Getenv(chromeRecoveryEnv) != "1" {
 		t.Skipf("set %s=1 to run the pinned Chrome topology recovery suite", chromeRecoveryEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -297,7 +297,7 @@ func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pi
 	}
 	assertRecoveryStaleToolRef(t, ctx, selection.broker, selection.initialCancel.Ref)
 	if _, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Ready && !oracle.Pending && oracle.Value == "initial"
+		return oracle.Ready && !oracle.Pending && oracle.Value == fixtureOracleInitial
 	}); err != nil {
 		t.Fatalf("wait for clean replacement page state: %v", err)
 	}
@@ -665,7 +665,7 @@ func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedC
 	}
 	assertRecoveryStaleToolRef(t, ctx, selection.broker, selection.initialCancel.Ref)
 	if _, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Ready && !oracle.Pending && oracle.Value == "initial"
+		return oracle.Ready && !oracle.Pending && oracle.Value == fixtureOracleInitial
 	}); err != nil {
 		t.Fatalf("wait for clean navigated page: %v", err)
 	}

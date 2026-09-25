@@ -338,11 +338,11 @@ func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *Tar
 	state.target.Generation = current
 	state.generation = current
 	state.target.Eligible = false
-	state.target.EligibilityReason = "target_closed"
+	state.target.EligibilityReason = staleReasonTargetClosed
 	s.storeLifecycleTargetLocked(event.BrowserID, event.TargetID, state)
 	reason := boundedLabel(event.Reason, maxLifecycleReason)
 	if reason == "" {
-		reason = "target_closed"
+		reason = staleReasonTargetClosed
 	}
 	// Keep the monotonic tombstone generation for stale-selection checks, but
 	// do not publish it as navigation: a closed target has no new document.
@@ -462,7 +462,7 @@ func applyLifecycleCapabilities(target *Target, event LifecycleEvent) {
 	}
 	if !target.WebMCP {
 		target.Eligible = false
-		target.EligibilityReason = "unsupported_webmcp"
+		target.EligibilityReason = eligibilityUnsupportedWebMCP
 	}
 }
 
@@ -579,7 +579,7 @@ func (s *Service) validateSelectionGenerationLocked(browserID, targetID string, 
 	if s.selection == nil {
 		reason := "selection_not_active"
 		if stateOK && state.generation != generation {
-			reason = "generation_changed"
+			reason = staleReasonGenerationChanged
 		}
 		return Selection{}, newStaleSelection(browserID, targetID, generation, reason)
 	}
@@ -588,9 +588,9 @@ func (s *Service) validateSelectionGenerationLocked(browserID, targetID string, 
 		return Selection{}, newStaleSelection(browserID, targetID, generation, "selection_replaced")
 	}
 	if generation == 0 || current.Generation != generation || (stateOK && state.generation != generation) {
-		reason := "generation_changed"
+		reason := staleReasonGenerationChanged
 		if stateOK && state.closed {
-			reason = "target_closed"
+			reason = staleReasonTargetClosed
 		}
 		return Selection{}, newStaleSelection(browserID, targetID, generation, reason)
 	}

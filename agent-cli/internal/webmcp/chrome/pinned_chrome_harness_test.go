@@ -60,7 +60,7 @@ type runningChrome struct {
 }
 
 func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, error) {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		return pinnedChrome{}, fmt.Errorf("locked artifact platform is %s (darwin/arm64), observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
 	}
 	root, err := repositoryRoot()
@@ -343,7 +343,7 @@ func waitForFixturePageTarget(ctx context.Context, baseURL, fixtureURL string) (
 }
 
 func readDevToolsTargets(ctx context.Context, baseURL string) ([]devToolsTarget, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/json/list", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+jsonListPath, nil)
 	if err != nil {
 		return nil, err
 	}

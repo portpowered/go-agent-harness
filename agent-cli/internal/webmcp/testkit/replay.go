@@ -422,7 +422,7 @@ func (r *BrowserReplay) matchOperationLocked(request OperationRequest) (RuntimeE
 		execution.InvocationID = invocationID
 		r.pending[invocationID] = struct{}{}
 		if len(execution.Result) == 0 {
-			execution.Result = MustJSONValue(map[string]any{"invocation_id": invocationID})
+			execution.Result = MustJSONValue(map[string]any{jsonFieldInvocationID: invocationID})
 		}
 	}
 	if request.Type == OperationNavigate {
@@ -469,7 +469,7 @@ func (r *BrowserReplay) invocationIDForResult(result json.RawMessage) (string, e
 		if err != nil {
 			return "", err
 		}
-		if raw, ok := fields["invocation_id"]; ok {
+		if raw, ok := fields[jsonFieldInvocationID]; ok {
 			id, err := parseScriptString(raw)
 			if err != nil {
 				return "", err
@@ -504,7 +504,7 @@ func (r *BrowserReplay) matchEventLocked(actual FixtureEvent) error {
 	}
 	if expected.Type == EmittedToolResponded {
 		if _, ok := r.pending[expected.InvocationID]; !ok {
-			return r.divergeEventLocked(actual, "invocation_id", string(expected.Type), eventTypeLabel(actual), errors.New("terminal response has no pending invocation"))
+			return r.divergeEventLocked(actual, jsonFieldInvocationID, string(expected.Type), eventTypeLabel(actual), errors.New("terminal response has no pending invocation"))
 		}
 		delete(r.pending, expected.InvocationID)
 	}

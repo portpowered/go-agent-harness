@@ -181,7 +181,7 @@ func invokeYouTubeAdapterTool(t *testing.T, ctx context.Context, session webmcp.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if event.Status != "Completed" {
+	if event.Status != toolStatusCompleted {
 		t.Fatalf("%s terminal = %+v", tool.Name, event)
 	}
 	return event

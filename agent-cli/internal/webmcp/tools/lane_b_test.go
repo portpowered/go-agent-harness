@@ -20,7 +20,7 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 		if definition.Name != wantNames[index] {
 			t.Fatalf("definition %d name = %q, want %q", index, definition.Name, wantNames[index])
 		}
-		if definition.Parameters["type"] != "object" || definition.Parameters["additionalProperties"] != false {
+		if definition.Parameters["type"] != schemaTypeObject || definition.Parameters["additionalProperties"] != false {
 			t.Fatalf("%s schema is not a closed object: %#v", definition.Name, definition.Parameters)
 		}
 		properties, ok := definition.Parameters["properties"].(map[string]any)
@@ -67,7 +67,7 @@ func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
 }
 
 func TestLaneBToolExecutorGoldenSuccessAndCorrelation(t *testing.T) {
-	browser := discovery.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3", Source: discovery.SourceConfigured, Loopback: true}
+	browser := discovery.BrowserCandidate{ID: testBrowserID, Product: "Chrome/Test", Protocol: "1.3", Source: discovery.SourceConfigured, Loopback: true}
 	target := discovery.Target{
 		BrowserID:      browser.ID,
 		ID:             "target-a",
@@ -213,7 +213,7 @@ func assertLaneBInvalidInputIssue(t *testing.T, content, wantPath, wantCode stri
 }
 
 func TestLaneBOutputReappliesSafePageMetadataBoundary(t *testing.T) {
-	browser := discovery.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3"}
+	browser := discovery.BrowserCandidate{ID: testBrowserID, Product: "Chrome/Test", Protocol: "1.3"}
 	target := discovery.Target{
 		BrowserID:      browser.ID,
 		ID:             "target-a",
@@ -267,7 +267,7 @@ func TestLaneBOutputReappliesSafePageMetadataBoundary(t *testing.T) {
 }
 
 func TestLaneBToolFailuresRefreshAndActivation(t *testing.T) {
-	browser := discovery.BrowserCandidate{ID: "browser-a", Product: "Chrome/Test", Protocol: "1.3"}
+	browser := discovery.BrowserCandidate{ID: testBrowserID, Product: "Chrome/Test", Protocol: "1.3"}
 	target := discovery.Target{BrowserID: browser.ID, ID: "target-a", Type: "page", Title: "Orders", URL: "https://example.test/orders", Origin: "https://example.test", Generation: 4, WebMCP: true, WebMCPKnown: true, ToolCount: 1, ToolCountKnown: true, Eligible: true}
 	selected := discovery.Selection{BrowserID: browser.ID, TargetID: target.ID, Title: target.Title, URL: target.URL, Origin: target.Origin, Generation: target.Generation, Target: target}
 
@@ -359,7 +359,7 @@ func TestLaneBToolFailuresRefreshAndActivation(t *testing.T) {
 func TestLaneBListTabsRequiresExactBrowserBeforeListing(t *testing.T) {
 	fake := &fakeDiscovery{candidates: []discovery.BrowserCandidate{
 		{ID: "browser-b", Product: "Beta"},
-		{ID: "browser-a", Product: "Alpha"},
+		{ID: testBrowserID, Product: "Alpha"},
 	}}
 	response, err := New(Options{Service: fake}).Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "ambiguous-list",
@@ -381,7 +381,7 @@ func TestLaneBListTabsRequiresExactBrowserBeforeListing(t *testing.T) {
 	if err := json.Unmarshal(mustJSON(t, envelope.Error.Details["candidate_browser_ids"]), &ids); err != nil {
 		t.Fatalf("decode candidate IDs: %v", err)
 	}
-	if !equalStrings(ids, []string{"browser-a", "browser-b"}) {
+	if !equalStrings(ids, []string{testBrowserID, "browser-b"}) {
 		t.Fatalf("candidate browser IDs = %v, want sorted exact IDs", ids)
 	}
 	recovery, ok := envelope.Error.Details["recovery"].(map[string]any)

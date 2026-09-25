@@ -44,7 +44,7 @@ type DiscoveryError struct {
 
 func (e *DiscoveryError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return e.Message
 }
@@ -130,7 +130,7 @@ func newRemoteEndpointDenied(kind EndpointKind) *DiscoveryError {
 func newProtocolInvalid(protocol, reason string, cause error) *DiscoveryError {
 	protocol = safeProtocolDetail(protocol)
 	if protocol == "" {
-		protocol = "unknown"
+		protocol = unknownValue
 	}
 	return &DiscoveryError{
 		Code:      CodeBrowserProtocolInvalid,
@@ -150,7 +150,7 @@ func safeProtocolDetail(value string) string {
 	if value == "" {
 		return ""
 	}
-	if value == "unknown" || protocolVersionPattern.MatchString(value) || strings.HasPrefix(value, "http_") {
+	if value == unknownValue || protocolVersionPattern.MatchString(value) || strings.HasPrefix(value, "http_") {
 		return boundedLabel(value, 32)
 	}
 	return "invalid"
@@ -307,7 +307,7 @@ func safeAmbiguityTitle(value string) string {
 		return ""
 	}
 	if strings.Contains(value, "://") || strings.ContainsAny(value, "?#@") {
-		return "redacted"
+		return redactedValue
 	}
 	return value
 }
@@ -366,13 +366,13 @@ func newTargetAttachFailed(browserID, targetID, phase, reason string, cause erro
 
 func newBrowserDisconnected(browserID, targetID, phase string, cause error) *DiscoveryError {
 	if !publicIDPattern.MatchString(strings.TrimSpace(browserID)) {
-		browserID = "unknown"
+		browserID = unknownValue
 	} else {
 		browserID = strings.TrimSpace(browserID)
 	}
 	phase = boundedLabel(phase, 32)
 	if phase == "" {
-		phase = "disconnect"
+		phase = phaseDisconnect
 	}
 	details := map[string]any{
 		"browser_id":         browserID,
@@ -407,7 +407,7 @@ func classifiedFrom(err error, kind EndpointKind, source Source) *DiscoveryError
 
 func (e *DiscoveryError) String() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }

@@ -27,7 +27,7 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 	if os.Getenv(cliChromeIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the pinned Chrome CLI integration proof", cliChromeIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
@@ -235,7 +235,7 @@ func (r *cliChromeIntegrationRun) assertControlledCancel(t *testing.T, ctx conte
 	var cancelData cliChromeCancelData
 	cancelEnvelope := requireCLIChromeIntegrationSuccess(t, cancelProcess)
 	decodeCLIChromeIntegrationData(t, cancelEnvelope.Data, &cancelData)
-	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != "canceled" || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
+	if cancelData.InvocationID != receipt.InvocationID || cancelData.Status != invocationStatusCanceled || cancelData.Phase != "terminal" || cancelData.Outcome != "confirmed_canceled" {
 		t.Fatalf("pinned Chrome cancel result = %+v", cancelData)
 	}
 
@@ -317,7 +317,7 @@ func (r *cliChromeIntegrationRun) confirmDeclarativeCancel(t *testing.T, ctx con
 	t.Helper()
 	var data cliChromeCancelData
 	decodeCLIChromeIntegrationData(t, declarativeEnvelope.Data, &data)
-	if declarativeCancel.err != nil || data.InvocationID != declarative.receiptID || data.Status != "canceled" || data.Phase != "terminal" || data.Outcome != "confirmed_canceled" {
+	if declarativeCancel.err != nil || data.InvocationID != declarative.receiptID || data.Status != invocationStatusCanceled || data.Phase != "terminal" || data.Outcome != "confirmed_canceled" {
 		t.Fatalf("pinned Chrome declarative cancel success = %+v err=%v", data, declarativeCancel.err)
 	}
 	declarative.outcome = data.Outcome
@@ -430,7 +430,7 @@ func assertCLIChromeRecovery(t *testing.T, binary, configDir, toolRef string) st
 	if err := json.Unmarshal(recoveredData.Output, &recoveredOutput); err != nil {
 		t.Fatalf("decode pinned Chrome recovery output: %v", err)
 	}
-	if recoveredOutput["message"] != "recovered" || recoveredOutput["greeting"] != "hello" {
+	if recoveredOutput["message"] != "recovered" || recoveredOutput["greeting"] != fixtureGreeting {
 		t.Fatalf("pinned Chrome recovery output = %+v", recoveredOutput)
 	}
 	return recoveredData.Status
@@ -445,7 +445,7 @@ func TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome(t *testing.T) {
 	if os.Getenv(cliSelectDeathIntegrationEnv) != "1" {
 		t.Skipf("set %s=1 to run the live kill-during-select proof", cliSelectDeathIntegrationEnv)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 

@@ -26,15 +26,15 @@ func (s *ScriptedTargetSession) ReleaseNextInvocation(output json.RawMessage) (w
 	return "", webmcp.ErrInvocationNotFound
 }
 
-// EmitToolResponse deliberately permits a response after cancellation or a
-// previous response. The broker must treat that event as bounded late
-// reconciliation rather than a second delivery.
 // Tool response statuses shared by scripted sessions and fixture validation.
 const (
 	toolResponseStatusCompleted = "Completed"
 	toolResponseStatusCanceled  = "Canceled"
 )
 
+// EmitToolResponse deliberately permits a response after cancellation or a
+// previous response. The broker must treat that event as bounded late
+// reconciliation rather than a second delivery.
 func (s *ScriptedTargetSession) EmitToolResponse(id webmcp.InvocationID, status string, output json.RawMessage) error {
 	s.mu.Lock()
 	record := s.invokes[id]

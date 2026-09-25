@@ -20,7 +20,7 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page", URL: "https://fixture.test/"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page", URL: "https://fixture.test/"},
 					testkit.WithInitialCatalog(
 						webmcp.ToolDescriptor{Name: "write_state", FrameID: "frame-1", InputSchema: []byte(`{"type":"object"}`)},
 						webmcp.ToolDescriptor{Name: "read_state", FrameID: "frame-1", InputSchema: []byte(`{"type":"object"}`), Annotations: webmcp.ToolAnnotations{ReadOnly: &readOnly}},
@@ -37,7 +37,7 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	})
 	defer func() { _ = broker.Close() }()
 
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
@@ -56,7 +56,7 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	if err != nil {
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
+	session := scriptedTargetSession(t, handleValue, primaryTargetID)
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -210,7 +210,7 @@ func TestStatefulBrokerBoundsSerializedInvocationResults(t *testing.T) {
 		testkit.BrowserConfig{
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{testkit.NewTargetConfig(
-				webmcp.Target{BrowserID: candidate.ID, ID: "tab-a", Type: "page"},
+				webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 				testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 			)},
 		},
@@ -223,7 +223,7 @@ func TestStatefulBrokerBoundsSerializedInvocationResults(t *testing.T) {
 		MaxResultBytes: 128,
 	})
 	defer func() { _ = broker.Close() }()
-	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: "tab-a"}); err != nil {
+	if _, err := broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select target: %v", err)
 	}
 	snapshot, err := broker.ListTools(context.Background(), webmcp.ListToolsOptions{IncludeSchemas: true})
@@ -234,7 +234,7 @@ func TestStatefulBrokerBoundsSerializedInvocationResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := handleValue.(*testkit.ScriptedBrowserHandle).TargetSession("tab-a")
+	session := scriptedTargetSession(t, handleValue, primaryTargetID)
 	session.BlockInvocations()
 	dispatched, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: snapshot.Tools[0].Ref, Input: []byte(`{}`)})
 	if err != nil {

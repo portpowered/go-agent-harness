@@ -609,14 +609,14 @@ func (s *Service) candidateFromVersion(version BrowserVersion, source Source, ki
 		if requireMetadata {
 			return BrowserCandidate{}, newProtocolInvalidAt("version", "unknown", "missing_browser_product", nil)
 		}
-		product = "unknown"
+		product = unknownValue
 	}
 	protocol, protocolErr := safeProtocol(version.ProtocolVersion, requireMetadata)
 	if protocolErr != "" {
 		return BrowserCandidate{}, newProtocolInvalidAt("version", version.ProtocolVersion, protocolErr, nil)
 	}
 	if protocol == "" {
-		protocol = "unknown"
+		protocol = unknownValue
 	}
 
 	wsRaw := strings.TrimSpace(version.WebSocketDebuggerURL)
@@ -807,7 +807,7 @@ func (s *Service) retireReplacedBrowserLocked(browserID string) {
 		for targetID, state := range targetStates {
 			state.closed = true
 			state.target.Eligible = false
-			state.target.EligibilityReason = "browser_replaced"
+			state.target.EligibilityReason = staleReasonBrowserReplaced
 			targetStates[targetID] = state
 		}
 	}
@@ -823,7 +823,7 @@ func (s *Service) retireReplacedBrowserLocked(browserID string) {
 	s.selection = nil
 	s.emitTarget(EventTargetDetached, selection.BrowserID, selection.TargetID, selection.Generation, map[string]any{
 		"generation":     selection.Generation,
-		"reason":         "browser_replaced",
+		"reason":         staleReasonBrowserReplaced,
 		"ownership_mode": ownership,
 	})
 }
@@ -834,11 +834,11 @@ func safeProduct(value string) string {
 		return ""
 	}
 	if len(value) > 128 || strings.ContainsAny(value, "\r\n?#") {
-		return "redacted"
+		return redactedValue
 	}
 	for _, r := range value {
 		if r < 0x20 || r == 0x7f {
-			return "redacted"
+			return redactedValue
 		}
 	}
 	return value
@@ -852,7 +852,7 @@ func safeProtocol(value string, required bool) (string, string) {
 		}
 		return "", ""
 	}
-	if value == "unknown" && !required {
+	if value == unknownValue && !required {
 		return value, ""
 	}
 	matches := protocolVersionPattern.FindStringSubmatch(value)
@@ -881,7 +881,7 @@ func boundedLabel(value string, max int) string {
 	}
 	for _, r := range value {
 		if r < 0x20 || r == 0x7f {
-			return "redacted"
+			return redactedValue
 		}
 	}
 	return value
@@ -941,7 +941,7 @@ func (s *Service) emit(kind EventType, browserID string, payload map[string]any)
 		BrowserID:   browserID,
 		Payload:     copyPayload,
 		Redaction: Redaction{
-			Mode:  "redacted",
+			Mode:  redactedValue,
 			Rules: []string{"url_query", "url_fragment", "raw_cdp_disabled"},
 		},
 	})
@@ -954,8 +954,8 @@ func (validatingWebSocketProbe) Probe(ctx context.Context, endpoint string) (Bro
 		return BrowserVersion{}, err
 	}
 	return BrowserVersion{
-		Browser:              "unknown",
-		ProtocolVersion:      "unknown",
+		Browser:              unknownValue,
+		ProtocolVersion:      unknownValue,
 		WebSocketDebuggerURL: endpoint,
 	}, nil
 }

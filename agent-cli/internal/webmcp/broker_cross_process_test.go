@@ -9,9 +9,15 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
 )
 
-// crossProcessTargetID is the watched target shared by every independent
-// client phase.
-const crossProcessTargetID = "tab-a"
+// Fixture identities shared by the broker tests: primaryTargetID is the
+// default scripted page target (and the watched target shared by every
+// independent client phase), secondaryTargetID a second page in the same
+// browser, and livingRoomCastDevice the scripted cast sink name.
+const (
+	primaryTargetID      = "tab-a"
+	secondaryTargetID    = "tab-second"
+	livingRoomCastDevice = "Living Room TV"
+)
 
 // crossProcessWatch is the watched broker state shared by the independent
 // client phases of the cross-process observation test.
@@ -30,7 +36,7 @@ func TestStatefulBrokerObservesIndependentClientCatalogAndInvocationEvents(t *te
 			Candidate: candidate,
 			Targets: []testkit.TargetConfig{
 				testkit.NewTargetConfig(
-					webmcp.Target{BrowserID: candidate.ID, ID: crossProcessTargetID, Type: "page"},
+					webmcp.Target{BrowserID: candidate.ID, ID: primaryTargetID, Type: "page"},
 					testkit.WithInitialCatalog(pageTool("read_state", "frame-1", `{}`)),
 				),
 				testkit.NewTargetConfig(webmcp.Target{BrowserID: candidate.ID, ID: "tab-b", Type: "page"}),
@@ -91,18 +97,18 @@ func requireBrokerStep(t *testing.T, err error, step string) {
 func requireWatchedCatalogEvent(t *testing.T, watch crossProcessWatch, reason, label string) {
 	t.Helper()
 	event := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventCatalogChanged)
-	if event.BrowserID != watch.candidate.ID || event.TargetID != crossProcessTargetID || event.Generation != 1 || event.Reason != reason {
+	if event.BrowserID != watch.candidate.ID || event.TargetID != primaryTargetID || event.Generation != 1 || event.Reason != reason {
 		t.Fatalf("%s = %#v, want watched target generation-one %s", label, event, reason)
 	}
 }
 
 func selectCrossProcessWatchedTarget(t *testing.T, watch crossProcessWatch) webmcp.ToolRef {
 	t.Helper()
-	if _, err := watch.broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: watch.candidate.ID, TargetID: crossProcessTargetID}); err != nil {
+	if _, err := watch.broker.Select(context.Background(), webmcp.TargetSelector{BrowserID: watch.candidate.ID, TargetID: primaryTargetID}); err != nil {
 		t.Fatalf("select watched target: %v", err)
 	}
 	selectedEvent := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventSelected)
-	if selectedEvent.BrowserID != watch.candidate.ID || selectedEvent.TargetID != crossProcessTargetID || selectedEvent.Generation != 1 {
+	if selectedEvent.BrowserID != watch.candidate.ID || selectedEvent.TargetID != primaryTargetID || selectedEvent.Generation != 1 {
 		t.Fatalf("selected event = %#v, want watched target generation one", selectedEvent)
 	}
 	requireWatchedCatalogEvent(t, watch, "tools_added", "initial catalog event")
@@ -120,7 +126,7 @@ func attachCrossProcessExternalClient(t *testing.T, watch crossProcessWatch) (we
 	t.Helper()
 	externalHandleValue, err := watch.runtime.Open(context.Background(), watch.candidate)
 	requireBrokerStep(t, err, "open external client")
-	externalSessionValue, err := externalHandleValue.Attach(context.Background(), crossProcessTargetID, webmcp.TargetOwnershipExternal)
+	externalSessionValue, err := externalHandleValue.Attach(context.Background(), primaryTargetID, webmcp.TargetOwnershipExternal)
 	requireBrokerStep(t, err, "attach external client")
 	externalSession := externalSessionValue.(*testkit.ScriptedTargetSession)
 	if externalSession == nil {
@@ -193,13 +199,13 @@ func assertCrossProcessExternalInvocation(t *testing.T, watch crossProcessWatch,
 	externalInvocationID, err := externalSession.InvokeWebMCP(context.Background(), writeTool.FrameID, writeTool.Name, []byte(`{"step":1}`))
 	requireBrokerStep(t, err, "invoke from external client")
 	created := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationCreated)
-	if created.InvocationID != externalInvocationID || created.ToolRef != writeRef || created.State != webmcp.InvocationDispatched || created.BrowserID != watch.candidate.ID || created.TargetID != crossProcessTargetID || created.Generation != 1 || created.Reason != "browser_observed" {
+	if created.InvocationID != externalInvocationID || created.ToolRef != writeRef || created.State != webmcp.InvocationDispatched || created.BrowserID != watch.candidate.ID || created.TargetID != primaryTargetID || created.Generation != 1 || created.Reason != "browser_observed" {
 		t.Fatalf("external invocation created event = %#v, want one correlated observation", created)
 	}
 
 	requireBrokerStep(t, externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"ok":true}`)), "respond from external client")
 	terminal := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventInvocationTerminal)
-	if terminal.InvocationID != externalInvocationID || terminal.ToolRef != writeRef || terminal.State != webmcp.InvocationCompleted || terminal.BrowserID != watch.candidate.ID || terminal.TargetID != crossProcessTargetID || terminal.Generation != 1 {
+	if terminal.InvocationID != externalInvocationID || terminal.ToolRef != writeRef || terminal.State != webmcp.InvocationCompleted || terminal.BrowserID != watch.candidate.ID || terminal.TargetID != primaryTargetID || terminal.Generation != 1 {
 		t.Fatalf("external invocation terminal event = %#v, want one correlated completion", terminal)
 	}
 	requireBrokerStep(t, externalSession.EmitToolResponse(externalInvocationID, "Completed", []byte(`{"duplicate":true}`)), "emit duplicate external response")
@@ -248,7 +254,7 @@ func assertCrossProcessStaleGenerationIgnored(t *testing.T, watch crossProcessWa
 	t.Helper()
 	requireBrokerStep(t, externalSession.Navigate("https://fixture.test/next", "https://fixture.test"), "navigate watched target")
 	generationEvent := waitForBrokerEvent(t, watch.events, webmcp.BrokerEventGenerationChanged)
-	if generationEvent.BrowserID != watch.candidate.ID || generationEvent.TargetID != crossProcessTargetID || generationEvent.Generation != 2 {
+	if generationEvent.BrowserID != watch.candidate.ID || generationEvent.TargetID != primaryTargetID || generationEvent.Generation != 2 {
 		t.Fatalf("generation event = %#v, want generation two", generationEvent)
 	}
 	requireBrokerStep(t, externalSession.Emit(webmcp.BrowserEvent{
@@ -319,4 +325,16 @@ func waitForTestkitEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp
 		t.Fatal("timed out waiting for testkit browser event")
 		return webmcp.BrowserEvent{}
 	}
+}
+
+// scriptedTargetSession returns the scripted session for targetID behind a
+// handle opened from a testkit runtime, failing the test when the handle is
+// not a scripted one.
+func scriptedTargetSession(t *testing.T, handle webmcp.BrowserHandle, targetID webmcp.TargetID) *testkit.ScriptedTargetSession {
+	t.Helper()
+	scripted, ok := handle.(*testkit.ScriptedBrowserHandle)
+	if !ok {
+		t.Fatalf("fixture handle is %T, want *testkit.ScriptedBrowserHandle", handle)
+	}
+	return scripted.TargetSession(targetID)
 }

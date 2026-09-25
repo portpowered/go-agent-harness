@@ -44,9 +44,9 @@ type BrowserDisconnectError = BrowserDisconnectedError
 
 func (e *BrowserDisconnectedError) Error() string {
 	if e == nil {
-		return "browser connection disconnected"
+		return browserDisconnectedMessage
 	}
-	return "browser connection disconnected"
+	return browserDisconnectedMessage
 }
 
 func (e *BrowserDisconnectedError) Unwrap() error {
@@ -192,7 +192,7 @@ func normalizeDisconnectEvent(event DisconnectEvent) (DisconnectEvent, *Discover
 	}
 	event.Phase = boundedLabel(event.Phase, 32)
 	if event.Phase == "" {
-		event.Phase = "disconnect"
+		event.Phase = phaseDisconnect
 	}
 	event.Reason = boundedLabel(event.Reason, maxDisconnectReason)
 	return event, nil
@@ -302,7 +302,7 @@ func (s *Service) markBrowserDisconnectedLocked(browserID, targetID, phase strin
 	}
 	state.Phase = boundedLabel(phase, 32)
 	if state.Phase == "" {
-		state.Phase = "disconnect"
+		state.Phase = phaseDisconnect
 	}
 	s.disconnected[browserID] = state
 	if s.selection != nil && s.selection.BrowserID == browserID {
@@ -319,7 +319,7 @@ func (s *Service) noteBrowserDisconnectedFailureLocked(failure *DiscoveryError, 
 		return
 	}
 	browserID := detailString(failure.Details, "browser_id")
-	if !publicIDPattern.MatchString(browserID) || browserID == "unknown" {
+	if !publicIDPattern.MatchString(browserID) || browserID == unknownValue {
 		browserID = fallbackBrowserID
 	}
 	targetID := detailString(failure.Details, "target_id")

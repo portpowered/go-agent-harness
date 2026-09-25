@@ -11,6 +11,15 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
+// Fixture values shared by the testkit tests: defaultTargetID is the first
+// scripted page target, secondTargetID the second, and okJSONOutput a
+// minimal successful tool output.
+const (
+	defaultTargetID = "tab-a"
+	secondTargetID  = "tab-b"
+	okJSONOutput    = `{"ok":true}`
+)
+
 func TestScriptedRuntimeModelsTargetsCatalogInvocationsAndOwnership(t *testing.T) {
 	clock := NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture", Loopback: true}
@@ -25,8 +34,8 @@ func TestScriptedRuntimeModelsTargetsCatalogInvocationsAndOwnership(t *testing.T
 		BrowserConfig{
 			Candidate: candidate,
 			Targets: []TargetConfig{
-				NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page", Title: "A", URL: "https://a.test/"}, WithInitialCatalog(readTool)),
-				NewTargetConfig(webmcp.Target{ID: "tab-b", Type: "page", Title: "B", URL: "https://b.test/"}, WithAutoResponse([]byte(`{"ok":true}`))),
+				NewTargetConfig(webmcp.Target{ID: defaultTargetID, Type: "page", Title: "A", URL: "https://a.test/"}, WithInitialCatalog(readTool)),
+				NewTargetConfig(webmcp.Target{ID: secondTargetID, Type: "page", Title: "B", URL: "https://b.test/"}, WithAutoResponse([]byte(okJSONOutput))),
 			},
 		},
 	)
@@ -39,7 +48,7 @@ func TestScriptedRuntimeModelsTargetsCatalogInvocationsAndOwnership(t *testing.T
 	if err != nil {
 		t.Fatalf("list targets: %v", err)
 	}
-	if len(targets) != 2 || targets[0].ID != "tab-a" || targets[1].ID != "tab-b" {
+	if len(targets) != 2 || targets[0].ID != defaultTargetID || targets[1].ID != secondTargetID {
 		t.Fatalf("targets = %#v, want deterministic tab-a/tab-b order", targets)
 	}
 
@@ -75,11 +84,11 @@ func requireScriptedSession(t *testing.T, value webmcp.TargetSession) *ScriptedT
 // sessions and consumes their initial attach and catalog events.
 func attachOwnershipSessions(t *testing.T, handleValue webmcp.BrowserHandle) (*ScriptedTargetSession, *ScriptedTargetSession) {
 	t.Helper()
-	sessionAValue, err := handleValue.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	sessionAValue, err := handleValue.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach tab-a: %v", err)
 	}
-	sessionBValue, err := handleValue.Attach(context.Background(), "tab-b", webmcp.TargetOwnershipHarnessOwned)
+	sessionBValue, err := handleValue.Attach(context.Background(), secondTargetID, webmcp.TargetOwnershipHarnessOwned)
 	if err != nil {
 		t.Fatalf("attach tab-b: %v", err)
 	}
@@ -130,7 +139,7 @@ func invokeBlockedAndIndependentTargets(t *testing.T, sessionA, sessionB *Script
 	if event := nextEvent(t, sessionB.Events()); event.Type != webmcp.EventToolInvoked || event.InvocationID != invoB {
 		t.Fatalf("tab-b invocation event = %#v", event)
 	}
-	if event := nextEvent(t, sessionB.Events()); event.Type != webmcp.EventToolResponded || string(event.Output) != `{"ok":true}` {
+	if event := nextEvent(t, sessionB.Events()); event.Type != webmcp.EventToolResponded || string(event.Output) != okJSONOutput {
 		t.Fatalf("tab-b response event = %#v", event)
 	}
 	if len(sessionA.PendingInvocations()) != 1 {
@@ -178,7 +187,7 @@ func assertCloseHonorsTargetOwnership(t *testing.T, handleValue webmcp.BrowserHa
 	if err != nil {
 		t.Fatalf("list targets after external detach: %v", err)
 	}
-	if len(remaining) != 2 || remaining[0].Attached || remaining[1].ID != "tab-b" || !remaining[1].Attached {
+	if len(remaining) != 2 || remaining[0].Attached || remaining[1].ID != secondTargetID || !remaining[1].Attached {
 		t.Fatalf("targets after external detach = %#v, want tab-a preserved and detached", remaining)
 	}
 	if err := sessionB.Close(); err != nil {
@@ -188,7 +197,7 @@ func assertCloseHonorsTargetOwnership(t *testing.T, handleValue webmcp.BrowserHa
 	if err != nil {
 		t.Fatalf("list targets after owned close: %v", err)
 	}
-	if len(remaining) != 1 || remaining[0].ID != "tab-a" {
+	if len(remaining) != 1 || remaining[0].ID != defaultTargetID {
 		t.Fatalf("targets after harness-owned close = %#v, want only external tab-a", remaining)
 	}
 
@@ -204,7 +213,7 @@ func TestScriptedRuntimeBroadcastsEventsAcrossIndependentClients(t *testing.T) {
 	candidate := webmcp.BrowserCandidate{ID: "browser-a", Product: "fixture"}
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: candidate,
-		Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page"})},
+		Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{ID: defaultTargetID, Type: "page"})},
 	})
 	defer func() {
 		if err := runtime.Close(); err != nil {
@@ -258,12 +267,12 @@ func TestScriptedRuntimeBroadcastsEventsAcrossIndependentClients(t *testing.T) {
 		}
 		invocationSequence = event.Sequence
 	}
-	if err := second.EmitToolResponse(id, "Completed", []byte(`{"ok":true}`)); err != nil {
+	if err := second.EmitToolResponse(id, "Completed", []byte(okJSONOutput)); err != nil {
 		t.Fatalf("respond from second client: %v", err)
 	}
 	for name, session := range map[string]*ScriptedTargetSession{"first": first, "second": second} {
 		event := nextEvent(t, session.Events())
-		if event.Type != webmcp.EventToolResponded || event.InvocationID != id || string(event.Output) != `{"ok":true}` {
+		if event.Type != webmcp.EventToolResponded || event.InvocationID != id || string(event.Output) != okJSONOutput {
 			t.Fatalf("%s response event = %#v, want correlated tool_responded", name, event)
 		}
 		if event.Sequence <= invocationSequence {
@@ -280,7 +289,7 @@ func openAttachedClient(t *testing.T, runtime *ScriptedBrowserRuntime, candidate
 	if err != nil {
 		t.Fatalf("open %s client: %v", label, err)
 	}
-	value, err := handle.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	value, err := handle.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach %s client: %v", label, err)
 	}
@@ -290,13 +299,13 @@ func openAttachedClient(t *testing.T, runtime *ScriptedBrowserRuntime, candidate
 func TestScriptedSessionCloseOrphansBlockedWorkAndWakesWaiters(t *testing.T) {
 	runtime := NewScriptedBrowserRuntime(BrowserConfig{
 		Candidate: webmcp.BrowserCandidate{ID: "browser-a"},
-		Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{ID: "tab-a", Type: "page"})},
+		Targets:   []TargetConfig{NewTargetConfig(webmcp.Target{ID: defaultTargetID, Type: "page"})},
 	})
 	handleValue, err := runtime.Open(context.Background(), webmcp.BrowserCandidate{ID: "browser-a"})
 	if err != nil {
 		t.Fatalf("open browser: %v", err)
 	}
-	sessionValue, err := handleValue.Attach(context.Background(), "tab-a", webmcp.TargetOwnershipExternal)
+	sessionValue, err := handleValue.Attach(context.Background(), defaultTargetID, webmcp.TargetOwnershipExternal)
 	if err != nil {
 		t.Fatalf("attach target: %v", err)
 	}
@@ -404,7 +413,7 @@ func TestTargetSessionOptionsPreserveConfiguredRuntimeSeams(t *testing.T) {
 		WithContext(page),
 		WithEnableEvents(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded}),
 		WithInitialCatalog(tool),
-		WithAutoResponseStatus("Queued", []byte(`{"ok":true}`)),
+		WithAutoResponseStatus("Queued", []byte(okJSONOutput)),
 		WithEnableError(enableErr),
 		WithInvokeError(invokeErr),
 		WithCancelError(cancelErr),
@@ -420,7 +429,7 @@ func TestTargetSessionOptionsPreserveConfiguredRuntimeSeams(t *testing.T) {
 	if len(options.InitialCatalog) != 1 || options.InitialCatalog[0].Name != tool.Name {
 		t.Fatalf("catalog option = %+v", options.InitialCatalog)
 	}
-	if options.AutoResponseStatus != "Queued" || string(options.AutoResponseOutput) != `{"ok":true}` {
+	if options.AutoResponseStatus != "Queued" || string(options.AutoResponseOutput) != okJSONOutput {
 		t.Fatalf("response options = %+v", options)
 	}
 	if options.EnableError != enableErr || options.InvokeError != invokeErr || options.CancelError != cancelErr {
