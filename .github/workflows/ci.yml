@@ -356,9 +356,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # unit, coverage, race and OS jobs skip docs/temp (about 90% of the checkout's bytes; no Go
-  # package, helper-module or factory-script test reads it): a blobless
-  # clone fetches only the sparse tree's blobs.
+  # The unit, coverage libraries, coverage, race and OS jobs skip docs/temp
+  # (about 90% of the checkout's bytes; no Go package, helper-module or
+  # factory-script test reads it): a blobless clone fetches only the sparse
+  # tree's blobs.
   coverage-libraries:
     name: CI (coverage libraries)
     runs-on: ubuntu-latest
