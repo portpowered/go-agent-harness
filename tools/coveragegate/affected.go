@@ -97,7 +97,10 @@ func SelectAffectedScope(ctx context.Context, gitBinary, goBinary, repoDir, base
 	if err != nil {
 		return AffectedScope{}, err
 	}
-	changed, reason := changedPackagesFor(paths, repoRoot, modules, packages)
+	changed, reason, err := changedPackagesFor(paths, repoRoot, modules, packages)
+	if err != nil {
+		return AffectedScope{}, fmt.Errorf("%w: scan data references: %w", ErrAffectedScope, err)
+	}
 	if reason != "" {
 		return AffectedScope{FullReason: reason}, nil
 	}
@@ -271,68 +274,6 @@ func stripTestVariants(deps []string) map[string]struct{} {
 		set[dep] = struct{}{}
 	}
 	return set
-}
-
-// changedPackagesFor maps every changed path inside a module to the package
-// owning its nearest enclosing package directory. Changed coverage floors
-// map to the package they describe. A file inside a module but outside
-// every package (other than documentation) cannot be scoped.
-func changedPackagesFor(paths []string, repoRoot string, modules []AffectedModule, packages map[string]*affectedPackage) (map[string]struct{}, string) {
-	byDirectory := make(map[string]string, len(packages))
-	for _, packageInfo := range packages {
-		byDirectory[packageInfo.directory] = packageInfo.importPath
-	}
-	moduleDirs := make([]string, 0, len(modules))
-	for _, module := range modules {
-		if absolute, err := filepath.Abs(module.Directory); err == nil {
-			moduleDirs = append(moduleDirs, canonicalPath(absolute))
-		}
-	}
-	changed := make(map[string]struct{})
-	for _, path := range paths {
-		target := path
-		if strings.HasPrefix(path, coverageManifestDirectory) {
-			target = strings.TrimSuffix(strings.TrimPrefix(path, coverageManifestDirectory), ".json") + "/floor"
-		}
-		absolute := filepath.Join(repoRoot, filepath.FromSlash(target))
-		moduleDir := enclosingModule(absolute, moduleDirs)
-		if moduleDir == "" {
-			continue
-		}
-		importPath := enclosingPackage(filepath.Dir(absolute), moduleDir, byDirectory)
-		switch {
-		case importPath != "":
-			changed[importPath] = struct{}{}
-		case strings.HasSuffix(path, ".md") || strings.HasPrefix(path, coverageManifestDirectory):
-		default:
-			return nil, "changed " + path + " outside every package"
-		}
-	}
-	return changed, ""
-}
-
-func enclosingModule(path string, moduleDirs []string) string {
-	best := ""
-	for _, moduleDir := range moduleDirs {
-		if pathWithin(moduleDir, path) && len(moduleDir) > len(best) {
-			best = moduleDir
-		}
-	}
-	return best
-}
-
-func enclosingPackage(directory, moduleDir string, byDirectory map[string]string) string {
-	for pathWithin(moduleDir, directory) {
-		if importPath, ok := byDirectory[directory]; ok {
-			return importPath
-		}
-		parent := filepath.Dir(directory)
-		if parent == directory {
-			break
-		}
-		directory = parent
-	}
-	return ""
 }
 
 func closeOverChanged(changed map[string]struct{}, packages map[string]*affectedPackage) AffectedScope {

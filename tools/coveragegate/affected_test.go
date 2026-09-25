@@ -161,3 +161,49 @@ func TestGateSelectedChecksOnlySelectedFloors(t *testing.T) {
 		t.Fatalf("run(--select) error = %v, want unmeasured selected package", err)
 	}
 }
+
+// commitReader adds a test package a/reader whose test names expression,
+// commits it, and returns the new base.
+func commitReader(t *testing.T, repo, body string) string {
+	t.Helper()
+	writeTestFile(t, filepath.Join(repo, "a", "reader", "reader_test.go"),
+		"package reader\n\nimport (\n\t\"path/filepath\"\n\t\"testing\"\n)\n\nfunc TestRead(t *testing.T) {\n\troot := t.TempDir()\n\t_ = root\n\t_ = filepath.Join\n\t"+body+"\n}\n")
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-qm", "add reader")
+	return strings.TrimSpace(runTestGit(t, repo, "rev-parse", "HEAD"))
+}
+
+func TestSelectAffectedScopeFallsBackToFullWhenAnotherPackageReadsChangedData(t *testing.T) {
+	readers := map[string]string{
+		"relative join":     `_ = filepath.Join("..", "leaf", "testdata")`,
+		"relative constant": `_ = "../leaf/testdata/input.txt"`,
+		"repository path":   `_ = "a/leaf/testdata"`,
+		"joined with base":  `_ = filepath.Join(root, "leaf", "testdata", "input.txt")`,
+	}
+	for name, body := range readers {
+		t.Run(name, func(t *testing.T) {
+			repo, modules, _ := newAffectedRepository(t)
+			base := commitReader(t, repo, body)
+			appendTestFile(t, filepath.Join(repo, "a", "leaf", "testdata", "input.txt"), "more\n")
+
+			got := selectAffectedForTest(t, repo, modules, base)
+			want := "scope full changed a/leaf/testdata/input.txt is referenced from a/reader/reader_test.go\n"
+			if got != want {
+				t.Fatalf("scope = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestSelectAffectedScopeIgnoresOwnAndUnrelatedPathLiterals(t *testing.T) {
+	repo, modules, _ := newAffectedRepository(t)
+	writeTestFile(t, filepath.Join(repo, "a", "leaf", "leaf_test.go"),
+		"package leaf\n\nimport \"testing\"\n\nfunc TestLeaf(t *testing.T) { _ = \"testdata/input.txt\" }\n")
+	base := commitReader(t, repo, `_ = []string{".", "../..", "phase/..", "a", "leaf", "testdata", "%s/leaf/testdata"}`)
+	appendTestFile(t, filepath.Join(repo, "a", "leaf", "testdata", "input.txt"), "more\n")
+
+	got := selectAffectedForTest(t, repo, modules, base)
+	if !strings.HasPrefix(got, "scope changed\nchanged example.test/a/leaf\n") {
+		t.Fatalf("scope = %q, want the changed scope for a/leaf", got)
+	}
+}

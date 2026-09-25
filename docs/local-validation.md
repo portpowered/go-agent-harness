@@ -12,11 +12,18 @@ enforces, each once, in three fail-fast stages:
 A failed stage stops the gate; the phases already running in that stage finish
 and their output is printed as one block per phase with its time.
 
-A phase that passed for exactly the same content (the working tree including
-untracked files, the `COVERAGE_BASE` commit, the Go version and the platform)
-is reported as cached and skipped, so re-running the gate after a flaky or
-unrelated failure repeats only what has not passed (`PREPUSH_CACHE=0` turns
-this off; results live in `.cache/prepush/`).
+A phase that passed for exactly the same inputs is reported as cached and
+skipped, so re-running the gate after a flaky or unrelated failure repeats only
+what has not passed (`PREPUSH_CACHE=0` turns this off; results live in
+`.cache/prepush/`). The key covers the working tree including untracked files
+(hashed through a private index and object directory, so nothing is written to
+the repository), the `COVERAGE_BASE` commit, the `go` binary make uses with its
+version and `go env` (GOOS, GOARCH, GOFLAGS, CGO_ENABLED, ...), Python, the
+platform, `MAKEFLAGS` (command-line Make variables such as the pinned analyzer
+versions) and the `GO*`, `CGO_*`, `CI`, `COVERAGE_*`, `LINT_*`, `TEST_*`,
+`AGENT_CLI_*`, `SKIP_*`, `BUILD_*` environment variables. A stage's passes are
+recorded only if the key is unchanged when the stage ends, so a result is
+never cached for content edited while it ran.
 
 ## One test pass
 
@@ -52,6 +59,14 @@ darwin display-permission packages, `agent-cli/test/functional` and
   `scripts/go-test-shards.sh`, `scripts/run-bounded.sh` or `tools/coveragegate/`,
   or a non-Markdown file inside a module but outside every package, falls back
   to the full scope.
+- So does a changed data file (anything other than a package's own Go source,
+  e.g. `testdata/`, fixtures, generators under `testdata/`) that a Go file of
+  another package names by path: tests that read another package's fixtures
+  (`../../wire/testdata/room-audio`, `filepath.Join(root, "go-agent-loop",
+  "testdata", "audio")`) do not link its owner, so the dependency closure
+  cannot see them. `coveragegate --affected` finds these by resolving every
+  string literal and literal `Join` in the modules' Go files relative to the
+  file, the repository and each module, and as a multi-segment path suffix.
 
 `make prepush-full` (or `PREPUSH_SCOPE=full`) runs every package like CI. The
 scope selection alone is `make coverage-changed` (or
