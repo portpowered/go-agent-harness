@@ -153,7 +153,11 @@ func startTestLiveConversation(t *testing.T, ctx context.Context, deps testSessi
 	if err != nil {
 		t.Fatalf("open live conversation: %v", err)
 	}
-	t.Cleanup(func() { _ = handle.Close() })
+	t.Cleanup(func() {
+		if err := handle.Close(); err != nil {
+			t.Logf("close live conversation: %v", err)
+		}
+	})
 	conversation := testLiveConversation{handle: handle, output: &strings.Builder{}, runErr: make(chan error, 1), runComplete: make(chan struct{})}
 	transcript := collectLiveTranscript(handle, conversation.output)
 	go func() {

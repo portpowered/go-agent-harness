@@ -728,7 +728,7 @@ func (s *ambiguousCubeConversationSession) emitPageToolWhenReady(ctx context.Con
 	}
 	s.phase = ambiguousCubeConversationAwaitingPageResult
 	s.mu.Unlock()
-	s.emitAssistantToolCall("call-cube-state", ambiguousCubeStateTool, `{}`)
+	s.emitAssistantToolCall("call-cube-state", "get_cube_state", `{}`)
 }
 
 func (s *ambiguousCubeConversationSession) emitAssistantText(text string) {

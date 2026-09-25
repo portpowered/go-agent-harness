@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"io"
 	"path/filepath"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/spf13/cobra"
 )
 
 // sessionLifecycleSafetyTimeout bounds each lifecycle wait in the hermetic
@@ -41,9 +41,9 @@ type liveToolSessionOptions struct {
 	args     []string
 }
 
-// runLiveToolSession runs the production live session path for one
-// invocation and returns its command result.
-func runLiveToolSession(ctx context.Context, t *testing.T, options liveToolSessionOptions) error {
+// newLiveToolSessionRoot composes the production CLI root with hermetic
+// session ports and the invocation arguments for one live tool session.
+func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra.Command {
 	t.Helper()
 	definitions := make([]messages.ToolDefinition, 0, len(options.toolNames))
 	for _, name := range options.toolNames {
@@ -77,5 +77,5 @@ func runLiveToolSession(ctx context.Context, t *testing.T, options liveToolSessi
 		args = append(args, "--audio-in-turn", inputPath, "--record-dir", filepath.Join(t.TempDir(), "recording"))
 	}
 	root.SetArgs(args)
-	return root.ExecuteContext(ctx)
+	return root
 }

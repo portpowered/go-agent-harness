@@ -259,7 +259,9 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 	// ingress, so the first microphone PCM reaches the provider as an audio
 	// delta rather than through the provider media endpoint.
 	if message.Type == messages.StreamTypeAudioDelta {
-		_ = s.outbound.WriteFrame(ctx, audio.PCMFrame{})
+		if err := s.outbound.WriteFrame(ctx, audio.PCMFrame{}); err != nil {
+			return false
+		}
 	}
 	if message.Type == messages.StreamTypeToolCallEnd {
 		if value, ok := message.Value.(*messages.ToolCallEndValue); ok && value != nil && value.ToolCallID == "cube-call" {

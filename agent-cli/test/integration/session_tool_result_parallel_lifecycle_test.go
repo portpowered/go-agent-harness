@@ -571,22 +571,21 @@ func TestSessionParallelToolResultsTerminalFailureNamesOnlyRemainingCall(t *test
 	executor := newParallelLifecycleExecutor()
 	observation := newParallelLifecycleObservation(inferencer)
 
+	root := newLiveToolSessionRoot(t, liveToolSessionOptions{
+		inferencer: inferencer,
+		executor:   executor,
+		toolNames:  []string{parallelLifecycleAlphaName, parallelLifecycleBravoName},
+		observer:   observation.observe,
+		inputPCM:   []byte{1, 2, 3, 4},
+		args: []string{
+			"--provider", "openai", "--model", "gpt-realtime", "--api-key", "test-key",
+			"--record", t.TempDir() + "/parallel-tool-result-terminal-failure.session.json",
+		},
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	runErr := make(chan error, 1)
-	go func() {
-		runErr <- runLiveToolSession(ctx, t, liveToolSessionOptions{
-			inferencer: inferencer,
-			executor:   executor,
-			toolNames:  []string{parallelLifecycleAlphaName, parallelLifecycleBravoName},
-			observer:   observation.observe,
-			inputPCM:   []byte{1, 2, 3, 4},
-			args: []string{
-				"--provider", "openai", "--model", "gpt-realtime", "--api-key", "test-key",
-				"--record", t.TempDir() + "/parallel-tool-result-terminal-failure.session.json",
-			},
-		})
-	}()
+	go func() { runErr <- root.ExecuteContext(ctx) }()
 	defer executor.releaseAll()
 
 	waitParallelLifecycle(t, inferencer.ready, "terminal-path session connection", 3*time.Second)

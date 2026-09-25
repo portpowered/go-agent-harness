@@ -11,6 +11,7 @@ import (
 
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/spf13/cobra"
 )
 
 const unresolvedToolCallID = "call_unresolved_failure"
@@ -117,13 +118,15 @@ func (e *unresolvedFailureToolExecutor) Execute(ctx context.Context, call messag
 
 func runUnresolvedFailureSession(t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor) error {
 	t.Helper()
+	root := newUnresolvedFailureSessionRoot(t, session, executor)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	return runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
+	return root.ExecuteContext(ctx)
 }
 
-func runUnresolvedFailureSessionWithContext(ctx context.Context, t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor) error {
-	return runLiveToolSession(ctx, t, liveToolSessionOptions{
+func newUnresolvedFailureSessionRoot(t *testing.T, session *unresolvedFailureSession, executor *unresolvedFailureToolExecutor) *cobra.Command {
+	t.Helper()
+	return newLiveToolSessionRoot(t, liveToolSessionOptions{
 		inferencer: &fixedUnresolvedFailureInferencer{session: session},
 		executor:   executor,
 		toolNames:  []string{"slow_tool"},
@@ -193,11 +196,10 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("caller cancellation", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
+		root := newUnresolvedFailureSessionRoot(t, session, executor)
 		ctx, cancel := context.WithCancel(context.Background())
 		runErr := make(chan error, 1)
-		go func() {
-			runErr <- runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
-		}()
+		go func() { runErr <- root.ExecuteContext(ctx) }()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before cancellation")
 		cancel()
 
@@ -212,15 +214,14 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("caller deadline", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
+		root := newUnresolvedFailureSessionRoot(t, session, executor)
 		// Coverage instrumentation and a loaded CI runner can take substantially
 		// longer than 50ms to compose the session and dispatch the tool call. Give
 		// setup enough headroom while still exercising a real caller deadline.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		runErr := make(chan error, 1)
-		go func() {
-			runErr <- runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
-		}()
+		go func() { runErr <- root.ExecuteContext(ctx) }()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before deadline")
 
 		select {
@@ -234,12 +235,11 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	t.Run("explicit client close", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
+		root := newUnresolvedFailureSessionRoot(t, session, executor)
 		ctx, cancel := context.WithTimeout(context.Background(), sessionLifecycleSafetyTimeout)
 		defer cancel()
 		runErr := make(chan error, 1)
-		go func() {
-			runErr <- runUnresolvedFailureSessionWithContext(ctx, t, session, executor)
-		}()
+		go func() { runErr <- root.ExecuteContext(ctx) }()
 		waitLifecycleSignal(t, executor.started, "unresolved tool executor to start before client close")
 		if err := session.Close(); err != nil {
 			t.Fatalf("close unresolved session: %v", err)
