@@ -430,9 +430,9 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 
 	// Public media leg 1 — the real root `agent media probe` command reports
 	// the negotiated camera tracks. One audio packet is enough for probe to
-	// return while leaving the fixture free to deliver all three video packets
-	// for the independent activity assertion.
-	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1]})
+	// return; the fixture writes its three video packets first, because probe
+	// disconnects once it holds that audio packet.
+	probeURL, probeObserved, probeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets[:1], videoFirst: true})
 	probeResult := runRootCLIMediaCommand(t, parentCtx, cfgDir, "probe", probeURL)
 	waitForExternalSourceEvent(t, probeObserved.negotiated, "camera media probe offer/answer completion")
 	waitForExternalSourceEvent(t, probeObserved.frameDelivered, "camera media probe audio frame delivery")
@@ -484,7 +484,7 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 
 	// Leg 1 — the camera's audio reaches us over WebRTC through the
 	// production inbound path, non-silent and complete.
-	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets})
+	bridgeURL, bridgeObserved, bridgeCleanup := startWebrtcSourceFixture(t, webrtcSourceOptions{withVideo: true, sendFrames: true, packets: packets, videoFirst: true})
 	sourcePCM := bridgeExternalSourceAudio(t, bridgeURL, len(packets), 10*time.Second)
 	waitForExternalSourceEvent(t, bridgeObserved.negotiated, "camera offer/answer completion")
 	waitForVideoDelivery(t, bridgeObserved, "camera video frame delivery")
