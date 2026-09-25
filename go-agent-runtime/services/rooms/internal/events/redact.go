@@ -1,6 +1,10 @@
 package events
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+)
 
 // RedactedMarker replaces every credential occurrence, matching the marker
 // room evidence writes.
@@ -29,3 +33,41 @@ func (r Redactor) Redact(value string) string {
 	}
 	return value
 }
+
+// RedactError presents err with every secret replaced while keeping the
+// original chain for errors.Is/As classification.
+func (r Redactor) RedactError(err error) error {
+	if err == nil {
+		return nil
+	}
+	message := r.Redact(err.Error())
+	if message == err.Error() {
+		return err
+	}
+	return &redactedError{message: message, cause: err}
+}
+
+// RedactResult removes secrets from every failure string of a room result.
+func (r Redactor) RedactResult(result rooms.RoomResult) rooms.RoomResult {
+	result.Error = r.Redact(result.Error)
+	if result.Participants == nil {
+		return result
+	}
+	participants := make(map[string]rooms.RoomParticipantResult, len(result.Participants))
+	for id, participant := range result.Participants {
+		participant.Error = r.Redact(participant.Error)
+		participant.TerminalReason = r.Redact(participant.TerminalReason)
+		participants[id] = participant
+	}
+	result.Participants = participants
+	return result
+}
+
+type redactedError struct {
+	message string
+	cause   error
+}
+
+func (e *redactedError) Error() string { return e.message }
+
+func (e *redactedError) Unwrap() error { return e.cause }

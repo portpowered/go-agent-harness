@@ -259,7 +259,7 @@ func finishMissingParticipants(state *runState, result rooms.RoomResult, manifes
 }
 
 func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (rooms.RoomResult, error) {
-	result, runErr = planning.RedactRunFailure(result, runErr, manifest, request)
+	result, runErr = redactRunFailure(result, runErr, manifest, request)
 	if request.OnParticipantTerminated != nil {
 		for _, participant := range manifest.Participants {
 			if value, ok := result.Participants[participant.ID]; ok {

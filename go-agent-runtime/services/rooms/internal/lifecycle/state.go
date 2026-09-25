@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/events"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/planning"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -365,4 +367,30 @@ func (s *runState) turnCount(id string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.turns[id]
+}
+
+// redactRunFailure removes the room's participant credentials — the evidence
+// redaction set, through the same redactor as the room event stream — from
+// the run error and result failure text hosts render. Secrets are resolved
+// only when failure text exists.
+func redactRunFailure(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions) (rooms.RoomResult, error) {
+	if runErr == nil && !resultHasFailureText(result) {
+		return result, nil
+	}
+	redactor := events.NewRedactor(planning.EvidenceSecrets(manifest, request))
+	return redactor.RedactResult(result), redactor.RedactError(runErr)
+}
+
+// resultHasFailureText reports whether a room result carries failure text
+// that may echo a participant credential.
+func resultHasFailureText(result rooms.RoomResult) bool {
+	if result.Error != "" {
+		return true
+	}
+	for _, participant := range result.Participants {
+		if participant.Error != "" || participant.TerminalReason != "" {
+			return true
+		}
+	}
+	return false
 }
