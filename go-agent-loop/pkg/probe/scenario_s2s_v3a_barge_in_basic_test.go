@@ -13,20 +13,6 @@ type v3aCorpusLookup map[string]bool
 
 func (lookup v3aCorpusLookup) Has(id string) bool { return lookup[id] }
 
-func registeredV3AScenarios(t *testing.T) []Scenario {
-	t.Helper()
-	suite := make([]Scenario, 0)
-	for _, scenario := range Scenarios() {
-		if strings.HasPrefix(scenario.ID, ScenarioIDS2SV3ABargeInBasic+"-") {
-			suite = append(suite, scenario)
-		}
-	}
-	if len(suite) != 3 {
-		t.Fatalf("v3a barge-in suite size = %d, want 3", len(suite))
-	}
-	return suite
-}
-
 func findV3AScenario(t *testing.T, id string) Scenario {
 	t.Helper()
 	for _, scenario := range Scenarios() {

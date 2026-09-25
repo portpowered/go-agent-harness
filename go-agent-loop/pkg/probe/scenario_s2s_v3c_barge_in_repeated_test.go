@@ -6,12 +6,6 @@ import (
 	"testing"
 )
 
-// v3cCorpusLookup accepts exactly the synthetic utterance corpora the v3c
-// scenarios reference, mirroring the replay corpus lookup's role in the CLI.
-type v3cCorpusLookup struct{}
-
-func (v3cCorpusLookup) Has(id string) bool { return strings.HasPrefix(id, "v3c-utterance-") }
-
 func registeredS2SV3CScenario(t *testing.T, id string) Scenario {
 	t.Helper()
 	for _, scenario := range Scenarios() {

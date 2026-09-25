@@ -127,6 +127,37 @@ func scriptModelToolCalls(s *recordingToolSession, ctx context.Context, calls []
 	})
 }
 
+// assertDuplicateProviderCallIgnored re-surfaces the already-completed call
+// tc-1, which must cause neither another executor admission nor another
+// provider result item. A fresh call tc-3 scripted after it is a sequence
+// barrier: once its result is delivered, the duplicate ahead of it on the
+// same ordered provider stream was handled too.
+func assertDuplicateProviderCallIgnored(ctx context.Context, t *testing.T, session *recordingToolSession, executor *cannedExecutor) {
+	t.Helper()
+	scriptModelToolCalls(session, ctx, []messages.ToolCall{
+		{ID: "tc-1", Name: "get_weather", Arguments: `{"city":"NYC"}`},
+	})
+	scriptModelToolCalls(session, ctx, []messages.ToolCall{
+		{ID: "tc-3", Name: "get_time", Arguments: `{}`},
+	})
+	waitForSentCount(t, session, messages.StreamTypeToolCallEnd, 3)
+	// Calls of one turn execute concurrently, so compare admissions as a set.
+	admitted := executor.callIDs()
+	sort.Strings(admitted)
+	if got := strings.Join(admitted, ","); got != "tc-1,tc-2,tc-3" {
+		t.Fatalf("executor admissions after duplicate provider call = %v, want tc-1, tc-2 and tc-3 once each", admitted)
+	}
+	delivered := map[string]int{}
+	for _, msg := range session.sentMessages() {
+		if v, ok := msg.Value.(*messages.ToolCallEndValue); ok && msg.Type == messages.StreamTypeToolCallEnd {
+			delivered[v.ToolCallID]++
+		}
+	}
+	if delivered["tc-1"] != 1 || delivered["tc-2"] != 1 || delivered["tc-3"] != 1 || len(delivered) != 3 {
+		t.Fatalf("tool results delivered per call = %v, want each call exactly once", delivered)
+	}
+}
+
 func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T) {
 	session := newRecordingToolSession()
 	executor := &cannedExecutor{responses: map[string]messages.ToolCallResponse{
@@ -200,32 +231,7 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 		}
 	}
 
-	// A provider that re-surfaces the same call ID must not cause another
-	// executor admission or another provider result item. A fresh call
-	// scripted after it is a sequence barrier: once its result is delivered,
-	// the duplicate ahead of it on the same ordered stream was handled too.
-	scriptModelToolCalls(session, ctx, []messages.ToolCall{
-		{ID: "tc-1", Name: "get_weather", Arguments: `{"city":"NYC"}`},
-	})
-	scriptModelToolCalls(session, ctx, []messages.ToolCall{
-		{ID: "tc-3", Name: "get_time", Arguments: `{}`},
-	})
-	waitForSentCount(t, session, messages.StreamTypeToolCallEnd, 3)
-	// Calls of one turn execute concurrently, so compare admissions as a set.
-	admitted := executor.callIDs()
-	sort.Strings(admitted)
-	if got := strings.Join(admitted, ","); got != "tc-1,tc-2,tc-3" {
-		t.Fatalf("executor admissions after duplicate provider call = %v, want tc-1, tc-2 and tc-3 once each", admitted)
-	}
-	delivered := map[string]int{}
-	for _, msg := range session.sentMessages() {
-		if v, ok := msg.Value.(*messages.ToolCallEndValue); ok && msg.Type == messages.StreamTypeToolCallEnd {
-			delivered[v.ToolCallID]++
-		}
-	}
-	if delivered["tc-1"] != 1 || delivered["tc-2"] != 1 || delivered["tc-3"] != 1 || len(delivered) != 3 {
-		t.Fatalf("tool results delivered per call = %v, want each call exactly once", delivered)
-	}
+	assertDuplicateProviderCallIgnored(ctx, t, session, executor)
 
 	cancel()
 	select {
@@ -236,16 +242,6 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return after cancel")
 	}
-}
-
-func countSentType(s *recordingToolSession, typ messages.StreamMessageType) int {
-	count := 0
-	for _, msg := range s.sentMessages() {
-		if msg.Type == typ {
-			count++
-		}
-	}
-	return count
 }
 
 func TestDuplexSession_ZeroToolResultsDeliverNothing(t *testing.T) {

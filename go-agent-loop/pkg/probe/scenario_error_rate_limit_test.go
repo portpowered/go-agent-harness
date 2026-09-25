@@ -5,17 +5,6 @@ import (
 	"testing"
 )
 
-func registeredS2SV6CErrorRateLimitScenario(t *testing.T) Scenario {
-	t.Helper()
-	for _, scenario := range Scenarios() {
-		if scenario.ID == ScenarioIDS2SV6CErrorRateLimitThrottled {
-			return scenario
-		}
-	}
-	t.Fatalf("scenario %q is not registered", ScenarioIDS2SV6CErrorRateLimitThrottled)
-	return Scenario{}
-}
-
 func TestS2SV6CErrorRateLimitRegistrationFailsFast(t *testing.T) {
 	want := errors.New("registration failed")
 	defer func() {
