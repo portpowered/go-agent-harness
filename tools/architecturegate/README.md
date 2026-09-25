@@ -96,7 +96,7 @@ diffs after rebasing so newer reductions are not overwritten.
 The pinned `golangci-lint` configuration is separate from this gate. It has two
 passes: `.golangci.yml` applies hard limits to all code, and
 `.golangci.new.yml` applies to new code only. See
-[size-baselines.md](../../docs/architecture/size-baselines.md#golangci-lint-limits).
+[lint-policy.md](../../docs/architecture/lint-policy.md).
 Verify both configurations with the resolver's v2.9.0 binary:
 
 ```sh
