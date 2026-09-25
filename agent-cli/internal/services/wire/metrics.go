@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	serviceRuntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceProbes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
@@ -19,13 +18,13 @@ import (
 
 // NewMetricsCollector reconciles runtime metrics with service-derived capture
 // deltas. Replay admission and capture inspection stay behind the replay
-// contract; execution uses the same public session runtime as ordinary calls.
-func NewMetricsCollector(sessionRuntime serviceRuntime.Runtime, replayService runtimeReplay.Service) serviceProbes.MetricsCollector {
-	return metricsCollector{runtime: sessionRuntime, replayService: replayService}
+// contract; execution uses the same session request path as ordinary calls.
+func NewMetricsCollector(sessionService serviceSession.SessionService, replayService runtimeReplay.Service) serviceProbes.MetricsCollector {
+	return metricsCollector{runtime: sessionService, replayService: replayService}
 }
 
 type metricsCollector struct {
-	runtime       serviceRuntime.Runtime
+	runtime       serviceSession.SessionService
 	replayService runtimeReplay.Service
 }
 

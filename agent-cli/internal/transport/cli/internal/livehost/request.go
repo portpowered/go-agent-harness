@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/interactive"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -29,7 +30,7 @@ type RequestDependencies struct {
 	CredentialReference func(string) string
 	InstructionService  runtimeSession.InstructionService
 	PageSightToolID     string
-	Capabilities        func(*config.Config) (*runtimeSession.LiveCapabilities, error)
+	Capabilities        func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error)
 	BindImagePreparer   func(messages.ToolExecutor) messages.ToolExecutor
 	OpenImages          func([]string) ([]messages.ContentPart, error)
 }
@@ -93,7 +94,7 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 			return requestInputs{}, err
 		}
 	}
-	capabilities, err := buildCapabilities(loaded, request, deps)
+	capabilities, err := buildCapabilities(ctx, loaded, request, deps)
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -317,18 +318,22 @@ func resolveCredentialReference(apiKey string, resolve func(string) string) stri
 	return resolve(apiKey)
 }
 
-func buildCapabilities(cfg *config.Config, request serviceSession.Request, deps RequestDependencies) (*runtimeSession.LiveCapabilities, error) {
+func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceSession.Request, deps RequestDependencies) (*runtimeSession.LiveCapabilities, error) {
 	if deps.Capabilities == nil {
 		return nil, nil
 	}
-	capabilities, err := deps.Capabilities(ToolConfig(cfg, request))
+	capabilities, err := deps.Capabilities(ctx, ToolConfig(cfg, request))
 	if err != nil {
 		return nil, err
 	}
 	if capabilities != nil && deps.BindImagePreparer != nil {
 		capabilities.Executor = deps.BindImagePreparer(capabilities.Executor)
 	}
-	return capabilities, nil
+	// The interactive latency policy is outermost so each call's deadline
+	// covers image preparation as well as the tool itself.
+	return capabilities, interactive.Bind(capabilities, interactive.Binding{
+		Config: cfg, Timeout: request.ToolExecutionTimeout, BrowserToolsEnabled: request.BrowserToolsEnabled, Cancellation: request.CancellationIntent,
+	})
 }
 
 func openImages(paths []string, opener func([]string) ([]messages.ContentPart, error)) ([]messages.ContentPart, error) {

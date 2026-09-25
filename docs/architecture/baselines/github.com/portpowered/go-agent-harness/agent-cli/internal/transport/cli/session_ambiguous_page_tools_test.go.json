@@ -67,7 +67,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_ambiguous_page_tools_test.go",
-      "value": 1088,
+      "value": 1055,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -77,7 +77,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_ambiguous_page_tools_test.go",
       "symbol": "TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork",
-      "value": 269,
+      "value": 248,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -87,7 +87,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_ambiguous_page_tools_test.go",
       "symbol": "TestSessionAmbiguousTabsPublishOnlySelectedPageTools",
-      "value": 227,
+      "value": 217,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -97,7 +97,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_ambiguous_page_tools_test.go",
       "symbol": "TestSessionAmbiguousCubeConversationRequiresChoiceBeforePageWork",
-      "value": 124,
+      "value": 118,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

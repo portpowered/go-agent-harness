@@ -1,12 +1,9 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit"
-	audioiowire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio/wire"
-	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 )
 
 // TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale is the customer
@@ -153,25 +148,7 @@ func TestSessionKeepsBrowserUsableWhenPersistedSelectionIsStale(t *testing.T) {
 
 	wire := newSessionUpdateWire()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- servicetest.RunSessionWithInstructions(sessionCtx, io.Discard, servicetest.SessionRunOptions{
-			Provider: config.ProviderOpenAI, AudioService: audioiowire.NewService(),
-			Model:                  "gpt-realtime",
-			ModelCatalog:           providerswire.NewModelCatalog(),
-			APIKey:                 "unused",
-			LoadedConfig:           cfg,
-			BrowserToolsEnabled:    true,
-			BrowserCapabilityState: surface.browserState,
-			WaitForClose:           true,
-			WebSocketDialer:        sessionUpdateDialer{wire: wire},
-			ToolExecutor:           surface.executor,
-			ToolDefinitions:        surface.definitions,
-			ToolDefinitionBase:     surface.base,
-			RefreshToolDefinitions: surface.refresh,
-			BrowserWatch:           surface.browserWatch,
-		}, "You help the customer with the cube on the connected page.")
-	}()
+	runErr := runTestBrowserLiveSession(sessionCtx, cfg, capabilities, sessionUpdateDialer{wire: wire}, "You help the customer with the cube on the connected page.")
 	defer func() {
 		cancelSession()
 		select {

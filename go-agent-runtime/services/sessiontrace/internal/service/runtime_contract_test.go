@@ -178,21 +178,11 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 }
 
 func TestLivenessClockAndTraceObserverPoliciesUseServiceContracts(t *testing.T) {
-	if liveness := LivenessClockFromSource(clock.Real{}); liveness == nil || liveness.NewTimer(time.Hour) == nil {
-		t.Fatal("real clock did not provide a liveness timer")
-	}
-	if LivenessClockFromSource(sourceOnlyClock{}) != nil {
-		t.Fatal("source-only clock unexpectedly provided a liveness timer")
-	}
 	observer := traceObserver{}
 	if !observer.ObserveProviderBoundaries() || observer.RetainCommitPayload() {
 		t.Fatal("trace observer policy contract changed")
 	}
 }
-
-type sourceOnlyClock struct{}
-
-func (sourceOnlyClock) Now() time.Time { return time.Unix(0, 0) }
 
 func TestTraceDeviceServiceBindsCaptureAndPlaybackObservers(t *testing.T) {
 	var preGate, uploaded, rendered []int16
@@ -574,4 +564,26 @@ type traceContractSampleSource struct {
 
 func (s *traceContractSampleSource) ReadSamples(_ context.Context, buf []int16) (int, error) {
 	return copy(buf, s.samples), nil
+}
+
+func TestNilRuntimeRecorderIsInert(t *testing.T) {
+	var recorder *sessionRuntimeObservationRecorder
+	recorder.audioOutputMessage([]byte{1}, messages.StreamMessage{})
+	recorder.audioPlaybackReceipt(audio.PlaybackReceipt{Applied: true})
+	recorder.audioInput([]byte{1})
+	recorder.providerAudioSent([]byte{1})
+	recorder.inputCommit()
+	recorder.providerInputCommit()
+	recorder.responseCreate(messages.StreamMessage{})
+	recorder.terminalWithAccounting(1, nil, nil)
+	recorder.observeToolCall(messages.ToolCall{ID: "call"})
+}
+
+func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {
+	if combineRTCDevicePlaybackObservers(nil, nil) != nil || combineRTCDeviceCaptureObservers(nil) != nil || combineRTCDevicePlaybackReceiptObservers(nil) != nil {
+		t.Fatal("combining only absent observers produced an observer")
+	}
+	if resolvePlaybackDiagnosticSink(nil) == nil {
+		t.Fatal("an unwired playback diagnostic sink was not replaced by the fallback")
+	}
 }

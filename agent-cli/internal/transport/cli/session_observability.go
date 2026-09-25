@@ -45,29 +45,23 @@ type FileDeviceService struct {
 	TraceService runtimeSessionTrace.Service
 }
 
-// NewSessionCommand creates the session command with both public service
-// contracts. Tests pass nil for the self-play service when they do not invoke
-// that subcommand.
+// NewSessionCommand creates the session command without the live runtime
+// roles. It serves help, flag, and preflight paths; invocations that reach
+// session execution report the missing live service.
 func NewSessionCommand(
 	askFlags *flags.AskFlags,
 	globalFlags *flags.GlobalFlags,
-	sessionService serviceSession.Service,
 	selfPlayService runtimeSelfPlay.Service,
 ) *SessionCommand {
-	return &SessionCommand{
-		askFlags: askFlags, globalFlags: globalFlags, sessionService: sessionService,
-		selfPlayService: selfPlayService,
-	}
+	return &SessionCommand{askFlags: askFlags, globalFlags: globalFlags, selfPlayService: selfPlayService}
 }
 
 // NewSessionCommandWithLive adds the reusable continuous-session and device
-// roles to the CLI host adapter. Text and finite/replay modes keep using the
-// existing SessionService until their presentation adapters are migrated;
-// bare and passive live invocations are admitted through OpenLive.
+// roles to the CLI host adapter. Every session invocation is admitted through
+// the service-owned live runtime.
 func NewSessionCommandWithLive(
 	askFlags *flags.AskFlags,
 	globalFlags *flags.GlobalFlags,
-	sessionService serviceSession.Service,
 	selfPlayService runtimeSelfPlay.Service,
 	liveService runtimeSession.LiveService,
 	liveReplayService runtimeReplay.Service,
@@ -80,7 +74,7 @@ func NewSessionCommandWithLive(
 	modelAdmission runtimeProviders.ModelAdmission,
 ) *SessionCommand {
 	return &SessionCommand{
-		askFlags: askFlags, globalFlags: globalFlags, sessionService: sessionService,
+		askFlags: askFlags, globalFlags: globalFlags,
 		selfPlayService: selfPlayService, liveService: liveService,
 		liveReplayService: liveReplayService,
 		deviceService:     deviceService, fileDeviceService: fileDeviceService, liveCapabilities: liveCapabilities,
@@ -88,69 +82,27 @@ func NewSessionCommandWithLive(
 	}
 }
 
-// runtimeLiveAdmission classifies an explicit replay through the replay
+// inspectSessionReplay classifies an explicit replay through the replay
 // service before the host opens files, devices, or a provider. It keeps route
 // selection independent of capture JSON and gives invalid archives one
-// authoritative error path.
-func (c *SessionCommand) runtimeLiveAdmission(ctx context.Context, request serviceSession.Request) (bool, *runtimeReplay.CaptureInspection, error) {
-	if strings.EqualFold(strings.TrimSpace(request.Transport), SessionTransportWebRTC) || c.liveService == nil {
-		return false, nil, nil
-	}
-	if strings.TrimSpace(request.ReplayPath) == "" {
-		return true, nil, nil
-	}
-	if c.legacyReplayOwnsPassiveInvocation(request) {
-		return false, nil, nil
-	}
-	if c.liveReplayService == nil {
-		// Preserve the runtime route so the invocation reports the missing
-		// replay role instead of silently selecting the legacy session graph.
-		return true, nil, nil
+// authoritative error path. A missing replay role is reported by the live
+// request builder.
+func (c *SessionCommand) inspectSessionReplay(ctx context.Context, request serviceSession.Request) (*runtimeReplay.CaptureInspection, error) {
+	if strings.TrimSpace(request.ReplayPath) == "" || c.liveReplayService == nil {
+		return nil, nil
 	}
 	inspection, err := c.liveReplayService.InspectCapture(ctx, request.ReplayPath)
 	if err != nil {
-		return false, nil, fmt.Errorf("replay session capture %s: %w", request.ReplayPath, err)
+		return nil, fmt.Errorf("replay session capture %s: %w", request.ReplayPath, err)
 	}
-	return inspection.IsRealtime() || (inspection.Kind == runtimeReplay.CaptureKindTurn && replayRequestsAudio(request)), &inspection, nil
+	return &inspection, nil
 }
 
-func (c *SessionCommand) legacyReplayOwnsPassiveInvocation(request serviceSession.Request) bool {
-	if c == nil {
-		return false
-	}
-	if c.sessionService == nil {
-		return false
-	}
-	return passiveReplayRequest(request)
-}
-
-func passiveReplayRequest(request serviceSession.Request) bool {
-	for _, disqualifies := range []bool{
-		strings.TrimSpace(request.RecordPath) != "",
-		strings.TrimSpace(request.RecordDirectory) != "",
-		strings.TrimSpace(request.AudioOutputPath) != "",
-		strings.TrimSpace(request.RecordSessionCapturePath) != "",
-		request.PromptProvided,
-		request.TextSeed.Present,
-		request.BareLive,
-		request.BrowserToolsEnabled,
-		request.ComputerUse,
-		request.AudioInput.Present,
-		request.AudioInput.DevicePresent,
-		len(request.AudioTurns) > 0,
-		len(request.ImagePaths) > 0,
-		request.AudioOutputDevice != "",
-		request.AudioInputDevice != "",
-		request.AudioOutputDevicePresent,
-		request.AudioInputDevicePresent,
-		request.WaitForClose,
-		request.TraceAudio,
-	} {
-		if disqualifies {
-			return false
-		}
-	}
-	return true
+// replaysTurnTranscript reports a provider-neutral turn capture replayed
+// without caller audio. Such a capture has no live provider to drive, so its
+// recorded conversation is rendered directly from the replay service.
+func replaysTurnTranscript(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection) bool {
+	return inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn && !replayRequestsAudio(request)
 }
 
 // runRuntimeLiveSession is the CLI host adapter for a complete continuous
@@ -227,12 +179,15 @@ func runtimeLiveCredentialValues(request serviceSession.Request) ([]string, erro
 	return []string{apiKey}, nil
 }
 
-func (c *SessionCommand) runtimeLiveCapabilities(cfg *config.Config) (*runtimeSession.LiveCapabilities, error) {
+func (c *SessionCommand) runtimeLiveCapabilities(ctx context.Context, cfg *config.Config) (*runtimeSession.LiveCapabilities, error) {
 	if c.liveCapabilities == nil || cfg == nil {
 		return nil, nil
 	}
 	capabilities, err := c.liveCapabilities(cfg)
 	if err != nil {
+		return nil, err
+	}
+	if err := initializeRuntimeLiveCapabilities(ctx, &capabilities); err != nil {
 		return nil, err
 	}
 	binding := &runtimeSession.LiveCapabilities{

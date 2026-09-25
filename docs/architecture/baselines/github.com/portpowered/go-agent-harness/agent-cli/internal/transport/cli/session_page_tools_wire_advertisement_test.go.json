@@ -27,17 +27,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_page_tools_wire_advertisement_test.go",
-      "value": 691,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "function-lines",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
-      "file": "internal/transport/cli/session_page_tools_wire_advertisement_test.go",
-      "symbol": "TestSessionAdvertisesConnectedPageToolsOnTheProviderWire",
-      "value": 133,
+      "value": 664,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -47,7 +37,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_page_tools_wire_advertisement_test.go",
       "symbol": "TestSessionAdvertisesPageToolsOnTheWireAfterMidSessionSelection",
-      "value": 183,
+      "value": 166,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -57,7 +47,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
       "file": "internal/transport/cli/session_page_tools_wire_advertisement_test.go",
       "symbol": "TestSessionRepublishesLateConnectedPageToolsOnTheProviderWire",
-      "value": 154,
+      "value": 137,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

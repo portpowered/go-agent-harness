@@ -36,9 +36,7 @@ func (h *handle) finishOnceBody(err error) {
 	}
 	err = h.finishMedia(err, userCancelled)
 	h.mu.Lock()
-	if !isContextTermination(h.pumpErr) {
-		err = errors.Join(err, h.pumpErr)
-	}
+	err = joinWorkerError(err, h.pumpErr)
 	h.mu.Unlock()
 	h.emitSynthesizedSessionClose()
 	h.mu.Lock()
@@ -321,7 +319,7 @@ func (s finishState) terminalError() error {
 		return requestedTerminalError(s)
 	}
 	if s.providerErr != nil && !isContextTermination(s.providerErr) {
-		return fmt.Errorf("session error: %w", s.providerErr)
+		return errors.Join(fmt.Errorf("session error: %w", s.providerErr), s.toolResultErr)
 	}
 	if s.toolResultErr != nil {
 		return s.toolResultErr

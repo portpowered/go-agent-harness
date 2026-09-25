@@ -1,19 +1,19 @@
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
-
 import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"os"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func v8RuntimeObservation(observations []runtimecontract.SessionRuntimeObservation, kind runtimecontract.SessionRuntimeObservationKind) (runtimecontract.SessionRuntimeObservation, error) {
@@ -95,7 +95,7 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 	if len(run.crossings) != 2 {
 		return fmt.Errorf("expected two retained PCM crossings, observed %d", len(run.crossings))
 	}
-	wantDirections := []string{"A-to-B", "B-to-A"}
+	wantDirections := []string{v8DirectionAToB, v8DirectionBToA}
 	for i, crossing := range run.crossings {
 		if crossing.Sequence != i+1 || crossing.Direction != wantDirections[i] {
 			return fmt.Errorf("crossing order mismatch at index %d: got sequence=%d direction=%s", i, crossing.Sequence, crossing.Direction)
@@ -117,7 +117,7 @@ func verifyV8Run(run v8DuplexRun, expected map[string][]byte) error {
 		}
 
 		sender, receiver := "A", "B"
-		if crossing.Direction == "B-to-A" {
+		if crossing.Direction == v8DirectionBToA {
 			sender, receiver = "B", "A"
 		}
 		outputObservation, err := v8RuntimeObservation(run.harnesses[sender].Runtime, runtimecontract.SessionRuntimeObservationAudioOutput)
@@ -241,9 +241,9 @@ func verifyV8TranscriptMarkers(harness string, records []v8StreamRecord) error {
 	}
 	for index, expected := range wantMarkers {
 		if gotMarkers[index] != expected {
-			turnKey := v8MultiTurnKey("A-to-B", index+1)
+			turnKey := v8MultiTurnKey(v8DirectionAToB, index+1)
 			if harness == "B" {
-				turnKey = v8MultiTurnKey("B-to-A", index+1)
+				turnKey = v8MultiTurnKey(v8DirectionBToA, index+1)
 			}
 			return fmt.Errorf("multi-turn harness %s turn %d (%s) transcript marker mismatch: expected=%q observed=%q", harness, index+1, turnKey, expected, gotMarkers[index])
 		}
@@ -253,9 +253,9 @@ func verifyV8TranscriptMarkers(harness string, records []v8StreamRecord) error {
 
 func v8InputDirection(harness string) string {
 	if harness == "A" {
-		return "B-to-A"
+		return v8DirectionBToA
 	}
-	return "A-to-B"
+	return v8DirectionAToB
 }
 
 func v8InputCrossingIndex(harness string, turn int) int {
@@ -344,7 +344,7 @@ func verifyV8ViewLedger(viewName string, view *v8RecordingView, crossings []v8Cr
 	}
 	for turnIndex, payload := range expected {
 		crossingIndex := turnIndex * 2
-		if direction == "B-to-A" {
+		if direction == v8DirectionBToA {
 			crossingIndex++
 		}
 		if crossingIndex >= len(crossings) {
@@ -387,7 +387,7 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 	if schedule[4].Overlapping || schedule[5].Overlapping || schedule[4].Tick == schedule[5].Tick {
 		return fmt.Errorf("multi-turn schedule lacks the required sequential turn-3 boundary: entries=%+v", schedule[4:])
 	}
-	for direction, frames := range map[string][][]byte{"A-to-B": aToB, "B-to-A": bToA} {
+	for direction, frames := range map[string][][]byte{v8DirectionAToB: aToB, v8DirectionBToA: bToA} {
 		seen := make(map[string]int, len(frames))
 		for turn, frame := range frames {
 			hash := v8PCMHash(frame)
@@ -410,7 +410,7 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 			return fmt.Errorf("multi-turn %s turn %d timestamp=%s, want %s", crossing.Direction, crossing.Turn, crossing.Timestamp.Format(time.RFC3339Nano), wantTimestamp.Format(time.RFC3339Nano))
 		}
 		want := aToB[entry.Turn-1]
-		if entry.Direction == "B-to-A" {
+		if entry.Direction == v8DirectionBToA {
 			want = bToA[entry.Turn-1]
 		}
 		if !bytes.Equal(crossing.Emitted, want) || !bytes.Equal(crossing.Delivered, want) {
@@ -489,10 +489,10 @@ func verifyV8MultiTurnRun(run v8DuplexRun, aToB, bToA [][]byte) error {
 		direction string
 		expected  [][]byte
 	}{
-		{name: "A/client", direction: "A-to-B", expected: aToB},
-		{name: "B/agent", direction: "A-to-B", expected: aToB},
-		{name: "B/client", direction: "B-to-A", expected: bToA},
-		{name: "A/agent", direction: "B-to-A", expected: bToA},
+		{name: "A/client", direction: v8DirectionAToB, expected: aToB},
+		{name: "B/agent", direction: v8DirectionAToB, expected: aToB},
+		{name: "B/client", direction: v8DirectionBToA, expected: bToA},
+		{name: "A/agent", direction: v8DirectionBToA, expected: bToA},
 	} {
 		if err := verifyV8ViewLedger(expectation.name, run.views[expectation.name], run.crossings, expectation.direction, expectation.expected); err != nil {
 			return err

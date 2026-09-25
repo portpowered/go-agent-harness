@@ -1,11 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"io"
@@ -18,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -57,7 +52,7 @@ func TestIsPassiveLiveInvocationMatrix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			command := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil).Generate()
+			command := newTestSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), testSessionDeps{}).Generate()
 			if err := command.ParseFlags(tt.args); err != nil {
 				t.Fatalf("parse flags %v: %v", tt.args, err)
 			}

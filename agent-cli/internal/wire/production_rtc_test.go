@@ -1,9 +1,5 @@
 package wire
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -22,30 +18,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
-
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
 // TestGeneratedRootCLI_WebRTCRejectsBeforeProductionSideEffects proves that
 // the shipped graph rejects an otherwise valid WebRTC request before any
-// customer-unreachable signaling, peer/media setup, provider connection, or
-// device/runtime side effect can occur.
+// provider connection or device/runtime side effect can occur.
 func TestGeneratedRootCLI_WebRTCRejectsBeforeProductionSideEffects(t *testing.T) {
-	var signalingCalls, dataPlaneCalls, mediaSourceCalls int
-	components := servicetest.SessionRTCComponents{
-		ResolveSignaling: func(context.Context, string) (rtc.Signaling, error) {
-			signalingCalls++
-			return nil, errors.New("signaling resolver should not be reached")
-		},
-		NewDataPlane: func(context.Context, rtc.Signaling) (servicetest.SessionRTCDataPlane, error) {
-			dataPlaneCalls++
-			return nil, errors.New("RTC data-plane factory should not be reached")
-		},
-		OpenMediaSource: func(context.Context, string) (sharedaudio.InboundMedia, error) {
-			mediaSourceCalls++
-			return nil, errors.New("media-source opener should not be reached")
-		},
-	}
 	provider := &recordingSessionInferencer{}
 	transportDialer := &recordingDialer{}
 	registry := &recordingDeviceRegistry{}
@@ -60,7 +38,6 @@ func TestGeneratedRootCLI_WebRTCRejectsBeforeProductionSideEffects(t *testing.T)
 		audioSink,
 		&recordingClock{},
 		WithSessionInferencer(provider),
-		WithSessionRTCComponents(components),
 	)
 	if err != nil {
 		t.Fatalf("compose generated root CLI: %v", err)
@@ -101,9 +78,6 @@ func TestGeneratedRootCLI_WebRTCRejectsBeforeProductionSideEffects(t *testing.T)
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("generated root WebRTC error %q missing %q", err, want)
 		}
-	}
-	if signalingCalls != 0 || dataPlaneCalls != 0 || mediaSourceCalls != 0 {
-		t.Fatalf("RTC component calls = signaling:%d data-plane:%d media:%d, want zero", signalingCalls, dataPlaneCalls, mediaSourceCalls)
 	}
 	if provider.connects != 0 {
 		t.Fatalf("provider session connects = %d, want zero", provider.connects)

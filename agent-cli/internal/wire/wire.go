@@ -14,8 +14,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/fleet"
 	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
-	serviceRuntime "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
-	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	toolservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/wire"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
@@ -43,15 +41,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"net/http"
 )
-
-// provideSessionRTCRuntimeFactory installs the service-owned WebRTC runtime
-// composition in the generated CLI graph. The component functions keep
-// signaling, peer/data, and media implementations behind the service's
-// provider-neutral contracts while leaving runtime side effects lazy until a
-// session actually starts.
-func provideSessionRTCRuntimeFactory(components rtcontract.SessionRTCComponents, metricSampler MetricSampler, logger Logger) rtcontract.SessionRTCRuntimeFactory {
-	return servicewire.NewSessionRTCRuntimeFactory(components, metricSampler, logger)
-}
 
 type modelValidation struct {
 	relax bool
@@ -296,10 +285,6 @@ func provideLiveReplayService() runtimeReplay.Service {
 	return runtimeReplayWire.NewService()
 }
 
-func provideSessionDependencies(clockSource Clock, resolver serviceTools.Service, runtimeFactory rtcontract.SessionRTCRuntimeFactory, inferencer messages.SessionInferencer, toolExecutor messages.ToolExecutor, deviceRegistry DeviceRegistry, observer SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, runtime serviceRuntime.Runtime) servicewire.SessionDependencies {
-	return servicewire.SessionDependencies{Clock: clockSource, ToolService: resolver, RuntimeFactory: runtimeFactory, SessionInferencer: inferencer, ToolExecutor: toolExecutor, DeviceRegistry: deviceRegistry, RuntimeObserver: observer, MetricSampler: metricSampler, Logger: logger, Runtime: runtime}
-}
-
 // CliSet provides CLI commands, router, and root.
 var CliSet = wire.NewSet(
 	FlagsSet,
@@ -312,8 +297,6 @@ var CliSet = wire.NewSet(
 	cli.NewProbeCommand,
 	servicewire.DeviceSet,
 	servicewire.RoomSet,
-	servicewire.SessionSet,
-	wire.NewSet(servicewire.NewBrowserConversationService),
 	servicewire.NewReplayService,
 	servicewire.NewMetricsCollector,
 	provideDefaultRuntimeToolService,
@@ -337,7 +320,6 @@ var CliSet = wire.NewSet(
 	provideFileDeviceService,
 	provideLiveReplayService,
 	provideRoomClock,
-	provideSessionDependencies,
 	provideToolCapabilitiesService,
 	cli.NewProbeRunCommandWithDeviceService,
 	cli.NewProbeGateCommand,
@@ -345,9 +327,9 @@ var CliSet = wire.NewSet(
 	cli.NewProbeFleetCommand,
 	provideFleetEntryExecutors,
 	provideAcceptanceCommands,
-	provideSessionRTCRuntimeFactory,
 	cli.NewSessionToolCapabilitiesFactoryFromService,
 	cli.NewSessionCommandWithLive,
+	cli.NewSessionRequestService,
 	runtimeSelfPlayWire.NewDependencies,
 	runtimeSelfPlayWire.NewService,
 	cli.NewSessionReplayCommand,
@@ -378,7 +360,6 @@ func assembleAgentCLI(
 	toolService toolServiceOverride,
 	inferencer messages.Inferencer,
 	sessionInferencer messages.SessionInferencer,
-	rtcComponents rtcontract.SessionRTCComponents,
 	relaxModelValidation bool,
 	observer assemblyObserver,
 ) (*cli.AgentCLI, error) {

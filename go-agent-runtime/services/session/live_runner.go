@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -53,6 +54,11 @@ type LiveRunOptions struct {
 	// AudioTurnAdmission applies when CaptureTurns contains multiple finite
 	// sources. Zero selects AudioTurnAdmissionCompletionGated.
 	AudioTurnAdmission AudioTurnAdmission
+	// Metrics optionally receives this invocation's per-direction stream
+	// accounting: the same observations the runtime reports in its terminal
+	// final accounting, whether or not a service-level runtime observer is
+	// installed. Recording failures are joined with the invocation result.
+	Metrics metrics.Recorder
 	// Recorder is an optional invocation-owned evidence sink. The runtime
 	// supplies ordered stream, media, and terminal observations and calls
 	// Finalize after all provider/device workers have joined.

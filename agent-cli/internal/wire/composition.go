@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	rtcontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime/transports"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"reflect"
 
@@ -173,8 +172,6 @@ type compositionOptions struct {
 	runtimeObserver      SessionRuntimeObserver
 	metricSampler        MetricSampler
 	logger               Logger
-	rtcComponents        rtcontract.SessionRTCComponents
-	rtcComponentsSet     bool
 	relaxModelValidation bool
 }
 
@@ -231,18 +228,6 @@ func WithLogger(logger Logger) CompositionOption {
 	}
 }
 
-// WithSessionRTCComponents replaces only the external RTC component edges
-// while retaining the production service-owned runtime factory and CLI graph.
-// It is intended for hermetic command tests; omitted callers receive the
-// concrete production composition.
-func WithSessionRTCComponents(components rtcontract.SessionRTCComponents) CompositionOption {
-	return func(options *compositionOptions) error {
-		options.rtcComponents = components
-		options.rtcComponentsSet = true
-		return nil
-	}
-}
-
 // WithRelaxedModelValidation preserves the test-only behavior of the legacy
 // mock initializer without making validation mode a dependency port.
 func WithRelaxedModelValidation() CompositionOption {
@@ -291,7 +276,6 @@ func ComposeAgentCLI(
 		inferencer:        compositionOptions.inferencer,
 		sessionInferencer: compositionOptions.sessionInferencer,
 		toolService:       compositionOptions.toolService,
-		rtcComponents:     effectiveSessionRTCComponents(compositionOptions),
 	}
 	normalizeClock(&values)
 	if err := validateDependencies(&values); err != nil {
@@ -316,7 +300,6 @@ func ComposeAgentCLI(
 		toolServiceOverride{service: values.toolService},
 		values.inferencer,
 		values.sessionInferencer,
-		values.rtcComponents,
 		compositionOptions.relaxModelValidation,
 		nil,
 	)
@@ -403,7 +386,6 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 		toolServiceOverride{service: values.toolService},
 		values.inferencer,
 		values.sessionInferencer,
-		values.rtcComponents,
 		relaxModelValidation,
 		withDefaultCallCounts(observer, values.defaultCalls),
 	)
@@ -448,8 +430,7 @@ func compositionValuesWithPorts(definitions []portDefinition, defaults toolDefau
 	}
 
 	values := compositionValues{
-		defaultCalls:  make(map[string]int, len(definitions)),
-		rtcComponents: defaultSessionRTCComponents(),
+		defaultCalls: make(map[string]int, len(definitions)),
 	}
 	swapped := make(map[string]struct{}, len(swaps))
 	for _, swap := range swaps {
@@ -499,7 +480,6 @@ type compositionValues struct {
 	logger            Logger
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
-	rtcComponents     rtcontract.SessionRTCComponents
 	defaultCalls      map[string]int
 }
 
@@ -508,11 +488,4 @@ type compositionValues struct {
 // replace that provider with a complete custom service.
 type toolServiceOverride struct {
 	service serviceTools.Service
-}
-
-func effectiveSessionRTCComponents(options compositionOptions) rtcontract.SessionRTCComponents {
-	if options.rtcComponentsSet {
-		return options.rtcComponents
-	}
-	return defaultSessionRTCComponents()
 }

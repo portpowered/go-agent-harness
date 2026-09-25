@@ -1,11 +1,5 @@
 package cli
 
-import sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
-import sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bufio"
 	"bytes"
@@ -25,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -84,7 +79,7 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
-	command := NewSessionCommand(flags.NewAskFlags(), globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}, DeviceRegistry: registry}), nil).Generate()
+	command := newTestSessionCommand(flags.NewAskFlags(), globalFlags, testSessionDeps{Registry: registry}).Generate()
 	command.SetOut(io.Discard)
 	var stderr bytes.Buffer
 	command.SetErr(&stderr)

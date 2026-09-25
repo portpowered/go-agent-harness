@@ -1,7 +1,5 @@
 package cli
 
-import rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
-
 import (
 	"bytes"
 	"context"
@@ -16,11 +14,9 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
-	sessionservicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
-	sessionclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	rooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
@@ -41,7 +37,7 @@ func testPathResolver(currentHome, namedHome string) *pathResolver {
 	return &pathResolver{
 		currentHome: func() (string, error) { return currentHome, nil },
 		lookupUser: func(name string) (string, error) {
-			if name != "alice" {
+			if name != roomTestAliceID {
 				return "", errors.New("unknown test user")
 			}
 			return namedHome, nil
@@ -54,7 +50,7 @@ func TestRouterPreRunNormalizesSessionPathFlagsAndPreservesSentinels(t *testing.
 	namedHome := t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
-	sessionOwner := NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil)
+	sessionOwner := newTestSessionCommand(askFlags, globalFlags, testSessionDeps{})
 	sessionCommand := sessionOwner.Generate()
 	root := newPathPreflightRoot(sessionCommand, testPathResolver(currentHome, namedHome))
 	var output bytes.Buffer
@@ -134,7 +130,7 @@ func TestRouterPreRunRejectsInvalidRepeatableSessionPathBeforeApplyingAnyValue(t
 	currentHome := t.TempDir()
 	globalFlags := flags.NewGlobalFlags()
 	askFlags := flags.NewAskFlags()
-	sessionOwner := NewSessionCommand(askFlags, globalFlags, newTestSessionService(sessionservicewire.SessionDependencies{Clock: sessionclock.Real{}}), nil)
+	sessionOwner := newTestSessionCommand(askFlags, globalFlags, testSessionDeps{})
 	sessionCommand := sessionOwner.Generate()
 	root := newPathPreflightRoot(sessionCommand, &pathResolver{
 		currentHome: func() (string, error) { return currentHome, nil },

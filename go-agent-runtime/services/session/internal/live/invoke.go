@@ -109,7 +109,7 @@ func openLiveHandle(s *Service, ctx context.Context, options session.LiveRunOpti
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Join(err, finalizeRecorder(options.Recorder, ctx, err))
 	}
-	handle, err := s.OpenLive(ctx, options.Request)
+	handle, err := s.openLive(ctx, options.Request, options.Metrics)
 	if err != nil {
 		return nil, errors.Join(err, finalizeRecorder(options.Recorder, ctx, err))
 	}
@@ -362,7 +362,7 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 	}
 	var playbackErr error
 	if shouldDrainPlayback(i.ctx, waitErr) {
-		playbackErr = drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout)
+		playbackErr = i.drainInvocationPlayback()
 	}
 	if i.stopPumps != nil {
 		i.stopPumps()

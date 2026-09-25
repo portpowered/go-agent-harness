@@ -5,8 +5,6 @@
 // this test only corroborates its event shape against the real provider.
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
-
 import (
 	"bufio"
 	"context"
@@ -26,6 +24,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 

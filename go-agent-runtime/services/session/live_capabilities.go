@@ -13,6 +13,12 @@ import (
 // provider configuration or concrete session type in this package.
 type LiveInferencerFactory func(context.Context, LiveRequest) (messages.SessionInferencer, error)
 
+// LiveCredentialResolver resolves a request's opaque CredentialReference
+// when the provider session is built. The session service passes the
+// reference through unchanged; only the host knows whether it names a vault
+// entry, an environment variable, or another secret source.
+type LiveCredentialResolver func(context.Context, string) (string, error)
+
 // LiveTurnDetection is the provider-neutral VAD policy carried into a live
 // session. Provider adapters translate it into their wire representation.
 type LiveTurnDetection struct {

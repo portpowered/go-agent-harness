@@ -1,17 +1,17 @@
 package integration
 
-import runtimecontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentruntime"
-
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"io"
 	"sync"
 	"testing"
 	"time"
+
+	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 type v8MultiTurnBridgePacket struct {
@@ -136,7 +136,7 @@ func (b *v8MultiTurnBridge) write(data []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if crossing.Direction == "A-to-B" && crossing.Schedule < len(v8MultiTurnSchedule())-2 && v8MultiTurnSchedule()[crossing.Schedule].Overlapping {
+	if crossing.Direction == v8DirectionAToB && crossing.Schedule < len(v8MultiTurnSchedule())-2 && v8MultiTurnSchedule()[crossing.Schedule].Overlapping {
 		// Each overlapping replay records both server output intervals before
 		// either client sends the peer AUDIO.DELTA. This preserves the strict
 		// capture order while retaining the equal-tick overlap.
@@ -298,7 +298,7 @@ func (b *v8MultiTurnBridge) consumePacket(destination []byte, packet v8MultiTurn
 
 func TestV8MultiTurnBridgeReadConsumesQueuedEOFAfterCancellation(t *testing.T) {
 	coordinator := &v8MultiTurnCoordinator{abort: make(chan struct{})}
-	bridge := newV8MultiTurnBridge(coordinator, "A-to-B", &v8RecordingView{}, &v8RecordingView{}, nil)
+	bridge := newV8MultiTurnBridge(coordinator, v8DirectionAToB, &v8RecordingView{}, &v8RecordingView{}, nil)
 	bridge.packets <- v8MultiTurnBridgePacket{eof: true}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -314,7 +314,7 @@ func TestV8MultiTurnBridgeReadConsumesQueuedEOFAfterCancellation(t *testing.T) {
 
 func TestV8MultiTurnBridgeReadConsumesEOFPublishedAfterCancellation(t *testing.T) {
 	coordinator := &v8MultiTurnCoordinator{abort: make(chan struct{})}
-	bridge := newV8MultiTurnBridge(coordinator, "A-to-B", &v8RecordingView{}, &v8RecordingView{}, nil)
+	bridge := newV8MultiTurnBridge(coordinator, v8DirectionAToB, &v8RecordingView{}, &v8RecordingView{}, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -497,7 +497,7 @@ func (b *v8PCMBridge) write(data []byte) (int, error) {
 		return 0, err
 	}
 	b.sender.record(crossing, emitted)
-	if b.direction == "A-to-B" {
+	if b.direction == v8DirectionAToB {
 		select {
 		case <-b.coordinator.deliveryReady:
 		case <-b.coordinator.abort:

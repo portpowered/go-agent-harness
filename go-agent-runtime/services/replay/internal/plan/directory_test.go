@@ -186,3 +186,65 @@ func TestResolveCapturePathPreservesCancellation(t *testing.T) {
 		t.Fatalf("cancellation error = %v, want %v", err, cause)
 	}
 }
+
+// traceUpdatedType is the recorded server acknowledgement traced below.
+const traceUpdatedType = "session.updated"
+
+func TestTraceCaptureReturnsOrderedOwnedEvents(t *testing.T) {
+	path := writePlanCapture(t,
+		clientRecord("session.update", `{"type":"session.update"}`),
+		serverRecord(traceUpdatedType, `{"type":"session.updated"}`),
+	)
+	events, err := New().TraceCapture(t.Context(), path)
+	if err != nil {
+		t.Fatalf("TraceCapture: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("trace events = %d, want 2", len(events))
+	}
+	if events[0].Sequence != 1 || events[0].Type != "session.update" || events[1].Type != traceUpdatedType {
+		t.Fatalf("trace order = %+v", events)
+	}
+	if events[0].Direction == events[1].Direction {
+		t.Fatalf("trace directions = %q/%q, want client then server", events[0].Direction, events[1].Direction)
+	}
+	var payload struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(events[1].Payload, &payload); err != nil || payload.Type != traceUpdatedType {
+		t.Fatalf("trace payload = %s (%v)", events[1].Payload, err)
+	}
+	if _, err := New().TraceCapture(t.Context(), filepath.Join(t.TempDir(), "missing.json")); err == nil {
+		t.Fatal("TraceCapture accepted a missing capture")
+	}
+	cause := errors.New("trace stopped")
+	ctx, cancel := context.WithCancelCause(t.Context())
+	cancel(cause)
+	if _, err := New().TraceCapture(ctx, path); !errors.Is(err, cause) {
+		t.Fatalf("canceled TraceCapture = %v, want %v", err, cause)
+	}
+}
+
+func TestPreparedLiveReplayExposesOwnedInspection(t *testing.T) {
+	prepared := prepareLiveReplayForTest(t)
+	closeReplayTestResource(t, prepared, "prepared replay")
+	inspection := prepared.Inspection()
+	if !inspection.IsRealtime() {
+		t.Fatalf("prepared inspection = %+v, want a realtime capture", inspection)
+	}
+	inspection.InitialTools = append(inspection.InitialTools, "mutated")
+	if again := prepared.Inspection(); len(again.InitialTools) == len(inspection.InitialTools) {
+		t.Fatal("Inspection returned the prepared replay's backing tool slice")
+	}
+	select {
+	case <-prepared.Done():
+		t.Fatal("prepared replay finished before any connection")
+	default:
+	}
+	if err := prepared.Err(); err != nil {
+		t.Fatalf("prepared replay error before use = %v", err)
+	}
+	if err := prepared.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}

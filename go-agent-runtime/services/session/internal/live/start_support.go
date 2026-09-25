@@ -382,3 +382,11 @@ func (h *handle) deferProviderClose() bool {
 	defer h.mu.Unlock()
 	return h.scheduledAudioCount > 0 && h.dispatchedAudioCount < h.scheduledAudioCount
 }
+func hasImageContentPart(parts []messages.ContentPart) bool {
+	for _, part := range parts {
+		if _, ok := part.(messages.ImagePart); ok {
+			return true
+		}
+	}
+	return false
+}
