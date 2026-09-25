@@ -658,7 +658,7 @@ PREPUSH_SCOPE ?= changed
 PREPUSH_JOBS ?= 4
 
 prepush: ## Run the fail-fast, timed local pre-push gate (PREPUSH_SCOPE=changed|full, PREPUSH_JOBS=N).
-	@PREPUSH_MAKE="$(PREPUSH_MAKE)" PREPUSH_SCOPE="$(PREPUSH_SCOPE)" PREPUSH_JOBS="$(PREPUSH_JOBS)" COVERAGE_BASE="$(COVERAGE_BASE)" scripts/prepush.sh
+	@GO="$(GO)" PREPUSH_MAKE="$(PREPUSH_MAKE)" PREPUSH_SCOPE="$(PREPUSH_SCOPE)" PREPUSH_JOBS="$(PREPUSH_JOBS)" COVERAGE_BASE="$(COVERAGE_BASE)" scripts/prepush.sh
 
 prepush-full: ## Run the pre-push gate over every package (the CI test and coverage scope).
 	@$(MAKE) --no-print-directory prepush PREPUSH_SCOPE=full

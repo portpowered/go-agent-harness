@@ -185,6 +185,60 @@ class PrepushTargetTests(unittest.TestCase):
             self.assertRegex(result.output, r"==> prepush phase fmt completed in \d+s")
             self.assertNotIn("==> prepush phase: vet", result.output)
 
+    def test_changed_content_or_environment_invalidates_the_phase_cache(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fake_make, log_path = self._fake_make(root)
+            repo = root / "repo"
+            repo.mkdir()
+            tracked = repo / "tracked.txt"
+            tracked.write_text("one\n", encoding="utf-8")
+            for arguments in (
+                ["init", "-q"],
+                ["config", "user.email", "prepush-test@example.test"],
+                ["config", "user.name", "prepush test"],
+                ["add", "-A"],
+                ["commit", "-qm", "baseline"],
+            ):
+                subprocess.run(["git", "-C", str(repo), *arguments], check=True)
+            objects_before = self._loose_objects(repo)
+            env = {"PREPUSH_JOBS": "1", "PREPUSH_CACHE": "1", "PREPUSH_CACHE_DIR": str(root / "cache")}
+
+            def run(extra=None):
+                if log_path.exists():
+                    log_path.unlink()
+                result = self._run_script(fake_make, log_path, {**env, **(extra or {})}, cwd=repo)
+                self.assertEqual(result.returncode, 0, result.output)
+                ran = log_path.read_text(encoding="utf-8").splitlines() if log_path.exists() else []
+                return ran, result.output
+
+            self.assertEqual(run()[0], list(PHASES))
+            self.assertEqual(run()[0], [])
+
+            tracked.write_text("two\n", encoding="utf-8")
+            self.assertEqual(run()[0], list(PHASES), "a tracked edit must invalidate the cache")
+            (repo / "untracked.txt").write_text("new\n", encoding="utf-8")
+            self.assertEqual(run()[0], list(PHASES), "an untracked file must invalidate the cache")
+            self.assertEqual(run({"GOFLAGS": "-mod=mod"})[0], list(PHASES), "GOFLAGS must be part of the key")
+            self.assertEqual(run({"MAKEFLAGS": "LINT_SHARD=agent-cli"})[0], list(PHASES), "Make variables must be part of the key")
+
+            # Content edited while a stage runs: that stage is not recorded,
+            # so after reverting the edit only that stage runs again.
+            env["PREPUSH_CACHE_DIR"] = str(root / "cache-mid-run")
+            ran, output = run({"PREPUSH_EDIT_PHASE": "coverage", "PREPUSH_EDIT_FILE": str(tracked)})
+            self.assertEqual(ran, list(PHASES))
+            self.assertIn("content changed while the gate ran", output)
+            tracked.write_text("two\n", encoding="utf-8")
+            (repo / "untracked.txt").write_text("new\n", encoding="utf-8")
+            self.assertEqual(run()[0], list(TEST_STAGE))
+
+            self.assertEqual(self._loose_objects(repo), objects_before, "hashing must not write objects into the repository")
+
+    @staticmethod
+    def _loose_objects(repo):
+        objects = repo / ".git" / "objects"
+        return sorted(str(path.relative_to(objects)) for path in objects.rglob("*") if path.is_file())
+
     def test_runner_returns_the_failing_phase_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             fake_make, log_path = self._fake_make(Path(temp_dir))
@@ -199,7 +253,7 @@ class PrepushTargetTests(unittest.TestCase):
             self.assertIn("lint", phase_log)
             self.assertFalse(set(TEST_STAGE) & set(phase_log), result.output)
 
-    def _run_script(self, fake_make, log_path, env):
+    def _run_script(self, fake_make, log_path, env, cwd=REPO_ROOT):
         process_env = os.environ.copy()
         process_env.pop("PREPUSH_SCOPE", None)
         process_env.pop("PREPUSH_JOBS", None)
@@ -212,7 +266,7 @@ class PrepushTargetTests(unittest.TestCase):
         )
         result = subprocess.run(
             [str(SCRIPT_PATH)],
-            cwd=REPO_ROOT,
+            cwd=cwd,
             capture_output=True,
             text=True,
             env=process_env,
@@ -260,6 +314,9 @@ class PrepushTargetTests(unittest.TestCase):
             "if [ \"${PREPUSH_FORMAT_DIAGNOSTIC:-0}\" = 1 ] && [ \"$phase\" = fmt ]; then\n"
             "  echo \"gofmt drift detected in fixture.go\" >&2\n"
             "  echo \"Run 'make fmt-fix' to rewrite files before rerunning 'make prepush'.\" >&2\n"
+            "fi\n"
+            "if [ \"${PREPUSH_EDIT_PHASE:-}\" = \"$phase\" ]; then\n"
+            "  printf 'edited mid-run\\n' >> \"$PREPUSH_EDIT_FILE\"\n"
             "fi\n"
             "if [ \"${PREPUSH_FAIL_PHASE:-}\" = \"$phase\" ]; then\n"
             "  exit \"${PREPUSH_FAIL_STATUS:-1}\"\n"

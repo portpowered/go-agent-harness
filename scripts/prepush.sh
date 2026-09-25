@@ -82,27 +82,52 @@ trap 'rm -rf "$work_dir"' EXIT
 
 phase_name() { printf '%s' "${1%% *}"; }
 
-# Phase result cache: a phase that passed for exactly this content (the
-# working tree including untracked files, the COVERAGE_BASE commit, the Go
-# toolchain and platform) is not run again, so re-running the gate after a
-# flaky or unrelated failure repeats only the phases that have not passed.
-# PREPUSH_CACHE=0 disables it; PREPUSH_CACHE_DIR moves it.
+# Phase result cache: a phase that passed for exactly this content is not
+# run again, so re-running the gate after a flaky or unrelated failure repeats
+# only the phases that have not passed. The key covers the working tree
+# (tracked and untracked, hashed through a private index and object
+# directory so nothing is written to the repository), the COVERAGE_BASE
+# commit, the Go toolchain used by make, the platform, the analyzer and
+# Python versions, MAKEFLAGS (command-line Make variables) and the
+# environment variables that change what a phase builds or tests. A stage's
+# passes are recorded only when the key is unchanged after the stage, so
+# content edited while a phase ran is never cached. PREPUSH_CACHE=0
+# disables it; PREPUSH_CACHE_DIR moves it.
 cache_dir=""
 content_key=""
+
+compute_content_key() {
+	(
+		set -e
+		private="$(mktemp -d "$work_dir/key.XXXXXX")"
+		cp "$(git rev-parse --git-path index)" "$private/index"
+		objects="$(cd "$(git rev-parse --git-path objects)" && pwd)"
+		export GIT_INDEX_FILE="$private/index" GIT_OBJECT_DIRECTORY="$private/objects" \
+			GIT_ALTERNATE_OBJECT_DIRECTORIES="$objects${GIT_ALTERNATE_OBJECT_DIRECTORIES:+:$GIT_ALTERNATE_OBJECT_DIRECTORIES}"
+		mkdir "$GIT_OBJECT_DIRECTORY"
+		git add -A . >/dev/null 2>&1
+		go_binary="${GO:-go}"
+		{
+			git write-tree
+			git rev-parse "${COVERAGE_BASE:-origin/main}" 2>/dev/null || echo "no-base"
+			command -v "$go_binary" || echo "no-go"
+			"$go_binary" version 2>/dev/null || true
+			"$go_binary" env GOROOT GOOS GOARCH GOFLAGS CGO_ENABLED GOEXPERIMENT GOWORK 2>/dev/null || true
+			python3 --version 2>&1 || true
+			uname -sm
+			# The jobserver descriptors differ on every run; the rest of
+			# MAKEFLAGS carries command-line Make variables.
+			printf 'MAKEFLAGS=%s\n' "$(printf '%s' "${MAKEFLAGS:-}" | tr ' ' '\n' | grep -v -e '^--jobserver' -e '^-j' | tr '\n' ' ')"
+			env | grep -E '^(GO[A-Z0-9_]*|CGO_[A-Z_]*|CC|CXX|CI|GITHUB_ACTIONS|(COVERAGE|LINT|TEST|AGENT_CLI|SKIP|BUILD|GOLANGCI_LINT|STATICCHECK|YUI)_[A-Z0-9_]*)=' |
+				grep -v '^GOCACHE=' | LC_ALL=C sort || true
+		} | shasum -a 256 | cut -d' ' -f1
+		rm -rf "$private"
+	)
+}
+
 if [ "${PREPUSH_CACHE:-1}" = 1 ]; then
 	cache_dir="${PREPUSH_CACHE_DIR:-.cache/prepush}"
-	content_key="$(
-		set -e
-		index="$work_dir/content-index"
-		cp "$(git rev-parse --git-path index)" "$index"
-		GIT_INDEX_FILE="$index" git add -A . >/dev/null 2>&1
-		{
-			GIT_INDEX_FILE="$index" git write-tree
-			git rev-parse "${COVERAGE_BASE:-origin/main}" 2>/dev/null || echo "no-base"
-			go version 2>/dev/null || true
-			uname -sm
-		} | shasum -a 256 | cut -d' ' -f1
-	)" || content_key=""
+	content_key="$(compute_content_key)" || content_key=""
 	if [ -z "$content_key" ] || ! mkdir -p "$cache_dir"; then
 		cache_dir=""
 	fi
@@ -142,7 +167,7 @@ run_phase() {
 		"$make_command" --no-print-directory ${arguments[@]+"${arguments[@]}"} "$target" || status=$?
 	fi
 	if [ "$status" = 0 ] && [ -n "$cache_dir" ]; then
-		: >"$(cache_marker "$spec")" || true
+		printf '%s\n' "$spec" >>"$work_dir/$name.passed"
 	fi
 	echo "$status $((SECONDS - started))" >"$work_dir/$name.status"
 	return "$status"
@@ -203,6 +228,23 @@ run_stage() {
 	done
 }
 
+# record_passes PHASE...: after a stage, cache its passed phases if the
+# content key still matches the one the stage started from.
+record_passes() {
+	local spec
+	[ -n "$cache_dir" ] || return 0
+	if [ "$(compute_content_key 2>/dev/null)" != "$content_key" ]; then
+		echo "==> prepush: content changed while the gate ran; results of this run are not cached" >&2
+		cache_dir=""
+		return 0
+	fi
+	for spec in "$@"; do
+		if [ -f "$work_dir/$(phase_name "$spec").passed" ]; then
+			: >"$(cache_marker "$spec")" || true
+		fi
+	done
+}
+
 echo "==> prepush starting (scope $scope, at most $jobs phase(s) at once)"
 for stage in stage_format stage_static stage_tests; do
 	eval "phases=(\"\${${stage}[@]}\")"
@@ -212,6 +254,7 @@ for stage in stage_format stage_static stage_tests; do
 	done < <(uncached_phases "${phases[@]}")
 	if [ "${#pending[@]}" -gt 0 ]; then
 		run_stage "${pending[@]}"
+		record_passes "${pending[@]}"
 	fi
 	if [ -n "$failed_phase" ]; then
 		break
