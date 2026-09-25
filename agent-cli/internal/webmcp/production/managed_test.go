@@ -1,4 +1,4 @@
-package cli
+package production
 
 import (
 	"context"
@@ -30,10 +30,10 @@ func TestManagedProductionDiscoveryInjectsEndpointAndDetachKeepsBrowserWarm(t *t
 	browserConfig.Managed.Open = "about:blank"
 
 	discoveryFake := &managedCompositionDiscoveryFake{}
-	composition := &productionWebMCPComposition{
+	composition := &composition{
 		browser:        browserConfig,
 		configDir:      configDir,
-		inputs:         productionDiscoveryInputs(browserConfig),
+		inputs:         DiscoveryInputs(browserConfig),
 		discovery:      discoveryFake,
 		managedManager: manager,
 		httpClient:     &http.Client{Transport: managedCompositionVersionTransport{}},
@@ -41,7 +41,7 @@ func TestManagedProductionDiscoveryInjectsEndpointAndDetachKeepsBrowserWarm(t *t
 		laneCandidates: make(map[string]discovery.BrowserCandidate),
 		endpoints:      make(map[string]discovery.Endpoint),
 	}
-	wrapped := &managedWebMCPDiscoveryService{owner: composition, delegate: discoveryFake}
+	wrapped := &managedDiscoveryService{owner: composition, delegate: discoveryFake}
 
 	candidates, err := wrapped.DiscoverAll(context.Background(), discovery.ConnectionInputs{
 		UserDataDir:      "/customer/profile",
@@ -95,7 +95,7 @@ func TestManagedProductionDiscoveryInjectsEndpointAndDetachKeepsBrowserWarm(t *t
 func TestExternalProductionCompositionDoesNotAcquireManagedBrowser(t *testing.T) {
 	browserConfig := config.DefaultBrowserConfig()
 	browserConfig.Connection.CDPURL = "http://127.0.0.1:9222/json/version"
-	composition := &productionWebMCPComposition{browser: browserConfig}
+	composition := &composition{browser: browserConfig}
 	browser, err := composition.ensureManagedBrowser(context.Background())
 	if err != nil {
 		t.Fatalf("external ensureManagedBrowser(): %v", err)
@@ -114,10 +114,10 @@ func TestManagedProductionCloseOnExitClearsStateAndStopsExactBrowser(t *testing.
 	browserConfig.Tools.Enabled = true
 	browserConfig.Managed.CloseOnExit = true
 	discoveryFake := &managedCompositionDiscoveryFake{}
-	composition := &productionWebMCPComposition{
+	composition := &composition{
 		browser:        browserConfig,
 		configDir:      configDir,
-		inputs:         productionDiscoveryInputs(browserConfig),
+		inputs:         DiscoveryInputs(browserConfig),
 		discovery:      discoveryFake,
 		managedManager: manager,
 		httpClient:     &http.Client{Transport: managedCompositionVersionTransport{}},
@@ -125,7 +125,7 @@ func TestManagedProductionCloseOnExitClearsStateAndStopsExactBrowser(t *testing.
 		laneCandidates: make(map[string]discovery.BrowserCandidate),
 		endpoints:      make(map[string]discovery.Endpoint),
 	}
-	wrapped := &managedWebMCPDiscoveryService{owner: composition, delegate: discoveryFake}
+	wrapped := &managedDiscoveryService{owner: composition, delegate: discoveryFake}
 	if _, err := wrapped.DiscoverAll(context.Background(), discovery.ConnectionInputs{}); err != nil {
 		t.Fatalf("managed DiscoverAll(): %v", err)
 	}

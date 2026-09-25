@@ -117,162 +117,12 @@ browser:
 	}
 }
 
-func TestProductionWebMCPHandlePreservesOpenTabAndNormalizesTargetIdentity(t *testing.T) {
-	runtime := &productionFakeRuntime{openedTarget: webmcp.Target{
-		ID:               "raw-opened-tab",
-		Type:             "page",
-		Title:            "Opened fixture",
-		URL:              "https://opened.example.test/page?visible=yes#section",
-		Origin:           "https://opened.example.test",
-		WebSocketURL:     "ws://127.0.0.1/devtools/page/raw-opened-tab",
-		ContinuityMarker: "raw-document-token",
-		Eligible:         true,
-	}}
-	raw := &productionFakeHandle{runtime: runtime, candidate: webmcp.BrowserCandidate{ID: "raw-browser"}}
-	owner := &productionWebMCPComposition{targetIDMapper: discovery.HashTargetIDMapper{}}
-	handle := &productionWebMCPHandle{
-		owner:     owner,
-		candidate: webmcp.BrowserCandidate{ID: "browser-public"},
-		raw:       raw,
-		closed:    make(chan struct{}),
-	}
-
-	opened, err := handle.OpenTab(context.Background(), "https://opened.example.test/page?visible=yes#section")
-	if err != nil {
-		t.Fatalf("production open tab: %v", err)
-	}
-	wantID := discovery.HashTargetIDMapper{}.TargetID(discovery.TargetIdentity{BrowserID: "browser-public", RawID: "raw-opened-tab"})
-	if opened.BrowserID != "browser-public" || string(opened.ID) != wantID || opened.URL != "https://opened.example.test/page" || opened.Origin != "https://opened.example.test" {
-		t.Fatalf("normalized opened target = %+v, want browser=%q target=%q", opened, "browser-public", wantID)
-	}
-	if opened.WebSocketURL != "" || opened.ContinuityMarker != "" {
-		t.Fatalf("opened target exposed transport identity: %+v", opened)
-	}
-	if runtime.count("open_tab") != 1 || runtime.openedURL != "https://opened.example.test/page?visible=yes#section" {
-		t.Fatalf("raw open operations = %v URL=%q", runtime.operationSnapshot(), runtime.openedURL)
-	}
-}
-
-func TestProductionWebMCPSessionRebasesRawGenerationForPersistedSelection(t *testing.T) {
-	runtime := &productionFakeRuntime{}
-	raw := &productionFakeSession{
-		runtime: runtime,
-		page: webmcp.PageContext{
-			Key:        webmcp.PageKey{BrowserID: "browser-a", TargetID: "target-a"},
-			Generation: 1,
-			Connected:  true,
-		},
-		tool: webmcp.ToolDescriptor{
-			Name:        "read_state",
-			FrameID:     "frame-a",
-			InputSchema: json.RawMessage(`{"type":"object"}`),
-		},
-	}
-	sessionValue, err := newProductionWebMCPSession(raw, webmcp.Target{
-		BrowserID:  "browser-a",
-		ID:         "target-a",
-		Generation: 7,
-	})
-	if err != nil {
-		t.Fatalf("construct production session: %v", err)
-	}
-	defer func() { _ = sessionValue.Close() }()
-
-	if err := sessionValue.EnableWebMCP(context.Background()); err != nil {
-		t.Fatalf("enable production session: %v", err)
-	}
-	select {
-	case event := <-sessionValue.Events():
-		if event.Type != webmcp.EventToolsAdded || event.Generation != 7 || len(event.Tools) != 1 || event.Tools[0].Generation != 7 {
-			t.Fatalf("rebased production event = %+v, want generation seven", event)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for rebased production catalog event")
-	}
-}
-
-func TestProductionWebMCPSessionMapsRawScreenshotIdentity(t *testing.T) {
-	raw := &productionScreenshotSession{
-		productionFakeSession: &productionFakeSession{
-			runtime: &productionFakeRuntime{},
-			page: webmcp.PageContext{
-				Key:        webmcp.PageKey{BrowserID: "browser-raw", TargetID: "raw-target"},
-				Generation: 1,
-				Connected:  true,
-			},
-		},
-		screenshot: webmcp.PageScreenshot{
-			BrowserID: "browser-raw",
-			TargetID:  "raw-target",
-			MIMEType:  "image/png",
-			Bytes:     []byte{1, 2, 3},
-			Width:     320,
-			Height:    200,
-		},
-	}
-	session, err := newProductionWebMCPSession(raw, webmcp.Target{
-		BrowserID:  "browser-public",
-		ID:         "target-public",
-		Generation: 4,
-	})
-	if err != nil {
-		t.Fatalf("construct production session: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	capturer, ok := session.(webmcp.PageScreenshotter)
-	if !ok {
-		t.Fatal("production session does not expose page capture")
-	}
-	got, err := capturer.CapturePageScreenshot(context.Background())
-	if err != nil {
-		t.Fatalf("capture production screenshot: %v", err)
-	}
-	if got.BrowserID != "browser-public" || got.TargetID != "target-public" {
-		t.Fatalf("production screenshot identity = %q/%q, want public selection", got.BrowserID, got.TargetID)
-	}
-	if string(got.Bytes) != string([]byte{1, 2, 3}) || got.MIMEType != "image/png" || got.Width != 320 || got.Height != 200 {
-		t.Fatalf("production screenshot payload = %+v, want raw capture preserved", got)
-	}
-}
-
-func TestProductionWebMCPSessionPreservesRawTabNavigation(t *testing.T) {
-	raw := &productionNavigationSession{productionFakeSession: &productionFakeSession{
-		runtime: &productionFakeRuntime{},
-		page: webmcp.PageContext{
-			Key:        webmcp.PageKey{BrowserID: "browser-raw", TargetID: "target-raw"},
-			Generation: 1,
-			Connected:  true,
-		},
-	}}
-	session, err := newProductionWebMCPSession(raw, webmcp.Target{BrowserID: "browser-public", ID: "target-public", Generation: 3})
-	if err != nil {
-		t.Fatalf("construct production session: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	navigator, ok := session.(webmcp.TargetTabNavigator)
-	if !ok {
-		t.Fatalf("production session %T does not preserve in-place navigation", session)
-	}
-	if err := navigator.NavigateTab(context.Background(), "https://www.google.com/"); err != nil {
-		t.Fatalf("navigate through production session: %v", err)
-	}
-	if raw.navigatedURL != "https://www.google.com/" {
-		t.Fatalf("raw navigation URL = %q", raw.navigatedURL)
-	}
-	got := session.Context()
-	if got.URL != "https://www.google.com/" || got.Origin != "https://www.google.com" || got.Generation != 4 {
-		t.Fatalf("post-navigation context = %+v, want Google at public generation 4", got)
-	}
-}
-
 func TestProductionWebMCPCLIFreshTabsReferenceSurvivesIncarnationChurn(t *testing.T) {
 	var server *httptest.Server
 	var mu sync.Mutex
 	versionCalls := 0
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/version" {
+		if request.URL.Path != testDevToolsVersionPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -353,12 +203,16 @@ browser:
 	}
 }
 
-func TestProductionWebMCPDirectSelectRecoversRestartedBrowserAndActivatesPersistedTarget(t *testing.T) {
+// newRestartingVersionServer serves one browser identity for the first
+// /json/version call and a restarted identity for every later call. The
+// returned function reports how many version calls were served.
+func newRestartingVersionServer(t *testing.T) (*httptest.Server, func() int) {
+	t.Helper()
 	var server *httptest.Server
 	var mu sync.Mutex
 	versionCalls := 0
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/version" {
+		if request.URL.Path != testDevToolsVersionPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -376,6 +230,15 @@ func TestProductionWebMCPDirectSelectRecoversRestartedBrowserAndActivatesPersist
 		_, _ = fmt.Fprintf(writer, `{"Browser":"Chrome/Test","Protocol-Version":"1.3","webSocketDebuggerUrl":%q,"browserInstanceId":%q}`, browserWebSocket, instance)
 	}))
 	t.Cleanup(server.Close)
+	return server, func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return versionCalls
+	}
+}
+
+func TestProductionWebMCPDirectSelectRecoversRestartedBrowserAndActivatesPersistedTarget(t *testing.T) {
+	server, versionCalls := newRestartingVersionServer(t)
 	serverURL, err := url.Parse(server.URL)
 	if err != nil {
 		t.Fatalf("parse restart fixture URL: %v", err)
@@ -463,10 +326,7 @@ browser:
 	if runtime.count("activate") != 1 {
 		t.Fatalf("restart recovery activation operations = %v", runtime.operationSnapshot())
 	}
-	mu.Lock()
-	gotVersionCalls := versionCalls
-	mu.Unlock()
-	if gotVersionCalls != 3 {
+	if gotVersionCalls := versionCalls(); gotVersionCalls != 3 {
 		t.Fatalf("restart recovery version calls = %d, want one per CLI invocation", gotVersionCalls)
 	}
 }
@@ -474,7 +334,7 @@ browser:
 func TestDefaultWebMCPDirectFactoryUsesProductionDiscovery(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/version" {
+		if request.URL.Path != testDevToolsVersionPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -504,61 +364,68 @@ browser:
 }
 
 func TestProductionWebMCPDirectFailuresRemainClassifiedAndFailClosed(t *testing.T) {
-	t.Run("endpoint unreachable", func(t *testing.T) {
-		server, _, _, runtime := newProductionTestEndpoint(t)
-		server.Close()
-		configDir := writeDoctorConfig(t, fmt.Sprintf(`
+	t.Run("endpoint unreachable", directFailureEndpointUnreachable)
+	t.Run("remote endpoint denied", directFailureRemoteEndpointDenied)
+	t.Run("ambiguous target", directFailureAmbiguousTarget)
+	t.Run("no eligible target", directFailureNoEligibleTarget)
+	t.Run("persistence failure", directFailurePersistence)
+}
+
+func directFailureEndpointUnreachable(t *testing.T) {
+	server, _, _, runtime := newProductionTestEndpoint(t)
+	server.Close()
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
 browser:
   connection:
     cdp_url: %q
   selection:
     persist: false
 `, server.URL+"/json/version"))
-		factory := NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
-		)
-		result := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
-		envelope := decodeDirectEnvelope(t, result.stdout)
-		if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorEndpointUnreachable) {
-			t.Fatalf("unreachable result = %+v/%v", envelope, result.err)
-		}
-		if runtime.count("open") != 0 {
-			t.Fatalf("unreachable endpoint opened runtime handles: %v", runtime.operationSnapshot())
-		}
-	})
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+	)
+	result := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorEndpointUnreachable) {
+		t.Fatalf("unreachable result = %+v/%v", envelope, result.err)
+	}
+	if runtime.count("open") != 0 {
+		t.Fatalf("unreachable endpoint opened runtime handles: %v", runtime.operationSnapshot())
+	}
+}
 
-	t.Run("remote endpoint denied", func(t *testing.T) {
-		_, _, _, runtime := newProductionTestEndpoint(t)
-		configDir := writeDoctorConfig(t, `
+func directFailureRemoteEndpointDenied(t *testing.T) {
+	_, _, _, runtime := newProductionTestEndpoint(t)
+	configDir := writeDoctorConfig(t, `
 browser:
   connection:
     cdp_url: http://192.0.2.1:9222
   selection:
     persist: false
 `)
-		factory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(runtime))
-		result := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
-		envelope := decodeDirectEnvelope(t, result.stdout)
-		if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorRemoteEndpointDenied) {
-			t.Fatalf("remote-denied result = %+v/%v", envelope, result.err)
-		}
-		if runtime.count("open") != 0 {
-			t.Fatalf("remote-denied endpoint opened runtime handles: %v", runtime.operationSnapshot())
-		}
-	})
+	factory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(runtime))
+	result := executeDirectCommand(t, configDir, nil, factory, "browsers", "--json")
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorRemoteEndpointDenied) {
+		t.Fatalf("remote-denied result = %+v/%v", envelope, result.err)
+	}
+	if runtime.count("open") != 0 {
+		t.Fatalf("remote-denied endpoint opened runtime handles: %v", runtime.operationSnapshot())
+	}
+}
 
-	t.Run("ambiguous target", func(t *testing.T) {
-		server, browserID, _, runtime := newProductionTestEndpoint(t)
-		defer server.Close()
-		runtime.mu.Lock()
-		second := runtime.targets[0]
-		second.ID = "raw-tab-2"
-		second.Title = "Second fixture"
-		second.URL = "https://fixture.test/second"
-		runtime.targets = append(runtime.targets, second)
-		runtime.mu.Unlock()
-		configDir := writeDoctorConfig(t, fmt.Sprintf(`
+func directFailureAmbiguousTarget(t *testing.T) {
+	server, browserID, _, runtime := newProductionTestEndpoint(t)
+	defer server.Close()
+	runtime.mu.Lock()
+	second := runtime.targets[0]
+	second.ID = "raw-tab-2"
+	second.Title = "Second fixture"
+	second.URL = "https://fixture.test/second"
+	runtime.targets = append(runtime.targets, second)
+	runtime.mu.Unlock()
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
 browser:
   connection:
     cdp_url: %q
@@ -567,24 +434,24 @@ browser:
     auto_select: single
     persist: false
 `, server.URL+"/json/version", browserID))
-		factory := NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
-		)
-		result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--json")
-		envelope := decodeDirectEnvelope(t, result.stdout)
-		if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorAmbiguousTab) {
-			t.Fatalf("ambiguous result = %+v/%v", envelope, result.err)
-		}
-	})
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+	)
+	result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--json")
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorAmbiguousTab) {
+		t.Fatalf("ambiguous result = %+v/%v", envelope, result.err)
+	}
+}
 
-	t.Run("no eligible target", func(t *testing.T) {
-		server, browserID, _, runtime := newProductionTestEndpoint(t)
-		defer server.Close()
-		runtime.mu.Lock()
-		runtime.targets = nil
-		runtime.mu.Unlock()
-		configDir := writeDoctorConfig(t, fmt.Sprintf(`
+func directFailureNoEligibleTarget(t *testing.T) {
+	server, browserID, _, runtime := newProductionTestEndpoint(t)
+	defer server.Close()
+	runtime.mu.Lock()
+	runtime.targets = nil
+	runtime.mu.Unlock()
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
 browser:
   connection:
     cdp_url: %q
@@ -593,45 +460,44 @@ browser:
     auto_select: single
     persist: false
 `, server.URL+"/json/version", browserID))
-		factory := NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
-		)
-		result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--json")
-		envelope := decodeDirectEnvelope(t, result.stdout)
-		if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorNoEligibleTab) {
-			t.Fatalf("no-eligible result = %+v/%v", envelope, result.err)
-		}
-	})
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+	)
+	result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--json")
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorNoEligibleTab) {
+		t.Fatalf("no-eligible result = %+v/%v", envelope, result.err)
+	}
+}
 
-	t.Run("persistence failure", func(t *testing.T) {
-		server, browserID, targetID, runtime := newProductionTestEndpoint(t)
-		defer server.Close()
-		store := &failingProductionSelectionStore{}
-		configDir := writeDoctorConfig(t, fmt.Sprintf(`
+func directFailurePersistence(t *testing.T) {
+	server, browserID, targetID, runtime := newProductionTestEndpoint(t)
+	defer server.Close()
+	store := &failingProductionSelectionStore{}
+	configDir := writeDoctorConfig(t, fmt.Sprintf(`
 browser:
   connection:
     cdp_url: %q
   selection:
     persist: true
 `, server.URL+"/json/version"))
-		factory := NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
-			WithWebMCPProductionSelectionStore(store),
-		)
-		result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
-		envelope := decodeDirectEnvelope(t, result.stdout)
-		if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorTargetAttachFailed) {
-			t.Fatalf("persistence-failure result = %+v/%v", envelope, result.err)
-		}
-		if store.saves != 1 {
-			t.Fatalf("persistence saves = %d, want one", store.saves)
-		}
-		if runtime.count("session_close") != runtime.count("attach") {
-			t.Fatalf("persistence failure leaked sessions: %v", runtime.operationSnapshot())
-		}
-	})
+	factory := NewProductionWebMCPDoctorFactory(
+		WithWebMCPProductionRuntime(runtime),
+		WithWebMCPProductionHTTPClient(server.Client()),
+		WithWebMCPProductionSelectionStore(store),
+	)
+	result := executeDirectCommand(t, configDir, nil, factory, "select", "--browser", browserID, "--tab", targetID, "--json")
+	envelope := decodeDirectEnvelope(t, result.stdout)
+	if result.err == nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorTargetAttachFailed) {
+		t.Fatalf("persistence-failure result = %+v/%v", envelope, result.err)
+	}
+	if store.saves != 1 {
+		t.Fatalf("persistence saves = %d, want one", store.saves)
+	}
+	if runtime.count("session_close") != runtime.count("attach") {
+		t.Fatalf("persistence failure leaked sessions: %v", runtime.operationSnapshot())
+	}
 }
 
 func TestProductionWebMCPOperationsPersistContinuityAndActivateOnlyExplicitly(t *testing.T) {
@@ -768,7 +634,7 @@ func newProductionTestEndpoint(t *testing.T) (*httptest.Server, string, string, 
 	t.Helper()
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/version" {
+		if request.URL.Path != testDevToolsVersionPath {
 			http.NotFound(writer, request)
 			return
 		}
@@ -966,40 +832,6 @@ type productionFakeSession struct {
 	once      sync.Once
 	mu        sync.Mutex
 	ready     bool
-}
-
-type productionScreenshotSession struct {
-	*productionFakeSession
-	screenshot webmcp.PageScreenshot
-}
-
-type productionNavigationSession struct {
-	*productionFakeSession
-	navigatedURL string
-}
-
-func (s *productionNavigationSession) NavigateTab(ctx context.Context, targetURL string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	s.navigatedURL = targetURL
-	s.init()
-	s.mu.Lock()
-	previous := s.page.Generation
-	s.page.Generation++
-	s.page.URL = targetURL
-	s.page.Origin = "https://www.google.com"
-	current := s.page.Generation
-	s.mu.Unlock()
-	s.events <- webmcp.BrowserEvent{Type: webmcp.EventPageNavigated, PreviousGeneration: previous, Generation: current, Reason: "navigation"}
-	return nil
-}
-
-func (s *productionScreenshotSession) CapturePageScreenshot(ctx context.Context) (webmcp.PageScreenshot, error) {
-	if err := ctx.Err(); err != nil {
-		return webmcp.PageScreenshot{}, err
-	}
-	return s.screenshot, nil
 }
 
 func (s *productionFakeSession) init() {

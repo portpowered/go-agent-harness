@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 )
 
 type WebMCPDoctorVersionFunc func(context.Context, webmcp.BrowserCandidate) (webmcp.BrowserVersion, error)
@@ -15,13 +15,7 @@ type WebMCPDoctorVersionFunc func(context.Context, webmcp.BrowserCandidate) (web
 // composition. Keeping this interface at the CLI boundary lets
 // command tests inject a discovery fake without importing a browser protocol
 // package or depending on a concrete service implementation.
-type WebMCPDiscoveryService interface {
-	DiscoverAll(context.Context, discovery.ConnectionInputs) ([]discovery.BrowserCandidate, error)
-	ListTargetSnapshot(context.Context, discovery.BrowserCandidate, ...discovery.TargetListOptions) (discovery.TargetSnapshot, error)
-	Select(context.Context, discovery.TargetSelectionRequest) (discovery.Selection, error)
-	Selected() (discovery.Selection, bool)
-	RefreshSelection(context.Context) (discovery.Selection, error)
-}
+type WebMCPDiscoveryService = production.DiscoveryService
 
 // WebMCPDoctorRuntime is the request-scoped set of seams used by doctor.
 // Broker is the real stateful broker in production-capable compositions;

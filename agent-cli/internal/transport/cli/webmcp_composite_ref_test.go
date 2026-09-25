@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,9 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
 func TestSplitCompositeTargetRef(t *testing.T) {
@@ -41,31 +38,6 @@ func TestSplitCompositeTargetRef(t *testing.T) {
 	}
 }
 
-func TestExactSelectionDoesNotProbeUnrelatedRestoredTab(t *testing.T) {
-	cases := []struct {
-		name        string
-		selectedTab string
-		browserID   string
-	}{
-		{name: "bare selection", selectedTab: "target-selected", browserID: "browser-selected"},
-		{name: "composite selection", selectedTab: "browser-selected/target-selected", browserID: "browser-selected"},
-	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			var browser config.BrowserConfig
-			browser.Selection.Tab = testCase.selectedTab
-			probe := productionTargetProbe{owner: &productionWebMCPComposition{browser: browser}}
-			// No runtime is installed: calling the renderer would panic. Listing an
-			// unrelated tab must leave its capability unknown without touching it.
-			capability, err := probe.Probe(context.Background(), discovery.BrowserCandidate{ID: testCase.browserID},
-				discovery.Target{ID: "target-suspended"})
-			if err != nil || capability.DomainKnown || capability.PageToolsKnown || capability.ToolCount != -1 {
-				t.Fatalf("unrelated capability should remain unknown: %+v, %v", capability, err)
-			}
-		})
-	}
-}
-
 // TestProductionWebMCPCLISelectAcceptsListedCompositeReference locks the
 // tabs->select contract for the exact "browserID/targetID" token that the
 // human-readable tabs listing prints: handing that token back verbatim to
@@ -74,7 +46,7 @@ func TestExactSelectionDoesNotProbeUnrelatedRestoredTab(t *testing.T) {
 func TestProductionWebMCPCLISelectAcceptsListedCompositeReference(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/json/version" {
+		if request.URL.Path != testDevToolsVersionPath {
 			http.NotFound(writer, request)
 			return
 		}

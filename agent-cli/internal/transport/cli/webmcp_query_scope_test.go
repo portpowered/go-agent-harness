@@ -149,11 +149,6 @@ func TestDecodeXVideoReply(t *testing.T) {
 	}
 }
 
-type focusBridgeFixture struct {
-	webmcp.TargetSession
-	acquired, released int
-}
-
 func TestRestoreXVideoFocusAfterCancellation(t *testing.T) {
 	type contextKey struct{}
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "kept"))
@@ -170,25 +165,5 @@ func TestRestoreXVideoFocusAfterCancellation(t *testing.T) {
 	})
 	if !errors.Is(err, want) {
 		t.Fatalf("cleanup error lost: %v", err)
-	}
-}
-
-func (s *focusBridgeFixture) AcquirePageFocus(context.Context) (func(context.Context) error, error) {
-	s.acquired++
-	return func(context.Context) error { s.released++; return nil }, nil
-}
-func TestProductionSessionForwardsFocusLeaseToExactRawTarget(t *testing.T) {
-	raw := &focusBridgeFixture{}
-	session := &productionTargetSession{raw: raw}
-	release, err := session.AcquirePageFocus(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	session.raw = &focusBridgeFixture{} // cleanup must not look up the new target
-	if err := release(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if raw.acquired != 1 || raw.released != 1 {
-		t.Fatalf("raw=%+v", raw)
 	}
 }
