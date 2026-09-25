@@ -31,9 +31,16 @@ type RequestDependencies struct {
 	InstructionService  runtimeSession.InstructionService
 	PageSightToolID     string
 	Capabilities        func(context.Context, *config.Config) (*runtimeSession.LiveCapabilities, error)
-	BindImagePreparer   func(messages.ToolExecutor) messages.ToolExecutor
-	OpenImages          func([]string) ([]messages.ContentPart, error)
+	// ModelCatalog supplies realtime model capabilities for image admission.
+	ModelCatalog runtimeProviders.ModelCatalog
+	// BindImagePreparer binds read_image to open, which already enforces the
+	// session model's image-input capability.
+	BindImagePreparer func(executor messages.ToolExecutor, open ImageOpener) messages.ToolExecutor
+	OpenImages        ImageOpener
 }
+
+// ImageOpener validates local image paths and returns their typed parts.
+type ImageOpener func([]string) ([]messages.ContentPart, error)
 
 // BuildRequest resolves one CLI request at the host boundary. It performs
 // only path/config admission and typed value conversion; the runtime owns
@@ -64,6 +71,7 @@ type requestInputs struct {
 	outputRate      int
 	replayFinish    bool
 	turnCapture     bool
+	openImages      ImageOpener
 }
 
 func resolveProviderInputs(ctx context.Context, request serviceSession.Request, replayInspection *runtimeReplay.CaptureInspection, deps RequestDependencies) (requestInputs, error) {
@@ -94,13 +102,16 @@ func resolveProviderInputs(ctx context.Context, request serviceSession.Request, 
 			return requestInputs{}, err
 		}
 	}
-	capabilities, err := buildCapabilities(ctx, loaded, request, deps)
+	openImages := guardImageOpener(func() imageCapability {
+		return resolveImageCapability(provider, model, request.ConfigDir, deps.ModelCatalog)
+	}, deps.OpenImages)
+	capabilities, err := buildCapabilities(ctx, loaded, request, deps, openImages)
 	if err != nil {
 		return requestInputs{}, err
 	}
 	return requestInputs{
 		effective: effective, inspection: inspection, provider: provider, model: model, capabilities: capabilities,
-		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference),
+		baseURL: baseURL, credentialRef: resolveCredentialReference(apiKey, deps.CredentialReference), openImages: openImages,
 	}, nil
 }
 
@@ -118,7 +129,7 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 		return requestInputs{}, err
 	}
 	requestPrompt, promptPresent := promptValues(request)
-	openingParts, openingResponse, err := openingValues(request, deps.OpenImages)
+	openingParts, openingResponse, err := openingValues(request, inputs.openImages)
 	if err != nil {
 		return requestInputs{}, err
 	}
@@ -226,7 +237,7 @@ func promptValues(request serviceSession.Request) (string, bool) {
 	return value, request.TextSeed.Present || request.PromptProvided || value != ""
 }
 
-func openingValues(request serviceSession.Request, opener func([]string) ([]messages.ContentPart, error)) ([]messages.ContentPart, runtimeSession.LiveOpeningMessageResponse, error) {
+func openingValues(request serviceSession.Request, opener ImageOpener) ([]messages.ContentPart, runtimeSession.LiveOpeningMessageResponse, error) {
 	parts, err := openImages(request.ImagePaths, opener)
 	if err != nil {
 		return nil, runtimeSession.LiveOpeningMessageRespond, err
@@ -318,7 +329,7 @@ func resolveCredentialReference(apiKey string, resolve func(string) string) stri
 	return resolve(apiKey)
 }
 
-func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceSession.Request, deps RequestDependencies) (*runtimeSession.LiveCapabilities, error) {
+func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceSession.Request, deps RequestDependencies, openImages ImageOpener) (*runtimeSession.LiveCapabilities, error) {
 	if deps.Capabilities == nil {
 		return nil, nil
 	}
@@ -327,7 +338,7 @@ func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceS
 		return nil, err
 	}
 	if capabilities != nil && deps.BindImagePreparer != nil {
-		capabilities.Executor = deps.BindImagePreparer(capabilities.Executor)
+		capabilities.Executor = deps.BindImagePreparer(capabilities.Executor, openImages)
 	}
 	// The interactive latency policy is outermost so each call's deadline
 	// covers image preparation as well as the tool itself.
@@ -337,12 +348,14 @@ func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceS
 	})
 }
 
-func openImages(paths []string, opener func([]string) ([]messages.ContentPart, error)) ([]messages.ContentPart, error) {
+var errImageOpenerUnavailable = errors.New("live image opener is unavailable")
+
+func openImages(paths []string, opener ImageOpener) ([]messages.ContentPart, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
 	if opener == nil {
-		return nil, errors.New("live image opener is unavailable")
+		return nil, errImageOpenerUnavailable
 	}
 	return opener(paths)
 }

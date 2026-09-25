@@ -21,6 +21,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	runtimeProvidersWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	runtimeRecording "github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSelfPlay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay"
@@ -159,9 +160,20 @@ func (c *SessionCommand) runtimeLiveRequest(ctx context.Context, request service
 		InstructionService:  runtimeSessionWire.NewInstructionService(),
 		PageSightToolID:     cliTools.PageSightToolID,
 		Capabilities:        c.runtimeLiveCapabilities,
+		ModelCatalog:        c.liveModelCatalog(),
 		BindImagePreparer:   bindRuntimeLiveImagePreparer,
 		OpenImages:          openRuntimeLiveImages,
 	})
+}
+
+// liveModelCatalog returns the injected provider catalog when the model
+// admission role carries one, and the built-in provider catalog otherwise, so
+// image admission always consults realtime model capabilities.
+func (c *SessionCommand) liveModelCatalog() runtimeProviders.ModelCatalog {
+	if catalog, ok := c.modelAdmission.(runtimeProviders.ModelCatalog); ok {
+		return catalog
+	}
+	return runtimeProvidersWire.NewModelCatalog()
 }
 
 func runtimeLiveCredentialValues(request serviceSession.Request) ([]string, error) {
@@ -311,14 +323,15 @@ func openRuntimeLiveImage(path string) (messages.ImagePart, error) {
 // same host-side image validation used for opening an initial image turn. The
 // runtime service performs the filesystem authorization before invoking this
 // callback; the callback only resolves the already-authorized bytes into the
-// provider-neutral typed part.
-func bindRuntimeLiveImagePreparer(executor messages.ToolExecutor) messages.ToolExecutor {
+// provider-neutral typed part. open is the capability-guarded opener, so a
+// model without image input yields a correlated tool failure.
+func bindRuntimeLiveImagePreparer(executor messages.ToolExecutor, open livehost.ImageOpener) messages.ToolExecutor {
 	binder, ok := executor.(runtimeTools.SessionImagePreparerBinder)
 	if !ok {
 		return executor
 	}
 	return binder.WithSessionImagePreparer(func(paths []string) ([]messages.ImagePart, error) {
-		content, err := openRuntimeLiveImages(paths)
+		content, err := open(paths)
 		if err != nil {
 			return nil, err
 		}
