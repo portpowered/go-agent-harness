@@ -415,6 +415,62 @@ func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testi
 	}
 }
 
+// TestProviderCaptureSpoolAdmitsBurstWithinBudgetWhileWriterIsDescheduled is
+// the regression for live sessions that failed with "provider capture queue is
+// full" on a loaded host: the writer goroutine fell behind a burst of a few
+// hundred small events that were far inside the byte and item budgets.
+func TestProviderCaptureSpoolAdmitsBurstWithinBudgetWhileWriterIsDescheduled(t *testing.T) {
+	destination := filepath.Join(t.TempDir(), "provider.json")
+	sink, err := NewProviderCapture(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spool, ok := sink.(*providerCaptureSpool)
+	if !ok {
+		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
+	}
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := spool.file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing reads the pipe, so the writer blocks on the first large record
+	// exactly like a descheduled writer: every later mutation stays queued.
+	spool.file = writeEnd
+	largePayload := json.RawMessage(`{"data":"` + strings.Repeat("x", 1<<20) + `"}`)
+	first := gatewaytesting.CapturedSessionEvent{
+		Sequence: 1, Direction: gatewaytesting.DirectionClientToServer,
+		Type: "large", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: largePayload,
+	}
+	if err := sink.Append(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Commit(first.Sequence); err != nil {
+		t.Fatal(err)
+	}
+	const burst = providerCaptureQueueMaxItems - 1
+	for sequence := 2; sequence <= burst; sequence++ {
+		event := gatewaytesting.CapturedSessionEvent{
+			Sequence: sequence, Direction: gatewaytesting.DirectionServerToClient,
+			Type: "input_audio_buffer.committed", PayloadType: gatewaytesting.SessionPayloadTypeWebSocketMessage, Payload: json.RawMessage(`{"type":"input_audio_buffer.committed"}`),
+		}
+		if err := sink.Append(event); err != nil {
+			t.Fatalf("Append(%d) inside the reservation budget: %v", sequence, err)
+		}
+		if err := sink.Commit(sequence); err != nil {
+			t.Fatalf("Commit(%d) inside the reservation budget: %v", sequence, err)
+		}
+	}
+	if err := readEnd.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Abort(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestProviderCaptureSpoolBoundsActiveReservationsWhenEarliestWriteBlocks(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "provider.json")
 	sink, err := NewProviderCapture(destination)

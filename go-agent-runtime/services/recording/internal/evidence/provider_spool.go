@@ -16,11 +16,19 @@ import (
 )
 
 const (
-	providerCaptureQueueCapacity  = 256
 	providerCaptureControlReserve = 16
 	providerCaptureQueueMaxBytes  = 16 << 20
 	providerCaptureQueueMaxItems  = 4096
 	providerCaptureMaxEventBytes  = 4 << 20
+	// providerCaptureQueueCapacity holds every mutation the reservation budget
+	// can admit: each reserved append (at most providerCaptureQueueMaxItems)
+	// plus its one commit or discard, and the control reserve. The byte and
+	// item budgets above are the admission bound; the channel must never be a
+	// tighter hidden one. A 256-slot channel failed live sessions with "queue
+	// is full" whenever the spool writer was descheduled for a burst of ~120
+	// events (for example 40 streamed silence frames and their provider
+	// replies) on a loaded host.
+	providerCaptureQueueCapacity = 2*providerCaptureQueueMaxItems + providerCaptureControlReserve
 )
 
 type providerCaptureError string
