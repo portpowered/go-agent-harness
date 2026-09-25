@@ -91,6 +91,28 @@ COVERAGE_BASE ?= origin/main
 COVERAGE_MODULES ?= $(MODULES)
 COVERAGE_INCLUDE_EMBEDDING ?= 1
 COVERAGE_RUN_GATE ?= 1
+# COVERAGE_SCOPE=full (default) runs every package and gates every floor.
+# COVERAGE_SCOPE=changed (what `make coverage-changed` and the default local
+# prepush use) runs only the test packages whose test binary links a package
+# changed since COVERAGE_BASE (the reverse dependency closure, across modules
+# and the embedding consumer) and gates the floors of the changed packages and
+# their importers, whose every covering test is in that closure. Changes to
+# go.mod/go.sum/go.work, the Makefile, the test orchestration scripts or the
+# coverage gate fall back to the full scope. CI always runs the full scope.
+COVERAGE_SCOPE ?= full
+COVERAGE_CHANGED_DIR ?= $(COVERAGE_DIR)/changed
+# Test packages (./relative, space separated) coverage-module runs for a
+# library module, and the agent-cli unit packages coverage-agent-cli-shard
+# runs; empty means every package. Set by coverage-changed.
+COVERAGE_PACKAGES ?=
+AGENT_CLI_COVERAGE_UNIT_PACKAGES ?=
+# test-tools also runs the architecture gate fixtures unless the caller (the
+# prepush gate, which runs them in verify-architecture) already has.
+TEST_TOOLS_ARCHITECTURE_GATE ?= 1
+# `go list` fields that decide which files a package builds and tests; the
+# packages whose fields differ between the hermetic coverage build and the
+# native build are the ones test-cgo-delta runs natively.
+PACKAGE_FILES_FORMAT := {{.ImportPath}} {{.GoFiles}} {{.CgoFiles}} {{.TestGoFiles}} {{.XTestGoFiles}}
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 STATICCHECK ?= staticcheck
@@ -137,7 +159,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -349,7 +371,23 @@ test-tools: ## Run tests for standalone repository helper modules.
 	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
 	echo "==> test tools/session-race-gate"; \
 	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
-	$(MAKE) test-architecture-gate
+	echo "==> test tools/coveragegate"; \
+	(cd tools/coveragegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	if [ "$(TEST_TOOLS_ARCHITECTURE_GATE)" = "1" ]; then \
+		$(MAKE) test-architecture-gate; \
+	fi
+
+test-cgo-delta: ## Test natively (cgo, real microphone backend) only the packages whose files differ from the hermetic coverage build.
+	@set -euo pipefail; \
+	for module in $(MODULES); do \
+		packages="$$(cd "$$module" && comm -13 \
+			<(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone -f '$(PACKAGE_FILES_FORMAT)' ./... | LC_ALL=C sort) \
+			<($(GO) list -f '$(PACKAGE_FILES_FORMAT)' ./... | LC_ALL=C sort) | cut -d' ' -f1)"; \
+		if [ -n "$$packages" ]; then \
+			echo "==> test-cgo-delta $$module:" $$packages; \
+			(cd "$$module" && $(GO) test $$packages -timeout "$(GO_TEST_TIMEOUT)"); \
+		fi; \
+	done
 
 architecture-check: ## Enforce service ownership, public contracts, and dependency direction.
 	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture
@@ -479,8 +517,11 @@ build: ## Build the agent-cli binary and compile library packages.
 
 typecheck: build ## Backward-compatible alias for root compile validation.
 
-coverage: ## Write per-module coverage profiles under coverage/.
+coverage: ## Write per-module coverage profiles under coverage/ (COVERAGE_SCOPE=changed: affected packages only).
 	@set -euo pipefail; \
+	if [ "$(COVERAGE_SCOPE)" = "changed" ]; then \
+		exec $(MAKE) --no-print-directory coverage-changed; \
+	fi; \
 	mkdir -p "$(COVERAGE_DIR)"; \
 	echo "==> coverage $(COVERAGE_MODULES)$(if $(filter 1,$(COVERAGE_INCLUDE_EMBEDDING)), embedding) (at most $(TEST_MODULE_JOBS) at once, test count flag '$(COVERAGE_COUNT_FLAG)')"; \
 	bash scripts/run-bounded.sh --jobs $(TEST_MODULE_JOBS) -- \
@@ -502,7 +543,7 @@ coverage-module:
 			(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test -mod=readonly ./... $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="$(abspath $(COVERAGE_DIR))/embedding.out") ;; \
 		*) \
 			echo "==> coverage $(COVERAGE_MODULE) (general package timeout: $(GO_TEST_TIMEOUT))"; \
-			(cd "$(COVERAGE_MODULE)" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test ./... $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=./... -coverprofile="$(abspath $(COVERAGE_DIR))/$(COVERAGE_MODULE).out") ;; \
+			(cd "$(COVERAGE_MODULE)" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test $(or $(COVERAGE_PACKAGES),./...) $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=./... -coverprofile="$(abspath $(COVERAGE_DIR))/$(COVERAGE_MODULE).out") ;; \
 	esac
 
 coverage-ci-agent-cli: ## Write the hermetic agent-cli profile(s) for AGENT_CLI_COVERAGE_SHARD (CI matrix shard).
@@ -518,7 +559,8 @@ coverage-agent-cli-shard:
 	mkdir -p "$(COVERAGE_DIR)"; \
 	shard="$(AGENT_CLI_COVERAGE_SHARD)"; \
 	run_unit() { \
-		(cd agent-cli && packages="$$(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone ./... | grep -v '/test/integration$$')" && \
+		(cd agent-cli && packages="$(AGENT_CLI_COVERAGE_UNIT_PACKAGES)" && \
+			if [ -z "$$packages" ]; then packages="$$(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone ./... | grep -v '/test/integration$$')"; fi && \
 			CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
 			$(GO) test $$packages $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG) -coverprofile="$(abspath $(COVERAGE_DIR))/agent-cli.out"); \
 	}; \
@@ -551,9 +593,53 @@ coverage-registration: ## Validate every workspace Go package is registered with
 		--manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" \
 		$(foreach module,$(MODULES),--module-dir ../../$(module)))
 
-# Service floors include callers in the CLI and embedding suite. Running only
-# changed packages drops that behavioral coverage and reports false regressions.
-coverage-changed: coverage ## Compatibility alias for the complete behavioral coverage gate.
+# Service floors include callers in the CLI and embedding suite, so the
+# changed scope runs every test package that links a changed package (not only
+# the changed packages' own tests) and gates only the floors that closure
+# measures exactly: the changed packages and their importers. Profiles go to
+# COVERAGE_CHANGED_DIR so a partial run never mixes with full profiles.
+coverage-changed: ## Run coverage and the gate for the packages affected by changes since COVERAGE_BASE.
+	@set -euo pipefail; \
+	dir="$(abspath $(COVERAGE_CHANGED_DIR))"; \
+	rm -rf "$$dir"; \
+	mkdir -p "$$dir"; \
+	(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --affected --repo ../.. --base "$(COVERAGE_BASE)" --tags nomicrophone \
+		$(foreach module,$(MODULES),--module-dir ../../$(module)) --standalone-module-dir ../../tests/embedding) >"$$dir/scope.txt"; \
+	if grep -q '^scope full' "$$dir/scope.txt"; then \
+		echo "==> coverage-changed: $$(sed -n 's/^scope full //p' "$$dir/scope.txt"); running the full coverage scope"; \
+		exec $(MAKE) --no-print-directory coverage COVERAGE_SCOPE=full; \
+	fi; \
+	sed -n 's/^check //p' "$$dir/scope.txt" >"$$dir/check.txt"; \
+	echo "==> coverage-changed since $(COVERAGE_BASE): $$(grep -c '^changed ' "$$dir/scope.txt" || true) changed package(s), $$(grep -c '^test ' "$$dir/scope.txt" || true) test package(s) to run, $$(wc -l <"$$dir/check.txt" | tr -d ' ') floor(s) to check"; \
+	sed -n 's/^changed /   changed: /p' "$$dir/scope.txt"; \
+	packages_for() { awk -v module="$$1" '$$1 == "test" && $$2 == module { print $$3 }' "$$dir/scope.txt" | tr '\n' ' '; }; \
+	jobs=(); \
+	for module in $(call scheduled_modules,$(COVERAGE_MODULES)); do \
+		packages="$$(packages_for "$$module")"; \
+		[ -n "$${packages// /}" ] || continue; \
+		if [ "$$module" = agent-cli ]; then \
+			unit="$$(printf '%s\n' $$packages | grep -vx '$(AGENT_CLI_INTEGRATION_PACKAGE)' | tr '\n' ' ' || true)"; \
+			case " $$packages " in \
+				*" $(AGENT_CLI_INTEGRATION_PACKAGE) "*) shard=all; [ -n "$${unit// /}" ] || shard=integration ;; \
+				*) shard=unit ;; \
+			esac; \
+			jobs+=("coverage agent-cli ($$shard)::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=agent-cli COVERAGE_DIR='$$dir' AGENT_CLI_COVERAGE_SHARD=$$shard AGENT_CLI_COVERAGE_UNIT_PACKAGES='$$unit'"); \
+		else \
+			jobs+=("coverage $$module::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=$$module COVERAGE_DIR='$$dir' COVERAGE_PACKAGES='$$packages'"); \
+		fi; \
+	done; \
+	if [ "$(COVERAGE_INCLUDE_EMBEDDING)" = "1" ] && [ -n "$$(packages_for tests/embedding | tr -d ' ')" ]; then \
+		jobs+=("coverage embedding::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=embedding COVERAGE_DIR='$$dir'"); \
+	fi; \
+	if [ "$${#jobs[@]}" -gt 0 ]; then \
+		bash scripts/run-bounded.sh --jobs $(TEST_MODULE_JOBS) -- "$${jobs[@]}"; \
+	fi; \
+	if [ "$(COVERAGE_RUN_GATE)" = "1" ]; then \
+		echo "==> coverage gate (changed scope)"; \
+		profiles=(); \
+		for profile in "$$dir"/*.out; do [ -e "$$profile" ] && profiles+=("$$profile"); done; \
+		(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" --select "$$dir/check.txt" $${profiles[@]+"$${profiles[@]}"}); \
+	fi
 
 wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
 	@python3 -B scripts/check-wire.py --go "$(GO)" $(MODULES)
@@ -561,8 +647,18 @@ wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
 check-ci-test-partition: ## Verify each Linux package corpus has exactly one CI owner.
 	@python3 -B scripts/check-ci-test-partition.py .github/workflows/ci.yml
 
-prepush: ## Run the fail-fast, timed local pre-push gate.
-	@PREPUSH_MAKE="$(PREPUSH_MAKE)" scripts/prepush.sh
+# PREPUSH_SCOPE=changed (default) tests and gates coverage only for packages
+# affected by changes since COVERAGE_BASE; PREPUSH_SCOPE=full runs every
+# package like CI. PREPUSH_JOBS bounds how many independent phases of a stage
+# run at once.
+PREPUSH_SCOPE ?= changed
+PREPUSH_JOBS ?= 4
+
+prepush: ## Run the fail-fast, timed local pre-push gate (PREPUSH_SCOPE=changed|full, PREPUSH_JOBS=N).
+	@PREPUSH_MAKE="$(PREPUSH_MAKE)" PREPUSH_SCOPE="$(PREPUSH_SCOPE)" PREPUSH_JOBS="$(PREPUSH_JOBS)" COVERAGE_BASE="$(COVERAGE_BASE)" scripts/prepush.sh
+
+prepush-full: ## Run the pre-push gate over every package (the CI test and coverage scope).
+	@$(MAKE) --no-print-directory prepush PREPUSH_SCOPE=full
 
 ci: ## Run the full deterministic validation pipeline used by contributors and CI.
 	@set -euo pipefail; \
