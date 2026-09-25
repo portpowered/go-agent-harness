@@ -319,7 +319,7 @@ func (s finishState) terminalError() error {
 		return requestedTerminalError(s)
 	}
 	if s.providerErr != nil && !isContextTermination(s.providerErr) {
-		return fmt.Errorf("session error: %w", s.providerErr)
+		return errors.Join(fmt.Errorf("session error: %w", s.providerErr), s.toolResultErr)
 	}
 	if s.toolResultErr != nil {
 		return s.toolResultErr

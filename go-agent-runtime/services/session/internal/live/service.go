@@ -362,3 +362,13 @@ func (h *handle) configureScheduledAudio(scheduled, responseBase int) {
 	}
 	h.mu.Unlock()
 }
+
+// observeExecutedToolCall registers a dispatched call as owing a provider
+// result before its executor runs, so a terminal path that races the event
+// pump still reports the call as unresolved.
+func (h *handle) observeExecutedToolCall(call messages.ToolCall) {
+	h.observeProviderToolCall(messages.StreamMessage{
+		Type: messages.StreamTypeToolCallStart, ToolCallId: call.ID,
+		Value: messages.NewToolCallStartValue(call.ID, call.Name),
+	})
+}

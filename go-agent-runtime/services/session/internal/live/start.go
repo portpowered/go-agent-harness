@@ -104,7 +104,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults
 	h.mu.Unlock()
 	toolExecutor = restrictToolExecutor(toolExecutor, h.offeredToolDefinitions, explicitCapability)
-	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn}
+	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn, observe: h.observeExecutedToolCall}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
@@ -124,11 +124,15 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 
 // activeCaptureToolExecutor keeps tool results behind the next active audio turn.
 type activeCaptureToolExecutor struct {
-	inner messages.ToolExecutor
-	wait  func(context.Context) error
+	inner   messages.ToolExecutor
+	wait    func(context.Context) error
+	observe func(messages.ToolCall)
 }
 
 func (e activeCaptureToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	if e.observe != nil {
+		e.observe(call)
+	}
 	if e.wait != nil {
 		if err := e.wait(ctx); err != nil {
 			return messages.ToolCallResponse{}, err
