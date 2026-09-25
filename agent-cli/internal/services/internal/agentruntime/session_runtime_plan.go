@@ -160,7 +160,7 @@ type sessionRuntimePlan struct {
 	liveEvidenceContext    context.Context
 	recordingSession       runtimerecording.SessionCapture
 	recordingSetup         func(*sessionRuntimePlan) error
-	interactivePolicy      *InteractiveToolPolicy
+	interactivePolicy      InteractiveToolPolicy
 	filesystemPolicy       *tools.FilesystemPolicy
 }
 
@@ -339,7 +339,7 @@ func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []m
 	if opts.InteractiveToolPolicy != nil {
 		policy := opts.InteractiveToolPolicy.Clone()
 		if err := policy.Validate(); err != nil {
-			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+			return nil, fmt.Errorf("resolve interactive tool policy: %w", err)
 		}
 		return policy, nil
 	}
@@ -355,21 +355,21 @@ func resolveSessionInteractiveToolPolicy(opts SessionRunOptions, definitions []m
 		if _, err := os.Stat(configPath); err == nil {
 			storage, storageErr := config.NewDefaultConfigStorage(opts.ConfigDir)
 			if storageErr != nil {
-				return InteractiveToolPolicy{}, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
+				return nil, fmt.Errorf("initialize interactive tool configuration: %w", storageErr)
 			}
 			loadedConfig, storageErr = storage.Load()
 			if storageErr != nil {
-				return InteractiveToolPolicy{}, fmt.Errorf("load interactive tool configuration: %w", storageErr)
+				return nil, fmt.Errorf("load interactive tool configuration: %w", storageErr)
 			}
 		} else if !os.IsNotExist(err) {
-			return InteractiveToolPolicy{}, fmt.Errorf("inspect interactive tool configuration: %w", err)
+			return nil, fmt.Errorf("inspect interactive tool configuration: %w", err)
 		}
 	}
 	settings := config.DefaultInteractiveToolConfig()
 	if loadedConfig != nil {
 		resolved, err := loadedConfig.ResolveInteractiveToolConfig()
 		if err != nil {
-			return InteractiveToolPolicy{}, fmt.Errorf("resolve interactive tool policy: %w", err)
+			return nil, fmt.Errorf("resolve interactive tool policy: %w", err)
 		}
 		settings = resolved
 	}

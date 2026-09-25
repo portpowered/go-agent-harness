@@ -17,16 +17,16 @@ import (
 func TestSessionToolExecutorScreenFailureUsesTypedEnvelope(t *testing.T) {
 	var diagnostic SessionToolDiagnostic
 	var diagnosticCalls int
-	response, err := newSessionToolExecutorWithInteractivePolicyAndObserverAndCancellationIntentAndDiagnostics(sessionToolExecutorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
+	response, err := newSessionLoopToolExecutor(sessionLoopOptions{ToolExecutor: sessionToolExecutorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
 		return messages.ToolCallResponse{}, &cliTools.ScreenCaptureError{
 			State:     cliTools.ScreenCaptureDenied,
 			Operation: "show",
 			Reason:    "screen recording permission denied",
 		}
-	}), nil, 0, nil, nil, SessionToolDiagnosticFunc(func(got SessionToolDiagnostic) {
+	}), toolDiagnostics: SessionToolDiagnosticFunc(func(got SessionToolDiagnostic) {
 		diagnostic = got
 		diagnosticCalls++
-	})).Execute(context.Background(), messages.ToolCall{ID: "screen-failure", Name: "show", Arguments: `{}`})
+	})}).Execute(context.Background(), messages.ToolCall{ID: "screen-failure", Name: "show", Arguments: `{}`})
 	if err != nil {
 		t.Fatalf("Execute returned Go error: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestSessionToolExecutorScreenFailureUsesTypedEnvelope(t *testing.T) {
 			t.Errorf("session screen failure error %q contains operator-only text %q", result.Error, forbidden)
 		}
 	}
-	if result.Error != "Screen sight is unavailable." {
+	if result.Error != screenSightUnavailable {
 		t.Fatalf("session screen failure error = %q, want concise customer-safe message", result.Error)
 	}
 	if diagnosticCalls != 1 || diagnostic.ToolCallID != "screen-failure" || diagnostic.ToolName != "show" || diagnostic.Source != sight.SourceScreen || diagnostic.ErrorCode != cliTools.ScreenRecordingPermissionDeniedErrorCode || diagnostic.Error == nil || !strings.Contains(diagnostic.Error.Error(), "System Settings → Privacy & Security → Screen & System Audio Recording") {
@@ -100,7 +100,7 @@ func TestComposedScreenToolDeliversOneProjectionAndRemainsUsable(t *testing.T) {
 	}
 	executor := capability.Executor
 	call := messages.ToolCall{ID: "screen-composed-1", Name: runtimeTools.ScreenToolID, Arguments: `{}`}
-	response, err := newSessionToolExecutor(executor).Execute(context.Background(), call)
+	response, err := newTestSessionToolExecutor(executor, 0).Execute(context.Background(), call)
 	if err != nil {
 		t.Fatalf("composed screen execute: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestComposedScreenToolDeliversOneProjectionAndRemainsUsable(t *testing.T) {
 	// poison the session tool path for the following turn.
 	second := call
 	second.ID = "screen-composed-2"
-	response, err = newSessionToolExecutor(executor).Execute(context.Background(), second)
+	response, err = newTestSessionToolExecutor(executor, 0).Execute(context.Background(), second)
 	if err != nil || len(response.ContentParts) != 2 || surface.captures != 2 {
 		t.Fatalf("later composed screen response = %#v, err = %v, captures = %d", response, err, surface.captures)
 	}
@@ -142,7 +142,7 @@ func TestComposedPageSightTimeoutDoesNotRecheckHostPermission(t *testing.T) {
 	}
 
 	call := messages.ToolCall{ID: "page-timeout", Name: runtimeTools.ScreenToolID, Arguments: `{}`}
-	response, err := newSessionToolExecutorWithTimeout(capability.Executor, 10*time.Millisecond).Execute(context.Background(), call)
+	response, err := newTestSessionToolExecutor(capability.Executor, 10*time.Millisecond).Execute(context.Background(), call)
 	if err != nil {
 		t.Fatalf("page sight timeout returned Go error: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 )
 
 // Gate probe 11 regression: first-class page tools on a pre-selected tab died
@@ -70,12 +71,12 @@ func (e slowExecutor) Execute(ctx context.Context, call messages.ToolCall) (mess
 // The timeout result names the expired budget so a 5s fast/read expiry is
 // distinguishable from a 20s long-running expiry in transcripts and recdirs.
 func TestSessionToolTimeoutNamesExpiredBudget(t *testing.T) {
-	executor := newSessionToolExecutorWithTimeout(slowExecutor{delay: 5 * time.Second}, 150*time.Millisecond)
+	executor := newTestSessionToolExecutor(slowExecutor{delay: 5 * time.Second}, 150*time.Millisecond)
 	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "t1", Name: "get_cube_state"})
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if !strings.Contains(response.Content, SessionToolTimeoutClassification) {
+	if !strings.Contains(response.Content, sessionturn.ToolTimeoutClassification) {
 		t.Fatalf("timeout content lacks classification: %s", response.Content)
 	}
 	if !strings.Contains(response.Content, "after 150ms") {

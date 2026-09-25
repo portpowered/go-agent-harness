@@ -50,7 +50,7 @@ func TestRunSession_OpenAIAdvertisesRegistryExecDefinition(t *testing.T) {
 	capture := recorder.Capture()
 	var sessionUpdate json.RawMessage
 	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionClientToServer && record.Type == "session.update" {
+		if record.Direction == gwtesting.DirectionClientToServer && record.Type == wireSessionUpdate {
 			sessionUpdate = append(json.RawMessage(nil), record.Payload...)
 			break
 		}
@@ -222,7 +222,7 @@ func TestRunSession_OpenAIAdvertisesComposedWebMCPDefinitions(t *testing.T) {
 		if err := json.Unmarshal(write, &event); err != nil {
 			t.Fatalf("decode outbound event %q: %v", string(write), err)
 		}
-		if event.Type != "session.update" {
+		if event.Type != wireSessionUpdate {
 			continue
 		}
 		var update struct {
