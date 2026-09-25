@@ -51,7 +51,11 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunO
 	if err := s.validateRunOutput(request); err != nil {
 		return rooms.RoomResult{}, err
 	}
-	return s.runner.Run(ctx, out, request)
+	result, err := s.runner.Run(ctx, out, request)
+	if err == nil {
+		err = allParticipantsFailed(result)
+	}
+	return result, err
 }
 
 func (s *Service) validateRunOutput(request rooms.RoomRunOptions) error {

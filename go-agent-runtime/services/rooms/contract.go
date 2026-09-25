@@ -33,6 +33,9 @@ const (
 // private to the service graph.
 type Service interface {
 	Run(context.Context, io.Writer, RoomRunOptions) (RoomResult, error)
+	ResolveRunPlan(RoomRunPlanOptions) (RoomRunPlan, error)
+	ResolveRunOutput(plan RoomRunPlan, requested string, explicit bool) (string, error)
+	ValidateRunOutput(RoomRunPlan, string) error
 	ResolveLaunchPlan(RoomLaunchOptions) (RoomLaunchPlan, error)
 	LoadReplayPlan(string) (RoomReplayPlan, error)
 	ReplayManifest(RoomReplayPlan) Manifest
@@ -269,6 +272,12 @@ type RoomLaunchOptions struct {
 	ManifestPath     string
 	ConfigDir        string
 	CredentialLookup func(string) (string, bool)
+	// Devices validates human device selectors and supplies bare-room
+	// defaults. It is required only when the launch names a human.
+	Devices LaunchDevices
+	// ConfigCredential supplies the host-configured fallback credential for
+	// the bare room when CredentialLookup has no usable value.
+	ConfigCredential ConfigCredentialLookup
 }
 
 const DefaultRoomOutputDir = "room-run"

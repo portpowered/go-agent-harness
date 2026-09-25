@@ -13,7 +13,6 @@ import (
 	sessionservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/agentsession"
 	devicesservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/devices"
 	toolsservice "github.com/portpowered/go-agent-harness/agent-cli/internal/services/internal/tools"
-	roomwire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/rooms/wire"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -31,6 +30,7 @@ import (
 	runtimeRoomReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRoomReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/wire"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+	runtimeRoomsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
@@ -64,9 +64,7 @@ func NewDeviceProbeService(registry devicegw.DeviceRegistry, sessionFactory serv
 	return runtimeDevicesWire.NewProbeService(registry, sessionFactory)
 }
 
-// NewRoomService keeps room orchestration behind the public room contract. The
-// application graph supplies the live session and media ports explicitly;
-// registry remains a host-only input to CLI launch planning.
+// NewRoomEvidenceService exposes the runtime room evidence owner.
 func NewRoomEvidenceService() roomevidence.Service {
 	return runtimeRoomEvidenceWire.NewService()
 }
@@ -75,21 +73,25 @@ func NewRoomLatencyService() roomevidence.LatencyService {
 	return runtimeRoomEvidenceWire.NewLatencyService()
 }
 
-func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, replay runtimeRoomReplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
-	return roomwire.NewService(roomwire.Dependencies{
-		Live: live, Media: media, Registry: registry, Clock: clockSource, Replay: replay,
+// NewRoomService keeps room orchestration behind the public room contract. The
+// application graph supplies the live session and media ports explicitly;
+// launch planning receives host devices per invocation through the contract.
+func NewRoomService(live runtimeSession.LiveService, media runtimeRooms.MediaFactory, clockSource clock.Scheduler, replay runtimeRoomReplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
+	return runtimeRoomsWire.NewService(runtimeRoomsWire.Dependencies{
+		Live: live, Media: media, Clock: clockSource, Replay: replay,
 		Evidence: evidence, Latency: latency,
 	})
 }
 
 // NewRoomServiceWithDevices lets application composition inject the complete
-// device service. The room adapter is constructed in the room service wire
-// package, keeping device registries and gateway workers out of room policy.
-func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, registry devicegw.DeviceRegistry, clockSource clock.Scheduler, replay runtimeRoomReplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
-	return roomwire.NewService(roomwire.Dependencies{
-		Live: live, Devices: deviceService, Registry: registry, Clock: clockSource, Replay: replay,
-		Evidence: evidence, Latency: latency,
-	})
+// device service. The media adapter is constructed by the runtime room wire,
+// keeping device registries and gateway workers out of room policy.
+func NewRoomServiceWithDevices(live runtimeSession.LiveService, deviceService runtimeDevices.Service, clockSource clock.Scheduler, replay runtimeRoomReplay.Service, evidence roomevidence.Service, latency roomevidence.LatencyService) runtimeRooms.Service {
+	var media runtimeRooms.MediaFactory
+	if deviceService != nil {
+		media = runtimeRoomsWire.NewMediaFactory(deviceService)
+	}
+	return NewRoomService(live, media, clockSource, replay, evidence, latency)
 }
 
 // NewRoomReplayService composes room bundle admission with the shared replay inspector.

@@ -529,34 +529,34 @@ func writeRoomCLIManifest(t *testing.T) string {
 	return path
 }
 
-// TestRoomRunCommandFailsWhenEveryParticipantFailsEvenIfRunnerReturnsNoError
-// covers Instance 3 of the exit-code-must-mean-the-work-happened defect
-// family under the same contract established for session --prompt and
-// --loop: `room run` used to exit 0 when every participant failed, because
-// the runner reports per-participant failures without itself returning a
-// room-level error. The fix lives entirely at the CLI boundary
-// (roomAllParticipantsFailedError) — servicetest.RunRoom and its #321 fault
-// isolation are untouched.
-func TestRoomRunCommandFailsWhenEveryParticipantFailsEvenIfRunnerReturnsNoError(t *testing.T) {
+// TestRoomRunCommandSurfacesAllParticipantsFailedAsNonZeroExit covers
+// Instance 3 of the exit-code-must-mean-the-work-happened defect family: the
+// rooms service classifies a run in which every participant failed as a typed
+// room error, and the CLI must exit non-zero while still printing the result.
+func TestRoomRunCommandSurfacesAllParticipantsFailedAsNonZeroExit(t *testing.T) {
 	manifestPath := writeRoomCLIManifest(t)
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
 	command.SetRunner(func(_ context.Context, _ io.Writer, _ rooms.RoomRunOptions) (rooms.RoomResult, error) {
 		return rooms.RoomResult{
-			TerminationReason: rooms.RoomTerminationStopped,
-			Participants: map[string]rooms.RoomParticipantResult{
-				"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
-				"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
-			},
-		}, nil
+				TerminationReason: rooms.RoomTerminationStopped,
+				Participants: map[string]rooms.RoomParticipantResult{
+					"alice": {ID: "alice", ParticipantID: "alice", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
+					"bob":   {ID: "bob", ParticipantID: "bob", TerminationReason: rooms.ParticipantTerminationError, Error: "provider dial failed"},
+				},
+			}, &rooms.AllParticipantsFailedError{Participants: []rooms.ParticipantFailureDetail{
+				{ParticipantID: "alice", Error: "provider dial failed"}, {ParticipantID: "bob", Error: "provider dial failed"},
+			}}
 	})
-
 	var output bytes.Buffer
 	cmd := command.Generate()
 	cmd.SetOut(&output)
 	cmd.SetArgs([]string{"--manifest", manifestPath})
 	err := cmd.ExecuteContext(context.Background())
-	if err == nil {
-		t.Fatalf("room run with every participant failing returned nil error; want a named non-zero failure; output=%q", output.String())
+	if !errors.Is(err, rooms.ErrAllParticipantsFailed) {
+		t.Fatalf("room run with every participant failing returned %v; want a named non-zero failure; output=%q", err, output.String())
+	}
+	if !strings.Contains(output.String(), `participant "alice": error`) {
+		t.Fatalf("output = %q, want the failed participant results", output.String())
 	}
 	for _, want := range []string{"alice", "bob", "all 2 participant"} {
 		if !strings.Contains(err.Error(), want) {

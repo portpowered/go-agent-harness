@@ -1,6 +1,6 @@
 // Package planning resolves room admission inputs into immutable decisions.
 // It does not construct a provider, open a device, create a goroutine, or
-// retain a host configuration object.
+// retain a host configuration object or a resolved credential.
 package planning
 
 import (
@@ -17,22 +17,29 @@ type Planner struct{}
 
 func New() Planner { return Planner{} }
 
-// Resolve admits an explicitly configured room. Bare room synthesis is kept
-// behind the outer wire until the device and live-session ports are present.
+// Resolve admits an explicitly configured room, or synthesizes the bare
+// customer-plus-agent room when no config path is named.
 func (Planner) Resolve(options rooms.RoomLaunchOptions) (rooms.RoomLaunchPlan, error) {
 	path, err := sourcePath(options.ConfigPath, options.ManifestPath)
 	if err != nil {
 		return rooms.RoomLaunchPlan{}, err
 	}
-	if path == "" {
-		return rooms.RoomLaunchPlan{}, fmt.Errorf("%w: bare launch requires an injected host plan", rooms.ErrRoomServiceUnavailable)
-	}
 	lookup := options.CredentialLookup
 	if lookup == nil {
 		lookup = os.LookupEnv
 	}
+	if path == "" {
+		return bare(options, lookup)
+	}
+	return configured(path, options, lookup)
+}
+
+func configured(path string, options rooms.RoomLaunchOptions, lookup func(string) (string, bool)) (rooms.RoomLaunchPlan, error) {
 	value, err := manifest.Read(path, rooms.ValidationOptions{LookupCredential: lookup})
 	if err != nil {
+		return rooms.RoomLaunchPlan{}, fmt.Errorf("validate room config: %w", err)
+	}
+	if err := validateHumanDevices(value, options.Devices); err != nil {
 		return rooms.RoomLaunchPlan{}, fmt.Errorf("validate room config: %w", err)
 	}
 	return plan(value, path, options.ConfigDir, lookup), nil

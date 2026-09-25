@@ -7,10 +7,10 @@ import (
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
-func TestNewRoomParticipantBrowserCapabilitiesFactoryCreatesIndependentOwners(t *testing.T) {
-	factory := NewRoomParticipantBrowserCapabilitiesFactory(t.TempDir())
+func TestRoomParticipantBrowserCapabilitiesFactoryCreatesIndependentOwners(t *testing.T) {
+	factory := newRoomParticipantBrowserCapabilitiesFactory(t.TempDir())
 	participant := func(id string) runtimeRooms.Participant {
-		browser := defaultRuntimeBrowserToolsConfig()
+		browser := runtimeRooms.BrowserToolsDefaults{}.Config()
 		browser.Connection.CDPURL = "http://127.0.0.1:9222"
 		return runtimeRooms.Participant{ID: id, BrowserTools: &browser}
 	}

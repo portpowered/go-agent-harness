@@ -403,7 +403,7 @@ func TestRoomRunCommandConfiguredHumanDeviceValidationPrecedesRunner(t *testing.
 	if err == nil || !strings.Contains(err.Error(), "participants[0].input_device") {
 		t.Fatalf("error = %v, want field-specific configured input-device error", err)
 	}
-	if !errors.Is(err, devicegw.ErrDeviceDirectionMismatch) {
+	if !errors.Is(err, rooms.ErrLaunchDeviceDirectionMismatch) {
 		t.Fatalf("error = %v, want direction mismatch", err)
 	}
 	if runnerCalls != 0 || registry.openCalls != 0 {
