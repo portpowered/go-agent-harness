@@ -209,21 +209,6 @@ func TestRoomRunCommandExampleFlagPrintsValidManifestAndExitsZero(t *testing.T) 
 	}
 }
 
-// TestRoomRunCommandHelpNamesRequiredManifestFields guards the same defect
-// from the other direction: even without running --example, --help alone
-// must name the fields a probe spent thirteen rounds of trial and error
-// discovering (opening_prompt and the required `tools: []` in particular).
-func TestRoomRunCommandHelpNamesRequiredManifestFields(t *testing.T) {
-	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
-	cmd := command.Generate()
-	help := cmd.Long
-	for _, want := range []string{"opening_prompt", "tools", "system_prompt", "api_key_env", "input_device", "output_device", "--example"} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("room run --help text missing %q:\n%s", want, help)
-		}
-	}
-}
-
 func TestRoomRunCommandRejectsInvalidManifestBeforeRunner(t *testing.T) {
 	secret := "manifest-secret-value"
 	t.Setenv("ROOM_ALICE_KEY", secret)

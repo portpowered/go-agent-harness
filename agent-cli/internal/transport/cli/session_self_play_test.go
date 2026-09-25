@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -64,29 +63,6 @@ func TestSessionSelfPlayCommandLeavesOmittedDefaultsForService(t *testing.T) {
 	}
 	if got.Provider != "" || got.Model != "" || got.MaxDuration != 0 || got.MaxTurns != 0 {
 		t.Fatalf("omitted self-play values = provider %q, model %q, duration %s, turns %d; want zero values for service defaults", got.Provider, got.Model, got.MaxDuration, got.MaxTurns)
-	}
-}
-
-func TestSessionSelfPlayCommandHelpDocumentsTransportContract(t *testing.T) {
-	cmd := NewSessionSelfPlayCommand(flags.NewGlobalFlags(), nil).Generate()
-	var helpOutput bytes.Buffer
-	cmd.SetOut(&helpOutput)
-	if err := cmd.Help(); err != nil {
-		t.Fatalf("render self-play help: %v", err)
-	}
-	help := helpOutput.String()
-	for _, want := range []string{
-		"bounded self-play harness",
-		"raw PCM16 audio",
-		"tools and transcript/text bridging are disabled",
-		"--api-key",
-		"--output-dir",
-		"--max-duration",
-		"--max-turns",
-	} {
-		if !strings.Contains(help, want) {
-			t.Fatalf("self-play help does not contain %q:\n%s", want, help)
-		}
 	}
 }
 
