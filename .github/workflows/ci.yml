@@ -311,10 +311,13 @@ jobs:
   # The Linux package corpus has one owner: coverage. agent-cli is isolated
   # because its deterministic integration and replay tests are the long pole;
   # the other modules and embedding consumer run concurrently on one runner.
-  # The agent-cli corpus is further split into disjoint matrix shards: every
-  # package except test/integration, plus AGENT_CLI_INTEGRATION_SHARDS
-  # duration-balanced shards of test/integration's top-level tests. The coverage
-  # gate unions all shard profiles.
+  # The agent-cli corpus is further split into two disjoint matrix jobs: every
+  # package except test/integration, and test/integration. The integration
+  # job compiles its coverage-instrumented test binary and helper binaries
+  # once and runs AGENT_CLI_INTEGRATION_SHARDS duration-balanced shards of its
+  # top-level tests concurrently: the shards mostly wait on paced audio, so
+  # one runner overlaps them instead of paying setup and a compile per shard.
+  # The coverage gate unions all profiles.
   coverage-agent-cli:
     name: CI (coverage agent-cli ${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -322,7 +325,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [unit, integration-1, integration-2, integration-3, integration-4, integration-5]
+        shard: [unit, integration]
 
     steps:
       - name: Check out repository
