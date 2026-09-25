@@ -15,24 +15,31 @@ import (
 // Default model when none is specified.
 const DefaultModel = "claude-sonnet-4-20250514"
 
+// DefaultMaxRetries is the number of retries after a failed request. It
+// matches the Anthropic SDK default and is set explicitly so the production
+// retry policy does not change silently with the SDK.
+const DefaultMaxRetries = 2
+
 // AnthropicProvider implements the Provider interface for Anthropic (Claude) Messages API.
 type AnthropicProvider struct {
 	client     anthropic.Client
 	model      string
 	apiKey     string
 	httpClient *http.Client
+	maxRetries int
 }
 
 // New creates a new Anthropic (Claude) provider.
 func New(opts ...Option) *AnthropicProvider {
 	p := &AnthropicProvider{
-		model: DefaultModel,
+		model:      DefaultModel,
+		maxRetries: DefaultMaxRetries,
 	}
 	for _, opt := range opts {
 		opt(p)
 	}
 
-	clientOpts := []option.RequestOption{}
+	clientOpts := []option.RequestOption{option.WithMaxRetries(p.maxRetries)}
 	if p.apiKey != "" {
 		clientOpts = append(clientOpts, option.WithAPIKey(p.apiKey))
 	}

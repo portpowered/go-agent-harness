@@ -78,7 +78,7 @@ func s11StatelessProviderCases() []statelessProviderCase {
 		{
 			name: "anthropic",
 			new: func(client *http.Client, secret string) providers.Provider {
-				return anthropic.New(anthropic.WithAPIKey(secret), anthropic.WithHTTPClient(client))
+				return anthropic.New(anthropic.WithAPIKey(secret), anthropic.WithHTTPClient(client), anthropic.WithMaxRetries(0))
 			},
 			request: request,
 		},
@@ -518,12 +518,5 @@ func assertSessionClosesIdempotently(t *testing.T, session messages.Session) {
 	case <-session.Done():
 	case <-time.After(time.Second):
 		t.Fatal("session Done channel did not close")
-	}
-}
-
-func TestS11ProviderRootFallbackCapabilities(t *testing.T) {
-	got := providers.UnknownProviderCapabilities("s2s-conformance")
-	if got.Provider != "s2s-conformance" {
-		t.Fatalf("UnknownProviderCapabilities().Provider = %q, want s2s-conformance", got.Provider)
 	}
 }

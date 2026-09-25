@@ -96,10 +96,21 @@ func TestMediaSourceS4TypedErrors(t *testing.T) {
 
 func TestMediaSourceS4RuntimeErrorTaxonomy(t *testing.T) {
 	t.Run("unreachable host preserves network cause", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-		defer cancel()
-		_, err := ProbeMediaSource(ctx, "rtsp://camera:secret@unreachable.invalid:554/camera")
+		source, err := ParseMediaSource("rtsp://camera:secret@unreachable.invalid:554/camera")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A resolver failure is injected so the test does not query host DNS.
+		var dialed string
+		source.dialer = dialerFunc(func(_ context.Context, _, address string) (net.Conn, error) {
+			dialed = address
+			return nil, &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", Name: "unreachable.invalid", IsNotFound: true}}
+		})
+		_, err = source.Probe(context.Background())
 		typed := typedSourceError(t, err, SourceErrorUnreachable, "secret")
+		if dialed != "unreachable.invalid:554" {
+			t.Fatalf("dialed %q, want unreachable.invalid:554", dialed)
+		}
 		if !strings.Contains(typed.Source, "unreachable.invalid") {
 			t.Fatalf("source identity = %q", typed.Source)
 		}
@@ -455,4 +466,11 @@ func requireClosed(t testing.TB, name string, closer io.Closer) {
 	if err := closer.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		t.Errorf("close %s: %v", name, err)
 	}
+}
+
+// dialerFunc adapts a function to contextDialer.
+type dialerFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
+func (f dialerFunc) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return f(ctx, network, address)
 }

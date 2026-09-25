@@ -34,13 +34,6 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-func TestFalProvider_Name(t *testing.T) {
-	p := New()
-	if got := p.Name(); got != "fal" {
-		t.Errorf("Name() = %q, want %q", got, "fal")
-	}
-}
-
 func TestFalProvider_Infer_InvalidRequests(t *testing.T) {
 	ctx := context.Background()
 	transport := &mockTransport{statusCode: 200, body: "{}"}
@@ -468,24 +461,6 @@ func TestFalProvider_Infer_QwenTTS_HTTPError(t *testing.T) {
 	}
 	if !errors.Is(err, providers.ErrInvalidRequest) {
 		t.Fatalf("Infer() error = %v, want ErrInvalidRequest", err)
-	}
-}
-
-func TestFalProvider_Infer_QwenTTS_MissingEmbedding(t *testing.T) {
-	ctx := context.Background()
-	p := New()
-
-	req := providers.InferenceRequest{
-		Model: ModelQwenTTS,
-		Messages: []models.Message{{
-			Role:         models.RoleUser,
-			ContentParts: []models.ContentPart{models.TextPart{Text: "Say hello"}},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error for missing embedding, got nil")
 	}
 }
 

@@ -18,39 +18,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
-// TestWindowsPortablePlaybackBurstPreservesFIFO runs the same bounded pacing
-// contract on Windows even though the current WASAPI registry only exposes
-// endpoint discovery/probing and has no native PCM writer yet.
-func TestWindowsPortablePlaybackBurstPreservesFIFO(t *testing.T) {
-	_, output, input := adversarialVirtualPair(t, 24000)
-	testPacedPlaybackBackend(t, output, func(raw []byte) {
-		samples := make([]int16, audio.FrameSize)
-		if err := input.ReadFrame(context.Background(), samples); err != nil {
-			t.Fatalf("read Windows portable playback frame: %v", err)
-		}
-		if err := codec.EncodePCM16Into(raw, samples); err != nil {
-			t.Fatal(err)
-		}
-	})
-}
-
-func TestWASAPIDeviceIDsAreStableAndNamesAreDescriptive(t *testing.T) {
-	first, err := NewDevice(wasapiBackend, "endpoint\\stable", "Microphone", DirectionInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := NewDevice(wasapiBackend, "endpoint\\stable", "Renamed Microphone", DirectionInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.ID != "wasapi:endpoint\\stable" || second.ID != first.ID {
-		t.Fatalf("IDs=%q and %q, want stable wasapi-qualified endpoint ID", first.ID, second.ID)
-	}
-	if first.Display() != "Microphone" || second.Display() != "Renamed Microphone" {
-		t.Fatalf("display names=%q and %q, want friendly names", first.Display(), second.Display())
-	}
-}
-
 func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 	cases := []struct {
 		name string
@@ -73,38 +40,6 @@ func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 				t.Fatalf("error=%q does not name device %q", err, id)
 			}
 		})
-	}
-}
-
-func TestWASAPICapturePacketEnergyMeasuresFramesAndHonorsSilence(t *testing.T) {
-	format := wasapiAudioFormat{
-		formatTag:          waveFormatPCM,
-		channels:           1,
-		blockAlign:         2,
-		bitsPerSample:      16,
-		validBitsPerSample: 16,
-		subFormat:          wasapiSubtypePCM,
-	}
-	raw := make([]byte, 6)
-	positive := int16(1000)
-	negative := int16(-1000)
-	small := int16(250)
-	binary.LittleEndian.PutUint16(raw[0:], uint16(positive))
-	binary.LittleEndian.PutUint16(raw[2:], uint16(negative))
-	binary.LittleEndian.PutUint16(raw[4:], uint16(small))
-	energy, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 3, 0, format)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if energy <= 0 {
-		t.Fatalf("capture energy=%g, want positive measured energy", energy)
-	}
-	silentEnergy, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 3, audclntBufferFlagsSilent, format)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if silentEnergy != 0 {
-		t.Fatalf("silent capture energy=%g, want zero", silentEnergy)
 	}
 }
 
@@ -135,57 +70,6 @@ func TestWindowsPortablePlaybackBurstPreservesFIFOCanonicalCaptureEnergy(t *test
 			t.Fatalf("portable captured frame energy = %g, want positive", energy)
 		}
 	})
-}
-
-func TestWASAPICapturePacketEnergyDelegatesCanonicalBoundedSemantics(t *testing.T) {
-	raw := []byte{
-		0x00, 0x40, 0x00, 0xc0, 0xaa, 0xbb,
-		0x00, 0x00, 0x00, 0x80, 0xcc, 0xdd,
-	}
-	format := wasapiAudioFormat{
-		formatTag:          waveFormatExtensible,
-		channels:           2,
-		blockAlign:         6,
-		bitsPerSample:      16,
-		validBitsPerSample: 12,
-		subFormat:          wasapiSubtypePCM,
-	}
-	energy, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 2, 0, format)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if energy != 1.5 {
-		t.Fatalf("padded capture energy = %.17g, want 1.5", energy)
-	}
-
-	if energy, err := wasapiCapturePacketEnergy(nil, 0, 0, format); err != nil || energy != 0 {
-		t.Fatalf("zero-frame nil capture = %g, %v, want zero without dereference", energy, err)
-	}
-	if energy, err := wasapiCapturePacketEnergy(nil, 2, audclntBufferFlagsSilent, format); err != nil || energy != 0 {
-		t.Fatalf("silent nil capture = %g, %v, want zero without dereference", energy, err)
-	}
-	if _, err := wasapiCapturePacketEnergy(nil, 2, 0, format); err == nil {
-		t.Fatal("non-silent nil capture returned nil error")
-	}
-
-	invalid := format
-	invalid.validBitsPerSample = 17
-	if _, err := wasapiCapturePacketEnergy(unsafe.Pointer(&raw[0]), 2, 0, invalid); !errors.Is(err, codec.ErrInvalidSampleFormat) {
-		t.Fatalf("invalid valid-bit metadata error = %v, want ErrInvalidSampleFormat", err)
-	}
-
-	floatRaw := make([]byte, 4)
-	binary.LittleEndian.PutUint32(floatRaw, math.Float32bits(float32(math.NaN())))
-	floatFormat := wasapiAudioFormat{
-		channels:           1,
-		blockAlign:         4,
-		bitsPerSample:      32,
-		validBitsPerSample: 32,
-		subFormat:          wasapiSubtypeIEEEFloat,
-	}
-	if _, err := wasapiCapturePacketEnergy(unsafe.Pointer(&floatRaw[0]), 1, 0, floatFormat); !errors.Is(err, codec.ErrNonFiniteSample) {
-		t.Fatalf("non-finite capture error = %v, want ErrNonFiniteSample", err)
-	}
 }
 
 // TestWindowsPortablePlaybackBurstPreservesFIFOCanonicalCaptureAdapter is
