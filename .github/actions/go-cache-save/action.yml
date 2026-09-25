@@ -18,6 +18,11 @@ inputs:
   gomodcache:
     description: go-cache gomodcache output.
     required: true
+  token:
+    description: >-
+      Token with actions: write, used on main to delete this job's superseded
+      caches after a save.
+    default: ${{ github.token }}
 
 runs:
   using: composite
@@ -37,3 +42,12 @@ runs:
           ${{ inputs.gocache }}
           ${{ inputs.gomodcache }}
         key: ${{ inputs.primary-key }}
+
+    # Keep one main cache per job: restores fall back to the newest entry, so
+    # older entries only consume the repository's 10 GB quota.
+    - name: Delete superseded main Go caches
+      if: github.ref == 'refs/heads/main' && inputs.matched-key != inputs.primary-key
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/delete_superseded_caches.sh" "${{ inputs.primary-key }}" || true

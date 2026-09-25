@@ -20,7 +20,7 @@ cd "$repo_root/agent-cli"
 go_cmd="${GO:-go}"
 main_package="./cmd/yui"
 
-for module in go-agent-loop go-llm-gateway; do
+for module in go-agent-loop go-llm-gateway go-audio go-device-gateway go-agent-runtime; do
 	replaced="$(GOWORK=off "$go_cmd" list -m -f '{{.Replace.Dir}}' "github.com/portpowered/go-agent-harness/$module")"
 	expected="$(cd "../$module" && pwd)"
 	if [ "$replaced" != "$expected" ]; then
