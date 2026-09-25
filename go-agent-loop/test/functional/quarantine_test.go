@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -38,6 +37,32 @@ func TestFunctionalQuarantine_EmptyManifestRunsEveryDiscoveredTest(t *testing.T)
 	}
 }
 
+const (
+	fixtureSelectorEnv = "FUNCTIONAL_FIXTURE_SELECTOR"
+	fixtureFailEnv     = "FUNCTIONAL_FIXTURE_FAIL"
+	fixtureFailExit    = 42
+)
+
+// TestQuarantineFixtureProcess is the child process RunSubprocess executes in
+// the exact-selector proof. Run directly, it has nothing to do. As a child it
+// reports its selector and, when asked to fail, exits non-zero with a
+// sentinel the parent must never observe for a quarantined selector.
+func TestQuarantineFixtureProcess(t *testing.T) {
+	selector := os.Getenv(fixtureSelectorEnv)
+	if selector == "" {
+		t.Skip("runs only as the RunSubprocess fixture child")
+	}
+	if _, err := fmt.Fprintf(os.Stdout, "fixture-ran selector=%s\n", selector); err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv(fixtureFailEnv) == "1" {
+		if _, err := fmt.Fprintln(os.Stderr, "quarantine-sentinel-executed"); err != nil {
+			t.Fatal(err)
+		}
+		os.Exit(fixtureFailExit)
+	}
+}
+
 func TestFunctionalQuarantine_ExactSelectorSkipsFailingInjectedSubprocess(t *testing.T) {
 	const packagePath = "fixture/package"
 	manifest := Manifest{
@@ -52,17 +77,17 @@ func TestFunctionalQuarantine_ExactSelectorSkipsFailingInjectedSubprocess(t *tes
 		}},
 	}
 	inventory := Inventory{Packages: []InventoryPackage{{Path: packagePath, Tests: []string{"TestRunnable", "TestQuarantined"}}}}
-	moduleRoot := functionalModuleRoot(t)
 	var fixtureOutput bytes.Buffer
 	var invoked []string
 	var reportOutput bytes.Buffer
 	report, err := RunSubprocess(context.Background(), manifest, inventory, func(ctx context.Context, selector TestSelector) *exec.Cmd {
 		invoked = append(invoked, selector.String())
-		cmd := exec.CommandContext(ctx, "go", "run", "./test/functional/internal/quarantinefixture")
-		cmd.Dir = moduleRoot
-		cmd.Env = append(os.Environ(), "FUNCTIONAL_FIXTURE_SELECTOR="+selector.String())
+		// Re-execute this test binary as the fixture process instead of
+		// compiling a separate fixture with `go run` on every run.
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestQuarantineFixtureProcess$", "-test.count=1")
+		cmd.Env = append(os.Environ(), fixtureSelectorEnv+"="+selector.String())
 		if selector.Test == "TestQuarantined" {
-			cmd.Env = append(cmd.Env, "FUNCTIONAL_FIXTURE_FAIL=1")
+			cmd.Env = append(cmd.Env, fixtureFailEnv+"=1")
 		}
 		cmd.Stdout = &fixtureOutput
 		cmd.Stderr = &fixtureOutput
@@ -176,13 +201,4 @@ func TestFunctionalQuarantine_RejectsMalformedIncompleteDuplicateAmbiguousAndUnk
 			}
 		})
 	}
-}
-
-func functionalModuleRoot(t *testing.T) string {
-	t.Helper()
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
 }

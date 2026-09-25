@@ -1,11 +1,12 @@
 package functional
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -61,96 +62,94 @@ func TestApplyPackageSelectionIntersectsManifestWithRunFilter(t *testing.T) {
 			Entry: Entry{Package: "p", Test: "TestQuarantined", Bucket: BucketGenuinelyFailing, Reason: "fixture", ExitCondition: "never"},
 			Tests: []TestSelector{{Package: "p", Test: "TestQuarantined"}},
 		}}}
-		if err := applyPackageSelection(selection); err != nil {
+		var report bytes.Buffer
+		if err := applyPackageSelection(selection, &report); err != nil {
 			t.Fatalf("filter %q: %v", tc.filter, err)
 		}
 		if got := runFlag.Value.String(); got != tc.want {
 			t.Fatalf("filter %q: test.run = %q, want %q", tc.filter, got, tc.want)
+		}
+		if !strings.Contains(report.String(), "quarantine: selector=p/TestQuarantined ") {
+			t.Fatalf("filter %q: quarantine report missing:\n%s", tc.filter, report.String())
 		}
 	}
 
 	if err := flag.CommandLine.Set("test.run", "("); err != nil {
 		t.Fatal(err)
 	}
-	if err := applyPackageSelection(Selection{Selected: selected}); err == nil || !strings.Contains(err.Error(), "compile existing test.run filter") {
+	if err := applyPackageSelection(Selection{Selected: selected}, io.Discard); err == nil || !strings.Contains(err.Error(), "compile existing test.run filter") {
 		t.Fatalf("invalid -run filter: err = %v", err)
 	}
 }
 
-func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.T) {
-	// Each subprocess reads its own temporary manifest, so the two
-	// recursive invocations are independent.
-	t.Parallel()
-	moduleRoot, err := functionalModuleRootPath()
-	if err != nil {
-		t.Fatal(err)
+// The package TestMain hook reads the external manifest, validates it
+// against the real discovered inventory, and only then runs the package:
+// a valid manifest narrows test.run and reports exact counts; an unknown
+// selector fails closed before any test runs. RunPackageTests only adds
+// flag parsing and os.Exit around this, so it runs in-process instead of
+// through a recursive `go test`.
+func TestRunSelectedPackageTestsAppliesExternalManifest(t *testing.T) {
+	const orchestration = "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration"
+	runFlag := flag.CommandLine.Lookup("test.run")
+	original := runFlag.Value.String()
+	t.Cleanup(func() {
+		if err := flag.CommandLine.Set("test.run", original); err != nil {
+			t.Errorf("restore test.run: %v", err)
+		}
+	})
+	tests := []struct {
+		name       string
+		manifest   func(*testing.T) string
+		runExit    int
+		wantExit   int
+		wantRun    bool
+		wantFilter string
+		wantStdout []string
+		wantStderr string
+	}{
+		{
+			name: "valid manifest narrows the run", manifest: writeProofManifest, wantRun: true,
+			wantFilter: "^(?:TestBasic_SimpleRequestResponseWithSystemPrompt)$",
+			wantStdout: []string{
+				"quarantine: selector=" + orchestration + "/TestBasic_SimpleRequestResponse ",
+				"summary: discovered=20 executed=19 passed=19 failed=0 quarantined=1",
+			},
+		},
+		{
+			name: "package failure is reported and propagated", manifest: writeProofManifest, runExit: 1, wantExit: 1, wantRun: true,
+			wantFilter: "^(?:TestBasic_SimpleRequestResponseWithSystemPrompt)$",
+			wantStdout: []string{"summary: discovered=20 executed=19 passed=0 failed=19 quarantined=1"},
+		},
+		{
+			name: "unknown selector fails closed", manifest: writeUnknownSelectorManifest, wantExit: 1,
+			wantFilter: "^TestBasic_(SimpleRequestResponse|SimpleRequestResponseWithSystemPrompt)$",
+			wantStderr: "does not resolve to a discovered package",
+		},
 	}
-	manifestPath := writeProofManifest(t)
-	cmd := exec.Command("go", goCommandArgs(
-		"test",
-		// Only the package owning the selectors: every other functional
-		// package matches none of the -run filter, so compiling and
-		// discovering it in the subprocess proved nothing extra.
-		"./test/functional/orchestration",
-		"-v",
-		"-run", "^TestBasic_(SimpleRequestResponse|SimpleRequestResponseWithSystemPrompt)$",
-		"-count=1",
-	)...)
-	cmd.Dir = moduleRoot
-	cmd.Env = setEnv(os.Environ(), ManifestPathEnv, manifestPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("recursive invocation: %v\n%s", err, output)
-	}
-
-	text := string(output)
-	quarantined := "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration/TestBasic_SimpleRequestResponse"
-	if !strings.Contains(text, "quarantine: selector="+quarantined+" ") {
-		t.Fatalf("recursive invocation did not report the quarantined real selector:\n%s", text)
-	}
-	if strings.Contains(text, "--- PASS: TestBasic_SimpleRequestResponse (") {
-		t.Fatalf("recursive invocation executed the quarantined selector:\n%s", text)
-	}
-	if !strings.Contains(text, "--- PASS: TestBasic_SimpleRequestResponseWithSystemPrompt (") {
-		t.Fatalf("recursive invocation did not execute the runnable real selector:\n%s", text)
-	}
-	if !strings.Contains(text, "summary: discovered=20 executed=19 passed=19 failed=0 quarantined=1") {
-		t.Fatalf("recursive invocation did not report exact package counts:\n%s", text)
-	}
-}
-
-func TestFunctionalSuite_ExternalManifestRejectsUnknownSelectorBeforeFilteredRecursiveInvocation(t *testing.T) {
-	// Each subprocess reads its own temporary manifest, so the two
-	// recursive invocations are independent.
-	t.Parallel()
-	moduleRoot, err := functionalModuleRootPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifestPath := writeUnknownSelectorManifest(t)
-	cmd := exec.Command("go", goCommandArgs(
-		"test",
-		// Only the package owning the selectors: every other functional
-		// package matches none of the -run filter, so compiling and
-		// discovering it in the subprocess proved nothing extra.
-		"./test/functional/orchestration",
-		"-v",
-		"-run", "^TestBasic_SimpleRequestResponse$",
-		"-count=1",
-	)...)
-	cmd.Dir = moduleRoot
-	cmd.Env = setEnv(os.Environ(), ManifestPathEnv, manifestPath)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("recursive invocation accepted an unknown selector:\n%s", output)
-	}
-
-	text := string(output)
-	if !strings.Contains(text, "does not resolve to a discovered package") {
-		t.Fatalf("recursive invocation did not report the typed unknown-selector error:\n%s", text)
-	}
-	if strings.Contains(text, "--- PASS: TestBasic_SimpleRequestResponse (") {
-		t.Fatalf("recursive invocation ran a test despite the invalid manifest:\n%s", text)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(ManifestPathEnv, tc.manifest(t))
+			if err := flag.CommandLine.Set("test.run", "^TestBasic_(SimpleRequestResponse|SimpleRequestResponseWithSystemPrompt)$"); err != nil {
+				t.Fatal(err)
+			}
+			ran := false
+			var stdout, stderr bytes.Buffer
+			exit := runSelectedPackageTests(func() int { ran = true; return tc.runExit }, orchestration, &stdout, &stderr)
+			if exit != tc.wantExit || ran != tc.wantRun {
+				t.Fatalf("exit = %d ran = %v, want exit %d ran %v\nstdout:\n%s\nstderr:\n%s", exit, ran, tc.wantExit, tc.wantRun, stdout.String(), stderr.String())
+			}
+			if got := runFlag.Value.String(); got != tc.wantFilter {
+				t.Fatalf("test.run = %q, want %q", got, tc.wantFilter)
+			}
+			for _, want := range tc.wantStdout {
+				if !strings.Contains(stdout.String(), want) {
+					t.Fatalf("stdout missing %q:\n%s", want, stdout.String())
+				}
+			}
+			if !strings.Contains(stderr.String(), tc.wantStderr) {
+				t.Fatalf("stderr missing %q:\n%s", tc.wantStderr, stderr.String())
+			}
+		})
 	}
 }
 
