@@ -128,7 +128,7 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 	default:
 	}
 	if err := wire.protocolError(); err != nil {
-		t.Fatalf("scripted provider protocol: %v", err)
+		t.Fatalf("scripted provider protocol: %v\nclient writes: %s\nprovider events: %v", err, wire.writeSummary(), wire.eventsSnapshot())
 	}
 
 	assertSessionAudioInterruptScenario(t, scenario, wire.writesSnapshot(), ledger.eventsSnapshot())
