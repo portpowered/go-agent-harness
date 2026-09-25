@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/input"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/mediagate"
@@ -77,6 +78,12 @@ func New(deps Dependencies) *Service {
 	}
 }
 func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
+	return s.openLive(ctx, request, nil)
+}
+
+// openLive admits one handle whose stream accounting may additionally feed a
+// per-invocation metrics recorder owned by RunLive's caller.
+func (s *Service) openLive(ctx context.Context, request session.LiveRequest, recorder metrics.Recorder) (session.LiveHandle, error) {
 	if s == nil || s.inferencerFactory == nil {
 		return nil, errors.New("live inferencer factory is required")
 	}
@@ -88,7 +95,7 @@ func (s *Service) OpenLive(ctx context.Context, request session.LiveRequest) (se
 	}
 	request = input.CloneLiveRequest(request)
 	h := newHandle(request, s.inferencerFactory, s.capabilityFactory, s.toolExecutor, s.toolDefinitions, s.eventCapacity, s.clock, s.scheduler)
-	h.runtimeTrace = observations.NewRuntimeTrace(s.runtimeObserver, s.clock, s.tick)
+	h.runtimeTrace = observations.NewInvocationTrace(s.runtimeObserver, recorder, s.clock, s.tick)
 	h.parentCtx = ctx
 	return h, nil
 }
@@ -99,6 +106,7 @@ type handle struct {
 	capabilityFactory                                session.LiveCapabilityFactory
 	toolExecutor                                     messages.ToolExecutor
 	toolDefinitions                                  []messages.ToolDefinition
+	pendingToolDefinitions                           []messages.ToolDefinition
 	capabilityClose                                  func() error
 	capabilityRefresh                                func(context.Context) ([]messages.ToolDefinition, error)
 	capabilityWatch                                  func(context.Context) <-chan session.LiveCapabilityEvent

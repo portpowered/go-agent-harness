@@ -36,9 +36,7 @@ func (h *handle) finishOnceBody(err error) {
 	}
 	err = h.finishMedia(err, userCancelled)
 	h.mu.Lock()
-	if !isContextTermination(h.pumpErr) {
-		err = errors.Join(err, h.pumpErr)
-	}
+	err = joinWorkerError(err, h.pumpErr)
 	h.mu.Unlock()
 	h.emitSynthesizedSessionClose()
 	h.mu.Lock()

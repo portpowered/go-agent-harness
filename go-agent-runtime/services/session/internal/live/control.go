@@ -92,8 +92,10 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 				h.runtimeTrace.ResponseCreate(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 			case session.LiveControlResponseCreate:
 				h.runtimeTrace.ResponseCreate(event)
-			case session.LiveControlText, session.LiveControlResponseCancel, session.LiveControlClose:
-				// Text and lifecycle controls have no dedicated runtime observation.
+			case session.LiveControlText:
+				h.runtimeTrace.UserTextInput(control.Text)
+			case session.LiveControlResponseCancel, session.LiveControlClose:
+				// Lifecycle controls have no dedicated runtime observation.
 			}
 		}
 		return nil
@@ -132,6 +134,8 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 		Value:           messages.NewSessionUpdateValue(&messages.SessionUpdateConfig{Tools: refreshed}),
 		ActorProvidedID: ackID,
 	}
+	h.setPendingToolDefinitions(refreshed)
+	defer h.setPendingToolDefinitions(nil)
 	if err := loop.SendSessionEvent(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
 		return err

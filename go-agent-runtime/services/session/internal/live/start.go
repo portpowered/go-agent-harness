@@ -103,7 +103,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 	h.mu.Lock()
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults
 	h.mu.Unlock()
-	toolExecutor = restrictToolExecutor(toolExecutor, toolDefinitions, explicitCapability)
+	toolExecutor = restrictToolExecutor(toolExecutor, h.offeredToolDefinitions, explicitCapability)
 	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
 	if len(toolDefinitions) > 0 {
@@ -201,33 +201,28 @@ func (h *handle) emitSynthesizedSessionClose() {
 	h.publishMessage(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: value})
 }
 
-// restrictToolExecutor keeps provider calls inside the invocation capability surface.
-func restrictToolExecutor(executor messages.ToolExecutor, definitions []messages.ToolDefinition, enforceEmpty bool) messages.ToolExecutor {
+// restrictToolExecutor keeps provider calls inside the invocation capability
+// surface. The surface is read for each call, so definitions republished
+// during the session are executable as soon as they are offered to the
+// provider, and definitions withdrawn by a refresh stop being callable.
+func restrictToolExecutor(executor messages.ToolExecutor, surface func() []messages.ToolDefinition, enforceEmpty bool) messages.ToolExecutor {
 	if replacement, ok := executor.(interface{ AllowUnadvertisedTools() bool }); ok && replacement.AllowUnadvertisedTools() {
 		return executor
 	}
-	if executor == nil || (!enforceEmpty && len(definitions) == 0) {
+	if executor == nil {
 		return executor
 	}
-	allowed := make(map[string]struct{}, len(definitions))
-	for _, definition := range definitions {
-		if definition.Name != "" {
-			allowed[definition.Name] = struct{}{}
-		}
-	}
-	if len(allowed) == 0 && !enforceEmpty {
-		return executor
-	}
-	return allowlistedToolExecutor{inner: executor, allowed: allowed}
+	return allowlistedToolExecutor{inner: executor, surface: surface, enforceEmpty: enforceEmpty}
 }
 
 type allowlistedToolExecutor struct {
-	inner   messages.ToolExecutor
-	allowed map[string]struct{}
+	inner        messages.ToolExecutor
+	surface      func() []messages.ToolDefinition
+	enforceEmpty bool
 }
 
 func (e allowlistedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if _, ok := e.allowed[call.Name]; !ok {
+	if !e.allows(call.Name) {
 		return messages.ToolCallResponse{
 			ToolCallID: call.ID,
 			Name:       call.Name,
@@ -235,6 +230,36 @@ func (e allowlistedToolExecutor) Execute(ctx context.Context, call messages.Tool
 		}, nil
 	}
 	return e.inner.Execute(ctx, call)
+}
+
+// allows reports whether name is in the offered surface. An unnamed surface
+// imposes no restriction unless the capability explicitly owns an empty one.
+func (e allowlistedToolExecutor) allows(name string) bool {
+	restricted := e.enforceEmpty
+	for _, definition := range e.surface() {
+		if definition.Name == "" {
+			continue
+		}
+		if definition.Name == name {
+			return true
+		}
+		restricted = true
+	}
+	return !restricted
+}
+
+// offeredToolDefinitions is the surface the provider may call: the accepted
+// definitions plus a refresh that is offered but not yet acknowledged.
+func (h *handle) offeredToolDefinitions() []messages.ToolDefinition {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append(append([]messages.ToolDefinition(nil), h.toolDefinitions...), h.pendingToolDefinitions...)
+}
+
+func (h *handle) setPendingToolDefinitions(definitions []messages.ToolDefinition) {
+	h.mu.Lock()
+	h.pendingToolDefinitions = append([]messages.ToolDefinition(nil), definitions...)
+	h.mu.Unlock()
 }
 
 func (h *handle) installLoop(loop *agentloop.AgentLoop) (func(context.Context) <-chan session.LiveCapabilityEvent, error) {

@@ -109,7 +109,7 @@ func openLiveHandle(s *Service, ctx context.Context, options session.LiveRunOpti
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Join(err, finalizeRecorder(options.Recorder, ctx, err))
 	}
-	handle, err := s.OpenLive(ctx, options.Request)
+	handle, err := s.openLive(ctx, options.Request, options.Metrics)
 	if err != nil {
 		return nil, errors.Join(err, finalizeRecorder(options.Recorder, ctx, err))
 	}

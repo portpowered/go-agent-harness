@@ -218,3 +218,13 @@ func appendToolAcknowledgementOption(options []agentloop.Option, policy *session
 }
 
 var _ sessionduration.DuplexLoopFactory = (*DuplexLoopFactory)(nil)
+
+// joinWorkerError adds a media worker failure to the invocation result unless
+// it is a context termination or already produced that result, so one failure
+// is reported once.
+func joinWorkerError(err, workerErr error) error {
+	if isContextTermination(workerErr) || errors.Is(err, workerErr) {
+		return err
+	}
+	return errors.Join(err, workerErr)
+}
