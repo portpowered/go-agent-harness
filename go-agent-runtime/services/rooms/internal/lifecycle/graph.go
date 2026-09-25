@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -30,6 +31,9 @@ type roomGraph struct {
 	outputs  []*graphOutput
 	err      error
 	recorder audioRecorder
+	// delivery observes peer hand-offs so a reached max_turns stop can wait
+	// for the final responses' audio. It is attached after the workers start.
+	delivery atomic.Pointer[finalTurnDelivery]
 
 	workers sync.WaitGroup
 	close   sync.Once
@@ -279,6 +283,7 @@ func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
 			}
 			return
 		}
+		g.delivery.Load().handedOff(output.target.participant.ID, mixed.Sources, frame.EndOfResponse)
 	}
 }
 

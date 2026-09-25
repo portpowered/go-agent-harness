@@ -69,14 +69,18 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 		return rooms.RoomResult{}, err
 	}
 	request = installRecorder(request, recorder)
+	delivery := newFinalTurnDelivery(r.clock, manifest)
+	request.EventSink = deliveryEventSink{host: request.EventSink, delivery: delivery}
 
 	runCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	state := newRunState(manifest, cancel)
+	state.delivery, state.deliveryCtx = delivery, runCtx
 	stopTimer := r.startDurationBound(runCtx, manifest.Room.MaxDuration, state)
 	defer stopTimer()
 	r.openParticipants(ctx, runCtx, state, manifest, request, recorder)
 	graph := r.startGraph(runCtx, state, request, recorder)
+	delivery.attach(graph)
 	state.waitAll(runCtx, request, r.currentTime)
 	return r.finishRun(runCtx, state, graph, manifest, request, recorder)
 }

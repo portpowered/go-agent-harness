@@ -51,6 +51,12 @@ type runState struct {
 	boundReason rooms.RoomTerminationReason
 	boundCause  error
 	stop        context.CancelCauseFunc
+	// delivery holds a reached turn bound until the final responses' audio
+	// reaches their peers; turnStopPending marks that held stop, and
+	// deliveryCtx ends the wait when the room stops for another reason.
+	delivery        *finalTurnDelivery
+	deliveryCtx     context.Context
+	turnStopPending bool
 }
 
 type terminalMetadata struct {
@@ -150,6 +156,9 @@ func (s *runState) setFailure(err error) {
 			s.stop(err)
 		}
 	}
+	// A failure while the final turn's audio drains ends the wait; the room
+	// keeps the turn bound it had already reached.
+	s.releaseTurnStopLocked()
 	s.mu.Unlock()
 }
 
@@ -183,21 +192,50 @@ func (s *runState) failParticipant(id string, err error) {
 
 func (s *runState) noteTurn(id string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.turns[id]++
-	if s.turnsBound <= 0 || s.boundReason != "" {
-		return
-	}
-	for _, turns := range s.turns {
-		if turns < s.turnsBound {
-			return
-		}
-	}
-	if len(s.turns) < s.agentCount {
+	if !s.turnsBoundReachedLocked() {
+		s.mu.Unlock()
 		return
 	}
 	s.boundReason = rooms.RoomTerminationMaxTurnsReached
 	s.boundCause = errTurnsBound
+	// MESSAGE.END usually precedes the peer hearing the final response, so
+	// the stop is held until that audio is delivered (bounded by the room
+	// clock) instead of truncating it.
+	s.turnStopPending = true
+	delivery, ctx := s.delivery, s.deliveryCtx
+	s.mu.Unlock()
+	if delivery == nil || ctx == nil {
+		s.releaseTurnStop()
+		return
+	}
+	delivery.begin(ctx, s.releaseTurnStop)
+}
+
+func (s *runState) turnsBoundReachedLocked() bool {
+	if s.turnsBound <= 0 || s.boundReason != "" {
+		return false
+	}
+	for _, turns := range s.turns {
+		if turns < s.turnsBound {
+			return false
+		}
+	}
+	return len(s.turns) >= s.agentCount
+}
+
+func (s *runState) releaseTurnStop() {
+	s.mu.Lock()
+	s.releaseTurnStopLocked()
+	s.mu.Unlock()
+}
+
+// releaseTurnStopLocked performs a held max_turns stop exactly once.
+func (s *runState) releaseTurnStopLocked() {
+	if !s.turnStopPending {
+		return
+	}
+	s.turnStopPending = false
 	if s.stop != nil {
 		s.stop(errTurnsBound)
 	}
@@ -211,6 +249,9 @@ func (s *runState) setBound(reason rooms.RoomTerminationReason, cause error) {
 			s.stop(cause)
 		}
 	}
+	// A duration bound ends a final-turn drain; the turn bound it reached
+	// first remains the room's reason.
+	s.releaseTurnStopLocked()
 	s.mu.Unlock()
 }
 
@@ -375,7 +416,7 @@ func (s *runState) stopWhenAgentsDone() {
 		return
 	}
 	s.mu.Lock()
-	if s.boundReason != "" || s.agentCount == 0 {
+	if s.agentCount == 0 {
 		s.mu.Unlock()
 		return
 	}
@@ -384,6 +425,12 @@ func (s *runState) stopWhenAgentsDone() {
 			s.mu.Unlock()
 			return
 		}
+	}
+	if s.boundReason != "" {
+		// No agent is left to deliver audio for a held turn stop.
+		s.releaseTurnStopLocked()
+		s.mu.Unlock()
+		return
 	}
 	s.boundReason = rooms.RoomTerminationStopped
 	s.boundCause = nil
