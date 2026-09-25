@@ -83,22 +83,7 @@ func TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints(t *t
 		t.Fatalf("normalized browser recording/replay = %+v/%+v", browser.Recording, browser.Replay)
 	}
 
-	encoded, err := json.Marshal(manifest)
-	if err != nil {
-		t.Fatalf("marshal normalized manifest: %v", err)
-	}
-	serialized := string(encoded)
-	for _, forbidden := range []string{"cdp-secret", "ws-secret", "fragment-secret", "browser-secret", "token="} {
-		if strings.Contains(serialized, forbidden) {
-			t.Fatalf("normalized manifest leaked endpoint material %q: %s", forbidden, serialized)
-		}
-	}
-	if !strings.Contains(serialized, `"browserTools"`) || !strings.Contains(serialized, `"invocation_timeout":"2m30s"`) {
-		t.Fatalf("normalized manifest omitted browser configuration: %s", serialized)
-	}
-	if !strings.Contains(serialized, `"ws_endpoint":"ws://127.0.0.1:9222/%3Credacted%3E"`) {
-		t.Fatalf("normalized manifest did not redact browser websocket path: %s", serialized)
-	}
+	assertBrowserToolsManifestRedacted(t, manifest)
 }
 
 func TestParseManifest_BrowserToolsAcceptsYAMLAndAppliesSessionDefaults(t *testing.T) {
@@ -151,110 +136,70 @@ func TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions(t *
 		mutate func(map[string]any)
 	}{
 		{
-			name:  "unsupported backend",
-			field: "participants[0].browserTools.backend",
-			cause: ErrUnsupportedBrowserToolsBackend,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{"backend": "chrome"}
-			},
+			name:   "unsupported backend",
+			field:  "participants[0].browserTools.backend",
+			cause:  ErrUnsupportedBrowserToolsBackend,
+			mutate: withBrowserTools(map[string]any{"backend": "chrome"}),
 		},
 		{
-			name:  "invalid auto select",
-			field: "participants[0].browserTools.selection.auto_select",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"selection": map[string]any{"auto_select": "many"},
-				}
-			},
+			name:   "invalid auto select",
+			field:  "participants[0].browserTools.selection.auto_select",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(map[string]any{"selection": map[string]any{"auto_select": "many"}}),
 		},
 		{
-			name:  "invalid duration",
-			field: "participants[0].browserTools.limits.invocation_timeout",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"limits": map[string]any{"invocation_timeout": "soon"},
-				}
-			},
+			name:   "invalid duration",
+			field:  "participants[0].browserTools.limits.invocation_timeout",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(map[string]any{"limits": map[string]any{"invocation_timeout": "soon"}}),
 		},
 		{
-			name:  "negative size",
-			field: "participants[0].browserTools.limits.max_input_bytes",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"limits": map[string]any{"max_input_bytes": -1},
-				}
-			},
+			name:   "negative size",
+			field:  "participants[0].browserTools.limits.max_input_bytes",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(map[string]any{"limits": map[string]any{"max_input_bytes": -1}}),
 		},
 		{
-			name:  "invalid CDP scheme",
-			field: "participants[0].browserTools.connection.cdp_url",
-			cause: ErrInvalidBrowserEndpoint,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"connection": map[string]any{"cdp_url": "file:///tmp/debug"},
-				}
-			},
+			name:   "invalid CDP scheme",
+			field:  "participants[0].browserTools.connection.cdp_url",
+			cause:  ErrInvalidBrowserEndpoint,
+			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"cdp_url": "file:///tmp/debug"}}),
 		},
 		{
-			name:  "page websocket",
-			field: "participants[0].browserTools.connection.ws_endpoint",
-			cause: ErrInvalidBrowserEndpoint,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"connection": map[string]any{"ws_endpoint": "ws://127.0.0.1:9222/devtools/page/page-secret"},
-				}
-			},
+			name:   "page websocket",
+			field:  "participants[0].browserTools.connection.ws_endpoint",
+			cause:  ErrInvalidBrowserEndpoint,
+			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"ws_endpoint": "ws://127.0.0.1:9222/devtools/page/page-secret"}}),
 		},
 		{
-			name:  "remote endpoint without opt in",
-			field: "participants[0].browserTools.connection.cdp_url",
-			cause: ErrInvalidBrowserEndpoint,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"connection": map[string]any{"cdp_url": "https://browser.example:9222"},
-				}
-			},
+			name:   "remote endpoint without opt in",
+			field:  "participants[0].browserTools.connection.cdp_url",
+			cause:  ErrInvalidBrowserEndpoint,
+			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"cdp_url": "https://browser.example:9222"}}),
 		},
 		{
-			name:  "null browser tools object",
-			field: "participants[0].browserTools",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = nil
-			},
+			name:   "null browser tools object",
+			field:  "participants[0].browserTools",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(nil),
 		},
 		{
-			name:  "malformed boolean",
-			field: "participants[0].browserTools.connection.allow_remote_cdp",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"connection": map[string]any{"allow_remote_cdp": "yes"},
-				}
-			},
+			name:   "malformed boolean",
+			field:  "participants[0].browserTools.connection.allow_remote_cdp",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"allow_remote_cdp": "yes"}}),
 		},
 		{
-			name:  "malformed duration type",
-			field: "participants[0].browserTools.limits.invocation_timeout",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"limits": map[string]any{"invocation_timeout": 30},
-				}
-			},
+			name:   "malformed duration type",
+			field:  "participants[0].browserTools.limits.invocation_timeout",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(map[string]any{"limits": map[string]any{"invocation_timeout": 30}}),
 		},
 		{
-			name:  "malformed origin list",
-			field: "participants[0].browserTools.policy.allowed_origins",
-			cause: ErrInvalidBrowserToolsOption,
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["browserTools"] = map[string]any{
-					"policy": map[string]any{"allowed_origins": "https://cube.example"},
-				}
-			},
+			name:   "malformed origin list",
+			field:  "participants[0].browserTools.policy.allowed_origins",
+			cause:  ErrInvalidBrowserToolsOption,
+			mutate: withBrowserTools(map[string]any{"policy": map[string]any{"allowed_origins": "https://cube.example"}}),
 		},
 	}
 	for _, test := range tests {
@@ -295,4 +240,76 @@ func TestManifestValidate_BrowserToolsRejectsDirectUnnormalizedValue(t *testing.
 	}
 	err := manifest.Validate()
 	assertManifestError(t, err, "participants[0].browserTools.selection.auto_select", ErrInvalidBrowserToolsOption)
+}
+
+// withBrowserTools returns a manifest mutation that sets the first
+// participant's browserTools value.
+func withBrowserTools(value any) func(map[string]any) {
+	return func(document map[string]any) {
+		fixtureParticipant(document, 0)["browserTools"] = value
+	}
+}
+
+// assertBrowserToolsManifestRedacted requires the serialized manifest to keep
+// the browser configuration while redacting endpoint secrets.
+func assertBrowserToolsManifestRedacted(t *testing.T, manifest Manifest) {
+	t.Helper()
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal normalized manifest: %v", err)
+	}
+	serialized := string(encoded)
+	for _, forbidden := range []string{"cdp-secret", "ws-secret", "fragment-secret", "browser-secret", "token="} {
+		if strings.Contains(serialized, forbidden) {
+			t.Fatalf("normalized manifest leaked endpoint material %q: %s", forbidden, serialized)
+		}
+	}
+	if !strings.Contains(serialized, `"browserTools"`) || !strings.Contains(serialized, `"invocation_timeout":"2m30s"`) {
+		t.Fatalf("normalized manifest omitted browser configuration: %s", serialized)
+	}
+	if !strings.Contains(serialized, `"ws_endpoint":"ws://127.0.0.1:9222/%3Credacted%3E"`) {
+		t.Fatalf("normalized manifest did not redact browser websocket path: %s", serialized)
+	}
+}
+
+// fixtureParticipant returns the indexed participant object of a
+// validManifestData document. The fixture shape is fixed by this file, so a
+// mismatch is a test programming error.
+func fixtureParticipant(document map[string]any, index int) map[string]any {
+	participants, ok := document["participants"].([]any)
+	if !ok {
+		panic("manifest fixture participants is not a list")
+	}
+	participant, ok := participants[index].(map[string]any)
+	if !ok {
+		panic("manifest fixture participant is not an object")
+	}
+	return participant
+}
+
+// withRoomField returns a manifest mutation that sets one room field.
+func withRoomField(key string, value any) func(map[string]any) {
+	return func(document map[string]any) {
+		room, ok := document["room"].(map[string]any)
+		if !ok {
+			panic("manifest fixture room is not an object")
+		}
+		room[key] = value
+	}
+}
+
+// withParticipantField returns a manifest mutation that sets one field on the
+// indexed participant.
+func withParticipantField(index int, key string, value any) func(map[string]any) {
+	return func(document map[string]any) {
+		fixtureParticipant(document, index)[key] = value
+	}
+}
+
+// withoutParticipantField returns a manifest mutation that deletes one field
+// from the indexed participant.
+func withoutParticipantField(index int, key string) func(map[string]any) {
+	return func(document map[string]any) {
+		delete(fixtureParticipant(document, index), key)
+	}
 }

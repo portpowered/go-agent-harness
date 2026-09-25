@@ -137,92 +137,70 @@ func TestParseManifest_RejectsMalformedShapeWithAttributedFields(t *testing.T) {
 			cause:  ErrMissingBound,
 		},
 		{
-			name: "missing bounds",
-			mutate: func(document map[string]any) {
-				document["room"] = map[string]any{}
-			},
-			field: "room",
-			cause: ErrMissingBound,
+			name:   "missing bounds",
+			mutate: func(document map[string]any) { document["room"] = map[string]any{} },
+			field:  "room",
+			cause:  ErrMissingBound,
 		},
 		{
-			name: "invalid turns",
-			mutate: func(document map[string]any) {
-				document["room"].(map[string]any)["max_turns"] = 0
-			},
-			field: "room.max_turns",
-			cause: ErrInvalidBound,
+			name:   "invalid turns",
+			mutate: withRoomField("max_turns", 0),
+			field:  "room.max_turns",
+			cause:  ErrInvalidBound,
 		},
 		{
-			name: "invalid duration",
-			mutate: func(document map[string]any) {
-				document["room"] = map[string]any{"max_duration": "not-a-duration"}
-			},
-			field: "room.max_duration",
-			cause: ErrInvalidBound,
+			name:   "invalid duration",
+			mutate: func(document map[string]any) { document["room"] = map[string]any{"max_duration": "not-a-duration"} },
+			field:  "room.max_duration",
+			cause:  ErrInvalidBound,
 		},
 		{
-			name: "too few participants",
-			mutate: func(document map[string]any) {
-				document["participants"] = []any{document["participants"].([]any)[0]}
-			},
-			field: "participants",
-			cause: ErrTooFewParticipants,
+			name:   "too few participants",
+			mutate: func(document map[string]any) { document["participants"] = []any{fixtureParticipant(document, 0)} },
+			field:  "participants",
+			cause:  ErrTooFewParticipants,
 		},
 		{
-			name: "empty participant ID",
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[0].(map[string]any)["id"] = "  "
-			},
-			field: "participants[0].id",
-			cause: ErrInvalidParticipant,
+			name:   "empty participant ID",
+			mutate: withParticipantField(0, "id", "  "),
+			field:  "participants[0].id",
+			cause:  ErrInvalidParticipant,
 		},
 		{
-			name: "duplicate participant ID",
-			mutate: func(document map[string]any) {
-				document["participants"].([]any)[1].(map[string]any)["id"] = "customer"
-			},
-			field: "participants[1].id",
-			cause: ErrDuplicateParticipant,
+			name:   "duplicate participant ID",
+			mutate: withParticipantField(1, "id", "customer"),
+			field:  "participants[1].id",
+			cause:  ErrDuplicateParticipant,
 		},
 		{
-			name: "missing prompt",
-			mutate: func(document map[string]any) {
-				delete(document["participants"].([]any)[1].(map[string]any), "system_prompt")
-			},
-			field: "participants[1].system_prompt",
-			cause: ErrInvalidParticipant,
+			name:   "missing prompt",
+			mutate: withoutParticipantField(1, "system_prompt"),
+			field:  "participants[1].system_prompt",
+			cause:  ErrInvalidParticipant,
 		},
 		{
-			name: "missing provider",
-			mutate: func(document map[string]any) {
-				delete(document["participants"].([]any)[1].(map[string]any), "provider")
-			},
-			field: "participants[1].provider",
-			cause: ErrInvalidParticipant,
+			name:   "missing provider",
+			mutate: withoutParticipantField(1, "provider"),
+			field:  "participants[1].provider",
+			cause:  ErrInvalidParticipant,
 		},
 		{
-			name: "missing model",
-			mutate: func(document map[string]any) {
-				delete(document["participants"].([]any)[1].(map[string]any), "model")
-			},
-			field: "participants[1].model",
-			cause: ErrInvalidParticipant,
+			name:   "missing model",
+			mutate: withoutParticipantField(1, "model"),
+			field:  "participants[1].model",
+			cause:  ErrInvalidParticipant,
 		},
 		{
-			name: "missing credential name",
-			mutate: func(document map[string]any) {
-				delete(document["participants"].([]any)[1].(map[string]any), "api_key_env")
-			},
-			field: "participants[1].api_key_env",
-			cause: ErrCredential,
+			name:   "missing credential name",
+			mutate: withoutParticipantField(1, "api_key_env"),
+			field:  "participants[1].api_key_env",
+			cause:  ErrCredential,
 		},
 		{
-			name: "missing tools list",
-			mutate: func(document map[string]any) {
-				delete(document["participants"].([]any)[1].(map[string]any), "tools")
-			},
-			field: "participants[1].tools",
-			cause: ErrInvalidParticipant,
+			name:   "missing tools list",
+			mutate: withoutParticipantField(1, "tools"),
+			field:  "participants[1].tools",
+			cause:  ErrInvalidParticipant,
 		},
 	}
 	for _, test := range tests {

@@ -67,12 +67,10 @@ func (o *observerState) prepareObservedResponse(msg messages.StreamMessage) (str
 		}
 		return responseLifecycleID, newResponseBoundary, acknowledgementResponse, true
 	}
-	if msg.Type == messages.StreamTypeSessionClose {
-		// Keep the active response owner while draining already-queued provider
-		// output. A transport can deliver SESSION.CLOSE before the response's
-		// terminal event; clearing the owner here would make that terminal look
-		// like a new response and discard its output ledger.
-	}
+	// On SESSION.CLOSE, keep the active response owner while draining
+	// already-queued provider output. A transport can deliver SESSION.CLOSE
+	// before the response's terminal event; clearing the owner here would make
+	// that terminal look like a new response and discard its output ledger.
 	if msg.Type != messages.StreamTypeSessionClose && responseScopedStreamType(msg.Type) && !o.responseEventBelongsToActive(msgResponseID) {
 		return "", false, false, false
 	}
