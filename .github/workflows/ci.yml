@@ -39,7 +39,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -64,8 +63,45 @@ jobs:
         if: always()
         run: make check-ci-test-partition
 
-      - name: Verify service architecture and size budgets
+      - name: Save Go cache
         if: always()
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
+  # The architecture gate type-loads every module from compiled export data,
+  # so it keeps its own build cache instead of adding its cold compile to the
+  # gates job. It needs full history for the baseline merge-base check.
+  static-architecture:
+    name: CI (static architecture)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
+
+      - name: Set up Go
+        id: go
+        uses: ./.github/actions/go-cache
+        with:
+          cache-name: static-architecture
+
+      - name: Verify service architecture and size budgets
         run: make architecture-size-check
 
       - name: Save Go cache
@@ -116,21 +152,31 @@ jobs:
             runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=agent-cli
-          - lane: windows libraries
-            cache: static-lint-windows-libraries
+          - lane: windows runtime
+            cache: static-lint-windows-runtime
             runner: ubuntu-latest
             fetch-depth: 1
-            command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=libraries
+            command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=runtime
+          - lane: windows support
+            cache: static-lint-windows-support
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=support
           - lane: darwin agent-cli
             cache: static-lint-darwin-agent-cli
             runner: ubuntu-latest
             fetch-depth: 1
             command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli
-          - lane: darwin libraries
-            cache: static-lint-darwin-libraries
+          - lane: darwin runtime
+            cache: static-lint-darwin-runtime
             runner: ubuntu-latest
             fetch-depth: 1
-            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=libraries
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=runtime
+          - lane: darwin support
+            cache: static-lint-darwin-support
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support
           # cgo-constrained darwin files (CoreAudio capture, display
           # permission) need the macOS SDK.
           - lane: darwin cgo
@@ -190,6 +236,7 @@ jobs:
     name: CI (static)
     needs:
       - static-gates
+      - static-architecture
       - static-lint
     if: always()
     runs-on: ubuntu-latest
@@ -199,9 +246,11 @@ jobs:
       - name: Verify static shards completed
         env:
           GATES_RESULT: ${{ needs.static-gates.result }}
+          ARCHITECTURE_RESULT: ${{ needs.static-architecture.result }}
           LINT_RESULT: ${{ needs.static-lint.result }}
         run: |
           test "$GATES_RESULT" = success
+          test "$ARCHITECTURE_RESULT" = success
           test "$LINT_RESULT" = success
 
   # Fast unit-level checks and the agent-cli link gate. No analyzer binaries
