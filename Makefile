@@ -363,7 +363,9 @@ coverage-ci-agent-cli: ## Write the hermetic agent-cli profile(s) for AGENT_CLI_
 	@$(MAKE) coverage COVERAGE_MODULES=agent-cli COVERAGE_INCLUDE_EMBEDDING=0 COVERAGE_RUN_GATE=0 AGENT_CLI_COVERAGE_SHARD="$(AGENT_CLI_COVERAGE_SHARD)"
 
 # unit writes coverage/agent-cli.out; integration-K writes
-# coverage/agent-cli-integration-K.out; all runs every part concurrently.
+# coverage/agent-cli-integration-K.out; all runs the unit packages and then
+# the integration shards (coverage-instrumented runs are too heavy to overlap
+# on a workstation without disturbing timing-bound tests).
 coverage-agent-cli-shard:
 	@set -euo pipefail; \
 	mkdir -p "$(COVERAGE_DIR)"; \
@@ -380,10 +382,7 @@ coverage-agent-cli-shard:
 	}; \
 	echo "==> coverage agent-cli shard $$shard"; \
 	case "$$shard" in \
-		all) \
-			run_unit & unit_pid=$$!; \
-			integration_status=0; run_integration || integration_status=$$?; \
-			wait "$$unit_pid"; exit "$$integration_status" ;; \
+		all) run_unit; run_integration ;; \
 		unit) run_unit ;; \
 		integration-*) run_integration "$${shard#integration-}" ;; \
 		*) echo "AGENT_CLI_COVERAGE_SHARD must be all, unit, or integration-K, got $$shard" >&2; exit 2 ;; \
