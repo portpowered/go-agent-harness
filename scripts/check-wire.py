@@ -2,6 +2,7 @@
 """Discover, regenerate, and verify every Wire injector in workspace modules."""
 
 import argparse
+import concurrent.futures
 import difflib
 import os
 from pathlib import Path
@@ -81,9 +82,18 @@ def check(root, modules, go):
     entries = discovered_packages(root, modules)
     before = {entry: (root / entry / "wire_gen.go").read_bytes() for entry in entries}
     env = dict(os.environ, GOWORK="off")
-    for entry in entries:
+
+    def regenerate(entry):
         print(f"==> Wire {entry}", flush=True)
         subprocess.run([go, "generate", "."], cwd=root / entry, env=env, check=True)
+
+    # Each package regenerates independently; Wire's package loading is
+    # mostly single-threaded, so run them concurrently. Entries are sorted, so
+    # the largest graph (agent-cli) starts first. list() re-raises the first
+    # generator failure after every started run has finished.
+    workers = max(1, min(len(entries), os.cpu_count() or 1))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(regenerate, entries))
     if discovered_packages(root, modules) != entries:
         raise ValueError("Wire package inventory changed during regeneration")
     changed = False
