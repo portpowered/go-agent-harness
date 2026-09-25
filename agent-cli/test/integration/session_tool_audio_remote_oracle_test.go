@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -384,4 +385,34 @@ func corruptRemoteToolAudioSample(index int) func([]int16) []int16 {
 		samples[index] = -samples[index]
 		return samples
 	}
+}
+
+// remoteToolAudioDrainInterval advances the manual device clock one render
+// quantum per millisecond (30x real time), the cadence the high-rate
+// regressions already prove the agent sustains.
+const remoteToolAudioDrainInterval = time.Millisecond
+
+// drainCadence is the manual clock interval used once the provider has sent
+// the complete topology. Every response boundary and tool continuation still
+// happens at the scenario's device cadence; only the final drain of
+// already-accepted PCM may run on the accelerated clock, and only scenarios
+// whose oracle ignores device underflow silence set drainInterval.
+func (c remoteToolAudioCase) drainCadence(callbackInterval time.Duration) time.Duration {
+	if c.drainInterval > 0 {
+		return c.drainInterval
+	}
+	return callbackInterval
+}
+
+func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
+	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
+}
+
+func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) string {
+	for index := len(trace) - 1; index >= 0; index-- {
+		if tap == "" || trace[index].Tap == tap {
+			return fmt.Sprintf("%+v", trace[index])
+		}
+	}
+	return "none"
 }

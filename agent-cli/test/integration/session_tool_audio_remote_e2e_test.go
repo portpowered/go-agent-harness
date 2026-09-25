@@ -51,18 +51,8 @@ type remoteToolAudioCase struct {
 	providerClose   bool
 	timingEvidence  bool
 	holdToneControl bool
-	// drainInterval, when set, replaces the callback interval once the
-	// provider has sent the complete topology. Every response boundary and
-	// tool continuation still happens at the scenario's device cadence; only
-	// the final drain of already-accepted PCM runs on the accelerated clock.
-	// Only scenarios whose oracle ignores device underflow silence use it.
-	drainInterval time.Duration
+	drainInterval   time.Duration // see remoteToolAudioCase.drainCadence
 }
-
-// remoteToolAudioDrainInterval advances the manual device clock one render
-// quantum per millisecond (30x real time), the cadence the high-rate
-// regressions already prove the agent sustains.
-const remoteToolAudioDrainInterval = time.Millisecond
 
 // TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM reproduces the live
 // provider timing contract: response.done makes a finite session return while
@@ -133,9 +123,8 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 //
 // The shipped session command talks to a real local WebSocket provider and a
 // separately built fixture-controlled tool executor. Playback crosses the
-// audio-device-server HTTP boundary while its manual callback clock advances:
-// at the delivery's device cadence until the provider has sent every
-// response, then at remoteToolAudioDrainInterval while the queued tail drains. The
+// audio-device-server HTTP boundary; its manual clock follows each delivery's
+// cadence until every response is sent, then drains the queued tail. The
 // assertion sees only network protocol observations, process-owned tool
 // observations, and device-rendered PCM; it does not inspect a session queue,
 // sink generation, or any other playback implementation state.
@@ -146,13 +135,11 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			name:            "test45",
 			responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
 			toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
-			drainInterval:   remoteToolAudioDrainInterval,
 		},
 		{
 			name:            "test46",
 			responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
 			toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
-			drainInterval:   remoteToolAudioDrainInterval,
 		},
 		{
 			// Responses 9-14 are the test47 segment with the same long
@@ -161,7 +148,6 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			responseSamples: []int{50400, 0, 0, 0, 0, 96000},
 			toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true},
 			healthyControl:  true,
-			drainInterval:   remoteToolAudioDrainInterval,
 		},
 		{
 			// Responses 8-13 are the equivalent healthy test48 chain.
@@ -169,10 +155,10 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			responseSamples: []int{82800, 0, 0, 0, 0, 98400},
 			toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true},
 			healthyControl:  true,
-			drainInterval:   remoteToolAudioDrainInterval,
 		},
 	}
 	for _, testCase := range cases {
+		testCase.drainInterval = remoteToolAudioDrainInterval
 		for _, delivery := range []struct {
 			name             string
 			deltaDelay       time.Duration
@@ -365,11 +351,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
 		}
 	} else {
-		drainInterval := callbackInterval
-		if testCase.drainInterval > 0 {
-			drainInterval = testCase.drainInterval
-		}
-		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), drainInterval, &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
+		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), testCase.drainCadence(callbackInterval), &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
 	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {
@@ -537,10 +519,6 @@ func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-cha
 	}
 }
 
-func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
-	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
-}
-
 // Timeout diagnostics stay on the scenario path so a failure preserves the
 // bounded device, provider, child, and callback evidence needed to repair it.
 // Keep this evidence beside the scenario's deadline and cleanup logic.
@@ -573,15 +551,6 @@ func remoteToolAudioFailureEvidence(ctx context.Context, endpoint string, provid
 		}
 	}
 	return fmt.Sprintf("remote timeout evidence: snapshot_error=%v rendered_pcm=%d nonzero_pcm=%d expected_pcm=%d final_marker=%t playback={queued:%d dropped:%d overflow:%d discarded:%d discard_events:%d callbacks:%d rendered:%d} capture={queued:%d captured:%d dropped:%d} trace_last=%s trace_render=%s trace_capture=%s expected_tool_calls=%d provider=%+v child=%s stderr=%q callback_advances=%d", snapshotErr, len(snapshot.RenderedSamples), len(got), len(want), remoteToolAudioHasSuffix(got, finalMarker), snapshot.Playback.QueuedSamples, snapshot.Playback.DroppedSamples, snapshot.Playback.OverflowEvents, snapshot.Playback.DiscardedSamples, snapshot.Playback.DiscardEvents, snapshot.Playback.CallbackCount, snapshot.Playback.RenderedSamples, snapshot.Capture.QueuedSamples, snapshot.Capture.CapturedSamples, snapshot.Capture.DroppedSamples, lastTrace, lastRenderTrace, lastCaptureTrace, expectedToolCalls, provider.Snapshot(), childStatus, stderrText, callbackAdvances.Load())
-}
-
-func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) string {
-	for index := len(trace) - 1; index >= 0; index-- {
-		if tap == "" || trace[index].Tap == tap {
-			return fmt.Sprintf("%+v", trace[index])
-		}
-	}
-	return "none"
 }
 
 // trimRemoteToolAudioEdgeSilence removes only callbacks before playback began
