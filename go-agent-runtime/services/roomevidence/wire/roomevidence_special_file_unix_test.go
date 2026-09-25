@@ -3,11 +3,8 @@
 package wire
 
 import (
-	"context"
-	"encoding/base64"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -17,44 +14,18 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 )
 
+// TestServiceRejectsFIFOReplayFiles runs admission in-process against a FIFO.
+// Every reader rejects non-regular files by Lstat before opening them, so each
+// call must return promptly. A regression would block in open(2); the bounded
+// wait reports it and then releases the reader by opening the write end.
 func TestServiceRejectsFIFOReplayFiles(t *testing.T) {
-	if payload, ok := fifoReplayChildPayload(os.Args); ok {
-		t.Run(payload, func(t *testing.T) {
-			decoded, err := base64.RawURLEncoding.DecodeString(payload)
-			if err != nil {
-				t.Fatalf("decode FIFO child arguments: %v", err)
-			}
-			arguments := strings.Split(string(decoded), "\x00")
-			if len(arguments) != 3 {
-				t.Fatalf("FIFO child arguments = %d values, want mode, root and path", len(arguments))
-			}
-			runFIFOReplayChild(t, arguments[0], arguments[1], arguments[2])
-		})
-		return
-	}
+	t.Parallel()
 	for _, mode := range []string{"manifest", "artifact", "replay"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			assertFIFOReplayMode(t, mode)
 		})
 	}
-}
-
-func fifoReplayChildPayload(arguments []string) (string, bool) {
-	for index, argument := range arguments {
-		var pattern string
-		switch {
-		case argument == "-test.run" && index+1 < len(arguments):
-			pattern = arguments[index+1]
-		case strings.HasPrefix(argument, "-test.run="):
-			pattern = strings.TrimPrefix(argument, "-test.run=")
-		}
-		const prefix = "^TestServiceRejectsFIFOReplayFiles/"
-		if strings.HasPrefix(pattern, prefix) && strings.HasSuffix(pattern, "$") {
-			payload := strings.TrimSuffix(strings.TrimPrefix(pattern, prefix), "$")
-			return payload, payload != ""
-		}
-	}
-	return "", false
 }
 
 func assertFIFOReplayMode(t *testing.T, mode string) {
@@ -70,7 +41,7 @@ func assertFIFOReplayMode(t *testing.T, mode string) {
 		}
 	})
 	fifoPath = configureFIFOReplay(t, mode, destination, recorder, fifoPath)
-	assertFIFOChildFailsClosed(t, mode, destination, fifoPath)
+	assertFIFOLoadFailsClosed(t, mode, destination, fifoPath)
 }
 
 func configureFIFOReplay(t *testing.T, mode, destination string, recorder roomevidence.Recorder, fifoPath string) string {
@@ -82,7 +53,7 @@ func configureFIFOReplay(t *testing.T, mode, destination string, recorder roomev
 		path := filepath.Join(destination, filepath.FromSlash(recorder.Artifacts("speaker").SentPCM))
 		return replaceWithFIFO(t, fifoPath, path)
 	case "replay":
-		// Keep the manifest valid so the child reaches the bounded replay reader.
+		// Keep the manifest valid so the load reaches the bounded replay reader.
 		return fifoPath
 	default:
 		t.Fatalf("unknown FIFO mode %q", mode)
@@ -101,49 +72,55 @@ func replaceWithFIFO(t *testing.T, fifoPath, path string) string {
 	return path
 }
 
-func assertFIFOChildFailsClosed(t *testing.T, mode, destination, fifoPath string) {
+func assertFIFOLoadFailsClosed(t *testing.T, mode, destination, fifoPath string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	payload := base64.RawURLEncoding.EncodeToString([]byte(strings.Join([]string{mode, destination, fifoPath}, "\x00")))
-	selector := "^TestServiceRejectsFIFOReplayFiles/" + payload + "$"
-	command := exec.CommandContext(ctx, os.Args[0], "-test.run", selector)
-	output, err := command.CombinedOutput()
-	if ctx.Err() == context.DeadlineExceeded {
+	result := make(chan error, 1)
+	go func() { result <- loadFIFOReplay(mode, destination, fifoPath) }()
+	var err error
+	select {
+	case err = <-result:
+	case <-time.After(2 * time.Second):
+		// Unblock a reader stuck opening the FIFO before failing the test.
+		if writer, openErr := os.OpenFile(fifoPath, os.O_WRONLY|syscall.O_NONBLOCK, 0); openErr == nil {
+			t.Logf("release FIFO writer: %v", writer.Close())
+		}
 		t.Fatalf("FIFO %s handling exceeded bounded deadline", mode)
 	}
-	if err != nil {
-		t.Fatalf("FIFO %s handling failed: %v\n%s", mode, err, output)
-	}
-}
-
-func runFIFOReplayChild(t *testing.T, mode, destination, fifoPath string) {
-	service := newTestService()
-	var err error
-	switch mode {
-	case "manifest", "artifact":
-		_, err = service.LoadPlan(destination)
-	case "replay":
-		plan, planErr := service.LoadPlan(destination)
-		if planErr != nil {
-			t.Fatalf("admit intact replay bundle: %v", planErr)
-		}
-		for participantIndex := range plan.Participants {
-			for artifactIndex := range plan.Participants[participantIndex].Artifacts {
-				artifact := &plan.Participants[participantIndex].Artifacts[artifactIndex]
-				if artifact.Role == "sent_pcm" {
-					artifact.AbsolutePath = fifoPath
-				}
-			}
-		}
-		_, err = service.Load(plan)
-	default:
-		t.Fatalf("unknown FIFO test mode %q", mode)
+	var setup fifoSetupError
+	if errors.As(err, &setup) {
+		t.Fatalf("admit intact replay bundle: %v", setup.err)
 	}
 	if err == nil || (!errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) && !errors.Is(err, roomevidence.ErrRoomReplayBundleIncomplete)) {
 		t.Fatalf("FIFO %s error = %v, want a public replay failure", mode, err)
 	}
-	if err != nil && strings.Contains(err.Error(), fifoPath) {
+	if strings.Contains(err.Error(), fifoPath) {
 		t.Fatalf("FIFO %s error leaked path %q: %v", mode, fifoPath, err)
 	}
+}
+
+// fifoSetupError marks a failure to admit the intact bundle before the FIFO
+// is reached.
+type fifoSetupError struct{ err error }
+
+func (e fifoSetupError) Error() string { return e.err.Error() }
+
+func loadFIFOReplay(mode, destination, fifoPath string) error {
+	service := newTestService()
+	plan, err := service.LoadPlan(destination)
+	if mode != "replay" {
+		return err
+	}
+	if err != nil {
+		return fifoSetupError{err: err}
+	}
+	for participantIndex := range plan.Participants {
+		for artifactIndex := range plan.Participants[participantIndex].Artifacts {
+			artifact := &plan.Participants[participantIndex].Artifacts[artifactIndex]
+			if artifact.Role == "sent_pcm" {
+				artifact.AbsolutePath = fifoPath
+			}
+		}
+	}
+	_, err = service.Load(plan)
+	return err
 }
