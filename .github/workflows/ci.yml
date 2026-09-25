@@ -532,10 +532,12 @@ jobs:
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  # One macOS runner owns every macOS check: the arm64 agent build is shared
-  # by the release inspection and the WebMCP proof, and the runner is set up
-  # once. `webmcp-chrome` below keeps the required "CI (WebMCP Chrome)" check
-  # name and reports the WebMCP step's own outcome.
+  # The macOS audio units, the darwin cross-build release inspection and
+  # the GoReleaser check. The WebMCP Chrome proof runs on its own macOS
+  # runner below: in one job it ran after the cross-build and put the job
+  # over three minutes with a cold cache, and the two share no build outputs
+  # (the cross-build sets CGO_CFLAGS per architecture, so its cgo packages
+  # never match the native build the WebMCP test links).
   macos-audio-release:
     name: CI (macOS audio release)
     runs-on: macos-14
@@ -544,8 +546,6 @@ jobs:
     permissions:
       contents: read
       actions: write
-    outputs:
-      webmcp: ${{ steps.webmcp.outcome }}
 
     steps:
       - name: Check out repository
@@ -597,11 +597,44 @@ jobs:
           fi
           "$goreleaser_dir/goreleaser" check --config .goreleaser.yaml
 
-      # The locked WebMCP Chrome artifact is mac-arm64. Runs even when an
-      # audio step failed so its required check always has a real outcome.
+      - name: Save Go cache
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
+  # Keep this behavioral check required alongside hermetic coverage so skipped
+  # opt-in coverage cannot make a pull request appear complete. The locked
+  # WebMCP Chrome artifact is mac-arm64. The test runs in the default build
+  # (no build tag), which is where it and every helper it uses live.
+  webmcp-chrome:
+    name: CI (WebMCP Chrome)
+    runs-on: macos-14
+    timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
+
+      - name: Set up Go
+        id: go
+        uses: ./.github/actions/go-cache
+        with:
+          cache-name: macos-webmcp
+
       - name: Run production-binary cross-process cancellation acceptance
-        id: webmcp
-        if: ${{ !cancelled() && steps.go.outcome == 'success' }}
         working-directory: agent-cli
         env:
           WEBMCP_CLI_CHROME_INTEGRATION: "1"
@@ -614,22 +647,6 @@ jobs:
           matched-key: ${{ steps.go.outputs.matched-key }}
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
-
-  # Keep this behavioral check required alongside hermetic coverage so skipped
-  # opt-in coverage cannot make a pull request appear complete. It runs on the
-  # macOS audio release runner and reports that step's outcome here.
-  webmcp-chrome:
-    name: CI (WebMCP Chrome)
-    needs: macos-audio-release
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Verify WebMCP Chrome acceptance passed
-        env:
-          WEBMCP_RESULT: ${{ needs.macos-audio-release.outputs.webmcp }}
-        run: test "$WEBMCP_RESULT" = success
 
   windows-audio-portable:
     name: CI (Windows audio portable)
