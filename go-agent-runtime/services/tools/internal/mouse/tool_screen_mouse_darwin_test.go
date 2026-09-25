@@ -5,8 +5,8 @@ package mouse
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 	"image"
 	"image/color"
 	"image/png"
@@ -17,49 +17,37 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
 
-func writeDarwinCommand(t *testing.T, dir, name, body string) {
+func darwinFixturePNG(t *testing.T) []byte {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nset -eu\n"+body+"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func fakeDarwinDesktop(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	fixture := filepath.Join(dir, "fixture.png")
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	img.Set(0, 0, color.RGBA{R: 255, A: 255})
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(fixture, buf.Bytes(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GO_AGENT_HARNESS_SCREEN_FIXTURE", fixture)
-	writeDarwinCommand(t, dir, "system_profiler", `printf 'Resolution: 2x2\nResolution: 2x2\n'`)
-	writeDarwinCommand(t, dir, "screencapture", `last=""; for arg in "$@"; do last="$arg"; done; cp "$GO_AGENT_HARNESS_SCREEN_FIXTURE" "$last"`)
-	writeDarwinCommand(t, dir, "cliclick", `printf '%s\n' "$*" >> "$GO_AGENT_HARNESS_CLICLICK_LOG"`)
-	t.Setenv("GO_AGENT_HARNESS_CLICLICK_LOG", filepath.Join(dir, "cliclick.log"))
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return dir
+	return buf.Bytes()
 }
 
-func assertDarwinCliclickLog(t *testing.T, path string, want []string) {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gotText := strings.TrimSpace(string(data))
-	wantText := strings.Join(want, "\n")
-	if gotText != wantText {
-		t.Fatalf("cliclick log = %q, want %q", gotText, wantText)
+// fakeDarwinDisplayProcess answers system_profiler with two 2x2 displays and
+// writes the fixture PNG to the screencapture output path.
+func fakeDarwinDisplayProcess(fixture []byte) display.DisplayProcessAdapter {
+	return display.DisplayProcessAdapter{
+		RunFunc: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			switch name {
+			case "system_profiler":
+				return []byte("Resolution: 2x2\nResolution: 2x2\n"), nil
+			case "screencapture":
+				return nil, os.WriteFile(args[len(args)-1], fixture, 0o600)
+			default:
+				return nil, fmt.Errorf("unexpected display command %q", name)
+			}
+		},
 	}
 }
 
@@ -74,20 +62,20 @@ func expectedDarwinDragLog(fromX, fromY, toX, toY int) []string {
 	return append(lines, fmt.Sprintf("r:%d,%d", toX, toY))
 }
 
-func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
-	dir := fakeDarwinDesktop(t)
-	logPath := filepath.Join(dir, "cliclick.log")
-	tool := display.NewScreenToolWithDisplaySurface(display.NewHostDisplaySurfaceWithOptions(display.HostDisplaySurfaceOptions{
+func TestS12DarwinFakeScreenOperations(t *testing.T) {
+	surface := display.NewHostDisplaySurfaceWithOptions(display.HostDisplaySurfaceOptions{
+		Process: fakeDarwinDisplayProcess(darwinFixturePNG(t)),
 		PermissionChecker: display.DisplayPermissionCheckerFunc(func(context.Context) (display.DisplayPermission, error) {
 			return display.DisplayPermission{State: display.DisplayPermissionGranted}, nil
 		}),
-	}))
-	if got := screenDisplayCount(); got != 2 {
-		t.Fatalf("screenDisplayCount = %d, want 2", got)
+	})
+	if got, err := surface.DisplayCount(context.Background()); err != nil || got != 2 {
+		t.Fatalf("DisplayCount = %d, %v; want 2", got, err)
 	}
-	if got := screenDisplayBounds(1); got.Dx() != 2 || got.Dy() != 2 {
-		t.Fatalf("screenDisplayBounds = %v", got)
+	if got, err := surface.Bounds(context.Background(), 1); err != nil || got.Dx() != 2 || got.Dy() != 2 {
+		t.Fatalf("Bounds = %v, %v; want 2x2", got, err)
 	}
+	tool := display.NewScreenToolWithDisplaySurface(surface)
 	msgs, err := tool.Execute(context.Background(), map[string]any{"display": float64(1)})
 	if err != nil {
 		t.Fatal(err)
@@ -105,38 +93,80 @@ func TestS12DarwinFakeScreenAndMouseOperations(t *testing.T) {
 	if !ok || imagePart.MediaType != "image/gif" {
 		t.Fatalf("recording image part = %#v, want GIF", msgs[0].ContentParts[1])
 	}
-	mousetool := NewMouseTool()
-	for _, tt := range []struct {
-		name    string
-		args    map[string]any
-		want    string
-		wantLog []string
-	}{
-		{"move", map[string]any{"action": "move", "x": float64(1), "y": float64(2)}, "Mouse moved to (1, 2)", []string{"m:1,2"}},
-		{"click", map[string]any{"action": "click", "x": float64(1), "y": float64(2), "button": "right"}, "right click at (1, 2)", []string{"rc:1,2"}},
-		{"double", map[string]any{"action": "double_click", "x": float64(1), "y": float64(2), "button": "middle"}, "middle double-click at (1, 2)", []string{"mC:1,2"}},
-		{"down", map[string]any{"action": "down", "x": float64(1), "y": float64(2)}, "left button held at (1, 2)", []string{"p:1,2"}},
-		{"up", map[string]any{"action": "up", "x": float64(1), "y": float64(2)}, "left button released at (1, 2)", []string{"r:1,2"}},
-		{"drag", map[string]any{"action": "drag", "x": float64(1), "y": float64(2), "to_x": float64(3), "to_y": float64(4)}, "left drag from (1, 2) to (3, 4)", expectedDarwinDragLog(1, 2, 3, 4)},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := os.WriteFile(logPath, nil, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			msgs, err := mousetool.Execute(context.Background(), tt.args)
-			if err != nil || len(msgs) != 1 || msgs[0].TextContent() != tt.want {
-				t.Fatalf("mouse result = %#v, err = %v; want %q", msgs, err, tt.want)
-			}
-			assertDarwinCliclickLog(t, logPath, tt.wantLog)
-		})
-	}
 
-	bad := filepath.Join(dir, "bad.png")
+	bad := filepath.Join(t.TempDir(), "bad.png")
 	if err := os.WriteFile(bad, []byte("bad"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := loadPNGasRGBA(bad); err == nil || !strings.Contains(err.Error(), "decode screenshot") {
 		t.Fatalf("invalid PNG error = %v", err)
+	}
+}
+
+func TestS12DarwinFakeMouseOperations(t *testing.T) {
+	dragSleeps := append([]time.Duration{mouseDragPause}, repeatDuration(mouseDragStepPause, 20)...)
+	for _, tt := range []struct {
+		name       string
+		args       map[string]any
+		want       string
+		wantLog    []string
+		wantSleeps []time.Duration
+	}{
+		{"move", map[string]any{"action": "move", "x": float64(1), "y": float64(2)}, "Mouse moved to (1, 2)", []string{"m:1,2"}, nil},
+		{"click", map[string]any{"action": "click", "x": float64(1), "y": float64(2), "button": "right"}, "right click at (1, 2)", []string{"rc:1,2"}, nil},
+		{"double", map[string]any{"action": "double_click", "x": float64(1), "y": float64(2), "button": "middle"}, "middle double-click at (1, 2)", []string{"mC:1,2"}, nil},
+		{"down", map[string]any{"action": "down", "x": float64(1), "y": float64(2)}, "left button held at (1, 2)", []string{"p:1,2"}, nil},
+		{"up", map[string]any{"action": "up", "x": float64(1), "y": float64(2)}, "left button released at (1, 2)", []string{"r:1,2"}, nil},
+		{"drag", map[string]any{"action": "drag", "x": float64(1), "y": float64(2), "to_x": float64(3), "to_y": float64(4)}, "left drag from (1, 2) to (3, 4)", expectedDarwinDragLog(1, 2, 3, 4), dragSleeps},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			process := &fakeMouseProcess{}
+			var sleeps recordedSleeps
+			tool := NewMouseToolWithOptions(MouseToolOptions{Process: process, Sleep: sleeps.sleep})
+			msgs, err := tool.Execute(context.Background(), tt.args)
+			if err != nil || len(msgs) != 1 || msgs[0].TextContent() != tt.want {
+				t.Fatalf("mouse result = %#v, err = %v; want %q", msgs, err, tt.want)
+			}
+			assertMouseCalls(t, process, "cliclick", tt.wantLog)
+			if fmt.Sprint([]time.Duration(sleeps)) != fmt.Sprint(tt.wantSleeps) {
+				t.Fatalf("sleeps = %v, want %v", sleeps, tt.wantSleeps)
+			}
+		})
+	}
+}
+
+func repeatDuration(duration time.Duration, count int) []time.Duration {
+	durations := make([]time.Duration, count)
+	for i := range durations {
+		durations[i] = duration
+	}
+	return durations
+}
+
+// TestS12DarwinMouseToolRunsCliclickSubprocess keeps the production process
+// runner covered end to end with one fake cliclick executable on PATH.
+func TestS12DarwinMouseToolRunsCliclickSubprocess(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "cliclick.log")
+	writeFakeCommand(t, dir, "cliclick", `printf '%s\n' "$*" >> "$GO_AGENT_HARNESS_CLICLICK_LOG"`)
+	t.Setenv("GO_AGENT_HARNESS_CLICLICK_LOG", logPath)
+	t.Setenv("PATH", dir)
+	msgs, err := NewMouseTool().Execute(context.Background(), map[string]any{"action": "move", "x": float64(1), "y": float64(2)})
+	if err != nil || len(msgs) != 1 || msgs[0].TextContent() != "Mouse moved to (1, 2)" {
+		t.Fatalf("mouse result = %#v, err = %v", msgs, err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "m:1,2" {
+		t.Fatalf("cliclick log = %q, want %q", got, "m:1,2")
+	}
+
+	t.Setenv("PATH", t.TempDir())
+	if err := newMouseDriver(MouseToolOptions{}).move(1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
+		t.Fatalf("missing cliclick error = %v", err)
 	}
 }
 
@@ -176,15 +206,21 @@ func TestDarwinHostDisplaySurfaceProbeUsesOneMetadataQuery(t *testing.T) {
 }
 
 func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
+	process := &fakeMouseProcess{}
+	var sleeps recordedSleeps
+	driver := newFakeMouseDriver(process, &sleeps)
 	for _, call := range []func() error{
-		func() error { return mouseButtonDown(1, 2, "right") },
-		func() error { return mouseButtonUp(1, 2, "middle") },
-		func() error { return mouseDrag(1, 2, 3, 4, "right") },
+		func() error { return driver.buttonDown(1, 2, "right") },
+		func() error { return driver.buttonUp(1, 2, "middle") },
+		func() error { return driver.drag(1, 2, 3, 4, "right") },
 	} {
 		err := call()
 		if err == nil || !strings.Contains(err.Error(), "only supports") {
 			t.Fatalf("unsupported button error = %v", err)
 		}
+	}
+	if len(process.calls) != 0 {
+		t.Fatalf("unsupported buttons ran cliclick: %q", process.calls)
 	}
 	if cliclickAction("left", "c") != "c" || cliclickAction("right", "c") != "rc" || cliclickAction("middle", "c") != "mc" || cliclickAction("other", "c") != "c" {
 		t.Fatal("cliclick button mapping is incorrect")
@@ -192,28 +228,36 @@ func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
 }
 
 func TestS4DarwinCliclickErrors(t *testing.T) {
-	failDir := t.TempDir()
-	writeDarwinCommand(t, failDir, "cliclick", `printf 'command failed\n' >&2; exit 7`)
-	t.Setenv("PATH", failDir)
-	if err := mouseClick(1, 2, "left"); err == nil || !strings.Contains(err.Error(), "cliclick [c:1,2]") || !strings.Contains(err.Error(), "command failed") {
+	var sleeps recordedSleeps
+	failing := &fakeMouseProcess{run: func([]string) ([]byte, error) {
+		return []byte("command failed\n"), errors.New("exit status 7")
+	}}
+	driver := newFakeMouseDriver(failing, &sleeps)
+	if err := driver.click(1, 2, "left"); err == nil || !strings.Contains(err.Error(), "cliclick [c:1,2]") || !strings.Contains(err.Error(), "command failed") {
 		t.Fatalf("cliclick command error = %v", err)
 	}
-	if err := mouseDrag(1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag start") {
+	if err := driver.drag(1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag start") {
 		t.Fatalf("drag start error = %v", err)
 	}
 
-	stepDir := t.TempDir()
-	stepLog := filepath.Join(stepDir, "cliclick.log")
-	t.Setenv("GO_AGENT_HARNESS_CLICLICK_LOG", stepLog)
-	writeDarwinCommand(t, stepDir, "cliclick", `printf '%s\n' "$*" >> "$GO_AGENT_HARNESS_CLICLICK_LOG"; case "$1" in p:*) exit 0 ;; *) exit 7 ;; esac`)
-	t.Setenv("PATH", stepDir)
-	if err := mouseDrag(1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag step 1") {
+	stepFailure := &fakeMouseProcess{run: func(args []string) ([]byte, error) {
+		if strings.HasPrefix(args[0], "p:") {
+			return nil, nil
+		}
+		return nil, errors.New("exit status 7")
+	}}
+	err := newFakeMouseDriver(stepFailure, &sleeps).drag(1, 2, 3, 4, "left")
+	if err == nil || !strings.Contains(err.Error(), "drag step 1") {
 		t.Fatalf("drag step error = %v", err)
 	}
+	assertMouseCalls(t, stepFailure, "cliclick", []string{"p:1,2", "m:1,2", "r:1,2"})
 
-	t.Setenv("PATH", t.TempDir())
-	if err := mouseMove(1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
+	missing := &fakeMouseProcess{run: func([]string) ([]byte, error) { return nil, helperNotFound("cliclick") }}
+	if err := newFakeMouseDriver(missing, &sleeps).move(1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
 		t.Fatalf("missing cliclick error = %v", err)
+	}
+	if sleeps.total() != mouseDragPause {
+		t.Fatalf("sleeps = %v, want only the drag press pause before the failing step", sleeps)
 	}
 }
 
@@ -255,11 +299,12 @@ func assertDarwinLiveMouse(t *testing.T) {
 	if err != nil {
 		t.Skipf("%s: unavailable capability: cursor position query (%v)", runtime.GOOS, err)
 	}
+	driver := newMouseDriver(MouseToolOptions{})
 	t.Cleanup(func() {
-		if err := mouseButtonUp(originalX, originalY, "left"); err != nil {
+		if err := driver.buttonUp(originalX, originalY, "left"); err != nil {
 			t.Logf("%s: cursor cleanup release failed: %v", runtime.GOOS, err)
 		}
-		if err := mouseMove(originalX, originalY); err != nil {
+		if err := driver.move(originalX, originalY); err != nil {
 			t.Logf("%s: cursor cleanup restore failed: %v", runtime.GOOS, err)
 		}
 	})
@@ -271,12 +316,12 @@ func assertDarwinLiveMouse(t *testing.T) {
 		wantX, wantY int
 		call         func() error
 	}{
-		{"move", baseX, baseY, func() error { return mouseMove(baseX, baseY) }},
-		{"click", baseX + 1, baseY + 1, func() error { return mouseClick(baseX+1, baseY+1, "left") }},
-		{"double-click", baseX + 2, baseY + 2, func() error { return mouseDoubleClick(baseX+2, baseY+2, "left") }},
-		{"button-down", baseX + 3, baseY + 3, func() error { return mouseButtonDown(baseX+3, baseY+3, "left") }},
-		{"button-up", baseX + 4, baseY + 4, func() error { return mouseButtonUp(baseX+4, baseY+4, "left") }},
-		{"drag", baseX + 7, baseY + 7, func() error { return mouseDrag(baseX+5, baseY+5, baseX+7, baseY+7, "left") }},
+		{"move", baseX, baseY, func() error { return driver.move(baseX, baseY) }},
+		{"click", baseX + 1, baseY + 1, func() error { return driver.click(baseX+1, baseY+1, "left") }},
+		{"double-click", baseX + 2, baseY + 2, func() error { return driver.doubleClick(baseX+2, baseY+2, "left") }},
+		{"button-down", baseX + 3, baseY + 3, func() error { return driver.buttonDown(baseX+3, baseY+3, "left") }},
+		{"button-up", baseX + 4, baseY + 4, func() error { return driver.buttonUp(baseX+4, baseY+4, "left") }},
+		{"drag", baseX + 7, baseY + 7, func() error { return driver.drag(baseX+5, baseY+5, baseX+7, baseY+7, "left") }},
 	}
 	for _, operation := range operations {
 		t.Run(operation.name, func(t *testing.T) {

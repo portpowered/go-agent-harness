@@ -3,14 +3,62 @@ package mouse
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // MouseTool lets the model control the mouse: move, click, double-click, hold,
 // drag, and release.  Platform-specific implementations live in
-// tool_mouse_windows.go and tool_mouse_other.go.
-type MouseTool struct{}
+// tool_mouse_darwin.go, tool_mouse_linux.go, tool_mouse_windows.go and
+// tool_mouse_other.go.
+type MouseTool struct {
+	driver mouseDriver
+}
+
+// MouseProcess runs one mouse helper command (cliclick on macOS, xdotool on
+// Linux) and returns its combined output. Windows uses Win32 input directly
+// and never runs a process.
+type MouseProcess interface {
+	Run(name string, args ...string) ([]byte, error)
+}
+
+// MouseProcessFunc adapts a function to MouseProcess.
+type MouseProcessFunc func(name string, args ...string) ([]byte, error)
+
+// Run calls f.
+func (f MouseProcessFunc) Run(name string, args ...string) ([]byte, error) { return f(name, args...) }
+
+// MouseToolOptions configures the process and pacing seams of MouseTool.
+// Nil fields select the host process runner and time.Sleep.
+type MouseToolOptions struct {
+	Process MouseProcess
+	Sleep   func(time.Duration)
+}
+
+type osMouseProcess struct{}
+
+func (osMouseProcess) Run(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput()
+}
+
+// mouseDriver carries the injected seams used by the platform operations.
+type mouseDriver struct {
+	process MouseProcess
+	sleep   func(time.Duration)
+}
+
+func newMouseDriver(options MouseToolOptions) mouseDriver {
+	driver := mouseDriver{process: options.Process, sleep: options.Sleep}
+	if driver.process == nil {
+		driver.process = osMouseProcess{}
+	}
+	if driver.sleep == nil {
+		driver.sleep = time.Sleep
+	}
+	return driver
+}
 
 const mouseButtonLeft = "left"
 
@@ -22,7 +70,13 @@ type mouseInvocation struct {
 	hasDragPoint bool
 }
 
-func NewMouseTool() *MouseTool { return &MouseTool{} }
+func NewMouseTool() *MouseTool { return NewMouseToolWithOptions(MouseToolOptions{}) }
+
+// NewMouseToolWithOptions injects the process runner and pacing sleep used by
+// the platform mouse operations.
+func NewMouseToolWithOptions(options MouseToolOptions) *MouseTool {
+	return &MouseTool{driver: newMouseDriver(options)}
+}
 
 func (t *MouseTool) Name() string { return "mouse" }
 
@@ -77,7 +131,7 @@ func (t *MouseTool) Execute(_ context.Context, args map[string]any) ([]messages.
 	if err != nil {
 		return nil, err
 	}
-	result, err := executeMouseInvocation(invocation)
+	result, err := t.driver.execute(invocation)
 	if err != nil {
 		return nil, err
 	}
@@ -115,25 +169,25 @@ func dragCoordinates(args map[string]any) (int, int, bool) {
 	return int(toX), int(toY), okX && okY
 }
 
-func executeMouseInvocation(invocation mouseInvocation) (string, error) {
+func (d mouseDriver) execute(invocation mouseInvocation) (string, error) {
 	var err error
 	var result string
 	switch invocation.action {
 	case "move":
-		err, result = mouseMove(invocation.x, invocation.y), fmt.Sprintf("Mouse moved to (%d, %d)", invocation.x, invocation.y)
+		err, result = d.move(invocation.x, invocation.y), fmt.Sprintf("Mouse moved to (%d, %d)", invocation.x, invocation.y)
 	case "click":
-		err, result = mouseClick(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s click at (%d, %d)", invocation.button, invocation.x, invocation.y)
+		err, result = d.click(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s click at (%d, %d)", invocation.button, invocation.x, invocation.y)
 	case "double_click":
-		err, result = mouseDoubleClick(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s double-click at (%d, %d)", invocation.button, invocation.x, invocation.y)
+		err, result = d.doubleClick(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s double-click at (%d, %d)", invocation.button, invocation.x, invocation.y)
 	case "down":
-		err, result = mouseButtonDown(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s button held at (%d, %d)", invocation.button, invocation.x, invocation.y)
+		err, result = d.buttonDown(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s button held at (%d, %d)", invocation.button, invocation.x, invocation.y)
 	case "up":
-		err, result = mouseButtonUp(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s button released at (%d, %d)", invocation.button, invocation.x, invocation.y)
+		err, result = d.buttonUp(invocation.x, invocation.y, invocation.button), fmt.Sprintf("%s button released at (%d, %d)", invocation.button, invocation.x, invocation.y)
 	case "drag":
 		if !invocation.hasDragPoint {
 			return "", fmt.Errorf("to_x and to_y are required for the drag action")
 		}
-		err = mouseDrag(invocation.x, invocation.y, invocation.toX, invocation.toY, invocation.button)
+		err = d.drag(invocation.x, invocation.y, invocation.toX, invocation.toY, invocation.button)
 		result = fmt.Sprintf("%s drag from (%d, %d) to (%d, %d)", invocation.button, invocation.x, invocation.y, invocation.toX, invocation.toY)
 	default:
 		return "", fmt.Errorf("unknown action %q", invocation.action)
