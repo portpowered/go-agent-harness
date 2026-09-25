@@ -10,6 +10,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools/interactive"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -273,7 +274,6 @@ func assembleLiveRequest(request serviceSession.Request, inputs requestInputs) r
 		ReplayPlan:            inputs.replayPlan,
 		MaxDuration:           request.MaxDuration,
 		SessionUpdatedTimeout: request.SessionUpdatedTimeout,
-		ToolExecutionTimeout:  request.ToolExecutionTimeout,
 		Capabilities:          inputs.capabilities,
 		// --wait-for-close is an explicit persistent-session policy. It must
 		// override the ordinary finite audio/output policy so a completed
@@ -329,7 +329,11 @@ func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceS
 	if capabilities != nil && deps.BindImagePreparer != nil {
 		capabilities.Executor = deps.BindImagePreparer(capabilities.Executor)
 	}
-	return capabilities, nil
+	// The interactive latency policy is outermost so each call's deadline
+	// covers image preparation as well as the tool itself.
+	return capabilities, interactive.Bind(capabilities, interactive.Binding{
+		Config: cfg, Timeout: request.ToolExecutionTimeout, BrowserToolsEnabled: request.BrowserToolsEnabled, Cancellation: request.CancellationIntent,
+	})
 }
 
 func openImages(paths []string, opener func([]string) ([]messages.ContentPart, error)) ([]messages.ContentPart, error) {
