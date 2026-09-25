@@ -368,7 +368,7 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 		_ = browser.Close()
 		return nil, newManagedBrowserLifecycleError("state", err)
 	}
-	m.trackManagedBrowser(browser, statePath, state)
+	m.trackManagedBrowser(browser, statePath, state) //nolint:contextcheck // Close outlives the launch request by design.
 	return browser, nil
 }
 
