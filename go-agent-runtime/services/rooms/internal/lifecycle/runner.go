@@ -255,6 +255,9 @@ func finishMissingParticipants(state *runState, result rooms.RoomResult, manifes
 }
 
 func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (rooms.RoomResult, error) {
+	// Provider and admission failures can echo a participant credential; the
+	// host renders these values, so they carry the evidence redaction set.
+	result, runErr = redactRun(result, runErr, manifest, request)
 	if request.OnParticipantTerminated != nil {
 		for _, participant := range manifest.Participants {
 			if value, ok := result.Participants[participant.ID]; ok {
