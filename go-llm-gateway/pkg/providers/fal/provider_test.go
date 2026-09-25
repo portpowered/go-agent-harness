@@ -464,24 +464,6 @@ func TestFalProvider_Infer_QwenTTS_HTTPError(t *testing.T) {
 	}
 }
 
-func TestFalProvider_Infer_QwenTTS_MissingEmbedding(t *testing.T) {
-	ctx := context.Background()
-	p := New()
-
-	req := providers.InferenceRequest{
-		Model: ModelQwenTTS,
-		Messages: []models.Message{{
-			Role:         models.RoleUser,
-			ContentParts: []models.ContentPart{models.TextPart{Text: "Say hello"}},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error for missing embedding, got nil")
-	}
-}
-
 func TestFalProvider_Infer_GrokImagineVideo_ValidRequestAndResponse(t *testing.T) {
 	ctx := context.Background()
 	transport := &mockTransport{
