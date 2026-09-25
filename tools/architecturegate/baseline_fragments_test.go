@@ -94,3 +94,68 @@ var _ engine.Engine
 		t.Fatalf("rule applied outside its from scope: %#v", issues)
 	}
 }
+
+// repositoryImportCase places one import in a package and source file of the
+// real workspace policy and states whether a forbidden_imports rule rejects it.
+type repositoryImportCase struct {
+	name, module, pkg, file, imported string
+	rejected                          bool
+}
+
+// TestRepositoryImportRulesRejectViolations proves every checked-in
+// forbidden_imports rule that replaced an import-scanning test fails on a
+// violation, and that its files, production_only and except_from scopes do
+// not reach beyond what the retired test checked.
+func TestRepositoryImportRulesRejectViolations(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := loadPolicy("docs/architecture/architecture-policy.json", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range repositoryImportCases() {
+		t.Run(test.name, func(t *testing.T) {
+			module := &Module{Dir: "/repo", Path: test.module}
+			pkg := &Package{ImportPath: test.pkg, Module: module}
+			source := &SourceFile{RelPath: test.file, Test: strings.HasSuffix(test.file, "_test.go")}
+			issues := forbiddenImportIssues(pkg, module, source, test.imported, policy)
+			if got := hasRule(issues, "forbidden-import"); got != test.rejected {
+				t.Fatalf("%s importing %s: rejected=%v, want %v (issues %#v)", test.file, test.imported, got, test.rejected, issues)
+			}
+		})
+	}
+}
+
+func repositoryImportCases() []repositoryImportCase {
+	const repo = "github.com/portpowered/go-agent-harness"
+	cli, loop := repo+"/agent-cli", repo+"/go-agent-loop"
+	gateway, provider := repo+"/go-device-gateway/pkg/devices", repo+"/go-llm-gateway/pkg/providers/openai"
+	private := cli + "/internal/services/internal/devices"
+	session, devices, transport := cli+"/internal/services/agentsession", cli+"/internal/services/devices", cli+"/internal/transport/cli"
+	return []repositoryImportCase{
+		{"session contract gateway", cli, session, "internal/services/agentsession/interface.go", gateway, true},
+		{"session contract provider", cli, session, "internal/services/agentsession/interface.go", provider, true},
+		{"session implementation file", cli, session, "internal/services/agentsession/session.go", gateway, false},
+		{"tool contract private", cli, cli + "/internal/services/tools", "internal/services/tools/interface.go", cli + "/internal/services/internal/tools", true},
+		{"device contract gateway", cli, devices, "internal/services/devices/interface.go", gateway, true},
+		{"device contract private", cli, devices, "internal/services/devices/interface.go", private, true},
+		{"device validation file", cli, devices, "internal/services/devices/validation.go", gateway, false},
+		{"device list transport", cli, transport, "internal/transport/cli/devices.go", gateway, true},
+		{"device probe transport", cli, transport, "internal/transport/cli/device_probe.go", gateway, true},
+		{"probe transport", cli, transport, "internal/transport/cli/probe.go", gateway, true},
+		{"session transport gateway", cli, transport, "internal/transport/cli/session.go", gateway, false},
+		{"cli transport private", cli, transport + "/internal/livehost", "internal/transport/cli/internal/livehost/files.go", private, true},
+		{"cli transport test private", cli, transport, "internal/transport/cli/session_test.go", private, false},
+		{"loop binary codec", loop, loop + "/pkg/engine", "pkg/engine/engine.go", "encoding/binary", true},
+		{"loop platform clock", loop, loop + "/test/functional/media", "test/functional/media/harness.go", loop + "/pkg/platform/clock", true},
+		{"loop test binary codec", loop, loop + "/pkg/engine", "pkg/engine/engine_test.go", "encoding/binary", false},
+		{"application wav codec", cli, cli + "/internal/room", "internal/room/room.go", repo + "/go-llm-gateway/pkg/wavio", true},
+		{"application audio package", cli, cli + "/internal/room", "internal/room/room.go", cli + "/internal/audio/pcm", true},
+		{"application test runtime access", cli, cli + "/internal/room", "internal/room/room.go", cli + "/internal/services/servicetest", true},
+		{"application binary codec", cli, cli + "/internal/webmcp", "internal/webmcp/frames.go", "encoding/binary", true},
+		{"browser testkit identifiers", cli, cli + "/internal/webmcp/testkit", "internal/webmcp/testkit/ids.go", "encoding/binary", false},
+		{"application test binary codec", cli, cli + "/internal/room", "internal/room/room_test.go", "encoding/binary", false},
+	}
+}

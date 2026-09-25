@@ -51,6 +51,7 @@ type remoteToolAudioCase struct {
 	providerClose   bool
 	timingEvidence  bool
 	holdToneControl bool
+	drainInterval   time.Duration // see remoteToolAudioCase.drainCadence
 }
 
 // TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM reproduces the live
@@ -122,12 +123,17 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 //
 // The shipped session command talks to a real local WebSocket provider and a
 // separately built fixture-controlled tool executor. Playback crosses the
-// audio-device-server HTTP boundary while its callback clock advances. The
+// audio-device-server HTTP boundary while its manual callback clock advances.
+// captured_cadence and slow_device keep that clock at their device cadence for
+// the whole run: the provider finishes sending within a few ticks, so nearly
+// all playback, including every response boundary at the device edge, happens
+// while the queue drains. The other deliveries vary the provider/tool side
+// and drain on the accelerated clock (remoteToolAudioDrainInterval). The
 // assertion sees only network protocol observations, process-owned tool
 // observations, and device-rendered PCM; it does not inspect a session queue,
 // sink generation, or any other playback implementation state.
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
-	scenarioSlots := make(chan struct{}, 2)
+	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	cases := []remoteToolAudioCase{
 		{
 			name:            "test45",
@@ -156,21 +162,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 		},
 	}
 	for _, testCase := range cases {
-		for _, delivery := range []struct {
-			name             string
-			deltaDelay       time.Duration
-			toolDelay        time.Duration
-			callbackInterval time.Duration
-			promptBytes      int
-			toolResultBytes  int
-			inputFrames      int
-		}{
-			{name: "provider_burst", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond},
-			{name: "captured_cadence", deltaDelay: 50 * time.Millisecond, toolDelay: 25 * time.Millisecond, callbackInterval: 30 * time.Millisecond},
-			{name: "slow_device", toolDelay: 3 * time.Millisecond, callbackInterval: 45 * time.Millisecond},
-			{name: "large_text_and_tool_results", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, promptBytes: 64 << 10, toolResultBytes: 64 << 10},
-			{name: "long_prior_input_61s", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, inputFrames: 2048},
-		} {
+		for _, delivery := range remoteToolAudioDeliveries() {
 			if testCase.healthyControl && delivery.name != "provider_burst" {
 				continue
 			}
@@ -179,7 +171,11 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 				t.Parallel()
 				scenarioSlots <- struct{}{}
 				defer func() { <-scenarioSlots }()
-				runRemoteToolAudioScenario(t, testCase, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
+				scenario := testCase
+				if !delivery.deviceCadence {
+					scenario.drainInterval = remoteToolAudioDrainInterval
+				}
+				runRemoteToolAudioScenario(t, scenario, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
 			})
 		}
 	}
@@ -348,7 +344,7 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
 		}
 	} else {
-		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval, &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
+		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), testCase.drainCadence(callbackInterval), &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
 	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {
@@ -516,10 +512,6 @@ func driveRemoteToolAudioClock(ctx context.Context, endpoint string, start <-cha
 	}
 }
 
-func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
-	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
-}
-
 // Timeout diagnostics stay on the scenario path so a failure preserves the
 // bounded device, provider, child, and callback evidence needed to repair it.
 // Keep this evidence beside the scenario's deadline and cleanup logic.
@@ -552,15 +544,6 @@ func remoteToolAudioFailureEvidence(ctx context.Context, endpoint string, provid
 		}
 	}
 	return fmt.Sprintf("remote timeout evidence: snapshot_error=%v rendered_pcm=%d nonzero_pcm=%d expected_pcm=%d final_marker=%t playback={queued:%d dropped:%d overflow:%d discarded:%d discard_events:%d callbacks:%d rendered:%d} capture={queued:%d captured:%d dropped:%d} trace_last=%s trace_render=%s trace_capture=%s expected_tool_calls=%d provider=%+v child=%s stderr=%q callback_advances=%d", snapshotErr, len(snapshot.RenderedSamples), len(got), len(want), remoteToolAudioHasSuffix(got, finalMarker), snapshot.Playback.QueuedSamples, snapshot.Playback.DroppedSamples, snapshot.Playback.OverflowEvents, snapshot.Playback.DiscardedSamples, snapshot.Playback.DiscardEvents, snapshot.Playback.CallbackCount, snapshot.Playback.RenderedSamples, snapshot.Capture.QueuedSamples, snapshot.Capture.CapturedSamples, snapshot.Capture.DroppedSamples, lastTrace, lastRenderTrace, lastCaptureTrace, expectedToolCalls, provider.Snapshot(), childStatus, stderrText, callbackAdvances.Load())
-}
-
-func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) string {
-	for index := len(trace) - 1; index >= 0; index-- {
-		if tap == "" || trace[index].Tap == tap {
-			return fmt.Sprintf("%+v", trace[index])
-		}
-	}
-	return "none"
 }
 
 // trimRemoteToolAudioEdgeSilence removes only callbacks before playback began

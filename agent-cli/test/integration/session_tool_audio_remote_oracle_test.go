@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,8 +15,10 @@ import (
 )
 
 // TestRemoteToolAudioSlowDeviceEdgeOracleControl exercises the same remote
-// device, callback cadence, and terminal-marker oracle as the failing agent
-// scenario, while removing provider/session lifecycle ordering from the path.
+// device and terminal-marker oracle as the failing agent scenario, while
+// removing provider/session lifecycle ordering from the path. The manual clock
+// keeps the slow_device ratio (45:30) against the accelerated drain cadence,
+// so the device, not the writer, remains the bottleneck.
 // A passing control localizes a missing sample run to the upstream delivery
 // boundary instead of allowing a device underflow to be mistaken for fixture
 // or oracle behavior.
@@ -49,7 +52,7 @@ func TestRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
 		ctx,
 		endpoint,
 		want,
-		45*time.Millisecond,
+		remoteToolAudioDrainInterval*3/2,
 		callbackAdvances,
 	)
 	if err != nil {
@@ -381,5 +384,62 @@ func corruptRemoteToolAudioSample(index int) func([]int16) []int16 {
 	return func(samples []int16) []int16 {
 		samples[index] = -samples[index]
 		return samples
+	}
+}
+
+// remoteToolAudioDrainInterval advances the manual device clock one render
+// quantum per millisecond (30x real time), the cadence the high-rate
+// regressions already prove the agent sustains.
+const remoteToolAudioDrainInterval = time.Millisecond
+
+// remoteToolAudioScenarioSlots bounds concurrent agent/device process pairs.
+// Device-cadence scenarios are mostly idle between clock ticks, so four pairs
+// keep their callback clocks on time while the real-cadence runs overlap.
+const remoteToolAudioScenarioSlots = 4
+
+// drainCadence is the manual clock interval used once the provider has sent
+// the complete topology. Scenarios that exercise a device cadence leave
+// drainInterval unset and play the whole queue at that cadence; only
+// scenarios whose oracle ignores device underflow silence set it.
+func (c remoteToolAudioCase) drainCadence(callbackInterval time.Duration) time.Duration {
+	if c.drainInterval > 0 {
+		return c.drainInterval
+	}
+	return callbackInterval
+}
+
+func remoteToolAudioHasSuffix(samples, suffix []int16) bool {
+	return len(suffix) > 0 && len(samples) >= len(suffix) && reflect.DeepEqual(samples[len(samples)-len(suffix):], suffix)
+}
+
+func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) string {
+	for index := len(trace) - 1; index >= 0; index-- {
+		if tap == "" || trace[index].Tap == tap {
+			return fmt.Sprintf("%+v", trace[index])
+		}
+	}
+	return "none"
+}
+
+// remoteToolAudioDelivery is one provider/tool/device timing variant of the
+// tool-continuation topology.
+type remoteToolAudioDelivery struct {
+	name             string
+	deltaDelay       time.Duration
+	toolDelay        time.Duration
+	callbackInterval time.Duration
+	promptBytes      int
+	toolResultBytes  int
+	inputFrames      int
+	deviceCadence    bool // play the whole queue at callbackInterval
+}
+
+func remoteToolAudioDeliveries() []remoteToolAudioDelivery {
+	return []remoteToolAudioDelivery{
+		{name: "provider_burst", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond},
+		{name: "captured_cadence", deltaDelay: 50 * time.Millisecond, toolDelay: 25 * time.Millisecond, callbackInterval: 30 * time.Millisecond, deviceCadence: true},
+		{name: "slow_device", toolDelay: 3 * time.Millisecond, callbackInterval: 45 * time.Millisecond, deviceCadence: true},
+		{name: "large_text_and_tool_results", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, promptBytes: 64 << 10, toolResultBytes: 64 << 10},
+		{name: "long_prior_input_61s", toolDelay: 3 * time.Millisecond, callbackInterval: 30 * time.Millisecond, inputFrames: 2048},
 	}
 }

@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// duplexProcessBound is the hard upper bound for a duplex child that must
+// finish on its own. Passing runs end as soon as the child exits; the bound
+// only has to absorb the first exec of a freshly linked binary, which takes
+// several seconds on a loaded macOS workstation.
+const duplexProcessBound = 30 * time.Second
+
 func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 	binary := buildDuplexTestChild(t)
 	runDir := filepath.Join(t.TempDir(), "record")
@@ -28,7 +34,7 @@ func TestDuplexRunnerStreamsFramesAndSanitizesCredentials(t *testing.T) {
 		Provider:         "openai",
 		Model:            "duplex-test-model",
 		APIKey:           secret,
-		MaxDuration:      5 * time.Second,
+		MaxDuration:      duplexProcessBound,
 		FrameDuration:    time.Millisecond,
 		AdditionalArgs:   []string{"--wait-for-close"},
 		Output:           &output,
@@ -96,7 +102,7 @@ func TestDuplexRunnerSendsSIGINTAtOutputBoundary(t *testing.T) {
 		APIKey:     "sigint-secret",
 		// Keep this budget generous enough for a busy full-suite scheduler while
 		// retaining a hard upper bound for a child that fails to start or exit.
-		MaxDuration:                 3 * time.Second,
+		MaxDuration:                 duplexProcessBound,
 		FrameDuration:               2 * time.Millisecond,
 		ShutdownGrace:               time.Second,
 		Termination:                 TerminationSIGINT,
@@ -156,7 +162,7 @@ func TestDuplexRunnerRejectsPrematureChildExit(t *testing.T) {
 		RecordDir:      filepath.Join(t.TempDir(), "record"),
 		Provider:       "openai",
 		Model:          "duplex-test-model",
-		MaxDuration:    5 * time.Second,
+		MaxDuration:    duplexProcessBound,
 		FrameDuration:  time.Millisecond,
 		AdditionalArgs: []string{"--duplex-exit-immediately"},
 		Segments:       []DuplexAudioSegment{{PCM16: make([]byte, 1<<20)}},
@@ -261,6 +267,10 @@ func main() {
 	command.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build child: %v\n%s", err, output)
+	}
+	// Pay the first exec of the fresh binary outside the timed session.
+	if output, err := exec.Command(binary, "--duplex-exit-immediately").CombinedOutput(); err != nil {
+		t.Fatalf("warm up child: %v\n%s", err, output)
 	}
 	return binary
 }

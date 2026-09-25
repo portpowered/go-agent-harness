@@ -12,17 +12,20 @@
 # Usage:
 #   scripts/go-test-shards.sh --dir MODULE_DIR --package PKG --shards N \
 #     [--shard K] [--jobs J] [--weights FILE] [--cover-prefix PATH] [--go GO] \
-#     [--build-flag FLAG]... [-- TEST_BINARY_FLAGS...]
+#     [--shared-dir-env NAME] [--build-flag FLAG]... [-- TEST_BINARY_FLAGS...]
 #
 # Without --shard every shard runs, at most J at a time (default: all); with
 # --shard only shard K runs (used by CI matrix jobs). With --cover-prefix,
 # shard K writes PATH-K.out (the binary must be built with coverage via
-# --build-flag). A passing shard prints its tests slower than
-# SLOW_TEST_SECONDS (default 5) and its summed test time.
+# --build-flag). With --shared-dir-env, every run of the test binary sees
+# NAME set to one scratch directory, and the binary first runs once with no
+# tests selected so its TestMain can prepare shared state (e.g. build helper
+# binaries) there before the shards start. A passing shard prints its tests
+# slower than SLOW_TEST_SECONDS (default 5) and its summed test time.
 set -euo pipefail
 
 usage() {
-	sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//' >&2
+	sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' >&2
 	exit 2
 }
 
@@ -33,6 +36,7 @@ only_shard=""
 jobs=""
 weights=""
 cover_prefix=""
+shared_dir_env=""
 go_binary="${GO:-go}"
 build_flags=()
 run_flags=()
@@ -46,6 +50,7 @@ while [ "$#" -gt 0 ]; do
 	--jobs) jobs="$2"; shift 2 ;;
 	--weights) weights="$2"; shift 2 ;;
 	--cover-prefix) cover_prefix="$2"; shift 2 ;;
+	--shared-dir-env) shared_dir_env="$2"; shift 2 ;;
 	--go) go_binary="$2"; shift 2 ;;
 	--build-flag) build_flags+=("$2"); shift 2 ;;
 	--) shift; run_flags=("$@"); break ;;
@@ -103,6 +108,16 @@ tests_file="$work_dir/tests"
 if [ ! -s "$tests_file" ]; then
 	echo "go-test-shards: $package lists no top-level tests" >&2
 	exit 1
+fi
+
+if [ -n "$shared_dir_env" ]; then
+	mkdir "$work_dir/shared"
+	export "$shared_dir_env=$work_dir/shared"
+	echo "==> go-test-shards preparing shared state in \$$shared_dir_env"
+	(cd "$package_dir" && GOCOVERDIR="$work_dir" "$test_binary" -test.run '^$' ${run_flags[@]+"${run_flags[@]}"}) >"$work_dir/prepare.log" 2>&1 || {
+		cat "$work_dir/prepare.log"
+		exit 1
+	}
 fi
 
 # Assign every test to exactly one shard: heaviest first onto the

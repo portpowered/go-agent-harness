@@ -115,7 +115,7 @@ func startAudioDeviceServerBinary(t *testing.T, manualClock bool) (string, func(
 	var line []byte
 	select {
 	case line = <-ready:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second): // absorbs a fresh binary's first exec on a loaded host
 		cancel()
 		_ = command.Wait()
 		t.Fatalf("audio-device server did not become ready; stderr=%q", stderr.String())

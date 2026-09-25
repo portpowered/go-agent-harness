@@ -179,6 +179,105 @@
         "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
       ],
       "reason": "the gateway consumer proof depends on the loop only through the shared message contract"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/go-device-gateway",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/**"
+      ],
+      "files": [
+        "internal/services/agentsession/interface.go"
+      ],
+      "reason": "the public session contract stays independent of concrete device and provider gateways"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+      ],
+      "imports": [
+        "**/services/internal/**"
+      ],
+      "files": [
+        "internal/services/tools/interface.go"
+      ],
+      "reason": "the public tool contract does not expose private service implementations"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
+      ],
+      "imports": [
+        "github.com/portpowered/go-agent-harness/go-device-gateway",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "**/services/internal/**"
+      ],
+      "files": [
+        "internal/services/devices/interface.go",
+        "internal/transport/cli/devices.go",
+        "internal/transport/cli/probe.go",
+        "internal/transport/cli/device_probe.go"
+      ],
+      "reason": "the device contract and the device list/probe transports reach devices only through the public device service"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/**"
+      ],
+      "imports": [
+        "**/services/internal/**"
+      ],
+      "production_only": true,
+      "reason": "CLI transports use public service boundaries, never private service implementations"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**"
+      ],
+      "imports": [
+        "encoding/binary",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock/**"
+      ],
+      "production_only": true,
+      "reason": "the loop exchanges PCM through go-audio/pkg/codec and takes clocks from go-audio; it never parses audio bytes itself"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/**"
+      ],
+      "imports": [
+        "**/services/servicetest",
+        "**/services/servicetest/**",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/audio*",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/audio*/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/wavio/**",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/platform/clock/**"
+      ],
+      "production_only": true,
+      "reason": "application code reaches audio payloads through go-audio and never imports acceptance-test runtime access"
+    },
+    {
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/**"
+      ],
+      "except_from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit",
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/testkit/**"
+      ],
+      "imports": [
+        "encoding/binary"
+      ],
+      "production_only": true,
+      "reason": "application code does not parse audio payload bytes; browser testkit binary identifiers are the reviewed exception"
     }
   ],
   "global_state_scopes": [

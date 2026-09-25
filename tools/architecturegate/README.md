@@ -33,6 +33,14 @@ The same baseline flags may be used with `-check architecture`. The driver
 combines every JSON fragment recursively, validates the combined deletion-only
 baseline, and filters entries by the selected lane.
 
+`forbidden_imports` rules name the importing packages (`from`) and the
+forbidden import patterns (`imports`). Optional fields narrow a rule:
+`except` re-allows specific imports, `except_from` removes packages from
+`from`, `files` limits the rule to module-relative source paths (for example
+one package's public `interface.go`), and `production_only` skips `_test.go`
+files. Prefer a rule here over a test that parses imports: the gate reports
+every violation with its file and runs once for the whole workspace.
+
 Composition authority is explicit. A whole package may be registered for an
 external application module; a repository test gets a single exact
 `_test.go` source entry. Wildcards, production files, and paths outside the

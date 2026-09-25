@@ -138,9 +138,9 @@ func (rs *RunScenario) Stop() error {
 	return rs.stopErr
 }
 
-// stoppedHistory stops the loop and returns its conversation history. An idle
-// running engine holds its state lock while waiting for the next input, so a
-// snapshot taken while running blocks until the run context expires.
+// stoppedHistory stops the loop and returns its conversation history. The
+// streamed reply text can reach the output before the loop commits the
+// assistant message, so stopping first makes the history read deterministic.
 func (rs *RunScenario) stoppedHistory() []messages.Message {
 	rs.t.Helper()
 	if err := rs.Stop(); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
