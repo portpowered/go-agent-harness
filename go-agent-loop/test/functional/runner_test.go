@@ -1,7 +1,6 @@
 package functional
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -10,57 +9,10 @@ import (
 	"testing"
 )
 
-func TestFunctionalSuite(t *testing.T) {
-	moduleRoot, err := functionalModuleRootPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	report, err := RunDiscovered(context.Background(), moduleRoot, os.Stdout)
-	if err != nil {
-		t.Fatalf("run discovered functional suite: %v", err)
-	}
-	t.Logf("functional suite completed: %+v", report)
-}
-
-func TestFunctionalSuite_ExternalManifestControlsCanonicalInvocation(t *testing.T) {
-	moduleRoot, err := functionalModuleRootPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifestPath := writeProofManifest(t)
-
-	cmd := exec.Command("go", goCommandArgs(
-		"test",
-		"./test/functional",
-		"-v",
-		"-run", "^TestFunctionalSuite$",
-		"-count=1",
-	)...)
-	cmd.Dir = moduleRoot
-	cmd.Env = setEnv(os.Environ(), ManifestPathEnv, manifestPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("canonical invocation: %v\n%s", err, output)
-	}
-
-	text := string(output)
-	quarantined := "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration/TestBasic_SimpleRequestResponse"
-	runnable := "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/orchestration/TestBasic_SimpleRequestResponseWithSystemPrompt"
-	if !strings.Contains(text, "quarantine: selector="+quarantined+" ") {
-		t.Fatalf("canonical invocation did not report the quarantined real selector:\n%s", text)
-	}
-	if strings.Contains(text, "functional: selector="+quarantined+" observed=pass") {
-		t.Fatalf("canonical invocation executed the quarantined selector:\n%s", text)
-	}
-	if !strings.Contains(text, "functional: selector="+runnable+" observed=pass") {
-		t.Fatalf("canonical invocation did not execute a runnable real selector:\n%s", text)
-	}
-	if !strings.Contains(text, "summary: discovered=") || !strings.Contains(text, "quarantined=71") {
-		t.Fatalf("canonical invocation did not report exact quarantine counts:\n%s", text)
-	}
-}
-
 func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.T) {
+	// Each subprocess reads its own temporary manifest, so the two
+	// recursive invocations are independent.
+	t.Parallel()
 	moduleRoot, err := functionalModuleRootPath()
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +49,9 @@ func TestFunctionalSuite_ExternalManifestControlsRecursiveInvocation(t *testing.
 }
 
 func TestFunctionalSuite_ExternalManifestRejectsUnknownSelectorBeforeFilteredRecursiveInvocation(t *testing.T) {
+	// Each subprocess reads its own temporary manifest, so the two
+	// recursive invocations are independent.
+	t.Parallel()
 	moduleRoot, err := functionalModuleRootPath()
 	if err != nil {
 		t.Fatal(err)

@@ -36,7 +36,7 @@ STATICCHECK_INSTALL ?= go install $(STATICCHECK_PACKAGE)@$(STATICCHECK_VERSION)
 GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@v2.17.0
 PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
-GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional
+GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional/...
 AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
 FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board factory.scripts.tests.test_worktree_cleanup
@@ -467,7 +467,7 @@ test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 	run_budget_unit go-device-gateway; \
 	run_budget_unit go-agent-runtime; \
 	run_budget_test agent-cli ./test/integration; \
-	run_budget_test go-agent-loop ./test/functional; \
+	run_budget_test go-agent-loop $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE); \
 	run_budget_test agent-cli ./test/integration -run '$(AGENT_CLI_REGRESSION_TESTS)'; \
 	run_budget_test go-llm-gateway $(GO_LLM_GATEWAY_REGRESSION_PACKAGES); \
 	echo "==> test-budget evaluating package timing"; \
