@@ -325,9 +325,9 @@ func evidenceTerminalAt(controller *PatienceController) time.Duration {
 
 func processClassification(label string) string {
 	if label == "dead-air" {
-		return "timeout"
+		return duplexExitTimeout
 	}
-	return "normal"
+	return duplexExitNormal
 }
 
 func familyEProcess(endedAt time.Duration, classification string) ProcessFacts {

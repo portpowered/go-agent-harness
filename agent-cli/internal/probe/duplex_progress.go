@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// nilErrorText is what a nil typed error reports from Error, matching fmt's
+// rendering of a nil value.
+const nilErrorText = "<nil>"
+
 const duplexProgressOutputWindow = 64 * 1024
 
 type duplexProgressState struct {
@@ -237,4 +241,93 @@ func (p *DuplexProgress) waitForSegmentOutput(ctx context.Context, segment Duple
 		return duplexPipeError("wait for output reads", err)
 	}
 	return nil
+}
+
+// DuplexProgressSnapshot is a point-in-time view available to segment gates.
+type DuplexProgressSnapshot struct {
+	At            time.Duration
+	InputBytes    int64
+	InputFrames   int
+	OutputBytes   int64
+	OutputReads   int
+	InputSegments int
+	OutputClosed  bool
+}
+
+// DuplexProgress exposes only observable stream progress to a segment gate.
+// It does not expose the child process or a direct product/runtime call.
+type DuplexProgress struct {
+	state *duplexProgressState
+}
+
+// Snapshot returns the progress observed so far.
+func (p *DuplexProgress) Snapshot() DuplexProgressSnapshot {
+	if p == nil || p.state == nil {
+		return DuplexProgressSnapshot{}
+	}
+	return p.state.snapshot()
+}
+
+// WaitForOutputBytes waits until at least minimum output bytes crossed the
+// child stdout boundary. A non-positive minimum returns immediately.
+func (p *DuplexProgress) WaitForOutputBytes(ctx context.Context, minimum int64) error {
+	if minimum <= 0 {
+		return nil
+	}
+	if p == nil || p.state == nil {
+		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
+	}
+	return p.state.waitForOutput(ctx, minimum, false)
+}
+
+// WaitForOutputReads waits until at least minimum stdout reads have completed.
+func (p *DuplexProgress) WaitForOutputReads(ctx context.Context, minimum int) error {
+	if minimum <= 0 {
+		return nil
+	}
+	if p == nil || p.state == nil {
+		return fmt.Errorf("%w: output progress is unavailable", ErrDuplexPipe)
+	}
+	return p.state.waitForOutput(ctx, int64(minimum), true)
+}
+
+// Elapsed returns the runner's monotonic elapsed time at the instant of the
+// snapshot. Segment gates use this to drive event-based policies while the
+// child remains open.
+func (p *DuplexProgress) Elapsed() time.Duration {
+	if p == nil || p.state == nil {
+		return 0
+	}
+	return p.state.elapsed()
+}
+
+// OutputEvents returns a copy of every stdout read observed so far. The
+// events retain their process-relative timestamps so callers can correlate
+// incremental output with another event ledger without assuming one read is
+// one response.
+func (p *DuplexProgress) OutputEvents() []DuplexOutputEvent {
+	if p == nil || p.state == nil {
+		return nil
+	}
+	return p.state.outputEvents()
+}
+
+// WaitForChange blocks until the child produces another observed output read
+// or the stdout pump closes. It is the non-polling wake-up primitive used by
+// the patience controller while the input pump keeps the process alive.
+func (p *DuplexProgress) WaitForChange(ctx context.Context) error {
+	if p == nil || p.state == nil {
+		return fmt.Errorf("%w: progress is unavailable", ErrDuplexPipe)
+	}
+	return p.state.waitForChange(ctx)
+}
+
+// OutputClosed reports that the stdout pump has observed EOF or stopped after
+// cancellation. It is an observable terminal boundary, not a claim that the
+// child has been reaped.
+func (p *DuplexProgress) OutputClosed() bool {
+	if p == nil || p.state == nil {
+		return false
+	}
+	return p.state.outputIsClosed()
 }

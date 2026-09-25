@@ -186,8 +186,8 @@ func customerSimulationResponseOutputInterval(scenario CustomerScenario, facts c
 		outputStart := max(previousTotal, outputEnd-int64(output.Bytes))
 		previousTotal = outputEnd
 
-		overlapStart := maxInt64(outputStart, target.Start)
-		overlapEnd := minInt64(outputEnd, target.End)
+		overlapStart := max(outputStart, target.Start)
+		overlapEnd := min(outputEnd, target.End)
 		if overlapEnd <= overlapStart {
 			continue
 		}
@@ -362,7 +362,7 @@ func (p *customerSimulationStreamParser) consumeMediaBoundary(record customerSim
 	if !seen {
 		interval.start = record.at
 	}
-	interval.end = maxDuration(interval.end, record.at+customerSimulationPCM16Duration(record.media.SampleCount*2))
+	interval.end = max(interval.end, record.at+customerSimulationPCM16Duration(record.media.SampleCount*2))
 	p.mediaByResponse[id] = interval
 	p.deliveredResponseID = id
 	p.inputSpeechActive = false

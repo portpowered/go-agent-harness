@@ -42,7 +42,7 @@ type CustomerContractValidationError struct {
 
 func (e *CustomerContractValidationError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilErrorText
 	}
 	message := fmt.Sprintf("customer simulation contract field %q", e.Field)
 	if e.Problem != "" {
@@ -228,6 +228,40 @@ type FilesystemExpectation struct {
 }
 
 func (s CustomerScenario) Validate() error {
+	if err := s.validateHeader(); err != nil {
+		return err
+	}
+	if err := s.validateImageEvents(); err != nil {
+		return err
+	}
+	if len(s.Actions) == 0 {
+		return contractFieldError(ErrInvalidCustomerScenario, "actions", "must contain at least one ordered action")
+	}
+	seen := map[string]struct{}{}
+	for i, action := range s.Actions {
+		field := fmt.Sprintf("actions[%d]", i)
+		if strings.TrimSpace(action.ID) == "" {
+			return contractFieldError(ErrInvalidCustomerScenario, field+".id", "must not be empty")
+		}
+		if _, ok := seen[action.ID]; ok {
+			return contractFieldError(ErrDuplicateActionIntent, field+".id", fmt.Sprintf("duplicate action %q", action.ID))
+		}
+		seen[action.ID] = struct{}{}
+		if err := action.validate(field); err != nil {
+			return err
+		}
+	}
+	for i, image := range s.ImageEvents {
+		if image.AfterActionID != "" {
+			if _, ok := seen[image.AfterActionID]; !ok {
+				return contractFieldError(ErrInvalidCustomerScenario, fmt.Sprintf("image_events[%d].after_action_id", i), "must identify a declared action")
+			}
+		}
+	}
+	return nil
+}
+
+func (s CustomerScenario) validateHeader() error {
 	if s.SchemaVersion != CustomerScenarioSchemaVersion {
 		return contractFieldError(ErrInvalidCustomerScenario, "schema_version", "must be 1")
 	}
@@ -257,7 +291,10 @@ func (s CustomerScenario) Validate() error {
 	if s.Deadline <= 0 {
 		return contractFieldError(ErrInvalidCustomerScenario, "deadline", "must be positive")
 	}
+	return nil
+}
 
+func (s CustomerScenario) validateImageEvents() error {
 	images := map[string]struct{}{}
 	for i, image := range s.ImageEvents {
 		field := fmt.Sprintf("image_events[%d]", i)
@@ -275,57 +312,34 @@ func (s CustomerScenario) Validate() error {
 			return err
 		}
 	}
-	if len(s.Actions) == 0 {
-		return contractFieldError(ErrInvalidCustomerScenario, "actions", "must contain at least one ordered action")
-	}
-	seen := map[string]struct{}{}
-	for i, action := range s.Actions {
-		field := fmt.Sprintf("actions[%d]", i)
-		if strings.TrimSpace(action.ID) == "" {
-			return contractFieldError(ErrInvalidCustomerScenario, field+".id", "must not be empty")
-		}
-		if _, ok := seen[action.ID]; ok {
-			return contractFieldError(ErrDuplicateActionIntent, field+".id", fmt.Sprintf("duplicate action %q", action.ID))
-		}
-		seen[action.ID] = struct{}{}
-		if strings.TrimSpace(action.Intent) == "" && strings.TrimSpace(action.Description) == "" {
-			return contractFieldError(ErrInvalidCustomerScenario, field, "intent or description must not be empty")
-		}
-		if len(action.AllowedDispositions) == 0 {
-			return contractFieldError(ErrInvalidCustomerScenario, field+".allowed_dispositions", "must not be empty")
-		}
-		dispositions := map[TerminalDisposition]struct{}{}
-		for j, disposition := range action.AllowedDispositions {
-			if !disposition.valid() {
-				return contractFieldError(ErrInvalidCustomerScenario, fmt.Sprintf("%s.allowed_dispositions[%d]", field, j), fmt.Sprintf("%q is invalid", disposition))
-			}
-			if _, ok := dispositions[disposition]; ok {
-				return contractFieldError(ErrInvalidCustomerScenario, field+".allowed_dispositions", "must be unique")
-			}
-			dispositions[disposition] = struct{}{}
-		}
-		if !action.PartialSideEffectPolicy.valid() {
-			return contractFieldError(ErrInvalidCustomerScenario, field+".partial_side_effect_policy", "must be preserve, rollback, or forbid")
-		}
-		if strings.TrimSpace(action.SideEffectRule) == "" {
-			return contractFieldError(ErrInvalidCustomerScenario, field+".side_effect_rule", "must describe observable cleanup or preservation")
-		}
-		if err := action.Oracle.validate(field + ".oracle"); err != nil {
-			return err
-		}
-	}
-	actionIDs := make(map[string]struct{}, len(s.Actions))
-	for _, action := range s.Actions {
-		actionIDs[action.ID] = struct{}{}
-	}
-	for i, image := range s.ImageEvents {
-		if image.AfterActionID != "" {
-			if _, ok := actionIDs[image.AfterActionID]; !ok {
-				return contractFieldError(ErrInvalidCustomerScenario, fmt.Sprintf("image_events[%d].after_action_id", i), "must identify a declared action")
-			}
-		}
-	}
 	return nil
+}
+
+// validate checks one declared action after its identity has been checked.
+func (action ActionIntent) validate(field string) error {
+	if strings.TrimSpace(action.Intent) == "" && strings.TrimSpace(action.Description) == "" {
+		return contractFieldError(ErrInvalidCustomerScenario, field, "intent or description must not be empty")
+	}
+	if len(action.AllowedDispositions) == 0 {
+		return contractFieldError(ErrInvalidCustomerScenario, field+".allowed_dispositions", "must not be empty")
+	}
+	dispositions := map[TerminalDisposition]struct{}{}
+	for j, disposition := range action.AllowedDispositions {
+		if !disposition.valid() {
+			return contractFieldError(ErrInvalidCustomerScenario, fmt.Sprintf("%s.allowed_dispositions[%d]", field, j), fmt.Sprintf("%q is invalid", disposition))
+		}
+		if _, ok := dispositions[disposition]; ok {
+			return contractFieldError(ErrInvalidCustomerScenario, field+".allowed_dispositions", "must be unique")
+		}
+		dispositions[disposition] = struct{}{}
+	}
+	if !action.PartialSideEffectPolicy.valid() {
+		return contractFieldError(ErrInvalidCustomerScenario, field+".partial_side_effect_policy", "must be preserve, rollback, or forbid")
+	}
+	if strings.TrimSpace(action.SideEffectRule) == "" {
+		return contractFieldError(ErrInvalidCustomerScenario, field+".side_effect_rule", "must describe observable cleanup or preservation")
+	}
+	return action.Oracle.validate(field + ".oracle")
 }
 
 func (o ActionOracle) validate(field string) error {
@@ -405,24 +419,6 @@ func validateInterruption(t InterruptionTrigger, actions []ActionIntent) error {
 	}
 	return contractFieldError(ErrInvalidCustomerScenario, "interruption_trigger.action_id", fmt.Sprintf("unknown action %q", t.ActionID))
 }
-func validatePatience(p PatienceThresholds) error {
-	for _, field := range []struct {
-		name  string
-		value time.Duration
-	}{{"listen_before_follow_up", p.ListenBeforeFollowUp}, {"response_start", p.ResponseStart}, {"in_progress_work", p.InProgressWork}, {"reprompt", p.Reprompt}, {"absolute_dead_air", p.AbsoluteDeadAir}} {
-		if field.value <= 0 {
-			return contractFieldError(ErrInvalidCustomerScenario, "patience."+field.name, "must be positive")
-		}
-	}
-	if p.MaxReprompts < 0 {
-		return contractFieldError(ErrInvalidCustomerScenario, "patience.max_reprompts", "must not be negative")
-	}
-	if p.ListenBeforeFollowUp > p.ResponseStart || p.ResponseStart > p.InProgressWork || p.InProgressWork > p.Reprompt || p.Reprompt > p.AbsoluteDeadAir {
-		return contractFieldError(ErrInvalidCustomerScenario, "patience", "thresholds must be ordered from listening through absolute dead air")
-	}
-	return nil
-}
-
 func ParseCustomerScenario(data []byte) (CustomerScenario, error) {
 	var scenario CustomerScenario
 	if err := decodeStrictJSON(data, &scenario); err != nil {

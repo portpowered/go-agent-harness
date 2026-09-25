@@ -67,7 +67,7 @@ func TestCustomerSimulationValidatorPreservesSubstantiveBrokenJudgment(t *testin
 	if result.Pass() || result.Status != ValidatorStatusBroken || result.Verdict.Verdict != ValidatorBroken {
 		t.Fatalf("result = %+v, want substantive non-success BROKEN result", result)
 	}
-	if result.Verdict.FirstFailingTurn != "turn-2" || result.Verdict.CustomerImpact == "" {
+	if result.Verdict.FirstFailingTurn != secondTurnID || result.Verdict.CustomerImpact == "" {
 		t.Fatalf("broken verdict = %+v, want turn, diagnosis, and customer impact", result.Verdict)
 	}
 	if result.AgentVerdict == nil || result.AgentVerdict.Verdict != ValidatorBroken {
@@ -75,16 +75,19 @@ func TestCustomerSimulationValidatorPreservesSubstantiveBrokenJudgment(t *testin
 	}
 }
 
-func TestCustomerSimulationValidatorFailsClosedAndPreservesAttemptedJudgment(t *testing.T) {
-	tests := []struct {
-		name        string
-		input       func(ValidatorInput) ValidatorInput
-		agent       CustomerSimulationValidatorAgent
-		timeout     time.Duration
-		wantStatus  CustomerSimulationValidatorStatus
-		wantError   error
-		wantAttempt bool
-	}{
+// validatorFailClosedCase is one validator outcome that must fail closed.
+type validatorFailClosedCase struct {
+	name        string
+	input       func(ValidatorInput) ValidatorInput
+	agent       CustomerSimulationValidatorAgent
+	timeout     time.Duration
+	wantStatus  CustomerSimulationValidatorStatus
+	wantError   error
+	wantAttempt bool
+}
+
+func validatorFailClosedCases() []validatorFailClosedCase {
+	return []validatorFailClosedCase{
 		{
 			name: "mechanical disagreement",
 			input: func(input ValidatorInput) ValidatorInput {
@@ -164,7 +167,10 @@ func TestCustomerSimulationValidatorFailsClosedAndPreservesAttemptedJudgment(t *
 			wantAttempt: false,
 		},
 	}
+}
 
+func TestCustomerSimulationValidatorFailsClosedAndPreservesAttemptedJudgment(t *testing.T) {
+	tests := validatorFailClosedCases()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			input := test.input(validatorTestInput(t))

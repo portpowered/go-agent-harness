@@ -320,7 +320,7 @@ func validateWorkedValidatorEvidence(input ValidatorInput) error {
 	if input.Process.DescendantsAlive || !input.Process.InputClosed || !input.Process.OutputClosed {
 		return contractFieldError(ErrMissingEvidence, "validator_input.process", "WORKED requires closed streams and no live descendants")
 	}
-	if input.Process.ExitClassification == "timeout" || input.Process.ExitClassification == "failed" || input.Process.ExitClassification == "cancelled" {
+	if input.Process.ExitClassification == duplexExitTimeout || input.Process.ExitClassification == duplexExitFailed || input.Process.ExitClassification == duplexExitCancelled {
 		return contractFieldError(ErrMissingEvidence, "validator_input.process.exit_classification", "WORKED cannot use an unsuccessful process classification")
 	}
 	for _, result := range input.Mechanical.ActionResults {

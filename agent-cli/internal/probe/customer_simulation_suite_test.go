@@ -16,6 +16,15 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+// Fixture values shared by the probe tests: firstTurnID is the first scripted
+// customer turn, secondTurnID the next one, and unknownFixtureValue an
+// unrecognized enum or identifier.
+const (
+	firstTurnID         = "turn-1"
+	secondTurnID        = "turn-2"
+	unknownFixtureValue = "unknown"
+)
+
 type testStreamMessageCodec struct{}
 
 func (testStreamMessageCodec) EncodeStreamMessage(message messages.StreamMessage) ([]byte, error) {
@@ -379,7 +388,7 @@ func TestCustomerSimulationAudioEventsCorrelateMultipleReadsToRecordedResponses(
 		{ID: "response-original-output", Text: "draft", AudioBytes: 4},
 		{ID: "response-replacement-output", Text: "final", AudioBytes: 4},
 	}})
-	if len(crossing) != 2 || crossing[0].TurnID != "turn-1" || crossing[0].Bytes != 4 || crossing[1].TurnID != "turn-2" || crossing[1].Bytes != 2 {
+	if len(crossing) != 2 || crossing[0].TurnID != firstTurnID || crossing[0].Bytes != 4 || crossing[1].TurnID != secondTurnID || crossing[1].Bytes != 2 {
 		t.Fatalf("one read crossing a response boundary = %+v, want 4 bytes on turn-1 and 2 bytes on turn-2", crossing)
 	}
 }

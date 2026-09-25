@@ -1,6 +1,10 @@
 package probe
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 const (
 	FamilyBScenarioID = "family-b-corrected-release-note"
@@ -192,46 +196,202 @@ func NewFamilyBScenario() CustomerScenario {
 	}
 }
 
-func customerSimulationCorrectionEvidence(scenario CustomerScenario, product []TranscriptEvent, process ProcessFacts, facts customerSimulationRecordingFacts) CorrectionEvidence {
-	original := customerSimulationRecordedResponse(facts, 0)
-	replacement := customerSimulationRecordedResponse(facts, 1)
-	originalStart, originalEnd := customerSimulationResponseOutputBoundaries(original)
-	replacementStart, replacementEnd := customerSimulationResponseOutputBoundaries(replacement)
-	// All three boundaries come from the copied agent transcript's logical
-	// clock: response output audio, the first non-silent correction frame, and
-	// the actual provider-boundary RESPONSE.CANCEL. Do not substitute a parent
-	// process PCM read, a next response, or a terminal marker for any of them.
-	correctionAt := customerSimulationRecordedInputStart(facts, 1)
-	cancelAt := time.Duration(0)
-	if facts.cancelObserved {
-		cancelAt = facts.cancelAt
-	}
-
-	originalStatus := customerSimulationResponseStatus(original)
-	if originalStatus == customerSimulationResponseIncomplete && facts.cancelObserved && facts.cancelResponseID == original.ID {
-		originalStatus = string(DispositionCancelled)
-	}
-	replacementStatus := customerSimulationResponseStatus(replacement)
-	originalResponseID := original.ID
-	if originalResponseID == "" && len(product) > 0 {
-		// Keep a visible placeholder for the malformed/missing-record case. The
-		// contract still rejects an empty ID, and the evaluator reports the
-		// action-specific failure instead of fabricating a passing interval.
-		originalResponseID = "unobserved-original-response"
-	}
-	return CorrectionEvidence{
-		OriginalActionID: FamilyBOriginalActionID, ReplacementActionID: FamilyBReplacementActionID,
-		OriginalTurnID: customerSimulationTurnID(scenario, 0), CorrectionTurnID: customerSimulationTurnID(scenario, 1), OriginalResponseID: originalResponseID,
-		OriginalResponseStartedAt: originalStart, CorrectionStartedAt: correctionAt, CancellationSentAt: cancelAt, OriginalResponseEndedAt: originalEnd,
-		ReplacementResponseStartedAt: replacementStart, ReplacementResponseEndedAt: replacementEnd,
-		CancellationEventRecorded: facts.cancelObserved, CancellationResponseID: facts.cancelResponseID,
-		OriginalResponseStatus: originalStatus, ReplacementResponseStatus: replacementStatus, Process: &process,
-	}
-}
-
 func customerSimulationRecordedInputStart(facts customerSimulationRecordingFacts, index int) time.Duration {
 	if index < 0 || index >= len(facts.inputSpeechStarts) {
 		return 0
 	}
 	return facts.inputSpeechStarts[index]
+}
+
+// EvaluateCustomerSimulationCorrection adds the Family B correction ledger
+// to the ordinary action/tool/filesystem oracle. It permits an explicitly
+// cancelled original action only when the response was actually interrupted;
+// a replacement still has to complete against its own tool and filesystem
+// evidence.
+func EvaluateCustomerSimulationCorrection(
+	scenario CustomerScenario,
+	actionResults []ActionResult,
+	checkpoints []FilesystemCheckpoint,
+	toolObservations []ToolObservation,
+	productTranscript []TranscriptEvent,
+	correction CorrectionEvidence,
+) (MechanicalVerdict, error) {
+	if err := scenario.Validate(); err != nil {
+		return MechanicalVerdict{}, err
+	}
+	if err := correction.Validate(scenario); err != nil {
+		return MechanicalVerdict{}, err
+	}
+
+	mechanical, err := EvaluateCustomerSimulation(scenario, actionResults, checkpoints, toolObservations, productTranscript)
+	if err != nil {
+		return mechanical, err
+	}
+
+	set := correctionFindingSet{
+		oracleFindingSet: oracleFindingSet{findings: append([]MechanicalFinding(nil), mechanical.Findings...)},
+		correction:       correction,
+	}
+	replacementAction := set.addActionIdentityFindings(scenario)
+
+	resultByID := make(map[string]ActionResult, len(actionResults))
+	for _, result := range actionResults {
+		resultByID[result.ActionID] = result
+	}
+	originalResult, originalResultObserved := resultByID[correction.OriginalActionID]
+	replacementResult, replacementResultObserved := resultByID[correction.ReplacementActionID]
+
+	// Generic evaluation deliberately treats every non-completed action as a
+	// failure. Family B is the one scenario where cancellation is an intended
+	// terminal disposition, but only with a matching provider cancellation.
+	if originalResultObserved && originalResult.Disposition == DispositionCancelled && isCorrectionCancelledStatus(correction.OriginalResponseStatus) {
+		set.dropOriginalNotCompleted()
+	}
+
+	set.addResultFindings(originalResult, originalResultObserved, replacementAction, replacementResult, replacementResultObserved)
+	set.addResponseBoundaryFindings()
+	set.addTranscriptFindings(productTranscript)
+	set.addUnresolvedFindings(toolObservations)
+	set.addProcessFindings()
+
+	findings := set.findings
+	mechanical.Findings = findings
+	mechanical.Pass = len(findings) == 0
+	mechanical.Summary = mechanicalSummary(len(findings), len(scenario.Actions))
+	if err := mechanical.validate(scenario, "mechanical_verdict"); err != nil {
+		return mechanical, err
+	}
+	return mechanical, nil
+}
+
+// correctionFindingSet extends the ordinary oracle findings with the Family B
+// correction ledger checks.
+type correctionFindingSet struct {
+	oracleFindingSet
+	correction CorrectionEvidence
+}
+
+// addActionIdentityFindings checks the correction's action identities against
+// the scenario and returns the declared replacement action.
+func (s *correctionFindingSet) addActionIdentityFindings(scenario CustomerScenario) ActionIntent {
+	c := s.correction
+	actions := make(map[string]ActionIntent, len(scenario.Actions))
+	actionOrder := make(map[string]int, len(scenario.Actions))
+	for index, action := range scenario.Actions {
+		actions[action.ID] = action
+		actionOrder[action.ID] = index
+	}
+	_, originalKnown := actions[c.OriginalActionID]
+	replacementAction, replacementKnown := actions[c.ReplacementActionID]
+	s.addChecks([]findingCheck{
+		{!originalKnown, "unknown_original_action", c.OriginalActionID, c.OriginalTurnID, "correction names an undeclared original action"},
+		{!replacementKnown, "unknown_replacement_action", c.ReplacementActionID, c.CorrectionTurnID, "correction names an undeclared replacement action"},
+		{originalKnown && replacementKnown && actionOrder[c.OriginalActionID] >= actionOrder[c.ReplacementActionID], "correction_action_order", c.OriginalActionID, c.OriginalTurnID, "replacement action must follow the original action"},
+		{scenario.Interruption.Kind != InterruptionDuringOutput, "interruption_trigger_mismatch", c.OriginalActionID, c.OriginalTurnID, fmt.Sprintf("Family B requires during_output interruption, got %q", scenario.Interruption.Kind)},
+		{scenario.Interruption.ActionID != c.OriginalActionID, "interruption_action_mismatch", c.OriginalActionID, c.OriginalTurnID, fmt.Sprintf("scenario interruption targets %q", scenario.Interruption.ActionID)},
+	})
+	return replacementAction
+}
+
+func (s *correctionFindingSet) dropOriginalNotCompleted() {
+	filtered := s.findings[:0]
+	for _, finding := range s.findings {
+		if finding.Code == "action_not_completed" && finding.ActionID == s.correction.OriginalActionID {
+			continue
+		}
+		filtered = append(filtered, finding)
+	}
+	s.findings = filtered
+}
+
+func (s *correctionFindingSet) addResultFindings(original ActionResult, originalObserved bool, replacementAction ActionIntent, replacement ActionResult, replacementObserved bool) {
+	c := s.correction
+	s.addChecks([]findingCheck{
+		{!originalObserved, "original_action_unresolved", c.OriginalActionID, c.OriginalTurnID, "the original action has no terminal disposition"},
+		{originalObserved && original.TurnID != c.OriginalTurnID, "original_turn_mismatch", c.OriginalActionID, original.TurnID, fmt.Sprintf("correction ledger names turn %q", c.OriginalTurnID)},
+		{!replacementObserved, "replacement_not_verified", c.ReplacementActionID, c.CorrectionTurnID, "the replacement action has no independently recorded terminal result"},
+	})
+	if !replacementObserved {
+		return
+	}
+	s.addChecks([]findingCheck{
+		{replacement.TurnID != c.CorrectionTurnID, "replacement_turn_mismatch", c.ReplacementActionID, replacement.TurnID, fmt.Sprintf("correction ledger names turn %q", c.CorrectionTurnID)},
+		{replacement.Disposition != DispositionCompleted, "replacement_not_completed", c.ReplacementActionID, replacement.TurnID, fmt.Sprintf("replacement ended with %q", replacement.Disposition)},
+		{len(replacement.CheckpointIDs) == 0, "replacement_not_verified", c.ReplacementActionID, replacement.TurnID, "replacement completion has no filesystem checkpoint"},
+		{len(replacement.ToolObservationIDs) == 0 && replacementAction.PartialSideEffectPolicy != PartialSideEffectsForbid, "replacement_not_independent", c.ReplacementActionID, replacement.TurnID, "replacement completion has no tool evidence distinct from the original work"},
+	})
+}
+
+func (s *correctionFindingSet) addResponseBoundaryFindings() {
+	c := s.correction
+	cancelResponseMissing := c.CancellationEventRecorded && strings.TrimSpace(c.CancellationResponseID) == ""
+	s.addChecks([]findingCheck{
+		{!isCorrectionCancelledStatus(c.OriginalResponseStatus), "correction_ignored", c.OriginalActionID, c.OriginalTurnID, fmt.Sprintf("original response ended with status %q instead of cancelled", c.OriginalResponseStatus)},
+		{!isCorrectionCompletedStatus(c.ReplacementResponseStatus), "replacement_response_incomplete", c.ReplacementActionID, c.CorrectionTurnID, fmt.Sprintf("replacement response ended with status %q", c.ReplacementResponseStatus)},
+		{!c.CancellationEventRecorded, "cancellation_event_missing", c.OriginalActionID, c.CorrectionTurnID, "the copied product recording has no outbound RESPONSE.CANCEL event"},
+		{cancelResponseMissing, "cancellation_response_missing", c.OriginalActionID, c.CorrectionTurnID, "the recorded RESPONSE.CANCEL event is not associated with an original response"},
+		{c.CancellationEventRecorded && !cancelResponseMissing && c.CancellationResponseID != c.OriginalResponseID, "cancellation_response_mismatch", c.OriginalActionID, c.CorrectionTurnID, fmt.Sprintf("recorded RESPONSE.CANCEL targets %q, original response is %q", c.CancellationResponseID, c.OriginalResponseID)},
+		{c.OriginalResponseStartedAt >= c.CorrectionStartedAt, "correction_not_after_output_start", c.OriginalActionID, c.OriginalTurnID, "correction speech did not begin after original output started"},
+		{c.CorrectionStartedAt >= c.OriginalResponseEndedAt, "correction_after_response", c.OriginalActionID, c.CorrectionTurnID, "correction speech began after the original response had already ended"},
+		{c.CancellationSentAt < c.OriginalResponseStartedAt || c.CancellationSentAt >= c.CorrectionStartedAt, "cancellation_boundary_missing", c.OriginalActionID, c.CorrectionTurnID, "response cancellation was not observed between original output start and correction speech"},
+		{c.ReplacementResponseStartedAt < c.CorrectionStartedAt, "replacement_started_before_correction", c.ReplacementActionID, c.CorrectionTurnID, "replacement response started before the correction utterance"},
+		{c.ReplacementResponseEndedAt <= c.ReplacementResponseStartedAt, "replacement_response_unfinished", c.ReplacementActionID, c.CorrectionTurnID, "replacement response has no positive completed interval"},
+	})
+}
+
+func (s *correctionFindingSet) addTranscriptFindings(productTranscript []TranscriptEvent) {
+	c := s.correction
+	productTurns := map[string]struct{}{}
+	for _, event := range productTranscript {
+		if strings.TrimSpace(event.Text) != "" {
+			productTurns[event.TurnID] = struct{}{}
+		}
+	}
+	_, originalConfirmed := productTurns[c.OriginalTurnID]
+	_, correctionConfirmed := productTurns[c.CorrectionTurnID]
+	s.addChecks([]findingCheck{
+		{!originalConfirmed, "original_confirmation_missing", c.OriginalActionID, c.OriginalTurnID, "no product transcript evidence was recorded for the original action"},
+		{!correctionConfirmed, "correction_confirmation_missing", c.ReplacementActionID, c.CorrectionTurnID, "no product transcript evidence was recorded for the corrected request"},
+	})
+}
+
+func (s *correctionFindingSet) addUnresolvedFindings(toolObservations []ToolObservation) {
+	c := s.correction
+	for _, toolID := range c.OutstandingToolIDs {
+		if strings.TrimSpace(toolID) == "" {
+			s.add("unresolved_tool", c.OriginalActionID, c.OriginalTurnID, "an outstanding tool ledger entry has an empty ID")
+			continue
+		}
+		s.add("unresolved_tool", c.OriginalActionID, c.OriginalTurnID, fmt.Sprintf("tool %q was still outstanding at session termination", toolID))
+	}
+	for _, actionID := range c.UnresolvedActionIDs {
+		s.add("unresolved_action", actionID, c.OriginalTurnID, "an action remained unresolved at session termination")
+	}
+	for _, observation := range toolObservations {
+		if (observation.ActionID == c.OriginalActionID || observation.ActionID == c.ReplacementActionID) && (observation.Status == toolStatusStarted || !observation.ResultSeen) {
+			s.add("unresolved_tool", observation.ActionID, observation.TurnID, fmt.Sprintf("tool observation %q has status=%q result_seen=%t", observation.ID, observation.Status, observation.ResultSeen))
+		}
+	}
+}
+
+func (s *correctionFindingSet) addProcessFindings() {
+	c := s.correction
+	process := c.Process
+	if process == nil {
+		return
+	}
+	s.addChecks([]findingCheck{
+		{process.DescendantsAlive, "orphan_process", c.ReplacementActionID, c.CorrectionTurnID, "a descendant process remained alive after the corrected run"},
+		{!process.ChildWaited, "child_not_reaped", c.ReplacementActionID, c.CorrectionTurnID, "the shipped child was not reaped"},
+		{!process.InputClosed || !process.OutputClosed, "stream_not_closed", c.ReplacementActionID, c.CorrectionTurnID, fmt.Sprintf("process streams closed input=%t output=%t", process.InputClosed, process.OutputClosed)},
+		{process.ExitClassification != duplexExitNormal, "unclean_process_termination", c.ReplacementActionID, c.CorrectionTurnID, fmt.Sprintf("corrected run exit classification was %q", process.ExitClassification)},
+	})
+}
+
+func isCorrectionCancelledStatus(status string) bool {
+	return status == "cancelled" || status == "canceled"
+}
+
+func isCorrectionCompletedStatus(status string) bool {
+	return status == toolStatusCompleted
 }

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -343,6 +344,10 @@ const (
 	filesystemCheckpointEvidenceRef = "filesystem-checkpoints.jsonl"
 	toolObservationEvidenceRef      = "tool-observations.jsonl"
 	productTranscriptEvidenceRef    = "transcripts/product.jsonl"
+	toolStatusCompleted             = "completed"
+	toolStatusStarted               = "started"
+	toolStatusFailed                = "failed"
+	toolStatusCancelled             = "cancelled"
 )
 
 // EvaluateCustomerSimulation applies the mechanical action, tool, checkpoint,
@@ -359,160 +364,24 @@ func EvaluateCustomerSimulation(
 	if err := scenario.Validate(); err != nil {
 		return MechanicalVerdict{}, err
 	}
-
-	checkpointByID := make(map[string]FilesystemCheckpoint, len(checkpoints))
-	for _, checkpoint := range checkpoints {
-		if _, exists := checkpointByID[checkpoint.ID]; exists {
-			return MechanicalVerdict{}, fmt.Errorf("%w: duplicate checkpoint %q", ErrInvalidCustomerEvidence, checkpoint.ID)
-		}
-		checkpointByID[checkpoint.ID] = checkpoint
+	oracle, err := newActionOracle(scenario, checkpoints, toolObservations, productTranscript)
+	if err != nil {
+		return MechanicalVerdict{}, err
 	}
-	toolByID := make(map[string]ToolObservation, len(toolObservations))
-	for _, observation := range toolObservations {
-		if _, exists := toolByID[observation.ID]; exists {
-			return MechanicalVerdict{}, fmt.Errorf("%w: duplicate tool observation %q", ErrInvalidCustomerEvidence, observation.ID)
-		}
-		toolByID[observation.ID] = observation
+	actionByID, err := oracle.indexActionResults(actionResults)
+	if err != nil {
+		return MechanicalVerdict{}, err
 	}
-	actionByID := make(map[string]ActionResult, len(actionResults))
-	scenarioActionIDs := make(map[string]struct{}, len(scenario.Actions))
-	for _, action := range scenario.Actions {
-		scenarioActionIDs[action.ID] = struct{}{}
-	}
-	var findings []MechanicalFinding
-	addFinding := func(code, actionID, turnID, message string) {
-		findings = append(findings, MechanicalFinding{
-			Code: code, ActionID: actionID, TurnID: turnID, Message: message,
-			EvidenceRefs: []string{filesystemCheckpointEvidenceRef, toolObservationEvidenceRef, productTranscriptEvidenceRef},
-		})
-	}
-	for index, result := range actionResults {
-		if _, exists := actionByID[result.ActionID]; exists {
-			return MechanicalVerdict{}, fmt.Errorf("%w: duplicate action result %q", ErrDuplicateActionIntent, result.ActionID)
-		}
-		actionByID[result.ActionID] = result
-		if _, known := scenarioActionIDs[result.ActionID]; !known {
-			addFinding("unknown_action", result.ActionID, result.TurnID, "action result is not declared by the scenario")
-		}
-		if index < len(scenario.Actions) && result.ActionID != scenario.Actions[index].ID {
-			addFinding("action_order_mismatch", result.ActionID, result.TurnID, fmt.Sprintf("action appeared at position %d; expected %q", index+1, scenario.Actions[index].ID))
-		}
-	}
-
 	results := make([]ActionResult, 0, len(scenario.Actions))
 	for _, action := range scenario.Actions {
-		result, observed := actionByID[action.ID]
-		if !observed {
-			result = ActionResult{
-				ActionID:      action.ID,
-				Disposition:   fallbackDisposition(action),
-				OutcomeReason: "no terminal action observation was recorded",
-				EvidenceRefs:  defaultActionEvidenceRefs(),
-			}
-			addFinding("missing_action", action.ID, "", "the simulator did not record a terminal disposition")
-		}
-		if len(result.EvidenceRefs) == 0 {
-			result.EvidenceRefs = defaultActionEvidenceRefs()
-		}
-		if !result.Disposition.valid() {
-			addFinding("invalid_disposition", action.ID, result.TurnID, fmt.Sprintf("disposition %q is not terminal", result.Disposition))
-		} else if !dispositionAllowed(action, result.Disposition) {
-			addFinding("disallowed_disposition", action.ID, result.TurnID, fmt.Sprintf("disposition %q is not allowed by the action", result.Disposition))
-		}
-		if result.ConfirmedAt < 0 {
-			addFinding("invalid_confirmation_time", action.ID, result.TurnID, "confirmation timestamp is negative")
-		}
-		if result.Disposition != DispositionCompleted {
-			addFinding("action_not_completed", action.ID, result.TurnID, fmt.Sprintf("action ended with %q: %s", result.Disposition, result.OutcomeReason))
-		}
-		if action.Oracle.RequireConfirmation && !result.Confirmed {
-			addFinding("missing_confirmation", action.ID, result.TurnID, "the action oracle requires a customer-visible confirmation")
-		}
-
-		var actionCheckpoints []FilesystemCheckpoint
-		for _, checkpoint := range checkpoints {
-			if checkpoint.ActionID == action.ID {
-				actionCheckpoints = append(actionCheckpoints, checkpoint)
-			}
-		}
-		var selectedCheckpoint *FilesystemCheckpoint
-		for _, checkpointID := range result.CheckpointIDs {
-			checkpoint, ok := checkpointByID[checkpointID]
-			if !ok {
-				addFinding("missing_checkpoint", action.ID, result.TurnID, fmt.Sprintf("checkpoint %q was referenced but not recorded", checkpointID))
-				continue
-			}
-			if checkpoint.ActionID != action.ID {
-				addFinding("checkpoint_action_mismatch", action.ID, result.TurnID, fmt.Sprintf("checkpoint %q belongs to action %q", checkpointID, checkpoint.ActionID))
-				continue
-			}
-			if selectedCheckpoint == nil {
-				copyOfCheckpoint := checkpoint
-				selectedCheckpoint = &copyOfCheckpoint
-			}
-		}
-		if len(action.Oracle.Checkpoints) > 0 {
-			if selectedCheckpoint == nil {
-				addFinding("missing_checkpoint", action.ID, result.TurnID, "the action has filesystem expectations but no referenced checkpoint")
-			} else if err := VerifyFilesystemExpectations(action.Oracle.Checkpoints, *selectedCheckpoint); err != nil {
-				addFinding("filesystem_checkpoint_mismatch", action.ID, result.TurnID, err.Error())
-				if result.Confirmed {
-					addFinding("confirmation_without_matching_side_effect", action.ID, result.TurnID, "confirmation was recorded for a checkpoint that does not satisfy the action oracle")
-				}
-			}
-		} else if len(result.CheckpointIDs) > 0 && len(actionCheckpoints) == 0 {
-			addFinding("unexpected_checkpoint", action.ID, result.TurnID, "the result references a checkpoint for an action with no filesystem oracle")
-		}
-
-		if action.PartialSideEffectPolicy != PartialSideEffectsForbid && result.Disposition == DispositionCompleted && len(result.ToolObservationIDs) == 0 {
-			addFinding("missing_tool_evidence", action.ID, result.TurnID, "a side-effecting completed action has no tool observation")
-		}
-		seenToolIDs := map[string]struct{}{}
-		for _, toolID := range result.ToolObservationIDs {
-			if _, duplicate := seenToolIDs[toolID]; duplicate {
-				addFinding("duplicate_tool_evidence", action.ID, result.TurnID, fmt.Sprintf("tool observation %q was referenced twice", toolID))
-				continue
-			}
-			seenToolIDs[toolID] = struct{}{}
-			observation, ok := toolByID[toolID]
-			if !ok {
-				addFinding("missing_tool_evidence", action.ID, result.TurnID, fmt.Sprintf("tool observation %q was not recorded", toolID))
-				continue
-			}
-			if observation.ActionID != action.ID || (result.TurnID != "" && observation.TurnID != result.TurnID) {
-				addFinding("tool_action_mismatch", action.ID, result.TurnID, fmt.Sprintf("tool observation %q is correlated to action %q / turn %q", toolID, observation.ActionID, observation.TurnID))
-			}
-			if observation.Status != "completed" || !observation.ResultSeen {
-				addFinding("tool_result_incomplete", action.ID, result.TurnID, fmt.Sprintf("tool observation %q is status=%q result_seen=%t", toolID, observation.Status, observation.ResultSeen))
-			}
-			if result.Confirmed && observation.At+observation.Duration > result.ConfirmedAt {
-				addFinding("confirmation_before_tool_result", action.ID, result.TurnID, fmt.Sprintf("confirmation at %s preceded tool result at %s", result.ConfirmedAt, observation.At+observation.Duration))
-			}
-			if selectedCheckpoint != nil && observation.At+observation.Duration > selectedCheckpoint.At {
-				addFinding("checkpoint_before_tool_result", action.ID, result.TurnID, fmt.Sprintf("checkpoint at %s precedes tool result at %s", selectedCheckpoint.At, observation.At+observation.Duration))
-			}
-		}
-
-		text := transcriptTextForTurn(productTranscript, result.TurnID)
-		for _, requiredText := range action.Oracle.RequiredText {
-			if !strings.Contains(strings.ToLower(text), strings.ToLower(requiredText)) {
-				addFinding("summary_missing_fact", action.ID, result.TurnID, fmt.Sprintf("product transcript does not contain required fact %q", requiredText))
-			}
-		}
-		for _, forbiddenText := range action.Oracle.ForbiddenText {
-			if strings.Contains(strings.ToLower(text), strings.ToLower(forbiddenText)) {
-				addFinding("summary_claims_absent_fact", action.ID, result.TurnID, fmt.Sprintf("product transcript contains forbidden or stale fact %q", forbiddenText))
-			}
-		}
-		results = append(results, result)
+		results = append(results, oracle.evaluateAction(action, actionByID))
 	}
-
 	for _, checkpoint := range checkpoints {
-		if _, known := scenarioActionIDs[checkpoint.ActionID]; !known {
-			addFinding("unknown_checkpoint_action", checkpoint.ActionID, "", fmt.Sprintf("checkpoint %q names an undeclared action", checkpoint.ID))
+		if _, known := oracle.scenarioActionIDs[checkpoint.ActionID]; !known {
+			oracle.add("unknown_checkpoint_action", checkpoint.ActionID, "", fmt.Sprintf("checkpoint %q names an undeclared action", checkpoint.ID))
 		}
 	}
-
+	findings := oracle.findings
 	verdict := MechanicalVerdict{
 		Pass:          len(findings) == 0,
 		Summary:       mechanicalSummary(len(findings), len(scenario.Actions)),
@@ -525,195 +394,224 @@ func EvaluateCustomerSimulation(
 	return verdict, nil
 }
 
-// EvaluateCustomerSimulationCorrection adds the Family B correction ledger
-// to the ordinary action/tool/filesystem oracle. It permits an explicitly
-// cancelled original action only when the response was actually interrupted;
-// a replacement still has to complete against its own tool and filesystem
-// evidence.
-func EvaluateCustomerSimulationCorrection(
-	scenario CustomerScenario,
-	actionResults []ActionResult,
-	checkpoints []FilesystemCheckpoint,
-	toolObservations []ToolObservation,
-	productTranscript []TranscriptEvent,
-	correction CorrectionEvidence,
-) (MechanicalVerdict, error) {
-	if err := scenario.Validate(); err != nil {
-		return MechanicalVerdict{}, err
-	}
-	if err := correction.Validate(scenario); err != nil {
-		return MechanicalVerdict{}, err
-	}
+// oracleFindingSet accumulates mechanical findings in evaluation order. The
+// slice stays nil until the first finding so passing verdicts keep their
+// historical encoding.
+type oracleFindingSet struct {
+	findings []MechanicalFinding
+	// evidenceRefs supplies each finding's references; nil uses the
+	// ordinary action evidence references.
+	evidenceRefs func() []string
+}
 
-	mechanical, err := EvaluateCustomerSimulation(scenario, actionResults, checkpoints, toolObservations, productTranscript)
-	if err != nil {
-		return mechanical, err
+func (s *oracleFindingSet) add(code, actionID, turnID, message string) {
+	refs := defaultActionEvidenceRefs
+	if s.evidenceRefs != nil {
+		refs = s.evidenceRefs
 	}
+	s.findings = append(s.findings, MechanicalFinding{Code: code, ActionID: actionID, TurnID: turnID, Message: message, EvidenceRefs: refs()})
+}
 
-	actions := make(map[string]ActionIntent, len(scenario.Actions))
-	actionOrder := make(map[string]int, len(scenario.Actions))
-	for index, action := range scenario.Actions {
-		actions[action.ID] = action
-		actionOrder[action.ID] = index
-	}
-	_, originalKnown := actions[correction.OriginalActionID]
-	replacementAction, replacementKnown := actions[correction.ReplacementActionID]
-	findings := append([]MechanicalFinding(nil), mechanical.Findings...)
-	addFinding := func(code, actionID, turnID, message string) {
-		findings = append(findings, MechanicalFinding{
-			Code: code, ActionID: actionID, TurnID: turnID, Message: message,
-			EvidenceRefs: []string{filesystemCheckpointEvidenceRef, toolObservationEvidenceRef, productTranscriptEvidenceRef},
-		})
-	}
+// findingCheck is one finding recorded, in declaration order, when failed.
+type findingCheck struct {
+	failed   bool
+	code     string
+	actionID string
+	turnID   string
+	message  string
+}
 
-	if !originalKnown {
-		addFinding("unknown_original_action", correction.OriginalActionID, correction.OriginalTurnID, "correction names an undeclared original action")
-	}
-	if !replacementKnown {
-		addFinding("unknown_replacement_action", correction.ReplacementActionID, correction.CorrectionTurnID, "correction names an undeclared replacement action")
-	}
-	if originalKnown && replacementKnown && actionOrder[correction.OriginalActionID] >= actionOrder[correction.ReplacementActionID] {
-		addFinding("correction_action_order", correction.OriginalActionID, correction.OriginalTurnID, "replacement action must follow the original action")
-	}
-	if scenario.Interruption.Kind != InterruptionDuringOutput {
-		addFinding("interruption_trigger_mismatch", correction.OriginalActionID, correction.OriginalTurnID, fmt.Sprintf("Family B requires during_output interruption, got %q", scenario.Interruption.Kind))
-	}
-	if scenario.Interruption.ActionID != correction.OriginalActionID {
-		addFinding("interruption_action_mismatch", correction.OriginalActionID, correction.OriginalTurnID, fmt.Sprintf("scenario interruption targets %q", scenario.Interruption.ActionID))
-	}
-
-	resultByID := make(map[string]ActionResult, len(actionResults))
-	for _, result := range actionResults {
-		resultByID[result.ActionID] = result
-	}
-	originalResult, originalResultObserved := resultByID[correction.OriginalActionID]
-	replacementResult, replacementResultObserved := resultByID[correction.ReplacementActionID]
-
-	// Generic evaluation deliberately treats every non-completed action as a
-	// failure. Family B is the one scenario where cancellation is an intended
-	// terminal disposition, but only with a matching provider cancellation.
-	if originalResultObserved && originalResult.Disposition == DispositionCancelled && isCorrectionCancelledStatus(correction.OriginalResponseStatus) {
-		filtered := findings[:0]
-		for _, finding := range findings {
-			if finding.Code == "action_not_completed" && finding.ActionID == correction.OriginalActionID {
-				continue
-			}
-			filtered = append(filtered, finding)
-		}
-		findings = filtered
-	}
-
-	if !originalResultObserved {
-		addFinding("original_action_unresolved", correction.OriginalActionID, correction.OriginalTurnID, "the original action has no terminal disposition")
-	} else if originalResult.TurnID != correction.OriginalTurnID {
-		addFinding("original_turn_mismatch", correction.OriginalActionID, originalResult.TurnID, fmt.Sprintf("correction ledger names turn %q", correction.OriginalTurnID))
-	}
-	if !replacementResultObserved {
-		addFinding("replacement_not_verified", correction.ReplacementActionID, correction.CorrectionTurnID, "the replacement action has no independently recorded terminal result")
-	} else {
-		if replacementResult.TurnID != correction.CorrectionTurnID {
-			addFinding("replacement_turn_mismatch", correction.ReplacementActionID, replacementResult.TurnID, fmt.Sprintf("correction ledger names turn %q", correction.CorrectionTurnID))
-		}
-		if replacementResult.Disposition != DispositionCompleted {
-			addFinding("replacement_not_completed", correction.ReplacementActionID, replacementResult.TurnID, fmt.Sprintf("replacement ended with %q", replacementResult.Disposition))
-		}
-		if len(replacementResult.CheckpointIDs) == 0 {
-			addFinding("replacement_not_verified", correction.ReplacementActionID, replacementResult.TurnID, "replacement completion has no filesystem checkpoint")
-		}
-		if len(replacementResult.ToolObservationIDs) == 0 && replacementAction.PartialSideEffectPolicy != PartialSideEffectsForbid {
-			addFinding("replacement_not_independent", correction.ReplacementActionID, replacementResult.TurnID, "replacement completion has no tool evidence distinct from the original work")
+func (s *oracleFindingSet) addChecks(checks []findingCheck) {
+	for _, check := range checks {
+		if check.failed {
+			s.add(check.code, check.actionID, check.turnID, check.message)
 		}
 	}
+}
 
-	if !isCorrectionCancelledStatus(correction.OriginalResponseStatus) {
-		addFinding("correction_ignored", correction.OriginalActionID, correction.OriginalTurnID, fmt.Sprintf("original response ended with status %q instead of cancelled", correction.OriginalResponseStatus))
-	}
-	if !isCorrectionCompletedStatus(correction.ReplacementResponseStatus) {
-		addFinding("replacement_response_incomplete", correction.ReplacementActionID, correction.CorrectionTurnID, fmt.Sprintf("replacement response ended with status %q", correction.ReplacementResponseStatus))
-	}
-	if !correction.CancellationEventRecorded {
-		addFinding("cancellation_event_missing", correction.OriginalActionID, correction.CorrectionTurnID, "the copied product recording has no outbound RESPONSE.CANCEL event")
-	} else if strings.TrimSpace(correction.CancellationResponseID) == "" {
-		addFinding("cancellation_response_missing", correction.OriginalActionID, correction.CorrectionTurnID, "the recorded RESPONSE.CANCEL event is not associated with an original response")
-	} else if correction.CancellationResponseID != correction.OriginalResponseID {
-		addFinding("cancellation_response_mismatch", correction.OriginalActionID, correction.CorrectionTurnID, fmt.Sprintf("recorded RESPONSE.CANCEL targets %q, original response is %q", correction.CancellationResponseID, correction.OriginalResponseID))
-	}
-	if correction.OriginalResponseStartedAt >= correction.CorrectionStartedAt {
-		addFinding("correction_not_after_output_start", correction.OriginalActionID, correction.OriginalTurnID, "correction speech did not begin after original output started")
-	}
-	if correction.CorrectionStartedAt >= correction.OriginalResponseEndedAt {
-		addFinding("correction_after_response", correction.OriginalActionID, correction.CorrectionTurnID, "correction speech began after the original response had already ended")
-	}
-	if correction.CancellationSentAt < correction.OriginalResponseStartedAt || correction.CancellationSentAt >= correction.CorrectionStartedAt {
-		addFinding("cancellation_boundary_missing", correction.OriginalActionID, correction.CorrectionTurnID, "response cancellation was not observed between original output start and correction speech")
-	}
-	if correction.ReplacementResponseStartedAt < correction.CorrectionStartedAt {
-		addFinding("replacement_started_before_correction", correction.ReplacementActionID, correction.CorrectionTurnID, "replacement response started before the correction utterance")
-	}
-	if correction.ReplacementResponseEndedAt <= correction.ReplacementResponseStartedAt {
-		addFinding("replacement_response_unfinished", correction.ReplacementActionID, correction.CorrectionTurnID, "replacement response has no positive completed interval")
-	}
+// actionOracle holds the indexed observations for one mechanical evaluation.
+type actionOracle struct {
+	oracleFindingSet
+	scenario          CustomerScenario
+	checkpoints       []FilesystemCheckpoint
+	checkpointByID    map[string]FilesystemCheckpoint
+	toolByID          map[string]ToolObservation
+	productTranscript []TranscriptEvent
+	scenarioActionIDs map[string]struct{}
+}
 
-	productTurns := map[string]struct{}{}
-	for _, event := range productTranscript {
-		if strings.TrimSpace(event.Text) != "" {
-			productTurns[event.TurnID] = struct{}{}
+func newActionOracle(scenario CustomerScenario, checkpoints []FilesystemCheckpoint, toolObservations []ToolObservation, productTranscript []TranscriptEvent) (*actionOracle, error) {
+	checkpointByID := make(map[string]FilesystemCheckpoint, len(checkpoints))
+	for _, checkpoint := range checkpoints {
+		if _, exists := checkpointByID[checkpoint.ID]; exists {
+			return nil, fmt.Errorf("%w: duplicate checkpoint %q", ErrInvalidCustomerEvidence, checkpoint.ID)
+		}
+		checkpointByID[checkpoint.ID] = checkpoint
+	}
+	toolByID := make(map[string]ToolObservation, len(toolObservations))
+	for _, observation := range toolObservations {
+		if _, exists := toolByID[observation.ID]; exists {
+			return nil, fmt.Errorf("%w: duplicate tool observation %q", ErrInvalidCustomerEvidence, observation.ID)
+		}
+		toolByID[observation.ID] = observation
+	}
+	scenarioActionIDs := make(map[string]struct{}, len(scenario.Actions))
+	for _, action := range scenario.Actions {
+		scenarioActionIDs[action.ID] = struct{}{}
+	}
+	return &actionOracle{
+		scenario:          scenario,
+		checkpoints:       checkpoints,
+		checkpointByID:    checkpointByID,
+		toolByID:          toolByID,
+		productTranscript: productTranscript,
+		scenarioActionIDs: scenarioActionIDs,
+	}, nil
+}
+
+func (o *actionOracle) indexActionResults(actionResults []ActionResult) (map[string]ActionResult, error) {
+	actionByID := make(map[string]ActionResult, len(actionResults))
+	for index, result := range actionResults {
+		if _, exists := actionByID[result.ActionID]; exists {
+			return nil, fmt.Errorf("%w: duplicate action result %q", ErrDuplicateActionIntent, result.ActionID)
+		}
+		actionByID[result.ActionID] = result
+		if _, known := o.scenarioActionIDs[result.ActionID]; !known {
+			o.add("unknown_action", result.ActionID, result.TurnID, "action result is not declared by the scenario")
+		}
+		if index < len(o.scenario.Actions) && result.ActionID != o.scenario.Actions[index].ID {
+			o.add("action_order_mismatch", result.ActionID, result.TurnID, fmt.Sprintf("action appeared at position %d; expected %q", index+1, o.scenario.Actions[index].ID))
 		}
 	}
-	if _, ok := productTurns[correction.OriginalTurnID]; !ok {
-		addFinding("original_confirmation_missing", correction.OriginalActionID, correction.OriginalTurnID, "no product transcript evidence was recorded for the original action")
-	}
-	if _, ok := productTurns[correction.CorrectionTurnID]; !ok {
-		addFinding("correction_confirmation_missing", correction.ReplacementActionID, correction.CorrectionTurnID, "no product transcript evidence was recorded for the corrected request")
-	}
+	return actionByID, nil
+}
 
-	for _, toolID := range correction.OutstandingToolIDs {
-		if strings.TrimSpace(toolID) == "" {
-			addFinding("unresolved_tool", correction.OriginalActionID, correction.OriginalTurnID, "an outstanding tool ledger entry has an empty ID")
+func (o *actionOracle) evaluateAction(action ActionIntent, actionByID map[string]ActionResult) ActionResult {
+	result, observed := actionByID[action.ID]
+	if !observed {
+		result = ActionResult{
+			ActionID:      action.ID,
+			Disposition:   fallbackDisposition(action),
+			OutcomeReason: "no terminal action observation was recorded",
+			EvidenceRefs:  defaultActionEvidenceRefs(),
+		}
+		o.add("missing_action", action.ID, "", "the simulator did not record a terminal disposition")
+	}
+	if len(result.EvidenceRefs) == 0 {
+		result.EvidenceRefs = defaultActionEvidenceRefs()
+	}
+	o.addDispositionFindings(action, result)
+	selectedCheckpoint := o.addCheckpointFindings(action, result)
+	o.addToolFindings(action, result, selectedCheckpoint)
+	o.addTranscriptFindings(action, result)
+	return result
+}
+
+func (o *actionOracle) addDispositionFindings(action ActionIntent, result ActionResult) {
+	if !result.Disposition.valid() {
+		o.add("invalid_disposition", action.ID, result.TurnID, fmt.Sprintf("disposition %q is not terminal", result.Disposition))
+	} else if !dispositionAllowed(action, result.Disposition) {
+		o.add("disallowed_disposition", action.ID, result.TurnID, fmt.Sprintf("disposition %q is not allowed by the action", result.Disposition))
+	}
+	if result.ConfirmedAt < 0 {
+		o.add("invalid_confirmation_time", action.ID, result.TurnID, "confirmation timestamp is negative")
+	}
+	if result.Disposition != DispositionCompleted {
+		o.add("action_not_completed", action.ID, result.TurnID, fmt.Sprintf("action ended with %q: %s", result.Disposition, result.OutcomeReason))
+	}
+	if action.Oracle.RequireConfirmation && !result.Confirmed {
+		o.add("missing_confirmation", action.ID, result.TurnID, "the action oracle requires a customer-visible confirmation")
+	}
+}
+
+// addCheckpointFindings verifies the referenced checkpoints and returns the
+// first checkpoint that belongs to the action, if any.
+func (o *actionOracle) addCheckpointFindings(action ActionIntent, result ActionResult) *FilesystemCheckpoint {
+	var selectedCheckpoint *FilesystemCheckpoint
+	for _, checkpointID := range result.CheckpointIDs {
+		checkpoint, ok := o.checkpointByID[checkpointID]
+		if !ok {
+			o.add("missing_checkpoint", action.ID, result.TurnID, fmt.Sprintf("checkpoint %q was referenced but not recorded", checkpointID))
 			continue
 		}
-		addFinding("unresolved_tool", correction.OriginalActionID, correction.OriginalTurnID, fmt.Sprintf("tool %q was still outstanding at session termination", toolID))
-	}
-	for _, actionID := range correction.UnresolvedActionIDs {
-		addFinding("unresolved_action", actionID, correction.OriginalTurnID, "an action remained unresolved at session termination")
-	}
-	for _, observation := range toolObservations {
-		if (observation.ActionID == correction.OriginalActionID || observation.ActionID == correction.ReplacementActionID) && (observation.Status == "started" || !observation.ResultSeen) {
-			addFinding("unresolved_tool", observation.ActionID, observation.TurnID, fmt.Sprintf("tool observation %q has status=%q result_seen=%t", observation.ID, observation.Status, observation.ResultSeen))
+		if checkpoint.ActionID != action.ID {
+			o.add("checkpoint_action_mismatch", action.ID, result.TurnID, fmt.Sprintf("checkpoint %q belongs to action %q", checkpointID, checkpoint.ActionID))
+			continue
+		}
+		if selectedCheckpoint == nil {
+			copyOfCheckpoint := checkpoint
+			selectedCheckpoint = &copyOfCheckpoint
 		}
 	}
-
-	if correction.Process != nil {
-		process := correction.Process
-		if process.DescendantsAlive {
-			addFinding("orphan_process", correction.ReplacementActionID, correction.CorrectionTurnID, "a descendant process remained alive after the corrected run")
+	if len(action.Oracle.Checkpoints) == 0 {
+		if len(result.CheckpointIDs) > 0 && !o.actionHasCheckpoint(action.ID) {
+			o.add("unexpected_checkpoint", action.ID, result.TurnID, "the result references a checkpoint for an action with no filesystem oracle")
 		}
-		if !process.ChildWaited {
-			addFinding("child_not_reaped", correction.ReplacementActionID, correction.CorrectionTurnID, "the shipped child was not reaped")
-		}
-		if !process.InputClosed || !process.OutputClosed {
-			addFinding("stream_not_closed", correction.ReplacementActionID, correction.CorrectionTurnID, fmt.Sprintf("process streams closed input=%t output=%t", process.InputClosed, process.OutputClosed))
-		}
-		if process.ExitClassification != "normal" {
-			addFinding("unclean_process_termination", correction.ReplacementActionID, correction.CorrectionTurnID, fmt.Sprintf("corrected run exit classification was %q", process.ExitClassification))
+		return selectedCheckpoint
+	}
+	if selectedCheckpoint == nil {
+		o.add("missing_checkpoint", action.ID, result.TurnID, "the action has filesystem expectations but no referenced checkpoint")
+	} else if err := VerifyFilesystemExpectations(action.Oracle.Checkpoints, *selectedCheckpoint); err != nil {
+		o.add("filesystem_checkpoint_mismatch", action.ID, result.TurnID, err.Error())
+		if result.Confirmed {
+			o.add("confirmation_without_matching_side_effect", action.ID, result.TurnID, "confirmation was recorded for a checkpoint that does not satisfy the action oracle")
 		}
 	}
-
-	mechanical.Findings = findings
-	mechanical.Pass = len(findings) == 0
-	mechanical.Summary = mechanicalSummary(len(findings), len(scenario.Actions))
-	if err := mechanical.validate(scenario, "mechanical_verdict"); err != nil {
-		return mechanical, err
-	}
-	return mechanical, nil
+	return selectedCheckpoint
 }
 
-func isCorrectionCancelledStatus(status string) bool {
-	return status == "cancelled" || status == "canceled"
+func (o *actionOracle) actionHasCheckpoint(actionID string) bool {
+	return slices.ContainsFunc(o.checkpoints, func(checkpoint FilesystemCheckpoint) bool { return checkpoint.ActionID == actionID })
 }
 
-func isCorrectionCompletedStatus(status string) bool {
-	return status == "completed"
+func (o *actionOracle) addToolFindings(action ActionIntent, result ActionResult, selectedCheckpoint *FilesystemCheckpoint) {
+	if action.PartialSideEffectPolicy != PartialSideEffectsForbid && result.Disposition == DispositionCompleted && len(result.ToolObservationIDs) == 0 {
+		o.add("missing_tool_evidence", action.ID, result.TurnID, "a side-effecting completed action has no tool observation")
+	}
+	seenToolIDs := map[string]struct{}{}
+	for _, toolID := range result.ToolObservationIDs {
+		if _, duplicate := seenToolIDs[toolID]; duplicate {
+			o.add("duplicate_tool_evidence", action.ID, result.TurnID, fmt.Sprintf("tool observation %q was referenced twice", toolID))
+			continue
+		}
+		seenToolIDs[toolID] = struct{}{}
+		observation, ok := o.toolByID[toolID]
+		if !ok {
+			o.add("missing_tool_evidence", action.ID, result.TurnID, fmt.Sprintf("tool observation %q was not recorded", toolID))
+			continue
+		}
+		o.addToolObservationFindings(action, result, observation, selectedCheckpoint)
+	}
+}
+
+func (o *actionOracle) addToolObservationFindings(action ActionIntent, result ActionResult, observation ToolObservation, selectedCheckpoint *FilesystemCheckpoint) {
+	toolID := observation.ID
+	if observation.ActionID != action.ID || (result.TurnID != "" && observation.TurnID != result.TurnID) {
+		o.add("tool_action_mismatch", action.ID, result.TurnID, fmt.Sprintf("tool observation %q is correlated to action %q / turn %q", toolID, observation.ActionID, observation.TurnID))
+	}
+	if observation.Status != toolStatusCompleted || !observation.ResultSeen {
+		o.add("tool_result_incomplete", action.ID, result.TurnID, fmt.Sprintf("tool observation %q is status=%q result_seen=%t", toolID, observation.Status, observation.ResultSeen))
+	}
+	if result.Confirmed && observation.At+observation.Duration > result.ConfirmedAt {
+		o.add("confirmation_before_tool_result", action.ID, result.TurnID, fmt.Sprintf("confirmation at %s preceded tool result at %s", result.ConfirmedAt, observation.At+observation.Duration))
+	}
+	if selectedCheckpoint != nil && observation.At+observation.Duration > selectedCheckpoint.At {
+		o.add("checkpoint_before_tool_result", action.ID, result.TurnID, fmt.Sprintf("checkpoint at %s precedes tool result at %s", selectedCheckpoint.At, observation.At+observation.Duration))
+	}
+}
+
+func (o *actionOracle) addTranscriptFindings(action ActionIntent, result ActionResult) {
+	text := transcriptTextForTurn(o.productTranscript, result.TurnID)
+	for _, requiredText := range action.Oracle.RequiredText {
+		if !strings.Contains(strings.ToLower(text), strings.ToLower(requiredText)) {
+			o.add("summary_missing_fact", action.ID, result.TurnID, fmt.Sprintf("product transcript does not contain required fact %q", requiredText))
+		}
+	}
+	for _, forbiddenText := range action.Oracle.ForbiddenText {
+		if strings.Contains(strings.ToLower(text), strings.ToLower(forbiddenText)) {
+			o.add("summary_claims_absent_fact", action.ID, result.TurnID, fmt.Sprintf("product transcript contains forbidden or stale fact %q", forbiddenText))
+		}
+	}
 }
 
 func defaultActionEvidenceRefs() []string {
@@ -756,4 +654,13 @@ func mechanicalSummary(findingCount, actionCount int) string {
 		return fmt.Sprintf("all %d ordered actions have terminal, truth-checked observations", actionCount)
 	}
 	return fmt.Sprintf("mechanical oracle found %d finding(s) across %d ordered actions", findingCount, actionCount)
+}
+
+func findActionResult(results []ActionResult, actionID string) (ActionResult, bool) {
+	for _, result := range results {
+		if result.ActionID == actionID {
+			return result, true
+		}
+	}
+	return ActionResult{}, false
 }

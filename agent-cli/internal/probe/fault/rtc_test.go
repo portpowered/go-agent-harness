@@ -103,13 +103,13 @@ type loopbackPeerDialer struct {
 	done             <-chan struct{}
 }
 
-func (d *loopbackPeerDialer) DialContext(ctx context.Context, _ string, _ map[string]string) (rtc.Conn, error) {
+func (d *loopbackPeerDialer) DialContext(ctx context.Context, _ string, _ map[string]string) (conn rtc.Conn, err error) {
 	offerer, answerer, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: time.Second})
 	if err != nil {
 		return nil, err
 	}
-	defer offerer.Close()
-	defer answerer.Close()
+	defer func() { err = errors.Join(err, offerer.Close()) }()
+	defer func() { err = errors.Join(err, answerer.Close()) }()
 	d.done = offerer.Done()
 
 	var offererSignaling rtc.Signaling = offerer
