@@ -101,8 +101,11 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	var observedInstructions string
 	probeService := runtimeDevicesWire.NewProbeService(registry, nil)
 	observation, err := probeService.Run(ctx, serviceDevices.DeviceProbeRequest{
-		Scenario:             serviceProbeScenario(),
-		CaptureTime:          700 * time.Millisecond,
+		Scenario: serviceProbeScenario(),
+		// The capture window runs on wall time. The virtual source delivers
+		// the ten seeded frames immediately, so a short window still proves
+		// the microphone path without waiting out a live-length capture.
+		CaptureTime:          150 * time.Millisecond,
 		SessionInferencer:    serviceProbeInferencer{session: session},
 		InstructionsObserved: func(value string) { observedInstructions = value },
 	})
