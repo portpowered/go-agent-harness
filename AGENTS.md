@@ -28,3 +28,7 @@ the agent may generate ticks.
 the user may generate ticks. 
 the system may generat ticks. 
 
+
+## validation
+
+Run `make prepush` before pushing; it tests only the packages your diff affects (`make prepush-full` tests everything, like CI). See docs/local-validation.md.

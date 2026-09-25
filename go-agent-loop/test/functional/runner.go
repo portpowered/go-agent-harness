@@ -163,25 +163,26 @@ func RunPackageTests(m *testing.M, packagePath string) {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
-	os.Exit(runSelectedPackageTests(m, packagePath))
+	os.Exit(runSelectedPackageTests(m.Run, packagePath, os.Stdout, os.Stderr))
 }
 
 // runSelectedPackageTests runs one package under its manifest selection and
-// returns the process exit code.
-func runSelectedPackageTests(m *testing.M, packagePath string) int {
+// returns the process exit code. run is the package's testing.M.Run; it is
+// never called when the manifest fails validation.
+func runSelectedPackageTests(run func() int, packagePath string, stdout, stderr io.Writer) int {
 	selection, selected, err := selectPackageTests(packagePath)
 	if err == nil && selected {
-		err = applyPackageSelection(selection)
+		err = applyPackageSelection(selection, stdout)
 	}
 	if err != nil {
-		writePackageRunnerError(err)
+		writePackageRunnerError(stderr, err)
 		return 1
 	}
 	if !selected {
-		return m.Run()
+		return run()
 	}
 
-	exitCode := m.Run()
+	exitCode := run()
 	report := Report{
 		Discovered:           len(selection.Discovered),
 		Executed:             len(selection.Selected),
@@ -193,8 +194,8 @@ func runSelectedPackageTests(m *testing.M, packagePath string) int {
 	} else {
 		report.Failed = report.Executed
 	}
-	if _, err := fmt.Fprintln(os.Stdout, report.Summary()); err != nil {
-		writePackageRunnerError(fmt.Errorf("write package summary: %w", err))
+	if _, err := fmt.Fprintln(stdout, report.Summary()); err != nil {
+		writePackageRunnerError(stderr, fmt.Errorf("write package summary: %w", err))
 		return 1
 	}
 	return exitCode
@@ -247,9 +248,9 @@ func selectPackageTests(packagePath string) (Selection, bool, error) {
 
 // applyPackageSelection reports quarantined selectors and narrows test.run to
 // the selected tests.
-func applyPackageSelection(selection Selection) error {
+func applyPackageSelection(selection Selection, stdout io.Writer) error {
 	for _, record := range selection.Quarantined {
-		if _, err := fmt.Fprintf(os.Stdout, "quarantine: selector=%s bucket=%s reason=%q exitCondition=%q count=%d observed=skip\n",
+		if _, err := fmt.Fprintf(stdout, "quarantine: selector=%s bucket=%s reason=%q exitCondition=%q count=%d observed=skip\n",
 			record.Entry.Selector(), record.Entry.Bucket, record.Entry.Reason, record.Entry.ExitCondition, len(record.Tests)); err != nil {
 			return fmt.Errorf("write quarantine report: %w", err)
 		}
@@ -301,20 +302,8 @@ func packageRunPattern(selected []TestSelector) (string, error) {
 	return "^(?:" + strings.Join(quoted, "|") + ")$", nil
 }
 
-func setEnv(environment []string, key, value string) []string {
-	prefix := key + "="
-	filtered := make([]string, 0, len(environment)+1)
-	for _, item := range environment {
-		if strings.HasPrefix(item, prefix) {
-			continue
-		}
-		filtered = append(filtered, item)
-	}
-	return append(filtered, prefix+value)
-}
-
-func writePackageRunnerError(err error) {
-	if _, writeErr := fmt.Fprintf(os.Stderr, "functional quarantine runner: %v\n", err); writeErr != nil {
+func writePackageRunnerError(stderr io.Writer, err error) {
+	if _, writeErr := fmt.Fprintf(stderr, "functional quarantine runner: %v\n", err); writeErr != nil {
 		return
 	}
 }

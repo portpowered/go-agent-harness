@@ -23,6 +23,9 @@ profile.cov
 
 factory/scripts/__pycache__/
 .cache/go-tools/
+# make prepush phase result cache and coverage profiles/scope files
+.cache/prepush/
+/coverage/
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
