@@ -127,6 +127,9 @@ ARCHITECTURE_BASELINE := docs/architecture/baselines
 ARCHITECTURE_BASE ?= origin/main
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
+# Race test binaries sleep 1s at exit by default (GORACE atexit_sleep_ms);
+# across the race targets' ~20 binaries that was a third of their time.
+RACE_GORACE ?= atexit_sleep_ms=0
 SESSIONS_RACE_TIMEOUT ?= 600s
 GOLANGCI_LINT_VERSION ?= v2.9.0
 STATICCHECK_VERSION ?= 2026.1
@@ -164,7 +167,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -418,11 +421,36 @@ test-audio-stability: ## Run deterministic duplex, queue, resampler, capsule, an
 	(cd agent-cli && $(GO) test ./internal/services/... -count=1 -timeout "$(GO_TEST_TIMEOUT)"); \
 	(cd agent-cli && $(GO) test ./test/integration -run '^TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio$$' -count=1 -timeout "$(GO_TEST_TIMEOUT)")
 
+# Only the packages that hold tests matching the pattern: race-compiling all
+# of go-audio, go-device-gateway and agent-cli/internal/services (26 test
+# binaries) to run tests from two of them cost most of the target's time.
+# `make test-audio-stability-race AUDIO_STABILITY_RACE_PACKAGES="../go-audio/... ../go-device-gateway/... ./internal/services/..."`
+# re-checks that no other package matches.
+AUDIO_STABILITY_RACE_PACKAGES ?= ../go-device-gateway/pkg/devices ../go-device-gateway/pkg/runtime
 test-audio-stability-race: ## Run callback, cancellation, queue, and replay audio paths under the race detector.
 	@set -euo pipefail; \
-	(cd agent-cli && CGO_ENABLED=1 $(GO) test -race -tags=nomicrophone ../go-audio/... ../go-device-gateway/... ./internal/services/... \
+	(cd agent-cli && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race -tags=nomicrophone $(AUDIO_STABILITY_RACE_PACKAGES) \
 		-run 'Test(SimulatedDuplex|RemoteDeviceServer|SessionAudioFailureCapsule|FailureCapsule|VirtualPlaybackCapacityAdversarial|RTCDeviceSinkSerializes|RTCDeviceSinkDiscard|RTCDeviceBoundSessionDrops)' \
 		-count=1 -timeout "$(RTC_RACE_TIMEOUT)")
+
+# The go-agent-loop packages whose tests drive concurrent sessions, the engine
+# hot loop, participant runners and duplex turns. The six capacity tests that
+# test-sessions-race gates (with its own retry and event verification) are
+# skipped here so each runs once.
+LOOP_RACE_PACKAGES := ./test/functional/sessions ./test/functional/duplex ./pkg/engine ./pkg/participants ./pkg/agentloop
+test-loop-race: ## Run the go-agent-loop session, engine, participant, agent-loop and duplex tests with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-loop-race go-agent-loop $(LOOP_RACE_PACKAGES)"; \
+	skip="$$(cd tools/session-race-gate && GOWORK=off $(GO) run . -print-run-pattern)"; \
+	(cd go-agent-loop && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race -tags=nomicrophone $(LOOP_RACE_PACKAGES) -skip "$$skip" -count=1 -timeout "$(SESSIONS_RACE_TIMEOUT)")
+
+# The native (cgo, real malgo backend) Linux device tests: the hermetic
+# coverage build uses the nomicrophone stub, so no other job compiles them.
+test-linux-devices-race: ## Run the native Linux cgo device backend tests with the race detector (Linux only).
+	@set -euo pipefail; \
+	if [ "$$($(GO) env GOOS)" != linux ]; then echo "==> test-linux-devices-race skipped: Linux only"; exit 0; fi; \
+	echo "==> test-linux-devices-race go-device-gateway/pkg/devices (cgo)"; \
+	(cd go-device-gateway && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race ./pkg/devices -run '^TestLinux' -count=1 -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-audio-device-server-integration: ## Build both binaries and run the process-boundary OpenAI audio replay.
 	@set -euo pipefail; \
@@ -447,12 +475,12 @@ test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
-	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
+	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-sessions-race: ## Run the concurrent session capacity acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-sessions-race go-agent-loop/test/functional/sessions"; \
-	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
+	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
 
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \

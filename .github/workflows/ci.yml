@@ -475,7 +475,11 @@ jobs:
 
   # Focused race-detector acceptance tests. Kept together on one runner
   # (rather than split further) to avoid adding more concurrent
-  # load-sensitive test processes across additional runners.
+  # load-sensitive test processes across additional runners. Each target
+  # race-compiles only the packages it runs tests from, and the Makefile sets
+  # GORACE=atexit_sleep_ms=0 so no race test binary idles 1s at exit. The
+  # Linux device step is also the only job that builds the native (cgo,
+  # malgo) Linux device backend and its tests.
   race:
     name: CI (race)
     runs-on: ubuntu-latest
@@ -512,6 +516,14 @@ jobs:
       - name: Run concurrent session capacity race acceptance
         if: always()
         run: make test-sessions-race
+
+      - name: Run agent loop session, engine and participant race corpus
+        if: always()
+        run: make test-loop-race
+
+      - name: Run native Linux device backend race tests
+        if: always()
+        run: make test-linux-devices-race
 
       - name: Save Go cache
         uses: ./.github/actions/go-cache-save
