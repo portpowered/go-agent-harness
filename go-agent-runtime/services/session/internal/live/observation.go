@@ -96,14 +96,13 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if allowOpening && msg.Type == messages.StreamTypeSessionOpen {
 		h.sendOpeningMessage(ctx, loop)
 	}
-	if responseComplete || (msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool) {
-		h.mu.Lock()
-		close(h.replayResponseWake)
-		h.replayResponseWake = make(chan struct{})
-		h.mu.Unlock()
+	// A deferred tool continuation resolves on the tool-role MESSAGE.END.
+	if responseComplete || toolContinuationComplete || (msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool) {
+		h.wakeResponseWaiters()
 	}
 	return responseComplete
 }
+
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {
 	if h == nil || msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool || (msg.Role != "" && msg.Role != messages.RoleAssistant) {
 		return

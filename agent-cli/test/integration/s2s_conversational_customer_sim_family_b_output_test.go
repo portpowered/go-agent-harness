@@ -126,10 +126,10 @@ func (f *familyBProviderFixture) sendReplacementOutput(connection *websocket.Con
 	}
 	f.mu.Lock()
 	f.replacementOutputEnded = f.elapsedLocked()
+	f.replacementDone = true
 	f.mu.Unlock()
 	f.recordResponseTerminal(rtStatusCompleted)
-	time.Sleep(25 * time.Millisecond)
-	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_b_correction_complete"})
+	return f.closeWhenComplete(connection)
 }
 
 func (f *familyBProviderFixture) sendSessionReady(connection *websocket.Conn) error {

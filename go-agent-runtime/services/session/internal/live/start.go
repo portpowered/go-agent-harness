@@ -82,6 +82,7 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		OnProviderDone:    h.providerDone, OnMediaAttached: h.setProviderMediaAttached,
 	})
 	h.providerTerminalError = capturing.TerminalError
+	h.providerReceiveSync = capturing.SyncReceive
 	options := []agentloop.Option{
 		agentloop.WithMode(engine.DuplexSession),
 		agentloop.WithSessionInferencer(capturing),

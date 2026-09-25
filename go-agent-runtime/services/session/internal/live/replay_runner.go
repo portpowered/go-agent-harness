@@ -116,6 +116,59 @@ func (h *handle) waitForResponse(ctx context.Context, target int) error {
 	}
 }
 
+// waitForOpeningResponse waits until target assistant response terminals were
+// observed and no provider tool call still owes its result or continuation.
+// Unlike waitForResponse it does not depend on finite-response accounting, so
+// it also holds for persistent (--wait-for-close) sessions. A provider close
+// releases the wait; the capture admission guard then reports the incomplete
+// scheduled audio instead of stalling until the duration bound.
+func (h *handle) waitForOpeningResponse(ctx context.Context, target int) error {
+	if h == nil {
+		return context.Canceled
+	}
+	if ctx == nil {
+		return errors.New("opening response context is required")
+	}
+	for {
+		h.mu.Lock()
+		wake := h.replayResponseWake
+		h.mu.Unlock()
+		if h.openingResponseSettled(target) {
+			return nil
+		}
+		select {
+		case <-wake:
+		case <-h.terminalObserved:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// wakeResponseWaiters releases every goroutine blocked on a response boundary
+// so it re-evaluates its condition against the state just observed.
+func (h *handle) wakeResponseWaiters() {
+	h.mu.Lock()
+	close(h.replayResponseWake)
+	h.replayResponseWake = make(chan struct{})
+	h.mu.Unlock()
+}
+
+// openingResponseSettled reports whether target assistant terminals were
+// observed and every provider tool call has resolved its continuation.
+func (h *handle) openingResponseSettled(target int) bool {
+	h.mu.Lock()
+	terminals := h.observedResponseTerminals
+	h.mu.Unlock()
+	if terminals < target {
+		return false
+	}
+	h.toolMu.Lock()
+	defer h.toolMu.Unlock()
+	return len(h.toolContinuations) == 0
+}
+
 // waitForResponseBoundary includes partial assistant terminals produced by
 // barge-in cancellation.
 func (h *handle) waitForResponseBoundary(ctx context.Context, target int) error {
