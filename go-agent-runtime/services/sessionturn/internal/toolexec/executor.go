@@ -1,5 +1,5 @@
 // Package toolexec implements the session-owned tool executor: per-call
-// deadlines, panic isolation, lifecycle observation, and correlated failure
+// deadlines, panic isolation, operator diagnostics, and correlated failure
 // results that never escalate one tool failure into a fatal session error.
 package toolexec
 
@@ -26,7 +26,6 @@ type Executor struct {
 	inner        messages.ToolExecutor
 	timeout      time.Duration
 	policy       tools.InteractiveToolPolicy
-	lifecycle    lifecycle
 	cancellation sessionturn.CancellationIntent
 	diagnostics  sessiontrace.ToolDiagnosticSink
 	presentation presentation
@@ -40,7 +39,6 @@ func New(request sessionturn.ToolExecutorRequest) *Executor {
 	executor := &Executor{
 		inner:        request.Inner,
 		timeout:      request.Timeout,
-		lifecycle:    newLifecycle(request.Lifecycle),
 		cancellation: request.Cancellation,
 		diagnostics:  request.Diagnostics,
 		presentation: presentation{ToolPresentation: request.Presentation},
@@ -68,9 +66,8 @@ func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (message
 	if e == nil {
 		return genericFailure(call, errNotConfigured), nil
 	}
-	e.lifecycle.call(call)
 	if e.inner == nil {
-		return e.finish(call, e.failure(call, errNotConfigured), true)
+		return e.finish(call, e.failure(call, errNotConfigured))
 	}
 	timeout := e.callTimeout(call.Name)
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -101,12 +98,12 @@ func (e *Executor) callTimeout(name string) time.Duration {
 
 func (e *Executor) completed(execCtx context.Context, call messages.ToolCall, result executionResult) (messages.ToolCallResponse, error) {
 	if result.err == nil {
-		return e.finish(call, result.response, e.presentation.responseFailed(result.response.Content))
+		return e.finish(call, result.response)
 	}
 	if e.sigintCancelled(execCtx, result.err) {
 		return cancelledResult(call, result.err)
 	}
-	return e.finish(call, e.failure(call, result.err), true)
+	return e.finish(call, e.failure(call, result.err))
 }
 
 func (e *Executor) expired(ctx, execCtx context.Context, call messages.ToolCall, timeout time.Duration) (messages.ToolCallResponse, error) {
@@ -115,29 +112,27 @@ func (e *Executor) expired(ctx, execCtx context.Context, call messages.ToolCall,
 	}
 	if errors.Is(execCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 		if permission, denied := e.deniedScreenPermission(ctx, call); denied {
-			return e.finish(call, e.failure(call, e.presentation.DisplayPermissionDenied(permission)), true)
+			return e.finish(call, e.failure(call, e.presentation.DisplayPermissionDenied(permission)))
 		}
 	}
 	failure := contextFailure(execCtx.Err())
 	if errors.Is(failure, sessionturn.ErrToolTimeout) {
 		failure = fmt.Errorf("%w after %s", sessionturn.ErrToolTimeout, timeout)
 	}
-	return e.finish(call, e.failure(call, failure), true)
+	return e.finish(call, e.failure(call, failure))
 }
 
 // finish keeps the provider's call identity authoritative even when an
 // injected executor omits or changes the response metadata.
-func (e *Executor) finish(call messages.ToolCall, response messages.ToolCallResponse, failed bool) (messages.ToolCallResponse, error) {
+func (e *Executor) finish(call messages.ToolCall, response messages.ToolCallResponse) (messages.ToolCallResponse, error) {
 	response.ToolCallID = call.ID
 	response.Name = call.Name
-	e.lifecycle.result(call, response, failed)
 	return response, nil
 }
 
 // sigintCancelled identifies the one cancellation that must not become a
-// provider-visible failed result: the runner still receives
-// context.Canceled, but only the provider call is recorded so the terminal
-// summary classifies the obligation as a user cancellation.
+// provider-visible failed result: the runner receives context.Canceled so
+// the terminal summary classifies the obligation as a user cancellation.
 func (e *Executor) sigintCancelled(ctx context.Context, err error) bool {
 	return e.cancellation != nil && e.cancellation.SIGINTReceived() &&
 		errors.Is(ctx.Err(), context.Canceled) && errors.Is(err, context.Canceled)

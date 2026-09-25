@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/sessionwrap"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -94,18 +95,22 @@ func (h *handle) buildLoop(inferencer messages.SessionInferencer, toolExecutor m
 		options = append(options, agentloop.WithToolExecutionDisabled())
 		return agentloop.New(options...)
 	}
-	if h.request.ToolExecutionTimeout > 0 {
-		toolExecutor = newTimedToolExecutor(toolExecutor, h.scheduler, h.request.ToolExecutionTimeout)
-	}
 	if h.providerLivenessEnabled() {
 		toolExecutor = livenessToolExecutor{inner: toolExecutor, handle: h}
 	}
 	h.mu.Lock()
 	explicitCapability := h.request.Capabilities != nil && !h.request.Capabilities.InheritDefaults
+	var toolPolicy tools.InteractiveToolPolicy
+	if h.request.Capabilities != nil {
+		toolPolicy = h.request.Capabilities.ToolPolicy
+	}
 	h.mu.Unlock()
 	toolExecutor = restrictToolExecutor(toolExecutor, h.offeredToolDefinitions, explicitCapability)
 	toolExecutor = activeCaptureToolExecutor{inner: toolExecutor, wait: h.waitForActiveCaptureTurn, observe: h.observeExecutedToolCall}
 	options = append(options, agentloop.WithToolExecutor(toolExecutor))
+	if toolPolicy != nil && recoversActiveResponseRejection(h.request.Provider) {
+		options = append(options, toolAcknowledgementOption(toolPolicy))
+	}
 	if len(toolDefinitions) > 0 {
 		options = append(options, agentloop.WithTools(toolDefinitions))
 	}

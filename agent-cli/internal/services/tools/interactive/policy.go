@@ -1,7 +1,8 @@
 // Package interactive binds the configured voice/realtime tool latency policy
 // to a live capability surface. It is a stateless host adapter: the
 // session-turn runtime service owns classification, deadlines, panic
-// isolation, and correlated failure results.
+// isolation, correlated failure results, and operator diagnostics; the live
+// session runtime owns the spoken acknowledgement for the same policy.
 package interactive
 
 import (
@@ -11,7 +12,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	runtimeSessionWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	sessionturnwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn/wire"
@@ -30,11 +30,15 @@ type Binding struct {
 	BrowserToolsEnabled bool
 	// Cancellation keeps an operator SIGINT distinct from a tool failure.
 	Cancellation sessiontrace.CancellationIntent
+	// Diagnostics receives each original tool error for the operator; the
+	// provider sees only the customer-safe correlated result.
+	Diagnostics sessiontrace.ToolDiagnosticSink
 }
 
 // Bind wraps the capability executor with the session-turn executor so each
-// call receives the interactive deadline for its tool class. A capability
-// without an executor is left unchanged.
+// call receives the interactive deadline for its tool class, and records the
+// resolved policy so the live runtime acknowledges long-running calls. A
+// capability without an executor is left unchanged.
 func Bind(capabilities *runtimeSession.LiveCapabilities, binding Binding) error {
 	if capabilities == nil || capabilities.Executor == nil {
 		return nil
@@ -46,6 +50,7 @@ func Bind(capabilities *runtimeSession.LiveCapabilities, binding Binding) error 
 	}
 	request := sessionturn.ToolExecutorRequest{
 		Inner: capabilities.Executor, Timeout: binding.Timeout, Policy: policy, Presentation: Presentation(),
+		Diagnostics: binding.Diagnostics,
 	}
 	if binding.Cancellation != nil {
 		request.Cancellation = binding.Cancellation
@@ -55,6 +60,7 @@ func Bind(capabilities *runtimeSession.LiveCapabilities, binding Binding) error 
 		bounded = unadvertisedToolExecutor{ToolExecutor: bounded}
 	}
 	capabilities.Executor = bounded
+	capabilities.ToolPolicy = policy
 	return nil
 }
 
@@ -95,5 +101,5 @@ func ResolvePolicy(service sessionturn.ToolService, binding Binding, capabilitie
 }
 
 func newTurnService() sessionturn.Service {
-	return sessionturnwire.NewService(runtimeSessionWire.NewInstructionService(), runtimeToolsWire.NewInteractiveToolPolicy(), runtimeToolsWire.NewImageStaging())
+	return sessionturnwire.NewService(runtimeToolsWire.NewInteractiveToolPolicy())
 }

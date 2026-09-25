@@ -147,6 +147,10 @@ func NewSynthesizedMessageEndValue(usage TokenUsage) *MessageEndValue {
 	return value
 }
 
+// ErrorClassificationResponseCreateActive classifies a provider's non-terminal
+// rejection of a response request while another response is still active.
+const ErrorClassificationResponseCreateActive = "response_create_active"
+
 // ErrorValue is the value for ERROR (inner type "error").
 type ErrorValue struct {
 	Type           string `json:"type"`                     // "error"

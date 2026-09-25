@@ -250,7 +250,12 @@ func (e *executor) evalApproval(_ context.Context, expectation probe.ScenarioV2E
 	return outcome{passed: check.Passed, expected: check.Expected, actual: check.Actual}
 }
 
+// evalProviderAudio fails closed when the scenario declared no provider
+// fixture, so audio objectives never pass without provider evidence.
 func (e *executor) evalProviderAudio(_ context.Context, expectation probe.ScenarioV2Expectation) outcome {
+	if e.providerReport == nil {
+		return outcome{expected: string(expectation.Type), actual: objective.Missing}
+	}
 	check := objective.ProviderCheck(*e.providerReport, expectation)
 	return outcome{passed: check.Passed, expected: check.Expected, actual: check.Actual}
 }

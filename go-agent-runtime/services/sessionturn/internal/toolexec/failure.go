@@ -2,7 +2,6 @@ package toolexec
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -14,12 +13,9 @@ import (
 
 const errToolFailed sessionturn.Error = "tool execution failed"
 
-const (
-	webMCPResultVersion = "webmcp.tool-result.v1"
-	// pageSightFallback is the encoded failure used when a host supplies no
-	// page-sight presentation.
-	pageSightFallback = `{"version":2,"status":"error","source":"browser_page","error_code":"page_sight_unavailable","error":"Browser-page sight is unavailable."}`
-)
+// pageSightFallback is the encoded failure used when a host supplies no
+// page-sight presentation.
+const pageSightFallback = `{"version":2,"status":"error","source":"browser_page","error_code":"page_sight_unavailable","error":"Browser-page sight is unavailable."}`
 
 type presentation struct {
 	sessionturn.ToolPresentation
@@ -27,22 +23,6 @@ type presentation struct {
 
 func (p presentation) displayTool(name string) bool {
 	return p.DisplayTool != nil && p.DisplayTool(name)
-}
-
-// responseFailed recognizes host-structured failures and the WebMCP failure
-// envelope. Other results are complete unless the executor returned an error.
-func (p presentation) responseFailed(content string) bool {
-	if p.FailedContent != nil && p.FailedContent(content) {
-		return true
-	}
-	var envelope struct {
-		Version string `json:"version"`
-		OK      *bool  `json:"ok"`
-	}
-	if err := json.Unmarshal([]byte(content), &envelope); err != nil {
-		return false
-	}
-	return envelope.Version == webMCPResultVersion && envelope.OK != nil && !*envelope.OK
 }
 
 func (e *Executor) pageSightTool(call messages.ToolCall) bool {

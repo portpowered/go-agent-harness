@@ -68,11 +68,9 @@ func TestRuntimeRecorderPublicContractCopiesPayloadsAndPublishesEachBoundary(t *
 	recorder.TurnCompleted(2)
 	recorder.TerminalWithAccounting(2, errors.New("run failed"), nil)
 	recorder.TerminalWithAccounting(3, nil, nil)
-	recorder.ObserveToolCall(messages.ToolCall{ID: "call-1", Name: "lookup", Arguments: `{}`})
-	recorder.ObserveToolResult(messages.ToolCall{ID: "call-1", Name: "lookup"}, messages.ToolCallResponse{ToolCallID: "call-1", Name: "lookup", Content: "ok"}, false)
 
 	observations := observer.snapshot()
-	if len(observations) < 13 {
+	if len(observations) < 11 {
 		t.Fatalf("observations = %d, want all recorder boundaries", len(observations))
 	}
 	if string(observations[0].Payload) != "payload" || observations[0].Error != "" {
@@ -576,7 +574,6 @@ func TestNilRuntimeRecorderIsInert(t *testing.T) {
 	recorder.providerInputCommit()
 	recorder.responseCreate(messages.StreamMessage{})
 	recorder.terminalWithAccounting(1, nil, nil)
-	recorder.observeToolCall(messages.ToolCall{ID: "call"})
 }
 
 func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {

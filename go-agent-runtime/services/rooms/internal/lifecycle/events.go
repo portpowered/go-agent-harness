@@ -79,11 +79,15 @@ func notifyTurnComplete(event session.LiveEvent, onTurn func()) {
 // turn. The session publishes each provider-neutral stream observation with
 // its stream type as the event kind, so a completed turn is the assistant
 // MESSAGE.END boundary. This mirrors the session's own turn accounting: tool
-// result responses and interrupted partial responses are not turns.
+// result responses, spoken tool acknowledgements, and interrupted partial
+// responses are not turns.
 func assistantTurnCompleted(event session.LiveEvent) bool {
 	kind, role := event.Kind, event.Role
 	var value messages.StreamMessageValue
 	if event.Message != nil {
+		if event.Message.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+			return false
+		}
 		kind, role, value = string(event.Message.Type), event.Message.Role, event.Message.Value
 	}
 	if kind != string(messages.StreamTypeMessageEnd) {

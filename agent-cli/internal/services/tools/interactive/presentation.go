@@ -24,7 +24,6 @@ func Presentation() sessionturn.ToolPresentation {
 		DisplayFailure:          cliTools.ScreenToolSessionErrorResult,
 		DisplayErrorCode:        cliTools.ScreenToolErrorCode,
 		DisplayPermissionDenied: screenPermissionDenied,
-		FailedContent:           filesystemRefusal,
 		PageSightFailure:        pageSightFailure,
 		DisplaySource:           sight.SourceScreen,
 		PageSightSource:         sight.SourceBrowserPage,
@@ -33,11 +32,6 @@ func Presentation() sessionturn.ToolPresentation {
 
 func screenPermissionDenied(permission runtimeTools.DisplayPermission) error {
 	return &cliTools.ScreenCaptureError{State: cliTools.ScreenCaptureDenied, Operation: screenRecheckOperation, Reason: permission.Reason}
-}
-
-func filesystemRefusal(content string) bool {
-	refusal, refused := cliTools.FilesystemRefusalFromContent(content)
-	return refused && refusal.Validate() == nil
 }
 
 func pageSightFailure() string {

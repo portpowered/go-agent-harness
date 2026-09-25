@@ -24,7 +24,7 @@ const (
 	realtimeInvalidRequestErrorType     = "invalid_request_error"
 	realtimeResponseCancelNotActiveCode = "response_cancel_not_active"
 	realtimeResponseCreateActiveCode    = "conversation_already_has_active_response"
-	realtimeResponseCreateActiveClass   = "response_create_active"
+	realtimeResponseCreateActiveClass   = messages.ErrorClassificationResponseCreateActive
 	realtimeMaxStatusDetailBytes        = 256
 )
 

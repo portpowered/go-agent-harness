@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 type testToolExecutor struct {
@@ -131,15 +132,15 @@ func TestToolRunner_EmptyResultPreservesCallID(t *testing.T) {
 	if len(deltas) != 4 {
 		t.Fatalf("empty result deltas = %d, want MESSAGE.START, TEXT.START, TEXT.END, MESSAGE.END", len(deltas))
 	}
-	if _, ok := deltas[1].Value.(*messages.TextStartValue); !ok || deltas[1].ToolCallId != "tc-empty" {
+	if _, ok := deltas[1].Value.(*messages.TextStartValue); !ok || deltas[1].ToolCallId != callID {
 		t.Fatalf("empty result start = %#v, want correlated TEXT.START", deltas[1])
 	}
-	if _, ok := deltas[2].Value.(*messages.TextEndValue); !ok || deltas[2].ToolCallId != "tc-empty" {
+	if _, ok := deltas[2].Value.(*messages.TextEndValue); !ok || deltas[2].ToolCallId != callID {
 		t.Fatalf("empty result end = %#v, want correlated TEXT.END", deltas[2])
 	}
 
 	results := messages.ReconstructToolMessagesFromDeltas(deltas)
-	if len(results) != 1 || results[0].ToolCallID != "tc-empty" {
+	if len(results) != 1 || results[0].ToolCallID != callID {
 		t.Fatalf("reconstructed empty results = %#v, want one result for tc-empty", results)
 	}
 	if len(results[0].ContentParts) != 1 || results[0].TextContent() != "" {
@@ -321,12 +322,17 @@ func TestExecuteBatch_MultipleFailures(t *testing.T) {
 	}
 }
 
+const (
+	slowToolName = "slow"
+	slowCallID   = "slow-call"
+)
+
 type acknowledgementGateExecutor struct {
 	release <-chan struct{}
 }
 
 func (e acknowledgementGateExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if call.Name == "slow" {
+	if call.Name == slowToolName {
 		select {
 		case <-e.release:
 		case <-ctx.Done():
@@ -341,8 +347,8 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	acknowledgements := make(chan []messages.ToolCall, 2)
 	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
 	runner.ConfigureAcknowledgement(10*time.Millisecond, func(name string) bool {
-		return name == "slow"
-	}, func(_ context.Context, calls []messages.ToolCall) {
+		return name == slowToolName
+	}, nil, func(_ context.Context, calls []messages.ToolCall) {
 		acknowledgements <- calls
 	})
 
@@ -351,7 +357,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	go func() {
 		results, err := runner.executeBatch(context.Background(), []messages.ToolCall{
 			{ID: "fast-call", Name: "fast"},
-			{ID: "slow-call", Name: "slow"},
+			{ID: slowCallID, Name: slowToolName},
 		})
 		resultCh <- results
 		errCh <- err
@@ -359,7 +365,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 
 	select {
 	case calls := <-acknowledgements:
-		if len(calls) != 1 || calls[0].ID != "slow-call" {
+		if len(calls) != 1 || calls[0].ID != slowCallID {
 			t.Fatalf("acknowledged calls = %#v, want only slow-call", calls)
 		}
 	case <-time.After(2 * time.Second):
@@ -375,7 +381,7 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 		t.Fatal("executeBatch did not complete after release")
 	}
 	results := <-resultCh
-	if len(results) != 2 || results[0].ToolCallID != "fast-call" || results[1].ToolCallID != "slow-call" {
+	if len(results) != 2 || results[0].ToolCallID != "fast-call" || results[1].ToolCallID != slowCallID {
 		t.Fatalf("results = %#v, want stable call order", results)
 	}
 	select {
@@ -385,10 +391,64 @@ func TestToolRunner_AcknowledgesOnlyPendingLongRunningCalls(t *testing.T) {
 	}
 }
 
+// armedTimerSource reports when the acknowledgement timer is armed so the
+// test advances the fake clock only after the runner started measuring.
+type armedTimerSource struct {
+	*clock.Deterministic
+	armed chan struct{}
+	once  sync.Once
+}
+
+func (s *armedTimerSource) NewTimer(duration time.Duration) clock.Timer {
+	timer := s.Deterministic.NewTimer(duration)
+	s.once.Do(func() { close(s.armed) })
+	return timer
+}
+
+func TestToolRunner_AcknowledgementThresholdFollowsConfiguredClock(t *testing.T) {
+	const threshold = 2 * time.Second
+	source := &armedTimerSource{Deterministic: clock.NewDeterministic(time.Unix(100, 0), time.Millisecond), armed: make(chan struct{})}
+	release := make(chan struct{})
+	acknowledged := make(chan []messages.ToolCall, 1)
+	runner := NewToolRunner(acknowledgementGateExecutor{release: release}, 8)
+	runner.ConfigureAcknowledgement(threshold, func(name string) bool { return name == slowToolName }, source, func(_ context.Context, calls []messages.ToolCall) {
+		acknowledged <- calls
+	})
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := runner.executeBatch(context.Background(), []messages.ToolCall{{ID: slowCallID, Name: slowToolName}})
+		errCh <- err
+	}()
+	select {
+	case <-source.armed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("acknowledgement timer was not armed on the configured clock")
+	}
+	source.AdvanceBy(threshold - time.Millisecond)
+	select {
+	case calls := <-acknowledged:
+		t.Fatalf("acknowledged %#v before the configured clock reached the threshold", calls)
+	case <-time.After(20 * time.Millisecond):
+	}
+	source.AdvanceBy(time.Millisecond)
+	select {
+	case calls := <-acknowledged:
+		if len(calls) != 1 || calls[0].ID != slowCallID {
+			t.Fatalf("acknowledged calls = %#v, want slow-call", calls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("configured clock reaching the threshold did not acknowledge")
+	}
+	close(release)
+	if err := <-errCh; err != nil {
+		t.Fatalf("executeBatch error = %v", err)
+	}
+}
+
 func TestToolRunner_FastCallCompletingBeforeThresholdDoesNotAcknowledge(t *testing.T) {
 	acknowledged := make(chan struct{}, 1)
 	runner := NewToolRunner(&testToolExecutor{results: map[string]string{"fast": "done"}}, 8)
-	runner.ConfigureAcknowledgement(100*time.Millisecond, func(string) bool { return true }, func(context.Context, []messages.ToolCall) {
+	runner.ConfigureAcknowledgement(100*time.Millisecond, func(string) bool { return true }, nil, func(context.Context, []messages.ToolCall) {
 		acknowledged <- struct{}{}
 	})
 

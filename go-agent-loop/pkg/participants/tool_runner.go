@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 // ToolRunner executes tool calls asynchronously as an active participant.
@@ -44,25 +45,28 @@ type ToolRunner struct {
 	acknowledgementThreshold time.Duration
 	isLongRunningTool        func(string) bool
 	sendAcknowledgement      func(context.Context, []messages.ToolCall)
+	acknowledgementClock     clock.TimerSource
 }
 
 func NewToolRunner(executor messages.ToolExecutor, bufferCapacity int) *ToolRunner {
 	return &ToolRunner{
-		executor:        executor,
-		admittedCallIDs: make(map[string]struct{}),
-		Inbox:           messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
-		DeltaOutbox:     messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		executor:             executor,
+		admittedCallIDs:      make(map[string]struct{}),
+		Inbox:                messages.NewTypedBuffer[messages.ToolBatchRequest](bufferCapacity),
+		DeltaOutbox:          messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
+		acknowledgementClock: clock.Real{},
 	}
 }
 
-// ConfigureAcknowledgement enables a one-shot callback when at least one
-// admitted long-running call remains pending after the configured threshold.
-// It is configured before Run starts and is intentionally independent from the
-// tool executor's timeout policy.
-func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, send func(context.Context, []messages.ToolCall)) {
+// ConfigureAcknowledgement enables a one-shot callback for a long-running call still pending
+// after threshold on source (nil keeps the real clock); set before Run, independent of timeouts.
+func (r *ToolRunner) ConfigureAcknowledgement(threshold time.Duration, isLongRunning func(string) bool, source clock.TimerSource, send func(context.Context, []messages.ToolCall)) {
 	r.acknowledgementThreshold = threshold
 	r.isLongRunningTool = isLongRunning
 	r.sendAcknowledgement = send
+	if source != nil {
+		r.acknowledgementClock = source
+	}
 }
 
 func (r *ToolRunner) Run(ctx context.Context) error {
@@ -330,11 +334,11 @@ func (r *ToolRunner) longRunningCalls(calls []messages.ToolCall) map[int]message
 // collectBatch waits for every worker outcome while at most once requesting
 // an acknowledgement for long-running calls that outlive the threshold.
 func (r *ToolRunner) collectBatch(ctx context.Context, batch *toolBatch, resultCh <-chan toolExecutionResult) {
-	var acknowledgementTimer *time.Timer
+	var acknowledgementTimer clock.Timer
 	var acknowledgementCh <-chan time.Time
 	if len(batch.pendingLongRunning) > 0 {
-		acknowledgementTimer = time.NewTimer(r.acknowledgementThreshold)
-		acknowledgementCh = acknowledgementTimer.C
+		acknowledgementTimer = r.acknowledgementClock.NewTimer(r.acknowledgementThreshold)
+		acknowledgementCh = acknowledgementTimer.C()
 		defer acknowledgementTimer.Stop()
 	}
 	ctxDone := ctx.Done()
@@ -352,9 +356,6 @@ func (r *ToolRunner) collectBatch(ctx context.Context, batch *toolBatch, resultC
 			// semantics remain intact, but never send an acknowledgement after
 			// cancellation.
 			ctxDone = nil
-			if acknowledgementTimer != nil {
-				acknowledgementTimer.Stop()
-			}
 			acknowledgementCh = nil
 		}
 	}

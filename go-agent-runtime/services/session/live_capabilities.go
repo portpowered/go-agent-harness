@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 // LiveInferencerFactory constructs the provider session at Start time. Keeping
@@ -40,6 +41,12 @@ type LiveTurnDetection struct {
 type LiveCapabilities struct {
 	Executor    messages.ToolExecutor
 	Definitions []messages.ToolDefinition
+	// ToolPolicy is the interactive latency policy the host bound to
+	// Executor. When set, a bounded long-running call still pending at the
+	// policy's acknowledgement threshold requests one spoken acknowledgement
+	// response; the acknowledgement neither completes the tool call nor
+	// counts as a turn response.
+	ToolPolicy tools.InteractiveToolPolicy
 	// BrowserCapabilityState is the host's normalized browser lifecycle
 	// snapshot used while composing the initial provider instructions. It is
 	// independent from whether the current definition snapshot contains page

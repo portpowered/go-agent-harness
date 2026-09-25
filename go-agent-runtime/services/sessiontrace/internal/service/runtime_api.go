@@ -55,9 +55,3 @@ func (r *sessionRuntimeObservationRecorder) TurnCompleted(turns int) { r.turnCom
 func (r *sessionRuntimeObservationRecorder) TerminalWithAccounting(turns int, runErr error, accounting *sessiontrace.SessionFinalAccounting) {
 	r.terminalWithAccounting(turns, runErr, accounting)
 }
-func (r *sessionRuntimeObservationRecorder) ObserveToolCall(call messages.ToolCall) {
-	r.observeToolCall(call)
-}
-func (r *sessionRuntimeObservationRecorder) ObserveToolResult(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
-	r.observeToolResult(call, response, failed)
-}

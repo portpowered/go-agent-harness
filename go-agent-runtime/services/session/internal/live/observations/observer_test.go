@@ -133,7 +133,6 @@ func TestRuntimeTracePublishesBoundariesAndFinalAccounting(t *testing.T) {
 	trace := NewRuntimeTrace(sessiontrace.RuntimeObserverFunc(func(value sessiontrace.RuntimeObservation) {
 		observed = append(observed, value)
 	}), func() time.Time { return now }, nil)
-
 	trace.CapturedAudio(audio.PCMFrame{StreamID: "capture-1", Samples: []int16{1, -1}})
 	trace.Message(messages.StreamMessage{Type: messages.StreamTypeInputItemAdded}, false)
 	trace.CapturedAudio(audio.PCMFrame{StreamID: "capture-2", Samples: []int16{2}})
@@ -141,7 +140,6 @@ func TestRuntimeTracePublishesBoundariesAndFinalAccounting(t *testing.T) {
 	trace.ResponseCreate(messages.StreamMessage{
 		ResponseID: "response-1", ActorStreamID: "provider-stream", LoopPassID: 3,
 	})
-
 	trace.Message(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant}, false)
 	audioPayload := []byte{1, 0, 255, 255}
 	trace.Message(messages.StreamMessage{
@@ -273,7 +271,7 @@ func TestRuntimeTraceBoundsCommitPayloadAndClassifiesTerminalErrors(t *testing.T
 }
 
 func TestRuntimeTraceWithoutObserverIsInert(t *testing.T) {
-	var trace *RuntimeTrace = NewRuntimeTrace(nil, nil, nil)
+	trace := NewRuntimeTrace(nil, nil, nil)
 	require.Nil(t, trace)
 	require.NoError(t, trace.Error())
 	trace.Message(messages.StreamMessage{}, false)

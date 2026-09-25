@@ -13,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -301,38 +302,6 @@ func parseRateLimitRetryDelay(message string, defaultDelay, maxDelay time.Durati
 	return delay
 }
 
-type timedToolExecutor struct {
-	inner     messages.ToolExecutor
-	scheduler platformclock.Scheduler
-	timeout   time.Duration
-}
-
-func newTimedToolExecutor(inner messages.ToolExecutor, scheduler platformclock.Scheduler, timeout time.Duration) messages.ToolExecutor {
-	if inner == nil || timeout <= 0 {
-		return inner
-	}
-	return timedToolExecutor{inner: inner, scheduler: scheduler, timeout: timeout}
-}
-
-func (e timedToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return messages.ToolCallResponse{}, err
-	}
-	if e.scheduler == nil {
-		return messages.ToolCallResponse{}, session.ErrLiveSchedulerUnavailable
-	}
-	toolCtx, cancel := e.scheduler.WithTimeout(ctx, e.timeout)
-	defer cancel()
-	response, err := e.inner.Execute(toolCtx, call)
-	if errors.Is(toolCtx.Err(), context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.Canceled) {
-		if err == nil {
-			err = context.DeadlineExceeded
-		}
-		return response, errors.Join(session.ErrLiveToolExecutionTimeout, err)
-	}
-	return response, err
-}
-
 func (h *handle) openingAdmissionRequired() bool {
 	return h != nil && len(h.request.OpeningContentParts) > 0
 }
@@ -397,4 +366,35 @@ func (h *handle) waitOpeningReady(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// toolAcknowledgementOption asks the provider for one spoken progress
+// acknowledgement when a bounded long-running call outlives the policy's
+// acknowledgement threshold. The threshold runs in the loop's clock domain.
+func toolAcknowledgementOption(policy tools.InteractiveToolPolicy) agentloop.Option {
+	snapshot := policy.Clone()
+	return agentloop.WithToolAcknowledgementPolicy(agentloop.ToolAcknowledgementPolicy{
+		Threshold: snapshot.Settings().AcknowledgementThreshold,
+		IsLongRunning: func(name string) bool {
+			return snapshot.ClassForTool(name) == tools.InteractiveToolClassBoundedLongRunning
+		},
+	})
+}
+
+// consumeToolAcknowledgement publishes the spoken progress acknowledgement
+// for an in-flight tool. It is customer-visible output, but not a response of
+// the session's turn accounting: it must not complete a finite response, the
+// first turn, or the pending tool continuation.
+func (h *handle) consumeToolAcknowledgement(ctx context.Context, msg messages.StreamMessage) {
+	h.observeProviderLiveness(ctx, msg)
+	h.publishMessage(msg) //nolint:contextcheck // recording owns the invocation evidence context.
+	h.observeRuntimeMessage(msg)
+}
+
+// recoversActiveResponseRejection reports whether provider answers a response
+// request made while another response is active with a non-terminal
+// diagnostic. Only such a provider may receive an unsolicited acknowledgement
+// request; Grok terminates the session on any provider error.
+func recoversActiveResponseRejection(provider string) bool {
+	return strings.EqualFold(strings.TrimSpace(provider), "openai")
 }

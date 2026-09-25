@@ -92,6 +92,7 @@ type sessionRunState struct {
 	retiredResponseIDs         map[string]struct{}
 	terminalResponseIDs        map[string]struct{}
 	acknowledgementOutstanding bool
+	acknowledgementStart       *messages.StreamMessage
 	acknowledgementCancelled   bool
 	acknowledgementEnded       bool
 	deferredSessionEvents      []messages.StreamMessage
@@ -385,13 +386,7 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
 	state.ensureMaps()
-	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
-		state.acknowledgementOutstanding = true
-	}
-	acknowledgementResponse := state.acknowledgementOutstanding
-	if acknowledgementResponse && isSessionResponseStreamType(msg.Type) {
-		msg.ResponsePurpose = messages.ResponsePurposeToolAcknowledgement
-	}
+	acknowledgementResponse := r.tagSessionAcknowledgement(ctx, state, &msg)
 	msgID := responseID(msg.ResponseID)
 	messageEndOwned := false
 

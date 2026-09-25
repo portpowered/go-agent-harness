@@ -359,3 +359,69 @@ func (p *graphRecorderProbe) RecordReceived(string, audio.PCMFrame) {
 	p.received++
 	p.mu.Unlock()
 }
+
+// peerStampProbe records whether peer-audio evidence for a source was stamped.
+type peerStampProbe struct {
+	graphRecorderProbe
+	peerSeen chan struct{}
+	once     sync.Once
+}
+
+func (*peerStampProbe) ObserveSpeakerAudio(string, []string, audio.PCMFrame) {}
+
+func (p *peerStampProbe) ObservePeerAudio(string, string, audio.PCMFrame) {
+	p.once.Do(func() { close(p.peerSeen) })
+}
+
+// stampCheckingOutbound reports, at hand-off time, whether the peer-audio
+// emission had already been stamped.
+type stampCheckingOutbound struct {
+	probe   *peerStampProbe
+	stamped chan bool
+}
+
+func (o *stampCheckingOutbound) WriteFrame(_ context.Context, frame audio.PCMFrame) error {
+	if frame.Samples[0] == 0 {
+		return nil
+	}
+	select {
+	case <-o.probe.peerSeen:
+		o.stamped <- true
+	default:
+		o.stamped <- false
+	}
+	return nil
+}
+
+func (*stampCheckingOutbound) Close() error { return nil }
+
+// A peer provider may react as soon as it holds the mixed frame, so the
+// emission landmark must be recorded before the hand-off; otherwise the
+// peer's reaction time is charged to local output latency.
+func TestRoomGraphStampsPeerAudioBeforeProviderHandOff(t *testing.T) {
+	source := &graphInbound{frames: make(chan audio.PCMFrame, 1)}
+	probe := &peerStampProbe{peerSeen: make(chan struct{})}
+	outbound := &stampCheckingOutbound{probe: probe, stamped: make(chan bool, 1)}
+	participants := []*activeParticipant{
+		{participant: rooms.Participant{ID: "alice", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Inbound: source}, finished: make(chan struct{})},
+		{participant: rooms.Participant{ID: "bob", Kind: rooms.ParticipantKindAgent}, endpoints: audio.MediaEndpoints{Outbound: outbound}, finished: make(chan struct{})},
+	}
+	graph, err := newRoomGraph(context.Background(), clock.Real{}, rooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 2 * time.Millisecond}, participants, nil, probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := graph.Close(); err != nil {
+			t.Errorf("close graph: %v", err)
+		}
+	}()
+	source.frames <- audio.PCMFrame{Samples: []int16{31, 37}}
+	select {
+	case stamped := <-outbound.stamped:
+		if !stamped {
+			t.Fatal("peer audio reached the provider before its emission was stamped")
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("peer did not receive the source frame (graph error: %v)", graph.Err())
+	}
+}

@@ -2,7 +2,6 @@ package wire
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,25 +18,8 @@ func (f executorFunc) Execute(ctx context.Context, call messages.ToolCall) (mess
 	return f(ctx, call)
 }
 
-func TestNewServiceReturnsUsablePublicContract(t *testing.T) {
-	service := NewService(nil, nil, nil)
-	if service == nil {
-		t.Fatal("NewService returned nil")
-	}
-	turns := service.NewTurns(sessionturn.TurnsOptions{})
-	if _, err := turns.RunTurn(context.Background(), sessionturn.TurnInput{Text: "hi"}, sessionturn.TurnDirectionUser, 1, 2); !errors.Is(err, sessionturn.ErrMissingTurnInferencer) {
-		t.Fatalf("turn without provider = %v", err)
-	}
-	if !strings.HasPrefix(service.NextWirePrompt(), sessionturn.TextSeedWirePrefix) {
-		t.Fatal("wire prompt lost its sentinel prefix")
-	}
-	if publication := service.StartPublication(context.Background(), sessionturn.PublicationRequest{}); publication == nil || publication.Errors() != nil {
-		t.Fatal("publication without a watch was not inert")
-	}
-}
-
 func TestServiceToolExecutorCorrelatesTimeouts(t *testing.T) {
-	executor := NewService(nil, nil, nil).NewToolExecutor(sessionturn.ToolExecutorRequest{
+	executor := NewService(nil).NewToolExecutor(sessionturn.ToolExecutorRequest{
 		Timeout: callTimeout,
 		Inner: executorFunc(func(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
 			<-ctx.Done()

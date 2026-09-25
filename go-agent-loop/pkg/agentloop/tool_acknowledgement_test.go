@@ -2,6 +2,7 @@ package agentloop
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +24,9 @@ type acknowledgementSession struct {
 	acknowledgementEnd   chan struct{}
 	ackStartOnce         sync.Once
 	ackEndOnce           sync.Once
+	// answerAcknowledgement, when set, replaces the provider's acknowledgement
+	// response (for example with an active-response rejection).
+	answerAcknowledgement func(*acknowledgementSession)
 }
 
 func newAcknowledgementSession(completeAck bool) *acknowledgementSession {
@@ -50,8 +54,12 @@ func (s *acknowledgementSession) Send(_ context.Context, msg messages.StreamMess
 		value, _ := msg.Value.(*messages.ResponseCreateValue)
 		if value != nil && value.IsToolAcknowledgement() {
 			s.mu.Lock()
-			s.acknowledgementOpen = true
+			s.acknowledgementOpen = s.answerAcknowledgement == nil
 			s.mu.Unlock()
+			if s.answerAcknowledgement != nil {
+				s.answerAcknowledgement(s)
+				break
+			}
 			s.emitAcknowledgement(s.completeAck)
 		} else {
 			s.mu.Lock()
@@ -459,4 +467,67 @@ func contextWithTestTimeout(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// rejectAcknowledgement models server VAD auto-starting a response just
+// before the acknowledgement request arrives: the provider rejects the request
+// as an active-response collision, before or after announcing its own
+// response, and then streams that ordinary response.
+func rejectAcknowledgement(startFirst bool) func(*acknowledgementSession) {
+	return func(s *acknowledgementSession) {
+		start := messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewMessageStartValue()}
+		rejection := messages.StreamMessage{Type: messages.StreamTypeError, Value: &messages.ErrorValue{
+			Type: "error", Message: "conversation already has an active response", NonTerminal: true,
+			Classification: messages.ErrorClassificationResponseCreateActive,
+		}}
+		ordered := []messages.StreamMessage{rejection, start}
+		if startFirst {
+			ordered = []messages.StreamMessage{start, rejection}
+		}
+		ordered = append(ordered,
+			messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewTextStartValue()},
+			messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewTextDeltaValue("server turn")},
+			messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewTextEndValue()},
+			messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+		)
+		for _, msg := range ordered {
+			s.recv.Write(context.Background(), msg)
+		}
+	}
+}
+
+func TestDuplexSession_RejectedAcknowledgementKeepsServerResponseOrdinary(t *testing.T) {
+	for name, startFirst := range map[string]bool{"start before rejection": true, "rejection before start": false} {
+		t.Run(name, func(t *testing.T) {
+			session := newAcknowledgementSession(true)
+			session.answerAcknowledgement = rejectAcknowledgement(startFirst)
+			executor := &blockingToolExecutor{started: make(chan struct{}), release: make(chan struct{})}
+			al := newAcknowledgementTestLoop(t, session, executor)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			runErr := make(chan error, 1)
+			go func() { runErr <- al.Run(ctx) }()
+			writeAcknowledgementToolCall(session)
+
+			server := waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
+				return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "response-server"
+			})
+			if server.ResponsePurpose != "" {
+				t.Fatalf("server response end = %#v, want ordinary purpose", server)
+			}
+			close(executor.release)
+			waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
+				return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "response-final"
+			})
+			select {
+			case err := <-runErr:
+				t.Fatalf("Run failed before cancellation: %v", err)
+			default:
+			}
+			cancel()
+			if err := <-runErr; err != nil && !errors.Is(err, context.Canceled) {
+				t.Fatalf("Run error = %v", err)
+			}
+		})
+	}
 }

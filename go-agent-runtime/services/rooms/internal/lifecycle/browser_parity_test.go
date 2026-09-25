@@ -392,6 +392,7 @@ func nonTurnEvents(sessionID string) []session.LiveEvent {
 		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleAssistant, ResponseID: "resp", Value: messages.NewTranscriptEndValue("hello")}),
 		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool, Value: messages.NewMessageEndValue(messages.TokenUsage{})}),
 		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleUser, Value: messages.NewMessageEndValue(messages.TokenUsage{})}),
+		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "acknowledgement", ResponsePurpose: messages.ResponsePurposeToolAcknowledgement, Value: messages.NewMessageEndValue(messages.TokenUsage{})}),
 		liveStreamEvent(sessionID, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: "interrupted", Value: messages.NewMessageEndValueWithTerminal(messages.TokenUsage{}, messages.TerminalReasonPartialOutput, messages.TerminalProvenanceProvider, messages.TerminalOutputPartial)}),
 	}
 }

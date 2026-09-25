@@ -2,7 +2,7 @@
 
 ---
 owner: Agent CLI maintainers
-last modified: 2026, August, 29
+last modified: 2026, September, 25
 ---
 
 This document is the maintainer catalog for tool calls made by `agent session`.
@@ -39,9 +39,9 @@ effect begins. An unknown or newly added tool is intentionally classified as
 
 The interactive policy does not change non-interactive behavior. `agent ask`,
 `agent chat`, cron execution, and direct batch tool adapters retain their
-existing configured deadlines. The legacy session wrapper used by callers that
-do not supply an interactive policy also retains its `60s`
-`defaultSessionToolExecutionTimeout` compatibility bound.
+existing configured deadlines. The session tool executor used by callers that
+do not supply an interactive policy retains its `60s`
+`DefaultToolExecutionTimeout` compatibility bound.
 
 ## Built-in session tool catalog
 
@@ -98,8 +98,8 @@ The runtime observer and recording stream expose the following boundaries:
 | --- | --- |
 | Input commit | `input_commit` is emitted after the session successfully sends the client `MESSAGE.END` for the input. For audio, it is the end of the PCM accumulated since the previous commit. This is the start of the dead-air measurement. |
 | Tool deadline | The per-call child context starts immediately before the composed executor is invoked. It is `fast_read_timeout` or `long_running_timeout` from the session snapshot; expiry cancels only that child context, not the enclosing session. |
-| Provider-visible failure | The executor returns a correlated result retaining the original call ID and tool name. The tool-result stream then emits the provider-facing tool result and the continuation request. For timeout, the stable classification is `interactive_tool_timeout`. |
-| Acknowledgement audio | A long-running call still pending at `acknowledgement_threshold` schedules one response with acknowledgement purpose. The first non-empty `audio_output` observation for that response is the observable acknowledgement boundary; it is not a grounded turn and does not close the tool call. |
+| Provider-visible failure | The executor returns a correlated result retaining the original call ID and tool name. The tool-result stream then emits the provider-facing tool result and the continuation request. For timeout, the stable classification is `interactive_tool_timeout`. The original error is written to stderr as one `tool diagnostic:` line for the operator; it never reaches the provider. |
+| Acknowledgement audio | A long-running call still pending at `acknowledgement_threshold` (measured on the live session clock) schedules one response with acknowledgement purpose, unless another response is already active or requested. Only providers that reject a colliding response request without ending the session (OpenAI) receive acknowledgements; Grok sessions do not. The first non-empty `audio_output` observation for that response is the observable acknowledgement boundary; it is not a grounded turn, does not close the tool call, and does not complete a finite session's response. |
 | Final continuation | After the original result is accepted, exactly one ordinary response is requested. Its non-empty assistant text/audio and terminal message are the grounded continuation boundary. A timeout or other failure follows the same correlated-result path. |
 | Dead-air limit | The customer bar is measured from `input_commit` to first non-empty assistant `audio_output`; it must stay below `30s`. Session duration, transport-close, and recording-finalization timestamps are not substitutes for first assistant audio. |
 

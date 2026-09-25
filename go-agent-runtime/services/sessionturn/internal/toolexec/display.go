@@ -10,40 +10,6 @@ import (
 
 const errRecheckPanicked sessionturn.Error = "screen recording permission re-check panicked"
 
-// lifecycle adds the participant liveness boundary to the recording hook.
-type lifecycle struct {
-	sessionturn.ToolLifecycle
-}
-
-func newLifecycle(observers sessionturn.ToolLifecycle) lifecycle {
-	return lifecycle{ToolLifecycle: observers}
-}
-
-func (l lifecycle) call(call messages.ToolCall) {
-	if l.Runtime != nil {
-		l.Runtime.ObserveToolCall(call)
-	}
-	if l.Progress != nil {
-		l.Progress.ObserveProviderToolCallWithID(call.ID, call.Name)
-		l.Progress.BeginLocalToolExecution()
-	}
-	if l.Recording != nil {
-		l.Recording.ObserveToolCall(call)
-	}
-}
-
-func (l lifecycle) result(call messages.ToolCall, response messages.ToolCallResponse, failed bool) {
-	if l.Runtime != nil {
-		l.Runtime.ObserveToolResult(call, response, failed)
-	}
-	if l.Recording != nil {
-		l.Recording.ObserveToolResult(call, response, failed)
-	}
-	if l.Progress != nil {
-		l.Progress.EndLocalToolExecution()
-	}
-}
-
 type recheckResult struct {
 	permission tools.DisplayPermission
 	err        error

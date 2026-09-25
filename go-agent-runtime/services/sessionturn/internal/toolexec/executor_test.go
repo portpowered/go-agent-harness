@@ -142,17 +142,16 @@ func TestInteractivePolicyTimeoutClassifiesAndCancels(t *testing.T) {
 func TestSIGINTCancellationDoesNotRecordFailedResult(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	log := &recordingLifecycle{}
+	diagnostics := &diagnosticRecorder{}
 	executor := New(sessionturn.ToolExecutorRequest{
-		Inner: blockingExecutor(nil, nil), Timeout: time.Second, Cancellation: sigintIntent{},
-		Lifecycle: sessionturn.ToolLifecycle{Recording: namedObserver{name: "recording", log: log}},
+		Inner: blockingExecutor(nil, nil), Timeout: time.Second, Cancellation: sigintIntent{}, Diagnostics: diagnostics,
 	})
 	response, err := executor.Execute(ctx, messages.ToolCall{ID: "sigint-call", Name: "sleep"})
-	if !errors.Is(err, context.Canceled) || response.ToolCallID != "sigint-call" {
+	if !errors.Is(err, context.Canceled) || response.ToolCallID != "sigint-call" || response.Content != "" {
 		t.Fatalf("SIGINT error = %v, response=%#v", err, response)
 	}
-	if got := log.snapshot(); len(got) != 1 || got[0] != "recording.call" {
-		t.Fatalf("lifecycle = %v, want only the provider call", got)
+	if got := diagnostics.all(); len(got) != 0 {
+		t.Fatalf("diagnostics = %v, want none for an operator cancellation", got)
 	}
 }
 
@@ -225,42 +224,5 @@ func TestExecutorUsesIndependentSessionBudgets(t *testing.T) {
 	}
 	if remaining := deadlineRemaining(t, sessionturn.ToolExecutorRequest{Policy: policyA, Timeout: otherFastBudget}, "exec"); remaining < otherFastBudget-time.Second || remaining > otherFastBudget {
 		t.Fatalf("explicit timeout = %s, want override of policy", remaining)
-	}
-}
-
-func TestLifecycleOrderAndFailureClassification(t *testing.T) {
-	log := &recordingLifecycle{}
-	contents := []string{"plain", `{"version":"webmcp.tool-result.v1","ok":false}`, `{"version":"webmcp.tool-result.v1","ok":true}`, "refused"}
-	next := make(chan string, len(contents))
-	for _, content := range contents {
-		next <- content
-	}
-	executor := New(sessionturn.ToolExecutorRequest{
-		Inner: executorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
-			return messages.ToolCallResponse{Content: <-next}, nil
-		}),
-		Presentation: cliPresentation(),
-		Lifecycle: sessionturn.ToolLifecycle{
-			Recording: namedObserver{name: "recording", log: log}, Runtime: namedObserver{name: "runtime", log: log},
-			Progress: progressObserver{log: log},
-		},
-	})
-	for range contents {
-		if _, err := executor.Execute(context.Background(), messages.ToolCall{ID: "id"}); err != nil {
-			t.Fatalf("Execute: %v", err)
-		}
-	}
-	want := []string{"runtime.call", "progress.call.id", "progress.begin", "recording.call", "runtime.result", "recording.result", "progress.end"}
-	got := log.snapshot()
-	for i, event := range want {
-		if got[i] != event {
-			t.Fatalf("lifecycle = %v, want prefix %v", got, want)
-		}
-	}
-	wantFailed := []bool{false, false, true, true, false, false, true, true}
-	for i, failed := range wantFailed {
-		if log.results[i] != failed {
-			t.Fatalf("failed flags = %v, want %v", log.results, wantFailed)
-		}
 	}
 }
