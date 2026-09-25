@@ -137,7 +137,7 @@ func (run *publicRoomLatencyRun) playOpening(t *testing.T) {
 	}
 	waitPublicRoomLatencyAudio(t, run.audioEvents, run.speakerID, openingID, run.pcmFixture, openingStart.tick+600)
 	advancePublicRoomLatencyMixer(run.clock)
-	waitPublicRoomLatencyFanout(t, run.fanouts, run.speakerID, run.listenerID, run.pcmFixture)
+	waitPublicRoomLatencyFanout(t, run.clock, run.fanouts, run.speakerID, run.listenerID, run.pcmFixture)
 	run.provider.completeTurn(run.speakerID)
 }
 
@@ -314,7 +314,7 @@ func publicRoomLatencyTurn(t *testing.T, provider *publicRoomLatencyProvider, cl
 	}
 	waitPublicRoomLatencyAudio(t, audioEvents, participantID, start.responseID, pcm, start.tick+600)
 	advancePublicRoomLatencyMixer(clock)
-	waitPublicRoomLatencyFanout(t, fanouts, participantID, peerID, pcm)
+	waitPublicRoomLatencyFanout(t, clock, fanouts, participantID, peerID, pcm)
 	provider.completeTurn(participantID)
 	return start.responseID
 }
@@ -392,20 +392,35 @@ func advancePublicRoomLatencyMixer(clock *platformclock.Deterministic) {
 	}
 }
 
-func waitPublicRoomLatencyFanout(t *testing.T, fanouts <-chan publicRoomLatencyFanout, sourceID, targetID string, wantPCM []byte) {
+// waitPublicRoomLatencyFanout waits for the provider frame to reach its peer.
+// A loaded scheduler can admit the frame to the mixer only after the bounded
+// cadence advances already fired; the mixer then needs another period, so a
+// quiet settle window drives one more frame period instead of stalling the
+// virtual clock forever.
+func waitPublicRoomLatencyFanout(t *testing.T, clock *platformclock.Deterministic, fanouts <-chan publicRoomLatencyFanout, sourceID, targetID string, wantPCM []byte) {
 	t.Helper()
-	select {
-	case fanout := <-fanouts:
-		if fanout.sourceID != sourceID || fanout.targetID != targetID {
-			t.Fatalf("fanout = %+v, want %s -> %s", fanout, sourceID, targetID)
+	deadline := time.After(publicRoomLatencyTestTimeout)
+	for {
+		select {
+		case fanout := <-fanouts:
+			if fanout.sourceID != sourceID || fanout.targetID != targetID {
+				t.Fatalf("fanout = %+v, want %s -> %s", fanout, sourceID, targetID)
+			}
+			if !bytes.Equal(fanout.pcm, wantPCM) {
+				t.Fatalf("fanout PCM = %v, want exact fixture %v", fanout.pcm, wantPCM)
+			}
+			return
+		case <-deadline:
+			t.Fatalf("timed out waiting for fanout %s -> %s", sourceID, targetID)
+		case <-time.After(publicRoomLatencyMixerSettle):
+			clock.AdvanceBy(20 * time.Millisecond)
 		}
-		if !bytes.Equal(fanout.pcm, wantPCM) {
-			t.Fatalf("fanout PCM = %v, want exact fixture %v", fanout.pcm, wantPCM)
-		}
-	case <-time.After(publicRoomLatencyTestTimeout):
-		t.Fatalf("timed out waiting for fanout %s -> %s", sourceID, targetID)
 	}
 }
+
+// publicRoomLatencyMixerSettle is the real-time quiet window after which a
+// missing fan-out gets one more mixer period.
+const publicRoomLatencyMixerSettle = 100 * time.Millisecond
 
 var _ session.LiveService = (*publicRoomLatencyLiveService)(nil)
 var _ session.LiveHandle = (*publicRoomLatencyLiveHandle)(nil)

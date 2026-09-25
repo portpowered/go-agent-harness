@@ -285,13 +285,16 @@ func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
 func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) error {
 	frame := mixed.Frame
 	if output.provider != nil {
+		// Stamp the peer-audio emission before the hand-off: once the peer
+		// provider holds the frame it may answer, so a later stamp would
+		// charge the peer's reaction time to local output latency.
+		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
 		if err := output.provider.WriteFrame(g.ctx, frame); err != nil {
 			return fmt.Errorf("write room mix for %q: %w", output.target.participant.ID, err)
 		}
 		if g.recorder != nil {
 			g.recorder.RecordReceived(output.target.participant.ID, frame)
 		}
-		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
 	}
 	if output.queue == (audio.FrameProducer{}) {
 		return nil
