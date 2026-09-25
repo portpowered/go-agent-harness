@@ -200,7 +200,10 @@ func TestBuildRejectsScheduleBeyondFrameLimit(t *testing.T) {
 	}
 }
 
-func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
+// buildAlphaBetaBarrierSchedule builds a two-frame schedule in which alpha
+// and the additional participant each target the other.
+func buildAlphaBetaBarrierSchedule(t *testing.T) roomreplay.Schedule {
+	t.Helper()
 	root := t.TempDir()
 	alphaCapture := filepath.Join(root, "alpha.session.json")
 	betaCapture := filepath.Join(root, "beta.session.json")
@@ -210,13 +213,17 @@ func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
 	betaPath := filepath.Join(root, "beta.pcm")
 	writeBytes(t, alphaPath, []byte{1, 0, 2, 0, 3, 0, 4, 0})
 	writeBytes(t, betaPath, []byte{9, 0, 8, 0, 7, 0, 6, 0})
-	schedule := buildSchedule(t, roomreplay.BuildRequest{
+	return buildSchedule(t, roomreplay.BuildRequest{
 		SourceFormat: sourceFormat(100, 1), TargetFormat: targetTestFormat(100, 1),
 		Participants: []roomreplay.Participant{
 			{ID: roomReplayScheduleAlphaID, CapturePath: alphaCapture, SentPCMPath: alphaPath},
 			{ID: roomReplayAdditionalParticipantID, CapturePath: betaCapture, SentPCMPath: betaPath},
 		}, TargetIDs: []string{roomReplayScheduleAlphaID, roomReplayAdditionalParticipantID},
 	})
+}
+
+func TestRunUsesAcknowledgementBarrierAndPreservesCancellation(t *testing.T) {
+	schedule := buildAlphaBetaBarrierSchedule(t)
 
 	var mu sync.Mutex
 	advances := map[string]int{}

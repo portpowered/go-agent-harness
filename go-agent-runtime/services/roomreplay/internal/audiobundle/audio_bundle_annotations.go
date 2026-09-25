@@ -11,38 +11,42 @@ import (
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
+// roomReplayAnnotationSets accumulates the analysis inputs derived from recognized annotations.
+type roomReplayAnnotationSets struct {
+	annotations []RoomReplayAudioAnnotation
+	overlaps    []roomanalysis.PCM16OverlapInterval
+	barges      []roomanalysis.PCM16BargeInAnnotation
+	loudness    []roomanalysis.PCM16LoudnessInterval
+}
+
+func (s *roomReplayAnnotationSets) add(annotation RoomReplayAudioAnnotation, overlap *roomanalysis.PCM16OverlapInterval, barge *roomanalysis.PCM16BargeInAnnotation, loudness *roomanalysis.PCM16LoudnessInterval) {
+	s.annotations = append(s.annotations, annotation)
+	if overlap != nil {
+		s.overlaps = append(s.overlaps, *overlap)
+	}
+	if barge != nil {
+		s.barges = append(s.barges, *barge)
+	}
+	if loudness != nil {
+		s.loudness = append(s.loudness, *loudness)
+	}
+}
+
 func parseRoomReplayAudioAnnotations(manifest roomReplayJSONObject, plan RoomReplayPlan, participants []RoomReplayAudioParticipant, streamParticipants map[string]string) ([]RoomReplayAudioAnnotation, []roomanalysis.PCM16OverlapInterval, []roomanalysis.PCM16BargeInAnnotation, []roomanalysis.PCM16LoudnessInterval, error) {
 	participantByID := make(map[string]RoomReplayAudioParticipant, len(participants))
 	for _, participant := range participants {
 		participantByID[participant.ID] = participant
 	}
-	rawAnnotations := make([]json.RawMessage, 0)
-	for _, key := range []string{"annotations", "audio_annotations"} {
-		if raw, ok := manifest[key]; ok {
-			entries, err := roomReplayAnnotationEntries(raw, key)
-			if err != nil {
-				return nil, nil, nil, nil, err
-			}
-			rawAnnotations = append(rawAnnotations, entries...)
-		}
+	rawAnnotations, err := collectRoomReplayAnnotationEntries(manifest)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
-	if analysisRaw, ok := manifest["analysis"]; ok {
-		if analysis, err := roomReplayObject(analysisRaw); err == nil {
-			for _, key := range []string{"annotations", "audio_annotations"} {
-				if raw, exists := analysis[key]; exists {
-					entries, entryErr := roomReplayAnnotationEntries(raw, "analysis."+key)
-					if entryErr != nil {
-						return nil, nil, nil, nil, entryErr
-					}
-					rawAnnotations = append(rawAnnotations, entries...)
-				}
-			}
-		}
+	sets := roomReplayAnnotationSets{
+		annotations: make([]RoomReplayAudioAnnotation, 0, len(rawAnnotations)),
+		overlaps:    make([]roomanalysis.PCM16OverlapInterval, 0),
+		barges:      make([]roomanalysis.PCM16BargeInAnnotation, 0),
+		loudness:    make([]roomanalysis.PCM16LoudnessInterval, 0),
 	}
-	annotations := make([]RoomReplayAudioAnnotation, 0, len(rawAnnotations))
-	overlaps := make([]roomanalysis.PCM16OverlapInterval, 0)
-	barges := make([]roomanalysis.PCM16BargeInAnnotation, 0)
-	loudness := make([]roomanalysis.PCM16LoudnessInterval, 0)
 	seenAnnotationIDs := make(map[string]int)
 	for index, raw := range rawAnnotations {
 		annotation, overlap, barge, loudnessInterval, recognized, err := parseRoomReplayAudioAnnotation(raw, index, plan, participantByID, streamParticipants)
@@ -56,18 +60,39 @@ func parseRoomReplayAudioAnnotations(manifest roomReplayJSONObject, plan RoomRep
 			return nil, nil, nil, nil, roomReplayAudioMismatch("annotations["+annotation.ID+"]", "run-manifest.json", fmt.Sprintf("unique annotation identity (first seen at index %d)", previousIndex), annotation.ID, nil)
 		}
 		seenAnnotationIDs[annotation.ID] = index
-		annotations = append(annotations, annotation)
-		if overlap != nil {
-			overlaps = append(overlaps, *overlap)
-		}
-		if barge != nil {
-			barges = append(barges, *barge)
-		}
-		if loudnessInterval != nil {
-			loudness = append(loudness, *loudnessInterval)
+		sets.add(annotation, overlap, barge, loudnessInterval)
+	}
+	return sets.annotations, sets.overlaps, sets.barges, sets.loudness, nil
+}
+
+// collectRoomReplayAnnotationEntries gathers top-level annotation entries
+// followed by those nested under an object-shaped "analysis" section.
+func collectRoomReplayAnnotationEntries(manifest roomReplayJSONObject) ([]json.RawMessage, error) {
+	rawAnnotations, err := appendRoomReplayAnnotationEntries(make([]json.RawMessage, 0), manifest, "")
+	if err != nil {
+		return nil, err
+	}
+	if analysisRaw, ok := manifest["analysis"]; ok {
+		if analysis, objectErr := roomReplayObject(analysisRaw); objectErr == nil {
+			return appendRoomReplayAnnotationEntries(rawAnnotations, analysis, "analysis.")
 		}
 	}
-	return annotations, overlaps, barges, loudness, nil
+	return rawAnnotations, nil
+}
+
+func appendRoomReplayAnnotationEntries(entries []json.RawMessage, object roomReplayJSONObject, fieldPrefix string) ([]json.RawMessage, error) {
+	for _, key := range []string{"annotations", "audio_annotations"} {
+		raw, ok := object[key]
+		if !ok {
+			continue
+		}
+		values, err := roomReplayAnnotationEntries(raw, fieldPrefix+key)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, values...)
+	}
+	return entries, nil
 }
 
 func roomReplayAnnotationEntries(raw json.RawMessage, field string) ([]json.RawMessage, error) {
@@ -99,18 +124,57 @@ func roomReplayAnnotationEntries(raw json.RawMessage, field string) ([]json.RawM
 	return []json.RawMessage{raw}, nil
 }
 
+// roomReplayAnnotationTarget carries a recognized annotation's validated
+// identity and interval together with the participant lookups used to resolve
+// its kind-specific endpoints.
+type roomReplayAnnotationTarget struct {
+	object             roomReplayJSONObject
+	annotation         RoomReplayAudioAnnotation
+	participants       map[string]RoomReplayAudioParticipant
+	streamParticipants map[string]string
+}
+
 func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomReplayPlan, participants map[string]RoomReplayAudioParticipant, streamParticipants map[string]string) (RoomReplayAudioAnnotation, *roomanalysis.PCM16OverlapInterval, *roomanalysis.PCM16BargeInAnnotation, *roomanalysis.PCM16LoudnessInterval, bool, error) {
+	target, recognized, err := parseRoomReplayAnnotationTarget(raw, index, plan)
+	if err != nil || !recognized {
+		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
+	}
+	target.participants, target.streamParticipants = participants, streamParticipants
+	kind := target.annotation.Kind
+	switch {
+	case strings.Contains(kind, "overlap") || strings.Contains(kind, "simultaneous"):
+		annotation, overlap, err := target.overlap()
+		if err != nil {
+			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
+		}
+		return annotation, &overlap, nil, nil, true, nil
+	case strings.Contains(kind, "barge") || strings.Contains(kind, "interrupt"):
+		annotation, barge, err := target.bargeIn()
+		if err != nil {
+			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
+		}
+		return annotation, nil, &barge, nil, true, nil
+	default:
+		annotation, loudness, err := target.loudness()
+		if err != nil {
+			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
+		}
+		return annotation, nil, nil, &loudness, true, nil
+	}
+}
+
+func parseRoomReplayAnnotationTarget(raw json.RawMessage, index int, plan RoomReplayPlan) (roomReplayAnnotationTarget, bool, error) {
 	object, err := roomReplayObject(raw)
 	if err != nil {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d]", index), "run-manifest.json", "annotation object", "invalid", err)
+		return roomReplayAnnotationTarget{}, false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d]", index), "run-manifest.json", "annotation object", "invalid", err)
 	}
 	kind, _, kindErr := firstRoomReplayStringField(object, nil, "kind", "type", "annotation", "event")
 	if kindErr != nil {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d].kind", index), "run-manifest.json", "string annotation kind", "invalid", kindErr)
+		return roomReplayAnnotationTarget{}, false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d].kind", index), "run-manifest.json", "string annotation kind", "invalid", kindErr)
 	}
 	kind = normalizeRoomReplayAnnotationKind(kind)
-	if kind == "" || (!strings.Contains(kind, "overlap") && !strings.Contains(kind, "simultaneous") && !strings.Contains(kind, "barge") && !strings.Contains(kind, "interrupt") && !strings.Contains(kind, "loudness") && !strings.Contains(kind, "balance")) {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, nil
+	if !isRoomReplayAnnotationKindRecognized(kind) {
+		return roomReplayAnnotationTarget{}, false, nil
 	}
 	id, _ := optionalRoomReplayStringField(object, nil, "id", "annotation_id", "name")
 	if strings.TrimSpace(id) == "" {
@@ -118,73 +182,26 @@ func parseRoomReplayAudioAnnotation(raw json.RawMessage, index int, plan RoomRep
 	}
 	start, end, intervalErr := roomReplayAnnotationInterval(object)
 	if intervalErr != nil {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioIncomplete(fmt.Sprintf("annotations[%s].interval", id), "run-manifest.json", "start and end inside room duration", "missing or invalid", intervalErr)
+		return roomReplayAnnotationTarget{}, false, roomReplayAudioIncomplete(fmt.Sprintf("annotations[%s].interval", id), "run-manifest.json", "start and end inside room duration", "missing or invalid", intervalErr)
 	}
 	roomDuration := plan.EndedAt.Sub(plan.ClockBase)
 	if start < 0 || end > roomDuration || end <= start {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioTimeline("annotations["+id+"]", "run-manifest.json", "interval inside declared room duration", fmt.Sprintf("%s..%s", start, end))
+		return roomReplayAnnotationTarget{}, false, roomReplayAudioTimeline("annotations["+id+"]", "run-manifest.json", "interval inside declared room duration", fmt.Sprintf("%s..%s", start, end))
 	}
 	annotation := RoomReplayAudioAnnotation{ID: id, Kind: kind, Start: start, End: end, Raw: append(json.RawMessage(nil), raw...)}
-	if strings.Contains(kind, "overlap") || strings.Contains(kind, "simultaneous") {
-		a, b := roomReplayAnnotationEndpoint(object, "a", "participant_a", "participant_a_id", "speaker_a", "a_participant_id", "first_participant_id", "left_participant_id"), roomReplayAnnotationEndpoint(object, "b", "participant_b", "participant_b_id", "speaker_b", "b_participant_id", "second_participant_id", "right_participant_id")
-		if a == "" || b == "" {
-			values := roomReplayAnnotationParticipantList(object)
-			if len(values) >= 2 {
-				a, b = values[0], values[1]
-			}
-		}
-		a = normalizeRoomReplayParticipantReference(a, streamParticipants)
-		b = normalizeRoomReplayParticipantReference(b, streamParticipants)
-		if err := validateRoomReplayAnnotationParticipants(id, []string{a, b}, participants); err != nil {
-			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
-		}
-		if a == b {
-			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch("annotations["+id+"]", "run-manifest.json", "two distinct participants", a, nil)
-		}
-		annotation.Participants = []string{a, b}
-		annotation.SourceParticipantID, annotation.TargetParticipantID = a, b
-		forwardSent, forwardReceived, err := roomReplayAnnotationStreams(object, "a", a, participants, streamParticipants)
-		if err != nil {
-			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
-		}
-		reverseSent, reverseReceived, err := roomReplayAnnotationStreams(object, "b", b, participants, streamParticipants)
-		if err != nil {
-			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
-		}
-		overlap := roomanalysis.PCM16OverlapInterval{PCM16TimeInterval: roomanalysis.PCM16TimeInterval{ID: id, Start: start, End: end}, A: roomanalysis.PCM16OverlapParticipant{ParticipantID: a, SentStreamID: forwardSent, ReceivedStreamID: forwardReceived}, B: roomanalysis.PCM16OverlapParticipant{ParticipantID: b, SentStreamID: reverseSent, ReceivedStreamID: reverseReceived}}
-		return annotation, &overlap, nil, nil, true, nil
+	return roomReplayAnnotationTarget{object: object, annotation: annotation}, true, nil
+}
+
+func isRoomReplayAnnotationKindRecognized(kind string) bool {
+	if kind == "" {
+		return false
 	}
-	if strings.Contains(kind, "barge") || strings.Contains(kind, "interrupt") {
-		interrupter := normalizeRoomReplayParticipantReference(roomReplayAnnotationEndpoint(object, "interrupter", "interrupter_participant", "interrupter_participant_id", "source_participant_id", "source"), streamParticipants)
-		interrupted := normalizeRoomReplayParticipantReference(roomReplayAnnotationEndpoint(object, "interrupted", "interrupted_participant", "interrupted_participant_id", "target_participant_id", "target"), streamParticipants)
-		if err := validateRoomReplayAnnotationParticipants(id, []string{interrupter, interrupted}, participants); err != nil {
-			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
-		}
-		if interrupter == interrupted {
-			return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch("annotations["+id+"]", "run-manifest.json", "distinct interrupter and interrupted participants", interrupter, nil)
-		}
-		annotation.Participants = []string{interrupter, interrupted}
-		annotation.InterrupterParticipantID, annotation.InterruptedParticipantID = interrupter, interrupted
-		barge := roomanalysis.PCM16BargeInAnnotation{PCM16TimeInterval: roomanalysis.PCM16TimeInterval{ID: id, Start: start, End: end}, InterrupterStreamID: participants[interrupter].Sent.StreamID, InterruptedStreamID: participants[interrupted].WAV.StreamID}
-		return annotation, nil, &barge, nil, true, nil
-	}
-	left := normalizeRoomReplayParticipantReference(roomReplayAnnotationEndpoint(object, "left", "left_participant", "left_participant_id", "participant_a", "a"), streamParticipants)
-	right := normalizeRoomReplayParticipantReference(roomReplayAnnotationEndpoint(object, "right", "right_participant", "right_participant_id", "participant_b", "b"), streamParticipants)
-	if left == "" || right == "" {
-		values := roomReplayAnnotationParticipantList(object)
-		if len(values) >= 2 {
-			left, right = normalizeRoomReplayParticipantReference(values[0], streamParticipants), normalizeRoomReplayParticipantReference(values[1], streamParticipants)
+	for _, marker := range []string{"overlap", "simultaneous", "barge", "interrupt", "loudness", "balance"} {
+		if strings.Contains(kind, marker) {
+			return true
 		}
 	}
-	if err := validateRoomReplayAnnotationParticipants(id, []string{left, right}, participants); err != nil {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, err
-	}
-	if left == right {
-		return RoomReplayAudioAnnotation{}, nil, nil, nil, false, roomReplayAudioMismatch("annotations["+id+"]", "run-manifest.json", "distinct loudness participants", left, nil)
-	}
-	annotation.Participants = []string{left, right}
-	loudness := roomanalysis.PCM16LoudnessInterval{PCM16TimeInterval: roomanalysis.PCM16TimeInterval{ID: id, Start: start, End: end}, LeftStreamID: participants[left].WAV.StreamID, RightStreamID: participants[right].WAV.StreamID}
-	return annotation, nil, nil, &loudness, true, nil
+	return false
 }
 
 func roomReplayAnnotationInterval(object roomReplayJSONObject) (time.Duration, time.Duration, error) {

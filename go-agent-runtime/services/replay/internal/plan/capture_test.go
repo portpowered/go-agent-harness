@@ -568,8 +568,9 @@ func TestPlannerAdmissionPreservesCancellationAndErrors(t *testing.T) {
 	if _, err := New().LoadLivePlan(ctx, "never-read.json"); !errors.Is(err, cause) {
 		t.Fatalf("cancellation cause=%v", err)
 	}
-	//lint:ignore SA1012 Exercise nil-context rejection before any replay filesystem access.
-	if _, err := New().LoadLivePlan(nil, "never-read.json"); err == nil {
+	// A typed nil exercises nil-context rejection before any replay filesystem access.
+	var nilContext context.Context
+	if _, err := New().LoadLivePlan(nilContext, "never-read.json"); err == nil {
 		t.Fatal("nil context accepted")
 	}
 	if _, err := New().LoadLivePlan(t.Context(), filepath.Join(t.TempDir(), "missing.json")); err == nil {
