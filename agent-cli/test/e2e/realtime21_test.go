@@ -65,100 +65,8 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 		t.Fatalf("live binary: %v\n%s", err, output)
 	}
 
-	replay, err := audiorecording.OpenReplay(filepath.Join(recordDir, "audio-trace"))
-	if err != nil {
-		t.Fatalf("validate live audio trace: %v", err)
-	}
-	traceTools, traceResults, traceOutput := 0, 0, 0
-	traceSends, traceReceives := 0, 0
-	for {
-		event, _, err := replay.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		switch event.RuntimeKind {
-		case "tool_call":
-			traceTools++
-		case "tool_result":
-			traceResults++
-		case "audio_output":
-			traceOutput++
-		case "provider_wire_send":
-			traceSends++
-		case "provider_wire_receive":
-			traceReceives++
-		}
-	}
-	if traceTools != 1 || traceResults != 1 || traceOutput == 0 || traceSends == 0 || traceReceives == 0 {
-		t.Fatalf("live trace evidence: calls=%d results=%d output=%d sends=%d receives=%d", traceTools, traceResults, traceOutput, traceSends, traceReceives)
-	}
-
-	var capture struct {
-		Provider struct {
-			Model string `json:"model"`
-		} `json:"provider"`
-		Records []struct {
-			Type      string          `json:"type"`
-			Direction string          `json:"direction"`
-			Payload   json.RawMessage `json:"payload"`
-		} `json:"records"`
-	}
-	raw, err := os.ReadFile(capturePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(raw, &capture); err != nil {
-		t.Fatal(err)
-	}
-	if capture.Provider.Model != "gpt-realtime-2.1" {
-		t.Fatalf("captured model = %q", capture.Provider.Model)
-	}
-
-	var ingress, egress []byte
-	toolCall, toolResult, audioDone := 0, 0, 0
-	reasoningLow := false
-	for _, record := range capture.Records {
-		var payload map[string]any
-		if err := json.Unmarshal(record.Payload, &payload); err != nil {
-			t.Fatalf("decode %s payload: %v", record.Type, err)
-		}
-		switch record.Type {
-		case "session.update":
-			session, _ := payload["session"].(map[string]any)
-			reasoning, _ := session["reasoning"].(map[string]any)
-			reasoningLow = reasoning["effort"] == "low"
-		case "input_audio_buffer.append":
-			chunk, err := base64.StdEncoding.DecodeString(payload["audio"].(string))
-			if err != nil {
-				t.Fatal(err)
-			}
-			ingress = append(ingress, chunk...)
-		case "response.output_audio.delta":
-			chunk, err := base64.StdEncoding.DecodeString(payload["delta"].(string))
-			if err != nil {
-				t.Fatal(err)
-			}
-			egress = append(egress, chunk...)
-		case "response.output_audio.done":
-			audioDone++
-		case "response.output_item.done":
-			item, _ := payload["item"].(map[string]any)
-			if item["type"] == "function_call" && item["name"] == "list_dir" {
-				toolCall++
-			}
-		case "conversation.item.create":
-			item, _ := payload["item"].(map[string]any)
-			if item["type"] == "function_call_output" {
-				toolResult++
-			}
-		}
-	}
-	if !reasoningLow || toolCall != 1 || toolResult != 1 || audioDone < 1 {
-		t.Fatalf("wire contract: reasoning_low=%v tool_calls=%d tool_results=%d audio_done=%d", reasoningLow, toolCall, toolResult, audioDone)
-	}
+	assertRealtime21TraceEvidence(t, filepath.Join(recordDir, "audio-trace"))
+	ingress, egress := assertRealtime21WireContract(t, capturePath)
 	timing, err := runtimeReplayWire.NewService().AnalyzeTiming(t.Context(), capturePath)
 	if err != nil {
 		t.Fatalf("analyze live timing: %v", err)
@@ -176,6 +84,125 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 		timing.Summary.MaxAudioBurstRatio,
 		timing.Summary.MaxEstimatedQueueDelayMS,
 	)
+	assertRealtime21AudioBytes(t, ingress, egress, inputPath, outputPath)
+}
+
+// assertRealtime21TraceEvidence requires the recorded audio trace to show one
+// tool call and result plus audio output and provider wire traffic.
+func assertRealtime21TraceEvidence(t *testing.T, traceDir string) {
+	t.Helper()
+	replay, err := audiorecording.OpenReplay(traceDir)
+	if err != nil {
+		t.Fatalf("validate live audio trace: %v", err)
+	}
+	counts := map[string]int{}
+	for {
+		event, _, err := replay.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		counts[event.RuntimeKind]++
+	}
+	traceTools, traceResults, traceOutput := counts["tool_call"], counts["tool_result"], counts["audio_output"]
+	traceSends, traceReceives := counts["provider_wire_send"], counts["provider_wire_receive"]
+	if traceTools != 1 || traceResults != 1 || traceOutput == 0 || traceSends == 0 || traceReceives == 0 {
+		t.Fatalf("live trace evidence: calls=%d results=%d output=%d sends=%d receives=%d", traceTools, traceResults, traceOutput, traceSends, traceReceives)
+	}
+}
+
+type realtime21Capture struct {
+	Provider struct {
+		Model string `json:"model"`
+	} `json:"provider"`
+	Records []struct {
+		Type      string          `json:"type"`
+		Direction string          `json:"direction"`
+		Payload   json.RawMessage `json:"payload"`
+	} `json:"records"`
+}
+
+// realtime21WireEvidence accumulates the provider wire contract observations.
+type realtime21WireEvidence struct {
+	ingress, egress                 []byte
+	toolCall, toolResult, audioDone int
+	reasoningLow                    bool
+}
+
+// assertRealtime21WireContract checks the captured provider wire and returns
+// the ingress and egress PCM carried on it.
+func assertRealtime21WireContract(t *testing.T, capturePath string) ([]byte, []byte) {
+	t.Helper()
+	var capture realtime21Capture
+	raw, err := os.ReadFile(capturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &capture); err != nil {
+		t.Fatal(err)
+	}
+	if capture.Provider.Model != "gpt-realtime-2.1" {
+		t.Fatalf("captured model = %q", capture.Provider.Model)
+	}
+	evidence := &realtime21WireEvidence{}
+	for _, record := range capture.Records {
+		var payload map[string]any
+		if err := json.Unmarshal(record.Payload, &payload); err != nil {
+			t.Fatalf("decode %s payload: %v", record.Type, err)
+		}
+		evidence.observe(t, record.Type, payload)
+	}
+	if !evidence.reasoningLow || evidence.toolCall != 1 || evidence.toolResult != 1 || evidence.audioDone < 1 {
+		t.Fatalf("wire contract: reasoning_low=%v tool_calls=%d tool_results=%d audio_done=%d", evidence.reasoningLow, evidence.toolCall, evidence.toolResult, evidence.audioDone)
+	}
+	return evidence.ingress, evidence.egress
+}
+
+func (e *realtime21WireEvidence) observe(t *testing.T, recordType string, payload map[string]any) {
+	t.Helper()
+	switch recordType {
+	case "session.update":
+		reasoning := eacObject(eacObject(payload, "session"), "reasoning")
+		e.reasoningLow = reasoning["effort"] == "low"
+	case "input_audio_buffer.append":
+		e.ingress = append(e.ingress, requireBase64Field(t, payload, "audio")...)
+	case "response.output_audio.delta":
+		e.egress = append(e.egress, requireBase64Field(t, payload, "delta")...)
+	case "response.output_audio.done":
+		e.audioDone++
+	case "response.output_item.done":
+		item := eacObject(payload, "item")
+		if item["type"] == "function_call" && item["name"] == "list_dir" {
+			e.toolCall++
+		}
+	case "conversation.item.create":
+		if eacObject(payload, "item")["type"] == "function_call_output" {
+			e.toolResult++
+		}
+	}
+}
+
+// requireBase64Field decodes a required base64 string field.
+func requireBase64Field(t *testing.T, payload map[string]any, field string) []byte {
+	t.Helper()
+	encoded, ok := payload[field].(string)
+	if !ok {
+		t.Fatalf("payload field %s = %T, want string", field, payload[field])
+	}
+	chunk, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return chunk
+}
+
+// assertRealtime21AudioBytes compares wire ingress with the input fixture
+// (allowing trailing silence padding below one frame) and wire egress with
+// the output WAV.
+func assertRealtime21AudioBytes(t *testing.T, ingress, egress []byte, inputPath, outputPath string) {
+	t.Helper()
 	inputPCM := wavData(t, inputPath)
 	if len(ingress) < len(inputPCM) || !bytes.Equal(ingress[:len(inputPCM)], inputPCM) || len(ingress)-len(inputPCM) >= 1440 {
 		t.Fatalf("ingress mismatch: wire=%d fixture=%d", len(ingress), len(inputPCM))

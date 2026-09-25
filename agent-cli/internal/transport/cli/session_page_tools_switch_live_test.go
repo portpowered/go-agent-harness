@@ -51,61 +51,19 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	assertLiveChromeStartupShape(t, ctx, cdpURL)
-	openLiveMarginTab(t, ctx, cdpURL)
+	assertLiveChromeStartupShape(t, ctx, cdpURL, sessionPageToolsLiveCubecadeOrigin, "Cubecade")
+	openLiveCDPTab(t, ctx, cdpURL, sessionPageToolsLiveMarginURL, "Margin")
 
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Tools.Backend = config.BrowserToolsBackendWebMCP
-	browser.Connection.CDPURL = cdpURL
-	browser.Selection.Origin = sessionPageToolsLiveCubecadeOrigin
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	browser.Selection.Persist = false
-	browser.Policy.AllowedOrigins = []string{
-		sessionPageToolsLiveCubecadeOrigin,
-		sessionPageToolsLiveMarginOrigin,
-	}
-	cfg := &config.Config{
-		Model: config.ModelConfig{
-			Provider: config.ProviderGrok,
-			Grok:     &config.GrokConfig{Model: "session-shape-fake", APIKey: "unused"},
-		},
-		Browser:   browser,
-		ConfigDir: t.TempDir(),
-	}
-	for _, id := range config.DefaultToolIDs {
-		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
-	}
-
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
-	if err != nil {
-		t.Fatalf("capability factory: %v", err)
-	}
-	defer func() {
-		if capabilities.Close != nil {
-			if closeErr := capabilities.Close(); closeErr != nil {
-				t.Logf("capability close: %v", closeErr)
-			}
-		}
-	}()
-
-	if capabilities.Initialize == nil {
-		t.Fatal("production capabilities did not expose session initialization")
-	}
-	if err := capabilities.Initialize(ctx); err != nil {
-		if capabilities.Status != nil {
-			status := capabilities.Status()
-			t.Logf("bootstrap status: state=%s err=%v", status.State, status.Err)
-		}
-		t.Fatalf("initialize Cubecade selection: %v", err)
-	}
+	cfg := newSessionPageToolsSwitchLiveConfig(t, cdpURL)
+	capabilities := initSessionPageToolsSwitchLiveCapabilities(t, ctx, cfg)
+	defer closeSessionPageToolsSwitchLiveCapabilities(t, capabilities)
 
 	base := messages.CanonicalToolDefinitions(capabilities.Definitions)
 	initialDefinitions, err := capabilities.RefreshDefinitionsWithError(ctx)
 	if err != nil {
 		t.Fatalf("refresh initial Cubecade definitions: %v", err)
 	}
-	requireLivePageSurface(t, initialDefinitions, base, []string{"get_cube_state", "queue_cube_moves"}, "Cubecade")
+	requireLivePageSurface(t, initialDefinitions, base, liveCubecadePageTools(), "Cubecade")
 
 	tabs := waitForLivePageTargets(t, ctx, capabilities.Executor)
 	cubeTarget, marginTarget := requireLivePageTargets(t, tabs)
@@ -116,31 +74,13 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 	t.Logf("targets: browser=%s Cubecade=%s (%s) Margin=%s (%s)", cubeTarget.BrowserID, cubeTarget.TargetID, cubeTarget.Origin, marginTarget.TargetID, marginTarget.Origin)
 
 	agentBinary := buildLiveAgentCLI(t, ctx)
-
 	providerSession := newSessionPageToolsLiveSession()
 	provider := &sessionPageToolsLiveInferencer{session: providerSession}
-	sessionCtx, cancelSession := context.WithCancel(ctx)
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- newTestSessionCommand(nil, nil, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}).runSessionRequest(sessionCtx, io.Discard, io.Discard, serviceSession.Request{
-			Provider: config.ProviderGrok, Model: "session-shape-fake", APIKey: "unused",
-			LoadedConfig: cfg, BrowserToolsEnabled: true, WaitForClose: true, MaxDuration: 4 * time.Minute,
-		})
-	}()
-	defer func() {
-		cancelSession()
-		select {
-		case err := <-runErr:
-			if err != nil && !errors.Is(err, context.Canceled) {
-				t.Logf("session shutdown: %v", err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("fake provider session did not stop after cancellation")
-		}
-	}()
+	runErr, stopSession := startSessionPageToolsSwitchLiveRun(t, ctx, cfg, capabilities, provider)
+	defer stopSession()
 
 	bootstrap := readSessionPageToolsLiveUpdate(t, ctx, runErr, providerSession)
-	requireLiveSessionSurface(t, bootstrap, base, []string{"get_cube_state", "queue_cube_moves"}, "Cubecade bootstrap")
+	requireLiveSessionSurface(t, bootstrap, base, liveCubecadePageTools(), "Cubecade bootstrap")
 
 	execute := func(name string, args any) webmcp.ToolResultEnvelope {
 		t.Helper()
@@ -151,7 +91,7 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 		return executeSessionPageToolsLiveCall(t, ctx, capabilities.Executor, name, string(encoded))
 	}
 
-	cubeState := execute("get_cube_state", map[string]any{})
+	cubeState := execute(ambiguousCubeStateTool, map[string]any{})
 	requireLiveSuccess(t, cubeState, "Cubecade get_cube_state")
 	t.Logf("result Cubecade.get_cube_state: ok=%t data_keys=%v", cubeState.OK, liveJSONKeys(cubeState.Data))
 
@@ -160,43 +100,27 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 		"target_id":  marginTarget.TargetID,
 	})
 	requireLiveSuccess(t, selectMargin, "select Margin")
-	marginUpdate := readLiveSessionSurface(t, ctx, runErr, providerSession, base, []string{
-		"add_comment",
-		"create_document",
-		"get_document",
-		"list_comments",
-		"list_documents",
-		"open_document",
-		"reopen_comment",
-		"reply_to_comment",
-		"resolve_comment",
-		"update_document",
-	}, "Margin switch")
+	marginUpdate := readLiveSessionSurface(t, ctx, runErr, providerSession, base, liveMarginPageTools(), "Margin switch")
 
-	staleCube := execute("get_cube_state", map[string]any{})
-	if staleCube.OK || staleCube.Error == nil || staleCube.Error.Code != string(webmcp.ErrorStaleToolRef) {
-		t.Fatalf("stale Cubecade tool result = %#v, want stale_tool_ref guidance", staleCube)
-	}
-	if !strings.Contains(staleCube.Error.Message, webmcp.ListToolsToolName) {
-		t.Fatalf("stale Cubecade guidance = %q, want %s recovery hint", staleCube.Error.Message, webmcp.ListToolsToolName)
-	}
+	staleCube := execute(ambiguousCubeStateTool, map[string]any{})
+	requireLiveStaleToolRef(t, staleCube, "Cubecade")
 	t.Logf("stale result Cubecade.get_cube_state while Margin selected: code=%s guidance=true", staleCube.Error.Code)
 
 	token := fmt.Sprintf("%d", time.Now().UnixNano())
 	title := "WebMCP switch " + token
 	content := "session-shape validation " + token
-	created := execute("create_document", map[string]any{
+	created := execute(liveCreateDocumentToolName, map[string]any{
 		"title":   title,
 		"content": content,
 	})
 	requireLiveSuccess(t, created, "Margin create_document")
 	documentID := liveDocumentID(created.Data)
 	if documentID == "" {
-		t.Fatalf("Margin create_document returned no document ID: %s", truncateLiveJSON(created.Data, 1200))
+		t.Fatalf("Margin create_document returned no document ID: %s", truncateLiveText(created.Data, 1200))
 	}
 	t.Logf("result Margin.create_document: ok=%t document_id=%s", created.OK, documentID)
 
-	gotDocument := execute("get_document", map[string]any{"document_id": documentID})
+	gotDocument := execute(liveGetDocumentToolName, map[string]any{"document_id": documentID})
 	requireLiveSuccess(t, gotDocument, "Margin get_document")
 	t.Logf("result Margin.get_document: ok=%t data_keys=%v", gotDocument.OK, liveJSONKeys(gotDocument.Data))
 
@@ -205,55 +129,115 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 		"target_id":  cubeTarget.TargetID,
 	})
 	requireLiveSuccess(t, selectCube, "select Cubecade again")
-	finalUpdate := readLiveSessionSurface(t, ctx, runErr, providerSession, base, []string{"get_cube_state", "queue_cube_moves"}, "Cubecade return")
-	staleMargin := execute("get_document", map[string]any{})
-	if staleMargin.OK || staleMargin.Error == nil || staleMargin.Error.Code != string(webmcp.ErrorStaleToolRef) {
-		t.Fatalf("stale Margin tool result = %#v, want stale_tool_ref guidance", staleMargin)
-	}
-	if !strings.Contains(staleMargin.Error.Message, webmcp.ListToolsToolName) {
-		t.Fatalf("stale Margin guidance = %q, want %s recovery hint", staleMargin.Error.Message, webmcp.ListToolsToolName)
-	}
+	finalUpdate := readLiveSessionSurface(t, ctx, runErr, providerSession, base, liveCubecadePageTools(), "Cubecade return")
+	staleMargin := execute(liveGetDocumentToolName, map[string]any{})
+	requireLiveStaleToolRef(t, staleMargin, "Margin")
 	t.Logf("stale result Margin.get_document while Cubecade selected: code=%s guidance=true", staleMargin.Error.Code)
-	finalCubeState := execute("get_cube_state", map[string]any{})
+	finalCubeState := execute(ambiguousCubeStateTool, map[string]any{})
 	requireLiveSuccess(t, finalCubeState, "Cubecade get_cube_state after return")
 	t.Logf("result Cubecade.get_cube_state after return: ok=%t data_keys=%v", finalCubeState.OK, liveJSONKeys(finalCubeState.Data))
 
-	cubeOracle := directLiveCatalog(t, ctx, agentBinary, cdpURL, cubeTarget, []string{"get_cube_state", "queue_cube_moves"})
-	logLiveCatalog(t, "Cubecade direct CLI oracle", cubeOracle)
-	directCubeState := directLiveInvoke(t, ctx, agentBinary, cdpURL, cubeTarget, findDirectToolRef(t, cubeOracle, "get_cube_state"), map[string]any{})
-	requireLiveSuccess(t, directCubeState, "direct CLI Cubecade get_cube_state")
-	t.Logf("oracle direct CLI Cubecade.get_cube_state: ok=%t data_keys=%v", directCubeState.OK, liveJSONKeys(directCubeState.Data))
-
-	marginOracle := directLiveCatalog(t, ctx, agentBinary, cdpURL, marginTarget, []string{
-		"add_comment",
-		"create_document",
-		"get_document",
-		"list_comments",
-		"list_documents",
-		"open_document",
-		"reopen_comment",
-		"reply_to_comment",
-		"resolve_comment",
-		"update_document",
-	})
-	logLiveCatalog(t, "Margin direct CLI oracle", marginOracle)
-	directDocument := directLiveInvoke(t, ctx, agentBinary, cdpURL, marginTarget, findDirectToolRef(t, marginOracle, "get_document"), map[string]any{"document_id": documentID})
-	requireLiveSuccess(t, directDocument, "direct CLI Margin get_document")
-	t.Logf("oracle direct CLI Margin.get_document: ok=%t data_keys=%v", directDocument.OK, liveJSONKeys(directDocument.Data))
+	verifySessionPageToolsSwitchDirectOracle(t, ctx, agentBinary, cdpURL, cubeTarget, marginTarget, documentID)
 
 	if connections := provider.connections(); connections != 1 {
 		t.Fatalf("provider connections = %d, want one persistent connection", connections)
 	}
-	assertLiveChromeStillRunning(t, ctx, cdpURL)
+	assertLiveChromeStillHasOrigins(t, ctx, cdpURL, sessionPageToolsLiveCubecadeOrigin, sessionPageToolsLiveMarginOrigin)
 	t.Logf("session shape: provider_connections=%d, definition_transitions=[Cubecade(%d)->Margin(%d)->Cubecade(%d)], external_browser_left_running=true", provider.connections(), len(bootstrap), len(marginUpdate), len(finalUpdate))
 }
 
-type sessionPageToolsLiveTarget struct {
-	BrowserID string `json:"browser_id"`
-	TargetID  string `json:"target_id"`
-	Type      string `json:"type"`
-	Origin    string `json:"origin"`
-	Eligible  bool   `json:"eligible"`
+const livePageTargetType = "page"
+
+func newSessionPageToolsSwitchLiveConfig(t *testing.T, cdpURL string) *config.Config {
+	cfg := livePageToolsConfig(t, cdpURL)
+	cfg.Model = config.ModelConfig{
+		Provider: config.ProviderGrok,
+		Grok:     &config.GrokConfig{Model: "session-shape-fake", APIKey: "unused"},
+	}
+	cfg.Browser.Selection.Origin = sessionPageToolsLiveCubecadeOrigin
+	cfg.Browser.Selection.Persist = false
+	cfg.Browser.Policy.AllowedOrigins = []string{sessionPageToolsLiveCubecadeOrigin, sessionPageToolsLiveMarginOrigin}
+	return cfg
+}
+
+func initSessionPageToolsSwitchLiveCapabilities(t *testing.T, ctx context.Context, cfg *config.Config) SessionToolCapabilities {
+	t.Helper()
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	if err != nil {
+		t.Fatalf("capability factory: %v", err)
+	}
+	if capabilities.Initialize == nil {
+		closeSessionPageToolsSwitchLiveCapabilities(t, capabilities)
+		t.Fatal("production capabilities did not expose session initialization")
+	}
+	if err := capabilities.Initialize(ctx); err != nil {
+		if capabilities.Status != nil {
+			status := capabilities.Status()
+			t.Logf("bootstrap status: state=%s err=%v", status.State, status.Err)
+		}
+		closeSessionPageToolsSwitchLiveCapabilities(t, capabilities)
+		t.Fatalf("initialize Cubecade selection: %v", err)
+	}
+	return capabilities
+}
+
+func closeSessionPageToolsSwitchLiveCapabilities(t *testing.T, capabilities SessionToolCapabilities) {
+	if capabilities.Close != nil {
+		if closeErr := capabilities.Close(); closeErr != nil {
+			t.Logf("capability close: %v", closeErr)
+		}
+	}
+}
+
+// startSessionPageToolsSwitchLiveRun runs the production session command with
+// the fake provider; the returned func cancels it and waits for shutdown.
+func startSessionPageToolsSwitchLiveRun(t *testing.T, ctx context.Context, cfg *config.Config, capabilities SessionToolCapabilities, provider *sessionPageToolsLiveInferencer) (<-chan error, func()) {
+	sessionCtx, cancelSession := context.WithCancel(ctx)
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- newTestSessionCommand(nil, nil, testSessionDeps{Inferencer: provider, Capabilities: borrowedTestCapabilities(capabilities)}).runSessionRequest(sessionCtx, io.Discard, io.Discard, serviceSession.Request{
+			Provider: config.ProviderGrok, Model: "session-shape-fake", APIKey: "unused",
+			LoadedConfig: cfg, BrowserToolsEnabled: true, WaitForClose: true, MaxDuration: 4 * time.Minute,
+		})
+	}()
+	return runErr, func() {
+		cancelSession()
+		select {
+		case err := <-runErr:
+			if err != nil && !errors.Is(err, context.Canceled) {
+				t.Logf("session shutdown: %v", err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("fake provider session did not stop after cancellation")
+		}
+	}
+}
+
+func requireLiveStaleToolRef(t *testing.T, result webmcp.ToolResultEnvelope, label string) {
+	t.Helper()
+	if result.OK || result.Error == nil || result.Error.Code != string(webmcp.ErrorStaleToolRef) {
+		t.Fatalf("stale %s tool result = %#v, want stale_tool_ref guidance", label, result)
+	}
+	if !strings.Contains(result.Error.Message, webmcp.ListToolsToolName) {
+		t.Fatalf("stale %s guidance = %q, want %s recovery hint", label, result.Error.Message, webmcp.ListToolsToolName)
+	}
+}
+
+// verifySessionPageToolsSwitchDirectOracle reads both pages through the direct
+// CLI as an oracle independent of the session under test.
+func verifySessionPageToolsSwitchDirectOracle(t *testing.T, ctx context.Context, agentBinary, cdpURL string, cubeTarget, marginTarget sessionPageToolsLiveTarget, documentID string) {
+	t.Helper()
+	cubeOracle := directLiveCatalog(t, ctx, agentBinary, cdpURL, cubeTarget, liveCubecadePageTools())
+	logLiveCatalog(t, "Cubecade direct CLI oracle", cubeOracle)
+	directCubeState := directLiveInvoke(t, ctx, agentBinary, cdpURL, cubeTarget, findDirectToolRef(t, cubeOracle, ambiguousCubeStateTool), map[string]any{})
+	requireLiveSuccess(t, directCubeState, "direct CLI Cubecade get_cube_state")
+	t.Logf("oracle direct CLI Cubecade.get_cube_state: ok=%t data_keys=%v", directCubeState.OK, liveJSONKeys(directCubeState.Data))
+
+	marginOracle := directLiveCatalog(t, ctx, agentBinary, cdpURL, marginTarget, liveMarginPageTools())
+	logLiveCatalog(t, "Margin direct CLI oracle", marginOracle)
+	directDocument := directLiveInvoke(t, ctx, agentBinary, cdpURL, marginTarget, findDirectToolRef(t, marginOracle, liveGetDocumentToolName), map[string]any{"document_id": documentID})
+	requireLiveSuccess(t, directDocument, "direct CLI Margin get_document")
+	t.Logf("oracle direct CLI Margin.get_document: ok=%t data_keys=%v", directDocument.OK, liveJSONKeys(directDocument.Data))
 }
 
 type sessionPageToolsLiveTabs struct {
@@ -265,28 +249,37 @@ type sessionPageToolsLiveCDPTarget struct {
 	URL  string `json:"url"`
 }
 
-func assertLiveChromeStartupShape(t *testing.T, ctx context.Context, cdpURL string) {
+func assertLiveChromeStartupShape(t *testing.T, ctx context.Context, cdpURL, origin, label string) {
 	t.Helper()
-	var targets []sessionPageToolsLiveCDPTarget
-	if err := getLiveCDPJSON(ctx, cdpURL, "/json/list", &targets); err != nil {
-		t.Fatalf("inspect external Chrome targets: %v", err)
-	}
-	pageCount := 0
-	for _, target := range targets {
-		if target.Type != "page" {
-			continue
-		}
-		pageCount++
-		if liveURLOrigin(target.URL) != sessionPageToolsLiveCubecadeOrigin {
-			t.Fatalf("external Chrome startup page origin = %q, want only %q", liveURLOrigin(target.URL), sessionPageToolsLiveCubecadeOrigin)
+	origins := liveChromePageOrigins(t, ctx, cdpURL, "inspect external Chrome targets")
+	for _, got := range origins {
+		if got != origin {
+			t.Fatalf("external Chrome startup page origin = %q, want only %q", got, origin)
 		}
 	}
-	if pageCount != 1 {
-		t.Fatalf("external Chrome startup page count = %d, want one Cubecade page", pageCount)
+	if len(origins) != 1 {
+		t.Fatalf("external Chrome startup page count = %d, want one %s page", len(origins), label)
 	}
 }
 
-func assertLiveChromeStillRunning(t *testing.T, ctx context.Context, cdpURL string) {
+// liveChromePageOrigins lists the origin of every page target in the external
+// Chrome, failing the test with the given context when CDP is unreachable.
+func liveChromePageOrigins(t *testing.T, ctx context.Context, cdpURL, failure string) []string {
+	t.Helper()
+	var targets []sessionPageToolsLiveCDPTarget
+	if err := getLiveCDPJSON(ctx, cdpURL, "/json/list", &targets); err != nil {
+		t.Fatalf("%s: %v", failure, err)
+	}
+	origins := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if target.Type == livePageTargetType {
+			origins = append(origins, liveURLOrigin(target.URL))
+		}
+	}
+	return origins
+}
+
+func assertLiveChromeStillHasOrigins(t *testing.T, ctx context.Context, cdpURL string, want ...string) {
 	t.Helper()
 	var version struct {
 		Browser string `json:"Browser"`
@@ -297,39 +290,38 @@ func assertLiveChromeStillRunning(t *testing.T, ctx context.Context, cdpURL stri
 	if strings.TrimSpace(version.Browser) == "" {
 		t.Fatalf("external Chrome /json/version omitted Browser identity")
 	}
-	var targets []sessionPageToolsLiveCDPTarget
-	if err := getLiveCDPJSON(ctx, cdpURL, "/json/list", &targets); err != nil {
-		t.Fatalf("inspect external Chrome after scenario: %v", err)
+	seen := map[string]bool{}
+	for _, origin := range liveChromePageOrigins(t, ctx, cdpURL, "inspect external Chrome after scenario") {
+		seen[origin] = true
 	}
-	origins := make(map[string]bool)
-	for _, target := range targets {
-		if target.Type == "page" {
-			origins[liveURLOrigin(target.URL)] = true
+	for _, origin := range want {
+		if !seen[origin] {
+			t.Fatalf("external Chrome lost %s; page_origins=%v", origin, seen)
 		}
-	}
-	if !origins[sessionPageToolsLiveCubecadeOrigin] || !origins[sessionPageToolsLiveMarginOrigin] {
-		t.Fatalf("external Chrome lost a scenario page: page_origins=%v", origins)
 	}
 }
 
-func openLiveMarginTab(t *testing.T, ctx context.Context, cdpURL string) {
+func openLiveCDPTab(t *testing.T, ctx context.Context, cdpURL, targetURL, label string) {
 	t.Helper()
-	endpoint, err := liveCDPEndpoint(cdpURL, "/json/new", sessionPageToolsLiveMarginURL)
+	endpoint, err := liveCDPEndpoint(cdpURL, "/json/new", targetURL)
 	if err != nil {
-		t.Fatalf("build legacy Chrome /json/new endpoint: %v", err)
+		t.Fatalf("build legacy Chrome /json/new endpoint for %s: %v", label, err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, nil)
 	if err != nil {
-		t.Fatalf("create Margin /json/new request: %v", err)
+		t.Fatalf("create %s /json/new request: %v", label, err)
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		t.Fatalf("open Margin through /json/new: %v", err)
+		t.Fatalf("open %s through /json/new: %v", label, err)
 	}
-	defer response.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+	defer func() { discardCloseError(response.Body.Close()) }()
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, 4096))
+	if readErr != nil {
+		t.Logf("read %s /json/new body: %v", label, readErr)
+	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		t.Fatalf("open Margin through /json/new status=%s body=%q", response.Status, string(body))
+		t.Fatalf("open %s through /json/new status=%s body=%q", label, response.Status, string(body))
 	}
 }
 
@@ -370,7 +362,7 @@ func requireLivePageTargets(t *testing.T, tabs sessionPageToolsLiveTabs) (sessio
 	t.Helper()
 	var cube, margin sessionPageToolsLiveTarget
 	for _, target := range tabs.Targets {
-		if target.Type != "page" || !target.Eligible {
+		if target.Type != livePageTargetType || !target.Eligible {
 			continue
 		}
 		switch target.Origin {
@@ -394,7 +386,7 @@ func requireLivePageTargets(t *testing.T, tabs sessionPageToolsLiveTabs) (sessio
 
 func hasLiveOrigin(targets []sessionPageToolsLiveTarget, origin string) bool {
 	for _, target := range targets {
-		if target.Type == "page" && target.Eligible && target.Origin == origin {
+		if target.Type == livePageTargetType && target.Eligible && target.Origin == origin {
 			return true
 		}
 	}
@@ -420,26 +412,6 @@ func requireLivePageSurface(t *testing.T, definitions, base []messages.ToolDefin
 		t.Fatalf("%s page names = %v, want %v", label, got, want)
 	}
 	t.Logf("definition transition %s: total=%d page_count=%d page_names=%v", label, len(definitions), len(want), want)
-}
-
-func executeSessionPageToolsLiveCall(t *testing.T, ctx context.Context, executor messages.ToolExecutor, name, args string) webmcp.ToolResultEnvelope {
-	t.Helper()
-	response, err := executor.Execute(ctx, messages.ToolCall{ID: "live-" + name, Name: name, Arguments: args})
-	if err != nil {
-		t.Fatalf("execute %s: %v", name, err)
-	}
-	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-	if err != nil {
-		t.Fatalf("%s result is not a valid envelope: %v; content=%s", name, err, truncateLiveJSON(json.RawMessage(response.Content), 1200))
-	}
-	return envelope
-}
-
-func requireLiveSuccess(t *testing.T, envelope webmcp.ToolResultEnvelope, operation string) {
-	t.Helper()
-	if !envelope.OK {
-		t.Fatalf("%s failed: %+v", operation, envelope.Error)
-	}
 }
 
 func readSessionPageToolsLiveUpdate(t *testing.T, ctx context.Context, runErr <-chan error, session *sessionPageToolsLiveSession) []messages.ToolDefinition {
@@ -581,7 +553,7 @@ func directLiveCatalog(t *testing.T, ctx context.Context, binary, cdpURL string,
 			t.Fatalf("direct CLI tool %q ref = %q, want webmcp.tool-ref.v1", tool.Name, tool.Ref)
 		}
 		if len(bytes.TrimSpace(tool.InputSchema)) == 0 || bytes.Equal(bytes.TrimSpace(tool.InputSchema), []byte("null")) || !json.Valid(tool.InputSchema) {
-			t.Fatalf("direct CLI tool %q schema = %q, want valid non-null JSON schema", tool.Name, truncateLiveJSON(tool.InputSchema, 500))
+			t.Fatalf("direct CLI tool %q schema = %q, want valid non-null JSON schema", tool.Name, truncateLiveText(tool.InputSchema, 500))
 		}
 	}
 	sort.Strings(got)
@@ -686,7 +658,7 @@ func getLiveCDPJSON(ctx context.Context, cdpURL, path string, target any) error 
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() { discardCloseError(response.Body.Close()) }()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("status %s", response.Status)
 	}
@@ -718,39 +690,6 @@ func liveURLOrigin(raw string) string {
 	return parsed.Scheme + "://" + parsed.Host
 }
 
-func liveDocumentID(raw json.RawMessage) string {
-	var value any
-	if json.Unmarshal(raw, &value) != nil {
-		return ""
-	}
-	return findLiveString(value, map[string]bool{"document_id": true, "id": true})
-}
-
-func findLiveString(value any, keys map[string]bool) string {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, value := range typed {
-			if keys[key] {
-				if stringValue, ok := value.(string); ok && stringValue != "" {
-					return stringValue
-				}
-			}
-		}
-		for _, value := range typed {
-			if found := findLiveString(value, keys); found != "" {
-				return found
-			}
-		}
-	case []any:
-		for _, value := range typed {
-			if found := findLiveString(value, keys); found != "" {
-				return found
-			}
-		}
-	}
-	return ""
-}
-
 func liveJSONKeys(raw json.RawMessage) []string {
 	var value map[string]json.RawMessage
 	if json.Unmarshal(raw, &value) != nil {
@@ -762,18 +701,6 @@ func liveJSONKeys(raw json.RawMessage) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func truncateLiveJSON(raw json.RawMessage, limit int) string {
-	return truncateLiveText(raw, limit)
-}
-
-func truncateLiveText(raw []byte, limit int) string {
-	text := string(raw)
-	if len(text) <= limit {
-		return text
-	}
-	return text[:limit] + "…"
 }
 
 type sessionPageToolsLiveInferencer struct {

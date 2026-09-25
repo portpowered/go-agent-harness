@@ -8,7 +8,6 @@ package integration
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -126,7 +125,7 @@ func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 		Model    string                           `json:"model"`
 		Runs     []liveVoiceToolGroundingEvidence `json:"runs"`
 	}{
-		Provider: "openai",
+		Provider: liveProviderOpenAI,
 		Model:    liveVoiceToolGroundingModel,
 		Runs:     evidence,
 	}, "", "  ")
@@ -166,7 +165,7 @@ func runLiveVoiceToolGrounding(t *testing.T, apiKey, artifactRoot string, testCa
 	rootCmd.SetArgs([]string{
 		"--config-dir", t.TempDir(),
 		"session",
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", liveVoiceToolGroundingModel,
 		"--api-key", apiKey,
 		"--record", capturePath,
@@ -188,280 +187,17 @@ func runLiveVoiceToolGrounding(t *testing.T, apiKey, artifactRoot string, testCa
 	return liveVoiceToolGroundingRun{capture: capture, capturePath: capturePath, recordDir: recordDir, audioPath: audioPath}
 }
 
-type liveVoiceToolGroundingObservation struct {
-	Provider                 string
-	Model                    string
-	Instructions             string
-	AdvertisedTools          []string
-	SessionUpdateCount       int
-	SessionUpdateIndex       int
-	FirstInputIndex          int
-	ToolName                 string
-	ToolCallID               string
-	ToolArguments            string
-	FunctionCallOutput       string
-	ToolCallIndex            int
-	ToolArgumentsIndex       int
-	FunctionOutputIndex      int
-	ResponseCreatesAfterTool int
-	SpokenReply              string
-	SpokenReplyIndex         int
-	AudioBytesAfterTool      int
-	TerminalStatus           string
-	TerminalIndex            int
-}
-
-func inspectLiveVoiceToolGroundingCapture(capture gwtesting.SessionCapture, testCase liveVoiceToolGroundingCase) (liveVoiceToolGroundingObservation, error) {
-	observation := liveVoiceToolGroundingObservation{
-		Provider:            capture.Provider.Name,
-		Model:               capture.Provider.Model,
-		SessionUpdateIndex:  -1,
-		FirstInputIndex:     -1,
-		ToolCallIndex:       -1,
-		ToolArgumentsIndex:  -1,
-		FunctionOutputIndex: -1,
-		SpokenReplyIndex:    -1,
-		TerminalIndex:       -1,
-	}
-
-	type functionCall struct {
-		index, argumentsIndex   int
-		name, callID, arguments string
-	}
-	type functionOutput struct {
-		index          int
-		callID, output string
-	}
-	var calls []functionCall
-	var outputs []functionOutput
-	var responseCreateIndices []int
-	var spoken []struct {
-		index int
-		text  string
-	}
-	var audio []struct {
-		index int
-		bytes int
-	}
-	var responseDone []struct {
-		index  int
-		status string
-	}
-
-	for index, record := range capture.Records {
-		payload := record.Payload
-		if len(payload) == 0 {
-			payload = record.Data
-		}
-		if len(payload) == 0 {
-			return observation, fmt.Errorf("record %d (%s) has an empty payload", index, record.Type)
-		}
-
-		if record.Direction == gwtesting.DirectionClientToServer {
-			switch record.Type {
-			case rtEventSessionUpdate:
-				observation.SessionUpdateCount++
-				var event struct {
-					Session struct {
-						Instructions string `json:"instructions"`
-						Tools        []struct {
-							Name string `json:"name"`
-						} `json:"tools"`
-					} `json:"session"`
-				}
-				if err := json.Unmarshal(payload, &event); err != nil {
-					return observation, fmt.Errorf("decode session.update: %w", err)
-				}
-				if observation.SessionUpdateIndex < 0 {
-					observation.SessionUpdateIndex = index
-				}
-				observation.Instructions = event.Session.Instructions
-				observation.AdvertisedTools = observation.AdvertisedTools[:0]
-				for _, tool := range event.Session.Tools {
-					observation.AdvertisedTools = append(observation.AdvertisedTools, tool.Name)
-				}
-			case rtEventInputAudioAppend:
-				if observation.FirstInputIndex < 0 {
-					observation.FirstInputIndex = index
-				}
-			case rtEventConversationItemCreate:
-				var event struct {
-					Item struct {
-						Type   string `json:"type"`
-						CallID string `json:"call_id"`
-						Output string `json:"output"`
-					} `json:"item"`
-				}
-				if err := json.Unmarshal(payload, &event); err != nil {
-					return observation, fmt.Errorf("decode conversation.item.create: %w", err)
-				}
-				if event.Item.Type == rtItemFunctionCallOutput {
-					outputs = append(outputs, functionOutput{index: index, callID: event.Item.CallID, output: event.Item.Output})
-				}
-			case rtEventResponseCreate:
-				responseCreateIndices = append(responseCreateIndices, index)
-			}
-			continue
-		}
-		if record.Direction != gwtesting.DirectionServerToClient {
-			continue
-		}
-
-		switch record.Type {
-		case rtEventOutputItemAdded:
-			var event struct {
-				Item struct {
-					Type   string `json:"type"`
-					Name   string `json:"name"`
-					CallID string `json:"call_id"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.output_item.added: %w", err)
-			}
-			if event.Item.Type == rtItemFunctionCall {
-				calls = append(calls, functionCall{index: index, name: event.Item.Name, callID: event.Item.CallID})
-			}
-		case rtEventFunctionCallArgumentsDone:
-			var event struct {
-				Name      string `json:"name"`
-				CallID    string `json:"call_id"`
-				Arguments string `json:"arguments"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.function_call_arguments.done: %w", err)
-			}
-			if len(calls) == 0 {
-				return observation, fmt.Errorf("function-call arguments arrived before function call")
-			}
-			calls[len(calls)-1].argumentsIndex = index
-			calls[len(calls)-1].arguments = event.Arguments
-			if calls[len(calls)-1].callID == "" {
-				calls[len(calls)-1].callID = event.CallID
-			}
-			if calls[len(calls)-1].name == "" {
-				calls[len(calls)-1].name = event.Name
-			}
-		case "response.output_audio_transcript.done":
-			var event struct {
-				Transcript string `json:"transcript"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.output_audio_transcript.done: %w", err)
-			}
-			if strings.TrimSpace(event.Transcript) != "" {
-				spoken = append(spoken, struct {
-					index int
-					text  string
-				}{index: index, text: event.Transcript})
-			}
-		case rtEventOutputAudioDelta, "response.audio.delta":
-			var event struct {
-				Delta string `json:"delta"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode output audio delta: %w", err)
-			}
-			if event.Delta != "" {
-				decoded, err := base64.StdEncoding.DecodeString(event.Delta)
-				if err != nil {
-					return observation, fmt.Errorf("decode output audio delta: %w", err)
-				}
-				audio = append(audio, struct {
-					index int
-					bytes int
-				}{index: index, bytes: len(decoded)})
-			}
-		case rtEventResponseDone:
-			var event struct {
-				Status   string `json:"status"`
-				Response struct {
-					Status string `json:"status"`
-				} `json:"response"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.done: %w", err)
-			}
-			status := event.Response.Status
-			if status == "" {
-				status = event.Status
-			}
-			responseDone = append(responseDone, struct {
-				index  int
-				status string
-			}{index: index, status: status})
-		case "error":
-			return observation, fmt.Errorf("provider emitted an error event")
-		}
-	}
-
-	if observation.SessionUpdateCount != 1 {
-		return observation, fmt.Errorf("session.update count=%d, want exactly one", observation.SessionUpdateCount)
-	}
-	if observation.SessionUpdateIndex < 0 || observation.FirstInputIndex < 0 || observation.SessionUpdateIndex >= observation.FirstInputIndex {
-		return observation, fmt.Errorf("session.update index=%d must precede first input index=%d", observation.SessionUpdateIndex, observation.FirstInputIndex)
-	}
-	if len(calls) != 1 {
-		return observation, fmt.Errorf("function_call count=%d, want exactly one %s", len(calls), testCase.ExpectedTool)
-	}
-	if len(outputs) != 1 {
-		return observation, fmt.Errorf("function_call_output count=%d, want exactly one", len(outputs))
-	}
-	call := calls[0]
-	output := outputs[0]
-	observation.ToolName = call.name
-	observation.ToolCallID = call.callID
-	observation.ToolArguments = call.arguments
-	observation.FunctionCallOutput = output.output
-	observation.ToolCallIndex = call.index
-	observation.ToolArgumentsIndex = call.argumentsIndex
-	observation.FunctionOutputIndex = output.index
-	if strings.TrimSpace(call.callID) == "" || output.callID != call.callID {
-		return observation, fmt.Errorf("function-call correlation invalid: call=(%q,%q), output_call_id=%q", call.name, call.callID, output.callID)
-	}
-	if call.argumentsIndex <= call.index || output.index <= call.argumentsIndex {
-		return observation, fmt.Errorf("call/result order invalid: call=%d arguments=%d output=%d", call.index, call.argumentsIndex, output.index)
-	}
-	for _, responseCreateIndex := range responseCreateIndices {
-		if responseCreateIndex > output.index {
-			observation.ResponseCreatesAfterTool++
-		}
-	}
-	for _, transcript := range spoken {
-		if transcript.index <= output.index {
-			continue
-		}
-		if observation.SpokenReplyIndex < 0 {
-			observation.SpokenReplyIndex = transcript.index
-		}
-		if observation.SpokenReply != "" {
-			observation.SpokenReply += " "
-		}
-		observation.SpokenReply += strings.TrimSpace(transcript.text)
-	}
-	for _, done := range responseDone {
-		if done.index <= observation.SpokenReplyIndex {
-			continue
-		}
-		observation.TerminalIndex = done.index
-		observation.TerminalStatus = done.status
-		if observation.TerminalStatus == "" {
-			observation.TerminalStatus = rtStatusCompleted
-		}
-		break
-	}
-	if observation.TerminalIndex >= 0 {
-		for _, delta := range audio {
-			if delta.index > output.index && delta.index < observation.TerminalIndex {
-				observation.AudioBytesAfterTool += delta.bytes
-			}
-		}
-	}
-	return observation, nil
-}
-
 func validateLiveVoiceToolGroundingObservation(observation liveVoiceToolGroundingObservation, testCase liveVoiceToolGroundingCase) error {
-	if observation.Provider != "openai" || observation.Model != liveVoiceToolGroundingModel {
+	if err := validateLiveVoiceToolGroundingContract(observation, testCase); err != nil {
+		return err
+	}
+	return validateLiveVoiceToolGroundingCase(observation, testCase)
+}
+
+// validateLiveVoiceToolGroundingContract checks the case-independent session,
+// tool, and reply ordering contract.
+func validateLiveVoiceToolGroundingContract(observation liveVoiceToolGroundingObservation, testCase liveVoiceToolGroundingCase) error {
+	if observation.Provider != liveProviderOpenAI || observation.Model != liveVoiceToolGroundingModel {
 		return fmt.Errorf("provider identity=(%q,%q), want (openai,%q)", observation.Provider, observation.Model, liveVoiceToolGroundingModel)
 	}
 	if strings.TrimSpace(observation.Instructions) == "" {
@@ -491,7 +227,7 @@ func validateLiveVoiceToolGroundingObservation(observation liveVoiceToolGroundin
 	if observation.TerminalIndex <= observation.SpokenReplyIndex {
 		return fmt.Errorf("terminal response.done is absent or precedes the spoken reply")
 	}
-	if observation.TerminalStatus == rtStatusFailed || observation.TerminalStatus == rtStatusCancelled || observation.TerminalStatus == "incomplete" {
+	if observation.TerminalStatus == rtStatusFailed || observation.TerminalStatus == rtStatusCancelled || observation.TerminalStatus == rtStatusIncomplete {
 		return fmt.Errorf("terminal response status=%q", observation.TerminalStatus)
 	}
 	if observation.AudioBytesAfterTool == 0 {
@@ -500,11 +236,19 @@ func validateLiveVoiceToolGroundingObservation(observation liveVoiceToolGroundin
 	if strings.TrimSpace(observation.FunctionCallOutput) == "" {
 		return fmt.Errorf("function_call_output is empty")
 	}
+	return nil
+}
 
-	var arguments struct {
-		Path    string `json:"path"`
-		Command string `json:"command"`
-	}
+// liveVoiceToolGroundingArguments are the read_file and exec arguments.
+type liveVoiceToolGroundingArguments struct {
+	Path    string `json:"path"`
+	Command string `json:"command"`
+}
+
+// validateLiveVoiceToolGroundingCase checks the case-specific tool arguments,
+// tool result, and honest spoken reply.
+func validateLiveVoiceToolGroundingCase(observation liveVoiceToolGroundingObservation, testCase liveVoiceToolGroundingCase) error {
+	var arguments liveVoiceToolGroundingArguments
 	if err := json.Unmarshal([]byte(observation.ToolArguments), &arguments); err != nil {
 		return fmt.Errorf("decode %s arguments: %w", testCase.ExpectedTool, err)
 	}
@@ -512,39 +256,54 @@ func validateLiveVoiceToolGroundingObservation(observation liveVoiceToolGroundin
 	reply := strings.ToLower(observation.SpokenReply)
 	switch testCase.Name {
 	case "missing-file":
-		if !isLiveVoiceToolGroundingMissingPath(arguments.Path) {
-			return fmt.Errorf("read_file path=%q, want the designated missing path", arguments.Path)
-		}
-		if !strings.Contains(result, arguments.Path) || !containsLiveVoiceGroundingTerm(result, "no such file", "does not exist", "not exist", "missing") {
-			return fmt.Errorf("read_file result=%q does not contain the missing-file error", observation.FunctionCallOutput)
-		}
-		if !containsLiveVoiceGroundingTerm(reply, "file", "read") || !containsLiveVoiceGroundingTerm(reply, "does not exist", "doesn't exist", "no such", "missing", "not found", "could not", "couldn't", "unable") {
-			return fmt.Errorf("spoken missing-file reply=%q is not an honest failure", observation.SpokenReply)
-		}
+		return validateLiveVoiceMissingFileCase(observation, arguments, result, reply)
 	case "exit-42":
-		if !strings.Contains(strings.ToLower(arguments.Command), "exit 42") {
-			return fmt.Errorf("exec command=%q does not contain exit 42", arguments.Command)
-		}
-		if !strings.Contains(result, "42") || !containsLiveVoiceGroundingTerm(result, "exit code", "exit status") {
-			return fmt.Errorf("exec result=%q does not contain exit status 42", observation.FunctionCallOutput)
-		}
-		if !strings.Contains(reply, "42") || !containsLiveVoiceGroundingTerm(reply, "exit", "status", "code", "non-zero", "nonzero") {
-			return fmt.Errorf("spoken exit-42 reply=%q does not report the returned failure", observation.SpokenReply)
-		}
-		if containsLiveVoiceGroundingTerm(reply, "successfully", "succeeded", "successful") {
-			return fmt.Errorf("spoken exit-42 reply=%q claims success", observation.SpokenReply)
-		}
+		return validateLiveVoiceExit42Case(observation, arguments, result, reply)
 	case "date-control":
-		if !strings.Contains(strings.ToLower(arguments.Command), "date") {
-			return fmt.Errorf("date control command=%q does not run date", arguments.Command)
-		}
-		date := liveVoiceToolGroundingDate.FindString(observation.FunctionCallOutput)
-		if date == "" {
-			return fmt.Errorf("date result=%q has no YYYY-MM-DD value", observation.FunctionCallOutput)
-		}
-		if !containsLiveVoiceGroundingDate(observation.SpokenReply, date) {
-			return fmt.Errorf("spoken date reply=%q omits returned date %q", observation.SpokenReply, date)
-		}
+		return validateLiveVoiceDateControlCase(observation, arguments, result, reply)
+	}
+	return nil
+}
+
+func validateLiveVoiceMissingFileCase(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments, result, reply string) error {
+	if !isLiveVoiceToolGroundingMissingPath(arguments.Path) {
+		return fmt.Errorf("read_file path=%q, want the designated missing path", arguments.Path)
+	}
+	if !strings.Contains(result, arguments.Path) || !containsLiveVoiceGroundingTerm(result, "no such file", "does not exist", "not exist", "missing") {
+		return fmt.Errorf("read_file result=%q does not contain the missing-file error", observation.FunctionCallOutput)
+	}
+	if !containsLiveVoiceGroundingTerm(reply, "file", "read") || !containsLiveVoiceGroundingTerm(reply, "does not exist", "doesn't exist", "no such", "missing", "not found", "could not", "couldn't", "unable") {
+		return fmt.Errorf("spoken missing-file reply=%q is not an honest failure", observation.SpokenReply)
+	}
+	return nil
+}
+
+func validateLiveVoiceExit42Case(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments, result, reply string) error {
+	if !strings.Contains(strings.ToLower(arguments.Command), "exit 42") {
+		return fmt.Errorf("exec command=%q does not contain exit 42", arguments.Command)
+	}
+	if !strings.Contains(result, "42") || !containsLiveVoiceGroundingTerm(result, "exit code", "exit status") {
+		return fmt.Errorf("exec result=%q does not contain exit status 42", observation.FunctionCallOutput)
+	}
+	if !strings.Contains(reply, "42") || !containsLiveVoiceGroundingTerm(reply, "exit", "status", "code", "non-zero", "nonzero") {
+		return fmt.Errorf("spoken exit-42 reply=%q does not report the returned failure", observation.SpokenReply)
+	}
+	if containsLiveVoiceGroundingTerm(reply, "successfully", "succeeded", "successful") {
+		return fmt.Errorf("spoken exit-42 reply=%q claims success", observation.SpokenReply)
+	}
+	return nil
+}
+
+func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments, result, reply string) error {
+	if !strings.Contains(strings.ToLower(arguments.Command), "date") {
+		return fmt.Errorf("date control command=%q does not run date", arguments.Command)
+	}
+	date := liveVoiceToolGroundingDate.FindString(observation.FunctionCallOutput)
+	if date == "" {
+		return fmt.Errorf("date result=%q has no YYYY-MM-DD value", observation.FunctionCallOutput)
+	}
+	if !containsLiveVoiceGroundingDate(observation.SpokenReply, date) {
+		return fmt.Errorf("spoken date reply=%q omits returned date %q", observation.SpokenReply, date)
 	}
 	return nil
 }

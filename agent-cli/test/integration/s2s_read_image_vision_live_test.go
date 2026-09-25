@@ -84,8 +84,7 @@ func TestLiveReadImageCLI_DefaultReadableAndMissing(t *testing.T) {
 			}
 
 			observation := assertLiveReadImageWireContract(t, run.capture, testCase.imagePath, testCase.expected, testCase.wantImage)
-			finalText := observation.finalText
-			assertLiveReadImageSemanticResult(t, run.output, finalText, testCase.wantImage)
+			assertLiveReadImageSemanticResult(t, run.output, observation.finalText, testCase.wantImage)
 			assertLiveReadImageTerminalContinuation(t, run.events)
 			logLiveReadImageEvidence(t, run.capture, observation)
 		})
@@ -161,15 +160,14 @@ func runLiveReadImageSessionWithInput(t *testing.T, apiKey, configDir, prompt, a
 	observer := &readImageSessionObserver{}
 	agentCLI.SetSessionStreamObserver(observer.observe)
 
-	stdout := &syncBuffer{}
-	stderr := &syncBuffer{}
+	stdout, stderr := &syncBuffer{}, &syncBuffer{}
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)
 	args := []string{
 		"--config-dir", configDir,
 		"session",
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", liveReadImageModel,
 		"--record", capturePath,
 		"--max-duration", liveReadImageTimeout.String(),
@@ -194,13 +192,7 @@ func runLiveReadImageSessionWithInput(t *testing.T, apiKey, configDir, prompt, a
 	if err != nil {
 		t.Fatalf("load temporary live read_image capture (run error: %v): %v", runErr, err)
 	}
-	return liveReadImageRun{
-		output:  stdout.String(),
-		stderr:  stderr.String(),
-		events:  observer.snapshot(),
-		capture: capture,
-		err:     runErr,
-	}
+	return liveReadImageRun{output: stdout.String(), stderr: stderr.String(), events: observer.snapshot(), capture: capture, err: runErr}
 }
 
 type liveReadImageFunctionOutput struct {
@@ -254,10 +246,9 @@ type liveReadImageWireObservation struct {
 // turn cannot satisfy these checks.
 func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapture, imagePath string, expectedBytes []byte, wantImage bool) liveReadImageWireObservation {
 	t.Helper()
-	if capture.Provider.Name != "openai" || capture.Provider.Model != liveReadImageModel {
+	if capture.Provider.Name != liveProviderOpenAI || capture.Provider.Model != liveReadImageModel {
 		t.Fatalf("live capture provider = (%q, %q), want (openai, %q)", capture.Provider.Name, capture.Provider.Model, liveReadImageModel)
 	}
-
 	observation := liveReadImageWireObservation{
 		eventTypes:            make([]string, 0, len(capture.Records)),
 		readImageCallIndex:    -1,
@@ -273,128 +264,148 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 			prefix = "C"
 		}
 		observation.eventTypes = append(observation.eventTypes, prefix+":"+record.Type)
-		payload := liveReadImageRecordPayload(record)
+		payload := liveBargeInRecordPayload(record)
 		if len(payload) == 0 {
 			t.Fatalf("live capture record %d (%s) has an empty payload", index, record.Type)
 		}
 		if record.Direction == gwtesting.DirectionClientToServer {
 			observation.encodedImageOccurrences += strings.Count(string(payload), expectedEncodedImage)
 		}
-
 		if record.Direction == gwtesting.DirectionServerToClient {
-			switch record.Type {
-			case rtEventOutputItemAdded:
-				var event struct {
-					Item struct {
-						Type   string `json:"type"`
-						CallID string `json:"call_id"`
-						Name   string `json:"name"`
-					} `json:"item"`
-				}
-				liveReadImageUnmarshal(t, payload, &event, "read_image output item")
-				if event.Item.Type == rtItemFunctionCall && event.Item.Name == tools.ReadImageToolID {
-					observation.readImageCallCount++
-					observation.readImageCallIndex = index
-					observation.readImageCallID = event.Item.CallID
-				}
-			case rtEventFunctionCallArgumentsDone:
-				var event struct {
-					CallID    string `json:"call_id"`
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}
-				liveReadImageUnmarshal(t, payload, &event, "read_image arguments")
-				var arguments struct {
-					Path string `json:"path"`
-				}
-				liveReadImageUnmarshal(t, []byte(event.Arguments), &arguments, "read_image argument JSON")
-				observation.argumentCount++
-				observation.argumentIndex = index
-				observation.argumentCallID = event.CallID
-				observation.argumentName = event.Name
-				observation.argumentPath = arguments.Path
-			case rtEventOutputTextDelta, rtEventOutputAudioTranscriptDelta:
-				var event struct {
-					Delta string `json:"delta"`
-				}
-				liveReadImageUnmarshal(t, payload, &event, "assistant text delta")
-			case "response.output_audio_transcript.done":
-				var event struct {
-					Transcript string `json:"transcript"`
-				}
-				liveReadImageUnmarshal(t, payload, &event, "assistant transcript")
-				observation.audioTranscriptDone = append(observation.audioTranscriptDone, liveReadImageTextChunk{index: index, text: event.Transcript})
-			case rtEventResponseDone:
-				var event struct {
-					Response struct {
-						Status string `json:"status"`
-					} `json:"response"`
-					Status string `json:"status"`
-				}
-				liveReadImageUnmarshal(t, payload, &event, rtEventResponseDone)
-				status := event.Response.Status
-				if status == "" {
-					status = event.Status
-				}
-				observation.responseDoneEvents = append(observation.responseDoneEvents, liveReadImageResponseDone{index: index, status: status})
-			case rtEventSessionClosed:
-				observation.sessionClosedIndices = append(observation.sessionClosedIndices, index)
-			case "error":
-				observation.serverErrorCount++
-				observation.serverErrorTypes = append(observation.serverErrorTypes, record.Type)
-			}
+			observation.observeServer(t, index, record.Type, payload)
 			continue
 		}
+		observation.observeClient(t, index, record.Type, payload)
+	}
+	functionOutput := observation.assertCallAndResult(t, imagePath, expectedBytes, wantImage)
+	observation.assertContinuation(t, functionOutput, expectedBytes, wantImage)
+	observation.assertTerminal(t, wantImage)
+	transcript, err := liveReadImageAudioTranscriptDone(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observation.finalText = transcript
+	return observation
+}
 
-		if record.Type == rtEventResponseCreate {
-			observation.responseCreateIndices = append(observation.responseCreateIndices, index)
-			continue
-		}
-		if record.Type != rtEventConversationItemCreate {
-			continue
-		}
+func (observation *liveReadImageWireObservation) observeServer(t *testing.T, index int, recordType string, payload []byte) {
+	t.Helper()
+	switch recordType {
+	case rtEventOutputItemAdded:
 		var event struct {
 			Item struct {
-				Type    string `json:"type"`
-				CallID  string `json:"call_id"`
-				Output  string `json:"output"`
-				Role    string `json:"role"`
-				ID      string `json:"id"`
-				Content []struct {
-					Type     string `json:"type"`
-					ImageURL string `json:"image_url"`
-				} `json:"content"`
+				Type   string `json:"type"`
+				CallID string `json:"call_id"`
+				Name   string `json:"name"`
 			} `json:"item"`
 		}
-		liveReadImageUnmarshal(t, payload, &event, "conversation item")
-		switch event.Item.Type {
-		case rtItemFunctionCallOutput:
-			if strings.TrimSpace(event.Item.Output) == "" {
-				t.Fatal("live function_call_output output is empty")
+		liveReadImageUnmarshal(t, payload, &event, "read_image output item")
+		if event.Item.Type == rtItemFunctionCall && event.Item.Name == tools.ReadImageToolID {
+			observation.readImageCallCount++
+			observation.readImageCallIndex = index
+			observation.readImageCallID = event.Item.CallID
+		}
+	case rtEventFunctionCallArgumentsDone:
+		var event struct {
+			CallID    string `json:"call_id"`
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		}
+		liveReadImageUnmarshal(t, payload, &event, "read_image arguments")
+		var arguments struct {
+			Path string `json:"path"`
+		}
+		liveReadImageUnmarshal(t, []byte(event.Arguments), &arguments, "read_image argument JSON")
+		observation.argumentCount++
+		observation.argumentIndex = index
+		observation.argumentCallID = event.CallID
+		observation.argumentName = event.Name
+		observation.argumentPath = arguments.Path
+	case rtEventOutputTextDelta, rtEventOutputAudioTranscriptDelta:
+		liveReadImageUnmarshal(t, payload, &struct {
+			Delta string `json:"delta"`
+		}{}, "assistant text delta")
+	case rtEventOutputAudioTranscriptDone:
+		var event struct {
+			Transcript string `json:"transcript"`
+		}
+		liveReadImageUnmarshal(t, payload, &event, "assistant transcript")
+		observation.audioTranscriptDone = append(observation.audioTranscriptDone, liveReadImageTextChunk{index: index, text: event.Transcript})
+	case rtEventResponseDone:
+		var event struct {
+			Response struct {
+				Status string `json:"status"`
+			} `json:"response"`
+			Status string `json:"status"`
+		}
+		liveReadImageUnmarshal(t, payload, &event, rtEventResponseDone)
+		status := event.Response.Status
+		if status == "" {
+			status = event.Status
+		}
+		observation.responseDoneEvents = append(observation.responseDoneEvents, liveReadImageResponseDone{index: index, status: status})
+	case rtEventSessionClosed:
+		observation.sessionClosedIndices = append(observation.sessionClosedIndices, index)
+	case rtEventError:
+		observation.serverErrorCount++
+		observation.serverErrorTypes = append(observation.serverErrorTypes, recordType)
+	}
+}
+
+func (observation *liveReadImageWireObservation) observeClient(t *testing.T, index int, recordType string, payload []byte) {
+	t.Helper()
+	if recordType == rtEventResponseCreate {
+		observation.responseCreateIndices = append(observation.responseCreateIndices, index)
+		return
+	}
+	if recordType != rtEventConversationItemCreate {
+		return
+	}
+	var event struct {
+		Item struct {
+			Type    string `json:"type"`
+			CallID  string `json:"call_id"`
+			Output  string `json:"output"`
+			Role    string `json:"role"`
+			ID      string `json:"id"`
+			Content []struct {
+				Type     string `json:"type"`
+				ImageURL string `json:"image_url"`
+			} `json:"content"`
+		} `json:"item"`
+	}
+	liveReadImageUnmarshal(t, payload, &event, "conversation item")
+	switch event.Item.Type {
+	case rtItemFunctionCallOutput:
+		if strings.TrimSpace(event.Item.Output) == "" {
+			t.Fatal("live function_call_output output is empty")
+		}
+		var result tools.ReadImageResult
+		liveReadImageUnmarshal(t, []byte(event.Item.Output), &result, "read_image result envelope")
+		observation.functionOutputs = append(observation.functionOutputs, liveReadImageFunctionOutput{
+			index:  index,
+			callID: event.Item.CallID,
+			output: event.Item.Output,
+			result: result,
+		})
+	case rtItemMessage:
+		for _, part := range event.Item.Content {
+			if part.Type != rtContentInputImage {
+				continue
 			}
-			var result tools.ReadImageResult
-			liveReadImageUnmarshal(t, []byte(event.Item.Output), &result, "read_image result envelope")
-			observation.functionOutputs = append(observation.functionOutputs, liveReadImageFunctionOutput{
-				index:  index,
-				callID: event.Item.CallID,
-				output: event.Item.Output,
-				result: result,
-			})
-		case rtItemMessage:
-			for _, part := range event.Item.Content {
-				if part.Type != rtContentInputImage {
-					continue
-				}
-				observation.inputImageCount++
-				if event.Item.ID == readImageToolImageItemID(observation.readImageCallID) {
-					observation.correlatedImageCount++
-					observation.correlatedImageIndex = index
-					observation.correlatedImageURL = part.ImageURL
-				}
+			observation.inputImageCount++
+			if event.Item.ID == readImageToolImageItemID(observation.readImageCallID) {
+				observation.correlatedImageCount++
+				observation.correlatedImageIndex = index
+				observation.correlatedImageURL = part.ImageURL
 			}
 		}
 	}
+}
 
+// assertCallAndResult requires one correlated read_image call and output.
+func (observation *liveReadImageWireObservation) assertCallAndResult(t *testing.T, imagePath string, expectedBytes []byte, wantImage bool) liveReadImageFunctionOutput {
+	t.Helper()
 	if observation.readImageCallCount != 1 || observation.readImageCallID == "" {
 		t.Fatalf("live read_image calls = %d, call ID %q; want exactly one real model call", observation.readImageCallCount, observation.readImageCallID)
 	}
@@ -409,7 +420,12 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 		t.Fatalf("live function_call_output call ID = %q, want %q", functionOutput.callID, observation.readImageCallID)
 	}
 	assertLiveReadImageEnvelope(t, functionOutput, expectedBytes, wantImage)
+	return functionOutput
+}
 
+// assertContinuation requires result and image to precede the continuation.
+func (observation *liveReadImageWireObservation) assertContinuation(t *testing.T, functionOutput liveReadImageFunctionOutput, expectedBytes []byte, wantImage bool) {
+	t.Helper()
 	if observation.serverErrorCount != 0 {
 		t.Fatalf("live capture contains provider error events: %v", observation.serverErrorTypes)
 	}
@@ -423,26 +439,32 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 	if functionOutput.index >= observation.continuationIndex {
 		t.Fatalf("live function_call_output index = %d, continuation response.create index = %d; result must precede continuation", functionOutput.index, observation.continuationIndex)
 	}
-	if wantImage {
-		if observation.inputImageCount != 1 || observation.correlatedImageCount != 1 || observation.correlatedImageIndex <= functionOutput.index {
-			t.Fatalf("live input_image counts = total %d, correlated %d, index %d; want one correlated image after function output", observation.inputImageCount, observation.correlatedImageCount, observation.correlatedImageIndex)
+	if !wantImage {
+		if observation.inputImageCount != 0 {
+			t.Fatalf("live missing-image result emitted %d input_image item(s), want none", observation.inputImageCount)
 		}
-		wantURL := liveReadImageDataURL(expectedBytes)
-		if observation.correlatedImageURL != wantURL {
-			t.Fatalf("live correlated input_image did not preserve the exact fixture bytes (URL length=%d, want length=%d)", len(observation.correlatedImageURL), len(wantURL))
-		}
-		if observation.correlatedImageIndex >= observation.continuationIndex {
-			t.Fatalf("live correlated input_image index = %d, continuation response.create index = %d; image must precede continuation", observation.correlatedImageIndex, observation.continuationIndex)
-		}
-	} else if observation.inputImageCount != 0 {
-		t.Fatalf("live missing-image result emitted %d input_image item(s), want none", observation.inputImageCount)
+		return
 	}
+	if observation.inputImageCount != 1 || observation.correlatedImageCount != 1 || observation.correlatedImageIndex <= functionOutput.index {
+		t.Fatalf("live input_image counts = total %d, correlated %d, index %d; want one correlated image after function output", observation.inputImageCount, observation.correlatedImageCount, observation.correlatedImageIndex)
+	}
+	wantURL := liveReadImageDataURL(expectedBytes)
+	if observation.correlatedImageURL != wantURL {
+		t.Fatalf("live correlated input_image did not preserve the exact fixture bytes (URL length=%d, want length=%d)", len(observation.correlatedImageURL), len(wantURL))
+	}
+	if observation.correlatedImageIndex >= observation.continuationIndex {
+		t.Fatalf("live correlated input_image index = %d, continuation response.create index = %d; image must precede continuation", observation.correlatedImageIndex, observation.continuationIndex)
+	}
+}
 
+// assertTerminal requires a completed continuation response.done.
+func (observation *liveReadImageWireObservation) assertTerminal(t *testing.T, wantImage bool) {
+	t.Helper()
 	for _, done := range observation.responseDoneEvents {
 		if done.index <= observation.continuationIndex {
 			continue
 		}
-		if done.status == rtStatusCancelled || done.status == rtStatusFailed || done.status == "incomplete" {
+		if done.status == rtStatusCancelled || done.status == rtStatusFailed || done.status == rtStatusIncomplete {
 			t.Fatalf("live continuation response.done status = %q at record %d", done.status, done.index)
 		}
 		observation.terminalResponseIndex = done.index
@@ -463,13 +485,6 @@ func assertLiveReadImageWireContract(t *testing.T, capture gwtesting.SessionCapt
 			t.Fatalf("live provider session.closed at record %d preceded terminal continuation response.done at record %d", closedIndex, observation.terminalResponseIndex)
 		}
 	}
-
-	transcript, err := liveReadImageAudioTranscriptDone(observation)
-	if err != nil {
-		t.Fatal(err)
-	}
-	observation.finalText = transcript
-	return observation
 }
 
 func assertLiveReadImageSpokenInput(t *testing.T, capture gwtesting.SessionCapture, audioPath string) int {
@@ -485,7 +500,7 @@ func assertLiveReadImageSpokenInput(t *testing.T, capture gwtesting.SessionCaptu
 		if record.Direction != gwtesting.DirectionClientToServer {
 			continue
 		}
-		payload := liveReadImageRecordPayload(record)
+		payload := liveBargeInRecordPayload(record)
 		switch record.Type {
 		case rtEventInputAudioAppend:
 			var event struct {
@@ -620,7 +635,7 @@ func assertLiveReadImageEnvelope(t *testing.T, output liveReadImageFunctionOutpu
 		if len(output.output) > 1024 || strings.Contains(strings.ToLower(output.output), "data:") || strings.Contains(strings.ToLower(output.output), "base64") {
 			t.Fatalf("live success result is not a bounded metadata envelope: bytes=%d", len(output.output))
 		}
-		if result.MIMEType != "image/png" || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
+		if result.MIMEType != liveMIMEImagePNG || result.ByteLength != len(expectedBytes) || result.SHA256 != wantDigestHex || result.TypedProjection != tools.ReadImageResultTypedProjectionInputImage {
 			t.Fatalf("live success result metadata = (MIME=%q length=%d digest=%q projection=%q), want exact PNG metadata and typed projection", result.MIMEType, result.ByteLength, result.SHA256, result.TypedProjection)
 		}
 		return
@@ -643,15 +658,8 @@ func assertLiveReadImageSemanticResult(t *testing.T, cliOutput, continuationText
 	cliText := strings.ToLower(cliOutput)
 	finalText := strings.ToLower(continuationText)
 	if wantImage {
-		for _, text := range []struct {
-			name  string
-			value string
-		}{
-			{name: "pixel", value: "pixel"},
-		} {
-			if !strings.Contains(finalText, text.value) || !strings.Contains(cliText, text.value) {
-				t.Fatalf("live readable continuation/CLI output missing grounded %s fact (continuation=%q cli_output=%q)", text.name, continuationText, cliOutput)
-			}
+		if !strings.Contains(finalText, "pixel") || !strings.Contains(cliText, "pixel") {
+			t.Fatalf("live readable continuation/CLI output missing grounded pixel fact (continuation=%q cli_output=%q)", continuationText, cliOutput)
 		}
 		colorTerms := []string{"indigo", "purple", "violet", "blue"}
 		if !containsLiveReadImageTerm(finalText, colorTerms) || !containsLiveReadImageTerm(cliText, colorTerms) {
@@ -709,42 +717,34 @@ func assertLiveReadImageTerminalContinuation(t *testing.T, events []messages.Str
 func logLiveReadImageEvidence(t *testing.T, capture gwtesting.SessionCapture, observation liveReadImageWireObservation) {
 	t.Helper()
 	result := observation.functionOutputs[0].result
-	eventOrder := make([]string, 0, len(observation.eventTypes))
-	for _, eventType := range observation.eventTypes {
-		if strings.Contains(eventType, rtEventOutputAudioDelta) {
-			continue
-		}
-		eventOrder = append(eventOrder, eventType)
-	}
-	t.Logf("sanitized live read_image evidence: started_at_utc=%s model=%s result_status=%s result_bytes=%d result_sha256=%s input_image_count=%d response_create_count=%d terminal_response_done=true exit=0 event_order=%s", capture.Session.StartedAtUTC, capture.Provider.Model, result.Status, result.ByteLength, result.SHA256, observation.inputImageCount, len(observation.responseCreateIndices), strings.Join(eventOrder, ">"))
+	eventOrder := liveReadImageEventOrder(observation)
+	t.Logf("sanitized live read_image evidence: started_at_utc=%s model=%s result_status=%s result_bytes=%d result_sha256=%s input_image_count=%d response_create_count=%d terminal_response_done=true exit=0 event_order=%s", capture.Session.StartedAtUTC, capture.Provider.Model, result.Status, result.ByteLength, result.SHA256, observation.inputImageCount, len(observation.responseCreateIndices), eventOrder)
 }
 
 func logLiveReadImageSpokenEvidence(t *testing.T, capture gwtesting.SessionCapture, observation liveReadImageWireObservation, inputAudioBytes int, actualImagePath string) {
 	t.Helper()
 	result := observation.functionOutputs[0]
-	eventOrder := make([]string, 0, len(observation.eventTypes))
-	for _, eventType := range observation.eventTypes {
-		if strings.Contains(eventType, rtEventOutputAudioDelta) {
-			continue
-		}
-		eventOrder = append(eventOrder, eventType)
-	}
+	eventOrder := liveReadImageEventOrder(observation)
 	transcript := strings.TrimSpace(strings.ReplaceAll(observation.finalText, actualImagePath, "/tmp/photo.jpg"))
 	if len(transcript) > 240 {
 		transcript = transcript[:240] + "..."
 	}
-	t.Logf("sanitized live spoken read_image evidence: command=agent session --provider openai --model %s --audio-in <spoken-describe-image.wav> --record <temporary>.session.json --max-duration %s image_path=/tmp/photo.jpg started_at_utc=%s input_audio_bytes=%d read_image_calls=1 function_call_output_count=1 typed_input_image_count=%d encoded_image_occurrences=%d envelope_bytes=%d image_bytes=%d image_sha256=%s continuation_requests=1 terminal_status=%s exit=0 event_order=%s transcript=%q", capture.Provider.Model, liveReadImageTimeout, capture.Session.StartedAtUTC, inputAudioBytes, observation.inputImageCount, observation.encodedImageOccurrences, len(result.output), result.result.ByteLength, result.result.SHA256, observation.terminalResponseStatus, strings.Join(eventOrder, ">"), transcript)
+	t.Logf("sanitized live spoken read_image evidence: command=agent session --provider openai --model %s --audio-in <spoken-describe-image.wav> --record <temporary>.session.json --max-duration %s image_path=/tmp/photo.jpg started_at_utc=%s input_audio_bytes=%d read_image_calls=1 function_call_output_count=1 typed_input_image_count=%d encoded_image_occurrences=%d envelope_bytes=%d image_bytes=%d image_sha256=%s continuation_requests=1 terminal_status=%s exit=0 event_order=%s transcript=%q", capture.Provider.Model, liveReadImageTimeout, capture.Session.StartedAtUTC, inputAudioBytes, observation.inputImageCount, observation.encodedImageOccurrences, len(result.output), result.result.ByteLength, result.result.SHA256, observation.terminalResponseStatus, eventOrder, transcript)
+}
+
+// liveReadImageEventOrder joins the captured event order without audio deltas.
+func liveReadImageEventOrder(observation liveReadImageWireObservation) string {
+	eventOrder := make([]string, 0, len(observation.eventTypes))
+	for _, eventType := range observation.eventTypes {
+		if !strings.Contains(eventType, rtEventOutputAudioDelta) {
+			eventOrder = append(eventOrder, eventType)
+		}
+	}
+	return strings.Join(eventOrder, ">")
 }
 
 func liveReadImageDataURL(data []byte) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
-}
-
-func liveReadImageRecordPayload(record gwtesting.CapturedSessionEvent) []byte {
-	if len(record.Payload) > 0 {
-		return record.Payload
-	}
-	return record.Data
 }
 
 func liveReadImageUnmarshal(t *testing.T, payload []byte, destination any, description string) {

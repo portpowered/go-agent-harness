@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -22,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -54,39 +54,109 @@ func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
 	if os.Getenv(gateI2OptIn) != "1" {
 		t.Skipf("set %s=1 to run the credentialed OpenAI Realtime Gate I2 measurement", gateI2OptIn)
 	}
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Skipf("Gate I2 uses the qualified %s Chrome lock; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
 	}
+	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed Gate I2 measurement")
 
-	apiKey, keySource, err := loadGateI2APIKey()
-	if errors.Is(err, errGateI2MissingAPIKey) {
-		t.Skip("OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed Gate I2 measurement")
-	}
+	run := prepareGateI2Run(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
+	defer cancel()
+	run.startChrome(t, ctx)
+	binaryPath := filepath.Join(run.artifactRoot, "agent")
+	root, err := repositoryRoot()
 	if err != nil {
-		t.Fatalf("load OpenAI API key: %v", err)
+		t.Fatalf("locate repository root: %v", err)
+	}
+	if err := buildGateBinary(ctx, root, binaryPath); err != nil {
+		t.Fatalf("build production agent CLI: %v", err)
+	}
+	runErr := run.runSession(t, ctx, binaryPath, apiKey)
+
+	outcome := run.observe(ctx, runErr)
+	evidence := run.evidence(keySource, outcome)
+	evidencePath := filepath.Join(run.artifactRoot, "acceptance-report.json")
+	if err := writeGateI2Evidence(evidencePath, evidence); err != nil {
+		t.Fatalf("write Gate I2 evidence: %v", err)
+	}
+	t.Logf("Gate I2 evidence: %s", evidencePath)
+	if outcome.validationErr != nil {
+		t.Fatalf("Gate I2 measurement failed: %v; evidence=%s", outcome.validationErr, evidencePath)
 	}
 
+	if closeErr := run.browser.close(); closeErr != nil {
+		t.Logf("Chrome process cleanup returned: %v", closeErr)
+	}
+	t.Logf("WEBMCP_GATE_I2_PASS chrome=%s revision=%s browser=%s target=%s list_tools_ref=%s invoke_ref=%s input_json=%q transcript=%q output_audio_bytes=%d capture=%s record_dir=%s", lockedChromeVersion, lockedChromeRevision, run.browserID, run.targetID, outcome.validation.ListToolRef, outcome.validation.InvokeToolRef, outcome.validation.RawInputJSON, outcome.observation.SpokenTranscript, outcome.observation.AudioBytesAfterInvoke, run.capturePath, run.recordDir)
+}
+
+// gateI2Run holds one Gate I2 measurement's inputs, pinned browser, and
+// artifact paths.
+type gateI2Run struct {
+	message          string
+	request          string
+	artifactRoot     string
+	configDir        string
+	inputPath        string
+	systemPromptPath string
+	capturePath      string
+	recordDir        string
+	audioPath        string
+
+	pinned       pinnedChrome
+	fixture      *fixtureServer
+	fixtureURL   string
+	browser      *liveBrowserOwner
+	baseURL      string
+	version      devToolsVersion
+	rawTargetID  string
+	browserID    string
+	targetID     string
+	cdpURL       string
+	beforeOracle fixtureOracle
+}
+
+// gateI2Outcome is everything observed after the session ends.
+type gateI2Outcome struct {
+	observation      gateI2Observation
+	validation       gateI2Validation
+	validationErr    error
+	afterOracle      fixtureOracle
+	postVersion      devToolsVersion
+	postVersionErr   error
+	postTarget       devToolsTarget
+	postTargetErr    error
+	independentState inspectedPageState
+	audioFileBytes   int64
+}
+
+func prepareGateI2Run(t *testing.T) *gateI2Run {
+	t.Helper()
 	message, err := randomGateI2Message()
 	if err != nil {
 		t.Fatalf("generate randomized fixture message: %v", err)
 	}
-	request := gateI2Request(message)
-
-	artifactRoot := gateI2ArtifactRoot(t)
-	configDir := filepath.Join(artifactRoot, "config")
-	if err := os.Mkdir(configDir, 0o700); err != nil {
+	run := &gateI2Run{message: message, request: gateI2Request(message), artifactRoot: gateI2ArtifactRoot(t)}
+	run.configDir = filepath.Join(run.artifactRoot, "config")
+	if err := os.Mkdir(run.configDir, 0o700); err != nil {
 		t.Fatalf("create Gate I2 config directory: %v", err)
 	}
-	inputPath := gateI2SpokenInput(t, artifactRoot, request)
-	systemPromptPath := filepath.Join(artifactRoot, "system-prompt.txt")
-	if err := os.WriteFile(systemPromptPath, []byte(gateI2SystemPrompt), 0o600); err != nil {
+	run.inputPath = gateI2SpokenInput(t.Context(), t, run.artifactRoot, run.request)
+	run.systemPromptPath = filepath.Join(run.artifactRoot, "system-prompt.txt")
+	if err := os.WriteFile(run.systemPromptPath, []byte(gateI2SystemPrompt), 0o600); err != nil {
 		t.Fatalf("write Gate I2 system prompt: %v", err)
 	}
+	run.capturePath = filepath.Join(run.artifactRoot, "provider.json")
+	run.recordDir = filepath.Join(run.artifactRoot, "recording")
+	run.audioPath = filepath.Join(run.artifactRoot, "assistant.wav")
+	return run
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
-	defer cancel()
-
-	workDir := filepath.Join(artifactRoot, "chrome")
+// startChrome launches the qualified Chrome on the local fixture, records the
+// initial independent oracle, and writes the exact-target browser config.
+func (r *gateI2Run) startChrome(t *testing.T, ctx context.Context) {
+	t.Helper()
+	workDir := filepath.Join(r.artifactRoot, "chrome")
 	if err := os.Mkdir(workDir, 0o700); err != nil {
 		t.Fatalf("create Gate I2 Chrome work directory: %v", err)
 	}
@@ -94,153 +164,142 @@ func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("acquire qualified Chrome for Testing: %v", err)
 	}
+	r.pinned = pinned
+	r.fixture = newFixtureServer()
+	t.Cleanup(r.fixture.Close)
+	r.fixtureURL = r.fixture.URL()
+	assertFixtureHeaders(t, ctx, r.fixtureURL)
 
-	fixture := newFixtureServer()
-	t.Cleanup(fixture.Close)
-	fixtureURL := fixture.URL()
-	assertFixtureHeaders(t, ctx, fixtureURL)
-
-	browser, err := launchPinnedChrome(ctx, pinned, fixtureURL)
+	browser, err := launchPinnedChrome(ctx, pinned, r.fixtureURL)
 	if err != nil {
 		t.Fatalf("launch qualified Chrome for Testing: %v", err)
 	}
-	closed := false
-	t.Cleanup(func() {
-		if !closed {
-			if closeErr := browser.Close(); closeErr != nil {
-				t.Logf("Gate I2 Chrome cleanup: %v", closeErr)
-			}
-		}
-	})
-
-	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
-	if err != nil {
+	r.browser = ownLiveBrowser(t, browser, "Gate I2 Chrome cleanup")
+	r.baseURL = browserHTTPURL(browser.endpoint())
+	if r.version, err = waitForDevToolsVersion(ctx, r.baseURL, lockedChromeVersion); err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}
-	rawTarget, err := waitForFixturePageTarget(ctx, baseURL, fixtureURL)
+	rawTarget, err := waitForFixturePageTarget(ctx, r.baseURL, r.fixtureURL)
 	if err != nil {
 		t.Fatalf("discover exact fixture target: %v", err)
 	}
-	browserID, targetID, err := gateI2PublicIDs(version.WebSocketDebuggerURL, rawTarget.ID)
-	if err != nil {
+	r.rawTargetID = rawTarget.ID
+	if r.browserID, r.targetID, err = gateI2PublicIDs(r.version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
 		t.Fatalf("derive opaque browser and target IDs: %v", err)
 	}
-	beforeOracle, err := waitForFixtureOracle(ctx, fixture.StateURL(), func(oracle fixtureOracle) bool {
-		return oracle.Ready && oracle.Value == "initial" && oracle.VisibleText == "initial" && !oracle.Pending
+	r.beforeOracle, err = waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
+		return oracle.Ready && oracle.Value == fixtureOracleInitial && oracle.VisibleText == fixtureOracleInitial && !oracle.Pending
 	})
 	if err != nil {
 		t.Fatalf("read initial independent page oracle: %v", err)
 	}
-
-	cdpURL := strings.TrimRight(baseURL, "/") + "/json/version"
-	if err := writeGateI2Config(configDir, cdpURL, fixture.server.URL, browserID, targetID); err != nil {
+	r.cdpURL = strings.TrimRight(r.baseURL, "/") + "/json/version"
+	if err := writeGateI2Config(r.configDir, r.cdpURL, r.fixture.server.URL, r.browserID, r.targetID); err != nil {
 		t.Fatalf("write Gate I2 browser config: %v", err)
 	}
+}
 
-	capturePath := filepath.Join(artifactRoot, "provider.json")
-	recordDir := filepath.Join(artifactRoot, "recording")
-	audioPath := filepath.Join(artifactRoot, "assistant.wav")
-
-	root, err := repositoryRoot()
-	if err != nil {
-		t.Fatalf("locate repository root: %v", err)
-	}
-	binaryPath := filepath.Join(artifactRoot, "agent")
-	if err := buildGateBinary(ctx, root, binaryPath); err != nil {
-		t.Fatalf("build production agent CLI: %v", err)
-	}
-	sessionArgs := []string{
+func (r *gateI2Run) sessionArgs() []string {
+	return []string{
 		"session",
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", gateI2Model,
 		"--browser-tools", "webmcp",
-		"--browser-cdp-url", cdpURL,
-		"--browser-browser", browserID,
-		"--browser-tab", targetID,
-		"--browser-origin", fixture.server.URL,
+		"--browser-cdp-url", r.cdpURL,
+		"--browser-browser", r.browserID,
+		"--browser-tab", r.targetID,
+		"--browser-origin", r.fixture.server.URL,
 		"--browser-approval", "never",
 		"--browser-cancel-on-interrupt", "always",
 		"--browser-record", "true",
 		"--browser-record-arguments", "true",
 		"--browser-record-results", "true",
-		"--record", capturePath,
-		"--record-dir", recordDir,
-		"--audio-in", inputPath,
-		"--audio-out", audioPath,
-		"--system-prompt", systemPromptPath,
+		"--record", r.capturePath,
+		"--record-dir", r.recordDir,
+		"--audio-in", r.inputPath,
+		"--audio-out", r.audioPath,
+		"--system-prompt", r.systemPromptPath,
 		"--max-duration", gateI2Timeout.String(),
 	}
+}
 
-	runContext, cancelRun := context.WithTimeout(ctx, gateI2Timeout+25*time.Second)
-	process, err := startGateCommandWithEnvironment(runContext, binaryPath, configDir, []string{"AGENT_MODEL__OPENAI__API_KEY=" + apiKey}, sessionArgs...)
-	if err != nil {
-		cancelRun()
-		t.Fatalf("start production agent CLI: %v", err)
+// runSession runs the production CLI. A session error is returned rather than
+// fatal because capture validation remains authoritative.
+func (r *gateI2Run) runSession(t *testing.T, ctx context.Context, binaryPath, apiKey string) error {
+	t.Helper()
+	sessionResult, err := runLiveAgentSession(ctx, gateI2Timeout+25*time.Second, binaryPath, r.configDir, apiKey, r.sessionArgs())
+	var startErr liveSessionStartError
+	if errors.As(err, &startErr) {
+		t.Fatalf("start production agent CLI: %v", startErr.cause)
 	}
-	sessionResult, waitErr := process.wait(runContext)
-	cancelRun()
-	var runErr error
-	if waitErr != nil {
-		runErr = waitErr
-	} else if sessionResult.Err != nil || sessionResult.ExitCode != 0 {
+	runErr := err
+	if runErr == nil && (sessionResult.Err != nil || sessionResult.ExitCode != 0) {
 		runErr = fmt.Errorf("agent session exit=%d err=%v", sessionResult.ExitCode, sessionResult.Err)
 	}
 	if runErr != nil {
 		t.Logf("Gate I2 session returned an error (capture validation remains authoritative): %v", runErr)
 	}
+	return runErr
+}
 
-	capture, captureErr := gwtesting.LoadSessionCapture(capturePath)
-	var observation gateI2Observation
-	var inspectErr error
-	if captureErr == nil {
-		observation, inspectErr = inspectGateI2Capture(capture)
-	} else {
-		inspectErr = captureErr
+// observe reads the provider capture and both independent page oracles, then
+// validates them together. The first failure becomes the validation error.
+func (r *gateI2Run) observe(ctx context.Context, runErr error) gateI2Outcome {
+	var outcome gateI2Outcome
+	capture, inspectErr := gwtesting.LoadSessionCapture(r.capturePath)
+	if inspectErr == nil {
+		outcome.observation, inspectErr = inspectGateI2Capture(capture)
 	}
+	outcome.afterOracle = readGateI2Oracle(ctx, r.fixture.StateURL())
+	outcome.postVersion, outcome.postVersionErr = readDevToolsVersion(ctx, r.baseURL)
+	outcome.postTarget, outcome.postTargetErr = readGateI2FixtureTarget(ctx, r.baseURL, r.rawTargetID, r.fixtureURL)
+	var independentErr error
+	if outcome.postVersionErr == nil && outcome.postTargetErr == nil {
+		outcome.independentState, independentErr = inspectExternalTarget(ctx, r.browser.browser.endpoint(), r.rawTargetID)
+	}
+	outcome.audioFileBytes = fileSize(r.audioPath)
 
-	afterOracle := readGateI2Oracle(ctx, fixture.StateURL())
-	postVersion, postVersionErr := readDevToolsVersion(ctx, baseURL)
-	postTarget, postTargetErr := readGateI2FixtureTarget(ctx, baseURL, rawTarget.ID, fixtureURL)
-	independentState := inspectedPageState{}
-	independentErr := error(nil)
-	if postVersionErr == nil && postTargetErr == nil {
-		independentState, independentErr = inspectExternalTarget(ctx, browser.endpoint(), rawTarget.ID)
+	outcome.validationErr = inspectErr
+	if outcome.validationErr == nil {
+		outcome.validation, outcome.validationErr = validateGateI2Observation(outcome.observation, r.fixtureURL, r.browserID, r.targetID, r.message, outcome.audioFileBytes)
 	}
-	audioFileBytes := gateI2FileSize(audioPath)
+	if outcome.validationErr == nil && runErr != nil {
+		outcome.validationErr = fmt.Errorf("live session returned an error: %w", runErr)
+	}
+	if outcome.validationErr == nil {
+		outcome.validationErr = r.validatePostSession(outcome, independentErr)
+	}
+	return outcome
+}
 
-	validationErr := inspectErr
-	var validation gateI2Validation
-	if validationErr == nil {
-		validation, validationErr = validateGateI2Observation(observation, fixtureURL, browserID, targetID, message, audioFileBytes)
+func (r *gateI2Run) validatePostSession(outcome gateI2Outcome, independentErr error) error {
+	after := outcome.afterOracle
+	if after.Value != "completed:"+r.message || after.VisibleText != "completed:"+r.message || after.Pending || !hasFixtureInvocation(after, completeToolName+":"+r.message) {
+		return fmt.Errorf("after oracle=%+v, want completed fixture mutation", after)
 	}
-	if validationErr == nil && runErr != nil {
-		validationErr = fmt.Errorf("live session returned an error: %v", runErr)
+	if outcome.postVersionErr != nil || outcome.postTargetErr != nil {
+		return fmt.Errorf("Chrome post-session liveness failed: version=%w target=%w", outcome.postVersionErr, outcome.postTargetErr)
 	}
-	if validationErr == nil {
-		if afterOracle.Value != "completed:"+message || afterOracle.VisibleText != "completed:"+message || afterOracle.Pending || !hasFixtureInvocation(afterOracle, completeToolName+":"+message) {
-			validationErr = fmt.Errorf("after oracle=%+v, want completed fixture mutation", afterOracle)
-		}
+	if independentErr != nil {
+		return fmt.Errorf("independent DOM oracle failed: %w", independentErr)
 	}
-	if validationErr == nil && (postVersionErr != nil || postTargetErr != nil) {
-		validationErr = fmt.Errorf("Chrome post-session liveness failed: version=%v target=%v", postVersionErr, postTargetErr)
+	if !gateI2StateMatchesOracle(outcome.independentState, after) {
+		return fmt.Errorf("independent DOM state=%+v disagrees with HTTP oracle=%+v", outcome.independentState, after)
 	}
-	if validationErr == nil && independentErr != nil {
-		validationErr = fmt.Errorf("independent DOM oracle failed: %v", independentErr)
-	}
-	if validationErr == nil && !gateI2StateMatchesOracle(independentState, afterOracle) {
-		validationErr = fmt.Errorf("independent DOM state=%+v disagrees with HTTP oracle=%+v", independentState, afterOracle)
-	}
+	return nil
+}
 
+func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evidence {
+	observation := outcome.observation
 	evidence := gateI2Evidence{
 		Schema:                 "webmcp.gate-i2.evidence.v1",
 		ObservedAtUTC:          time.Now().UTC().Format(time.RFC3339Nano),
-		Pins:                   gateI2PinsFromLock(pinned.Lock, version.Browser),
+		Pins:                   gateI2PinsFromLock(r.pinned.Lock, r.version.Browser),
 		Provider:               observation.Provider,
 		Model:                  observation.Model,
 		APIKeySource:           keySource,
-		SpokenRequest:          request,
-		ExpectedMessage:        message,
+		SpokenRequest:          r.request,
+		ExpectedMessage:        r.message,
 		RequestInput:           "audio-only",
 		AdvertisedTools:        append([]string(nil), observation.AdvertisedTools...),
 		SessionUpdateCount:     observation.SessionUpdateCount,
@@ -249,43 +308,28 @@ func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
 		SpokenTranscript:       observation.SpokenTranscript,
 		TerminalStatus:         observation.TerminalStatus,
 		OutputAudioBytes:       observation.AudioBytesAfterInvoke,
-		AudioFileBytes:         audioFileBytes,
-		BeforeOracle:           beforeOracle,
-		AfterOracle:            afterOracle,
-		IndependentDOM:         independentState,
-		ChromeAliveAfterRun:    postVersionErr == nil,
-		TargetPresentAfterRun:  postTargetErr == nil,
-		BrowserVersionAfterRun: postVersion.Browser,
-		TargetURLAfterRun:      postTarget.URL,
-		CapturePath:            capturePath,
-		RecordDir:              recordDir,
-		AudioPath:              audioPath,
-		ValidationError:        gateI2ErrorString(validationErr),
-		Pass:                   validationErr == nil,
+		AudioFileBytes:         outcome.audioFileBytes,
+		BeforeOracle:           r.beforeOracle,
+		AfterOracle:            outcome.afterOracle,
+		IndependentDOM:         outcome.independentState,
+		ChromeAliveAfterRun:    outcome.postVersionErr == nil,
+		TargetPresentAfterRun:  outcome.postTargetErr == nil,
+		BrowserVersionAfterRun: outcome.postVersion.Browser,
+		TargetURLAfterRun:      outcome.postTarget.URL,
+		CapturePath:            r.capturePath,
+		RecordDir:              r.recordDir,
+		AudioPath:              r.audioPath,
+		ValidationError:        gateI2ErrorString(outcome.validationErr),
+		Pass:                   outcome.validationErr == nil,
 	}
-	if validationErr == nil {
-		evidence.ListToolRef = validation.ListToolRef
-		evidence.InvokeToolRef = validation.InvokeToolRef
-		evidence.RawInputJSON = validation.RawInputJSON
-		evidence.Reason = validation.Reason
+	if outcome.validationErr == nil {
+		evidence.ListToolRef = outcome.validation.ListToolRef
+		evidence.InvokeToolRef = outcome.validation.InvokeToolRef
+		evidence.RawInputJSON = outcome.validation.RawInputJSON
+		evidence.Reason = outcome.validation.Reason
 		evidence.GroundedFinalState = true
 	}
-	evidencePath := filepath.Join(artifactRoot, "acceptance-report.json")
-	if err := writeGateI2Evidence(evidencePath, evidence); err != nil {
-		t.Fatalf("write Gate I2 evidence: %v", err)
-	}
-	t.Logf("Gate I2 evidence: %s", evidencePath)
-
-	if validationErr != nil {
-		t.Fatalf("Gate I2 measurement failed: %v; evidence=%s", validationErr, evidencePath)
-	}
-
-	closeErr := browser.Close()
-	closed = true
-	if closeErr != nil {
-		t.Logf("Chrome process cleanup returned: %v", closeErr)
-	}
-	t.Logf("WEBMCP_GATE_I2_PASS chrome=%s revision=%s browser=%s target=%s list_tools_ref=%s invoke_ref=%s input_json=%q transcript=%q output_audio_bytes=%d capture=%s record_dir=%s", lockedChromeVersion, lockedChromeRevision, browserID, targetID, validation.ListToolRef, validation.InvokeToolRef, validation.RawInputJSON, observation.SpokenTranscript, observation.AudioBytesAfterInvoke, capturePath, recordDir)
+	return evidence
 }
 
 var gateI2SystemPrompt = strings.Join([]string{
@@ -297,52 +341,6 @@ var gateI2SystemPrompt = strings.Join([]string{
 	"- Do not invent or rewrite a tool_ref, silently coerce malformed JSON, retry an invocation, or claim that the page changed before the terminal tool result.",
 	"- After the terminal tool result, speak one concise confirmation grounded in its returned message and the final page state. Do not put tool refs or encoded arguments in the spoken request or final confirmation.",
 }, "\n")
-
-type gateI2Observation struct {
-	Provider              string
-	Model                 string
-	Instructions          string
-	AdvertisedTools       []string
-	SessionUpdateCount    int
-	SessionUpdateIndex    int
-	FirstInputIndex       int
-	Calls                 []gateI2Call
-	Outputs               []gateI2Output
-	ResponseCreates       []int
-	AudioDeltas           []gateI2AudioDelta
-	SpokenTranscript      string
-	SpokenTranscriptIndex int
-	AudioBytesAfterInvoke int
-	TerminalStatus        string
-	TerminalIndex         int
-	ProviderErrors        int
-}
-
-type gateI2Call struct {
-	Index          int
-	ArgumentsIndex int
-	Name           string
-	CallID         string
-	Arguments      string
-}
-
-type gateI2Output struct {
-	Index  int
-	CallID string
-	Output string
-}
-
-type gateI2AudioDelta struct {
-	Index int
-	Bytes int
-}
-
-type gateI2Validation struct {
-	ListToolRef   string
-	InvokeToolRef string
-	RawInputJSON  string
-	Reason        string
-}
 
 type gateI2Pins struct {
 	Channel             string   `json:"channel"`
@@ -408,247 +406,101 @@ type gateI2EvidenceOutput struct {
 	Output string `json:"output"`
 }
 
-func inspectGateI2Capture(capture gwtesting.SessionCapture) (gateI2Observation, error) {
-	observation := gateI2Observation{
-		Provider:              capture.Provider.Name,
-		Model:                 capture.Provider.Model,
-		SessionUpdateIndex:    -1,
-		FirstInputIndex:       -1,
-		SpokenTranscriptIndex: -1,
-		TerminalIndex:         -1,
-	}
-	for index, record := range capture.Records {
-		payload := record.Payload
-		if len(payload) == 0 {
-			payload = record.Data
-		}
-		if len(payload) == 0 {
-			return observation, fmt.Errorf("record %d (%s) has an empty payload", index, record.Type)
-		}
-		if record.Direction == gwtesting.DirectionClientToServer {
-			switch record.Type {
-			case "session.update":
-				observation.SessionUpdateCount++
-				var event struct {
-					Session struct {
-						Instructions string `json:"instructions"`
-						Tools        []struct {
-							Name string `json:"name"`
-						} `json:"tools"`
-					} `json:"session"`
-				}
-				if err := json.Unmarshal(payload, &event); err != nil {
-					return observation, fmt.Errorf("decode session.update: %w", err)
-				}
-				if observation.SessionUpdateIndex < 0 {
-					observation.SessionUpdateIndex = index
-				}
-				observation.Instructions = event.Session.Instructions
-				observation.AdvertisedTools = observation.AdvertisedTools[:0]
-				for _, tool := range event.Session.Tools {
-					observation.AdvertisedTools = append(observation.AdvertisedTools, tool.Name)
-				}
-			case "input_audio_buffer.append":
-				if observation.FirstInputIndex < 0 {
-					observation.FirstInputIndex = index
-				}
-			case "conversation.item.create":
-				var event struct {
-					Item struct {
-						Type   string `json:"type"`
-						CallID string `json:"call_id"`
-						Output string `json:"output"`
-					} `json:"item"`
-				}
-				if err := json.Unmarshal(payload, &event); err != nil {
-					return observation, fmt.Errorf("decode conversation.item.create: %w", err)
-				}
-				if event.Item.Type == "function_call_output" {
-					observation.Outputs = append(observation.Outputs, gateI2Output{Index: index, CallID: event.Item.CallID, Output: event.Item.Output})
-				}
-			case "response.create":
-				observation.ResponseCreates = append(observation.ResponseCreates, index)
-			}
-			continue
-		}
-		if record.Direction != gwtesting.DirectionServerToClient {
-			continue
-		}
-		switch record.Type {
-		case "response.output_item.added":
-			var event struct {
-				Item struct {
-					Type   string `json:"type"`
-					Name   string `json:"name"`
-					CallID string `json:"call_id"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.output_item.added: %w", err)
-			}
-			if event.Item.Type == "function_call" {
-				observation.Calls = append(observation.Calls, gateI2Call{Index: index, ArgumentsIndex: -1, Name: event.Item.Name, CallID: event.Item.CallID})
-			}
-		case "response.function_call_arguments.done":
-			var event struct {
-				Name      string `json:"name"`
-				CallID    string `json:"call_id"`
-				Arguments string `json:"arguments"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.function_call_arguments.done: %w", err)
-			}
-			callIndex := -1
-			for candidate := len(observation.Calls) - 1; candidate >= 0; candidate-- {
-				if observation.Calls[candidate].ArgumentsIndex >= 0 {
-					continue
-				}
-				if event.CallID == "" || observation.Calls[candidate].CallID == event.CallID {
-					callIndex = candidate
-					break
-				}
-			}
-			if callIndex < 0 {
-				return observation, fmt.Errorf("function-call arguments have no correlating output item call_id=%q", event.CallID)
-			}
-			observation.Calls[callIndex].ArgumentsIndex = index
-			observation.Calls[callIndex].Arguments = event.Arguments
-			if observation.Calls[callIndex].CallID == "" {
-				observation.Calls[callIndex].CallID = event.CallID
-			}
-			if observation.Calls[callIndex].Name == "" {
-				observation.Calls[callIndex].Name = event.Name
-			}
-		case "response.output_audio_transcript.done":
-			var event struct {
-				Transcript string `json:"transcript"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode output transcript: %w", err)
-			}
-			if strings.TrimSpace(event.Transcript) != "" {
-				if observation.SpokenTranscriptIndex < 0 {
-					observation.SpokenTranscriptIndex = index
-				}
-				if observation.SpokenTranscript != "" {
-					observation.SpokenTranscript += " "
-				}
-				observation.SpokenTranscript += strings.TrimSpace(event.Transcript)
-			}
-		case "response.output_audio.delta", "response.audio.delta":
-			var event struct {
-				Delta string `json:"delta"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode output audio delta: %w", err)
-			}
-			if event.Delta != "" {
-				decoded, err := base64.StdEncoding.DecodeString(event.Delta)
-				if err != nil {
-					return observation, fmt.Errorf("decode output audio delta: %w", err)
-				}
-				observation.AudioDeltas = append(observation.AudioDeltas, gateI2AudioDelta{Index: index, Bytes: len(decoded)})
-			}
-		case "response.done":
-			var event struct {
-				Status   string `json:"status"`
-				Response struct {
-					Status string `json:"status"`
-				} `json:"response"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode response.done: %w", err)
-			}
-			status := event.Response.Status
-			if status == "" {
-				status = event.Status
-			}
-			if observation.TerminalIndex < 0 && observation.SpokenTranscriptIndex >= 0 && index > observation.SpokenTranscriptIndex {
-				observation.TerminalIndex = index
-				observation.TerminalStatus = status
-			}
-		case "error":
-			observation.ProviderErrors++
-		}
-	}
-	observation.AudioBytesAfterInvoke = gateI2AudioBytesAfterInvoke(observation)
-	return observation, nil
-}
-
-func gateI2AudioBytesAfterInvoke(observation gateI2Observation) int {
-	invokeOutputIndex := -1
-	for _, call := range observation.Calls {
-		if call.Name != webmcp.InvokeToolName || call.CallID == "" {
-			continue
-		}
-		for _, output := range observation.Outputs {
-			if output.CallID == call.CallID && output.Index > invokeOutputIndex {
-				invokeOutputIndex = output.Index
-			}
-		}
-	}
-	if invokeOutputIndex < 0 {
-		return 0
-	}
-
-	bytes := 0
-	for _, delta := range observation.AudioDeltas {
-		if delta.Index <= invokeOutputIndex || (observation.TerminalIndex >= 0 && delta.Index >= observation.TerminalIndex) {
-			continue
-		}
-		bytes += delta.Bytes
-	}
-	return bytes
+// gateI2Expectation is the independently known ground truth a Gate I2
+// capture is validated against.
+type gateI2Expectation struct {
+	fixtureURL     string
+	browserID      string
+	targetID       string
+	message        string
+	audioFileBytes int64
 }
 
 func validateGateI2Observation(observation gateI2Observation, fixtureURL, expectedBrowserID, expectedTargetID, expectedMessage string, audioFileBytes int64) (gateI2Validation, error) {
-	if observation.Provider != "openai" || observation.Model != gateI2Model {
-		return gateI2Validation{}, fmt.Errorf("provider identity=(%q,%q), want (openai,%q)", observation.Provider, observation.Model, gateI2Model)
+	want := gateI2Expectation{fixtureURL: fixtureURL, browserID: expectedBrowserID, targetID: expectedTargetID, message: expectedMessage, audioFileBytes: audioFileBytes}
+	if err := validateGateI2Session(observation); err != nil {
+		return gateI2Validation{}, err
+	}
+	outputsByCall, err := validateGateI2CallSequence(observation)
+	if err != nil {
+		return gateI2Validation{}, err
+	}
+	if err := validateGateI2TabSelection(observation, outputsByCall, want); err != nil {
+		return gateI2Validation{}, err
+	}
+	listToolRef, err := gateI2CatalogRef(outputsByCall[observation.Calls[2].CallID])
+	if err != nil {
+		return gateI2Validation{}, err
+	}
+	validation, err := validateGateI2InvokeArguments(observation.Calls[3].Arguments, listToolRef, want.message)
+	if err != nil {
+		return gateI2Validation{}, err
+	}
+	invokeOutput := outputsByCall[observation.Calls[3].CallID]
+	if err := validateGateI2InvokeResult(invokeOutput, listToolRef, want.message); err != nil {
+		return gateI2Validation{}, err
+	}
+	if err := validateGateI2SpokenConfirmation(observation, invokeOutput.Index, want); err != nil {
+		return gateI2Validation{}, err
+	}
+	return validation, nil
+}
+
+func validateGateI2Session(observation gateI2Observation) error {
+	if observation.Provider != liveProviderOpenAI || observation.Model != gateI2Model {
+		return fmt.Errorf("provider identity=(%q,%q), want (openai,%q)", observation.Provider, observation.Model, gateI2Model)
 	}
 	if observation.ProviderErrors != 0 {
-		return gateI2Validation{}, fmt.Errorf("provider emitted %d error event(s)", observation.ProviderErrors)
+		return fmt.Errorf("provider emitted %d error event(s)", observation.ProviderErrors)
 	}
 	if observation.SessionUpdateCount != 1 || observation.SessionUpdateIndex < 0 || observation.FirstInputIndex < 0 || observation.SessionUpdateIndex >= observation.FirstInputIndex {
-		return gateI2Validation{}, fmt.Errorf("session.update/input ordering count=%d update=%d first_audio=%d, want exactly one update before spoken audio", observation.SessionUpdateCount, observation.SessionUpdateIndex, observation.FirstInputIndex)
+		return fmt.Errorf("session.update/input ordering count=%d update=%d first_audio=%d, want exactly one update before spoken audio", observation.SessionUpdateCount, observation.SessionUpdateIndex, observation.FirstInputIndex)
 	}
 	if !strings.Contains(observation.Instructions, "input_json") || !strings.Contains(observation.Instructions, "webmcp_list_tools") {
-		return gateI2Validation{}, errors.New("session instructions omit the Gate I2 discovery and JSON-in-string contract")
+		return errors.New("session instructions omit the Gate I2 discovery and JSON-in-string contract")
 	}
-	if !gateI2SameStrings(observation.AdvertisedTools, webmcp.StableToolNames()) {
-		return gateI2Validation{}, fmt.Errorf("advertised tools=%v, want exactly the stable broker surface", observation.AdvertisedTools)
+	if !slices.Equal(observation.AdvertisedTools, webmcp.StableToolNames()) {
+		return fmt.Errorf("advertised tools=%v, want exactly the stable broker surface", observation.AdvertisedTools)
 	}
 	if len(observation.Calls) != 4 || len(observation.Outputs) != 4 {
-		return gateI2Validation{}, fmt.Errorf("provider trace has %d calls and %d textual outputs, want one list_tabs/select_tab/list_tools/invoke sequence", len(observation.Calls), len(observation.Outputs))
+		return fmt.Errorf("provider trace has %d calls and %d textual outputs, want one list_tabs/select_tab/list_tools/invoke sequence", len(observation.Calls), len(observation.Outputs))
 	}
+	return nil
+}
 
+// validateGateI2CallSequence checks the exact four-call broker sequence and
+// returns each call's single textual output keyed by call_id.
+func validateGateI2CallSequence(observation gateI2Observation) (map[string]gateI2Output, error) {
 	wantedNames := []string{webmcp.ListTabsToolName, webmcp.SelectTabToolName, webmcp.ListToolsToolName, webmcp.InvokeToolName}
 	outputsByCall := make(map[string]gateI2Output, len(observation.Outputs))
 	for _, output := range observation.Outputs {
 		if output.CallID == "" {
-			return gateI2Validation{}, fmt.Errorf("function_call_output at index %d has an empty call_id", output.Index)
+			return nil, fmt.Errorf("function_call_output at index %d has an empty call_id", output.Index)
 		}
 		if _, exists := outputsByCall[output.CallID]; exists {
-			return gateI2Validation{}, fmt.Errorf("function_call_output call_id=%q occurred more than once", output.CallID)
+			return nil, fmt.Errorf("function_call_output call_id=%q occurred more than once", output.CallID)
 		}
 		outputsByCall[output.CallID] = output
 	}
 	for index, call := range observation.Calls {
 		if call.Name != wantedNames[index] {
-			return gateI2Validation{}, fmt.Errorf("call %d name=%q, want %q", index, call.Name, wantedNames[index])
+			return nil, fmt.Errorf("call %d name=%q, want %q", index, call.Name, wantedNames[index])
 		}
 		if call.CallID == "" || call.ArgumentsIndex <= call.Index {
-			return gateI2Validation{}, fmt.Errorf("call %d correlation/order invalid: %+v", index, call)
+			return nil, fmt.Errorf("call %d correlation/order invalid: %+v", index, call)
 		}
 		output, ok := outputsByCall[call.CallID]
 		if !ok || output.Index <= call.ArgumentsIndex {
-			return gateI2Validation{}, fmt.Errorf("call %s has no terminal textual output after arguments", call.CallID)
+			return nil, fmt.Errorf("call %s has no terminal textual output after arguments", call.CallID)
 		}
 		if _, err := webmcp.UnmarshalToolResult([]byte(output.Output)); err != nil {
-			return gateI2Validation{}, fmt.Errorf("call %s output is not a validated textual WebMCP envelope: %w; envelope=%s", call.CallID, err, output.Output)
+			return nil, fmt.Errorf("call %s output is not a validated textual WebMCP envelope: %w; envelope=%s", call.CallID, err, output.Output)
 		}
 	}
+	return outputsByCall, nil
+}
 
-	listTabsOutput := outputsByCall[observation.Calls[0].CallID]
+func validateGateI2TabSelection(observation gateI2Observation, outputsByCall map[string]gateI2Output, want gateI2Expectation) error {
 	var tabs struct {
 		Targets []struct {
 			BrowserID string `json:"browser_id"`
@@ -659,28 +511,32 @@ func validateGateI2Observation(observation gateI2Observation, fixtureURL, expect
 			Eligible  bool   `json:"eligible"`
 		} `json:"targets"`
 	}
-	if err := decodeGateI2EnvelopeData(listTabsOutput.Output, &tabs); err != nil {
-		return gateI2Validation{}, fmt.Errorf("decode webmcp_list_tabs envelope: %w", err)
+	if err := decodeGateI2EnvelopeData(outputsByCall[observation.Calls[0].CallID].Output, &tabs); err != nil {
+		return fmt.Errorf("decode webmcp_list_tabs envelope: %w", err)
 	}
 	matches := 0
 	for _, target := range tabs.Targets {
-		if target.BrowserID == expectedBrowserID && target.TargetID == expectedTargetID && target.Type == "page" && target.URL == fixtureURL && target.Origin == strings.TrimRight(fixtureURL, "/") && target.Eligible {
+		if target.BrowserID == want.browserID && target.TargetID == want.targetID && target.Type == pageTargetType && target.URL == want.fixtureURL && target.Origin == strings.TrimRight(want.fixtureURL, "/") && target.Eligible {
 			matches++
 		}
 	}
 	if matches != 1 {
-		return gateI2Validation{}, fmt.Errorf("webmcp_list_tabs returned %d exact eligible fixture target rows, want one", matches)
+		return fmt.Errorf("webmcp_list_tabs returned %d exact eligible fixture target rows, want one", matches)
 	}
 
 	selectArgs, err := decodeGateI2Object(observation.Calls[1].Arguments)
 	if err != nil {
-		return gateI2Validation{}, fmt.Errorf("decode webmcp_select_tab arguments: %w", err)
+		return fmt.Errorf("decode webmcp_select_tab arguments: %w", err)
 	}
-	if gateI2StringValue(selectArgs, "browser_id") != expectedBrowserID || gateI2StringValue(selectArgs, "target_id") != expectedTargetID {
-		return gateI2Validation{}, fmt.Errorf("webmcp_select_tab did not reuse list_tabs IDs: browser=%q target=%q", gateI2StringValue(selectArgs, "browser_id"), gateI2StringValue(selectArgs, "target_id"))
+	if gateI2StringValue(selectArgs, "browser_id") != want.browserID || gateI2StringValue(selectArgs, "target_id") != want.targetID {
+		return fmt.Errorf("webmcp_select_tab did not reuse list_tabs IDs: browser=%q target=%q", gateI2StringValue(selectArgs, "browser_id"), gateI2StringValue(selectArgs, "target_id"))
 	}
+	return nil
+}
 
-	listToolsOutput := outputsByCall[observation.Calls[2].CallID]
+// gateI2CatalogRef returns the one valid ref webmcp_list_tools exposed for
+// the fixture's completion tool.
+func gateI2CatalogRef(listToolsOutput gateI2Output) (string, error) {
 	var catalog struct {
 		Tools []struct {
 			Ref  string `json:"ref"`
@@ -688,24 +544,27 @@ func validateGateI2Observation(observation gateI2Observation, fixtureURL, expect
 		} `json:"tools"`
 	}
 	if err := decodeGateI2EnvelopeData(listToolsOutput.Output, &catalog); err != nil {
-		return gateI2Validation{}, fmt.Errorf("decode webmcp_list_tools envelope: %w", err)
+		return "", fmt.Errorf("decode webmcp_list_tools envelope: %w", err)
 	}
 	listToolRef := ""
 	for _, tool := range catalog.Tools {
 		if tool.Name == completeToolName {
 			if listToolRef != "" {
-				return gateI2Validation{}, fmt.Errorf("webmcp_list_tools returned duplicate %s descriptors", completeToolName)
+				return "", fmt.Errorf("webmcp_list_tools returned duplicate %s descriptors", completeToolName)
 			}
 			listToolRef = tool.Ref
 		}
 	}
 	if !webmcp.IsValidToolRef(webmcp.ToolRef(listToolRef)) {
-		return gateI2Validation{}, fmt.Errorf("webmcp_list_tools returned invalid %s ref %q", completeToolName, listToolRef)
+		return "", fmt.Errorf("webmcp_list_tools returned invalid %s ref %q", completeToolName, listToolRef)
 	}
+	return listToolRef, nil
+}
 
-	invokeArgs, err := decodeGateI2Object(observation.Calls[3].Arguments)
+func validateGateI2InvokeArguments(rawArguments, listToolRef, expectedMessage string) (gateI2Validation, error) {
+	invokeArgs, err := decodeGateI2Object(rawArguments)
 	if err != nil {
-		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: decode webmcp_invoke arguments: %w; raw arguments=%s; raw-schema acceleration fallback is required if the provider cannot reliably produce input_json", err, observation.Calls[3].Arguments)
+		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: decode webmcp_invoke arguments: %w; raw arguments=%s; raw-schema acceleration fallback is required if the provider cannot reliably produce input_json", err, rawArguments)
 	}
 	invokeToolRef := gateI2StringValue(invokeArgs, "tool_ref")
 	if invokeToolRef != listToolRef {
@@ -726,8 +585,10 @@ func validateGateI2Observation(observation gateI2Observation, fixtureURL, expect
 	if strings.TrimSpace(reason) == "" {
 		return gateI2Validation{}, errors.New("Gate I2 measurement: webmcp_invoke reason is empty")
 	}
+	return gateI2Validation{ListToolRef: listToolRef, InvokeToolRef: invokeToolRef, RawInputJSON: rawInputJSON, Reason: reason}, nil
+}
 
-	invokeOutput := outputsByCall[observation.Calls[3].CallID]
+func validateGateI2InvokeResult(invokeOutput gateI2Output, listToolRef, expectedMessage string) error {
 	var invokeEnvelope struct {
 		InvocationID string          `json:"invocation_id"`
 		ToolRef      string          `json:"tool_ref"`
@@ -735,38 +596,41 @@ func validateGateI2Observation(observation gateI2Observation, fixtureURL, expect
 		Output       json.RawMessage `json:"output"`
 	}
 	if err := decodeGateI2EnvelopeData(invokeOutput.Output, &invokeEnvelope); err != nil {
-		return gateI2Validation{}, fmt.Errorf("decode webmcp_invoke envelope: %w", err)
+		return fmt.Errorf("decode webmcp_invoke envelope: %w", err)
 	}
 	if invokeEnvelope.InvocationID == "" || invokeEnvelope.ToolRef != listToolRef || invokeEnvelope.Status != string(webmcp.InvocationCompleted) {
-		return gateI2Validation{}, fmt.Errorf("webmcp_invoke result=%+v, want completed correlated invocation", invokeEnvelope)
+		return fmt.Errorf("webmcp_invoke result=%+v, want completed correlated invocation", invokeEnvelope)
 	}
 	var pageOutput struct {
 		Greeting string `json:"greeting"`
 		Message  string `json:"message"`
 	}
 	if err := json.Unmarshal(invokeEnvelope.Output, &pageOutput); err != nil || pageOutput.Greeting != "hello" || pageOutput.Message != expectedMessage {
-		return gateI2Validation{}, fmt.Errorf("webmcp_invoke page output=%s, want greeting hello and message %q", invokeEnvelope.Output, expectedMessage)
+		return fmt.Errorf("webmcp_invoke page output=%s, want greeting hello and message %q", invokeEnvelope.Output, expectedMessage)
 	}
+	return nil
+}
 
+func validateGateI2SpokenConfirmation(observation gateI2Observation, invokeOutputIndex int, want gateI2Expectation) error {
 	responseCreatesAfterInvoke := 0
 	for _, index := range observation.ResponseCreates {
-		if index > invokeOutput.Index {
+		if index > invokeOutputIndex {
 			responseCreatesAfterInvoke++
 		}
 	}
 	if responseCreatesAfterInvoke == 0 {
-		return gateI2Validation{}, errors.New("no response.create followed the delivered webmcp_invoke result")
+		return errors.New("no response.create followed the delivered webmcp_invoke result")
 	}
-	if observation.SpokenTranscriptIndex <= invokeOutput.Index || !strings.Contains(strings.ToLower(observation.SpokenTranscript), strings.ToLower(expectedMessage)) {
-		return gateI2Validation{}, fmt.Errorf("spoken transcript=%q is absent, precedes the invoke result, or omits the final message", observation.SpokenTranscript)
+	if observation.SpokenTranscriptIndex <= invokeOutputIndex || !strings.Contains(strings.ToLower(observation.SpokenTranscript), strings.ToLower(want.message)) {
+		return fmt.Errorf("spoken transcript=%q is absent, precedes the invoke result, or omits the final message", observation.SpokenTranscript)
 	}
-	if observation.TerminalIndex <= observation.SpokenTranscriptIndex || observation.TerminalStatus == "failed" || observation.TerminalStatus == "cancelled" || observation.TerminalStatus == "incomplete" {
-		return gateI2Validation{}, fmt.Errorf("terminal response status=%q index=%d, spoken index=%d", observation.TerminalStatus, observation.TerminalIndex, observation.SpokenTranscriptIndex)
+	if observation.TerminalIndex <= observation.SpokenTranscriptIndex || observation.TerminalStatus == "failed" || observation.TerminalStatus == liveStatusCancelled || observation.TerminalStatus == "incomplete" {
+		return fmt.Errorf("terminal response status=%q index=%d, spoken index=%d", observation.TerminalStatus, observation.TerminalIndex, observation.SpokenTranscriptIndex)
 	}
-	if observation.AudioBytesAfterInvoke == 0 || audioFileBytes <= 44 {
-		return gateI2Validation{}, fmt.Errorf("spoken output audio is missing: provider_delta_bytes=%d file_bytes=%d", observation.AudioBytesAfterInvoke, audioFileBytes)
+	if observation.AudioBytesAfterInvoke == 0 || want.audioFileBytes <= 44 {
+		return fmt.Errorf("spoken output audio is missing: provider_delta_bytes=%d file_bytes=%d", observation.AudioBytesAfterInvoke, want.audioFileBytes)
 	}
-	return gateI2Validation{ListToolRef: listToolRef, InvokeToolRef: invokeToolRef, RawInputJSON: rawInputJSON, Reason: reason}, nil
+	return nil
 }
 
 func decodeGateI2EnvelopeData(output string, destination any) error {
@@ -831,6 +695,48 @@ func writeGateI2Config(configDir, cdpURL, origin, browserID, targetID string) er
 	return os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(builder.String()), 0o600)
 }
 
+// liveBrowserConfig is the browser section a live proof writes to
+// config.yaml. An empty browserID auto-selects the single eligible tab
+// instead of naming an exact target.
+type liveBrowserConfig struct {
+	cdpURL            string
+	origin            string
+	browserID         string
+	targetID          string
+	cancelOnInterrupt string
+	invocationTimeout string
+}
+
+func writeLiveBrowserConfig(configDir string, browser liveBrowserConfig) error {
+	selection := "    auto_select: single\n"
+	if browser.browserID != "" {
+		selection = fmt.Sprintf("    browser: %q\n    tab: %q\n    auto_select: off\n", browser.browserID, browser.targetID)
+	}
+	contents := fmt.Sprintf(`browser:
+  tools:
+    enabled: true
+    backend: webmcp
+  connection:
+    cdp_url: %q
+    allow_remote_cdp: false
+  selection:
+%s    activate_tab: false
+    persist: false
+  policy:
+    allowed_origins:
+      - %q
+    approval: never
+    cancel_on_interrupt: %s
+  limits:
+    invocation_timeout: %s
+  recording:
+    enabled: true
+    include_arguments: true
+    include_results: true
+`, browser.cdpURL, selection, browser.origin, browser.cancelOnInterrupt, browser.invocationTimeout)
+	return os.WriteFile(filepath.Join(configDir, liveConfigFileName), []byte(contents), 0o600)
+}
+
 func loadGateI2APIKey() (string, string, error) {
 	path := strings.TrimSpace(os.Getenv(gateI2KeyFileEnv))
 	if path != "" {
@@ -838,7 +744,7 @@ func loadGateI2APIKey() (string, string, error) {
 		if err != nil {
 			return "", gateI2KeyFileEnv, err
 		}
-		defer file.Close()
+		defer discardSecondaryError(file.Close)
 		// This is the documented operator protocol:
 		// Run tr with CR/LF deletion, as in: OPENAI_API_KEY="$(tr -d '\r\n' < "$OPENAI_API_KEY_FILE")"
 		command := exec.Command("tr", "-d", "\\r\\n")
@@ -873,7 +779,7 @@ func gateI2Request(message string) string {
 	return gateI2RequestPrefix + fmt.Sprintf("%q", message) + ". First discover the available page tools, then perform that exact action, verify the resulting page state, and tell me the value you observed."
 }
 
-func gateI2SpokenInput(t *testing.T, artifactRoot, request string) string {
+func gateI2SpokenInput(parent context.Context, t *testing.T, artifactRoot, request string) string {
 	t.Helper()
 	for _, command := range []string{"say", "afconvert"} {
 		if _, err := exec.LookPath(command); err != nil {
@@ -882,7 +788,7 @@ func gateI2SpokenInput(t *testing.T, artifactRoot, request string) string {
 	}
 	aiffPath := filepath.Join(artifactRoot, "request.aiff")
 	wavPath := filepath.Join(artifactRoot, "request.wav")
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
 	if output, err := exec.CommandContext(ctx, "say", "-o", aiffPath, request).CombinedOutput(); err != nil {
 		t.Fatalf("generate Gate I2 spoken request: %v: %s", err, strings.TrimSpace(string(output)))
@@ -923,7 +829,7 @@ func readGateI2FixtureTarget(ctx context.Context, baseURL, rawTargetID, fixtureU
 		return devToolsTarget{}, err
 	}
 	for _, target := range targets {
-		if target.ID == rawTargetID && target.Type == "page" && target.URL == fixtureURL {
+		if target.ID == rawTargetID && target.Type == pageTargetType && target.URL == fixtureURL {
 			return target, nil
 		}
 	}
@@ -935,15 +841,7 @@ func gateI2StateMatchesOracle(state inspectedPageState, oracle fixtureOracle) bo
 		state.Value == oracle.Value &&
 		state.VisibleText == oracle.VisibleText &&
 		state.Pending == oracle.Pending &&
-		gateI2SameStrings(state.Invocations, oracle.Invocations)
-}
-
-func gateI2FileSize(path string) int64 {
-	info, err := os.Stat(path)
-	if err != nil {
-		return 0
-	}
-	return info.Size()
+		slices.Equal(state.Invocations, oracle.Invocations)
 }
 
 func gateI2PinsFromLock(lock chromeForTestingLock, executableVersion string) gateI2Pins {
@@ -1000,14 +898,67 @@ func gateI2ErrorString(err error) string {
 	return err.Error()
 }
 
-func gateI2SameStrings(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
+// requireLiveOpenAIKey loads the operator's OpenAI key, skipping the proof
+// with skipMessage when none is configured.
+func requireLiveOpenAIKey(t *testing.T, skipMessage string) (string, string) {
+	t.Helper()
+	apiKey, keySource, err := loadGateI2APIKey()
+	if errors.Is(err, errGateI2MissingAPIKey) {
+		t.Skip(skipMessage)
 	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
+	if err != nil {
+		t.Fatalf("load OpenAI API key: %v", err)
+	}
+	return apiKey, keySource
+}
+
+// liveBrowserOwner closes a test-owned Chrome exactly once: explicitly on the
+// success path, or from test cleanup when the proof stops early.
+type liveBrowserOwner struct {
+	browser *runningChrome
+	closed  bool
+}
+
+func ownLiveBrowser(t *testing.T, browser *runningChrome, cleanupLabel string) *liveBrowserOwner {
+	t.Helper()
+	owner := &liveBrowserOwner{browser: browser}
+	t.Cleanup(func() {
+		if !owner.closed {
+			if closeErr := browser.Close(); closeErr != nil {
+				t.Logf("%s: %v", cleanupLabel, closeErr)
+			}
 		}
+	})
+	return owner
+}
+
+func (o *liveBrowserOwner) close() error {
+	o.closed = true
+	return o.browser.Close()
+}
+
+// liveSessionStartError marks a production CLI that never started, as
+// opposed to one that started and then failed to finish within its budget.
+type liveSessionStartError struct {
+	cause error
+}
+
+func (e liveSessionStartError) Error() string {
+	return "start production agent CLI: " + e.cause.Error()
+}
+
+func (e liveSessionStartError) Unwrap() error {
+	return e.cause
+}
+
+// runLiveAgentSession runs the production CLI with the OpenAI key and waits
+// for it within budget. A start failure is a liveSessionStartError.
+func runLiveAgentSession(parent context.Context, budget time.Duration, binaryPath, configDir, apiKey string, args []string) (gateCLIResult, error) {
+	runContext, cancelRun := context.WithTimeout(parent, budget)
+	defer cancelRun()
+	process, err := startGateCommandWithEnvironment(runContext, binaryPath, configDir, []string{liveOpenAIKeyEnvironment + apiKey}, args...)
+	if err != nil {
+		return gateCLIResult{}, liveSessionStartError{cause: err}
 	}
-	return true
+	return process.wait(runContext)
 }

@@ -73,7 +73,7 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 		"--record", capturePath,
 		"--record-dir", recordDir,
 		"--audio-out", audioOutPath,
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", liveBargeInModel,
 		"--system-prompt", promptPath,
 		"--max-duration", scheduledAudioBargeInMaxDuration.String(),
@@ -87,7 +87,7 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 	runErr := awaitLiveBargeInCommand(ctx, root)
 	capture, loadErr := gwtesting.LoadSessionCapture(capturePath)
 	if loadErr != nil {
-		if liveBargeInRunErrorClass(runErr) != "runtime-contract-failure" {
+		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
 			t.Skipf("INCONCLUSIVE scheduled audio barge-in confirmation: provider/setup result did not produce a capture")
 		}
 		t.Fatalf("scheduled audio barge-in capture was not written: %v", runErr)
@@ -102,7 +102,7 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 		t.Fatalf("scheduled audio barge-in capture adapter failed: %v", validationErr)
 	}
 	if runErr != nil {
-		if liveBargeInRunErrorClass(runErr) != "runtime-contract-failure" {
+		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
 			t.Skipf("INCONCLUSIVE scheduled audio barge-in confirmation: provider result class=%s", liveBargeInRunErrorClass(runErr))
 		}
 		t.Fatalf("scheduled audio barge-in command returned a contract failure: %v", runErr)
@@ -174,7 +174,7 @@ func validateScheduledAudioBargeInBoundaries(facts liveBargeInCaptureFacts, trac
 	if first.Created == 0 || first.Done == 0 || second.Created == 0 || second.Done == 0 {
 		return &liveBargeInInconclusiveError{Reason: "two complete response boundaries were not observed"}
 	}
-	if !(first.Created < facts.InputStarts[1] && facts.InputStarts[1] < first.Done) {
+	if first.Created >= facts.InputStarts[1] || facts.InputStarts[1] >= first.Done {
 		return &liveBargeInInconclusiveError{Reason: "second scheduled input did not arrive while response 1 was active"}
 	}
 	if first.Cancel == 0 {
@@ -203,7 +203,7 @@ func validateScheduledAudioBargeInRecordDir(path string) error {
 	if err != nil {
 		return fmt.Errorf("open session log: %w", err)
 	}
-	defer file.Close()
+	defer discardCloseError(file)
 	entries := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

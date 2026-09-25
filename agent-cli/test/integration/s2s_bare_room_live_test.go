@@ -165,8 +165,12 @@ func startBareRoomLiveProbe(t *testing.T, configDir, apiKey string) (*bareRoomLi
 
 	stderrDone := make(chan string, 1)
 	go func() {
-		data, _ := io.ReadAll(stderr)
-		stderrDone <- redactBareRoomLiveText(string(data), apiKey)
+		data, err := io.ReadAll(stderr)
+		text := string(data)
+		if err != nil {
+			text += fmt.Sprintf("\n[stderr read failed: %v]", err)
+		}
+		stderrDone <- redactBareRoomLiveText(text, apiKey)
 	}()
 
 	wait := make(chan error, 1)
@@ -226,23 +230,9 @@ func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID devicegw.DeviceID) 
 				readyEvents++
 			}
 			if fields, ok := bareRoomLineFields(line, "room running: "); ok {
-				if fields["participants"] != "2" {
-					return readiness, fmt.Errorf("room running reported participants=%q, want 2", fields["participants"])
+				if err := completeBareRoomLiveReadiness(&readiness, fields, ready, readyEvents, inputID, outputID); err != nil {
+					return readiness, err
 				}
-				if readyEvents != 2 || len(ready) != 2 {
-					return readiness, fmt.Errorf("participant readiness events=%d identities=%d, want exactly two", readyEvents, len(ready))
-				}
-				customer := ready[defaultRoomCustomerID]
-				agent := ready[defaultRoomAgentID]
-				if customer.kind != "human" || customer.input != string(inputID) || customer.output != string(outputID) {
-					return readiness, fmt.Errorf("customer readiness=%+v, want human input=%q output=%q", customer, inputID, outputID)
-				}
-				if agent.kind != "agent" || agent.provider != "openai" || agent.model != servicetest.DefaultOpenAIRealtimeModel || agent.input != "" || agent.output != "" {
-					return readiness, fmt.Errorf("agent readiness=%+v, want openai model=%q without devices", agent, servicetest.DefaultOpenAIRealtimeModel)
-				}
-				readiness.customerInput = customer.input
-				readiness.customerOutput = customer.output
-				readiness.agentModel = agent.model
 				readiness.startupDuration = time.Since(startedAt)
 				readiness.observedAt = time.Now()
 				return readiness, nil
@@ -255,6 +245,29 @@ func (p *bareRoomLiveProcess) awaitRunning(inputID, outputID devicegw.DeviceID) 
 			return readiness, fmt.Errorf("room running was not observed within %s", bareRoomLiveProbeStartupTimeout)
 		}
 	}
+}
+
+// completeBareRoomLiveReadiness validates the "room running" line against the
+// two participant readiness events and records the customer devices and model.
+func completeBareRoomLiveReadiness(readiness *bareRoomLiveReadiness, fields map[string]string, ready map[string]bareRoomLiveReadyParticipant, readyEvents int, inputID, outputID devicegw.DeviceID) error {
+	if fields["participants"] != "2" {
+		return fmt.Errorf("room running reported participants=%q, want 2", fields["participants"])
+	}
+	if readyEvents != 2 || len(ready) != 2 {
+		return fmt.Errorf("participant readiness events=%d identities=%d, want exactly two", readyEvents, len(ready))
+	}
+	customer := ready[defaultRoomCustomerID]
+	agent := ready[defaultRoomAgentID]
+	if customer.kind != "human" || customer.input != string(inputID) || customer.output != string(outputID) {
+		return fmt.Errorf("customer readiness=%+v, want human input=%q output=%q", customer, inputID, outputID)
+	}
+	if agent.kind != "agent" || agent.provider != liveProviderOpenAI || agent.model != servicetest.DefaultOpenAIRealtimeModel || agent.input != "" || agent.output != "" {
+		return fmt.Errorf("agent readiness=%+v, want openai model=%q without devices", agent, servicetest.DefaultOpenAIRealtimeModel)
+	}
+	readiness.customerInput = customer.input
+	readiness.customerOutput = customer.output
+	readiness.agentModel = agent.model
+	return nil
 }
 
 func (p *bareRoomLiveProcess) awaitExit(timeout time.Duration) error {
@@ -294,7 +307,7 @@ func (p *bareRoomLiveProcess) terminate() {
 		return
 	}
 	if !p.waited && p.command != nil && p.command.Process != nil {
-		_ = p.command.Process.Kill()
+		killLiveProcess(p.command.Process)
 		select {
 		case p.waitErr = <-p.wait:
 			p.waited = true
@@ -436,81 +449,23 @@ type bareRoomLiveEvidenceParticipant struct {
 }
 
 func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, customerOutput string) error {
-	relative, err := filepath.Rel(configDir, outputDir)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+	if bareRoomLivePathEscapes(configDir, outputDir) {
 		return fmt.Errorf("run directory %q is not under config directory %q", outputDir, configDir)
 	}
 	if !strings.HasPrefix(filepath.Base(outputDir), "room-run-") {
 		return fmt.Errorf("run directory %q does not use the fresh room-run prefix", outputDir)
 	}
-
-	manifestPath := filepath.Join(outputDir, runtimeRooms.RoomReplayBundleManifestPath)
-	manifestData, err := os.ReadFile(manifestPath)
+	manifest, err := readBareRoomLiveManifest(outputDir, secret, customerInput, customerOutput)
 	if err != nil {
-		return fmt.Errorf("read terminal manifest: %w", err)
+		return err
 	}
-	if bytes.Contains(manifestData, []byte(secret)) {
-		return errors.New("terminal manifest contains the provider credential")
-	}
-	var manifest bareRoomLiveEvidenceManifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return fmt.Errorf("decode terminal manifest: %w", err)
-	}
-	if !manifest.Finalized || manifest.TerminationReason != string(runtimeRooms.RoomTerminationStopped) || manifest.Reason != string(runtimeRooms.RoomTerminationStopped) || manifest.Error != "" {
-		return fmt.Errorf("terminal manifest = %+v, want finalized stopped result without error", manifest)
-	}
-	wantKinds := map[string]string{defaultRoomCustomerID: "human", defaultRoomAgentID: "agent"}
-	if len(manifest.Participants) != len(wantKinds) || len(manifest.TurnCounts) != len(wantKinds) {
-		return fmt.Errorf("manifest participants=%d turns=%d, want two each", len(manifest.Participants), len(manifest.TurnCounts))
-	}
-	for id, kind := range wantKinds {
-		participant, ok := manifest.Participants[id]
-		if !ok || participant.Kind != kind || !participant.Connected {
-			return fmt.Errorf("manifest participant %q = %+v, want connected %s", id, participant, kind)
-		}
-		if id == defaultRoomCustomerID && (participant.Input != customerInput || participant.Output != customerOutput) {
-			return fmt.Errorf("manifest customer devices=%q/%q, want %q/%q", participant.Input, participant.Output, customerInput, customerOutput)
-		}
-		if manifest.TurnCounts[id] != 0 {
-			return fmt.Errorf("manifest participant %q turn count=%d, want zero scripted turns", id, manifest.TurnCounts[id])
-		}
-	}
-
 	wantArtifacts := []string{
 		"customer.wav", "customer.diagnostics", "customer.deltas",
 		"agent.wav", "agent.diagnostics", "agent.deltas",
 	}
 	for _, key := range wantArtifacts {
-		relativePath, ok := manifest.Artifacts[key]
-		if !ok || relativePath == "" {
-			return fmt.Errorf("terminal manifest omitted artifact %q", key)
-		}
-		artifactPath := filepath.Join(outputDir, filepath.FromSlash(relativePath))
-		artifactRelative, err := filepath.Rel(outputDir, artifactPath)
-		if err != nil || artifactRelative == ".." || strings.HasPrefix(artifactRelative, ".."+string(filepath.Separator)) || filepath.IsAbs(artifactRelative) {
-			return fmt.Errorf("artifact %q escapes run directory", key)
-		}
-		data, err := os.ReadFile(artifactPath)
-		if err != nil {
-			return fmt.Errorf("read artifact %q: %w", key, err)
-		}
-		if bytes.Contains(data, []byte(secret)) {
-			return fmt.Errorf("artifact %q contains the provider credential", key)
-		}
-		if strings.HasSuffix(key, ".wav") {
-			if len(data) < 44 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WAVE" {
-				return fmt.Errorf("artifact %q is not a readable WAV", key)
-			}
-			continue
-		}
-		scanner := bufio.NewScanner(bytes.NewReader(data))
-		for scanner.Scan() {
-			if line := bytes.TrimSpace(scanner.Bytes()); len(line) > 0 && !json.Valid(line) {
-				return fmt.Errorf("artifact %q contains invalid JSONL", key)
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("read artifact %q: %w", key, err)
+		if err := validateBareRoomLiveArtifact(outputDir, secret, key, manifest.Artifacts[key]); err != nil {
+			return err
 		}
 	}
 	entries, err := os.ReadDir(outputDir)
@@ -521,6 +476,83 @@ func validateBareRoomLiveArtifacts(outputDir, secret, configDir, customerInput, 
 		if strings.HasSuffix(entry.Name(), ".tmp") {
 			return fmt.Errorf("temporary artifact %q remained after teardown", entry.Name())
 		}
+	}
+	return nil
+}
+
+// bareRoomLivePathEscapes reports whether path is not strictly inside root.
+func bareRoomLivePathEscapes(root, path string) bool {
+	relative, err := filepath.Rel(root, path)
+	return err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative)
+}
+
+// readBareRoomLiveManifest decodes the terminal manifest and requires a clean
+// stopped result with two connected, unscripted participants.
+func readBareRoomLiveManifest(outputDir, secret, customerInput, customerOutput string) (bareRoomLiveEvidenceManifest, error) {
+	var manifest bareRoomLiveEvidenceManifest
+	manifestData, err := os.ReadFile(filepath.Join(outputDir, runtimeRooms.RoomReplayBundleManifestPath))
+	if err != nil {
+		return manifest, fmt.Errorf("read terminal manifest: %w", err)
+	}
+	if bytes.Contains(manifestData, []byte(secret)) {
+		return manifest, errors.New("terminal manifest contains the provider credential")
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		return manifest, fmt.Errorf("decode terminal manifest: %w", err)
+	}
+	if !manifest.Finalized || manifest.TerminationReason != string(runtimeRooms.RoomTerminationStopped) || manifest.Reason != string(runtimeRooms.RoomTerminationStopped) || manifest.Error != "" {
+		return manifest, fmt.Errorf("terminal manifest = %+v, want finalized stopped result without error", manifest)
+	}
+	wantKinds := map[string]string{defaultRoomCustomerID: "human", defaultRoomAgentID: "agent"}
+	if len(manifest.Participants) != len(wantKinds) || len(manifest.TurnCounts) != len(wantKinds) {
+		return manifest, fmt.Errorf("manifest participants=%d turns=%d, want two each", len(manifest.Participants), len(manifest.TurnCounts))
+	}
+	for id, kind := range wantKinds {
+		participant, ok := manifest.Participants[id]
+		if !ok || participant.Kind != kind || !participant.Connected {
+			return manifest, fmt.Errorf("manifest participant %q = %+v, want connected %s", id, participant, kind)
+		}
+		if id == defaultRoomCustomerID && (participant.Input != customerInput || participant.Output != customerOutput) {
+			return manifest, fmt.Errorf("manifest customer devices=%q/%q, want %q/%q", participant.Input, participant.Output, customerInput, customerOutput)
+		}
+		if manifest.TurnCounts[id] != 0 {
+			return manifest, fmt.Errorf("manifest participant %q turn count=%d, want zero scripted turns", id, manifest.TurnCounts[id])
+		}
+	}
+	return manifest, nil
+}
+
+// validateBareRoomLiveArtifact requires one manifest artifact to stay inside
+// the run directory, omit the credential, and be a readable WAV or JSONL file.
+func validateBareRoomLiveArtifact(outputDir, secret, key, relativePath string) error {
+	if relativePath == "" {
+		return fmt.Errorf("terminal manifest omitted artifact %q", key)
+	}
+	artifactPath := filepath.Join(outputDir, filepath.FromSlash(relativePath))
+	if bareRoomLivePathEscapes(outputDir, artifactPath) {
+		return fmt.Errorf("artifact %q escapes run directory", key)
+	}
+	data, err := os.ReadFile(artifactPath)
+	if err != nil {
+		return fmt.Errorf("read artifact %q: %w", key, err)
+	}
+	if bytes.Contains(data, []byte(secret)) {
+		return fmt.Errorf("artifact %q contains the provider credential", key)
+	}
+	if strings.HasSuffix(key, ".wav") {
+		if len(data) < 44 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WAVE" {
+			return fmt.Errorf("artifact %q is not a readable WAV", key)
+		}
+		return nil
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		if line := bytes.TrimSpace(scanner.Bytes()); len(line) > 0 && !json.Valid(line) {
+			return fmt.Errorf("artifact %q contains invalid JSONL", key)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read artifact %q: %w", key, err)
 	}
 	return nil
 }
