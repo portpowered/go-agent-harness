@@ -39,9 +39,6 @@ type RequestDependencies struct {
 	OpenImages        ImageOpener
 }
 
-// ImageOpener validates local image paths and returns their typed parts.
-type ImageOpener func([]string) ([]messages.ContentPart, error)
-
 // BuildRequest resolves one CLI request at the host boundary. It performs
 // only path/config admission and typed value conversion; the runtime owns
 // provider session lifecycle, tool execution, and media ordering.
@@ -346,18 +343,6 @@ func buildCapabilities(ctx context.Context, cfg *config.Config, request serviceS
 		Config: cfg, Timeout: request.ToolExecutionTimeout, BrowserToolsEnabled: request.BrowserToolsEnabled, Cancellation: request.CancellationIntent,
 		Diagnostics: request.ToolDiagnostics,
 	})
-}
-
-var errImageOpenerUnavailable = errors.New("live image opener is unavailable")
-
-func openImages(paths []string, opener ImageOpener) ([]messages.ContentPart, error) {
-	if len(paths) == 0 {
-		return nil, nil
-	}
-	if opener == nil {
-		return nil, errImageOpenerUnavailable
-	}
-	return opener(paths)
 }
 
 func hasAudioInput(request serviceSession.Request) bool {

@@ -3,12 +3,10 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -85,54 +83,6 @@ func (s *runState) noteTerminal(id string, event session.LiveEvent) {
 		s.terminals[id] = value
 	}
 	s.mu.Unlock()
-}
-
-func terminalMetadataFromEvent(event session.LiveEvent) terminalMetadata {
-	value := terminalMetadataFromLiveness(event.Liveness)
-	mergeTerminalMetadata(&value, terminalMetadataFromTerminal(event.Terminal))
-	return value
-}
-
-func terminalMetadataFromLiveness(liveness *session.LiveLivenessFailure) terminalMetadata {
-	if liveness == nil {
-		return terminalMetadata{}
-	}
-	return terminalMetadata{
-		classification: strings.TrimSpace(liveness.Classification),
-		reason:         string(liveness.TerminalReason),
-		provenance:     string(liveness.TerminalProvenance),
-		outputState:    string(liveness.OutputState),
-	}
-}
-
-func terminalMetadataFromTerminal(terminal *messages.SessionCloseValue) terminalMetadata {
-	if terminal == nil {
-		return terminalMetadata{}
-	}
-	return terminalMetadata{
-		classification: strings.TrimSpace(terminal.Classification),
-		reason:         string(terminal.TerminalReason),
-		provenance:     string(terminal.TerminalProvenance),
-		outputState:    string(terminal.OutputState),
-	}
-}
-
-func mergeTerminalMetadata(destination *terminalMetadata, source terminalMetadata) {
-	if destination == nil {
-		return
-	}
-	if destination.classification == "" {
-		destination.classification = source.classification
-	}
-	if destination.reason == "" {
-		destination.reason = source.reason
-	}
-	if destination.provenance == "" {
-		destination.provenance = source.provenance
-	}
-	if destination.outputState == "" {
-		destination.outputState = source.outputState
-	}
 }
 
 func (s *runState) snapshotActive() []*activeParticipant {
@@ -376,35 +326,6 @@ func (s *runState) finish(participant rooms.Participant, reason rooms.Participan
 	}
 	s.mu.Unlock()
 	s.stopWhenAgentsDone()
-}
-
-const (
-	silentProviderEmptyResponse = "silent_provider_empty_response"
-	silentProviderTimeout       = "silent_provider_timeout"
-)
-
-func terminalLivenessFailure(event session.LiveEvent) error {
-	if event.Liveness != nil {
-		classification := strings.TrimSpace(event.Liveness.Classification)
-		if classification == "" {
-			return nil
-		}
-		if classification == silentProviderEmptyResponse || classification == silentProviderTimeout {
-			return fmt.Errorf("%s: provider response produced no observable output", classification)
-		}
-		return nil
-	}
-	if event.Terminal == nil {
-		return nil
-	}
-	classification := strings.TrimSpace(event.Terminal.Classification)
-	if classification == "" && event.Terminal.TerminalReason == messages.TerminalReasonPartialOutput && event.Terminal.OutputState == messages.TerminalOutputNone {
-		classification = silentProviderEmptyResponse
-	}
-	if classification != silentProviderEmptyResponse && classification != silentProviderTimeout {
-		return nil
-	}
-	return fmt.Errorf("%s: provider response produced no observable output", classification)
 }
 
 // stopWhenAgentsDone closes a room that has no provider work left. Human

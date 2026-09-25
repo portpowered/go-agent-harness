@@ -68,8 +68,8 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	if err != nil {
 		return rooms.RoomResult{}, err
 	}
-	request = installRecorder(request, recorder)
 	delivery := newFinalTurnDelivery(r.clock, manifest)
+	request = installRecorder(request, recorder)
 	request.EventSink = deliveryEventSink{host: request.EventSink, delivery: delivery}
 
 	runCtx, cancel := context.WithCancelCause(ctx)
@@ -259,9 +259,7 @@ func finishMissingParticipants(state *runState, result rooms.RoomResult, manifes
 }
 
 func (r Runner) finalizeRun(result rooms.RoomResult, runErr error, manifest rooms.Manifest, request rooms.RoomRunOptions, recorder roomevidence.Recorder) (rooms.RoomResult, error) {
-	// Provider and admission failures can echo a participant credential; the
-	// host renders these values, so they carry the evidence redaction set.
-	result, runErr = redactRun(result, runErr, manifest, request)
+	result, runErr = planning.RedactRunFailure(result, runErr, manifest, request)
 	if request.OnParticipantTerminated != nil {
 		for _, participant := range manifest.Participants {
 			if value, ok := result.Participants[participant.ID]; ok {
