@@ -75,11 +75,17 @@ match fixture stems:
 | `s2s-v3c-barge-in-repeated-double-cancel.session.json` | `...-double-cancel` | negative control: cancels one response twice → fails `barge-in-cancel-once` (`stray or duplicate cancels`) |
 | `s2s-v3c-barge-in-repeated-duplicated-turn.session.json` | `...-duplicated-turn` | negative control: re-emits one delivered turn → fails naming `assistant_delivered: expected 4, actual 5` |
 
-Runtime-mutated controls in
-`agent-cli/test/integration/s2s_v3c_barge_in_repeated_test.go` apply the same
-violations to copies of the pristine fixture at test time (duplicate a
-delivered message block, drop a commit, duplicate a cancel) and must fail the
-matching assertion through the same CLI path.
+`TestProbeRunS2SV3CNegativeControlsFailNamingTheirInvariant`
+(`agent-cli/internal/transport/cli/probe_v3c_barge_in_repeated_test.go`) runs
+each committed negative control through the same `probe run --replay` CLI path
+and requires it to fail naming its invariant.
+
+`TestProbeRunS2SV3CRuntimeMutatedPositiveFixtureFails` (same file) guards the
+committed controls against drifting from the pristine fixture: it applies the
+violations at test time to a copy of the positive capture (duplicate the first
+`response.cancel`; drop the closing turn's `input_audio_buffer.commit`) and
+requires both to fail under the positive scenario ID, naming
+`barge-in-cancel-once` and `user_turns: expected 7, actual 6`.
 
 ## Reproduction
 
@@ -87,11 +93,8 @@ matching assertion through the same CLI path.
 # Probe-package unit coverage (registration + evaluation semantics)
 go test ./go-agent-loop/pkg/probe -run 'TestS2SV3C' -count=1 -v
 
-# CLI replay derivation + entrypoint behavior
-go test ./agent-cli/internal/cli -run 'TestProbeRunS2SV3C|TestDeriveBargeInObservationCountsV3CComposition' -count=1 -v
-
-# Integration suite over the committed fixtures (real CLI exec)
-go test ./agent-cli/test/integration -run 'TestS2SV3C' -count=1 -v
+# CLI replay derivation, entrypoint behavior, committed and runtime-mutated negative controls
+go test ./agent-cli/internal/transport/cli -run 'TestProbeRunS2SV3C' -count=1 -v
 
 # Direct CLI surface, single positive case
 (cd agent-cli && go run ./cmd/agent probe run s2s-v3c-barge-in-repeated \

@@ -217,7 +217,7 @@ func observabilityJSONPayload(t *testing.T, value map[string]any) json.RawMessag
 func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [][]byte {
 	t.Helper()
 
-	args := []string{"--replay", fixturePath, "--record-dir", recordDir}
+	args := []string{"--replay", fixturePath, "--record-dir", recordDir, "--audio-in-pacing", "unpaced"}
 	references := make([][]byte, 0, observabilityTurnCount)
 	for turn := 1; turn <= observabilityTurnCount; turn++ {
 		wavPath := locateCLIFixture(t, multiturnTurnWAVs[turn-1])
@@ -504,17 +504,18 @@ func TestSessionCommandConversationObservabilityProvesConversationFromArtifactsO
 	if err := assertConversationArtifactEvidence(root, observabilityInputTranscripts, observabilityReplies, references); err != nil {
 		t.Fatalf("on-disk artifacts do not prove the conversation: %v", err)
 	}
+	t.Run("negative control fails truncated artifacts", func(t *testing.T) {
+		assertObservabilityRejectsTruncatedArtifacts(t, root, references)
+	})
 }
 
-// TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArtifacts
-// proves the artifact-only assertions are not vacuous: against a truncated
-// session log and redacted reply audio copied from the same combined bundle,
-// the identical assertion fails and names both missing evidence classes.
-func TestSessionCommandConversationObservabilityNegativeControlFailsTruncatedArtifacts(t *testing.T) {
-	fixturePath := buildObservabilityReplayFixture(t)
-	root := t.TempDir()
-	references := runObservabilityConversation(t, fixturePath, root)
-
+// assertObservabilityRejectsTruncatedArtifacts proves the artifact-only
+// assertions are not vacuous: against a truncated session log and redacted
+// reply audio copied from the positive run's bundle, the identical assertion
+// fails and names both missing evidence classes. It mutates a copy of the
+// recorded evidence instead of replaying the session a second time.
+func assertObservabilityRejectsTruncatedArtifacts(t *testing.T, root string, references [][]byte) {
+	t.Helper()
 	negativeRoot := filepath.Join(t.TempDir(), "negative")
 	copyArtifactTree(t, root, negativeRoot)
 	truncateSessionLog(t, filepath.Join(negativeRoot, "session-log.jsonl"), observabilityTurnCount-1)

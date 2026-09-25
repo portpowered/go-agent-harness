@@ -5,7 +5,43 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+func TestParseAskArgs_AttachmentBeforePromptKeepsPrompt(t *testing.T) {
+	video := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(video, []byte("mp4 content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	prompt, paths := ParseAskArgs([]string{video, "is that a fish or a banana?"})
+	if prompt != "is that a fish or a banana?" {
+		t.Fatalf("prompt = %q, want the prompt that follows the attachment", prompt)
+	}
+	if !reflect.DeepEqual(paths, []string{video}) {
+		t.Fatalf("attachment paths = %#v, want %q", paths, video)
+	}
+}
+
+func TestLoadAskContentPart_MP4BecomesVideoPart(t *testing.T) {
+	video := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(video, []byte("mp4 content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	part, err := LoadAskContentPart(video)
+	if err != nil {
+		t.Fatalf("load .mp4 attachment: %v", err)
+	}
+	videoPart, ok := part.(messages.VideoPart)
+	if !ok {
+		t.Fatalf("content part = %T, want messages.VideoPart", part)
+	}
+	if string(videoPart.Bytes) != "mp4 content" || videoPart.MediaType != "video/mp4" {
+		t.Fatalf("video part = {%q, %q}, want the file bytes as video/mp4", videoPart.Bytes, videoPart.MediaType)
+	}
+}
 
 func TestParseAskArgs_PreservesPromptAndAttachmentIntent(t *testing.T) {
 	dir := t.TempDir()

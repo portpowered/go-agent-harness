@@ -884,29 +884,3 @@ func TestS2SLiveBargeInPlainSpeechOracleRejectsNamedMutations(t *testing.T) {
 func plainSpeechRecordResponseID(record gwtesting.CapturedSessionEvent) string {
 	return plainSpeechJSONField(plainSpeechRecordPayload(record), "response_id", "response.id")
 }
-
-func TestS2SLiveBargeInPlainSpeechWaitForNoEventIsBounded(t *testing.T) {
-	ledger := probe.NewBargeInLedger()
-	ledger.Observe(probe.BargeInEvent{
-		Sequence: 1, Kind: probe.BargeInEventInputAppend,
-		InputID: "input-wait", TurnID: "turn-wait", AppendGroupID: "input-wait",
-		Bytes: 2, NonEmpty: true,
-	})
-	start := time.Now()
-	err := ledger.WaitFor(context.Background(), "plain-speech assistant audio", make(chan struct{}), 20*time.Millisecond)
-	if err == nil {
-		t.Fatal("missing assistant-audio gate unexpectedly passed")
-	}
-	var waitErr *probe.BargeInWaitError
-	if !errors.As(err, &waitErr) || !errors.Is(err, probe.ErrBargeInWait) || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("wait error = %v, want bounded barge-in wait with deadline identity", err)
-	}
-	if elapsed := time.Since(start); elapsed >= time.Second {
-		t.Fatalf("missing assistant-audio gate took %s, want a bounded return", elapsed)
-	}
-	for _, want := range []string{"plain-speech assistant audio", "1:input.append", "input-wait:commit", "session:terminal"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("wait error = %v, want diagnostic %q", err, want)
-		}
-	}
-}

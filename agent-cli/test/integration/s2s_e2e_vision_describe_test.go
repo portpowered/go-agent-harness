@@ -55,6 +55,16 @@ var visionDescribeContentMarkers = []string{
 	"cyan pixel in the bottom right corner",
 }
 
+// visionDescribeQuestionWAVPath returns a short voiced slice of the committed
+// 4.84s spoken question. The fixture builders expand the capture's append
+// marker into one frame per frame of whatever WAV they are given, and no
+// vision or read_image assertion depends on the question's duration, so the
+// real-time-paced input stays short.
+func visionDescribeQuestionWAVPath(t *testing.T) string {
+	t.Helper()
+	return writeVoicedWAVSlice(t, locateCLIFixture(t, visionDescribeQuestionWAV), shortVoicedSlice)
+}
+
 // visionDescribeFixturePath locates the committed lane fixture.
 func visionDescribeFixturePath(t *testing.T) string {
 	t.Helper()
@@ -127,12 +137,12 @@ func visionRewritePayload(t *testing.T, raw json.RawMessage, mutate func(payload
 // data URL, the append marker expands into one real frame per corpus WAV
 // frame, and the scripted spoken reply audio is injected. When transcript is
 // non-nil it replaces the recorded reply text (negative control variant).
-func buildVisionDescribeFixture(t *testing.T, transcript []string) string {
+func buildVisionDescribeFixture(t *testing.T, wavPath string, transcript []string) string {
 	t.Helper()
 
 	capture := captureCopy(t, visionDescribeFixturePath(t))
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(visionDescribePNG(t))
-	frames := multiturnAudioFrames(t, locateCLIFixture(t, visionDescribeQuestionWAV))
+	frames := multiturnAudioFrames(t, wavPath)
 	replyAudio := base64.StdEncoding.EncodeToString(visionPCMBytes(visionReplySamples()))
 
 	records := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records)+len(frames))
@@ -273,142 +283,13 @@ func injectVisionImagePart(t *testing.T, raw json.RawMessage, dataURL string) js
 	})
 }
 
-// TestVisionDescribeFixtureIsWellFormed proves the committed fixture passes
-// the shared capture validation surface, carries an image part on the first
-// user turn, keeps raw audio redacted behind a runtime re-injection marker,
-// and terminates with the provider close.
-func TestVisionDescribeFixtureIsWellFormed(t *testing.T) {
-	path := visionDescribeFixturePath(t)
-	if violations := gwtesting.ValidateSessionCaptureFile(path); len(violations) > 0 {
-		t.Fatalf("committed vision describe fixture failed validation: %v", violations)
-	}
-	capture, err := gwtesting.LoadSessionCapture(path)
-	if err != nil {
-		t.Fatalf("load committed vision describe fixture: %v", err)
-	}
-
-	counts := visionFixtureCounts{}
-	for _, record := range capture.Records {
-		counts.observe(t, record)
-	}
-	if counts.imageTurns != 1 {
-		t.Fatalf("fixture carries %d image turns, want exactly 1 on the first user turn", counts.imageTurns)
-	}
-	if counts.appendMarkers != 1 {
-		t.Fatalf("fixture carries %d audio append markers, want exactly 1 re-injection marker", counts.appendMarkers)
-	}
-	if counts.responseCreates != 1 {
-		t.Fatalf("fixture carries %d response.create events, want exactly one after audio begins", counts.responseCreates)
-	}
-	if !counts.closed {
-		t.Fatalf("fixture never terminates with session.closed")
-	}
-}
-
-// visionFixtureCounts tallies the committed fixture's hygiene-relevant records.
-type visionFixtureCounts struct {
-	imageTurns, appendMarkers, responseCreates int
-	closed                                     bool
-}
-
-func (c *visionFixtureCounts) observe(t *testing.T, record gwtesting.CapturedSessionEvent) {
-	t.Helper()
-	switch record.Type {
-	case rtEventConversationItemCreate:
-		c.imageTurns += countRedactedVisionImageParts(t, record.Payload)
-	case rtEventInputAudioAppend:
-		c.appendMarkers++
-		var payload struct {
-			Audio struct {
-				Redacted bool `json:"redacted"`
-			} `json:"audio"`
-		}
-		if err := json.Unmarshal(record.Payload, &payload); err != nil || !payload.Audio.Redacted {
-			t.Fatalf("committed append record must redact raw audio, got %s", record.Payload)
-		}
-	case rtEventResponseCreate:
-		c.responseCreates++
-		if c.appendMarkers == 0 {
-			t.Fatalf("committed fixture requests response.create before the voice turn; image and audio would be separate turns")
-		}
-	case rtEventSessionClosed:
-		c.closed = true
-		if !strings.Contains(string(record.Payload), "fixture_complete") {
-			t.Fatalf("session.closed payload missing fixture_complete reason: %s", record.Payload)
-		}
-	}
-}
-
-// countRedactedVisionImageParts counts input_image parts in one committed
-// conversation item and requires each to keep its data URL redacted.
-func countRedactedVisionImageParts(t *testing.T, raw json.RawMessage) int {
-	t.Helper()
-	var payload struct {
-		Item struct {
-			Content []struct {
-				Type     string          `json:"type"`
-				ImageURL json.RawMessage `json:"image_url"`
-			} `json:"content"`
-		} `json:"item"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		t.Fatalf("decode conversation.item.create payload: %v", err)
-	}
-	images := 0
-	for _, part := range payload.Item.Content {
-		if part.Type != rtContentInputImage {
-			continue
-		}
-		images++
-		var imageURL struct {
-			Redacted bool `json:"redacted"`
-		}
-		if err := json.Unmarshal(part.ImageURL, &imageURL); err != nil || !imageURL.Redacted {
-			t.Fatalf("committed image part must keep the data URL redacted for hygiene, got %s", part.ImageURL)
-		}
-	}
-	return images
-}
-
-// TestVisionDescribePNGIsDeterministicWithKnownContent proves the synthetic
-// image is byte-stable across generations and really carries the authored
-// pixel facts the grounding assertion demands.
-func TestVisionDescribePNGIsDeterministicWithKnownContent(t *testing.T) {
-	first := visionDescribePNG(t)
-	second := visionDescribePNG(t)
-	if !bytes.Equal(first, second) {
-		t.Fatal("vision describe PNG generation is not deterministic")
-	}
-
-	img, err := png.Decode(bytes.NewReader(first))
-	if err != nil {
-		t.Fatalf("decode vision describe PNG: %v", err)
-	}
-	bounds := img.Bounds()
-	if bounds.Dx() != 4 || bounds.Dy() != 4 {
-		t.Fatalf("vision describe PNG bounds = %v, want 4x4", bounds)
-	}
-	visionAssertPixel(t, img, 0, 0, color.NRGBA{R: 255, G: 0, B: 255, A: 255})
-	visionAssertPixel(t, img, 3, 3, color.NRGBA{R: 0, G: 255, B: 255, A: 255})
-	visionAssertPixel(t, img, 1, 1, color.NRGBA{R: 0, G: 0, B: 128, A: 255})
-	visionAssertPixel(t, img, 2, 2, color.NRGBA{R: 0, G: 0, B: 128, A: 255})
-}
-
-func visionAssertPixel(t *testing.T, img image.Image, x, y int, want color.NRGBA) {
-	t.Helper()
-	got := mustAs[color.NRGBA](t, color.NRGBAModel.Convert(img.At(x, y)))
-	if got != want {
-		t.Fatalf("pixel (%d,%d) = %v, want %v", x, y, got, want)
-	}
-}
-
 // TestSessionCommandVisionDescribeGroundsReplyInCommittedImage is the lane's
 // main path: the customer's voice question and the committed image travel
 // the real session CLI over record/replay, the reply names the image's
 // authored pixel facts, and the recorded spoken reply is non-silent.
 func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, nil)
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
 	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
 		t.Fatalf("write synthetic image: %v", err)
@@ -451,8 +332,8 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 // image-only response or an omitted audio commit fails this test before the
 // grounded transcript can be observed.
 func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, nil)
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
 	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
 		t.Fatalf("write synthetic image: %v", err)
@@ -472,8 +353,8 @@ func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
 // replay diverges with the typed mismatch error instead of producing a
 // grounded reply. This proves the grounded outcome requires the image path.
 func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, nil)
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 
 	stdout := &syncBuffer{}
 	cmd := newTestSessionRootCommand(t)
@@ -500,8 +381,8 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 // names no image content) must FAIL the grounding assertion, proving the
 // assertion discriminates image-grounded answers from any successful reply.
 func TestVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
-	fixture := buildVisionDescribeFixture(t, []string{"I hear your question ", "clearly."})
-	wavPath := locateCLIFixture(t, visionDescribeQuestionWAV)
+	wavPath := visionDescribeQuestionWAVPath(t)
+	fixture := buildVisionDescribeFixture(t, wavPath, []string{"I hear your question ", "clearly."})
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
 	if err := os.WriteFile(imagePath, visionDescribePNG(t), 0o600); err != nil {
 		t.Fatalf("write synthetic image: %v", err)

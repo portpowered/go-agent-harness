@@ -22,13 +22,11 @@ package integration
 //     divergence — never by timeout.
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -37,7 +35,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -370,16 +367,11 @@ func assertToolResultFollowUpOrdering(t *testing.T, wirePath string, resultSeque
 // verbatim on the provider exchange -> the spoken reply (rendered transcript
 // plus audible recorded audio) quoting values unique to that result.
 func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing.T) {
+	// The representative real-time tool-call conversation: it streams the
+	// full 2.75s committed corpus at real pace, while the controls stream a
+	// short slice (conversationFixtureInputs).
 	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
+	reply := toolSingleCallReplyWindow(t, wavPath)
 
 	executor := &conversationResultExecutor{result: toolResultPositive}
 	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
@@ -426,16 +418,7 @@ func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing
 // transcript-reflection assertion fails naming the mismatched expectation —
 // never via timeout.
 func TestSessionToolCallConversationDifferentResultFailsReflection(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
+	wavPath, reply := conversationFixtureInputs(t)
 
 	executor := &conversationResultExecutor{result: toolResultControl}
 	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
@@ -450,8 +433,12 @@ func TestSessionToolCallConversationDifferentResultFailsReflection(t *testing.T)
 	// The production command may expose the typed replay mismatch directly or
 	// through an outer capture wrapper. The causal contract is the precise
 	// function_call_output boundary and JSON pointer, not that incidental wrapper.
+	outputs := functionCallOutputsInExchange(t, wirePath)
+	if len(outputs) != 1 {
+		t.Fatalf("authored exchange contains %d function_call_output events, want exactly 1", len(outputs))
+	}
 	if !strings.Contains(runErr.Error(), "replay mismatch") ||
-		!strings.Contains(runErr.Error(), `expected event type "conversation.item.create" at sequence 101`) ||
+		!strings.Contains(runErr.Error(), fmt.Sprintf(`expected event type "conversation.item.create" at sequence %d`, outputs[0].Sequence)) ||
 		!strings.Contains(runErr.Error(), "JSON pointer /item/output") {
 		t.Fatalf("control failure %q is not the deterministic replay divergence at the function_call_output frame", runErr)
 	}

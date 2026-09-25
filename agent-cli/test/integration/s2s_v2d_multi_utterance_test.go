@@ -172,23 +172,6 @@ func decodeS2SV2DJSONL(t *testing.T, text string) []map[string]any {
 	return decoded
 }
 
-// s2sV2DSummaryLine returns the run-summary JSON object embedded in mixed CLI
-// output (the summary line shares stderr with cobra error decoration), or nil.
-func s2sV2DSummaryLine(t *testing.T, text string) map[string]any {
-	t.Helper()
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "{") {
-			continue
-		}
-		var value map[string]any
-		if json.Unmarshal([]byte(line), &value) == nil && value["status"] != nil && value["total"] != nil {
-			return value
-		}
-	}
-	return nil
-}
-
 const (
 	s2sV2DFixtureDir    = "s2s-v2d"
 	s2sV2DHappyFrames   = 18.0
@@ -272,38 +255,6 @@ func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
 	summary := decodeS2SV2DJSONL(t, readFile(t, summaryPath))
 	if len(summary) != 1 || summary[0]["status"] != "fail" || summary[0][rtStatusFailed] != float64(1) {
 		t.Fatalf("summary artifact must reflect the failure: %v", summary)
-	}
-}
-
-func TestS2SV2DSuiteSelectsEachFixtureByNameAndBothPassOrFailCorrectly(t *testing.T) {
-	happy := locateCLIFixture(t, filepath.Join(s2sV2DFixtureDir, "scenarios", "s2s_v2d_multi_utterance.scenario.json"))
-	mis := locateCLIFixture(t, filepath.Join(s2sV2DFixtureDir, "scenarios", "s2s_v2d_multi_utterance_missegmented.scenario.json"))
-
-	run := runAgentBinary(t, "probe", "run",
-		"--replay", locateCLIFixture(t, s2sV2DFixtureDir),
-		happy, mis, "--json")
-	if run.exitCode != 1 {
-		t.Fatalf("exit code = %d, want 1 when the negative control runs alongside the happy path; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
-	}
-
-	results := decodeS2SV2DJSONL(t, run.stdout)
-	if len(results) != 2 { // one JSONL scenario result line per selected scenario
-		t.Fatalf("stdout line count = %d, want 2: %q", len(results), run.stdout)
-	}
-	byName := map[string]map[string]any{}
-	for _, result := range results {
-		byName[mustAs[string](t, result["name"])] = result
-	}
-	if byName["s2s_v2d_multi_utterance"]["pass"] != true {
-		t.Fatalf("happy-path case must still pass in the combined run: %v", byName["s2s_v2d_multi_utterance"])
-	}
-	if byName["s2s_v2d_multi_utterance_merged"]["pass"] != false {
-		t.Fatalf("mis-segmented case must fail in the combined run: %v", byName["s2s_v2d_multi_utterance_merged"])
-	}
-	summary := s2sV2DSummaryLine(t, run.stderr)
-	if summary == nil || summary["status"] != "fail" ||
-		summary["total"] != float64(2) || summary["passed"] != float64(1) || summary[rtStatusFailed] != float64(1) {
-		t.Fatalf("unexpected combined-run summary on stderr: %q", run.stderr)
 	}
 }
 

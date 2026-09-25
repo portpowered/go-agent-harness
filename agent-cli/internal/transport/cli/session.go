@@ -239,6 +239,7 @@ type SessionCommand struct {
 	feedbackWarningWriter   io.Writer
 	holdToneConfig          *serviceSession.HoldToneConfig
 	imagePaths              []string
+	audioInPacing           runtimeDevices.FilePacing
 }
 
 // sessionVoiceFlagValue validates the public voice flag. The service owns the
@@ -409,12 +410,10 @@ func (c *SessionCommand) Generate() *cobra.Command {
 	signaling, mediaSource := "", ""
 	var maxDuration time.Duration
 	var waitForClose, noInputTranscription, computerUse, experimentalTools, noTerminalTools bool
-	var audioInTurns []string
+	var audioInTurns, audioInterrupts []string
 	var audioInTurnBarge bool
-	var audioInterrupts []string
 	var audioInterruptTool string
-	var audioInDevice devicegw.DeviceID
-	var audioOutDevice devicegw.DeviceID
+	var audioInDevice, audioOutDevice devicegw.DeviceID
 	var audioDeviceServer string
 	browserFlags := flags.NewBrowserFlags()
 	voiceFlag := &sessionVoiceFlagValue{target: &voice}
@@ -524,6 +523,7 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(t.mediaSource, "media-source", "", "Deferred/unavailable WebRTC receive-only external media source; requires --transport webrtc and cannot be combined with --audio-in")
 	cmd.Flags().StringVar(t.transport, "transport", SessionTransportWebSocket, "Session transport: ws (default, supported) or webrtc (deferred/unavailable customer path)")
 	cmd.Flags().StringVar(t.signaling, "signaling", "", "Deferred/unavailable WebRTC signaling endpoint; customer-reachable network signaling is not wired yet; requires --transport webrtc, and --transport webrtc requires this flag")
+	registerSessionPacingFlag(cmd, &c.audioInPacing)
 	registerSessionBrowserFlags(cmd, t.browserFlags)
 	cmd.AddCommand(NewSessionSelfPlayCommand(c.globalFlags, c.selfPlayService).Generate())
 }

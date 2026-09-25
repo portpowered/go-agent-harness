@@ -419,8 +419,8 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
 		"--system-prompt", "none",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn2.wav"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -510,8 +510,8 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 		"--model", "gpt-realtime",
 		"--api-key", "test-key",
 		"--system-prompt", "none",
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn1.wav"),
-		"--audio-in-turn", locateCLIFixture(t, "multiturn_turn2.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
+		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn2.wav"),
 		"--audio-in-turn-barge",
 	})
 

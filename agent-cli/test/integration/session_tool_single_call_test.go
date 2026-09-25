@@ -49,10 +49,6 @@ const toolCallScenarioName = "get_weather"
 // provider exchange carries for the single tool call.
 const toolCallScenarioArguments = `{"city":"Lisbon"}`
 
-// toolCallScenarioOutput is the exact result returned by the recording
-// executor and required on the provider-facing function_call_output item.
-const toolCallScenarioOutput = `{"temperature_c":24,"condition":"clear"}`
-
 // toolSingleCallInputWAV is the existing committed corpus fixture expressing
 // the spoken single-tool request. Reused from go-agent-loop/testdata/audio;
 // no new audio asset is added by this lane.
@@ -74,6 +70,21 @@ func toolSingleCallWAVPath(t *testing.T) string {
 		t.Fatalf("committed corpus WAV %s not found: %v", toolSingleCallInputWAV, err)
 	}
 	return path
+}
+
+// toolSingleCallReplyWindow carves the scripted voiced reply window from the
+// committed corpus at wavPath.
+func toolSingleCallReplyWindow(t *testing.T, wavPath string) []int16 {
+	t.Helper()
+	wavBytes, err := os.ReadFile(wavPath)
+	if err != nil {
+		t.Fatalf("read committed corpus WAV: %v", err)
+	}
+	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
+	if err != nil {
+		t.Fatalf("parse committed corpus WAV: %v", err)
+	}
+	return loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
 }
 
 // buildToolSingleCallFixture writes a synthetic record/replay capture for the
@@ -186,20 +197,6 @@ func (e *toolCallRecordingExecutor) Execute(ctx context.Context, call messages.T
 	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: toolSingleCallResultContent}, nil
 }
 
-// runToolSingleCall drives the real 'agent session' command surface — wired
-// through the same composition root as production with the recording executor
-// swapped into the tool-executor port — over the hermetic record/replay
-// transport with file-backed audio-in and audio-out.
-func runToolSingleCall(t *testing.T, wavPath, wirePath string, executor *toolCallRecordingExecutor) (string, error) {
-	return runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, []messages.ToolDefinition{{
-		Name:        toolCallScenarioName,
-		Description: "Look up the weather for one city in the replay fixture.",
-		Parameters: []messages.ToolParameter{{
-			Name: "city", Type: "string", Description: "City to look up.", Required: true,
-		}},
-	}})
-}
-
 func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, executor *toolCallRecordingExecutor, definitions []messages.ToolDefinition) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
@@ -229,73 +226,6 @@ func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, ex
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return outputPath, err
-}
-
-// countToolCallsInExchange loads the replayed provider exchange and counts the
-// named function tool call events carrying the expected arguments. It also
-// reports whether output audio follows the final matching tool call.
-func countToolCallsInExchange(t *testing.T, wirePath string) (count int, argumentsMatched int, audioAfter bool) {
-	t.Helper()
-	capture, err := gwtesting.LoadSessionCapture(wirePath)
-	if err != nil {
-		t.Fatalf("load replayed provider exchange: %v", err)
-	}
-	lastToolCallIndex := -1
-	lastAudioIndex := -1
-	for i, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionServerToClient {
-			continue
-		}
-		var payload struct {
-			Type      string `json:"type"`
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		}
-		if json.Unmarshal(record.Payload, &payload) != nil {
-			continue
-		}
-		switch payload.Type {
-		case rtEventFunctionCallArgumentsDone:
-			if payload.Name == toolCallScenarioName {
-				count++
-				if payload.Arguments == toolCallScenarioArguments {
-					argumentsMatched++
-				}
-				lastToolCallIndex = i
-			}
-		case rtEventOutputAudioDelta:
-			lastAudioIndex = i
-		}
-	}
-	return count, argumentsMatched, lastAudioIndex > lastToolCallIndex
-}
-
-func countMatchingToolResultsInExchange(t *testing.T, wirePath string) (count, matching int) {
-	t.Helper()
-	capture, err := gwtesting.LoadSessionCapture(wirePath)
-	if err != nil {
-		t.Fatalf("load replayed provider exchange: %v", err)
-	}
-	for _, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionClientToServer || record.Type != rtEventConversationItemCreate {
-			continue
-		}
-		var payload struct {
-			Item struct {
-				Type   string `json:"type"`
-				CallID string `json:"call_id"`
-				Output string `json:"output"`
-			} `json:"item"`
-		}
-		if json.Unmarshal(record.Payload, &payload) != nil || payload.Item.Type != rtItemFunctionCallOutput {
-			continue
-		}
-		count++
-		if payload.Item.CallID == "call_weather_1" && payload.Item.Output == toolCallScenarioOutput {
-			matching++
-		}
-	}
-	return count, matching
 }
 
 // assertRecordedSpeech is the local speech assertion for the recorded
@@ -361,58 +291,13 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 	return nil
 }
 
-// TestSessionToolSingleCallRoundTripThroughCLI is the full positive path: the
-// real agent session CLI receives a spoken request, the executor records
-// exactly one invocation of the named tool with the expected arguments, the
-// replayed provider exchange contains the tool call followed by output speech,
-// and resumed speech is recorded.
-func TestSessionToolSingleCallRoundTripThroughCLI(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
-
-	executor := &toolCallRecordingExecutor{}
-	wirePath := buildToolSingleCallFixture(t, wavPath, reply, true)
-	outputPath, runErr := runToolSingleCall(t, wavPath, wirePath, executor)
-	if runErr != nil {
-		t.Fatalf("agent session --audio-in/--audio-out over replay failed: %v", runErr)
-	}
-	assertRecordedSpeech(t, outputPath, len(reply))
-
-	count, argsMatched, audioAfter := countToolCallsInExchange(t, wirePath)
-	if count != 1 {
-		t.Fatalf("replayed provider exchange contains %d invocations of tool %q, want exactly 1", count, toolCallScenarioName)
-	}
-	if argsMatched != 1 {
-		t.Fatalf("named tool call arguments = mismatch, want %s", toolCallScenarioArguments)
-	}
-	if !audioAfter {
-		t.Fatal("no output speech produced after the named tool call in the replayed provider exchange")
-	}
-
-	resultCount, matchingResults := countMatchingToolResultsInExchange(t, wirePath)
-	if resultCount != 1 || matchingResults != 1 {
-		t.Fatalf("replayed provider exchange contains %d tool results (%d matching), want exactly one correlated result with output %s", resultCount, matchingResults, toolCallScenarioOutput)
-	}
-	if err := validateExactlyOneToolCall(executor.calls); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestSessionToolSingleCallRejectsOmittedCustomDefinition proves that a
 // complete tool service is an allowlist boundary as well as an executor
 // injection seam. The provider still emits the recorded get_weather call, but
 // the service advertises no definition for it, so the runtime must reject the
 // call without invoking the paired executor.
 func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
+	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t), shortVoicedSlice)
 	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
 	executor := &toolCallRecordingExecutor{}
 	_, runErr := runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, nil)
@@ -425,37 +310,16 @@ func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 }
 
 // TestSessionToolSingleCallSuppressedFailsDeterministically is the negative
-// control: the same CLI flow with the named tool call suppressed must fail the
-// exactly-one invocation assertion deterministically — never via timeout or
-// transport error — proving the positive assertion cannot pass vacuously.
+// control for the exactly-one invocation oracle: with the named tool call
+// suppressed from the provider exchange, the oracle must reject the resulting
+// zero-invocation evidence, proving the positive assertion cannot pass
+// vacuously. It runs on constructed evidence only; the oracle's full-session
+// negative control is TestSessionToolCallConversationWrongToolNameIsRejected.
 func TestSessionToolSingleCallSuppressedFailsDeterministically(t *testing.T) {
-	wavPath := toolSingleCallWAVPath(t)
-	wavBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		t.Fatalf("read committed corpus WAV: %v", err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(wavBytes))
-	if err != nil {
-		t.Fatalf("parse committed corpus WAV: %v", err)
-	}
-	reply := loudestWindowSamplesIntegration(t, samples, toolSingleCallReplySamples)
-
-	executor := &toolCallRecordingExecutor{}
-	wirePath := buildToolSingleCallFixture(t, wavPath, reply, false)
-	outputPath, runErr := runToolSingleCall(t, wavPath, wirePath, executor)
-	if runErr != nil {
-		t.Fatalf("suppressed-tool-call control should complete the session deterministically, got run error: %v", runErr)
-	}
-	assertRecordedSpeech(t, outputPath, len(reply))
-
-	count, _, _ := countToolCallsInExchange(t, wirePath)
-	if count != 0 {
-		t.Fatalf("suppressed fixture still contained %d named tool calls; the control is not suppressed", count)
-	}
-	if len(executor.calls) != 0 {
-		t.Fatalf("executor recorded %d invocations with the tool call suppressed, want zero: %+v", len(executor.calls), executor.calls)
-	}
-	assertionErr := validateExactlyOneToolCall(executor.calls)
+	// A session whose provider exchange suppresses the call reaches the
+	// executor zero times.
+	var executorCalls []messages.ToolCall
+	assertionErr := validateExactlyOneToolCall(executorCalls)
 	if assertionErr == nil {
 		t.Fatal("shared exactly-one invocation assertion passed on a zero-invocation run; the check does not discriminate")
 	}

@@ -53,5 +53,5 @@ go test ./go-llm-gateway/pkg/providers/openai ./go-llm-gateway/pkg/providers/gro
 go test ./go-llm-gateway/pkg/inference
 go test ./agent-cli/internal/agent
 go test ./agent-cli/internal/services -run 'TestRunSession_RecordFlushesCaptureWhenContextCanceled|TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation|TestRunAgentLoopSession_ReturnsOnCleanDoneSignal|TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError|TestRunSession_SessionProviderCloseExitsPromptly'
-go test ./agent-cli/test/integration -run 'TestSessionCommand_.*Replay.*|TestRecordReplaySession'
+go test ./agent-cli/test/integration -run 'TestSessionCommand_.*Replay.*'
 ```

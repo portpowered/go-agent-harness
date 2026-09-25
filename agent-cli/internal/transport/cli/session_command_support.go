@@ -147,7 +147,7 @@ func (c *SessionCommand) buildSessionRequest(cmd *cobra.Command, args []string, 
 		AudioInTurnBarge: state.AudioTurnBarge, InteractiveDevices: browserToolsInteractive || passiveLive || bareSession,
 		TraceAudio: state.TraceAudio, RecordDirectory: state.RecordDirectory, AudioOutputPath: state.AudioOutputPath, MaxDuration: state.MaxDuration, TextSeed: serviceSession.TextSeed{Value: state.Prompt, Present: cmd.Flags().Changed("prompt")},
 		AudioInput: audioInput, AudioTurns: append([]string(nil), state.AudioTurns...), AudioInterrupts: append([]string(nil), state.AudioInterrupts...),
-		AudioInterruptTool: state.AudioInterruptTool, SystemPrompt: c.askFlags.SystemPrompt, ImagePaths: append([]string(nil), c.imagePaths...),
+		AudioInterruptTool: state.AudioInterruptTool, AudioInputPacing: c.audioInPacing, SystemPrompt: c.askFlags.SystemPrompt, ImagePaths: append([]string(nil), c.imagePaths...),
 		AudioInputDevice: string(state.AudioInputDevice), AudioOutputDevice: string(state.AudioOutputDevice), AudioInputDevicePresent: cmd.Flags().Changed("audio-in-device"), AudioOutputDevicePresent: cmd.Flags().Changed("audio-out-device"),
 		AudioDeviceServer: state.AudioDeviceServer, HoldToneConfig: c.holdToneConfig, FeedbackWarningWriter: c.feedbackWarningWriter, ComputerUse: state.ComputerUse, ExperimentalTools: state.ExperimentalTools, NoTerminalTools: state.NoTerminalTools,
 	}, nil
@@ -261,4 +261,45 @@ func initializeRuntimeLiveCapabilities(ctx context.Context, capabilities *Sessio
 		}
 	}
 	return nil
+}
+
+// sessionAudioInPacingFlag is the hidden test-harness option that selects how
+// finite file audio inputs (--audio-in, --audio-in-turn, --audio-interrupt)
+// are paced. The default is the production real-time cadence; hermetic tests
+// against a scripted provider may accelerate ("20x") or disable ("unpaced")
+// it. Pacing never changes which samples are sent, their order, or turn
+// boundaries.
+const sessionAudioInPacingFlag = "audio-in-pacing"
+
+// filePacingFlag binds a runtime FilePacing to a pflag value through its
+// text encoding ("realtime", "unpaced", "20x").
+type filePacingFlag struct {
+	target *runtimeDevices.FilePacing
+}
+
+func (f *filePacingFlag) String() string {
+	if f.target == nil {
+		return runtimeDevices.FilePacing{}.String()
+	}
+	return f.target.String()
+}
+
+func (f *filePacingFlag) Set(value string) error {
+	var pacing runtimeDevices.FilePacing
+	if err := pacing.UnmarshalText([]byte(value)); err != nil {
+		return err
+	}
+	*f.target = pacing
+	return nil
+}
+
+func (f *filePacingFlag) Type() string { return "pacing" }
+
+// registerSessionPacingFlag registers the hidden --audio-in-pacing option.
+// MarkHidden fails only for an unknown name, a programming error.
+func registerSessionPacingFlag(cmd *cobra.Command, target *runtimeDevices.FilePacing) {
+	cmd.Flags().Var(&filePacingFlag{target: target}, sessionAudioInPacingFlag, "Test harness: deliver finite file audio inputs at realtime (default), unpaced, or a speed multiplier such as 20x")
+	if err := cmd.Flags().MarkHidden(sessionAudioInPacingFlag); err != nil {
+		panic(err)
+	}
 }

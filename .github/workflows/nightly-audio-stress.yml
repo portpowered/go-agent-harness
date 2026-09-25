@@ -4,8 +4,10 @@ name: Nightly audio stress
 # run on every pull request inside the agent-cli integration coverage job
 # (YUI_AUDIO_STRESS=1: 40 fresh agent/device process pairs, ~140 CPU-s on a
 # 4-vCPU runner already running the timing-bound integration shards). They
-# run here once a day against main instead, and on demand. Locally:
-# `make test-audio-stress AUDIO_STRESS_COUNT=N`.
+# run here once a day against main instead, and on demand. The same gate
+# holds the real-time device-cadence tool continuations (all but
+# test45/captured_cadence, which stays in the pull-request corpus), so they run
+# here too. Locally: `make test-audio-stress AUDIO_STRESS_COUNT=N`.
 #
 # A scheduled failure opens (or comments on) a "Nightly audio stress failed"
 # issue, so a regression is noticed without anyone watching the Actions tab.
@@ -16,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       count:
-        description: Repetitions of the 20-trial Test45/Test46 stress pair.
+        description: Repetitions of the 20-trial Test45/Test46 stress pair and the device-cadence tool continuations.
         required: false
         default: "4"
   # Exercise the workflow itself when it changes.

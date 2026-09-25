@@ -144,7 +144,7 @@ GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@v2.17.0
 PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional/...
-AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestRecordReplaySession|TestSessionReplayFixture_.*|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
+AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
 FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board factory.scripts.tests.test_worktree_cleanup
 RELEASE_VERSION ?= v0.0.2
@@ -466,18 +466,20 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 # The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
-# trials each per repetition) skip unless YUI_AUDIO_STRESS=1. They hunt rare
+# trials each per repetition) and the real-time device-cadence deliveries of
+# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio other than
+# test45/captured_cadence skip unless YUI_AUDIO_STRESS=1. They hunt rare
 # races rather than prove behavior, so pull requests do not run them (their
-# test45/test46 topologies run once per delivery in
+# test45/test46 topologies run once per remaining delivery in
 # TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio); the scheduled
 # Nightly audio stress workflow runs this target with the coverage job's
 # build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
 AUDIO_STRESS_COUNT ?= 1
 test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
 	@set -euo pipefail; \
-	echo "==> test-audio-stress Test45/Test46 high-rate tool audio, $(AUDIO_STRESS_COUNT) repetition(s) of 20 trials each"; \
+	echo "==> test-audio-stress Test45/Test46 high-rate tool audio (20 trials each) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone \
-		-run '^TestAgentBinaryTest4[56]HighRateToolAudioRegression$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+		-run '^TestAgentBinary(Test4[56]HighRateToolAudioRegression|ToolContinuationPreservesRemoteDeviceAudio)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \

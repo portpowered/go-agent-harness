@@ -42,6 +42,7 @@ func openFileMedia(request serviceSession.Request, out io.Writer, liveRequest ru
 		// fixed-frame reads rather than the count-aware finite source contract.
 		FrameInput: request.ReplayPath != "" && liveRequest.ReplayPlan != nil && liveRequest.ReplayPlan.InputAudioSampleRate <= 0,
 		Scheduler:  deps.FileDeviceService.Scheduler,
+		Pacing:     request.AudioInputPacing,
 		Labels:     cliFileMediaLabels(),
 	}
 	if request.AudioInput.Present {

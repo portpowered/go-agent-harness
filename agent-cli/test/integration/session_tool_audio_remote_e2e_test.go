@@ -75,6 +75,7 @@ func TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel() // independent process pairs draining at device cadence
 			promptBytes := 0
 			if testCase.naturalClose {
 				promptBytes = 32
@@ -123,14 +124,12 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 // The shipped session command talks to a real local WebSocket provider and a
 // separately built fixture-controlled tool executor. Playback crosses the
 // audio-device-server HTTP boundary while its manual callback clock advances.
-// captured_cadence and slow_device keep that clock at their device cadence for
-// the whole run: the provider finishes sending within a few ticks, so nearly
-// all playback, including every response boundary at the device edge, happens
-// while the queue drains. The other deliveries vary the provider/tool side
-// and drain on the accelerated clock (remoteToolAudioDrainInterval). The
-// assertion sees only network protocol observations, process-owned tool
-// observations, and device-rendered PCM; it does not inspect a session queue,
-// sink generation, or any other playback implementation state.
+// captured_cadence and slow_device (see requireRemoteToolAudioCadenceSlot)
+// keep that clock at device cadence for the whole run, so nearly all playback,
+// including every response boundary at the device edge, happens while the
+// queue drains; the others drain on remoteToolAudioDrainInterval. The
+// assertion sees only protocol observations, process-owned tool observations
+// and device-rendered PCM, never session queue or sink implementation state.
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	cases := []remoteToolAudioCase{
@@ -168,6 +167,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
 				// Bound real process/device pairs so callback clocks retain CPU under the full package.
 				t.Parallel()
+				requireRemoteToolAudioCadenceSlot(t, testCase.name, delivery)
 				scenarioSlots <- struct{}{}
 				defer func() { <-scenarioSlots }()
 				scenario := testCase

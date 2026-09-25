@@ -63,7 +63,7 @@ Nothing else conflicts; `git merge-tree` shows every other path auto-merges.
 cd go-llm-gateway && go test ./internal/sessionfixturevalidator/ -count=1 && cd ..
 
 # v2d behavior: one commit per utterance, missegmented negative control via real CLI
-go test ./agent-cli/test/integration/ -run 'TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance|TestS2SV2DMisSegmentedFixtureFailsViaCLI|TestS2SV2DSuiteSelectsEachFixtureByNameAndBothPassOrFailCorrectly' -count=1 -v
+go test ./agent-cli/test/integration/ -run 'TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance|TestS2SV2DMisSegmentedFixtureFailsViaCLI' -count=1 -v
 ```
 
 Note: the original lane PRD file `tasks/todo/s2s-v2d-*.md` is absent from every ref in
