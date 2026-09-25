@@ -8,7 +8,6 @@ package integration
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -228,236 +227,11 @@ func normalizeLiveBargeInCapture(capture gwtesting.SessionCapture) (*probe.Barge
 
 func (a *liveBargeInCaptureAdapter) observe(record gwtesting.CapturedSessionEvent) {
 	payload := liveBargeInRecordPayload(record)
-	server := record.Direction == gwtesting.DirectionServerToClient
-	client := record.Direction == gwtesting.DirectionClientToServer
-	switch record.Type {
-	case rtEventSessionCreated:
-		if server {
-			a.facts.SessionCreated++
-		}
-	case "session.updated":
-		if server {
-			a.facts.SessionUpdated++
-		}
-	case rtEventSessionClosed:
-		if server {
-			a.facts.SessionClosed++
-		}
-	case "error":
-		if server {
-			a.facts.ProviderErrors++
-			code := liveBargeInSafeToken(liveBargeInJSONField(payload, "error.code", "error.type", "code", "type"))
-			if code == "unknown" {
-				code = "unknown"
-			}
-			a.facts.ProviderCodes = append(a.facts.ProviderCodes, code)
-		}
-	case rtEventInputAudioAppend:
-		if !client {
-			return
-		}
-		if a.currentInput == "" {
-			a.inputOrdinal++
-			a.currentInput = fmt.Sprintf("input-%d", a.inputOrdinal)
-			a.facts.InputStarts = append(a.facts.InputStarts, record.Sequence)
-		}
-		encoded := liveBargeInJSONField(payload, "audio")
-		decoded, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || len(decoded) == 0 {
-			a.issues = append(a.issues, fmt.Sprintf("input append %d was not non-empty base64 audio", record.Sequence))
-		}
-		a.facts.Appends++
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:      a.nextEventSequence(),
-			Kind:          probe.BargeInEventInputAppend,
-			InputID:       a.currentInput,
-			TurnID:        liveBargeInTurnID(a.currentInput),
-			AppendGroupID: a.currentInput,
-			Bytes:         len(decoded),
-			NonEmpty:      len(decoded) > 0,
-		})
-	case rtEventInputAudioCommit:
-		if !client {
-			return
-		}
-		a.facts.Commits++
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence: a.nextEventSequence(),
-			Kind:     probe.BargeInEventInputCommit,
-			InputID:  a.currentInput,
-			TurnID:   liveBargeInTurnID(a.currentInput),
-		})
-		a.lastCommittedInput = a.currentInput
-		if a.currentInput != "" {
-			a.committedInputs = append(a.committedInputs, a.currentInput)
-		}
-		a.currentInput = ""
-	case "conversation.item.created":
-		if !server || liveBargeInJSONField(payload, "item.role") != rtRoleUser {
-			return
-		}
-		a.observeUserTurn(liveBargeInJSONField(payload, "item.id"))
-	case "input_audio_buffer.committed":
-		if !server {
-			return
-		}
-		// Realtime also exposes the committed user item on this acknowledgement.
-		// Treat it as the same logical user-turn signal and deduplicate it if a
-		// later conversation.item.created event carries the same item ID.
-		a.observeUserTurn(liveBargeInJSONField(payload, "item_id", "item.id"))
-	case "conversation.item.input_audio_transcription.completed":
-		if !server {
-			return
-		}
-		// Current OpenAI Realtime sessions identify the user item on the
-		// transcription completion event; older captures may expose the same
-		// identity through conversation.item.created above. Both are one logical
-		// user-turn representation and are deduplicated by item ID.
-		a.observeUserTurn(liveBargeInJSONField(payload, "item_id", "item.id"))
-	case rtEventResponseCreated:
-		if !server {
-			return
-		}
-		a.responseOrdinal++
-		providerID := liveBargeInJSONField(payload, "response.id", "response_id")
-		if providerID == "" {
-			a.issues = append(a.issues, "response.created had no provider identity")
-		}
-		stableID := fmt.Sprintf("response-%d", a.responseOrdinal)
-		identity := liveBargeInResponseIdentity{
-			stable:     stableID,
-			providerID: providerID,
-			inputID:    a.lastCommittedInput,
-			turnID:     liveBargeInTurnID(a.lastCommittedInput),
-			ordinal:    a.responseOrdinal,
-		}
-		if _, exists := a.providerResponses[providerID]; exists {
-			a.issues = append(a.issues, "response provider identity was reused")
-		}
-		a.providerResponses[providerID] = identity
-		a.responseByProvider[providerID] = stableID
-		a.facts.Responses = append(a.facts.Responses, liveBargeInWireResponse{Created: record.Sequence})
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventResponseCreated,
-			InputID:    identity.inputID,
-			TurnID:     identity.turnID,
-			ResponseID: stableID,
-		})
-		if a.responseOrdinal > 1 {
-			a.ledger.Observe(probe.BargeInEvent{
-				Sequence:   a.nextEventSequence(),
-				Kind:       probe.BargeInEventContinuation,
-				InputID:    identity.inputID,
-				TurnID:     identity.turnID,
-				ResponseID: stableID,
-			})
-		}
-	case rtEventOutputAudioDelta, "response.audio.delta":
-		if !server {
-			return
-		}
-		providerID := liveBargeInJSONField(payload, "response_id", "response.id")
-		stableID := a.responseByProvider[providerID]
-		if a.providerOutputWasDiscarded(providerID, record.Sequence) {
-			return
-		}
-		decoded, err := base64.StdEncoding.DecodeString(liveBargeInJSONField(payload, "delta"))
-		if err != nil || len(decoded) == 0 {
-			a.issues = append(a.issues, "response audio output was not non-empty base64 audio")
-		}
-		if response := a.wireResponse(providerID); response != nil && len(decoded) > 0 && response.FirstAudio == 0 {
-			response.FirstAudio = record.Sequence
-		}
-		if response := a.wireResponse(providerID); response != nil {
-			response.AudioBytes += len(decoded)
-		}
-		if stableID == "" {
-			a.issues = append(a.issues, "response audio output referenced unknown provider identity")
-		}
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventResponseOutput,
-			ResponseID: stableID,
-			Bytes:      len(decoded),
-			NonEmpty:   len(decoded) > 0,
-		})
-	case rtEventOutputTextDelta, "response.text.delta", rtEventOutputAudioTranscriptDelta, "response.audio_transcript.delta", "response.output_audio_transcript.done", "response.audio_transcript.done":
-		if !server {
-			return
-		}
-		providerID := liveBargeInJSONField(payload, "response_id", "response.id")
-		stableID := a.responseByProvider[providerID]
-		if a.providerOutputWasDiscarded(providerID, record.Sequence) {
-			return
-		}
-		text := liveBargeInJSONField(payload, "delta", "transcript")
-		if response := a.wireResponse(providerID); response != nil && text != "" && response.FirstText == 0 {
-			response.FirstText = record.Sequence
-		}
-		if stableID == "" {
-			a.issues = append(a.issues, "response text output referenced unknown provider identity")
-		}
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventResponseOutput,
-			ResponseID: stableID,
-			Bytes:      len(text),
-			NonEmpty:   text != "",
-		})
-	case rtEventResponseCancel:
-		if !client {
-			return
-		}
-		identity := a.activeResponse()
-		interruptingInput := a.currentInput
-		if interruptingInput == "" {
-			interruptingInput = fmt.Sprintf("input-%d", a.inputOrdinal+1)
-		}
-		if identity.ordinal == 0 {
-			a.issues = append(a.issues, "response.cancel had no active response")
-		} else {
-			identity.cancelSeq = record.Sequence
-			a.providerResponses[identity.providerID] = identity
-			if response := a.wireResponse(identity.providerID); response != nil {
-				response.Cancel = record.Sequence
-			}
-			a.facts.Cancels++
-		}
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:   a.nextEventSequence(),
-			Kind:       probe.BargeInEventResponseCancel,
-			InputID:    interruptingInput,
-			TurnID:     liveBargeInTurnID(interruptingInput),
-			ResponseID: identity.stable,
-		})
-	case rtEventResponseDone:
-		if !server {
-			return
-		}
-		providerID := liveBargeInJSONField(payload, "response.id", "response_id")
-		identity, exists := a.providerResponses[providerID]
-		if !exists {
-			a.issues = append(a.issues, "response.done referenced unknown provider identity")
-		}
-		status := liveBargeInJSONField(payload, "response.status", "status")
-		reason := liveBargeInJSONField(payload, "response.status_details.reason", "status_details.reason")
-		if status == "" {
-			a.issues = append(a.issues, "response.done had no terminal status")
-		}
-		a.ledger.Observe(probe.BargeInEvent{
-			Sequence:    a.nextEventSequence(),
-			Kind:        probe.BargeInEventResponseTerminal,
-			ResponseID:  identity.stable,
-			Disposition: liveBargeInDisposition(status, reason, identity.cancelSeq > 0),
-			Reason:      liveBargeInSafeToken(reason),
-		})
-		if response := a.wireResponse(providerID); response != nil {
-			response.Done = record.Sequence
-			response.Terminal = true
-		}
-		identity.terminal = true
-		a.providerResponses[providerID] = identity
+	switch record.Direction {
+	case gwtesting.DirectionServerToClient:
+		a.observeServer(record, payload)
+	case gwtesting.DirectionClientToServer:
+		a.observeClient(record, payload)
 	}
 }
 
@@ -537,7 +311,7 @@ func liveBargeInDisposition(status, reason string, wasCancelled bool) probe.Barg
 		return probe.BargeInDispositionCompleted
 	case rtStatusCancelled, "canceled":
 		return probe.BargeInDispositionCancelled
-	case "incomplete":
+	case rtStatusIncomplete:
 		if wasCancelled || strings.Contains(strings.ToLower(reason), "cancel") || strings.EqualFold(reason, "turn_detected") {
 			return probe.BargeInDispositionCancelled
 		}
@@ -581,7 +355,7 @@ func liveBargeInJSONField(payload []byte, paths ...string) string {
 func liveBargeInSafeToken(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
-		return "unknown"
+		return liveUnknownCode
 	}
 	if len(value) > 64 {
 		return "redacted"
@@ -637,22 +411,6 @@ func liveBargeInTraceBoundary(trace *liveBargeInTrace, response, turn int, outpu
 		}
 	}
 	return before, after, true
-}
-
-func liveBargeInOutputAfterInputStart(trace *liveBargeInTrace, response, turn int) (audio, text int, ok bool) {
-	events, starts := trace.snapshot()
-	start, ok := starts[turn]
-	if !ok {
-		return 0, 0, false
-	}
-	for index, event := range events {
-		if index < start || event.ResponseOrdinal != response {
-			continue
-		}
-		audio += event.AudioBytes
-		text += event.TextBytes
-	}
-	return audio, text, true
 }
 
 // validateLiveBargeInBoundaries separates an unavailable provider or missed
@@ -745,7 +503,7 @@ func validateLiveBargeInRecordDir(path string) error {
 	if err != nil {
 		return fmt.Errorf("open session log: %w", err)
 	}
-	defer file.Close()
+	defer discardCloseError(file)
 	entries := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -792,7 +550,7 @@ func liveBargeInRunErrorClass(err error) string {
 	case strings.Contains(text, "connection"), strings.Contains(text, "websocket"), strings.Contains(text, "network"), strings.Contains(text, "no such host"), strings.Contains(text, "unavailable"), strings.Contains(text, "tls"):
 		return "provider-unavailable"
 	default:
-		return "runtime-contract-failure"
+		return liveBargeInRuntimeContractFailure
 	}
 }
 
@@ -875,7 +633,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 		"session",
 		"--record", capturePath,
 		"--record-dir", recordDir,
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", liveBargeInModel,
 		"--api-key", apiKey,
 		"--system-prompt", "Answer every spoken request with a concise but clearly audible response of several short sentences.",
@@ -889,7 +647,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 	runErr := awaitLiveBargeInCommand(ctx, root)
 	capture, loadErr := gwtesting.LoadSessionCapture(capturePath)
 	if loadErr != nil {
-		if liveBargeInRunErrorClass(runErr) != "runtime-contract-failure" {
+		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
 			t.Skipf("INCONCLUSIVE live barge-in proof: provider/setup result did not produce a capture")
 		}
 		t.Fatalf("live barge-in capture was not written; result class=%s", liveBargeInRunErrorClass(runErr))
@@ -901,7 +659,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 		t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
 	if runErr != nil {
-		if liveBargeInRunErrorClass(runErr) != "runtime-contract-failure" {
+		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
 			t.Skipf("INCONCLUSIVE live barge-in proof: provider result class=%s; capture=%s; trace=%s", liveBargeInRunErrorClass(runErr), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 		}
 		if validationErr == nil {

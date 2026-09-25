@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +14,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 // liveBargeInTrace is a gate over messages consumed by the shipped session
@@ -303,3 +306,228 @@ func waitLiveBargeInFrame(ctx context.Context, target time.Time) error {
 }
 
 func (*liveBargeInAudioReader) Close() error { return nil }
+
+// observeClient normalizes one client-to-server capture record.
+func (a *liveBargeInCaptureAdapter) observeClient(record gwtesting.CapturedSessionEvent, payload []byte) {
+	switch record.Type {
+	case rtEventInputAudioAppend:
+		a.observeInputAppend(record, payload)
+	case rtEventInputAudioCommit:
+		a.observeInputCommit()
+	case rtEventResponseCancel:
+		a.observeResponseCancel(record)
+	}
+}
+
+// observeServer normalizes one server-to-client capture record.
+func (a *liveBargeInCaptureAdapter) observeServer(record gwtesting.CapturedSessionEvent, payload []byte) {
+	switch record.Type {
+	case rtEventSessionCreated:
+		a.facts.SessionCreated++
+	case "session.updated":
+		a.facts.SessionUpdated++
+	case rtEventSessionClosed:
+		a.facts.SessionClosed++
+	case rtEventError:
+		a.facts.ProviderErrors++
+		code := liveBargeInSafeToken(liveBargeInJSONField(payload, "error.code", "error.type", "code", "type"))
+		a.facts.ProviderCodes = append(a.facts.ProviderCodes, code)
+	case rtEventConversationItemCreated:
+		if liveBargeInJSONField(payload, "item.role") == rtRoleUser {
+			a.observeUserTurn(liveBargeInJSONField(payload, "item.id"))
+		}
+	case "input_audio_buffer.committed", "conversation.item.input_audio_transcription.completed":
+		// Realtime exposes the committed user item on the commit
+		// acknowledgement and, in current sessions, on the transcription
+		// completion; older captures expose it through
+		// conversation.item.created above. All are one logical user-turn
+		// representation and are deduplicated by item ID.
+		a.observeUserTurn(liveBargeInJSONField(payload, "item_id", "item.id"))
+	case rtEventResponseCreated:
+		a.observeResponseCreated(record, payload)
+	case rtEventOutputAudioDelta, rtEventLegacyAudioDelta:
+		a.observeAudioOutput(record, payload)
+	case rtEventOutputTextDelta, "response.text.delta", rtEventOutputAudioTranscriptDelta, "response.audio_transcript.delta", rtEventOutputAudioTranscriptDone, "response.audio_transcript.done":
+		a.observeTextOutput(record, payload)
+	case rtEventResponseDone:
+		a.observeResponseDone(record, payload)
+	}
+}
+
+func (a *liveBargeInCaptureAdapter) observeInputAppend(record gwtesting.CapturedSessionEvent, payload []byte) {
+	if a.currentInput == "" {
+		a.inputOrdinal++
+		a.currentInput = fmt.Sprintf("input-%d", a.inputOrdinal)
+		a.facts.InputStarts = append(a.facts.InputStarts, record.Sequence)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(liveBargeInJSONField(payload, "audio"))
+	if err != nil || len(decoded) == 0 {
+		a.issues = append(a.issues, fmt.Sprintf("input append %d was not non-empty base64 audio", record.Sequence))
+	}
+	a.facts.Appends++
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence:      a.nextEventSequence(),
+		Kind:          probe.BargeInEventInputAppend,
+		InputID:       a.currentInput,
+		TurnID:        liveBargeInTurnID(a.currentInput),
+		AppendGroupID: a.currentInput,
+		Bytes:         len(decoded),
+		NonEmpty:      len(decoded) > 0,
+	})
+}
+
+func (a *liveBargeInCaptureAdapter) observeInputCommit() {
+	a.facts.Commits++
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence: a.nextEventSequence(),
+		Kind:     probe.BargeInEventInputCommit,
+		InputID:  a.currentInput,
+		TurnID:   liveBargeInTurnID(a.currentInput),
+	})
+	a.lastCommittedInput = a.currentInput
+	if a.currentInput != "" {
+		a.committedInputs = append(a.committedInputs, a.currentInput)
+	}
+	a.currentInput = ""
+}
+
+// observeResponseCreated assigns the next stable response identity and
+// appends its wire-response record.
+func (a *liveBargeInCaptureAdapter) observeResponseCreated(record gwtesting.CapturedSessionEvent, payload []byte) {
+	a.responseOrdinal++
+	providerID := liveBargeInJSONField(payload, "response.id", "response_id")
+	if providerID == "" {
+		a.issues = append(a.issues, "response.created had no provider identity")
+	}
+	stableID := fmt.Sprintf("response-%d", a.responseOrdinal)
+	identity := liveBargeInResponseIdentity{
+		stable:     stableID,
+		providerID: providerID,
+		inputID:    a.lastCommittedInput,
+		turnID:     liveBargeInTurnID(a.lastCommittedInput),
+		ordinal:    a.responseOrdinal,
+	}
+	if _, exists := a.providerResponses[providerID]; exists {
+		a.issues = append(a.issues, "response provider identity was reused")
+	}
+	a.providerResponses[providerID] = identity
+	a.responseByProvider[providerID] = stableID
+	a.facts.Responses = append(a.facts.Responses, liveBargeInWireResponse{Created: record.Sequence})
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence:   a.nextEventSequence(),
+		Kind:       probe.BargeInEventResponseCreated,
+		InputID:    identity.inputID,
+		TurnID:     identity.turnID,
+		ResponseID: stableID,
+	})
+	if a.responseOrdinal > 1 {
+		a.ledger.Observe(probe.BargeInEvent{
+			Sequence:   a.nextEventSequence(),
+			Kind:       probe.BargeInEventContinuation,
+			InputID:    identity.inputID,
+			TurnID:     identity.turnID,
+			ResponseID: stableID,
+		})
+	}
+}
+
+func (a *liveBargeInCaptureAdapter) observeAudioOutput(record gwtesting.CapturedSessionEvent, payload []byte) {
+	providerID := liveBargeInJSONField(payload, "response_id", "response.id")
+	stableID := a.responseByProvider[providerID]
+	if a.providerOutputWasDiscarded(providerID, record.Sequence) {
+		return
+	}
+	decoded, err := base64.StdEncoding.DecodeString(liveBargeInJSONField(payload, "delta"))
+	if err != nil || len(decoded) == 0 {
+		a.issues = append(a.issues, "response audio output was not non-empty base64 audio")
+	}
+	if response := a.wireResponse(providerID); response != nil {
+		if len(decoded) > 0 && response.FirstAudio == 0 {
+			response.FirstAudio = record.Sequence
+		}
+		response.AudioBytes += len(decoded)
+	}
+	if stableID == "" {
+		a.issues = append(a.issues, "response audio output referenced unknown provider identity")
+	}
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence:   a.nextEventSequence(),
+		Kind:       probe.BargeInEventResponseOutput,
+		ResponseID: stableID,
+		Bytes:      len(decoded),
+		NonEmpty:   len(decoded) > 0,
+	})
+}
+
+func (a *liveBargeInCaptureAdapter) observeTextOutput(record gwtesting.CapturedSessionEvent, payload []byte) {
+	providerID := liveBargeInJSONField(payload, "response_id", "response.id")
+	stableID := a.responseByProvider[providerID]
+	if a.providerOutputWasDiscarded(providerID, record.Sequence) {
+		return
+	}
+	text := liveBargeInJSONField(payload, "delta", "transcript")
+	if response := a.wireResponse(providerID); response != nil && text != "" && response.FirstText == 0 {
+		response.FirstText = record.Sequence
+	}
+	if stableID == "" {
+		a.issues = append(a.issues, "response text output referenced unknown provider identity")
+	}
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence:   a.nextEventSequence(),
+		Kind:       probe.BargeInEventResponseOutput,
+		ResponseID: stableID,
+		Bytes:      len(text),
+		NonEmpty:   text != "",
+	})
+}
+
+func (a *liveBargeInCaptureAdapter) observeResponseCancel(record gwtesting.CapturedSessionEvent) {
+	identity := a.activeResponse()
+	interruptingInput := a.currentInput
+	if interruptingInput == "" {
+		interruptingInput = fmt.Sprintf("input-%d", a.inputOrdinal+1)
+	}
+	if identity.ordinal == 0 {
+		a.issues = append(a.issues, "response.cancel had no active response")
+	} else {
+		identity.cancelSeq = record.Sequence
+		a.providerResponses[identity.providerID] = identity
+		if response := a.wireResponse(identity.providerID); response != nil {
+			response.Cancel = record.Sequence
+		}
+		a.facts.Cancels++
+	}
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence:   a.nextEventSequence(),
+		Kind:       probe.BargeInEventResponseCancel,
+		InputID:    interruptingInput,
+		TurnID:     liveBargeInTurnID(interruptingInput),
+		ResponseID: identity.stable,
+	})
+}
+
+func (a *liveBargeInCaptureAdapter) observeResponseDone(record gwtesting.CapturedSessionEvent, payload []byte) {
+	providerID := liveBargeInJSONField(payload, "response.id", "response_id")
+	identity, exists := a.providerResponses[providerID]
+	if !exists {
+		a.issues = append(a.issues, "response.done referenced unknown provider identity")
+	}
+	status := liveBargeInJSONField(payload, "response.status", "status")
+	reason := liveBargeInJSONField(payload, "response.status_details.reason", "status_details.reason")
+	if status == "" {
+		a.issues = append(a.issues, "response.done had no terminal status")
+	}
+	a.ledger.Observe(probe.BargeInEvent{
+		Sequence:    a.nextEventSequence(),
+		Kind:        probe.BargeInEventResponseTerminal,
+		ResponseID:  identity.stable,
+		Disposition: liveBargeInDisposition(status, reason, identity.cancelSeq > 0),
+		Reason:      liveBargeInSafeToken(reason),
+	})
+	if response := a.wireResponse(providerID); response != nil {
+		response.Done = record.Sequence
+		response.Terminal = true
+	}
+	identity.terminal = true
+	a.providerResponses[providerID] = identity
+}

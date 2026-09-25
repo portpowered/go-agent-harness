@@ -112,7 +112,7 @@ func runMixedModalityLiveSession(t *testing.T, apiKey, imagePath, audioPath stri
 	args := []string{
 		"--config-dir", workDir,
 		"session",
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", mixedModalityLiveModel,
 		"--api-key", apiKey,
 		"--record-dir", recordDir,
@@ -189,7 +189,7 @@ func assertMixedModalityLiveRecordingBundle(t *testing.T, destination string, tu
 	if err != nil {
 		t.Fatalf("open mixed-modality session log: %v", err)
 	}
-	defer logFile.Close()
+	defer discardCloseError(logFile)
 	entries := make([]mixedModalityLiveRecordingEntry, 0, turns)
 	scanner := bufio.NewScanner(logFile)
 	for scanner.Scan() {
@@ -244,7 +244,7 @@ func writeMixedModalityImage(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("create mixed-modality image: %v", err)
 	}
-	defer file.Close()
+	defer closeForTest(t, file)
 	if err := png.Encode(file, img); err != nil {
 		t.Fatalf("encode mixed-modality image: %v", err)
 	}
@@ -294,7 +294,7 @@ func copyMixedModalityPath(source, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer discardCloseError(input)
 	output, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err

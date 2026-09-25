@@ -49,7 +49,7 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 	rootCmd.SetArgs([]string{
 		"--config-dir", workDir,
 		"session",
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", "gpt-realtime-2.1-mini",
 		"--api-key", apiKey,
 		"--audio-in", liveAudioInWAVPath(t),
@@ -65,45 +65,12 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 		t.Fatalf("load live capture (run error: %v): %v", runErr, loadErr)
 	}
 
-	commitSent := false
-	responseCreateSent := false
-	transcriptDone := false
-	audioBytes := 0
-	for _, record := range capture.Records {
-		if record.Direction == gwtesting.DirectionClientToServer {
-			switch record.Type {
-			case rtEventInputAudioCommit:
-				commitSent = true
-			case rtEventResponseCreate:
-				responseCreateSent = true
-			}
-			continue
-		}
-		if record.Direction != gwtesting.DirectionServerToClient {
-			continue
-		}
-		switch {
-		case record.Type == "response.output_audio_transcript.done":
-			transcriptDone = true
-		case record.Type == rtEventOutputAudioDelta || record.Type == "response.audio.delta":
-			var payload struct {
-				Delta string `json:"delta"`
-			}
-			raw := record.Payload
-			if len(raw) == 0 {
-				raw = record.Data
-			}
-			if json.Unmarshal(raw, &payload) == nil && payload.Delta != "" {
-				if decoded, decodeErr := base64.StdEncoding.DecodeString(payload.Delta); decodeErr == nil {
-					audioBytes += len(decoded)
-				}
-			}
-		}
+	facts := liveAudioInCaptureFacts(capture)
+	audioBytes := facts.audioBytes
+	if !facts.commitSent || !facts.responseCreateSent {
+		t.Fatalf("live capture missing client end-of-turn signaling (commit=%v response.create=%v, run error: %v): %s", facts.commitSent, facts.responseCreateSent, runErr, describeCapture(&capture))
 	}
-	if !commitSent || !responseCreateSent {
-		t.Fatalf("live capture missing client end-of-turn signaling (commit=%v response.create=%v, run error: %v): %s", commitSent, responseCreateSent, runErr, describeCapture(&capture))
-	}
-	if !transcriptDone {
+	if !facts.transcriptDone {
 		t.Fatalf("live session never received response.output_audio_transcript.done within %s (run error: %v)", liveAudioInTimeout, describeCapture(&capture))
 	}
 	if audioBytes == 0 {
@@ -152,7 +119,7 @@ func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 			args := []string{
 				"--config-dir", workDir,
 				"session",
-				"--provider", "openai",
+				"--provider", liveProviderOpenAI,
 				"--model", "gpt-realtime",
 				"--api-key", apiKey,
 				"--record-dir", recordDir,
@@ -173,7 +140,60 @@ func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 	}
 }
 
+// liveAudioInFacts are the end-of-turn and response facts of one capture.
+type liveAudioInFacts struct {
+	commitSent, responseCreateSent, transcriptDone bool
+	audioBytes                                     int
+}
+
+func liveAudioInCaptureFacts(capture gwtesting.SessionCapture) liveAudioInFacts {
+	var facts liveAudioInFacts
+	for _, record := range capture.Records {
+		switch record.Direction {
+		case gwtesting.DirectionClientToServer:
+			facts.commitSent = facts.commitSent || record.Type == rtEventInputAudioCommit
+			facts.responseCreateSent = facts.responseCreateSent || record.Type == rtEventResponseCreate
+		case gwtesting.DirectionServerToClient:
+			switch record.Type {
+			case rtEventOutputAudioTranscriptDone:
+				facts.transcriptDone = true
+			case rtEventOutputAudioDelta, rtEventLegacyAudioDelta:
+				facts.audioBytes += liveAudioInDeltaBytes(record)
+			}
+		}
+	}
+	return facts
+}
+
+// liveAudioInDeltaBytes returns the decoded audio size of one delta record,
+// or zero when the payload is not a decodable non-empty delta.
+func liveAudioInDeltaBytes(record gwtesting.CapturedSessionEvent) int {
+	var payload struct {
+		Delta string `json:"delta"`
+	}
+	raw := record.Payload
+	if len(raw) == 0 {
+		raw = record.Data
+	}
+	if json.Unmarshal(raw, &payload) != nil || payload.Delta == "" {
+		return 0
+	}
+	decoded, err := base64.StdEncoding.DecodeString(payload.Delta)
+	if err != nil {
+		return 0
+	}
+	return len(decoded)
+}
+
 func assertLiveRecordDirBundle(t *testing.T, destination string, wantTurns int) {
+	t.Helper()
+	assertLiveRecordDirManifest(t, destination, wantTurns)
+	assertLiveRecordDirAudioSegments(t, destination, wantTurns)
+	assertLiveRecordDirSessionLog(t, destination, wantTurns)
+	t.Logf("live record-dir proof: %d ordered turn bundle(s) finalized with non-empty input/output audio", wantTurns)
+}
+
+func assertLiveRecordDirManifest(t *testing.T, destination string, wantTurns int) {
 	t.Helper()
 	manifestBytes, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
 	if err != nil {
@@ -211,7 +231,10 @@ func assertLiveRecordDirBundle(t *testing.T, destination string, wantTurns int) 
 			t.Fatalf("live recording artifact %q is missing or empty: %v", path, err)
 		}
 	}
+}
 
+func assertLiveRecordDirAudioSegments(t *testing.T, destination string, wantTurns int) {
+	t.Helper()
 	inputCount := 0
 	outputCount := 0
 	for index := 0; index < wantTurns; index++ {
@@ -234,7 +257,10 @@ func assertLiveRecordDirBundle(t *testing.T, destination string, wantTurns int) 
 	if inputCount != wantTurns || outputCount != wantTurns {
 		t.Fatalf("live recording audio segments = input %d/output %d, want %d/%d", inputCount, outputCount, wantTurns, wantTurns)
 	}
+}
 
+func assertLiveRecordDirSessionLog(t *testing.T, destination string, wantTurns int) {
+	t.Helper()
 	logBytes, err := os.ReadFile(filepath.Join(destination, "session-log.jsonl"))
 	if err != nil {
 		t.Fatalf("read live session log: %v", err)
@@ -262,7 +288,6 @@ func assertLiveRecordDirBundle(t *testing.T, destination string, wantTurns int) 
 			t.Fatalf("live session log entry %d does not prove an ordered committed input and completed audio response: %#v", index+1, entry)
 		}
 	}
-	t.Logf("live record-dir proof: %d ordered turn bundle(s) finalized with non-empty input/output audio", wantTurns)
 }
 
 func liveRecordingDigits(index int) string {

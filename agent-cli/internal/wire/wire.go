@@ -167,8 +167,13 @@ func (l sessionLoopLogger) emit(level, message string, fields []looplogging.Fiel
 	for _, field := range fields {
 		values[field.Key] = fmt.Sprint(field.Value)
 	}
-	_ = l.sink.Log(context.Background(), observability.LogRecord{Level: level, Message: message, Fields: values})
+	discardLogError(l.sink.Log(context.Background(), observability.LogRecord{Level: level, Message: message, Fields: values}))
 }
+
+// discardLogError marks a loop log sink failure as deliberately ignored: the
+// agent loop's logging interface has no error return, and a failed diagnostic
+// write must not change the session's outcome.
+func discardLogError(error) {}
 
 func (l sessionLoopLogger) Debug(message string, fields ...looplogging.Field) {
 	l.emit("debug", message, fields)

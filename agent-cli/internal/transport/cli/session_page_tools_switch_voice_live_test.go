@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -28,13 +27,13 @@ const (
 	sessionPageToolsSwitchVoiceLiveEnv         = "WEBMCP_PAGETOOLS_SWITCH_VOICE_LIVE"
 	sessionPageToolsSwitchVoiceArtifactEnv     = "WEBMCP_PAGETOOLS_SWITCH_VOICE_ARTIFACT_DIR"
 	sessionPageToolsSwitchVoiceKeyFileEnv      = "OPENAI_API_KEY_FILE"
-	sessionPageToolsSwitchVoiceModel           = "gpt-realtime-2.1-mini"
 	sessionPageToolsSwitchVoiceMaxDuration     = 30 * time.Second
 	sessionPageToolsSwitchVoiceRunGrace        = 25 * time.Second
 	sessionPageToolsSwitchVoiceChromeVersion   = "152.0.7977.64"
 	sessionPageToolsSwitchVoiceArtifactMode    = 0o700
 	sessionPageToolsSwitchVoiceEvidenceMode    = 0o600
 	sessionPageToolsSwitchVoiceCaptureFilename = "provider.json"
+	sessionPageToolsSwitchVoiceSessionUpdate   = "session.update"
 )
 
 var sessionPageToolsSwitchVoiceSystemPrompt = `You are a concise voice operator controlling two already-open WebMCP pages.
@@ -79,8 +78,8 @@ func TestSessionPageToolsSwitchVoiceAgainstLiveChrome(t *testing.T) {
 	defer cancel()
 
 	chromeVersion := sessionPageToolsSwitchVoiceChromeVersionString(t, ctx, cdpURL)
-	assertLiveChromeStartupShape(t, ctx, cdpURL)
-	openLiveMarginTab(t, ctx, cdpURL)
+	assertLiveChromeStartupShape(t, ctx, cdpURL, sessionPageToolsLiveCubecadeOrigin, "Cubecade")
+	openLiveCDPTab(t, ctx, cdpURL, sessionPageToolsLiveMarginURL, "Margin")
 	cubeTarget, marginTarget := sessionPageToolsSwitchVoiceTargets(t, ctx, cdpURL)
 	if cubeTarget.BrowserID != marginTarget.BrowserID {
 		t.Fatalf("voice targets use different browsers: Cubecade=%q Margin=%q", cubeTarget.BrowserID, marginTarget.BrowserID)
@@ -99,23 +98,77 @@ func TestSessionPageToolsSwitchVoiceAgainstLiveChrome(t *testing.T) {
 		"Read the cube state again and say goodbye.",
 	}
 	audioPaths := sessionPageToolsSwitchVoiceAudio(t, artifactRoot, turns)
-	systemPromptPath := filepath.Join(artifactRoot, "system-prompt.txt")
-	if err := os.WriteFile(systemPromptPath, []byte(sessionPageToolsSwitchVoiceSystemPrompt), sessionPageToolsSwitchVoiceEvidenceMode); err != nil {
-		t.Fatalf("write voice system prompt: %v", err)
-	}
 
 	agentBinary := buildLiveAgentCLI(t, ctx)
-	beforeCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, cubeTarget, []string{"get_cube_state", "queue_cube_moves"})
-	beforeCubeState := directLiveInvoke(t, ctx, agentBinary, cdpURL, cubeTarget, findDirectToolRef(t, beforeCatalog, "get_cube_state"), map[string]any{})
-	requireLiveSuccess(t, beforeCubeState, "direct CLI Cubecade state before voice run")
+	beforeCubeState := sessionPageToolsSwitchVoiceCubeState(t, ctx, agentBinary, cdpURL, cubeTarget, "before")
 
 	capturePath := filepath.Join(artifactRoot, sessionPageToolsSwitchVoiceCaptureFilename)
 	recordDir := filepath.Join(artifactRoot, "recording")
 	audioOutPath := filepath.Join(artifactRoot, "assistant.wav")
+	runErr := runSessionPageToolsSwitchVoiceProcess(t, ctx, agentBinary, apiKey, sessionPageToolsSwitchVoiceArgs(t, artifactRoot, cdpURL, audioPaths))
+
+	afterCubeState := sessionPageToolsSwitchVoiceCubeState(t, ctx, agentBinary, cdpURL, cubeTarget, "after")
+	marginCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, marginTarget, liveMarginPageTools())
+
+	capture, err := gwtesting.LoadSessionCapture(capturePath)
+	if err != nil {
+		t.Fatalf("load one-run voice provider capture: %v", err)
+	}
+	observation, err := inspectSessionPageToolsSwitchVoiceCapture(capture)
+	if err != nil {
+		t.Fatalf("inspect one-run voice provider capture: %v", err)
+	}
+	documentID, err := validateSessionPageToolsSwitchVoiceObservation(observation, cubeTarget, marginTarget, title, content)
+	if err != nil {
+		t.Fatalf("validate one-run voice provider trace: %v", err)
+	}
+
+	directDocument := directLiveInvoke(t, ctx, agentBinary, cdpURL, marginTarget, findDirectToolRef(t, marginCatalog, liveGetDocumentToolName), map[string]any{"document_id": documentID})
+	requireLiveSuccess(t, directDocument, "direct CLI Margin get_document after voice run")
+	if !sessionPageToolsSwitchVoiceDocumentMatches(directDocument.Data, title, content) {
+		t.Fatalf("direct CLI Margin document did not preserve exact title/content: %s", truncateLiveText(directDocument.Data, 2000))
+	}
+	if err := validateSessionPageToolsSwitchVoiceRecordDir(recordDir); err != nil {
+		t.Fatalf("validate one-run voice record-dir: %v", err)
+	}
+	if info, err := os.Stat(audioOutPath); err != nil || info.Size() <= 44 {
+		t.Fatalf("assistant audio artifact = err:%v size:%d, want non-empty WAV", err, sessionPageToolsSwitchVoiceFileSize(audioOutPath))
+	}
+
+	if runErr != nil && !errors.Is(runErr, context.DeadlineExceeded) {
+		t.Fatalf("one-run voice session failed: %v", runErr)
+	}
+	assertLiveChromeStillHasOrigins(t, ctx, cdpURL, sessionPageToolsLiveCubecadeOrigin, sessionPageToolsLiveMarginOrigin)
+	t.Logf("sanitized transcript: user=%s assistant=%s", sessionPageToolsSwitchVoiceJSONStrings(observation.UserTranscripts), sessionPageToolsSwitchVoiceJSONStrings(observation.AssistantTranscripts))
+	t.Logf("oracle Cubecade before: %s", truncateLiveText(beforeCubeState.Data, 1200))
+	t.Logf("oracle Margin get_document: %s", truncateLiveText(directDocument.Data, 1600))
+	t.Logf("oracle Cubecade after: %s", truncateLiveText(afterCubeState.Data, 1200))
+	t.Logf("voice evidence: model=%s max_duration=%s key_source=%s browser_auto_select=single pinned_browser_tab=<none> origin_filter=<none> provider_connections=%d definition_transitions=Cubecade(2)->Margin(10)->Cubecade(2) title=%q content=%q recording=<artifact>/recording capture=<artifact>/%s", sessionPageToolsSwitchVoiceModel, sessionPageToolsSwitchVoiceMaxDuration, keySource, observation.SessionCreated, title, content, sessionPageToolsSwitchVoiceCaptureFilename)
+	t.Logf("voice artifacts retained outside source control: %s", artifactRoot)
+}
+
+// sessionPageToolsSwitchVoiceCubeState reads the Cubecade state through the
+// direct CLI oracle.
+func sessionPageToolsSwitchVoiceCubeState(t *testing.T, ctx context.Context, agentBinary, cdpURL string, cubeTarget sessionPageToolsLiveTarget, phase string) webmcp.ToolResultEnvelope {
+	t.Helper()
+	catalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, cubeTarget, liveCubecadePageTools())
+	state := directLiveInvoke(t, ctx, agentBinary, cdpURL, cubeTarget, findDirectToolRef(t, catalog, ambiguousCubeStateTool), map[string]any{})
+	requireLiveSuccess(t, state, "direct CLI Cubecade state "+phase+" voice run")
+	return state
+}
+
+// sessionPageToolsSwitchVoiceArgs writes the system prompt and returns the
+// production session command line for the one voice run.
+func sessionPageToolsSwitchVoiceArgs(t *testing.T, artifactRoot, cdpURL string, audioPaths []string) []string {
+	t.Helper()
+	systemPromptPath := filepath.Join(artifactRoot, "system-prompt.txt")
+	if err := os.WriteFile(systemPromptPath, []byte(sessionPageToolsSwitchVoiceSystemPrompt), sessionPageToolsSwitchVoiceEvidenceMode); err != nil {
+		t.Fatalf("write voice system prompt: %v", err)
+	}
 	args := []string{
 		"-C", filepath.Join(artifactRoot, "config"),
 		"session",
-		"--provider", "openai",
+		"--provider", config.ProviderOpenAI,
 		"--model", sessionPageToolsSwitchVoiceModel,
 		"--voice", "marin",
 		"--browser-tools", "webmcp",
@@ -131,80 +184,34 @@ func TestSessionPageToolsSwitchVoiceAgainstLiveChrome(t *testing.T) {
 		"--browser-record", "true",
 		"--browser-record-arguments", "true",
 		"--browser-record-results", "true",
-		"--record", capturePath,
-		"--record-dir", recordDir,
-		"--audio-out", audioOutPath,
+		"--record", filepath.Join(artifactRoot, sessionPageToolsSwitchVoiceCaptureFilename),
+		"--record-dir", filepath.Join(artifactRoot, "recording"),
+		"--audio-out", filepath.Join(artifactRoot, "assistant.wav"),
 		"--system-prompt", systemPromptPath,
 		"--max-duration", sessionPageToolsSwitchVoiceMaxDuration.String(),
 	}
 	for _, audioPath := range audioPaths {
 		args = append(args, "--audio-in-turn", audioPath)
 	}
+	return args
+}
 
+// runSessionPageToolsSwitchVoiceProcess runs the voice session and returns its
+// exit error; a deadline stop is expected for the bounded session.
+func runSessionPageToolsSwitchVoiceProcess(t *testing.T, ctx context.Context, agentBinary, apiKey string, args []string) error {
+	t.Helper()
 	processCtx, cancelProcess := context.WithTimeout(ctx, sessionPageToolsSwitchVoiceMaxDuration+sessionPageToolsSwitchVoiceRunGrace)
+	defer cancelProcess()
 	process := exec.CommandContext(processCtx, agentBinary, args...)
 	process.Env = append(os.Environ(), "AGENT_MODEL__OPENAI__API_KEY="+apiKey)
 	var stdout, stderr bytes.Buffer
 	process.Stdout = &stdout
 	process.Stderr = &stderr
 	runErr := process.Run()
-	cancelProcess()
 	if runErr != nil && !errors.Is(runErr, context.DeadlineExceeded) {
 		t.Logf("voice process returned %v; stdout=%s stderr=%s", runErr, truncateLiveText(stdout.Bytes(), 1200), truncateLiveText(stderr.Bytes(), 1200))
 	}
-
-	afterCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, cubeTarget, []string{"get_cube_state", "queue_cube_moves"})
-	afterCubeState := directLiveInvoke(t, ctx, agentBinary, cdpURL, cubeTarget, findDirectToolRef(t, afterCatalog, "get_cube_state"), map[string]any{})
-	requireLiveSuccess(t, afterCubeState, "direct CLI Cubecade state after voice run")
-
-	marginCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, marginTarget, []string{
-		"add_comment",
-		"create_document",
-		"get_document",
-		"list_comments",
-		"list_documents",
-		"open_document",
-		"reopen_comment",
-		"reply_to_comment",
-		"resolve_comment",
-		"update_document",
-	})
-
-	capture, err := gwtesting.LoadSessionCapture(capturePath)
-	if err != nil {
-		t.Fatalf("load one-run voice provider capture: %v", err)
-	}
-	observation, err := inspectSessionPageToolsSwitchVoiceCapture(capture)
-	if err != nil {
-		t.Fatalf("inspect one-run voice provider capture: %v", err)
-	}
-	documentID, err := validateSessionPageToolsSwitchVoiceObservation(observation, cubeTarget, marginTarget, title, content)
-	if err != nil {
-		t.Fatalf("validate one-run voice provider trace: %v", err)
-	}
-
-	directDocument := directLiveInvoke(t, ctx, agentBinary, cdpURL, marginTarget, findDirectToolRef(t, marginCatalog, "get_document"), map[string]any{"document_id": documentID})
-	requireLiveSuccess(t, directDocument, "direct CLI Margin get_document after voice run")
-	if !sessionPageToolsSwitchVoiceDocumentMatches(directDocument.Data, title, content) {
-		t.Fatalf("direct CLI Margin document did not preserve exact title/content: %s", truncateLiveJSON(directDocument.Data, 2000))
-	}
-	if err := validateSessionPageToolsSwitchVoiceRecordDir(recordDir); err != nil {
-		t.Fatalf("validate one-run voice record-dir: %v", err)
-	}
-	if info, err := os.Stat(audioOutPath); err != nil || info.Size() <= 44 {
-		t.Fatalf("assistant audio artifact = err:%v size:%d, want non-empty WAV", err, sessionPageToolsSwitchVoiceFileSize(audioOutPath))
-	}
-
-	if runErr != nil && !errors.Is(runErr, context.DeadlineExceeded) {
-		t.Fatalf("one-run voice session failed: %v", runErr)
-	}
-	assertLiveChromeStillRunning(t, ctx, cdpURL)
-	t.Logf("sanitized transcript: user=%s assistant=%s", sessionPageToolsSwitchVoiceJSONStrings(observation.UserTranscripts), sessionPageToolsSwitchVoiceJSONStrings(observation.AssistantTranscripts))
-	t.Logf("oracle Cubecade before: %s", truncateLiveJSON(beforeCubeState.Data, 1200))
-	t.Logf("oracle Margin get_document: %s", truncateLiveJSON(directDocument.Data, 1600))
-	t.Logf("oracle Cubecade after: %s", truncateLiveJSON(afterCubeState.Data, 1200))
-	t.Logf("voice evidence: model=%s max_duration=%s key_source=%s browser_auto_select=single pinned_browser_tab=<none> origin_filter=<none> provider_connections=%d definition_transitions=Cubecade(2)->Margin(10)->Cubecade(2) title=%q content=%q recording=<artifact>/recording capture=<artifact>/%s", sessionPageToolsSwitchVoiceModel, sessionPageToolsSwitchVoiceMaxDuration, keySource, observation.SessionCreated, title, content, sessionPageToolsSwitchVoiceCaptureFilename)
-	t.Logf("voice artifacts retained outside source control: %s", artifactRoot)
+	return runErr
 }
 
 func sessionPageToolsSwitchVoiceAPIKey(t *testing.T) (string, string) {
@@ -259,18 +266,10 @@ func sessionPageToolsSwitchVoiceChromeVersionString(t *testing.T, ctx context.Co
 
 func sessionPageToolsSwitchVoiceTargets(t *testing.T, ctx context.Context, cdpURL string) (sessionPageToolsLiveTarget, sessionPageToolsLiveTarget) {
 	t.Helper()
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Tools.Backend = config.BrowserToolsBackendWebMCP
-	browser.Connection.CDPURL = cdpURL
-	browser.Selection.Origin = sessionPageToolsLiveCubecadeOrigin
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	browser.Selection.Persist = false
-	browser.Policy.AllowedOrigins = []string{sessionPageToolsLiveCubecadeOrigin, sessionPageToolsLiveMarginOrigin}
-	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-	for _, id := range config.DefaultToolIDs {
-		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
-	}
+	cfg := livePageToolsConfig(t, cdpURL)
+	cfg.Browser.Selection.Origin = sessionPageToolsLiveCubecadeOrigin
+	cfg.Browser.Selection.Persist = false
+	cfg.Browser.Policy.AllowedOrigins = []string{sessionPageToolsLiveCubecadeOrigin, sessionPageToolsLiveMarginOrigin}
 
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
 	if err != nil {
@@ -294,7 +293,7 @@ func sessionPageToolsSwitchVoiceTargets(t *testing.T, ctx context.Context, cdpUR
 	if err != nil {
 		t.Fatalf("refresh Cubecade voice target definitions: %v", err)
 	}
-	requireLivePageSurface(t, definitions, messages.CanonicalToolDefinitions(capabilities.Definitions), []string{"get_cube_state", "queue_cube_moves"}, "voice Cubecade bootstrap")
+	requireLivePageSurface(t, definitions, messages.CanonicalToolDefinitions(capabilities.Definitions), liveCubecadePageTools(), "voice Cubecade bootstrap")
 	tabs := waitForLivePageTargets(t, ctx, capabilities.Executor)
 	cube, margin := requireLivePageTargets(t, tabs)
 	if capabilities.Close != nil {
@@ -351,41 +350,6 @@ func sessionPageToolsSwitchVoiceAudio(t *testing.T, root string, turns []string)
 	return paths
 }
 
-type sessionPageToolsSwitchVoiceTool struct {
-	Name string
-	Raw  json.RawMessage
-}
-
-type sessionPageToolsSwitchVoiceSurface struct {
-	Index int
-	Tools []sessionPageToolsSwitchVoiceTool
-}
-
-type sessionPageToolsSwitchVoiceCall struct {
-	Index       int
-	Name        string
-	CallID      string
-	Arguments   string
-	ArgumentsAt int
-}
-
-type sessionPageToolsSwitchVoiceOutput struct {
-	Index    int
-	CallID   string
-	Envelope webmcp.ToolResultEnvelope
-}
-
-type sessionPageToolsSwitchVoiceObservation struct {
-	Provider             string
-	Model                string
-	SessionCreated       int
-	Surfaces             []sessionPageToolsSwitchVoiceSurface
-	Calls                []sessionPageToolsSwitchVoiceCall
-	Outputs              []sessionPageToolsSwitchVoiceOutput
-	UserTranscripts      []string
-	AssistantTranscripts []string
-}
-
 func inspectSessionPageToolsSwitchVoiceCapture(capture gwtesting.SessionCapture) (sessionPageToolsSwitchVoiceObservation, error) {
 	observation := sessionPageToolsSwitchVoiceObservation{
 		Provider: capture.Provider.Name,
@@ -399,97 +363,121 @@ func inspectSessionPageToolsSwitchVoiceCapture(capture gwtesting.SessionCapture)
 		if len(payload) == 0 {
 			continue
 		}
-		if record.Direction == gwtesting.DirectionClientToServer {
-			switch record.Type {
-			case "session.update":
-				surface, err := sessionPageToolsSwitchVoiceSurfaceFromUpdate(index, payload)
-				if err != nil {
-					return observation, err
-				}
-				if len(surface.Tools) > 0 {
-					observation.Surfaces = append(observation.Surfaces, surface)
-				}
-			case "conversation.item.create":
-				output, ok, err := sessionPageToolsSwitchVoiceOutputFromItem(index, payload)
-				if err != nil {
-					return observation, err
-				}
-				if ok {
-					observation.Outputs = append(observation.Outputs, output)
-				}
-			}
-			continue
+		var err error
+		switch record.Direction {
+		case gwtesting.DirectionClientToServer:
+			err = observation.addClientRecord(index, record.Type, payload)
+		case gwtesting.DirectionServerToClient:
+			err = observation.addServerRecord(index, record.Type, payload)
 		}
-		if record.Direction != gwtesting.DirectionServerToClient {
-			continue
-		}
-		switch record.Type {
-		case "session.created":
-			observation.SessionCreated++
-		case "response.output_item.added":
-			var event struct {
-				Item struct {
-					Type   string `json:"type"`
-					Name   string `json:"name"`
-					CallID string `json:"call_id"`
-					ID     string `json:"id"`
-				} `json:"item"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode function call at record %d: %w", index, err)
-			}
-			if event.Item.Type == "function_call" {
-				callID := event.Item.CallID
-				if callID == "" {
-					callID = event.Item.ID
-				}
-				observation.Calls = append(observation.Calls, sessionPageToolsSwitchVoiceCall{Index: index, Name: event.Item.Name, CallID: callID, ArgumentsAt: -1})
-			}
-		case "response.function_call_arguments.done":
-			var event struct {
-				Name      string `json:"name"`
-				CallID    string `json:"call_id"`
-				Arguments string `json:"arguments"`
-			}
-			if err := json.Unmarshal(payload, &event); err != nil {
-				return observation, fmt.Errorf("decode function arguments at record %d: %w", index, err)
-			}
-			callIndex := -1
-			for candidate := len(observation.Calls) - 1; candidate >= 0; candidate-- {
-				if observation.Calls[candidate].ArgumentsAt >= 0 {
-					continue
-				}
-				if event.CallID == "" || observation.Calls[candidate].CallID == event.CallID {
-					callIndex = candidate
-					break
-				}
-			}
-			if callIndex < 0 {
-				return observation, fmt.Errorf("function arguments at record %d have no matching call_id=%q", index, event.CallID)
-			}
-			observation.Calls[callIndex].Arguments = event.Arguments
-			observation.Calls[callIndex].ArgumentsAt = index
-			if observation.Calls[callIndex].Name == "" {
-				observation.Calls[callIndex].Name = event.Name
-			}
-			if observation.Calls[callIndex].CallID == "" {
-				observation.Calls[callIndex].CallID = event.CallID
-			}
-		case "conversation.item.input_audio_transcription.completed":
-			if text := sessionPageToolsSwitchVoiceStringField(payload, "transcript"); text != "" {
-				observation.UserTranscripts = append(observation.UserTranscripts, text)
-			}
-		case "response.output_audio_transcript.done", "response.audio_transcript.done":
-			if text := sessionPageToolsSwitchVoiceStringField(payload, "transcript"); text != "" {
-				observation.AssistantTranscripts = append(observation.AssistantTranscripts, text)
-			}
-		case "response.output_text.done":
-			if text := sessionPageToolsSwitchVoiceStringField(payload, "text"); text != "" {
-				observation.AssistantTranscripts = append(observation.AssistantTranscripts, text)
-			}
+		if err != nil {
+			return observation, err
 		}
 	}
 	return observation, nil
+}
+
+func (observation *sessionPageToolsSwitchVoiceObservation) addClientRecord(index int, recordType string, payload json.RawMessage) error {
+	switch recordType {
+	case sessionPageToolsSwitchVoiceSessionUpdate:
+		surface, err := sessionPageToolsSwitchVoiceSurfaceFromUpdate(index, payload)
+		if err != nil {
+			return err
+		}
+		if len(surface.Tools) > 0 {
+			observation.Surfaces = append(observation.Surfaces, surface)
+		}
+	case "conversation.item.create":
+		output, ok, err := sessionPageToolsSwitchVoiceOutputFromItem(index, payload)
+		if err != nil {
+			return err
+		}
+		if ok {
+			observation.Outputs = append(observation.Outputs, output)
+		}
+	}
+	return nil
+}
+
+func (observation *sessionPageToolsSwitchVoiceObservation) addServerRecord(index int, recordType string, payload json.RawMessage) error {
+	switch recordType {
+	case "session.created":
+		observation.SessionCreated++
+	case "response.output_item.added":
+		return observation.addFunctionCall(index, payload)
+	case "response.function_call_arguments.done":
+		return observation.addFunctionArguments(index, payload)
+	case "conversation.item.input_audio_transcription.completed":
+		if text := sessionPageToolsSwitchVoiceStringField(payload, "transcript"); text != "" {
+			observation.UserTranscripts = append(observation.UserTranscripts, text)
+		}
+	case "response.output_audio_transcript.done", "response.audio_transcript.done":
+		if text := sessionPageToolsSwitchVoiceStringField(payload, "transcript"); text != "" {
+			observation.AssistantTranscripts = append(observation.AssistantTranscripts, text)
+		}
+	case "response.output_text.done":
+		if text := sessionPageToolsSwitchVoiceStringField(payload, "text"); text != "" {
+			observation.AssistantTranscripts = append(observation.AssistantTranscripts, text)
+		}
+	}
+	return nil
+}
+
+func (observation *sessionPageToolsSwitchVoiceObservation) addFunctionCall(index int, payload json.RawMessage) error {
+	var event struct {
+		Item struct {
+			Type   string `json:"type"`
+			Name   string `json:"name"`
+			CallID string `json:"call_id"`
+			ID     string `json:"id"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return fmt.Errorf("decode function call at record %d: %w", index, err)
+	}
+	if event.Item.Type != "function_call" {
+		return nil
+	}
+	callID := event.Item.CallID
+	if callID == "" {
+		callID = event.Item.ID
+	}
+	observation.Calls = append(observation.Calls, sessionPageToolsSwitchVoiceCall{Index: index, Name: event.Item.Name, CallID: callID, ArgumentsAt: -1})
+	return nil
+}
+
+func (observation *sessionPageToolsSwitchVoiceObservation) addFunctionArguments(index int, payload json.RawMessage) error {
+	var event struct {
+		Name      string `json:"name"`
+		CallID    string `json:"call_id"`
+		Arguments string `json:"arguments"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return fmt.Errorf("decode function arguments at record %d: %w", index, err)
+	}
+	callIndex := -1
+	for candidate := len(observation.Calls) - 1; candidate >= 0; candidate-- {
+		if observation.Calls[candidate].ArgumentsAt >= 0 {
+			continue
+		}
+		if event.CallID == "" || observation.Calls[candidate].CallID == event.CallID {
+			callIndex = candidate
+			break
+		}
+	}
+	if callIndex < 0 {
+		return fmt.Errorf("function arguments at record %d have no matching call_id=%q", index, event.CallID)
+	}
+	call := &observation.Calls[callIndex]
+	call.Arguments = event.Arguments
+	call.ArgumentsAt = index
+	if call.Name == "" {
+		call.Name = event.Name
+	}
+	if call.CallID == "" {
+		call.CallID = event.CallID
+	}
+	return nil
 }
 
 func sessionPageToolsSwitchVoiceSurfaceFromUpdate(index int, payload json.RawMessage) (sessionPageToolsSwitchVoiceSurface, error) {
@@ -554,242 +542,6 @@ func sessionPageToolsSwitchVoiceStringField(payload json.RawMessage, field strin
 	return strings.TrimSpace(value)
 }
 
-func validateSessionPageToolsSwitchVoiceObservation(observation sessionPageToolsSwitchVoiceObservation, cubeTarget, marginTarget sessionPageToolsLiveTarget, title, content string) (string, error) {
-	if observation.Provider != "openai" || observation.Model != sessionPageToolsSwitchVoiceModel {
-		return "", fmt.Errorf("provider identity=(%q,%q), want (openai,%q)", observation.Provider, observation.Model, sessionPageToolsSwitchVoiceModel)
-	}
-	if observation.SessionCreated != 1 {
-		return "", fmt.Errorf("provider session.created count=%d, want one persistent connection", observation.SessionCreated)
-	}
-	if len(observation.UserTranscripts) < 5 {
-		return "", fmt.Errorf("user transcript turns=%d, want five spoken turns", len(observation.UserTranscripts))
-	}
-	if len(observation.AssistantTranscripts) == 0 {
-		return "", errors.New("voice capture has no assistant transcript")
-	}
-	transcript := strings.ToLower(strings.Join(observation.UserTranscripts, " "))
-	for _, phrase := range []string{"cube", "document editor", "exact title", "switch back", "goodbye"} {
-		if !strings.Contains(transcript, phrase) {
-			return "", fmt.Errorf("spoken transcript %q is missing %q", transcript, phrase)
-		}
-	}
-
-	pageNames := map[string]struct{}{
-		"get_cube_state": {}, "queue_cube_moves": {},
-		"add_comment": {}, "create_document": {}, "get_document": {}, "list_comments": {}, "list_documents": {}, "open_document": {}, "reopen_comment": {}, "reply_to_comment": {}, "resolve_comment": {}, "update_document": {},
-	}
-	baseNames := make([]string, 0)
-	baseDefinitions := map[string]string{}
-	stableDefinitions := map[string]string{}
-	for _, surface := range observation.Surfaces {
-		seen := map[string]bool{}
-		for _, tool := range surface.Tools {
-			if seen[tool.Name] {
-				return "", fmt.Errorf("session.update at record %d repeats tool %q", surface.Index, tool.Name)
-			}
-			seen[tool.Name] = true
-			if _, isPage := pageNames[tool.Name]; !isPage {
-				if len(baseNames) == 0 || !containsSessionPageToolsSwitchVoice(baseNames, tool.Name) {
-					baseNames = appendUniqueSessionPageToolsSwitchVoice(baseNames, tool.Name)
-				}
-			}
-		}
-	}
-	sort.Strings(baseNames)
-	if len(baseNames) == 0 {
-		return "", errors.New("provider definitions contain no static or stable base tools")
-	}
-	wantStable := webmcp.StableToolNames()
-	for _, stable := range wantStable {
-		if !containsSessionPageToolsSwitchVoice(baseNames, stable) {
-			return "", fmt.Errorf("provider definition base omitted stable broker tool %q", stable)
-		}
-	}
-
-	wantCube := []string{"get_cube_state", "queue_cube_moves"}
-	wantMargin := []string{"add_comment", "create_document", "get_document", "list_comments", "list_documents", "open_document", "reopen_comment", "reply_to_comment", "resolve_comment", "update_document"}
-	for _, names := range [][]string{wantCube, wantMargin} {
-		sort.Strings(names)
-	}
-	cubeAt, marginAt, returnedCubeAt := -1, -1, -1
-	for index, surface := range observation.Surfaces {
-		currentNames := make([]string, 0, len(surface.Tools))
-		currentByName := map[string]string{}
-		for _, tool := range surface.Tools {
-			currentNames = append(currentNames, tool.Name)
-			canonical, err := sessionPageToolsSwitchVoiceCanonicalJSON(tool.Raw)
-			if err != nil {
-				return "", fmt.Errorf("canonicalize provider definition %q: %w", tool.Name, err)
-			}
-			currentByName[tool.Name] = canonical
-		}
-		page := make([]string, 0)
-		for _, name := range currentNames {
-			if _, isPage := pageNames[name]; isPage {
-				page = append(page, name)
-			}
-		}
-		sort.Strings(currentNames)
-		sort.Strings(page)
-		for _, name := range baseNames {
-			if !containsSessionPageToolsSwitchVoice(currentNames, name) {
-				return "", fmt.Errorf("session.update at record %d omitted base tool %q", surface.Index, name)
-			}
-			if previous, ok := baseDefinitions[name]; ok && previous != currentByName[name] {
-				return "", fmt.Errorf("static definition %q changed across session.update replacements", name)
-			}
-			baseDefinitions[name] = currentByName[name]
-		}
-		for _, name := range wantStable {
-			if previous, ok := stableDefinitions[name]; ok && previous != currentByName[name] {
-				return "", fmt.Errorf("stable definition %q changed across session.update replacements", name)
-			}
-			stableDefinitions[name] = currentByName[name]
-		}
-		wantNames := append(append([]string(nil), baseNames...), page...)
-		sort.Strings(wantNames)
-		if !sameSessionPageToolsSwitchVoiceStrings(currentNames, wantNames) {
-			return "", fmt.Errorf("session.update at record %d has unexpected ordered surface: got=%v want=%v", surface.Index, currentNames, wantNames)
-		}
-		switch {
-		case sameSessionPageToolsSwitchVoiceStrings(page, wantCube):
-			if cubeAt < 0 {
-				cubeAt = index
-			} else if marginAt >= 0 && returnedCubeAt < 0 {
-				returnedCubeAt = index
-			}
-		case sameSessionPageToolsSwitchVoiceStrings(page, wantMargin):
-			if cubeAt < 0 {
-				return "", fmt.Errorf("Margin surface at record %d preceded Cubecade surface", surface.Index)
-			}
-			if marginAt < 0 {
-				marginAt = index
-			}
-		default:
-			if len(page) != 0 {
-				return "", fmt.Errorf("session.update at record %d advertised unexpected page tools %v", surface.Index, page)
-			}
-		}
-	}
-	if cubeAt < 0 || marginAt < 0 || returnedCubeAt < 0 || !(cubeAt < marginAt && marginAt < returnedCubeAt) {
-		return "", fmt.Errorf("definition transitions did not prove Cubecade->Margin->Cubecade: cube=%d margin=%d returned_cube=%d surfaces=%d", cubeAt, marginAt, returnedCubeAt, len(observation.Surfaces))
-	}
-
-	outputs := map[string]sessionPageToolsSwitchVoiceOutput{}
-	for _, output := range observation.Outputs {
-		if output.CallID == "" {
-			return "", fmt.Errorf("tool output at record %d omitted call_id", output.Index)
-		}
-		if _, exists := outputs[output.CallID]; exists {
-			return "", fmt.Errorf("tool output call_id=%q occurred more than once", output.CallID)
-		}
-		outputs[output.CallID] = output
-		if !output.Envelope.OK {
-			return "", fmt.Errorf("voice tool %q failed: %+v", output.CallID, output.Envelope.Error)
-		}
-	}
-	initialCubeSelected, marginSelected, cubeSelected := false, false, false
-	cubeReadsBefore, cubeReadsAfter := 0, 0
-	pageCallCount := map[string]int{}
-	var documentID string
-	for _, call := range observation.Calls {
-		if call.CallID == "" || call.ArgumentsAt <= call.Index {
-			return "", fmt.Errorf("uncorrelated voice call: %+v", call)
-		}
-		if _, ok := outputs[call.CallID]; !ok {
-			return "", fmt.Errorf("voice call %q has no tool result", call.CallID)
-		}
-		switch call.Name {
-		case webmcp.SelectTabToolName:
-			var args struct {
-				BrowserID string `json:"browser_id"`
-				TargetID  string `json:"target_id"`
-			}
-			if err := json.Unmarshal([]byte(call.Arguments), &args); err != nil {
-				return "", fmt.Errorf("decode %s arguments: %w", call.Name, err)
-			}
-			switch {
-			case args.BrowserID == marginTarget.BrowserID && args.TargetID == marginTarget.TargetID && !marginSelected:
-				marginSelected = true
-			case args.BrowserID == cubeTarget.BrowserID && args.TargetID == cubeTarget.TargetID && !marginSelected && !initialCubeSelected:
-				initialCubeSelected = true
-			case args.BrowserID == cubeTarget.BrowserID && args.TargetID == cubeTarget.TargetID && marginSelected && !cubeSelected:
-				cubeSelected = true
-			default:
-				return "", fmt.Errorf("unexpected selection call arguments: browser=%q target=%q", args.BrowserID, args.TargetID)
-			}
-		case "get_cube_state", "queue_cube_moves", "add_comment", "create_document", "get_document", "list_comments", "list_documents", "open_document", "reopen_comment", "reply_to_comment", "resolve_comment", "update_document":
-			pageCallCount[call.Name]++
-			if call.Name == "get_cube_state" || call.Name == "queue_cube_moves" {
-				if marginSelected && !cubeSelected {
-					return "", fmt.Errorf("Cubecade page tool %q was called while Margin was selected", call.Name)
-				}
-				if call.Name == "queue_cube_moves" {
-					return "", errors.New("voice scenario unexpectedly attempted to move the cube")
-				}
-				if cubeSelected {
-					cubeReadsAfter++
-				} else {
-					cubeReadsBefore++
-				}
-			} else if !marginSelected || cubeSelected {
-				return "", fmt.Errorf("Margin page tool %q was called outside the selected Margin interval", call.Name)
-			}
-			if call.Name == "create_document" {
-				var args struct {
-					Title   string `json:"title"`
-					Content string `json:"content"`
-				}
-				if err := json.Unmarshal([]byte(call.Arguments), &args); err != nil {
-					return "", fmt.Errorf("decode create_document arguments: %w", err)
-				}
-				if args.Title != title || args.Content != content {
-					return "", fmt.Errorf("create_document arguments=(%q,%q), want exact=(%q,%q)", args.Title, args.Content, title, content)
-				}
-				documentID = liveDocumentID(outputs[call.CallID].Envelope.Data)
-				if documentID == "" {
-					return "", errors.New("create_document result omitted document ID")
-				}
-			}
-			if call.Name == "get_document" {
-				var args map[string]any
-				if err := json.Unmarshal([]byte(call.Arguments), &args); err != nil {
-					return "", fmt.Errorf("decode get_document arguments: %w", err)
-				}
-				if got, _ := args["document_id"].(string); got != documentID {
-					return "", fmt.Errorf("get_document document_id=%q, want created document %q", got, documentID)
-				}
-			}
-		default:
-			if !containsSessionPageToolsSwitchVoice(webmcp.StableToolNames(), call.Name) {
-				return "", fmt.Errorf("unexpected provider tool call %q", call.Name)
-			}
-		}
-	}
-	if !initialCubeSelected || !marginSelected || !cubeSelected {
-		return "", fmt.Errorf("selection calls initial_cube=%t margin=%t return_cube=%t, want exact startup selection and both directions", initialCubeSelected, marginSelected, cubeSelected)
-	}
-	if cubeReadsBefore == 0 || cubeReadsAfter == 0 || pageCallCount["create_document"] != 1 || pageCallCount["get_document"] < 1 {
-		return "", fmt.Errorf("page call counts=%v cube_reads_before=%d cube_reads_after=%d, want cube reads on both sides and one create/get", pageCallCount, cubeReadsBefore, cubeReadsAfter)
-	}
-	if documentID == "" {
-		return "", errors.New("voice trace did not produce a document ID")
-	}
-	return documentID, nil
-}
-
-func sessionPageToolsSwitchVoiceCanonicalJSON(raw json.RawMessage) (string, error) {
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return "", err
-	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return "", err
-	}
-	return string(encoded), nil
-}
-
 func validateSessionPageToolsSwitchVoiceRecordDir(path string) error {
 	for _, name := range []string{"manifest.json", "client.transcript.jsonl", "agent.transcript.jsonl"} {
 		info, err := os.Stat(filepath.Join(path, name))
@@ -832,34 +584,6 @@ func sessionPageToolsSwitchVoiceFindDocument(value any, title, content string) b
 		}
 	}
 	return false
-}
-
-func containsSessionPageToolsSwitchVoice(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-func appendUniqueSessionPageToolsSwitchVoice(values []string, value string) []string {
-	if containsSessionPageToolsSwitchVoice(values, value) {
-		return values
-	}
-	return append(values, value)
-}
-
-func sameSessionPageToolsSwitchVoiceStrings(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for index := range got {
-		if got[index] != want[index] {
-			return false
-		}
-	}
-	return true
 }
 
 func sessionPageToolsSwitchVoiceJSONStrings(values []string) string {

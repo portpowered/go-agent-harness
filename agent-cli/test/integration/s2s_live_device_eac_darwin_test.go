@@ -42,7 +42,7 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 		"--config-dir", workDir,
 		"--workdir", workDir,
 		"session",
-		"--provider", "openai",
+		"--provider", liveProviderOpenAI,
 		"--model", "gpt-realtime-2.1-mini",
 		"--api-key", apiKey,
 		"--audio-in-device", "default",
@@ -83,7 +83,7 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 	counts := map[string]int{}
 	for _, record := range capture.Records {
 		counts[record.Type]++
-		if record.Type == "error" {
+		if record.Type == rtEventError {
 			t.Fatalf("provider emitted error during device EAC round trip: %+v", record)
 		}
 	}

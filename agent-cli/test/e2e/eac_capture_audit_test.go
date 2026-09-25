@@ -36,15 +36,24 @@ func TestEAC24Through33CaptureIntegrity(t *testing.T) {
 	}
 }
 
+// eacCaptureAudit accumulates the provider-edge evidence of one capture.
+type eacCaptureAudit struct {
+	inputBytes, outputBytes int
+	audioResponses          map[string]int
+	audioDone               map[string]bool
+	toolCalls               map[string]bool
+	toolResults             map[string]bool
+	rateLimited             bool
+}
+
 func auditEACCapture(t *testing.T, capture gatewaytesting.SessionCapture, expectAudio bool) {
 	t.Helper()
-	inputBytes, outputBytes := 0, 0
-	audioResponses := map[string]int{}
-	audioDone := map[string]bool{}
-	toolCalls := map[string]bool{}
-	toolResults := map[string]bool{}
-	rateLimited := false
-
+	audit := &eacCaptureAudit{
+		audioResponses: map[string]int{},
+		audioDone:      map[string]bool{},
+		toolCalls:      map[string]bool{},
+		toolResults:    map[string]bool{},
+	}
 	for index, record := range capture.Records {
 		if record.Sequence != index+1 {
 			t.Fatalf("record %d sequence = %d, want %d", index, record.Sequence, index+1)
@@ -53,69 +62,93 @@ func auditEACCapture(t *testing.T, capture gatewaytesting.SessionCapture, expect
 		if err := json.Unmarshal(record.Payload, &payload); err != nil {
 			t.Fatalf("record %d %s payload: %v", record.Sequence, record.Type, err)
 		}
-		switch record.Type {
-		case "input_audio_buffer.append":
-			inputBytes += decodedEACAudioBytes(t, record.Sequence, payload, "audio")
-		case "response.output_audio.delta":
-			outputBytes += decodedEACAudioBytes(t, record.Sequence, payload, "delta")
-			if responseID, _ := payload["response_id"].(string); responseID != "" {
-				audioResponses[responseID]++
-			}
-		case "response.output_audio.done":
-			if responseID, _ := payload["response_id"].(string); responseID != "" {
-				audioDone[responseID] = true
-			}
-		case "response.output_item.done":
-			item, _ := payload["item"].(map[string]any)
-			if item["type"] == "function_call" {
-				if callID, _ := item["call_id"].(string); callID != "" {
-					toolCalls[callID] = true
-				}
-			}
-		case "conversation.item.create":
-			item, _ := payload["item"].(map[string]any)
-			if item["type"] == "function_call_output" {
-				if callID, _ := item["call_id"].(string); callID != "" {
-					toolResults[callID] = true
-				}
-			}
-		case "error":
-			providerError, _ := payload["error"].(map[string]any)
-			errorType, _ := providerError["type"].(string)
-			code, _ := providerError["code"].(string)
-			message, _ := providerError["message"].(string)
-			rateLimited = providers.SessionErrorClassification(errorType, code, message) == providers.ErrorClassRateLimited
-		}
+		audit.observe(t, record.Sequence, record.Type, payload)
 	}
+	audit.assert(t, expectAudio)
+}
 
-	for responseID := range audioResponses {
-		if !audioDone[responseID] {
+func (a *eacCaptureAudit) observe(t *testing.T, sequence int, recordType string, payload map[string]any) {
+	t.Helper()
+	switch recordType {
+	case "input_audio_buffer.append":
+		a.inputBytes += decodedEACAudioBytes(t, sequence, payload, "audio")
+	case "response.output_audio.delta":
+		a.outputBytes += decodedEACAudioBytes(t, sequence, payload, "delta")
+		if responseID := eacString(payload, "response_id"); responseID != "" {
+			a.audioResponses[responseID]++
+		}
+	case "response.output_audio.done":
+		if responseID := eacString(payload, "response_id"); responseID != "" {
+			a.audioDone[responseID] = true
+		}
+	case "response.output_item.done":
+		item := eacObject(payload, "item")
+		if callID := eacString(item, "call_id"); item["type"] == "function_call" && callID != "" {
+			a.toolCalls[callID] = true
+		}
+	case "conversation.item.create":
+		item := eacObject(payload, "item")
+		if callID := eacString(item, "call_id"); item["type"] == "function_call_output" && callID != "" {
+			a.toolResults[callID] = true
+		}
+	case "error":
+		providerError := eacObject(payload, "error")
+		a.rateLimited = providers.SessionErrorClassification(
+			eacString(providerError, "type"),
+			eacString(providerError, "code"),
+			eacString(providerError, "message"),
+		) == providers.ErrorClassRateLimited
+	}
+}
+
+func (a *eacCaptureAudit) assert(t *testing.T, expectAudio bool) {
+	t.Helper()
+	for responseID := range a.audioResponses {
+		if !a.audioDone[responseID] {
 			t.Errorf("audio response %s has deltas without response.output_audio.done", responseID)
 		}
 	}
-	for callID := range toolCalls {
-		if !toolResults[callID] {
+	for callID := range a.toolCalls {
+		if !a.toolResults[callID] {
 			t.Errorf("tool call %s has no function_call_output", callID)
 		}
 	}
 	if expectAudio {
-		if inputBytes == 0 || outputBytes == 0 {
-			t.Fatalf("audio capture is empty: input_bytes=%d output_bytes=%d", inputBytes, outputBytes)
+		if a.inputBytes == 0 || a.outputBytes == 0 {
+			t.Fatalf("audio capture is empty: input_bytes=%d output_bytes=%d", a.inputBytes, a.outputBytes)
 		}
-		if rateLimited {
+		if a.rateLimited {
 			t.Fatal("audio capture unexpectedly terminated for quota exhaustion")
 		}
 		return
 	}
-	if !rateLimited {
+	if !a.rateLimited {
 		t.Fatal("expected the quota-only capture to contain a classified rate-limit error")
 	}
 }
 
+// eacString returns the string at key, or "" when it is absent or not a
+// string (the same zero value an unchecked assertion yields).
+func eacString(payload map[string]any, key string) string {
+	value, ok := payload[key].(string)
+	if !ok {
+		return ""
+	}
+	return value
+}
+
+// eacObject returns the JSON object at key, or nil when it is absent.
+func eacObject(payload map[string]any, key string) map[string]any {
+	value, ok := payload[key].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return value
+}
+
 func decodedEACAudioBytes(t *testing.T, sequence int, payload map[string]any, field string) int {
 	t.Helper()
-	encoded, _ := payload[field].(string)
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	decoded, err := base64.StdEncoding.DecodeString(eacString(payload, field))
 	if err != nil {
 		t.Fatalf("record %d field %s is not valid base64: %v", sequence, field, err)
 	}

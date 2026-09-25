@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,27 +65,14 @@ func TestSessionPaperieMarginFromBaselineAgentsMD(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
-	assertPaperieOnlyStartup(t, ctx, cdpURL)
-	openPaperieMarginLiveTab(t, ctx, cdpURL, sessionPageToolsLiveMarginURL, "Margin")
+	assertLiveChromeStartupShape(t, ctx, cdpURL, sessionPaperieMarginOrigin, "Paperie")
+	openLiveCDPTab(t, ctx, cdpURL, sessionPageToolsLiveMarginURL, "Margin")
 	paperie, margin := discoverPaperieMarginTargets(t, ctx, cdpURL)
 	if paperie.BrowserID != margin.BrowserID {
 		t.Fatalf("scenario targets use different browsers: Paperie=%q Margin=%q", paperie.BrowserID, margin.BrowserID)
 	}
 
-	artifactRoot := paperieMarginArtifactRoot(t)
-	workspace := filepath.Join(artifactRoot, "workspace")
-	configDir := filepath.Join(artifactRoot, "config")
-	for _, directory := range []string{workspace, configDir} {
-		if err := os.MkdirAll(directory, sessionPaperieMarginArtifactMode); err != nil {
-			t.Fatalf("create %s: %v", filepath.Base(directory), err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(workspace, "AGENTS.md"), []byte(sessionWebMCPWorkspaceBaseline), sessionPaperieMarginEvidenceMode); err != nil {
-		t.Fatalf("write baseline AGENTS.md: %v", err)
-	}
-	if err := writePaperieMarginBrowserOnlyConfig(configDir); err != nil {
-		t.Fatalf("write browser-only config: %v", err)
-	}
+	artifactRoot, workspace, configDir := preparePaperieMarginWorkspace(t)
 
 	token := fmt.Sprintf("%d", time.Now().UnixNano())
 	title := "Customer follow-up " + token
@@ -107,7 +92,7 @@ func TestSessionPaperieMarginFromBaselineAgentsMD(t *testing.T) {
 		"-C", configDir,
 		"--workdir", workspace,
 		"session",
-		"--provider", "openai",
+		"--provider", config.ProviderOpenAI,
 		"--model", sessionPaperieMarginModel,
 		"--browser-tools", "webmcp",
 		"--browser-cdp-url", cdpURL,
@@ -156,61 +141,19 @@ func TestSessionPaperieMarginFromBaselineAgentsMD(t *testing.T) {
 	cardState := directLiveInvoke(t, ctx, agentBinary, cdpURL, paperie, findDirectToolRef(t, paperieCatalog, "get_card_state"), map[string]any{})
 	requireLiveSuccess(t, cardState, "direct Paperie state oracle")
 	if !paperieMarginJSONContains(cardState.Data, "Maya", "Jordan", eyebrow, front, inside) {
-		t.Fatalf("Paperie state does not contain the exact requested fields: %s", truncateLiveJSON(cardState.Data, 3000))
+		t.Fatalf("Paperie state does not contain the exact requested fields: %s", truncateLiveText(cardState.Data, 3000))
 	}
 	marginCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, margin, sessionMarginTools)
-	document := directLiveInvoke(t, ctx, agentBinary, cdpURL, margin, findDirectToolRef(t, marginCatalog, "get_document"), map[string]any{"document_id": documentID})
+	document := directLiveInvoke(t, ctx, agentBinary, cdpURL, margin, findDirectToolRef(t, marginCatalog, liveGetDocumentToolName), map[string]any{"document_id": documentID})
 	requireLiveSuccess(t, document, "direct Margin document oracle")
 	if !paperieMarginJSONContains(document.Data, title, initial, appendText) {
-		t.Fatalf("Margin document does not contain created and appended text: %s", truncateLiveJSON(document.Data, 3000))
+		t.Fatalf("Margin document does not contain created and appended text: %s", truncateLiveText(document.Data, 3000))
 	}
 	if err := validateSessionPageToolsSwitchVoiceRecordDir(recordDir); err != nil {
 		t.Fatalf("validate record-dir: %v", err)
 	}
 	assertLiveChromeStillHasOrigins(t, ctx, cdpURL, sessionPaperieMarginOrigin, sessionPageToolsLiveMarginOrigin)
 	t.Logf("WEBMCP_PAPERIE_MARGIN_PASS model=%s key_source=%s browser=%s paperie=%s margin=%s document=%s artifacts=%s", sessionPaperieMarginModel, keySource, paperie.BrowserID, paperie.TargetID, margin.TargetID, documentID, artifactRoot)
-}
-
-func assertPaperieOnlyStartup(t *testing.T, ctx context.Context, cdpURL string) {
-	t.Helper()
-	var targets []sessionPageToolsLiveCDPTarget
-	if err := getLiveCDPJSON(ctx, cdpURL, "/json/list", &targets); err != nil {
-		t.Fatalf("inspect external Chrome targets: %v", err)
-	}
-	pages := 0
-	for _, target := range targets {
-		if target.Type != "page" {
-			continue
-		}
-		pages++
-		if got := liveURLOrigin(target.URL); got != sessionPaperieMarginOrigin {
-			t.Fatalf("startup page origin=%q, want only %q", got, sessionPaperieMarginOrigin)
-		}
-	}
-	if pages != 1 {
-		t.Fatalf("startup page count=%d, want one Paperie page", pages)
-	}
-}
-
-func openPaperieMarginLiveTab(t *testing.T, ctx context.Context, cdpURL, targetURL, label string) {
-	t.Helper()
-	endpoint, err := liveCDPEndpoint(cdpURL, "/json/new", targetURL)
-	if err != nil {
-		t.Fatalf("build %s /json/new endpoint: %v", label, err)
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, nil)
-	if err != nil {
-		t.Fatalf("create %s /json/new request: %v", label, err)
-	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatalf("open %s through /json/new: %v", label, err)
-	}
-	defer response.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		t.Fatalf("open %s through /json/new status=%s body=%q", label, response.Status, string(body))
-	}
 }
 
 func discoverPaperieMarginTargets(t *testing.T, ctx context.Context, cdpURL string) (sessionPageToolsLiveTarget, sessionPageToolsLiveTarget) {
@@ -228,7 +171,11 @@ func discoverPaperieMarginTargets(t *testing.T, ctx context.Context, cdpURL stri
 		t.Fatalf("create target-discovery capabilities: %v", err)
 	}
 	if capabilities.Close != nil {
-		defer capabilities.Close()
+		defer func() {
+			if closeErr := capabilities.Close(); closeErr != nil {
+				t.Logf("close target-discovery capabilities: %v", closeErr)
+			}
+		}()
 	}
 	if err := capabilities.Initialize(ctx); err != nil {
 		t.Fatalf("initialize target discovery: %v", err)
@@ -237,23 +184,8 @@ func discoverPaperieMarginTargets(t *testing.T, ctx context.Context, cdpURL stri
 	for time.Now().Before(deadline) {
 		response, callErr := capabilities.Executor.Execute(ctx, messages.ToolCall{ID: "paperie-margin-list-tabs", Name: webmcp.ListTabsToolName, Arguments: `{"eligible_only":true,"include_zero_tool_pages":true}`})
 		if callErr == nil {
-			envelope, decodeErr := webmcp.UnmarshalToolResult([]byte(response.Content))
-			if decodeErr == nil && envelope.OK {
-				var tabs sessionPageToolsLiveTabs
-				if json.Unmarshal(envelope.Data, &tabs) == nil {
-					var paperie, margin sessionPageToolsLiveTarget
-					for _, target := range tabs.Targets {
-						switch target.Origin {
-						case sessionPaperieMarginOrigin:
-							paperie = target
-						case sessionPageToolsLiveMarginOrigin:
-							margin = target
-						}
-					}
-					if paperie.TargetID != "" && margin.TargetID != "" {
-						return paperie, margin
-					}
-				}
+			if paperie, margin, found := paperieMarginTargetsFromTabs(response.Content); found {
+				return paperie, margin
 			}
 		}
 		select {
@@ -264,6 +196,28 @@ func discoverPaperieMarginTargets(t *testing.T, ctx context.Context, cdpURL stri
 	}
 	t.Fatal("timed out discovering Paperie and Margin targets")
 	return sessionPageToolsLiveTarget{}, sessionPageToolsLiveTarget{}
+}
+
+// paperieMarginTargetsFromTabs finds the Paperie and Margin targets in one
+// successful list-tabs result.
+func paperieMarginTargetsFromTabs(content string) (paperie, margin sessionPageToolsLiveTarget, found bool) {
+	envelope, err := webmcp.UnmarshalToolResult([]byte(content))
+	if err != nil || !envelope.OK {
+		return paperie, margin, false
+	}
+	var tabs sessionPageToolsLiveTabs
+	if json.Unmarshal(envelope.Data, &tabs) != nil {
+		return paperie, margin, false
+	}
+	for _, target := range tabs.Targets {
+		switch target.Origin {
+		case sessionPaperieMarginOrigin:
+			paperie = target
+		case sessionPageToolsLiveMarginOrigin:
+			margin = target
+		}
+	}
+	return paperie, margin, paperie.TargetID != "" && margin.TargetID != ""
 }
 
 func paperieMarginArtifactRoot(t *testing.T) string {
@@ -282,6 +236,27 @@ func paperieMarginArtifactRoot(t *testing.T) string {
 	return root
 }
 
+// preparePaperieMarginWorkspace creates the run's artifact root, a workspace
+// holding the page-agnostic baseline AGENTS.md, and a browser-only config.
+func preparePaperieMarginWorkspace(t *testing.T) (artifactRoot, workspace, configDir string) {
+	t.Helper()
+	artifactRoot = paperieMarginArtifactRoot(t)
+	workspace = filepath.Join(artifactRoot, "workspace")
+	configDir = filepath.Join(artifactRoot, "config")
+	for _, directory := range []string{workspace, configDir} {
+		if err := os.MkdirAll(directory, sessionPaperieMarginArtifactMode); err != nil {
+			t.Fatalf("create %s: %v", filepath.Base(directory), err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "AGENTS.md"), []byte(sessionWebMCPWorkspaceBaseline), sessionPaperieMarginEvidenceMode); err != nil {
+		t.Fatalf("write baseline AGENTS.md: %v", err)
+	}
+	if err := writePaperieMarginBrowserOnlyConfig(configDir); err != nil {
+		t.Fatalf("write browser-only config: %v", err)
+	}
+	return artifactRoot, workspace, configDir
+}
+
 func writePaperieMarginBrowserOnlyConfig(configDir string) error {
 	var builder strings.Builder
 	builder.WriteString("tools:\n  list:\n")
@@ -292,100 +267,140 @@ func writePaperieMarginBrowserOnlyConfig(configDir string) error {
 }
 
 func validatePaperieMarginObservation(observation sessionPageToolsSwitchVoiceObservation, paperie, margin sessionPageToolsLiveTarget, title, eyebrow, front, inside, initial, appendText string) (string, error) {
-	if observation.Provider != "openai" || observation.Model != sessionPaperieMarginModel || observation.SessionCreated != 1 {
+	if observation.Provider != config.ProviderOpenAI || observation.Model != sessionPaperieMarginModel || observation.SessionCreated != 1 {
 		return "", fmt.Errorf("provider=(%q,%q) session.created=%d, want openai/%s and one session", observation.Provider, observation.Model, observation.SessionCreated, sessionPaperieMarginModel)
 	}
 	if !paperieMarginSurfaceContains(observation.Surfaces, sessionPaperieTools) || !paperieMarginSurfaceContains(observation.Surfaces, sessionMarginTools) {
 		return "", errors.New("dynamic tool surfaces did not advertise both Paperie and Margin page tools")
 	}
-	outputs := make(map[string]sessionPageToolsSwitchVoiceOutput, len(observation.Outputs))
+	state := paperieMarginCallState{
+		paperie: paperie, margin: margin, title: title, eyebrow: eyebrow, front: front, inside: inside, initial: initial, appendText: appendText,
+		outputs: make(map[string]sessionPageToolsSwitchVoiceOutput, len(observation.Outputs)),
+	}
 	for _, output := range observation.Outputs {
 		if output.CallID == "" || !output.Envelope.OK {
 			return "", fmt.Errorf("failed or uncorrelated tool output at record %d: %+v", output.Index, output.Envelope.Error)
 		}
-		outputs[output.CallID] = output
+		state.outputs[output.CallID] = output
 	}
-	paperieSelected, marginSelected := false, false
-	cardReadsBefore, cardReadsAfter := 0, 0
-	cardMutated := false
-	created, updated, readDocument := false, false, false
-	documentID := ""
 	for _, call := range observation.Calls {
-		output, hasOutput := outputs[call.CallID]
-		if call.CallID == "" || call.ArgumentsAt <= call.Index || !hasOutput {
-			return "", fmt.Errorf("uncorrelated call: %+v", call)
-		}
-		switch call.Name {
-		case webmcp.SelectTabToolName:
-			var args struct{ BrowserID, TargetID string }
-			var raw map[string]string
-			if err := json.Unmarshal([]byte(call.Arguments), &raw); err != nil {
-				return "", fmt.Errorf("decode select arguments: %w", err)
-			}
-			args.BrowserID, args.TargetID = raw["browser_id"], raw["target_id"]
-			switch {
-			case !paperieSelected && args.BrowserID == paperie.BrowserID && args.TargetID == paperie.TargetID:
-				paperieSelected = true
-			case paperieSelected && !marginSelected && args.BrowserID == margin.BrowserID && args.TargetID == margin.TargetID:
-				marginSelected = true
-			default:
-				return "", fmt.Errorf("unexpected tab selection browser=%q target=%q", args.BrowserID, args.TargetID)
-			}
-		case "get_card_state":
-			if !paperieSelected || marginSelected {
-				return "", errors.New("get_card_state ran outside the Paperie interval")
-			}
-			if cardMutated {
-				cardReadsAfter++
-			} else {
-				cardReadsBefore++
-			}
-		case "set_recipient_context":
-			if !paperieSelected || marginSelected || !paperieMarginArgumentsContain(call.Arguments, "Maya", "Jordan") {
-				return "", fmt.Errorf("recipient edit was misplaced or inexact: %s", call.Arguments)
-			}
-			cardMutated = true
-		case "set_card_message":
-			if !paperieSelected || marginSelected || !paperieMarginArgumentsContain(call.Arguments, eyebrow, front, inside) {
-				return "", fmt.Errorf("card-message edit was misplaced or inexact: %s", call.Arguments)
-			}
-			cardMutated = true
-		case "start_custom_card", "set_card_design", "set_card_size", "set_envelope", "set_preview", "select_card_template", "apply_generated_artwork", "set_print_quantity", "review_and_print", "list_print_options":
-			if !paperieSelected || marginSelected {
-				return "", fmt.Errorf("Paperie tool %q ran outside the Paperie interval", call.Name)
-			}
-		case "create_document":
-			if !marginSelected || !paperieMarginArgumentsContain(call.Arguments, title, initial) {
-				return "", fmt.Errorf("document create was misplaced or inexact: %s", call.Arguments)
-			}
-			documentID = liveDocumentID(output.Envelope.Data)
-			if documentID == "" {
-				return "", errors.New("create_document omitted document ID")
-			}
-			created = true
-		case "update_document":
-			if !created || !paperieMarginArgumentsContain(call.Arguments, documentID, appendText) {
-				return "", fmt.Errorf("document append was misplaced or inexact: %s", call.Arguments)
-			}
-			updated = true
-		case "get_document":
-			if updated && paperieMarginArgumentsContain(call.Arguments, documentID) {
-				readDocument = true
-			}
-		case "list_documents", "open_document", "add_comment", "list_comments", "reopen_comment", "reply_to_comment", "resolve_comment":
-			if !marginSelected {
-				return "", fmt.Errorf("Margin tool %q ran before Margin selection", call.Name)
-			}
-		default:
-			if !containsSessionPageToolsSwitchVoice(webmcp.StableToolNames(), call.Name) {
-				return "", fmt.Errorf("unexpected tool call %q", call.Name)
-			}
+		if err := state.observe(call); err != nil {
+			return "", err
 		}
 	}
-	if !paperieSelected || !marginSelected || cardReadsBefore == 0 || cardReadsAfter == 0 || !cardMutated || !created || !updated || !readDocument {
-		return "", fmt.Errorf("incomplete scenario: paperie=%t margin=%t card_reads=%d/%d card_mutated=%t created=%t updated=%t document_read=%t", paperieSelected, marginSelected, cardReadsBefore, cardReadsAfter, cardMutated, created, updated, readDocument)
+	return state.finish()
+}
+
+// paperieMarginCallState replays the provider tool calls in order and tracks
+// the selected page and the card and document edits made so far.
+type paperieMarginCallState struct {
+	paperie, margin                                    sessionPageToolsLiveTarget
+	title, eyebrow, front, inside, initial, appendText string
+	outputs                                            map[string]sessionPageToolsSwitchVoiceOutput
+	paperieSelected, marginSelected, cardMutated       bool
+	cardReadsBefore, cardReadsAfter                    int
+	created, updated, readDocument                     bool
+	documentID                                         string
+}
+
+func (state *paperieMarginCallState) observe(call sessionPageToolsSwitchVoiceCall) error {
+	output, hasOutput := state.outputs[call.CallID]
+	if call.CallID == "" || call.ArgumentsAt <= call.Index || !hasOutput {
+		return fmt.Errorf("uncorrelated call: %+v", call)
 	}
-	return documentID, nil
+	switch {
+	case call.Name == webmcp.SelectTabToolName:
+		return state.observeSelection(call)
+	case containsSessionPageToolsSwitchVoice(sessionPaperieTools, call.Name):
+		return state.observePaperieCall(call)
+	case containsSessionPageToolsSwitchVoice(sessionMarginTools, call.Name):
+		return state.observeMarginCall(call, output)
+	case !containsSessionPageToolsSwitchVoice(webmcp.StableToolNames(), call.Name):
+		return fmt.Errorf("unexpected tool call %q", call.Name)
+	}
+	return nil
+}
+
+func (state *paperieMarginCallState) observeSelection(call sessionPageToolsSwitchVoiceCall) error {
+	var raw map[string]string
+	if err := json.Unmarshal([]byte(call.Arguments), &raw); err != nil {
+		return fmt.Errorf("decode select arguments: %w", err)
+	}
+	browserID, targetID := raw["browser_id"], raw["target_id"]
+	switch {
+	case !state.paperieSelected && browserID == state.paperie.BrowserID && targetID == state.paperie.TargetID:
+		state.paperieSelected = true
+	case state.paperieSelected && !state.marginSelected && browserID == state.margin.BrowserID && targetID == state.margin.TargetID:
+		state.marginSelected = true
+	default:
+		return fmt.Errorf("unexpected tab selection browser=%q target=%q", browserID, targetID)
+	}
+	return nil
+}
+
+func (state *paperieMarginCallState) observePaperieCall(call sessionPageToolsSwitchVoiceCall) error {
+	inPaperie := state.paperieSelected && !state.marginSelected
+	switch call.Name {
+	case "get_card_state":
+		if !inPaperie {
+			return errors.New("get_card_state ran outside the Paperie interval")
+		}
+		if state.cardMutated {
+			state.cardReadsAfter++
+		} else {
+			state.cardReadsBefore++
+		}
+	case "set_recipient_context":
+		if !inPaperie || !paperieMarginArgumentsContain(call.Arguments, "Maya", "Jordan") {
+			return fmt.Errorf("recipient edit was misplaced or inexact: %s", call.Arguments)
+		}
+		state.cardMutated = true
+	case "set_card_message":
+		if !inPaperie || !paperieMarginArgumentsContain(call.Arguments, state.eyebrow, state.front, state.inside) {
+			return fmt.Errorf("card-message edit was misplaced or inexact: %s", call.Arguments)
+		}
+		state.cardMutated = true
+	default:
+		if !inPaperie {
+			return fmt.Errorf("Paperie tool %q ran outside the Paperie interval", call.Name)
+		}
+	}
+	return nil
+}
+
+func (state *paperieMarginCallState) observeMarginCall(call sessionPageToolsSwitchVoiceCall, output sessionPageToolsSwitchVoiceOutput) error {
+	switch call.Name {
+	case liveCreateDocumentToolName:
+		if !state.marginSelected || !paperieMarginArgumentsContain(call.Arguments, state.title, state.initial) {
+			return fmt.Errorf("document create was misplaced or inexact: %s", call.Arguments)
+		}
+		state.documentID = liveDocumentID(output.Envelope.Data)
+		if state.documentID == "" {
+			return errors.New("create_document omitted document ID")
+		}
+		state.created = true
+	case "update_document":
+		if !state.created || !paperieMarginArgumentsContain(call.Arguments, state.documentID, state.appendText) {
+			return fmt.Errorf("document append was misplaced or inexact: %s", call.Arguments)
+		}
+		state.updated = true
+	case liveGetDocumentToolName:
+		if state.updated && paperieMarginArgumentsContain(call.Arguments, state.documentID) {
+			state.readDocument = true
+		}
+	default:
+		if !state.marginSelected {
+			return fmt.Errorf("Margin tool %q ran before Margin selection", call.Name)
+		}
+	}
+	return nil
+}
+
+func (state *paperieMarginCallState) finish() (string, error) {
+	if !state.paperieSelected || !state.marginSelected || state.cardReadsBefore == 0 || state.cardReadsAfter == 0 || !state.cardMutated || !state.created || !state.updated || !state.readDocument {
+		return "", fmt.Errorf("incomplete scenario: paperie=%t margin=%t card_reads=%d/%d card_mutated=%t created=%t updated=%t document_read=%t", state.paperieSelected, state.marginSelected, state.cardReadsBefore, state.cardReadsAfter, state.cardMutated, state.created, state.updated, state.readDocument)
+	}
+	return state.documentID, nil
 }
 
 func paperieMarginSurfaceContains(surfaces []sessionPageToolsSwitchVoiceSurface, want []string) bool {
@@ -425,31 +440,15 @@ func paperieMarginValueContains(value any, values ...string) bool {
 	}
 	text := string(encoded)
 	for _, want := range values {
-		quoted, _ := json.Marshal(want)
+		quoted, err := json.Marshal(want)
+		if err != nil {
+			return false
+		}
 		if !strings.Contains(text, string(quoted)[1:len(quoted)-1]) {
 			return false
 		}
 	}
 	return true
-}
-
-func assertLiveChromeStillHasOrigins(t *testing.T, ctx context.Context, cdpURL string, want ...string) {
-	t.Helper()
-	var targets []sessionPageToolsLiveCDPTarget
-	if err := getLiveCDPJSON(ctx, cdpURL, "/json/list", &targets); err != nil {
-		t.Fatalf("external Chrome stopped before oracle completed: %v", err)
-	}
-	seen := map[string]bool{}
-	for _, target := range targets {
-		if target.Type == "page" {
-			seen[liveURLOrigin(target.URL)] = true
-		}
-	}
-	for _, origin := range want {
-		if !seen[origin] {
-			t.Fatalf("external Chrome lost %s; origins=%v", origin, seen)
-		}
-	}
 }
 
 func TestValidatePaperieMarginObservationRejectsIncompleteOrMisroutedRuns(t *testing.T) {
@@ -488,7 +487,7 @@ func TestValidatePaperieMarginObservationRejectsIncompleteOrMisroutedRuns(t *tes
 			marginSurface = append(marginSurface, sessionPageToolsSwitchVoiceTool{Name: name})
 		}
 		return sessionPageToolsSwitchVoiceObservation{
-			Provider:       "openai",
+			Provider:       config.ProviderOpenAI,
 			Model:          sessionPaperieMarginModel,
 			SessionCreated: 1,
 			Surfaces: []sessionPageToolsSwitchVoiceSurface{
@@ -520,7 +519,7 @@ func TestValidatePaperieMarginObservationRejectsIncompleteOrMisroutedRuns(t *tes
 		{name: "append loses created id", mutate: func(o *sessionPageToolsSwitchVoiceObservation) {
 			o.Calls[8].Arguments = `{"document_id":"wrong","append":"Bring the greeting cards."}`
 		}},
-		{name: "missing document readback", mutate: func(o *sessionPageToolsSwitchVoiceObservation) { o.Calls[9].Name = "list_documents" }},
+		{name: "missing document readback", mutate: func(o *sessionPageToolsSwitchVoiceObservation) { o.Calls[9].Name = queryParityToolName }},
 		{name: "failed page output", mutate: func(o *sessionPageToolsSwitchVoiceObservation) { o.Outputs[4].Envelope.OK = false }},
 		{name: "wrong model", mutate: func(o *sessionPageToolsSwitchVoiceObservation) { o.Model = "other" }},
 		{name: "missing dynamic surface", mutate: func(o *sessionPageToolsSwitchVoiceObservation) { o.Surfaces = o.Surfaces[:1] }},
