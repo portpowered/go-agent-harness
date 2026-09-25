@@ -1,0 +1,63 @@
+version: "2"
+
+# New-code lint policy. These linters still carry legacy debt, so they apply
+# only to code changed relative to the lint base (scripts/golangci-lint-working-tree.sh
+# passes --new-from-rev). The hard, all-code policy lives in .golangci.yml.
+# Promote a linter to .golangci.yml once its repository-wide count is zero.
+# See docs/architecture/lint-policy.md.
+
+run:
+  tests: true
+
+linters:
+  default: none
+  enable:
+    # Error-flow checks with legacy debt.
+    - errorlint
+    - contextcheck
+
+    # Policy values and finite state transitions.
+    - mnd
+    - exhaustive
+
+    # Package state and prohibited effects.
+    - gochecknoglobals
+    - forbidigo
+
+  settings:
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      check:
+        - switch
+      # A default branch must not silently hide a newly added enum member.
+      default-signifies-exhaustive: false
+      package-scope-only: true
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+        - assign
+      # Language and wire protocol sentinels are intentionally readable as
+      # literals. Meaningful policy values still require named constants.
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "10"
+        - "100"
+        - "255"
+    forbidigo:
+      forbid:
+        - pattern: '^os\.Getwd$'
+          msg: inject the working directory through a host boundary
+        - pattern: '^os\.UserHomeDir$'
+          msg: inject host directories through a boundary
+        - pattern: '^fmt\.(Print|Printf|Println)$'
+          msg: return diagnostics through an injected writer or typed result

@@ -196,6 +196,88 @@ Path(os.environ[\"FAKE_RESULT\"]).write_text(json.dumps({
             self.assertNotIn("ignored.go", self._git(root, "ls-files", "--others", "--exclude-standard").stdout)
             self.assertEqual(list(index_dir.iterdir()), [])
 
+    def test_config_selects_new_code_or_all_code_arguments(self):
+        with tempfile.TemporaryDirectory(prefix="golangci-working-tree-modes-") as temp_dir:
+            root = Path(temp_dir)
+            (root / "fixture").mkdir()
+            index_dir = root / "temporary-indexes"
+            index_dir.mkdir()
+            (root / "go.mod").write_text(
+                "module example.com/architecture-gate-modes\n\ngo 1.24\n",
+                encoding="utf-8",
+            )
+            (root / "hard.yml").write_text('version: "2"\n', encoding="utf-8")
+            (root / "fixture" / "base.go").write_text(
+                "package fixture\n\nfunc Base() {}\n", encoding="utf-8"
+            )
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.email", "architecture-gate@example.com")
+            self._git(root, "config", "user.name", "Architecture Gate")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-qm", "fixture baseline")
+            (root / "fixture" / "new.go").write_text(
+                "package fixture\n\nfunc New() {}\n", encoding="utf-8"
+            )
+            recorded = root / "argv.json"
+            analyzer = root / "fake-argv-analyzer.py"
+            analyzer.write_text(
+                """#!/usr/bin/env python3
+import json
+import os
+import sys
+from pathlib import Path
+
+Path(os.environ[\"FAKE_ARGV\"]).write_text(json.dumps({
+    \"argv\": sys.argv[1:],
+    \"index\": os.environ.get(\"GIT_INDEX_FILE\", \"\"),
+}), encoding=\"utf-8\")
+print(\"0 issues.\")
+""",
+                encoding="utf-8",
+            )
+            analyzer.chmod(0o755)
+
+            def run(*mode):
+                result = subprocess.run(
+                    [
+                        str(SCRIPT_PATH),
+                        "--analyzer",
+                        str(analyzer),
+                        "--repo",
+                        str(root),
+                        "--base",
+                        "HEAD",
+                        "--module",
+                        ".",
+                        "--config",
+                        "hard.yml",
+                        *mode,
+                        "--",
+                        "./...",
+                    ],
+                    cwd=root,
+                    env={**os.environ, "TMPDIR": str(index_dir), "FAKE_ARGV": str(recorded)},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                return json.loads(recorded.read_text(encoding="utf-8"))
+
+            config_path = str(root / "hard.yml")
+            new_code = run()
+            self.assertEqual(
+                new_code["argv"],
+                ["run", "--config", config_path, "--new-from-rev", "HEAD", "./..."],
+            )
+            self.assertNotEqual(new_code["index"], "")
+
+            all_code = run("--all-code")
+            self.assertEqual(all_code["argv"], ["run", "--config", config_path, "./..."])
+            self.assertEqual(all_code["index"], "")
+            self.assertEqual(self._git(root, "diff", "--cached", "--quiet").returncode, 0)
+            self.assertEqual(list(index_dir.iterdir()), [])
+
     def test_loader_error_fails_even_when_analyzer_returns_zero(self):
         with tempfile.TemporaryDirectory(prefix="golangci-working-tree-loader-") as temp_dir:
             root = Path(temp_dir)

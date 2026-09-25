@@ -28,12 +28,20 @@ func TestLinuxPhysicalAudioDeviceLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open physical Linux input: %v", err)
 	}
-	defer source.Close()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Errorf("close physical Linux input: %v", err)
+		}
+	})
 	sink, err := devicegw.NewDeviceSink(registry, "")
 	if err != nil {
 		t.Fatalf("open physical Linux output: %v", err)
 	}
-	defer sink.Close()
+	t.Cleanup(func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close physical Linux output: %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

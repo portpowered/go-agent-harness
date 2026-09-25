@@ -4,12 +4,20 @@ set -euo pipefail
 
 usage() {
 	cat >&2 <<'USAGE'
-usage: scripts/golangci-lint-working-tree.sh --analyzer PATH [--repo DIR] [--base REF] [--module DIR] [-- ARG ...]
+usage: scripts/golangci-lint-working-tree.sh --analyzer PATH [--repo DIR] [--base REF] [--module DIR] [--config FILE] [--all-code] [-- ARG ...]
 
-Run the pinned golangci-lint binary with a temporary Git index that includes
-the current module's Go working tree. This makes issues.new-from-rev include
-modified, deleted, and non-ignored untracked Go files without changing the
-user's index or writing unrelated working-tree blobs to the repository.
+Run the pinned golangci-lint binary for one module.
+
+By default the run is limited to new code: it uses a temporary Git index that
+includes the current module's Go working tree and passes --new-from-rev, so
+modified, deleted, and non-ignored untracked Go files are compared with the
+base without changing the user's index or writing unrelated working-tree
+blobs to the repository.
+
+--all-code lints every file in the module with no new-from-rev filter. This is
+the hard pass that enforces .golangci.yml on legacy and new code alike.
+--config selects the golangci-lint configuration (repository-relative or
+absolute); without it golangci-lint discovers the nearest .golangci.yml.
 USAGE
 }
 
@@ -17,6 +25,8 @@ repo_dir="."
 module_dir="."
 base_ref="${LINT_BASE:-origin/main}"
 analyzer=""
+config_file=""
+all_code=0
 run_args=()
 
 while (($# > 0)); do
@@ -40,6 +50,15 @@ while (($# > 0)); do
 			(($# >= 2)) || { usage; exit 2; }
 			analyzer="$2"
 			shift 2
+			;;
+		--config)
+			(($# >= 2)) || { usage; exit 2; }
+			config_file="$2"
+			shift 2
+			;;
+		--all-code)
+			all_code=1
+			shift
 			;;
 		--)
 			shift
@@ -84,16 +103,19 @@ if [[ "$analyzer" == */* && ! -x "$analyzer" ]]; then
 	echo "golangci-lint analyzer is not executable: $analyzer" >&2
 	exit 2
 fi
+config_args=()
+if [[ -n "$config_file" ]]; then
+	if [[ "$config_file" != /* ]]; then
+		config_file="$repo_root/$config_file"
+	fi
+	if [[ ! -f "$config_file" ]]; then
+		echo "golangci-lint config does not exist: $config_file" >&2
+		exit 2
+	fi
+	config_args=(--config "$config_file")
+fi
 
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/golangci-lint-index.XXXXXX")"
-temporary_index="$temporary_dir/index"
-temporary_objects="$temporary_dir/objects"
-pathspec_file="$temporary_dir/go-pathspecs"
-mkdir -p -- "$temporary_objects"
-# Resolve the repository object database before changing Git's object
-# directory environment. This path remains the read-only alternate for HEAD
-# and the existing history.
-repository_objects="$(git -C "$repo_root" rev-parse --path-format=absolute --git-path objects)"
 cleanup() {
 	rm -rf -- "$temporary_dir"
 }
@@ -102,40 +124,49 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-export GIT_INDEX_FILE="$temporary_index"
-# Keep newly staged blobs in the temporary object database. Existing commits
-# remain readable through the alternate object database, while unrelated
-# working-tree files never enter either the temporary index or the repository
-# object store.
-export GIT_OBJECT_DIRECTORY="$temporary_objects"
-export GIT_ALTERNATE_OBJECT_DIRECTORIES="$repository_objects"
-git -C "$repo_root" read-tree HEAD
-# Build a NUL-delimited pathspec list from the module's tracked and
-# non-ignored untracked files, retaining only Go sources. The cached list is
-# the HEAD tree loaded above, so deleted tracked Go files are included too.
-{
-	git -C "$repo_root" ls-files --cached -z -- "$module_dir"
-	git -C "$repo_root" ls-files --others --exclude-standard -z -- "$module_dir"
-} | while IFS= read -r -d '' path; do
-	case "$path" in
-		*.go) printf '%s\0' "$path" ;;
-	esac
-done >"$pathspec_file"
+new_code_args=()
+if ((all_code == 0)); then
+	new_code_args=(--new-from-rev "$base_ref")
+	temporary_index="$temporary_dir/index"
+	temporary_objects="$temporary_dir/objects"
+	pathspec_file="$temporary_dir/go-pathspecs"
+	mkdir -p -- "$temporary_objects"
+	# Resolve the repository object database before changing Git's object
+	# directory environment. This path remains the read-only alternate for HEAD
+	# and the existing history.
+	repository_objects="$(git -C "$repo_root" rev-parse --path-format=absolute --git-path objects)"
 
-if [[ -s "$pathspec_file" ]]; then
-	# Git's normal ignore rules apply. The temporary index captures tracked
-	# modifications, deletions, and non-ignored untracked Go files together.
-	git -C "$repo_root" add --all --pathspec-from-file="$pathspec_file" --pathspec-file-nul
+	export GIT_INDEX_FILE="$temporary_index"
+	# Keep newly staged blobs in the temporary object database. Existing commits
+	# remain readable through the alternate object database, while unrelated
+	# working-tree files never enter either the temporary index or the
+	# repository object store.
+	export GIT_OBJECT_DIRECTORY="$temporary_objects"
+	export GIT_ALTERNATE_OBJECT_DIRECTORIES="$repository_objects"
+	git -C "$repo_root" read-tree HEAD
+	# Build a NUL-delimited pathspec list from the module's tracked and
+	# non-ignored untracked files, retaining only Go sources. The cached list
+	# is the HEAD tree loaded above, so deleted tracked Go files are included.
+	{
+		git -C "$repo_root" ls-files --cached -z -- "$module_dir"
+		git -C "$repo_root" ls-files --others --exclude-standard -z -- "$module_dir"
+	} | while IFS= read -r -d '' path; do
+		case "$path" in
+			*.go) printf '%s\0' "$path" ;;
+		esac
+	done >"$pathspec_file"
+
+	if [[ -s "$pathspec_file" ]]; then
+		# Git's normal ignore rules apply. The temporary index captures tracked
+		# modifications, deletions, and non-ignored untracked Go files together.
+		git -C "$repo_root" add --all --pathspec-from-file="$pathspec_file" --pathspec-file-nul
+	fi
 fi
 
 cd "$module_path"
 lint_output="$temporary_dir/lint-output"
 set +e
-if ((${#run_args[@]} > 0)); then
-	"$analyzer" run --new-from-rev "$base_ref" "${run_args[@]}" >"$lint_output" 2>&1
-else
-	"$analyzer" run --new-from-rev "$base_ref" >"$lint_output" 2>&1
-fi
+"$analyzer" run ${config_args[@]+"${config_args[@]}"} ${new_code_args[@]+"${new_code_args[@]}"} ${run_args[@]+"${run_args[@]}"} >"$lint_output" 2>&1
 lint_status=$?
 set -e
 cat -- "$lint_output"

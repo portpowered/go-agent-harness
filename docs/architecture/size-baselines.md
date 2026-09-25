@@ -7,7 +7,8 @@ The architecture tool also covers its own implementation and the independent
 runtime consumer module. Test files and inactive platform source files are
 included in its physical source inventory.
 
-The older root `.golangci.yml` remains an additional production-only ceiling.
+The root golangci-lint configuration is a second, repository-wide hard limit;
+see [lint-policy.md](lint-policy.md).
 The Makefile pins golangci-lint v2.9.0 and Staticcheck 2026.1; it resolves and
 checks those versions before running them. Do not infer current maximum holders
 from historical filenames: extraction changes both owners and measurements.
@@ -26,18 +27,6 @@ independently, and enclosing functions retain their nested-body costs. Cognitive
 and cyclomatic scores use the pinned libraries in `tools/architecturegate/go.mod`.
 Only registered, recognized generated output is excluded. These budgets do not
 establish correctness; behavioral, race, replay, and platform checks remain required.
-
-The retained golangci-lint limits are 1,307 physical file lines, 296 function
-lines, and 124 cognitive-complexity points. They do not override the stronger
-architecture gate or permit new code to grow to those ceilings.
-
-An availability check against the repository-cached v2.9.0 binary confirmed
-`errcheck`, `bodyclose`, `contextcheck`, `durationcheck`, `errorlint`, `exhaustive`,
-`goconst`, `mnd`, `nilerr`, and `nolintlint`. Availability is separate from
-enforcement: the root configuration still enables the three legacy linters.
-The runtime plan tracks staged configuration and no-new-debt enforcement for
-additional checks. The `golangci-lint` executable on PATH may be older; use the
-Makefile resolver rather than assuming PATH matches the repository pin.
 
 ## Exact baseline and ratchet
 
