@@ -51,7 +51,18 @@ type remoteToolAudioCase struct {
 	providerClose   bool
 	timingEvidence  bool
 	holdToneControl bool
+	// drainInterval, when set, replaces the callback interval once the
+	// provider has sent the complete topology. Every response boundary and
+	// tool continuation still happens at the scenario's device cadence; only
+	// the final drain of already-accepted PCM runs on the accelerated clock.
+	// Only scenarios whose oracle ignores device underflow silence use it.
+	drainInterval time.Duration
 }
+
+// remoteToolAudioDrainInterval advances the manual device clock one render
+// quantum per millisecond (30x real time), the cadence the high-rate
+// regressions already prove the agent sustains.
+const remoteToolAudioDrainInterval = time.Millisecond
 
 // TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM reproduces the live
 // provider timing contract: response.done makes a finite session return while
@@ -122,7 +133,9 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 //
 // The shipped session command talks to a real local WebSocket provider and a
 // separately built fixture-controlled tool executor. Playback crosses the
-// audio-device-server HTTP boundary while its callback clock advances. The
+// audio-device-server HTTP boundary while its manual callback clock advances:
+// at the delivery's device cadence until the provider has sent every
+// response, then at remoteToolAudioDrainInterval while the queued tail drains. The
 // assertion sees only network protocol observations, process-owned tool
 // observations, and device-rendered PCM; it does not inspect a session queue,
 // sink generation, or any other playback implementation state.
@@ -133,11 +146,13 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			name:            "test45",
 			responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
 			toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
+			drainInterval:   remoteToolAudioDrainInterval,
 		},
 		{
 			name:            "test46",
 			responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
 			toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
+			drainInterval:   remoteToolAudioDrainInterval,
 		},
 		{
 			// Responses 9-14 are the test47 segment with the same long
@@ -146,6 +161,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			responseSamples: []int{50400, 0, 0, 0, 0, 96000},
 			toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true},
 			healthyControl:  true,
+			drainInterval:   remoteToolAudioDrainInterval,
 		},
 		{
 			// Responses 8-13 are the equivalent healthy test48 chain.
@@ -153,6 +169,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			responseSamples: []int{82800, 0, 0, 0, 0, 98400},
 			toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true},
 			healthyControl:  true,
+			drainInterval:   remoteToolAudioDrainInterval,
 		},
 	}
 	for _, testCase := range cases {
@@ -348,7 +365,11 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 			t.Fatalf("read naturally closed remote device evidence: %v", snapshotErr)
 		}
 	} else {
-		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), callbackInterval, &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
+		drainInterval := callbackInterval
+		if testCase.drainInterval > 0 {
+			drainInterval = testCase.drainInterval
+		}
+		snapshot = requireRemoteToolAudio(t, ctx, endpoint, nonzeroRemoteToolAudio(want), drainInterval, &stdout.callbackAdvances, provider, len(calls), want, done, &stderr)
 	}
 	got := nonzeroRemoteToolAudio(snapshot.RenderedSamples)
 	if testCase.deviceWAV {

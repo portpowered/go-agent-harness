@@ -14,8 +14,10 @@ import (
 )
 
 // TestRemoteToolAudioSlowDeviceEdgeOracleControl exercises the same remote
-// device, callback cadence, and terminal-marker oracle as the failing agent
-// scenario, while removing provider/session lifecycle ordering from the path.
+// device and terminal-marker oracle as the failing agent scenario, while
+// removing provider/session lifecycle ordering from the path. The manual clock
+// keeps the slow_device ratio (45:30) against the accelerated drain cadence,
+// so the device, not the writer, remains the bottleneck.
 // A passing control localizes a missing sample run to the upstream delivery
 // boundary instead of allowing a device underflow to be mistaken for fixture
 // or oracle behavior.
@@ -49,7 +51,7 @@ func TestRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
 		ctx,
 		endpoint,
 		want,
-		45*time.Millisecond,
+		remoteToolAudioDrainInterval*3/2,
 		callbackAdvances,
 	)
 	if err != nil {
