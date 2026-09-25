@@ -77,7 +77,7 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 	}
 	event.ActorProvidedID = ackID
 	stamp := h.controlStamp(control.Kind)
-	if err := loop.SendSessionEvent(ctx, event); err != nil {
+	if err := loop.SendSessionEventWaiting(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
 		return err
 	}
@@ -137,7 +137,7 @@ func (h *handle) refreshLiveTools(ctx context.Context, loop *agentloop.AgentLoop
 	}
 	h.setPendingToolDefinitions(refreshed)
 	defer h.setPendingToolDefinitions(nil)
-	if err := loop.SendSessionEvent(ctx, event); err != nil {
+	if err := loop.SendSessionEventWaiting(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
 		return err
 	}

@@ -3,6 +3,7 @@ package participants
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -83,6 +84,123 @@ func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, er
 	return err
 }
 
+// SessionIngressError is a constant sentinel error for session ingress
+// admission; being a constant, it cannot be reassigned.
+type SessionIngressError string
+
+func (e SessionIngressError) Error() string { return string(e) }
+
+// ErrSessionClosed reports that a waiting session admission was abandoned
+// because the session runner stopped and will never drain the ingress again.
+const ErrSessionClosed SessionIngressError = "session runner stopped; input was not admitted"
+
+// sessionIngressStop is closed when the session runner returns, so admissions
+// parked on a full ingress are released instead of waiting for a consumer that
+// no longer exists. A later runSession on the same runner re-arms it.
+type sessionIngressStop struct {
+	mu     sync.Mutex
+	ch     chan struct{}
+	closed bool
+}
+
+func (s *sessionIngressStop) done() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ch == nil {
+		s.ch = make(chan struct{})
+	}
+	return s.ch
+}
+
+func (s *sessionIngressStop) start() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		s.ch, s.closed = make(chan struct{}), false
+	}
+}
+
+func (s *sessionIngressStop) stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ch == nil {
+		s.ch = make(chan struct{})
+	}
+	if !s.closed {
+		close(s.ch)
+		s.closed = true
+	}
+}
+
+func (s *sessionIngressStop) stopped() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
+}
+
+// EnqueueSessionEvent queues a control-plane event in the same ordered ingress
+// as audio admitted by EnqueueSessionAudioInput. It does not wait for ingress
+// capacity: a full ingress returns ErrSessionInputQueueFull. It does, however,
+// take the FIFO admission lock that orders all session inputs, so it can wait
+// behind a waiting admission (EnqueueSessionEventWaiting or
+// EnqueueSessionAudioInputWithPolicyWaiting) that is parked on a full ingress,
+// until that admission is drained, cancelled, or released by runner shutdown.
+func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	return r.enqueueSessionEvent(ctx, msg, false, "EnqueueSessionEvent")
+}
+
+func (r *ModelRunner) EnqueueSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error {
+	return r.enqueueSessionEvent(ctx, msg, true, "EnqueueSessionEventWaiting")
+}
+
+func (r *ModelRunner) enqueueSessionEvent(ctx context.Context, msg messages.StreamMessage, waitForCapacity bool, operation string) error {
+	if r == nil || r.sessionInputInbox == nil {
+		return fmt.Errorf("%s: not in session mode", operation)
+	}
+	if ctx == nil && waitForCapacity {
+		return fmt.Errorf("%s: nil context", operation)
+	}
+	r.sessionInputMu.Lock()
+	defer r.sessionInputMu.Unlock()
+	// A nil context on the non-waiting path means "no cancellation"; its nil
+	// done channel never becomes ready.
+	var done <-chan struct{}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		done = ctx.Done()
+	}
+	r.markSessionToolEventQueued(msg)
+	input := sessionInput{kind: sessionInputEvent, event: msg}
+	if waitForCapacity {
+		if r.ingressStop.stopped() {
+			r.markSessionToolEventConsumed(msg)
+			return ErrSessionClosed
+		}
+		select {
+		case r.sessionInputInbox <- input:
+			return nil
+		case <-done:
+			r.markSessionToolEventConsumed(msg)
+			return ctx.Err()
+		case <-r.ingressStop.done():
+			r.markSessionToolEventConsumed(msg)
+			return ErrSessionClosed
+		}
+	}
+	select {
+	case r.sessionInputInbox <- input:
+		return nil
+	case <-done:
+		r.markSessionToolEventConsumed(msg)
+		return ctx.Err()
+	default:
+		r.markSessionToolEventConsumed(msg)
+		return ErrSessionInputQueueFull
+	}
+}
+
 func (r *ModelRunner) EnqueueSessionAudioInput(ctx context.Context, pcm []byte) error {
 	return r.enqueueSessionAudioInput(ctx, pcm, messages.SessionAudioInputPolicyDefault, "EnqueueSessionAudioInput")
 }
@@ -113,11 +231,16 @@ func (r *ModelRunner) enqueueSessionAudioInputWaiting(ctx context.Context, pcm [
 func (r *ModelRunner) enqueueSessionAudioInputLocked(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, waitForCapacity bool) error {
 	input := sessionInput{kind: sessionInputAudio, audio: messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: policy}}
 	if waitForCapacity {
+		if r.ingressStop.stopped() {
+			return ErrSessionClosed
+		}
 		select {
 		case r.sessionInputInbox <- input:
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-r.ingressStop.done():
+			return ErrSessionClosed
 		}
 	}
 	select {

@@ -87,7 +87,7 @@ func (r *coreRuntime) runAction(runCtx, readCtx context.Context, cancel context.
 	if action.responseEnds <= 0 {
 		return fmt.Errorf("%w: final recorded input has no response.done completion boundary", publicreplay.ErrBundleIncomplete)
 	}
-	if err := r.runInput(runCtx, action); err != nil {
+	if err := r.runInput(readCtx, action); err != nil {
 		return err
 	}
 	ended := 0
@@ -120,7 +120,7 @@ func (r *coreRuntime) runInput(ctx context.Context, action replayInputAction) er
 		}
 	}
 	if len(action.audio) > 0 {
-		return r.loop.SendSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+		return r.loop.SendSessionEventWaiting(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 	}
 	return nil
 }

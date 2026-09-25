@@ -2,7 +2,9 @@ package participants
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -76,6 +78,120 @@ func TestSessionModelRunnerWaitingAudioIngressBackpressuresUntilCapacity(t *test
 	if err := <-admitted; err != nil {
 		t.Fatalf("waiting audio admission = %v, want capacity backpressure then success", err)
 	}
+}
+
+func fillSessionIngress(t *testing.T, runner *ModelRunner) {
+	t.Helper()
+	for i := 0; i < cap(runner.sessionInputInbox); i++ {
+		if err := runner.EnqueueSessionAudioInput(t.Context(), []byte{byte(i)}); err != nil {
+			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
+		}
+	}
+}
+
+func TestSessionModelRunnerWaitingEventIngressBackpressuresUntilCapacity(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		runner := NewSessionModelRunner(nil, 8, nil)
+		fillSessionIngress(t, runner)
+		commit := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}
+		if err := runner.EnqueueSessionEvent(t.Context(), commit); !errors.Is(err, ErrSessionInputQueueFull) {
+			t.Fatalf("non-waiting event admission = %v, want ErrSessionInputQueueFull", err)
+		}
+		admitted := make(chan error, 1)
+		go func() { admitted <- runner.EnqueueSessionEventWaiting(t.Context(), commit) }()
+		synctest.Wait()
+		select {
+		case err := <-admitted:
+			t.Fatalf("waiting event admission returned %v while the ingress was full", err)
+		default:
+		}
+		if got := len(runner.sessionInputInbox); got != cap(runner.sessionInputInbox) {
+			t.Fatalf("ingress length = %d before draining, want full %d", got, cap(runner.sessionInputInbox))
+		}
+		<-runner.sessionInputInbox
+		if err := <-admitted; err != nil {
+			t.Fatalf("waiting event admission = %v, want capacity backpressure then success", err)
+		}
+		for i := 1; i < cap(runner.sessionInputInbox); i++ {
+			if input := <-runner.sessionInputInbox; input.kind != sessionInputAudio {
+				t.Fatalf("ingress slot %d kind = %d, want earlier audio before the event", i, input.kind)
+			}
+		}
+		if input := <-runner.sessionInputInbox; input.kind != sessionInputEvent || input.event.Type != messages.StreamTypeMessageEnd {
+			t.Fatalf("last ingress input = %#v, want queued MESSAGE.END behind audio", input)
+		}
+	})
+}
+
+func TestSessionModelRunnerStopReleasesParkedWaitingAdmissions(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		runner := NewSessionModelRunner(&failingConnectInferencer{err: errors.New("provider session closed")}, 8, nil)
+		fillSessionIngress(t, runner)
+		event := make(chan error, 1)
+		go func() {
+			event <- runner.EnqueueSessionEventWaiting(t.Context(), messages.StreamMessage{
+				Type:  messages.StreamTypeToolCallEnd,
+				Value: messages.NewToolCallEndValue("call-stop", "tool", "result"),
+			})
+		}()
+		synctest.Wait()
+		select {
+		case err := <-event:
+			t.Fatalf("waiting event returned %v before the runner stopped", err)
+		default:
+		}
+		if err := runner.Run(t.Context()); err == nil {
+			t.Fatal("Run with a failing provider connection returned nil")
+		}
+		if err := <-event; !errors.Is(err, ErrSessionClosed) {
+			t.Fatalf("parked event admission after runner stop = %v, want ErrSessionClosed", err)
+		}
+		if runner.hasPendingSessionToolEvents() {
+			t.Fatal("abandoned waiting tool event remained marked pending")
+		}
+		err := runner.EnqueueSessionAudioInputWithPolicyWaiting(t.Context(), []byte{1}, messages.SessionAudioInputPolicyDefault)
+		if !errors.Is(err, ErrSessionClosed) {
+			t.Fatalf("waiting audio admission after runner stop = %v, want ErrSessionClosed", err)
+		}
+		runner.ingressStop.start()
+		if runner.ingressStop.stopped() {
+			t.Fatal("a new runSession did not re-arm waiting admission")
+		}
+	})
+}
+
+func TestSessionModelRunnerWaitingEventIngressHonorsCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		runner := NewSessionModelRunner(nil, 8, nil)
+		for i := 0; i < cap(runner.sessionInputInbox); i++ {
+			if err := runner.EnqueueSessionAudioInput(t.Context(), []byte{byte(i)}); err != nil {
+				t.Fatalf("fill ordered session ingress at %d: %v", i, err)
+			}
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		admitted := make(chan error, 1)
+		go func() {
+			admitted <- runner.EnqueueSessionEventWaiting(ctx, messages.StreamMessage{
+				Type:  messages.StreamTypeToolCallEnd,
+				Value: messages.NewToolCallEndValue("call-wait", "tool", "result"),
+			})
+		}()
+		synctest.Wait()
+		if !runner.hasPendingSessionToolEvents() {
+			t.Fatal("waiting tool event was not marked pending while blocked on capacity")
+		}
+		cancel()
+		if err := <-admitted; !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled waiting event admission = %v, want context.Canceled", err)
+		}
+		if runner.hasPendingSessionToolEvents() {
+			t.Fatal("cancelled waiting tool event remained marked pending")
+		}
+		var nilCtx context.Context
+		if err := runner.EnqueueSessionEventWaiting(nilCtx, messages.StreamMessage{}); err == nil {
+			t.Fatal("nil context accepted by waiting event admission")
+		}
+	})
 }
 
 func TestModelRunner_ExplicitSessionAudioPolicyControlsCancellation(t *testing.T) {

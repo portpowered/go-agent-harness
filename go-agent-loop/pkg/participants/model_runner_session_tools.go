@@ -27,6 +27,7 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		// that boundary when the session loop recorded it; an isolated caller
 		// still needs the explicit request below.
 		if r.hasPendingSessionToolEvents() {
+			// A parked EnqueueSessionEventWaiting boundary also counts here.
 			// ToolResultForwarder has accepted the result boundary into the
 			// session input queue, but the session loop has not forwarded it to
 			// the provider yet. Waiting here preserves TOOLCALL.END before the
