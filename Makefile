@@ -381,6 +381,10 @@ test-tools: ## Run tests for standalone repository helper modules.
 	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
 	echo "==> test tools/coveragegate"; \
 	(cd tools/coveragegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	for module in tools/rtc-race-gate tools/timingate scripts/webmcp-o0 test/localai; do \
+		echo "==> test $$module"; \
+		(cd "$$module" && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
+	done; \
 	if [ "$(TEST_TOOLS_ARCHITECTURE_GATE)" = "1" ]; then \
 		$(MAKE) test-architecture-gate; \
 	fi
