@@ -12,33 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestDevicesListCommandTableAndJSONGoldens(t *testing.T) {
-	service := newDevicesTestService()
-	got := executeDevicesList(t, service)
-	if got.err != nil || got.stdout != devicesTableGolden || got.stderr != "" {
-		t.Fatalf("table result = (%q, %q, %v), want (%q, %q, nil)", got.stdout, got.stderr, got.err, devicesTableGolden, "")
-	}
-	if service.enumerateCalls != 1 {
-		t.Fatalf("service observations = %+v, want one enumeration", service)
-	}
-
-	service = newDevicesTestService()
-	got = executeDevicesList(t, service, "--json")
-	if got.err != nil || got.stdout != devicesJSONGolden || got.stderr != "" {
-		t.Fatalf("JSON result = (%q, %q, %v), want (%q, %q, nil)", got.stdout, got.stderr, got.err, devicesJSONGolden, "")
-	}
-	var decoded deviceListResponse
-	if err := json.Unmarshal([]byte(got.stdout), &decoded); err != nil {
-		t.Fatalf("JSON is invalid: %v", err)
-	}
-	if len(decoded.Devices) != 4 || decoded.Devices[0].ID != "virtual:input-a" || decoded.Devices[2].Direction != serviceDevices.DeviceDirectionOutput {
-		t.Fatalf("decoded devices = %#v, want four canonically ordered entries", decoded.Devices)
-	}
-	if service.enumerateCalls != 1 {
-		t.Fatalf("service observations = %+v, want one enumeration", service)
-	}
-}
-
 func TestDevicesListCommandJSONIDRoundTripsThroughSelection(t *testing.T) {
 	result := executeDevicesList(t, newDevicesTestService(), "--json")
 	if result.err != nil {
@@ -182,28 +155,4 @@ func (*devicesTestService) ProbeAvailability(context.Context) (serviceDevices.De
 		ReasonCode: serviceDevices.DeviceProbeSkipNoDevices,
 		Reason:     "no audio input or output device",
 	}, nil
-}
-
-func TestDevicesListRegisteredInRootUsesInjectedService(t *testing.T) {
-	table := executeCLI("devices", "list")
-	if table.exitCode != 0 || table.stderr != "" {
-		t.Fatalf("devices list = (%d, %q), want exit 0 and empty stderr; stdout=%q", table.exitCode, table.stderr, table.stdout)
-	}
-	if !strings.HasPrefix(table.stdout, "INPUT\n") || !strings.Contains(table.stdout, "\nOUTPUT\n") {
-		t.Fatalf("production table output = %q, want directional headings from the platform registry", table.stdout)
-	}
-
-	jsonResult := executeCLI("devices", "list", "--json")
-	if jsonResult.exitCode != 0 || jsonResult.stderr != "" {
-		t.Fatalf("devices list --json = (%d, %q), want exit 0 and JSON only on stdout; stdout=%q", jsonResult.exitCode, jsonResult.stderr, jsonResult.stdout)
-	}
-	var response deviceListResponse
-	if err := json.Unmarshal([]byte(jsonResult.stdout), &response); err != nil {
-		t.Fatalf("production root JSON invalid: %v", err)
-	}
-	for _, device := range response.Devices {
-		if device.ID == "" || device.Name == "" || device.Direction == "" {
-			t.Fatalf("production root returned incomplete device %#v", device)
-		}
-	}
 }

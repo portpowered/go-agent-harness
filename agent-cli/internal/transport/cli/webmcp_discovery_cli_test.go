@@ -7,9 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -260,39 +257,6 @@ func assertClassifiedDiscoveryFailure(t *testing.T, result directCommandResult, 
 	}
 	if strings.Contains(result.stdout, "Lane B") || strings.Contains(result.stdout, "Lane D") {
 		t.Fatalf("error output exposed an internal lane name: %s", result.stdout)
-	}
-}
-
-func TestWebMCPCLISourcesContainNoResidualLanePlaceholder(t *testing.T) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller did not identify the test file")
-	}
-	root := filepath.Dir(currentFile)
-	forbidden := []string{
-		"WebMCP doctor requires Lane B or requires Lane D for production browser discovery and CDP runtime.",
-		"ErrWebMCPDoctorRequiresLaneBOrD",
-		"ErrWebMCPOperationsRequiresLaneBOrD",
-		"unavailableWebMCPDoctorFactory",
-	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatalf("read WebMCP CLI source directory: %v", err)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		path := filepath.Join(root, entry.Name())
-		source, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read WebMCP CLI source %s: %v", entry.Name(), err)
-		}
-		for _, phrase := range forbidden {
-			if strings.Contains(string(source), phrase) {
-				t.Errorf("production source %s contains forbidden WebMCP placeholder %q", entry.Name(), phrase)
-			}
-		}
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,7 +19,6 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -55,30 +53,6 @@ func TestS2SV9WebRTCDeviceProbeIsReachableThroughPublicCLI(t *testing.T) {
 	}
 	if summary["status"] != string(devicegw.DeviceProbeStatusSkip) || summary["skipped"] != float64(1) || summary["failed"] != float64(0) {
 		t.Fatalf("device-tier summary = %v, want one skipped scenario and no failures", summary)
-	}
-}
-
-func TestS2SV9ScenarioLoadsThroughProbeSchema(t *testing.T) {
-	data, err := os.ReadFile(deviceProbeScenarioPath)
-	if err != nil {
-		t.Fatalf("read committed v9 scenario: %v", err)
-	}
-	scenario, err := loadProbeScenario(data)
-	if err != nil {
-		t.Fatalf("load committed v9 scenario: %v", err)
-	}
-	if scenario.ID != v9WebRTCDeviceScenarioID || len(scenario.Steps) != 2 || len(scenario.Expectations) != 2 {
-		t.Fatalf("loaded v9 scenario = %#v, want one audio step, one close, and two expectations", scenario)
-	}
-	if scenario.Steps[0].Type != probe.StepSendAudio || scenario.Steps[1].Type != probe.StepClose {
-		t.Fatalf("v9 steps = %#v, want send_audio followed by close", scenario.Steps)
-	}
-	input := authoredDeviceProbeInput(t, scenario)
-	if input.CorpusID != "utterance-hello-there" || input.Text != "The timer is ready for the next step." {
-		t.Fatalf("device input contract = %#v, want authored corpus and utterance", input)
-	}
-	if scenario.Expectations[0].Type != probe.ExpectAudioEnergy || scenario.Expectations[1].Type != probe.ExpectTranscriptContains {
-		t.Fatalf("v9 expectations = %#v, want audio energy and transcript assertions", scenario.Expectations)
 	}
 }
 

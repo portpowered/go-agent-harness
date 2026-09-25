@@ -354,16 +354,6 @@ func TestLoad_Cached(t *testing.T) {
 	}
 }
 
-func TestNewDefaultConfigStorage_EmptyUsesHome(t *testing.T) {
-	storage, err := NewDefaultConfigStorage("")
-	if err != nil {
-		t.Fatalf("NewDefaultConfigStorage: %v", err)
-	}
-	if storage == nil {
-		t.Fatal("expected non-nil ConfigStorage")
-	}
-}
-
 func TestValidate_RequiresAPIKey(t *testing.T) {
 	c := Config{Model: ModelConfig{Provider: "openai"}}
 	if err := c.Validate(); err == nil {

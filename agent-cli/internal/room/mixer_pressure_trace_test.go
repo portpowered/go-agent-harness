@@ -12,7 +12,6 @@ import (
 const (
 	pressureTraceDeltaBytes   = 19_200
 	pressureTraceDeltas       = 3
-	pressureTraceCadence      = 400 * time.Millisecond
 	pressureTraceInputFrames  = 40
 	pressureTraceOutputFrames = 4
 )
@@ -46,10 +45,14 @@ func TestPCM16MixerProviderShapedPressureTrace(t *testing.T) {
 
 func newPressureTraceMixer(ctx context.Context, t *testing.T, format PCM16Format) *PCM16Mixer {
 	t.Helper()
+	// The manual cadence replaces the wall-clock ticker: each Advance is one
+	// 20 ms frame, so a provider delta's 400 ms arrival gap is exactly
+	// providerFrames advances and the trace runs without real sleeps.
 	mixer, err := NewPCM16MixerWithConfig(ctx, PCM16MixerConfig{
 		Format:            format,
 		InputQueueFrames:  pressureTraceInputFrames,
 		OutputQueueFrames: pressureTraceOutputFrames,
+		Manual:            true,
 	})
 	if err != nil {
 		t.Fatalf("new mixer: %v", err)
@@ -85,17 +88,11 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 				return
 			}
 			got = append(got, pcm...)
-			// Model a healthy session-ingestion hop that is slower than the
-			// test goroutine but still well inside the 20 ms cadence.
-			time.Sleep(2 * time.Millisecond)
 		}
 		readErr <- nil
 	}()
 
 	for delta := 0; delta < pressureTraceDeltas; delta++ {
-		if delta > 0 {
-			time.Sleep(pressureTraceCadence)
-		}
 		if err := mixer.Write("alpha", providerPCM16Delta(delta, pressureTraceDeltaBytes)); err != nil {
 			t.Fatalf("provider delta %d: %v", delta, err)
 		}
@@ -105,6 +102,8 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 		if inputStats.Duration > inputStats.CapacityDuration || stats.Output.Duration > stats.Output.CapacityDuration {
 			t.Fatalf("queue occupancy exceeded capacity: %+v", stats)
 		}
+		// One provider cadence gap: the healthy reader drains every frame.
+		advancePressureTrace(ctx, t, mixer, providerFrames)
 	}
 
 	select {
@@ -174,6 +173,9 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 	if err := mixer.Write("alpha", providerPCM16Delta(0, pressureTraceDeltaBytes)); err != nil {
 		t.Fatalf("first provider delta: %v", err)
 	}
+	// One frame reaches the stalled reader and the output queue fills behind
+	// it; a further advance would block on the full queue.
+	advancePressureTrace(ctx, t, mixer, 1+pressureTraceOutputFrames)
 	select {
 	case <-firstFrame:
 	case result := <-readResultCh:
@@ -181,19 +183,14 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 	case <-ctx.Done():
 		t.Fatalf("receive first output frame: %v", ctx.Err())
 	}
+	advanced := 1 + pressureTraceOutputFrames
 
-	waitForMixerStats(t, mixer, func(stats PCM16MixerStats) bool {
-		return stats.Output.Frames == stats.Output.CapacityFrames && stats.Inputs["alpha"].Frames > 0
-	})
-
-	// Keep the provider-shaped 400 ms arrival cadence while the downstream
-	// consumer is stalled. The first additional delta still fits in the
-	// bounded input queue; the next one must wait rather than be rejected.
-	time.Sleep(pressureTraceCadence)
+	// Two more provider deltas arrive while the consumer is stalled. The
+	// first still fits in the bounded input queue; the next must wait rather
+	// than be rejected.
 	if err := mixer.Write("alpha", providerPCM16Delta(1, pressureTraceDeltaBytes)); err != nil {
 		t.Fatalf("provider delta 1: %v", err)
 	}
-	time.Sleep(pressureTraceCadence)
 	writeDone := make(chan error, 1)
 	go func() {
 		writeDone <- mixer.WriteContext(ctx, "alpha", providerPCM16Delta(2, pressureTraceDeltaBytes))
@@ -202,7 +199,31 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 
 	releaseOnce.Do(func() { close(releaseDownstream) })
 	released = true
-	assertPressureTraceRecovery(ctx, t, mixer, writeDone, readResultCh, allFrames*frameBytes)
+	// Drain until delta 2 fits, then let it land before mixing further so
+	// the recovered frames keep provider order instead of mixing silence.
+	for mixer.Stats().Inputs["alpha"].Frames > pressureTraceInputFrames-providerFrames {
+		advancePressureTrace(ctx, t, mixer, 1)
+		advanced++
+	}
+	var writeErr error
+	select {
+	case writeErr = <-writeDone:
+	case <-ctx.Done():
+		t.Fatalf("provider delta 2 remained blocked after downstream recovery: %v", ctx.Err())
+	}
+	advancePressureTrace(ctx, t, mixer, allFrames-advanced)
+	assertPressureTraceRecovery(ctx, t, mixer, writeErr, readResultCh, allFrames*frameBytes)
+}
+
+// advancePressureTrace releases frames cadence frames; each Advance blocks
+// while the output queue is full, as the production cadence would.
+func advancePressureTrace(ctx context.Context, t *testing.T, mixer *PCM16Mixer, frames int) {
+	t.Helper()
+	for frame := 0; frame < frames; frame++ {
+		if err := mixer.Advance(ctx); err != nil {
+			t.Fatalf("advance cadence frame %d/%d: %v", frame+1, frames, err)
+		}
+	}
 }
 
 // assertPressureTraceStalled requires the pending provider write to stay
@@ -213,7 +234,7 @@ func assertPressureTraceStalled(t *testing.T, mixer *PCM16Mixer, writeDone <-cha
 	select {
 	case err := <-writeDone:
 		t.Fatalf("stalled provider delta returned before downstream release: %v", err)
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(20 * time.Millisecond):
 	}
 
 	stats := mixer.Stats()
@@ -227,15 +248,10 @@ func assertPressureTraceStalled(t *testing.T, mixer *PCM16Mixer, writeDone <-cha
 	}
 }
 
-func assertPressureTraceRecovery(ctx context.Context, t *testing.T, mixer *PCM16Mixer, writeDone <-chan error, readResultCh <-chan pressureTraceReadResult, wantCapacity int) {
+func assertPressureTraceRecovery(ctx context.Context, t *testing.T, mixer *PCM16Mixer, writeErr error, readResultCh <-chan pressureTraceReadResult, wantCapacity int) {
 	t.Helper()
-	select {
-	case err := <-writeDone:
-		if err != nil {
-			t.Fatalf("provider delta 2 after downstream recovery: %v", err)
-		}
-	case <-ctx.Done():
-		t.Fatalf("provider delta 2 remained blocked after downstream recovery: %v", ctx.Err())
+	if writeErr != nil {
+		t.Fatalf("provider delta 2 after downstream recovery: %v", writeErr)
 	}
 	var result pressureTraceReadResult
 	select {

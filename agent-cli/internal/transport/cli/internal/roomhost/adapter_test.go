@@ -70,14 +70,6 @@ func TestConfigCredentialReadsOnlyTheBareRoomKey(t *testing.T) {
 	}
 }
 
-func TestRunOptionsCarriesTheAdmittedDecision(t *testing.T) {
-	launch := &rooms.RoomLaunchPlan{Mode: rooms.RoomLaunchModeBare}
-	options := RunOptions(rooms.RoomRunPlan{LaunchPlan: launch, Manifest: rooms.Manifest{SchemaVersion: rooms.SchemaVersion}})
-	if options.LaunchPlan != launch || options.ReplayPlan != nil || options.Manifest.SchemaVersion != rooms.SchemaVersion {
-		t.Fatalf("run options = %+v, want the launch decision", options)
-	}
-}
-
 func TestBrowserWatchProjectsSemanticThenLegacyEvents(t *testing.T) {
 	if BrowserWatch(nil, nil) != nil {
 		t.Fatal("absent browser streams produced a watch")

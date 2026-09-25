@@ -4,6 +4,8 @@
 package wire
 
 import (
+	"time"
+
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
@@ -79,8 +81,18 @@ var RoomSet = wire.NewSet(NewRoomReplayService, NewRoomEvidenceService, NewRoomL
 
 // NewToolCapabilitiesService keeps session tool composition in the private
 // service implementation while allowing the CLI to provide its browser seam.
-func NewToolCapabilitiesService(staticExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service) serviceTools.Service {
-	return toolsservice.New(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeService)
+func NewToolCapabilitiesService(staticExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, runtimeService runtimeTools.Service, options ...ToolCapabilitiesOption) serviceTools.Service {
+	return toolsservice.New(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeService, options...)
+}
+
+// ToolCapabilitiesOption configures NewToolCapabilitiesService.
+type ToolCapabilitiesOption = toolsservice.Option
+
+// WithDisplayProbeTimeout bounds the session display capability probe; a
+// probe that has not answered by then fails closed. A non-positive timeout
+// keeps the default.
+func WithDisplayProbeTimeout(timeout time.Duration) ToolCapabilitiesOption {
+	return toolsservice.WithDisplayProbeTimeout(timeout)
 }
 
 func NewToolCapabilitiesServiceForWire(toolExecutor messages.ToolExecutor, browserFactory serviceTools.BrowserFactory, displaySurface cliTools.DisplaySurface, runtimeService runtimeTools.Service) serviceTools.Service {
