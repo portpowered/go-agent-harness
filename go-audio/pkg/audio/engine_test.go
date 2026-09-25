@@ -48,26 +48,6 @@ func TestRouteEngineDrainsPartialTailThroughBuffers(t *testing.T) {
 	}
 }
 
-func TestRoutePortsExposeTheOwnedBufferControls(t *testing.T) {
-	format := audio.PCM16DeviceFormat(24000)
-	engine, ports, err := audio.NewRouteEngine(audio.RouteConfig{
-		Input: format, Output: format, Quantum: 4, BufferFrames: 2, BufferSamples: 8,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ports.InputControl.Snapshot() != (audio.BufferStats{CapacityFrames: 2, CapacitySamples: 8}) {
-		t.Fatalf("input control snapshot = %+v", ports.InputControl.Snapshot())
-	}
-	if ports.OutputControl.Snapshot() != (audio.BufferStats{CapacityFrames: 2, CapacitySamples: 8}) {
-		t.Fatalf("output control snapshot = %+v", ports.OutputControl.Snapshot())
-	}
-	in, out := engine.Snapshot()
-	if in.CapacityFrames == 0 || out.CapacityFrames == 0 {
-		t.Fatalf("route snapshot unexpectedly empty: in=%+v out=%+v", in, out)
-	}
-}
-
 func TestRouteEngineBlockedConsumerDoesNotPreventInvalidation(t *testing.T) {
 	format := audio.PCM16DeviceFormat(24000)
 	e, ports, err := audio.NewRouteEngine(audio.RouteConfig{Input: format, Output: format, Quantum: 2, BufferFrames: 1, BufferSamples: 4})

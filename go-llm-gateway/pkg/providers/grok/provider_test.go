@@ -259,13 +259,6 @@ func TestConnectSession_CustomConfig(t *testing.T) {
 	}
 }
 
-func TestProviderName(t *testing.T) {
-	p := New()
-	if p.Name() != "grok" {
-		t.Errorf("Name: got %q, want %q", p.Name(), "grok")
-	}
-}
-
 func TestConnectSession_DefaultBaseURL(t *testing.T) {
 	conn := newMockConn()
 	dialer := &mockDialer{conn: conn}

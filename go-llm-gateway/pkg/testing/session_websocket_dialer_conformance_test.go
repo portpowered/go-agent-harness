@@ -442,7 +442,8 @@ func TestReplayCadenceUsesInjectedTimerDomain(t *testing.T) {
 	source := &observedReplayClock{Deterministic: clock.NewDeterministic(time.Unix(123, 0), time.Millisecond), created: make(chan struct{}, 1)}
 	first := websocketCapture(DirectionServerToClient, 1, `{"type":"session.created"}`)
 	second := websocketCapture(DirectionServerToClient, 2, `{"type":"response.done"}`)
-	first.TimestampMs, second.TimestampMs = 0, 25
+	// A non-zero first offset proves pacing is relative to the first record.
+	first.TimestampMs, second.TimestampMs = 500, 525
 	path := writeReplayConformanceCapture(t, []CapturedSessionEvent{first, second})
 	dialer, err := NewReplayWebSocketDialer(path, WithRecordedSessionTiming(), WithReplayClock(source))
 	if err != nil {

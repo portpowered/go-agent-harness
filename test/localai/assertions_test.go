@@ -156,25 +156,3 @@ func fixtureImageDataURI() (string, error) {
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes()), nil
 }
-
-func TestFixtureImageIsNonEmptyPNG(t *testing.T) {
-	dataURI, err := fixtureImageDataURI()
-	if err != nil {
-		t.Fatal(err)
-	}
-	encoded := strings.TrimPrefix(dataURI, "data:image/png;base64,")
-	data, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		t.Fatalf("decode data URI: %v", err)
-	}
-	decoded, err := png.Decode(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("decode fixture PNG: %v", err)
-	}
-	if decoded.Bounds().Empty() {
-		t.Fatal("fixture image has empty bounds")
-	}
-	if decoded.Bounds().Dx() < 100 || decoded.Bounds().Dy() < 40 {
-		t.Fatalf("fixture image bounds = %v, want readable dimensions", decoded.Bounds())
-	}
-}

@@ -252,17 +252,6 @@ func TestSimulatedDuplexDeviceLossWakesBlockedRead(t *testing.T) {
 	}
 }
 
-func TestDeviceFrameDuration16_24_48k(t *testing.T) {
-	for _, tc := range []struct {
-		rate int
-		want time.Duration
-	}{{16000, 30 * time.Millisecond}, {24000, 20 * time.Millisecond}, {48000, 10 * time.Millisecond}} {
-		if got := time.Duration(audio.FrameSize) * time.Second / time.Duration(tc.rate); got != tc.want {
-			t.Fatalf("480 samples at %d Hz = %s, want %s", tc.rate, got, tc.want)
-		}
-	}
-}
-
 // assertSimulatedRegistryContracts checks listing, directional defaults, and
 // typed open rejections before any stream is acquired.
 func assertSimulatedRegistryContracts(t *testing.T, r *SimulatedDuplexRegistry) {

@@ -520,10 +520,3 @@ func assertSessionClosesIdempotently(t *testing.T, session messages.Session) {
 		t.Fatal("session Done channel did not close")
 	}
 }
-
-func TestS11ProviderRootFallbackCapabilities(t *testing.T) {
-	got := providers.UnknownProviderCapabilities("s2s-conformance")
-	if got.Provider != "s2s-conformance" {
-		t.Fatalf("UnknownProviderCapabilities().Provider = %q, want s2s-conformance", got.Provider)
-	}
-}

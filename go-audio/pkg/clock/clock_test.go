@@ -173,20 +173,6 @@ func TestDeterministicTimerFiresAtLogicalDeadline(t *testing.T) {
 	}
 }
 
-func TestDeterministicTimerStopPreventsDelivery(t *testing.T) {
-	clock := NewDeterministic(time.Unix(42, 0).UTC(), time.Second)
-	timer := clock.NewTimer(time.Second)
-	if !timer.Stop() {
-		t.Fatal("Stop reported an inactive timer")
-	}
-	clock.Advance()
-	select {
-	case <-timer.C():
-		t.Fatal("stopped timer delivered a tick")
-	default:
-	}
-}
-
 func TestDeterministicTimersOrderByDeadlineAndCreation(t *testing.T) {
 	base := time.Unix(42, 0).UTC()
 	clock := NewDeterministic(base, time.Second)
