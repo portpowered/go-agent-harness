@@ -530,6 +530,15 @@ func TestTrackSessionForwardsProviderConfigurationAndAlternateFlush(t *testing.T
 	if err := session.Close(); err != nil {
 		t.Fatal(err)
 	}
+	// Close triggers an asynchronous flush into destination's TempDir; wait
+	// for it so TempDir cleanup never races the write.
+	flusher, ok := owner.(interface{ FlushCapture() error })
+	if !ok {
+		t.Fatalf("recording session %T does not expose FlushCapture", owner)
+	}
+	if err := flusher.FlushCapture(); err != nil {
+		t.Fatal(err)
+	}
 	copyPath := filepath.Join(t.TempDir(), "copy.capture.json")
 	if err := owner.FlushToFile(copyPath); err != nil {
 		t.Fatal(err)
