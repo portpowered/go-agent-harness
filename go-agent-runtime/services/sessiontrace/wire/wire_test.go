@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -42,9 +43,6 @@ func testPublicWireConstructors(t *testing.T) {
 	}
 	if NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{}) == nil {
 		t.Fatal("NewPlaybackDiagnostics returned nil")
-	}
-	if NewObserver(sessiontrace.NewObserverOptions{}) == nil {
-		t.Fatal("NewObserver returned nil")
 	}
 }
 
@@ -119,8 +117,21 @@ func testPublicWireLiveness(t *testing.T) {
 	if got := OutputStateForProgress(true, 1); got != string(messages.TerminalOutputPartial) {
 		t.Fatalf("active progress output state = %q", got)
 	}
-	if unresolved := NewUnresolvedToolResultsError([]string{"b", "a"}, map[string]messages.SessionSendStatus{"a": messages.SessionSendTimedOut}); unresolved == nil || unresolved.Error() == "" {
-		t.Fatal("NewUnresolvedToolResultsError did not return a typed error")
+}
+
+func TestPublicWireUnresolvedToolResultsErrorNormalizesCalls(t *testing.T) {
+	unresolved := NewUnresolvedToolResultsError(
+		[]string{" b ", "a", "", "b"},
+		map[string]messages.SessionSendStatus{"a": messages.SessionSendTimedOut, "orphan": messages.SessionSendClosed},
+	)
+	if got := unresolved.UnresolvedCallIDs(); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("unresolved IDs = %v, want trimmed, de-duplicated and sorted [a b]", got)
+	}
+	if len(unresolved.SendStatuses) != 1 || unresolved.SendStatuses["a"] != messages.SessionSendTimedOut {
+		t.Fatalf("send statuses = %v, want only the listed call's status", unresolved.SendStatuses)
+	}
+	if !errors.Is(unresolved, sessiontrace.ErrUnresolvedToolResults) || !strings.Contains(unresolved.Error(), "a") {
+		t.Fatalf("unresolved error = %v, want the stable sentinel naming its calls", unresolved)
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/observer"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/service"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -49,11 +48,6 @@ func NewPlaybackDiagnostics(options sessiontrace.PlaybackDiagnosticsOptions) ses
 	return playbackDiagnostics
 }
 
-func NewObserver(options sessiontrace.NewObserverOptions) sessiontrace.Observer {
-	sessiontraceObserver := observer.NewObserver(options)
-	return sessiontraceObserver
-}
-
 // providers.go:
 
 func CombineDiagnosticSinks(sinks ...sessiontrace.DiagnosticSink) sessiontrace.DiagnosticSink {
@@ -81,5 +75,5 @@ func OutputStateForProgress(open bool, turns int) string {
 }
 
 func NewUnresolvedToolResultsError(ids []string, statuses map[string]messages.SessionSendStatus) *sessiontrace.UnresolvedToolResultsError {
-	return observer.NewUnresolvedToolResultsError(ids, statuses)
+	return service.NewUnresolvedToolResultsError(ids, statuses)
 }

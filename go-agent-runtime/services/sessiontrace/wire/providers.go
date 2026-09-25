@@ -13,7 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-	observer "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/observer"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/internal/service"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -44,7 +43,7 @@ func OutputStateForProgress(open bool, turns int) string {
 }
 
 func NewUnresolvedToolResultsError(ids []string, statuses map[string]messages.SessionSendStatus) *sessiontrace.UnresolvedToolResultsError {
-	return observer.NewUnresolvedToolResultsError(ids, statuses)
+	return service.NewUnresolvedToolResultsError(ids, statuses)
 }
 
 func NewService() sessiontrace.Service {
@@ -74,10 +73,5 @@ func NewReplayMetricsCollector(options sessiontrace.MetricsCollectorOptions) ses
 
 func NewPlaybackDiagnostics(options sessiontrace.PlaybackDiagnosticsOptions) sessiontrace.PlaybackDiagnostics {
 	wire.Build(service.NewPlaybackDiagnostics)
-	return nil
-}
-
-func NewObserver(options sessiontrace.NewObserverOptions) sessiontrace.Observer {
-	wire.Build(observer.NewObserver)
 	return nil
 }

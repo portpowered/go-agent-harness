@@ -6,13 +6,13 @@ package servicetest
 import (
 	sessioncontract "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audioio "github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionterminal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -49,7 +49,9 @@ type SessionToolContinuationError = runtimeSession.LiveToolContinuationError
 type SessionToolDiagnostic = sessiontrace.ToolDiagnostic
 type SessionUnresolvedToolResultsError = sessioncontract.SessionUnresolvedToolResultsError
 
-const SessionMaxDurationReason = sessionterminal.MaxDurationReason
+// SessionMaxDurationReason is the stable terminal reason the live runtime
+// records when --max-duration ends a session.
+const SessionMaxDurationReason messages.TerminalReason = "max_duration"
 const SessionSilentProviderTimeoutClassification = sessiontrace.SilentProviderTimeoutClassification
 const SessionDiagnosticEventFailure = sessiontrace.SessionDiagnosticEventFailure
 const SessionDiagnosticEventMetrics = sessiontrace.SessionDiagnosticEventMetrics

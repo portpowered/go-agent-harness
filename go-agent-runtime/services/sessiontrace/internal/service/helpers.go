@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -199,3 +201,30 @@ func (s *traceSampleSource) Close() error {
 
 var _ audio.AudioSource = (*traceAudioSource)(nil)
 var _ audio.SampleSource = (*traceSampleSource)(nil)
+
+// NewUnresolvedToolResultsError returns the typed diagnostic for provider
+// calls whose local results never reached the provider. IDs are trimmed,
+// de-duplicated and sorted; statuses are retained only for listed calls.
+func NewUnresolvedToolResultsError(ids []string, statuses map[string]messages.SessionSendStatus) *sessiontrace.UnresolvedToolResultsError {
+	seen := make(map[string]struct{}, len(ids))
+	ordered := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ordered = append(ordered, id)
+	}
+	sort.Strings(ordered)
+	owned := make(map[string]messages.SessionSendStatus, len(statuses))
+	for _, id := range ordered {
+		if status, ok := statuses[id]; ok {
+			owned[id] = status
+		}
+	}
+	return &sessiontrace.UnresolvedToolResultsError{CallIDs: ordered, SendStatuses: owned}
+}
