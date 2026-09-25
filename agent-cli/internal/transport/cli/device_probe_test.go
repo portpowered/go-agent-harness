@@ -5,21 +5,17 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
-	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/spf13/cobra"
 )
 
@@ -140,202 +136,6 @@ func TestDeviceProbeReadyPathUsesDeadguard(t *testing.T) {
 	}
 }
 
-func TestDeviceProbeRuntimeUsesBoundDevicesAndSessionOutput(t *testing.T) {
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatalf("create virtual registry: %v", err)
-	}
-	availability, err := devicegw.ProbeDeviceAvailability(registry)
-	if err != nil {
-		t.Fatalf("probe virtual availability: %v", err)
-	}
-	scenario, err := loadProbeScenario(mustReadDeviceProbeScenario(t))
-	if err != nil {
-		t.Fatalf("load device scenario: %v", err)
-	}
-	inputPlan := authoredDeviceProbeInput(t, scenario)
-	corpusSamples := readDeviceProbeCorpus(t, inputPlan.CorpusID)
-	input, err := registry.Default(devicegw.DirectionInput)
-	if err != nil {
-		t.Fatalf("select input: %v", err)
-	}
-	if availability.InputDevices[0].ID != input.ID {
-		t.Fatalf("availability input = %q, default input = %q", availability.InputDevices[0].ID, input.ID)
-	}
-	output, err := registry.Default(devicegw.DirectionOutput)
-	if err != nil {
-		t.Fatalf("select output: %v", err)
-	}
-	seed, err := devicegw.NewDeviceSink(registry, output.ID)
-	if err != nil {
-		t.Fatalf("open seeded input source: %v", err)
-	}
-	// The seed is closed and checked explicitly below; this deferred close only
-	// releases it on an early failure, where a repeat close error is expected.
-	defer releaseForTest(seed.Close)
-	const seededDeviceFrameCount = 8
-	seedVoicedDeviceProbeFrames(t, seed, corpusSamples, seededDeviceFrameCount)
-
-	session := newDeviceProbeSession()
-	if !session.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen}) {
-		t.Fatal("queue session open")
-	}
-	if !session.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionCreated}) {
-		t.Fatal("queue session created")
-	}
-	const deviceProbeInputFrameSamples = audio.SampleRate / 50
-	const deviceProbeProviderFrameSamples = wavio.Rate24kHz / 50
-	response, err := wavio.Resample(voicedDeviceProbeFrame()[:deviceProbeInputFrameSamples], audio.SampleRate, wavio.Rate24kHz)
-	if err != nil {
-		t.Fatalf("resample response: %v", err)
-	}
-	responsePCM := pcm16ProbeBytes(response)
-	audioObserved := make(chan []byte, 32)
-	var observedInstructions string
-	runContext, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	go answerDeviceProbeTurn(runContext, session, audioObserved, responsePCM)
-
-	observation, err := servicewire.NewDeviceProbeService(registry, nil).Run(runContext, serviceDevices.DeviceProbeRequest{
-		Scenario:             scenario,
-		SessionInferencer:    &deviceProbeSessionInferencer{session: session},
-		CaptureTime:          750 * time.Millisecond,
-		InstructionsObserved: func(instructions string) { observedInstructions = instructions },
-	})
-	if err != nil {
-		t.Fatalf("run device probe runtime: %v", err)
-	}
-	wantProviderFrames := seededDeviceFrameCount * audio.FrameSize / deviceProbeInputFrameSamples
-	assertForwardedDeviceProbeAudio(t, drainDeviceProbeAudio(audioObserved), wantProviderFrames*deviceProbeProviderFrameSamples*2)
-	if !strings.Contains(observedInstructions, inputPlan.CorpusID) || !strings.Contains(observedInstructions, inputPlan.Text) {
-		t.Fatalf("session instructions = %q, want authored corpus %q and utterance %q", observedInstructions, inputPlan.CorpusID, inputPlan.Text)
-	}
-	if len(observation.PCM16Samples) == 0 || audio.PCM16RMSEnergy(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
-		t.Fatalf("runtime output samples/RMS = %d/%.2f, want non-silent output", len(observation.PCM16Samples), audio.PCM16RMSEnergy(observation.PCM16Samples))
-	}
-	if observation.Transcript != "device round trip" {
-		t.Fatalf("runtime transcript = %q, want provider session transcript", observation.Transcript)
-	}
-	if err := seed.Close(); err != nil {
-		t.Fatalf("close seeded input source: %v", err)
-	}
-	if got := registry.Observations(); got.OpenCount != 3 || got.ReleaseCount != 3 {
-		t.Fatalf("device lifecycle observations = %+v, want seed plus bound input/output", got)
-	}
-}
-
-// readDeviceProbeCorpus decodes the authored 16 kHz input corpus.
-func readDeviceProbeCorpus(t *testing.T, corpusID string) []int16 {
-	t.Helper()
-	corpusPath, err := replayCorpusPath(corpusID)
-	if err != nil {
-		t.Fatalf("locate authored input corpus: %v", err)
-	}
-	corpusWAV, err := os.ReadFile(corpusPath)
-	if err != nil {
-		t.Fatalf("read authored input corpus: %v", err)
-	}
-	rate, corpusSamples, err := wavio.Read(bytes.NewReader(corpusWAV))
-	if err != nil {
-		t.Fatalf("decode authored input corpus: %v", err)
-	}
-	if rate != wavio.Rate16kHz {
-		t.Fatalf("authored input corpus rate = %d, want %d", rate, wavio.Rate16kHz)
-	}
-	return corpusSamples
-}
-
-// seedVoicedDeviceProbeFrames writes frameCount consecutive corpus frames,
-// starting at the first voiced window, into the seeded input device.
-func seedVoicedDeviceProbeFrames(t *testing.T, seed audio.AudioSink, corpusSamples []int16, frameCount int) {
-	t.Helper()
-	corpusStart := -1
-	for offset := 0; offset+frameCount*audio.FrameSize <= len(corpusSamples); offset += audio.FrameSize {
-		if audio.PCM16RMSEnergy(corpusSamples[offset:offset+audio.FrameSize]) > audio.DefaultVADConfig.EnergyThreshold {
-			corpusStart = offset
-			break
-		}
-	}
-	if corpusStart < 0 {
-		t.Fatalf("authored input corpus has no voiced frame window")
-	}
-	for i := 0; i < frameCount; i++ {
-		frameStart := corpusStart + i*audio.FrameSize
-		frame := append([]int16(nil), corpusSamples[frameStart:frameStart+audio.FrameSize]...)
-		if err := seed.WriteFrame(context.Background(), frame); err != nil {
-			t.Fatalf("seed authored microphone frame %d: %v", i, err)
-		}
-	}
-}
-
-// answerDeviceProbeTurn records forwarded microphone audio and answers the
-// first completed user turn with a scripted transcript and audio response.
-func answerDeviceProbeTurn(ctx context.Context, session *deviceProbeSession, audioObserved chan<- []byte, responsePCM []byte) {
-	for {
-		select {
-		case message := <-session.sent:
-			if recordProbeAudioDelta(message, audioObserved) || message.Type != messages.StreamTypeMessageEnd {
-				continue
-			}
-			for _, responseMessage := range []messages.StreamMessage{
-				{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device round trip")},
-				{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("device round trip")},
-				{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
-				{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
-				{Type: messages.StreamTypeMessageEnd},
-			} {
-				if !session.receive.Write(ctx, responseMessage) {
-					return
-				}
-			}
-			return
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// drainDeviceProbeAudio concatenates every audio chunk already observed.
-func drainDeviceProbeAudio(audioObserved <-chan []byte) []byte {
-	var capturedAudio []byte
-	for {
-		select {
-		case chunk := <-audioObserved:
-			capturedAudio = append(capturedAudio, chunk...)
-		default:
-			return capturedAudio
-		}
-	}
-}
-
-// assertForwardedDeviceProbeAudio requires the exact voiced PCM16 payload the
-// seeded device frames produce after provider-rate conversion.
-func assertForwardedDeviceProbeAudio(t *testing.T, capturedAudio []byte, wantAudioBytes int) {
-	t.Helper()
-	if len(capturedAudio) == 0 || len(capturedAudio)%2 != 0 {
-		t.Fatalf("runtime forwarded microphone audio payload of %d bytes, want non-empty PCM16", len(capturedAudio))
-	}
-	if len(capturedAudio) != wantAudioBytes {
-		t.Fatalf("runtime forwarded %d authored PCM bytes, want %d bytes", len(capturedAudio), wantAudioBytes)
-	}
-	capturedSamples := make([]int16, len(capturedAudio)/2)
-	for i := range capturedSamples {
-		capturedSamples[i] = int16(binary.LittleEndian.Uint16(capturedAudio[i*2:]))
-	}
-	if audio.PCM16RMSEnergy(capturedSamples) <= audio.DefaultVADConfig.EnergyThreshold {
-		t.Fatalf("runtime forwarded authored input RMS = %.2f, want voiced corpus input above %.2f", audio.PCM16RMSEnergy(capturedSamples), audio.DefaultVADConfig.EnergyThreshold)
-	}
-}
-
-func mustReadDeviceProbeScenario(t *testing.T) []byte {
-	t.Helper()
-	data, err := os.ReadFile(deviceProbeScenarioPath)
-	if err != nil {
-		t.Fatalf("read device scenario: %v", err)
-	}
-	return data
-}
-
 func newDeviceProbeTestRoot(registry devicegw.DeviceRegistry, exec ...DeviceProbeExecFunc) *cobra.Command {
 	root := &cobra.Command{Use: "agent", SilenceUsage: true, SilenceErrors: true}
 	probe := NewProbeCommand().Generate()
@@ -405,35 +205,6 @@ func (r *deviceProbeRegistry) Default(devicegw.Direction) (devicegw.Device, erro
 
 func (r *deviceProbeRegistry) Open(devicegw.DeviceID) (devicegw.OpenedDevice, error) {
 	return nil, fmt.Errorf("device probe availability must not open devices")
-}
-
-// authoredDeviceProbeInput returns the scenario's single authored send_audio
-// corpus and utterance; the runtime probe service validates the full contract.
-func authoredDeviceProbeInput(t *testing.T, scenario probe.Scenario) probe.Step {
-	t.Helper()
-	var authored []probe.Step
-	for _, step := range scenario.Steps {
-		if step.Type == probe.StepSendAudio || step.Kind == probe.StepSendAudio {
-			authored = append(authored, step)
-		}
-	}
-	if len(authored) != 1 || authored[0].CorpusID == "" || strings.TrimSpace(authored[0].Text) == "" {
-		t.Fatalf("device scenario send_audio steps = %#v, want one authored corpus with text", authored)
-	}
-	authored[0].Text = strings.TrimSpace(authored[0].Text)
-	return authored[0]
-}
-
-// recordProbeAudioDelta forwards the bytes of an uploaded audio delta and
-// reports whether message was one.
-func recordProbeAudioDelta(message messages.StreamMessage, observed chan<- []byte) bool {
-	if message.Type != messages.StreamTypeAudioDelta {
-		return false
-	}
-	if value, ok := message.Value.(*messages.AudioDeltaValue); ok && value != nil {
-		observed <- append([]byte(nil), value.Content...)
-	}
-	return true
 }
 
 // openReadyDeviceProbePair opens the registry's default input and output

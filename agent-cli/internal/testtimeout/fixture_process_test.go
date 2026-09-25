@@ -1,6 +1,7 @@
-package blockedchild
+package testtimeout
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,9 +16,10 @@ const (
 )
 
 // TestTimeoutFixtureBlockedChild is intentionally selected only by the
-// focused timeout contract. It starts a child and grandchild, then blocks so
-// the production test-command boundary must terminate the entire process
-// group. The testdata directory keeps this fixture out of ./... discovery.
+// focused timeout contract, which re-executes this test binary with the
+// fixture mode set; ordinary runs skip it. It starts a child and grandchild,
+// then blocks so the production test-command boundary must terminate the
+// entire process group.
 func TestTimeoutFixtureBlockedChild(t *testing.T) {
 	if os.Getenv(fixtureModeEnv) != "blocked" {
 		t.Skip("blocked-child fixture is launched only by the timeout contract")
@@ -79,15 +81,20 @@ func fixtureEnvironment(mode string) []string {
 
 func announceFixture(format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
-	fmt.Fprintln(os.Stdout, line)
+	if _, err := os.Stdout.WriteString(line + "\n"); err != nil {
+		fmt.Fprintf(os.Stderr, "fixture announcement error: %v\n", err)
+	}
 	if path := os.Getenv(fixtureMarkerEnv); path != "" {
 		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "fixture marker error: %v\n", err)
 			return
 		}
-		_, _ = fmt.Fprintln(file, line)
-		_ = file.Close()
+		_, writeErr := fmt.Fprintln(file, line)
+		closeErr := file.Close()
+		if err := errors.Join(writeErr, closeErr); err != nil {
+			fmt.Fprintf(os.Stderr, "fixture marker error: %v\n", err)
+		}
 	}
 }
 

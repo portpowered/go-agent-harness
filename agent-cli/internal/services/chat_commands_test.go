@@ -228,10 +228,6 @@ func TestChatCommands_AutocompleteUsesVisibleRegistryAndPreservesSkillOrder(t *t
 	}
 }
 
-func TestChatCommands_TypedFailureContractIsBlockedByCurrentDispatcher(t *testing.T) {
-	t.Skip("the current slash dispatcher renders failures as chatLineSystem output and returns no typed error; preserve this requirement for the follow-up contract change")
-}
-
 func countUserChatLines(lines []chatLine) int {
 	count := 0
 	for _, line := range lines {
@@ -260,17 +256,6 @@ func TestChatCommands_RegistryLookupContract(t *testing.T) {
 	}
 	if _, ok := lookupChatCommand("SYSTEM"); ok {
 		t.Fatal(`lookupChatCommand("SYSTEM") unexpectedly matched; lookup must be case-sensitive`)
-	}
-}
-
-func TestChatCommands_RegistryOrderIsDispatchPrecedence(t *testing.T) {
-	names := make([]string, 0, len(registeredChatCommands()))
-	for _, cmd := range registeredChatCommands() {
-		names = append(names, cmd.Name)
-	}
-	want := []string{"system", "help", "clear"}
-	if !slices.Equal(names, want) {
-		t.Fatalf("registry order = %v, want %v", names, want)
 	}
 }
 

@@ -64,163 +64,97 @@ func TestIsPassiveLiveInvocationMatrix(t *testing.T) {
 	}
 }
 
-// TestSessionRecordOnlyLiveOpensDevicesAndDoesNotSelfClose pins the exact
-// regression the operator hit: `agent session --model X --record test5.json`
-// used to run for milliseconds and stop after two capture records, because
-// --record made the invocation non-bare and that silently dropped both the
-// implicit microphone/speaker devices and the "stay open for the
-// conversation" semantics bare mode gets. This drives the CLI end to end
-// (through Generate/Execute, not the services package directly) with an
-// injected provider session and a virtual device registry so it never
-// touches real hardware or a live network, and asserts both halves of the
-// fix: the shared microphone and speaker are opened, and the session does
-// not send a close the instant it opens.
-func TestSessionRecordOnlyLiveOpensDevicesAndDoesNotSelfClose(t *testing.T) {
-	configDir := t.TempDir()
-	configYAML := `
+// TestSessionPassiveLiveInvocationsOpenDevicesAndStayInteractive drives the
+// CLI end to end (through Generate/Execute, not the services package
+// directly) with an injected provider session and a virtual device registry,
+// so it never touches real hardware or a live network. Each case asserts that
+// the implicit microphone and speaker are opened and that the session does
+// not send a close right after it opens. The cases run in parallel so their
+// "stays open" observation windows overlap.
+//
+//   - record-only: the exact regression the operator hit. `agent session
+//     --model X --record test5.json` used to run for milliseconds and stop
+//     after two capture records, because --record made the invocation
+//     non-bare and silently dropped both the implicit devices and the "stay
+//     open for the conversation" semantics bare mode gets.
+//   - recorded-webmcp-cast: the test64 command boundary. --record and
+//     --audio-out are passive captures, so adding both to an interactive
+//     WebMCP Cast session must not remove the audio devices or send
+//     client_close immediately after session.open.
+//   - unrecorded-webmcp-cast: the operator's exact command shape. --audio-out
+//     is a passive copy of the audio already headed to the selected device,
+//     not an input that turns an interactive browser session into a finite
+//     scripted exchange; omitting --record must not remove the implicit
+//     microphone or close the client immediately after session.open.
+func TestSessionPassiveLiveInvocationsOpenDevicesAndStayInteractive(t *testing.T) {
+	grokConfig := `
 model:
   provider: grok
   grok:
     model: grok-realtime-test
     api_key: test-key
 `
-	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	globalFlags := flags.NewGlobalFlags()
-	globalFlags.ConfigDirPath = configDir
-
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatalf("new virtual device registry: %v", err)
-	}
-
-	inferencer := newRecordOnlyLiveInferencer()
-	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
-	command := owner.Generate()
-	command.SetOut(io.Discard)
-	recordPath := filepath.Join(t.TempDir(), "capture.json")
-	command.SetArgs([]string{"--record", recordPath})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	runErr := make(chan error, 1)
-	go func() { runErr <- command.ExecuteContext(ctx) }()
-
-	select {
-	case <-inferencer.opened:
-	case <-time.After(3 * time.Second):
-		t.Fatal("record-only-live session never connected to the provider")
-	}
-
-	select {
-	case <-inferencer.session.closeRequested:
-		t.Fatal("record-only-live session sent a close immediately after opening; want it to stay open like a bare interactive conversation")
-	case <-time.After(300 * time.Millisecond):
-	}
-
-	if observations := registry.Observations(); observations.OpenCount != 2 {
-		t.Fatalf("device observations = %+v, want the implicit microphone and speaker both opened", observations)
-	}
-
-	inferencer.endFromProvider(ctx)
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("record-only-live session command: %v", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("record-only-live session did not return after the provider-driven close")
-	}
-}
-
-// TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive reproduces the
-// test64 command boundary. --record and --audio-out are passive captures, so
-// adding both to an interactive WebMCP Cast session must not remove the audio
-// devices or send client_close immediately after session.open.
-func TestSessionRecordedWebMCPCastDeviceWAVStaysInteractive(t *testing.T) {
-	configDir := t.TempDir()
-	configYAML := `
+	openAIConfig := func(model string) string {
+		return `
 model:
   provider: openai
   openai:
-    model: gpt-realtime
+    model: ` + model + `
     api_key: test-key
 `
-	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
 	}
-	globalFlags := flags.NewGlobalFlags()
-	globalFlags.ConfigDirPath = configDir
-
-	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
-	if err != nil {
-		t.Fatalf("new virtual device registry: %v", err)
+	tests := []struct {
+		name       string
+		configYAML string
+		args       func(dir string) []string
+	}{
+		{
+			name:       "record-only",
+			configYAML: grokConfig,
+			args: func(dir string) []string {
+				return []string{"--record", filepath.Join(dir, "capture.json")}
+			},
+		},
+		{
+			name:       "recorded-webmcp-cast",
+			configYAML: openAIConfig("gpt-realtime"),
+			args: func(dir string) []string {
+				return []string{
+					"--browser-tools", "webmcp",
+					"--web-cast",
+					"--browser-cdp-url", testCDPURL,
+					"--browser-auto-select", "single",
+					"--audio-out-device", "default",
+					"--audio-out", filepath.Join(dir, "test64-device.wav"),
+					"--record", filepath.Join(dir, "test64.json"),
+				}
+			},
+		},
+		{
+			name:       "unrecorded-webmcp-cast",
+			configYAML: openAIConfig("gpt-realtime-2.1"),
+			args: func(dir string) []string {
+				return []string{
+					"--model", "gpt-realtime-2.1",
+					"--browser-tools", "webmcp",
+					"--web-cast",
+					"--audio-out-device", "default",
+					"--audio-out", filepath.Join(dir, "32.wav"),
+				}
+			},
+		},
 	}
-
-	inferencer := newRecordOnlyLiveInferencer()
-	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
-	command := owner.Generate()
-	command.SetOut(io.Discard)
-	recordPath := filepath.Join(t.TempDir(), "test64.json")
-	audioPath := filepath.Join(t.TempDir(), "test64-device.wav")
-	command.SetArgs([]string{
-		"--browser-tools", "webmcp",
-		"--web-cast",
-		"--browser-cdp-url", testCDPURL,
-		"--browser-auto-select", "single",
-		"--audio-out-device", "default",
-		"--audio-out", audioPath,
-		"--record", recordPath,
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	runErr := make(chan error, 1)
-	go func() { runErr <- command.ExecuteContext(ctx) }()
-
-	select {
-	case <-inferencer.opened:
-	case <-ctx.Done():
-		t.Fatal("recorded WebMCP session never connected to the provider")
-	}
-
-	select {
-	case <-inferencer.session.closeRequested:
-		t.Fatal("recorded WebMCP session sent client_close immediately after opening")
-	case <-time.After(300 * time.Millisecond):
-	}
-
-	if observations := registry.Observations(); observations.OpenCount != 2 {
-		t.Fatalf("device observations = %+v, want the implicit microphone and speaker both opened", observations)
-	}
-
-	inferencer.endFromProvider(ctx)
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("recorded WebMCP session command: %v", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("recorded WebMCP session did not return after provider close")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			runPassiveLiveSessionStaysInteractive(t, tt.configYAML, tt.args(t.TempDir()))
+		})
 	}
 }
 
-// TestSessionUnrecordedWebMCPCastDeviceWAVStaysInteractive reproduces the
-// operator's exact command shape: --audio-out is a passive copy of the audio
-// already headed to the selected device, not an input that should turn an
-// interactive browser session into a finite scripted exchange. In
-// particular, omitting --record must not remove the implicit microphone or
-// cause the client to close immediately after session.open.
-func TestSessionUnrecordedWebMCPCastDeviceWAVStaysInteractive(t *testing.T) {
+func runPassiveLiveSessionStaysInteractive(t *testing.T, configYAML string, args []string) {
+	t.Helper()
 	configDir := t.TempDir()
-	configYAML := `
-model:
-  provider: openai
-  openai:
-    model: gpt-realtime-2.1
-    api_key: test-key
-`
 	if err := os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(configYAML), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -236,14 +170,7 @@ model:
 	owner := newTestLiveSessionCommand(flags.NewAskFlags(), globalFlags, inferencer, registry)
 	command := owner.Generate()
 	command.SetOut(io.Discard)
-	audioPath := filepath.Join(t.TempDir(), "32.wav")
-	command.SetArgs([]string{
-		"--model", "gpt-realtime-2.1",
-		"--browser-tools", "webmcp",
-		"--web-cast",
-		"--audio-out-device", "default",
-		"--audio-out", audioPath,
-	})
+	command.SetArgs(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -253,14 +180,14 @@ model:
 	select {
 	case <-inferencer.opened:
 	case <-ctx.Done():
-		t.Fatal("unrecorded WebMCP session never connected to the provider")
+		t.Fatal("passive live session never connected to the provider")
 	}
 
 	select {
 	case <-inferencer.session.closeRequested:
-		t.Fatal("unrecorded WebMCP session sent client_close immediately after opening")
+		t.Fatal("passive live session sent a close immediately after opening; want it to stay open like a bare interactive conversation")
 	case err := <-runErr:
-		t.Fatalf("unrecorded WebMCP session returned before provider close: %v", err)
+		t.Fatalf("passive live session returned before provider close: %v", err)
 	case <-time.After(300 * time.Millisecond):
 	}
 
@@ -272,10 +199,10 @@ model:
 	select {
 	case err := <-runErr:
 		if err != nil {
-			t.Fatalf("unrecorded WebMCP session command: %v", err)
+			t.Fatalf("passive live session command: %v", err)
 		}
 	case <-ctx.Done():
-		t.Fatal("unrecorded WebMCP session did not return after provider close")
+		t.Fatal("passive live session did not return after the provider-driven close")
 	}
 }
 

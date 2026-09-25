@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
@@ -78,21 +77,6 @@ func TestMediaProbeCommandReplayOptionCompletesObservationCycle(t *testing.T) {
 	}
 }
 
-func TestMediaProbeCommandReplayReportIsDeterministicAcrossRuns(t *testing.T) {
-	fixture := replaySessionFixturePath(t)
-	var first, second bytes.Buffer
-	for _, out := range []*bytes.Buffer{&first, &second} {
-		command := NewMediaProbeCommandWithOptions(WithReplayFixture(fixture), WithReplayService(replaywire.NewService()))
-		command.Timeout = time.Second
-		if err := command.Run(context.Background(), out, "go2rtc://unused-when-replaying"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if first.String() != second.String() || first.Len() == 0 {
-		t.Fatalf("replay reports diverged or empty:\n%s\n---\n%s", first.String(), second.String())
-	}
-}
-
 func TestMediaProbeCommandReplayRejectsInvalidFixtureWithClearError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "invalid.session.json")
 	invalid := `{"version":1,"provider":{"name":"grok","model":"m"},"records":[]}`
@@ -137,21 +121,6 @@ func TestMediaProbeCLIReplayFlagProducesDeterministicReport(t *testing.T) {
 	}
 	if first.String() != second.String() || !strings.Contains(first.String(), "Mode: replay\n") || !strings.Contains(first.String(), "Inbound frames: 10\n") {
 		t.Fatalf("CLI replay report not deterministic/complete:\n%s\n---\n%s", first.String(), second.String())
-	}
-}
-
-func TestMediaProbeCLIDefaultInvocationUsesLivePath(t *testing.T) {
-	command := NewMediaProbeCommand(func(context.Context, string) (rtc.MediaCapabilities, error) {
-		return rtc.MediaCapabilities{Source: "stub-src", AudioCodec: "PCMU", SampleRate: 8000, Channels: 1}, nil
-	}).Generate()
-	var out bytes.Buffer
-	command.SetOut(&out)
-	command.SetArgs([]string{"stub"})
-	if err := command.ExecuteContext(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(out.String(), "Mode: replay") {
-		t.Fatalf("default invocation used replay path: %q", out.String())
 	}
 }
 

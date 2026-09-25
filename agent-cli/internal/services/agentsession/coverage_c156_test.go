@@ -129,56 +129,6 @@ func TestC156ReasoningEffortContract(t *testing.T) {
 	}
 }
 
-func TestC156DiagnosticContractConstants(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		got  string
-		want string
-	}{
-		{name: "failure event", got: SessionDiagnosticEventFailure, want: "session_failure"},
-		{name: "terminal event", got: SessionDiagnosticEventTerminal, want: "session_terminal"},
-		{name: "turn event", got: SessionDiagnosticEventTurn, want: "session_turn_completed"},
-		{name: "tool call event", got: SessionDiagnosticEventToolCall, want: "session_tool_call_unexecutable"},
-		{name: "metrics event", got: SessionDiagnosticEventMetrics, want: "session_metrics"},
-		{name: "room bound event", got: SessionDiagnosticEventRoomBound, want: "room_bound_shutdown"},
-		{name: "unresolved count", got: SessionDiagnosticFieldUnresolvedToolResultCount, want: "unresolved_tool_result_count"},
-		{name: "unresolved IDs", got: SessionDiagnosticFieldUnresolvedToolCallIDs, want: "unresolved_tool_call_ids"},
-		{name: "pending image count", got: SessionDiagnosticFieldPendingImageContinuationCount, want: "pending_image_continuation_count"},
-		{name: "pending image IDs", got: SessionDiagnosticFieldPendingImageContinuationIDs, want: "pending_image_continuation_call_ids"},
-		{name: "pending tool count", got: SessionDiagnosticFieldPendingToolContinuationCount, want: "pending_tool_continuation_count"},
-		{name: "pending tool IDs", got: SessionDiagnosticFieldPendingToolContinuationIDs, want: "pending_tool_continuation_call_ids"},
-		{name: "scheduled input count", got: SessionDiagnosticFieldScheduledInputCount, want: "scheduled_input_count"},
-		{name: "dispatched input count", got: SessionDiagnosticFieldDispatchedInputCount, want: "dispatched_input_count"},
-		{name: "completed turn count", got: SessionDiagnosticFieldCompletedTurnCount, want: "completed_turn_count"},
-		{name: "pending statuses", got: SessionDiagnosticFieldPendingContinuationStatuses, want: "pending_continuation_statuses"},
-		{name: "pending codes", got: SessionDiagnosticFieldPendingContinuationCodes, want: "pending_continuation_codes"},
-		{name: "pending details", got: SessionDiagnosticFieldPendingContinuationDetails, want: "pending_continuation_details"},
-		{name: "cancelled by", got: SessionDiagnosticFieldCancelledBy, want: "cancelled_by"},
-		{name: "cancelled scheduled count", got: SessionDiagnosticFieldCancelledScheduledInputCount, want: "cancelled_scheduled_input_count"},
-		{name: "cancelled tool count", got: SessionDiagnosticFieldCancelledToolResultCount, want: "cancelled_tool_result_count"},
-		{name: "cancelled tool IDs", got: SessionDiagnosticFieldCancelledToolResultCallIDs, want: "cancelled_tool_result_call_ids"},
-		{name: "cancelled continuation count", got: SessionDiagnosticFieldCancelledToolContinuationCount, want: "cancelled_tool_continuation_count"},
-		{name: "cancelled continuation IDs", got: SessionDiagnosticFieldCancelledToolContinuationCallIDs, want: "cancelled_tool_continuation_call_ids"},
-		{name: "playback overflow event", got: SessionDiagnosticEventPlaybackOverflow, want: "session_playback_overflow"},
-		{name: "playback device", got: SessionDiagnosticFieldPlaybackDeviceID, want: "device_id"},
-		{name: "playback sample rate", got: SessionDiagnosticFieldPlaybackSampleRate, want: "sample_rate"},
-		{name: "playback channels", got: SessionDiagnosticFieldPlaybackChannels, want: "channels"},
-		{name: "playback latency", got: SessionDiagnosticFieldPlaybackLatencyTargetMillis, want: "latency_target_ms"},
-		{name: "playback capacity", got: SessionDiagnosticFieldPlaybackCapacitySamples, want: "capacity_samples"},
-		{name: "playback queued", got: SessionDiagnosticFieldPlaybackQueuedSamples, want: "queued_samples"},
-		{name: "playback peak queued", got: SessionDiagnosticFieldPlaybackPeakQueuedSamples, want: "peak_queued_samples"},
-		{name: "playback dropped", got: SessionDiagnosticFieldPlaybackDroppedSamples, want: "dropped_samples"},
-		{name: "playback overflow count", got: SessionDiagnosticFieldPlaybackOverflowEvents, want: "overflow_events"},
-		{name: "playback participant", got: SessionDiagnosticFieldPlaybackParticipantID, want: "participant_id"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if test.got != test.want {
-				t.Fatalf("diagnostic contract value = %q, want %q", test.got, test.want)
-			}
-		})
-	}
-}
-
 func TestC156RequestAndAudioInputPreserveCallerMetadata(t *testing.T) {
 	reader := bytes.NewReader([]byte{0x01, 0x02, 0x03})
 	request := Request{

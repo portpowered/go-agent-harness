@@ -494,26 +494,6 @@ func TestPCM16MixerRejectsChunkLargerThanBoundedQueue(t *testing.T) {
 	}
 }
 
-func waitForMixerStats(t *testing.T, mixer *PCM16Mixer, predicate func(PCM16MixerStats) bool) PCM16MixerStats {
-	t.Helper()
-	deadline := time.NewTimer(500 * time.Millisecond)
-	defer deadline.Stop()
-	ticker := time.NewTicker(time.Millisecond)
-	defer ticker.Stop()
-	for {
-		stats := mixer.Stats()
-		if predicate(stats) {
-			return stats
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatalf("mixer stats did not reach expected state: %+v", stats)
-			return stats
-		}
-	}
-}
-
 func providerPCM16Delta(delta, byteCount int) []byte {
 	pcm := make([]byte, byteCount)
 	for sample := 0; sample < byteCount/2; sample++ {

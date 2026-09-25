@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"time"
-
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	servicewire "github.com/portpowered/go-agent-harness/agent-cli/internal/services/wire"
@@ -16,8 +14,6 @@ import (
 type SessionBrowserBrokerFactory func(config.BrowserConfig) (webmcp.Broker, error)
 
 type SessionDisplayCapability = cliTools.DisplayCapability
-
-const sessionDisplayCapabilityProbeTimeout = 3 * time.Second
 
 func NewSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory) SessionToolCapabilitiesFactory {
 	return NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor, brokerFactory, nil)
@@ -37,15 +33,18 @@ func NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor messages
 	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, displaySurface, displaySurface)
 }
 
-func NewSessionToolCapabilitiesFactoryWithDisplayProbe(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displayProbe cliTools.DisplayCapabilityProbe) SessionToolCapabilitiesFactory {
+// NewSessionToolCapabilitiesFactoryWithDisplayProbe resolves display
+// admission through displayProbe. Options such as
+// servicewire.WithDisplayProbeTimeout tune how long admission waits for it.
+func NewSessionToolCapabilitiesFactoryWithDisplayProbe(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displayProbe cliTools.DisplayCapabilityProbe, options ...servicewire.ToolCapabilitiesOption) SessionToolCapabilitiesFactory {
 	surface := cliTools.NewHostDisplaySurface()
 	if displayProbe == nil {
 		displayProbe = surface
 	}
-	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, surface, displayProbe)
+	return newSessionToolCapabilitiesFactory(staticExecutor, brokerFactory, surface, displayProbe, options...)
 }
 
-func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe) SessionToolCapabilitiesFactory {
+func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory, displaySurface cliTools.DisplaySurface, displayProbe cliTools.DisplayCapabilityProbe, options ...servicewire.ToolCapabilitiesOption) SessionToolCapabilitiesFactory {
 	browserFactory := func(browser config.BrowserConfig, configDir string) (serviceTools.BrowserCapability, error) {
 		var broker webmcp.Broker
 		var err error
@@ -56,7 +55,7 @@ func newSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, bro
 		}
 		return sessionbroker.ServiceCapability(broker), err
 	}
-	resolver := servicewire.NewToolCapabilitiesService(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeToolsWire.NewService())
+	resolver := servicewire.NewToolCapabilitiesService(staticExecutor, browserFactory, displaySurface, displayProbe, runtimeToolsWire.NewService(), options...)
 	return NewSessionToolCapabilitiesFactoryFromService(resolver)
 }
 
