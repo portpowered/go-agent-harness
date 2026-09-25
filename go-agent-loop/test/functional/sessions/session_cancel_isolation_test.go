@@ -118,6 +118,37 @@ func stabilizePayload(payload []byte) []byte {
 	return ephemeralIDPattern.ReplaceAll(payload, []byte("NORMALIZED"))
 }
 
+// TestScriptRecordBucketsIgnoreCrossPathInterleaving pins the comparison the
+// cancellation proof relies on: two captures with identical per-path
+// sequences compare equal however their paths interleave. The scripted
+// provider reply is injected before the client's request, so the reply's
+// assistant MESSAGE.END can be captured before or after that request.
+func TestScriptRecordBucketsIgnoreCrossPathInterleaving(t *testing.T) {
+	record := func(peer transcript.Peer, direction transcript.Direction, payload string) transcript.Record {
+		return transcript.Record{Peer: peer, Direction: direction, Stream: transcript.StreamWS, Payload: []byte(payload)}
+	}
+	request := record(transcript.PeerClient, transcript.DirectionOut, "sess-07 asks to run session_marker_lookup")
+	received := record(transcript.PeerAgent, transcript.DirectionIn, "sess-07 asks to run session_marker_lookup")
+	toolCall := record(transcript.PeerAgent, transcript.DirectionOut, `{"Type":"TOOLCALL.START","Role":"assistant"}`)
+	replyEnd := record(transcript.PeerAgent, transcript.DirectionOut, `{"Type":"MESSAGE.END","Role":"assistant"}`)
+	toolResult := record(transcript.PeerAgent, transcript.DirectionOut, `{"Type":"MESSAGE.END","Role":"tool"}`)
+	closeRequest := record(transcript.PeerClient, transcript.DirectionOut, sessionCloseControl)
+	closeReceived := record(transcript.PeerAgent, transcript.DirectionIn, sessionCloseControl)
+
+	requestFirst := []transcript.Record{request, received, toolCall, replyEnd, toolResult, closeRequest, closeReceived}
+	replyFirst := []transcript.Record{toolCall, replyEnd, request, received, closeRequest, toolResult, closeReceived}
+	want := scriptRecordBuckets(requestFirst)
+	if diff := compareRecordBuckets(want, scriptRecordBuckets(replyFirst)); diff != "" {
+		t.Fatalf("identical per-path captures compared unequal after reordering paths: %s", diff)
+	}
+	if got := len(want["client/out/ws"]); got != 1 {
+		t.Fatalf("client/out/ws keeps %d records, want the scripted request without teardown", got)
+	}
+	if got := len(want["agent/out/ws"]); got != 2 {
+		t.Fatalf("agent/out/ws keeps %d records, want the reply through its assistant MESSAGE.END", got)
+	}
+}
+
 // recordPathBuckets groups stabilized payload keys by capture path
 // (peer/direction/stream). Within a single path, crossings are FIFO, so each
 // bucket sequence must match the reference exactly. Relative order across
@@ -156,25 +187,62 @@ func compareRecordBuckets(want, got map[string][]string) string {
 	return ""
 }
 
-// scriptRecordBuckets buckets only the script-deterministic prefix of a
-// session's captures: everything up to and including the last assistant
-// MESSAGE.END. Content past that point (the executed-tool-result message and
-// the SESSION.CLOSE/LOOP.END lifecycle records) is produced by shutdown
-// flushing whose landing relative to Stop is engine-internal scheduling, not
-// conversation state; tool execution itself is asserted at the executor
-// boundary via the tool-call tally below, and lifecycle completion via the
-// delta-order comparison.
+// scriptRecordBuckets buckets only the script-deterministic part of each
+// capture path. An output path keeps everything up to and including its last
+// assistant MESSAGE.END; content past that point (the executed-tool-result
+// message and the SESSION.CLOSE/LOOP.END lifecycle records) is produced by
+// shutdown flushing whose landing relative to Stop is engine-internal
+// scheduling, not conversation state. An input path keeps every scripted
+// client input and drops only the teardown session_close control. Tool
+// execution itself is asserted at the executor boundary via the tool-call
+// tally below, and lifecycle completion via the delta-order comparison.
+//
+// The cut is made per path, never at a position in the combined record list:
+// the script injects each turn's provider response before sending the
+// client's inputs, so the model's reply can be captured before the client's
+// request, and a global cut then included or excluded that request depending
+// on goroutine scheduling (the survivor-diverges flake, about 1 in 5000
+// sessions under -race with background load).
 func scriptRecordBuckets(records []transcript.Record) map[string][]string {
+	byPath := map[string][]transcript.Record{}
+	for _, record := range records {
+		path := fmt.Sprintf("%s/%s/%s", record.Peer, record.Direction, record.Stream)
+		byPath[path] = append(byPath[path], record)
+	}
+	buckets := map[string][]string{}
+	for _, pathRecords := range byPath {
+		for path, keys := range recordPathBuckets(scriptPathRecords(pathRecords)) {
+			buckets[path] = keys
+		}
+	}
+	return buckets
+}
+
+// scriptPathRecords returns the script-deterministic records of one path.
+func scriptPathRecords(pathRecords []transcript.Record) []transcript.Record {
 	lastScript := -1
-	for i, record := range records {
-		if bytes.Contains(record.Payload, []byte(`"Role":"assistant"`)) && bytes.Contains(record.Payload, []byte(`"Type":"MESSAGE.END"`)) {
+	for i, record := range pathRecords {
+		if isAssistantMessageEndRecord(record) {
 			lastScript = i
 		}
 	}
 	if lastScript >= 0 {
-		records = records[:lastScript+1]
+		return pathRecords[:lastScript+1]
 	}
-	return recordPathBuckets(records)
+	kept := make([]transcript.Record, 0, len(pathRecords))
+	for _, record := range pathRecords {
+		if !bytes.Equal(record.Payload, []byte(sessionCloseControl)) {
+			kept = append(kept, record)
+		}
+	}
+	return kept
+}
+
+// sessionCloseControl is the client's teardown control payload.
+const sessionCloseControl = "session_close"
+
+func isAssistantMessageEndRecord(record transcript.Record) bool {
+	return bytes.Contains(record.Payload, []byte(`"Role":"assistant"`)) && bytes.Contains(record.Payload, []byte(`"Type":"MESSAGE.END"`))
 }
 
 func summarizeKey(key string) string {

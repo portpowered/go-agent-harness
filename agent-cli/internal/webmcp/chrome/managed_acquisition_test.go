@@ -218,7 +218,7 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: 10 * time.Second})
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: fixtureChromeVersionHangBound})
 	request := PinnedChromeRequest{Platform: platform, RequiredMajor: MinimumManagedChromeMajor, LockPath: lockPath, CacheDir: cacheDir, HTTPClient: client}
 
 	first, err := acquirer.AcquirePinnedChrome(context.Background(), request)
@@ -240,6 +240,13 @@ func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing
 		t.Fatalf("ready marker is unavailable: %v", err)
 	}
 }
+
+// fixtureChromeVersionHangBound bounds the fixture executable's --version
+// run. The first exec of a freshly extracted executable waits for macOS code
+// assessment: 5.3s on an idle workstation and over 10s while other packages
+// test in parallel, which failed both acquirer tests as version_unverified.
+// Nothing asserts elapsed time, so this is only a hang bound.
+const fixtureChromeVersionHangBound = time.Minute
 
 func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testing.T) {
 	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
@@ -269,7 +276,7 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: 10 * time.Second})
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{HTTPClient: client, VersionTimeout: fixtureChromeVersionHangBound})
 	request := PinnedChromeRequest{Platform: platform, RequiredMajor: MinimumManagedChromeMajor, LockPath: lockPath, CacheDir: cacheDir, HTTPClient: client}
 
 	const callers = 6

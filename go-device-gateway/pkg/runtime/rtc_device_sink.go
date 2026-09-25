@@ -113,6 +113,7 @@ type RTCDeviceSink struct {
 	playbackGeneration   uint64
 	playbackBlocked      bool
 	playbackResponse     rtcDevicePlaybackIdentity
+	interruptedResponse  rtcDevicePlaybackIdentity // see blockInterruptedPlaybackLocked
 	playbackSpans        []rtcDevicePlaybackSpan
 	playbackNoopDiscards atomic.Uint64
 	// pacingMu serializes producer admission and enqueue while cancellation can
@@ -327,7 +328,7 @@ func (s *RTCDeviceSink) interruptPlayback(requested audio.PlaybackResponse, requ
 	if !found && !requireRequested {
 		active, found = s.playbackFallbackSpanLocked(current)
 	}
-	s.blockPlaybackLocked()
+	s.blockInterruptedPlaybackLocked(active, found)
 	if !found || s.deviceRate <= 0 || active.end < active.start || requireRequested && !active.response.equal(requestedIdentity) {
 		return audio.PlaybackInterruption{}, false
 	}
@@ -496,8 +497,7 @@ func (s *RTCDeviceSink) playbackStateFor(response audio.PlaybackResponse) (uint6
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
-	// Prefetched continuation identity is not stale; interruption changes generation.
-	return s.playbackGeneration, s.playbackBlocked
+	return s.playbackGeneration, s.playbackBlocked || s.playbackResponseInterruptedLocked(response)
 }
 
 // writePlayback is the single producer boundary for device-rate PCM.

@@ -50,13 +50,22 @@ type roomLiveResult struct {
 	err   error
 }
 
+// releasePeerOnLiveness releases the peer once the silent participant's
+// liveness fault is observed AND the peer's scripted transcript has been
+// published. Closing the peer session earlier could end its receive loop
+// before the pre-queued transcript was read, so /events carried no
+// transcript_delta (7% of runs under -race with background load).
 type releasePeerOnLiveness struct {
 	delegate  runtimeRooms.EventSink
 	release   func()
 	observed  chan struct{}
-	once      sync.Once
 	started   chan struct{}
 	startOnce sync.Once
+
+	mu                sync.Mutex
+	livenessSeen      bool
+	peerTranscriptOut bool
+	released          bool
 }
 
 func (s *releasePeerOnLiveness) Publish(ctx context.Context, participantID string, event session.LiveEvent) error {
@@ -64,11 +73,18 @@ func (s *releasePeerOnLiveness) Publish(ctx context.Context, participantID strin
 	if participantID == roomLiveSilentParticipant && event.Kind == string(messages.StreamTypeMessageStart) && s.started != nil {
 		s.startOnce.Do(func() { close(s.started) })
 	}
-	if participantID == roomLiveSilentParticipant && event.Liveness != nil {
-		s.once.Do(func() {
-			s.release()
-			close(s.observed)
-		})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if participantID == "peer" && event.Kind == string(messages.StreamTypeTranscriptDelta) {
+		s.peerTranscriptOut = true
+	}
+	if participantID == roomLiveSilentParticipant && event.Liveness != nil && !s.livenessSeen {
+		s.livenessSeen = true
+		close(s.observed)
+	}
+	if s.livenessSeen && s.peerTranscriptOut && !s.released {
+		s.released = true
+		s.release()
 	}
 	return err
 }

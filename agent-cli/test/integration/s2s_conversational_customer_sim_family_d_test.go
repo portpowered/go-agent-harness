@@ -79,13 +79,6 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 	startedAt := time.Now()
 	fixture.SetStartedAt(startedAt)
 	recordDir := filepath.Join(t.TempDir(), "record")
-	silenceFor := 200 * time.Millisecond
-	if method == probe.TerminationSIGINT {
-		// Keep stdin active while the shipped child starts and emits its first
-		// response bytes; SIGINT must interrupt the open PCM stream, not a
-		// script that already reached EOF.
-		silenceFor = 2 * time.Second
-	}
 	config := probe.DuplexSessionConfig{
 		BinaryPath:       buildAgentBinary(t),
 		RecordDir:        recordDir,
@@ -99,7 +92,7 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 		MaxDuration:      5 * time.Second,
 		FrameDuration:    5 * time.Millisecond,
 		AdditionalArgs:   []string{"--wait-for-close"},
-		Segments:         []probe.DuplexAudioSegment{{ID: "active-request", PCM16: familyDFrame(1), SilenceFor: silenceFor}},
+		Segments:         familyDSegments(method),
 	}
 	if method == probe.TerminationSIGINT {
 		config.Termination = probe.TerminationSIGINT
@@ -127,10 +120,10 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 	activeResponseEndedAt := result.Duration
 	satisfactionAt := activeResponseEndedAt
 	if observation.OutputEndedAt <= observation.OutputStartedAt {
-		// SIGINT intentionally leaves the provider response open; retain a
-		// positive fixture interval for lifecycle assertions without using it
-		// as the cross-clock termination interval above.
-		observation.OutputEndedAt = result.Duration
+		// SIGINT leaves the provider response open; retain a positive fixture
+		// interval on the fixture's own clock (result.Duration starts later, at
+		// process start, and could precede the fixture's output start).
+		observation.OutputEndedAt = time.Since(startedAt)
 	}
 	if method == probe.TerminationSIGINT {
 		responseStatus = "interrupted"
@@ -176,6 +169,24 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 		scenario: scenario, sandbox: sandbox, recordDir: recordDir, result: result, checkpoint: checkpoint,
 		observation: observation, process: process, termination: termination, mechanical: mechanical,
 	}
+}
+
+// familyDSegments scripts the customer's PCM. For SIGINT, stdin stays open
+// until the runner's output-gated SIGINT ends the run: SIGINT must interrupt
+// the open PCM stream, not a script that already reached EOF. The former fixed
+// 2s silence tail only held stdin open if the child answered within 2s.
+func familyDSegments(method probe.TerminationMethod) []probe.DuplexAudioSegment {
+	segments := []probe.DuplexAudioSegment{{ID: "active-request", PCM16: familyDFrame(1), SilenceFor: 200 * time.Millisecond}}
+	if method != probe.TerminationSIGINT {
+		return segments
+	}
+	return append(segments, probe.DuplexAudioSegment{
+		ID: "hold-open-until-sigint", SilenceFor: 5 * time.Millisecond,
+		Before: func(ctx context.Context, _ *probe.DuplexProgress) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	})
 }
 
 func assertFamilyDProcessRun(t *testing.T, run familyDProcessRun) {

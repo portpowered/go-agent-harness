@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -65,7 +67,11 @@ func TestManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose(t *testing
 		t.Fatalf("explicit close was not idempotent: %d terminate calls", control.terminate.Load())
 	}
 	waitForManagedLifecycleCleanup(t, configDir)
-	_ = first
+	// The first handle was only detached; closing it joins its exit watcher so
+	// nothing touches the profile after the test's TempDir cleanup starts.
+	if err := first.Close(); err != nil {
+		t.Fatalf("detached handle Close(): %v", err)
+	}
 }
 
 func TestManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPID(t *testing.T) {
@@ -326,14 +332,16 @@ func TestManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
 	manager := newManagedLifecycleTestManager(t, configDir, control, &starts, "concurrent-incarnation")
 	var waitGroup sync.WaitGroup
 	errorsCh := make(chan error, 2)
+	browsers := make(chan *ManagedBrowser, 2)
 	for range 2 {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			_, err := manager.Acquire(context.Background(), ManagedBrowserLaunchOptions{})
+			browser, err := manager.Acquire(context.Background(), ManagedBrowserLaunchOptions{})
 			if err == nil {
 				// Keep the shared process alive; the test is checking acquisition,
 				// not close-on-exit policy.
+				browsers <- browser
 				return
 			}
 			errorsCh <- err
@@ -341,6 +349,7 @@ func TestManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
 	}
 	waitGroup.Wait()
 	close(errorsCh)
+	close(browsers)
 	for err := range errorsCh {
 		t.Fatalf("concurrent Acquire(): %v", err)
 	}
@@ -352,6 +361,13 @@ func TestManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
 	}
 	control.exit()
 	waitForManagedLifecycleCleanup(t, configDir)
+	// Closing the exited handles joins their exit watchers before TempDir
+	// cleanup removes the profile directory.
+	for browser := range browsers {
+		if err := browser.Close(); err != nil {
+			t.Fatalf("Close() after process exit: %v", err)
+		}
+	}
 }
 
 func waitForManagedLifecycleCleanup(t *testing.T, configDir string) {
@@ -467,4 +483,45 @@ func (t managedLifecycleRecoveryTransport) RoundTrip(request *http.Request) (*ht
 		return nil, errors.New("first launch endpoint unavailable")
 	}
 	return managedLaunchVersionTransport{}.RoundTrip(request)
+}
+
+// TestManagedBrowserCloseJoinsExitWatcherBeforeReturning is the regression for
+// the exit watcher that used to outlive Close and re-create the lifecycle lock
+// inside the profile afterwards, racing the caller's removal of the profile
+// directory ("directory not empty" in TempDir cleanup). Close must join it.
+func TestManagedBrowserCloseJoinsExitWatcherBeforeReturning(t *testing.T) {
+	for iteration := range 20 {
+		configDir := t.TempDir()
+		control := &managedLifecycleTestControl{}
+		var starts atomic.Int32
+		manager := newManagedLifecycleTestManager(t, configDir, control, &starts, "join-incarnation")
+		// A coarse lock poll keeps a watcher that collides with Close's lease
+		// waiting long after Close returns unless Close joins it.
+		manager.options.LockPoll = 20 * time.Millisecond
+		before := managedBrowserWatcherGoroutines()
+		browser, err := manager.Acquire(context.Background(), ManagedBrowserLaunchOptions{})
+		if err != nil {
+			t.Fatalf("iteration %d Acquire(): %v", iteration, err)
+		}
+		if err := browser.Close(); err != nil {
+			t.Fatalf("iteration %d Close(): %v", iteration, err)
+		}
+		if after := managedBrowserWatcherGoroutines(); after > before {
+			t.Fatalf("iteration %d exit watchers after Close = %d, want <= %d (watcher outlived Close)", iteration, after, before)
+		}
+		if err := os.RemoveAll(browser.ProfileDir()); err != nil {
+			t.Fatalf("iteration %d remove profile after Close: %v", iteration, err)
+		}
+	}
+}
+
+func managedBrowserWatcherGoroutines() int {
+	buffer := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buffer, true)
+		if n < len(buffer) {
+			return strings.Count(string(buffer[:n]), ").watchManagedBrowser(")
+		}
+		buffer = make([]byte, 2*len(buffer))
+	}
 }

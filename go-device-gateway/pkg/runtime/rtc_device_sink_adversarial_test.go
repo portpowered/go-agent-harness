@@ -4,6 +4,7 @@ import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/d
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite guards
@@ -311,3 +313,95 @@ func c21WaitForDeviceSamples(t *testing.T, sub *RTCDevicePlaybackObservationSubs
 		time.Sleep(time.Millisecond)
 	}
 }
+
+// TestRTCDeviceSinkDropsInterruptedResponseFramesDeliveredAfterInterruption
+// reproduces a buffered media bridge that already holds frames of the
+// interrupted response when the barge-in lands, and has also dequeued the next
+// response (whose StartPlayback unblocks playback in a new generation). The
+// stale frames must not play, and must not poison the converter so the next
+// response fails with "audio stream identity changed without a reset".
+func TestRTCDeviceSinkDropsInterruptedResponseFramesDeliveredAfterInterruption(t *testing.T) {
+	registry := newRTCDeviceSinkRateRegistry(t, audio.SampleRate)
+	sink, err := NewRTCDeviceSinkAtRate(registry, "virtual:output", wavio.Rate24kHz)
+	if err != nil {
+		t.Fatalf("open sink: %v", err)
+	}
+	defer func() {
+		if err := sink.Close(); err != nil {
+			t.Errorf("close sink: %v", err)
+		}
+	}()
+	sink.holdToneConfig.GapThreshold = time.Hour
+
+	interrupted := boundaryTestPCM(2160, 900)
+	next := boundaryTestPCM(1440, 3100)
+	interruptedResponse := audio.PlaybackResponse{ResponseID: "response-interrupted", ItemID: "item-interrupted"}
+	nextResponse := audio.PlaybackResponse{ResponseID: "response-next", ItemID: "item-next"}
+
+	var got []int16
+	playedBeforeInterrupt := -1
+	inbound := &interruptedBridgeInboundMedia{
+		frames: []audio.PCMFrame{
+			{Samples: interrupted[:720], PlaybackResponse: interruptedResponse},
+			{Samples: interrupted[720:1440], PlaybackResponse: interruptedResponse},
+			{Samples: interrupted[1440:], PlaybackResponse: interruptedResponse},
+			{Samples: next[:720], PlaybackResponse: nextResponse},
+			{Samples: next[720:], EndOfResponse: true, PlaybackResponse: nextResponse},
+		},
+	}
+	inbound.before = map[int]func(audio.PlaybackController){
+		0: func(controller audio.PlaybackController) { controller.StartPlayback(interruptedResponse) },
+		1: func(controller audio.PlaybackController) {
+			playedBeforeInterrupt = len(got)
+			active, ok := controller.(audio.ActivePlaybackController)
+			if !ok {
+				t.Fatalf("controller %T cannot interrupt active playback", controller)
+			}
+			active.InterruptActivePlayback()
+			// The bridge has already dequeued the next response.
+			controller.StartPlayback(nextResponse)
+		},
+	}
+	sink.SetPlaybackSamplesObserver(func(_ context.Context, _ int, samples []int16) error {
+		got = append(got, samples...)
+		return nil
+	})
+	if err := sink.Pump(context.Background(), inbound); err != nil {
+		t.Fatalf("pump after interruption: %v", err)
+	}
+	if playedBeforeInterrupt < 0 {
+		t.Fatal("interruption hook did not run")
+	}
+	if want := boundaryTestResample(t, next); !reflect.DeepEqual(got[playedBeforeInterrupt:], want) {
+		t.Fatalf("playback after interruption = %d samples, want exactly the next response's %d samples", len(got)-playedBeforeInterrupt, len(want))
+	}
+}
+
+// interruptedBridgeInboundMedia replays frames in order and runs a hook, on
+// the pump goroutine, before handing out the frame at a given index.
+type interruptedBridgeInboundMedia struct {
+	controller audio.PlaybackController
+	frames     []audio.PCMFrame
+	before     map[int]func(audio.PlaybackController)
+	index      int
+}
+
+func (m *interruptedBridgeInboundMedia) SetPlaybackController(controller audio.PlaybackController) {
+	m.controller = controller
+}
+
+func (m *interruptedBridgeInboundMedia) ReadFrame(context.Context) (audio.PCMFrame, error) {
+	if m.index >= len(m.frames) {
+		return audio.PCMFrame{}, io.EOF
+	}
+	if hook := m.before[m.index]; hook != nil && m.controller != nil {
+		hook(m.controller)
+	}
+	frame := m.frames[m.index]
+	m.index++
+	return frame, nil
+}
+
+func (*interruptedBridgeInboundMedia) Close() error { return nil }
+
+var _ audio.PlaybackControlledInbound = (*interruptedBridgeInboundMedia)(nil)

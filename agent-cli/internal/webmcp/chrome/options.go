@@ -2,6 +2,7 @@ package chrome
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -74,4 +75,20 @@ func (h *handle) timeout() time.Duration {
 		return h.commandTimeout
 	}
 	return defaultCommandTimeout
+}
+
+func stringSetContains(values []string, expected string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizedManagedShutdown(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return defaultManagedBrowserShutdownTimeout
+	}
+	return timeout
 }

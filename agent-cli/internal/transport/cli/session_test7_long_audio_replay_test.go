@@ -42,6 +42,8 @@ const (
 // real provider PCM, provider chunk sizing, total duration, and burst pressure.
 // Exact 16 kHz loopback equality proves that conversion and device pacing lose,
 // duplicate, and reorder zero samples across the long response.
+const test7ReplayHangBound = 2 * time.Minute
+
 func TestSessionCommandReplaysTest7LongOpenAIAudioTo16kLoopback(t *testing.T) {
 	deltas, providerPCM := loadTest7LongOpenAIAudio(t)
 	providerSamples := decodeTest7PCM16(t, providerPCM)
@@ -80,7 +82,11 @@ func TestSessionCommandReplaysTest7LongOpenAIAudioTo16kLoopback(t *testing.T) {
 	command.SetErr(&stderr)
 	command.SetArgs([]string{"--replay", capturePath, "--audio-out-device", "virtual:output"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Hang bound only: nothing below asserts elapsed time. The replay is
+	// CPU-bound JSON/base64 decoding of ~50s of 24 kHz provider audio; under
+	// -race it took ~20s end to end at load average ~90 (4s without -race), so
+	// the former 15s bound failed every race run on a busy host.
+	ctx, cancel := context.WithTimeout(context.Background(), test7ReplayHangBound)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() { runErr <- command.ExecuteContext(ctx) }()
