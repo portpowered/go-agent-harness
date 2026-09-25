@@ -209,10 +209,15 @@ func typeLoadPatterns(module *Module) []string {
 	return patterns
 }
 
+// typeLoadConfig loads only each package's *types.Package. The rules read
+// package scopes and exported types, never syntax or TypesInfo, so types come
+// from compiler export data (shared with the Go build cache) instead of
+// type-checking every dependency from source. Compile errors still fail the
+// load.
 func typeLoadConfig(ctx context.Context, module *Module, goos, goarch string) *packages.Config {
 	cfg := &packages.Config{
 		Context: ctx,
-		Mode:    packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports | packages.NeedDeps | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule,
+		Mode:    packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports | packages.NeedTypes | packages.NeedModule,
 		Dir:     module.Dir,
 		Env:     setTypeLoadEnvironment(os.Environ(), goos, goarch),
 		Tests:   true,

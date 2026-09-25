@@ -10,37 +10,46 @@ permissions:
   contents: read
 
 jobs:
-  # Static checks run as parallel shards so no shard exceeds the
-  # three-minute test budget; `static` below aggregates them under the
-  # required "CI (static)" check name. Each check step runs with
-  # `if: always()` so an early failure does not hide later results in the
-  # same shard.
+  # Static checks run as parallel shards; `static` below aggregates them under
+  # the required "CI (static)" check name. Every shard must finish within the
+  # three-minute budget even when its build cache is cold (first main run
+  # after a toolchain or cache-key change, or an evicted cache), which is what
+  # sets the lane sizes below. Each check step runs with `if: always()` so an
+  # early failure does not hide later results in the same shard.
+  #
+  # go vet and standalone staticcheck do not run here: golangci-lint's
+  # standard linters (govet with the go vet analyzer set, staticcheck with
+  # every SA/S/ST/QF check staticcheck enables by default, and unused)
+  # enforce them on every lint lane. See docs/architecture/lint-policy.md.
+  #
+  # Every shard restores its own Go build, module and golangci-lint caches
+  # through .github/actions/go-cache. golangci-lint and the architecture gate
+  # load dependencies from compiled export data, so the build cache is what
+  # keeps these jobs short. The checkouts skip docs/temp like the test jobs.
   static-gates:
     name: CI (static gates)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: static-gates
 
       - name: Run gofmt check
         if: always()
@@ -54,122 +63,151 @@ jobs:
         if: always()
         run: make check-ci-test-partition
 
-      - name: Verify service architecture and size budgets
+      - name: Save Go cache
         if: always()
-        run: make architecture-size-check
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
 
-  static-vet:
-    name: CI (static vet)
+  # The architecture gate type-loads every module from compiled export data,
+  # so it keeps its own build cache instead of adding its cold compile to the
+  # gates job. It needs full history for the baseline merge-base check.
+  static-architecture:
+    name: CI (static architecture)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
-
-      - name: Cache pinned analyzer binaries
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/go-agent-harness/ci-analyzers
-          key: ci-analyzers-${{ runner.os }}-${{ runner.arch }}-golangci-lint-v2.9.0-staticcheck-2026.1
-
-      - name: Cache staticcheck analysis
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/staticcheck
-          key: staticcheck-2026.1-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            staticcheck-2026.1-${{ runner.os }}-
-
-      - name: Install staticcheck
-        env:
-          STATICCHECK_VERSION: 2026.1
-        run: bash scripts/install-ci-analyzer.sh staticcheck
-
-      - name: Run go vet
-        if: always()
-        run: make vet
-
-      - name: Run staticcheck
-        if: always()
-        run: make staticcheck
-
-  # golangci-lint lanes. Every lane enforces the hard limits in .golangci.yml
-  # (which also loads the opt-in live/e2e/e2e_internal/stress/
-  # sessioncapacityramp test tags). The Linux lanes add the new-code pass and
-  # the wireinject pass; the cross lanes lint GOOS=windows and GOOS=darwin
-  # with cgo disabled. See docs/architecture/lint-policy.md.
-  static-lint:
-    name: CI (static lint ${{ matrix.lane }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - lane: agent-cli
-            command: make lint LINT_SHARD=agent-cli
-          - lane: libraries
-            command: make lint LINT_SHARD=libraries
-          - lane: windows
-            command: make lint-cross LINT_CROSS_GOOS=windows
-          - lane: darwin
-            command: make lint-cross LINT_CROSS_GOOS=darwin
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        id: go
+        uses: ./.github/actions/go-cache
         with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
+          cache-name: static-architecture
+
+      - name: Verify service architecture and size budgets
+        run: make architecture-size-check
+
+      - name: Save Go cache
+        if: always()
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
+  # golangci-lint lanes. Every lane enforces the hard limits in .golangci.yml
+  # (which also loads the opt-in live/e2e/e2e_internal/stress/
+  # sessioncapacityramp test tags). The linux lanes add the new-code pass and
+  # the wireinject pass; the windows and darwin lanes lint with cgo disabled
+  # (darwin also with the nomicrophone tag), and the darwin cgo lane lints
+  # cgo-constrained packages natively on macOS. See
+  # docs/architecture/lint-policy.md.
+  static-lint:
+    name: CI (static lint ${{ matrix.lane }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: linux agent-cli
+            cache: static-lint-linux-agent-cli
+            runner: ubuntu-latest
+            fetch-depth: 0
+            command: make lint LINT_SHARD=agent-cli
+          - lane: linux runtime
+            cache: static-lint-linux-runtime
+            runner: ubuntu-latest
+            fetch-depth: 0
+            command: make lint LINT_SHARD=runtime
+          - lane: linux support
+            cache: static-lint-linux-support
+            runner: ubuntu-latest
+            fetch-depth: 0
+            command: make lint LINT_SHARD=support
+          - lane: windows agent-cli
+            cache: static-lint-windows-agent-cli
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=agent-cli
+          - lane: windows runtime
+            cache: static-lint-windows-runtime
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=runtime
+          - lane: windows support
+            cache: static-lint-windows-support
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=windows LINT_SHARD=support
+          - lane: darwin agent-cli
+            cache: static-lint-darwin-agent-cli
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=agent-cli
+          - lane: darwin runtime
+            cache: static-lint-darwin-runtime
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=runtime
+          - lane: darwin support
+            cache: static-lint-darwin-support
+            runner: ubuntu-latest
+            fetch-depth: 1
+            command: make lint-cross LINT_CROSS_GOOS=darwin LINT_SHARD=support
+          # cgo-constrained darwin files (CoreAudio capture, display
+          # permission) need the macOS SDK.
+          - lane: darwin cgo
+            cache: static-lint-darwin-cgo
+            runner: macos-14
+            fetch-depth: 1
+            command: make lint-darwin-cgo
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ matrix.fetch-depth }}
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/temp/
+
+      - name: Set up Go
+        id: go
+        uses: ./.github/actions/go-cache
+        with:
+          cache-name: ${{ matrix.cache }}
+          extra-paths: ${{ runner.temp }}/golangci-lint
 
       - name: Cache pinned analyzer binaries
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: ~/.cache/go-agent-harness/ci-analyzers
           key: ci-analyzers-${{ runner.os }}-${{ runner.arch }}-golangci-lint-v2.9.0-staticcheck-2026.1
-
-      # Per-lane analysis cache. A configuration change falls back to the
-      # lane's newest cache so unchanged packages stay warm.
-      - name: Cache golangci-lint analysis
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/golangci-lint
-          key: golangci-lint-v2.9.0-${{ runner.os }}-${{ matrix.lane }}-${{ hashFiles('.golangci.yml', '.golangci.new.yml') }}-${{ github.sha }}
-          restore-keys: |
-            golangci-lint-v2.9.0-${{ runner.os }}-${{ matrix.lane }}-${{ hashFiles('.golangci.yml', '.golangci.new.yml') }}-
-            golangci-lint-v2.9.0-${{ runner.os }}-${{ matrix.lane }}-
 
       - name: Install golangci-lint
         env:
@@ -177,59 +215,19 @@ jobs:
         run: bash scripts/install-ci-analyzer.sh golangci-lint
 
       - name: Run golangci-lint
+        env:
+          GOLANGCI_LINT_CACHE: ${{ runner.temp }}/golangci-lint
         run: ${{ matrix.command }}
 
-  # cgo-constrained darwin files (CoreAudio capture, display permission) need
-  # the macOS SDK, so they are linted natively on a macOS runner.
-  static-lint-darwin-cgo:
-    name: CI (static lint darwin cgo)
-    runs-on: macos-14
-    timeout-minutes: 15
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Save Go cache
+        if: always()
+        uses: ./.github/actions/go-cache-save
         with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.26.7"
-          cache: true
-          cache-dependency-path: |
-            go.work.sum
-            agent-cli/go.sum
-            go-agent-loop/go.sum
-            go-llm-gateway/go.sum
-            go-audio/go.sum
-            go-device-gateway/go.sum
-            go-agent-runtime/go.sum
-            tools/architecturegate/go.sum
-            tests/embedding/go.sum
-
-      - name: Cache pinned analyzer binaries
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/go-agent-harness/ci-analyzers
-          key: ci-analyzers-${{ runner.os }}-${{ runner.arch }}-golangci-lint-v2.9.0-staticcheck-2026.1
-
-      - name: Cache golangci-lint analysis
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/Library/Caches/golangci-lint
-          key: golangci-lint-v2.9.0-${{ runner.os }}-darwin-cgo-${{ hashFiles('.golangci.yml', '.golangci.new.yml') }}-${{ github.sha }}
-          restore-keys: |
-            golangci-lint-v2.9.0-${{ runner.os }}-darwin-cgo-${{ hashFiles('.golangci.yml', '.golangci.new.yml') }}-
-            golangci-lint-v2.9.0-${{ runner.os }}-darwin-cgo-
-
-      - name: Install golangci-lint
-        env:
-          GOLANGCI_LINT_VERSION: v2.9.0
-        run: bash scripts/install-ci-analyzer.sh golangci-lint
-
-      - name: Run golangci-lint on darwin cgo packages
-        run: make lint-darwin-cgo
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+          extra-paths: ${{ runner.temp }}/golangci-lint
 
   # Preserve the required "CI (static)" check name while aggregating the
   # parallel static shards. `always()` reports a failed shard as a failed
@@ -238,9 +236,8 @@ jobs:
     name: CI (static)
     needs:
       - static-gates
-      - static-vet
+      - static-architecture
       - static-lint
-      - static-lint-darwin-cgo
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -249,14 +246,12 @@ jobs:
       - name: Verify static shards completed
         env:
           GATES_RESULT: ${{ needs.static-gates.result }}
-          VET_RESULT: ${{ needs.static-vet.result }}
+          ARCHITECTURE_RESULT: ${{ needs.static-architecture.result }}
           LINT_RESULT: ${{ needs.static-lint.result }}
-          LINT_DARWIN_CGO_RESULT: ${{ needs.static-lint-darwin-cgo.result }}
         run: |
           test "$GATES_RESULT" = success
-          test "$VET_RESULT" = success
+          test "$ARCHITECTURE_RESULT" = success
           test "$LINT_RESULT" = success
-          test "$LINT_DARWIN_CGO_RESULT" = success
 
   # Fast unit-level checks and the agent-cli link gate. No analyzer binaries
   # needed. Library packages are not compiled here: the coverage libraries

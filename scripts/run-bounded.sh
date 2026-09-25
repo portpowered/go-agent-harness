@@ -63,6 +63,19 @@ report() {
 reap() {
 	local remaining=() index
 	for index in ${running[@]+"${running[@]}"}; do
+		if [ ! -f "$work_dir/$index.status" ] && ! kill -0 "${pids[$index]}" 2>/dev/null; then
+			# The job's subshell exited without recording a status (for
+			# example it was killed); report it as failed instead of waiting
+			# for a status file that will never appear.
+			local exited=0
+			wait "${pids[$index]}" 2>/dev/null || exited=$?
+			if [ ! -f "$work_dir/$index.status" ]; then
+				if [ "$exited" = 0 ]; then
+					exited=1
+				fi
+				echo "$exited ?" >"$work_dir/$index.status"
+			fi
+		fi
 		if [ -f "$work_dir/$index.status" ]; then
 			wait "${pids[$index]}" 2>/dev/null || true
 			report "$index"

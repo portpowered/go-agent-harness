@@ -18,6 +18,10 @@ inputs:
   gomodcache:
     description: go-cache gomodcache output.
     required: true
+  extra-paths:
+    description: The extra-paths value passed to go-cache, if any.
+    required: false
+    default: ""
   token:
     description: >-
       Token with actions: write, used on main to delete this job's superseded
@@ -41,6 +45,7 @@ runs:
         path: |
           ${{ inputs.gocache }}
           ${{ inputs.gomodcache }}
+          ${{ inputs.extra-paths }}
         key: ${{ inputs.primary-key }}
 
     # Keep one main cache per job: restores fall back to the newest entry, so
