@@ -52,7 +52,10 @@ func newRoomLiveLivenessFixture(t *testing.T, timeoutCase bool) *roomLiveLivenes
 		clock:          platformclock.NewDeterministic(time.Unix(1700000000, 0), time.Millisecond),
 		provider: map[string]*roomLiveSession{
 			roomLiveSilentParticipant: newRoomLiveSession(silentEvents...),
-			"peer":                    newRoomLiveSession(roomLiveMessage(messages.StreamTypeSessionOpen, messages.NewSessionOpenValue("peer-session", "audio_inference"))),
+			"peer": newRoomLiveSession(
+				roomLiveMessage(messages.StreamTypeSessionOpen, messages.NewSessionOpenValue("peer-session", "audio_inference")),
+				roomLiveMessage(messages.StreamTypeTranscriptDelta, messages.NewTranscriptDeltaValue(roomLivePeerTranscript+roomLivePeerSecret)),
+			),
 		},
 		factoryReady:  make(chan struct{}, 2),
 		resultChannel: make(chan roomLiveResult, 1),
@@ -126,7 +129,9 @@ func (f *roomLiveLivenessFixture) liveService(t *testing.T) session.LiveService 
 
 func (f *roomLiveLivenessFixture) newStream(t *testing.T) runtimeRooms.RoomEventStream {
 	t.Helper()
-	stream, err := runtimeRoomWire.NewRoomEventStream(runtimeRooms.RoomEventStreamOptions{ParticipantIDs: []string{roomLiveSilentParticipant, "peer"}, Now: f.clock.Now})
+	t.Setenv("PEER_KEY", roomLivePeerSecret)
+	redactor := runtimeRoomWire.NewRoomSecretRedactor(runtimeRooms.RoomCredentialSources{Manifest: f.manifest})
+	stream, err := runtimeRoomWire.NewRoomEventStream(runtimeRooms.RoomEventStreamOptions{ParticipantIDs: []string{roomLiveSilentParticipant, "peer"}, Redactor: redactor, Now: f.clock.Now})
 	if err != nil {
 		t.Fatalf("NewRoomEventStream: %v", err)
 	}
@@ -227,7 +232,7 @@ func (f *roomLiveLivenessFixture) assertPeerFault(t *testing.T) {
 	t.Helper()
 	for {
 		payload := f.peerReader.next(t)
-		if frameString(t, payload, "event") != runtimeRooms.RoomStreamEventParticipantLivenessFault {
+		if frameString(t, payload, "type") != runtimeRooms.RoomStreamTypeRoom || frameString(t, payload, "event") != runtimeRooms.RoomStreamEventParticipantLivenessFault {
 			continue
 		}
 		if got := frameString(t, payload, "participant_id"); got != roomLiveSilentParticipant {
@@ -275,12 +280,29 @@ func (f *roomLiveLivenessFixture) assertStream(t *testing.T, stream roomLiveStre
 	if stream.faultCount != 1 || stream.faultIndex < 0 || stream.terminatedIndex < 0 || stream.faultIndex >= stream.terminatedIndex {
 		t.Fatalf("room stream liveness ordering fault_count=%d fault_index=%d terminated_index=%d events=%v", stream.faultCount, stream.faultIndex, stream.terminatedIndex, stream.events)
 	}
+	assertPeerTranscript(t, stream.events)
 	joined, terminated := lifecycleParticipants(t, stream.events)
 	for _, participantID := range []string{roomLiveSilentParticipant, "peer"} {
 		if !joined[participantID] || !terminated[participantID] {
 			t.Fatalf("participant %q lifecycle events joined=%v terminated=%v; events=%v", participantID, joined[participantID], terminated[participantID], stream.events)
 		}
 	}
+}
+
+// assertPeerTranscript proves a participant's provider transcript reaches
+// /events as a transcript_delta with the participant's credential redacted.
+func assertPeerTranscript(t *testing.T, events []map[string]json.RawMessage) {
+	t.Helper()
+	for _, payload := range events {
+		if frameString(t, payload, "type") != runtimeRooms.RoomStreamTypeTranscriptDelta {
+			continue
+		}
+		if text := frameString(t, payload, "text"); frameString(t, payload, "participant_id") != "peer" || text != roomLivePeerTranscript+"[REDACTED]" {
+			t.Fatalf("peer transcript delta = %v, want redacted peer text", payload)
+		}
+		return
+	}
+	t.Fatalf("room stream carried no transcript_delta; events=%v", events)
 }
 
 func lifecycleParticipants(t *testing.T, events []map[string]json.RawMessage) (map[string]bool, map[string]bool) {
@@ -332,6 +354,8 @@ const (
 	roomLiveSilentParticipant           = "silent"
 	roomLiveEmptyResponseClassification = "silent_provider_empty_response"
 	roomLiveTimeoutClassification       = "silent_provider_timeout"
+	roomLivePeerTranscript              = "my key is "
+	roomLivePeerSecret                  = "sk-room-peer-secret-9"
 )
 
 func (f *roomLiveLivenessFixture) assertSilentResult(t *testing.T, result runtimeRooms.RoomResult) {

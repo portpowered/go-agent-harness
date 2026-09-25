@@ -38,17 +38,20 @@ func (s *LiveSink) Publish(ctx context.Context, participantID string, event sess
 		s.broker.PublishRoomEvent(rooms.RoomStreamEventParticipantLivenessFault, participantID, classification)
 		return nil
 	}
-	switch strings.ToLower(strings.TrimSpace(event.Kind)) {
-	case string(messages.StreamTypeTranscriptDelta):
+	// Live kinds mix provider stream types ("TRANSCRIPT.DELTA") and session
+	// kinds ("overflow"), so match them without regard to case.
+	kind := strings.TrimSpace(event.Kind)
+	switch {
+	case strings.EqualFold(kind, string(messages.StreamTypeTranscriptDelta)):
 		s.broker.TranscriptDelta(participantID, event.Text)
-	case string(messages.StreamTypeTranscriptEnd):
+	case strings.EqualFold(kind, string(messages.StreamTypeTranscriptEnd)):
 		s.broker.TranscriptEnd(participantID, event.Text)
-	case string(session.LiveEventOverflow):
+	case strings.EqualFold(kind, string(session.LiveEventOverflow)):
 		s.broker.Diagnostic(participantID, "live_event_overflow", map[string]string{
 			"dropped": fmt.Sprint(event.Dropped),
 		})
 	default:
-		if event.Capability != nil || strings.HasPrefix(strings.ToLower(strings.TrimSpace(event.Kind)), "browser.") {
+		if event.Capability != nil || strings.HasPrefix(strings.ToLower(kind), "browser.") {
 			s.broker.Diagnostic(participantID, "live_browser_event", map[string]string{
 				"kind": event.Kind, "browser_id": event.BrowserID, "target_id": event.TargetID,
 				"invocation_id": event.InvocationID, "state": event.State, "reason": event.Reason,
