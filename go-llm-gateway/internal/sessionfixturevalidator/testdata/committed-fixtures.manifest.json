@@ -1,8 +1,7 @@
 {
-  "count": 39,
+  "count": 37,
   "files": [
     "agent-cli/test/integration/testdata/multiturn_zephyr_4turn.session.json",
-    "agent-cli/test/integration/testdata/multiturn_zephyr_no_carry.session.json",
     "agent-cli/test/integration/testdata/openai_realtime_error.session.json",
     "agent-cli/test/integration/testdata/openai_realtime_smoke.session.json",
     "agent-cli/test/integration/testdata/openai_realtime_text.session.json",
@@ -36,7 +35,6 @@
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_malformed_frame.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_failure_tool_call.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_healthy_multiturn_audio.session.json",
-    "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_inbound_then_outbound.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_outbound_then_inbound.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/session_text_reply.session.json",
     "go-llm-gateway/pkg/testing/testdata/session-fixtures/synthetic-text.session.json"

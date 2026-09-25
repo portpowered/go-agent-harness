@@ -108,8 +108,10 @@ func TestSessionAudioInPacingFlagReachesTheSessionRequest(t *testing.T) {
 	}
 
 	cmd := NewSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil).Generate()
-	if err := cmd.ParseFlags([]string{"--audio-in-pacing=fast"}); err == nil {
-		t.Fatal("--audio-in-pacing=fast parsed; want an invalid pacing error")
+	err := cmd.ParseFlags([]string{"--audio-in-pacing=fast"})
+	const want = `invalid argument "fast" for "--audio-in-pacing" flag: invalid device media request: file input pacing "fast": want realtime, unpaced, or a speed such as 10x`
+	if err == nil || err.Error() != want {
+		t.Fatalf("--audio-in-pacing=fast error = %v, want %q", err, want)
 	}
 	assertSessionFlagHidden(t, cmd, sessionAudioInPacingFlag)
 }

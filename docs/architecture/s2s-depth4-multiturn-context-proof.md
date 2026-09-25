@@ -4,8 +4,9 @@ Status: **proof tests retired** (2026-09-25). The two tests described below
 were removed: each turn was a separate `session --replay` invocation over a
 slice of the committed capture, so the "carried" codeword was scripted
 provider text and the CLI carried no context between turns; the tests only
-exercised their own oracle. The committed fixtures remain (the positive
-capture and its turn WAVs still drive
+exercised their own oracle. The negative-control capture
+`multiturn_zephyr_no_carry.session.json` was deleted with them; the positive
+capture and its turn WAVs remain (they still drive
 `TestSessionCommandConversationObservabilityProvesConversationFromArtifactsOnly`).
 Genuine cross-turn behavior needs one persistent session that replays every
 turn, which this proof never did. The original record follows.

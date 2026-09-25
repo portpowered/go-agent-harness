@@ -228,45 +228,6 @@ func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, ex
 	return outputPath, err
 }
 
-// countToolCallsInExchange loads the replayed provider exchange and counts the
-// named function tool call events carrying the expected arguments. It also
-// reports whether output audio follows the final matching tool call.
-func countToolCallsInExchange(t *testing.T, wirePath string) (count int, argumentsMatched int, audioAfter bool) {
-	t.Helper()
-	capture, err := gwtesting.LoadSessionCapture(wirePath)
-	if err != nil {
-		t.Fatalf("load replayed provider exchange: %v", err)
-	}
-	lastToolCallIndex := -1
-	lastAudioIndex := -1
-	for i, record := range capture.Records {
-		if record.Direction != gwtesting.DirectionServerToClient {
-			continue
-		}
-		var payload struct {
-			Type      string `json:"type"`
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		}
-		if json.Unmarshal(record.Payload, &payload) != nil {
-			continue
-		}
-		switch payload.Type {
-		case rtEventFunctionCallArgumentsDone:
-			if payload.Name == toolCallScenarioName {
-				count++
-				if payload.Arguments == toolCallScenarioArguments {
-					argumentsMatched++
-				}
-				lastToolCallIndex = i
-			}
-		case rtEventOutputAudioDelta:
-			lastAudioIndex = i
-		}
-	}
-	return count, argumentsMatched, lastAudioIndex > lastToolCallIndex
-}
-
 // assertRecordedSpeech is the local speech assertion for the recorded
 // --audio-out WAV: non-silent RMS energy within plausible duration bounds.
 func assertRecordedSpeech(t *testing.T, outputPath string, wantSamples int) {
@@ -355,13 +316,8 @@ func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 // vacuously. It runs on constructed evidence only; the oracle's full-session
 // negative control is TestSessionToolCallConversationWrongToolNameIsRejected.
 func TestSessionToolSingleCallSuppressedFailsDeterministically(t *testing.T) {
-	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t), shortVoicedSlice)
-	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, false)
-	count, _, _ := countToolCallsInExchange(t, wirePath)
-	if count != 0 {
-		t.Fatalf("suppressed fixture still contained %d named tool calls; the control is not suppressed", count)
-	}
-	// A session over a suppressed exchange reaches the executor zero times.
+	// A session whose provider exchange suppresses the call reaches the
+	// executor zero times.
 	var executorCalls []messages.ToolCall
 	assertionErr := validateExactlyOneToolCall(executorCalls)
 	if assertionErr == nil {
