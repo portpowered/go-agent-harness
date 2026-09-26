@@ -119,6 +119,10 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 	switch event.Type {
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		err = s.interruptPlayback(ctx, media)
+	case models.SessionEventResponseCreated:
+		// Name the response before its first audio delta, so an interruption
+		// in between still discards that response's late audio.
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: firstStringField(event.Data, "response.id")})
 	case models.SessionEventResponseOutputAudioDelta:
 		format := realtimeAudioMediaType(event.Data)
 		if format != "" && format != realtimePCMAudioFormat {

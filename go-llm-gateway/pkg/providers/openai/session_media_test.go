@@ -425,3 +425,45 @@ func TestRealtimeSession_BargeInLatencyStaysFlatAcrossLongSession(t *testing.T) 
 		}
 	})
 }
+
+// response.created names the response before its first audio delta names the
+// audio item. An interruption in that window must still discard the
+// response's deltas that arrive afterwards.
+func TestRealtimeSession_CancelBeforeFirstAudioDiscardsLateDeltas(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-early", "status": "in_progress"}})
+	for {
+		msg, ok := session.Receive().ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatal("session closed before response.created")
+		}
+		if msg.Type == messages.StreamTypeMessageStart {
+			break
+		}
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+		t.Fatalf("send RESPONSE.CANCEL: %+v", outcome)
+	}
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-early", "item_id": "item-early", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000)), "format": "pcm16",
+	})
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-next", "item_id": "item-next", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 2400)), "format": "pcm16",
+	})
+	frame, err := endpoints.Inbound.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read frame after cancel: %v", err)
+	}
+	if frame.PlaybackResponse.ResponseID != "resp-next" {
+		t.Fatalf("first audible frame belongs to %+v, want resp-next (cancelled response played)", frame.PlaybackResponse)
+	}
+}

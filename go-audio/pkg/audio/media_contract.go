@@ -173,3 +173,13 @@ func (m *sessionInboundMedia) appendInboundFramesLocked() {
 
 // HasIdentity reports whether a provider supplied a response or item identity.
 func (r PlaybackResponse) HasIdentity() bool { return r.ResponseID != "" || r.ItemID != "" }
+
+// sameResponse reports whether r and other identify the same provider
+// response. A response known only by its response ID (announced before its
+// first audio delta names the item) matches its later, fully named deltas.
+func (r PlaybackResponse) sameResponse(other PlaybackResponse) bool {
+	if r.ResponseID != "" && r.ResponseID == other.ResponseID && (r.ItemID == "" || other.ItemID == "") {
+		return true
+	}
+	return r == other
+}

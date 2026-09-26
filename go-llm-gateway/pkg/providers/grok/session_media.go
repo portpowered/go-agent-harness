@@ -112,6 +112,9 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		media.InterruptInbound()
 	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
+		// The response identity lets an interruption discard this response's
+		// late deltas.
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: responseEventID(event.Data)})
 		data, decodeErr := decodeGrokAudioDelta(event.Data)
 		if decodeErr != nil {
 			err = decodeErr

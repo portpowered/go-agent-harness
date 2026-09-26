@@ -325,11 +325,19 @@ func (m *sessionInboundMedia) activatePlaybackLocked(response PlaybackResponse) 
 
 func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
 	m.mu.Lock()
-	if m.discarding && m.interrupted == response {
+	if m.discarding && m.interrupted.sameResponse(response) {
 		m.mu.Unlock()
 		return
 	}
 	if m.closed || m.response == response {
+		m.mu.Unlock()
+		return
+	}
+	if m.response.ItemID == "" && m.response.ResponseID != "" && m.response.ResponseID == response.ResponseID {
+		// The response announced at creation now names its audio item.
+		m.responseSamples[response] = m.responseSamples[m.response]
+		delete(m.responseSamples, m.response)
+		m.response = response
 		m.mu.Unlock()
 		return
 	}

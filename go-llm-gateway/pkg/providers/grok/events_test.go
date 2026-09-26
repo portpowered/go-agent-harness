@@ -158,16 +158,15 @@ func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 			defer closeForTest(t, session)
 
 			backlog := make([]int16, 24000*3)
-			conn.addServerEvent("response.audio.delta", map[string]any{"delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
+			conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-cancelled", "delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
 			if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
 				t.Fatalf("read first frame: %v", err)
 			}
 			interrupt(t, conn, session)
-			marker := make([]int16, 720)
-			for index := range marker {
-				marker[index] = 7
-			}
-			conn.addServerEvent("response.audio.delta", map[string]any{"delta": codec.EncodeBase64(codec.EncodePCM16(marker))})
+			// A late delta of the cancelled response is discarded; the next
+			// audible frame is the next response's.
+			conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-cancelled", "delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
+			conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-next", "delta": codec.EncodeBase64(codec.EncodePCM16(make([]int16, 720)))})
 			frame, err := endpoints.Inbound.ReadFrame(ctx)
 			if err != nil {
 				t.Fatalf("read frame after interruption: %v", err)
