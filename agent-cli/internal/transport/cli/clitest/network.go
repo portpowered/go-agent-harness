@@ -12,9 +12,10 @@ import (
 )
 
 // PipeListener is an in-memory net.Listener. Every DialContext is one
-// net.Pipe whose server end Accept returns, so HTTP and WebSocket servers and
-// clients inside a synctest bubble block only on bubble channels and advance
-// with its virtual clock. Any address dials the listener.
+// loopback-TCP-like stream connection (see newStreamConnPair) whose server end
+// Accept returns, so HTTP and WebSocket servers and clients inside a synctest
+// bubble block only on bubble channels and timers and advance with its
+// virtual clock. Any address dials the listener.
 type PipeListener struct {
 	conns     chan net.Conn
 	closed    chan struct{}
@@ -36,7 +37,7 @@ func (l *PipeListener) Accept() (net.Conn, error) {
 	}
 }
 
-// Close stops Accept and future dials; established pipes stay open.
+// Close stops Accept and future dials; established streams stay open.
 func (l *PipeListener) Close() error {
 	l.closeOnce.Do(func() { close(l.closed) })
 	return nil
@@ -45,9 +46,9 @@ func (l *PipeListener) Close() error {
 // Addr reports the listener's placeholder address.
 func (l *PipeListener) Addr() net.Addr { return pipeAddr{} }
 
-// DialContext connects a new pipe to the listener, whatever the address.
+// DialContext connects a new stream to the listener, whatever the address.
 func (l *PipeListener) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
-	client, server := net.Pipe()
+	client, server := newStreamConnPair()
 	select {
 	case l.conns <- server:
 		return client, nil
@@ -58,13 +59,16 @@ func (l *PipeListener) DialContext(ctx context.Context, _, _ string) (net.Conn, 
 	}
 }
 
+// pipeNetwork names the in-memory network in every stream address.
+const pipeNetwork = "pipe"
+
 type pipeAddr struct{}
 
-func (pipeAddr) Network() string { return "pipe" }
-func (pipeAddr) String() string  { return "pipe" }
+func (pipeAddr) Network() string { return pipeNetwork }
+func (pipeAddr) String() string  { return pipeNetwork }
 
 // WebSocketDialer is a transport.Dialer (the CLI's provider transport port)
-// that performs the real WebSocket handshake over the listener's pipes,
+// that performs the real WebSocket handshake over the listener's streams,
 // exactly as the provider's default gorilla dialer does over TCP.
 func WebSocketDialer(listener *PipeListener) transport.Dialer {
 	return webSocketDialer{dialer: &websocket.Dialer{NetDialContext: listener.DialContext}}
