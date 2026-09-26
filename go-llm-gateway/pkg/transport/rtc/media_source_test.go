@@ -198,7 +198,7 @@ func testProbeBoundsNonResponsiveEndpoint(t *testing.T) {
 // ends.
 func listenLoopback(t *testing.T) net.Listener {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func testMediaSourceErrorContracts(t *testing.T) {
 	if !strings.Contains(unknownError, "rtsp://host/camera") || !strings.Contains(unknownError, "check the source") {
 		t.Fatalf("unknown source error = %q", unknownError)
 	}
-	if (safeCause{err: errors.New("private cause")}).Error() != "source operation failed" {
+	if (safeCauseError{err: errors.New("private cause")}).Error() != "source operation failed" {
 		t.Fatal("safe cause did not use stable public text")
 	}
 	if errString(nil) != "" {
@@ -461,10 +461,10 @@ func testRTSPProtocolFramingContracts(t *testing.T) {
 // requireClosed closes a test-owned resource and reports an unexpected close
 // failure. A resource a fixture or earlier close already released reports
 // net.ErrClosed, which is the expected terminal state and is tolerated.
-func requireClosed(t testing.TB, name string, closer io.Closer) {
-	t.Helper()
+func requireClosed(tb testing.TB, name string, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-		t.Errorf("close %s: %v", name, err)
+		tb.Errorf("close %s: %v", name, err)
 	}
 }
 

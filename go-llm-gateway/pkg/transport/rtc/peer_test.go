@@ -192,8 +192,8 @@ type fake struct {
 func (f *fake) DialContext(ctx context.Context, _ string, _ map[string]string) (Conn, error) {
 	return f.fn(ctx, int(f.dials.Add(1)))
 }
-func peer(fn func(context.Context, int) (Conn, error), max int) *Peer {
-	return NewPeer(PeerConfig{Dialer: &fake{fn: fn}, Retry: RetryPolicy{MaxAttempts: max}})
+func peer(fn func(context.Context, int) (Conn, error), maxAttempts int) *Peer {
+	return NewPeer(PeerConfig{Dialer: &fake{fn: fn}, Retry: RetryPolicy{MaxAttempts: maxAttempts}})
 }
 func newConn(open, closed *atomic.Int32) *fake {
 	if open != nil {
@@ -213,14 +213,19 @@ func (f *fake) Close() error {
 	}
 	return nil
 }
-func must(t *testing.T, err error) { check(t, err == nil, "unexpected error: %v", err) }
+func must(t *testing.T, err error) {
+	t.Helper()
+	check(t, err == nil, "unexpected error: %v", err)
+}
 func terminal(t *testing.T, p *Peer, err, cause error, attempts int) {
+	t.Helper()
 	var typed *TerminalError
 	check(t, errors.Is(err, cause) && errors.Is(err, ErrPeerTerminalFailure) && errors.As(err, &typed) && typed.Attempts == attempts && p.State() == StateTerminalFailure, "error/state = %v/%s", err, p.State())
 	check(t, errors.Is(p.Err(), cause), "peer error lost cause: %v", p.Err())
 	check(t, typed.Error() == fmt.Sprintf("rtc peer terminal failure after %d attempts: %v", attempts, typed.Cause), "terminal error string = %q", typed.Error())
 }
 func path(t *testing.T, p *Peer, want ...State) {
+	t.Helper()
 	got := p.Transitions()
 	check(t, len(got) == len(want)-1, "transitions = %#v", got)
 	for i, tr := range got {
@@ -228,11 +233,13 @@ func path(t *testing.T, p *Peer, want ...State) {
 	}
 }
 func check(t *testing.T, ok bool, format string, args ...any) {
+	t.Helper()
 	if !ok {
 		t.Fatalf(format, args...)
 	}
 }
 func awaitErr(t *testing.T, ch <-chan error) error {
+	t.Helper()
 	select {
 	case err := <-ch:
 		return err
@@ -242,6 +249,7 @@ func awaitErr(t *testing.T, ch <-chan error) error {
 	}
 }
 func settle(t *testing.T, timeout time.Duration, f func() bool) {
+	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for !f() {
 		if time.Now().After(deadline) {

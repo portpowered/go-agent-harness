@@ -203,10 +203,10 @@ func (l *testLogger) Error(_ string, fields ...logging.Field) {
 
 // closeForTest closes a test-owned resource and reports an unexpected close
 // failure without stopping the test.
-func closeForTest(t testing.TB, resource io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, resource io.Closer) {
+	tb.Helper()
 	if err := resource.Close(); err != nil {
-		t.Errorf("close %T: %v", resource, err)
+		tb.Errorf("close %T: %v", resource, err)
 	}
 }
 

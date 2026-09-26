@@ -62,7 +62,7 @@ func TestEndpointHonorsWholeURLOverrideAndProbesSessionCreated(t *testing.T) {
 }
 
 func TestEndpointCachesClosedEndpoint(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for ephemeral address: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestEndpointCachesClosedEndpoint(t *testing.T) {
 }
 
 func TestEndpointDoesNotProbeAFailedEndpointAgain(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for ephemeral address: %v", err)
 	}

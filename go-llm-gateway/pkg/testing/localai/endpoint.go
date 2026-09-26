@@ -39,8 +39,8 @@ var failedEndpoints = struct {
 // LOCALAI_REALTIME_URL override, and whether a realtime WebSocket produced a
 // session.created event. Failed endpoint probes are cached for the lifetime of
 // the process so an absent server does not delay every live test.
-func Endpoint(t testing.TB) (wsURL string, ok bool) {
-	t.Helper()
+func Endpoint(tb testing.TB) (wsURL string, ok bool) {
+	tb.Helper()
 
 	wsURL = resolveEndpoint()
 	if endpointFailed(wsURL) {

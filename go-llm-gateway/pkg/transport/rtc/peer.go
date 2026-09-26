@@ -190,9 +190,9 @@ func (p *Peer) Close() error {
 }
 
 func (p *Peer) run(ctx context.Context) error {
-	max := p.config.Retry.MaxAttempts
+	maxAttempts := p.config.Retry.MaxAttempts
 	last := error(ErrRetryExhausted)
-	for attempt := 1; attempt <= max; attempt++ {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return p.terminal(err, attempt-1, false)
 		}
@@ -220,14 +220,14 @@ func (p *Peer) run(ctx context.Context) error {
 		if err = ctx.Err(); err != nil {
 			return p.terminal(err, attempt, false)
 		}
-		if attempt == max {
+		if attempt == maxAttempts {
 			return p.terminal(last, attempt, true)
 		}
 		if err = p.backoff(ctx); err != nil {
 			return p.terminal(err, attempt, false)
 		}
 	}
-	return p.terminal(last, max, true)
+	return p.terminal(last, maxAttempts, true)
 }
 func (p *Peer) backoff(ctx context.Context) error {
 	delay := p.config.Retry.Backoff
