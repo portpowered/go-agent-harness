@@ -302,7 +302,7 @@ func TestTickUntil_MaxTicksExceeded(t *testing.T) {
 	defer cancel()
 
 	// Write enough deltas to not block, but predicate never satisfied.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ts.modelRunner.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("x"),
 		})

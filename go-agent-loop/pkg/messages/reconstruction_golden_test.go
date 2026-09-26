@@ -510,7 +510,7 @@ func fuzzToolDeltas(controls []byte, text string, payload []byte, toolCount int)
 	deltas := []StreamMessage{
 		{Type: StreamTypeMessageStart, Value: NewMessageStartValue()},
 	}
-	for i := 0; i < toolCount; i++ {
+	for i := range toolCount {
 		toolID := fmt.Sprintf("fuzz-result-%d", i)
 		deltas = append(deltas, StreamMessage{Type: StreamTypeTextStart, ToolCallId: toolID, Value: NewTextStartValue()})
 		for _, chunk := range splitFuzzBytes([]byte(text), controls) {

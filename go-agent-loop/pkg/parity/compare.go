@@ -97,7 +97,7 @@ func compareJSONObject(path string, expectedValue, actualValue map[string]any, d
 // missing element compares as JSON null.
 func compareJSONArray(path string, expectedValue, actualValue []any, differences *[]Difference) {
 	length := max(len(actualValue), len(expectedValue))
-	for index := 0; index < length; index++ {
+	for index := range length {
 		var expectedMember, actualMember any
 		if index < len(expectedValue) {
 			expectedMember = expectedValue[index]

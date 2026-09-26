@@ -144,7 +144,7 @@ func (c *sessionCapture) awaitCrossing(payload []byte, clientDirection, agentDir
 func (c *sessionCapture) awaitRecordCount(count int) error {
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
-	for index := 0; index < count; index++ {
+	for range count {
 		select {
 		case <-c.records:
 		case <-timer.C:

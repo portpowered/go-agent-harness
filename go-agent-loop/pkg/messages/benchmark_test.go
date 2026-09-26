@@ -15,7 +15,7 @@ func generateTextDeltas(n int) []StreamMessage {
 	deltas := make([]StreamMessage, 0, n+4)
 	deltas = append(deltas, StreamMessage{Type: StreamTypeMessageStart, Role: RoleAssistant, Value: NewMessageStartValue()})
 	deltas = append(deltas, StreamMessage{Type: StreamTypeTextStart, Role: RoleAssistant, Value: NewTextStartValue()})
-	for i := 0; i < n; i++ {
+	for range n {
 		deltas = append(deltas, StreamMessage{Type: StreamTypeTextDelta, Role: RoleAssistant, Value: NewTextDeltaValue("chunk ")})
 	}
 	deltas = append(deltas, StreamMessage{Type: StreamTypeTextEnd, Role: RoleAssistant, Value: NewTextEndValue()})
@@ -26,7 +26,7 @@ func generateTextDeltas(n int) []StreamMessage {
 func BenchmarkReconstructModelMessageFromDeltas_10(b *testing.B) {
 	deltas := generateTextDeltas(10)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		ReconstructModelMessageFromDeltas(deltas)
 	}
 }
@@ -34,7 +34,7 @@ func BenchmarkReconstructModelMessageFromDeltas_10(b *testing.B) {
 func BenchmarkReconstructModelMessageFromDeltas_100(b *testing.B) {
 	deltas := generateTextDeltas(100)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		ReconstructModelMessageFromDeltas(deltas)
 	}
 }
@@ -42,7 +42,7 @@ func BenchmarkReconstructModelMessageFromDeltas_100(b *testing.B) {
 func BenchmarkReconstructModelMessageFromDeltas_1000(b *testing.B) {
 	deltas := generateTextDeltas(1000)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		ReconstructModelMessageFromDeltas(deltas)
 	}
 }
@@ -50,7 +50,7 @@ func BenchmarkReconstructModelMessageFromDeltas_1000(b *testing.B) {
 func BenchmarkReconstructModelMessageFromDeltas_10000(b *testing.B) {
 	deltas := generateTextDeltas(10000)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		ReconstructModelMessageFromDeltas(deltas)
 	}
 }
@@ -61,7 +61,7 @@ func BenchmarkTypedBuffer_Write(b *testing.B) {
 	buf := NewTypedBuffer[int](b.N + 1)
 	ctx := context.Background()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		buf.Write(ctx, i)
 	}
 }
@@ -69,11 +69,11 @@ func BenchmarkTypedBuffer_Write(b *testing.B) {
 func BenchmarkTypedBuffer_Read(b *testing.B) {
 	buf := NewTypedBuffer[int](b.N + 1)
 	ctx := context.Background()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		buf.Write(ctx, i)
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		buf.Read()
 	}
 }
@@ -82,7 +82,7 @@ func BenchmarkTypedBuffer_WriteRead(b *testing.B) {
 	buf := NewTypedBuffer[int](64)
 	ctx := context.Background()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		buf.Write(ctx, i)
 		buf.Read()
 	}
@@ -93,7 +93,7 @@ func BenchmarkTypedBuffer_StreamMessage(b *testing.B) {
 	ctx := context.Background()
 	delta := StreamMessage{Type: StreamTypeTextDelta, Role: RoleAssistant, Value: NewTextDeltaValue("hello")}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		buf.Write(ctx, delta)
 		buf.Read()
 	}
@@ -106,7 +106,7 @@ func BenchmarkTypedBuffer_Capacities(b *testing.B) {
 			buf := NewTypedBuffer[int](cap)
 			ctx := context.Background()
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for i := range b.N {
 				buf.Write(ctx, i)
 				buf.Read()
 			}

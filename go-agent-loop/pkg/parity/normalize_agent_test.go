@@ -355,7 +355,7 @@ func TestNormalizeAgentDeterministicAndConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("baseline NormalizeAgent: %v", err)
 	}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		got, err := NormalizeAgent("agent", input)
 		if err != nil {
 			t.Fatalf("repeat %d: %v", i, err)
@@ -370,7 +370,7 @@ func TestNormalizeAgentDeterministicAndConcurrent(t *testing.T) {
 	errorsCh := make(chan error, workers)
 	var group sync.WaitGroup
 	group.Add(workers)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			defer group.Done()
 			got, err := NormalizeAgent("agent", input)

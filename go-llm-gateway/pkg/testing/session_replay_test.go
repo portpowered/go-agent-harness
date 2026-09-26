@@ -231,7 +231,7 @@ func TestSessionReplayer_BlocksLaterInboundUntilExpectedOutbound(t *testing.T) {
 func TestSessionReplayer_AdmitsBeforeOutboundBufferFills(t *testing.T) {
 	const serverEvents = 80
 	events := make([]CapturedSessionEvent, 0, serverEvents+1)
-	for i := 0; i < serverEvents; i++ {
+	for i := range serverEvents {
 		events = append(events, makeCapture(DirectionServerToClient, int64(i), messages.StreamTypeTextDelta, messages.NewTextDeltaValue("server")))
 	}
 	client := messages.NewTextDeltaValue("client after server run")
@@ -249,7 +249,7 @@ func TestSessionReplayer_AdmitsBeforeOutboundBufferFills(t *testing.T) {
 		t.Fatalf("Send after long server run failed: %+v", outcome)
 	}
 
-	for i := 0; i < serverEvents; i++ {
+	for i := range serverEvents {
 		msg := readReplayMessage(t, replayer)
 		if msg.Type != messages.StreamTypeTextDelta {
 			t.Fatalf("server event[%d] type = %q, want text delta", i, msg.Type)
@@ -266,7 +266,7 @@ func TestSessionReplayer_BoundsValidatedOutboundAdmission(t *testing.T) {
 	const clientEvents = maxPendingReplayOutbound + 1
 	events := make([]CapturedSessionEvent, 0, clientEvents+1)
 	events = append(events, makeCapture(DirectionServerToClient, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("server")))
-	for i := 0; i < clientEvents; i++ {
+	for i := range clientEvents {
 		events = append(events, makeCapture(DirectionClientToServer, int64(i+1), messages.StreamTypeTextDelta, messages.NewTextDeltaValue("client")))
 	}
 	r := &SessionReplayer{
@@ -277,7 +277,7 @@ func TestSessionReplayer_BoundsValidatedOutboundAdmission(t *testing.T) {
 	}
 	r.cond = sync.NewCond(&r.mu)
 
-	for i := 0; i < maxPendingReplayOutbound; i++ {
+	for i := range maxPendingReplayOutbound {
 		outcome := r.SendWithOutcome(context.Background(), messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Value: messages.NewTextDeltaValue("client"),

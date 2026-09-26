@@ -585,7 +585,7 @@ func TestReplay_Error400_BadRequest(t *testing.T) {
 	if !errors.As(err, &providerErr) {
 		t.Fatalf("expected ProviderError, got %T: %v", err, err)
 	}
-	if providerErr.Provider != openAIProviderName || providerErr.StatusCode != 400 {
+	if providerErr.Provider != openAIProviderName || providerErr.StatusCode != http.StatusBadRequest {
 		t.Fatalf("ProviderError = %+v, want provider openai status 400", providerErr)
 	}
 	if !strings.Contains(providerErr.Detail, realtimeInvalidRequestErrorType) {
@@ -860,7 +860,7 @@ func TestInfer_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
 	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		capturedReq = req
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
 			Body:       io.NopCloser(bytes.NewReader(body)),
 			Request:    req,
@@ -897,7 +897,7 @@ func TestInferStream_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
 	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		capturedReq = req
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
 			Body:       io.NopCloser(bytes.NewReader(body)),
 			Request:    req,
@@ -936,7 +936,7 @@ func TestInfer_WithAPIKey_IncludesAuthorizationHeader(t *testing.T) {
 	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		capturedReq = req
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
 			Body:       io.NopCloser(bytes.NewReader(body)),
 			Request:    req,

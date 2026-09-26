@@ -222,7 +222,7 @@ func TestNormalizeClientIsDeterministicConcurrentAndOwnsOutput(t *testing.T) {
 	results := make(chan Projection, workers)
 	var group sync.WaitGroup
 	group.Add(workers)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			defer group.Done()
 			projection, err := NormalizeClient(concurrentInput)

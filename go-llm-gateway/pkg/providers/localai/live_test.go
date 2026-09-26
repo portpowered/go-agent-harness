@@ -82,7 +82,7 @@ func TestLiveRealtimeAudio(t *testing.T) {
 func livePCM16Tone() []byte {
 	const sampleRate, samples, frequency = 16000, 16000 / 2, 440.0
 	audio := make([]byte, samples*2)
-	for i := 0; i < samples; i++ {
+	for i := range samples {
 		value := int16(math.Sin(2*math.Pi*frequency*float64(i)/sampleRate) * 0.25 * math.MaxInt16)
 		binary.LittleEndian.PutUint16(audio[i*2:], uint16(value))
 	}

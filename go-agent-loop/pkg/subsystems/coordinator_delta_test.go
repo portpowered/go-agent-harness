@@ -33,7 +33,7 @@ func TestCoordinatorDelta_ForwardsModelDeltas(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		req, ok := buf.Read()
 		if !ok {
 			t.Fatalf("expected KernelDeltaRequest #%d for model delta", i)
@@ -456,7 +456,7 @@ func TestCoordinator_UnscopedToolEventsJoinResponsesOnFinalBoundary(t *testing.T
 
 func TestCoordinator_ModelResponseAssemblyIsBounded(t *testing.T) {
 	c := NewCoordinator(nil)
-	for index := 0; index < maxTrackedModelResponses; index++ {
+	for index := range maxTrackedModelResponses {
 		if _, err := c.observeModelResponses([]messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: fmt.Sprintf("response-%d", index), Value: messages.NewMessageStartValue()}}); err != nil {
 			t.Fatalf("response %d unexpectedly exceeded assembly bound: %v", index, err)
 		}

@@ -77,7 +77,7 @@ func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 		{0x20, 0x00, 0xfe, 0x02},
 	}}
 	deviceInput := capture.WrapDeviceInput(input)
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		buffer := make([]byte, 4)
 		n, err := deviceInput.Read(buffer)
 		if err != nil || n != len(buffer) {

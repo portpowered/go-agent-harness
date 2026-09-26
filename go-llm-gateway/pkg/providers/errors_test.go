@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -266,7 +267,7 @@ func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) 
 		t.Fatalf("wrapped provider retryability = %v, want true", got)
 	}
 	var gotProvider *ProviderError
-	if !errors.As(wrappedProvider, &gotProvider) || gotProvider.Provider != "fake" || gotProvider.StatusCode != 429 || gotProvider.Detail != "slow down" {
+	if !errors.As(wrappedProvider, &gotProvider) || gotProvider.Provider != "fake" || gotProvider.StatusCode != http.StatusTooManyRequests || gotProvider.Detail != "slow down" {
 		t.Fatalf("wrapped provider details = %+v", gotProvider)
 	}
 
@@ -307,7 +308,7 @@ func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) 
 	if !errors.Is(joinedTyped, ErrPartialOutput) {
 		t.Fatal("joined typed error lost partial-output sentinel")
 	}
-	if !errors.As(joinedTyped, &gotProvider) || gotProvider.StatusCode != 429 {
+	if !errors.As(joinedTyped, &gotProvider) || gotProvider.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("joined typed provider details = %+v", gotProvider)
 	}
 }
@@ -390,7 +391,7 @@ func assertStreamValuesPreserveProviderTaxonomy(t *testing.T, providerErr, wrapp
 		t.Fatal("stream value lost provider taxonomy")
 	}
 	var typed *ProviderError
-	if !errors.As(value.Err, &typed) || typed.StatusCode != 429 {
+	if !errors.As(value.Err, &typed) || typed.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("stream typed cause = %+v, want status 429 provider error", typed)
 	}
 	if !IsRetryable(value.Err) {
@@ -409,7 +410,7 @@ func assertStreamValuesPreserveProviderTaxonomy(t *testing.T, providerErr, wrapp
 		t.Fatal("stream value lost two-level wrapped provider retryability")
 	}
 	var wrappedStreamTyped *ProviderError
-	if !errors.As(wrappedStreamValue.Err, &wrappedStreamTyped) || wrappedStreamTyped.StatusCode != 429 {
+	if !errors.As(wrappedStreamValue.Err, &wrappedStreamTyped) || wrappedStreamTyped.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("two-level wrapped stream cause = %+v, want status 429 provider error", wrappedStreamTyped)
 	}
 }
@@ -461,7 +462,7 @@ func TestErrorClassification_DistinguishesRuntimeOutcomes(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := ErrorClassification(tc.err); got != tc.want {

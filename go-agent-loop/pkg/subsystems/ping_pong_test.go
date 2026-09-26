@@ -429,7 +429,7 @@ func TestPingClock_PublicLoopEmitsOnePongPerPingMessage(t *testing.T) {
 	if err := loop.Send(ctx, []messages.Message{ping, ping, ping}); err != nil {
 		t.Fatalf("Send pings: %v", err)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if got := readPingClockPong(t, loop); got != base.UnixMilli() {
 			t.Fatalf("PONG[%d] timestamp = %d, want %d", i, got, base.UnixMilli())
 		}

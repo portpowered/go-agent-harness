@@ -276,7 +276,7 @@ func TestCrossingEmitterConcurrentRecordsAreCompleteAndMonotonic(t *testing.T) {
 	var wait sync.WaitGroup
 	errCh := make(chan error, producerCount*eventsPerProducer)
 	wait.Add(producerCount)
-	for producer := 0; producer < producerCount; producer++ {
+	for producer := range producerCount {
 		go func(producer int) {
 			defer wait.Done()
 			<-start
@@ -284,7 +284,7 @@ func TestCrossingEmitterConcurrentRecordsAreCompleteAndMonotonic(t *testing.T) {
 			if producer%2 != 0 {
 				direction = CrossingDirectionOut
 			}
-			for eventIndex := 0; eventIndex < eventsPerProducer; eventIndex++ {
+			for eventIndex := range eventsPerProducer {
 				_, err := emitter.Emit(CrossingEvent{
 					Direction: direction,
 					Buffer:    fmt.Sprintf("producer.%d", producer), MessageType: "StreamMessage",
@@ -499,7 +499,7 @@ func BenchmarkCrossingEmitterDisabledInfoAllocations(b *testing.B) {
 	b.ReportAllocs()
 	emitter, logger := newAllocationBenchmarkSubject(false)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
 			b.Fatal(err)
 		}
@@ -522,7 +522,7 @@ func BenchmarkCrossingEmitterEnabledInfoAllocations(b *testing.B) {
 	b.ReportAllocs()
 	emitter, logger := newAllocationBenchmarkSubject(true)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
 			b.Fatal(err)
 		}

@@ -140,12 +140,11 @@ func TestWriterConcurrentPeerWritesAreCompleteAndUnique(t *testing.T) {
 	}
 	results := make(chan appendResult, total)
 	var group sync.WaitGroup
-	for producer := 0; producer < producers; producer++ {
-		producer := producer
+	for producer := range producers {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			for sequence := 0; sequence < recordsPerProducer; sequence++ {
+			for sequence := range recordsPerProducer {
 				record := NewRecord(uint64(producer*recordsPerProducer+sequence+1), time.Unix(0, 0),
 					Peer(producerPeer(producer)), DirectionOut, StreamRTCData,
 					[]byte(fmt.Sprintf("producer=%d sequence=%d", producer, sequence)))
@@ -294,13 +293,12 @@ func TestWriterConcurrentWriteAndCloseLeavesCompleteRecords(t *testing.T) {
 	results := make(chan writeResult, total)
 	start := make(chan struct{})
 	var group sync.WaitGroup
-	for producer := 0; producer < producers; producer++ {
-		producer := producer
+	for producer := range producers {
 		group.Add(1)
 		go func() {
 			defer group.Done()
 			<-start
-			for sequence := 0; sequence < recordsPerProducer; sequence++ {
+			for sequence := range recordsPerProducer {
 				record := NewRecord(uint64(producer*recordsPerProducer+sequence+2), time.Unix(0, 0),
 					Peer(producerPeer(producer)), DirectionOut, StreamRTCData,
 					[]byte(fmt.Sprintf("close producer=%d sequence=%d", producer, sequence)))
@@ -340,7 +338,7 @@ func TestWriterConcurrentWriteAndCloseLeavesCompleteRecords(t *testing.T) {
 	if writer.AcceptedCount() != uint64(len(accepted)) {
 		t.Fatalf("AcceptedCount = %d, want %d", writer.AcceptedCount(), len(accepted))
 	}
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		if err := writer.Write(NewRecord(uint64(total+index+2), time.Unix(0, 0), PeerAgent, DirectionIn, StreamWS,
 			[]byte(fmt.Sprintf("post-close-%d", index)))); !errors.Is(err, ErrWriterClosed) {
 			t.Fatalf("post-close Write %d = %v, want ErrWriterClosed", index, err)

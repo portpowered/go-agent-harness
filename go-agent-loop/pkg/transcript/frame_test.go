@@ -386,7 +386,7 @@ func TestTeeRotationPreservesLiveResultAndTranscript(t *testing.T) {
 // force segment rotation.
 func alternatingRotationRecords(total int) []Record {
 	inputs := make([]Record, 0, total)
-	for index := 0; index < total; index++ {
+	for index := range total {
 		peer := PeerClient
 		direction := DirectionIn
 		if index%2 == 1 {

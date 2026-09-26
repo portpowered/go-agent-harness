@@ -28,7 +28,7 @@ func TestConcurrentSessionsCompleteScriptedTurns(t *testing.T) {
 	}
 
 	for _, state := range run.States {
-		state := state
+
 		t.Run(state.Token, func(t *testing.T) {
 			AssertSessionLifecycle(t, state.Deltas)
 

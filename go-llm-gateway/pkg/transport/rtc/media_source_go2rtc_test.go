@@ -355,7 +355,7 @@ func (f *go2rtcFixture) stream(ctx context.Context, peer *go2rtcFixturePeer) {
 	case <-time.After(go2rtcFixtureStepTimeout):
 		return
 	}
-	for i := 0; i < f.options.packets; i++ {
+	for i := range f.options.packets {
 		if err := peer.audio.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * go2rtcFixtureAudioTicks)}, Payload: []byte{0xff, 0x00, 0x7f}}); err != nil {
 			return
 		}

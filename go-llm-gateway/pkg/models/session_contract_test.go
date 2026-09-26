@@ -199,7 +199,7 @@ func TestModels_S11JSONConformance(t *testing.T) {
 	assertModelCaseRegistry(t, cases)
 
 	for _, modelCase := range cases {
-		modelCase := modelCase
+
 		t.Run(modelCase.name, func(t *testing.T) {
 			encoded, err := json.Marshal(modelCase.value)
 			if err != nil {
@@ -261,7 +261,7 @@ func TestModels_S11JSONTags(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		testCase := testCase
+
 		t.Run(testCase.name, func(t *testing.T) {
 			encoded, err := json.Marshal(testCase.value)
 			if err != nil {
@@ -319,7 +319,7 @@ func TestModels_S11UnknownProviderFields(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		testCase := testCase
+
 		t.Run(testCase.name, func(t *testing.T) {
 			encoded, err := json.Marshal(testCase.value)
 			if err != nil {
@@ -385,7 +385,7 @@ func TestModels_S11ZeroAndOptionalWireForms(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		testCase := testCase
+
 		t.Run(testCase.name, func(t *testing.T) {
 			got, err := json.Marshal(testCase.value)
 			if err != nil {
@@ -455,7 +455,7 @@ func TestModels_S11SessionEventConstructors(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		testCase := testCase
+
 		t.Run(testCase.name, func(t *testing.T) {
 			if testCase.got.Type != testCase.wantType {
 				t.Fatalf("event type: want %q, got %q", testCase.wantType, testCase.got.Type)

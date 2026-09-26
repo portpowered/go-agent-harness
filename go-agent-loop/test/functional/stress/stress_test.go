@@ -246,7 +246,7 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 	const modelResponse = "ok"
 
 	inf := newStressInferencer()
-	for i := 0; i < numCalls; i++ {
+	for range numCalls {
 		inf.AddTextResponse(modelResponse)
 	}
 	tool := newStressToolExecutor()
@@ -267,7 +267,7 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	for i := 0; i < numCalls; i++ {
+	for i := range numCalls {
 		result, execErr := loop.Execute(ctx, agentloop.NewExecuteInput(fmt.Sprintf("msg-%d", i)))
 		if execErr != nil {
 			t.Fatalf("Execute call %d: %v", i, execErr)
@@ -303,7 +303,7 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 
 	// Enough responses for all possible inference calls triggered by sends.
 	inf := newStressInferencer()
-	for i := 0; i < totalMessages*2; i++ {
+	for i := range totalMessages * 2 {
 		inf.AddTextResponse(fmt.Sprintf("response-%d", i))
 	}
 	tool := newStressToolExecutor()
@@ -337,11 +337,11 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	var rejected atomic.Int64
 
 	// Sender goroutines.
-	for s := 0; s < numSenders; s++ {
+	for s := range numSenders {
 		wg.Add(1)
 		go func(senderID int) {
 			defer wg.Done()
-			for m := 0; m < messagesPerSender; m++ {
+			for m := range messagesPerSender {
 				msg := messages.NewTextMessage(messages.RoleUser,
 					fmt.Sprintf("sender-%d-msg-%d", senderID, m))
 				if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
@@ -359,7 +359,7 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < totalMessages/2; i++ {
+		for i := range totalMessages / 2 {
 			followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
 			if err := loop.SendInterrupt(ctx, &followUp); err != nil {
 				rejected.Add(1)
@@ -395,7 +395,7 @@ func TestStress_HighThroughputStreaming(t *testing.T) {
 
 	chunks := make([]string, numChunks)
 	var want strings.Builder
-	for i := 0; i < numChunks; i++ {
+	for i := range numChunks {
 		chunk := fmt.Sprintf("chunk-%04d ", i)
 		chunks[i] = chunk
 		want.WriteString(chunk)
@@ -457,7 +457,7 @@ func TestStress_LargeBatchToolCalls(t *testing.T) {
 	calls := make([]messages.ToolCall, numTools)
 	toolExec := newStressToolExecutor()
 
-	for i := 0; i < numTools; i++ {
+	for i := range numTools {
 		name := fmt.Sprintf("tool_%d", i)
 		tools[i] = messages.ToolDefinition{Name: name, Description: fmt.Sprintf("Tool number %d", i)}
 		calls[i] = messages.ToolCall{

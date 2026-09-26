@@ -135,7 +135,7 @@ func TestContextPressureNotifier_FiresOnlyOnce(t *testing.T) {
 	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
 
 	ls := loopStateWithTokens(900)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := n.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("Execute iteration %d: unexpected error: %v", i, err)
 		}

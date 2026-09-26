@@ -38,7 +38,7 @@ func TestLoopbackSignalingFailureMatrixAndCleanup(t *testing.T) {
 	done(t, o)
 	done(t, a)
 	for kind, want := range failures {
-		for n := 0; n < 8; n++ {
+		for range 8 {
 			o, a, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: 5 * time.Millisecond, Unreachable: kind == 4})
 			expect(t, err, nil)
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)

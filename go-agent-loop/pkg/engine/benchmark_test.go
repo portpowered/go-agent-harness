@@ -32,7 +32,7 @@ func newBenchDeltas(textChunks int) []messages.StreamMessage {
 	deltas := make([]messages.StreamMessage, 0, textChunks+4)
 	deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
 	deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()})
-	for i := 0; i < textChunks; i++ {
+	for range textChunks {
 		deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("chunk ")})
 	}
 	deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()})
@@ -69,14 +69,14 @@ func BenchmarkReadTick(b *testing.B) {
 			ctx := context.Background()
 			ls := eng.State().LoopState
 
-			for i := 0; i < preload; i++ {
+			for i := range preload {
 				ls.History.ConversationBuffer = append(
 					ls.History.ConversationBuffer,
 					messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("message %d", i)),
 				)
 			}
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				modelRunner.DeltaOutbox.Write(ctx, messages.StreamMessage{
 					Type:  messages.StreamTypeTextDelta,
 					Role:  messages.RoleAssistant,
@@ -85,7 +85,7 @@ func BenchmarkReadTick(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				if err := ordering.ReadTick(ctx, ls); err != nil {
 					b.Fatal(err)
 				}
@@ -105,7 +105,7 @@ func BenchmarkUpdateWorldHistory(b *testing.B) {
 			ordering := NewGlobalOrdering(modelRunner, nil, userRunner, nil)
 			ls := eng.State().LoopState
 
-			for i := 0; i < histLen; i++ {
+			for range histLen {
 				ls.History.ConversationBuffer = append(
 					ls.History.ConversationBuffer,
 					messages.NewTextMessage(messages.RoleUser, "msg"),
@@ -119,7 +119,7 @@ func BenchmarkUpdateWorldHistory(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				ls.Inputs.ModelInputDelta = append(ls.Inputs.ModelInputDelta[:0], delta)
 				ordering.UpdateWorldHistory(ls)
 				ls.History.CurrentModelDeltaCount = 0
@@ -139,7 +139,7 @@ func BenchmarkFullTickCycle(b *testing.B) {
 	eng, modelRunner, _, _, _ := newBenchEngineWithCap(bufCap)
 	ctx := context.Background()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		modelRunner.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Role:  messages.RoleAssistant,
@@ -148,7 +148,7 @@ func BenchmarkFullTickCycle(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if err := eng.Tick(ctx); err != nil {
 			b.Fatal(err)
 		}
@@ -178,7 +178,7 @@ func BenchmarkExecute(b *testing.B) {
 			eng := NewEngine(ModeAskOnce, nil, hlps, modelRunner, toolRunner, userRunner, kernelRunner, nil)
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				b.StopTimer()
 
 				ls := eng.State().LoopState

@@ -274,7 +274,7 @@ func (e *Engine) TickOnce(ctx context.Context) error {
 // TickN executes exactly n tick cycles sequentially. Returns on the first error
 // encountered. The tick count reflects the number of successful ticks completed.
 func (e *Engine) TickN(ctx context.Context, n int) error {
-	for i := 0; i < n; i++ {
+	for range n {
 		if err := e.Tick(ctx); err != nil {
 			return err
 		}
@@ -287,7 +287,7 @@ func (e *Engine) TickN(ctx context.Context, n int) error {
 // Returns the number of ticks executed and an error if maxTicks was exceeded without
 // the predicate being satisfied, or if a tick returned an error.
 func (e *Engine) TickUntil(ctx context.Context, predicate func() bool, maxTicks int) (int, error) {
-	for i := 0; i < maxTicks; i++ {
+	for i := range maxTicks {
 		if predicate() {
 			return i, nil
 		}

@@ -47,7 +47,7 @@ func runInboundRaceProducer(inbound *pionInbound, started, produced chan struct{
 	defer workers.Done()
 	defer producedOnce.Do(func() { close(produced) })
 	<-started
-	for index := 0; index < 24; index++ {
+	for index := range 24 {
 		frame := sharedaudio.PCMFrame{Samples: []int16{int16(index)}}
 		select {
 		case inbound.frames <- frame:

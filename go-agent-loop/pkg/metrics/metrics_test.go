@@ -282,9 +282,9 @@ func TestConcurrentRecordersReconcileExactly(t *testing.T) {
 		bytes uint64
 	}
 	expected := make(map[SeriesKey]totals)
-	for worker := 0; worker < workers; worker++ {
+	for worker := range workers {
 		key := keys[worker%len(keys)]
-		for observation := 0; observation < observationsPerWorker; observation++ {
+		for observation := range observationsPerWorker {
 			byteSize := int64((worker+1)*3 + observation%17)
 			total := expected[key]
 			total.count++
@@ -312,12 +312,12 @@ func TestConcurrentRecordersReconcileExactly(t *testing.T) {
 
 	var producers sync.WaitGroup
 	producers.Add(workers)
-	for worker := 0; worker < workers; worker++ {
-		worker, key := worker, keys[worker%len(keys)]
+	for worker := range workers {
+		key := keys[worker%len(keys)]
 		go func() {
 			defer producers.Done()
 			<-start
-			for observation := 0; observation < observationsPerWorker; observation++ {
+			for observation := range observationsPerWorker {
 				byteSize := int64((worker+1)*3 + observation%17)
 				if err := sink.Record(key.Direction, key.Modality, byteSize); err != nil {
 					t.Errorf("record worker %d observation %d: %v", worker, observation, err)

@@ -134,7 +134,7 @@ func TestOutboundTrackSerializesConcurrentWrites(t *testing.T) {
 	results := make(chan error, writes)
 	var workers sync.WaitGroup
 	workers.Add(writes)
-	for index := 0; index < writes; index++ {
+	for index := range writes {
 		go func(index int) {
 			defer workers.Done()
 			results <- track.WriteRTP(&rtp.Packet{

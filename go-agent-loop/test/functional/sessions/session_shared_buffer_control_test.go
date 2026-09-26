@@ -57,7 +57,7 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 	workers.Add(aliasedCount)
 	workerErrors := make(chan error, aliasedCount)
 	for _, result := range results {
-		result := result
+
 		participant, err := functionalTime.Register("aliased-" + result.Token)
 		if err != nil {
 			t.Fatalf("register %s: %v", result.Token, err)

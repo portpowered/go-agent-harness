@@ -209,7 +209,7 @@ func TestBackpressure_ToolDeltaOutboxSaturated(t *testing.T) {
 	}
 
 	// Additional tool result deltas should be dropped.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ts.toolRunner.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Role:  messages.RoleTool,
@@ -320,7 +320,7 @@ func TestBackpressure_KernelDeltaInboxSaturated(t *testing.T) {
 	}
 
 	// Additional writes should be dropped.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ts.kernelRunner.DeltaInbox.Write(ctx, messages.KernelDeltaRequest{
 			Delta: messages.StreamMessage{
 				Type:  messages.StreamTypeTextDelta,

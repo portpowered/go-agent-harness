@@ -258,7 +258,7 @@ type concurrentBufferValue struct {
 }
 
 func TestTypedBufferConcurrentProducersConsumers(t *testing.T) {
-	for iteration := 0; iteration < concurrentBufferIterations; iteration++ {
+	for iteration := range concurrentBufferIterations {
 		runTypedBufferConcurrentIteration(t, iteration)
 	}
 }
@@ -269,7 +269,7 @@ func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 
 	var producerWG sync.WaitGroup
 	producerWG.Add(concurrentProducerCount)
-	for producer := 0; producer < concurrentProducerCount; producer++ {
+	for producer := range concurrentProducerCount {
 		go func(producer int) {
 			defer producerWG.Done()
 			run.produce(producer)
@@ -278,7 +278,7 @@ func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 
 	var consumerWG sync.WaitGroup
 	consumerWG.Add(concurrentConsumerCount)
-	for consumer := 0; consumer < concurrentConsumerCount; consumer++ {
+	for consumer := range concurrentConsumerCount {
 		go func(consumer int) {
 			defer consumerWG.Done()
 			run.consume(consumer)
@@ -331,7 +331,7 @@ func newConcurrentBufferRun(iteration int) *concurrentBufferRun {
 
 func (run *concurrentBufferRun) produce(producer int) {
 	rng := rand.New(rand.NewSource(int64(0x51f15e + run.iteration*97 + producer*13)))
-	for sequence := 0; sequence < concurrentValuesPerProducer; sequence++ {
+	for sequence := range concurrentValuesPerProducer {
 		if rng.Intn(3) == 0 {
 			runtime.Gosched()
 		}
@@ -466,7 +466,7 @@ func recordBufferMaxLen[T any](buffer *TypedBuffer[T], maxLen *atomic.Int64) {
 }
 
 func TestTypedBufferCloseDuringWrite(t *testing.T) {
-	for iteration := 0; iteration < cancellationRaceIterations; iteration++ {
+	for iteration := range cancellationRaceIterations {
 		buffer := NewTypedBuffer[int](1)
 		var dropCount atomic.Int64
 		buffer.SetOnDrop(func(_ int) {
@@ -522,7 +522,7 @@ type typedBufferReadResult[T any] struct {
 }
 
 func TestTypedBufferCloseDuringRead(t *testing.T) {
-	for iteration := 0; iteration < cancellationRaceIterations; iteration++ {
+	for iteration := range cancellationRaceIterations {
 		buffer := NewTypedBuffer[int](1)
 		done := make(chan struct{})
 		started := make(chan struct{})
