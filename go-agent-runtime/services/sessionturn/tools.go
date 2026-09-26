@@ -74,8 +74,9 @@ type InteractivePolicyRequest struct {
 	DynamicLongRunning bool
 }
 
-// ToolService owns session tool execution and its latency policy.
-type ToolService interface {
+// Service owns session tool execution and its latency policy. Its
+// implementation is private and constructed through services/sessionturn/wire.
+type Service interface {
 	// NewToolExecutor returns an executor that converts errors, panics, and
 	// deadlines into correlated tool results with a nil Go error. Only an
 	// operator SIGINT cancellation is returned as an error.

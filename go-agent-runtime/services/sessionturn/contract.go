@@ -16,9 +16,3 @@ func (e Error) Error() string { return string(e) }
 // ErrToolTimeout is retained behind a correlated tool result so callers can
 // classify a local deadline without parsing the response content.
 const ErrToolTimeout Error = "tool execution timed out"
-
-// Service is the complete session tool-execution capability. Its
-// implementation is private and constructed through services/sessionturn/wire.
-type Service interface {
-	ToolService
-}

@@ -220,9 +220,8 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string
 	return r.ExecuteWithContext(ctx, name, args)
 }
 
-// ExecuteWithContext executes a tool with channel/chatID context and optional async callback.
-// If the tool implements AsyncTool and a non-nil callback is provided,
-// the callback will be set on the tool before execution.
+// ExecuteWithContext executes a tool synchronously and wraps its failure in a
+// ToolInvocationError.
 // Returns messages (e.g. text, images) for the agent loop and supports streaming and multimodal content.
 func (r *ToolRegistry) ExecuteWithContext(
 	ctx context.Context,

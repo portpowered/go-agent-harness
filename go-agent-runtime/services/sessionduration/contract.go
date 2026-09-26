@@ -279,13 +279,6 @@ type Controller interface {
 	Finalize(context.Context, FinalizeRequest) (Result, error)
 }
 
-// ControllerService is the narrow dependency needed by a host session that
-// delegates bounded-session policy to this service. The broader Service
-// contract remains available to composition and artifact callers.
-type ControllerService interface {
-	Begin(Options) (Controller, error)
-}
-
 // LifecycleFailures contains independent shutdown causes. The service joins
 // each non-nil cause while retaining errors.Is/As identity.
 type LifecycleFailures struct {

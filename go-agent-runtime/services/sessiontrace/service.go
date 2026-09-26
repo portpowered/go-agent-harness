@@ -114,18 +114,9 @@ const (
 	ScheduledAudioDispatchActiveResponse  ScheduledAudioDispatchPolicy = "active-response"
 )
 
-type ScheduledInputSender interface {
-	SendAudioInput(context.Context, []byte) error
-	SendSessionEvent(context.Context, messages.StreamMessage) error
-}
-
 type LivenessTimer interface {
 	C() <-chan time.Time
 	Stop() bool
-}
-
-type LivenessClock interface {
-	NewTimer(time.Duration) LivenessTimer
 }
 
 type LivenessError struct {

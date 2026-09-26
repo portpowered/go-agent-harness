@@ -1,19 +1,11 @@
 package rooms
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
-
-// ReportingService derives a versioned latency report from a finalized room
-// evidence bundle. Hosts may render the returned JSON through their own CLI
-// or embedding surface.
-type ReportingService interface {
-	LatencyReport(string) (json.RawMessage, error)
-}
 
 // LatencyObservationKind identifies a runtime boundary recorded by a room
 // latency ledger. These values are part of the room evidence contract; the

@@ -166,8 +166,9 @@ type Handle interface {
 }
 
 // DeviceSelectionProvider optionally reports the concrete devices admitted
-// for a media handle. The result contains only opaque IDs; registry and
-// opened-device objects remain private to the service implementation.
+// for a media handle or acquired by an RTC binding for its enabled
+// directions. The result contains only opaque IDs; registry and opened-device
+// objects remain private to the service implementation.
 type DeviceSelectionProvider interface {
 	SelectedDeviceIDs() (input, output string)
 }
@@ -261,13 +262,6 @@ type RTCBinding interface {
 	Inferencer() messages.SessionInferencer
 	Errors() <-chan error
 	Close() error
-}
-
-// RTCBindingDeviceSelection reports the concrete IDs acquired for enabled
-// directions. It is optional so the lifecycle contract remains usable by
-// bindings that do not expose registry metadata.
-type RTCBindingDeviceSelection interface {
-	SelectedDeviceIDs() (input, output string)
 }
 
 // ProbeRequest is the transport-neutral configuration for a live device
