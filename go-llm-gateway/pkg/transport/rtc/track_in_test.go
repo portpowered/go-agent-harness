@@ -172,21 +172,21 @@ func (d *compatibilityInboundDecoder) Decode([]byte) ([]int16, error) {
 
 func (d *compatibilityInboundDecoder) DecodePLC() ([]int16, error) { return nil, nil }
 
-func compatibilityInboundPacket(sequence uint16, timestamp uint32, ssrc uint32, payloadType uint8) *rtp.Packet {
+func compatibilityInboundPacket(sequence uint16, timestamp uint32, ssrc uint32) *rtp.Packet {
 	return &rtp.Packet{Header: rtp.Header{
 		Version:        2,
 		SequenceNumber: sequence,
 		Timestamp:      timestamp,
 		SSRC:           ssrc,
-		PayloadType:    payloadType,
+		PayloadType:    defaultOpusPayloadType,
 	}, Payload: []byte{0x01}}
 }
 
-func newCompatibilityInboundTrack(t testing.TB, source *compatibilityInboundSource, decoder OpusDecoder, config InboundTrackConfig) *InboundTrack {
-	t.Helper()
+func newCompatibilityInboundTrack(tb testing.TB, source *compatibilityInboundSource, decoder OpusDecoder, config InboundTrackConfig) *InboundTrack {
+	tb.Helper()
 	track, err := NewInboundTrack(source, decoder, config)
 	if err != nil {
-		t.Fatalf("NewInboundTrack() error = %v", err)
+		tb.Fatalf("NewInboundTrack() error = %v", err)
 	}
 	return track
 }
@@ -208,7 +208,7 @@ func testInboundResampledOwnership(t *testing.T) {
 	resampled[0] = 11
 	var resampleInput []int16
 	source := &compatibilityInboundSource{reads: []compatibilityInboundRead{{
-		packet: compatibilityInboundPacket(10, 100, 20, 111),
+		packet: compatibilityInboundPacket(10, 100, 20),
 	}}}
 	track := newCompatibilityInboundTrack(t, source, decoder, InboundTrackConfig{
 		SampleRate:    wavio.Rate24kHz,
@@ -242,7 +242,7 @@ func testInboundResampledOwnership(t *testing.T) {
 func testInboundIdentityRateAndClose(t *testing.T) {
 	closeErr := errors.New("source close")
 	source := &compatibilityInboundSource{closeErr: closeErr, reads: []compatibilityInboundRead{{
-		packet: compatibilityInboundPacket(10, 100, 20, 111),
+		packet: compatibilityInboundPacket(10, 100, 20),
 	}}}
 	track := newCompatibilityInboundTrack(t, source, &compatibilityInboundDecoder{samples: make([]int16, 960)}, InboundTrackConfig{})
 	frame, err := track.ReadFrame(context.Background())
@@ -329,7 +329,7 @@ func testInboundSourceErrors(t *testing.T) {
 }
 
 func testInboundPacketValidation(t *testing.T) {
-	validPacket := compatibilityInboundPacket(10, 100, 20, 111)
+	validPacket := compatibilityInboundPacket(10, 100, 20)
 	cases := []struct {
 		name string
 		read *rtp.Packet
@@ -348,7 +348,7 @@ func testInboundPacketValidation(t *testing.T) {
 		})
 	}
 	decoder := &compatibilityInboundDecoder{samples: make([]int16, 960)}
-	source := &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}, {packet: compatibilityInboundPacket(11, 1060, 21, 111)}}}
+	source := &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}, {packet: compatibilityInboundPacket(11, 1060, 21)}}}
 	track := newCompatibilityInboundTrack(t, source, decoder, InboundTrackConfig{})
 	if _, err := track.ReadFrame(context.Background()); err != nil {
 		t.Fatalf("first packet = %v", err)
@@ -356,7 +356,7 @@ func testInboundPacketValidation(t *testing.T) {
 	if _, err := track.ReadFrame(context.Background()); !errors.Is(err, ErrInvalidInboundRTPPacket) {
 		t.Fatalf("identity change = %v, want packet identity", err)
 	}
-	source = &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}, {packet: compatibilityInboundPacket(12, 1060, 20, 111)}}}
+	source = &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}, {packet: compatibilityInboundPacket(12, 1060, 20)}}}
 	track = newCompatibilityInboundTrack(t, source, decoder, InboundTrackConfig{})
 	if _, err := track.ReadFrame(context.Background()); err != nil {
 		t.Fatalf("first packet for progress = %v", err)
@@ -367,7 +367,7 @@ func testInboundPacketValidation(t *testing.T) {
 }
 
 func testInboundDecoderAndResamplerErrors(t *testing.T) {
-	validPacket := compatibilityInboundPacket(10, 100, 20, 111)
+	validPacket := compatibilityInboundPacket(10, 100, 20)
 	decodeErr := errors.New("decode failed")
 	track := newCompatibilityInboundTrack(t, &compatibilityInboundSource{reads: []compatibilityInboundRead{{packet: validPacket}}}, &compatibilityInboundDecoder{decodeErr: decodeErr}, InboundTrackConfig{})
 	if _, err := track.ReadFrame(context.Background()); !errors.Is(err, decodeErr) || !errors.Is(err, ErrInboundTrackDecode) {

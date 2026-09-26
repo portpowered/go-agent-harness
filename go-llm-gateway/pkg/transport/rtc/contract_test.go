@@ -86,15 +86,7 @@ func TestRTCS4OperationErrorIdentity(t *testing.T) {
 					t.Fatal("failed Dial returned a connection")
 				}
 			} else {
-				if err != nil || conn == nil {
-					t.Fatalf("setup Dial = (%v, %v)", conn, err)
-				}
-				defer closeForTest(t, conn)
-				if tc.name == opRead {
-					_, _, err = conn.ReadMessage()
-				} else {
-					err = conn.WriteMessage(4, []byte("s4-write"))
-				}
+				err = runS4DataOperation(t, tc.name, conn, err)
 			}
 			if err == nil || !errors.Is(err, want) {
 				t.Fatalf("%s error = %v, want errors.Is(..., %v)", tc.name, err, want)
@@ -105,6 +97,21 @@ func TestRTCS4OperationErrorIdentity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runS4DataOperation runs the read or write operation named op on a
+// successfully dialed conn and returns its error.
+func runS4DataOperation(t *testing.T, op string, conn transport.Conn, dialErr error) error {
+	t.Helper()
+	if dialErr != nil || conn == nil {
+		t.Fatalf("setup Dial = (%v, %v)", conn, dialErr)
+	}
+	t.Cleanup(func() { closeForTest(t, conn) })
+	if op == opRead {
+		_, _, err := conn.ReadMessage()
+		return err
+	}
+	return conn.WriteMessage(4, []byte("s4-write"))
 }
 
 type operationError struct{ Operation string }

@@ -100,15 +100,15 @@ func (e *MediaSourceError) Is(target error) bool {
 	return ok && other.Kind == e.Kind && other.Source == e.Source
 }
 
-type safeCause struct{ err error }
+type safeCauseError struct{ err error }
 
-func (e safeCause) Error() string        { return "source operation failed" }
-func (e safeCause) Is(target error) bool { return e.err != nil && errors.Is(e.err, target) }
-func (e safeCause) As(target any) bool   { return e.err != nil && errors.As(e.err, target) }
+func (e safeCauseError) Error() string        { return "source operation failed" }
+func (e safeCauseError) Is(target error) bool { return e.err != nil && errors.Is(e.err, target) }
+func (e safeCauseError) As(target any) bool   { return e.err != nil && errors.As(e.err, target) }
 func sourceError(kind SourceErrorKind, source string, cause error) error {
 	var safe error
 	if cause != nil {
-		safe = safeCause{cause}
+		safe = safeCauseError{cause}
 	}
 	return &MediaSourceError{Kind: kind, Source: source, Identity: source, Cause: safe, cause: safe}
 }

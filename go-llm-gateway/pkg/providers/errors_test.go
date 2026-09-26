@@ -351,7 +351,7 @@ func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 				if value.Message == "" || value.Message != tc.err.Error() {
 					t.Fatalf("message = %q, want readable %q", value.Message, tc.err.Error())
 				}
-				if value.Err != tc.err {
+				if !errors.Is(value.Err, tc.err) {
 					t.Fatalf("preserved cause = %v, want original %v", value.Err, tc.err)
 				}
 			}

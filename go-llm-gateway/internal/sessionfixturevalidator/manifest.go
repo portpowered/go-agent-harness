@@ -83,7 +83,7 @@ func repositoryRootPathFrom(workingDirectory, callerFile string) string {
 		}
 	}
 	if filepath.IsAbs(callerFile) {
-		return filepath.Clean(filepath.Join(filepath.Dir(callerFile), "../../../"))
+		return filepath.Clean(filepath.Join(filepath.Dir(callerFile), "..", "..", ".."))
 	}
 	return "."
 }
@@ -331,7 +331,7 @@ func verifyCommittedFixtureManifest(manifestPath string, roots []string, scanned
 }
 
 func formatManifestIntegrityFailure(manifestRef string, err error) error {
-	return fmt.Errorf("committed session fixture manifest %s is invalid: %v\nif the fixture change is intentional, regenerate the manifest from the repository root with:\n  %s", manifestRef, err, regenerateFixtureManifestCommand)
+	return fmt.Errorf("committed session fixture manifest %s is invalid: %w\nif the fixture change is intentional, regenerate the manifest from the repository root with:\n  %s", manifestRef, err, regenerateFixtureManifestCommand)
 }
 
 func validateManifestFileEntries(files []string) error {

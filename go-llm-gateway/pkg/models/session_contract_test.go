@@ -274,7 +274,7 @@ func TestModels_S11JSONTags(t *testing.T) {
 
 			typ := reflect.TypeOf(testCase.value)
 			value := reflect.ValueOf(testCase.value)
-			for fieldIndex := 0; fieldIndex < typ.NumField(); fieldIndex++ {
+			for fieldIndex := range typ.NumField() {
 				assertModelFieldJSON(t, encoded, object, typ.Field(fieldIndex), value.Field(fieldIndex))
 			}
 		})

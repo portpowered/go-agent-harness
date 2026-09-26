@@ -216,7 +216,7 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 	if channels <= 0 {
 		channels = 1
 	}
-	return
+	return audio, video, codec, rate, channels
 }
 
 func isSDPMediaDirection(line string) bool {
