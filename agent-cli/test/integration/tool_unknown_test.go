@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 // s2s-v4e-tool-unknown proves the unregistered-tool refusal through the public
@@ -87,17 +90,26 @@ func buildAgentBinary(t *testing.T) string {
 	return agentBinaryPath
 }
 
-// runAgentCLI runs one invocation of the production-composed CLI in the
-// calling test's bubble.
+// runAgentCLI runs one invocation of the production-composed CLI (strict
+// model validation) in the calling test's bubble. Replay is in-memory; the
+// provider transport port is replaced by a dialer that fails every dial, so
+// an accidental live provider connection fails immediately instead of
+// reaching the network (or, inside the bubble, blocking on a real socket).
 func runAgentCLI(t *testing.T, args ...string) agentProcessResult {
 	t.Helper()
-	// Replay is in-memory. Invalid proxy endpoints make an accidental HTTP(S)
-	// attempt fail immediately instead of allowing a test to reach the network.
-	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"} {
-		t.Setenv(name, "http://127.0.0.1:1")
-	}
-	run := clitest.Run(t, clitest.Invocation{Args: args, Timeout: toolUnknownRunDeadline})
+	run := clitest.Run(t, clitest.Invocation{
+		Args:    args,
+		Timeout: toolUnknownRunDeadline,
+		Ports:   []wire.PortSwap{wire.NewPortSwap(wire.PortTransportDialer, transport.Dialer(refusingDialer{}))},
+	})
 	return agentProcessResult{ExitCode: run.ExitCode, Stdout: run.Stdout, Stderr: run.Stderr}
+}
+
+// refusingDialer is a transport.Dialer that fails every dial.
+type refusingDialer struct{}
+
+func (refusingDialer) Dial(endpoint string, _ map[string]string) (transport.Conn, error) {
+	return nil, fmt.Errorf("dial %s: replay-only test attempted a live provider connection", endpoint)
 }
 
 func locateUnknownToolFixture(t *testing.T, name string) string {

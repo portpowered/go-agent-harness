@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -335,4 +336,11 @@ func sessionRuntimeObserverPort() portDefinition {
 			}
 		},
 	}
+}
+
+// InitializeAgentCLIWithPorts is InitializeMockAgentCLIWithPorts with the
+// production (strict) model validation: named replacements, the same
+// composition path, and the same checks the shipped binary applies.
+func InitializeAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
+	return initializeAgentCLIWithPorts(false, nil, swaps...)
 }
