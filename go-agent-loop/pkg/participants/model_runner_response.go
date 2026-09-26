@@ -2,7 +2,6 @@ package participants
 
 import (
 	"context"
-	"slices"
 	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -26,7 +25,7 @@ func isSessionContinuationCreate(evt messages.StreamMessage) bool {
 }
 
 func clearSessionContinuation(state *sessionRunState) {
-	state.responseRequests = responseRequestQueue{}
+	state.continuationRequested = false
 	state.continuationInFlight = false
 	state.continuationResponseID = ""
 	state.continuationEnded = false
@@ -36,7 +35,7 @@ func clearSessionContinuation(state *sessionRunState) {
 // for a new response, must wait for the active response's terminal boundary.
 // A tool continuation is never requested over an active response: the
 // provider rejects a second active response, and the response that is playing
-// must stay interruptible. Deferred, it binds to the next response opened.
+// must stay interruptible. The provider adapter marks the response that answers it.
 func deferSessionResponseRequest(state *sessionRunState, evt messages.StreamMessage) bool {
 	requestsNewResponse := evt.Type == messages.StreamTypeMessageEnd || isSessionContinuationCreate(evt)
 	if requestsNewResponse && state.responseCancelSent && (state.responseInFlight || state.acknowledgementOutstanding) {
@@ -301,80 +300,3 @@ func (s *responseIDSet) has(id string) bool {
 }
 
 func (s *responseIDSet) len() int { return len(s.ids) }
-
-// responseRequest is the kind of request that asked the provider for a
-// response.
-type responseRequest uint8
-
-const (
-	requestNone responseRequest = iota
-	requestUserTurn
-	requestContinuation
-	requestOther
-)
-
-// maxPendingResponseRequests bounds the queue; a request the provider never
-// answers must not accumulate for the whole session.
-const maxPendingResponseRequests = 16
-
-// responseRequestQueue binds each response the provider opens to the request
-// that asked for it, so only the response opened for a tool continuation is
-// treated as that continuation. The provider answers requests in the order it
-// received them; a response it opens on its own (server VAD) has no request.
-// When the provider rejects a request because such a response was already
-// active, the response that consumed the request was that provider-owned one:
-// the request goes back to the head of the queue, and the provider adapter --
-// the single owner of that retry -- requests it again once the colliding
-// response ends.
-type responseRequestQueue struct {
-	pending []responseRequest
-	// opened is the request consumed by the current response, or requestNone
-	// when that response was unrequested or has ended.
-	opened responseRequest
-}
-
-func requestForCreate(evt messages.StreamMessage) responseRequest {
-	if isSessionContinuationCreate(evt) {
-		return requestContinuation
-	}
-	return requestOther
-}
-
-func (q *responseRequestQueue) push(request responseRequest) {
-	q.pending = append(q.pending, request)
-	if len(q.pending) > maxPendingResponseRequests {
-		q.pending = append(q.pending[:0], q.pending[1:]...)
-	}
-}
-
-func (q *responseRequestQueue) has(request responseRequest) bool {
-	return slices.Contains(q.pending, request)
-}
-
-// open binds a newly opened response to the oldest pending request.
-func (q *responseRequestQueue) open() responseRequest {
-	q.opened = requestNone
-	if len(q.pending) > 0 {
-		q.opened = q.pending[0]
-		q.pending = append(q.pending[:0], q.pending[1:]...)
-	}
-	return q.opened
-}
-
-// ended records that the current response reached its terminal boundary.
-func (q *responseRequestQueue) ended() { q.opened = requestNone }
-
-// rejected handles a provider rejection of a response request because another
-// response was active.
-func (q *responseRequestQueue) rejected(state *sessionRunState) {
-	if q.opened == requestNone {
-		return // the rejected request is still pending; the adapter retries it
-	}
-	q.pending = append([]responseRequest{q.opened}, q.pending...)
-	if q.opened == requestContinuation && state.continuationInFlight {
-		// The provider's own response was bound as the continuation.
-		state.continuationInFlight = false
-		state.continuationResponseID = ""
-	}
-	q.opened = requestNone
-}

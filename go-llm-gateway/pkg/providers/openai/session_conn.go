@@ -52,7 +52,7 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 
 	session := newRealtimeSession(conn, p.logger)
 	session.writeBackpressure, session.clientTurnBoundaries = p.sessionWriteBackpressure, p.clientOwnsAudioTurnBoundaries
-	session.mediaSampleRate = int(config.OutputAudioSampleRate)
+	session.mediaSampleRate, session.inputSampleRate = int(config.OutputAudioSampleRate), int(config.InputAudioSampleRate)
 	// Queue any immediate server audio before the read loop starts. A caller
 	// that only consumes the normalized stream releases this speculative queue
 	// on its first Receive call; an RTC caller claims it through RTCMedia.

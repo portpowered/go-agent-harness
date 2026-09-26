@@ -22,6 +22,7 @@ import (
 // The recorder is thread-safe: Send and Receive may be called from different
 // goroutines concurrently.
 type SessionRecorder struct {
+	messages.SessionCapabilities
 	inner    messages.Session
 	events   []CapturedSessionEvent
 	mu       sync.Mutex
@@ -143,9 +144,10 @@ func WithSessionRelayContext(ctx context.Context) SessionRecorderOption {
 // every event that passes through Send and Receive.
 func NewSessionRecorder(inner messages.Session, opts ...SessionRecorderOption) *SessionRecorder {
 	r := &SessionRecorder{
-		inner:  inner,
-		events: make([]CapturedSessionEvent, 0),
-		clock:  clock.Real{},
+		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
+		inner:               inner,
+		events:              make([]CapturedSessionEvent, 0),
+		clock:               clock.Real{},
 	}
 	for _, opt := range opts {
 		opt(r)

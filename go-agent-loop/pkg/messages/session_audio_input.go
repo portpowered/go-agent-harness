@@ -47,6 +47,10 @@ type LocalPlaybackState struct {
 	// the level an acoustic echo of the playback has at a unity-gain
 	// microphone and serves as the echo reference for local barge-in.
 	Level float64
+	// EchoCancelled reports that the capture path removes this playback from
+	// the microphone signal (for example a feedback gate or AEC), so the
+	// playback level is not an echo reference.
+	EchoCancelled bool
 }
 
 // SessionLocalPlayback is implemented by sessions that own local playback of
@@ -65,4 +69,48 @@ type SessionLocalPlayback interface {
 // detector must not second-guess it.
 type SessionTurnDetection interface {
 	ProviderTurnDetection() bool
+}
+
+// SessionInputFormat is implemented by sessions that know the sample rate of
+// the PCM16 audio the client sends, so audio durations can be measured.
+type SessionInputFormat interface {
+	InputAudioSampleRate() int
+}
+
+// SessionCapabilities forwards the optional capabilities the session runner's
+// local barge-in reads -- turn detection, local playback and input format --
+// from a wrapped session. Every session wrapper embeds it, so a wrapper cannot
+// silently hide them from the runner.
+type SessionCapabilities struct {
+	Wrapped Session
+}
+
+var (
+	_ SessionTurnDetection = SessionCapabilities{}
+	_ SessionLocalPlayback = SessionCapabilities{}
+	_ SessionInputFormat   = SessionCapabilities{}
+)
+
+func (c SessionCapabilities) ProviderTurnDetection() bool {
+	detector, ok := c.Wrapped.(SessionTurnDetection)
+	return ok && detector.ProviderTurnDetection()
+}
+
+func (c SessionCapabilities) LocalPlayback() LocalPlaybackState {
+	if playback, ok := c.Wrapped.(SessionLocalPlayback); ok {
+		return playback.LocalPlayback()
+	}
+	return LocalPlaybackState{}
+}
+
+func (c SessionCapabilities) InterruptLocalPlayback(ctx context.Context) bool {
+	playback, ok := c.Wrapped.(SessionLocalPlayback)
+	return ok && playback.InterruptLocalPlayback(ctx)
+}
+
+func (c SessionCapabilities) InputAudioSampleRate() int {
+	if format, ok := c.Wrapped.(SessionInputFormat); ok {
+		return format.InputAudioSampleRate()
+	}
+	return 0
 }

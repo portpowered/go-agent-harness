@@ -21,7 +21,7 @@ func (f *familyBProviderFixture) sendOriginalOutput(connection *websocket.Conn) 
 		return err
 	}
 	if err := f.send(connection, map[string]any{
-		"type": rtEventOutputAudioDelta, "response_id": "response-original-tool-continuation", "delta": base64.StdEncoding.EncodeToString([]byte{9, 0x42, 0x52, 0x42}), "format": "pcm16",
+		"type": rtEventOutputAudioDelta, "response_id": "response-original-tool-continuation", "delta": base64.StdEncoding.EncodeToString([]byte{9, 0x08, 0x52, 0x08}), "format": "pcm16",
 	}); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (f *familyBProviderFixture) sendOriginalOutput(connection *websocket.Conn) 
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "response_id": "response-original-output", "transcript": text}); err != nil {
 		return err
 	}
-	audio := []byte{1, 0x42, 0x52, 0x42}
+	audio := []byte{1, 0x08, 0x52, 0x08}
 	return f.send(connection, map[string]any{
 		"type": rtEventOutputAudioDelta, "response_id": "response-original-output", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
 	})
@@ -109,7 +109,7 @@ func (f *familyBProviderFixture) sendReplacementOutput(connection *websocket.Con
 	if err := f.send(connection, map[string]string{"type": "response.output_audio_transcript.done", "response_id": "response-replacement-output", "transcript": text}); err != nil {
 		return err
 	}
-	audio := []byte{2, 0x42, 0x52, 0x42}
+	audio := []byte{2, 0x08, 0x52, 0x08}
 	if err := f.send(connection, map[string]any{
 		"type": rtEventOutputAudioDelta, "response_id": "response-replacement-output", "delta": base64.StdEncoding.EncodeToString(audio), "format": "pcm16",
 	}); err != nil {
@@ -189,6 +189,11 @@ func familyBToolArguments(path, content string) string {
 	}
 	return string(data)
 }
+
+// familyBCorrectionSeed makes the correction speech (RMS ~12k) clearly louder
+// than the agent audio it interrupts (RMS ~2k): the runner's barge-in ignores
+// input that could be the agent's own echo at the playback level.
+const familyBCorrectionSeed = 0x30
 
 func familyBFrame(seed byte) []byte {
 	frame := make([]byte, probe.DefaultDuplexFrameSamples*2)

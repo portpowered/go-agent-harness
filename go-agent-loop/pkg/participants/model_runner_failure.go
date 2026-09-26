@@ -311,7 +311,7 @@ func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.
 	})
 }
 
-func startSessionResponse(state *sessionResponseState, msgID string, acknowledgementResponse bool) {
+func startSessionResponse(state *sessionResponseState, msgID string, acknowledgementResponse, continuation bool) {
 	if !beginSessionResponse(state, msgID) {
 		return
 	}
@@ -319,7 +319,10 @@ func startSessionResponse(state *sessionResponseState, msgID string, acknowledge
 	state.responseCompleted = false
 	state.responseCancelSent = false
 	state.responseInFlight = true
-	if !acknowledgementResponse && state.responseRequests.open() == requestContinuation {
+	if continuation && !acknowledgementResponse {
+		// The provider adapter owns which request each response answers and
+		// reports the continuation on the response it opens.
+		state.continuationRequested = false
 		state.continuationInFlight = true
 		state.continuationResponseID = msgID
 	}
@@ -361,7 +364,7 @@ func endSessionResponse(state *sessionResponseState, msg *messages.StreamMessage
 		state.terminalResponseIDs.add(ownedID)
 	}
 	state.currentResponseID = ""
-	state.responseRequests.ended()
+	state.continuationRequested = false
 	if state.continuationInFlight {
 		state.continuationInFlight = false
 		state.continuationResponseID = ""

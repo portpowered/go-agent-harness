@@ -102,7 +102,7 @@ func capacityOrDefault(override, fallback int) int {
 func newModelRunner(cfg AgentLoopConfig) *participants.ModelRunner {
 	modelCap := capacityOrDefault(cfg.ModelBufferCapacity, cfg.BufferCapacity)
 	if cfg.SessionInferencer != nil {
-		return participants.NewSessionModelRunner(cfg.SessionInferencer, modelCap, cfg.SessionConfig)
+		return cfg.configureSessionRunner(participants.NewSessionModelRunner(cfg.SessionInferencer, modelCap, cfg.SessionConfig))
 	}
 	return participants.NewModelRunner(cfg.Inferencer, modelCap)
 }

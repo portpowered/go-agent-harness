@@ -45,7 +45,7 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "first-speech", PCM16: customerSimulationFrame(1)},
 			{ID: "first-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 4},
-			{ID: "correction-speech", PCM16: customerSimulationFrame(2), WaitForOutputBytes: 4},
+			{ID: "correction-speech", PCM16: customerSimulationFrame(customerSimulationCorrectionSeed), WaitForOutputBytes: 4},
 			{ID: "second-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 8},
 			{ID: "final-speech", PCM16: customerSimulationFrame(3), WaitForOutputBytes: 8},
 		},
@@ -457,6 +457,11 @@ func (f *customerSimulationFixture) failProtocol(message string) {
 	}
 	f.mu.Unlock()
 }
+
+// customerSimulationCorrectionSeed makes the correction speech (RMS ~20.6k)
+// clearly louder than the response it interrupts (RMS ~9.2k): the runner's
+// barge-in ignores input that could be the agent's own echo.
+const customerSimulationCorrectionSeed = 0x50
 
 func customerSimulationFrame(seed byte) []byte {
 	frame := make([]byte, probe.DefaultDuplexFrameSamples*2)

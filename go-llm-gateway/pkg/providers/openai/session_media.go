@@ -185,6 +185,18 @@ func (s *realtimeSession) sendResponseCancel(ctx context.Context, events []model
 // does unless the session owns its audio turn boundaries (turn_detection null).
 func (s *realtimeSession) ProviderTurnDetection() bool { return !s.clientTurnBoundaries }
 
+// InputAudioSampleRate reports the rate of the PCM16 audio the client sends;
+// OpenAI Realtime defaults to 24 kHz.
+func (s *realtimeSession) InputAudioSampleRate() int {
+	if s.inputSampleRate > 0 {
+		return s.inputSampleRate
+	}
+	return defaultRealtimeInputSampleRate
+}
+
+// defaultRealtimeInputSampleRate is the OpenAI Realtime pcm16 input rate.
+const defaultRealtimeInputSampleRate = 24000
+
 // LocalPlayback reports provider audio still queued for or audible on the
 // local device, which outlives response.done.
 func (s *realtimeSession) LocalPlayback() messages.LocalPlaybackState {
@@ -334,4 +346,34 @@ func (s *realtimeSession) closeWithLog() {
 	if err := s.Close(); err != nil {
 		s.logger.Warn("openai realtime: session close error", logging.Field{Key: "error", Value: err})
 	}
+}
+
+// realtimeResponsePurposeKey is the response.create metadata key carrying the
+// harness request purpose; OpenAI echoes response metadata on
+// response.created, which binds each opened response to its request.
+const realtimeResponsePurposeKey = models.ResponseMetadataPurposeKey
+
+func realtimeResponseCreatedMessages(data json.RawMessage, responseID string) []messages.StreamMessage {
+	return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID,
+		Value: messages.NewMessageStartValue(), ResponsePurpose: realtimeCreatedResponsePurpose(data)}}
+}
+
+// realtimeResponseMetadata carries the request purpose the client binds by.
+// Only a tool continuation is marked; other requests keep the legacy shape.
+func realtimeResponseMetadata(value *messages.ResponseCreateValue) map[string]string {
+	if !value.IsToolContinuation() {
+		return nil
+	}
+	return map[string]string{realtimeResponsePurposeKey: string(messages.ResponsePurposeToolContinuation)}
+}
+
+// realtimeCreatedResponsePurpose reads the purpose echoed on response.created.
+// The adapter owns which request each response answers (it holds, drops and
+// retries creates), so the echoed metadata -- not client-side ordering --
+// identifies a tool continuation.
+func realtimeCreatedResponsePurpose(data json.RawMessage) messages.ResponsePurpose {
+	if firstStringField(data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation) {
+		return messages.ResponsePurposeToolContinuation
+	}
+	return ""
 }

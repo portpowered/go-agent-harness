@@ -148,3 +148,84 @@ func realtimeResponseActive(session *realtimeSession) bool {
 	defer session.responseMu.Unlock()
 	return session.responseActive
 }
+
+// Reviewer repro: the user ends a turn while a function-call response is
+// active, then the tool result and its continuation arrive. The adapter sends
+// one response.create and owns which request it answers, so the continuation
+// purpose travels on that request as response metadata and comes back on
+// response.created. The opened response -- not a runner-side FIFO that cannot
+// see held, dropped or retried creates -- identifies the continuation, and the
+// following ordinary user turn is not mistaken for it.
+func TestRealtimeSession_ContinuationPurposeRoundTripsThroughResponseMetadata(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session, ctx := startMockRealtimeSession(t, conn)
+
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-call"}})
+	readRealtimeMessage(t, session, ctx, "function-call response.created")
+	conn.addServerEvent("response.output_item.added", map[string]any{"response_id": "resp-call",
+		"item": map[string]any{"type": "function_call", "id": "item-call", "call_id": "call-1", "name": "lookup"}})
+	readRealtimeMessage(t, session, ctx, "function call item")
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); !outcome.OK() {
+		t.Fatalf("user end of turn: %+v", outcome)
+	}
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-call", "status": "completed"}})
+	readRealtimeMessage(t, session, ctx, "function-call response.done")
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-1", "lookup", `{"ok":true}`)}); !outcome.OK() {
+		t.Fatalf("tool result: %+v", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCreate,
+		Value: messages.NewToolContinuationResponseCreateValue()}); !outcome.OK() {
+		t.Fatalf("continuation: %+v", outcome)
+	}
+
+	creates := waitForResponseCreates(t, conn, 1)
+	if len(creates) != 1 || realtimeResponsePurpose(creates[0]) != string(messages.ResponsePurposeToolContinuation) {
+		t.Fatalf("response.create frames = %s, want exactly one carrying the continuation purpose", creates)
+	}
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-continuation",
+		"metadata": map[string]any{realtimeResponsePurposeKey: string(messages.ResponsePurposeToolContinuation)}}})
+	if got := readRealtimeMessage(t, session, ctx, "continuation response.created"); got.ResponsePurpose != messages.ResponsePurposeToolContinuation {
+		t.Fatalf("continuation start = %#v, want the tool-continuation purpose", got)
+	}
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-continuation", "status": "completed"}})
+	readRealtimeMessage(t, session, ctx, "continuation response.done")
+
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); !outcome.OK() {
+		t.Fatalf("next user end of turn: %+v", outcome)
+	}
+	creates = waitForResponseCreates(t, conn, 2)
+	if purpose := realtimeResponsePurpose(creates[1]); purpose != "" {
+		t.Fatalf("user-turn response.create carries purpose %q, want none", purpose)
+	}
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-user"}})
+	if got := readRealtimeMessage(t, session, ctx, "user-turn response.created"); got.ResponsePurpose != "" {
+		t.Fatalf("user-turn start = %#v, want no purpose", got)
+	}
+}
+
+func waitForResponseCreates(t *testing.T, conn *mockWebSocketConn, want int) [][]byte {
+	t.Helper()
+	timer := time.NewTimer(realtimeTestSafetyTimeout)
+	defer timer.Stop()
+	for {
+		var creates [][]byte
+		for _, payload := range conn.getClientMessages() {
+			if firstStringField(payload, "type") == wireResponseCreate {
+				creates = append(creates, payload)
+			}
+		}
+		if len(creates) >= want {
+			return creates
+		}
+		select {
+		case <-conn.clientWriteCh:
+		case <-timer.C:
+			t.Fatalf("timed out waiting for %d response.create frames, got %d", want, len(creates))
+		}
+	}
+}
+
+func realtimeResponsePurpose(payload []byte) string {
+	return firstStringField(payload, "response.metadata."+realtimeResponsePurposeKey)
+}

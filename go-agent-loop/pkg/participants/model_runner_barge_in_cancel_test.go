@@ -410,6 +410,14 @@ func TestSessionModelRunner_ToolContinuationAfterPeerAudioStillProducesAudio(t *
 // happens to be playing when that request is queued. These tests pin the
 // per-response rule.
 
+// continuationStart is the provider's opening of a tool-continuation response,
+// identified by the adapter from the request it answers.
+func continuationStart(responseID string) messages.StreamMessage {
+	msg := sessionMessage(messages.StreamTypeMessageStart, responseID)
+	msg.ResponsePurpose = messages.ResponsePurposeToolContinuation
+	return msg
+}
+
 func continuationCreate() messages.StreamMessage {
 	return messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewToolContinuationResponseCreateValue()}
 }
@@ -466,7 +474,7 @@ func TestSessionModelRunner_PlayingResponseInterruptibleWhileContinuationPending
 	}
 
 	// The provider opens the continuation response; it is the protected one.
-	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-B"))
+	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-B"))
 	if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyDoNotInterrupt, state); err != nil {
 		t.Fatalf("forward peer audio: %v", err)
 	}
@@ -479,7 +487,7 @@ func TestSessionModelRunner_PlayingResponseInterruptibleWhileContinuationPending
 	if endB.ResponsePurpose != messages.ResponsePurposeToolContinuation || !state.responseCompleted {
 		t.Fatalf("continuation resp-B end = %#v state=%+v, want a completed tool-continuation response", endB, state)
 	}
-	if state.responseRequests.has(requestContinuation) || state.continuationResponseID != "" {
+	if state.continuationRequested || state.continuationResponseID != "" {
 		t.Fatalf("continuation bookkeeping leaked past its response: %+v", state)
 	}
 
@@ -493,8 +501,8 @@ func TestSessionModelRunner_PlayingResponseInterruptibleWhileContinuationPending
 	}
 }
 
-// A continuation requested while nothing is playing binds to the next
-// response the provider opens, and only that response is protected.
+// A continuation requested while nothing is playing binds to the response the
+// adapter reports as answering it, and only that response is protected.
 func TestSessionModelRunner_IdleContinuationBindsNextResponse(t *testing.T) {
 	ctx := context.Background()
 	session := newRecordingSession()
@@ -506,7 +514,7 @@ func TestSessionModelRunner_IdleContinuationBindsNextResponse(t *testing.T) {
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 1 {
 		t.Fatalf("idle continuation request count = %d, want 1", got)
 	}
-	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-B"))
+	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-B"))
 	if state.continuationResponseID != "resp-B" {
 		t.Fatalf("continuation bound to %q, want resp-B", state.continuationResponseID)
 	}
@@ -549,7 +557,7 @@ func TestSessionModelRunner_RejectedContinuationRetriedAfterActiveResponse(t *te
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 1 {
 		t.Fatalf("runner re-requested the rejected continuation: creates=%d, want only the original", got)
 	}
-	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-B"))
+	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-B"))
 	if state.continuationResponseID != "resp-B" {
 		t.Fatalf("retried continuation bound to %q, want resp-B", state.continuationResponseID)
 	}
@@ -565,7 +573,7 @@ func newContinuationRunState(t *testing.T, runner *ModelRunner, responseID strin
 	state := &sessionRunState{}
 	state.ensureMaps()
 	runner.forwardQueuedSessionEvent(ctx, setup, state, continuationCreate())
-	runner.forwardSessionMessageState(ctx, setup, state, sessionMessage(messages.StreamTypeMessageStart, responseID))
+	runner.forwardSessionMessageState(ctx, setup, state, continuationStart(responseID))
 	if !state.continuationInFlight || state.currentResponseID != responseID {
 		t.Fatalf("setup: continuation %q not bound: %+v", responseID, state)
 	}

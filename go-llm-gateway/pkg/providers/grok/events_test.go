@@ -177,3 +177,31 @@ func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 		})
 	}
 }
+
+// An interruption between response.created and the response's first audio
+// delta must still discard that response's late audio.
+func TestSession_CancelBeforeFirstAudioDiscardsLateDeltas(t *testing.T) {
+	conn := newMockConn()
+	session := newGrokSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	ctx := newGrokTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-early"}})
+	for readFromSession(t, ctx, session, "response.created").Type != messages.StreamTypeMessageStart {
+	}
+	if !session.Send(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}) {
+		t.Fatal("send RESPONSE.CANCEL rejected")
+	}
+	conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-early", "delta": codec.EncodeBase64(codec.EncodePCM16(make([]int16, 24000)))})
+	conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-next", "delta": codec.EncodeBase64(codec.EncodePCM16(make([]int16, 720)))})
+	frame, err := endpoints.Inbound.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read frame after cancel: %v", err)
+	}
+	if frame.PlaybackResponse.ResponseID != "resp-next" {
+		t.Fatalf("first audible frame belongs to %+v, want resp-next", frame.PlaybackResponse)
+	}
+}

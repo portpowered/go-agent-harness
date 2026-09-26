@@ -257,3 +257,23 @@ func TestReplayWebSocketDialerMismatchIncludesDivergenceContext(t *testing.T) {
 		t.Fatalf("error = %v, want structured payload divergence", err)
 	}
 }
+
+// The purpose metadata a client attaches to response.create only correlates
+// the opened response with its request. A capture recorded before it existed
+// still replays; a capture that recorded it still requires it.
+func TestCompareReplayPayloadsToleratesUnrecordedResponsePurposeMetadata(t *testing.T) {
+	tagged := []byte(`{"type":"response.create","response":{"metadata":{"harness_purpose":"tool_continuation"}}}`)
+	if err := compareReplayPayloads([]byte(`{"type":"response.create"}`), tagged); err != nil {
+		t.Fatalf("legacy capture rejected purpose metadata: %v", err)
+	}
+	if err := compareReplayPayloads(tagged, []byte(`{"type":"response.create"}`)); err == nil {
+		t.Fatal("recorded purpose metadata was not required")
+	}
+	withInstructions := []byte(`{"type":"response.create","response":{"instructions":"x","metadata":{"harness_purpose":"tool_continuation"}}}`)
+	if err := compareReplayPayloads([]byte(`{"type":"response.create","response":{"instructions":"x"}}`), withInstructions); err != nil {
+		t.Fatalf("legacy capture with instructions rejected purpose metadata: %v", err)
+	}
+	if err := compareReplayPayloads([]byte(`{"type":"response.create"}`), []byte(`{"type":"response.create","response":{"metadata":{"other":"x"}}}`)); err == nil {
+		t.Fatal("unrelated metadata was tolerated")
+	}
+}

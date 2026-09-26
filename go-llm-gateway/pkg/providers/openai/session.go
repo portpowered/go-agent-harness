@@ -76,10 +76,10 @@ type realtimeSession struct {
 	// response wire lock remains held.
 	responseDispatchFailureBarrier func()
 
-	mediaMu                       sync.Mutex
-	media                         *sharedaudio.SessionMedia
-	mediaClaimed, mediaContinuous bool
-	mediaSampleRate               int
+	mediaMu                          sync.Mutex
+	media                            *sharedaudio.SessionMedia
+	mediaClaimed, mediaContinuous    bool
+	mediaSampleRate, inputSampleRate int
 }
 
 const maxPendingResponseIntents = 32

@@ -213,6 +213,26 @@ func NewResponseCreateEventWithInstructions(instructions string) SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCreate, Data: data}
 }
 
+// ResponseMetadataPurposeKey is the response.create metadata key carrying the
+// harness request purpose. It only correlates the opened response with its
+// request and is not part of the recorded conversation.
+const ResponseMetadataPurposeKey = "harness_purpose"
+
+// NewResponseCreateEventWithMetadata creates a response request carrying
+// optional instructions and response metadata. Providers that echo response
+// metadata on response.created let the client bind the opened response to the
+// request that asked for it. Empty arguments preserve the legacy shape.
+func NewResponseCreateEventWithMetadata(instructions string, metadata map[string]string) SessionEvent {
+	if len(metadata) == 0 {
+		return NewResponseCreateEventWithInstructions(instructions)
+	}
+	response := map[string]any{"metadata": metadata}
+	if instructions != "" {
+		response["instructions"] = instructions
+	}
+	return SessionEvent{Type: SessionEventResponseCreate, Data: encodeEventData(map[string]any{"response": response})}
+}
+
 // NewResponseCancelEvent creates an event that cancels an in-progress response.
 func NewResponseCancelEvent() SessionEvent {
 	return SessionEvent{Type: SessionEventResponseCancel}
@@ -243,4 +263,39 @@ func encodeEventData(payload any) json.RawMessage {
 		return nil
 	}
 	return data
+}
+
+// StripUnrecordedResponsePurpose returns actual without the response.create
+// purpose metadata when the recorded expected payload predates it, so an older
+// capture still replays. That metadata only correlates the opened response
+// with its request; a capture that recorded it still requires it.
+func StripUnrecordedResponsePurpose(expected, actual []byte) []byte {
+	var expectedEvent, actualEvent struct {
+		Response map[string]json.RawMessage `json:"response"`
+	}
+	if json.Unmarshal(actual, &actualEvent) != nil || json.Unmarshal(expected, &expectedEvent) != nil {
+		return actual
+	}
+	var metadata map[string]json.RawMessage
+	if json.Unmarshal(actualEvent.Response["metadata"], &metadata) != nil || len(metadata) != 1 || metadata[ResponseMetadataPurposeKey] == nil {
+		return actual
+	}
+	if _, recorded := expectedEvent.Response["metadata"]; recorded {
+		return actual
+	}
+	var event map[string]json.RawMessage
+	if json.Unmarshal(actual, &event) != nil {
+		return actual
+	}
+	delete(actualEvent.Response, "metadata")
+	if len(actualEvent.Response) == 0 {
+		delete(event, "response")
+	} else if response, err := json.Marshal(actualEvent.Response); err == nil {
+		event["response"] = response
+	}
+	stripped, err := json.Marshal(event)
+	if err != nil {
+		return actual
+	}
+	return stripped
 }

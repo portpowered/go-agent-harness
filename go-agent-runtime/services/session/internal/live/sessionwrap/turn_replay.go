@@ -36,15 +36,16 @@ func (i inferencerAdapter) ConnectSession(ctx context.Context) (messages.Session
 }
 
 type mediaSession struct {
-	inner        messages.Session
-	media        *sharedaudio.SessionMedia
-	received     *messages.TypedBuffer[messages.StreamMessage]
-	done         chan struct{}
-	stop         chan struct{}
-	forwarded    chan struct{}
-	mediaFlushed bool
-	closeOnce    sync.Once
-	closeErr     error
+	messages.SessionCapabilities // playback is answered by the session's own media
+	inner                        messages.Session
+	media                        *sharedaudio.SessionMedia
+	received                     *messages.TypedBuffer[messages.StreamMessage]
+	done                         chan struct{}
+	stop                         chan struct{}
+	forwarded                    chan struct{}
+	mediaFlushed                 bool
+	closeOnce                    sync.Once
+	closeErr                     error
 	// closing records that the owner asked to stop the provider through
 	// Close; a cancellation the provider reports afterwards is that stop.
 	closing     atomic.Bool
@@ -60,12 +61,13 @@ func newMediaSession(ctx context.Context, inner messages.Session, sampleRate int
 		InboundContinuous: continuous,
 	})
 	s := &mediaSession{
-		inner:     inner,
-		media:     media,
-		received:  messages.NewTypedBuffer[messages.StreamMessage](turnReplayMessageCapacity),
-		done:      make(chan struct{}),
-		stop:      make(chan struct{}),
-		forwarded: make(chan struct{}),
+		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
+		inner:               inner,
+		media:               media,
+		received:            messages.NewTypedBuffer[messages.StreamMessage](turnReplayMessageCapacity),
+		done:                make(chan struct{}),
+		stop:                make(chan struct{}),
+		forwarded:           make(chan struct{}),
 	}
 	go s.forward(ctx)
 	return s

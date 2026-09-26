@@ -42,7 +42,8 @@ func WrapSession(ctx context.Context, inner messages.Session, continuous bool, c
 		capacity = 128
 	}
 	drained := &terminalDrainSession{
-		inner: inner, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity),
+		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
+		inner:               inner, receive: messages.NewTypedBuffer[messages.StreamMessage](capacity),
 		done: make(chan struct{}), stop: make(chan struct{}), syncRequests: make(chan chan struct{}),
 	}
 	go drained.forward(context.WithoutCancel(ctx), source, inner.Done())
@@ -79,6 +80,7 @@ type ReceiveSyncer interface {
 var _ ReceiveSyncer = (*terminalDrainSession)(nil)
 
 type terminalDrainSession struct {
+	messages.SessionCapabilities
 	inner      messages.Session
 	receive    *messages.TypedBuffer[messages.StreamMessage]
 	done, stop chan struct{}

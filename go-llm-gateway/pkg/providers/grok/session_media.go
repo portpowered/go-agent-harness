@@ -111,6 +111,10 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 	switch event.Type {
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		media.InterruptInbound()
+	case models.SessionEventResponseCreated:
+		// Name the response before its first audio delta, so an interruption
+		// in between still discards that response's late audio.
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: responseEventID(event.Data)})
 	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
 		// The response identity lets an interruption discard this response's
 		// late deltas.
@@ -136,6 +140,18 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 
 // ProviderTurnDetection reports that Grok always runs server VAD.
 func (*grokSession) ProviderTurnDetection() bool { return true }
+
+// InputAudioSampleRate reports the rate of the PCM16 audio the client sends,
+// 24 kHz unless configured.
+func (s *grokSession) InputAudioSampleRate() int {
+	if s.inputSampleRate > 0 {
+		return s.inputSampleRate
+	}
+	return defaultGrokInputSampleRate
+}
+
+// defaultGrokInputSampleRate is the Grok realtime PCM16 input rate.
+const defaultGrokInputSampleRate = 24000
 
 // LocalPlayback reports provider audio still queued for or audible on the
 // local device.

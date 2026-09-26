@@ -305,7 +305,7 @@ func (r *ModelRunner) noteAcceptedSessionResponse(state *sessionRunState, evt me
 		state.responseCancelSent = false
 		return
 	}
-	state.responseRequests.push(requestForCreate(evt))
+	state.continuationRequested = true
 	r.sessionToolContinuation = sessionToolContinuationAccepted
 }
 
@@ -342,7 +342,7 @@ func holdForAcknowledgement(state *sessionRunState, evt messages.StreamMessage) 
 		return false
 	}
 	if isToolAcknowledgementResponseCreate(evt) {
-		return state.responseInFlight || state.responseRequests.has(requestContinuation) || state.continuationInFlight || state.acknowledgementOutstanding
+		return state.responseInFlight || state.continuationRequested || state.continuationInFlight || state.acknowledgementOutstanding
 	}
 	if state.acknowledgementOutstanding {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)

@@ -51,11 +51,11 @@ type grokSession struct {
 	errMu       sync.Mutex
 	terminalErr error
 
-	mediaMu         sync.Mutex
-	media           *sharedaudio.SessionMedia
-	mediaClaimed    bool
-	mediaContinuous bool
-	mediaSampleRate int
+	mediaMu                          sync.Mutex
+	media                            *sharedaudio.SessionMedia
+	mediaClaimed                     bool
+	mediaContinuous                  bool
+	mediaSampleRate, inputSampleRate int
 }
 
 func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {

@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/capture"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -116,6 +117,7 @@ func jsonPayloadEqual(expected, actual []byte) bool {
 }
 
 func compareJSONPayloads(expected, actual []byte, fallback string) error {
+	actual = models.StripUnrecordedResponsePurpose(expected, actual)
 	if jsonPayloadEqual(expected, actual) {
 		return nil
 	}

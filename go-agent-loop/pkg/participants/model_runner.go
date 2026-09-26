@@ -59,6 +59,8 @@ type ModelRunner struct {
 	sessionToolEventMu       sync.Mutex
 	pendingSessionToolEvents int
 
+	bargeInConfig *BargeInConfig // nil selects DefaultBargeInConfig
+
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
@@ -88,9 +90,10 @@ type sessionRunState struct {
 	responseCompleted    bool
 	pendingSendErrors    []messages.StreamMessage
 	suppressContinuation bool
-	// responseRequests lists, in send order, response requests the provider
-	// accepted but has not opened yet (see responseRequestQueue).
-	responseRequests responseRequestQueue
+	// continuationRequested records an accepted response request whose
+	// response has not ended yet; a progress acknowledgement must not compete
+	// with it.
+	continuationRequested bool
 	// continuationInFlight marks the current response as the tool
 	// continuation. Only this response is exempt from barge-in; every other
 	// response, including one that was already playing when the continuation
@@ -293,7 +296,6 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
 	state.ensureMaps()
-	requestRejected := rejectsActiveResponseCreate(msg) && !state.acknowledgementOutstanding
 	acknowledgementResponse := r.tagSessionAcknowledgement(ctx, state, &msg)
 	msgID := responseID(msg.ResponseID)
 	messageEndOwned := false
@@ -303,12 +305,9 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	// not define its terminal boundary. When a provider starts a replacement
 	// response before the older one has drained, the older response is retired
 	// and can no longer mutate the current lifecycle.
-	if requestRejected {
-		state.responseRequests.rejected(state)
-	}
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
-		startSessionResponse(state, msgID, acknowledgementResponse)
+		startSessionResponse(state, msgID, acknowledgementResponse, msg.ResponsePurpose == messages.ResponsePurposeToolContinuation)
 		tagSessionContinuation(state, &msg, msgID)
 	case messages.StreamTypeMessageEnd:
 		tagSessionContinuation(state, &msg, msgID)

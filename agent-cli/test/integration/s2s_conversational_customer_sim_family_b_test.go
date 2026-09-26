@@ -74,7 +74,7 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 		AdditionalArgs:   []string{"--wait-for-close"},
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "original-request", PCM16: familyBFrame(1)},
-			{ID: "correction-request", PCM16: familyBFrame(2), WaitForOutputSequence: []byte{1, 0x42, 0x52, 0x42}, Before: captureOriginal},
+			{ID: "correction-request", PCM16: familyBFrame(familyBCorrectionSeed), WaitForOutputSequence: []byte{1, 0x08, 0x52, 0x08}, Before: captureOriginal},
 			{ID: "correction-silence", SilenceFor: 5 * time.Millisecond},
 		},
 	})
@@ -132,7 +132,7 @@ func TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries(t *te
 	result, runErr := probe.RunCustomerSimulationSuite(context.Background(), probe.CustomerSimulationSuiteOptions{
 		BinaryPath: buildAgentBinary(t), RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime",
 		BaseURL: fixture.WebSocketURL(), APIKey: "hermetic-key", SystemPrompt: scenario.TextSeed,
-		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBFrame(2)}}},
+		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBFrame(familyBCorrectionSeed)}}},
 		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: 5 * time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
 		ReplayService: replaywire.NewService(),
 	})
@@ -195,8 +195,8 @@ func assertFamilyBProcessEvidence(t *testing.T, result probe.DuplexRunResult) {
 		t.Fatalf("stream evidence input=%d output_reads=%d, want correction on one open paced stream", len(result.Input), len(result.Output))
 	}
 	for marker := byte(1); marker <= 2; marker++ {
-		if !bytes.Contains(result.Stdout, []byte{marker, 0x42, 0x52, 0x42}) {
-			t.Fatalf("captured stdout = %x, missing response audio marker %x", result.Stdout, []byte{marker, 0x42, 0x52, 0x42})
+		if !bytes.Contains(result.Stdout, []byte{marker, 0x08, 0x52, 0x08}) {
+			t.Fatalf("captured stdout = %x, missing response audio marker %x", result.Stdout, []byte{marker, 0x08, 0x52, 0x08})
 		}
 	}
 	if strings.Contains(result.Command, "hermetic-key") || strings.Contains(strings.Join(result.SanitizedArgs, "\x00"), "hermetic-key") {
