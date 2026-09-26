@@ -332,3 +332,52 @@ func TestGlobalOrdering_SettledDeltaHistoryStaysBounded(t *testing.T) {
 		t.Fatalf("delta history retains %d audio bytes, want at most the live response's %d", retainedAudio, limit)
 	}
 }
+
+// In a duplex session the provider owns the conversation's audio; the
+// reconstructed assistant messages only need their transcript once the
+// response is settled. Their audio must not accumulate for the whole session.
+func TestGlobalOrdering_SettledAssistantAudioIsCompacted(t *testing.T) {
+	o := NewGlobalOrdering(participants.NewModelRunner(nil, 16), nil, nil, nil)
+	ts := &state.LoopState{Mode: state.DuplexSession, History: state.History{ConversationDeltaBuffer: []messages.StreamMessage{}}}
+	pcm := make([]byte, 4800)
+	for turn := range 50 {
+		ts.History.ModelDeltaStartIndex, ts.History.CurrentModelDeltaCount = len(ts.History.ConversationDeltaBuffer), 0
+		response := []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}}
+		for range 10 {
+			response = append(response, messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)})
+		}
+		response = append(response,
+			messages.StreamMessage{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("answer")},
+			messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+		for _, delta := range response {
+			if err := o.consumeModelDelta(ts, delta); err != nil {
+				t.Fatalf("turn %d: %v", turn, err)
+			}
+			o.UpdateWorldHistory(ts)
+			o.FlushInputs(ts)
+		}
+	}
+	retainedAudio := 0
+	for index, message := range ts.History.ConversationBuffer {
+		audioBytes, transcript := messageAudioAndTranscript(message)
+		retainedAudio += audioBytes
+		if transcript != "answer" {
+			t.Fatalf("message %d lost its transcript: %#v", index, message.ContentParts)
+		}
+	}
+	if limit := 10 * len(pcm); retainedAudio > limit {
+		t.Fatalf("conversation retains %d audio bytes after 50 responses, want at most the latest response's %d", retainedAudio, limit)
+	}
+}
+
+func messageAudioAndTranscript(message messages.Message) (audioBytes int, transcript string) {
+	for _, part := range message.ContentParts {
+		switch part := part.(type) {
+		case messages.AudioPart:
+			audioBytes += len(part.Bytes)
+		case messages.TranscriptPart:
+			transcript += part.Text
+		}
+	}
+	return audioBytes, transcript
+}

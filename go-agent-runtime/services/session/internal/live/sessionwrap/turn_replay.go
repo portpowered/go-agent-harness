@@ -37,6 +37,7 @@ func (i inferencerAdapter) ConnectSession(ctx context.Context) (messages.Session
 
 type mediaSession struct {
 	messages.SessionCapabilities // playback is answered by the session's own media
+	barrier                      messages.RelayBarrier
 	inner                        messages.Session
 	media                        *sharedaudio.SessionMedia
 	received                     *messages.TypedBuffer[messages.StreamMessage]
@@ -183,6 +184,8 @@ func (s *mediaSession) forward(ctx context.Context) {
 			return
 		case <-ctx.Done():
 			return
+		case reply := <-s.barrier.Requests():
+			s.barrier.Relay(reply, source, func(msg messages.StreamMessage) bool { return s.forwardMessage(ctx, msg) })
 		}
 	}
 }

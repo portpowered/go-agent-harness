@@ -229,3 +229,68 @@ func waitForResponseCreates(t *testing.T, conn *mockWebSocketConn, want int) [][
 func realtimeResponsePurpose(payload []byte) string {
 	return firstStringField(payload, "response.metadata."+realtimeResponsePurposeKey)
 }
+
+// A tool result and its continuation that are queued behind an active
+// response are not work of that response: the user interrupting it must not
+// drop them, or the tool obligation is never resolved (and the runner waits
+// for a continuation that never opens).
+func TestRealtimeSession_CancelKeepsQueuedToolResultAndContinuation(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session, ctx := startMockRealtimeSession(t, conn)
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-vad"}})
+	readRealtimeMessage(t, session, ctx, "server-VAD response.created")
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeToolCallEnd,
+		Value: messages.NewToolCallEndValue("call-1", "lookup", `{"ok":true}`)}); !outcome.OK() {
+		t.Fatalf("tool result: %+v", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCreate,
+		Value: messages.NewToolContinuationResponseCreateValue()}); !outcome.OK() {
+		t.Fatalf("continuation: %+v", outcome)
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+		t.Fatalf("cancel: %+v", outcome)
+	}
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-vad", "status": "cancelled"}})
+	readRealtimeMessage(t, session, ctx, "cancelled response.done")
+	creates := waitForResponseCreates(t, conn, 1)
+	if realtimeResponsePurpose(creates[0]) != string(messages.ResponsePurposeToolContinuation) {
+		t.Fatalf("response.create after the cancel = %s, want the tool continuation", creates[0])
+	}
+	var sawResult bool
+	for _, payload := range conn.getClientMessages() {
+		sawResult = sawResult || firstStringField(payload, "item.type") == realtimeFunctionCallOutputType
+	}
+	if !sawResult {
+		t.Fatal("the queued tool result was dropped by the cancel")
+	}
+}
+
+// A continuation rejected because a server-VAD response won the race waits
+// to be retried when that response ends. The user cancelling the VAD
+// response in the meantime must not drop the retry: the tool obligation
+// would stay unresolved.
+func TestRealtimeSession_CancelKeepsRejectedContinuationRetry(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session, ctx := startMockRealtimeSession(t, conn)
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCreate,
+		Value: messages.NewToolContinuationResponseCreateValue()}); !outcome.OK() {
+		t.Fatalf("continuation: %+v", outcome)
+	}
+	waitForResponseCreates(t, conn, 1)
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-vad"}})
+	readRealtimeMessage(t, session, ctx, "server-VAD response.created")
+	conn.addServerEvent("error", map[string]any{"error": map[string]any{
+		"type": realtimeInvalidRequestErrorType, "code": realtimeResponseCreateActiveCode,
+		"message": "Conversation already has an active response.",
+	}})
+	readRealtimeMessage(t, session, ctx, "active-response rejection")
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+		t.Fatalf("cancel: %+v", outcome)
+	}
+	conn.addServerEvent("response.done", map[string]any{"response": map[string]any{"id": "resp-vad", "status": "cancelled"}})
+	readRealtimeMessage(t, session, ctx, "cancelled response.done")
+	creates := waitForResponseCreates(t, conn, 2)
+	if realtimeResponsePurpose(creates[1]) != string(messages.ResponsePurposeToolContinuation) {
+		t.Fatalf("response.create after the cancel = %s, want the continuation retried", creates[1])
+	}
+}

@@ -300,5 +300,8 @@ func (c AgentLoopConfig) configureSessionRunner(runner *participants.ModelRunner
 	if c.BargeIn != nil {
 		runner.SetBargeInConfig(*c.BargeIn)
 	}
+	if c.Clock != nil {
+		runner.SetClock(c.Clock)
+	}
 	return runner
 }

@@ -286,14 +286,14 @@ func (r *ModelRunner) forwardSessionCompleteMessage(ctx context.Context, session
 func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) error {
 	if input.kind != sessionInputAudio {
 		r.cancelLane.queuedControls.Add(-1)
-		r.flushHeldAudio(ctx, session, state)
 	}
 	switch input.kind {
 	case sessionInputAudio:
 		return r.forwardSessionAudioInputWithState(ctx, session, input.audio, state)
 	case sessionInputEvent:
-		r.forwardQueuedSessionEvent(ctx, session, state, input.event)
+		r.forwardQueuedSessionEvent(ctx, session, state, input.event) // orders held audio around the event
 	case sessionInputMessage:
+		r.flushHeldAudio(ctx, session, state)
 		return r.forwardSessionCompleteMessage(ctx, session, input.message, input.requestResponse)
 	}
 	return nil

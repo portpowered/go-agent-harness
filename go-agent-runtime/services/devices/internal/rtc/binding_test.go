@@ -190,3 +190,18 @@ func TestBoundSessionForwardsBargeInCapabilities(t *testing.T) {
 		}
 	}
 }
+
+// The RTC binding relays provider messages through its own goroutine;
+// SyncReceive publishes every queued message before it returns.
+func TestBoundSessionSyncReceivePublishesQueuedProviderMessages(t *testing.T) {
+	provider := newIdleSession()
+	bound := newBoundSession(provider, &binding{}, context.Background())
+	t.Cleanup(bound.stopReceiveForwarder)
+	for round := range 50 {
+		provider.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: string(rune('a' + round%26))})
+		bound.SyncReceive(context.Background())
+		if _, ok := bound.Receive().Read(); !ok {
+			t.Fatalf("round %d: message was still behind the RTC relay after SyncReceive", round)
+		}
+	}
+}

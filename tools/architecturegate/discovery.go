@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"io"
 	"os"
 	"os/exec"
@@ -31,6 +32,10 @@ type Package struct {
 	Files        []*SourceFile
 	Types        *packages.Package
 	TypeLoadable bool
+	// SourceTypes is the package type-checked from source, unexported types
+	// included. Only packages importing messages load it; see
+	// loadSessionSourceTypes.
+	SourceTypes *types.Package
 }
 
 type SourceFile struct {
@@ -201,8 +206,14 @@ func setEnv(environment []string, key, value string) []string {
 }
 
 func loadTypes(ctx context.Context, modules []*Module, goos, goarch string) error {
-	return forEachModule(len(modules), func(index int) error {
+	if err := forEachModule(len(modules), func(index int) error {
 		return loadModuleTypes(ctx, modules[index], goos, goarch)
+	}); err != nil {
+		return err
+	}
+	reaching := packagesReachingMessages(modules)
+	return forEachModule(len(modules), func(index int) error {
+		return loadSessionSourceTypes(ctx, modules[index], reaching, goos, goarch)
 	})
 }
 

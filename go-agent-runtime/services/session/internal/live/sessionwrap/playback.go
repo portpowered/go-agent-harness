@@ -28,3 +28,10 @@ func (s *mediaSession) InterruptLocalPlayback(context.Context) bool {
 	_, interrupted := s.media.InterruptInbound()
 	return interrupted
 }
+
+// SyncReceive returns once every provider message queued before the call has
+// crossed the turn replay relay into Receive.
+func (s *mediaSession) SyncReceive(ctx context.Context) {
+	s.SessionCapabilities.SyncReceive(ctx)
+	s.barrier.Await(ctx, s.forwarded)
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
 	"sync"
 )
@@ -59,7 +60,8 @@ type ModelRunner struct {
 	sessionToolEventMu       sync.Mutex
 	pendingSessionToolEvents int
 
-	bargeInConfig *BargeInConfig // nil selects DefaultBargeInConfig
+	bargeInConfig *BargeInConfig    // nil selects DefaultBargeInConfig
+	clock         clock.TimerSource // times held onset audio; nil selects the real clock
 
 	execMu     sync.Mutex
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
@@ -117,7 +119,8 @@ type sessionRunState struct {
 	deferredSessionEvents      []messages.StreamMessage
 	initialSessionConfigSent   bool
 	bargeIn                    bargeInDetector
-	heldAudio                  [][]byte // onset frames held until barge-in is decided
+	heldAudio                  [][]byte    // onset frames held until barge-in is decided
+	heldAudioTimer             clock.Timer // releases heldAudio once onset can no longer be reached
 }
 
 // sessionResponseState is retained as an alias for the identity-aware helper
@@ -239,6 +242,10 @@ func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session me
 	acknowledgementEnded := state.acknowledgementEnded
 	if acknowledgementEnded {
 		state.acknowledgementEnded = false
+	}
+	if messageEnded {
+		// Held onset audio has nothing left to interrupt.
+		r.flushHeldAudio(ctx, session, state)
 	}
 	if acknowledgementEnded || messageEnded {
 		// Either this response's own terminal boundary was just observed, or

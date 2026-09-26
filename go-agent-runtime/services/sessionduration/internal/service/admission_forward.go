@@ -65,8 +65,20 @@ func (s *AdmissionSession) forward(ctx context.Context) {
 				return
 			}
 			s.forwardMessage(ctx, msg, &admissionOpen)
+		case reply := <-s.barrier.Requests():
+			s.barrier.Relay(reply, source, func(msg messages.StreamMessage) bool {
+				s.forwardMessage(ctx, msg, &admissionOpen)
+				return true
+			})
 		}
 	}
+}
+
+// SyncReceive returns once every provider message queued before the call has
+// crossed the admission relay into Receive.
+func (s *AdmissionSession) SyncReceive(ctx context.Context) {
+	s.SessionCapabilities.SyncReceive(ctx)
+	s.barrier.Await(ctx, s.done)
 }
 
 func (s *AdmissionSession) drainSourceAfterClose() {

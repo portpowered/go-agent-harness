@@ -429,13 +429,8 @@ func (s *realtimeSession) popPendingResponseIntentLocked() (responseIntent, bool
 func (s *realtimeSession) invalidatePendingResponseIntents() {
 	s.responseMu.Lock()
 	s.responseGeneration++
-	for _, intent := range s.pendingResponseIntents {
-		settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
-	}
-	s.pendingResponseIntents = nil
-	s.responseRetry = nil
-	s.responseSent = false
-	s.responseRetryPending = false
+	s.pendingResponseIntents = s.keepToolWorkLocked(s.pendingResponseIntents)
+	s.keepContinuationRetryLocked()
 	s.responseHasFunctionCall = false
 	s.suppressStandaloneResponseCreate = false
 	s.toolResultAdmitted = false

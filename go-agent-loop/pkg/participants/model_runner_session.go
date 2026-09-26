@@ -72,19 +72,27 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 		r.forwardPendingSessionMessages(ctx, session, state)
 		r.forwardQueuedSessionEvent(ctx, session, state, evt)
 	case req, ok := <-r.Inbox.Chan():
-		if !ok {
-			return true, r.endSession(ctx, state, nil)
-		}
-		// After the provider's SESSION.CLOSE no response can follow, so a late
-		// request must not reach the closed wire.
-		if !state.sessionClosed {
-			r.sendLatestUserText(ctx, session, req)
-		}
+		return r.awaitedInferenceRequest(ctx, session, state, req, ok)
+	case <-state.heldAudioExpiry():
+		// Onset can no longer be reached: release the held frames.
+		r.flushHeldAudio(ctx, session, state)
 	case msg, ok := <-session.Receive().Chan():
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
 		}
 		r.forwardSessionMessageState(ctx, session, state, msg)
+	}
+	return false, nil
+}
+
+func (r *ModelRunner) awaitedInferenceRequest(ctx context.Context, session messages.Session, state *sessionRunState, req messages.InferenceRequest, ok bool) (bool, error) {
+	if !ok {
+		return true, r.endSession(ctx, state, nil)
+	}
+	// After the provider's SESSION.CLOSE no response can follow, so a late
+	// request must not reach the closed wire.
+	if !state.sessionClosed {
+		r.sendLatestUserText(ctx, session, req)
 	}
 	return false, nil
 }
@@ -290,7 +298,13 @@ func sessionEventBlockedByAdmissionForSession(session messages.Session, msg mess
 // active; tool results themselves remain deliverable so the provider can use
 // them as soon as the acknowledgement has ended.
 func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) {
-	r.flushHeldAudio(ctx, session, state) // held onset audio precedes any later control
+	// Held onset audio precedes any later control, except an explicit cancel:
+	// that is the interrupt the held audio was waiting to decide.
+	if evt.Type == messages.StreamTypeResponseCancel {
+		defer r.flushHeldAudio(ctx, session, state)
+	} else {
+		r.flushHeldAudio(ctx, session, state)
+	}
 	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.suppressContinuation {
 		r.markSessionToolEventConsumed(evt)
 		// A result in this batch was rejected at the provider boundary. Do not
@@ -322,6 +336,9 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 	// will never arrive. Hold the event only when a cancel is actually
 	// outstanding, then replay it from flushDeferredSessionEvents once that
 	// boundary is observed.
+	if isSessionContinuationCreate(evt) {
+		r.syncProviderMessages(ctx, session, state)
+	}
 	if deferSessionResponseRequest(state, evt) {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
 		return

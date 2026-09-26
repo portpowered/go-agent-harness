@@ -230,10 +230,15 @@ func (i replayInferencer) ConnectSession(ctx context.Context) (messages.Session,
 	if err != nil || s == nil {
 		return s, err
 	}
-	return &replaySession{Session: s}, nil
+	return &replaySession{Session: s, SessionCapabilities: messages.SessionCapabilities{Wrapped: s}}, nil
 }
 
-type replaySession struct{ messages.Session }
+// replaySession forwards the replayed provider session's barge-in
+// capabilities so a runner replaying a capture keeps its live behavior.
+type replaySession struct {
+	messages.Session
+	messages.SessionCapabilities
+}
 
 var _ messages.SessionSendOutcomeSender = (*replaySession)(nil)
 

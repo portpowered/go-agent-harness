@@ -348,32 +348,49 @@ func (s *realtimeSession) closeWithLog() {
 	}
 }
 
-// realtimeResponsePurposeKey is the response.create metadata key carrying the
-// harness request purpose; OpenAI echoes response metadata on
-// response.created, which binds each opened response to its request.
-const realtimeResponsePurposeKey = models.ResponseMetadataPurposeKey
-
-func realtimeResponseCreatedMessages(data json.RawMessage, responseID string) []messages.StreamMessage {
-	return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID,
-		Value: messages.NewMessageStartValue(), ResponsePurpose: realtimeCreatedResponsePurpose(data)}}
+// keepToolWorkLocked drops the queued response intents a RESPONSE.CANCEL
+// invalidates and keeps tool work: a tool result or a tool continuation
+// request queued behind the cancelled response is not work of that response.
+// Dropping it would leave the tool obligation unresolved and the runner
+// waiting for a continuation that never opens. Kept intents join the new
+// generation and dispatch once the cancelled response ends. Caller holds
+// responseMu.
+func (s *realtimeSession) keepToolWorkLocked(pending []responseIntent) []responseIntent {
+	kept := pending[:0]
+	for _, intent := range pending {
+		if !responseIntentIsToolWork(intent) {
+			settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
+			continue
+		}
+		intent.generation = s.responseGeneration
+		kept = append(kept, intent)
+	}
+	return kept
 }
 
-// realtimeResponseMetadata carries the request purpose the client binds by.
-// Only a tool continuation is marked; other requests keep the legacy shape.
-func realtimeResponseMetadata(value *messages.ResponseCreateValue) map[string]string {
-	if !value.IsToolContinuation() {
-		return nil
+func responseIntentIsToolWork(intent responseIntent) bool {
+	for _, event := range intent.events {
+		if responseEventIsFunctionCallOutput(event) || responseEventIsToolContinuation(event) {
+			return true
+		}
 	}
-	return map[string]string{realtimeResponsePurposeKey: string(messages.ResponsePurposeToolContinuation)}
+	return false
 }
 
-// realtimeCreatedResponsePurpose reads the purpose echoed on response.created.
-// The adapter owns which request each response answers (it holds, drops and
-// retries creates), so the echoed metadata -- not client-side ordering --
-// identifies a tool continuation.
-func realtimeCreatedResponsePurpose(data json.RawMessage) messages.ResponsePurpose {
-	if firstStringField(data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation) {
-		return messages.ResponsePurposeToolContinuation
+func responseEventIsToolContinuation(event models.SessionEvent) bool {
+	return firstStringField(event.Data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation)
+}
+
+// keepContinuationRetryLocked keeps a tool continuation's retry state across
+// a cancel. A continuation rejected because another response was active
+// (or sent and not yet answered) is retried when that response ends; the
+// cancel ends that response, it does not answer the continuation. Any other
+// remembered request belongs to the cancelled generation and is forgotten.
+func (s *realtimeSession) keepContinuationRetryLocked() {
+	if s.responseRetry != nil && responseEventIsToolContinuation(*s.responseRetry) {
+		return
 	}
-	return ""
+	s.responseRetry = nil
+	s.responseSent = false
+	s.responseRetryPending = false
 }

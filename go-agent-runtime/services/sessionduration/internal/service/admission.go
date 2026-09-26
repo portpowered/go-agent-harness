@@ -173,6 +173,7 @@ func (i *AdmissionInferencer) CloseAdmission() {
 
 type AdmissionSession struct {
 	messages.SessionCapabilities
+	barrier   messages.RelayBarrier
 	inner     messages.Session
 	admission *EventAdmission
 	receive   *messages.TypedBuffer[messages.StreamMessage]
