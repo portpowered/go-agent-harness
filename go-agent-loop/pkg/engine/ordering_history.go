@@ -55,6 +55,46 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 
 	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.UserInputDelta...)
 	o.settleHistory(ts)
+	o.compactSettledAssistantAudio(ts)
+}
+
+// compactSettledAssistantAudio drops the reconstructed audio of settled
+// assistant messages in a duplex session, keeping their transcript. There the
+// provider owns the conversation audio (truncated at the heard position on an
+// interruption); history never replays it, so only the latest assistant
+// message keeps its audio. Turn-based modes may resend audio and keep it.
+func (o *GlobalOrdering) compactSettledAssistantAudio(ts *state.LoopState) {
+	if ts.Mode != state.DuplexSession {
+		return
+	}
+	buffer := ts.History.ConversationBuffer
+	latest := -1
+	for index := len(buffer) - 1; index >= 0 && latest < 0; index-- {
+		if buffer[index].Role == messages.RoleAssistant {
+			latest = index
+		}
+	}
+	for index := min(o.settledMessages, len(buffer)); index < latest; index++ {
+		if buffer[index].Role == messages.RoleAssistant {
+			buffer[index] = withoutAudioBytes(buffer[index])
+		}
+	}
+	o.settledMessages = max(o.settledMessages, latest)
+}
+
+// withoutAudioBytes returns message with its inline audio dropped. The parts
+// slice is copied: the original message may be shared with other consumers.
+func withoutAudioBytes(message messages.Message) messages.Message {
+	parts := make([]messages.ContentPart, len(message.ContentParts))
+	for index, part := range message.ContentParts {
+		if audio, ok := part.(messages.AudioPart); ok {
+			audio.Bytes = nil
+			part = audio
+		}
+		parts[index] = part
+	}
+	message.ContentParts = parts
+	return message
 }
 
 // settledHistoryLimit bounds the settled prefix of ConversationDeltaBuffer:

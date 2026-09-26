@@ -32,13 +32,13 @@ func hasControlPlanePart(m messages.Message) bool {
 // emits the assembled Message. Partial or interrupted streams can be reconstructed from deltas
 // up to the last received delta.
 type GlobalOrdering struct {
-	modelRunner       *participants.ModelRunner
-	toolRunner        *participants.ToolRunner
-	userRunner        *participants.UserRunner
-	interactionRunner *participants.InteractionRunner
-	logger            logging.Logger
-	toolBatchActive   bool
-	settledCompacted  int // ConversationDeltaBuffer prefix whose audio is already compacted
+	modelRunner                       *participants.ModelRunner
+	toolRunner                        *participants.ToolRunner
+	userRunner                        *participants.UserRunner
+	interactionRunner                 *participants.InteractionRunner
+	logger                            logging.Logger
+	toolBatchActive                   bool
+	settledCompacted, settledMessages int // prefixes of the delta and message history whose audio is compacted
 }
 
 // NewGlobalOrdering returns an ordering that consumes from the given runners. toolRunner
