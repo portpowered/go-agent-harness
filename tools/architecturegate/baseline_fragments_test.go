@@ -220,5 +220,5 @@ func repositoryImportCases() []repositoryImportCase {
 // Every type that wraps a messages.Session and is itself a session must keep
 // forwarding the runner's barge-in capabilities.
 func TestSessionWrapperAnalyzerFixture(t *testing.T) {
-	analysistest.Run(t, analysistest.TestData(), SessionWrapperAnalyzer, "architecturesessionwrapper")
+	analysistest.Run(t, analysistest.TestData(), SessionWrapperAnalyzer, "architecturesessionwrapper", "architecturesessionwrapperindirect")
 }

@@ -206,8 +206,14 @@ func setEnv(environment []string, key, value string) []string {
 }
 
 func loadTypes(ctx context.Context, modules []*Module, goos, goarch string) error {
-	return forEachModule(len(modules), func(index int) error {
+	if err := forEachModule(len(modules), func(index int) error {
 		return loadModuleTypes(ctx, modules[index], goos, goarch)
+	}); err != nil {
+		return err
+	}
+	reaching := packagesReachingMessages(modules)
+	return forEachModule(len(modules), func(index int) error {
+		return loadSessionSourceTypes(ctx, modules[index], reaching, goos, goarch)
 	})
 }
 
@@ -231,7 +237,7 @@ func loadModuleTypes(ctx context.Context, module *Module, goos, goarch string) e
 			return fmt.Errorf("type loading returned no package for %s", pkg.ImportPath)
 		}
 	}
-	return loadSessionSourceTypes(ctx, module, goos, goarch)
+	return nil
 }
 
 func typeLoadPatterns(module *Module) []string {

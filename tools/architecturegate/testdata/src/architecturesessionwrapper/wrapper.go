@@ -29,7 +29,25 @@ type leaf struct{}
 func (leaf) Send(string) bool { return true }
 func (leaf) Close() error     { return nil }
 
+// pointerHolder holds a concrete wrapper by pointer and drops them.
+type pointerHolder struct { // want "session wrapper pointerHolder does not implement messages.BargeInCapableSession"
+	inner *forwarding
+}
+
+func (s *pointerHolder) Send(msg string) bool { return s.inner.Send(msg) }
+func (s *pointerHolder) Close() error         { return s.inner.Close() }
+
+// resolving reaches the wrapped session through a function.
+type resolving struct { // want "session wrapper resolving does not implement messages.BargeInCapableSession"
+	session func() m.Session
+}
+
+func (s *resolving) Send(msg string) bool { return s.session().Send(msg) }
+func (s *resolving) Close() error         { return s.session().Close() }
+
 var (
+	_ = pointerHolder{}
+	_ = resolving{}
 	_ = forwarding{}
 	_ = hiding{}
 	_ = named{}

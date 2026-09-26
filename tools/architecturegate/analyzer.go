@@ -122,17 +122,14 @@ func sessionContracts(pkg *types.Package) (session, capable *types.Interface) {
 	return contractInterface(messages, "Session"), contractInterface(messages, "BargeInCapableSession")
 }
 
-// messagesPackage finds the messages package pkg depends on. Packages loaded
-// from export data may not list their imports, so the struct fields of pkg's
-// types are searched as well.
+// messagesPackage finds the messages package pkg depends on, directly or
+// through another package (a wrapper may embed a session interface declared
+// elsewhere and never import messages). Packages loaded from export data may
+// not list their imports, so the struct fields of pkg's types are searched as
+// well.
 func messagesPackage(pkg *types.Package) *types.Package {
-	if pkg.Path() == messagesPackagePath {
-		return pkg
-	}
-	for _, imported := range pkg.Imports() {
-		if imported.Path() == messagesPackagePath {
-			return imported
-		}
+	if found := importedMessages(pkg, map[*types.Package]bool{}); found != nil {
+		return found
 	}
 	scope := pkg.Scope()
 	for _, name := range scope.Names() {
@@ -142,6 +139,22 @@ func messagesPackage(pkg *types.Package) *types.Package {
 			if isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == messagesPackagePath {
 				return named.Obj().Pkg()
 			}
+		}
+	}
+	return nil
+}
+
+func importedMessages(pkg *types.Package, visited map[*types.Package]bool) *types.Package {
+	if pkg.Path() == messagesPackagePath {
+		return pkg
+	}
+	visited[pkg] = true
+	for _, imported := range pkg.Imports() {
+		if visited[imported] {
+			continue
+		}
+		if found := importedMessages(imported, visited); found != nil {
+			return found
 		}
 	}
 	return nil
@@ -158,14 +171,28 @@ func contractInterface(pkg *types.Package, name string) *types.Interface {
 	return nil
 }
 
+// holdsSession reports whether a field reaches a session: a session
+// interface, a concrete session (by value or pointer) or a function returning
+// one.
 func holdsSession(structure *types.Struct, session *types.Interface) bool {
 	for index := range structure.NumFields() {
 		field := types.Unalias(structure.Field(index).Type())
-		if types.IsInterface(field) && types.Implements(field, session) {
+		if signature, ok := field.Underlying().(*types.Signature); ok && signature.Results().Len() == 1 {
+			field = types.Unalias(signature.Results().At(0).Type())
+		}
+		if isSession(field, session) {
 			return true
 		}
 	}
 	return false
+}
+
+func isSession(candidate types.Type, session *types.Interface) bool {
+	if types.Implements(candidate, session) {
+		return true
+	}
+	_, pointer := candidate.Underlying().(*types.Pointer)
+	return !pointer && !types.IsInterface(candidate) && types.Implements(types.NewPointer(candidate), session)
 }
 
 // sessionWrapperIssues reports the session wrappers of pkg that hide the
@@ -183,14 +210,14 @@ func sessionWrapperIssues(pkg *Package, module *Module) []Issue {
 }
 
 // loadSessionSourceTypes type-checks, from source, the module's packages that
-// import messages. Session wrappers are usually unexported, and the export
+// reach messages. Session wrappers are usually unexported, and the export
 // data the other rules read omits unexported types. Dependencies still come
 // from export data, so only these packages are checked from source.
-func loadSessionSourceTypes(ctx context.Context, module *Module, goos, goarch string) error {
+func loadSessionSourceTypes(ctx context.Context, module *Module, reaching map[string]bool, goos, goarch string) error {
 	byPath := make(map[string]*Package)
 	patterns := make([]string, 0)
 	for _, pkg := range module.Packages {
-		if pkg.Types != nil && importsMessages(pkg.Types) {
+		if pkg.Types != nil && reaching[pkg.ImportPath] {
 			byPath[pkg.ImportPath] = pkg
 			patterns = append(patterns, pkg.ImportPath)
 		}
@@ -219,7 +246,32 @@ func loadSessionSourceTypes(ctx context.Context, module *Module, goos, goarch st
 	return nil
 }
 
-func importsMessages(loaded *packages.Package) bool {
-	_, ok := loaded.Imports[messagesPackagePath]
-	return ok || loaded.PkgPath == messagesPackagePath
+// packagesReachingMessages returns the repository packages that import
+// messages directly or through other repository packages; only they can
+// declare a type that is a messages.Session.
+func packagesReachingMessages(modules []*Module) map[string]bool {
+	reaching := map[string]bool{messagesPackagePath: true}
+	for changed := true; changed; {
+		changed = false
+		for _, module := range modules {
+			for _, pkg := range module.Packages {
+				if !reaching[pkg.ImportPath] && importsAny(pkg.Types, reaching) {
+					reaching[pkg.ImportPath], changed = true, true
+				}
+			}
+		}
+	}
+	return reaching
+}
+
+func importsAny(loaded *packages.Package, paths map[string]bool) bool {
+	if loaded == nil {
+		return false
+	}
+	for imported := range loaded.Imports {
+		if paths[imported] {
+			return true
+		}
+	}
+	return false
 }
