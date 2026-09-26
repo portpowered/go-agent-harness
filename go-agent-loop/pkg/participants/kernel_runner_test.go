@@ -544,3 +544,40 @@ func TestSessionModelRunner_ContinuationRequestSyncsProviderMessagesFirst(t *tes
 		t.Fatalf("continuation bound to %q after the server-VAD response, want resp-continuation", state.continuationResponseID)
 	}
 }
+
+// closingSession closes admission like a room shutting down: afterwards
+// every send is rejected as closed.
+type closingSession struct {
+	*playbackSession
+	closed bool
+}
+
+func (s *closingSession) SessionAdmissionClosed() bool { return s.closed }
+
+func (s *closingSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
+	if s.closed {
+		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
+	}
+	s.Send(ctx, msg)
+	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+}
+
+// Room shutdown closes admission before it cancels. Onset audio held across
+// that boundary is discarded like any other late frame, not reported as a
+// terminal audio failure.
+func TestSessionModelRunner_HeldOnsetAudioDiscardedAfterAdmissionCloses(t *testing.T) {
+	session := &closingSession{playbackSession: &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-closing")
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	session.closed = true
+	runner.forwardSessionMessageState(context.Background(), session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-closing"))
+	for msg, ok := runner.DeltaOutbox.Read(); ok; msg, ok = runner.DeltaOutbox.Read() {
+		if msg.Type == messages.StreamTypeError {
+			t.Fatalf("published %#v after admission closed, want the held frame discarded", msg.Value)
+		}
+	}
+	if len(state.heldAudio) != 0 || len(session.sentMessages()) != 0 {
+		t.Fatalf("held=%d sent=%#v, want the held frame discarded", len(state.heldAudio), session.sentMessages())
+	}
+}

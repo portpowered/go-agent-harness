@@ -193,12 +193,17 @@ func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm
 }
 
 // releaseHeldAudio forwards onset frames held while barge-in was undecided.
+// Once admission has closed (room shutdown) they are discarded, like any
+// frame that reaches that boundary.
 func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Session, state *sessionResponseState) error {
 	held := state.heldAudio
 	state.heldAudio = nil
 	if state.heldAudioTimer != nil {
 		state.heldAudioTimer.Stop()
 		state.heldAudioTimer = nil
+	}
+	if sessionAdmissionClosed(session) {
+		return nil
 	}
 	for _, pcm := range held {
 		if err := forwardUserAudio(ctx, session, pcm); err != nil {
