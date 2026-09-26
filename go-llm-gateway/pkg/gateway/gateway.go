@@ -58,16 +58,23 @@ func (g *DefaultGateway) InferStream(ctx context.Context, req InferenceRequest) 
 	if err != nil {
 		return nil, err
 	}
-	return normalizeStreamErrors(stream), nil
+	return normalizeStreamErrors(ctx, stream), nil
 }
 
-func normalizeStreamErrors(in <-chan messages.StreamMessage) <-chan messages.StreamMessage {
+// normalizeStreamErrors forwards the provider stream until it closes or the
+// request context ends. A consumer may stop reading at a terminal message and
+// cancel the request; the forwarder must not stay blocked on that send.
+func normalizeStreamErrors(ctx context.Context, in <-chan messages.StreamMessage) <-chan messages.StreamMessage {
 	out := make(chan messages.StreamMessage)
 	go func() {
 		defer close(out)
 		for msg := range in {
 			normalizeStreamErrorValue(msg.Value)
-			out <- msg
+			select {
+			case out <- msg:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 	return out

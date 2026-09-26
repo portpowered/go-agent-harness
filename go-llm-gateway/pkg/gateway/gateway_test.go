@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"testing/synctest"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
@@ -304,4 +305,37 @@ func TestInferStream_TerminalErrorNormalizationPreservesProviderCapabilities(t *
 	if provider.calls != 0 {
 		t.Fatalf("stateless Infer calls = %d, want 0", provider.calls)
 	}
+}
+
+// TestInferStream_ForwarderExitsWhenConsumerCancelsAfterTerminalMessage pins
+// the forwarder lifecycle: a consumer that stops reading at MESSAGE.END and
+// cancels its request must not leave the forwarding goroutine blocked on a
+// send the provider buffered after the terminal message.
+func TestInferStream_ForwarderExitsWhenConsumerCancelsAfterTerminalMessage(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider := &fakeInteractionProvider{
+			name: "fake-provider",
+			streamMessages: []messages.StreamMessage{
+				{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
+				{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("after terminal")},
+			},
+		}
+		gw, err := NewGateway(WithProvider(provider))
+		if err != nil {
+			t.Fatalf("NewGateway: %v", err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		ch, err := gw.InferStream(ctx, InferenceRequest{Model: "model-a"})
+		if err != nil {
+			t.Fatalf("InferStream() error = %v", err)
+		}
+		if first := <-ch; first.Type != messages.StreamTypeMessageEnd {
+			t.Fatalf("first message = %s, want %s", first.Type, messages.StreamTypeMessageEnd)
+		}
+		cancel()
+		synctest.Wait()
+		if msg, open := <-ch; open {
+			t.Fatalf("forwarder still delivering %s after cancellation; want the stream closed", msg.Type)
+		}
+	})
 }
