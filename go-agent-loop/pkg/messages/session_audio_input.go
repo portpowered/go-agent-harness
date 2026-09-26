@@ -77,6 +77,17 @@ type SessionInputFormat interface {
 	InputAudioSampleRate() int
 }
 
+// BargeInCapableSession is a session that answers every question the session
+// runner's local barge-in asks. Every session wrapper returned to a runner
+// implements it (usually by embedding SessionCapabilities), so a wrapper cannot
+// silently hide the provider's answers.
+type BargeInCapableSession interface {
+	Session
+	SessionTurnDetection
+	SessionLocalPlayback
+	SessionInputFormat
+}
+
 // SessionCapabilities forwards the optional capabilities the session runner's
 // local barge-in reads -- turn detection, local playback and input format --
 // from a wrapped session. Every session wrapper embeds it, so a wrapper cannot

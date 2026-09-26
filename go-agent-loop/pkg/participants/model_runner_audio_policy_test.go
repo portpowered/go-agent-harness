@@ -531,3 +531,42 @@ func TestSessionModelRunner_InterruptKeepsOrderBehindQueuedTurnBoundary(t *testi
 		t.Fatalf("interrupt after the boundary drained = %v (lane %d), want the priority lane", err, len(runner.cancelLane.inbox))
 	}
 }
+
+// Providers that do not echo the request purpose (Grok, LocalAI behind the
+// OpenAI session) still get their tool continuation protected: the first
+// response opened after an accepted continuation request, which is only sent
+// while nothing is in flight, is that continuation.
+func TestSessionModelRunner_UntaggedContinuationProtectedWithoutPurposeEcho(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-continuation"))
+	if !state.continuationInFlight {
+		t.Fatalf("untagged continuation response was not bound: %+v", state)
+	}
+	sendUserAudio(t, runner, session, state, loudPCM())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 {
+		t.Fatalf("peer audio cancelled the tool continuation: cancels=%d", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-continuation"))
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-next"))
+	if state.continuationInFlight {
+		t.Fatalf("an ordinary response after the continuation was bound: %+v", state)
+	}
+}
+
+// Only continuation requests arm the binding: a rate-limit retry or a live
+// control's RESPONSE.CREATE is an ordinary response.
+func TestSessionModelRunner_OrdinaryResponseCreateDoesNotArmContinuation(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+	runner.forwardQueuedSessionEvent(ctx, session, state, messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()})
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-ordinary"))
+	if state.continuationRequested || state.continuationInFlight {
+		t.Fatalf("ordinary response.create armed the continuation binding: %+v", state)
+	}
+}

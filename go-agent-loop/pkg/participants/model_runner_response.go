@@ -300,3 +300,18 @@ func (s *responseIDSet) has(id string) bool {
 }
 
 func (s *responseIDSet) len() int { return len(s.ids) }
+
+// continuationRequestRejected handles a provider rejection of a response
+// request because another response was already active. The provider adapter
+// retries the request once that response ends. A continuation guessed onto
+// the colliding response (no purpose echo) was the provider's own response:
+// release it and wait for the retried request's response.
+func continuationRequestRejected(state *sessionRunState) {
+	if !state.continuationInFlight || !state.continuationGuessed {
+		return
+	}
+	state.continuationInFlight = false
+	state.continuationGuessed = false
+	state.continuationResponseID = ""
+	state.continuationRequested = true
+}

@@ -12,6 +12,8 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
+var _ messages.BargeInCapableSession = (*boundSession)(nil)
+
 const playbackDrainTimeout = 5 * time.Second
 
 type boundSession struct {

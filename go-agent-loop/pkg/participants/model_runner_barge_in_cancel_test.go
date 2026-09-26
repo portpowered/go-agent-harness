@@ -557,7 +557,7 @@ func TestSessionModelRunner_RejectedContinuationRetriedAfterActiveResponse(t *te
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 1 {
 		t.Fatalf("runner re-requested the rejected continuation: creates=%d, want only the original", got)
 	}
-	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-B"))
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-B"))
 	if state.continuationResponseID != "resp-B" {
 		t.Fatalf("retried continuation bound to %q, want resp-B", state.continuationResponseID)
 	}

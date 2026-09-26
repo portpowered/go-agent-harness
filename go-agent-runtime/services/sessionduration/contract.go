@@ -104,9 +104,7 @@ type AdmissionInferencer interface {
 type AdmissionSession interface {
 	messages.Session
 	// The runner's local barge-in reads these through every wrapper.
-	messages.SessionTurnDetection
-	messages.SessionLocalPlayback
-	messages.SessionInputFormat
+	messages.BargeInCapableSession
 	SendMessage(context.Context, messages.Message) bool
 	SendMessageWithoutResponse(context.Context, messages.Message) bool
 	SupportsCompleteMessages() bool

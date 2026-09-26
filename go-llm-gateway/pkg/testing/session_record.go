@@ -15,6 +15,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
+var _ messages.BargeInCapableSession = (*SessionRecorder)(nil)
+
 // SessionRecorder wraps a messages.Session and records all sent and received
 // events for later serialisation. It is the session-level counterpart of
 // RecordRoundTripper.

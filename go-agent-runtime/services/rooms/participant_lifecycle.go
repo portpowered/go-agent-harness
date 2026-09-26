@@ -125,6 +125,7 @@ type ParticipantLifecycle interface {
 // audio-only tool continuations.
 type TrackedSession interface {
 	messages.Session
+	messages.BargeInCapableSession
 	SessionAdmissionClosed() bool
 	SessionAdmissionAllows(messages.StreamMessage) bool
 	SessionAdmissionAllowsCompleteMessage(messages.Message) bool

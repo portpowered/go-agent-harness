@@ -90,10 +90,15 @@ type sessionRunState struct {
 	responseCompleted    bool
 	pendingSendErrors    []messages.StreamMessage
 	suppressContinuation bool
-	// continuationRequested records an accepted response request whose
-	// response has not ended yet; a progress acknowledgement must not compete
-	// with it.
+	// continuationRequested records an accepted tool-continuation request
+	// whose response has not opened yet.
 	continuationRequested bool
+	// purposeEchoObserved records that the provider echoes the request purpose
+	// on the responses it opens (OpenAI response metadata). Until then a
+	// continuation binds to the first response opened after its request.
+	purposeEchoObserved bool
+	// continuationGuessed marks a continuation bound by that fallback.
+	continuationGuessed bool
 	// continuationInFlight marks the current response as the tool
 	// continuation. Only this response is exempt from barge-in; every other
 	// response, including one that was already playing when the continuation
@@ -296,6 +301,9 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
 	state.ensureMaps()
+	if rejectsActiveResponseCreate(msg) && !state.acknowledgementOutstanding {
+		continuationRequestRejected(state)
+	}
 	acknowledgementResponse := r.tagSessionAcknowledgement(ctx, state, &msg)
 	msgID := responseID(msg.ResponseID)
 	messageEndOwned := false

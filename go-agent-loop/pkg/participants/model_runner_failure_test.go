@@ -502,6 +502,12 @@ func TestSessionModelRunner_ContinuationBindsToItsOwnRequestNotAnEarlierUserTurn
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newSessionResponseState()
 
+	// The provider has already echoed a continuation purpose in this session.
+	setup := newRecordingSession()
+	runner.forwardQueuedSessionEvent(ctx, setup, state, continuationCreate())
+	runner.forwardSessionMessageState(ctx, setup, state, continuationStart("resp-earlier"))
+	runner.forwardSessionMessageState(ctx, setup, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-earlier"))
+
 	runner.forwardQueuedSessionEvent(ctx, session, state, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
 	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
 	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-user"))

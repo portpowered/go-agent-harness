@@ -11,6 +11,12 @@ import (
 // audio is still playing locally. orderedSession and terminalDrainSession
 // forward those questions through the embedded messages.SessionCapabilities.
 
+var (
+	_ messages.BargeInCapableSession = (*orderedSession)(nil)
+	_ messages.BargeInCapableSession = (*terminalDrainSession)(nil)
+	_ messages.BargeInCapableSession = (*mediaSession)(nil)
+)
+
 // A turn replay renders provider audio through its own session media, so it
 // answers playback questions itself.
 func (s *mediaSession) LocalPlayback() messages.LocalPlaybackState {

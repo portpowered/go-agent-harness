@@ -305,7 +305,7 @@ func (r *ModelRunner) noteAcceptedSessionResponse(state *sessionRunState, evt me
 		state.responseCancelSent = false
 		return
 	}
-	state.continuationRequested = true
+	state.continuationRequested = state.continuationRequested || isSessionContinuationCreate(evt)
 	r.sessionToolContinuation = sessionToolContinuationAccepted
 }
 
