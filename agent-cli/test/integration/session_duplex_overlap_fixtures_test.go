@@ -3,19 +3,25 @@ package integration
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
+	"testing"
+
+	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-	"math"
-	"os"
-	"path/filepath"
-	"runtime"
-	"testing"
 )
 
 func v8PCMStats(payload []byte) (string, float64) {
@@ -282,4 +288,187 @@ func writeV8SyntheticCapture(t *testing.T, path, sessionID, label string, record
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("write %s: %v", label, err)
 	}
+}
+
+type postDoneTruncate struct {
+	ItemID       string `json:"item_id"`
+	ContentIndex int    `json:"content_index"`
+	AudioEndMS   int    `json:"audio_end_ms"`
+}
+
+type postDoneBargeInSnapshot struct {
+	responseCreates int
+	speechStarted   bool
+	truncates       []postDoneTruncate
+	protocolError   string
+}
+
+// postDoneBargeInProvider answers the prompt with one long audio response
+// sent in a burst, then acts as a server-VAD provider: loud input audio
+// yields input_audio_buffer.speech_started.
+type postDoneBargeInProvider struct {
+	server   *httptest.Server
+	upgrader websocket.Upgrader
+	response []int16
+
+	responseDone, truncated, releaseClose           chan struct{}
+	doneOnce, speechOnce, truncateOnce, releaseOnce sync.Once
+	writeMu                                         sync.Mutex
+
+	mu       sync.Mutex
+	observed postDoneBargeInSnapshot
+}
+
+func newPostDoneBargeInProvider() *postDoneBargeInProvider {
+	return &postDoneBargeInProvider{
+		response:     remoteToolAudioPCM(postDoneBargeInSamples, 900),
+		responseDone: make(chan struct{}),
+		truncated:    make(chan struct{}),
+		releaseClose: make(chan struct{}),
+	}
+}
+
+func (p *postDoneBargeInProvider) WebSocketURL() string {
+	return "ws" + p.server.URL[len("http"):]
+}
+
+func (p *postDoneBargeInProvider) ReleaseClose() { p.releaseOnce.Do(func() { close(p.releaseClose) }) }
+
+func (p *postDoneBargeInProvider) Snapshot() postDoneBargeInSnapshot {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	observed := p.observed
+	observed.truncates = append([]postDoneTruncate(nil), p.observed.truncates...)
+	return observed
+}
+
+func (p *postDoneBargeInProvider) handle(writer http.ResponseWriter, request *http.Request) {
+	if request.Header.Get("Authorization") != rtAuthorizationHeader {
+		p.fail("missing hermetic authorization")
+		writer.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	connection, err := p.upgrader.Upgrade(writer, request, nil)
+	if err != nil {
+		p.fail("upgrade websocket: " + err.Error())
+		return
+	}
+	defer discardCloseError(connection)
+	readerDone := make(chan struct{})
+	defer close(readerDone)
+	go func() {
+		select {
+		case <-p.releaseClose:
+			_ = p.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "fixture_complete"}) //nolint:errcheck // send records write failures through p.fail
+		case <-readerDone:
+		}
+	}()
+	for {
+		_, payload, err := connection.ReadMessage()
+		if err != nil || !p.handleEvent(connection, payload) {
+			return
+		}
+	}
+}
+
+func (p *postDoneBargeInProvider) handleEvent(connection *websocket.Conn, payload []byte) bool {
+	var event struct {
+		Type  string `json:"type"`
+		Audio string `json:"audio"`
+		postDoneTruncate
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		p.fail("decode client event: " + err.Error())
+		return false
+	}
+	switch event.Type {
+	case rtEventSessionUpdate:
+		return p.send(connection, map[string]any{"type": rtEventSessionCreated, "session": map[string]string{"id": "sess-post-done-barge-in", "model": "gpt-realtime-2.1"}}) == nil
+	case rtEventResponseCreate:
+		return p.handleResponseCreate(connection)
+	case rtEventInputAudioAppend:
+		return p.handleInputAudio(connection, event.Audio)
+	case "conversation.item.truncate":
+		p.mu.Lock()
+		p.observed.truncates = append(p.observed.truncates, event.postDoneTruncate)
+		p.mu.Unlock()
+		p.truncateOnce.Do(func() { close(p.truncated) })
+	}
+	return true
+}
+
+// handleResponseCreate answers the prompt: the whole response, then done.
+func (p *postDoneBargeInProvider) handleResponseCreate(connection *websocket.Conn) bool {
+	p.mu.Lock()
+	p.observed.responseCreates++
+	first := p.observed.responseCreates == 1
+	p.mu.Unlock()
+	if !first {
+		return true
+	}
+	if p.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": postDoneBargeInResponseID}}) != nil {
+		return false
+	}
+	for offset := 0; offset < len(p.response); offset += remoteToolAudioDeltaSamples {
+		end := min(offset+remoteToolAudioDeltaSamples, len(p.response))
+		if p.send(connection, remoteToolAudioDelta(postDoneBargeInResponseID, postDoneBargeInItemID, p.response[offset:end])) != nil {
+			return false
+		}
+	}
+	if p.send(connection, map[string]string{"type": "response.output_audio.done", "response_id": postDoneBargeInResponseID, "item_id": postDoneBargeInItemID}) != nil {
+		return false
+	}
+	if p.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": postDoneBargeInResponseID, "status": rtStatusCompleted}}) != nil {
+		return false
+	}
+	p.doneOnce.Do(func() { close(p.responseDone) })
+	return true
+}
+
+// handleInputAudio is the server VAD: the first loud input after the
+// response is done starts user speech.
+func (p *postDoneBargeInProvider) handleInputAudio(connection *websocket.Conn, encoded string) bool {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(decoded)%2 != 0 {
+		p.fail("decode input audio")
+		return false
+	}
+	loud := false
+	for index := 0; index+1 < len(decoded); index += 2 {
+		sample := int(int16(uint16(decoded[index]) | uint16(decoded[index+1])<<8))
+		if sample > postDoneBargeInVADLevel || sample < -postDoneBargeInVADLevel {
+			loud = true
+			break
+		}
+	}
+	if !loud {
+		return true
+	}
+	started := false
+	p.speechOnce.Do(func() { started = true })
+	if !started {
+		return true
+	}
+	p.mu.Lock()
+	p.observed.speechStarted = true
+	p.mu.Unlock()
+	return p.send(connection, map[string]any{"type": "input_audio_buffer.speech_started", "audio_start_ms": 0, "item_id": "item-user-post-done"}) == nil
+}
+
+func (p *postDoneBargeInProvider) send(connection *websocket.Conn, event any) error {
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+	if err := connection.WriteJSON(event); err != nil {
+		p.fail("write server event: " + err.Error())
+		return err
+	}
+	return nil
+}
+
+func (p *postDoneBargeInProvider) fail(message string) {
+	p.mu.Lock()
+	if p.observed.protocolError == "" {
+		p.observed.protocolError = message
+	}
+	p.mu.Unlock()
 }

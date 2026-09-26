@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -285,4 +290,213 @@ func assertExpectationKindFails(t *testing.T, result map[string]any, want string
 		}
 	}
 	t.Fatalf("expected failed outcome for kind %q missing: %v", want, result)
+}
+
+const (
+	postDoneBargeInResponseID = "resp-post-done-barge-in"
+	postDoneBargeInItemID     = "item-post-done-barge-in"
+	// postDoneBargeInSamples is 6 s of 24 kHz provider audio: 96000 samples,
+	// 200 callbacks, at the 16 kHz device.
+	postDoneBargeInSamples = 144000
+	// postDoneBargeInHeard is how much of the response the device renders
+	// after response.done before the user speaks: 0.5 s.
+	postDoneBargeInHeard = 8000
+	// postDoneBargeInDeviceSamplesPerMS is the device's 16 kHz rate per ms.
+	postDoneBargeInDeviceSamplesPerMS = 16
+	// postDoneBargeInSpeech is the near-end speech amplitude: well above the
+	// barge-in speech level and the playback echo margin.
+	postDoneBargeInSpeech = 8000
+	// postDoneBargeInVADLevel is the input peak the fake provider's server
+	// VAD treats as speech.
+	postDoneBargeInVADLevel = 4000
+	// postDoneBargeInTruncateSlackMS bounds the gap between the truncation
+	// point and the audio the device rendered before playback stopped: the
+	// resampler's and device queue's latency.
+	postDoneBargeInTruncateSlackMS   = 120
+	postDoneBargeInCallbacksPerCheck = 4
+	// postDoneBargeInInterruptWait bounds the barge-in: speech onset, the
+	// provider's VAD and the truncation. The response has ample audio left
+	// playing meanwhile.
+	postDoneBargeInInterruptWait    = 5 * time.Second
+	postDoneBargeInSettleCallbacks  = 20
+	postDoneBargeInCallbackInterval = 10 * time.Millisecond
+)
+
+// TestAgentBinaryPostDoneBargeInStopsRemoteDevicePlayback is the real-process
+// proof of a barge-in after response.done. Provider audio arrives faster than
+// real time, so the response is done while seconds are still queued for the
+// device. The user speaking into the audio-device-server over its HTTP
+// boundary must stop that playback and truncate the provider's item at the
+// audio the device actually rendered.
+func TestAgentBinaryPostDoneBargeInStopsRemoteDevicePlayback(t *testing.T) {
+	provider := newPostDoneBargeInProvider()
+	provider.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(provider.handle))
+	endpoint, stopDevice := startAudioDeviceServerBinary(t, true)
+	t.Cleanup(stopDevice)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	paths := remoteToolAudioPaths{configDir: t.TempDir()}
+	arguments := append([]string{"--audio-device-server", endpoint, "--base-url", provider.WebSocketURL()}, postDoneBargeInArgs()...)
+	agent := startRemoteToolAudioProcess(t, ctx, remoteToolAudioCase{}, arguments, paths)
+	runPostDoneBargeIn(t, ctx, remoteDeviceServer{endpoint: endpoint}, provider, agent)
+}
+
+// TestPostDoneBargeInStopsDevicePlayback runs the same scenario in-process on
+// a virtual clock: real WebSocket over in-memory pipes and the simulated
+// device the audio-device-server serves.
+func TestPostDoneBargeInStopsDevicePlayback(t *testing.T) {
+	clitest.Test(t, func(t *testing.T) {
+		provider := newPostDoneBargeInProvider()
+		listener := clitest.NewPipeListener()
+		clitest.Serve(t, listener, http.HandlerFunc(provider.handle))
+		device := newInProcessDuplexDevice(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		arguments := append([]string{"--base-url", "ws://provider.pipe"}, postDoneBargeInArgs()...)
+		agent := startRemoteToolAudioInProcess(t, remoteToolAudioCase{}, arguments, remoteToolAudioPaths{configDir: t.TempDir()}, listener, device)
+		runPostDoneBargeIn(t, ctx, device, provider, agent)
+	})
+}
+
+func postDoneBargeInArgs() []string {
+	return []string{
+		"--provider", "openai",
+		"--model", "gpt-realtime-2.1",
+		"--api-key", "hermetic-key",
+		"--audio-out-device=",
+		"--audio-in-device=",
+		"--max-duration", "30s",
+		"--wait-for-close",
+		"answer at length",
+	}
+}
+
+func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudioDevice, provider *postDoneBargeInProvider, agent remoteToolAudioAgent) {
+	t.Helper()
+	run := &postDoneBargeInRun{t: t, ctx: ctx, device: device, provider: provider, agent: agent, clock: time.NewTicker(postDoneBargeInCallbackInterval)}
+	defer run.clock.Stop()
+	select {
+	case <-provider.responseDone:
+	case err := <-agent.done:
+		run.fail("agent exited before response.done: %v", err)
+	case <-ctx.Done():
+		run.fail("provider response did not complete: %v", ctx.Err())
+	}
+	// The response is done; play part of its queued audio, then speak.
+	for _, heard := run.rendered(); heard < postDoneBargeInHeard; _, heard = run.rendered() {
+		run.advance(postDoneBargeInCallbacksPerCheck)
+	}
+	if err := device.InjectCapture(ctx, postDoneBargeInSpeechPCM()); err != nil {
+		run.fail("inject near-end speech: %v", err)
+	}
+	run.awaitTruncation()
+
+	// Playback stopped: further callbacks render nothing more of the response.
+	run.advance(postDoneBargeInSettleCallbacks)
+	stopped, heard := run.rendered()
+	run.advance(postDoneBargeInSettleCallbacks)
+	after, heardAfter := run.rendered()
+	if heardAfter != heard || after.Playback.QueuedSamples != 0 {
+		run.fail("playback continued after the barge-in: rendered %d then %d samples, queued=%d", heard, heardAfter, after.Playback.QueuedSamples)
+	}
+	if total := postDoneBargeInSamples * 2 / 3; heard >= total {
+		run.fail("device rendered %d of %d response samples; the barge-in did not stop playback", heard, total)
+	}
+	if stopped.Playback.DroppedSamples != 0 || stopped.Playback.OverflowEvents != 0 {
+		run.fail("device playback lost samples before the barge-in: %+v", stopped.Playback)
+	}
+	assertPostDoneTruncation(t, provider.Snapshot(), heard/postDoneBargeInDeviceSamplesPerMS)
+
+	provider.ReleaseClose()
+	awaitRemoteToolAudioExit(t, ctx, agent.done, agent.stdout, agent.stderr, "agent did not close after the provider closed", "agent exited")
+}
+
+// postDoneBargeInRun drives one scenario's device clock.
+type postDoneBargeInRun struct {
+	t        *testing.T
+	ctx      context.Context
+	device   remoteToolAudioDevice
+	provider *postDoneBargeInProvider
+	agent    remoteToolAudioAgent
+	clock    *time.Ticker
+}
+
+func (r *postDoneBargeInRun) fail(format string, args ...any) {
+	r.t.Helper()
+	r.t.Fatalf("%s; provider=%+v stderr=%q", fmt.Sprintf(format, args...), r.provider.Snapshot(), r.agent.stderr.String())
+}
+
+// advance renders callbacks on the device clock, one per tick.
+func (r *postDoneBargeInRun) advance(callbacks int) {
+	r.t.Helper()
+	for range callbacks {
+		select {
+		case <-r.clock.C:
+		case <-r.ctx.Done():
+			r.fail("device clock cancelled: %v", r.ctx.Err())
+		}
+		if err := r.device.Advance(r.ctx, 1); err != nil {
+			r.fail("advance device clock: %v", err)
+		}
+	}
+}
+
+// rendered reads the device evidence and how much response audio it rendered.
+func (r *postDoneBargeInRun) rendered() (devicegw.DeviceServerSnapshot, int) {
+	r.t.Helper()
+	snapshot, err := r.device.Snapshot(r.ctx)
+	if err != nil {
+		r.fail("read device evidence: %v", err)
+	}
+	return snapshot, len(nonzeroRemoteToolAudio(snapshot.RenderedSamples))
+}
+
+// awaitTruncation keeps the device clock running until the provider sees
+// the interrupted item truncated.
+func (r *postDoneBargeInRun) awaitTruncation() {
+	r.t.Helper()
+	interrupt := time.NewTimer(postDoneBargeInInterruptWait)
+	defer interrupt.Stop()
+	for {
+		r.advance(1)
+		select {
+		case <-r.provider.truncated:
+			return
+		case err := <-r.agent.done:
+			r.fail("agent exited before truncating the interrupted item: %v", err)
+		case <-interrupt.C:
+			r.fail("no truncation within %s of the user speaking", postDoneBargeInInterruptWait)
+		default:
+		}
+	}
+}
+
+func assertPostDoneTruncation(t *testing.T, observed postDoneBargeInSnapshot, heardMS int) {
+	t.Helper()
+	if observed.protocolError != "" {
+		t.Fatalf("provider protocol error: %s", observed.protocolError)
+	}
+	if len(observed.truncates) != 1 {
+		t.Fatalf("truncations = %+v, want exactly one", observed.truncates)
+	}
+	truncate := observed.truncates[0]
+	if truncate.ItemID != postDoneBargeInItemID || truncate.ContentIndex != 0 {
+		t.Fatalf("truncation = %+v, want item %q content 0", truncate, postDoneBargeInItemID)
+	}
+	if gap := truncate.AudioEndMS - heardMS; truncate.AudioEndMS <= 0 || gap > postDoneBargeInTruncateSlackMS || -gap > postDoneBargeInTruncateSlackMS {
+		t.Fatalf("truncation audio_end_ms = %d, want the %d ms the device rendered (within %d ms)", truncate.AudioEndMS, heardMS, postDoneBargeInTruncateSlackMS)
+	}
+}
+
+// postDoneBargeInSpeechPCM is 1 s of a loud 1 kHz square wave at 16 kHz.
+func postDoneBargeInSpeechPCM() []int16 {
+	const halfPeriod = 8
+	samples := make([]int16, 16000)
+	for index := range samples {
+		samples[index] = postDoneBargeInSpeech
+		if index/halfPeriod%2 == 1 {
+			samples[index] = -postDoneBargeInSpeech
+		}
+	}
+	return samples
 }
