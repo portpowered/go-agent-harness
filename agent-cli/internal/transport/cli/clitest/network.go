@@ -20,6 +20,9 @@ type PipeListener struct {
 	conns     chan net.Conn
 	closed    chan struct{}
 	closeOnce sync.Once
+
+	acceptedMu sync.Mutex
+	accepted   []net.Conn
 }
 
 // NewPipeListener returns an open in-memory listener.
@@ -31,6 +34,9 @@ func NewPipeListener() *PipeListener {
 func (l *PipeListener) Accept() (net.Conn, error) {
 	select {
 	case conn := <-l.conns:
+		l.acceptedMu.Lock()
+		l.accepted = append(l.accepted, conn)
+		l.acceptedMu.Unlock()
 		return conn, nil
 	case <-l.closed:
 		return nil, net.ErrClosed
@@ -41,6 +47,21 @@ func (l *PipeListener) Accept() (net.Conn, error) {
 func (l *PipeListener) Close() error {
 	l.closeOnce.Do(func() { close(l.closed) })
 	return nil
+}
+
+// closeAccepted closes every connection Accept returned, including ones an
+// HTTP handler hijacked (http.Server.Close does not close hijacked
+// connections, such as WebSocket upgrades).
+func (l *PipeListener) closeAccepted() error {
+	l.acceptedMu.Lock()
+	accepted := l.accepted
+	l.accepted = nil
+	l.acceptedMu.Unlock()
+	var result error
+	for _, conn := range accepted {
+		result = errors.Join(result, conn.Close())
+	}
+	return result
 }
 
 // Addr reports the listener's placeholder address.
@@ -101,9 +122,10 @@ func closeIfOpen(conn *websocket.Conn) error {
 	return conn.Close()
 }
 
-// Serve runs handler on listener until the test ends. The server and every
-// connection it accepted are closed in t's cleanup, so no bubble goroutine
-// outlives the test.
+// Serve runs handler on listener until the test ends. t's cleanup closes the
+// server and then every connection the listener accepted: http.Server.Close
+// does not close hijacked connections (WebSocket upgrades), so the listener
+// closes them, and no handler stays blocked reading one.
 func Serve(t interface{ Cleanup(func()) }, listener *PipeListener, handler http.Handler) {
 	server := &http.Server{Handler: handler}
 	done := make(chan struct{})
@@ -114,5 +136,6 @@ func Serve(t interface{ Cleanup(func()) }, listener *PipeListener, handler http.
 	t.Cleanup(func() {
 		_ = server.Close() //nolint:errcheck // closing an in-memory server cannot fail in a way the test acts on.
 		<-done
+		_ = listener.closeAccepted() //nolint:errcheck // in-memory stream closes cannot fail.
 	})
 }

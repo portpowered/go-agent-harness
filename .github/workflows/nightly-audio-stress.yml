@@ -6,7 +6,8 @@ name: Nightly audio stress
 # 4-vCPU runner already running the timing-bound integration shards). They
 # run here once a day against main instead, and on demand. The same gate
 # holds the fresh-process tool-continuation matrix, whose device-cadence
-# deliveries drain in real time (pull requests run every topology and
+# deliveries drain in real time (all but test45/captured_cadence, which stays
+# in the pull-request corpus; pull requests also run every topology and
 # delivery in-process on a virtual clock), so it runs here too. Locally:
 # `make test-audio-stress AUDIO_STRESS_COUNT=N`.
 #

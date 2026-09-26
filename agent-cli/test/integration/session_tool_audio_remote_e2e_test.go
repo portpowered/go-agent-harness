@@ -55,6 +55,19 @@ type remoteToolAudioCase struct {
 	inProcess       bool          // see startRemoteToolAudioTopology
 }
 
+// naturalCloseBaseline is a plain response that ends the finite session
+// while its PCM is still queued for the device.
+func naturalCloseBaseline() remoteToolAudioCase {
+	return remoteToolAudioCase{name: "natural_close_baseline", responseSamples: []int{38400}, naturalClose: true, deviceWAV: true}
+}
+
+// TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM is the real-process proof
+// of the natural-close drain: the shipped binary returns from a finite session
+// only after its queued PCM crossed the audio-device-server HTTP boundary.
+func TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM(t *testing.T) {
+	runRemoteToolAudioScenario(t, naturalCloseBaseline(), 0, 3*time.Millisecond, 30*time.Millisecond, 32, 0, 0)
+}
+
 // TestNaturalCloseDrainsDevicePCM reproduces the live provider timing
 // contract: response.done makes a finite session return while the provider's
 // faster-than-realtime PCM is still queued for a 16 kHz output device. Both the
@@ -63,13 +76,7 @@ type remoteToolAudioCase struct {
 // a virtual clock (see startRemoteToolAudioTopology).
 func TestNaturalCloseDrainsDevicePCM(t *testing.T) {
 	for _, testCase := range []remoteToolAudioCase{
-		{
-			name:            "natural_close_baseline",
-			responseSamples: []int{38400},
-			naturalClose:    true,
-			deviceWAV:       true,
-			inProcess:       true,
-		},
+		naturalCloseBaseline(),
 		{
 			name:            "provider_close_tool_continuation",
 			responseSamples: []int{38400, 66000},
@@ -79,6 +86,7 @@ func TestNaturalCloseDrainsDevicePCM(t *testing.T) {
 			inProcess:       true,
 		},
 	} {
+		testCase.inProcess = true
 		clitest.Subtest(t, testCase.name, func(t *testing.T) {
 			promptBytes := 0
 			if testCase.naturalClose {
@@ -187,13 +195,12 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 // continuation matrix with fresh process triples: the shipped binary (with
 // the fixture tool executor), a real local WebSocket provider, and the
 // audio-device-server binary whose manual callback clock the test advances
-// over HTTP. Its device-cadence deliveries drain in real time (18-22 s each),
-// so it runs only with YUI_AUDIO_STRESS=1 (make test-audio-device-server-
-// integration and the nightly audio stress workflow); pull requests prove
-// the process edges with TestAgentBinaryAudioOutRecordsRemoteDevicePCM and
-// TestAgentBinarySerialToolTimingAtProcessEdges.
+// over HTTP. Its device-cadence deliveries drain in real time (11-22 s each).
+// Pull requests keep test45/captured_cadence as the representative real-time
+// continuation across the three processes; the rest of the matrix runs with
+// YUI_AUDIO_STRESS=1 (make test-audio-device-server-integration and the
+// nightly audio stress workflow).
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
-	requireRemoteToolAudioStress(t)
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	for _, testCase := range remoteToolAudioContinuationCases() {
 		for _, delivery := range remoteToolAudioDeliveries() {
@@ -201,6 +208,9 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 				continue
 			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
+				if testCase.name != "test45" || delivery.name != "captured_cadence" {
+					requireRemoteToolAudioStress(t)
+				}
 				// Bound real process/device pairs so callback clocks retain CPU under the full package.
 				t.Parallel()
 				scenarioSlots <- struct{}{}

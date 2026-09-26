@@ -389,7 +389,10 @@ func startRemoteToolAudioInProcess(t *testing.T, testCase remoteToolAudioCase, a
 	agent := remoteToolAudioAgent{stdout: &remoteToolAudioBuffer{}, stderr: &remoteToolAudioBuffer{}}
 	process := clitest.Start(t, clitest.Invocation{
 		Args: remoteToolAudioSessionArgs(paths.configDir, arguments), Ports: ports, Configure: configure,
-		Stdout: agent.stdout, Stderr: agent.stderr,
+		// The mock-tool-agent binary composes with the mock initializer's
+		// relaxed validation; match it, and stay strict like cmd/agent otherwise.
+		RelaxModelValidation: executor != nil,
+		Stdout:               agent.stdout, Stderr: agent.stderr,
 	})
 	done := make(chan error, 1)
 	go func() {

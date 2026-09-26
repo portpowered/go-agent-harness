@@ -485,13 +485,14 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 
 # The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
 # trials each per repetition) and the fresh-process continuation matrix
-# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio (whose
-# device-cadence deliveries drain in real time) skip unless
-# YUI_AUDIO_STRESS=1. They hunt rare races rather than prove behavior, so
-# pull requests do not run them (every topology and delivery runs in-process
-# on a virtual clock in TestToolContinuationPreservesDeviceAudio); the
-# scheduled Nightly audio stress workflow runs this target with the coverage
-# job's build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
+# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio other than
+# test45/captured_cadence (whose device-cadence deliveries drain in real
+# time) skip unless YUI_AUDIO_STRESS=1. They hunt rare races rather than
+# prove behavior, so pull requests run only test45/captured_cadence as the
+# real-process representative (every topology and delivery also runs
+# in-process on a virtual clock in TestToolContinuationPreservesDeviceAudio);
+# the scheduled Nightly audio stress workflow runs this target with the
+# coverage job's build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
 AUDIO_STRESS_COUNT ?= 1
 test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
 	@set -euo pipefail; \

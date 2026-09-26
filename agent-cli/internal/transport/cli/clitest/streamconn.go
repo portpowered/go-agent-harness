@@ -5,15 +5,28 @@ import (
 	"net"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 )
 
 // newStreamConnPair returns two connected in-memory stream ends that behave
 // like a loopback TCP connection rather than net.Pipe: writes are buffered
-// and never wait for the peer's read, a write after the peer closed is
-// accepted and dropped (as the kernel accepts it before a reset), and reads
-// drain buffered bytes before reporting io.EOF. Blocking uses only channels
-// and timers, so both ends advance with a synctest bubble's virtual clock.
+// and never wait for the peer's read; after the peer closed, the first write
+// is accepted and dropped (as the kernel accepts it before the peer's reset)
+// and later writes fail with EPIPE; reads drain buffered bytes before
+// reporting io.EOF. Blocking uses only channels and timers, so both ends
+// advance with a synctest bubble's virtual clock.
+//
+// Known differences from TCP:
+//   - after the peer closed, TCP's first write may already fail (the reset
+//     can arrive first) and later ones report EPIPE or ECONNRESET; here the
+//     first always succeeds and later ones report EPIPE, and a read after
+//     the peer closed reports io.EOF, never ECONNRESET;
+//   - buffering is unbounded: there is no send window, so a writer is never
+//     slowed by a peer that stops reading;
+//   - there is no CloseWrite (half-close); Close ends both directions;
+//   - a read whose deadline has passed still returns already-buffered bytes
+//     (the deadline is checked only while waiting for data).
 func newStreamConnPair() (net.Conn, net.Conn) {
 	ab, ba := newStreamBuffer(), newStreamBuffer()
 	return &streamConn{in: ba, out: ab}, &streamConn{in: ab, out: ba}
@@ -24,7 +37,8 @@ type streamBuffer struct {
 	mu         sync.Mutex
 	data       []byte
 	writerDone bool // the writing end closed: reads return EOF once drained
-	readerDone bool // the reading end closed: writes are dropped
+	readerDone bool // the reading end closed: writes are dropped, then refused
+	reset      bool // a write after readerDone was dropped; the next fails
 	changed    chan struct{}
 }
 
@@ -93,10 +107,15 @@ func (c *streamConn) Write(p []byte) (int, error) {
 	if c.out.writerDone {
 		return 0, net.ErrClosed
 	}
-	if !c.out.readerDone {
-		c.out.data = append(c.out.data, p...)
-		c.out.signalLocked()
+	if c.out.readerDone {
+		if c.out.reset {
+			return 0, &net.OpError{Op: "write", Net: pipeNetwork, Err: syscall.EPIPE}
+		}
+		c.out.reset = true
+		return len(p), nil
 	}
+	c.out.data = append(c.out.data, p...)
+	c.out.signalLocked()
 	return len(p), nil
 }
 

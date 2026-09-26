@@ -4,9 +4,11 @@
 # test's run event, or its cont event when parallel, to its last subtest
 # event); a missing or stale entry only affects balance, never which tests
 # run.
+TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio 11.50
 TestAgentBinaryAudioOutRecordsRemoteDevicePCM 4.99
 TestAgentBinarySerialToolTimingAtProcessEdges 4.13
 TestShippedSessionProcessFamilyEPatienceInitialOutputThenStall 1.73
+TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM 1.70
 TestDefaultHoldToneIsSeparateFromProviderPCM 1.31
 TestShippedSessionProcessFamilyEPatienceRecovery 1.24
 TestToolContinuationPreservesDeviceAudio 0.96
@@ -172,7 +174,6 @@ TestV3BWrongFunctionCallOutputSubtypeFails 0.01
 TestV6CSuitePrefixSelectionResolvesThrottledCase 0.01
 TestAgentBinaryTest45HighRateToolAudioRegression 0.00
 TestAgentBinaryTest46HighRateToolAudioRegression 0.00
-TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio 0.00
 TestAskNoArgsNoStdin 0.00
 TestAskWithStdinAudioBytes 0.00
 TestAskWithStdinUnknownBinaryBytes 0.00

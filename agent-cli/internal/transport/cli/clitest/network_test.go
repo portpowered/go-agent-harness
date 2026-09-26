@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -26,7 +27,8 @@ func TestStreamConnDrainsBufferedBytesBeforeEOF(t *testing.T) {
 }
 
 // A write racing the peer's close is accepted, as a kernel accepts it before
-// a reset, instead of failing the way net.Pipe does.
+// the peer's reset, instead of failing the way net.Pipe does; the next write
+// reports the broken pipe.
 func TestStreamConnDropsWritesAfterPeerClose(t *testing.T) {
 	client, server := newStreamConnPair()
 	if err := server.Close(); err != nil {
@@ -34,6 +36,9 @@ func TestStreamConnDropsWritesAfterPeerClose(t *testing.T) {
 	}
 	if n, err := client.Write([]byte("late")); n != 4 || err != nil {
 		t.Fatalf("write after peer close = %d, %v; want accepted", n, err)
+	}
+	if _, err := client.Write([]byte("later")); !errors.Is(err, syscall.EPIPE) {
+		t.Fatalf("second write after peer close = %v, want EPIPE", err)
 	}
 	if _, err := client.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
 		t.Fatalf("read after peer close = %v, want EOF", err)

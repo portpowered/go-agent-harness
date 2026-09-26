@@ -16,6 +16,12 @@
 // run with a goroutine dump instead of letting it hang until the global
 // -timeout.
 //
+// PipeListener streams approximate loopback TCP, not exactly: after the peer
+// closed, the first write is silently dropped (TCP may already report
+// EPIPE/ECONNRESET) and later writes report EPIPE; buffering is unbounded;
+// there is no CloseWrite; and a read past its deadline still returns
+// buffered bytes. See newStreamConnPair.
+//
 // Composition uses the production (strict) model validation. Only callers
 // that swap components and must match a relaxed mock binary set
 // RelaxModelValidation.
