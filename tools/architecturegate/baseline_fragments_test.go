@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/analysis/analysistest"
 )
 
 // newFixtureFile is the file a fixture entry moves to or is added in.
@@ -213,4 +215,10 @@ func repositoryImportCases() []repositoryImportCase {
 		{"browser testkit identifiers", cli, cli + "/internal/webmcp/testkit", "internal/webmcp/testkit/ids.go", "encoding/binary", false},
 		{"application test binary codec", cli, cli + "/internal/room", "internal/room/room_test.go", "encoding/binary", false},
 	}
+}
+
+// Every type that wraps a messages.Session and is itself a session must keep
+// forwarding the runner's barge-in capabilities.
+func TestSessionWrapperAnalyzerFixture(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), SessionWrapperAnalyzer, "architecturesessionwrapper")
 }

@@ -19,6 +19,7 @@ func architectureIssues(pkg *Package, module *Module, service serviceInfo, polic
 	if service.Role == roleRoot {
 		issues = append(issues, serviceInterfaceIssue(pkg, module)...)
 	}
+	issues = append(issues, sessionWrapperIssues(pkg, module)...)
 	if service.Role == roleRoot || service.Role == roleWire || service.Role == roleComposition || moduleRootAPI(pkg, module, policy) {
 		issues = append(issues, publicSurfaceIssues(pkg, module)...)
 	}

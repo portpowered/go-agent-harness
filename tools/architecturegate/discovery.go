@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"io"
 	"os"
 	"os/exec"
@@ -31,6 +32,10 @@ type Package struct {
 	Files        []*SourceFile
 	Types        *packages.Package
 	TypeLoadable bool
+	// SourceTypes is the package type-checked from source, unexported types
+	// included. Only packages importing messages load it; see
+	// loadSessionSourceTypes.
+	SourceTypes *types.Package
 }
 
 type SourceFile struct {
@@ -226,7 +231,7 @@ func loadModuleTypes(ctx context.Context, module *Module, goos, goarch string) e
 			return fmt.Errorf("type loading returned no package for %s", pkg.ImportPath)
 		}
 	}
-	return nil
+	return loadSessionSourceTypes(ctx, module, goos, goarch)
 }
 
 func typeLoadPatterns(module *Module) []string {

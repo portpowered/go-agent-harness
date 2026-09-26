@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
+	"os"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/packages"
 )
 
 // MutableGlobalAnalyzer is the package-local go/analysis form of the global
@@ -55,4 +60,166 @@ func reportGlobalVariables(pass *analysis.Pass, declaration *ast.GenDecl) {
 			}
 		}
 	}
+}
+
+// sessionWrapperRule names the architecture issue for a session wrapper that
+// hides the session runner's barge-in capabilities.
+const sessionWrapperRule = "session-wrapper-capabilities"
+
+// messagesPackagePath owns messages.Session and messages.BargeInCapableSession.
+const messagesPackagePath = "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+
+// SessionWrapperAnalyzer reports types that wrap a messages.Session, are
+// sessions themselves and do not implement messages.BargeInCapableSession: a
+// runner handed such a wrapper cannot see turn detection, local playback, the
+// input format or the receive barrier of the provider session beneath it.
+//
+//nolint:gochecknoglobals // the exported descriptor is immutable after package initialization
+var SessionWrapperAnalyzer = &analysis.Analyzer{
+	Name: "architecturesessionwrapper",
+	Doc:  "reports session wrappers that do not forward the barge-in capabilities",
+	Run: func(pass *analysis.Pass) (interface{}, error) {
+		for _, wrapper := range sessionWrappersHidingCapabilities(pass.Pkg) {
+			pass.Reportf(wrapper.Pos(), "%s", sessionWrapperMessage(wrapper))
+		}
+		return nil, nil
+	},
+}
+
+func sessionWrapperMessage(wrapper *types.TypeName) string {
+	return fmt.Sprintf("session wrapper %s does not implement messages.BargeInCapableSession; embed messages.SessionCapabilities", wrapper.Name())
+}
+
+// sessionWrappersHidingCapabilities returns the struct types of pkg that hold
+// a messages.Session, implement messages.Session and do not implement
+// messages.BargeInCapableSession.
+func sessionWrappersHidingCapabilities(pkg *types.Package) []*types.TypeName {
+	session, capable := sessionContracts(pkg)
+	if session == nil || capable == nil {
+		return nil
+	}
+	var wrappers []*types.TypeName
+	scope := pkg.Scope()
+	for _, name := range scope.Names() {
+		object, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || object.IsAlias() {
+			continue
+		}
+		structure, ok := object.Type().Underlying().(*types.Struct)
+		pointer := types.NewPointer(object.Type())
+		if ok && types.Implements(pointer, session) && holdsSession(structure, session) && !types.Implements(pointer, capable) {
+			wrappers = append(wrappers, object)
+		}
+	}
+	return wrappers
+}
+
+func sessionContracts(pkg *types.Package) (session, capable *types.Interface) {
+	messages := messagesPackage(pkg)
+	if messages == nil {
+		return nil, nil
+	}
+	return contractInterface(messages, "Session"), contractInterface(messages, "BargeInCapableSession")
+}
+
+// messagesPackage finds the messages package pkg depends on. Packages loaded
+// from export data may not list their imports, so the struct fields of pkg's
+// types are searched as well.
+func messagesPackage(pkg *types.Package) *types.Package {
+	if pkg.Path() == messagesPackagePath {
+		return pkg
+	}
+	for _, imported := range pkg.Imports() {
+		if imported.Path() == messagesPackagePath {
+			return imported
+		}
+	}
+	scope := pkg.Scope()
+	for _, name := range scope.Names() {
+		structure, ok := scope.Lookup(name).Type().Underlying().(*types.Struct)
+		for index := 0; ok && index < structure.NumFields(); index++ {
+			named, isNamed := types.Unalias(structure.Field(index).Type()).(*types.Named)
+			if isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == messagesPackagePath {
+				return named.Obj().Pkg()
+			}
+		}
+	}
+	return nil
+}
+
+func contractInterface(pkg *types.Package, name string) *types.Interface {
+	object := pkg.Scope().Lookup(name)
+	if object == nil {
+		return nil
+	}
+	if contract, ok := object.Type().Underlying().(*types.Interface); ok {
+		return contract
+	}
+	return nil
+}
+
+func holdsSession(structure *types.Struct, session *types.Interface) bool {
+	for index := range structure.NumFields() {
+		field := types.Unalias(structure.Field(index).Type())
+		if types.IsInterface(field) && types.Implements(field, session) {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionWrapperIssues reports the session wrappers of pkg that hide the
+// runner's barge-in capabilities.
+func sessionWrapperIssues(pkg *Package, module *Module) []Issue {
+	if pkg.SourceTypes == nil {
+		return nil
+	}
+	wrappers := sessionWrappersHidingCapabilities(pkg.SourceTypes)
+	issues := make([]Issue, 0, len(wrappers))
+	for _, wrapper := range wrappers {
+		issues = append(issues, Issue{Rule: sessionWrapperRule, Module: module.Path, Package: pkg.ImportPath, Symbol: wrapper.Name(), Message: sessionWrapperMessage(wrapper)})
+	}
+	return issues
+}
+
+// loadSessionSourceTypes type-checks, from source, the module's packages that
+// import messages. Session wrappers are usually unexported, and the export
+// data the other rules read omits unexported types. Dependencies still come
+// from export data, so only these packages are checked from source.
+func loadSessionSourceTypes(ctx context.Context, module *Module, goos, goarch string) error {
+	byPath := make(map[string]*Package)
+	patterns := make([]string, 0)
+	for _, pkg := range module.Packages {
+		if pkg.Types != nil && importsMessages(pkg.Types) {
+			byPath[pkg.ImportPath] = pkg
+			patterns = append(patterns, pkg.ImportPath)
+		}
+	}
+	if len(patterns) == 0 {
+		return nil
+	}
+	cfg := &packages.Config{
+		Context: ctx,
+		Mode:    packages.NeedName | packages.NeedImports | packages.NeedTypes | packages.NeedSyntax,
+		Dir:     module.Dir,
+		Env:     setTypeLoadEnvironment(os.Environ(), goos, goarch),
+	}
+	loaded, err := packages.Load(cfg, patterns...)
+	if err != nil {
+		return fmt.Errorf("load session source types for module %q: %w", module.Dir, err)
+	}
+	for _, source := range loaded {
+		if len(source.Errors) > 0 {
+			return fmt.Errorf("session source type loading failed for %s: %s", source.PkgPath, formatPackageErrors(source.Errors))
+		}
+		if pkg := byPath[source.PkgPath]; pkg != nil {
+			pkg.SourceTypes = source.Types
+		}
+	}
+	return nil
+}
+
+func importsMessages(loaded *packages.Package) bool {
+	_, ok := loaded.Imports[messagesPackagePath]
+	return ok || loaded.PkgPath == messagesPackagePath
 }
