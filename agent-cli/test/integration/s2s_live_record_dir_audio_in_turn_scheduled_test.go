@@ -110,6 +110,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 }
 
 func testSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding(t *testing.T) {
+	t.Helper()
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIGroundedScheduledBoundaryAgent(t, server)
@@ -197,6 +198,7 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 }
 
 func testSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *testing.T) {
+	t.Helper()
 	server := newCLILiveScheduledBoundaryServer(false)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -335,6 +337,7 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 }
 
 func testSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *testing.T) {
+	t.Helper()
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -425,6 +428,7 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 }
 
 func testSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
+	t.Helper()
 	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)
@@ -499,6 +503,7 @@ func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeCo
 }
 
 func testSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl(t *testing.T) {
+	t.Helper()
 	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)

@@ -70,19 +70,19 @@ func TestStatefulBrokerCastsTheExactSelectedWebMCPPage(t *testing.T) {
 
 // closeAtTestEnd releases a broker or browser fixture when a test finishes.
 // Scripted fixtures close cleanly, so a close failure is a real teardown defect.
-func closeAtTestEnd(t testing.TB, closer interface{ Close() error }) {
-	t.Helper()
+func closeAtTestEnd(tb testing.TB, closer interface{ Close() error }) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("close test fixture: %v", err)
+		tb.Errorf("close test fixture: %v", err)
 	}
 }
 
 // mustAs asserts a fixture value's concrete type and fails the test otherwise.
-func mustAs[T any](t testing.TB, value any) T {
-	t.Helper()
+func mustAs[T any](tb testing.TB, value any) T {
+	tb.Helper()
 	typed, ok := value.(T)
 	if !ok {
-		t.Fatalf("fixture value = %T, want %T", value, typed)
+		tb.Fatalf("fixture value = %T, want %T", value, typed)
 	}
 	return typed
 }

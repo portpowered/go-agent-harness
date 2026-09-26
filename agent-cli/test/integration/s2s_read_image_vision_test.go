@@ -129,6 +129,7 @@ func (o *readImageSessionObserver) snapshot() []messages.StreamMessage {
 }
 
 func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath string, imageBytes []byte) string {
+	t.Helper()
 	return materializeReadImageReplayFixtureMode(t, committedPath, imagePath, imageBytes, true)
 }
 
@@ -249,6 +250,7 @@ func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataU
 }
 
 func writeReadImageConfig(t *testing.T, readImageEnabled bool) string {
+	t.Helper()
 	return writeReadImageModelConfig(t, readImageEnabled, "gpt-realtime")
 }
 

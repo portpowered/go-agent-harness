@@ -127,6 +127,7 @@ func executeTargetActions(ctx context.Context, executor cdp.Executor, actions []
 
 // injectEvaluateResult replaces every Runtime.evaluate result with value.
 func injectEvaluateResult(t *testing.T, value []byte) func(string, any) {
+	t.Helper()
 	return func(method string, result any) {
 		if method != runtime.CommandEvaluate {
 			return

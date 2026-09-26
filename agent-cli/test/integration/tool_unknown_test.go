@@ -182,6 +182,7 @@ func TestUnknownToolRefusalThroughCLI(t *testing.T) {
 }
 
 func testUnknownToolRefusalThroughCLI(t *testing.T) {
+	t.Helper()
 	fixture := locateUnknownToolFixture(t, unknownToolFixture)
 	scenario := locateUnknownToolFixture(t, unknownToolScenario)
 	configDir := t.TempDir()
@@ -254,6 +255,7 @@ func TestRegisteredToolControlRejectsUnknownRefusalExpectation(t *testing.T) {
 }
 
 func testRegisteredToolControlRejectsUnknownRefusalExpectation(t *testing.T) {
+	t.Helper()
 	scenario := locateUnknownToolFixture(t, registeredToolScenario)
 	fixture := locateUnknownToolFixture(t, registeredToolFixture)
 

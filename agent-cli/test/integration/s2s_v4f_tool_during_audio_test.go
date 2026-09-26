@@ -479,6 +479,7 @@ func TestSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
 }
 
 func testSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
+	t.Helper()
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)
@@ -519,6 +520,7 @@ func TestSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T
 }
 
 func testSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T) {
+	t.Helper()
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)

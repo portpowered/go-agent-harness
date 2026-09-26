@@ -340,6 +340,7 @@ func TestAgentBinaryPostDoneBargeInStopsRemoteDevicePlayback(t *testing.T) {
 // device the audio-device-server serves.
 func TestPostDoneBargeInStopsDevicePlayback(t *testing.T) {
 	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
 		provider := newPostDoneBargeInProvider()
 		listener := clitest.NewPipeListener()
 		clitest.Serve(t, listener, http.HandlerFunc(provider.handle))
@@ -358,6 +359,7 @@ func TestPostDoneBargeInStopsDevicePlayback(t *testing.T) {
 // interrupt can stop playback and truncate the item.
 func TestPostDoneBargeInClientTurnsStopsDevicePlayback(t *testing.T) {
 	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
 		provider := newPostDoneBargeInProvider()
 		provider.serverVAD = false
 		listener := clitest.NewPipeListener()

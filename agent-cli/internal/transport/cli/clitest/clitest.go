@@ -92,9 +92,9 @@ type Process struct {
 // under t.Context(). A composition failure or an exceeded Timeout fails the
 // test; command failures are reported through ExitCode and the captured
 // streams, as the process boundary reports them.
-func Run(t testing.TB, inv Invocation) Result {
-	t.Helper()
-	process := Start(t, inv)
+func Run(tb testing.TB, inv Invocation) Result {
+	tb.Helper()
+	process := Start(tb, inv)
 	if inv.Timeout <= 0 {
 		return process.Wait()
 	}
@@ -106,18 +106,18 @@ func Run(t testing.TB, inv Invocation) Result {
 	case <-timer.C:
 		process.Cancel()
 		result := process.Wait()
-		t.Fatalf("agent %s exceeded %s\nstdout:\n%s\nstderr:\n%s", strings.Join(inv.Args, " "), inv.Timeout, result.Stdout, result.Stderr)
+		tb.Fatalf("agent %s exceeded %s\nstdout:\n%s\nstderr:\n%s", strings.Join(inv.Args, " "), inv.Timeout, result.Stdout, result.Stderr)
 		return result
 	}
 }
 
 // Start composes the CLI and runs inv in the background under t.Context().
 // A composition failure fails the test before anything runs.
-func Start(t testing.TB, inv Invocation) *Process {
-	t.Helper()
-	agentCLI, err := compose(t.Context(), inv)
+func Start(tb testing.TB, inv Invocation) *Process {
+	tb.Helper()
+	agentCLI, err := compose(tb.Context(), inv)
 	if err != nil {
-		t.Fatalf("compose agent CLI: %v", err)
+		tb.Fatalf("compose agent CLI: %v", err)
 	}
 	if inv.Configure != nil {
 		inv.Configure(agentCLI)
@@ -127,7 +127,7 @@ func Start(t testing.TB, inv Invocation) *Process {
 	if stdin == nil {
 		stdin = bytes.NewReader(nil)
 	}
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithCancel(tb.Context())
 	process := &Process{done: make(chan struct{}), cancel: cancel}
 	go func() {
 		defer close(process.done)

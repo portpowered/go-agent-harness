@@ -24,8 +24,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newTestSessionRootCommand(t testing.TB, swaps ...agentwire.PortSwap) *cobra.Command {
-	t.Helper()
+func newTestSessionRootCommand(tb testing.TB, swaps ...agentwire.PortSwap) *cobra.Command {
+	tb.Helper()
 	var agentCLI *cli.AgentCLI
 	var err error
 	if len(swaps) == 0 {
@@ -34,7 +34,7 @@ func newTestSessionRootCommand(t testing.TB, swaps ...agentwire.PortSwap) *cobra
 		agentCLI, err = agentwire.InitializeMockAgentCLIWithPorts(t.Context(), swaps...)
 	}
 	if err != nil {
-		t.Fatalf("initialize composed agent CLI: %v", err)
+		tb.Fatalf("initialize composed agent CLI: %v", err)
 	}
 	return agentCLI.Generate()
 }

@@ -51,6 +51,7 @@ func v8AudioFixturePath(t *testing.T, name string) string {
 }
 
 func v8LoudFrames(t *testing.T, path string) ([]byte, []byte) {
+	t.Helper()
 	frames := v8LoudFrameSet(t, path, 2)
 	return frames[0], frames[1]
 }

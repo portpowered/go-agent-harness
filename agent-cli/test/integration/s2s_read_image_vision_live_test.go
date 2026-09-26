@@ -142,10 +142,12 @@ type liveReadImageRun struct {
 }
 
 func runLiveReadImageSession(t *testing.T, apiKey, configDir, prompt string) liveReadImageRun {
+	t.Helper()
 	return runLiveReadImageSessionWithInput(t, apiKey, configDir, prompt, "", "")
 }
 
 func runLiveReadImageSpokenSession(t *testing.T, configDir, audioPath, systemPrompt string) liveReadImageRun {
+	t.Helper()
 	return runLiveReadImageSessionWithInput(t, "", configDir, "", audioPath, systemPrompt)
 }
 

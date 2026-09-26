@@ -247,6 +247,7 @@ func recoveryFixtureTarget(ctx context.Context, adapter *Runtime, candidate webm
 }
 
 func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
 	selection := newRecoverySelection(t, ctx, pinned, fixture)
@@ -374,6 +375,7 @@ func (s *recoverySelection) awaitTerminal(t *testing.T, ctx context.Context, id 
 }
 
 func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
 	selection := newRecoverySelection(t, ctx, pinned, fixture)
@@ -489,6 +491,7 @@ func lastRecoveryGeneration(t *testing.T, events []webmcp.BrokerEvent, previousG
 }
 
 func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
 	selection := newRecoverySelection(t, ctx, pinned, fixture)
@@ -565,6 +568,7 @@ func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinn
 }
 
 func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
 	selection := newRecoverySelection(t, ctx, pinned, fixture)
@@ -640,6 +644,7 @@ func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned 
 }
 
 func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
 	selection := newRecoverySelection(t, ctx, pinned, fixture)

@@ -504,6 +504,7 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 }
 
 func testSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
+	t.Helper()
 	session := newParallelLifecycleSession(parallelLifecycleBravoID, "")
 	inferencer := newParallelLifecycleInferencer(session)
 	executor := newParallelLifecycleExecutor()

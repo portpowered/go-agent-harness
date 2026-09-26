@@ -130,6 +130,7 @@ func TestProductionWebMCPDirectCommandsCancelAcrossOSProcessesAndRecover(t *test
 }
 
 func receiptLine(t *testing.T, receipt WebMCPDirectInvocationReceipt) string {
+	t.Helper()
 	return string(append(mustJSONMarshal(t, receipt), '\n'))
 }
 
@@ -164,6 +165,7 @@ func (p *osProcessWebMCPChild) Wait() error {
 }
 
 func runOSProcessWebMCPChild(t *testing.T) {
+	t.Helper()
 	mode := os.Getenv(osProcessFixtureChildEnv)
 	endpoint := os.Getenv(osProcessFixtureEndpointEnv)
 	configDir := os.Getenv(osProcessFixtureConfigDirEnv)

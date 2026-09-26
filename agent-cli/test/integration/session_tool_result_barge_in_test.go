@@ -407,6 +407,7 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 }
 
 func testSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testing.T) {
+	t.Helper()
 	inferencer := newSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
 
@@ -512,6 +513,7 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 }
 
 func testSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *testing.T) {
+	t.Helper()
 	inferencer := newActiveSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
 	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),

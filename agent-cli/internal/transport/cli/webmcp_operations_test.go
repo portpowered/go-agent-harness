@@ -204,6 +204,7 @@ func (b *childProcessStderrBuffer) Write(value []byte) (int, error) {
 }
 
 func runWebMCPDirectInvokeSIGINTChild(t *testing.T) {
+	t.Helper()
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	page, target, candidate, tool := directFixture()
@@ -712,6 +713,7 @@ func TestWebMCPDirectSelectBrowserDeathAtEveryStage(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+				t.Helper()
 				runSelectBrowserDeathCase(t, testCase, jsonMode)
 			})
 		})
@@ -748,6 +750,7 @@ func newBrowserDeathRuntime(t *testing.T, testCase browserDeathCase) *testkit.Sc
 }
 
 func runSelectBrowserDeathCase(t *testing.T, testCase browserDeathCase, jsonMode bool) {
+	t.Helper()
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	_, target, candidate, _ := directFixture()

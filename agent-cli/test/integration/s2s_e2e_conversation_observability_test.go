@@ -207,6 +207,7 @@ func observabilityInputTranscriptRecords(t *testing.T, turn int) []gwtesting.Cap
 }
 
 func observabilityJSONPayload(t *testing.T, value map[string]any) json.RawMessage {
+	t.Helper()
 	data, err := json.Marshal(value)
 	if err != nil {
 		t.Fatalf("marshal observability provider event: %v", err)

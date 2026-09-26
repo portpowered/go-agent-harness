@@ -363,9 +363,10 @@ type familyDProviderFixture struct {
 	utteranceSeen      bool
 }
 
-func newFamilyDProviderFixture(t testing.TB, _ probe.CustomerScenario, method probe.TerminationMethod) *familyDProviderFixture {
+func newFamilyDProviderFixture(tb testing.TB, _ probe.CustomerScenario, method probe.TerminationMethod) *familyDProviderFixture {
+	tb.Helper()
 	fixture := &familyDProviderFixture{upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}, method: method}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

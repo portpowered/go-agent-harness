@@ -527,19 +527,19 @@ func encodeFixtureJSON(writer io.Writer, value any) {
 }
 
 // closeForTest closes a resource whose close is expected to succeed.
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("close: %v", err)
+		tb.Errorf("close: %v", err)
 	}
 }
 
 // mustType asserts the dynamic type of value and fails the test otherwise.
-func mustType[T any](t testing.TB, value any) T {
-	t.Helper()
+func mustType[T any](tb testing.TB, value any) T {
+	tb.Helper()
 	typed, ok := value.(T)
 	if !ok {
-		t.Fatalf("value has type %T, want %T", value, typed)
+		tb.Fatalf("value has type %T, want %T", value, typed)
 	}
 	return typed
 }

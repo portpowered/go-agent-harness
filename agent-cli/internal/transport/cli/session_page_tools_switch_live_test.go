@@ -150,6 +150,7 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 const livePageTargetType = "page"
 
 func newSessionPageToolsSwitchLiveConfig(t *testing.T, cdpURL string) *config.Config {
+	t.Helper()
 	cfg := livePageToolsConfig(t, cdpURL)
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderGrok,
@@ -183,6 +184,7 @@ func initSessionPageToolsSwitchLiveCapabilities(t *testing.T, ctx context.Contex
 }
 
 func closeSessionPageToolsSwitchLiveCapabilities(t *testing.T, capabilities SessionToolCapabilities) {
+	t.Helper()
 	if capabilities.Close != nil {
 		if closeErr := capabilities.Close(); closeErr != nil {
 			t.Logf("capability close: %v", closeErr)
@@ -193,6 +195,7 @@ func closeSessionPageToolsSwitchLiveCapabilities(t *testing.T, capabilities Sess
 // startSessionPageToolsSwitchLiveRun runs the production session command with
 // the fake provider; the returned func cancels it and waits for shutdown.
 func startSessionPageToolsSwitchLiveRun(t *testing.T, ctx context.Context, cfg *config.Config, capabilities SessionToolCapabilities, provider *sessionPageToolsLiveInferencer) (<-chan error, func()) {
+	t.Helper()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := make(chan error, 1)
 	go func() {

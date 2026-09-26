@@ -211,6 +211,7 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 // transport with file-backed audio-in and --audio-out, capturing stdout so
 // transcript rendering can be asserted.
 func runToolResultConversation(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor) (stdout string, outputPath string, runErr error) {
+	t.Helper()
 	return runToolResultConversationWithBounds(t, wavPath, wirePath, executor, 8*time.Second, 10*time.Second)
 }
 
@@ -219,6 +220,7 @@ func runToolResultConversation(t *testing.T, wavPath, wirePath string, executor 
 // impossible second result must have a short, explicit liveness bound rather
 // than inheriting the positive path's larger audio-session allowance.
 func runToolResultConversationWithBounds(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor, maxDuration, contextTimeout time.Duration) (stdout string, outputPath string, runErr error) {
+	t.Helper()
 	return runToolResultConversationWithOptions(t, wavPath, wirePath, executor, maxDuration, contextTimeout, false)
 }
 
@@ -227,6 +229,7 @@ func runToolResultConversationWithBounds(t *testing.T, wavPath, wirePath string,
 // control so the first tool-call MESSAGE.END cannot be mistaken for the final
 // assistant response while the replay waits at its bounded terminal edge.
 func runToolResultConversationWithWaitForCloseAndBounds(t *testing.T, wavPath, wirePath string, executor messages.ToolExecutor, maxDuration, contextTimeout time.Duration) (stdout string, outputPath string, runErr error) {
+	t.Helper()
 	return runToolResultConversationWithOptions(t, wavPath, wirePath, executor, maxDuration, contextTimeout, true)
 }
 
@@ -369,6 +372,7 @@ func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing
 }
 
 func testSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing.T) {
+	t.Helper()
 	// The representative real-time tool-call conversation: it streams the
 	// full 2.75s committed corpus at real pace, while the controls stream a
 	// short slice (conversationFixtureInputs).
@@ -424,6 +428,7 @@ func TestSessionToolCallConversationDifferentResultFailsReflection(t *testing.T)
 }
 
 func testSessionToolCallConversationDifferentResultFailsReflection(t *testing.T) {
+	t.Helper()
 	wavPath, reply := conversationFixtureInputs(t)
 
 	executor := &conversationResultExecutor{result: toolResultControl}

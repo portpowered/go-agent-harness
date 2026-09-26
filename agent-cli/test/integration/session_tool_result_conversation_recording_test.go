@@ -95,6 +95,7 @@ func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 }
 
 func testSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
+	t.Helper()
 	wavPath, reply := conversationFixtureInputs(t)
 	wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 

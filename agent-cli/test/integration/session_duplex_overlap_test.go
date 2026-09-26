@@ -360,13 +360,14 @@ type startupAnnouncementConversation struct {
 	finalSent    bool
 }
 
-func newStartupAnnouncementFixture(t testing.TB, toolPath, toolContent string) *startupAnnouncementFixture {
+func newStartupAnnouncementFixture(tb testing.TB, toolPath, toolContent string) *startupAnnouncementFixture {
+	tb.Helper()
 	fixture := &startupAnnouncementFixture{
 		upgrader:    websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		toolPath:    toolPath,
 		toolContent: toolContent,
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

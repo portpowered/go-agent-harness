@@ -116,6 +116,7 @@ func TestSessionPageToolsConcurrentColdSessions(t *testing.T) {
 // livePageToolsConfig enables WebMCP browser tools against one live endpoint
 // with single-target automatic selection.
 func livePageToolsConfig(t *testing.T, cdpURL string) *config.Config {
+	t.Helper()
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = true
 	browser.Tools.Backend = config.BrowserToolsBackendWebMCP

@@ -78,6 +78,7 @@ func loadCorpusHarnessSamples(t *testing.T, wavPath string) []int16 {
 // and no response.create. The server side closes the session immediately,
 // so any turn activity on either side diverges the replay and fails the run.
 func buildZeroCommitFixture(t *testing.T, samples []int16) string {
+	t.Helper()
 	return buildAudioInWireFixture(t, samples, false)
 }
 
@@ -86,6 +87,7 @@ func buildZeroCommitFixture(t *testing.T, samples []int16) string {
 // response.create) and delivers a spoken transcript turn in response, so the
 // run can only complete when a real commit is sent.
 func buildSpeechCommitFixture(t *testing.T, samples []int16) string {
+	t.Helper()
 	return buildAudioInWireFixture(t, samples, true)
 }
 
@@ -308,6 +310,7 @@ func TestSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
 }
 
 func testSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
+	t.Helper()
 	wavPath := locateCorpusWAV(t, "utt_short_16k")
 	samples := loadCorpusHarnessSamples(t, wavPath)
 	wirePath := buildSpeechCommitFixture(t, samples)

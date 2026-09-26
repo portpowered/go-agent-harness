@@ -466,6 +466,7 @@ type faultScenarioResult struct {
 }
 
 func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
+	t.Helper()
 	return runFaultScenarioFrames(t, faultScenarioFrames(), options...)
 }
 

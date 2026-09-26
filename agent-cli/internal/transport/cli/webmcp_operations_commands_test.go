@@ -476,6 +476,7 @@ func directOperationCases(tool webmcp.ToolDescriptor) []directOperationCase {
 func directDiscoveryOperationCases() []directOperationCase {
 	return []directOperationCase{
 		{name: "browsers", args: []string{"browsers", "--json"}, check: func(t *testing.T, result directCommandResult, _ *directCommandBroker) {
+			t.Helper()
 			var data WebMCPDirectBrowsersData
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
 			if len(data.Browsers) != 1 || data.Browsers[0].ID != "browser-a" || strings.Contains(result.stdout, "secret") {
@@ -483,6 +484,7 @@ func directDiscoveryOperationCases() []directOperationCase {
 			}
 		}},
 		{name: "tabs", args: []string{"tabs", "--browser", "browser-a", "--eligible", "--json"}, check: func(t *testing.T, result directCommandResult, _ *directCommandBroker) {
+			t.Helper()
 			var data WebMCPDirectTabsData
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
 			if len(data.Tabs) != 1 || data.Tabs[0].TargetID != "tab-a" || data.Tabs[0].Origin != "https://fixture.test" {
@@ -495,12 +497,14 @@ func directDiscoveryOperationCases() []directOperationCase {
 func directTargetOperationCases(tool webmcp.ToolDescriptor) []directOperationCase {
 	return []directOperationCase{
 		{name: "activate", args: []string{"activate", "--browser", "browser-a", "--tab", "tab-a", "--json"}, check: func(t *testing.T, result directCommandResult, broker *directCommandBroker) {
+			t.Helper()
 			requireDirectSuccess(t, result)
 			if len(broker.activateCalls) != 1 || broker.activateCalls[0].TargetID != "tab-a" {
 				t.Fatalf("activate calls = %+v", broker.activateCalls)
 			}
 		}},
 		{name: "context", args: []string{"context", "--browser", "browser-a", "--tab", "tab-a", "--json"}, check: func(t *testing.T, result directCommandResult, _ *directCommandBroker) {
+			t.Helper()
 			var data WebMCPDirectContext
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
 			if data.Generation != 7 || data.CatalogGeneration != 7 || data.ToolCount != 1 || data.URL != "https://fixture.test/page" {
@@ -508,6 +512,7 @@ func directTargetOperationCases(tool webmcp.ToolDescriptor) []directOperationCas
 			}
 		}},
 		{name: "tools", args: []string{"tools", "--browser", "browser-a", "--tab", "tab-a", "--json"}, check: func(t *testing.T, result directCommandResult, _ *directCommandBroker) {
+			t.Helper()
 			var data WebMCPDirectToolsData
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
 			if len(data.Tools) != 1 || data.Tools[0].Ref != string(tool.Ref) || data.Tools[0].Generation != 7 {
@@ -515,6 +520,7 @@ func directTargetOperationCases(tool webmcp.ToolDescriptor) []directOperationCas
 			}
 		}},
 		{name: "invoke", args: []string{"invoke", "--browser", "browser-a", "--tab", "tab-a", "--tool-ref", string(tool.Ref), "--input-json", `{"value":1}`, "--reason", "test reason", "--json"}, check: func(t *testing.T, result directCommandResult, broker *directCommandBroker) {
+			t.Helper()
 			var data WebMCPDirectInvocation
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
 			if data.InvocationID != testDirectInvocationID || data.ToolRef != string(tool.Ref) || data.Status != string(webmcp.InvocationCompleted) {
@@ -526,6 +532,7 @@ func directTargetOperationCases(tool webmcp.ToolDescriptor) []directOperationCas
 			requireSingleDispatchReceipt(t, result.stderr, testDirectInvocationID, tool.Ref)
 		}},
 		{name: "cancel", args: []string{"cancel", testDirectInvocationID, "--browser", "browser-a", "--tab", "tab-a", "--json"}, check: func(t *testing.T, result directCommandResult, broker *directCommandBroker) {
+			t.Helper()
 			var data WebMCPDirectCancelData
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
 			if data.InvocationID != testDirectInvocationID || broker.cancelRequest.InvocationID != testDirectInvocationID {

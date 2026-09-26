@@ -628,6 +628,7 @@ func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 }
 
 func testSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
+	t.Helper()
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, true); err != nil {
@@ -720,6 +721,7 @@ func TestSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 }
 
 func testSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
+	t.Helper()
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{
 		maxDuration:      asyncCollisionControlMaxDuration,

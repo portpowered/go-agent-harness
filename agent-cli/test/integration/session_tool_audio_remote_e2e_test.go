@@ -90,6 +90,7 @@ func TestNaturalCloseDrainsDevicePCM(t *testing.T) {
 	} {
 		testCase.inProcess = true
 		clitest.Subtest(t, testCase.name, func(t *testing.T) {
+			t.Helper()
 			promptBytes := 0
 			if testCase.naturalClose {
 				promptBytes = 32
@@ -184,6 +185,7 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
 				t.Parallel() // each scenario is CPU-bound in its own bubble
 				clitest.Test(t, func(t *testing.T) {
+					t.Helper()
 					scenario := testCase
 					scenario.inProcess = true
 					runRemoteToolAudioContinuation(t, scenario, delivery)

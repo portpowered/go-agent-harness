@@ -287,6 +287,7 @@ func TestSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
 }
 
 func testSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
+	t.Helper()
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__FAST_READ_TIMEOUT", interactiveFastTimeout.String())
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__LONG_RUNNING_TIMEOUT", "5s")
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__ACKNOWLEDGEMENT_THRESHOLD", "50ms")

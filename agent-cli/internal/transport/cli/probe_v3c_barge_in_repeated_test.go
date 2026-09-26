@@ -161,6 +161,7 @@ func TestProbeRunS2SV3CRuntimeMutatedPositiveFixtureFails(t *testing.T) {
 		{
 			name: "duplicate first cancel",
 			mutate: func(t *testing.T, records []map[string]any) []map[string]any {
+				t.Helper()
 				first := v3cRecordIndexes(t, records, "response.cancel")[0]
 				doubled := append(append([]map[string]any{}, records[:first+1]...), v3cRecordCopy(t, records[first]))
 				return append(doubled, records[first+1:]...)
@@ -171,6 +172,7 @@ func TestProbeRunS2SV3CRuntimeMutatedPositiveFixtureFails(t *testing.T) {
 		{
 			name: "drop closing-turn commit",
 			mutate: func(t *testing.T, records []map[string]any) []map[string]any {
+				t.Helper()
 				commits := v3cRecordIndexes(t, records, "input_audio_buffer.commit")
 				closing := commits[len(commits)-1]
 				return append(append([]map[string]any{}, records[:closing]...), records[closing+1:]...)

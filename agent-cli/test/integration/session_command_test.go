@@ -118,6 +118,7 @@ func TestSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer(t *tes
 }
 
 func testSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer(t *testing.T) {
+	t.Helper()
 	sessionInf := &integrationScriptedSessionInferencer{
 		events: []messages.StreamMessage{
 			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
@@ -472,6 +473,7 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t
 }
 
 func testSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t *testing.T) {
+	t.Helper()
 	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
@@ -512,6 +514,7 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithM
 }
 
 func testSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch(t *testing.T) {
+	t.Helper()
 	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},

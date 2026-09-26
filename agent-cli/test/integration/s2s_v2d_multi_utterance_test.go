@@ -202,11 +202,17 @@ const (
 )
 
 func TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance(t *testing.T) {
-	clitest.Test(t, func(t *testing.T) { assertS2SV2DHappyPath(t, runAgentInProcess) })
+	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
+		assertS2SV2DHappyPath(t, runAgentInProcess)
+	})
 }
 
 func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
-	clitest.Test(t, func(t *testing.T) { assertS2SV2DMisSegmented(t, runAgentInProcess) })
+	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
+		assertS2SV2DMisSegmented(t, runAgentInProcess)
+	})
 }
 
 // TestAgentBinaryProbeRunReportsExitStatusAcrossProcessBoundary is the

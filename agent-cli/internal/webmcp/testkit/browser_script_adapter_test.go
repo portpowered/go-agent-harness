@@ -194,27 +194,27 @@ func browserScriptAdapterScript(cancellable bool) BrowserScript {
 
 // closeForTest closes a fixture resource at test end and reports an
 // unexpected close failure.
-func closeForTest(t testing.TB, closer interface{ Close() error }) {
-	t.Helper()
+func closeForTest(tb testing.TB, closer interface{ Close() error }) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("close: %v", err)
+		tb.Errorf("close: %v", err)
 	}
 }
 
 // requireNoError fails the test when a required step returns an error.
-func requireNoError(t testing.TB, err error, step string) {
-	t.Helper()
+func requireNoError(tb testing.TB, err error, step string) {
+	tb.Helper()
 	if err != nil {
-		t.Fatalf("%s: %v", step, err)
+		tb.Fatalf("%s: %v", step, err)
 	}
 }
 
 // mustType asserts the dynamic type of value and fails the test otherwise.
-func mustType[T any](t testing.TB, value any) T {
-	t.Helper()
+func mustType[T any](tb testing.TB, value any) T {
+	tb.Helper()
 	typed, ok := value.(T)
 	if !ok {
-		t.Fatalf("value has type %T, want %T", value, typed)
+		tb.Fatalf("value has type %T, want %T", value, typed)
 	}
 	return typed
 }

@@ -131,6 +131,7 @@ func TestWebMCPLiveSessionAndDirectQueryPayloadParity(t *testing.T) {
 }
 
 func newQueryParityFixture(t *testing.T) queryParityFixture {
+	t.Helper()
 	return newQueryParityFixtureWithTool(t, webmcp.ToolDescriptor{
 		Name:        queryParityToolName,
 		Description: "List documents in the current Margin page.",

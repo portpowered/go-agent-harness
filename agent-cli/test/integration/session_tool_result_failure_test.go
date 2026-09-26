@@ -189,6 +189,7 @@ func assertUnresolvedFailure(t *testing.T, err error) {
 
 func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *testing.T) {
 	clitest.Subtest(t, "provider close", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		runErr := make(chan error, 1)
@@ -204,6 +205,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "buffer full result send", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession(messages.SessionSendBufferFull, errors.New("provider result queue is full"))
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{})}
 		runErr := runUnresolvedFailureSession(t, session, executor)
@@ -211,6 +213,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "caller cancellation", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -229,6 +232,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "caller deadline", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -250,6 +254,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "explicit client close", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)

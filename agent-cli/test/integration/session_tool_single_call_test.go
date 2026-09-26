@@ -298,6 +298,7 @@ func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 }
 
 func testSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
+	t.Helper()
 	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t))
 	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
 	executor := &toolCallRecordingExecutor{}

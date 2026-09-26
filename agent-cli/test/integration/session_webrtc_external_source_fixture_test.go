@@ -178,6 +178,7 @@ func startWebrtcSourceFixture(t *testing.T, opts webrtcSourceOptions) (string, *
 // serveWebrtcSource answers one go2rtc WebRTC offer with PCMU audio (and
 // optional H.264 video) and streams fixture frames once connected.
 func serveWebrtcSource(t *testing.T, ctx context.Context, conn *websocket.Conn, opts webrtcSourceOptions, observed *webrtcSourceObservation) {
+	t.Helper()
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		return
@@ -301,6 +302,7 @@ func answerWebrtcOffer(ctx context.Context, pc *webrtc.PeerConnection, offerSDP 
 // closeWebrtcSourceFixture cancels live handlers and closes the server, each
 // within a one-second bound.
 func closeWebrtcSourceFixture(t *testing.T, cancelFixture context.CancelFunc, server *httptest.Server, handlers *sync.WaitGroup) {
+	t.Helper()
 	cancelFixture()
 	server.CloseClientConnections()
 	handlersDone := make(chan struct{})

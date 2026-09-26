@@ -244,13 +244,14 @@ type familyEProviderFixture struct {
 	recoveryResponseSent bool
 }
 
-func newFamilyEProviderFixture(t testing.TB, scenario probe.CustomerScenario, mode familyEShippedMode) *familyEProviderFixture {
+func newFamilyEProviderFixture(tb testing.TB, scenario probe.CustomerScenario, mode familyEShippedMode) *familyEProviderFixture {
+	tb.Helper()
 	fixture := &familyEProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 		mode:     mode,
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

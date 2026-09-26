@@ -389,6 +389,7 @@ func TestReadImageSpokenProductionComposition(t *testing.T) {
 }
 
 func testReadImageSpokenProductionComposition(t *testing.T) {
+	t.Helper()
 	imagePath := filepath.Join(t.TempDir(), "photo.png")
 	imageBytes := readImageFixtureBytes(t)
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
@@ -422,6 +423,7 @@ func TestReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
 }
 
 func testReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
+	t.Helper()
 	imagePath := filepath.Join(t.TempDir(), "photo.png")
 	imageBytes := readImageFixtureBytes(t)
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
@@ -476,6 +478,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 		},
 	} {
 		clitest.Subtest(t, testCase.name, func(t *testing.T) {
+			t.Helper()
 			fixture := rewriteReadImageCapture(t, validFixture, testCase.mutate)
 			run := runSpokenReadImageSession(t, fixture, configDir, imagePath, wavPath)
 			if run.err == nil {

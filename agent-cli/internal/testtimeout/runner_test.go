@@ -55,6 +55,7 @@ func TestTimeoutContract(t *testing.T) {
 // never finishes is terminated when its finite budget expires and reported
 // as a timeout with the cleanup outcome.
 func testBudgetExpiryFailsClosed(t *testing.T, fixtureBinary string) {
+	t.Helper()
 	marker := filepath.Join(t.TempDir(), "expiry.markers")
 	result, runErr := runFixture(context.Background(), fixtureBinary, marker, "grandchild", "TestTimeoutFixtureGrandchild", expiryBudget)
 	var timeoutErr *Error
@@ -78,6 +79,7 @@ func testBudgetExpiryFailsClosed(t *testing.T, fixtureBinary string) {
 // parent has started its child and grandchild, then ends the run through the
 // shared termination path and proves every descendant exits.
 func testBlockedChildFailsClosedAndCleansDescendants(t *testing.T, fixtureBinary string) {
+	t.Helper()
 	marker := filepath.Join(t.TempDir(), "blocked-child.markers")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -130,6 +132,7 @@ func testBlockedChildFailsClosedAndCleansDescendants(t *testing.T, fixtureBinary
 }
 
 func testSuccessControlUsesSameBoundary(t *testing.T, fixtureBinary string) {
+	t.Helper()
 	marker := filepath.Join(t.TempDir(), "success.markers")
 	result, err := runFixture(context.Background(), fixtureBinary, marker, "success", "TestTimeoutFixtureSuccess", fixtureSafetyBudget)
 	if err != nil {

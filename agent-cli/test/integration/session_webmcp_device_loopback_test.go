@@ -34,6 +34,7 @@ func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 }
 
 func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
+	t.Helper()
 	registry := newWebMCPDeviceRegistry(t)
 	feed := openWebMCPVirtualStream(t, registry, "mic-feed")
 

@@ -64,6 +64,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 }
 
 func newManagedLaunchFixture(t *testing.T) *httptest.Server {
+	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/managed-start" && request.URL.Path != "/opened-by-agent" && request.URL.Path != "/webmcp-tool" && request.URL.Path != "/cast-navigation" {
 			http.NotFound(writer, request)

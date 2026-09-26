@@ -62,6 +62,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 }
 
 func testSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) {
+	t.Helper()
 	server := newCLILiveRecordDirServer(false)
 	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -148,6 +149,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 }
 
 func testSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
+	t.Helper()
 	server := newCLILiveBargeScheduledBoundaryServer()
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -259,6 +261,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 }
 
 func testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
+	t.Helper()
 	server := newCLILiveRecordDirCloseAfterTurnServer(2)
 	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(

@@ -293,6 +293,7 @@ func waitForV8MultiTurnEOFs(t *testing.T, ctx context.Context, aToBBridge, bToAB
 }
 
 func waitForV8MultiTurnCompletion(t *testing.T, wg *sync.WaitGroup, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
+	t.Helper()
 	wg.Wait()
 	waitForV8MultiTurnEOFs(t, ctx, aToBBridge, bToABridge)
 }

@@ -266,6 +266,7 @@ func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 }
 
 func testSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.T) {
+	t.Helper()
 	secondContinuationObserved := make(chan struct{})
 	inferencer := newScheduledContinuationInferencer(secondContinuationObserved)
 	executor := &scheduledContinuationExecutor{}
@@ -348,15 +349,15 @@ var _ messages.ToolExecutor = (*scheduledContinuationExecutor)(nil)
 // injected provider doubles while acknowledging their deliberate recording
 // boundary: without a raw provider recorder, audio evidence is a partial bundle
 // whose missing provider artifact is the expected result.
-func assertExpectedSemanticLiveRunResult(t testing.TB, err error) {
-	t.Helper()
+func assertExpectedSemanticLiveRunResult(tb testing.TB, err error) {
+	tb.Helper()
 	if err == nil {
 		return
 	}
 	if errors.Is(err, os.ErrNotExist) && strings.Contains(err.Error(), "finalize provider evidence") {
 		return
 	}
-	t.Fatalf("semantic live command returned an unrelated error: %v", err)
+	tb.Fatalf("semantic live command returned an unrelated error: %v", err)
 }
 
 func assertScheduledContinuationDelivery(t *testing.T, inferencer *scheduledContinuationInferencer, executor *scheduledContinuationExecutor) {

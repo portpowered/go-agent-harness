@@ -326,6 +326,7 @@ func TestSessionToolCallConversationWrongToolNameIsRejected(t *testing.T) {
 }
 
 func testSessionToolCallConversationWrongToolNameIsRejected(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateConversationCallIdentity(t, capture, conversationWrongToolName, "")
 	})
@@ -364,6 +365,7 @@ func TestSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
 }
 
 func testSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateConversationCall(t, capture)
 	})
@@ -392,6 +394,7 @@ func TestSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) 
 }
 
 func testSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		removeExpectedConversationResult(t, capture)
 		removeConversationFollowUp(t, capture)
@@ -416,6 +419,7 @@ func TestSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness
 }
 
 func testSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateExpectedConversationResult(t, capture)
 	})
@@ -446,6 +450,7 @@ func TestSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *te
 }
 
 func testSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateExpectedConversationResult(t, capture, conversationOtherCallID, toolResultPositive)
 	})
@@ -465,6 +470,7 @@ func TestSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate(t *testing
 }
 
 func testSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateExpectedConversationResult(t, capture, "", toolResultPositive)
 	})

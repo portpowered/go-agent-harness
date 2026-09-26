@@ -69,6 +69,7 @@ func pressureTraceWantPCM(capacity int) []byte {
 }
 
 func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFrames int) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	mixer := newPressureTraceMixer(ctx, t, format)
@@ -150,6 +151,7 @@ func startPressureTraceStalledReader(ctx context.Context, mixer *PCM16Mixer, fra
 }
 
 func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameBytes, providerFrames int) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	mixer := newPressureTraceMixer(ctx, t, format)

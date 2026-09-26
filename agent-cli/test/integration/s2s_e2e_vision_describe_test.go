@@ -201,10 +201,12 @@ func buildVisionDescribeFixture(t *testing.T, wavPath string, transcript []strin
 // the captured stdout. It waits for the terminal close marker so
 // asynchronous terminal formatting is always observed.
 func runVisionDescribeSession(t *testing.T, fixturePath, wavPath, imagePath, audioOutPath string) (string, error) {
+	t.Helper()
 	return runVisionDescribeSessionMode(t, fixturePath, wavPath, imagePath, audioOutPath, true)
 }
 
 func runVisionDescribeSessionWithoutRecordingDirectory(t *testing.T, fixturePath, wavPath, imagePath string) (string, error) {
+	t.Helper()
 	return runVisionDescribeSessionMode(t, fixturePath, wavPath, imagePath, "", false)
 }
 
@@ -287,6 +289,7 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 }
 
 func testSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) {
+	t.Helper()
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
@@ -331,6 +334,7 @@ func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
 }
 
 func testVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
+	t.Helper()
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
@@ -384,6 +388,7 @@ func TestVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
 }
 
 func testVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
+	t.Helper()
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, []string{"I hear your question ", "clearly."})
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")

@@ -340,6 +340,7 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 }
 
 func testS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
+	t.Helper()
 	wavPath := locateS2SV2BLongWAV(t)
 	capture, frameCount := buildS2SV2BLongCapture(t, wavPath)
 	capturePath := writeS2SV2BCapture(t, capture)
@@ -411,6 +412,7 @@ func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 }
 
 func testS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
+	t.Helper()
 	wavPath := locateS2SV2BLongWAV(t)
 	positive, _ := buildS2SV2BLongCapture(t, wavPath)
 	negative := buildS2SV2BPerChunkCommitCapture(t, positive)

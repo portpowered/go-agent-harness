@@ -182,12 +182,13 @@ type familyAProviderFixture struct {
 	pendingResult                                                 bool
 }
 
-func newFamilyAProviderFixture(t testing.TB, scenario probe.CustomerScenario) *familyAProviderFixture {
+func newFamilyAProviderFixture(tb testing.TB, scenario probe.CustomerScenario) *familyAProviderFixture {
+	tb.Helper()
 	fixture := &familyAProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 func (f *familyAProviderFixture) WebSocketURL() string {

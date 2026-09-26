@@ -164,6 +164,7 @@ type directCommandResult struct {
 }
 
 func executeDirectCommand(t *testing.T, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
+	t.Helper()
 	return executeDirectCommandContext(t, context.Background(), configDir, store, factory, args...)
 }
 

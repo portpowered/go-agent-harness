@@ -259,12 +259,13 @@ func loadFamilyCScenario(t *testing.T) probe.CustomerScenario {
 	return scenario
 }
 
-func newFamilyCProviderFixture(t testing.TB, scenario probe.CustomerScenario) *familyCProviderFixture {
+func newFamilyCProviderFixture(tb testing.TB, scenario probe.CustomerScenario) *familyCProviderFixture {
+	tb.Helper()
 	fixture := &familyCProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 
