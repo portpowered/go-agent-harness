@@ -3,12 +3,16 @@ package openai
 import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -315,4 +319,109 @@ func TestRealtimeSession_AutomaticResponseCancelKeepsQueuedPlayback(t *testing.T
 	if frame, err := endpoints.Inbound.ReadFrame(ctx); err != nil || frame.PlaybackResponse.ItemID != "item-echo" {
 		t.Fatalf("frame after automatic cancel = %+v (%v), want the queued response audio", frame.PlaybackResponse, err)
 	}
+}
+
+// virtualPlaybackDevice renders frames at the device clock of a synctest
+// bubble: each 30 ms frame occupies 30 ms of virtual time. It records when each
+// response started and stopped being audible.
+type virtualPlaybackDevice struct {
+	mu         sync.Mutex
+	playedMS   map[string]int
+	firstHeard map[string]time.Time
+	lastHeard  map[string]time.Time
+}
+
+func newVirtualPlaybackDevice() *virtualPlaybackDevice {
+	return &virtualPlaybackDevice{playedMS: map[string]int{}, firstHeard: map[string]time.Time{}, lastHeard: map[string]time.Time{}}
+}
+
+func (d *virtualPlaybackDevice) StartPlayback(sharedaudio.PlaybackResponse) {}
+
+func (d *virtualPlaybackDevice) InterruptPlayback(response sharedaudio.PlaybackResponse) (int, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.playedMS[response.ItemID], true
+}
+
+func (d *virtualPlaybackDevice) pump(ctx context.Context, inbound sharedaudio.InboundMedia) {
+	for {
+		frame, err := inbound.ReadFrame(ctx)
+		if err != nil {
+			return
+		}
+		duration := time.Duration(len(frame.Samples)) * time.Second / 24000
+		item := frame.PlaybackResponse.ItemID
+		d.mu.Lock()
+		if _, ok := d.firstHeard[item]; !ok {
+			d.firstHeard[item] = time.Now()
+		}
+		d.lastHeard[item] = time.Now().Add(duration)
+		d.playedMS[item] += int(duration / time.Millisecond)
+		d.mu.Unlock()
+		time.Sleep(duration)
+	}
+}
+
+func (d *virtualPlaybackDevice) heard(item string) (time.Time, time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.firstHeard[item], d.lastHeard[item]
+}
+
+// A long conversation where the user interrupts every response. The provider
+// delivers each 3 s answer at once, far ahead of the device. Measured on the
+// virtual device clock, the interrupted answer must fall silent within one
+// frame of the interrupt and the next answer must start within one frame of
+// its arrival -- on the last turn exactly as on the first. Before cancel
+// flushed local playback, every interrupted backlog kept playing and pushed
+// each later answer further behind, so the barge-in delay grew every turn.
+func TestRealtimeSession_BargeInLatencyStaysFlatAcrossLongSession(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const turns, frame = 32, 30 * time.Millisecond
+		conn := newMockWebSocketConn()
+		session := newRealtimeSession(conn, logging.DummyLogger())
+		session.mediaSampleRate = 24000
+		endpoints := session.RTCMedia()
+		device := newVirtualPlaybackDevice()
+		controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+		if !ok {
+			t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+		}
+		controlled.SetPlaybackController(device)
+		ctx, stop := context.WithCancel(t.Context())
+		session.start(ctx)
+		pumped := make(chan struct{})
+		go func() { defer close(pumped); device.pump(ctx, endpoints.Inbound) }()
+		arrived, interrupted := make([]time.Time, turns), make([]time.Time, turns)
+		for turn := range turns {
+			item := fmt.Sprintf("item-%02d", turn)
+			arrived[turn] = time.Now()
+			conn.addServerEvent("response.output_audio.delta", map[string]any{
+				"response_id": "resp-" + item, "item_id": item, "content_index": 0,
+				"delta": codec.EncodePCM16Base64(make([]int16, 24000*3)), "format": "pcm16",
+			})
+			time.Sleep(time.Second) // the user listens, then interrupts
+			interrupted[turn] = time.Now()
+			if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+				t.Errorf("turn %d: send RESPONSE.CANCEL: %+v", turn, outcome)
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		time.Sleep(turns * 3 * time.Second) // let any backlog drain on the device clock
+		stop()
+		<-pumped
+		closeForTest(t, session)
+		startLatency, silenceLatency := make([]time.Duration, turns), make([]time.Duration, turns)
+		for turn := range turns {
+			first, last := device.heard(fmt.Sprintf("item-%02d", turn))
+			startLatency[turn], silenceLatency[turn] = first.Sub(arrived[turn]), max(last.Sub(interrupted[turn]), 0)
+		}
+		t.Logf("per-turn answer start latency %v", startLatency)
+		t.Logf("per-turn barge-in silence latency %v", silenceLatency)
+		for turn := range startLatency {
+			if startLatency[turn] > frame || silenceLatency[turn] > frame {
+				t.Fatalf("turn %d: answer started %v after arrival and fell silent %v after the interrupt, want both within one %v frame", turn, startLatency[turn], silenceLatency[turn], frame)
+			}
+		}
+	})
 }

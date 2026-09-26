@@ -247,12 +247,15 @@ func (r *ModelRunner) EnqueueSessionMessage(ctx context.Context, msg messages.Me
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	r.cancelLane.queuedControls.Add(1)
 	select {
 	case r.sessionInputInbox <- sessionInput{kind: sessionInputMessage, message: msg, requestResponse: requestResponse}:
 		return nil
 	case <-ctx.Done():
+		r.cancelLane.queuedControls.Add(-1)
 		return ctx.Err()
 	default:
+		r.cancelLane.queuedControls.Add(-1)
 		return ErrSessionInputQueueFull
 	}
 }
@@ -281,6 +284,9 @@ func (r *ModelRunner) forwardSessionCompleteMessage(ctx context.Context, session
 // forwardSessionInput dispatches the ordered ingress without reading a second
 // input or changing the provider lifecycle observation order.
 func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) error {
+	if input.kind != sessionInputAudio {
+		r.cancelLane.queuedControls.Add(-1)
+	}
 	switch input.kind {
 	case sessionInputAudio:
 		return r.forwardSessionAudioInputWithState(ctx, session, input.audio, state)

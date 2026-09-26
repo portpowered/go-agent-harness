@@ -68,6 +68,9 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 			return true, r.endSession(ctx, state, nil)
 		}
 		return r.awaitedSessionEvent(ctx, session, state, evt)
+	case evt := <-r.cancelLane.inbox:
+		r.forwardPendingSessionMessages(ctx, session, state)
+		r.forwardQueuedSessionEvent(ctx, session, state, evt)
 	case req, ok := <-r.Inbox.Chan():
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
@@ -111,7 +114,7 @@ func (r *ModelRunner) awaitedSessionEvent(ctx context.Context, session messages.
 func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, state *sessionRunState) (handled, closed bool, audioErr error) {
 	state.ensureMaps()
 	for {
-		if r.forwardPendingSessionMessages(ctx, session, state) {
+		if r.forwardPendingSessionMessagesAndCancels(ctx, session, state) {
 			handled = true
 			continue
 		}

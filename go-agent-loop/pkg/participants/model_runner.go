@@ -38,6 +38,7 @@ type ModelRunner struct {
 	// caller order and then forwarded by the session runner in that order.
 	sessionInputMu sync.Mutex
 	ingressStop    sessionIngressStop // closed when runSession returns; releases parked waiting admissions
+	cancelLane     sessionCancelLane  // lets RESPONSE.CANCEL overtake queued bulk audio
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
@@ -170,6 +171,7 @@ func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, co
 		UserAudioInbox:    make(chan []byte, 64),
 		UserEventInbox:    make(chan messages.StreamMessage, 8),
 		sessionInputInbox: make(chan sessionInput, 72),
+		cancelLane:        sessionCancelLane{inbox: make(chan messages.StreamMessage, sessionCancelLaneCapacity)},
 	}
 }
 
@@ -186,36 +188,6 @@ func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, 
 		return err
 	}
 	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, false)
-}
-
-func isSessionToolEvent(msg messages.StreamMessage) bool {
-	return msg.Type == messages.StreamTypeToolCallEnd || msg.Type == messages.StreamTypeResponseCreate
-}
-
-func (r *ModelRunner) markSessionToolEventQueued(msg messages.StreamMessage) {
-	if !isSessionToolEvent(msg) {
-		return
-	}
-	r.sessionToolEventMu.Lock()
-	r.pendingSessionToolEvents++
-	r.sessionToolEventMu.Unlock()
-}
-
-func (r *ModelRunner) markSessionToolEventConsumed(msg messages.StreamMessage) {
-	if !isSessionToolEvent(msg) {
-		return
-	}
-	r.sessionToolEventMu.Lock()
-	if r.pendingSessionToolEvents > 0 {
-		r.pendingSessionToolEvents--
-	}
-	r.sessionToolEventMu.Unlock()
-}
-
-func (r *ModelRunner) hasPendingSessionToolEvents() bool {
-	r.sessionToolEventMu.Lock()
-	defer r.sessionToolEventMu.Unlock()
-	return r.pendingSessionToolEvents > 0
 }
 
 // CancelCurrentExecution cancels the per-execution context for the inference

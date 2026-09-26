@@ -3,6 +3,7 @@ package participants
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -433,5 +434,100 @@ func lastAnnouncedStart(runner *ModelRunner) *messages.StreamMessage {
 		if delta.Type == messages.StreamTypeMessageStart {
 			last = &delta
 		}
+	}
+}
+
+// pacedRecordingSession spends one 30 ms audio frame of virtual time on each
+// provider audio write, like a transport that is momentarily at capacity, and
+// reports when each RESPONSE.CANCEL reaches the provider.
+type pacedRecordingSession struct {
+	*recordingSession
+	cancels chan time.Time
+}
+
+func (s *pacedRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeAudioDelta {
+		time.Sleep(30 * time.Millisecond)
+	}
+	if msg.Type == messages.StreamTypeResponseCancel {
+		s.cancels <- time.Now()
+	}
+	return s.recordingSession.Send(ctx, msg)
+}
+
+// An interrupt must not wait behind microphone audio already queued for a
+// slow transport. Over a long session with an interrupt every turn, the
+// explicit RESPONSE.CANCEL reaches the provider within one in-flight frame of
+// the interrupt, on the last turn exactly as on the first. Before the cancel
+// lane it queued behind two seconds of bulk audio (and behind any admission
+// parked on a full ingress).
+func TestSessionModelRunner_InterruptOvertakesQueuedAudioAcrossLongSession(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const turns, frame = 32, 30 * time.Millisecond
+		session := &pacedRecordingSession{recordingSession: newRecordingSession(), cancels: make(chan time.Time, 1)}
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 64, nil)
+		ctx, stop := context.WithCancel(t.Context())
+		ran := make(chan error, 1)
+		go func() { ran <- runner.Run(ctx) }()
+		go func() {
+			for _, ok := runner.DeltaOutbox.ReadBlockingContext(ctx); ok; _, ok = runner.DeltaOutbox.ReadBlockingContext(ctx) {
+			}
+		}()
+		latency := make([]time.Duration, 0, turns)
+		for turn := range turns {
+			id := fmt.Sprintf("resp-%02d", turn)
+			session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: id, Value: messages.NewMessageStartValue()})
+			for range 64 { // two seconds of microphone audio waiting for the transport
+				if err := runner.EnqueueSessionAudioInputWithPolicyWaiting(ctx, []byte{0, 0}, messages.SessionAudioInputPolicyDoNotInterrupt); err != nil {
+					t.Fatalf("turn %d: queue microphone audio: %v", turn, err)
+				}
+			}
+			pressed := time.Now()
+			if err := runner.EnqueueSessionEventWaiting(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); err != nil {
+				t.Fatalf("turn %d: interrupt: %v", turn, err)
+			}
+			latency = append(latency, (<-session.cancels).Sub(pressed))
+			session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: id, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+			time.Sleep(3 * time.Second) // the transport drains the queued audio
+		}
+		stop()
+		<-ran
+		t.Logf("per-turn interrupt to RESPONSE.CANCEL latency %v", latency)
+		for turn, got := range latency {
+			if got > frame {
+				t.Fatalf("turn %d: RESPONSE.CANCEL reached the provider %v after the interrupt, want within one %v frame", turn, got, frame)
+			}
+		}
+	})
+}
+
+// The cancel lane never reorders control inputs: while a turn boundary is
+// queued, an interrupt keeps its FIFO position behind that boundary.
+func TestSessionModelRunner_InterruptKeepsOrderBehindQueuedTurnBoundary(t *testing.T) {
+	runner := NewSessionModelRunner(nil, 8, nil)
+	ctx := t.Context()
+	if err := runner.EnqueueSessionAudioInput(ctx, []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	commit := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}
+	if err := runner.EnqueueSessionEvent(ctx, commit); err != nil {
+		t.Fatal(err)
+	}
+	cancel := messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}
+	if err := runner.EnqueueSessionEvent(ctx, cancel); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.cancelLane.inbox) != 0 || len(runner.sessionInputInbox) != 3 {
+		t.Fatalf("cancel lane=%d ingress=%d, want the interrupt queued behind the turn boundary", len(runner.cancelLane.inbox), len(runner.sessionInputInbox))
+	}
+	session := newRecordingSession()
+	state := newSessionResponseState()
+	for len(runner.sessionInputInbox) > 0 {
+		if err := runner.forwardSessionInput(ctx, session, state, <-runner.sessionInputInbox); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := runner.EnqueueSessionEvent(ctx, cancel); err != nil || len(runner.cancelLane.inbox) != 1 {
+		t.Fatalf("interrupt after the boundary drained = %v (lane %d), want the priority lane", err, len(runner.cancelLane.inbox))
 	}
 }

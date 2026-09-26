@@ -145,6 +145,8 @@ func (s *sessionIngressStop) stopped() bool {
 // behind a waiting admission (EnqueueSessionEventWaiting or
 // EnqueueSessionAudioInputWithPolicyWaiting) that is parked on a full ingress,
 // until that admission is drained, cancelled, or released by runner shutdown.
+// A RESPONSE.CANCEL with no control input queued ahead of it bypasses both and
+// overtakes queued audio (see sessionCancelLane).
 func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
 	return r.enqueueSessionEvent(ctx, msg, false, "EnqueueSessionEvent")
 }
@@ -160,6 +162,18 @@ func (r *ModelRunner) enqueueSessionEvent(ctx context.Context, msg messages.Stre
 	if ctx == nil && waitForCapacity {
 		return fmt.Errorf("%s: nil context", operation)
 	}
+	if r.admitPriorityCancel(msg) {
+		return nil
+	}
+	r.cancelLane.queuedControls.Add(1)
+	err := r.enqueueOrderedSessionEvent(ctx, msg, waitForCapacity)
+	if err != nil {
+		r.cancelLane.queuedControls.Add(-1)
+	}
+	return err
+}
+
+func (r *ModelRunner) enqueueOrderedSessionEvent(ctx context.Context, msg messages.StreamMessage, waitForCapacity bool) error {
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
 	// A nil context on the non-waiting path means "no cancellation"; its nil

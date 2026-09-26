@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -233,4 +234,76 @@ func hasPCM16Signal(pcm []byte) bool {
 		}
 	}
 	return false
+}
+
+func isSessionToolEvent(msg messages.StreamMessage) bool {
+	return msg.Type == messages.StreamTypeToolCallEnd || msg.Type == messages.StreamTypeResponseCreate
+}
+
+func (r *ModelRunner) markSessionToolEventQueued(msg messages.StreamMessage) {
+	if !isSessionToolEvent(msg) {
+		return
+	}
+	r.sessionToolEventMu.Lock()
+	r.pendingSessionToolEvents++
+	r.sessionToolEventMu.Unlock()
+}
+
+func (r *ModelRunner) markSessionToolEventConsumed(msg messages.StreamMessage) {
+	if !isSessionToolEvent(msg) {
+		return
+	}
+	r.sessionToolEventMu.Lock()
+	if r.pendingSessionToolEvents > 0 {
+		r.pendingSessionToolEvents--
+	}
+	r.sessionToolEventMu.Unlock()
+}
+
+func (r *ModelRunner) hasPendingSessionToolEvents() bool {
+	r.sessionToolEventMu.Lock()
+	defer r.sessionToolEventMu.Unlock()
+	return r.pendingSessionToolEvents > 0
+}
+
+// sessionCancelLaneCapacity bounds interrupts waiting for the runner; a full
+// lane falls back to the ordered ingress.
+const sessionCancelLaneCapacity = 4
+
+// sessionCancelLane gives an explicit RESPONSE.CANCEL priority over bulk audio
+// already waiting in the ordered session ingress, so an interrupt is not
+// delayed by (or parked behind a waiting admission of) queued audio frames.
+// A cancel never overtakes a queued control input: while one is queued the
+// cancel keeps its FIFO position relative to that turn boundary.
+type sessionCancelLane struct {
+	inbox          chan messages.StreamMessage
+	queuedControls atomic.Int64
+}
+
+func (r *ModelRunner) admitPriorityCancel(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeResponseCancel || r.cancelLane.inbox == nil ||
+		r.cancelLane.queuedControls.Load() > 0 || r.ingressStop.stopped() {
+		return false
+	}
+	select {
+	case r.cancelLane.inbox <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// forwardPendingSessionMessagesAndCancels observes queued provider messages,
+// then forwards any priority cancel before queued user input is admitted.
+func (r *ModelRunner) forwardPendingSessionMessagesAndCancels(ctx context.Context, session messages.Session, state *sessionRunState) bool {
+	if r.forwardPendingSessionMessages(ctx, session, state) {
+		return true
+	}
+	select {
+	case evt := <-r.cancelLane.inbox:
+		r.forwardQueuedSessionEvent(ctx, session, state, evt)
+		return true
+	default:
+		return false
+	}
 }
