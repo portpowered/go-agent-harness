@@ -67,9 +67,10 @@ type Result struct {
 	Stderr   string
 }
 
-// Run composes the CLI (see Invocation.Ports) and executes inv to completion under t.Context(). A composition failure or an exceeded
-// Timeout fails the test; command failures are reported through ExitCode and
-// the captured streams, as the process boundary reports them.
+// Run composes the CLI (see Invocation.Ports) and executes inv to completion
+// under t.Context(). A composition failure or an exceeded Timeout fails the
+// test; command failures are reported through ExitCode and the captured
+// streams, as the process boundary reports them.
 func Run(t testing.TB, inv Invocation) Result {
 	t.Helper()
 	agentCLI, err := compose(inv)
