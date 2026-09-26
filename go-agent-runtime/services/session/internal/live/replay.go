@@ -290,15 +290,20 @@ func (h *handle) sendAudioInput(ctx context.Context, pcm []byte, policy messages
 		}
 		return session.ErrLiveClosed
 	}
-	// Provider output audio reaches playback without waiting for the relay
-	// that publishes response lifecycle messages to the runner. Input may be
-	// a reaction to that audio, so publish every provider message queued
-	// before it; the runner then evaluates barge-in against the response the
-	// speaker actually heard instead of a stale idle state.
+	h.syncProviderReceive(ctx)
+	return liveInputError(loop.SendAudioInputWithPolicy(ctx, pcm, policy))
+}
+
+// syncProviderReceive publishes every provider message queued before this
+// point. Provider output audio reaches playback without waiting for the relay
+// that publishes response lifecycle messages to the runner, and user input
+// (audio or an interrupt control) may be a reaction to that audio; the runner
+// then evaluates barge-in against the response the speaker actually heard
+// instead of a stale idle state.
+func (h *handle) syncProviderReceive(ctx context.Context) {
 	if h.providerReceiveSync != nil {
 		h.providerReceiveSync(ctx)
 	}
-	return liveInputError(loop.SendAudioInputWithPolicy(ctx, pcm, policy))
 }
 
 // liveInputError reports session ingress admission abandoned because the

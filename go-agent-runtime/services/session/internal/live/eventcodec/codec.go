@@ -234,3 +234,39 @@ func InterruptedBeforeToolContinuation(msg messages.StreamMessage) bool {
 	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput &&
 		value.TerminalProvenance == messages.TerminalProvenanceLoop
 }
+
+// CapabilityEvent converts a browser capability event into a live event.
+func CapabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
+	copy := value
+	return session.LiveEvent{
+		Kind:          "browser." + strings.TrimSpace(value.Type),
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		Timestamp:     value.Timestamp,
+		BrowserID:     value.BrowserID,
+		TargetID:      value.TargetID,
+		Generation:    value.Generation,
+		InvocationID:  value.InvocationID,
+		State:         value.State,
+		Reason:        value.Reason,
+		Capability:    &copy,
+		Critical:      capabilityEventCritical(value),
+	}
+}
+
+func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
+	typeName := strings.ToLower(strings.TrimSpace(value.Type))
+	state := strings.ToLower(strings.TrimSpace(value.State))
+	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
+		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
+		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
+		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
+}
+
+// CapabilityEventRequiresRefresh reports whether a browser capability event
+// can change the live tool catalog.
+func CapabilityEventRequiresRefresh(event session.LiveCapabilityEvent) bool {
+	kind := strings.ToLower(strings.TrimSpace(event.Type))
+	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation") ||
+		kind == "tools_added" || kind == "tools_removed" || kind == "page_navigated" || kind == "frame_navigated"
+}

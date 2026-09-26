@@ -7,6 +7,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"strings"
 )
@@ -291,7 +292,7 @@ func (h *handle) handleCapabilityEvent(
 	event session.LiveCapabilityEvent,
 ) error {
 	h.publishCapabilityEvent(event) //nolint:contextcheck // event publication owns its bounded recorder path.
-	if !capabilityEventRequiresRefresh(event) {
+	if !eventcodec.CapabilityEventRequiresRefresh(event) {
 		return nil
 	}
 	for {
@@ -305,7 +306,7 @@ func (h *handle) handleCapabilityEvent(
 	}
 }
 func (h *handle) publishCapabilityEvent(event session.LiveCapabilityEvent) {
-	h.publish(capabilityEvent(h.request.SessionID, h.request.ParticipantID, event), false)
+	h.publish(eventcodec.CapabilityEvent(h.request.SessionID, h.request.ParticipantID, event), false)
 	h.publishCaptureInterruptionEvent(event)
 }
 
@@ -351,18 +352,13 @@ func (h *handle) nextCapabilityRefresh(ctx context.Context, events <-chan sessio
 				return latest, refreshAgain, nil
 			}
 			h.publishCapabilityEvent(next) //nolint:contextcheck // event publication owns its bounded recorder path.
-			if capabilityEventRequiresRefresh(next) {
+			if eventcodec.CapabilityEventRequiresRefresh(next) {
 				latest, refreshAgain = next, true
 			}
 		default:
 			return latest, refreshAgain, nil
 		}
 	}
-}
-func capabilityEventRequiresRefresh(event session.LiveCapabilityEvent) bool {
-	kind := strings.ToLower(strings.TrimSpace(event.Type))
-	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation") ||
-		kind == "tools_added" || kind == "tools_removed" || kind == "page_navigated" || kind == "frame_navigated"
 }
 func waitForOpeningContent(value any, ctx context.Context) error {
 	ready, ok := value.(interface{ waitOpeningReady(context.Context) error })
