@@ -545,6 +545,24 @@ func TestSessionModelRunner_ContinuationRequestSyncsProviderMessagesFirst(t *tes
 	}
 }
 
+// An explicit cancel that took the ordered ingress (the priority lane was
+// bypassed behind a queued control) still precedes the held onset audio.
+func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-ordered")
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	runner.cancelLane.queuedControls.Add(1)
+	cancel := messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}
+	if err := runner.forwardSessionInput(context.Background(), session, state, sessionInput{kind: sessionInputEvent, event: cancel}); err != nil {
+		t.Fatal(err)
+	}
+	sent := session.sentMessages()
+	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("sent %#v, want RESPONSE.CANCEL before the held frame", sent)
+	}
+}
+
 // closingSession closes admission like a room shutting down: afterwards
 // every send is rejected as closed.
 type closingSession struct {
