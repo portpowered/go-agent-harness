@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -13,29 +12,33 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
-// TestRemoteToolAudioSlowDeviceEdgeOracleControl exercises the same remote
-// device and terminal-marker oracle as the failing agent scenario, while
-// removing provider/session lifecycle ordering from the path. The manual clock
+// TestRemoteToolAudioSlowDeviceEdgeOracleControl exercises the same simulated
+// device and terminal-marker oracle as the agent scenarios, while removing
+// provider/session lifecycle ordering from the path. It runs in-process on a
+// virtual clock (clitest). The manual clock
 // keeps the slow_device ratio (45:30) against the accelerated drain cadence,
 // so the device, not the writer, remains the bottleneck.
 // A passing control localizes a missing sample run to the upstream delivery
 // boundary instead of allowing a device underflow to be mistaken for fixture
 // or oracle behavior.
 func TestRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
+	clitest.Test(t, testRemoteToolAudioSlowDeviceEdgeOracleControl)
+}
+
+func testRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
 	want := remoteToolAudioSlowDeviceControlPCM(t)
 	if len(want) < audio.FrameSize {
 		t.Fatalf("expected control audio to contain at least one frame: %d samples", len(want))
 	}
 
-	endpoint, stopDevice := startAudioDeviceServerBinary(t, true)
-	defer stopDevice()
-
-	sink := newRemoteToolAudioEdgeSink(t, endpoint)
+	device := newInProcessDuplexDevice(t)
+	sink := newRemoteToolAudioEdgeSink(t, device.registry)
 	defer func() {
 		if err := sink.Close(); err != nil {
 			t.Errorf("close remote device edge sink: %v", err)
@@ -54,7 +57,7 @@ func TestRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
 	callbackAdvances := &atomic.Uint64{}
 	snapshot, err := waitForRemoteToolAudio(
 		ctx,
-		endpoint,
+		device,
 		want,
 		remoteToolAudioDrainInterval*3/2,
 		callbackAdvances,
@@ -87,12 +90,8 @@ func remoteToolAudioSlowDeviceControlPCM(t *testing.T) []int16 {
 	return remoteToolAudioExpected(t, responses)
 }
 
-func newRemoteToolAudioEdgeSink(t *testing.T, endpoint string) *devicegw.DeviceSink {
+func newRemoteToolAudioEdgeSink(t *testing.T, registry devicegw.DeviceRegistry) *devicegw.DeviceSink {
 	t.Helper()
-	registry, err := devicegw.NewRemoteDeviceRegistry(endpoint)
-	if err != nil {
-		t.Fatalf("connect to remote device: %v", err)
-	}
 	output, err := registry.Default(devicegw.DirectionOutput)
 	if err != nil {
 		t.Fatalf("resolve default remote output: %v", err)
@@ -127,7 +126,7 @@ func writeRemoteToolAudioControl(ctx context.Context, sink *devicegw.DeviceSink,
 	return nil
 }
 
-func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64) (devicegw.DeviceServerSnapshot, error) {
+func waitForRemoteToolAudio(ctx context.Context, device remoteToolAudioDevice, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64) (devicegw.DeviceServerSnapshot, error) {
 	// Keep the external callback clock alive until the expected PCM suffix crosses
 	// the device edge; a fixed callback budget races coverage-instrumented agents.
 	markerSamples := audio.FrameSize
@@ -141,7 +140,7 @@ func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, 
 	callbacksSinceSnapshot := callbacksPerSnapshot
 	for {
 		if callbacksSinceSnapshot >= callbacksPerSnapshot {
-			snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(ctx, endpoint)
+			snapshot, err := device.Snapshot(ctx)
 			if err != nil {
 				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("read remote device evidence: %w", err)
 			}
@@ -153,7 +152,7 @@ func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, 
 		}
 		select {
 		case <-ticker.C:
-			if err := devicegw.AdvanceRemoteDeviceServer(ctx, endpoint, 1); err != nil {
+			if err := device.Advance(ctx, 1); err != nil {
 				return devicegw.DeviceServerSnapshot{}, fmt.Errorf("advance remote playback while awaiting final marker: %w", err)
 			}
 			callbackAdvances.Add(1)
@@ -164,11 +163,11 @@ func waitForRemoteToolAudio(ctx context.Context, endpoint string, want []int16, 
 	}
 }
 
-func requireRemoteToolAudio(t *testing.T, ctx context.Context, endpoint string, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64, provider *remoteToolAudioProvider, expectedToolCalls int, expected []int16, done <-chan error, stderr *remoteToolAudioBuffer) devicegw.DeviceServerSnapshot {
+func requireRemoteToolAudio(t *testing.T, ctx context.Context, device remoteToolAudioDevice, want []int16, callbackInterval time.Duration, callbackAdvances *atomic.Uint64, provider *remoteToolAudioProvider, expectedToolCalls int, expected []int16, done <-chan error, stderr *remoteToolAudioBuffer) devicegw.DeviceServerSnapshot {
 	t.Helper()
-	snapshot, err := waitForRemoteToolAudio(ctx, endpoint, want, callbackInterval, callbackAdvances)
+	snapshot, err := waitForRemoteToolAudio(ctx, device, want, callbackInterval, callbackAdvances)
 	if err != nil {
-		t.Fatalf("remote playback wait failed: %v; %s", err, remoteToolAudioFailureEvidence(ctx, endpoint, provider, expectedToolCalls, expected, done, stderr, callbackAdvances))
+		t.Fatalf("remote playback wait failed: %v; %s", err, remoteToolAudioFailureEvidence(ctx, device, provider, expectedToolCalls, expected, done, stderr, callbackAdvances))
 	}
 	return snapshot
 }
@@ -219,27 +218,26 @@ func assertRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, g
 	}
 }
 
-// TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM forces a gap beyond
-// the production cue threshold. The remote device must observe both complete
+// TestDefaultHoldToneIsSeparateFromProviderPCM forces a gap beyond
+// the production cue threshold. The device must observe both complete
 // provider responses plus independent local cue samples. This is the control
 // that permits exact-delivery scenarios to disable the cue explicitly instead
 // of weakening their provider-only PCM oracle.
-func TestAgentBinaryDefaultHoldToneIsSeparateFromProviderPCM(t *testing.T) {
+func TestDefaultHoldToneIsSeparateFromProviderPCM(t *testing.T) {
 	testCase := remoteToolAudioCase{
 		name:            "default_hold_tone_control",
 		responseSamples: []int{remoteToolAudioDeltaSamples, remoteToolAudioDeltaSamples},
 		toolResponses:   map[int]bool{0: true},
 		providerClose:   true,
 		holdToneControl: true,
+		inProcess:       true,
 	}
 	// Both subtests wait out a 3s tool delay to cross the 2.5s hold-tone gap
-	// threshold; they are independent process pairs, so they wait together.
-	t.Run("default_cue", func(t *testing.T) {
-		t.Parallel()
+	// threshold, on the virtual clock.
+	clitest.Subtest(t, "default_cue", func(t *testing.T) {
 		runRemoteToolAudioScenario(t, testCase, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
 	})
-	t.Run("provider_only_fixture", func(t *testing.T) {
-		t.Parallel()
+	clitest.Subtest(t, "provider_only_fixture", func(t *testing.T) {
 		providerOnly := testCase
 		providerOnly.name = "provider_only_hold_tone_policy"
 		providerOnly.holdToneControl = false
@@ -430,18 +428,6 @@ func remoteToolAudioTraceTail(trace []devicegw.DeviceTraceEvent, tap string) str
 	return "none"
 }
 
-// requireRemoteToolAudioCadenceSlot skips device-cadence deliveries other
-// than test45/captured_cadence unless YUI_AUDIO_STRESS=1. Each drains in real
-// time (18-22s), so pull requests keep that one as the representative
-// real-pace tool continuation over remote device audio and the nightly audio
-// stress workflow runs the rest.
-func requireRemoteToolAudioCadenceSlot(t *testing.T, caseName string, delivery remoteToolAudioDelivery) {
-	t.Helper()
-	if delivery.deviceCadence && (caseName != "test45" || delivery.name != "captured_cadence") {
-		requireRemoteToolAudioStress(t)
-	}
-}
-
 // remoteToolAudioDelivery is one provider/tool/device timing variant of the
 // tool-continuation topology.
 type remoteToolAudioDelivery struct {
@@ -486,17 +472,13 @@ func newRemoteToolAudioPaths(t *testing.T, testCase remoteToolAudioCase, calls [
 	return paths
 }
 
-// remoteToolAudioCommand builds the shipped agent session command wired to
-// the hermetic provider and the remote audio-device server.
-func remoteToolAudioCommand(ctx context.Context, testCase remoteToolAudioCase, withTools bool, endpoint, providerURL string, withInput bool, prompt string, paths remoteToolAudioPaths) *exec.Cmd {
+// remoteToolAudioArgs are the session flags of a scenario; the topology
+// adds how the agent reaches its provider and device.
+func remoteToolAudioArgs(testCase remoteToolAudioCase, withInput bool, prompt string, paths remoteToolAudioPaths) []string {
 	arguments := []string{
-		"--config-dir", paths.configDir,
-		"session",
 		"--provider", "openai",
 		"--model", "gpt-realtime-2.1",
 		"--api-key", "hermetic-key",
-		"--base-url", providerURL,
-		"--audio-device-server", endpoint,
 		"--audio-out-device=",
 		"--max-duration", "30s",
 	}
@@ -505,10 +487,6 @@ func remoteToolAudioCommand(ctx context.Context, testCase remoteToolAudioCase, w
 	}
 	if !testCase.naturalClose {
 		arguments = append(arguments, "--wait-for-close")
-	}
-	binaryPath := agentBinaryPath
-	if withTools {
-		binaryPath = mockToolAgentBinaryPath
 	}
 	if paths.audioOut != "" {
 		arguments = append(arguments, "--audio-out", paths.audioOut)
@@ -519,9 +497,12 @@ func remoteToolAudioCommand(ctx context.Context, testCase remoteToolAudioCase, w
 	if prompt != "" {
 		arguments = append(arguments, prompt)
 	}
-	command := exec.CommandContext(ctx, binaryPath, arguments...)
-	command.Env = remoteToolAudioEnvironment(os.Environ(), paths.fixture, testCase.holdToneControl)
-	return command
+	return arguments
+}
+
+// remoteToolAudioSessionArgs prefixes the shipped session command.
+func remoteToolAudioSessionArgs(configDir string, arguments []string) []string {
+	return append([]string{"--config-dir", configDir, "session"}, arguments...)
 }
 
 // awaitRemoteToolAudioTopology waits until the provider sent every scripted

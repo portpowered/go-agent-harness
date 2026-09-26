@@ -1,19 +1,20 @@
 // Package clitest runs the agent CLI entrypoint inside the test process.
 //
-// Run drives cli.Execute, the path cmd/agent uses, over a CLI composed exactly
-// like the shipped binary, with in-memory standard streams instead of a built
-// executable and pipes. Test wraps a test body in a testing/synctest bubble,
-// so the command's timers, tickers, sleeps and context deadlines advance on the
-// bubble's virtual clock: a 14-second paced audio stream or a 30-second
-// max-duration bound completes as soon as every goroutine is idle.
+// Run and Start drive cli.Execute, the path cmd/agent uses, with in-memory
+// standard streams instead of a built executable and pipes. Test wraps a test
+// body in a testing/synctest bubble, so the command's timers, tickers, sleeps
+// and context deadlines advance on the bubble's virtual clock: a 14-second
+// paced audio stream or a 30-second max-duration bound completes as soon as
+// every goroutine is idle.
 //
 // A bubble only advances while its goroutines are durably blocked. Commands
 // run here must therefore reach providers and devices through in-memory
-// transports (replay captures, injected dialers and devices), never through
-// real sockets, subprocesses or cgo audio. A goroutine blocked on real I/O
-// keeps the bubble from ever going idle, so virtual time stops and virtual
-// deadlines never fire; Test's real-time watchdog then fails the run with a
-// goroutine dump instead of letting it hang until the global -timeout.
+// transports (replay captures, PipeListener networks, injected devices),
+// never through real sockets, subprocesses or cgo audio. A goroutine blocked
+// on real I/O keeps the bubble from ever going idle, so virtual time stops
+// and virtual deadlines never fire; Test's real-time watchdog then fails the
+// run with a goroutine dump instead of letting it hang until the global
+// -timeout.
 //
 // Composition uses the production (strict) model validation. Only callers
 // that swap components and must match a relaxed mock binary set
@@ -23,7 +24,6 @@ package clitest
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -45,9 +45,9 @@ type Invocation struct {
 	Args []string
 	// Stdin is the command's standard input; nil reads as empty.
 	Stdin io.Reader
-	// Timeout, when positive, bounds the run; exceeding it fails the test.
-	// Inside a bubble the bound is virtual time: it fires once every goroutine
-	// is durably blocked. A goroutine blocked on real I/O never lets that
+	// Timeout, when positive, bounds Run; exceeding it fails the test. Inside
+	// a bubble the bound is virtual time: it fires once every goroutine is
+	// durably blocked. A goroutine blocked on real I/O never lets that
 	// happen; Test's real-time watchdog covers that case.
 	Timeout time.Duration
 	// Ports replace composition ports by name. Without replacements the CLI
@@ -58,6 +58,12 @@ type Invocation struct {
 	// the run must match a mock binary that uses it: the default is the
 	// strict validation the shipped binary applies.
 	RelaxModelValidation bool
+	// Configure, when set, adjusts the composed CLI before it runs.
+	Configure func(*cli.AgentCLI)
+	// Stdout and Stderr, when set, also receive the command's output as it is
+	// written, for tests that react to streamed output.
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 // Result is the observable outcome of a finished run, shaped like a process.
@@ -67,37 +73,81 @@ type Result struct {
 	Stderr   string
 }
 
+// Process is a command started by Start and running in the background.
+type Process struct {
+	done   chan struct{}
+	cancel context.CancelFunc
+	stdout syncBuffer
+	stderr syncBuffer
+	result Result
+}
+
 // Run composes the CLI (see Invocation.Ports) and executes inv to completion
 // under t.Context(). A composition failure or an exceeded Timeout fails the
 // test; command failures are reported through ExitCode and the captured
 // streams, as the process boundary reports them.
 func Run(t testing.TB, inv Invocation) Result {
 	t.Helper()
+	process := Start(t, inv)
+	if inv.Timeout <= 0 {
+		return process.Wait()
+	}
+	timer := time.NewTimer(inv.Timeout)
+	defer timer.Stop()
+	select {
+	case <-process.Done():
+		return process.Wait()
+	case <-timer.C:
+		process.Cancel()
+		result := process.Wait()
+		t.Fatalf("agent %s exceeded %s\nstdout:\n%s\nstderr:\n%s", strings.Join(inv.Args, " "), inv.Timeout, result.Stdout, result.Stderr)
+		return result
+	}
+}
+
+// Start composes the CLI and runs inv in the background under t.Context().
+// A composition failure fails the test before anything runs.
+func Start(t testing.TB, inv Invocation) *Process {
+	t.Helper()
 	agentCLI, err := compose(inv)
 	if err != nil {
 		t.Fatalf("compose agent CLI: %v", err)
 	}
-	ctx, cancel := t.Context(), context.CancelFunc(func() {})
-	if inv.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, inv.Timeout)
+	if inv.Configure != nil {
+		inv.Configure(agentCLI)
 	}
-	defer cancel()
+	root := agentCLI.Generate()
 	stdin := inv.Stdin
 	if stdin == nil {
 		stdin = bytes.NewReader(nil)
 	}
-	var stdout, stderr syncBuffer
-	code := cli.Execute(ctx, agentCLI.Generate(), cli.Invocation{
-		Args:   inv.Args,
-		Stdin:  stdin,
-		Stdout: &stdout,
-		Stderr: &stderr,
-	})
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		t.Fatalf("agent %s exceeded %s\nstdout:\n%s\nstderr:\n%s", strings.Join(inv.Args, " "), inv.Timeout, stdout.String(), stderr.String())
-	}
-	return Result{ExitCode: code, Stdout: stdout.String(), Stderr: stderr.String()}
+	ctx, cancel := context.WithCancel(t.Context())
+	process := &Process{done: make(chan struct{}), cancel: cancel}
+	go func() {
+		defer close(process.done)
+		defer cancel()
+		code := cli.Execute(ctx, root, cli.Invocation{
+			Args:   inv.Args,
+			Stdin:  stdin,
+			Stdout: tee(&process.stdout, inv.Stdout),
+			Stderr: tee(&process.stderr, inv.Stderr),
+		})
+		process.result = Result{ExitCode: code, Stdout: process.stdout.String(), Stderr: process.stderr.String()}
+	}()
+	return process
 }
+
+// Done is closed when the command has returned.
+func (p *Process) Done() <-chan struct{} { return p.done }
+
+// Wait blocks until the command returns and reports its result.
+func (p *Process) Wait() Result {
+	<-p.done
+	return p.result
+}
+
+// Cancel cancels the command's context, as a caller's cancellation would.
+func (p *Process) Cancel() { p.cancel() }
 
 func compose(inv Invocation) (*cli.AgentCLI, error) {
 	switch {
@@ -108,6 +158,13 @@ func compose(inv Invocation) (*cli.AgentCLI, error) {
 	default:
 		return wire.InitializeAgentCLI()
 	}
+}
+
+func tee(capture *syncBuffer, observer io.Writer) io.Writer {
+	if observer == nil {
+		return capture
+	}
+	return io.MultiWriter(capture, observer)
 }
 
 // RealTimeLimit is how long one bubble may run in real time before the

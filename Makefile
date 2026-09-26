@@ -484,14 +484,14 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 # The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
-# trials each per repetition) and the real-time device-cadence deliveries of
-# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio other than
-# test45/captured_cadence skip unless YUI_AUDIO_STRESS=1. They hunt rare
-# races rather than prove behavior, so pull requests do not run them (their
-# test45/test46 topologies run once per remaining delivery in
-# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio); the scheduled
-# Nightly audio stress workflow runs this target with the coverage job's
-# build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
+# trials each per repetition) and the fresh-process continuation matrix
+# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio (whose
+# device-cadence deliveries drain in real time) skip unless
+# YUI_AUDIO_STRESS=1. They hunt rare races rather than prove behavior, so
+# pull requests do not run them (every topology and delivery runs in-process
+# on a virtual clock in TestToolContinuationPreservesDeviceAudio); the
+# scheduled Nightly audio stress workflow runs this target with the coverage
+# job's build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
 AUDIO_STRESS_COUNT ?= 1
 test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
 	@set -euo pipefail; \

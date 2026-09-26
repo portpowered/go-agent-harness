@@ -5,9 +5,10 @@ name: Nightly audio stress
 # (YUI_AUDIO_STRESS=1: 40 fresh agent/device process pairs, ~140 CPU-s on a
 # 4-vCPU runner already running the timing-bound integration shards). They
 # run here once a day against main instead, and on demand. The same gate
-# holds the real-time device-cadence tool continuations (all but
-# test45/captured_cadence, which stays in the pull-request corpus), so they run
-# here too. Locally: `make test-audio-stress AUDIO_STRESS_COUNT=N`.
+# holds the fresh-process tool-continuation matrix, whose device-cadence
+# deliveries drain in real time (pull requests run every topology and
+# delivery in-process on a virtual clock), so it runs here too. Locally:
+# `make test-audio-stress AUDIO_STRESS_COUNT=N`.
 #
 # A scheduled failure opens (or comments on) a "Nightly audio stress failed"
 # issue, so a regression is noticed without anyone watching the Actions tab.
