@@ -8,6 +8,20 @@
 # repository root or anything a subprocess reads). A test that starts reading
 # such inputs belongs here.
 #
+# Go also records a test's inputs only from m.Run on: a file read, a `go
+# list`/`go build` or any other work in TestMain before m.Run, or in init(),
+# is invisible to the cache, so a package doing that with repository inputs
+# belongs here too (e.g. go-agent-loop/test/functional's runner, which runs
+# `go list` before m.Run when functional-quarantine.json has entries).
+#
+# scripts/go-test-input-guard.py enforces this list: every cached run goes
+# through it, and an unlisted package fails if its test process opened or
+# stat'd a repository file outside its module, or exec'd go, git or another
+# source-reading tool in the repository (TestMain and init included, via
+# PATH shims). It cannot see in-process file reads before m.Run or tools
+# exec'd by absolute path: keep those out of cached packages or list the
+# package.
+#
 # Format: MODULE PACKAGE [# reason], PACKAGE relative to MODULE.
 
 # Session fixtures from go-llm-gateway and scenarios from go-agent-loop.
