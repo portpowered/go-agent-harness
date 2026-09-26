@@ -51,6 +51,17 @@ outputs:
 runs:
   using: composite
   steps:
+    # Go's test result cache keys the files a test reads on their size and
+    # mtime, and actions/checkout stamps every file with the current time, so
+    # without this no test that reads a file (testdata, fixtures) is ever
+    # reused. Run after actions/checkout and before anything writes to the
+    # tree; CI checkouts are clean, so each file's content is its blob's.
+    - name: Set content-derived source mtimes
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+        "$python" "$GITHUB_ACTION_PATH/source_mtimes.py" "$GITHUB_WORKSPACE"
+
     # Linux images do not ship this Go release, and setup-go's download plus
     # extraction took ~11s per job. macOS images ship it. Windows is left to
     # setup-go: its tool cache entry is a symlink that a restored copy breaks.
@@ -110,3 +121,15 @@ runs:
       run: |
         if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
         "$python" "$GITHUB_ACTION_PATH/gocache_working_set.py" age "${{ steps.paths.outputs.gocache }}"
+
+    # go-cache-save compares against this list and skips the upload when the
+    # job added no cache file (e.g. every package and test result was reused).
+    - name: Record restored cache files
+      if: steps.restore.outputs.cache-matched-key != ''
+      shell: bash
+      env:
+        EXTRA_PATHS: ${{ inputs.extra-paths }}
+      run: |
+        if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+        "$python" "$GITHUB_ACTION_PATH/gocache_working_set.py" snapshot "$RUNNER_TEMP/go-cache-files.txt" \
+          "${{ steps.paths.outputs.gocache }}" "${{ steps.paths.outputs.gomodcache }}/cache/download"

@@ -80,11 +80,25 @@ TEST_MODULE_JOBS ?= 3
 MODULE_SCHEDULE := agent-cli go-agent-runtime go-agent-loop go-llm-gateway go-audio go-device-gateway
 # scheduled_modules orders a module list longest-first for scripts/run-bounded.sh.
 scheduled_modules = $(filter $(1),$(MODULE_SCHEDULE)) $(filter-out $(MODULE_SCHEDULE),$(1))
-# Local coverage runs may reuse Go's test result cache (coverage profiles are
-# cacheable), so an unchanged package is not re-run on every prepush. CI and
-# COVERAGE_COUNT=1 force a fresh run of every package.
-COVERAGE_COUNT ?= $(if $(filter true 1,$(CI)),1,)
-COVERAGE_COUNT_FLAG = $(if $(COVERAGE_COUNT),-count=$(COVERAGE_COUNT),)
+# Test runs reuse Go's test result cache, locally and in CI: a package whose
+# test binary, cacheable flags, and the environment variables and in-module
+# files its tests read are all unchanged replays its cached result (coverage
+# profile included) instead of re-running. CI checkouts get content-derived
+# mtimes (.github/actions/go-cache/source_mtimes.py) so file inputs match.
+# GO_TEST_COUNT=1 forces a fresh run of every package; the scheduled CI run
+# and a `fresh` manual dispatch set it. Invocations whose real inputs Go
+# cannot see (binaries or tools they exec, real devices, race and stress
+# runs) pass -count=1 themselves. COVERAGE_COUNT is the older name.
+COVERAGE_COUNT ?=
+GO_TEST_COUNT ?= $(COVERAGE_COUNT)
+GO_TEST_COUNT_FLAG = $(if $(GO_TEST_COUNT),-count=$(GO_TEST_COUNT),)
+# Test packages whose results depend on inputs Go's test cache does not
+# track (files in another module, a `go list` subprocess, a host tool) are
+# listed in scripts/go-test-fresh-packages.txt and always run fresh, beside
+# the cached packages.
+# go_test_split runs `go test` for module $(1) from its directory over
+# packages $(2) with flags $(3), writing coverage profile $(4) if given.
+go_test_split = bash $(CURDIR)/scripts/go-test-fresh-split.sh --go "$(GO)" --module "$(1)" $(if $(4),--coverprofile "$(4)") $(2) -- $(3)
 # Which part of the agent-cli coverage corpus to run: all, unit (every package
 # except test/integration), integration (every shard of the integration
 # package, compiled once and run concurrently), or integration-K for shard K
@@ -121,7 +135,11 @@ TEST_TOOLS_ARCHITECTURE_GATE ?= 1
 # prints each one's output as a block); the Python modules themselves run
 # test-by-test across processes (scripts/unittest-parallel.py).
 TOOLS_PYTHON_TEST_MODULES := scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_working_tree
-TOOLS_GO_TEST_MODULES := tools/analyzergate tools/session-race-gate tools/coveragegate tools/rtc-race-gate tools/timingate scripts/webmcp-o0 test/localai
+TOOLS_GO_TEST_MODULES := tools/analyzergate tools/session-race-gate tools/rtc-race-gate tools/timingate scripts/webmcp-o0
+# Tool modules whose tests always run fresh (-count=1): coveragegate runs `go
+# list` over the workspace and reads the repository's coverage-manifest, and
+# localai probes a local LocalAI server; Go's test cache sees neither.
+TOOLS_GO_FRESH_TEST_MODULES := tools/coveragegate test/localai
 # `go list` fields that decide which files a package builds and tests; the
 # packages whose fields differ between the hermetic coverage build and the
 # native build are the ones test-cgo-delta runs natively.
@@ -166,7 +184,7 @@ SKIP_RELEASE_CI ?= 0
 define agent_cli_split_tests
 (cd agent-cli; \
 	packages="$$($(2) $(GO) list $(1) ./... | grep -v '/test/integration$$')"; \
-	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli packages" -- $(GO) test $$packages $(1) -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" & unit_pid=$$!; \
+	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli packages" -- $(call go_test_split,agent-cli,$$packages,$(1) $(GO_TEST_COUNT_FLAG) -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)") & unit_pid=$$!; \
 	integration_status=0; \
 	$(2) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --label "agent-cli integration shards" -- bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) $(foreach flag,$(1),--build-flag $(flag)) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT) || integration_status=$$?; \
 	wait "$$unit_pid"; \
@@ -375,14 +393,15 @@ test-module:
 		$(if $(TEST_HERMETIC),$(call agent_cli_split_tests,-tags=nomicrophone,CGO_ENABLED=0),$(call agent_cli_split_tests,,)); \
 	else \
 		echo "==> test $$module (general package timeout: $(GO_TEST_TIMEOUT))"; \
-		(cd "$$module" && $(if $(TEST_HERMETIC),CGO_ENABLED=0 )$(GO) test ./... $(if $(TEST_HERMETIC),-tags=nomicrophone )-timeout "$(GO_TEST_TIMEOUT)"); \
+		(cd "$$module" && $(if $(TEST_HERMETIC),CGO_ENABLED=0 )$(call go_test_split,$(TEST_MODULE),./...,$(GO_TEST_COUNT_FLAG) $(if $(TEST_HERMETIC),-tags=nomicrophone )-timeout "$(GO_TEST_TIMEOUT)")); \
 	fi
 
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
 	bash scripts/run-bounded.sh -- \
 		'test repository helper Python modules::PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/unittest-parallel.py $(TOOLS_PYTHON_TEST_MODULES)' \
-		$(foreach module,$(TOOLS_GO_TEST_MODULES),'test $(module)::cd $(module) && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"') \
+		$(foreach module,$(TOOLS_GO_TEST_MODULES),'test $(module)::cd $(module) && GOWORK=off $(GO) test ./... $(GO_TEST_COUNT_FLAG) -timeout "$(GO_TEST_TIMEOUT)"') \
+		$(foreach module,$(TOOLS_GO_FRESH_TEST_MODULES),'test $(module) (fresh)::cd $(module) && GOWORK=off $(GO) test ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"') \
 		$(if $(filter 1,$(TEST_TOOLS_ARCHITECTURE_GATE)),'test tools/architecturegate::$(MAKE) --no-print-directory test-architecture-gate')
 
 test-cgo-delta: ## Test natively (cgo, real microphone backend) only the packages whose files differ from the hermetic coverage build.
@@ -393,7 +412,7 @@ test-cgo-delta: ## Test natively (cgo, real microphone backend) only the package
 			<($(GO) list -f '$(PACKAGE_FILES_FORMAT)' ./... | LC_ALL=C sort) | cut -d' ' -f1)"; \
 		if [ -n "$$packages" ]; then \
 			echo "==> test-cgo-delta $$module:" $$packages; \
-			(cd "$$module" && $(GO) test $$packages -timeout "$(GO_TEST_TIMEOUT)"); \
+			(cd "$$module" && $(call go_test_split,$$module,$$packages,$(GO_TEST_COUNT_FLAG) -timeout "$(GO_TEST_TIMEOUT)")); \
 		fi; \
 	done
 
@@ -406,8 +425,10 @@ size-check: ## Enforce package, file, and function budgets against exact legacy 
 architecture-size-check: ## Enforce architecture and size budgets in one shared inventory pass.
 	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture,size
 
+# -count=1: its tests read docs/architecture at the repository root, outside
+# the module, where Go's test cache cannot see a change.
 test-architecture-gate: ## Verify architecture enforcement against positive and negative fixtures.
-	@cd tools/architecturegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"
+	@cd tools/architecturegate && GOWORK=off $(GO) test ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"
 
 verify-architecture: architecture-size-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
 
@@ -519,14 +540,14 @@ test-integration: ## Run deterministic integration tests for agent-cli and go-ag
 	echo "==> test-integration agent-cli ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT)) and go-agent-loop ($(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE), timeout $(GO_TEST_TIMEOUT)) concurrently"; \
 	bash scripts/run-bounded.sh -- \
 		'test-integration agent-cli::cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- bash ../scripts/go-test-shards.sh $(AGENT_CLI_INTEGRATION_SHARD_ARGS) -- -test.timeout=$(AGENT_CLI_INTEGRATION_TIMEOUT)' \
-		'test-integration go-agent-loop::cd go-agent-loop && $(GO) test $(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE) -timeout "$(GO_TEST_TIMEOUT)"'
+		'test-integration go-agent-loop::cd go-agent-loop && $(call go_test_split,go-agent-loop,$(GO_AGENT_LOOP_FUNCTIONAL_PACKAGE),$(GO_TEST_COUNT_FLAG) -timeout "$(GO_TEST_TIMEOUT)")'
 
 test-regressions: ## Run committed replay and fixture regression tests suitable for CI.
 	@set -euo pipefail; \
 	echo "==> test-regressions agent-cli replay fixtures ($(AGENT_CLI_INTEGRATION_PACKAGE), timeout $(AGENT_CLI_INTEGRATION_TIMEOUT))"; \
 	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test $(AGENT_CLI_INTEGRATION_PACKAGE) -run '$(AGENT_CLI_REGRESSION_TESTS)' -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)"); \
 	echo "==> test-regressions go-llm-gateway replay fixtures (timeout $(GO_TEST_TIMEOUT))"; \
-	(cd go-llm-gateway && $(GO) test $(GO_LLM_GATEWAY_REGRESSION_PACKAGES) -timeout "$(GO_TEST_TIMEOUT)")
+	(cd go-llm-gateway && $(call go_test_split,go-llm-gateway,$(GO_LLM_GATEWAY_REGRESSION_PACKAGES),$(GO_TEST_COUNT_FLAG) -timeout "$(GO_TEST_TIMEOUT)"))
 
 test-customer-sessions: ## Inspect private session data only when explicitly opted in; otherwise skip with guidance.
 	@set -euo pipefail; \
@@ -572,7 +593,7 @@ coverage: ## Write per-module coverage profiles under coverage/ (COVERAGE_SCOPE=
 		exec $(MAKE) --no-print-directory coverage-changed; \
 	fi; \
 	mkdir -p "$(COVERAGE_DIR)"; \
-	echo "==> coverage $(COVERAGE_MODULES)$(if $(filter 1,$(COVERAGE_INCLUDE_EMBEDDING)), embedding) (at most $(TEST_MODULE_JOBS) at once, test count flag '$(COVERAGE_COUNT_FLAG)')"; \
+	echo "==> coverage $(COVERAGE_MODULES)$(if $(filter 1,$(COVERAGE_INCLUDE_EMBEDDING)), embedding) (at most $(TEST_MODULE_JOBS) at once, test count flag '$(GO_TEST_COUNT_FLAG)')"; \
 	bash scripts/run-bounded.sh --jobs $(TEST_MODULE_JOBS) -- \
 		$(foreach module,$(call scheduled_modules,$(COVERAGE_MODULES)),'coverage $(module)::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=$(module)') \
 		$(if $(filter 1,$(COVERAGE_INCLUDE_EMBEDDING)),'coverage embedding::$(MAKE) --no-print-directory coverage-module COVERAGE_MODULE=embedding'); \
@@ -589,10 +610,10 @@ coverage-module:
 			$(MAKE) --no-print-directory coverage-agent-cli-shard AGENT_CLI_COVERAGE_SHARD="$(AGENT_CLI_COVERAGE_SHARD)" ;; \
 		embedding) \
 			echo "==> embedded runtime coverage"; \
-			(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test -mod=readonly ./... $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="$(abspath $(COVERAGE_DIR))/embedding.out") ;; \
+			(cd tests/embedding && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test -mod=readonly ./... $(GO_TEST_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=github.com/portpowered/go-agent-harness/go-agent-runtime/... -coverprofile="$(abspath $(COVERAGE_DIR))/embedding.out") ;; \
 		*) \
 			echo "==> coverage $(COVERAGE_MODULE) (general package timeout: $(GO_TEST_TIMEOUT))"; \
-			(cd "$(COVERAGE_MODULE)" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) test $(or $(COVERAGE_PACKAGES),./...) $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=./... -coverprofile="$(abspath $(COVERAGE_DIR))/$(COVERAGE_MODULE).out") ;; \
+			(cd "$(COVERAGE_MODULE)" && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(call go_test_split,$(COVERAGE_MODULE),$(or $(COVERAGE_PACKAGES),./...),$(GO_TEST_COUNT_FLAG) -tags=nomicrophone -timeout "$(GO_TEST_TIMEOUT)" -coverpkg=./...,$(abspath $(COVERAGE_DIR))/$(COVERAGE_MODULE).out)) ;; \
 	esac
 
 coverage-ci-agent-cli: ## Write the hermetic agent-cli profile(s) for AGENT_CLI_COVERAGE_SHARD (CI matrix shard).
@@ -611,7 +632,7 @@ coverage-agent-cli-shard:
 		(cd agent-cli && packages="$(AGENT_CLI_COVERAGE_UNIT_PACKAGES)" && \
 			if [ -z "$$packages" ]; then packages="$$(CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) list -tags=nomicrophone ./... | grep -v '/test/integration$$')"; fi && \
 			CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (unit packages)" -- \
-			$(GO) test $$packages $(COVERAGE_COUNT_FLAG) -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG) -coverprofile="$(abspath $(COVERAGE_DIR))/agent-cli.out"); \
+			$(call go_test_split,agent-cli,$$packages,$(GO_TEST_COUNT_FLAG) -tags=nomicrophone -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -coverpkg=$(AGENT_CLI_COVERPKG),$(abspath $(COVERAGE_DIR))/agent-cli.out)); \
 	}; \
 	run_integration() { \
 		(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" --report-budget --label "agent-cli coverage (integration $${1:-all})" -- \

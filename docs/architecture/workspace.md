@@ -113,7 +113,16 @@ required check that aggregates other jobs (`CI (static)` over the lint lanes,
 with `scripts/ci-await-jobs.sh` rather than through a relay job. `make check-ci-test-partition` keeps each Linux test
 corpus owned by exactly one job. Every job restores a per-job Go build and
 module cache (`.github/actions/go-cache`) that main pushes save as the job's
-exact working set. `CI (WebMCP Chrome)` runs on its own macOS runner beside
+exact working set (a job that added no cache file skips the upload). That
+cache also carries Go's test results: tests run without `-count=1`, and the
+checkout gets content-derived mtimes, so a package whose test binary, flags,
+environment and in-module input files are unchanged replays its cached
+result (coverage profile included) instead of re-running. Packages whose
+inputs Go cannot track (`scripts/go-test-fresh-packages.txt`) and the
+race, device, Chrome and integration runs always run with `-count=1`. A
+nightly scheduled run, and a manual dispatch with `fresh`, set
+`GO_TEST_COUNT=1` and re-run every test; a nightly failure opens a
+"Nightly fresh CI run failed" issue. `CI (WebMCP Chrome)` runs on its own macOS runner beside
 `CI (macOS audio release)`: the two share no build outputs and together
 exceeded the three-minute budget with a cold cache. The race-detector steps
 are intentionally Linux-only, since the current Windows `runtime/cgo: cgo.exe:

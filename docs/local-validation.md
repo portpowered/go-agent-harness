@@ -79,7 +79,7 @@ scope selection alone is `make coverage-changed` (or
 | `PREPUSH_SCOPE` | `changed` | `changed` or `full` test and coverage scope |
 | `PREPUSH_JOBS` | `4` | phases of one stage run at once; `1` runs them serially with live output |
 | `COVERAGE_BASE` | `origin/main` | comparison base for the changed scope |
-| `COVERAGE_COUNT` | empty locally, `1` in CI | set `1` to bypass Go's test cache |
+| `GO_TEST_COUNT` (`COVERAGE_COUNT`) | empty (locally and in CI) | set `1` to bypass Go's test cache and re-run every test |
 | `PREPUSH_CACHE` | `1` | skip phases that passed for identical content |
 | `PREPUSH_FACTORY_SCRIPTS` | `auto` | `always`/`never` overrides when factory script tests run |
 | `TEST_MODULE_JOBS` | `3` | modules the coverage pass runs at once |
@@ -89,7 +89,12 @@ worktree of a user; test results are keyed by the worktree path, so a fresh
 worktree re-runs its tests once). Keep `TMPDIR` stable between runs: tests
 that read it are cached against its value. The agent-cli integration package
 runs as sharded processes of one test binary and is never cached, which is why
-the changed scope matters most when a diff does not reach it.
+the changed scope matters most when a diff does not reach it. Packages listed
+in `scripts/go-test-fresh-packages.txt` read inputs Go's test cache cannot
+see (files in another module, a `go list` subprocess, a host tool), so they
+always run with `-count=1`; `make coverage GO_TEST_COUNT=1` re-runs
+everything. CI uses the same test cache, restored with each job's build cache (see
+[workspace.md](architecture/workspace.md#github-actions)).
 
 ## Differences from CI
 
