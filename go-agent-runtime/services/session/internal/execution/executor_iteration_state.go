@@ -29,7 +29,7 @@ func (e *Executor) prepareIterations(ctx context.Context, _ *Config, loopCfg Ite
 		return iterationState{}, fmt.Errorf("get session storage: %w", err)
 	}
 
-	trace, err := loadIterationTrace(sessionStorage, loopCfg.TraceID)
+	trace, err := loadIterationTrace(ctx, sessionStorage, loopCfg.TraceID)
 	if err != nil {
 		return iterationState{}, err
 	}
@@ -89,7 +89,7 @@ func (e *Executor) createIterationTrace(ctx context.Context, loopCfg IterativeLo
 		}
 		input.Message = prompt
 	}
-	traceID, err := newTraceID(storage)
+	traceID, err := newTraceID(ctx, storage)
 	if err != nil {
 		return session.TraceRecord{}, input, false, fmt.Errorf("create trace ID: %w", err)
 	}
@@ -97,17 +97,17 @@ func (e *Executor) createIterationTrace(ctx context.Context, loopCfg IterativeLo
 		TraceID: traceID, Status: session.TraceStatusRunning,
 		Config: session.TraceConfig{MaxIterations: maxIter, StopWord: loopCfg.StopWord, Prompt: input.Message},
 	}
-	if err := storage.SaveTrace(trace); err != nil {
+	if err := storage.SaveTrace(ctx, trace); err != nil {
 		return session.TraceRecord{}, input, false, fmt.Errorf("save trace: %w", err)
 	}
 	return trace, input, false, nil
 }
 
-func loadIterationTrace(storage Storage, id string) (session.TraceRecord, error) {
+func loadIterationTrace(ctx context.Context, storage Storage, id string) (session.TraceRecord, error) {
 	if id == "" {
 		return session.TraceRecord{}, nil
 	}
-	trace, err := storage.LoadTrace(id)
+	trace, err := storage.LoadTrace(ctx, id)
 	if err != nil {
 		return session.TraceRecord{}, fmt.Errorf("load trace %s: %w", id, err)
 	}

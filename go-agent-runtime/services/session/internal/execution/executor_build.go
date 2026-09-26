@@ -50,7 +50,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 		sessionID = cfg.SessionID
 		initialHistory = cfg.InitialHistory
 	} else {
-		initialHistory, sessionID, err = e.getInitialHistory(cfg, sessionStorage)
+		initialHistory, sessionID, err = e.getInitialHistory(ctx, cfg, sessionStorage)
 		if err != nil {
 			return nil, err
 		}

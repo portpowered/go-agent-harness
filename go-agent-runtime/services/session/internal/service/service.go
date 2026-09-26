@@ -57,8 +57,7 @@ func (s *Service) Run(ctx context.Context, request session.Request) (session.Res
 	if s == nil || s.executor == nil {
 		return session.Result{}, fmt.Errorf("session executor is required")
 	}
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return session.Result{}, err
 	}
 	resolution, err := s.resolve(ctx, request)
@@ -66,7 +65,7 @@ func (s *Service) Run(ctx context.Context, request session.Request) (session.Res
 		return session.Result{}, err
 	}
 	config := toExecutionConfig(request, resolution)
-	executor := s.executor.WithResolution(toRuntimeResolution(ctx, resolution))
+	executor := s.executor.WithResolution(toRuntimeResolution(resolution))
 	text, produced, err := executor.RunAskDetailed(ctx, &config, request.Input, io.Discard)
 	return session.Result{Text: text, Messages: produced}, err
 }
@@ -77,8 +76,7 @@ func (s *Service) Open(ctx context.Context, request session.Request) (session.Se
 	if s == nil || s.executor == nil {
 		return nil, fmt.Errorf("session executor is required")
 	}
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return nil, err
 	}
 	resolution, err := s.resolve(ctx, request)
@@ -86,21 +84,23 @@ func (s *Service) Open(ctx context.Context, request session.Request) (session.Se
 		return nil, err
 	}
 	config := toExecutionConfig(request, resolution)
-	executor := s.executor.WithResolution(toRuntimeResolution(ctx, resolution))
+	executor := s.executor.WithResolution(toRuntimeResolution(resolution))
 	runData, err := executor.BuildLoop(ctx, &config)
 	if err != nil {
 		return nil, err
 	}
-	lifetimeCtx, cancel := context.WithCancel(ctx)
-	return &handle{
+	h := &handle{
 		executor:  executor,
 		runData:   runData,
 		config:    config,
-		ctx:       lifetimeCtx,
-		cancel:    cancel,
 		closeDone: make(chan struct{}),
 		active:    make(map[*ownedStream]struct{}),
-	}, nil
+		turns:     make(map[uint64]context.CancelFunc),
+	}
+	// The handle lives no longer than the Open context: its cancellation
+	// expires the handle and cancels every in-flight turn.
+	h.stopLifetime = context.AfterFunc(ctx, func() { h.expire(ctx.Err()) })
+	return h, nil
 }
 
 // RunIterative executes the transport-neutral iterative loop and maps its
@@ -109,8 +109,7 @@ func (s *Service) RunIterative(ctx context.Context, request session.Request, opt
 	if s == nil || s.executor == nil {
 		return session.IterativeResult{}, fmt.Errorf("session executor is required")
 	}
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return session.IterativeResult{}, err
 	}
 	resolution, err := s.resolve(ctx, request)
@@ -121,7 +120,7 @@ func (s *Service) RunIterative(ctx context.Context, request session.Request, opt
 		resolution.TraceStore = options.TraceStore
 	}
 	config := toExecutionConfig(request, resolution)
-	executor := s.executor.WithResolution(toRuntimeResolution(ctx, resolution))
+	executor := s.executor.WithResolution(toRuntimeResolution(resolution))
 	loopConfig := agent.IterativeLoopConfig{
 		MaxIterations: options.MaxIterations, StopWord: options.StopWord,
 		ContextPressureThreshold: options.ContextPressureThreshold,
@@ -176,15 +175,13 @@ func (s *Service) NewSessionID(ctx context.Context, request session.Request) (st
 	if s == nil || s.executor == nil {
 		return "", fmt.Errorf("session executor is required")
 	}
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return "", err
 	}
 	resolution, err := s.resolve(ctx, request)
 	if err != nil {
 		return "", err
 	}
-	config := toExecutionConfig(request, resolution)
-	executor := s.executor.WithResolution(toRuntimeResolution(ctx, resolution))
-	return executor.NewChatSessionID(&config)
+	executor := s.executor.WithResolution(toRuntimeResolution(resolution))
+	return executor.NewChatSessionID(ctx)
 }

@@ -167,7 +167,7 @@ func (e *Executor) RunAskDetailed(ctx context.Context, cfg *Config, input agentl
 	}
 
 	if execErr == nil {
-		if saveErr := e.SaveSession(runData); saveErr != nil {
+		if saveErr := e.SaveSession(ctx, runData); saveErr != nil {
 			return result, append([]messages.Message(nil), runData.producedMessages...), saveErr
 		}
 	}
@@ -186,7 +186,7 @@ func (e *Executor) RunAskWithSession(ctx context.Context, sessionID string, cfg 
 	if err != nil {
 		return "", err
 	}
-	initialHistory, err := storage.Load(sessionID)
+	initialHistory, err := storage.Load(ctx, sessionID)
 	if err != nil {
 		return "", fmt.Errorf("load session %s: %w", sessionID, err)
 	}
@@ -220,7 +220,7 @@ func (e *Executor) RunAskWithSession(ctx context.Context, sessionID string, cfg 
 	}
 
 	if execErr == nil {
-		if saveErr := e.SaveSession(runData); saveErr != nil {
+		if saveErr := e.SaveSession(ctx, runData); saveErr != nil {
 			return result, saveErr
 		}
 	}

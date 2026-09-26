@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	agent "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/execution"
 )
 
 // blockingStream models a provider stream that does not finish until its
@@ -44,15 +45,21 @@ func (s *blockingStream) Close() error {
 	return nil
 }
 
-func TestHandleCloseCancelsAndClosesActiveStreams(t *testing.T) {
-	openContext, openCancel := context.WithCancel(context.Background())
-	defer openCancel()
-	h := &handle{
-		ctx:       openContext,
-		cancel:    openCancel,
+func newTestHandle() *handle {
+	return &handle{
 		closeDone: make(chan struct{}),
 		active:    make(map[*ownedStream]struct{}),
+		turns:     make(map[uint64]context.CancelFunc),
 	}
+}
+
+func TestHandleCloseCancelsAndClosesActiveStreams(t *testing.T) {
+	h := newTestHandle()
+	turnContext, turnCancel := context.WithCancel(t.Context())
+	defer turnCancel()
+	h.mu.Lock()
+	h.registerTurnLocked(turnCancel)
+	h.mu.Unlock()
 	stream := newBlockingStream()
 	owned := &ownedStream{
 		handle: h,
@@ -65,9 +72,12 @@ func TestHandleCloseCancelsAndClosesActiveStreams(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 	select {
-	case <-openContext.Done():
+	case <-turnContext.Done():
 	default:
-		t.Fatal("Close() did not cancel the Open lifetime context")
+		t.Fatal("Close() did not cancel a registered turn context")
+	}
+	if _, err := h.Stream(t.Context(), agentloop.ExecuteInput{}); err == nil {
+		t.Fatal("Stream() after Close() succeeded, want closed handle error")
 	}
 	if got := stream.closeCall.Load(); got != 1 {
 		t.Fatalf("stream Close calls = %d, want one", got)
@@ -91,6 +101,31 @@ func TestHandleCloseCancelsAndClosesActiveStreams(t *testing.T) {
 		}()
 	}
 	wait.Wait()
+}
+
+func TestHandleOpenContextExpiryCancelsTurnsAndRejectsNewTurns(t *testing.T) {
+	h := newTestHandle()
+	h.runData = &agent.RunData{}
+	openContext, openCancel := context.WithCancel(t.Context())
+	h.stopLifetime = context.AfterFunc(openContext, func() { h.expire(openContext.Err()) })
+	turnContext, turnCancel := context.WithCancel(t.Context())
+	defer turnCancel()
+	h.mu.Lock()
+	stop := h.registerTurnLocked(turnCancel)
+	h.mu.Unlock()
+
+	openCancel()
+	select {
+	case <-turnContext.Done():
+	case <-time.After(time.Second):
+		t.Fatal("Open context cancellation did not cancel the registered turn")
+	}
+	if _, err := h.Stream(t.Context(), agentloop.ExecuteInput{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Stream() after Open cancellation error = %v, want context.Canceled", err)
+	}
+	if !stop() {
+		t.Fatal("turn was unregistered before its owner stopped it")
+	}
 }
 
 func TestOwnedStreamCloseUnblocksReaderAndFinishesOwner(t *testing.T) {

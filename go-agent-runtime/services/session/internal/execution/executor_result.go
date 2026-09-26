@@ -43,13 +43,13 @@ func (e *Executor) ExecuteOneTurn(ctx context.Context, runData *RunData, execInp
 }
 
 // SaveSession saves the conversation history to the session storage.
-func (e *Executor) SaveSession(runData *RunData) error {
+func (e *Executor) SaveSession(ctx context.Context, runData *RunData) error {
 	if runData.SessionID == "" {
 		return nil
 	}
 	history := runData.Loop.GetConversationHistory()
 	if len(history) > 0 {
-		if err := runData.sessionManager.Save(runData.SessionID, history); err != nil {
+		if err := runData.sessionManager.Save(ctx, runData.SessionID, history); err != nil {
 			return fmt.Errorf("save session: %w", err)
 		}
 	}

@@ -115,12 +115,12 @@ func TestExecutorRun_ContinuationAndResolvedPolicy(t *testing.T) {
 
 func nudgeExecStorage(t *testing.T) Storage {
 	t.Helper()
-	return session.NewStorage(t.TempDir())
+	return newFileStorage(t.TempDir())
 }
 
 func TestExecutorRun_BuildLoopUsesResolvedDependencies(t *testing.T) {
 	dir := t.TempDir()
-	storage := session.NewStorage(dir)
+	storage := newFileStorage(dir)
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "built")}}}}
 	tool := &executorRecordingTool{}
 	defs := []messages.ToolDefinition{{Name: "lookup", Description: "lookup value"}}
@@ -168,8 +168,8 @@ func TestExecutorRun_BuildLoopUsesResolvedDependencies(t *testing.T) {
 
 func TestExecutorRun_RunAskWithSessionPersistsHistory(t *testing.T) {
 	dir := t.TempDir()
-	storage := session.NewStorage(dir)
-	if err := storage.Save("chat-session", []messages.Message{messages.NewTextMessage(messages.RoleUser, "prior")}); err != nil {
+	storage := newFileStorage(dir)
+	if err := storage.Save(t.Context(), "chat-session", []messages.Message{messages.NewTextMessage(messages.RoleUser, "prior")}); err != nil {
 		t.Fatalf("seed session: %v", err)
 	}
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "answer")}}}}
@@ -179,7 +179,7 @@ func TestExecutorRun_RunAskWithSessionPersistsHistory(t *testing.T) {
 	if err != nil || got != "answer" || out.String() != "answer\n" {
 		t.Fatalf("RunAskWithSession() = (%q, %v), output=%q; want answer", got, err, out.String())
 	}
-	saved, err := storage.Load("chat-session")
+	saved, err := storage.Load(t.Context(), "chat-session")
 	if err != nil || !containsMessageText(saved, messages.RoleAssistant, "answer") {
 		t.Fatalf("saved session = %#v, %v; want assistant answer", saved, err)
 	}
@@ -187,7 +187,7 @@ func TestExecutorRun_RunAskWithSessionPersistsHistory(t *testing.T) {
 
 func TestExecutorRun_RunIterativeLoopRecordsCompletionFailureAndResume(t *testing.T) {
 	dir := t.TempDir()
-	storage := session.NewStorage(dir)
+	storage := newFileStorage(dir)
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "first")}},
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "finished STOP")}},
@@ -208,7 +208,7 @@ func TestExecutorRun_RunIterativeLoopRecordsCompletionFailureAndResume(t *testin
 			t.Fatalf("iteration %d did not receive its annotation: %+v", i+1, request.Messages)
 		}
 	}
-	trace, err := storage.LoadTrace(result.TraceID)
+	trace, err := storage.LoadTrace(t.Context(), result.TraceID)
 	if err != nil || trace == nil || trace.Status != session.TraceStatusCompleted || trace.Iterations[1].Status != session.IterationStatusCompleted {
 		t.Fatalf("completion trace = %+v, %v; want completed trace", trace, err)
 	}
@@ -217,7 +217,7 @@ func TestExecutorRun_RunIterativeLoopRecordsCompletionFailureAndResume(t *testin
 
 func TestExecutorRun_IterativeFailureContinues(t *testing.T) {
 	failureDir := t.TempDir()
-	failureStorage := session.NewStorage(failureDir)
+	failureStorage := newFileStorage(failureDir)
 	failureInf := &executorScriptedInferencer{steps: []executorInferenceStep{
 		{streamErr: errors.New("iteration failed")},
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "recovered")}},
@@ -232,9 +232,9 @@ func TestExecutorRun_IterativeFailureContinues(t *testing.T) {
 
 func TestExecutorRun_IterativeResumeRestoresSavedConfiguration(t *testing.T) {
 	resumeDir := t.TempDir()
-	resumeStorage := session.NewStorage(resumeDir)
+	resumeStorage := newFileStorage(resumeDir)
 	resumeID := "resume-trace"
-	if err := resumeStorage.SaveTrace(session.TraceRecord{
+	if err := resumeStorage.SaveTrace(t.Context(), session.TraceRecord{
 		TraceID:          resumeID,
 		Status:           session.TraceStatusInterrupted,
 		Config:           session.TraceConfig{MaxIterations: 2, StopWord: "STOP", Prompt: "saved prompt"},
@@ -264,14 +264,14 @@ func TestExecutorRun_IterativeCorruptTrace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(badTraceDir, "sessions", "trace-bad.json"), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	badExec := resolvedExecutorForTest(t, stubInferencer{}, session.NewStorage(badTraceDir), nil, nil)
+	badExec := resolvedExecutorForTest(t, stubInferencer{}, newFileStorage(badTraceDir), nil, nil)
 	if _, err := badExec.RunIterativeLoop(context.Background(), executorTestConfig(), IterativeLoopConfig{TraceID: "bad"}, agentloop.NewExecuteInput("prompt"), &strings.Builder{}); err == nil || !strings.Contains(err.Error(), "load trace bad") {
 		t.Fatalf("bad trace error = %v, want load trace context", err)
 	}
 }
 
 func TestExecutorRun_IterativeInteractionOwnsSteeringAndTracePrompt(t *testing.T) {
-	storage := session.NewStorage(t.TempDir())
+	storage := newFileStorage(t.TempDir())
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "first")}},
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, "second")}},
@@ -307,14 +307,14 @@ func TestExecutorRun_IterativeInteractionOwnsSteeringAndTracePrompt(t *testing.T
 	if len(requests) != 2 || !containsMessageText(requests[0].Messages, messages.RoleUser, iterativeInitialPrompt) || !containsMessageText(requests[1].Messages, messages.RoleUser, "steered") {
 		t.Fatalf("interactive requests = %#v, want initial then steered prompts", requests)
 	}
-	trace, err := storage.LoadTrace(result.TraceID)
+	trace, err := storage.LoadTrace(t.Context(), result.TraceID)
 	if err != nil || trace == nil || trace.Status != session.TraceStatusCompleted || trace.Config.Prompt != "steered" {
 		t.Fatalf("interactive trace = %+v, %v; want completed trace with latest prompt", trace, err)
 	}
 }
 
 func TestExecutorRun_IterativeInteractionDoneSkipsTraceCreation(t *testing.T) {
-	storage := session.NewStorage(t.TempDir())
+	storage := newFileStorage(t.TempDir())
 	exec := resolvedExecutorForTest(t, stubInferencer{}, storage, nil, nil)
 	interaction := &IterativeInteraction{
 		InitialPrompt: func(context.Context) (string, bool, error) { return "", true, nil },

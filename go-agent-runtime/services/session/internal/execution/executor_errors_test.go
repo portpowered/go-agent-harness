@@ -6,7 +6,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	session "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 )
 
 func validationRunData(catalog ModelCatalog) *RunData {
@@ -15,7 +14,7 @@ func validationRunData(catalog ModelCatalog) *RunData {
 
 func validationExecutor(t *testing.T, catalog ModelCatalog, relaxed bool) *Executor {
 	t.Helper()
-	storage := session.NewStorage(t.TempDir())
+	storage := newFileStorage(t.TempDir())
 	return NewExecutor(nil, nil, stubInferencer{}, relaxed).WithResolution(RuntimeResolution{
 		Resolved:       true,
 		Provider:       ProviderConfig{Provider: "test", Model: "test-model"},

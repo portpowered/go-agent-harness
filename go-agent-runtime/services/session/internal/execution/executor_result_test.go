@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -170,7 +169,7 @@ func newExecutorRunData(t *testing.T, inf messages.Inferencer, tool messages.Too
 		t.Fatalf("agentloop.New: %v", err)
 	}
 	return &RunData{
-		sessionManager: session.NewStorage(t.TempDir()),
+		sessionManager: newFileStorage(t.TempDir()),
 		Loop:           loop,
 	}
 }
@@ -274,22 +273,22 @@ func TestSaveSession_AndFlushRecorderBranches(t *testing.T) {
 	exec := &Executor{}
 
 	noSession := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil)
-	if err := exec.SaveSession(noSession); err != nil {
+	if err := exec.SaveSession(t.Context(), noSession); err != nil {
 		t.Fatalf("SaveSession() without ID error = %v", err)
 	}
 
 	noHistory := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil)
 	noHistory.SessionID = "empty"
-	if err := exec.SaveSession(noHistory); err != nil {
+	if err := exec.SaveSession(t.Context(), noHistory); err != nil {
 		t.Fatalf("SaveSession() without history error = %v", err)
 	}
 
 	withHistory := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil, messages.NewTextMessage(messages.RoleUser, "saved"))
 	withHistory.SessionID = "saved"
-	if err := exec.SaveSession(withHistory); err != nil {
+	if err := exec.SaveSession(t.Context(), withHistory); err != nil {
 		t.Fatalf("SaveSession() error = %v", err)
 	}
-	saved, err := withHistory.sessionManager.Load("saved")
+	saved, err := withHistory.sessionManager.Load(t.Context(), "saved")
 	if err != nil || len(saved) != 1 || saved[0].TextContent() != "saved" {
 		t.Fatalf("saved history = %#v, %v; want user message", saved, err)
 	}
@@ -300,8 +299,8 @@ func TestSaveSession_AndFlushRecorderBranches(t *testing.T) {
 	}
 	broken := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil, messages.NewTextMessage(messages.RoleUser, "saved"))
 	broken.SessionID = "broken"
-	broken.sessionManager = session.NewStorage(badSessionRoot)
-	if err := exec.SaveSession(broken); err == nil || !strings.Contains(err.Error(), "save session") {
+	broken.sessionManager = newFileStorage(badSessionRoot)
+	if err := exec.SaveSession(t.Context(), broken); err == nil || !strings.Contains(err.Error(), "save session") {
 		t.Fatalf("broken SaveSession() error = %v, want save context", err)
 	}
 

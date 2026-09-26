@@ -3,6 +3,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -18,11 +19,11 @@ import (
 // Bubble Tea updates cannot return an error, so callers report the joined
 // cleanup result through the model's diagnostic writer while preserving every
 // individual failure.
-func finalizeChatHandle(handle session.SessionHandle, recordPath string) error {
+func finalizeChatHandle(ctx context.Context, handle session.SessionHandle, recordPath string) error {
 	if handle == nil {
 		return nil
 	}
-	return errors.Join(handle.Save(), handle.Flush(recordPath), handle.Close())
+	return errors.Join(handle.Save(ctx), handle.Flush(recordPath), handle.Close())
 }
 
 func closeChatHandle(handle session.SessionHandle) error {

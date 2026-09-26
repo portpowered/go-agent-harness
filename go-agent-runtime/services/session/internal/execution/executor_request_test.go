@@ -16,14 +16,14 @@ const savedSessionID = "saved"
 
 func TestExecutorRequestInitialHistoryUsesExplicitStore(t *testing.T) {
 	workspace := t.TempDir()
-	storage := session.NewStorage(workspace)
+	storage := newFileStorage(workspace)
 	wantHistory := []messages.Message{messages.NewTextMessage(messages.RoleUser, savedSessionID)}
-	if err := storage.Save(savedSessionID, wantHistory); err != nil {
+	if err := storage.Save(t.Context(), savedSessionID, wantHistory); err != nil {
 		t.Fatalf("save session: %v", err)
 	}
 	exec := resolvedExecutorForTest(t, stubInferencer{}, storage, nil, nil)
 
-	history, id, err := exec.getInitialHistory(&Config{SessionID: savedSessionID}, storage)
+	history, id, err := exec.getInitialHistory(t.Context(), &Config{SessionID: savedSessionID}, storage)
 	if err != nil {
 		t.Fatalf("session-id history error = %v", err)
 	}
@@ -31,7 +31,7 @@ func TestExecutorRequestInitialHistoryUsesExplicitStore(t *testing.T) {
 		t.Fatalf("session-id result = (%q, %#v), want saved user message", id, history)
 	}
 
-	latestHistory, latestID, err := exec.getInitialHistory(&Config{ContinueLastSession: true}, storage)
+	latestHistory, latestID, err := exec.getInitialHistory(t.Context(), &Config{ContinueLastSession: true}, storage)
 	if err != nil {
 		t.Fatalf("continue-last history error = %v", err)
 	}
@@ -42,10 +42,10 @@ func TestExecutorRequestInitialHistoryUsesExplicitStore(t *testing.T) {
 }
 
 func TestExecutorRequestInitialHistoryCopiesInput(t *testing.T) {
-	storage := session.NewStorage(t.TempDir())
+	storage := newFileStorage(t.TempDir())
 	exec := resolvedExecutorForTest(t, stubInferencer{}, storage, nil, nil)
 	initial := []messages.Message{messages.NewTextMessage(messages.RoleUser, iterativeInitialPrompt)}
-	initialHistory, initialID, err := exec.getInitialHistory(&Config{InitialHistory: initial}, storage)
+	initialHistory, initialID, err := exec.getInitialHistory(t.Context(), &Config{InitialHistory: initial}, storage)
 	if err != nil || initialID == "" || len(initialHistory) != 1 || initialHistory[0].TextContent() != iterativeInitialPrompt {
 		t.Fatalf("provided history result = (%q, %#v, %v), want exact history and new ID", initialID, initialHistory, err)
 	}
@@ -54,7 +54,7 @@ func TestExecutorRequestInitialHistoryCopiesInput(t *testing.T) {
 		t.Fatal("initial history was not copied")
 	}
 
-	emptyHistory, emptyID, err := exec.getInitialHistory(&Config{}, storage)
+	emptyHistory, emptyID, err := exec.getInitialHistory(t.Context(), &Config{}, storage)
 	if err != nil || emptyHistory != nil || emptyID == "" {
 		t.Fatalf("empty history result = (%q, %#v, %v), want new ID and nil history", emptyID, emptyHistory, err)
 	}
@@ -63,8 +63,8 @@ func TestExecutorRequestInitialHistoryCopiesInput(t *testing.T) {
 
 func TestExecutorRequestInitialHistoryReportsStorageErrors(t *testing.T) {
 	exec := resolvedExecutorForTest(t, stubInferencer{}, nil, nil, nil)
-	noSessions := session.NewStorage(t.TempDir())
-	if _, _, err := exec.getInitialHistory(&Config{ContinueLastSession: true}, noSessions); err == nil || !strings.Contains(err.Error(), "no previous session to continue") {
+	noSessions := newFileStorage(t.TempDir())
+	if _, _, err := exec.getInitialHistory(t.Context(), &Config{ContinueLastSession: true}, noSessions); err == nil || !strings.Contains(err.Error(), "no previous session to continue") {
 		t.Fatalf("empty continue error = %v, want no-previous-session context", err)
 	}
 
@@ -75,8 +75,8 @@ func TestExecutorRequestInitialHistoryReportsStorageErrors(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(badRoot, "sessions", "session-bad.json"), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	badStorage := session.NewStorage(badRoot)
-	if _, _, err := exec.getInitialHistory(&Config{SessionID: "bad"}, badStorage); err == nil || !strings.Contains(err.Error(), "load session bad") {
+	badStorage := newFileStorage(badRoot)
+	if _, _, err := exec.getInitialHistory(t.Context(), &Config{SessionID: "bad"}, badStorage); err == nil || !strings.Contains(err.Error(), "load session bad") {
 		t.Fatalf("bad session error = %v, want load context", err)
 	}
 }
@@ -86,7 +86,7 @@ func TestExecutorRequestRequiresExplicitStorage(t *testing.T) {
 	if _, err := exec.getSessionStorage(); err == nil || !strings.Contains(err.Error(), "session storage is required") {
 		t.Fatalf("getSessionStorage() error = %v, want explicit store error", err)
 	}
-	if _, err := exec.NewChatSessionID(&Config{}); err == nil || !strings.Contains(err.Error(), "session storage is required") {
+	if _, err := exec.NewChatSessionID(t.Context()); err == nil || !strings.Contains(err.Error(), "session storage is required") {
 		t.Fatalf("NewChatSessionID() error = %v, want explicit store error", err)
 	}
 }
@@ -94,10 +94,10 @@ func TestExecutorRequestRequiresExplicitStorage(t *testing.T) {
 func TestExecutorRequestIDErrorsPreserveCause(t *testing.T) {
 	sentinel := errors.New("ID source failed")
 	storage := &requestIDFailureStorage{sessionErr: sentinel, traceErr: sentinel}
-	if _, err := newSessionID(storage); !errors.Is(err, sentinel) {
+	if _, err := newSessionID(t.Context(), storage); !errors.Is(err, sentinel) {
 		t.Fatalf("newSessionID() error = %v, want sentinel", err)
 	}
-	if _, err := newTraceID(storage); !errors.Is(err, sentinel) {
+	if _, err := newTraceID(t.Context(), storage); !errors.Is(err, sentinel) {
 		t.Fatalf("newTraceID() error = %v, want sentinel", err)
 	}
 }
@@ -118,13 +118,19 @@ type requestIDFailureStorage struct {
 	traceErr   error
 }
 
-func (s *requestIDFailureStorage) Load(string) ([]messages.Message, error)        { return nil, nil }
-func (s *requestIDFailureStorage) Latest() (string, error)                        { return "", nil }
-func (s *requestIDFailureStorage) NewSessionID() string                           { return "" }
-func (s *requestIDFailureStorage) NewSessionIDWithError() (string, error)         { return "", s.sessionErr }
-func (s *requestIDFailureStorage) Save(string, []messages.Message) error          { return nil }
-func (s *requestIDFailureStorage) WorkspaceDir() string                           { return "" }
-func (s *requestIDFailureStorage) LoadTrace(string) (*session.TraceRecord, error) { return nil, nil }
-func (s *requestIDFailureStorage) SaveTrace(session.TraceRecord) error            { return nil }
-func (s *requestIDFailureStorage) NewTraceID() string                             { return "" }
-func (s *requestIDFailureStorage) NewTraceIDWithError() (string, error)           { return "", s.traceErr }
+func (s *requestIDFailureStorage) Load(context.Context, string) ([]messages.Message, error) {
+	return nil, nil
+}
+func (s *requestIDFailureStorage) Latest(context.Context) (string, error) { return "", nil }
+func (s *requestIDFailureStorage) NewSessionID(context.Context) (string, error) {
+	return "", s.sessionErr
+}
+func (s *requestIDFailureStorage) Save(context.Context, string, []messages.Message) error { return nil }
+func (s *requestIDFailureStorage) WorkspaceDir() string                                   { return "" }
+func (s *requestIDFailureStorage) LoadTrace(context.Context, string) (*session.TraceRecord, error) {
+	return nil, nil
+}
+func (s *requestIDFailureStorage) SaveTrace(context.Context, session.TraceRecord) error { return nil }
+func (s *requestIDFailureStorage) NewTraceID(context.Context) (string, error) {
+	return "", s.traceErr
+}
