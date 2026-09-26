@@ -563,8 +563,7 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 	}
 }
 
-// closingSession closes admission like a room shutting down: afterwards
-// every send is rejected as closed.
+// closingSession closes admission like a room shutting down, then rejects.
 type closingSession struct {
 	*playbackSession
 	closed bool

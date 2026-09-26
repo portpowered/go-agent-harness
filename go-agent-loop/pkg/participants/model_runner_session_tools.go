@@ -291,8 +291,7 @@ func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.
 	case sessionInputAudio:
 		return r.forwardSessionAudioInputWithState(ctx, session, input.audio, state)
 	case sessionInputEvent:
-		// forwardQueuedSessionEvent orders held audio around the event.
-		r.forwardQueuedSessionEvent(ctx, session, state, input.event)
+		r.forwardQueuedSessionEvent(ctx, session, state, input.event) // orders held audio around the event
 	case sessionInputMessage:
 		r.flushHeldAudio(ctx, session, state)
 		return r.forwardSessionCompleteMessage(ctx, session, input.message, input.requestResponse)
