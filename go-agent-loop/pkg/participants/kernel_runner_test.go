@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -445,4 +446,65 @@ func pcmFrameAtLevel(level int16, samples int) []byte {
 		pcm[i], pcm[i+1] = byte(uint16(sample)), byte(uint16(sample)>>8)
 	}
 	return pcm
+}
+
+// An explicit host interrupt is the cancel; a frame held for onset is the
+// interrupting audio. The cancel reaches the provider first.
+func TestSessionModelRunner_ExplicitCancelPrecedesHeldOnsetAudio(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-explicit")
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	runner.forwardQueuedSessionEvent(context.Background(), session, state, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()})
+	sent := session.sentMessages()
+	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("sent %#v, want RESPONSE.CANCEL before the held frame", sent)
+	}
+}
+
+// A frame held because it could interrupt a response is released when that
+// response ends: there is nothing left for it to interrupt.
+func TestSessionModelRunner_HeldOnsetAudioReleasedWhenResponseEnds(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-ending")
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	runner.forwardSessionMessageState(context.Background(), session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-ending"))
+	sent := session.sentMessages()
+	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("sent %#v, want the held frame released at the response's end", sent)
+	}
+}
+
+// With sparse input (a relay that sends no silence) nothing follows a lone
+// loud frame. Once onset can no longer be reached the frame is released.
+func TestSessionModelRunner_HeldOnsetAudioReleasedAfterOnsetWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := newRecordingSession()
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 16, nil)
+		ctx, stop := context.WithCancel(t.Context())
+		ran := make(chan error, 1)
+		go func() { ran <- runner.Run(ctx) }()
+		go func() {
+			for _, ok := runner.DeltaOutbox.ReadBlockingContext(ctx); ok; _, ok = runner.DeltaOutbox.ReadBlockingContext(ctx) {
+			}
+		}()
+		session.recv.Write(ctx, sessionMessage(messages.StreamTypeMessageStart, "resp-sparse"))
+		synctest.Wait()
+		if err := runner.EnqueueSessionAudioInput(ctx, pcmFrameAtLevel(9000, 480)); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		if got := len(session.sentMessages()); got != 0 {
+			t.Fatalf("sent %d messages while onset was undecided, want the frame held", got)
+		}
+		time.Sleep(DefaultBargeInConfig().MinSpeech)
+		synctest.Wait()
+		sent := session.sentMessages()
+		stop()
+		<-ran
+		if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
+			t.Fatalf("sent %#v after the onset window, want only the released frame", sent)
+		}
+	})
 }

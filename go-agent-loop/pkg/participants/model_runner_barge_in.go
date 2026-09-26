@@ -5,6 +5,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -181,6 +183,9 @@ func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm
 	case onset && !providerVAD && !responseActive && playing.Active:
 		playback.InterruptLocalPlayback(ctx)
 	case loud && !onset && cancelTarget:
+		if len(state.heldAudio) == 0 {
+			state.heldAudioTimer = r.timerSource().NewTimer(r.bargeInTuning().MinSpeech)
+		}
 		state.heldAudio = append(state.heldAudio, pcm)
 		return true, nil
 	}
@@ -191,6 +196,10 @@ func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm
 func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Session, state *sessionResponseState) error {
 	held := state.heldAudio
 	state.heldAudio = nil
+	if state.heldAudioTimer != nil {
+		state.heldAudioTimer.Stop()
+		state.heldAudioTimer = nil
+	}
 	for _, pcm := range held {
 		if err := forwardUserAudio(ctx, session, pcm); err != nil {
 			return err
@@ -237,4 +246,25 @@ func (r *ModelRunner) sendBargeInCancel(ctx context.Context, session messages.Se
 	}
 	state.cancelledResponseIDs.add(state.currentResponseID)
 	return nil
+}
+
+// heldAudioExpiry fires once held onset audio can no longer reach onset: the
+// onset window elapsed without the speech that would complete it. Frames
+// arrive in real time, so this bounds how long sparse input (a relay that
+// sends no silence) keeps a frame held. It is nil while nothing is held.
+func (s *sessionRunState) heldAudioExpiry() <-chan time.Time {
+	if s.heldAudioTimer == nil {
+		return nil
+	}
+	return s.heldAudioTimer.C()
+}
+
+// SetClock sets the clock that times held onset audio. Call it before Run.
+func (r *ModelRunner) SetClock(source clock.TimerSource) { r.clock = source }
+
+func (r *ModelRunner) timerSource() clock.TimerSource {
+	if r.clock != nil {
+		return r.clock
+	}
+	return clock.Real{}
 }
