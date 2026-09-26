@@ -316,8 +316,7 @@ func TestModelRunner_ExplicitInterruptPolicyDoesNotCancelToolContinuation(t *tes
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 8, nil)
-	state := newInFlightRunState(t, session, runner, "resp-continuation-policy")
-	state.awaitingContinuation = true
+	state := newContinuationRunState(t, runner, "resp-continuation-policy")
 
 	if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{7, 7, 7}, messages.SessionAudioInputPolicyInterrupt); err != nil {
 		t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)

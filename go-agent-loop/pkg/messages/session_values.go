@@ -146,6 +146,10 @@ type ResponsePurpose string
 
 const (
 	ResponsePurposeToolAcknowledgement ResponsePurpose = "tool_acknowledgement"
+	// ResponsePurposeToolContinuation marks the provider response opened for
+	// an accepted tool result's continuation. The session runner stamps it on
+	// that response's output so tool-obligation accounting is scoped to it.
+	ResponsePurposeToolContinuation ResponsePurpose = "tool_continuation"
 )
 
 // ToolAcknowledgementInstructions is deliberately short and prohibits a

@@ -206,3 +206,31 @@ func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.
 		OutputState:        value.OutputState,
 	}
 }
+
+// ContinuationOutputType reports whether kind is provider output that counts
+// toward an owed tool continuation.
+func ContinuationOutputType(kind messages.StreamMessageType) bool {
+	if kind == messages.StreamTypeRefusal {
+		return true
+	}
+	name := string(kind)
+	if !strings.HasSuffix(name, ".DELTA") && !strings.HasSuffix(name, ".END") {
+		return false
+	}
+	return kind != messages.StreamTypeMessageEnd && kind != messages.StreamTypeToolCallEnd && kind != messages.StreamTypeToolCallDelta
+}
+
+// InterruptedBeforeToolContinuation reports the terminal boundary of a
+// response the session runner cancelled on barge-in that is not the tool
+// continuation. The runner never requests a continuation over an active
+// response, so a response interrupted while a continuation is owed is the one
+// that was already playing; the continuation is requested after it ends and
+// resolves the tool obligation itself.
+func InterruptedBeforeToolContinuation(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeMessageEnd || msg.ResponsePurpose == messages.ResponsePurposeToolContinuation {
+		return false
+	}
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput &&
+		value.TerminalProvenance == messages.TerminalProvenanceLoop
+}

@@ -318,9 +318,7 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 	// will never arrive. Hold the event only when a cancel is actually
 	// outstanding, then replay it from flushDeferredSessionEvents once that
 	// boundary is observed.
-	requestsNewResponse := evt.Type == messages.StreamTypeMessageEnd ||
-		(evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt))
-	if requestsNewResponse && state.responseCancelSent && (state.responseInFlight || state.acknowledgementOutstanding) {
+	if deferSessionResponseRequest(state, evt) {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
 		return
 	}
@@ -351,47 +349,4 @@ func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failure
 	for _, failure := range failures {
 		r.DeltaOutbox.Write(ctx, failure)
 	}
-}
-
-// forwardSessionMessageWithState forwards one provider event and updates the
-// identity-aware response lifecycle. The return value is true only when this
-// event is the terminal MESSAGE.END for the currently owned response.
-func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMessage {
-	value, ok := msg.Value.(*messages.SessionCloseValue)
-	if !ok {
-		return msg
-	}
-	if value.TerminalReason == "" {
-		if value.Reason == "provider_closed" {
-			value.TerminalReason = messages.TerminalReasonProviderClose
-		} else {
-			value.TerminalReason = messages.TerminalReasonSessionClose
-		}
-	}
-	if value.Classification == "" {
-		// The gateway public taxonomy classifies a provider transport close
-		// without completion as transport; clean session closes keep their
-		// descriptive reason.
-		if value.TerminalReason == messages.TerminalReasonProviderClose {
-			value.Classification = "transport"
-		} else {
-			value.Classification = string(value.TerminalReason)
-		}
-	}
-	if value.TerminalProvenance == "" {
-		value.TerminalProvenance = messages.TerminalProvenanceSession
-	}
-	if value.OutputState == "" {
-		value.OutputState = messages.TerminalOutputNotApplicable
-	}
-	return msg
-}
-
-func hasPCM16Signal(pcm []byte) bool {
-	for _, value := range pcm {
-		if value != 0 {
-			return true
-		}
-	}
-	return false
 }

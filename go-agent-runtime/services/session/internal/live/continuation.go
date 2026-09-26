@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/live/eventcodec"
 	"sort"
 	"strings"
 )
@@ -35,7 +36,7 @@ func (h *handle) observeToolLifecycle(msg messages.StreamMessage) (error, bool) 
 		}
 		return nil, false
 	}
-	if isContinuationOutputType(msg.Type) {
+	if eventcodec.ContinuationOutputType(msg.Type) {
 		if msg.Role == messages.RoleTool {
 			h.observeToolResponseOutput(msg.ToolCallId)
 			return nil, false
@@ -48,19 +49,14 @@ func (h *handle) observeToolLifecycle(msg messages.StreamMessage) (error, bool) 
 			h.markToolResponseComplete()
 			return h.finishDeferredToolContinuations()
 		}
+		if eventcodec.InterruptedBeforeToolContinuation(msg) {
+			// The runner requests the continuation after this barge-in cancelled response.
+			h.setContinuationOutput(false)
+			return nil, false
+		}
 		return h.finishToolContinuations(msg)
 	}
 	return nil, false
-}
-func isContinuationOutputType(kind messages.StreamMessageType) bool {
-	if kind == messages.StreamTypeRefusal {
-		return true
-	}
-	name := string(kind)
-	if !strings.HasSuffix(name, ".DELTA") && !strings.HasSuffix(name, ".END") {
-		return false
-	}
-	return kind != messages.StreamTypeMessageEnd && kind != messages.StreamTypeToolCallEnd && kind != messages.StreamTypeToolCallDelta
 }
 func (h *handle) observeProviderToolCall(msg messages.StreamMessage) {
 	callID, name := providerToolCallIdentity(msg)
@@ -241,14 +237,17 @@ func (h *handle) beginContinuationAdmission() func() {
 		h.toolMu.Unlock()
 	}
 }
-func (h *handle) markContinuationOutput() {
+func (h *handle) markContinuationOutput() { h.setContinuationOutput(true) }
+
+// setContinuationOutput records whether owed continuations have output.
+func (h *handle) setContinuationOutput(observed bool) {
 	if h == nil {
 		return
 	}
 	h.toolMu.Lock()
 	for _, state := range h.toolContinuations {
 		if state.resultAccepted && state.continuationRequested {
-			state.outputObserved = true
+			state.outputObserved = observed
 		}
 	}
 	h.toolMu.Unlock()

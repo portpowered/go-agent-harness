@@ -80,14 +80,26 @@ const (
 // pending tool-result bookkeeping lets the pending-input preflight observe an
 // already-queued provider boundary before it admits user audio.
 type sessionRunState struct {
-	responseInFlight           bool
-	responseCancelSent         bool
-	sessionClosed              bool
-	hasOutput                  bool
-	responseCompleted          bool
-	pendingSendErrors          []messages.StreamMessage
-	awaitingContinuation       bool
-	suppressContinuation       bool
+	responseInFlight     bool
+	responseCancelSent   bool
+	sessionClosed        bool
+	hasOutput            bool
+	responseCompleted    bool
+	pendingSendErrors    []messages.StreamMessage
+	suppressContinuation bool
+	// continuationRequested records that the provider accepted a tool
+	// continuation RESPONSE.CREATE whose response has not started yet. The
+	// request is only sent while no response is active, so the next response
+	// the provider opens is that continuation.
+	continuationRequested bool
+	// continuationInFlight marks the current response as the tool
+	// continuation. Only this response is exempt from barge-in; every other
+	// response, including one that was already playing when the continuation
+	// was queued, stays interruptible.
+	continuationInFlight       bool
+	continuationResponseID     string
+	continuationEnded          bool
+	continuationCreate         messages.StreamMessage
 	currentResponseID          string
 	cancelledResponseIDs       map[string]struct{}
 	retiredResponseIDs         map[string]struct{}
@@ -253,7 +265,7 @@ func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session me
 	if msg.Type == messages.StreamTypeSessionClose {
 		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 		state.pendingSendErrors = nil
-		state.awaitingContinuation = false
+		clearSessionContinuation(state)
 		r.sessionToolContinuation = sessionToolContinuationNone
 	}
 	messageEnded := r.forwardSessionMessageWithState(ctx, session, msg, state)
@@ -269,10 +281,10 @@ func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session me
 		// waiting on is no longer active, so it is now safe to replay them.
 		r.flushDeferredSessionEvents(ctx, session, state)
 	}
-	if messageEnded && state.awaitingContinuation && !acknowledgementEnded {
+	if state.continuationEnded {
+		state.continuationEnded = false
 		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
 		state.pendingSendErrors = nil
-		state.awaitingContinuation = false
 	}
 }
 
@@ -311,23 +323,20 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 	// delta are separate ordered events, and speech in that interval must not
 	// be mistaken for an idle session.
 	//
-	// A response that is itself the requested continuation of an already
-	// accepted tool result (state.awaitingContinuation) is deliberately
-	// excluded. Unlike an ordinary spoken response or a tool acknowledgement,
-	// nothing re-requests a cancelled tool continuation: MESSAGE.END for a
-	// cancelled response is rewritten with TerminalReasonPartialOutput and no
-	// further response.create is ever queued for that call, so the tool's
-	// obligation is left permanently unresolved and the session later fails
-	// closed with an unresolved tool_continuation -- even though the
-	// interrupting audio was ordinary room/peer input, not a deliberate
-	// interrupt of this participant's own turn. A room participant observed
-	// this exactly: it received one peer audio frame with signal 557ms into
-	// its tool continuation response, sent RESPONSE.CANCEL against it,
-	// and died with classification=tool_continuation at t=2.9s having never
-	// produced a single sample of its own audio (sent.pcm was 0 bytes). Held
-	// off, the continuation is free to complete and deliver the tool result;
-	// the participant's next ordinary response remains fully interruptible.
-	if policy.InterruptsResponse() && (state.responseInFlight || state.acknowledgementOutstanding) && !state.awaitingContinuation && !state.responseCancelSent && hasPCM16Signal(pcm) {
+	// The response that is itself the requested continuation of an already
+	// accepted tool result (state.continuationInFlight) is deliberately
+	// excluded. Nothing re-requests a cancelled tool continuation: its
+	// MESSAGE.END is rewritten with TerminalReasonPartialOutput and the tool's
+	// obligation is left permanently unresolved, so the session later fails
+	// closed with an unresolved tool_continuation. A room participant observed
+	// this exactly: one peer audio frame 557ms into its tool continuation
+	// response cancelled it and the participant died having produced no audio.
+	//
+	// The exemption is scoped to that one response. A response that was
+	// already playing when the continuation was queued (for example a
+	// server-VAD reply) is not the continuation: the continuation request is
+	// deferred until that response ends, so interrupting it strands nothing.
+	if policy.InterruptsResponse() && (state.responseInFlight || state.acknowledgementOutstanding) && !state.continuationInFlight && !state.responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
 			Value: messages.NewResponseCancelValue(),
@@ -368,14 +377,19 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	// not define its terminal boundary. When a provider starts a replacement
 	// response before the older one has drained, the older response is retired
 	// and can no longer mutate the current lifecycle.
+	r.retrySessionContinuationOnRejection(ctx, session, state, msg)
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		startSessionResponse(state, msgID, acknowledgementResponse)
+		tagSessionContinuation(state, &msg, msgID)
 	case messages.StreamTypeMessageEnd:
+		tagSessionContinuation(state, &msg, msgID)
 		messageEndOwned = endSessionResponse(state, &msg, msgID, acknowledgementResponse)
 	case messages.StreamTypeSessionClose:
 		state.sessionClosed = true
 		msg = normalizeSessionCloseMessage(msg)
+	default:
+		tagSessionContinuation(state, &msg, msgID)
 	}
 	// A provider may have already queued output when RESPONSE.CANCEL reaches
 	// it. The wire adapter cannot retract those frames, but they must not cross
@@ -392,98 +406,6 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	r.forwardInitialSessionConfig(ctx, session, state, msg)
 	r.DeltaOutbox.Write(ctx, msg)
 	return messageEndOwned
-}
-
-func beginSessionResponse(state *sessionResponseState, msgID string) bool {
-	if msgID != "" {
-		if _, retired := state.retiredResponseIDs[msgID]; retired {
-			return false
-		}
-		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
-			return false
-		}
-	}
-	if state.responseInFlight {
-		if state.currentResponseID == msgID {
-			// Duplicate starts for the same response must not reset cancellation
-			// or output state.
-			return false
-		}
-		if state.currentResponseID != "" && msgID == "" {
-			// An untagged start cannot claim an identified response.
-			return false
-		}
-		if state.currentResponseID != "" && msgID != state.currentResponseID {
-			state.retiredResponseIDs[state.currentResponseID] = struct{}{}
-			// The retired response's own MESSAGE.END, whenever it eventually
-			// arrives, will never be "owned" again (ownsSessionResponseEnd
-			// rejects retired ids), so the reset that normally happens there
-			// would never run. Finalize any acknowledgement bookkeeping for it
-			// here instead of leaving acknowledgementOutstanding stuck true:
-			// left stuck, every later non-silent audio frame would look like a
-			// live barge-in target (state.responseInFlight || state.
-			// acknowledgementOutstanding) even once nothing is actually
-			// active, producing a RESPONSE.CANCEL the provider rejects with
-			// response_cancel_not_active.
-			if state.acknowledgementOutstanding {
-				state.acknowledgementOutstanding = false
-				state.acknowledgementCancelled = false
-				state.acknowledgementEnded = true
-			}
-		}
-	}
-	state.currentResponseID = msgID
-	return true
-}
-
-func ownsSessionResponseEnd(state *sessionResponseState, msgID string) bool {
-	if msgID != "" {
-		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
-			return false
-		}
-		if _, retired := state.retiredResponseIDs[msgID]; retired {
-			return false
-		}
-		if _, cancelled := state.cancelledResponseIDs[msgID]; cancelled && state.currentResponseID != msgID {
-			return false
-		}
-		if state.responseInFlight {
-			return msgID == "" || state.currentResponseID == msgID
-		}
-		// A response.done without response.created is accepted once for
-		// compatibility with providers that omit the opening event.
-		return !state.responseCompleted
-	}
-	if state.responseInFlight {
-		// Compatible providers may omit response_id on response.done. The
-		// sole active identified response owns that terminal event unless a
-		// non-empty competing ID is supplied.
-		return true
-	}
-	return !state.responseCompleted
-}
-
-func staleSessionCustomerOutput(state *sessionResponseState, msg messages.StreamMessage) bool {
-	if !isCustomerOutputDelta(msg) {
-		return false
-	}
-	msgID := responseID(msg.ResponseID)
-	if msgID != "" {
-		if _, cancelled := state.cancelledResponseIDs[msgID]; cancelled {
-			return true
-		}
-		if _, retired := state.retiredResponseIDs[msgID]; retired {
-			return true
-		}
-		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
-			return true
-		}
-		if state.currentResponseID != "" && state.currentResponseID != msgID {
-			return true
-		}
-		return false
-	}
-	return state.responseCancelSent
 }
 
 func isSessionResponseStreamType(typ messages.StreamMessageType) bool {
