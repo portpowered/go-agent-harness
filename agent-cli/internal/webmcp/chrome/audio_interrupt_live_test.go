@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -580,8 +581,8 @@ func audioInterruptArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		t.Fatalf("create audio interrupt artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "s2s-audio-interrupt-")
-	if err != nil {
+	root := filepath.Join(parent, "s2s-audio-interrupt-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create audio interrupt artifact directory: %v", err)
 	}
 	return root

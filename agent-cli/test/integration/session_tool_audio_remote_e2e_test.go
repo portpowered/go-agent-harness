@@ -177,6 +177,7 @@ func remoteToolAudioContinuationCases() []remoteToolAudioCase {
 // observations, tool observations and device-rendered PCM, never session
 // queue or sink implementation state.
 func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range remoteToolAudioContinuationCases() {
 		for _, delivery := range remoteToolAudioDeliveries() {
 			if testCase.healthyControl && delivery.name != "provider_burst" {

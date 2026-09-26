@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -495,8 +496,8 @@ func liveVoiceToolGroundingArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		t.Fatalf("create live grounding artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "s2s-voice-tool-grounding-")
-	if err != nil {
+	root := filepath.Join(parent, "s2s-voice-tool-grounding-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create live grounding artifact directory: %v", err)
 	}
 	return root

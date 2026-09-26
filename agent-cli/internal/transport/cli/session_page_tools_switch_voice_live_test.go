@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -245,8 +246,8 @@ func sessionPageToolsSwitchVoiceArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, sessionPageToolsSwitchVoiceArtifactMode); err != nil {
 		t.Fatalf("create voice artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "webmcp-switch-voice-")
-	if err != nil {
+	root := filepath.Join(parent, "webmcp-switch-voice-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create voice artifact directory: %v", err)
 	}
 	return root

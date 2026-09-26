@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -233,8 +234,8 @@ func paperieMarginArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, sessionPaperieMarginArtifactMode); err != nil {
 		t.Fatalf("create artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "paperie-margin-")
-	if err != nil {
+	root := filepath.Join(parent, "paperie-margin-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create artifact root: %v", err)
 	}
 	return root

@@ -70,6 +70,7 @@ func TestCustomerSimulationScenarioScriptUsesVisibleWordingForBuiltInsAndCustoms
 // product record exists. Each run must still leave a verifiable bundle with a
 // structured BROKEN verdict and a bounded, non-secret diagnosis.
 func TestRunCustomerSimulationSuiteLeavesTypedBrokenBundles(t *testing.T) {
+	t.Parallel()
 	binaryPath := filepath.Join(t.TempDir(), "child.sh")
 	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\nhead -c 1 >/dev/null\nexit 1\n"), 0o700); err != nil {
 		t.Fatalf("write child: %v", err)

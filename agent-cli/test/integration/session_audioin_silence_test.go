@@ -279,6 +279,7 @@ func containsFold(s, substr string) bool {
 // silence corpus fixtures through the agent session CLI over the hermetic
 // replay transport and asserts zero commits and zero turns.
 func TestSessionAudioInSilenceFixturesProduceZeroCommitsAndTurns(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"silence_16k", "silence_24k"} {
 		t.Run(name, func(t *testing.T) {
 			// Each subtest is an independent session over its own replay
@@ -293,6 +294,7 @@ func TestSessionAudioInSilenceFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 // corpus fixtures through the identical CLI path and asserts zero commits and
 // zero turns so background noise is never treated as speech.
 func TestSessionAudioInNoiseFixturesProduceZeroCommitsAndTurns(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"noise_16k", "noise_24k"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

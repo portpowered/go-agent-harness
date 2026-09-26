@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -811,8 +812,8 @@ func gateI2ArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		t.Fatalf("create Gate I2 artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "webmcp-gate-i2-")
-	if err != nil {
+	root := filepath.Join(parent, "webmcp-gate-i2-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create Gate I2 artifact directory: %v", err)
 	}
 	return root

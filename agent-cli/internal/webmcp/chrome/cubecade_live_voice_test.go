@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -286,8 +287,8 @@ func cubecadeNestedArtifactRoot(t *testing.T, prefix, label string) string {
 	} else if err := os.MkdirAll(parent, cubecadeLiveVoiceArtifactMode); err != nil {
 		t.Fatalf("create %s artifact parent: %v", label, err)
 	}
-	root, err := os.MkdirTemp(parent, prefix)
-	if err != nil {
+	root := filepath.Join(parent, prefix+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create %s artifact directory: %v", label, err)
 	}
 	return root
