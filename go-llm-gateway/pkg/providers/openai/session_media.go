@@ -370,9 +370,27 @@ func (s *realtimeSession) keepToolWorkLocked(pending []responseIntent) []respons
 
 func responseIntentIsToolWork(intent responseIntent) bool {
 	for _, event := range intent.events {
-		if responseEventIsFunctionCallOutput(event) || firstStringField(event.Data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation) {
+		if responseEventIsFunctionCallOutput(event) || responseEventIsToolContinuation(event) {
 			return true
 		}
 	}
 	return false
+}
+
+func responseEventIsToolContinuation(event models.SessionEvent) bool {
+	return firstStringField(event.Data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation)
+}
+
+// keepContinuationRetryLocked keeps a tool continuation's retry state across
+// a cancel. A continuation rejected because another response was active
+// (or sent and not yet answered) is retried when that response ends; the
+// cancel ends that response, it does not answer the continuation. Any other
+// remembered request belongs to the cancelled generation and is forgotten.
+func (s *realtimeSession) keepContinuationRetryLocked() {
+	if s.responseRetry != nil && responseEventIsToolContinuation(*s.responseRetry) {
+		return
+	}
+	s.responseRetry = nil
+	s.responseSent = false
+	s.responseRetryPending = false
 }

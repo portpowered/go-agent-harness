@@ -430,9 +430,7 @@ func (s *realtimeSession) invalidatePendingResponseIntents() {
 	s.responseMu.Lock()
 	s.responseGeneration++
 	s.pendingResponseIntents = s.keepToolWorkLocked(s.pendingResponseIntents)
-	s.responseRetry = nil
-	s.responseSent = false
-	s.responseRetryPending = false
+	s.keepContinuationRetryLocked()
 	s.responseHasFunctionCall = false
 	s.suppressStandaloneResponseCreate = false
 	s.toolResultAdmitted = false
