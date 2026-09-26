@@ -220,10 +220,12 @@ func ContinuationOutputType(kind messages.StreamMessageType) bool {
 	return kind != messages.StreamTypeMessageEnd && kind != messages.StreamTypeToolCallEnd && kind != messages.StreamTypeToolCallDelta
 }
 
-// InterruptedBeforeToolContinuation reports the terminal boundary of a
-// response the session runner cancelled on barge-in that is not the tool
-// continuation. The runner never requests a continuation over an active
-// response, so a response interrupted while a continuation is owed is the one
+// InterruptedBeforeToolContinuation reports the terminal boundary of an
+// interrupted response that is not the tool continuation: one the session
+// runner cancelled on local barge-in, or one the provider's own turn
+// detection cancelled (status "cancelled"). The runner never requests a
+// continuation over an active response and tags the continuation response, so
+// an untagged response interrupted while a continuation is owed is the one
 // that was already playing; the continuation is requested after it ends and
 // resolves the tool obligation itself.
 func InterruptedBeforeToolContinuation(msg messages.StreamMessage) bool {
@@ -231,8 +233,11 @@ func InterruptedBeforeToolContinuation(msg messages.StreamMessage) bool {
 		return false
 	}
 	value, ok := msg.Value.(*messages.MessageEndValue)
-	return ok && value != nil && value.TerminalReason == messages.TerminalReasonPartialOutput &&
-		value.TerminalProvenance == messages.TerminalProvenanceLoop
+	if !ok || value == nil {
+		return false
+	}
+	locallyCancelled := value.TerminalReason == messages.TerminalReasonPartialOutput && value.TerminalProvenance == messages.TerminalProvenanceLoop
+	return locallyCancelled || strings.EqualFold(strings.TrimSpace(value.Status), "cancelled")
 }
 
 // CapabilityEvent converts a browser capability event into a live event.

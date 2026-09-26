@@ -134,6 +134,25 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 	return err
 }
 
+// ProviderTurnDetection reports that Grok always runs server VAD.
+func (*grokSession) ProviderTurnDetection() bool { return true }
+
+// LocalPlayback reports provider audio still queued for or audible on the
+// local device.
+func (s *grokSession) LocalPlayback() messages.LocalPlaybackState {
+	activity := s.currentRTCMedia().PlaybackActivity()
+	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}
+}
+
+// InterruptLocalPlayback discards audio not yet heard.
+func (s *grokSession) InterruptLocalPlayback(context.Context) bool {
+	if !s.LocalPlayback().Active {
+		return false
+	}
+	s.interruptRTCPlayback()
+	return true
+}
+
 // interruptRTCPlayback discards response audio queued for local playback.
 // Grok audio deltas carry no conversation item identity, so no provider-side
 // truncation is possible.

@@ -21,7 +21,11 @@ func TestInterruptedBeforeToolContinuation(t *testing.T) {
 		"interrupted playing response": {messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: interrupted}, true},
 		"interrupted continuation": {messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: interrupted,
 			ResponsePurpose: messages.ResponsePurposeToolContinuation}, false},
-		"completed response":   {messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: completed}, false},
+		"completed response": {messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: completed}, false},
+		"provider VAD cancelled response": {messages.StreamMessage{Type: messages.StreamTypeMessageEnd,
+			Value: &messages.MessageEndValue{Type: "message_end", Status: "cancelled"}}, true},
+		"provider VAD cancelled continuation": {messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponsePurpose: messages.ResponsePurposeToolContinuation,
+			Value: &messages.MessageEndValue{Type: "message_end", Status: "cancelled"}}, false},
 		"non-terminal message": {messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: interrupted}, false},
 	} {
 		if got := InterruptedBeforeToolContinuation(tc.msg); got != tc.want {

@@ -319,10 +319,7 @@ func startSessionResponse(state *sessionResponseState, msgID string, acknowledge
 	state.responseCompleted = false
 	state.responseCancelSent = false
 	state.responseInFlight = true
-	if !acknowledgementResponse && state.continuationRequested {
-		// The continuation request is only sent while no response is active,
-		// so the first response opened after it is the continuation.
-		state.continuationRequested = false
+	if !acknowledgementResponse && state.responseRequests.open() == requestContinuation {
 		state.continuationInFlight = true
 		state.continuationResponseID = msgID
 	}
@@ -364,6 +361,7 @@ func endSessionResponse(state *sessionResponseState, msg *messages.StreamMessage
 		state.terminalResponseIDs.add(ownedID)
 	}
 	state.currentResponseID = ""
+	state.responseRequests.ended()
 	if state.continuationInFlight {
 		state.continuationInFlight = false
 		state.continuationResponseID = ""

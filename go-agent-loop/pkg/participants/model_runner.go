@@ -88,11 +88,9 @@ type sessionRunState struct {
 	responseCompleted    bool
 	pendingSendErrors    []messages.StreamMessage
 	suppressContinuation bool
-	// continuationRequested records that the provider accepted a tool
-	// continuation RESPONSE.CREATE whose response has not started yet. The
-	// request is only sent while no response is active, so the next response
-	// the provider opens is that continuation.
-	continuationRequested bool
+	// responseRequests lists, in send order, response requests the provider
+	// accepted but has not opened yet (see responseRequestQueue).
+	responseRequests responseRequestQueue
 	// continuationInFlight marks the current response as the tool
 	// continuation. Only this response is exempt from barge-in; every other
 	// response, including one that was already playing when the continuation
@@ -100,7 +98,6 @@ type sessionRunState struct {
 	continuationInFlight       bool
 	continuationResponseID     string
 	continuationEnded          bool
-	continuationCreate         messages.StreamMessage
 	currentResponseID          string
 	cancelledResponseIDs       responseIDSet
 	retiredResponseIDs         responseIDSet
@@ -111,6 +108,7 @@ type sessionRunState struct {
 	acknowledgementEnded       bool
 	deferredSessionEvents      []messages.StreamMessage
 	initialSessionConfigSent   bool
+	bargeIn                    bargeInDetector
 }
 
 // sessionResponseState is retained as an alias for the identity-aware helper
@@ -277,42 +275,9 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 		// intentionally discarded without manufacturing a provider failure.
 		return nil
 	}
-	// Barge-in: new user audio while the current model response is still
-	// non-terminal. The response-created-before-first-audio state is
-	// intentionally included: provider response creation and its first output
-	// delta are separate ordered events, and speech in that interval must not
-	// be mistaken for an idle session.
-	//
-	// The response that is itself the requested continuation of an already
-	// accepted tool result (state.continuationInFlight) is deliberately
-	// excluded. Nothing re-requests a cancelled tool continuation: its
-	// MESSAGE.END is rewritten with TerminalReasonPartialOutput and the tool's
-	// obligation is left permanently unresolved, so the session later fails
-	// closed with an unresolved tool_continuation. A room participant observed
-	// this exactly: one peer audio frame 557ms into its tool continuation
-	// response cancelled it and the participant died having produced no audio.
-	//
-	// The exemption is scoped to that one response. A response that was
-	// already playing when the continuation was queued (for example a
-	// server-VAD reply) is not the continuation: the continuation request is
-	// deferred until that response ends, so interrupting it strands nothing.
-	if policy.InterruptsResponse() && (state.responseInFlight || state.acknowledgementOutstanding) && !state.continuationInFlight && !state.responseCancelSent && hasPCM16Signal(pcm) {
-		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
-			Type:  messages.StreamTypeResponseCancel,
-			Value: messages.NewAutomaticResponseCancelValue(),
-		})
-		if !cancelOutcome.OK() {
-			return sessionAudioSendError("response cancel", cancelOutcome)
-		}
-		// Keep the response in flight until its terminal MESSAGE.END arrives,
-		// but never send a second cancel for more audio belonging to the same
-		// response.
-		state.responseCancelSent = true
-		if state.acknowledgementOutstanding {
-			state.acknowledgementCancelled = true
-		}
-		if state.currentResponseID != "" {
-			state.cancelledResponseIDs.add(state.currentResponseID)
+	if policy.InterruptsResponse() {
+		if err := r.bargeIn(ctx, session, pcm, state); err != nil {
+			return err
 		}
 	}
 	// Forward the user audio to the inference provider.
@@ -328,6 +293,7 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
 	state.ensureMaps()
+	requestRejected := rejectsActiveResponseCreate(msg) && !state.acknowledgementOutstanding
 	acknowledgementResponse := r.tagSessionAcknowledgement(ctx, state, &msg)
 	msgID := responseID(msg.ResponseID)
 	messageEndOwned := false
@@ -337,7 +303,9 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 	// not define its terminal boundary. When a provider starts a replacement
 	// response before the older one has drained, the older response is retired
 	// and can no longer mutate the current lifecycle.
-	r.retrySessionContinuationOnRejection(ctx, session, state, msg)
+	if requestRejected {
+		state.responseRequests.rejected(state)
+	}
 	switch msg.Type {
 	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
 		startSessionResponse(state, msgID, acknowledgementResponse)

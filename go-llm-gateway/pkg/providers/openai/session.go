@@ -30,9 +30,9 @@ type realtimeSession struct {
 	logger logging.Logger
 	// sendQueue buffers client-to-provider events. Overflow drops are counted
 	// and logged through the default observer attached below.
-	sendQueue         *messages.TypedBuffer[models.SessionEvent]
-	writeBackpressure bool
-	outbound          providers.OutboundWireDrain
+	sendQueue                               *messages.TypedBuffer[models.SessionEvent]
+	writeBackpressure, clientTurnBoundaries bool // clientTurnBoundaries: provider VAD disabled
+	outbound                                providers.OutboundWireDrain
 	// recvBuf buffers translated provider-to-client events.
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
@@ -122,7 +122,7 @@ func (s *realtimeSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
 	outcome := s.sendEvents(ctx, events)
-	if outcome.OK() && messages.IsExplicitResponseCancel(msg) {
+	if outcome.OK() && messages.CancelStopsPlayback(msg) {
 		s.interruptPlaybackForCancel(ctx)
 	}
 	return outcome

@@ -171,8 +171,8 @@ func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read frame after interruption: %v", err)
 			}
-			if len(frame.Samples) == 0 || frame.Samples[0] != 7 {
-				t.Fatal("cancelled backlog was still audible after the interruption")
+			if frame.PlaybackResponse.ResponseID != "resp-next" {
+				t.Fatalf("first frame after the interruption belongs to %+v, want resp-next", frame.PlaybackResponse)
 			}
 		})
 	}

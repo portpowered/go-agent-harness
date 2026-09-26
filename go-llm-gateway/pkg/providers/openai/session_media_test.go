@@ -282,10 +282,10 @@ func TestRealtimeSession_HostResponseCancelFlushesQueuedPlayback(t *testing.T) {
 	}
 }
 
-// The session runner's automatic input-energy barge-in also matches the
-// agent's own playback echo on a device without echo cancellation. Its cancel
-// stops generation but leaves local playback to the provider's turn detection.
-func TestRealtimeSession_AutomaticResponseCancelKeepsQueuedPlayback(t *testing.T) {
+// After response.done the provider has nothing left to cancel, but seconds of
+// the response are still playing locally. Interrupting local playback stops
+// it and truncates the item at the heard position.
+func TestRealtimeSession_InterruptLocalPlaybackAfterResponseDone(t *testing.T) {
 	conn := newMockWebSocketConn()
 	session := newRealtimeSession(conn, logging.DummyLogger())
 	session.mediaSampleRate = 24000
@@ -294,30 +294,39 @@ func TestRealtimeSession_AutomaticResponseCancelKeepsQueuedPlayback(t *testing.T
 	if !ok {
 		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
 	}
-	controller := &openAIPlaybackController{audioEndMS: 700}
+	controller := &openAIPlaybackController{audioEndMS: 400}
 	controlled.SetPlaybackController(controller)
 	ctx := newRealtimeTestContext(t)
 	session.start(ctx)
 	defer closeForTest(t, session)
+	if !session.ProviderTurnDetection() {
+		t.Fatal("default OpenAI session reported no provider turn detection")
+	}
 	conn.addServerEvent("response.output_audio.delta", map[string]any{
-		"response_id": "resp-echo", "item_id": "item-echo", "content_index": 0,
-		"delta": codec.EncodePCM16Base64(make([]int16, 24000)), "format": "pcm16",
+		"response_id": "resp-done", "item_id": "item-done", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000*3)), "format": "pcm16",
 	})
 	if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
 		t.Fatalf("read first playback frame: %v", err)
 	}
-	outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewAutomaticResponseCancelValue()})
-	if !outcome.OK() {
-		t.Fatalf("send automatic RESPONSE.CANCEL: %+v", outcome)
+	if !session.LocalPlayback().Active {
+		t.Fatal("queued response audio is not reported as local playback")
 	}
-	if sent := waitForClientMessages(t, conn, 1, "automatic response cancel"); len(sent) != 1 {
-		t.Fatalf("client events = %d, want only response.cancel", len(sent))
+	if !session.InterruptLocalPlayback(ctx) {
+		t.Fatal("InterruptLocalPlayback reported nothing to interrupt")
 	}
-	if _, interrupted := controller.snapshot(); interrupted.ItemID != "" {
-		t.Fatalf("automatic cancel interrupted device playback: %+v", interrupted)
+	var truncate struct {
+		Type       string `json:"type"`
+		ItemID     string `json:"item_id"`
+		AudioEndMS int    `json:"audio_end_ms"`
 	}
-	if frame, err := endpoints.Inbound.ReadFrame(ctx); err != nil || frame.PlaybackResponse.ItemID != "item-echo" {
-		t.Fatalf("frame after automatic cancel = %+v (%v), want the queued response audio", frame.PlaybackResponse, err)
+	sent := waitForClientMessages(t, conn, 1, "conversation truncation")
+	if err := json.Unmarshal(sent[0], &truncate); err != nil || truncate.Type != string(models.SessionEventConversationItemTruncate) ||
+		truncate.ItemID != "item-done" || truncate.AudioEndMS != 400 {
+		t.Fatalf("client event = %s (%v), want truncation of item-done at 400 ms", sent[0], err)
+	}
+	if session.LocalPlayback().Active {
+		t.Fatal("playback still reported active after the interrupt")
 	}
 }
 
@@ -424,6 +433,25 @@ func TestRealtimeSession_BargeInLatencyStaysFlatAcrossLongSession(t *testing.T) 
 			}
 		}
 	})
+}
+
+// Client-owned audio turns send turn_detection null, so the session must not
+// claim provider-side speech detection: local barge-in is the runner's job.
+func TestConnectSession_ClientOwnedTurnsDisableProviderTurnDetection(t *testing.T) {
+	for _, clientOwned := range []bool{false, true} {
+		options := []Option{WithAPIKey("test-key"), WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"), WithWebSocketDialer(&mockWebSocketDialer{conn: newMockWebSocketConn()})}
+		if clientOwned {
+			options = append(options, WithClientOwnedAudioTurnBoundaries())
+		}
+		session, err := New(options...).ConnectSession(newRealtimeTestContext(t), models.SessionConfig{Model: "gpt-realtime"})
+		if err != nil {
+			t.Fatalf("ConnectSession: %v", err)
+		}
+		if got := realtimeSessionForTest(t, session).ProviderTurnDetection(); got == clientOwned {
+			t.Errorf("client-owned=%t: ProviderTurnDetection = %t", clientOwned, got)
+		}
+		closeForTest(t, session)
+	}
 }
 
 // response.created names the response before its first audio delta names the

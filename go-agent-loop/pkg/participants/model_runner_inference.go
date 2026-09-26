@@ -254,11 +254,6 @@ func outputState(hasOutput bool) messages.TerminalOutputState {
 	return messages.TerminalOutputNone
 }
 
-// hasPCM16Signal distinguishes a real input frame from the zero-filled
-// cadence frames produced by a room mixer while no participant is speaking.
-// The frame is still forwarded in either case so the provider's audio timing
-// and VAD state remain intact; only a frame with at least one non-zero byte can
-// be the user activity that cancels an in-flight response.
 func cancellationErrorValue(err error, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) *messages.ErrorValue {
 	if err == nil {
 		err = context.Canceled

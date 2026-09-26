@@ -99,7 +99,7 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 		events = append(events, models.NewResponseCreateEvent())
 	}
 	outcome := s.sendEvents(ctx, events)
-	if outcome.OK() && messages.IsExplicitResponseCancel(msg) {
+	if outcome.OK() && messages.CancelStopsPlayback(msg) {
 		// Audio arrives faster than real time; stop the cancelled response's
 		// backlog that is still queued for local playback.
 		s.interruptRTCPlayback()

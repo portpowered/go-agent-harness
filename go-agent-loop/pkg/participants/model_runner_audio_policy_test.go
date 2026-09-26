@@ -239,7 +239,7 @@ func TestModelRunner_ExplicitSessionAudioPolicyControlsCancellation(t *testing.T
 			runner := NewSessionModelRunner(nil, 8, nil)
 			state := newInFlightRunState(t, session, runner, "resp-policy")
 
-			if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{1, 2, 3, 4}, test.policy); err != nil {
+			if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, loudPCM(), test.policy); err != nil {
 				t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
 			}
 			input := <-runner.sessionInputInbox
@@ -282,7 +282,7 @@ func assertPolicyAudioForwarded(t *testing.T, sent []messages.StreamMessage, wan
 	if !ok {
 		t.Fatalf("last sent value = %T, want *messages.AudioDeltaValue", sent[len(sent)-1].Value)
 	}
-	if got := value.Content; string(got) != string([]byte{1, 2, 3, 4}) {
+	if got := value.Content; string(got) != string(loudPCM()) {
 		t.Fatalf("forwarded PCM = %v, want [1 2 3 4]", got)
 	}
 }
@@ -319,7 +319,7 @@ func TestModelRunner_ExplicitInterruptPolicyDoesNotCancelToolContinuation(t *tes
 	runner := NewSessionModelRunner(nil, 8, nil)
 	state := newContinuationRunState(t, runner, "resp-continuation-policy")
 
-	if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{7, 7, 7}, messages.SessionAudioInputPolicyInterrupt); err != nil {
+	if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, loudPCM(), messages.SessionAudioInputPolicyInterrupt); err != nil {
 		t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
 	}
 	input := <-runner.sessionInputInbox

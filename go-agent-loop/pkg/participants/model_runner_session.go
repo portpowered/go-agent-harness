@@ -331,6 +331,9 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 	if deferred {
 		r.noteDeferredSessionFailure(state, evt, failure)
 	}
+	if admitted && evt.Type == messages.StreamTypeMessageEnd {
+		state.responseRequests.push(requestUserTurn)
+	}
 	if responseAccepted {
 		r.noteAcceptedSessionResponse(state, evt)
 	} else if evt.Type == messages.StreamTypeResponseCancel && admitted {

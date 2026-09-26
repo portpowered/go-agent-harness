@@ -181,7 +181,28 @@ func (s *realtimeSession) sendResponseCancel(ctx context.Context, events []model
 	return s.enqueueWireEvents(ctx, events)
 }
 
-// interruptPlaybackForCancel applies an explicit host RESPONSE.CANCEL to local
+// ProviderTurnDetection reports whether OpenAI detects user speech itself. It
+// does unless the session owns its audio turn boundaries (turn_detection null).
+func (s *realtimeSession) ProviderTurnDetection() bool { return !s.clientTurnBoundaries }
+
+// LocalPlayback reports provider audio still queued for or audible on the
+// local device, which outlives response.done.
+func (s *realtimeSession) LocalPlayback() messages.LocalPlaybackState {
+	activity := s.currentRTCMedia().PlaybackActivity()
+	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}
+}
+
+// InterruptLocalPlayback stops local playback and truncates the heard item.
+// It is valid after response.done, when there is no response left to cancel.
+func (s *realtimeSession) InterruptLocalPlayback(ctx context.Context) bool {
+	if !s.LocalPlayback().Active {
+		return false
+	}
+	s.interruptPlaybackForCancel(ctx)
+	return true
+}
+
+// interruptPlaybackForCancel applies a RESPONSE.CANCEL to local
 // playback. Audio arrives faster than real time, so the cancelled response may
 // still have seconds queued; that backlog is discarded and the item truncated
 // at what was heard. A following server-VAD speech_started finds nothing

@@ -185,7 +185,7 @@ func sendSessionToolResultsAsStream(ctx context.Context, session messages.Sessio
 	}
 	return session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewResponseCreateValue(),
+		Value: messages.NewToolContinuationResponseCreateValue(),
 	})
 }
 
@@ -305,8 +305,7 @@ func (r *ModelRunner) noteAcceptedSessionResponse(state *sessionRunState, evt me
 		state.responseCancelSent = false
 		return
 	}
-	state.continuationRequested = true
-	state.continuationCreate = evt
+	state.responseRequests.push(requestForCreate(evt))
 	r.sessionToolContinuation = sessionToolContinuationAccepted
 }
 
@@ -343,7 +342,7 @@ func holdForAcknowledgement(state *sessionRunState, evt messages.StreamMessage) 
 		return false
 	}
 	if isToolAcknowledgementResponseCreate(evt) {
-		return state.responseInFlight || state.continuationRequested || state.continuationInFlight || state.acknowledgementOutstanding
+		return state.responseInFlight || state.responseRequests.has(requestContinuation) || state.continuationInFlight || state.acknowledgementOutstanding
 	}
 	if state.acknowledgementOutstanding {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)

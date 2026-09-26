@@ -180,7 +180,7 @@ func TestSessionModelRunner_BargeInSendFailurePropagatesFromRun(t *testing.T) {
 				Value: messages.NewMessageStartValue(),
 			})
 			waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
-			runner.UserAudioInbox <- []byte{7, 8, 9}
+			runner.UserAudioInbox <- loudPCM()
 
 			select {
 			case err := <-errCh:
@@ -386,4 +386,136 @@ func loudPCM() []byte {
 		pcm[i], pcm[i+1] = byte(uint16(sample)), byte(uint16(sample)>>8)
 	}
 	return pcm
+}
+
+// playbackSession is a provider session that owns local playback and reports
+// whether the provider runs its own turn detection.
+type playbackSession struct {
+	*recordingSession
+	providerVAD bool
+	playback    messages.LocalPlaybackState
+	interrupts  int
+}
+
+func (s *playbackSession) ProviderTurnDetection() bool                { return s.providerVAD }
+func (s *playbackSession) LocalPlayback() messages.LocalPlaybackState { return s.playback }
+func (s *playbackSession) InterruptLocalPlayback(context.Context) bool {
+	s.interrupts++
+	s.playback = messages.LocalPlaybackState{}
+	return true
+}
+
+// pcmAtLevel returns 20 ms of 16 kHz PCM16 whose RMS is level.
+func pcmAtLevel(level int16) []byte {
+	pcm := make([]byte, 640)
+	for i := 0; i < len(pcm); i += 2 {
+		sample := level
+		if i%4 == 0 {
+			sample = -level
+		}
+		pcm[i], pcm[i+1] = byte(uint16(sample)), byte(uint16(sample)>>8)
+	}
+	return pcm
+}
+
+func sendUserAudio(t *testing.T, runner *ModelRunner, session messages.Session, state *sessionRunState, pcm []byte) {
+	t.Helper()
+	if err := runner.forwardSessionAudioWithPolicyWithState(context.Background(), session, pcm, messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+		t.Fatalf("forward user audio: %v", err)
+	}
+}
+
+// The response is done but seconds of its audio are still playing (the
+// provider delivers faster than real time). The user hears the agent talking
+// and speaks over it: that must stop playback -- there is no response left to
+// cancel, so the interrupt is local playback plus truncation.
+func TestSessionModelRunner_SpeechInterruptsPlaybackAfterResponseDone(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession()}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-done")
+	runner.forwardSessionMessageState(context.Background(), session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-done"))
+	session.playback = messages.LocalPlaybackState{Active: true, Level: 1500}
+
+	sendUserAudio(t, runner, session, state, pcmAtLevel(8000))
+	if session.interrupts != 1 || countSent(session.sentMessages(), messages.StreamTypeResponseCancel) != 0 {
+		t.Fatalf("playback interrupts=%d cancels=%d, want one local playback interrupt and no RESPONSE.CANCEL", session.interrupts, countSent(session.sentMessages(), messages.StreamTypeResponseCancel))
+	}
+}
+
+// Without echo cancellation the microphone hears the agent's own playback at
+// about the playback level. That echo alone must not barge in, while real
+// speech clearly above the playback does.
+func TestSessionModelRunner_EchoAloneDoesNotBargeInButSpeechOverPlaybackDoes(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), playback: messages.LocalPlaybackState{Active: true, Level: 6000}}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-playing")
+	for range 25 { // half a second of unity-gain echo
+		sendUserAudio(t, runner, session, state, pcmAtLevel(6000))
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 || session.interrupts != 0 {
+		t.Fatalf("echo of playback: cancels=%d interrupts=%d, want none", got, session.interrupts)
+	}
+	sendUserAudio(t, runner, session, state, pcmAtLevel(20000))
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("speech over playback: cancels=%d, want 1", got)
+	}
+}
+
+// Background noise below speech level never barges in.
+func TestSessionModelRunner_QuietNoiseDoesNotBargeIn(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession()}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-noise")
+	for range 50 {
+		sendUserAudio(t, runner, session, state, pcmAtLevel(60))
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 {
+		t.Fatalf("noise cancels=%d, want 0", got)
+	}
+}
+
+// When the provider runs turn detection it stops local playback on
+// speech_started itself. The runner still cancels the response before the
+// speech reaches the provider, but leaves playback (and echo judgement) to the
+// provider.
+func TestSessionModelRunner_ProviderTurnDetectionOwnsPlayback(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), providerVAD: true, playback: messages.LocalPlaybackState{Active: true, Level: 12000}}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-vad")
+	sendUserAudio(t, runner, session, state, pcmAtLevel(3000))
+	sent := session.sentMessages()
+	if countSent(sent, messages.StreamTypeResponseCancel) != 1 || messages.CancelStopsPlayback(sent[0]) || session.interrupts != 0 {
+		t.Fatalf("provider VAD barge-in sent=%#v interrupts=%d, want one playback-keeping cancel", sent, session.interrupts)
+	}
+}
+
+// A user turn's response request (MESSAGE.END: commit + response.create) that
+// has been sent but not yet opened is answered before a continuation requested
+// after it. The first response to open is the user's turn, not the
+// continuation: it must stay interruptible, and the continuation is the next.
+func TestSessionModelRunner_ContinuationBindsToItsOwnRequestNotAnEarlierUserTurn(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+
+	runner.forwardQueuedSessionEvent(ctx, session, state, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-user"))
+	if state.continuationInFlight {
+		t.Fatalf("user-turn response was bound as the tool continuation: %+v", state)
+	}
+	sendUserAudio(t, runner, session, state, loudPCM())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("user-turn response was not interruptible: cancels=%d", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-user"))
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-continuation"))
+	if !state.continuationInFlight || state.continuationResponseID != "resp-continuation" {
+		t.Fatalf("continuation bound to %q, want resp-continuation", state.continuationResponseID)
+	}
+	sendUserAudio(t, runner, session, state, loudPCM())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("tool continuation was cancelled: cancels=%d", got)
+	}
 }

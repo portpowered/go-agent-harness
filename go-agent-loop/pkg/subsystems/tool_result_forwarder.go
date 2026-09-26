@@ -118,7 +118,7 @@ func (f *ToolResultForwarder) Execute(ctx context.Context, curr *state.LoopState
 		// parallel tool results cannot create one provider response per call.
 		if err := f.sendSessionEvent(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCreate,
-			Value: messages.NewResponseCreateValue(),
+			Value: messages.NewToolContinuationResponseCreateValue(),
 		}); err != nil {
 			return err
 		}
