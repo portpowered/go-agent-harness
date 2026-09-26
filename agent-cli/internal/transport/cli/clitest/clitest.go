@@ -202,14 +202,22 @@ func testWithin(t *testing.T, limit time.Duration, body func(t *testing.T)) {
 }
 
 // failStuckBubble runs on the watchdog's real timer, outside the bubble. The
-// bubble's goroutines cannot be unblocked from here, so it dumps every
+// bubble's goroutines cannot be unblocked from here, so it reports every
 // goroutine and panics, failing the test binary with the stuck I/O visible.
 func failStuckBubble(name string, limit time.Duration) {
+	message, dump := stuckBubbleReport(name, limit)
+	_, _ = os.Stderr.WriteString(dump) //nolint:errcheck // best-effort diagnostics before the panic
+	panic(message)
+}
+
+// stuckBubbleReport returns the watchdog's panic message and the goroutine
+// dump written before it.
+func stuckBubbleReport(name string, limit time.Duration) (message, dump string) {
 	stacks := make([]byte, stackDumpBytes)
 	stacks = stacks[:runtime.Stack(stacks, true)]
-	_, _ = fmt.Fprintf(os.Stderr, "%s\n", stacks) // best-effort diagnostics before the panic
-	panic(fmt.Sprintf("clitest: %s ran %s of real time and its synctest bubble never went idle: "+
-		"real I/O (socket, exec or cgo) inside clitest.Test? goroutines dumped above", name, limit))
+	message = fmt.Sprintf("clitest: %s ran %s of real time and its synctest bubble never went idle: "+
+		"real I/O (socket, exec or cgo) inside clitest.Test? goroutines dumped above", name, limit)
+	return message, string(stacks) + "\n"
 }
 
 // Subtest runs body as the named subtest of t in its own bubble. A bubble
