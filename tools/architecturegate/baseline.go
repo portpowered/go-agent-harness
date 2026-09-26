@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -241,20 +240,6 @@ func compareBaselineHistory(ctx context.Context, gitBinary, repoRoot, baselinePa
 	return compareHistoricalEntries(relative, previous, current)
 }
 
-func decodeHistoricalBaseline(data []byte) (Baseline, error) {
-	var previous Baseline
-	if err := json.Unmarshal(data, &previous); err != nil {
-		return Baseline{}, fmt.Errorf("merge-base baseline is invalid: %w", err)
-	}
-	if previous.Version != baselineVersion {
-		return Baseline{}, fmt.Errorf("merge-base baseline has version %d; expected %d", previous.Version, baselineVersion)
-	}
-	if err := validateBaseline(previous); err != nil {
-		return Baseline{}, fmt.Errorf("merge-base baseline is invalid: %w", err)
-	}
-	return previous, nil
-}
-
 func compareHistoricalEntries(relative string, previous, current Baseline) []Issue {
 	oldEntries := baselineEntries(previous.Entries)
 	newEntries := baselineEntries(current.Entries)
@@ -365,19 +350,6 @@ func renameSourceFor(renames []BaselineRename, target string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func gitOutput(ctx context.Context, gitBinary, dir string, args ...string) ([]byte, error) {
-	if strings.TrimSpace(gitBinary) == "" {
-		gitBinary = "git"
-	}
-	command := exec.CommandContext(ctx, gitBinary, args...)
-	command.Dir = dir
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
-	}
-	return output, nil
 }
 
 func baselineJSON(baseline Baseline) ([]byte, error) {

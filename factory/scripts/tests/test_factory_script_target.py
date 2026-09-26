@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -14,16 +15,44 @@ PRIMARY_MODULES = (
 
 
 class FactoryScriptTargetTests(unittest.TestCase):
-    def test_target_runs_expected_suite_without_creating_bytecode(self):
-        before = self._bytecode_artifacts()
-        result = self._run_target()
-        after = self._bytecode_artifacts()
+    def test_default_selection_includes_the_primary_modules(self):
+        # The default suite itself is executed by the enclosing
+        # `make test-factory-scripts` run, which fails on zero tests or any
+        # failure; re-running it here would only double the target's time.
+        modules = self._default_modules()
+        for module in PRIMARY_MODULES:
+            self.assertIn(module, modules)
+
+    def test_target_runs_selected_modules_without_creating_bytecode(self):
+        # The fixture imports every default module, so any bytecode the
+        # target's interpreters would write for repository sources (the
+        # modules under test and the scripts they load) appears here.
+        modules = self._default_modules()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture_path = Path(temp_dir) / "factory_target_import_fixture.py"
+            fixture_path.write_text(
+                "import importlib\n"
+                "import unittest\n\n"
+                f"for name in {modules!r}:\n"
+                "    importlib.import_module(name)\n\n\n"
+                "class FactoryTargetImports(unittest.TestCase):\n"
+                "    def test_imports(self):\n"
+                "        pass\n",
+                encoding="utf-8",
+            )
+            python_path = os.pathsep.join(
+                [temp_dir, os.environ.get("PYTHONPATH", "")]
+            ).rstrip(os.pathsep)
+            before = self._bytecode_artifacts()
+            result = self._run_target(
+                "FACTORY_TEST_MODULES=factory_target_import_fixture",
+                env={"PYTHONPATH": python_path},
+            )
+            after = self._bytecode_artifacts()
 
         self.assertEqual(result.returncode, 0, result.output)
         self.assertIn("==> test-factory-scripts modules:", result.output)
-        for module in PRIMARY_MODULES:
-            self.assertIn(module, result.output)
-        self.assertRegex(result.output, r"Ran \d+ tests? in ")
+        self.assertRegex(result.output, r"Ran 1 test in ")
         self.assertEqual(after, before, result.output)
 
     def test_target_rejects_empty_selection(self):
@@ -90,6 +119,22 @@ class FactoryScriptTargetTests(unittest.TestCase):
             check=False,
         )
         return _CommandResult(result.returncode, result.stdout + result.stderr)
+
+    @staticmethod
+    def _default_modules():
+        # `make -n` expands the recipe, including the configured module
+        # list, without running it.
+        result = subprocess.run(
+            ["make", "-n", "test-factory-scripts", "FACTORY_TEST_CONTRACT_CHILD=1"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        match = re.search(r'==> test-factory-scripts modules: ([^"]*)"', result.stdout)
+        if match is None:
+            raise AssertionError(f"module list not found in dry run:\n{result.stdout}")
+        return match.group(1).split()
 
     def _bytecode_artifacts(self):
         artifacts = set()

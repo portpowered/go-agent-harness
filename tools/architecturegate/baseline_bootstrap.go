@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 )
 
 // compareBootstrapBaseline checks a newly introduced baseline against the
@@ -302,64 +301,4 @@ func validateCombinedBaseline(combined Baseline, label string) (Baseline, error)
 		return Baseline{}, fmt.Errorf("invalid combined baseline %q: %w", label, err)
 	}
 	return combined, nil
-}
-
-func loadHistoricalBaseline(ctx context.Context, gitBinary, repoRoot, commit, relative string) (Baseline, bool, error) {
-	kind, err := gitOutput(ctx, gitBinary, repoRoot, "cat-file", "-t", commit+":"+relative)
-	if err == nil {
-		switch strings.TrimSpace(string(kind)) {
-		case "blob":
-			data, showErr := gitOutput(ctx, gitBinary, repoRoot, "show", commit+":"+relative)
-			if showErr != nil {
-				return Baseline{}, true, showErr
-			}
-			baseline, decodeErr := decodeHistoricalBaseline(data)
-			return baseline, true, decodeErr
-		case "tree":
-			baseline, loadErr := loadHistoricalBaselineDirectory(ctx, gitBinary, repoRoot, commit, relative)
-			return baseline, true, loadErr
-		default:
-			return Baseline{}, true, fmt.Errorf("merge-base baseline %q is a %s, expected a file or directory", relative, strings.TrimSpace(string(kind)))
-		}
-	}
-	legacy := filepath.ToSlash(filepath.Join(filepath.Dir(relative), "architecture-size-baseline.json"))
-	if legacy != relative {
-		if data, legacyErr := gitOutput(ctx, gitBinary, repoRoot, "show", commit+":"+legacy); legacyErr == nil {
-			baseline, decodeErr := decodeHistoricalBaseline(data)
-			return baseline, true, decodeErr
-		}
-	}
-	return Baseline{}, false, nil
-}
-
-func loadHistoricalBaselineDirectory(ctx context.Context, gitBinary, repoRoot, commit, relative string) (Baseline, error) {
-	listing, err := gitOutput(ctx, gitBinary, repoRoot, "ls-tree", "-r", "--name-only", commit, "--", relative)
-	if err != nil {
-		return Baseline{}, err
-	}
-	paths := make([]string, 0)
-	for _, path := range strings.Split(strings.TrimSpace(string(listing)), "\n") {
-		if strings.HasSuffix(path, ".json") {
-			paths = append(paths, path)
-		}
-	}
-	sort.Strings(paths)
-	if len(paths) == 0 {
-		return Baseline{}, fmt.Errorf("merge-base baseline directory %q contains no JSON fragments", relative)
-	}
-	combined := Baseline{Version: baselineVersion}
-	for _, path := range paths {
-		data, err := gitOutput(ctx, gitBinary, repoRoot, "show", commit+":"+path)
-		if err != nil {
-			return Baseline{}, err
-		}
-		fragment, err := decodeHistoricalBaseline(data)
-		if err != nil {
-			return Baseline{}, fmt.Errorf("fragment %q: %w", path, err)
-		}
-		if err := appendBaselineFragment(&combined, fragment, path); err != nil {
-			return Baseline{}, err
-		}
-	}
-	return validateCombinedBaseline(combined, "merge-base "+relative)
 }

@@ -37,10 +37,36 @@ class WireGateTest(unittest.TestCase):
             check_wire.check(self.root, ["runtime"], "custom-go")
         run.assert_called_once()
         args, kwargs = run.call_args
-        self.assertEqual(args[0], ["custom-go", "generate", "."])
-        self.assertEqual(kwargs["cwd"], self.package)
+        self.assertEqual(
+            args[0],
+            ["custom-go", "run", "-mod=mod", "github.com/google/wire/cmd/wire", "gen", "./services/session/wire"],
+        )
+        self.assertEqual(kwargs["cwd"], self.root / "runtime")
         self.assertEqual(kwargs["env"]["GOWORK"], "off")
         self.assertTrue(kwargs["check"])
+
+    def test_one_generator_per_module_covers_every_package(self):
+        extra = self.root / "runtime/services/tools/wire"
+        extra.mkdir(parents=True)
+        (extra / "wire.go").write_text(self.injector.read_text())
+        (extra / "wire_gen.go").write_text(self.generated.read_text())
+        other = self.root / "cli/internal/wire"
+        other.mkdir(parents=True)
+        (self.root / "cli/go.mod").write_text("module example.com/cli\n")
+        (other / "wire.go").write_text(self.injector.read_text())
+        (other / "wire_gen.go").write_text(self.generated.read_text())
+        with mock.patch.object(check_wire.subprocess, "run") as run:
+            check_wire.check(self.root, ["runtime", "cli"], "go")
+        calls = {call.kwargs["cwd"]: call.args[0][5:] for call in run.call_args_list}
+        self.assertEqual(calls, {
+            self.root / "runtime": ["./services/session/wire", "./services/tools/wire"],
+            self.root / "cli": ["./internal/wire"],
+        })
+
+    def test_non_wire_generate_directive_fails_closed(self):
+        (self.package / "enum.go").write_text("//go:generate stringer -type=Kind\npackage wire\n")
+        with self.assertRaisesRegex(ValueError, "non-Wire go:generate directive"):
+            check_wire.discovered_packages(self.root, ["runtime"])
 
     def test_generated_drift_fails_and_keeps_reviewable_output(self):
         def regenerate(*args, **kwargs):
