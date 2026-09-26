@@ -295,3 +295,40 @@ func TestGlobalOrdering_PreservesToolBatchAcrossInterleavedModelDeltas(t *testin
 		t.Fatalf("tool history placement = {start:%d len:%d}, want {start:5 len:9}", ts.History.ToolDeltaStartIndex, len(ts.History.ConversationDeltaBuffer))
 	}
 }
+
+// The conversation delta history must not grow with session length. Audio of
+// responses whose messages are already reconstructed is compacted, and the
+// settled history is retained only to a bounded window; the live response
+// window stays intact.
+func TestGlobalOrdering_SettledDeltaHistoryStaysBounded(t *testing.T) {
+	o := NewGlobalOrdering(participants.NewModelRunner(nil, 16), nil, nil, nil)
+	ts := &state.LoopState{History: state.History{ConversationDeltaBuffer: []messages.StreamMessage{}}}
+	pcm := make([]byte, 4800) // 100 ms at 24 kHz
+	for turn := range 400 {
+		ts.History.ModelDeltaStartIndex, ts.History.CurrentModelDeltaCount = len(ts.History.ConversationDeltaBuffer), 0
+		response := []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue()}}
+		for range 30 {
+			response = append(response, messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)})
+		}
+		response = append(response, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+		for _, delta := range response {
+			if err := o.consumeModelDelta(ts, delta); err != nil {
+				t.Fatalf("turn %d: %v", turn, err)
+			}
+			o.UpdateWorldHistory(ts)
+			o.FlushInputs(ts)
+		}
+	}
+	retainedAudio := 0
+	for _, delta := range ts.History.ConversationDeltaBuffer {
+		if value, ok := delta.Value.(*messages.AudioDeltaValue); ok {
+			retainedAudio += len(value.Content)
+		}
+	}
+	if got := len(ts.History.ConversationDeltaBuffer); got > settledHistoryLimit+64 {
+		t.Fatalf("delta history holds %d entries after 400 responses, want at most %d", got, settledHistoryLimit+64)
+	}
+	if limit := 30 * len(pcm); retainedAudio > limit {
+		t.Fatalf("delta history retains %d audio bytes, want at most the live response's %d", retainedAudio, limit)
+	}
+}

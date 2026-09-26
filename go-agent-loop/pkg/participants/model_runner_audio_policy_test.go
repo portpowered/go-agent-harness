@@ -3,6 +3,7 @@ package participants
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -238,7 +239,7 @@ func TestModelRunner_ExplicitSessionAudioPolicyControlsCancellation(t *testing.T
 			runner := NewSessionModelRunner(nil, 8, nil)
 			state := newInFlightRunState(t, session, runner, "resp-policy")
 
-			if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{1, 2, 3, 4}, test.policy); err != nil {
+			if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, loudPCM(), test.policy); err != nil {
 				t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
 			}
 			input := <-runner.sessionInputInbox
@@ -281,7 +282,7 @@ func assertPolicyAudioForwarded(t *testing.T, sent []messages.StreamMessage, wan
 	if !ok {
 		t.Fatalf("last sent value = %T, want *messages.AudioDeltaValue", sent[len(sent)-1].Value)
 	}
-	if got := value.Content; string(got) != string([]byte{1, 2, 3, 4}) {
+	if got := value.Content; string(got) != string(loudPCM()) {
 		t.Fatalf("forwarded PCM = %v, want [1 2 3 4]", got)
 	}
 }
@@ -316,10 +317,9 @@ func TestModelRunner_ExplicitInterruptPolicyDoesNotCancelToolContinuation(t *tes
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 8, nil)
-	state := newInFlightRunState(t, session, runner, "resp-continuation-policy")
-	state.awaitingContinuation = true
+	state := newContinuationRunState(t, runner, "resp-continuation-policy")
 
-	if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, []byte{7, 7, 7}, messages.SessionAudioInputPolicyInterrupt); err != nil {
+	if err := runner.EnqueueSessionAudioInputWithPolicy(ctx, loudPCM(), messages.SessionAudioInputPolicyInterrupt); err != nil {
 		t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
 	}
 	input := <-runner.sessionInputInbox
@@ -434,5 +434,139 @@ func lastAnnouncedStart(runner *ModelRunner) *messages.StreamMessage {
 		if delta.Type == messages.StreamTypeMessageStart {
 			last = &delta
 		}
+	}
+}
+
+// pacedRecordingSession spends one 30 ms audio frame of virtual time on each
+// provider audio write, like a transport that is momentarily at capacity, and
+// reports when each RESPONSE.CANCEL reaches the provider.
+type pacedRecordingSession struct {
+	*recordingSession
+	cancels chan time.Time
+}
+
+func (s *pacedRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
+	if msg.Type == messages.StreamTypeAudioDelta {
+		time.Sleep(30 * time.Millisecond)
+	}
+	if msg.Type == messages.StreamTypeResponseCancel {
+		s.cancels <- time.Now()
+	}
+	return s.recordingSession.Send(ctx, msg)
+}
+
+// An interrupt must not wait behind microphone audio already queued for a
+// slow transport. Over a long session with an interrupt every turn, the
+// explicit RESPONSE.CANCEL reaches the provider within one in-flight frame of
+// the interrupt, on the last turn exactly as on the first. Before the cancel
+// lane it queued behind two seconds of bulk audio (and behind any admission
+// parked on a full ingress).
+func TestSessionModelRunner_InterruptOvertakesQueuedAudioAcrossLongSession(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const turns, frame = 32, 30 * time.Millisecond
+		session := &pacedRecordingSession{recordingSession: newRecordingSession(), cancels: make(chan time.Time, 1)}
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 64, nil)
+		ctx, stop := context.WithCancel(t.Context())
+		ran := make(chan error, 1)
+		go func() { ran <- runner.Run(ctx) }()
+		go func() {
+			for _, ok := runner.DeltaOutbox.ReadBlockingContext(ctx); ok; _, ok = runner.DeltaOutbox.ReadBlockingContext(ctx) {
+			}
+		}()
+		latency := make([]time.Duration, 0, turns)
+		for turn := range turns {
+			id := fmt.Sprintf("resp-%02d", turn)
+			session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: id, Value: messages.NewMessageStartValue()})
+			for range 64 { // two seconds of microphone audio waiting for the transport
+				if err := runner.EnqueueSessionAudioInputWithPolicyWaiting(ctx, []byte{0, 0}, messages.SessionAudioInputPolicyDoNotInterrupt); err != nil {
+					t.Fatalf("turn %d: queue microphone audio: %v", turn, err)
+				}
+			}
+			pressed := time.Now()
+			if err := runner.EnqueueSessionEventWaiting(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); err != nil {
+				t.Fatalf("turn %d: interrupt: %v", turn, err)
+			}
+			latency = append(latency, (<-session.cancels).Sub(pressed))
+			session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: id, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+			time.Sleep(3 * time.Second) // the transport drains the queued audio
+		}
+		stop()
+		<-ran
+		t.Logf("per-turn interrupt to RESPONSE.CANCEL latency %v", latency)
+		for turn, got := range latency {
+			if got > frame {
+				t.Fatalf("turn %d: RESPONSE.CANCEL reached the provider %v after the interrupt, want within one %v frame", turn, got, frame)
+			}
+		}
+	})
+}
+
+// The cancel lane never reorders control inputs: while a turn boundary is
+// queued, an interrupt keeps its FIFO position behind that boundary.
+func TestSessionModelRunner_InterruptKeepsOrderBehindQueuedTurnBoundary(t *testing.T) {
+	runner := NewSessionModelRunner(nil, 8, nil)
+	ctx := t.Context()
+	if err := runner.EnqueueSessionAudioInput(ctx, []byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	commit := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{})}
+	if err := runner.EnqueueSessionEvent(ctx, commit); err != nil {
+		t.Fatal(err)
+	}
+	cancel := messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}
+	if err := runner.EnqueueSessionEvent(ctx, cancel); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.cancelLane.inbox) != 0 || len(runner.sessionInputInbox) != 3 {
+		t.Fatalf("cancel lane=%d ingress=%d, want the interrupt queued behind the turn boundary", len(runner.cancelLane.inbox), len(runner.sessionInputInbox))
+	}
+	session := newRecordingSession()
+	state := newSessionResponseState()
+	for len(runner.sessionInputInbox) > 0 {
+		if err := runner.forwardSessionInput(ctx, session, state, <-runner.sessionInputInbox); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := runner.EnqueueSessionEvent(ctx, cancel); err != nil || len(runner.cancelLane.inbox) != 1 {
+		t.Fatalf("interrupt after the boundary drained = %v (lane %d), want the priority lane", err, len(runner.cancelLane.inbox))
+	}
+}
+
+// Providers that do not echo the request purpose (Grok, LocalAI behind the
+// OpenAI session) still get their tool continuation protected: the first
+// response opened after an accepted continuation request, which is only sent
+// while nothing is in flight, is that continuation.
+func TestSessionModelRunner_UntaggedContinuationProtectedWithoutPurposeEcho(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-continuation"))
+	if !state.continuationInFlight {
+		t.Fatalf("untagged continuation response was not bound: %+v", state)
+	}
+	sendUserAudio(t, runner, session, state, loudPCM())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 {
+		t.Fatalf("peer audio cancelled the tool continuation: cancels=%d", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-continuation"))
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-next"))
+	if state.continuationInFlight {
+		t.Fatalf("an ordinary response after the continuation was bound: %+v", state)
+	}
+}
+
+// Only continuation requests arm the binding: a rate-limit retry or a live
+// control's RESPONSE.CREATE is an ordinary response.
+func TestSessionModelRunner_OrdinaryResponseCreateDoesNotArmContinuation(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+	runner.forwardQueuedSessionEvent(ctx, session, state, messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()})
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-ordinary"))
+	if state.continuationRequested || state.continuationInFlight {
+		t.Fatalf("ordinary response.create armed the continuation binding: %+v", state)
 	}
 }

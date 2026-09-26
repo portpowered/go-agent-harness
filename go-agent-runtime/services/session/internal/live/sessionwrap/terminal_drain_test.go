@@ -2,6 +2,7 @@ package sessionwrap
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -72,4 +73,32 @@ func TestTerminalDrainSyncReceiveReturnsAfterClose(t *testing.T) {
 		t.Fatal("terminal drain session does not expose SyncReceive")
 	}
 	syncer.SyncReceive(ctx)
+}
+
+type playbackProvider struct {
+	queuedProvider
+	interrupts int
+}
+
+func (*playbackProvider) ProviderTurnDetection() bool { return true }
+func (*playbackProvider) LocalPlayback() messages.LocalPlaybackState {
+	return messages.LocalPlaybackState{Active: true, Level: 1234}
+}
+func (p *playbackProvider) InterruptLocalPlayback(context.Context) bool { p.interrupts++; return true }
+
+// The runner decides local barge-in from the provider's turn detection and
+// local playback; every wrapper between them must forward both.
+func TestWrappersForwardTurnDetectionAndLocalPlayback(t *testing.T) {
+	ctx := context.Background()
+	provider := &playbackProvider{queuedProvider: queuedProvider{receive: messages.NewTypedBuffer[messages.StreamMessage](4), done: make(chan struct{})}}
+	drained := WrapSession(ctx, provider, false, 4)
+	t.Cleanup(func() { require.NoError(t, drained.Close()) })
+	wrapped := WrapOrderedSession(drained, OrderedSessionOptions{})
+	detector, ok := wrapped.(messages.SessionTurnDetection)
+	require.True(t, ok && detector.ProviderTurnDetection(), "turn detection was not forwarded")
+	playback, ok := wrapped.(messages.SessionLocalPlayback)
+	require.True(t, ok, "local playback was not forwarded")
+	require.Equal(t, messages.LocalPlaybackState{Active: true, Level: 1234}, playback.LocalPlayback())
+	require.True(t, playback.InterruptLocalPlayback(ctx))
+	require.Equal(t, 1, provider.interrupts)
 }

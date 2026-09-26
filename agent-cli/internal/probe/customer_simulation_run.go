@@ -212,7 +212,7 @@ func (r *customerSimulationRun) segments() []DuplexAudioSegment {
 		if spec.Scenario.Family == ScenarioFamilyB && index == 1 {
 			// A tool-only continuation can be delivered or suppressed separately.
 			// Gate on the original response's marker itself.
-			segment.WaitForOutputSequence = []byte{1, 0x42, 0x52, 0x42}
+			segment.WaitForOutputSequence = []byte{1, 0x08, 0x52, 0x08}
 		}
 		segments[index] = segment
 	}

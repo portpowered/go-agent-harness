@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestPublicLivenessIgnoresStaleResponseCancellation(t *testing.T) {
@@ -143,5 +144,49 @@ func TestPublicLivenessUsesCurrentResponseForCancellationWithoutID(t *testing.T)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("new provider response did not rearm after ID-less cancellation")
+	}
+}
+
+// capabilityProvider is a provider session that runs turn detection, owns
+// local playback and declares its input rate.
+type capabilityProvider struct {
+	messages.Session
+	interrupts int
+}
+
+func (*capabilityProvider) ProviderTurnDetection() bool { return true }
+func (*capabilityProvider) InputAudioSampleRate() int   { return 24000 }
+func (*capabilityProvider) LocalPlayback() messages.LocalPlaybackState {
+	return messages.LocalPlaybackState{Active: true, Level: 1234}
+}
+func (p *capabilityProvider) InterruptLocalPlayback(context.Context) bool {
+	p.interrupts++
+	return true
+}
+
+// The recording, strict-replay and live-recorder paths wrap the provider in a
+// session recorder and the admission session. The runner's local barge-in
+// reads turn detection, local playback and the input rate through both.
+func TestAdmissionSessionForwardsBargeInCapabilities(t *testing.T) {
+	service := NewService()
+	provider := &capabilityProvider{Session: newPublicSession()}
+	recorded := gwtesting.NewSessionRecorder(provider)
+	var session messages.Session = service.NewAdmissionSession(context.Background(), recorded, service.NewEventAdmission(), nil)
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close admission session: %v", err)
+		}
+	})
+	detector, ok := session.(messages.SessionTurnDetection)
+	if !ok || !detector.ProviderTurnDetection() {
+		t.Fatal("provider turn detection was not forwarded")
+	}
+	format, ok := session.(messages.SessionInputFormat)
+	if !ok || format.InputAudioSampleRate() != 24000 {
+		t.Fatal("input sample rate was not forwarded")
+	}
+	playback, ok := session.(messages.SessionLocalPlayback)
+	if !ok || playback.LocalPlayback().Level != 1234 || !playback.InterruptLocalPlayback(context.Background()) || provider.interrupts != 1 {
+		t.Fatal("local playback was not forwarded")
 	}
 }

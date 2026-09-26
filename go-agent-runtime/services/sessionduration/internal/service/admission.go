@@ -172,6 +172,7 @@ func (i *AdmissionInferencer) CloseAdmission() {
 }
 
 type AdmissionSession struct {
+	messages.SessionCapabilities
 	inner     messages.Session
 	admission *EventAdmission
 	receive   *messages.TypedBuffer[messages.StreamMessage]
@@ -193,11 +194,12 @@ func NewAdmissionSession(ctx context.Context, inner messages.Session, admission 
 		ctx = context.Background()
 	}
 	s := &AdmissionSession{
-		inner:     inner,
-		admission: admission,
-		receive:   messages.NewTypedBuffer[messages.StreamMessage](streamAdmissionBufferCapacity),
-		done:      make(chan struct{}),
-		onClose:   onClose,
+		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
+		inner:               inner,
+		admission:           admission,
+		receive:             messages.NewTypedBuffer[messages.StreamMessage](streamAdmissionBufferCapacity),
+		done:                make(chan struct{}),
+		onClose:             onClose,
 	}
 	if inner != nil && inner.Receive() != nil && inner.Done() != nil {
 		go s.forward(ctx)

@@ -185,7 +185,7 @@ func sendSessionToolResultsAsStream(ctx context.Context, session messages.Sessio
 	}
 	return session.Send(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
-		Value: messages.NewResponseCreateValue(),
+		Value: messages.NewToolContinuationResponseCreateValue(),
 	})
 }
 
@@ -247,12 +247,15 @@ func (r *ModelRunner) EnqueueSessionMessage(ctx context.Context, msg messages.Me
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	r.cancelLane.queuedControls.Add(1)
 	select {
 	case r.sessionInputInbox <- sessionInput{kind: sessionInputMessage, message: msg, requestResponse: requestResponse}:
 		return nil
 	case <-ctx.Done():
+		r.cancelLane.queuedControls.Add(-1)
 		return ctx.Err()
 	default:
+		r.cancelLane.queuedControls.Add(-1)
 		return ErrSessionInputQueueFull
 	}
 }
@@ -281,6 +284,10 @@ func (r *ModelRunner) forwardSessionCompleteMessage(ctx context.Context, session
 // forwardSessionInput dispatches the ordered ingress without reading a second
 // input or changing the provider lifecycle observation order.
 func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) error {
+	if input.kind != sessionInputAudio {
+		r.cancelLane.queuedControls.Add(-1)
+		r.flushHeldAudio(ctx, session, state)
+	}
 	switch input.kind {
 	case sessionInputAudio:
 		return r.forwardSessionAudioInputWithState(ctx, session, input.audio, state)
@@ -299,7 +306,7 @@ func (r *ModelRunner) noteAcceptedSessionResponse(state *sessionRunState, evt me
 		state.responseCancelSent = false
 		return
 	}
-	state.awaitingContinuation = true
+	state.continuationRequested = state.continuationRequested || isSessionContinuationCreate(evt)
 	r.sessionToolContinuation = sessionToolContinuationAccepted
 }
 
@@ -312,7 +319,7 @@ func (r *ModelRunner) noteAcceptedSessionCancel(state *sessionRunState) {
 		state.acknowledgementCancelled = true
 	}
 	if state.currentResponseID != "" {
-		state.cancelledResponseIDs[state.currentResponseID] = struct{}{}
+		state.cancelledResponseIDs.add(state.currentResponseID)
 	}
 }
 
@@ -336,7 +343,7 @@ func holdForAcknowledgement(state *sessionRunState, evt messages.StreamMessage) 
 		return false
 	}
 	if isToolAcknowledgementResponseCreate(evt) {
-		return state.responseInFlight || state.awaitingContinuation || state.acknowledgementOutstanding
+		return state.responseInFlight || state.continuationRequested || state.continuationInFlight || state.acknowledgementOutstanding
 	}
 	if state.acknowledgementOutstanding {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)

@@ -5,6 +5,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
@@ -36,6 +37,9 @@ type AgentLoopConfig struct {
 	// the inference provider emits its first SESSION.OPEN or SESSION.CREATED.
 	// Only used in DuplexSession mode.
 	SessionConfig *messages.SessionUpdateConfig
+	// BargeIn tunes the session runner's local barge-in detection; nil keeps
+	// participants.DefaultBargeInConfig.
+	BargeIn *participants.BargeInConfig
 
 	// ToolAcknowledgement configures one short, one-shot progress response for a
 	// long-running duplex tool batch. It is ignored outside session mode.
@@ -283,4 +287,18 @@ func (al *AgentLoop) forwardToOutputs(text string) {
 			al.logError("agentloop: output write failed", logging.Field{Key: "output", Value: out.Label}, logging.Field{Key: "error", Value: err.Error()})
 		}
 	}
+}
+
+// WithBargeInConfig tunes the session runner's local barge-in detection.
+func WithBargeInConfig(config participants.BargeInConfig) Option {
+	return func(c *AgentLoopConfig) {
+		c.BargeIn = &config
+	}
+}
+
+func (c AgentLoopConfig) configureSessionRunner(runner *participants.ModelRunner) *participants.ModelRunner {
+	if c.BargeIn != nil {
+		runner.SetBargeInConfig(*c.BargeIn)
+	}
+	return runner
 }

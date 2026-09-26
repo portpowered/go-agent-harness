@@ -37,6 +37,7 @@ type mediaForwarder interface {
 
 type trackedSession struct {
 	PS
+	m.SessionCapabilities
 	lifecycle L
 	a         Ch
 	once      sync.Once
@@ -88,10 +89,10 @@ func allCancel(errs []error) bool {
 }
 
 func NewTrackedSession(session PS, lifecycle L, admission Ch) SS {
-	return &trackedSession{PS: session, lifecycle: lifecycle, a: admission}
+	return &trackedSession{PS: session, SessionCapabilities: m.SessionCapabilities{Wrapped: session}, lifecycle: lifecycle, a: admission}
 }
 func newTrackedSession(session PS, lifecycle L, admission Ch) *tr {
-	return &trackedSession{PS: session, lifecycle: lifecycle, a: admission}
+	return &trackedSession{PS: session, SessionCapabilities: m.SessionCapabilities{Wrapped: session}, lifecycle: lifecycle, a: admission}
 }
 func (s *tr) SessionAdmissionClosed() bool { return s != nil && channelClosed(s.a) }
 func (s *tr) SessionAdmissionAllows(msg M) bool {

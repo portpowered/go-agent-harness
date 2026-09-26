@@ -395,3 +395,54 @@ func TestKernelRunner_TickProcessesDelta(t *testing.T) {
 		t.Fatal("timed out waiting for delta from Tick")
 	}
 }
+
+// A single loud frame (a cough, a door) must not cancel the response, while
+// sustained speech does. Frames are held only until onset is decided; the
+// cancel still precedes every interrupting frame at the provider, and a
+// transient is released unchanged, in order.
+func TestSessionModelRunner_TransientDoesNotBargeInButSustainedSpeechDoes(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-transient")
+	cough, quiet := pcmFrameAtLevel(9000, 480), pcmFrameAtLevel(0, 480)
+	sendUserAudio(t, runner, session, state, cough)
+	sendUserAudio(t, runner, session, state, quiet)
+	sent := session.sentMessages()
+	if countSent(sent, messages.StreamTypeResponseCancel) != 0 || len(sent) != 2 ||
+		string(audioDeltaContent(t, sent[0].Value)) != string(cough) || string(audioDeltaContent(t, sent[1].Value)) != string(quiet) {
+		t.Fatalf("a 20 ms transient produced %#v, want the two frames forwarded in order and no cancel", sent)
+	}
+	for range 2 {
+		sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	}
+	sent = session.sentMessages()[2:]
+	if len(sent) != 3 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta || sent[2].Type != messages.StreamTypeAudioDelta {
+		t.Fatalf("40 ms of speech produced %#v, want RESPONSE.CANCEL before both speech frames", sent)
+	}
+}
+
+// Held onset audio never falls behind a turn boundary queued after it.
+func TestSessionModelRunner_HeldOnsetAudioPrecedesLaterControl(t *testing.T) {
+	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-held")
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	runner.forwardQueuedSessionEvent(context.Background(), session, state, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	sent := session.sentMessages()
+	if len(sent) != 2 || sent[0].Type != messages.StreamTypeAudioDelta || sent[1].Type != messages.StreamTypeMessageEnd {
+		t.Fatalf("sent %#v, want the held frame before MESSAGE.END", sent)
+	}
+}
+
+// pcmFrameAtLevel returns samples of PCM16 whose RMS is level.
+func pcmFrameAtLevel(level int16, samples int) []byte {
+	pcm := make([]byte, samples*2)
+	for i := 0; i < len(pcm); i += 2 {
+		sample := level
+		if i%4 == 0 {
+			sample = -level
+		}
+		pcm[i], pcm[i+1] = byte(uint16(sample)), byte(uint16(sample)>>8)
+	}
+	return pcm
+}

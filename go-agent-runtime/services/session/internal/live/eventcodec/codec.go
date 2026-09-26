@@ -206,3 +206,72 @@ func sessionCloseValueFromMessageEnd(value *messages.MessageEndValue) *messages.
 		OutputState:        value.OutputState,
 	}
 }
+
+// ContinuationOutputType reports whether kind is provider output that counts
+// toward an owed tool continuation.
+func ContinuationOutputType(kind messages.StreamMessageType) bool {
+	if kind == messages.StreamTypeRefusal {
+		return true
+	}
+	name := string(kind)
+	if !strings.HasSuffix(name, ".DELTA") && !strings.HasSuffix(name, ".END") {
+		return false
+	}
+	return kind != messages.StreamTypeMessageEnd && kind != messages.StreamTypeToolCallEnd && kind != messages.StreamTypeToolCallDelta
+}
+
+// InterruptedBeforeToolContinuation reports the terminal boundary of an
+// interrupted response that is not the tool continuation: one the session
+// runner cancelled on local barge-in, or one the provider's own turn
+// detection cancelled (status "cancelled"). The runner never requests a
+// continuation over an active response and tags the continuation response, so
+// an untagged response interrupted while a continuation is owed is the one
+// that was already playing; the continuation is requested after it ends and
+// resolves the tool obligation itself.
+func InterruptedBeforeToolContinuation(msg messages.StreamMessage) bool {
+	if msg.Type != messages.StreamTypeMessageEnd || msg.ResponsePurpose == messages.ResponsePurposeToolContinuation {
+		return false
+	}
+	value, ok := msg.Value.(*messages.MessageEndValue)
+	if !ok || value == nil {
+		return false
+	}
+	locallyCancelled := value.TerminalReason == messages.TerminalReasonPartialOutput && value.TerminalProvenance == messages.TerminalProvenanceLoop
+	return locallyCancelled || strings.EqualFold(strings.TrimSpace(value.Status), "cancelled")
+}
+
+// CapabilityEvent converts a browser capability event into a live event.
+func CapabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
+	copy := value
+	return session.LiveEvent{
+		Kind:          "browser." + strings.TrimSpace(value.Type),
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		Timestamp:     value.Timestamp,
+		BrowserID:     value.BrowserID,
+		TargetID:      value.TargetID,
+		Generation:    value.Generation,
+		InvocationID:  value.InvocationID,
+		State:         value.State,
+		Reason:        value.Reason,
+		Capability:    &copy,
+		Critical:      capabilityEventCritical(value),
+	}
+}
+
+func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
+	typeName := strings.ToLower(strings.TrimSpace(value.Type))
+	state := strings.ToLower(strings.TrimSpace(value.State))
+	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
+		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
+		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
+		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
+}
+
+// CapabilityEventRequiresRefresh reports whether a browser capability event
+// can change the live tool catalog.
+func CapabilityEventRequiresRefresh(event session.LiveCapabilityEvent) bool {
+	kind := strings.ToLower(strings.TrimSpace(event.Type))
+	return event.CatalogReady || strings.Contains(kind, "catalog") || strings.Contains(kind, "generation") ||
+		kind == "tools_added" || kind == "tools_removed" || kind == "page_navigated" || kind == "frame_navigated"
+}

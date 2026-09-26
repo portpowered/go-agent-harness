@@ -77,6 +77,9 @@ func (h *handle) sendLiveControl(ctx context.Context, loop *agentloop.AgentLoop,
 	}
 	event.ActorProvidedID = ackID
 	stamp := h.controlStamp(control.Kind)
+	// A control (an interrupt in particular) reacts to audio that reached
+	// playback ahead of its response lifecycle; publish that lifecycle first.
+	h.syncProviderReceive(ctx)
 	if err := loop.SendSessionEventWaiting(ctx, event); err != nil {
 		h.media.AbortAck(ackID)
 		return liveInputError(err)
@@ -368,31 +371,4 @@ func (h *handle) captureInterruptionsEnabled() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.captureInterruptionEvent != nil
-}
-
-func capabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
-	copy := value
-	return session.LiveEvent{
-		Kind:          "browser." + strings.TrimSpace(value.Type),
-		SessionID:     sessionID,
-		ParticipantID: participantID,
-		Timestamp:     value.Timestamp,
-		BrowserID:     value.BrowserID,
-		TargetID:      value.TargetID,
-		Generation:    value.Generation,
-		InvocationID:  value.InvocationID,
-		State:         value.State,
-		Reason:        value.Reason,
-		Capability:    &copy,
-		Critical:      capabilityEventCritical(value),
-	}
-}
-
-func capabilityEventCritical(value session.LiveCapabilityEvent) bool {
-	typeName := strings.ToLower(strings.TrimSpace(value.Type))
-	state := strings.ToLower(strings.TrimSpace(value.State))
-	return strings.Contains(typeName, "closed") || strings.Contains(typeName, "disconnect") ||
-		strings.Contains(typeName, "error") || strings.Contains(typeName, "failed") ||
-		strings.Contains(state, "error") || strings.Contains(state, "failed") ||
-		strings.Contains(state, "canceled") || strings.Contains(state, "timed_out")
 }

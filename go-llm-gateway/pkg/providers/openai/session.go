@@ -30,9 +30,9 @@ type realtimeSession struct {
 	logger logging.Logger
 	// sendQueue buffers client-to-provider events. Overflow drops are counted
 	// and logged through the default observer attached below.
-	sendQueue         *messages.TypedBuffer[models.SessionEvent]
-	writeBackpressure bool
-	outbound          providers.OutboundWireDrain
+	sendQueue                               *messages.TypedBuffer[models.SessionEvent]
+	writeBackpressure, clientTurnBoundaries bool // clientTurnBoundaries: provider VAD disabled
+	outbound                                providers.OutboundWireDrain
 	// recvBuf buffers translated provider-to-client events.
 	recvBuf *messages.TypedBuffer[messages.StreamMessage]
 
@@ -76,10 +76,10 @@ type realtimeSession struct {
 	// response wire lock remains held.
 	responseDispatchFailureBarrier func()
 
-	mediaMu                       sync.Mutex
-	media                         *sharedaudio.SessionMedia
-	mediaClaimed, mediaContinuous bool
-	mediaSampleRate               int
+	mediaMu                          sync.Mutex
+	media                            *sharedaudio.SessionMedia
+	mediaClaimed, mediaContinuous    bool
+	mediaSampleRate, inputSampleRate int
 }
 
 const maxPendingResponseIntents = 32
@@ -121,7 +121,11 @@ func (s *realtimeSession) SendWithOutcome(ctx context.Context, msg messages.Stre
 	if !ok {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
-	return s.sendEvents(ctx, events)
+	outcome := s.sendEvents(ctx, events)
+	if outcome.OK() && messages.CancelStopsPlayback(msg) {
+		s.interruptPlaybackForCancel(ctx)
+	}
+	return outcome
 }
 
 // RequestResponse starts a response without adding another user turn. This is
@@ -155,16 +159,9 @@ func (s *realtimeSession) sendEvents(ctx context.Context, events []models.Sessio
 	if needsAdmission {
 		return s.admitResponseIntent(ctx, events, reservesResponse)
 	}
-	// RESPONSE.CANCEL is deliberately outside the response intent queue. It
-	// must reach the provider even while a default response is active and
-	// invalidates queued work from the cancelled generation.
 	for _, event := range events {
 		if event.Type == models.SessionEventResponseCancel {
-			s.responseWireMu.Lock()
-			s.invalidatePendingResponseIntents()
-			outcome := s.enqueueWireEvents(ctx, events)
-			s.responseWireMu.Unlock()
-			return outcome
+			return s.sendResponseCancel(ctx, events)
 		}
 	}
 	return s.enqueueWireEvents(ctx, events)

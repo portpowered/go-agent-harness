@@ -1,6 +1,7 @@
 package agentloop
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -26,7 +27,7 @@ func streamValue[T any](t *testing.T, msg messages.StreamMessage) T {
 // isContinuationCreate reports an ordinary (non-acknowledgement) response.create.
 func isContinuationCreate(msg messages.StreamMessage) bool {
 	value, ok := msg.Value.(*messages.ResponseCreateValue)
-	return msg.Type == messages.StreamTypeResponseCreate && ok && value.Purpose == ""
+	return msg.Type == messages.StreamTypeResponseCreate && ok && !value.IsToolAcknowledgement()
 }
 
 type acknowledgementSession struct {
@@ -364,7 +365,7 @@ func TestDuplexSession_LongRunningToolAcknowledgementPrecedesGroundedContinuatio
 	if streamValue[*messages.ResponseCreateValue](t, responseCreates[0]).Purpose != messages.ResponsePurposeToolAcknowledgement {
 		t.Fatalf("first response.create = %#v, want acknowledgement", responseCreates[0].Value)
 	}
-	if streamValue[*messages.ResponseCreateValue](t, responseCreates[1]).Purpose != "" {
+	if streamValue[*messages.ResponseCreateValue](t, responseCreates[1]).IsToolAcknowledgement() {
 		t.Fatalf("second response.create = %#v, want ordinary continuation", responseCreates[1].Value)
 	}
 	if toolResultIndex < 0 || indexOfSentMessage(sent, responseCreates[1]) <= toolResultIndex {
@@ -410,7 +411,7 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 		return msg.Type == messages.StreamTypeAudioDelta && msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
 	})
 
-	if err := al.SendAudioInput(ctx, []byte{1, 2, 3}); err != nil {
+	if err := al.SendAudioInput(ctx, bytes.Repeat([]byte{0x40, 0x1f, 0xc0, 0xe0}, 600)); err != nil {
 		t.Fatalf("SendAudioInput: %v", err)
 	}
 	waitForAcknowledgementSent(t, session, func(msg messages.StreamMessage) bool {

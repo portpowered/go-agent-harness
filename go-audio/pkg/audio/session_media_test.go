@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -455,5 +456,96 @@ func closeForTest(t testing.TB, closer io.Closer) {
 	t.Helper()
 	if err := closer.Close(); err != nil {
 		t.Errorf("Close() error = %v", err)
+	}
+}
+
+// A host-side RESPONSE.CANCEL and the provider's server-VAD speech_started can
+// both interrupt the same response. The second interruption must not re-admit
+// late deltas of the response the first one discarded.
+func TestSessionMediaRepeatedInterruptKeepsDiscardingCancelledResponse(t *testing.T) {
+	media := audio.NewSessionMediaAtRate(nil, 24000)
+	t.Cleanup(func() {
+		if err := media.Close(); err != nil {
+			t.Errorf("SessionMedia.Close() = %v", err)
+		}
+	})
+	cancelled := audio.PlaybackResponse{ResponseID: "resp-cancelled", ItemID: "item-cancelled"}
+	media.StartInboundResponse(cancelled)
+	if err := media.PushInbound(make([]int16, 24000)); err != nil {
+		t.Fatal(err)
+	}
+	media.InterruptInbound()
+	media.InterruptInbound()
+
+	media.StartInboundResponse(cancelled)
+	if err := media.PushInbound(make([]int16, 24000)); err != nil {
+		t.Fatal(err)
+	}
+	next := audio.PlaybackResponse{ResponseID: "resp-next", ItemID: "item-next"}
+	media.StartInboundResponse(next)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := media.Endpoints().Inbound.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.PlaybackResponse != next {
+		t.Fatalf("first audible frame after repeated interruption = %+v, want %+v", frame.PlaybackResponse, next)
+	}
+}
+
+// Provider audio arrives faster than real time and consumers read ahead of
+// the speaker, so playback stays audible long after the response queue is
+// drained. PlaybackActivity follows the audio on the device clock: it stays
+// active until the dequeued audio has had time to play, reports the level of
+// the audio currently audible (the echo reference for local barge-in), and an
+// interruption silences it at once.
+func TestSessionMediaPlaybackActivityFollowsAudibleAudio(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		media := audio.NewSessionMediaAtRate(nil, 24000)
+		t.Cleanup(func() { requireNoError(t, media.Close()) })
+		pushSpeech(t, media, "resp-activity")
+		requireNoError(t, media.FlushInbound())
+		assertPlaybackActivity(t, media, "queued", true, 0, 0)
+		for range 34 { // a read-ahead consumer drains the whole second at once
+			_, err := media.Endpoints().Inbound.ReadFrame(t.Context())
+			requireNoError(t, err)
+		}
+		time.Sleep(500 * time.Millisecond)
+		assertPlaybackActivity(t, media, "mid-playback", true, 2900, 3100)
+		time.Sleep(time.Second) // past the audio and its acoustic tail
+		assertPlaybackActivity(t, media, "finished", false, 0, 0)
+
+		pushSpeech(t, media, "resp-next")
+		_, err := media.Endpoints().Inbound.ReadFrame(t.Context())
+		requireNoError(t, err)
+		media.InterruptInbound()
+		assertPlaybackActivity(t, media, "interrupted", false, 0, 0)
+	})
+}
+
+// pushSpeech queues one second of audio at level 3000 for responseID.
+func pushSpeech(t *testing.T, media *audio.SessionMedia, responseID string) {
+	t.Helper()
+	media.StartInboundResponse(audio.PlaybackResponse{ResponseID: responseID, ItemID: "item-" + responseID})
+	speech := make([]int16, 24000)
+	for i := range speech {
+		speech[i] = int16(3000 * (1 - 2*(i%2)))
+	}
+	requireNoError(t, media.PushInbound(speech))
+}
+
+func assertPlaybackActivity(t *testing.T, media *audio.SessionMedia, phase string, active bool, minLevel, maxLevel float64) {
+	t.Helper()
+	if got := media.PlaybackActivity(); got.Active != active || got.Level < minLevel || got.Level > maxLevel {
+		t.Fatalf("%s playback activity = %+v, want active=%t level in [%v, %v]", phase, got, active, minLevel, maxLevel)
+	}
+}
+
+func requireNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

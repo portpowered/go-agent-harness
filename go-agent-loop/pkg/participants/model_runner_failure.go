@@ -145,6 +145,8 @@ func (s *sessionIngressStop) stopped() bool {
 // behind a waiting admission (EnqueueSessionEventWaiting or
 // EnqueueSessionAudioInputWithPolicyWaiting) that is parked on a full ingress,
 // until that admission is drained, cancelled, or released by runner shutdown.
+// A RESPONSE.CANCEL with no control input queued ahead of it bypasses both and
+// overtakes queued audio (see sessionCancelLane).
 func (r *ModelRunner) EnqueueSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
 	return r.enqueueSessionEvent(ctx, msg, false, "EnqueueSessionEvent")
 }
@@ -160,6 +162,18 @@ func (r *ModelRunner) enqueueSessionEvent(ctx context.Context, msg messages.Stre
 	if ctx == nil && waitForCapacity {
 		return fmt.Errorf("%s: nil context", operation)
 	}
+	if r.admitPriorityCancel(msg) {
+		return nil
+	}
+	r.cancelLane.queuedControls.Add(1)
+	err := r.enqueueOrderedSessionEvent(ctx, msg, waitForCapacity)
+	if err != nil {
+		r.cancelLane.queuedControls.Add(-1)
+	}
+	return err
+}
+
+func (r *ModelRunner) enqueueOrderedSessionEvent(ctx context.Context, msg messages.StreamMessage, waitForCapacity bool) error {
 	r.sessionInputMu.Lock()
 	defer r.sessionInputMu.Unlock()
 	// A nil context on the non-waiting path means "no cancellation"; its nil
@@ -297,7 +311,7 @@ func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.
 	})
 }
 
-func startSessionResponse(state *sessionResponseState, msgID string, acknowledgementResponse bool) {
+func startSessionResponse(state *sessionResponseState, msgID string, acknowledgementResponse, tagged bool) {
 	if !beginSessionResponse(state, msgID) {
 		return
 	}
@@ -305,10 +319,24 @@ func startSessionResponse(state *sessionResponseState, msgID string, acknowledge
 	state.responseCompleted = false
 	state.responseCancelSent = false
 	state.responseInFlight = true
+	if tagged {
+		state.purposeEchoObserved = true
+	}
+	// A provider that echoes the request purpose identifies the continuation
+	// exactly; the adapter owns which request each response answers. Without
+	// that echo, the first response opened after the continuation request --
+	// which is only sent while nothing is in flight -- is the continuation.
+	continuation := tagged || (!state.purposeEchoObserved && state.continuationRequested)
+	if continuation && !acknowledgementResponse {
+		state.continuationGuessed = !tagged
+		state.continuationRequested = false
+		state.continuationInFlight = true
+		state.continuationResponseID = msgID
+	}
 	if acknowledgementResponse && state.acknowledgementCancelled {
 		state.responseCancelSent = true
 		if msgID != "" {
-			state.cancelledResponseIDs[msgID] = struct{}{}
+			state.cancelledResponseIDs.add(msgID)
 		}
 	}
 }
@@ -340,9 +368,14 @@ func endSessionResponse(state *sessionResponseState, msg *messages.StreamMessage
 		state.responseCompleted = true
 	}
 	if ownedID != "" {
-		state.terminalResponseIDs[ownedID] = struct{}{}
+		state.terminalResponseIDs.add(ownedID)
 	}
 	state.currentResponseID = ""
+	if state.continuationInFlight {
+		state.continuationInFlight = false
+		state.continuationResponseID = ""
+		state.continuationEnded = true
+	}
 	if acknowledgementResponse {
 		state.acknowledgementOutstanding = false
 		state.acknowledgementCancelled = false

@@ -3,15 +3,21 @@ package openai
 import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 func TestDecodeOpenAIRealtimeAudioDeltaPreservesOddPCMContext(t *testing.T) {
@@ -201,4 +207,291 @@ func (c *openAIPlaybackController) snapshot() (sharedaudio.PlaybackResponse, sha
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.started, c.interrupted
+}
+
+// An explicit host interrupt control sends RESPONSE.CANCEL. The provider
+// streams audio faster than real time, so seconds of the cancelled response
+// are already queued for local playback when the cancel is sent. Cancelling
+// only generation leaves that backlog audible: the user perceives that
+// barge-in "did not work". The cancel must flush local playback and truncate
+// the conversation item at the audio actually heard, exactly like server VAD.
+func TestRealtimeSession_HostResponseCancelFlushesQueuedPlayback(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+	}
+	controller := &openAIPlaybackController{audioEndMS: 700}
+	controlled.SetPlaybackController(controller)
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+
+	// Four seconds of audio arrive at once; one frame has reached the device.
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-host", "item_id": "item-host", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000*4)), "format": "pcm16",
+	})
+	if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
+		t.Fatalf("read first playback frame: %v", err)
+	}
+
+	outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()})
+	if !outcome.OK() {
+		t.Fatalf("send RESPONSE.CANCEL: %+v", outcome)
+	}
+	sent := waitForClientMessages(t, conn, 2, "response cancel and conversation truncation")
+	var cancel, truncate struct {
+		Type         string `json:"type"`
+		ItemID       string `json:"item_id"`
+		ContentIndex int    `json:"content_index"`
+		AudioEndMS   int    `json:"audio_end_ms"`
+	}
+	if err := json.Unmarshal(sent[0], &cancel); err != nil || cancel.Type != "response.cancel" {
+		t.Fatalf("first client event = %s (%v), want response.cancel", sent[0], err)
+	}
+	if err := json.Unmarshal(sent[1], &truncate); err != nil {
+		t.Fatalf("unmarshal truncation: %v", err)
+	}
+	if truncate.Type != string(models.SessionEventConversationItemTruncate) || truncate.ItemID != "item-host" || truncate.AudioEndMS != 700 {
+		t.Fatalf("conversation truncation = %+v, want item-host at 700 ms", truncate)
+	}
+	if _, interrupted := controller.snapshot(); interrupted.ItemID != "item-host" {
+		t.Fatalf("device playback was not interrupted: %+v", interrupted)
+	}
+
+	// A late delta of the cancelled response is discarded; the next audible
+	// frame is the next response's, not the rest of the cancelled backlog.
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-host", "item_id": "item-host", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000)), "format": "pcm16",
+	})
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-next", "item_id": "item-next", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 2400)), "format": "pcm16",
+	})
+	frame, err := endpoints.Inbound.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read frame after cancel: %v", err)
+	}
+	if frame.PlaybackResponse.ItemID != "item-next" {
+		t.Fatalf("frame after cancel belongs to %+v, want the next response (cancelled backlog still audible)", frame.PlaybackResponse)
+	}
+}
+
+// After response.done the provider has nothing left to cancel, but seconds of
+// the response are still playing locally. Interrupting local playback stops
+// it and truncates the item at the heard position.
+func TestRealtimeSession_InterruptLocalPlaybackAfterResponseDone(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+	}
+	controller := &openAIPlaybackController{audioEndMS: 400}
+	controlled.SetPlaybackController(controller)
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+	if !session.ProviderTurnDetection() {
+		t.Fatal("default OpenAI session reported no provider turn detection")
+	}
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-done", "item_id": "item-done", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000*3)), "format": "pcm16",
+	})
+	if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
+		t.Fatalf("read first playback frame: %v", err)
+	}
+	if !session.LocalPlayback().Active {
+		t.Fatal("queued response audio is not reported as local playback")
+	}
+	if !session.InterruptLocalPlayback(ctx) {
+		t.Fatal("InterruptLocalPlayback reported nothing to interrupt")
+	}
+	var truncate struct {
+		Type       string `json:"type"`
+		ItemID     string `json:"item_id"`
+		AudioEndMS int    `json:"audio_end_ms"`
+	}
+	sent := waitForClientMessages(t, conn, 1, "conversation truncation")
+	if err := json.Unmarshal(sent[0], &truncate); err != nil || truncate.Type != string(models.SessionEventConversationItemTruncate) ||
+		truncate.ItemID != "item-done" || truncate.AudioEndMS != 400 {
+		t.Fatalf("client event = %s (%v), want truncation of item-done at 400 ms", sent[0], err)
+	}
+	if session.LocalPlayback().Active {
+		t.Fatal("playback still reported active after the interrupt")
+	}
+}
+
+// virtualPlaybackDevice renders frames at the device clock of a synctest
+// bubble: each 30 ms frame occupies 30 ms of virtual time. It records when each
+// response started and stopped being audible.
+type virtualPlaybackDevice struct {
+	mu         sync.Mutex
+	playedMS   map[string]int
+	firstHeard map[string]time.Time
+	lastHeard  map[string]time.Time
+}
+
+func newVirtualPlaybackDevice() *virtualPlaybackDevice {
+	return &virtualPlaybackDevice{playedMS: map[string]int{}, firstHeard: map[string]time.Time{}, lastHeard: map[string]time.Time{}}
+}
+
+func (d *virtualPlaybackDevice) StartPlayback(sharedaudio.PlaybackResponse) {}
+
+func (d *virtualPlaybackDevice) InterruptPlayback(response sharedaudio.PlaybackResponse) (int, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.playedMS[response.ItemID], true
+}
+
+func (d *virtualPlaybackDevice) pump(ctx context.Context, inbound sharedaudio.InboundMedia) {
+	for {
+		frame, err := inbound.ReadFrame(ctx)
+		if err != nil {
+			return
+		}
+		duration := time.Duration(len(frame.Samples)) * time.Second / 24000
+		item := frame.PlaybackResponse.ItemID
+		d.mu.Lock()
+		if _, ok := d.firstHeard[item]; !ok {
+			d.firstHeard[item] = time.Now()
+		}
+		d.lastHeard[item] = time.Now().Add(duration)
+		d.playedMS[item] += int(duration / time.Millisecond)
+		d.mu.Unlock()
+		time.Sleep(duration)
+	}
+}
+
+func (d *virtualPlaybackDevice) heard(item string) (time.Time, time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.firstHeard[item], d.lastHeard[item]
+}
+
+// A long conversation where the user interrupts every response. The provider
+// delivers each 3 s answer at once, far ahead of the device. Measured on the
+// virtual device clock, the interrupted answer must fall silent within one
+// frame of the interrupt and the next answer must start within one frame of
+// its arrival -- on the last turn exactly as on the first. Before cancel
+// flushed local playback, every interrupted backlog kept playing and pushed
+// each later answer further behind, so the barge-in delay grew every turn.
+func TestRealtimeSession_BargeInLatencyStaysFlatAcrossLongSession(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const turns, frame = 32, 30 * time.Millisecond
+		conn := newMockWebSocketConn()
+		session := newRealtimeSession(conn, logging.DummyLogger())
+		session.mediaSampleRate = 24000
+		endpoints := session.RTCMedia()
+		device := newVirtualPlaybackDevice()
+		controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+		if !ok {
+			t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+		}
+		controlled.SetPlaybackController(device)
+		ctx, stop := context.WithCancel(t.Context())
+		session.start(ctx)
+		pumped := make(chan struct{})
+		go func() { defer close(pumped); device.pump(ctx, endpoints.Inbound) }()
+		arrived, interrupted := make([]time.Time, turns), make([]time.Time, turns)
+		for turn := range turns {
+			item := fmt.Sprintf("item-%02d", turn)
+			arrived[turn] = time.Now()
+			conn.addServerEvent("response.output_audio.delta", map[string]any{
+				"response_id": "resp-" + item, "item_id": item, "content_index": 0,
+				"delta": codec.EncodePCM16Base64(make([]int16, 24000*3)), "format": "pcm16",
+			})
+			time.Sleep(time.Second) // the user listens, then interrupts
+			interrupted[turn] = time.Now()
+			if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+				t.Errorf("turn %d: send RESPONSE.CANCEL: %+v", turn, outcome)
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		time.Sleep(turns * 3 * time.Second) // let any backlog drain on the device clock
+		stop()
+		<-pumped
+		closeForTest(t, session)
+		startLatency, silenceLatency := make([]time.Duration, turns), make([]time.Duration, turns)
+		for turn := range turns {
+			first, last := device.heard(fmt.Sprintf("item-%02d", turn))
+			startLatency[turn], silenceLatency[turn] = first.Sub(arrived[turn]), max(last.Sub(interrupted[turn]), 0)
+		}
+		t.Logf("per-turn answer start latency %v", startLatency)
+		t.Logf("per-turn barge-in silence latency %v", silenceLatency)
+		for turn := range startLatency {
+			if startLatency[turn] > frame || silenceLatency[turn] > frame {
+				t.Fatalf("turn %d: answer started %v after arrival and fell silent %v after the interrupt, want both within one %v frame", turn, startLatency[turn], silenceLatency[turn], frame)
+			}
+		}
+	})
+}
+
+// Client-owned audio turns send turn_detection null, so the session must not
+// claim provider-side speech detection: local barge-in is the runner's job.
+func TestConnectSession_ClientOwnedTurnsDisableProviderTurnDetection(t *testing.T) {
+	for _, clientOwned := range []bool{false, true} {
+		options := []Option{WithAPIKey("test-key"), WithRealtimeBaseURL("wss://mock.openai.test/v1/realtime"), WithWebSocketDialer(&mockWebSocketDialer{conn: newMockWebSocketConn()})}
+		if clientOwned {
+			options = append(options, WithClientOwnedAudioTurnBoundaries())
+		}
+		session, err := New(options...).ConnectSession(newRealtimeTestContext(t), models.SessionConfig{Model: "gpt-realtime"})
+		if err != nil {
+			t.Fatalf("ConnectSession: %v", err)
+		}
+		if got := realtimeSessionForTest(t, session).ProviderTurnDetection(); got == clientOwned {
+			t.Errorf("client-owned=%t: ProviderTurnDetection = %t", clientOwned, got)
+		}
+		closeForTest(t, session)
+	}
+}
+
+// response.created names the response before its first audio delta names the
+// audio item. An interruption in that window must still discard the
+// response's deltas that arrive afterwards.
+func TestRealtimeSession_CancelBeforeFirstAudioDiscardsLateDeltas(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+
+	conn.addServerEvent("response.created", map[string]any{"response": map[string]any{"id": "resp-early", "status": "in_progress"}})
+	for {
+		msg, ok := session.Receive().ReadBlockingContext(ctx)
+		if !ok {
+			t.Fatal("session closed before response.created")
+		}
+		if msg.Type == messages.StreamTypeMessageStart {
+			break
+		}
+	}
+	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
+		t.Fatalf("send RESPONSE.CANCEL: %+v", outcome)
+	}
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-early", "item_id": "item-early", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000)), "format": "pcm16",
+	})
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-next", "item_id": "item-next", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 2400)), "format": "pcm16",
+	})
+	frame, err := endpoints.Inbound.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read frame after cancel: %v", err)
+	}
+	if frame.PlaybackResponse.ResponseID != "resp-next" {
+		t.Fatalf("first audible frame belongs to %+v, want resp-next (cancelled response played)", frame.PlaybackResponse)
+	}
 }

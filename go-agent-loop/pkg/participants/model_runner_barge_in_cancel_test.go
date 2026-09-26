@@ -59,7 +59,7 @@ func TestSessionModelRunner_EndOfTurnDeferredUntilCancelledResponseEnds(t *testi
 	// Barge-in: contentful audio while resp-1 is active sends exactly one
 	// cancel, then forwards the audio -- mirroring what the session runner
 	// does before ever reaching UserEventInbox.
-	runner.UserAudioInbox <- []byte{1, 2, 3}
+	runner.UserAudioInbox <- loudPCM()
 	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
 		t.Fatalf("drainSessionAudioWithState: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestSessionModelRunner_RetiredAcknowledgementDoesNotStrandCancelGuard(t *te
 	if state.acknowledgementOutstanding {
 		t.Fatalf("acknowledgementOutstanding stuck true after its response was retired: %+v", state)
 	}
-	if _, retired := state.retiredResponseIDs["resp-ack"]; !retired {
+	if !state.retiredResponseIDs.has("resp-ack") {
 		t.Fatalf("resp-ack was not retired: %+v", state)
 	}
 
@@ -172,7 +172,7 @@ func TestSessionModelRunner_RetiredAcknowledgementDoesNotStrandCancelGuard(t *te
 	// forwarded directly -- with the bug, the stranded acknowledgementOutstanding
 	// flag would make this send a RESPONSE.CANCEL with nothing to cancel,
 	// which is exactly what the provider rejects with response_cancel_not_active.
-	runner.UserAudioInbox <- []byte{9, 9, 9}
+	runner.UserAudioInbox <- loudPCM()
 	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
 		t.Fatalf("drainSessionAudioWithState: %v", err)
 	}
@@ -203,15 +203,15 @@ func TestSessionModelRunner_BargeInAfterRetirementTargetsCurrentResponseID(t *te
 	}
 
 	// A genuine barge-in now targets whichever response is actually live.
-	runner.UserAudioInbox <- []byte{4, 5, 6}
+	runner.UserAudioInbox <- loudPCM()
 	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
 		t.Fatalf("drainSessionAudioWithState: %v", err)
 	}
-	if _, cancelled := state.cancelledResponseIDs["resp-b"]; !cancelled {
-		t.Fatalf("cancelledResponseIDs = %v, want resp-b (the live response)", state.cancelledResponseIDs)
+	if !state.cancelledResponseIDs.has("resp-b") {
+		t.Fatalf("cancelledResponseIDs = %v, want resp-b (the live response)", state.cancelledResponseIDs.ids)
 	}
-	if _, cancelled := state.cancelledResponseIDs["resp-a"]; cancelled {
-		t.Fatalf("cancelledResponseIDs = %v, want resp-a (already retired) untouched", state.cancelledResponseIDs)
+	if state.cancelledResponseIDs.has("resp-a") {
+		t.Fatalf("cancelledResponseIDs = %v, want resp-a (already retired) untouched", state.cancelledResponseIDs.ids)
 	}
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
@@ -238,7 +238,7 @@ func TestSessionModelRunner_BargeInAfterRetirementTargetsCurrentResponseID(t *te
 	if state.currentResponseID != "" || state.responseInFlight {
 		t.Fatalf("state after resp-b ended = %+v, want idle", state)
 	}
-	if _, terminal := state.terminalResponseIDs["resp-b"]; !terminal {
+	if !state.terminalResponseIDs.has("resp-b") {
 		t.Fatalf("resp-b was not recorded terminal: %+v", state)
 	}
 }
@@ -303,7 +303,7 @@ func TestSessionModelRunner_EndOfTurnNotDeferredWhenResponseActiveWithNoCancel(t
 
 // Requirement 5 (the room-participant-dies-in-tool-continuation-seconds-in
 // defect): a response that is itself the awaited continuation of an already
-// accepted tool result (state.awaitingContinuation) must never be barge-in
+// accepted tool result (state.continuationInFlight) must never be barge-in
 // cancelled by ordinary peer/room audio. Unlike an ordinary spoken response
 // or a tool acknowledgement, a cancelled tool continuation is never
 // re-requested by anything: its MESSAGE.END is rewritten with
@@ -327,12 +327,11 @@ func TestSessionModelRunner_ToolContinuationSurvivesPeerAudioBargeIn(t *testing.
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 8, nil)
-	state := newInFlightRunState(t, session, runner, "resp-continuation")
-	state.awaitingContinuation = true
+	state := newContinuationRunState(t, runner, "resp-continuation")
 
 	// Ordinary room/peer audio with real signal arrives while the tool
 	// continuation is still open.
-	runner.UserAudioInbox <- []byte{7, 7, 7}
+	runner.UserAudioInbox <- loudPCM()
 	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
 		t.Fatalf("drainSessionAudioWithState: %v", err)
 	}
@@ -366,10 +365,9 @@ func TestSessionModelRunner_ToolContinuationAfterPeerAudioStillProducesAudio(t *
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 8, nil)
-	state := newInFlightRunState(t, session, runner, "resp-continuation")
-	state.awaitingContinuation = true
+	state := newContinuationRunState(t, runner, "resp-continuation")
 
-	runner.UserAudioInbox <- []byte{7, 7, 7}
+	runner.UserAudioInbox <- loudPCM()
 	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
 		t.Fatalf("drainSessionAudioWithState: %v", err)
 	}
@@ -405,4 +403,197 @@ func TestSessionModelRunner_ToolContinuationAfterPeerAudioStillProducesAudio(t *
 	if !state.responseCompleted || state.responseCancelSent {
 		t.Fatalf("state after continuation completed = %+v, want a normal completed response with output, not cancelled/failed", state)
 	}
+}
+
+// The tool-continuation barge-in exemption is scoped to the response the
+// provider opens for the continuation request, never to whichever response
+// happens to be playing when that request is queued. These tests pin the
+// per-response rule.
+
+// continuationStart is the provider's opening of a tool-continuation response,
+// identified by the adapter from the request it answers.
+func continuationStart(responseID string) messages.StreamMessage {
+	msg := sessionMessage(messages.StreamTypeMessageStart, responseID)
+	msg.ResponsePurpose = messages.ResponsePurposeToolContinuation
+	return msg
+}
+
+func continuationCreate() messages.StreamMessage {
+	return messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewToolContinuationResponseCreateValue()}
+}
+
+func countSent(sent []messages.StreamMessage, kind messages.StreamMessageType) int {
+	count := 0
+	for _, msg := range sent {
+		if msg.Type == kind {
+			count++
+		}
+	}
+	return count
+}
+
+func sessionMessage(kind messages.StreamMessageType, responseID string) messages.StreamMessage {
+	values := map[messages.StreamMessageType]messages.StreamMessageValue{
+		messages.StreamTypeMessageStart: messages.NewMessageStartValue(),
+		messages.StreamTypeMessageEnd:   messages.NewMessageEndValue(messages.TokenUsage{}),
+		messages.StreamTypeAudioDelta:   messages.NewAudioDeltaValue([]byte{9, 9}),
+	}
+	return messages.StreamMessage{Type: kind, Role: messages.RoleAssistant, ResponseID: responseID, Value: values[kind]}
+}
+
+// Regression: response A (a server-VAD spoken reply) is playing when a tool
+// continuation is requested. The user's speech must still cancel A.
+func TestSessionModelRunner_PlayingResponseInterruptibleWhileContinuationPending(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "resp-A")
+
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 0 {
+		t.Fatalf("continuation RESPONSE.CREATE sent while resp-A is active (provider rejects it with conversation_already_has_active_response): %d", got)
+	}
+
+	if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+		t.Fatalf("forward user audio: %v", err)
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("user speech over playing resp-A sent %d RESPONSE.CANCEL, want 1; sent=%#v", got, session.sentMessages())
+	}
+
+	// resp-A's cancelled terminal boundary releases the deferred
+	// continuation: the tool result stays in the conversation and the
+	// provider is asked for the continuation exactly once.
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-A"))
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 1 {
+		t.Fatalf("continuation RESPONSE.CREATE count after resp-A ended = %d, want 1", got)
+	}
+	endA := lastOutboxMessage(t, runner, messages.StreamTypeMessageEnd)
+	if endA.ResponsePurpose == messages.ResponsePurposeToolContinuation {
+		t.Fatalf("interrupted resp-A was attributed to the tool continuation: %#v", endA)
+	}
+
+	// The provider opens the continuation response; it is the protected one.
+	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-B"))
+	if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyDoNotInterrupt, state); err != nil {
+		t.Fatalf("forward peer audio: %v", err)
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("peer audio cancelled the tool continuation: cancels=%d", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeAudioDelta, "resp-B"))
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-B"))
+	endB := lastOutboxMessage(t, runner, messages.StreamTypeMessageEnd)
+	if endB.ResponsePurpose != messages.ResponsePurposeToolContinuation || !state.responseCompleted {
+		t.Fatalf("continuation resp-B end = %#v state=%+v, want a completed tool-continuation response", endB, state)
+	}
+	if state.continuationRequested || state.continuationResponseID != "" {
+		t.Fatalf("continuation bookkeeping leaked past its response: %+v", state)
+	}
+
+	// The next ordinary response is fully interruptible again.
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-C"))
+	if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+		t.Fatalf("forward user audio: %v", err)
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 2 {
+		t.Fatalf("ordinary resp-C was not interruptible: cancels=%d", got)
+	}
+}
+
+// A continuation requested while nothing is playing binds to the response the
+// adapter reports as answering it, and only that response is protected.
+func TestSessionModelRunner_IdleContinuationBindsNextResponse(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := &sessionRunState{}
+	state.ensureMaps()
+
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 1 {
+		t.Fatalf("idle continuation request count = %d, want 1", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-B"))
+	if state.continuationResponseID != "resp-B" {
+		t.Fatalf("continuation bound to %q, want resp-B", state.continuationResponseID)
+	}
+	if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+		t.Fatalf("forward audio: %v", err)
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 {
+		t.Fatalf("tool continuation was cancelled: cancels=%d", got)
+	}
+}
+
+// A provider rejection of the continuation request because another response
+// became active first must not lose the continuation: it is re-requested
+// once that response ends.
+func TestSessionModelRunner_RejectedContinuationRetriedAfterActiveResponse(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := &sessionRunState{}
+	state.ensureMaps()
+
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	// Server VAD opened its own response before the request arrived.
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-vad"))
+	runner.forwardSessionMessageState(ctx, session, state, messages.StreamMessage{
+		Type: messages.StreamTypeError,
+		Value: &messages.ErrorValue{Type: "error", Message: "active response", NonTerminal: true,
+			Classification: messages.ErrorClassificationResponseCreateActive},
+	})
+	// resp-vad was the provider's own response, so it is interruptible.
+	if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+		t.Fatalf("forward audio: %v", err)
+	}
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
+		t.Fatalf("provider-owned response was not interruptible after continuation rejection: cancels=%d", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-vad"))
+	// The provider adapter owns the retry of its rejected response.create; a
+	// second request from the runner would answer the tool result twice.
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 1 {
+		t.Fatalf("runner re-requested the rejected continuation: creates=%d, want only the original", got)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-B"))
+	if state.continuationResponseID != "resp-B" {
+		t.Fatalf("retried continuation bound to %q, want resp-B", state.continuationResponseID)
+	}
+}
+
+// newContinuationRunState builds a state whose current response is the one the
+// provider opened for an accepted tool continuation request. Setup traffic is
+// sent to a throwaway session so callers observe only their own sends.
+func newContinuationRunState(t *testing.T, runner *ModelRunner, responseID string) *sessionRunState {
+	t.Helper()
+	ctx := context.Background()
+	setup := newRecordingSession()
+	state := &sessionRunState{}
+	state.ensureMaps()
+	runner.forwardQueuedSessionEvent(ctx, setup, state, continuationCreate())
+	runner.forwardSessionMessageState(ctx, setup, state, continuationStart(responseID))
+	if !state.continuationInFlight || state.currentResponseID != responseID {
+		t.Fatalf("setup: continuation %q not bound: %+v", responseID, state)
+	}
+	return state
+}
+
+func lastOutboxMessage(t *testing.T, runner *ModelRunner, kind messages.StreamMessageType) messages.StreamMessage {
+	t.Helper()
+	var last *messages.StreamMessage
+	for {
+		msg, ok := runner.DeltaOutbox.Read()
+		if !ok {
+			break
+		}
+		if msg.Type == kind {
+			last = &msg
+		}
+	}
+	if last == nil {
+		t.Fatalf("no %s reached DeltaOutbox", kind)
+	}
+	return *last
 }

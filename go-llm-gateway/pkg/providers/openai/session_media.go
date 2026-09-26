@@ -118,17 +118,11 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 	var err error
 	switch event.Type {
 	case models.SessionEventInputAudioBufferSpeechStarted:
-		if interruption, ok := media.InterruptInbound(); ok {
-			truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
-			outcome := s.enqueueWireEventWait(ctx, truncate)
-			if !outcome.OK() {
-				if outcome.Err != nil {
-					err = outcome.Err
-				} else {
-					err = fmt.Errorf("queue OpenAI Realtime conversation truncation: %s", outcome.Status)
-				}
-			}
-		}
+		err = s.interruptPlayback(ctx, media)
+	case models.SessionEventResponseCreated:
+		// Name the response before its first audio delta, so an interruption
+		// in between still discards that response's late audio.
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: firstStringField(event.Data, "response.id")})
 	case models.SessionEventResponseOutputAudioDelta:
 		format := realtimeAudioMediaType(event.Data)
 		if format != "" && format != realtimePCMAudioFormat {
@@ -156,6 +150,83 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 		media.FailInbound(err)
 	}
 	return err
+}
+
+// interruptPlayback discards queued local playback of the audible response
+// and truncates its conversation item at the audio the device actually
+// played, as the OpenAI Realtime protocol expects on an interruption.
+func (s *realtimeSession) interruptPlayback(ctx context.Context, media *sharedaudio.SessionMedia) error {
+	interruption, ok := media.InterruptInbound()
+	if !ok {
+		return nil
+	}
+	truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
+	outcome := s.enqueueWireEventWait(ctx, truncate)
+	if outcome.OK() {
+		return nil
+	}
+	if outcome.Err != nil {
+		return outcome.Err
+	}
+	return fmt.Errorf("queue OpenAI Realtime conversation truncation: %s", outcome.Status)
+}
+
+// sendResponseCancel sends RESPONSE.CANCEL outside the response intent queue:
+// it must reach the provider even while a default response is active, and it
+// invalidates queued work from the cancelled generation.
+func (s *realtimeSession) sendResponseCancel(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
+	s.responseWireMu.Lock()
+	defer s.responseWireMu.Unlock()
+	s.invalidatePendingResponseIntents()
+	return s.enqueueWireEvents(ctx, events)
+}
+
+// ProviderTurnDetection reports whether OpenAI detects user speech itself. It
+// does unless the session owns its audio turn boundaries (turn_detection null).
+func (s *realtimeSession) ProviderTurnDetection() bool { return !s.clientTurnBoundaries }
+
+// InputAudioSampleRate reports the rate of the PCM16 audio the client sends;
+// OpenAI Realtime defaults to 24 kHz.
+func (s *realtimeSession) InputAudioSampleRate() int {
+	if s.inputSampleRate > 0 {
+		return s.inputSampleRate
+	}
+	return defaultRealtimeInputSampleRate
+}
+
+// defaultRealtimeInputSampleRate is the OpenAI Realtime pcm16 input rate.
+const defaultRealtimeInputSampleRate = 24000
+
+// LocalPlayback reports provider audio still queued for or audible on the
+// local device, which outlives response.done.
+func (s *realtimeSession) LocalPlayback() messages.LocalPlaybackState {
+	activity := s.currentRTCMedia().PlaybackActivity()
+	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}
+}
+
+// InterruptLocalPlayback stops local playback and truncates the heard item.
+// It is valid after response.done, when there is no response left to cancel.
+func (s *realtimeSession) InterruptLocalPlayback(ctx context.Context) bool {
+	if !s.LocalPlayback().Active {
+		return false
+	}
+	s.interruptPlaybackForCancel(ctx)
+	return true
+}
+
+// interruptPlaybackForCancel applies a RESPONSE.CANCEL to local
+// playback. Audio arrives faster than real time, so the cancelled response may
+// still have seconds queued; that backlog is discarded and the item truncated
+// at what was heard. A following server-VAD speech_started finds nothing
+// audible and sends no second truncation.
+func (s *realtimeSession) interruptPlaybackForCancel(ctx context.Context) {
+	media := s.currentRTCMedia()
+	if media == nil {
+		return
+	}
+	if err := s.interruptPlayback(ctx, media); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
+		s.logger.Warn("openai: playback interruption after response cancel failed", logging.Field{Key: "error", Value: err})
+	}
 }
 
 func realtimePlaybackResponse(data json.RawMessage) sharedaudio.PlaybackResponse {
@@ -275,4 +346,34 @@ func (s *realtimeSession) closeWithLog() {
 	if err := s.Close(); err != nil {
 		s.logger.Warn("openai realtime: session close error", logging.Field{Key: "error", Value: err})
 	}
+}
+
+// realtimeResponsePurposeKey is the response.create metadata key carrying the
+// harness request purpose; OpenAI echoes response metadata on
+// response.created, which binds each opened response to its request.
+const realtimeResponsePurposeKey = models.ResponseMetadataPurposeKey
+
+func realtimeResponseCreatedMessages(data json.RawMessage, responseID string) []messages.StreamMessage {
+	return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID,
+		Value: messages.NewMessageStartValue(), ResponsePurpose: realtimeCreatedResponsePurpose(data)}}
+}
+
+// realtimeResponseMetadata carries the request purpose the client binds by.
+// Only a tool continuation is marked; other requests keep the legacy shape.
+func realtimeResponseMetadata(value *messages.ResponseCreateValue) map[string]string {
+	if !value.IsToolContinuation() {
+		return nil
+	}
+	return map[string]string{realtimeResponsePurposeKey: string(messages.ResponsePurposeToolContinuation)}
+}
+
+// realtimeCreatedResponsePurpose reads the purpose echoed on response.created.
+// The adapter owns which request each response answers (it holds, drops and
+// retries creates), so the echoed metadata -- not client-side ordering --
+// identifies a tool continuation.
+func realtimeCreatedResponsePurpose(data json.RawMessage) messages.ResponsePurpose {
+	if firstStringField(data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation) {
+		return messages.ResponsePurposeToolContinuation
+	}
+	return ""
 }

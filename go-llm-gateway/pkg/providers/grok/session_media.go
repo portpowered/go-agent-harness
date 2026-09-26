@@ -109,7 +109,16 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 
 	var err error
 	switch event.Type {
+	case models.SessionEventInputAudioBufferSpeechStarted:
+		media.InterruptInbound()
+	case models.SessionEventResponseCreated:
+		// Name the response before its first audio delta, so an interruption
+		// in between still discards that response's late audio.
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: responseEventID(event.Data)})
 	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
+		// The response identity lets an interruption discard this response's
+		// late deltas.
+		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: responseEventID(event.Data)})
 		data, decodeErr := decodeGrokAudioDelta(event.Data)
 		if decodeErr != nil {
 			err = decodeErr
@@ -127,6 +136,46 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 		media.FailInbound(err)
 	}
 	return err
+}
+
+// ProviderTurnDetection reports that Grok always runs server VAD.
+func (*grokSession) ProviderTurnDetection() bool { return true }
+
+// InputAudioSampleRate reports the rate of the PCM16 audio the client sends,
+// 24 kHz unless configured.
+func (s *grokSession) InputAudioSampleRate() int {
+	if s.inputSampleRate > 0 {
+		return s.inputSampleRate
+	}
+	return defaultGrokInputSampleRate
+}
+
+// defaultGrokInputSampleRate is the Grok realtime PCM16 input rate.
+const defaultGrokInputSampleRate = 24000
+
+// LocalPlayback reports provider audio still queued for or audible on the
+// local device.
+func (s *grokSession) LocalPlayback() messages.LocalPlaybackState {
+	activity := s.currentRTCMedia().PlaybackActivity()
+	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}
+}
+
+// InterruptLocalPlayback discards audio not yet heard.
+func (s *grokSession) InterruptLocalPlayback(context.Context) bool {
+	if !s.LocalPlayback().Active {
+		return false
+	}
+	s.interruptRTCPlayback()
+	return true
+}
+
+// interruptRTCPlayback discards response audio queued for local playback.
+// Grok audio deltas carry no conversation item identity, so no provider-side
+// truncation is possible.
+func (s *grokSession) interruptRTCPlayback() {
+	if media := s.currentRTCMedia(); media != nil {
+		media.InterruptInbound()
+	}
 }
 
 // publishRTCMediaWithLog forwards provider audio to the RTC media path. The

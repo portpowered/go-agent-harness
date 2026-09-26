@@ -63,7 +63,7 @@ func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage
 	case models.SessionEventSessionClosed:
 		return realtimeSessionClosedMessages(event.Data)
 	case models.SessionEventResponseCreated:
-		return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID, Value: messages.NewMessageStartValue()}}
+		return realtimeResponseCreatedMessages(event.Data, responseID)
 	case models.SessionEventResponseDone:
 		return []messages.StreamMessage{{Type: messages.StreamTypeMessageEnd, ResponseID: responseID, Value: realtimeResponseDoneMessageEnd(event.Data)}}
 	case models.SessionEventResponseOutputItemAdded:
@@ -334,7 +334,7 @@ func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, 
 		if !ok || v == nil {
 			return nil, false
 		}
-		return []models.SessionEvent{models.NewResponseCreateEventWithInstructions(v.Instructions)}, true
+		return []models.SessionEvent{models.NewResponseCreateEventWithMetadata(v.Instructions, realtimeResponseMetadata(v))}, true
 	case messages.StreamTypeTextDelta:
 		v, ok := msg.Value.(*messages.TextDeltaValue)
 		if !ok || v == nil {

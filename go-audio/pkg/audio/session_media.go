@@ -118,6 +118,17 @@ func (m *SessionMedia) InterruptInbound() (PlaybackInterruption, bool) {
 	return m.inbound.interrupt()
 }
 
+// PlaybackActivity reports whether provider audio is still queued or audible
+// and the level of the audible audio. See playbackActivity.
+func (m *SessionMedia) PlaybackActivity() PlaybackActivity {
+	if m == nil || m.inbound == nil {
+		return PlaybackActivity{}
+	}
+	m.inbound.mu.Lock()
+	defer m.inbound.mu.Unlock()
+	return m.inbound.activity.state(len(m.inbound.frames) > 0 || len(m.inbound.pending) > 0)
+}
+
 // FlushInbound emits a final zero-padded frame for samples remaining at the
 // end of a provider audio response.
 func (m *SessionMedia) FlushInbound() error {
@@ -151,54 +162,6 @@ func (m *SessionMedia) Close() error {
 	return nil
 }
 
-type sessionOutboundMedia struct {
-	writer    SessionMediaWriter
-	done      chan struct{}
-	closeOnce sync.Once
-}
-
-func newSessionOutboundMedia(writer SessionMediaWriter) *sessionOutboundMedia {
-	return &sessionOutboundMedia{
-		writer: writer,
-		done:   make(chan struct{}),
-	}
-}
-
-func (m *sessionOutboundMedia) WriteFrame(ctx context.Context, frame PCMFrame) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if len(frame.Samples) == 0 {
-		return ErrSessionMediaEmptyFrame
-	}
-	select {
-	case <-m.done:
-		return ErrSessionMediaClosed
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-	if m.writer == nil {
-		return ErrSessionMediaNoWriter
-	}
-
-	// Do not let a provider retain or mutate the caller's frame buffer.
-	samples := append([]int16(nil), frame.Samples...)
-	frame.Samples = samples
-	return m.writer(ctx, frame)
-}
-
-func (m *sessionOutboundMedia) Close() error {
-	m.close()
-	return nil
-}
-
-func (m *sessionOutboundMedia) close() {
-	m.closeOnce.Do(func() {
-		close(m.done)
-	})
-}
-
 type sessionInboundMedia struct {
 	mu                        sync.Mutex
 	frameSamples              int
@@ -225,6 +188,7 @@ type sessionInboundMedia struct {
 	interrupted      PlaybackResponse
 	discarding       bool
 	controller       PlaybackController
+	activity         playbackActivity
 }
 
 func newSessionInboundMedia(frameSamples, sampleRate int, padPartial bool) *sessionInboundMedia {
@@ -250,6 +214,7 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 			m.frames = m.frames[1:]
 			if len(frame.Samples) > 0 {
 				m.activatePlaybackLocked(frame.PlaybackResponse)
+				m.activity.dequeued(frame.Samples, m.sampleRate)
 			}
 			m.mu.Unlock()
 			return frame, nil
@@ -325,11 +290,19 @@ func (m *sessionInboundMedia) activatePlaybackLocked(response PlaybackResponse) 
 
 func (m *sessionInboundMedia) startResponse(response PlaybackResponse) {
 	m.mu.Lock()
-	if m.discarding && m.interrupted == response {
+	if m.discarding && m.interrupted.sameResponse(response) {
 		m.mu.Unlock()
 		return
 	}
 	if m.closed || m.response == response {
+		m.mu.Unlock()
+		return
+	}
+	if m.response.ItemID == "" && m.response.ResponseID != "" && m.response.ResponseID == response.ResponseID {
+		// The response announced at creation now names its audio item.
+		m.responseSamples[response] = m.responseSamples[m.response]
+		delete(m.responseSamples, m.response)
+		m.response = response
 		m.mu.Unlock()
 		return
 	}
@@ -353,18 +326,19 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	responseSamplesByResponse := m.responseSamples
 	ingressResponse := m.response
 	controller := m.controller
-	for index := range m.frames {
-		m.frames[index] = PCMFrame{}
-	}
-	m.frames = nil
-	m.pending = nil
+	clear(m.frames)
+	m.frames, m.pending = nil, nil
+	m.activity.interrupted()
 	m.epoch++
 	m.response = PlaybackResponse{}
 	m.playbackResponse = PlaybackResponse{}
 	m.responseSamples = make(map[PlaybackResponse]uint64)
-	// Discard late deltas from the interrupted ingress response.
-	m.interrupted = ingressResponse
-	m.discarding = ingressResponse.HasIdentity()
+	// Discard late deltas from the interrupted ingress response. A repeated
+	// interruption with no new ingress response (a host cancel followed by
+	// the provider's own speech_started) keeps discarding the earlier one.
+	if ingressResponse.HasIdentity() {
+		m.interrupted, m.discarding = ingressResponse, true
+	}
 	if controller == nil || response.ItemID == "" {
 		m.mu.Unlock()
 		m.notify()
@@ -377,10 +351,7 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	} else {
 		interruption.AudioEndMS, ok = controller.InterruptPlayback(response)
 	}
-	audioEndMS := interruption.AudioEndMS
-	if audioEndMS < 0 {
-		audioEndMS = 0
-	}
+	audioEndMS := max(interruption.AudioEndMS, 0)
 	if m.sampleRate > 0 {
 		availableSamples, known := responseSamplesByResponse[interruption.PlaybackResponse]
 		if interruption.PlaybackResponse == response {

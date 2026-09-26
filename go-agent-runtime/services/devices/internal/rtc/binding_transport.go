@@ -12,10 +12,13 @@ import (
 	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 )
 
+var _ messages.BargeInCapableSession = (*boundSession)(nil)
+
 const playbackDrainTimeout = 5 * time.Second
 
 type boundSession struct {
 	messages.Session
+	capabilities                             messages.SessionCapabilities
 	binding                                  *binding
 	lifecycleCtx                             context.Context
 	stopPumps                                context.CancelFunc
@@ -26,12 +29,27 @@ type boundSession struct {
 }
 
 func newBoundSession(session messages.Session, binding *binding, lifecycleCtx context.Context, stopPumps ...context.CancelFunc) *boundSession {
-	bound := &boundSession{Session: session, binding: binding, lifecycleCtx: lifecycleCtx}
+	bound := &boundSession{Session: session, capabilities: messages.SessionCapabilities{Wrapped: session}, binding: binding, lifecycleCtx: lifecycleCtx}
 	if len(stopPumps) > 0 {
 		bound.stopPumps = stopPumps[0]
 	}
 	bound.startReceiveForwarder(lifecycleCtx)
 	return bound
+}
+
+func (s *boundSession) ProviderTurnDetection() bool { return s.capabilities.ProviderTurnDetection() }
+func (s *boundSession) InputAudioSampleRate() int   { return s.capabilities.InputAudioSampleRate() }
+func (s *boundSession) InterruptLocalPlayback(ctx context.Context) bool {
+	return s.capabilities.InterruptLocalPlayback(ctx)
+}
+
+// LocalPlayback forwards the provider's playback state. A binding with a
+// feedback gate removes this playback from the captured audio, so the
+// playback level is not an echo reference for local barge-in.
+func (s *boundSession) LocalPlayback() messages.LocalPlaybackState {
+	state := s.capabilities.LocalPlayback()
+	state.EchoCancelled = s.binding != nil && s.binding.feedback != nil
+	return state
 }
 
 func (s *boundSession) Send(ctx context.Context, msg messages.StreamMessage) bool {

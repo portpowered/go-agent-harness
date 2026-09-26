@@ -146,3 +146,47 @@ func TestBoundSessionForwardsAndClosesProviderSession(t *testing.T) {
 		t.Fatalf("second Close() error = %v", err)
 	}
 }
+
+type capabilityProvider struct {
+	*idleSession
+	interrupts int
+}
+
+func (*capabilityProvider) ProviderTurnDetection() bool { return true }
+func (*capabilityProvider) InputAudioSampleRate() int   { return 24000 }
+func (*capabilityProvider) LocalPlayback() messages.LocalPlaybackState {
+	return messages.LocalPlaybackState{Active: true, Level: 1234}
+}
+func (p *capabilityProvider) InterruptLocalPlayback(context.Context) bool {
+	p.interrupts++
+	return true
+}
+
+// The RTC device path wraps the provider session; the runner's local barge-in
+// must still see turn detection, local playback and the input rate. A binding
+// with a feedback gate removes playback from the microphone, so its playback
+// is reported as echo-cancelled.
+func TestBoundSessionForwardsBargeInCapabilities(t *testing.T) {
+	for _, gated := range []bool{false, true} {
+		provider := &capabilityProvider{idleSession: newIdleSession()}
+		bind := &binding{}
+		if gated {
+			bind.feedback = &audio.PCM16FeedbackGate{}
+		}
+		var session messages.Session = newBoundSession(provider, bind, context.Background())
+		detector, ok := session.(messages.SessionTurnDetection)
+		if !ok || !detector.ProviderTurnDetection() {
+			t.Fatal("provider turn detection was not forwarded")
+		}
+		if format, ok := session.(messages.SessionInputFormat); !ok || format.InputAudioSampleRate() != 24000 {
+			t.Fatal("input sample rate was not forwarded")
+		}
+		playback, ok := session.(messages.SessionLocalPlayback)
+		if !ok || playback.LocalPlayback().Level != 1234 || playback.LocalPlayback().EchoCancelled != gated {
+			t.Fatalf("gated=%t local playback = %+v, want forwarded level and echo-cancelled=%t", gated, playback.LocalPlayback(), gated)
+		}
+		if !playback.InterruptLocalPlayback(context.Background()) || provider.interrupts != 1 {
+			t.Fatal("playback interruption was not forwarded")
+		}
+	}
+}

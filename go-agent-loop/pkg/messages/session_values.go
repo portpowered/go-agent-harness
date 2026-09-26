@@ -129,6 +129,10 @@ func NewSessionUpdateValue(cfg *SessionUpdateConfig) *SessionUpdateValue {
 // inference provider via session.Send to cancel an in-progress response (barge-in).
 type ResponseCancelValue struct {
 	Type string `json:"type"` // "response_cancel"
+	// KeepPlayback marks a cancel raised while the provider runs its own turn
+	// detection. The provider's speech_started then owns stopping local
+	// playback, so the adapter cancels generation only.
+	KeepPlayback bool `json:"keep_playback,omitempty"`
 }
 
 func (*ResponseCancelValue) streamMessageValue() {}
@@ -136,6 +140,16 @@ func (*ResponseCancelValue) streamMessageValue() {}
 // NewResponseCancelValue returns a value for RESPONSE.CANCEL.
 func NewResponseCancelValue() *ResponseCancelValue {
 	return &ResponseCancelValue{Type: "response_cancel"}
+}
+
+// CancelStopsPlayback reports whether RESPONSE.CANCEL msg must also stop the
+// cancelled response's audio already queued for local playback.
+func CancelStopsPlayback(msg StreamMessage) bool {
+	if msg.Type != StreamTypeResponseCancel {
+		return false
+	}
+	value, ok := msg.Value.(*ResponseCancelValue)
+	return !ok || value == nil || !value.KeepPlayback
 }
 
 // ResponsePurpose identifies the reason a session response was requested.
@@ -146,6 +160,10 @@ type ResponsePurpose string
 
 const (
 	ResponsePurposeToolAcknowledgement ResponsePurpose = "tool_acknowledgement"
+	// ResponsePurposeToolContinuation marks the provider response opened for
+	// an accepted tool result's continuation. The session runner stamps it on
+	// that response's output so tool-obligation accounting is scoped to it.
+	ResponsePurposeToolContinuation ResponsePurpose = "tool_continuation"
 )
 
 // ToolAcknowledgementInstructions is deliberately short and prohibits a
@@ -177,6 +195,19 @@ func NewToolAcknowledgementResponseCreateValue() *ResponseCreateValue {
 		Purpose:      ResponsePurposeToolAcknowledgement,
 		Instructions: ToolAcknowledgementInstructions,
 	}
+}
+
+// NewToolContinuationResponseCreateValue returns the response request that
+// continues the model after an accepted tool-result batch. The session runner
+// binds the response it opens as the tool continuation.
+func NewToolContinuationResponseCreateValue() *ResponseCreateValue {
+	return &ResponseCreateValue{Type: "response_create", Purpose: ResponsePurposeToolContinuation}
+}
+
+// IsToolContinuation reports whether this request continues the model after
+// an accepted tool-result batch.
+func (v *ResponseCreateValue) IsToolContinuation() bool {
+	return v != nil && v.Purpose == ResponsePurposeToolContinuation
 }
 
 // IsToolAcknowledgement reports whether this response request is the one-shot

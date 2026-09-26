@@ -24,13 +24,15 @@ type OrderedSession interface {
 
 func WrapOrderedSession(inner messages.Session, options OrderedSessionOptions) OrderedSession {
 	return &orderedSession{
-		inner: inner, media: options.Media, flushOutbound: options.FlushOutbound,
+		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
+		inner:               inner, media: options.Media, flushOutbound: options.FlushOutbound,
 		onDispatch: options.OnDispatch, onToolResult: options.OnToolResult,
 		onContinuation: options.OnContinuation, onOpeningAdmitted: options.OnOpeningAdmitted,
 	}
 }
 
 type orderedSession struct {
+	messages.SessionCapabilities
 	inner             messages.Session
 	media             *mediagate.Gate
 	flushOutbound     bool

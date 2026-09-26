@@ -346,7 +346,7 @@ func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) 
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeAudioStart)
 
-	runner.UserAudioInbox <- []byte{1, 2, 3}
+	runner.UserAudioInbox <- loudPCM()
 
 	var sawCancel bool
 	for i := 0; i < 2; i++ {
@@ -363,7 +363,7 @@ func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) 
 				if !ok {
 					t.Fatalf("audio delta value = %T", sent.Value)
 				}
-				if string(value.Content) != "\x01\x02\x03" {
+				if string(value.Content) != string(loudPCM()) {
 					t.Fatalf("forwarded audio = %v", value.Content)
 				}
 				if !sawCancel {
@@ -398,7 +398,7 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
 
-	runner.UserAudioInbox <- []byte{4, 5, 6}
+	runner.UserAudioInbox <- loudPCM()
 	first := waitForSentMessage(t, ctx, session)
 	second := waitForSentMessage(t, ctx, session)
 	if first.Type != messages.StreamTypeResponseCancel {
@@ -410,7 +410,7 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 
 	// More speech in the same response overlap is still forwarded, but must not
 	// dispatch another cancellation for the response already cancelled above.
-	runner.UserAudioInbox <- []byte{7, 8, 9}
+	runner.UserAudioInbox <- loudPCM()
 	third := waitForSentMessage(t, ctx, session)
 	if third.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("third outbound type = %s, want %s without a duplicate cancel", third.Type, messages.StreamTypeAudioDelta)
@@ -454,7 +454,7 @@ func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.
 
 	// A later contentful frame still cancels the same in-flight response and
 	// remains ordered ahead of that frame.
-	runner.UserAudioInbox <- []byte{4, 5, 6, 7}
+	runner.UserAudioInbox <- loudPCM()
 	first := waitForSentMessage(t, ctx, session)
 	second := waitForSentMessage(t, ctx, session)
 	if first.Type != messages.StreamTypeResponseCancel {
@@ -591,7 +591,7 @@ func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T
 			responseInFlight := test.responseInFlight
 			responseCancelSent := false
 
-			err := runner.forwardSessionAudio(context.Background(), session, []byte{1, 2, 3}, &responseInFlight, &responseCancelSent)
+			err := runner.forwardSessionAudio(context.Background(), session, loudPCM(), &responseInFlight, &responseCancelSent)
 			if err == nil || !contains(err.Error(), test.wantError) {
 				t.Fatalf("forwardSessionAudio error = %v, want %q failure", err, test.wantError)
 			}
@@ -627,7 +627,7 @@ func TestSessionModelRunner_DropsProviderOutputAfterBargeInCancel(t *testing.T) 
 		Value: messages.NewMessageStartValue(),
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
-	runner.UserAudioInbox <- []byte{1, 2, 3}
+	runner.UserAudioInbox <- loudPCM()
 	if sent := waitForSentMessage(t, ctx, session); sent.Type != messages.StreamTypeResponseCancel {
 		t.Fatalf("first outbound type = %s, want %s", sent.Type, messages.StreamTypeResponseCancel)
 	}

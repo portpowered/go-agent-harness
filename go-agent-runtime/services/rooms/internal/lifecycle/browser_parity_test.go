@@ -533,3 +533,53 @@ func (h *scriptedLiveHandle) Close() error {
 	h.closed.Do(func() { close(h.events) })
 	return nil
 }
+
+// roomCapabilityProvider is a provider session that runs turn detection, owns
+// local playback and declares its input rate.
+type roomCapabilityProvider struct {
+	receive    *messages.TypedBuffer[messages.StreamMessage]
+	done       chan struct{}
+	interrupts int
+}
+
+func (*roomCapabilityProvider) Send(context.Context, messages.StreamMessage) bool { return true }
+func (p *roomCapabilityProvider) Receive() *messages.TypedBuffer[messages.StreamMessage] {
+	return p.receive
+}
+func (p *roomCapabilityProvider) Done() <-chan struct{}     { return p.done }
+func (*roomCapabilityProvider) Close() error                { return nil }
+func (*roomCapabilityProvider) ProviderTurnDetection() bool { return true }
+func (*roomCapabilityProvider) InputAudioSampleRate() int   { return 24000 }
+func (*roomCapabilityProvider) LocalPlayback() messages.LocalPlaybackState {
+	return messages.LocalPlaybackState{Active: true, Level: 1234}
+}
+func (p *roomCapabilityProvider) InterruptLocalPlayback(context.Context) bool {
+	p.interrupts++
+	return true
+}
+
+type roomCapabilityInferencer struct{ session messages.Session }
+
+func (i roomCapabilityInferencer) ConnectSession(context.Context) (messages.Session, error) {
+	return i.session, nil
+}
+
+// The room path hands the runner the connection tracker's session. The
+// runner's local barge-in must still see turn detection, local playback and
+// the input rate through it.
+func TestRoomTrackedSessionForwardsBargeInCapabilities(t *testing.T) {
+	provider := &roomCapabilityProvider{receive: messages.NewTypedBuffer[messages.StreamMessage](4), done: make(chan struct{})}
+	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
+	session, err := NewConnectionTracker(roomCapabilityInferencer{session: provider}, lifecycle, nil).ConnectSession(context.Background())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	capable, ok := session.(messages.BargeInCapableSession)
+	if !ok {
+		t.Fatalf("room session %T does not expose the barge-in capabilities", session)
+	}
+	if !capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 24000 || capable.LocalPlayback().Level != 1234 ||
+		!capable.InterruptLocalPlayback(context.Background()) || provider.interrupts != 1 {
+		t.Fatal("room session did not forward the provider's barge-in capabilities")
+	}
+}

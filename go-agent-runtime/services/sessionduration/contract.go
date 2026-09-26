@@ -103,6 +103,8 @@ type AdmissionInferencer interface {
 // that need optional complete-message capabilities.
 type AdmissionSession interface {
 	messages.Session
+	// The runner's local barge-in reads these through every wrapper.
+	messages.BargeInCapableSession
 	SendMessage(context.Context, messages.Message) bool
 	SendMessageWithoutResponse(context.Context, messages.Message) bool
 	SupportsCompleteMessages() bool

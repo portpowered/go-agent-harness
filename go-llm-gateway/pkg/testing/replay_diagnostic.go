@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 const (
@@ -32,6 +33,7 @@ func replayEventDescription(sequence int, eventType string) string {
 }
 
 func compareReplayPayloads(expected, actual []byte) error {
+	actual = models.StripUnrecordedResponsePurpose(expected, actual)
 	if bytes.Equal(expected, actual) {
 		return nil
 	}
