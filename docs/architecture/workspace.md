@@ -119,7 +119,12 @@ checkout gets content-derived mtimes, so a package whose test binary, flags,
 environment and in-module input files are unchanged replays its cached
 result (coverage profile included) instead of re-running. Packages whose
 inputs Go cannot track (`scripts/go-test-fresh-packages.txt`) and the
-race, device, Chrome and integration runs always run with `-count=1`. A
+race, device, Chrome and integration runs always run with `-count=1`.
+Every cached run goes through `scripts/go-test-input-guard.py` (`go test
+-exec`), which fails an unlisted package whose test process read a
+repository file outside its module or exec'd `go`, `git` or another
+source-reading tool in the repository (TestMain included), so the list is
+enforced on every pull request; a failed run is never cached. A
 nightly scheduled run, and a manual dispatch with `fresh`, set
 `GO_TEST_COUNT=1` and re-run every test; a nightly failure opens a
 "Nightly fresh CI run failed" issue. `CI (WebMCP Chrome)` runs on its own macOS runner beside

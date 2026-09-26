@@ -43,10 +43,18 @@ if [ -z "$module" ] || [ "${#packages[@]}" -eq 0 ]; then
 	echo "go-test-fresh-split: --module and at least one package are required" >&2
 	exit 2
 fi
-fresh="$(awk -v module="$module" '$1 == module { print $2 }' "$(dirname "$0")/go-test-fresh-packages.txt")"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+fresh="$(awk -v module="$module" '$1 == module { print $2 }' "$script_dir/go-test-fresh-packages.txt")"
+# Every cacheable run goes through the input guard, which fails a package
+# that reads inputs the test cache cannot see. Its content hash is part of
+# the exec command, so a guard change re-runs (and re-checks) every package.
+guard="$script_dir/go-test-input-guard.py"
+guard_rev="$(cksum <"$guard" | cut -d' ' -f1)"
+guard_flag="-exec=python3 $guard --rev $guard_rev"
 
 # run_go_test PROFILE PACKAGE... -- EXTRA_FLAG...: go test with the caller's
-# flags, writing PROFILE when coverage is on.
+# flags, writing PROFILE when coverage is on. Pass guard_flag for cacheable
+# runs; fresh runs (-count=1) need no guard.
 run_go_test() {
 	local out="$1" args=()
 	shift
@@ -61,7 +69,7 @@ run_go_test() {
 }
 
 if [ -z "${fresh// /}" ]; then
-	run_go_test "$profile" "${packages[@]}" --
+	run_go_test "$profile" "${packages[@]}" -- "$guard_flag"
 	exit
 fi
 
@@ -84,7 +92,7 @@ while IFS= read -r path; do
 done < <("$go_cmd" list ${list_flags[@]+"${list_flags[@]}"} "${packages[@]}")
 
 if [ "${#selected_fresh[@]}" -eq 0 ]; then
-	run_go_test "$profile" "${cached[@]}" --
+	run_go_test "$profile" "${cached[@]}" -- "$guard_flag"
 	exit
 fi
 if [ "${#cached[@]}" -eq 0 ]; then
@@ -96,7 +104,7 @@ fresh_profile="${profile:+$profile.fresh}"
 run_go_test "$fresh_profile" "${selected_fresh[@]}" -- -count=1 &
 fresh_pid=$!
 status=0
-run_go_test "$profile" "${cached[@]}" -- || status=$?
+run_go_test "$profile" "${cached[@]}" -- "$guard_flag" || status=$?
 wait "$fresh_pid" || status=$?
 if [ -n "$profile" ] && [ -f "$fresh_profile" ]; then
 	if [ -f "$profile" ]; then

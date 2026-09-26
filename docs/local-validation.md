@@ -92,7 +92,9 @@ runs as sharded processes of one test binary and is never cached, which is why
 the changed scope matters most when a diff does not reach it. Packages listed
 in `scripts/go-test-fresh-packages.txt` read inputs Go's test cache cannot
 see (files in another module, a `go list` subprocess, a host tool), so they
-always run with `-count=1`; `make coverage GO_TEST_COUNT=1` re-runs
+always run with `-count=1`. Cached runs go through
+`scripts/go-test-input-guard.py`, which fails an unlisted package that reads
+such inputs and names the file or command; `make coverage GO_TEST_COUNT=1` re-runs
 everything. CI uses the same test cache, restored with each job's build cache (see
 [workspace.md](architecture/workspace.md#github-actions)).
 
