@@ -518,11 +518,6 @@ func newRemoteToolAudioProvider(responses [][]int16, toolAt map[int]bool, calls 
 	}
 }
 
-// serveHTTP serves the provider on a loopback socket for agent processes.
-func (p *remoteToolAudioProvider) serveHTTP() {
-	p.server = httptest.NewServer(http.HandlerFunc(p.handle))
-}
-
 func (p *remoteToolAudioProvider) WebSocketURL() string {
 	return strings.Replace(p.server.URL, "http://", "ws://", 1)
 }

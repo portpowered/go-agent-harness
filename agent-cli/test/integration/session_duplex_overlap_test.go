@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 )
 
 func TestSessionCLI_DuplexPCMOverlap(t *testing.T) {
@@ -177,7 +178,7 @@ func runStartupAnnouncementProof(t *testing.T) startupAnnouncementProof {
 		toolPath    = "announcement-proof.txt"
 		toolContent = "startup routing proof\n"
 	)
-	fixture := newStartupAnnouncementFixture(toolPath, toolContent)
+	fixture := newStartupAnnouncementFixture(t, toolPath, toolContent)
 	defer fixture.Close()
 
 	sandbox := startupAnnouncementDirectory(t, "sandbox")
@@ -359,13 +360,13 @@ type startupAnnouncementConversation struct {
 	finalSent    bool
 }
 
-func newStartupAnnouncementFixture(toolPath, toolContent string) *startupAnnouncementFixture {
+func newStartupAnnouncementFixture(t testing.TB, toolPath, toolContent string) *startupAnnouncementFixture {
 	fixture := &startupAnnouncementFixture{
 		upgrader:    websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		toolPath:    toolPath,
 		toolContent: toolContent,
 	}
-	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

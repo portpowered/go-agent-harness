@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
 )
 
@@ -102,7 +103,7 @@ func TestShippedSessionProcessFamilyEPatienceInitialOutputThenStall(t *testing.T
 func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSimulationRunResult, familyEProviderObservation, error) {
 	t.Helper()
 	scenario := familyEShippedScenario()
-	fixture := newFamilyEProviderFixture(scenario, mode)
+	fixture := newFamilyEProviderFixture(t, scenario, mode)
 	fixture.SetStartedAt(time.Now())
 
 	validator := probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, request probe.CustomerSimulationValidatorRequest) ([]byte, error) {
@@ -243,13 +244,13 @@ type familyEProviderFixture struct {
 	recoveryResponseSent bool
 }
 
-func newFamilyEProviderFixture(scenario probe.CustomerScenario, mode familyEShippedMode) *familyEProviderFixture {
+func newFamilyEProviderFixture(t testing.TB, scenario probe.CustomerScenario, mode familyEShippedMode) *familyEProviderFixture {
 	fixture := &familyEProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 		mode:     mode,
 	}
-	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

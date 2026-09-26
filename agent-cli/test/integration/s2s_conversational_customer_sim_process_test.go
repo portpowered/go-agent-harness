@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 )
 
 // TestShippedSessionProcessDuplexConversation drives the built agent binary
@@ -26,7 +27,7 @@ import (
 // responses. The runner's output gates make the ordering observable without
 // buffering the conversation or restarting the child.
 func TestShippedSessionProcessDuplexConversation(t *testing.T) {
-	fixture := newCustomerSimulationFixture()
+	fixture := newCustomerSimulationFixture(t)
 	defer fixture.Close()
 	recordDir := filepath.Join(t.TempDir(), "record")
 
@@ -168,12 +169,12 @@ type customerSimulationSnapshot struct {
 	protocolError            string
 }
 
-func newCustomerSimulationFixture() *customerSimulationFixture {
+func newCustomerSimulationFixture(t testing.TB) *customerSimulationFixture {
 	fixture := &customerSimulationFixture{
 		upgrader:   websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		closeReady: make(chan struct{}),
 	}
-	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 
