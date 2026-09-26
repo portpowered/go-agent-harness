@@ -22,6 +22,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mocktool"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -332,7 +333,8 @@ type remoteToolAudioAgent struct {
 func startRemoteToolAudioTopology(t *testing.T, testCase remoteToolAudioCase, provider *remoteToolAudioProvider) (remoteToolAudioDevice, func(context.Context, []string, remoteToolAudioPaths) remoteToolAudioAgent) {
 	t.Helper()
 	if !testCase.inProcess {
-		provider.serveHTTP()
+		// A remote provider's segments reach the agent WAN-sized; see testnet.
+		provider.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(provider.handle))
 		endpoint, stopDevice := startAudioDeviceServerBinary(t, true)
 		t.Cleanup(stopDevice)
 		return remoteDeviceServer{endpoint: endpoint}, func(ctx context.Context, arguments []string, paths remoteToolAudioPaths) remoteToolAudioAgent {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 )
 
 // TestFamilyDTerminationShapesThroughShippedProcess runs the same declared
@@ -74,7 +75,7 @@ func runFamilyDProcess(t *testing.T, method probe.TerminationMethod) familyDProc
 		t.Fatalf("write Family D config: %v", err)
 	}
 
-	fixture := newFamilyDProviderFixture(scenario, method)
+	fixture := newFamilyDProviderFixture(t, scenario, method)
 	defer fixture.Close()
 	startedAt := time.Now()
 	fixture.SetStartedAt(startedAt)
@@ -357,9 +358,9 @@ type familyDProviderFixture struct {
 	utteranceSeen      bool
 }
 
-func newFamilyDProviderFixture(_ probe.CustomerScenario, method probe.TerminationMethod) *familyDProviderFixture {
+func newFamilyDProviderFixture(t testing.TB, _ probe.CustomerScenario, method probe.TerminationMethod) *familyDProviderFixture {
 	fixture := &familyDProviderFixture{upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}, method: method}
-	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

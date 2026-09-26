@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,7 +29,7 @@ func TestFamilyAIterativeBuildUpThroughShippedProcess(t *testing.T) {
 		t.Fatalf("NewFilesystemOracle: %v", err)
 	}
 
-	fixture := newFamilyAProviderFixture(scenario)
+	fixture := newFamilyAProviderFixture(t, scenario)
 	defer fixture.Close()
 	startedAt := time.Now()
 	fixture.startedAt = startedAt
@@ -181,12 +182,12 @@ type familyAProviderFixture struct {
 	pendingResult                                                 bool
 }
 
-func newFamilyAProviderFixture(scenario probe.CustomerScenario) *familyAProviderFixture {
+func newFamilyAProviderFixture(t testing.TB, scenario probe.CustomerScenario) *familyAProviderFixture {
 	fixture := &familyAProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 	}
-	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 func (f *familyAProviderFixture) WebSocketURL() string {

@@ -22,6 +22,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe"
+	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
 )
 
 // TestFamilyCMixedModalProcessReportsUnsupportedPublicBoundary exercises the
@@ -179,7 +180,7 @@ func runFamilyCProcess(t *testing.T, imagePath string) familyCProcessRun {
 	if err != nil {
 		t.Fatalf("NewFilesystemOracle: %v", err)
 	}
-	fixture := newFamilyCProviderFixture(scenario)
+	fixture := newFamilyCProviderFixture(t, scenario)
 	defer fixture.Close()
 	startedAt := time.Now()
 	fixture.SetStartedAt(startedAt)
@@ -258,12 +259,12 @@ func loadFamilyCScenario(t *testing.T) probe.CustomerScenario {
 	return scenario
 }
 
-func newFamilyCProviderFixture(scenario probe.CustomerScenario) *familyCProviderFixture {
+func newFamilyCProviderFixture(t testing.TB, scenario probe.CustomerScenario) *familyCProviderFixture {
 	fixture := &familyCProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 	}
-	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 
@@ -277,11 +278,7 @@ func (f *familyCProviderFixture) WebSocketURL() string {
 	return strings.Replace(f.server.URL, "http://", "ws://", 1)
 }
 
-func (f *familyCProviderFixture) Close() {
-	if f.server != nil {
-		f.server.Close()
-	}
-}
+func (f *familyCProviderFixture) Close() { f.server.Close() }
 
 func (f *familyCProviderFixture) Snapshot() familyCProviderObservation {
 	f.mu.Lock()
