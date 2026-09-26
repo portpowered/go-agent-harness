@@ -317,7 +317,7 @@ func (m Manifest) validateEntryCoordinates() error {
 	entryIndex := 0
 	for _, scenario := range m.Scenarios {
 		for _, transport := range m.Transports {
-			for repeatIndex := 0; repeatIndex < m.RepeatCount; repeatIndex++ {
+			for repeatIndex := range m.RepeatCount {
 				entry := m.Entries[entryIndex]
 				if _, exists := seen[entry.ID]; exists {
 					return validation(fmt.Sprintf("entries[%d].id", entryIndex), entry.ID, "must be unique", ErrDuplicateEntry)

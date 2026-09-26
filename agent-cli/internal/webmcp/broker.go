@@ -937,7 +937,7 @@ func (b *StatefulBroker) retireRefLocked(ref ToolRef) {
 }
 
 func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, error) {
-	for attempt := 0; attempt < maxToolRefMintAttempts; attempt++ {
+	for range maxToolRefMintAttempts {
 		var (
 			ref ToolRef
 			err error

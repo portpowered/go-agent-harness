@@ -238,7 +238,7 @@ func resolvePathArguments(resolver *pathResolver, args []string, count int, labe
 		count = len(args)
 	}
 	normalized := append([]string(nil), args...)
-	for index := 0; index < count; index++ {
+	for index := range count {
 		resolved, err := resolver.Resolve(args[index])
 		if err != nil {
 			return nil, fmt.Errorf("resolve %s operand %d: %w", label, index+1, err)

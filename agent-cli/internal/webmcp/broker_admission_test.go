@@ -6,7 +6,7 @@ import (
 )
 
 func TestWaitForAdmissionDispatchPreservesReportedBrowserIDWhenContextIsCanceled(t *testing.T) {
-	for iteration := 0; iteration < 128; iteration++ {
+	for iteration := range 128 {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		broker := &StatefulBroker{closedCh: make(chan struct{})}

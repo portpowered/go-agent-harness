@@ -1,10 +1,10 @@
 package devices
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,7 +90,7 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	// 8 frames (240 ms) all survive the virtual output-to-input loopback, so
 	// the forwarded byte count below is exact; ten frames forward only 240 ms.
 	const seededFrames = 8
-	for i := 0; i < seededFrames; i++ {
+	for i := range seededFrames {
 		if err := seed.WriteFrame(context.Background(), inputFrame); err != nil {
 			t.Fatalf("seed input frame %d: %v", i, err)
 		}
@@ -116,7 +116,7 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run virtual probe: %v", err)
 	}
-	if !bytes.Contains([]byte(observedInstructions), []byte("probe-corpus")) {
+	if !strings.Contains(observedInstructions, "probe-corpus") {
 		t.Fatalf("instructions = %q, want authored corpus identity", observedInstructions)
 	}
 	if session.audioMessages == 0 {
@@ -151,7 +151,7 @@ func TestServiceRunVirtualProbeRejectsUnavailableAndCancelledRuns(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtimeDevicesWire.NewProbeService(outputOnly, nil).Run(context.Background(), serviceDevices.DeviceProbeRequest{Scenario: serviceProbeScenario()}); err == nil || !bytes.Contains([]byte(err.Error()), []byte("status \"skip\"")) {
+	if _, err := runtimeDevicesWire.NewProbeService(outputOnly, nil).Run(context.Background(), serviceDevices.DeviceProbeRequest{Scenario: serviceProbeScenario()}); err == nil || !strings.Contains(err.Error(), "status \"skip\"") {
 		t.Fatalf("Run unavailable registry error = %v, want explicit skip status", err)
 	}
 

@@ -78,7 +78,7 @@ func (Composer) Compose(input ComposeInput) (Manifest, error) {
 	}
 	for _, scenario := range scenarios {
 		for _, transport := range transports {
-			for repeatIndex := 0; repeatIndex < input.RepeatCount; repeatIndex++ {
+			for repeatIndex := range input.RepeatCount {
 				manifest.Entries = append(manifest.Entries, Entry{
 					ID:           EntryID(scenario.ID, transport, repeatIndex),
 					ScenarioID:   scenario.ID,

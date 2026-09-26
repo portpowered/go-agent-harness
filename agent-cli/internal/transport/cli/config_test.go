@@ -149,7 +149,7 @@ func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
 			runConfigAddLocalCase(t, tc)
 		})
@@ -207,7 +207,7 @@ func TestConfigAddLocalConcurrentUpdatesCommitExactlyOneRevision(t *testing.T) {
 	results := make(chan cliResult, 2)
 	var group sync.WaitGroup
 	for _, model := range []string{"first-winner-candidate", "second-winner-candidate"} {
-		model := model
+
 		group.Add(1)
 		go func() {
 			defer group.Done()

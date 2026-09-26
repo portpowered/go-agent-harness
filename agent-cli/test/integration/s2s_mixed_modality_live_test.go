@@ -217,8 +217,8 @@ func writeMixedModalityImage(t *testing.T) string {
 	t.Helper()
 	const size = 64
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := range size {
+		for x := range size {
 			img.SetRGBA(x, y, color.RGBA{R: 245, G: 245, B: 245, A: 255})
 		}
 	}

@@ -241,7 +241,7 @@ func familyESlowProgressEvidence(t *testing.T, scenario CustomerScenario) Patien
 	if err := controller.ObserveResponseStart("response started before the response-start threshold"); err != nil {
 		t.Fatalf("ObserveResponseStart: %v", err)
 	}
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		clock.Advance(1500 * time.Millisecond)
 		if err := controller.ObserveToolProgress(100*time.Millisecond, "tool made measurable progress"); err != nil {
 			t.Fatalf("ObserveToolProgress %d: %v", index, err)

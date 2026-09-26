@@ -216,7 +216,7 @@ func TestHandlerSlowClientNeverBlocksRoomPublishers(t *testing.T) {
 	awaitSignal(t, writer.writeStarted, "slow client did not begin its blocked write")
 	published := make(chan struct{})
 	go func() {
-		for index := 0; index < 256; index++ {
+		for range 256 {
 			stream.PublishRoomEvent("overflow", "a", "")
 		}
 		close(published)

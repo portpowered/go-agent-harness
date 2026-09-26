@@ -170,7 +170,7 @@ func loadTest13ProviderPackets(t *testing.T) ([]string, []byte) {
 
 	deltas := make([]string, 0, test13ProviderPacketCount)
 	providerPCM := make([]byte, 0, test13ProviderBytes)
-	for index := 0; index < test13ProviderPacketCount-1; index++ {
+	for index := range test13ProviderPacketCount - 1 {
 		packet := seeds[index%4]
 		deltas = append(deltas, base64.StdEncoding.EncodeToString(packet))
 		providerPCM = append(providerPCM, packet...)

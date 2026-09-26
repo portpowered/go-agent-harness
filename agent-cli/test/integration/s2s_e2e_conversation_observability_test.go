@@ -295,7 +295,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 	if limit > len(wantReplies) {
 		limit = len(wantReplies)
 	}
-	for index := 0; index < limit; index++ {
+	for index := range limit {
 		violations = append(violations, checkObservabilityTurn(root, index, entries[index], wantInputs, wantReplies, referenceUtterances)...)
 	}
 

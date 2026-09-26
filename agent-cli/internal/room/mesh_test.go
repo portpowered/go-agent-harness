@@ -279,13 +279,13 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	awaitClosed(t, pair.closeStarted)
 	closeResults := make(chan error, 3)
 	closeCallStarted := make(chan struct{}, 3)
-	for index := 0; index < 3; index++ {
+	for range 3 {
 		go func() {
 			closeCallStarted <- struct{}{}
 			closeResults <- mesh.Close()
 		}()
 	}
-	for index := 0; index < 3; index++ {
+	for range 3 {
 		select {
 		case <-closeCallStarted:
 		case <-time.After(time.Second):
@@ -307,7 +307,7 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	}
 	pair.releaseClose()
 	var firstResult error
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		select {
 		case err := <-closeResults:
 			if err == nil || !errors.Is(err, closeErr) || err.Error() != closeErr.Error() {
@@ -326,7 +326,7 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	if got := pair.closeCount.Load(); got != 1 {
 		t.Fatalf("gated pair close count at Done boundary = %d, want 1", got)
 	}
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		err := mesh.Close()
 		if err != firstResult {
 			t.Fatalf("repeated Close result %d = %v, want same published result %v", index, err, firstResult)
@@ -435,7 +435,7 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 			releaseGatedClosesInOrder(t, firstClosed, connected, pending)
 			awaitClosed(t, mesh.Done())
 			var firstResult error
-			for index := 0; index < 2; index++ {
+			for index := range 2 {
 				select {
 				case err := <-closeResults:
 					assertJoinedMeshCloseResult(t, err, connected.closeErr, pending.closeErr)

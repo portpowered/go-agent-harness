@@ -210,7 +210,7 @@ func TestChatCommand_AudioWriterErrors(t *testing.T) {
 			samples := []int16(nil)
 			if tt.withSpeech {
 				samples = make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig().MaxSilenceFrames))
-				for i := 0; i < audio.FrameSize*3; i++ {
+				for i := range audio.FrameSize * 3 {
 					samples[i] = 1000
 				}
 			}
@@ -263,7 +263,7 @@ func testAudioSpeechDispatch(t *testing.T) {
 	ask := flags.NewAskFlags()
 	ask.NoSystemInformation = true
 	samples := make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig().MaxSilenceFrames))
-	for i := 0; i < audio.FrameSize*3; i++ {
+	for i := range audio.FrameSize * 3 {
 		samples[i] = 1000
 	}
 	var out, errOut bytes.Buffer
@@ -489,7 +489,7 @@ func answerCLIGo2RTCOffer(ctx context.Context, conn *websocket.Conn, pc *webrtc.
 }
 
 func (h *cliGo2RTCFixtureHandler) streamFrames(tracks cliGo2RTCFixtureTracks) error {
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if h.sendAudio {
 			packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}
 			if err := tracks.audio.WriteRTP(packet); err != nil {

@@ -41,7 +41,7 @@ func TestComposeExpandsEveryCoordinateInDeterministicOrder(t *testing.T) {
 	wantTransports := []Transport{TransportLive, TransportReplay}
 	for index, scenario := range wantScenarios {
 		for transportIndex, transport := range wantTransports {
-			for repeat := 0; repeat < 3; repeat++ {
+			for repeat := range 3 {
 				entry := manifest.Entries[index*len(wantTransports)*3+transportIndex*3+repeat]
 				wantID := EntryID(scenario, transport, repeat)
 				if entry.ID != wantID || entry.ScenarioID != scenario || entry.Transport != transport || entry.RepeatIndex != repeat {

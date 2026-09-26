@@ -237,7 +237,7 @@ func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
 		responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
 		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
 	}
-	for trial := 0; trial < 20; trial++ {
+	for trial := range 20 {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			t.Parallel()
 			slots <- struct{}{}
@@ -254,7 +254,7 @@ func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 		responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
 		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
 	}
-	for trial := 0; trial < 20; trial++ {
+	for trial := range 20 {
 		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
 			t.Parallel()
 			slots <- struct{}{}
@@ -729,7 +729,7 @@ func (p *remoteToolAudioProvider) sendReadyResponses(connection *websocket.Conn)
 		callIndex := -1
 		if tool {
 			callIndex = 0
-			for response := 0; response < index; response++ {
+			for response := range index {
 				if p.toolAt[response] {
 					callIndex++
 				}

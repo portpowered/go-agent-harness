@@ -62,7 +62,7 @@ func newPressureTraceMixer(ctx context.Context, t *testing.T, format PCM16Format
 
 func pressureTraceWantPCM(capacity int) []byte {
 	want := make([]byte, 0, capacity)
-	for delta := 0; delta < pressureTraceDeltas; delta++ {
+	for delta := range pressureTraceDeltas {
 		want = append(want, providerPCM16Delta(delta, pressureTraceDeltaBytes)...)
 	}
 	return want
@@ -81,7 +81,7 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 	got := make([]byte, 0, len(want))
 	readErr := make(chan error, 1)
 	go func() {
-		for frame := 0; frame < pressureTraceDeltas*providerFrames; frame++ {
+		for range pressureTraceDeltas * providerFrames {
 			pcm, frameErr := mixer.ReadFrame(ctx)
 			if frameErr != nil {
 				readErr <- frameErr
@@ -92,7 +92,7 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 		readErr <- nil
 	}()
 
-	for delta := 0; delta < pressureTraceDeltas; delta++ {
+	for delta := range pressureTraceDeltas {
 		if err := mixer.Write("alpha", providerPCM16Delta(delta, pressureTraceDeltaBytes)); err != nil {
 			t.Fatalf("provider delta %d: %v", delta, err)
 		}
@@ -126,7 +126,7 @@ func startPressureTraceStalledReader(ctx context.Context, mixer *PCM16Mixer, fra
 	readResultCh := make(chan pressureTraceReadResult, 1)
 	go func() {
 		got := make([]byte, 0, allFrames*frameBytes)
-		for frameIndex := 0; frameIndex < allFrames; frameIndex++ {
+		for frameIndex := range allFrames {
 			frame, frameErr := mixer.ReadFrame(ctx)
 			if frameErr != nil {
 				readResultCh <- pressureTraceReadResult{err: frameErr}
@@ -219,7 +219,7 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 // while the output queue is full, as the production cadence would.
 func advancePressureTrace(ctx context.Context, t *testing.T, mixer *PCM16Mixer, frames int) {
 	t.Helper()
-	for frame := 0; frame < frames; frame++ {
+	for frame := range frames {
 		if err := mixer.Advance(ctx); err != nil {
 			t.Fatalf("advance cadence frame %d/%d: %v", frame+1, frames, err)
 		}

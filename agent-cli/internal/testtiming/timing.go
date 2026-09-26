@@ -150,7 +150,7 @@ func writeEntries(w io.Writer, title string, entries []Entry, top int) error {
 	if len(entries) < limit {
 		limit = len(entries)
 	}
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		entry := entries[i]
 		name := entry.Package
 		if entry.Test != "" {

@@ -1,11 +1,11 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -73,7 +73,7 @@ func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 
 	// Only a device write triggers the provider script. There is no audio file
 	// or direct provider event injection in this integration path.
-	for frame := 0; frame < 12; frame++ {
+	for frame := range 12 {
 		before := registry.PCMObservations()
 		if err := feed.WriteFrame(ctx, webMCPDeviceSignal(audio.FrameSize, 4100+frame)); err != nil {
 			t.Fatalf("write customer turn frame %d to microphone device: %v", frame, err)
@@ -84,7 +84,7 @@ func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	}
 	select {
 	case result := <-provider.toolResult:
-		if result.Name != "queue_cube_moves" || !bytes.Contains([]byte(result.Arguments), []byte("ok")) {
+		if result.Name != "queue_cube_moves" || !strings.Contains(result.Arguments, "ok") {
 			t.Fatalf("provider tool result = %+v", result)
 		}
 	case <-ctx.Done():

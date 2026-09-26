@@ -471,7 +471,7 @@ func (s *Service) explicitAttempts(inputs ConnectionInputs) []endpointAttempt {
 		if configured == nil {
 			continue
 		}
-		configured := configured
+
 		attempts = append(attempts, endpointAttempt{
 			source: SourceConfigured,
 			kind:   EndpointKindConfigured,

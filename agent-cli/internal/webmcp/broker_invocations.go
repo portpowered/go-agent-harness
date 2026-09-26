@@ -175,7 +175,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 }
 
 func (b *StatefulBroker) mintInvocationIDLocked() (InvocationID, error) {
-	for attempt := 0; attempt < maxInvocationIDMintAttempts; attempt++ {
+	for range maxInvocationIDMintAttempts {
 		id, err := b.ids.NewInvocationID()
 		if err != nil {
 			return "", err

@@ -377,7 +377,7 @@ func (s *Service) listTargetDescriptorsLocked(ctx context.Context, browser Brows
 	if response.Body != nil {
 		defer closeAfterRead(response.Body)
 	}
-	if response.StatusCode == 404 {
+	if response.StatusCode == http.StatusNotFound {
 		return nil, newEndpointNotFound(EndpointKindCDPHTTP, browser.Source)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

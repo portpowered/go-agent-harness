@@ -16,7 +16,7 @@ func TestSessionListCommandBoundsAndComposesMetadataFilters(t *testing.T) {
 	configDir := t.TempDir()
 	storage := newManagedSessionStoreForTest(t, configDir)
 	base := time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC)
-	for i := 0; i < 105; i++ {
+	for i := range 105 {
 		id := fmt.Sprintf("bulk-%03d", i)
 		if err := storage.Save(t.Context(), id, nil); err != nil {
 			t.Fatalf("Save %q: %v", id, err)

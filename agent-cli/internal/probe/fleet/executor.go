@@ -77,7 +77,7 @@ func Execute(ctx context.Context, manifest Manifest, executor EntryExecutor) (Ex
 	}
 	var workers sync.WaitGroup
 	workers.Add(workerCount)
-	for worker := 0; worker < workerCount; worker++ {
+	for range workerCount {
 		go func() {
 			defer workers.Done()
 			for index := range jobs {

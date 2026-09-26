@@ -296,7 +296,7 @@ func TestSessionBrowserBrokerSharesInitializationAcrossConcurrentFirstUse(t *tes
 	errorsCh := make(chan error, callers)
 	var group sync.WaitGroup
 	start := make(chan struct{})
-	for index := 0; index < callers; index++ {
+	for index := range callers {
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()

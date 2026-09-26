@@ -93,7 +93,7 @@ func collectExternalSourceAudio(rawURL string, wantPackets int, frameWait time.D
 	}
 	defer discardCloseError(stream)
 	pcm := make([]byte, 0, wantPackets*externalSourcePacketSamples*2)
-	for packet := 0; packet < wantPackets; packet++ {
+	for packet := range wantPackets {
 		ctx, cancel := context.WithTimeout(context.Background(), frameWait)
 		frame, readErr := stream.ReadFrame(ctx)
 		cancel()
@@ -389,7 +389,7 @@ func sqrtOf(value float64) float64 {
 		return 0
 	}
 	guess := value
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		guess = (guess + value/guess) / 2
 	}
 	return guess
@@ -699,7 +699,7 @@ func stripSDPMediaSection(sdp, media string) string {
 func splitSDPLines(sdp string) []string {
 	lines := []string{}
 	start := 0
-	for i := 0; i < len(sdp); i++ {
+	for i := range len(sdp) {
 		if sdp[i] == '\n' {
 			end := i
 			if end > start && sdp[end-1] == '\r' {

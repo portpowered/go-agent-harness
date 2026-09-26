@@ -125,7 +125,7 @@ func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 				"--record-dir", recordDir,
 				"--max-duration", liveAudioInTimeout.String(),
 			}
-			for index := 0; index < testCase.turns; index++ {
+			for range testCase.turns {
 				args = append(args, "--audio-in-turn", liveAudioInWAVPath(t))
 			}
 			rootCmd.SetArgs(args)
@@ -237,7 +237,7 @@ func assertLiveRecordDirAudioSegments(t *testing.T, destination string, wantTurn
 	t.Helper()
 	inputCount := 0
 	outputCount := 0
-	for index := 0; index < wantTurns; index++ {
+	for index := range wantTurns {
 		for _, side := range []string{"in", "out"} {
 			path := filepath.Join(destination, "audio", side+"-"+liveRecordingDigits(index)+".pcm")
 			info, err := os.Stat(path)

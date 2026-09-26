@@ -159,7 +159,7 @@ func loadTest7LongOpenAIAudio(t *testing.T) ([]string, []byte) {
 
 	deltas := make([]string, 0, test7OutputChunks)
 	providerPCM := make([]byte, 0, test7ProviderBytes)
-	for index := 0; index < test7OutputChunks; index++ {
+	for index := range test7OutputChunks {
 		chunk := seeds[index%len(seeds)]
 		if index == test7OutputChunks-1 {
 			chunk = chunk[:test7FinalChunkBytes]

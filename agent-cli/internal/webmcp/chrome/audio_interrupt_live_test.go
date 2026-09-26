@@ -159,7 +159,7 @@ func TestPinnedChromeAudioInterruptDuringWebMCP(t *testing.T) {
 		},
 	}
 	for _, scenario := range scenarios {
-		scenario := scenario
+
 		t.Run(scenario.name, func(t *testing.T) {
 			runAudioInterruptScenario(t, ctx, artifactRoot, pinned, binaryPath, apiKey, scenario)
 		})

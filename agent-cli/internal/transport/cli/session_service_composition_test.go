@@ -229,7 +229,7 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 		chatFlagMatrixParseCases,
 	} {
 		for _, tt := range makeCases() {
-			tt := tt
+
 			t.Run(tt.name, func(t *testing.T) {
 				runChatFlagMatrixCase(t, tt)
 			})

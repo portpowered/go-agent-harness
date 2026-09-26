@@ -196,19 +196,19 @@ func TestC156CancellationIntentIsOptionalAndMonotonic(t *testing.T) {
 	var readersDone sync.WaitGroup
 	ready.Add(readers)
 	readersDone.Add(readers)
-	for i := 0; i < readers; i++ {
+	for range readers {
 		go func() {
 			defer readersDone.Done()
 			<-start
 			ready.Done()
-			for j := 0; j < observations; j++ {
+			for range observations {
 				_ = intent.SIGINTReceived()
 			}
 		}()
 	}
 	close(start)
 	ready.Wait()
-	for i := 0; i < observations; i++ {
+	for range observations {
 		intent.MarkSIGINT()
 	}
 	readersDone.Wait()

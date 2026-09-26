@@ -862,8 +862,8 @@ func boolPointer(value bool) *bool { return &value }
 func testPNG(t *testing.T, width, height int) []byte {
 	t.Helper()
 	imageValue := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			imageValue.SetRGBA(x, y, color.RGBA{R: uint8(x + 1), G: uint8(y + 1), B: 0x7f, A: 0xff})
 		}
 	}

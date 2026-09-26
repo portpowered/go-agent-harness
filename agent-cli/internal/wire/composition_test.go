@@ -408,7 +408,7 @@ func TestLivePorts_ReturnsStableIndependentDescriptors(t *testing.T) {
 
 func TestS11_InitializeMockAgentCLIWithPorts_SwapsEveryLivePort(t *testing.T) {
 	for _, definition := range livePortDefinitions() {
-		definition := definition
+
 		t.Run(definition.descriptor.Name, func(t *testing.T) {
 			testLivePortSwap(t, definition)
 		})
@@ -483,7 +483,7 @@ func TestS4_PortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
 	)
 
 	for _, definition := range livePortDefinitions() {
-		definition := definition
+
 		replacement := replacementForPortType(t, definition.descriptor.Type)
 		assertInvalid(
 			definition.descriptor.Name+"/duplicate",

@@ -403,7 +403,7 @@ func TestDeterministicIDsAreValidAndReproducible(t *testing.T) {
 	pattern := regexp.MustCompile(`^webmcp\.tool-ref\.v1:[A-Za-z0-9_-]{22}$`)
 	left := NewDeterministicIDs()
 	right := NewDeterministicIDs()
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		leftRef, err := left.NewToolRef()
 		if err != nil {
 			t.Fatalf("left tool ref: %v", err)

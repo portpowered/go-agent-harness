@@ -547,7 +547,7 @@ func audioBurstScenarioFrames() []faultTestFrame {
 		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-audio-burst","model":"grok-fault-injection"}`)},
 		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
 	}
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
 	}
 	return append(frames,
@@ -561,7 +561,7 @@ func fullReceiveBufferFaultFrames() []faultTestFrame {
 		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-full-buffer","model":"grok-fault-injection"}`)},
 		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
 	}
-	for i := 0; i < 70; i++ {
+	for range 70 {
 		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
 	}
 	return frames

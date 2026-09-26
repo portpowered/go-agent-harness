@@ -813,7 +813,7 @@ type externalProbeHandle struct {
 func (externalProbeHandle) Close() error { return nil }
 
 func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T) {
-	for iteration := 0; iteration < 16; iteration++ {
+	for iteration := range 16 {
 		clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 		ids := testkit.NewDeterministicIDs()
 		candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}

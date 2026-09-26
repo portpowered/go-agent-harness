@@ -30,7 +30,7 @@ func TestRecordReplayStateless(t *testing.T) {
 	// Build a request matching the fixture's captured request shape:
 	// single user message with text content, same URL/method as the fixture.
 	reqBody := `{"messages":[{"content":[{"text":"what is 2 + 2?","type":"text"}],"role":"user"}],"model":"z-ai/glm-4.7","tools":[{"function":{"name":"edit_file","description":"Edit a file","parameters":{"properties":{"path":{"type":"string"}},"required":["path"],"type":"object"}},"type":"function"}],"stream":true}`
-	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(reqBody))
+	req, err := http.NewRequest(http.MethodPost, "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(reqBody))
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestRecordReplayStateless(t *testing.T) {
 		}
 	}()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
