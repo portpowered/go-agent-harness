@@ -11,6 +11,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 func TestInfer_PreservesProviderHTTPStatusClassification(t *testing.T) {
@@ -336,6 +337,54 @@ func TestInferStream_ForwarderExitsWhenConsumerCancelsAfterTerminalMessage(t *te
 		synctest.Wait()
 		if msg, open := <-ch; open {
 			t.Fatalf("forwarder still delivering %s after cancellation; want the stream closed", msg.Type)
+		}
+	})
+}
+
+// unconditionalStreamProvider sends every message into a 64-slot buffer
+// without selecting on the request context, then closes the stream.
+type unconditionalStreamProvider struct {
+	fakeInteractionProvider
+	count int
+	done  chan struct{}
+}
+
+func (p *unconditionalStreamProvider) InferStream(context.Context, providers.InferenceRequest) (<-chan messages.StreamMessage, error) {
+	ch := make(chan messages.StreamMessage, 64)
+	go func() {
+		defer close(p.done)
+		defer close(ch)
+		for range p.count {
+			ch <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("x")}
+		}
+	}()
+	return ch, nil
+}
+
+// TestInferStream_CancelledStreamIsDrainedUntilProviderCloses pins that a
+// provider sending more than its buffer after the consumer cancelled is not
+// left blocked: the gateway drains the stream until the provider closes it.
+func TestInferStream_CancelledStreamIsDrainedUntilProviderCloses(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider := &unconditionalStreamProvider{fakeInteractionProvider: fakeInteractionProvider{name: "fake-provider"}, count: 200, done: make(chan struct{})}
+		gw, err := NewGateway(WithProvider(provider))
+		if err != nil {
+			t.Fatalf("NewGateway: %v", err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		ch, err := gw.InferStream(ctx, InferenceRequest{Model: "model-a"})
+		if err != nil {
+			t.Fatalf("InferStream() error = %v", err)
+		}
+		<-ch
+		cancel()
+		synctest.Wait()
+		select {
+		case <-provider.done:
+		default:
+			t.Fatal("provider still blocked sending after cancellation; want the stream drained until it closes")
+		}
+		for range ch { // the output must close
 		}
 	})
 }
