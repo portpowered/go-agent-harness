@@ -182,3 +182,33 @@ func realtimeToolsToParams(tools []models.ToolDefinition) []map[string]any {
 	}
 	return params
 }
+
+// realtimeResponsePurposeKey is the response.create metadata key carrying the
+// harness request purpose; OpenAI echoes response metadata on
+// response.created, which binds each opened response to its request.
+const realtimeResponsePurposeKey = models.ResponseMetadataPurposeKey
+
+func realtimeResponseCreatedMessages(data json.RawMessage, responseID string) []messages.StreamMessage {
+	return []messages.StreamMessage{{Type: messages.StreamTypeMessageStart, ResponseID: responseID,
+		Value: messages.NewMessageStartValue(), ResponsePurpose: realtimeCreatedResponsePurpose(data)}}
+}
+
+// realtimeResponseMetadata carries the request purpose the client binds by.
+// Only a tool continuation is marked; other requests keep the legacy shape.
+func realtimeResponseMetadata(value *messages.ResponseCreateValue) map[string]string {
+	if !value.IsToolContinuation() {
+		return nil
+	}
+	return map[string]string{realtimeResponsePurposeKey: string(messages.ResponsePurposeToolContinuation)}
+}
+
+// realtimeCreatedResponsePurpose reads the purpose echoed on response.created.
+// The adapter owns which request each response answers (it holds, drops and
+// retries creates), so the echoed metadata -- not client-side ordering --
+// identifies a tool continuation.
+func realtimeCreatedResponsePurpose(data json.RawMessage) messages.ResponsePurpose {
+	if firstStringField(data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation) {
+		return messages.ResponsePurposeToolContinuation
+	}
+	return ""
+}
