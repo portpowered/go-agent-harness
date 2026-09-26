@@ -468,7 +468,7 @@ func TestSessionVirtualDeviceLoopbackFidelity(t *testing.T) {
 
 	want := mustResampleStream(t, pushed, loopbackProviderRate, loopbackDeviceRate)
 	got := make([]int16, 0, len(want))
-	for i := range len(pushed) {
+	for i := range pushed {
 		frame := make([]int16, audio.FrameSize)
 		if err := tap.ReadFrame(h.ctx, frame); err != nil {
 			t.Fatalf("read played frame %d: %v", i, err)
