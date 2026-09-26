@@ -102,9 +102,9 @@ type sessionRunState struct {
 	continuationEnded          bool
 	continuationCreate         messages.StreamMessage
 	currentResponseID          string
-	cancelledResponseIDs       map[string]struct{}
-	retiredResponseIDs         map[string]struct{}
-	terminalResponseIDs        map[string]struct{}
+	cancelledResponseIDs       responseIDSet
+	retiredResponseIDs         responseIDSet
+	terminalResponseIDs        responseIDSet
 	acknowledgementOutstanding bool
 	acknowledgementStart       *messages.StreamMessage
 	acknowledgementCancelled   bool
@@ -118,28 +118,16 @@ type sessionRunState struct {
 type sessionResponseState = sessionRunState
 
 func newSessionResponseState() *sessionResponseState {
-	return &sessionResponseState{
-		cancelledResponseIDs: make(map[string]struct{}),
-		retiredResponseIDs:   make(map[string]struct{}),
-		terminalResponseIDs:  make(map[string]struct{}),
-	}
+	return &sessionResponseState{}
 }
 
 func responseID(value string) string {
 	return strings.TrimSpace(value)
 }
 
-func (s *sessionRunState) ensureMaps() {
-	if s.cancelledResponseIDs == nil {
-		s.cancelledResponseIDs = make(map[string]struct{})
-	}
-	if s.retiredResponseIDs == nil {
-		s.retiredResponseIDs = make(map[string]struct{})
-	}
-	if s.terminalResponseIDs == nil {
-		s.terminalResponseIDs = make(map[string]struct{})
-	}
-}
+// ensureMaps is retained for callers; the bounded identity sets need no
+// initialization.
+func (s *sessionRunState) ensureMaps() {}
 
 func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRunner {
 	return &ModelRunner{
@@ -324,7 +312,7 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 			state.acknowledgementCancelled = true
 		}
 		if state.currentResponseID != "" {
-			state.cancelledResponseIDs[state.currentResponseID] = struct{}{}
+			state.cancelledResponseIDs.add(state.currentResponseID)
 		}
 	}
 	// Forward the user audio to the inference provider.

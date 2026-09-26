@@ -329,7 +329,7 @@ func startSessionResponse(state *sessionResponseState, msgID string, acknowledge
 	if acknowledgementResponse && state.acknowledgementCancelled {
 		state.responseCancelSent = true
 		if msgID != "" {
-			state.cancelledResponseIDs[msgID] = struct{}{}
+			state.cancelledResponseIDs.add(msgID)
 		}
 	}
 }
@@ -361,7 +361,7 @@ func endSessionResponse(state *sessionResponseState, msg *messages.StreamMessage
 		state.responseCompleted = true
 	}
 	if ownedID != "" {
-		state.terminalResponseIDs[ownedID] = struct{}{}
+		state.terminalResponseIDs.add(ownedID)
 	}
 	state.currentResponseID = ""
 	if state.continuationInFlight {

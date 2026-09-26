@@ -319,7 +319,7 @@ func (r *ModelRunner) noteAcceptedSessionCancel(state *sessionRunState) {
 		state.acknowledgementCancelled = true
 	}
 	if state.currentResponseID != "" {
-		state.cancelledResponseIDs[state.currentResponseID] = struct{}{}
+		state.cancelledResponseIDs.add(state.currentResponseID)
 	}
 }
 

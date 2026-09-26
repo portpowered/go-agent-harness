@@ -54,6 +54,46 @@ func (o *GlobalOrdering) UpdateWorldHistory(ts *state.LoopState) {
 	ts.History.CurrentToolDeltaCount += len(ts.Inputs.ToolInputDelta)
 
 	ts.History.ConversationDeltaBuffer = append(ts.History.ConversationDeltaBuffer, ts.Inputs.UserInputDelta...)
+	o.settleHistory(ts)
+}
+
+// settledHistoryLimit bounds the settled prefix of ConversationDeltaBuffer:
+// deltas of responses and tool batches whose messages are already
+// reconstructed into ConversationBuffer. The live windows are never trimmed.
+const settledHistoryLimit = 4096
+
+// settleHistory keeps the delta history bounded over a long session. Settled
+// audio deltas drop their PCM (the reconstructed message owns that audio), and
+// once the settled prefix exceeds settledHistoryLimit its oldest half is
+// discarded, shifting the live window indices with it.
+func (o *GlobalOrdering) settleHistory(ts *state.LoopState) {
+	history := &ts.History
+	settled := min(history.ModelDeltaStartIndex, len(history.ConversationDeltaBuffer))
+	if o.toolBatchActive {
+		settled = min(settled, history.ToolDeltaStartIndex)
+	}
+	for index := o.settledCompacted; index < settled; index++ {
+		if value, ok := history.ConversationDeltaBuffer[index].Value.(*messages.AudioDeltaValue); ok && len(value.Content) > 0 {
+			compacted := *value
+			compacted.Content = nil
+			history.ConversationDeltaBuffer[index].Value = &compacted
+		}
+	}
+	o.settledCompacted = max(o.settledCompacted, settled)
+	if settled <= settledHistoryLimit {
+		return
+	}
+	drop := settled - settledHistoryLimit/2
+	kept := copy(history.ConversationDeltaBuffer, history.ConversationDeltaBuffer[drop:])
+	clear(history.ConversationDeltaBuffer[kept:])
+	history.ConversationDeltaBuffer = history.ConversationDeltaBuffer[:kept]
+	history.ModelDeltaStartIndex -= drop
+	o.settledCompacted -= drop
+	if history.ToolDeltaStartIndex >= drop {
+		history.ToolDeltaStartIndex -= drop
+	} else {
+		history.ToolDeltaStartIndex, history.CurrentToolDeltaCount = 0, 0
+	}
 }
 
 func isModelHistoryDelta(delta messages.StreamMessage) bool {

@@ -38,6 +38,7 @@ type GlobalOrdering struct {
 	interactionRunner *participants.InteractionRunner
 	logger            logging.Logger
 	toolBatchActive   bool
+	settledCompacted  int // ConversationDeltaBuffer prefix whose audio is already compacted
 }
 
 // NewGlobalOrdering returns an ordering that consumes from the given runners. toolRunner

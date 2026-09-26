@@ -3,6 +3,7 @@ package participants
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -335,4 +336,54 @@ func TestJoinOnFailureOnlyAttachesCleanupToFailures(t *testing.T) {
 	if err := joinOnFailure(primary, cleanup); !errors.Is(err, primary) || !errors.Is(err, cleanup) {
 		t.Fatalf("joinOnFailure(primary, cleanup) = %v, want both errors", err)
 	}
+}
+
+// Response identity bookkeeping must not grow with session length. Only the
+// most recent responses can still deliver a late event, so older identities
+// are retired from the lookup sets.
+func TestSessionModelRunner_ResponseIdentityBookkeepingStaysBounded(t *testing.T) {
+	ctx := context.Background()
+	session := newRecordingSession()
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+	for turn := range 1000 {
+		id := fmt.Sprintf("resp-%04d", turn)
+		runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, id))
+		if turn%2 == 0 {
+			if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if turn%3 == 0 { // a replacement start retires the response
+			runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, id+"-next"))
+			id += "-next"
+		}
+		runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, id))
+		for _, ok := runner.DeltaOutbox.Read(); ok; _, ok = runner.DeltaOutbox.Read() {
+		}
+	}
+	if got := retainedResponseIDs(state); got > 3*responseIDRetention {
+		t.Fatalf("retained %d response identities after 1000 responses, want at most %d", got, 3*responseIDRetention)
+	}
+	// A late event of a recent response is still recognised.
+	if !state.terminalResponseIDs.has("resp-0998") {
+		t.Fatal("recent terminal response identity was not retained")
+	}
+}
+
+func retainedResponseIDs(state *sessionRunState) int {
+	return state.cancelledResponseIDs.len() + state.retiredResponseIDs.len() + state.terminalResponseIDs.len()
+}
+
+// loudPCM returns 20 ms of 16 kHz PCM16 at speech level (about -12 dBFS).
+func loudPCM() []byte {
+	pcm := make([]byte, 640)
+	for i := 0; i < len(pcm); i += 2 {
+		sample := int16(8000)
+		if i%4 == 0 {
+			sample = -8000
+		}
+		pcm[i], pcm[i+1] = byte(uint16(sample)), byte(uint16(sample)>>8)
+	}
+	return pcm
 }

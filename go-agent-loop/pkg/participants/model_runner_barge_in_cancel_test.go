@@ -143,7 +143,7 @@ func TestSessionModelRunner_RetiredAcknowledgementDoesNotStrandCancelGuard(t *te
 	if state.acknowledgementOutstanding {
 		t.Fatalf("acknowledgementOutstanding stuck true after its response was retired: %+v", state)
 	}
-	if _, retired := state.retiredResponseIDs["resp-ack"]; !retired {
+	if !state.retiredResponseIDs.has("resp-ack") {
 		t.Fatalf("resp-ack was not retired: %+v", state)
 	}
 
@@ -207,11 +207,11 @@ func TestSessionModelRunner_BargeInAfterRetirementTargetsCurrentResponseID(t *te
 	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
 		t.Fatalf("drainSessionAudioWithState: %v", err)
 	}
-	if _, cancelled := state.cancelledResponseIDs["resp-b"]; !cancelled {
-		t.Fatalf("cancelledResponseIDs = %v, want resp-b (the live response)", state.cancelledResponseIDs)
+	if !state.cancelledResponseIDs.has("resp-b") {
+		t.Fatalf("cancelledResponseIDs = %v, want resp-b (the live response)", state.cancelledResponseIDs.ids)
 	}
-	if _, cancelled := state.cancelledResponseIDs["resp-a"]; cancelled {
-		t.Fatalf("cancelledResponseIDs = %v, want resp-a (already retired) untouched", state.cancelledResponseIDs)
+	if state.cancelledResponseIDs.has("resp-a") {
+		t.Fatalf("cancelledResponseIDs = %v, want resp-a (already retired) untouched", state.cancelledResponseIDs.ids)
 	}
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
@@ -238,7 +238,7 @@ func TestSessionModelRunner_BargeInAfterRetirementTargetsCurrentResponseID(t *te
 	if state.currentResponseID != "" || state.responseInFlight {
 		t.Fatalf("state after resp-b ended = %+v, want idle", state)
 	}
-	if _, terminal := state.terminalResponseIDs["resp-b"]; !terminal {
+	if !state.terminalResponseIDs.has("resp-b") {
 		t.Fatalf("resp-b was not recorded terminal: %+v", state)
 	}
 }

@@ -91,10 +91,10 @@ func (r *ModelRunner) retrySessionContinuationOnRejection(ctx context.Context, s
 
 func beginSessionResponse(state *sessionResponseState, msgID string) bool {
 	if msgID != "" {
-		if _, retired := state.retiredResponseIDs[msgID]; retired {
+		if state.retiredResponseIDs.has(msgID) {
 			return false
 		}
-		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
+		if state.terminalResponseIDs.has(msgID) {
 			return false
 		}
 	}
@@ -118,13 +118,13 @@ func beginSessionResponse(state *sessionResponseState, msgID string) bool {
 
 func ownsSessionResponseEnd(state *sessionResponseState, msgID string) bool {
 	if msgID != "" {
-		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
+		if state.terminalResponseIDs.has(msgID) {
 			return false
 		}
-		if _, retired := state.retiredResponseIDs[msgID]; retired {
+		if state.retiredResponseIDs.has(msgID) {
 			return false
 		}
-		if _, cancelled := state.cancelledResponseIDs[msgID]; cancelled && state.currentResponseID != msgID {
+		if state.cancelledResponseIDs.has(msgID) && state.currentResponseID != msgID {
 			return false
 		}
 		if state.responseInFlight {
@@ -149,13 +149,13 @@ func staleSessionCustomerOutput(state *sessionResponseState, msg messages.Stream
 	}
 	msgID := responseID(msg.ResponseID)
 	if msgID != "" {
-		if _, cancelled := state.cancelledResponseIDs[msgID]; cancelled {
+		if state.cancelledResponseIDs.has(msgID) {
 			return true
 		}
-		if _, retired := state.retiredResponseIDs[msgID]; retired {
+		if state.retiredResponseIDs.has(msgID) {
 			return true
 		}
-		if _, terminal := state.terminalResponseIDs[msgID]; terminal {
+		if state.terminalResponseIDs.has(msgID) {
 			return true
 		}
 		if state.currentResponseID != "" && state.currentResponseID != msgID {
@@ -169,7 +169,7 @@ func staleSessionCustomerOutput(state *sessionResponseState, msg messages.Stream
 // retireSessionResponse retires the current response when a replacement
 // response starts before its terminal boundary was observed.
 func retireSessionResponse(state *sessionResponseState) {
-	state.retiredResponseIDs[state.currentResponseID] = struct{}{}
+	state.retiredResponseIDs.add(state.currentResponseID)
 	// The retired response's own MESSAGE.END, whenever it eventually
 	// arrives, will never be "owned" again (ownsSessionResponseEnd
 	// rejects retired ids), so the reset that normally happens there
@@ -307,3 +307,37 @@ func (r *ModelRunner) forwardPendingSessionMessagesAndCancels(ctx context.Contex
 		return false
 	}
 }
+
+// responseIDRetention bounds each response identity set. Only recent
+// responses can still deliver a late event; a provider never interleaves
+// output from dozens of responses back.
+const responseIDRetention = 64
+
+// responseIDSet remembers the most recent response identities, evicting the
+// oldest so session bookkeeping does not grow with session length.
+type responseIDSet struct {
+	ids   map[string]struct{}
+	order []string
+}
+
+func (s *responseIDSet) add(id string) {
+	if id == "" || s.has(id) {
+		return
+	}
+	if s.ids == nil {
+		s.ids = make(map[string]struct{}, responseIDRetention+1)
+	}
+	s.ids[id] = struct{}{}
+	s.order = append(s.order, id)
+	if len(s.order) > responseIDRetention {
+		delete(s.ids, s.order[0])
+		s.order = append(s.order[:0], s.order[1:]...)
+	}
+}
+
+func (s *responseIDSet) has(id string) bool {
+	_, ok := s.ids[id]
+	return ok
+}
+
+func (s *responseIDSet) len() int { return len(s.ids) }
