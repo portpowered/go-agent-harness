@@ -545,6 +545,11 @@ func TestOpeningResponseGateHoldsFirstTurnUntilToolContinuationCompletes(t *test
 	toolErr, _ := end("", messages.RoleTool)
 	require.NoError(t, toolErr)
 	require.False(t, h.openingResponseSettled(1), "settled before the continuation terminal")
+	select {
+	case err := <-result:
+		t.Fatalf("first scheduled turn released before the continuation terminal: %v", err)
+	default:
+	}
 	h.markContinuationOutput()
 	continuationErr, complete := end("response-continuation", messages.RoleAssistant)
 	require.NoError(t, continuationErr)
@@ -575,4 +580,15 @@ func TestWaitReplayReadyReturnsTerminalResultWhenSessionEndsFirst(t *testing.T) 
 		}
 		require.ErrorIs(t, h.waitReplayReady(context.Background()), want)
 	}
+}
+
+// The provider can answer the final capture boundary before the pump marks
+// capture complete; that answer must still finish the finite session.
+func TestCaptureCompletionCountsResponseAnsweringFinalBoundary(t *testing.T) {
+	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureSourceActive: true, responseStarted: true, replayResponses: 2}
+	noteCaptureBoundary(h)
+	h.replayResponses++
+	h.markCaptureComplete()
+	require.Equal(t, 3, h.captureResponseTarget)
+	require.True(t, h.gracefulStop, "response answering the final boundary did not finish the session")
 }

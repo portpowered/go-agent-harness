@@ -75,7 +75,7 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 		"--audio-in-turn", audioPath,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	if err := rootCommand.ExecuteContext(ctx); err != nil {
 		t.Fatalf("execute image/audio session: %v\noutput:\n%s", err, output.String())

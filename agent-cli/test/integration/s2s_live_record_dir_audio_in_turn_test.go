@@ -265,7 +265,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
@@ -331,7 +331,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
@@ -375,7 +375,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {

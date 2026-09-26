@@ -242,12 +242,7 @@ func (r *DuplexRunner) Run(ctx context.Context, config DuplexSessionConfig) (Dup
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	session := newDuplexSession(runCtx, cancelRun, normalized, child, stdin, startedAt)
-	deadline := time.AfterFunc(normalized.MaxDuration, func() {
-		session.deadlineReached.Store(true)
-		cancelRun()
-	})
-	defer deadline.Stop()
-
+	defer session.armDeadline()()
 	session.startPumps(stdout, stderr)
 	if normalized.Termination == TerminationSIGINT {
 		session.terminationWG.Add(1)

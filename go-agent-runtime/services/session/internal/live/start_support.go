@@ -387,3 +387,14 @@ func hasImageContentPart(parts []messages.ContentPart) bool {
 	}
 	return false
 }
+
+func continuationFailed(value *messages.MessageEndValue, outputObserved bool) bool {
+	if !outputObserved {
+		return true
+	}
+	status := ""
+	if value != nil {
+		status = strings.ToLower(strings.TrimSpace(value.Status))
+	}
+	return status == continuationStatusFailed || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
+}

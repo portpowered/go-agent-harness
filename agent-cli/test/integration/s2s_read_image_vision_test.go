@@ -2,7 +2,6 @@ package integration
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -290,7 +289,7 @@ func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string,
 		"--model", "gpt-realtime",
 		prompt,
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return stdout.String(), err

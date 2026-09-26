@@ -166,9 +166,7 @@ func (h *handle) beginToolResultAdmission(callID, name string, requestsContinuat
 		state = &liveToolContinuation{callID: callID}
 		h.toolContinuations[callID] = state
 	}
-	previousAccepted := state.resultAccepted
-	previousName := state.name
-	previousRequested := state.continuationRequested
+	prior := *state
 	state.resultAccepted = true
 	if name != "" {
 		state.name = name
@@ -178,18 +176,28 @@ func (h *handle) beginToolResultAdmission(callID, name string, requestsContinuat
 	}
 	h.toolMu.Unlock()
 	return func() {
-		h.toolMu.Lock()
-		if current := h.toolContinuations[callID]; current == state {
-			current.resultAccepted = previousAccepted
-			current.name = previousName
-			current.continuationRequested = previousRequested
-			if !existed && !current.toolOutputObserved && !current.toolResponseComplete && !current.outputObserved &&
-				!current.pendingTerminal && current.status == "" && current.code == "" && current.detail == "" {
-				delete(h.toolContinuations, callID)
-			}
+		// Wake outside toolMu: h.mu is ordered before toolMu.
+		if h.restoreToolResultAdmission(callID, state, prior, existed) {
+			h.wakeResponseWaiters()
 		}
-		h.toolMu.Unlock()
 	}
+}
+
+// restoreToolResultAdmission undoes a rejected admission and reports whether
+// it removed state created only for that admission.
+func (h *handle) restoreToolResultAdmission(callID string, state *liveToolContinuation, prior liveToolContinuation, existed bool) bool {
+	h.toolMu.Lock()
+	defer h.toolMu.Unlock()
+	if h.toolContinuations[callID] != state {
+		return false
+	}
+	state.resultAccepted, state.name, state.continuationRequested = prior.resultAccepted, prior.name, prior.continuationRequested
+	if existed || state.toolOutputObserved || state.toolResponseComplete || state.outputObserved ||
+		state.pendingTerminal || state.status != "" || state.code != "" || state.detail != "" {
+		return false
+	}
+	delete(h.toolContinuations, callID)
+	return true
 }
 func (h *handle) unresolvedToolResultsError() error {
 	if h == nil {
@@ -387,14 +395,4 @@ func continuationFailure(image, tools continuationFailures) error {
 		return toolFailure
 	}
 	return errors.Join(failure, toolFailure)
-}
-func continuationFailed(value *messages.MessageEndValue, outputObserved bool) bool {
-	if !outputObserved {
-		return true
-	}
-	status := ""
-	if value != nil {
-		status = strings.ToLower(strings.TrimSpace(value.Status))
-	}
-	return status == continuationStatusFailed || status == "cancelled" || status == "canceled" || status == "incomplete" || status == "error"
 }

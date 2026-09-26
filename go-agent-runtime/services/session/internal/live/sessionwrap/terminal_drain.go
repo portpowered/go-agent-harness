@@ -70,6 +70,14 @@ func (i terminalDrainInferencer) FlushCapture() error {
 	return nil
 }
 
+// ReceiveSyncer is implemented by a session relay that can publish every
+// provider message it has already queued before returning.
+type ReceiveSyncer interface {
+	SyncReceive(context.Context)
+}
+
+var _ ReceiveSyncer = (*terminalDrainSession)(nil)
+
 type terminalDrainSession struct {
 	inner      messages.Session
 	receive    *messages.TypedBuffer[messages.StreamMessage]
@@ -130,13 +138,11 @@ func (s *terminalDrainSession) forward(ctx context.Context, source *messages.Typ
 	}
 }
 
-// drainAvailable forwards the messages already queued by the provider without
-// waiting for more. It reports false when forwarding stopped.
+// drainAvailable forwards the messages the provider had queued when the
+// barrier arrived. The count is snapshotted so a provider that keeps writing
+// cannot hold the barrier open. It reports false when forwarding stopped.
 func (s *terminalDrainSession) drainAvailable(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) bool {
-	if syncer, ok := s.inner.(interface{ SyncReceive(context.Context) }); ok {
-		syncer.SyncReceive(ctx)
-	}
-	for {
+	for queued := source.Len(); queued > 0; queued-- {
 		msg, ok := source.Read()
 		if !ok {
 			return true
@@ -145,6 +151,7 @@ func (s *terminalDrainSession) drainAvailable(ctx context.Context, source *messa
 			return false
 		}
 	}
+	return true
 }
 
 func (s *terminalDrainSession) drain(ctx context.Context, source *messages.TypedBuffer[messages.StreamMessage]) {

@@ -24,6 +24,8 @@ type duplexSession struct {
 	startedAt time.Time
 
 	deadlineReached atomic.Bool
+	started         chan struct{}
+	startedOnce     sync.Once
 	progress        *duplexProgressState
 	stdoutCapture   *childproc.Capture
 	stderrCapture   *childproc.Capture
@@ -59,6 +61,38 @@ const duplexFailureBuffer = 4
 // duplexPumpCount is the stdout, stderr, and stdin pump goroutines.
 const duplexPumpCount = 3
 
+// duplexStartupBound only bounds a child that never writes any output. The
+// MaxDuration budget starts at the child's first output, when its own
+// --max-duration clock is already running, so cold exec and runtime startup
+// on a loaded runner are not charged to the session.
+const duplexStartupBound = 60 * time.Second
+
+func (s *duplexSession) markStarted() { s.startedOnce.Do(func() { close(s.started) }) }
+
+// armDeadline cancels the run once MaxDuration has elapsed after the child's
+// first output, or when the child stays silent for duplexStartupBound.
+func (s *duplexSession) armDeadline() (stop func()) {
+	done := make(chan struct{})
+	go func() {
+		bound := time.NewTimer(duplexStartupBound)
+		defer bound.Stop()
+		select {
+		case <-s.started:
+			bound.Reset(s.config.MaxDuration)
+		case <-bound.C:
+		case <-done:
+			return
+		}
+		select {
+		case <-bound.C:
+			s.deadlineReached.Store(true)
+			s.cancelRun()
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
+}
+
 func newDuplexSession(runCtx context.Context, cancelRun context.CancelFunc, config normalizedDuplexConfig, child *exec.Cmd, stdin io.WriteCloser, startedAt time.Time) *duplexSession {
 	session := &duplexSession{
 		runCtx:        runCtx,
@@ -71,6 +105,7 @@ func newDuplexSession(runCtx context.Context, cancelRun context.CancelFunc, conf
 		stdoutCapture: childproc.NewCapture(config.MaxCapturedOutputBytes),
 		stderrCapture: childproc.NewCapture(config.MaxCapturedOutputBytes),
 		failureCh:     make(chan error, duplexFailureBuffer),
+		started:       make(chan struct{}),
 	}
 	session.progress.setStartedAt(startedAt)
 	return session
@@ -112,7 +147,7 @@ func (s *duplexSession) startPumps(stdout, stderr io.Reader) {
 	go func() {
 		defer s.pumps.Done()
 		defer s.outputPumps.Done()
-		if err := pumpDuplexOutput(s.runCtx, stdout, s.config.Output, s.stdoutCapture, s.progress, s.startedAt, true); err != nil {
+		if err := pumpDuplexOutput(s.runCtx, startupReader{stdout, s.markStarted}, s.config.Output, s.stdoutCapture, s.progress, s.startedAt, true); err != nil {
 			s.recordFailure(err)
 		}
 		s.progress.noteOutputClosed()
@@ -121,7 +156,7 @@ func (s *duplexSession) startPumps(stdout, stderr io.Reader) {
 	go func() {
 		defer s.pumps.Done()
 		defer s.outputPumps.Done()
-		if err := pumpDuplexOutput(s.runCtx, stderr, s.config.ErrorOutput, s.stderrCapture, s.progress, s.startedAt, false); err != nil {
+		if err := pumpDuplexOutput(s.runCtx, startupReader{stderr, s.markStarted}, s.config.ErrorOutput, s.stderrCapture, s.progress, s.startedAt, false); err != nil {
 			s.recordFailure(err)
 		}
 		s.stderrClosed.Store(true)

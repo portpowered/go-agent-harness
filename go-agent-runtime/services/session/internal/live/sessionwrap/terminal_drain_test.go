@@ -38,7 +38,7 @@ func TestTerminalDrainSyncReceivePublishesQueuedProviderMessages(t *testing.T) {
 			t.Errorf("close relay session: %v", err)
 		}
 	})
-	syncer, ok := session.(interface{ SyncReceive(context.Context) })
+	syncer, ok := session.(ReceiveSyncer)
 	if !ok {
 		t.Fatal("terminal drain session does not expose SyncReceive")
 	}
@@ -67,7 +67,7 @@ func TestTerminalDrainSyncReceiveReturnsAfterClose(t *testing.T) {
 	if err := session.Close(); err != nil {
 		t.Fatal(err)
 	}
-	syncer, ok := session.(interface{ SyncReceive(context.Context) })
+	syncer, ok := session.(ReceiveSyncer)
 	if !ok {
 		t.Fatal("terminal drain session does not expose SyncReceive")
 	}

@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -99,7 +98,7 @@ func executeV5ADefaultSleepSession(t *testing.T, capturePath, configDir string) 
 		v5aDefaultSleepPrompt,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return writer.StdoutString(), err
