@@ -163,7 +163,7 @@ func (l *Loader) Catalog() ([]Profile, error) {
 func readFile(root fs.FS, profile, name string) ([]byte, error) {
 	data, err := fs.ReadFile(root, path.Join(profile, name))
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %v", name, err)
+		return nil, fmt.Errorf("read %s: %w", name, err)
 	}
 	return data, nil
 }
@@ -180,7 +180,7 @@ func profileNameRune(r rune) bool {
 func findDeclaration(root fs.FS, profile string) (string, error) {
 	entries, err := fs.ReadDir(root, profile)
 	if err != nil {
-		return "", fmt.Errorf("read profile directory: %v", err)
+		return "", fmt.Errorf("read profile directory: %w", err)
 	}
 	name, count := "", 0
 	for _, entry := range entries {

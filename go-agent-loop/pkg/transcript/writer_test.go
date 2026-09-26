@@ -221,7 +221,7 @@ func TestWriterSinkFailureIsOneWayAndReportedOnce(t *testing.T) {
 		t.Fatalf("status = %+v, want degraded with one accepted record", writer.Status())
 	}
 	thirdErr := writer.Write(NewRecord(3, time.Unix(0, 0), PeerClient, DirectionIn, StreamWS, []byte("third")))
-	if !errors.Is(thirdErr, sinkErr) || thirdErr != secondErr {
+	if !errors.Is(thirdErr, sinkErr) || !errors.Is(thirdErr, secondErr) {
 		t.Fatalf("third Write error = %v, want stable first degradation %v", thirdErr, secondErr)
 	}
 	if len(reports) != 1 || !errors.Is(reports[0], sinkErr) {

@@ -108,7 +108,7 @@ func (e *RecordingError) Unwrap() error {
 		return nil
 	}
 	identities := []error{e.Kind}
-	if e.Kind == ErrRecordingDestinationNotEmpty {
+	if errors.Is(e.Kind, ErrRecordingDestinationNotEmpty) {
 		identities = append(identities, ErrRecordingDestination)
 	}
 	if e.Cause != nil {
@@ -224,24 +224,24 @@ func (s *RecordingStatus) UnmarshalJSON(data []byte) error {
 	}
 	fields, err := decodeRecordingJSONObject(data)
 	if err != nil {
-		return fmt.Errorf("recording status: %v", err)
+		return fmt.Errorf("recording status: %w", err)
 	}
 	allowed := map[string]struct{}{"state": {}, "reason": {}}
 	if err := rejectRecordingUnknownFields(fields, allowed); err != nil {
-		return fmt.Errorf("recording status: %v", err)
+		return fmt.Errorf("recording status: %w", err)
 	}
 	if _, ok := fields["state"]; !ok {
 		return errors.New("recording status: state is required")
 	}
 	state, err := parseRecordingString(fields["state"])
 	if err != nil {
-		return fmt.Errorf("recording status.state: %v", err)
+		return fmt.Errorf("recording status.state: %w", err)
 	}
 	reason := ""
 	if raw, ok := fields["reason"]; ok {
 		reason, err = parseRecordingString(raw)
 		if err != nil {
-			return fmt.Errorf("recording status.reason: %v", err)
+			return fmt.Errorf("recording status.reason: %w", err)
 		}
 	}
 	result := RecordingStatus{State: state, Reason: reason}

@@ -375,7 +375,7 @@ func TestDuplexSession_LongRunningToolAcknowledgementPrecedesGroundedContinuatio
 	cancel()
 	select {
 	case err := <-runErr:
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("Run error = %v", err)
 		}
 	case <-time.After(3 * time.Second):
@@ -455,7 +455,7 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 	cancel()
 	select {
 	case err := <-runErr:
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("Run error = %v", err)
 		}
 	case <-time.After(3 * time.Second):

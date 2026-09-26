@@ -115,18 +115,18 @@ func (ExpectationScenarioRunner) Run(ctx context.Context, scenario Scenario, sub
 	}
 	for index, step := range scenario.Steps {
 		if err := contextErr(ctx); err != nil {
-			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %v", ErrDeadSessionExecution, index, err)
+			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %w", ErrDeadSessionExecution, index, err)
 		}
 		if err := subject.Accept(ctx, step); err != nil {
-			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %v", ErrDeadSessionExecution, index, err)
+			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %w", ErrDeadSessionExecution, index, err)
 		}
 	}
 	if err := contextErr(ctx); err != nil {
-		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %v", ErrDeadSessionExecution, err)
+		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %w", ErrDeadSessionExecution, err)
 	}
 	observation, err := subject.Snapshot(ctx)
 	if err != nil {
-		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %v", ErrDeadSessionExecution, err)
+		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %w", ErrDeadSessionExecution, err)
 	}
 	return ScenarioRunResult{
 		Observation:        observation,
@@ -556,7 +556,7 @@ func classifyScenarioRun(scenario Scenario, run ScenarioRunResult, runErr error)
 				hasMismatch = true
 				continue
 			}
-			return DeadSessionExecutionFailure, fmt.Errorf("%w: scenario %q expectation %d: %v", ErrDeadSessionExecution, stableScenarioID(scenario), expectation.Index, expectation.Err)
+			return DeadSessionExecutionFailure, fmt.Errorf("%w: scenario %q expectation %d: %w", ErrDeadSessionExecution, stableScenarioID(scenario), expectation.Index, expectation.Err)
 		}
 		if !expectation.Passed {
 			return DeadSessionExecutionFailure, fmt.Errorf("%w: scenario %q expectation %d returned false without an error", ErrDeadSessionExecution, stableScenarioID(scenario), expectation.Index)
@@ -576,7 +576,7 @@ func (r ScenarioRunResult) expectations() []ExpectationResult {
 }
 
 func wrapExecutionError(scenarioID string, control any, err error) error {
-	return fmt.Errorf("%w: scenario %q control %q: %v", ErrDeadSessionExecution, scenarioID, control, err)
+	return fmt.Errorf("%w: scenario %q control %q: %w", ErrDeadSessionExecution, scenarioID, control, err)
 }
 
 // DefaultDeadSessionSubjectFactory creates one isolated deterministic

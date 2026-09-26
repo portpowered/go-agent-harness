@@ -236,7 +236,7 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 	cancel()
 	select {
 	case err := <-runErr:
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("Run error = %v", err)
 		}
 	case <-time.After(2 * time.Second):

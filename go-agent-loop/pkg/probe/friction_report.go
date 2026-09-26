@@ -377,7 +377,7 @@ func malformedReportLine(source string, line int, err error) error {
 	return &FrictionReportError{
 		Source: source,
 		Line:   line,
-		Err:    fmt.Errorf("%w: %v", ErrMalformedReport, err),
+		Err:    fmt.Errorf("%w: %w", ErrMalformedReport, err),
 	}
 }
 

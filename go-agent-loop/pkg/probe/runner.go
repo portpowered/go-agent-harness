@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -204,13 +205,12 @@ type observedVsExpected struct {
 }
 
 func expectationDetail(err error) observedVsExpected {
-	switch value := err.(type) {
-	case *ExpectationMismatchError:
-		return observedVsExpected{
-			expected: diagnosticValue(value.Expected),
-			actual:   diagnosticValue(value.Actual),
-		}
-	default:
+	var value *ExpectationMismatchError
+	if !errors.As(err, &value) {
 		return observedVsExpected{}
+	}
+	return observedVsExpected{
+		expected: diagnosticValue(value.Expected),
+		actual:   diagnosticValue(value.Actual),
 	}
 }

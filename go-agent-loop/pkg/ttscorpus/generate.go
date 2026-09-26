@@ -100,7 +100,7 @@ func (g *Generator) WaitReady(ctx context.Context) error {
 		}
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return fmt.Errorf("ttscorpus: backend %s not ready within %s: last error: %v", g.Endpoint, g.ReadyTimeout, lastErr)
+			return fmt.Errorf("ttscorpus: backend %s not ready within %s: last error: %w", g.Endpoint, g.ReadyTimeout, lastErr)
 		}
 		if err := g.waitBeforeNextProbe(ctx, remaining); err != nil {
 			return err

@@ -7,8 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 )
@@ -257,7 +258,7 @@ func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
 
 	kind, present, err := firstString(fields, "kind", "type")
 	if err != nil {
-		return nil, "", fmt.Errorf("kind %s", err)
+		return nil, "", fmt.Errorf("kind %w", err)
 	}
 	if nested, ok := objectField(fields, "value"); ok {
 		for key, value := range nested {
@@ -268,7 +269,7 @@ func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
 		if !present {
 			kind, _, err = firstString(fields, "kind", "type")
 			if err != nil {
-				return nil, "", fmt.Errorf("kind %s", err)
+				return nil, "", fmt.Errorf("kind %w", err)
 			}
 		}
 	}

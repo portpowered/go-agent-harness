@@ -758,7 +758,7 @@ func parseRecordingStringArray(raw json.RawMessage) ([]string, error) {
 	for index, value := range values {
 		parsed, err := parseRecordingString(value)
 		if err != nil {
-			return nil, fmt.Errorf("item %d %v", index, err)
+			return nil, fmt.Errorf("item %d %w", index, err)
 		}
 		result[index] = parsed
 	}

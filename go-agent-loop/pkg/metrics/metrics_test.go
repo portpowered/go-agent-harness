@@ -125,7 +125,7 @@ func assertValidationError(t *testing.T, err, wantKind error, wantMessage string
 	if !errors.As(err, &typed) {
 		t.Fatalf("error %T is not a ValidationError", err)
 	}
-	if typed.Kind != wantKind {
+	if !errors.Is(typed.Kind, wantKind) {
 		t.Fatalf("validation kind: got %v, want %v", typed.Kind, wantKind)
 	}
 	if err.Error() != wantMessage {

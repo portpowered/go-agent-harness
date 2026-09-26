@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -39,7 +40,7 @@ func TestEvaluateMetricsReconcileFailsWithNamedSeriesDetail(t *testing.T) {
 		t.Fatal("off-by-one overcount must fail the metrics reconciliation")
 	}
 	var mismatchErr *ExpectationMismatchError
-	if !asMismatch(err, &mismatchErr) {
+	if !errors.As(err, &mismatchErr) {
 		t.Fatalf("failure must be an expectation mismatch, got %T", err)
 	}
 	if mismatchErr.Kind != ExpectMetricsReconcile {
@@ -73,19 +74,4 @@ func TestEvaluateMetricsReconcileFailsWithoutEvidence(t *testing.T) {
 	if !strings.Contains(err.Error(), "none provided") {
 		t.Fatalf("absent evidence detail missing, got %v", err)
 	}
-}
-
-func asMismatch(err error, target **ExpectationMismatchError) bool {
-	for err != nil {
-		if mismatch, ok := err.(*ExpectationMismatchError); ok {
-			*target = mismatch
-			return true
-		}
-		unwrapper, ok := err.(interface{ Unwrap() error })
-		if !ok {
-			return false
-		}
-		err = unwrapper.Unwrap()
-	}
-	return false
 }

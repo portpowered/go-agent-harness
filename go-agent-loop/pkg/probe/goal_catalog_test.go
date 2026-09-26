@@ -173,7 +173,7 @@ func TestGoalCatalogValidationErrorFormatsNilAndBareDiagnostics(t *testing.T) {
 	if got := bare.Error(); got != "catalog: invalid" {
 		t.Fatalf("bare validation error string = %q, want %q", got, "catalog: invalid")
 	}
-	if got := bare.Unwrap(); got != probe.ErrEmptyGoalCatalog {
+	if got := bare.Unwrap(); !errors.Is(got, probe.ErrEmptyGoalCatalog) {
 		t.Fatalf("bare validation error unwrap = %v, want %v", got, probe.ErrEmptyGoalCatalog)
 	}
 }

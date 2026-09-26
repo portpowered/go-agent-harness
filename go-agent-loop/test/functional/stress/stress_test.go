@@ -4,6 +4,7 @@ package stress
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -377,7 +378,7 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	select {
 	case loopErr := <-runErr:
 		// context.Canceled is expected after cancel().
-		if loopErr != nil && loopErr != context.Canceled && loopErr.Error() != "context canceled" {
+		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
 			t.Logf("Run exited with: %v (non-fatal for stress test)", loopErr)
 		}
 	case <-time.After(5 * time.Second):

@@ -311,7 +311,7 @@ func TestDiagnosticErrorsAndEvaluationWrapper(t *testing.T) {
 
 	err := EvaluateExpectation(ExpectedBehavior{Type: ExpectationKind(unknownLabel)}, ObservationSnapshot{})
 	var validation *ExpectationValidationError
-	if !errors.As(err, &validation) || validation.Error() == "" || validation.Unwrap() != ErrInvalidExpectation {
+	if !errors.As(err, &validation) || validation.Error() == "" || !errors.Is(validation.Unwrap(), ErrInvalidExpectation) {
 		t.Fatalf("validation diagnostic: %v", err)
 	}
 
