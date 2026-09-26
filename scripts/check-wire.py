@@ -29,22 +29,44 @@ def _wire_injector(source):
     return "//go:build wireinject" in contents or "// +build wireinject" in contents
 
 
-def _wire_directive(line):
-    command = line.removeprefix("//go:generate ").strip().split()
-    return WIRE_DIRECTIVE in line or bool(command and command[0] == "wire")
+# The only go:generate commands check() treats as Wire, split into words.
+# check() runs the pinned form itself with `gen <packages>` appended, so any
+# other command, including wire with flags or extra arguments, or a shell
+# that also runs something else, is not reproduced and must be rejected.
+WIRE_COMMANDS = (
+    ("go", "run", "-mod=mod", WIRE_DIRECTIVE),
+    ("wire",),
+)
+
+
+def _generate_command(line):
+    """Return the command of a go:generate line, or None for other lines.
+
+    Mirrors cmd/go's isGoGenerate: the directive is `//go:generate` followed
+    by a space or a tab.
+    """
+    if line.startswith("//go:generate ") or line.startswith("//go:generate\t"):
+        return line[len("//go:generate"):].strip()
+    return None
+
+
+def _wire_directive(command):
+    return tuple(command.split()) in WIRE_COMMANDS
 
 
 def _foreign_directives(directory):
-    """Return go:generate lines in a Wire package that do not run Wire.
+    """Return go:generate lines in a Wire package that are not exact Wire runs.
 
     check() regenerates with one `wire gen` per module instead of
-    `go generate` per package, so a package whose go:generate would also run
-    some other generator must fail closed rather than silently skip it.
+    `go generate` per package, so a package whose go:generate would run
+    anything else (another generator, wire with other arguments, a compound
+    shell command) must fail closed rather than silently skip it.
     """
     foreign = []
     for source in sorted(directory.glob("*.go")):
         for line in source.read_text().splitlines():
-            if line.startswith("//go:generate ") and not _wire_directive(line):
+            command = _generate_command(line)
+            if command is not None and not _wire_directive(command):
                 foreign.append(f"{source.name}: {line}")
     return foreign
 
@@ -79,9 +101,8 @@ def discovered_packages(root, modules):
         injector_contents = injectors[0].read_text()
         directives = []
         for line in injector_contents.splitlines():
-            if not line.startswith("//go:generate "):
-                continue
-            if _wire_directive(line):
+            command = _generate_command(line)
+            if command is not None and _wire_directive(command):
                 directives.append(line)
         if len(directives) != 1:
             raise ValueError(f"Wire injector requires exactly one reproducible generation directive: {entry}")

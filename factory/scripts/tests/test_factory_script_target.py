@@ -55,6 +55,40 @@ class FactoryScriptTargetTests(unittest.TestCase):
         self.assertRegex(result.output, r"Ran 1 test in ")
         self.assertEqual(after, before, result.output)
 
+    def test_target_fails_when_a_spawned_interpreter_writes_bytecode(self):
+        # The recipe snapshots bytecode across the checkout around the real
+        # suite run, so bytecode written by a subprocess a test spawns (not
+        # only by the test interpreters) fails the target.
+        scripts_dir = REPO_ROOT / "factory" / "scripts"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture_path = Path(temp_dir) / "factory_target_spawn_fixture.py"
+            fixture_path.write_text(
+                "import os\n"
+                "import subprocess\n"
+                "import sys\n"
+                "import unittest\n\n\n"
+                "class FactoryTargetSpawn(unittest.TestCase):\n"
+                "    def test_spawn(self):\n"
+                "        env = {k: v for k, v in os.environ.items() if k != 'PYTHONDONTWRITEBYTECODE'}\n"
+                f"        env['PYTHONPATH'] = {str(scripts_dir)!r}\n"
+                "        subprocess.run([sys.executable, '-c', 'import project_contract'], env=env, check=True)\n",
+                encoding="utf-8",
+            )
+            before = self._bytecode_artifacts()
+            try:
+                result = self._run_target(
+                    "FACTORY_TEST_MODULES=factory_target_spawn_fixture",
+                    env={"PYTHONPATH": temp_dir},
+                )
+                written = self._bytecode_artifacts() - before
+            finally:
+                self._remove_artifacts(self._bytecode_artifacts() - before)
+
+        self.assertNotEqual(result.returncode, 0, result.output)
+        self.assertIn("the tests wrote Python bytecode", result.output)
+        self.assertIn("factory/scripts/__pycache__", result.output)
+        self.assertIn("factory/scripts/__pycache__", written)
+
     def test_target_rejects_empty_selection(self):
         result = self._run_target("FACTORY_TEST_MODULES=")
 
@@ -135,6 +169,16 @@ class FactoryScriptTargetTests(unittest.TestCase):
         if match is None:
             raise AssertionError(f"module list not found in dry run:\n{result.stdout}")
         return match.group(1).split()
+
+    @staticmethod
+    def _remove_artifacts(artifacts):
+        # Files first, then the directories that held only them.
+        for relative in sorted(artifacts, key=len, reverse=True):
+            path = REPO_ROOT / relative
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
 
     def _bytecode_artifacts(self):
         artifacts = set()

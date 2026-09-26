@@ -487,7 +487,7 @@ test-sessions-race: ## Run the concurrent session capacity acceptance tests with
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
 	echo "==> test-factory-scripts modules: $(FACTORY_TEST_MODULES)"; \
-	if output="$$(PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/unittest-parallel.py -v $(FACTORY_TEST_MODULES) 2>&1)"; then \
+	if output="$$(PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/unittest-parallel.py -v --forbid-bytecode . $(FACTORY_TEST_MODULES) 2>&1)"; then \
 		status=0; \
 	else \
 		status=$$?; \

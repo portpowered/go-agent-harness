@@ -50,10 +50,10 @@ class UnittestParallelTest(unittest.TestCase):
         self.directory = Path(temporary.name)
         (self.directory / "parallel_fixture.py").write_text(FIXTURE)
 
-    def run_runner(self, *names):
+    def run_runner(self, *names, options=()):
         env = dict(os.environ, PYTHONPATH=str(self.directory), PYTHONDONTWRITEBYTECODE="1")
         return subprocess.run(
-            [sys.executable, "-B", str(RUNNER), "-v", "-j", "4", *names],
+            [sys.executable, "-B", str(RUNNER), "-v", "-j", "4", *options, *names],
             cwd=self.directory, env=env, capture_output=True, text=True, check=False,
         )
 
@@ -84,6 +84,31 @@ class UnittestParallelTest(unittest.TestCase):
         self.assertEqual(result.returncode, 5, result.stderr)
         self.assertIn("Ran 0 tests in ", result.stderr)
         self.assertIn("NO TESTS RAN", result.stderr)
+
+    def test_forbid_bytecode_catches_bytecode_from_spawned_interpreters(self):
+        (self.directory / "helper_module.py").write_text("VALUE = 1\n")
+        (self.directory / "spawning_fixture.py").write_text(textwrap.dedent(
+            """
+            import os
+            import subprocess
+            import sys
+            import unittest
+
+
+            class Spawns(unittest.TestCase):
+                def test_spawn_without_dont_write_bytecode(self):
+                    env = {k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"}
+                    subprocess.run([sys.executable, "-c", "import helper_module"], env=env, check=True)
+            """
+        ))
+        options = ("--forbid-bytecode", str(self.directory))
+        clean = self.run_runner("parallel_fixture.SharedFixture", options=options)
+        self.assertEqual(clean.returncode, 0, clean.stderr)
+        result = self.run_runner("spawning_fixture", options=options)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("Ran 1 test in ", result.stderr)
+        self.assertIn("the tests wrote Python bytecode", result.stderr)
+        self.assertIn("__pycache__", result.stderr)
 
 
 if __name__ == "__main__":

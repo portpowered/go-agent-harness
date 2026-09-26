@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run unittest test names across worker processes with unittest's output.
 
-    python3 -B scripts/unittest-parallel.py [-v] [-j N] NAME...
+    python3 -B scripts/unittest-parallel.py [-v] [-j N] [--forbid-bytecode ROOT] NAME...
 
 NAME is anything `python -m unittest NAME` accepts (module, class or test
 method). Every selected test runs exactly once; only the wall time changes.
@@ -14,7 +14,14 @@ module, a failed import) are reported as unittest reports them.
 Per-test lines and failure details are printed in the original test order
 once the run finishes, followed by unittest's "Ran N tests" summary and
 OK/FAILED line. The exit status matches `python -m unittest`: 0 on success,
-1 on any failure or error, 5 when no tests ran.
+1 on any failure or error, 5 when no tests ran. A worker process that dies
+outright (os._exit, a signal) fails the run with a BrokenProcessPool
+traceback and exit status 1 rather than its own status.
+
+--forbid-bytecode ROOT snapshots every __pycache__ directory and .pyc file
+under ROOT before the run and fails the run (exit 1) if any appeared or
+changed afterwards, including bytecode written by subprocesses the tests
+spawn. Nested git checkouts and .git directories are not scanned.
 """
 
 import argparse
@@ -125,16 +132,46 @@ def _summary(totals):
     return status + (f" ({', '.join(details)})" if details else ""), bool(failed)
 
 
+def bytecode_snapshot(root):
+    """Map each __pycache__ directory and .pyc file under root to its mtime."""
+    snapshot = {}
+    for directory, subdirectories, files in os.walk(root):
+        # Skip git metadata and other checkouts (worktrees, fixtures) nested
+        # in the tree: they are not this repository's sources.
+        subdirectories[:] = [
+            name for name in subdirectories
+            if name != ".git" and not os.path.exists(os.path.join(directory, name, ".git"))
+        ]
+        if os.path.basename(directory) == "__pycache__":
+            snapshot[os.path.relpath(directory, root)] = None
+        for name in files:
+            if name.endswith(".pyc"):
+                path = os.path.join(directory, name)
+                try:
+                    snapshot[os.path.relpath(path, root)] = os.stat(path).st_mtime_ns
+                except FileNotFoundError:
+                    continue
+    return snapshot
+
+
+def new_bytecode(before, after):
+    return sorted(path for path, stamp in after.items() if path not in before or before[path] != stamp)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-v", "--verbose", action="store_const", const=2, default=1, dest="verbosity")
     parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1)
+    parser.add_argument("--forbid-bytecode", metavar="ROOT")
     parser.add_argument("names", nargs="*")
     args = parser.parse_args(argv)
     # Match `python -m unittest`, which imports names relative to the
     # working directory rather than this script's directory.
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:] = [entry for entry in sys.path if os.path.abspath(entry or ".") != script_directory]
     sys.path.insert(0, os.getcwd())
 
+    before = bytecode_snapshot(args.forbid_bytecode) if args.forbid_bytecode else None
     started = time.perf_counter()
     units = plan(args.names)
     results = [None] * len(units)
@@ -161,6 +198,12 @@ def main(argv=None):
     status, failed = _summary(totals)
     sys.stderr.write("-" * 70 + "\n")
     sys.stderr.write(f"Ran {totals['run']} test{'s' if totals['run'] != 1 else ''} in {elapsed:.3f}s\n\n{status}\n")
+    if before is not None:
+        written = new_bytecode(before, bytecode_snapshot(args.forbid_bytecode))
+        if written:
+            sys.stderr.write(f"FAILED: the tests wrote Python bytecode under {args.forbid_bytecode}:\n")
+            sys.stderr.writelines(f"  {path}\n" for path in written)
+            return 1
     if failed:
         return 1
     return NO_TESTS_STATUS if totals["run"] == 0 else 0

@@ -64,9 +64,30 @@ class WireGateTest(unittest.TestCase):
         })
 
     def test_non_wire_generate_directive_fails_closed(self):
-        (self.package / "enum.go").write_text("//go:generate stringer -type=Kind\npackage wire\n")
-        with self.assertRaisesRegex(ValueError, "non-Wire go:generate directive"):
-            check_wire.discovered_packages(self.root, ["runtime"])
+        directives = {
+            "other generator": "//go:generate stringer -type=Kind",
+            "tab separator": "//go:generate\tfalse",
+            "compound shell command": '//go:generate sh -c "go run github.com/google/wire/cmd/wire && ./other"',
+            "wire with flags": "//go:generate go run -mod=mod github.com/google/wire/cmd/wire -tags=extra",
+            "wire with extra arguments": "//go:generate wire gen ./other",
+            "wire without the pinned module mode": "//go:generate go run github.com/google/wire/cmd/wire",
+        }
+        extra = self.package / "extra.go"
+        for name, directive in directives.items():
+            with self.subTest(name=name):
+                extra.write_text(directive + "\npackage wire\n")
+                with self.assertRaisesRegex(ValueError, "non-Wire go:generate directive"):
+                    check_wire.discovered_packages(self.root, ["runtime"])
+        extra.unlink()
+
+    def test_exact_wire_directives_are_accepted_with_either_separator(self):
+        for directive in ("//go:generate\tgo run -mod=mod github.com/google/wire/cmd/wire", "//go:generate wire"):
+            with self.subTest(directive=directive):
+                (self.package / "extra.go").write_text(directive + "\npackage wire\n")
+                self.assertEqual(
+                    check_wire.discovered_packages(self.root, ["runtime"]),
+                    ["runtime/services/session/wire"],
+                )
 
     def test_generated_drift_fails_and_keeps_reviewable_output(self):
         def regenerate(*args, **kwargs):
