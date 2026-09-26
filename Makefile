@@ -117,6 +117,11 @@ AGENT_CLI_COVERAGE_UNIT_PACKAGES ?=
 # test-tools also runs the architecture gate fixtures unless the caller (the
 # prepush gate, which runs them in verify-architecture) already has.
 TEST_TOOLS_ARCHITECTURE_GATE ?= 1
+# test-tools runs these independent suites concurrently (scripts/run-bounded.sh
+# prints each one's output as a block); the Python modules themselves run
+# test-by-test across processes (scripts/unittest-parallel.py).
+TOOLS_PYTHON_TEST_MODULES := scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_working_tree
+TOOLS_GO_TEST_MODULES := tools/analyzergate tools/session-race-gate tools/coveragegate tools/rtc-race-gate tools/timingate scripts/webmcp-o0 test/localai
 # `go list` fields that decide which files a package builds and tests; the
 # packages whose fields differ between the hermetic coverage build and the
 # native build are the ones test-cgo-delta runs natively.
@@ -375,22 +380,10 @@ test-module:
 
 test-tools: ## Run tests for standalone repository helper modules.
 	@set -euo pipefail; \
-	python3 -B -m unittest discover -s scripts -p test_check_wire.py; \
-	python3 -B -m unittest scripts.test_check_ci_test_partition scripts.test_ci_await_jobs; \
-	python3 -B -m unittest factory.scripts.tests.test_golangci_lint_working_tree; \
-	echo "==> test tools/analyzergate"; \
-	(cd tools/analyzergate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
-	echo "==> test tools/session-race-gate"; \
-	(cd tools/session-race-gate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
-	echo "==> test tools/coveragegate"; \
-	(cd tools/coveragegate && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
-	for module in tools/rtc-race-gate tools/timingate scripts/webmcp-o0 test/localai; do \
-		echo "==> test $$module"; \
-		(cd "$$module" && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"); \
-	done; \
-	if [ "$(TEST_TOOLS_ARCHITECTURE_GATE)" = "1" ]; then \
-		$(MAKE) test-architecture-gate; \
-	fi
+	bash scripts/run-bounded.sh -- \
+		'test repository helper Python modules::PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/unittest-parallel.py $(TOOLS_PYTHON_TEST_MODULES)' \
+		$(foreach module,$(TOOLS_GO_TEST_MODULES),'test $(module)::cd $(module) && GOWORK=off $(GO) test ./... -timeout "$(GO_TEST_TIMEOUT)"') \
+		$(if $(filter 1,$(TEST_TOOLS_ARCHITECTURE_GATE)),'test tools/architecturegate::$(MAKE) --no-print-directory test-architecture-gate')
 
 test-cgo-delta: ## Test natively (cgo, real microphone backend) only the packages whose files differ from the hermetic coverage build.
 	@set -euo pipefail; \
@@ -494,7 +487,7 @@ test-sessions-race: ## Run the concurrent session capacity acceptance tests with
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
 	echo "==> test-factory-scripts modules: $(FACTORY_TEST_MODULES)"; \
-	if output="$$(PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest -v $(FACTORY_TEST_MODULES) 2>&1)"; then \
+	if output="$$(PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/unittest-parallel.py -v --forbid-bytecode . $(FACTORY_TEST_MODULES) 2>&1)"; then \
 		status=0; \
 	else \
 		status=$$?; \

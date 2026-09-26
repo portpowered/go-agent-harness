@@ -29,6 +29,48 @@ def _wire_injector(source):
     return "//go:build wireinject" in contents or "// +build wireinject" in contents
 
 
+# The only go:generate commands check() treats as Wire, split into words.
+# check() runs the pinned form itself with `gen <packages>` appended, so any
+# other command, including wire with flags or extra arguments, or a shell
+# that also runs something else, is not reproduced and must be rejected.
+WIRE_COMMANDS = (
+    ("go", "run", "-mod=mod", WIRE_DIRECTIVE),
+    ("wire",),
+)
+
+
+def _generate_command(line):
+    """Return the command of a go:generate line, or None for other lines.
+
+    Mirrors cmd/go's isGoGenerate: the directive is `//go:generate` followed
+    by a space or a tab.
+    """
+    if line.startswith("//go:generate ") or line.startswith("//go:generate\t"):
+        return line[len("//go:generate"):].strip()
+    return None
+
+
+def _wire_directive(command):
+    return tuple(command.split()) in WIRE_COMMANDS
+
+
+def _foreign_directives(directory):
+    """Return go:generate lines in a Wire package that are not exact Wire runs.
+
+    check() regenerates with one `wire gen` per module instead of
+    `go generate` per package, so a package whose go:generate would run
+    anything else (another generator, wire with other arguments, a compound
+    shell command) must fail closed rather than silently skip it.
+    """
+    foreign = []
+    for source in sorted(directory.glob("*.go")):
+        for line in source.read_text().splitlines():
+            command = _generate_command(line)
+            if command is not None and not _wire_directive(command):
+                foreign.append(f"{source.name}: {line}")
+    return foreign
+
+
 def discovered_packages(root, modules):
     """Return sorted Wire package paths and fail closed on malformed pairs."""
     root = root.resolve()
@@ -59,13 +101,14 @@ def discovered_packages(root, modules):
         injector_contents = injectors[0].read_text()
         directives = []
         for line in injector_contents.splitlines():
-            if not line.startswith("//go:generate "):
-                continue
-            command = line.removeprefix("//go:generate ").strip().split()
-            if WIRE_DIRECTIVE in line or (command and command[0] == "wire"):
+            command = _generate_command(line)
+            if command is not None and _wire_directive(command):
                 directives.append(line)
         if len(directives) != 1:
             raise ValueError(f"Wire injector requires exactly one reproducible generation directive: {entry}")
+        foreign = _foreign_directives(directory)
+        if foreign:
+            raise ValueError(f"Wire package has a non-Wire go:generate directive: {entry}: {foreign}")
         if "wire.Build(" not in injector_contents:
             raise ValueError(f"Wire injector does not call wire.Build: {entry}")
         generated_contents = generated.read_text()
@@ -83,30 +126,34 @@ def check(root, modules, go):
     before = {entry: (root / entry / "wire_gen.go").read_bytes() for entry in entries}
     env = dict(os.environ, GOWORK="off")
 
-    def regenerate(entry):
-        print(f"==> Wire {entry}", flush=True)
-        subprocess.run([go, "generate", "."], cwd=root / entry, env=env, check=True)
-
-    # Each package regenerates independently and Wire's package loading is
-    # mostly single-threaded, so run them concurrently. A module's first
-    # package runs alone so its generator (`go run ...wire`) is built once and
-    # cached before that module's other packages start; modules proceed
-    # independently. Entries are sorted, so the largest graph (agent-cli)
-    # starts first. The first generator failure is re-raised.
+    # One `wire gen` per module regenerates every Wire package of that module
+    # from a single package load, so dependencies shared by the graphs are
+    # type-checked once instead of once per package. It is the command each
+    # package's go:generate directive runs (`go run -mod=mod <wire>` from
+    # inside the module, so the module's pinned Wire version), and
+    # discovered_packages rejects any other go:generate directive in a Wire
+    # package, so no generator that `go generate .` would have run is
+    # skipped. Modules are independent and regenerate concurrently; the first
+    # generator failure is re-raised.
     module_names = sorted((Path(module).as_posix() for module in modules), key=len, reverse=True)
     groups = {}
     for entry in entries:
-        owner = next((name for name in module_names if entry.startswith(name + "/")), entry)
+        owner = next((name for name in module_names if entry.startswith(name + "/")), None)
+        if owner is None:
+            raise ValueError(f"Wire package is outside the checked modules: {entry}")
         groups.setdefault(owner, []).append(entry)
-    workers = max(1, min(len(entries), os.cpu_count() or 1))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        def regenerate_module(group):
-            regenerate(group[0])
-            return [pool.submit(regenerate, entry) for entry in group[1:]]
 
-        heads = [pool.submit(regenerate_module, group) for group in groups.values()]
-        followers = [future for head in heads for future in head.result()]
-        for future in followers:
+    def regenerate(owner, group):
+        print(f"==> Wire {owner}: {' '.join(group)}", flush=True)
+        packages = ["./" + Path(entry).relative_to(owner).as_posix() for entry in group]
+        subprocess.run(
+            [go, "run", "-mod=mod", WIRE_DIRECTIVE, "gen", *packages],
+            cwd=root / owner, env=env, check=True,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(groups)) as pool:
+        futures = [pool.submit(regenerate, owner, group) for owner, group in groups.items()]
+        for future in futures:
             future.result()
     if discovered_packages(root, modules) != entries:
         raise ValueError("Wire package inventory changed during regeneration")

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -58,32 +59,64 @@ func discoverModules(ctx context.Context, goBinary, repoRoot string, dirs, patte
 }
 
 func discoverModulesForTarget(ctx context.Context, goBinary, repoRoot string, dirs, patterns []string, goos, goarch string) ([]*Module, error) {
-	modules := make([]*Module, 0, len(dirs))
+	resolvedDirs := make([]string, 0, len(dirs))
 	seen := make(map[string]struct{}, len(dirs))
 	for _, rawDir := range dirs {
-		resolved, err := resolveRepoPath(rawDir, repoRoot)
+		resolved, err := resolveModuleDir(rawDir, repoRoot)
 		if err != nil {
-			return nil, fmt.Errorf("module %q: %w", rawDir, err)
+			return nil, err
 		}
-		info, err := os.Stat(resolved)
-		if err != nil {
-			return nil, fmt.Errorf("inspect module %q: %w", rawDir, err)
-		}
-		if !info.IsDir() {
-			return nil, fmt.Errorf("module %q is not a directory", rawDir)
-		}
-		resolved = canonicalPath(resolved)
 		if _, ok := seen[resolved]; ok {
 			return nil, fmt.Errorf("module directory %q was specified more than once", rawDir)
 		}
 		seen[resolved] = struct{}{}
-		module, err := discoverModule(ctx, goBinary, resolved, patterns, goos, goarch)
-		if err != nil {
-			return nil, err
-		}
-		modules = append(modules, module)
+		resolvedDirs = append(resolvedDirs, resolved)
+	}
+	modules := make([]*Module, len(resolvedDirs))
+	err := forEachModule(len(resolvedDirs), func(index int) error {
+		module, err := discoverModule(ctx, goBinary, resolvedDirs[index], patterns, goos, goarch)
+		modules[index] = module
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 	return modules, nil
+}
+
+func resolveModuleDir(rawDir, repoRoot string) (string, error) {
+	resolved, err := resolveRepoPath(rawDir, repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("module %q: %w", rawDir, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("inspect module %q: %w", rawDir, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("module %q is not a directory", rawDir)
+	}
+	return canonicalPath(resolved), nil
+}
+
+// forEachModule runs work for every module index concurrently. Each module is
+// an independent go list / type-check unit, so the serial loop only added the
+// modules' wall times together. The error reported is the one from the lowest
+// index, which is the error the former serial loop would have returned first,
+// so failures stay deterministic.
+func forEachModule(count int, work func(index int) error) error {
+	errs := make([]error, count)
+	var group sync.WaitGroup
+	for index := range count {
+		group.Go(func() { errs[index] = work(index) })
+	}
+	group.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func canonicalPath(name string) string {
@@ -168,12 +201,9 @@ func setEnv(environment []string, key, value string) []string {
 }
 
 func loadTypes(ctx context.Context, modules []*Module, goos, goarch string) error {
-	for _, module := range modules {
-		if err := loadModuleTypes(ctx, module, goos, goarch); err != nil {
-			return err
-		}
-	}
-	return nil
+	return forEachModule(len(modules), func(index int) error {
+		return loadModuleTypes(ctx, modules[index], goos, goarch)
+	})
 }
 
 func loadModuleTypes(ctx context.Context, module *Module, goos, goarch string) error {

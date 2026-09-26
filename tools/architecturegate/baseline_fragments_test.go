@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -53,22 +54,73 @@ func TestBaselineDirectoryLoadsFragmentsAndRejectsDuplicates(t *testing.T) {
 	}
 }
 
-func TestHistoricalBaselineDirectoryAggregatesFragments(t *testing.T) {
+func TestHistoricalBaselineDirectoryMatchesWorkingTreeLoad(t *testing.T) {
 	root := t.TempDir()
 	gitTestCommand(t, root, "init")
 	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
 	gitTestCommand(t, root, "config", "user.name", "architecturegate")
-	entry := BaselineEntry{Rule: "file-lines", Module: "example.com/app", Package: "example.com/app", File: "app.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	data, err := baselineJSON(Baseline{Version: baselineVersion, SourceCommit: "reviewed", Entries: []BaselineEntry{entry}})
+	fragments := map[string]BaselineEntry{
+		"baselines/example.com/app/app.json":   {Rule: "file-lines", Module: "example.com/app", Package: "example.com/app", File: "app.go", Value: 401, Rationale: "legacy", Phase: "P0"},
+		"baselines/example.com/app/b/b.json":   {Rule: "function-lines", Module: "example.com/app", Package: "example.com/app/b", File: "b/b.go", Symbol: "B", Value: 81, Rationale: "legacy", Phase: "P0"},
+		"baselines/example.com/zed/zed z.json": {Rule: "file-lines", Module: "example.com/zed", Package: "example.com/zed", File: "zed.go", Value: 402, Rationale: "legacy", Phase: "P0"},
+	}
+	for path, entry := range fragments {
+		data, err := baselineJSON(Baseline{Version: baselineVersion, SourceCommit: "reviewed", Entries: []BaselineEntry{entry}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFixture(t, root, path, string(data))
+	}
+	writeFixture(t, root, "baselines/README.md", "not a fragment\n")
+	gitTestCommand(t, root, "add", ".")
+	gitTestCommand(t, root, "commit", "-m", "sharded baseline")
+	historical, found, err := loadHistoricalBaseline(context.Background(), "git", root, "HEAD", "baselines")
+	if err != nil || !found {
+		t.Fatalf("historical baseline found=%v, err=%v", found, err)
+	}
+	current, err := loadBaseline("baselines", root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFixture(t, root, "baselines/app.json", string(data))
+	if !reflect.DeepEqual(historical, current) {
+		t.Fatalf("historical baseline = %#v\nworking tree baseline = %#v", historical, current)
+	}
+	added := current
+	added.Entries = append(append([]BaselineEntry(nil), current.Entries...), BaselineEntry{Rule: "file-lines", Module: "example.com/app", Package: "example.com/app", File: newFixtureFile, Value: 401, Rationale: "legacy", Phase: "P0"})
+	if issues := compareBaselineHistory(context.Background(), "git", root, filepath.Join(root, "baselines"), "HEAD", added); !hasRule(issues, "baseline-history-add") {
+		t.Fatalf("added exemption was accepted against a sharded merge-base baseline: %#v", issues)
+	}
+	raised := current
+	raised.Entries = append([]BaselineEntry(nil), current.Entries...)
+	raised.Entries[0].Value++
+	if issues := compareBaselineHistory(context.Background(), "git", root, filepath.Join(root, "baselines"), "HEAD", raised); !hasRule(issues, "baseline-history-increase") {
+		t.Fatalf("raised ceiling was accepted against a sharded merge-base baseline: %#v", issues)
+	}
+}
+
+func TestHistoricalBaselineDirectoryRejectsCorruptFragment(t *testing.T) {
+	root := t.TempDir()
+	gitTestCommand(t, root, "init")
+	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
+	gitTestCommand(t, root, "config", "user.name", "architecturegate")
+	writeFixture(t, root, "baselines/bad.json", "{")
 	gitTestCommand(t, root, "add", ".")
-	gitTestCommand(t, root, "commit", "-m", "sharded baseline")
-	baseline, found, err := loadHistoricalBaseline(context.Background(), "git", root, "HEAD", "baselines")
-	if err != nil || !found || len(baseline.Entries) != 1 {
-		t.Fatalf("historical baseline = %#v, found=%v, err=%v", baseline, found, err)
+	gitTestCommand(t, root, "commit", "-m", "corrupt baseline")
+	if _, _, err := loadHistoricalBaseline(context.Background(), "git", root, "HEAD", "baselines"); err == nil || !strings.Contains(err.Error(), "bad.json") {
+		t.Fatalf("corrupt fragment error = %v", err)
+	}
+}
+
+func TestParseGitTreeJSONRejectsNonBlobFragmentsAndMalformedRecords(t *testing.T) {
+	blobs, err := parseGitTreeJSON([]byte("100644 blob bbb\tb.json\x00100644 blob ccc\tnotes.md\x00100644 blob aaa\ta.json\x00"))
+	if err != nil || len(blobs) != 2 || blobs[0].Path != "a.json" || blobs[1].Object != "bbb" {
+		t.Fatalf("parsed blobs = %#v, err=%v", blobs, err)
+	}
+	if _, err := parseGitTreeJSON([]byte("160000 commit abc\tsub.json\x00")); err == nil {
+		t.Fatal("submodule fragment was accepted")
+	}
+	if _, err := parseGitTreeJSON([]byte("garbage\x00")); err == nil {
+		t.Fatal("malformed ls-tree record was accepted")
 	}
 }
 

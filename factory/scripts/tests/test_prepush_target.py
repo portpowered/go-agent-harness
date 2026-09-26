@@ -197,6 +197,11 @@ class PrepushTargetTests(unittest.TestCase):
                 ["init", "-q"],
                 ["config", "user.email", "prepush-test@example.test"],
                 ["config", "user.name", "prepush test"],
+                # No detached auto-maintenance after commit: it would
+                # write objects/maintenance.lock while the test inspects
+                # the object directory.
+                ["config", "maintenance.auto", "false"],
+                ["config", "gc.auto", "0"],
                 ["add", "-A"],
                 ["commit", "-qm", "baseline"],
             ):
@@ -253,6 +258,11 @@ class PrepushTargetTests(unittest.TestCase):
                 ["init", "-q"],
                 ["config", "user.email", "prepush-test@example.test"],
                 ["config", "user.name", "prepush test"],
+                # No detached auto-maintenance after commit: it would
+                # write objects/maintenance.lock while the test inspects
+                # the object directory.
+                ["config", "maintenance.auto", "false"],
+                ["config", "gc.auto", "0"],
                 ["config", "core.trustctime", "false"],
                 ["add", "-A"],
                 ["commit", "-qm", "baseline"],
