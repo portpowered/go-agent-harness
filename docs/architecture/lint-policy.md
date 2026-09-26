@@ -175,17 +175,23 @@ both in real CI runs), rather than on a macOS lane of its own. The job caches
 the golangci-lint directory through `extra-paths`, which changed its cache
 version: the first run after that change restored nothing and ran cold.
 
-Merged lanes were measured cold in #591 and later and do not fit: `make lint
-LINT_SHARD=libraries` 131-223s, `make lint-cross LINT_CROSS_GOOS=windows
-LINT_SHARD=all` 176-225s, `make lint-cross LINT_CROSS_GOOS=darwin
-LINT_SHARD=all` 155-206s, `make lint LINT_SHARD=all` ~250s, and `make
-lint-cross LINT_CROSS_GOOS="windows darwin"` 158-163s for `LINT_SHARD=agent-cli`
-and 144-180s for `LINT_SHARD=support` (too close to the budget). Warm, every one
-of them takes under 35s, so the lanes can merge once cold compiles shrink:
-they are one matrix in `.github/workflows/ci.yml`, and merging two lanes is a
-change to one entry's `LINT_SHARD` or `LINT_CROSS_GOOS` (for example
-`LINT_CROSS_GOOS="windows darwin"`) plus the lane count in `CI (static)`'s
-`--min-matches`.
+Merged lanes were measured cold (empty Go build, module and golangci-lint
+caches) in #591, #601 and earlier and do not fit: `make lint
+LINT_SHARD=libraries` 131-223s, `make lint LINT_SHARD=all` 243-250s, one lane
+per operating system 176-243s, `make lint-cross LINT_CROSS_GOOS=windows
+LINT_SHARD=libraries` 142-179s and the darwin equivalent 127-177s, `make
+lint-cross LINT_CROSS_GOOS="windows darwin"` 158-173s for
+`LINT_SHARD=agent-cli` and 144-192s for `runtime` or `support`, linux
+agent-cli plus support 174s, and `CI (static)`'s own checks plus any linux lane
+163-170s. A lane's cold time is roughly the compile and analysis CPU of its
+modules on the 4-vCPU runner and varies by up to a third between runs, so a
+merge needs a wide margin. Warm, every one of them takes under 60s, so the
+lanes can merge once cold compiles shrink: they are one matrix in
+`.github/workflows/ci.yml`, and merging two lanes is a change to one entry's
+`LINT_SHARD` or `LINT_CROSS_GOOS` (for example `LINT_CROSS_GOOS="windows
+darwin"`) plus the lane count in `CI (static)`'s `--min-matches` (list the
+replaced lanes' caches in go-cache's `fallback-cache-names` so the merged
+lane's first run is warm).
 
 The required `CI (static)` check runs `make fmt`, `make
 check-ci-test-partition` and `make architecture-size-check` (75-100s cold;

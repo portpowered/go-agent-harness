@@ -10,6 +10,16 @@ entry is fresh again while unused ones stay backdated.
 ninety minutes, i.e. entries this job never touched. The saved cache is then
 exactly this job's working set instead of growing with every commit until
 Go's own five-day trim catches up.
+
+`snapshot MANIFEST DIR...` runs after the restore and records the file names
+under each cached directory (plus the newline-separated directories in
+$EXTRA_PATHS, go-cache's extra-paths); `changed MANIFEST DIR...` runs before the save
+and prints `save=true` when any directory gained a file since (a new build,
+test result, module or lint analysis entry) and `save=false` otherwise. A
+cache that gained nothing would save the same entries it restored, so
+go-cache-save skips the upload (entries it would prune stay until the next
+save that has something new; they are what the job restored, so the cache
+does not grow).
 """
 
 from __future__ import annotations
@@ -31,9 +41,37 @@ def entries(cache_dir: Path):
             yield from (entry for entry in shard.iterdir() if entry.is_file())
 
 
+def file_names(directories: list[str]) -> set[str]:
+    names = set()
+    for index, directory in enumerate(directories):
+        for parent, _, files in os.walk(directory):
+            relative = os.path.relpath(parent, directory)
+            names.update(f"{index}/{relative}/{name}" for name in files)
+    return names
+
+
+def manifest(mode: str, path: str, directories: list[str]) -> int:
+    directories = directories + [line.strip() for line in os.environ.get("EXTRA_PATHS", "").splitlines() if line.strip()]
+    if mode == "snapshot":
+        Path(path).write_text("\n".join(sorted(file_names(directories))) + "\n")
+        print(f"snapshot: recorded the files of {len(directories)} cached directories")
+        return 0
+    try:
+        before = set(Path(path).read_text().splitlines())
+    except FileNotFoundError:
+        print("save=true")
+        return 0
+    added = file_names(directories) - before
+    print(f"changed: {len(added)} new cached files", file=sys.stderr)
+    print(f"save={'true' if added else 'false'}")
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) >= 3 and sys.argv[1] in {"snapshot", "changed"}:
+        return manifest(sys.argv[1], sys.argv[2], sys.argv[3:])
     if len(sys.argv) != 3 or sys.argv[1] not in {"age", "prune"}:
-        print("usage: gocache_working_set.py age|prune GOCACHE", file=sys.stderr)
+        print("usage: gocache_working_set.py age|prune GOCACHE | snapshot|changed MANIFEST DIR...", file=sys.stderr)
         return 2
     mode, cache_dir = sys.argv[1], Path(sys.argv[2])
     if not cache_dir.is_dir():

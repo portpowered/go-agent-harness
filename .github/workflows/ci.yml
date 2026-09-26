@@ -5,9 +5,34 @@ on:
   push:
     branches:
       - main
+  # The nightly run re-executes every test (GO_TEST_COUNT=1) on main, so a
+  # result the test cache replayed on pull requests is re-proven daily.
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+    inputs:
+      fresh:
+        description: Re-run every test instead of reusing Go's cached test results.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+
+# Test runs reuse Go's test result cache (restored with each job's build
+# cache): a package whose test binary, flags, and the environment variables
+# and in-module files its tests read are unchanged since a cached run replays
+# that result, coverage profile included, instead of re-running. That is not
+# a skip: any change to those inputs re-runs the package. Tests whose real
+# inputs Go cannot see always run with -count=1 (the packages listed in
+# scripts/go-test-fresh-packages.txt, the tool modules that read the
+# workspace, and the race, device, Chrome and integration runs); every
+# cached run goes through scripts/go-test-input-guard.py, which fails an
+# unlisted package that reads such inputs, so the list is enforced here. The
+# scheduled run and a manual dispatch set GO_TEST_COUNT=1, which re-runs
+# every test (and does not save caches: see go-cache-save).
+env:
+  GO_TEST_COUNT: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.fresh)) && '1' || '' }}
 
 jobs:
   # Every job starts at once (no `needs:`), and each must finish within three
@@ -95,10 +120,16 @@ jobs:
   # runtime, support, libraries, all) or LINT_CROSS_GOOS (e.g. "windows
   # darwin") once the merged lane fits the cold budget. golangci-lint loads
   # dependencies from compiled export data, so a cold lane spends most of
-  # its time compiling: every lane here takes 80-140s cold, while the merged
-  # lanes measured in #591 and in run 36195053824 (linux libraries, windows
-  # all, darwin all, and windows+darwin agent-cli 158-163s or support
-  # 144-180s) took up to 225s cold, too close to or over the budget.
+  # its time compiling, and a lane's cold time is roughly the sum of its
+  # modules' compile and analysis CPU on the 4-vCPU runner, and varies by
+  # up to ~35% between runs. Every merge measured cold (empty Go build,
+  # module and golangci-lint caches) went over or too close to the budget:
+  # windows or darwin libraries 142-179s and 127-177s (#601: one run in an
+  # isolated experiment, one in the full workflow), linux libraries 196s,
+  # linux agent-cli+support 174s, windows+darwin agent-cli 173s, runtime
+  # 192s, support 191s, one lane per OS 213-243s, and CI (static)'s checks
+  # plus any linux lane 163-170s (runs 36210316761, 36210652899,
+  # 36211278527, 36211944579). The single lanes took 66-148s cold there.
   #
   # Every lane enforces the hard limits in .golangci.yml (which also loads the
   # opt-in live/e2e/e2e_internal/stress/sessioncapacityramp test tags). The
@@ -626,3 +657,34 @@ jobs:
           matched-key: ${{ steps.go.outputs.matched-key }}
           gocache: ${{ steps.go.outputs.gocache }}
           gomodcache: ${{ steps.go.outputs.gomodcache }}
+
+  # The scheduled run re-executes every test (GO_TEST_COUNT=1). Its failure
+  # opens (or comments on) an issue, so a regression the test cache replayed
+  # past on pull requests is never left unnoticed. Skipped on every other
+  # event.
+  nightly-report:
+    name: Report nightly fresh-test failure
+    if: failure() && github.event_name == 'schedule'
+    needs: [static, static-lint, unit, coverage-libraries, coverage, race, macos-audio-release, webmcp-chrome, windows-audio-portable]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Nightly fresh CI run failed
+        run: |
+          body="The nightly CI run (every test re-executed, GO_TEST_COUNT=1) failed on ${GITHUB_SHA::9}: ${RUN_URL}"
+          number="$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body
+
+          A test that passes from Go's test cache on pull requests may fail when re-run: reproduce with \`make coverage GO_TEST_COUNT=1\` (or dispatch CI with fresh). Close this issue once the nightly run passes again."
+          fi
