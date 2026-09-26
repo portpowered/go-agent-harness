@@ -36,6 +36,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 // toolConversationCallID is the call_id shared by the scripted provider tool
@@ -367,6 +369,10 @@ func assertToolResultFollowUpOrdering(t *testing.T, wirePath string, resultSeque
 // verbatim on the provider exchange -> the spoken reply (rendered transcript
 // plus audible recorded audio) quoting values unique to that result.
 func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationSpokenReplyReflectsRealToolResult)
+}
+
+func testSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing.T) {
 	// The representative real-time tool-call conversation: it streams the
 	// full 2.75s committed corpus at real pace, while the controls stream a
 	// short slice (conversationFixtureInputs).
@@ -418,6 +424,10 @@ func TestSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing
 // transcript-reflection assertion fails naming the mismatched expectation —
 // never via timeout.
 func TestSessionToolCallConversationDifferentResultFailsReflection(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationDifferentResultFailsReflection)
+}
+
+func testSessionToolCallConversationDifferentResultFailsReflection(t *testing.T) {
 	wavPath, reply := conversationFixtureInputs(t)
 
 	executor := &conversationResultExecutor{result: toolResultControl}

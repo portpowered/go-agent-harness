@@ -17,6 +17,8 @@ import (
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 // This suite proves, through the shipped 'agent session' CLI over the
@@ -301,6 +303,10 @@ func TestSessionAudioInNoiseFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 // commit-requiring fixture must produce at least one real commit whose turn
 // completes, proving the zero-commit assertions discriminate speech.
 func TestSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
+	clitest.Test(t, testSessionAudioInUtteranceFixtureProducesRealCommit)
+}
+
+func testSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
 	wavPath := locateCorpusWAV(t, "utt_short_16k")
 	samples := loadCorpusHarnessSamples(t, wavPath)
 	wirePath := buildSpeechCommitFixture(t, samples)

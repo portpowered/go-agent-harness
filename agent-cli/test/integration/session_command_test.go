@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 func TestSessionCommand_ReplayMissingFileReturnsActionableError(t *testing.T) {
@@ -112,6 +113,10 @@ model:
 }
 
 func TestSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer(t *testing.T) {
+	clitest.Test(t, testSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer)
+}
+
+func testSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer(t *testing.T) {
 	sessionInf := &integrationScriptedSessionInferencer{
 		events: []messages.StreamMessage{
 			{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
@@ -462,6 +467,10 @@ func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnIsByteDeterministic(t *
 // capture, not a live provider, so there is nothing for --record-dir to
 // observe unless the caller wants one.
 func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t *testing.T) {
+	clitest.Test(t, testSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir)
+}
+
+func testSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
@@ -498,6 +507,10 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t
 // strict replay dialer still reports a diff-bearing mismatch instead of the
 // self-driving path silently accepting different audio.
 func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch(t *testing.T) {
+	clitest.Test(t, testSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch)
+}
+
+func testSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch(t *testing.T) {
 	agentCLI, err := wire.InitializeMockAgentCLI(
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
@@ -797,82 +810,4 @@ func TestSessionCommand_ReplayGrokWebSocketCaptureFailsOnDivergentOutbound(t *te
 	if elapsed >= 2*time.Second {
 		t.Fatalf("replay divergence should fail before the bounded session timeout; elapsed=%s", elapsed)
 	}
-}
-
-type integrationScriptedSessionInferencer struct {
-	events    []messages.StreamMessage
-	connected bool
-	sentText  chan string
-}
-
-func (s *integrationScriptedSessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	s.connected = true
-	if s.sentText == nil {
-		s.sentText = make(chan string, 8)
-	}
-	session := newIntegrationScriptedSession(s.sentText)
-	go func() {
-		session.recv.Write(ctx, messages.StreamMessage{
-			Type:  messages.StreamTypeSessionOpen,
-			Value: messages.NewSessionOpenValue("integration-session", "openai"),
-		})
-		time.Sleep(150 * time.Millisecond)
-		for _, evt := range s.events {
-			session.recv.Write(ctx, evt)
-		}
-	}()
-	return session, nil
-}
-
-func assertIntegrationSessionReceivedText(t *testing.T, sessionInf *integrationScriptedSessionInferencer, want string) {
-	t.Helper()
-
-	select {
-	case got := <-sessionInf.sentText:
-		if got != want {
-			t.Fatalf("session received prompt = %q, want %q", got, want)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatalf("session did not receive prompt %q within 10s", want)
-	}
-}
-
-type integrationScriptedSession struct {
-	recv     *messages.TypedBuffer[messages.StreamMessage]
-	done     chan struct{}
-	once     sync.Once
-	sentText chan string
-}
-
-func newIntegrationScriptedSession(sentText chan string) *integrationScriptedSession {
-	return &integrationScriptedSession{
-		recv:     messages.NewTypedBuffer[messages.StreamMessage](32),
-		done:     make(chan struct{}),
-		sentText: sentText,
-	}
-}
-
-func (s *integrationScriptedSession) Send(_ context.Context, msg messages.StreamMessage) bool {
-	if v, ok := msg.Value.(*messages.TextDeltaValue); ok && v != nil {
-		select {
-		case s.sentText <- v.Content:
-		default:
-		}
-	}
-	return true
-}
-
-func (s *integrationScriptedSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	return s.recv
-}
-
-func (s *integrationScriptedSession) Done() <-chan struct{} {
-	return s.done
-}
-
-func (s *integrationScriptedSession) Close() error {
-	s.once.Do(func() {
-		close(s.done)
-	})
-	return nil
 }

@@ -26,6 +26,8 @@ import (
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 func shortConversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
@@ -321,7 +323,7 @@ func assertConversationAcceptedExchange(t *testing.T, stdout, wirePath string, e
 }
 
 func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *testing.T) {
-	t.Run("provider close while unresolved", func(t *testing.T) {
+	clitest.Subtest(t, "provider close while unresolved", func(t *testing.T) {
 		wavPath, reply := shortConversationFixtureInputs(t)
 		_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
 			insertConversationProviderCloseBeforeResult(t, capture)
@@ -361,7 +363,7 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 		}
 	})
 
-	t.Run("accepted result then completion", func(t *testing.T) {
+	clitest.Subtest(t, "accepted result then completion", func(t *testing.T) {
 		wavPath, reply := shortConversationFixtureInputs(t)
 		executor := newGatedConversationExecutor(toolResultPositive)
 		defer executor.releaseResult()
@@ -434,6 +436,10 @@ func TestSessionToolResultConversationContinuesWithoutProviderCloseShortcut(t *t
 }
 
 func TestSessionToolResultConversationMissingContinuationIsBounded(t *testing.T) {
+	clitest.Test(t, testSessionToolResultConversationMissingContinuationIsBounded)
+}
+
+func testSessionToolResultConversationMissingContinuationIsBounded(t *testing.T) {
 	wavPath, reply := shortConversationFixtureInputs(t)
 	_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
 		removeConversationContinuationAfterResult(t, capture)
@@ -474,7 +480,7 @@ func TestSessionToolResultConversationAudioAbsenceAndSignalControls(t *testing.T
 	}
 
 	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
+		clitest.Subtest(t, testCase.name, func(t *testing.T) {
 			wavPath, reply := shortConversationFixtureInputs(t)
 			_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
 				testCase.mutate(t, capture)

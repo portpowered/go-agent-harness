@@ -29,8 +29,13 @@ command surface.
 
 ## The exact command
 
-The proof enters only through the real shipped CLI executed as a subprocess
-(the binary built once per package run from `./cmd/agent`):
+The proof enters only through the shipped command entrypoint (`cli.Execute`
+over the production composition, the path `./cmd/agent` uses), run
+in-process inside a `testing/synctest` bubble (`clitest`). The WAV still
+streams at its real-time `--audio-in` pacing, on the bubble's virtual clock,
+so the ~14 s input finishes in well under a second of wall time; the positive
+test also requires the run to span at least the WAV's paced duration of
+virtual time:
 
 ```bash
 agent session \

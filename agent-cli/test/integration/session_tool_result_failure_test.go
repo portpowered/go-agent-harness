@@ -10,6 +10,7 @@ import (
 	"time"
 
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/spf13/cobra"
 )
@@ -171,7 +172,7 @@ func assertUnresolvedFailure(t *testing.T, err error) {
 }
 
 func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *testing.T) {
-	t.Run("provider close", func(t *testing.T) {
+	clitest.Subtest(t, "provider close", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		runErr := make(chan error, 1)
@@ -186,14 +187,14 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		}
 	})
 
-	t.Run("buffer full result send", func(t *testing.T) {
+	clitest.Subtest(t, "buffer full result send", func(t *testing.T) {
 		session := newUnresolvedFailureSession(messages.SessionSendBufferFull, errors.New("provider result queue is full"))
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{})}
 		runErr := runUnresolvedFailureSession(t, session, executor)
 		assertUnresolvedFailure(t, runErr)
 	})
 
-	t.Run("caller cancellation", func(t *testing.T) {
+	clitest.Subtest(t, "caller cancellation", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -211,7 +212,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		}
 	})
 
-	t.Run("caller deadline", func(t *testing.T) {
+	clitest.Subtest(t, "caller deadline", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -232,7 +233,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 		}
 	})
 
-	t.Run("explicit client close", func(t *testing.T) {
+	clitest.Subtest(t, "explicit client close", func(t *testing.T) {
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)

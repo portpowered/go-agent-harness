@@ -23,6 +23,8 @@ import (
 	"time"
 
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 func (s *cliLiveRecordDirServer) shutdown() {
@@ -56,6 +58,10 @@ type cliLiveRecordingEntry struct {
 }
 
 func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle)
+}
+
+func testSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) {
 	server := newCLILiveRecordDirServer(false)
 	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -138,6 +144,10 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 }
 
 func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary)
+}
+
+func testSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
 	server := newCLILiveBargeScheduledBoundaryServer()
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -176,6 +186,24 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 	if dialCount != 1 || serverVAD || len(providerErrors) != 0 {
 		t.Fatalf("active scheduled provider state = dials:%d server_vad:%t errors:%v timeline=%v; want one client-owned clean session", dialCount, serverVAD, providerErrors, timeline)
 	}
+	assertBargeInScheduledTimeline(t, timeline)
+
+	appendAudio := audioPayloadsFromOutbound(outbound)
+	if len(appendAudio) != 3 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 || len(appendAudio[2]) == 0 {
+		t.Fatalf("active scheduled input payloads = %v, want three non-empty append payloads", audioLengths(appendAudio))
+	}
+	observedMu.Lock()
+	observedCopy := append([]messages.StreamMessage(nil), observed...)
+	observedMu.Unlock()
+	assertBargeInScheduledResponseAudio(t, observedCopy)
+}
+
+// assertBargeInScheduledTimeline requires three scheduled turns with one
+// cancellation, ordered response.created < response.cancel < second append <
+// second response.done < third append, with the cancel sent before the first
+// response's terminal event.
+func assertBargeInScheduledTimeline(t *testing.T, timeline []string) {
+	t.Helper()
 	if countTimeline(timeline, "out:input_audio_buffer.append") != 3 ||
 		countTimeline(timeline, "out:input_audio_buffer.commit") != 3 ||
 		countTimeline(timeline, "out:response.create") != 3 ||
@@ -194,16 +222,14 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 	if firstResponseDone := indexOfTimeline(timeline, "in:response.done", 0); firstResponseDone <= cancelIndex {
 		t.Fatalf("cancel did not win before first response terminality: %v", timeline)
 	}
+}
 
-	appendAudio := audioPayloadsFromOutbound(outbound)
-	if len(appendAudio) != 3 || len(appendAudio[0]) == 0 || len(appendAudio[1]) == 0 || len(appendAudio[2]) == 0 {
-		t.Fatalf("active scheduled input payloads = %v, want three non-empty append payloads", audioLengths(appendAudio))
-	}
-	observedMu.Lock()
-	observedCopy := append([]messages.StreamMessage(nil), observed...)
-	observedMu.Unlock()
+// assertBargeInScheduledResponseAudio requires the replacement and third
+// responses' audio on the stream and no stale post-cancel audio.
+func assertBargeInScheduledResponseAudio(t *testing.T, observed []messages.StreamMessage) {
+	t.Helper()
 	seenReplacement, seenThird, seenStale := false, false, false
-	for _, msg := range observedCopy {
+	for _, msg := range observed {
 		value, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok || value == nil {
 			continue
@@ -218,17 +244,21 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 		}
 	}
 	if !seenReplacement {
-		t.Fatalf("replacement response audio was not observed; stream=%#v", observedCopy)
+		t.Fatalf("replacement response audio was not observed; stream=%#v", observed)
 	}
 	if !seenThird {
-		t.Fatalf("third scheduled response audio was not observed; stream=%#v", observedCopy)
+		t.Fatalf("third scheduled response audio was not observed; stream=%#v", observed)
 	}
 	if seenStale {
-		t.Fatalf("stale post-cancel provider audio crossed the stream boundary; stream=%#v", observedCopy)
+		t.Fatalf("stale post-cancel provider audio crossed the stream boundary; stream=%#v", observed)
 	}
 }
 
 func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput)
+}
+
+func testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
 	server := newCLILiveRecordDirCloseAfterTurnServer(2)
 	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -535,63 +565,4 @@ func assertCLIRecordingEntries(t *testing.T, entries []cliLiveRecordingEntry, tu
 			t.Fatalf("session log response %d text = %q, want %q; entry=%#v", index+1, entry.Response.Text, wantText, entry)
 		}
 	}
-}
-
-func containsTimeline(timeline []string, want string) bool {
-	return indexOfTimeline(timeline, want, 0) >= 0
-}
-
-func countTimeline(timeline []string, want string) int {
-	count := 0
-	for _, event := range timeline {
-		if event == want {
-			count++
-		}
-	}
-	return count
-}
-
-func indexOfTimeline(timeline []string, want string, occurrence int) int {
-	seen := 0
-	for index, event := range timeline {
-		if event != want {
-			continue
-		}
-		if seen == occurrence {
-			return index
-		}
-		seen++
-	}
-	return -1
-}
-
-func audioLengths(audio [][]byte) []int {
-	lengths := make([]int, len(audio))
-	for index, data := range audio {
-		lengths[index] = len(data)
-	}
-	return lengths
-}
-
-func audioLengthsFromOutbound(outbound []cliLiveOutbound) []int {
-	lengths := make([]int, 0, len(outbound))
-	for _, event := range outbound {
-		if event.typeName == rtEventInputAudioAppend {
-			lengths = append(lengths, len(event.audio))
-		}
-	}
-	return lengths
-}
-
-func scheduledAppendRange(timeline []string, start, end int) (first, count int) {
-	first = -1
-	for index := start; index < end; index++ {
-		if timeline[index] == "out:input_audio_buffer.append" {
-			if first < 0 {
-				first = index
-			}
-			count++
-		}
-	}
-	return first, count
 }

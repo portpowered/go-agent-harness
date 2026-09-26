@@ -15,6 +15,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const (
@@ -320,6 +322,10 @@ func assertConversationMissingResultFailure(t *testing.T, runErr error, elapsed 
 // provider-issued tool name. The transport still accepts the paired result,
 // so the failure is specifically the observed-vs-expected call identity.
 func TestSessionToolCallConversationWrongToolNameIsRejected(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationWrongToolNameIsRejected)
+}
+
+func testSessionToolCallConversationWrongToolNameIsRejected(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateConversationCallIdentity(t, capture, conversationWrongToolName, "")
 	})
@@ -354,6 +360,10 @@ func TestSessionToolCallConversationWrongArgumentsAreRejected(t *testing.T) {
 // the provider call records. The live executor must observe one call and the
 // one accepted result must still unlock the normal follow-up speech.
 func TestSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationDuplicateCallIsDeduplicated)
+}
+
+func testSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateConversationCall(t, capture)
 	})
@@ -378,6 +388,10 @@ func TestSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
 // normal close boundary reports the still-unresolved call instead of allowing
 // the missing result to be silently discarded.
 func TestSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationMissingResultIsRejectedAtGate)
+}
+
+func testSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		removeExpectedConversationResult(t, capture)
 		removeConversationFollowUp(t, capture)
@@ -398,6 +412,10 @@ func TestSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) 
 // the replay remains at the duplicate outbound boundary and must fail within a
 // short explicit bound instead of treating one result as two.
 func TestSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness)
+}
+
+func testSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateExpectedConversationResult(t, capture)
 	})
@@ -424,6 +442,10 @@ func TestSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness
 }
 
 func TestSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate)
+}
+
+func testSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateExpectedConversationResult(t, capture, conversationOtherCallID, toolResultPositive)
 	})
@@ -439,6 +461,10 @@ func TestSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *te
 }
 
 func TestSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate)
+}
+
+func testSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate(t *testing.T) {
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateExpectedConversationResult(t, capture, "", toolResultPositive)
 	})

@@ -25,6 +25,8 @@ import (
 	// supplies an empty token-limit-style provider failure.
 
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const (
@@ -384,6 +386,10 @@ func assertReadImageSpokenFailureLifecycle(t *testing.T, events []messages.Strea
 // path: spoken input, one default read_image execution, one compact result,
 // one exact typed image, and a grounded assistant continuation.
 func TestReadImageSpokenProductionComposition(t *testing.T) {
+	clitest.Test(t, testReadImageSpokenProductionComposition)
+}
+
+func testReadImageSpokenProductionComposition(t *testing.T) {
 	imagePath := filepath.Join(t.TempDir(), "photo.png")
 	imageBytes := readImageFixtureBytes(t)
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
@@ -413,6 +419,10 @@ func TestReadImageSpokenProductionComposition(t *testing.T) {
 // assistant output and a token-limit-style failed response. The CLI must
 // return the typed continuation failure rather than a clean close.
 func TestReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
+	clitest.Test(t, testReadImageSpokenFailedContinuationIsActionable)
+}
+
+func testReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
 	imagePath := filepath.Join(t.TempDir(), "photo.png")
 	imageBytes := readImageFixtureBytes(t)
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
@@ -466,7 +476,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 			},
 		},
 	} {
-		t.Run(testCase.name, func(t *testing.T) {
+		clitest.Subtest(t, testCase.name, func(t *testing.T) {
 			fixture := rewriteReadImageCapture(t, validFixture, testCase.mutate)
 			run := runSpokenReadImageSession(t, fixture, configDir, imagePath, wavPath)
 			if run.err == nil {

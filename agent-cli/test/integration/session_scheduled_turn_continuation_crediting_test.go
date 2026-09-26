@@ -14,6 +14,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const (
@@ -245,6 +247,10 @@ func (e *scheduledContinuationExecutor) callsSnapshot() []messages.ToolCall {
 // retain its originating scheduled lifecycle through the terminal assistant
 // continuation before the next audio input is admitted.
 func TestSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.T) {
+	clitest.Test(t, testSessionCommand_CreditsConsecutiveScheduledToolContinuations)
+}
+
+func testSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.T) {
 	secondContinuationObserved := make(chan struct{})
 	inferencer := newScheduledContinuationInferencer(secondContinuationObserved)
 	executor := &scheduledContinuationExecutor{}

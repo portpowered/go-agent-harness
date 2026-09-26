@@ -11,6 +11,8 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const sessionToolBargeInCallID = "call_barge_in_slow"
@@ -386,6 +388,10 @@ func waitSessionToolBargeInSignal(t *testing.T, signal <-chan struct{}, name str
 // barrier makes the continuation boundary explicit, while the command must
 // keep the provider session open until the correlated result is accepted.
 func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testing.T) {
+	clitest.Test(t, testSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose)
+}
+
+func testSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testing.T) {
 	inferencer := newSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
 
@@ -487,6 +493,10 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 }
 
 func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *testing.T) {
+	clitest.Test(t, testSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle)
+}
+
+func testSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *testing.T) {
 	inferencer := newActiveSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
 	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(

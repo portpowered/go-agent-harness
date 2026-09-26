@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -201,4 +203,85 @@ func writeReplayCaptureFixture(t testReporter, capture gwtesting.SessionCapture,
 		t.Fatalf("replay fixture %s rejected by the session replayer dialer: %v", name, err)
 	}
 	return path
+}
+
+func containsTimeline(timeline []string, want string) bool {
+	return indexOfTimeline(timeline, want, 0) >= 0
+}
+
+func countTimeline(timeline []string, want string) int {
+	count := 0
+	for _, event := range timeline {
+		if event == want {
+			count++
+		}
+	}
+	return count
+}
+
+func indexOfTimeline(timeline []string, want string, occurrence int) int {
+	seen := 0
+	for index, event := range timeline {
+		if event != want {
+			continue
+		}
+		if seen == occurrence {
+			return index
+		}
+		seen++
+	}
+	return -1
+}
+
+func audioLengths(audio [][]byte) []int {
+	lengths := make([]int, len(audio))
+	for index, data := range audio {
+		lengths[index] = len(data)
+	}
+	return lengths
+}
+
+func scheduledAppendRange(timeline []string, start, end int) (first, count int) {
+	first = -1
+	for index := start; index < end; index++ {
+		if timeline[index] == "out:input_audio_buffer.append" {
+			if first < 0 {
+				first = index
+			}
+			count++
+		}
+	}
+	return first, count
+}
+
+func readScheduledWAVSamples(t *testing.T, path string) []int16 {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read scheduled WAV %q: %v", path, err)
+	}
+	_, samples, err := wavio.Read(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode scheduled WAV %q: %v", path, err)
+	}
+	return samples
+}
+
+// scheduledSessionUpdate is the session.update subset the scheduled-boundary
+// tests inspect.
+type scheduledSessionUpdate struct {
+	Instructions string `json:"instructions"`
+	Tools        []struct {
+		Name string `json:"name"`
+	} `json:"tools"`
+}
+
+func scheduledUpdatesAdvertiseToolsWithoutInstructions(updates []json.RawMessage) bool {
+	for _, raw := range updates {
+		var update scheduledSessionUpdate
+		if json.Unmarshal(raw, &update) == nil && update.Instructions == "" && len(update.Tools) > 0 {
+			return true
+		}
+	}
+	return false
 }

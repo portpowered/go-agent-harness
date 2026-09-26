@@ -1,12 +1,10 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -14,10 +12,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
-// s2s-v4e-tool-unknown proves the unregistered-tool refusal through public
-// agent-cli processes. The fixtures are replay-only: no provider credentials
+// s2s-v4e-tool-unknown proves the unregistered-tool refusal through the public
+// agent-cli command entrypoint, run in-process on a virtual clock (clitest). The fixtures are replay-only: no provider credentials
 // or network connection is needed by any command under test.
 const (
 	unknownToolFixture     = "s2s-v4e-tool-unknown.capture.json"
@@ -34,7 +34,7 @@ const (
 // negative-control scenario declare this identical expectation.
 const unknownToolRefusalPayload = `{"type":"refusal","classification":"unknown_tool","tool_name":"s2s_v4e_unregistered_tool"}`
 
-const toolUnknownProcessDeadline = 60 * time.Second
+const toolUnknownRunDeadline = 60 * time.Second
 
 type agentProcessResult struct {
 	ExitCode int
@@ -87,38 +87,17 @@ func buildAgentBinary(t *testing.T) string {
 	return agentBinaryPath
 }
 
-func runAgentCLIBinary(t *testing.T, binaryPath string, args ...string) agentProcessResult {
+// runAgentCLI runs one invocation of the production-composed CLI in the
+// calling test's bubble.
+func runAgentCLI(t *testing.T, args ...string) agentProcessResult {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), toolUnknownProcessDeadline)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
-	cmd.Dir = agentCLIRoot(t)
 	// Replay is in-memory. Invalid proxy endpoints make an accidental HTTP(S)
 	// attempt fail immediately instead of allowing a test to reach the network.
-	cmd.Env = append(os.Environ(),
-		"HTTP_PROXY=http://127.0.0.1:1",
-		"HTTPS_PROXY=http://127.0.0.1:1",
-		"ALL_PROXY=http://127.0.0.1:1",
-	)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if ctx.Err() != nil {
-		t.Fatalf("agent %s exceeded %s: %v\nstdout:\n%s\nstderr:\n%s",
-			strings.Join(args, " "), toolUnknownProcessDeadline, ctx.Err(), stdout.String(), stderr.String())
+	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"} {
+		t.Setenv(name, "http://127.0.0.1:1")
 	}
-
-	exitCode := 0
-	if err != nil {
-		exitCode = 1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
-		}
-	}
-	return agentProcessResult{ExitCode: exitCode, Stdout: stdout.String(), Stderr: stderr.String()}
+	run := clitest.Run(t, clitest.Invocation{Args: args, Timeout: toolUnknownRunDeadline})
+	return agentProcessResult{ExitCode: run.ExitCode, Stdout: run.Stdout, Stderr: run.Stderr}
 }
 
 func locateUnknownToolFixture(t *testing.T, name string) string {
@@ -179,17 +158,20 @@ func parseToolRefusal(t *testing.T, output string) toolRefusalObservation {
 	return refusal
 }
 
-// TestUnknownToolRefusalThroughBuiltCLI proves the positive unknown-tool path
-// from outside the command graph. It first observes the active tool registry
+// TestUnknownToolRefusalThroughCLI proves the positive unknown-tool path
+// from the command entrypoint. It first observes the active tool registry
 // through the public CLI, then runs the real session replay and probe commands
-// as child processes with their production argv and replay-only transport.
-func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
-	binaryPath := buildAgentBinary(t)
+// with their production argv and replay-only transport.
+func TestUnknownToolRefusalThroughCLI(t *testing.T) {
+	clitest.Test(t, testUnknownToolRefusalThroughCLI)
+}
+
+func testUnknownToolRefusalThroughCLI(t *testing.T) {
 	fixture := locateUnknownToolFixture(t, unknownToolFixture)
 	scenario := locateUnknownToolFixture(t, unknownToolScenario)
 	configDir := t.TempDir()
 
-	registry := runAgentCLIBinary(t, binaryPath, "--config-dir", configDir, "tool", "--list")
+	registry := runAgentCLI(t, "--config-dir", configDir, "tool", "--list")
 	if registry.ExitCode != 0 {
 		t.Fatalf("tool --list failed: exit=%d stdout=%q stderr=%q", registry.ExitCode, registry.Stdout, registry.Stderr)
 	}
@@ -200,7 +182,7 @@ func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
 		t.Fatalf("positive fixture tool %q unexpectedly appears in active CLI registry: %q", unknownToolName, registry.Stdout)
 	}
 
-	session := runAgentCLIBinary(t, binaryPath,
+	session := runAgentCLI(t,
 		"--config-dir", configDir,
 		"session",
 		"--replay", fixture,
@@ -221,7 +203,7 @@ func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
 		t.Fatalf("session output is missing the healthy post-refusal terminal boundary:\n%s", session.Stdout)
 	}
 
-	probe := runAgentCLIBinary(t, binaryPath,
+	probe := runAgentCLI(t,
 		"probe", "run", scenario,
 		"--replay", fixture,
 		"--json",
@@ -253,13 +235,16 @@ func TestUnknownToolRefusalThroughBuiltCLI(t *testing.T) {
 // same unknown-tool refusal expectation must fail through the real probe run
 // with machine-readable expected-versus-actual evidence.
 func TestRegisteredToolControlRejectsUnknownRefusalExpectation(t *testing.T) {
-	binaryPath := buildAgentBinary(t)
+	clitest.Test(t, testRegisteredToolControlRejectsUnknownRefusalExpectation)
+}
+
+func testRegisteredToolControlRejectsUnknownRefusalExpectation(t *testing.T) {
 	scenario := locateUnknownToolFixture(t, registeredToolScenario)
 	fixture := locateUnknownToolFixture(t, registeredToolFixture)
 
 	assertSameExpectationsAsPositiveScenario(t)
 
-	control := runAgentCLIBinary(t, binaryPath,
+	control := runAgentCLI(t,
 		"probe", "run", scenario,
 		"--replay", fixture,
 		"--json",

@@ -12,6 +12,8 @@ import (
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const (
@@ -395,20 +397,6 @@ func (o *parallelLifecycleObservation) closeCount() int {
 	return o.localCloseCount
 }
 
-func waitParallelLifecycle[T any](t *testing.T, result <-chan T, name string, timeout time.Duration) T {
-	t.Helper()
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case value := <-result:
-		return value
-	case <-timer.C:
-		t.Fatalf("timed out waiting for %s within %s", name, timeout)
-		var zero T
-		return zero
-	}
-}
-
 func assertParallelLifecycleCalls(t *testing.T, calls []messages.ToolCall) {
 	t.Helper()
 	if len(calls) != len(parallelLifecycleRequestOrder) {
@@ -508,6 +496,10 @@ func runParallelLifecycleCLI(t *testing.T, executor *parallelLifecycleExecutor, 
 // blocked second provider send, and exactly one client close follows only after
 // that second result is accepted.
 func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
+	clitest.Test(t, testSessionCommand_OverlappingToolResultsWaitIndependently)
+}
+
+func testSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 	session := newParallelLifecycleSession(parallelLifecycleBravoID, "")
 	inferencer := newParallelLifecycleInferencer(session)
 	executor := newParallelLifecycleExecutor()

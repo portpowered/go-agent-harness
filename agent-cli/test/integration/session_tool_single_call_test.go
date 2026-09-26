@@ -40,6 +40,8 @@ import (
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 // toolCallScenarioName is the named CLI tool requested by the spoken fixture.
@@ -297,6 +299,10 @@ func validateExactlyOneToolCall(calls []messages.ToolCall) error {
 // the service advertises no definition for it, so the runtime must reject the
 // call without invoking the paired executor.
 func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
+	clitest.Test(t, testSessionToolSingleCallRejectsOmittedCustomDefinition)
+}
+
+func testSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t), shortVoicedSlice)
 	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
 	executor := &toolCallRecordingExecutor{}
