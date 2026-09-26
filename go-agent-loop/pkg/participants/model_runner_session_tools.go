@@ -286,6 +286,7 @@ func (r *ModelRunner) forwardSessionCompleteMessage(ctx context.Context, session
 func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) error {
 	if input.kind != sessionInputAudio {
 		r.cancelLane.queuedControls.Add(-1)
+		r.flushHeldAudio(ctx, session, state)
 	}
 	switch input.kind {
 	case sessionInputAudio:

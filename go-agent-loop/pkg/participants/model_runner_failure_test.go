@@ -375,9 +375,10 @@ func retainedResponseIDs(state *sessionRunState) int {
 	return state.cancelledResponseIDs.len() + state.retiredResponseIDs.len() + state.terminalResponseIDs.len()
 }
 
-// loudPCM returns 20 ms of 16 kHz PCM16 at speech level (about -12 dBFS).
+// loudPCM returns 50 ms of 24 kHz PCM16 at speech level (about -12 dBFS):
+// enough for the barge-in onset.
 func loudPCM() []byte {
-	pcm := make([]byte, 640)
+	pcm := make([]byte, 2400)
 	for i := 0; i < len(pcm); i += 2 {
 		sample := int16(8000)
 		if i%4 == 0 {
@@ -408,9 +409,9 @@ func (s *playbackSession) InterruptLocalPlayback(context.Context) bool {
 	return true
 }
 
-// pcmAtLevel returns 20 ms of 16 kHz PCM16 whose RMS is level.
+// pcmAtLevel returns 50 ms of 24 kHz PCM16 whose RMS is level.
 func pcmAtLevel(level int16) []byte {
-	pcm := make([]byte, 640)
+	pcm := make([]byte, 2400)
 	for i := 0; i < len(pcm); i += 2 {
 		sample := level
 		if i%4 == 0 {
@@ -557,19 +558,19 @@ func TestSessionModelRunner_EchoCancelledPathSkipsPlaybackMargin(t *testing.T) {
 	}
 }
 
-// Onset and hangover are durations: at 48 kHz one 320-sample frame is only
-// 6.7 ms, short of the default 10 ms onset, while two frames reach it.
+// Onset and hangover are durations: at 48 kHz one 1200-sample frame is only
+// 25 ms, short of the default 40 ms onset, while two frames reach it.
 func TestSessionModelRunner_BargeInOnsetFollowsInputSampleRate(t *testing.T) {
 	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 48000}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-48k")
 	sendUserAudio(t, runner, session, state, pcmAtLevel(8000))
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 {
-		t.Fatalf("6.7 ms of speech at 48 kHz sent %d cancels, want 0", got)
+		t.Fatalf("25 ms of speech at 48 kHz sent %d cancels, want 0", got)
 	}
 	sendUserAudio(t, runner, session, state, pcmAtLevel(8000))
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
-		t.Fatalf("13 ms of speech at 48 kHz sent %d cancels, want 1", got)
+		t.Fatalf("50 ms of speech at 48 kHz sent %d cancels, want 1", got)
 	}
 }
 

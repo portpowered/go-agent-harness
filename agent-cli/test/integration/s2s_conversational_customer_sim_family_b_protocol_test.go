@@ -100,7 +100,15 @@ func (f *familyBProviderFixture) handleInputAudio(connection *websocket.Conn, en
 	if err != nil {
 		return fmt.Errorf("decode input audio: %w", err)
 	}
-	if !familyBSilent(audio) {
+	silent := familyBSilent(audio)
+	f.mu.Lock()
+	continuing := !silent && f.speaking && f.utteranceIndex >= 2
+	f.speaking = !silent
+	f.mu.Unlock()
+	if continuing {
+		return nil // a later frame of the correction utterance
+	}
+	if !silent {
 		return f.handleCustomerUtterance(connection)
 	}
 	if err := f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}); err != nil {

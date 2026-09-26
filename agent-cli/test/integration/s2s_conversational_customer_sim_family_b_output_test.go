@@ -190,6 +190,12 @@ func familyBToolArguments(path, content string) string {
 	return string(data)
 }
 
+// familyBCorrectionSpeech is the correction utterance: two capture frames,
+// long enough for the runner's barge-in onset.
+func familyBCorrectionSpeech() []byte {
+	return append(familyBFrame(familyBCorrectionSeed), familyBFrame(familyBCorrectionSeed)...)
+}
+
 // familyBCorrectionSeed makes the correction speech (RMS ~12k) clearly louder
 // than the agent audio it interrupts (RMS ~2k): the runner's barge-in ignores
 // input that could be the agent's own echo at the playback level.

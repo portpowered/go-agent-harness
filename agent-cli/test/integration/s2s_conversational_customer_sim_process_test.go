@@ -45,7 +45,7 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "first-speech", PCM16: customerSimulationFrame(1)},
 			{ID: "first-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 4},
-			{ID: "correction-speech", PCM16: customerSimulationFrame(customerSimulationCorrectionSeed), WaitForOutputBytes: 4},
+			{ID: "correction-speech", PCM16: append(customerSimulationFrame(customerSimulationCorrectionSeed), customerSimulationFrame(customerSimulationCorrectionSeed)...), WaitForOutputBytes: 4},
 			{ID: "second-silence", SilenceFor: 5 * time.Millisecond, WaitForOutputBytes: 8},
 			{ID: "final-speech", PCM16: customerSimulationFrame(3), WaitForOutputBytes: 8},
 		},
@@ -64,14 +64,14 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 	if observation.sessionUpdates != 1 {
 		t.Fatalf("session.update count = %d, want one handshake", observation.sessionUpdates)
 	}
-	if len(observation.appends) != 5 {
-		t.Fatalf("provider audio appends = %d, want five frames across three speech/silence segments", len(observation.appends))
+	if len(observation.appends) != 6 {
+		t.Fatalf("provider audio appends = %d, want six frames across three speech/silence segments", len(observation.appends))
 	}
 	if observation.silentAppends != 2 || observation.committedTurns != 2 {
 		t.Fatalf("provider VAD-shaped boundaries = silent appends %d, committed turns %d; want two of each", observation.silentAppends, observation.committedTurns)
 	}
-	if observation.nonSilentAppends != 3 || !observation.finalAppendAfterFirst {
-		t.Fatalf("provider speech progression = non-silent appends %d, final-after-first=%t; want three later frames on one connection", observation.nonSilentAppends, observation.finalAppendAfterFirst)
+	if observation.nonSilentAppends != 4 || !observation.finalAppendAfterFirst {
+		t.Fatalf("provider speech progression = non-silent appends %d, final-after-first=%t; want four later frames on one connection", observation.nonSilentAppends, observation.finalAppendAfterFirst)
 	}
 	if observation.cancelCount-observation.inactiveCancelCount != 1 {
 		t.Fatalf("provider successful cancellation count = %d, want one interruption", observation.cancelCount-observation.inactiveCancelCount)
@@ -86,7 +86,7 @@ func TestShippedSessionProcessDuplexConversation(t *testing.T) {
 	if result.ExitCode != 0 || !result.ChildWaited || !result.InputFinished || !result.InputClosed || !result.StdoutClosed || !result.StderrClosed {
 		t.Fatalf("process lifecycle result = %+v, want a completed, fully reaped child", result)
 	}
-	if len(result.Input) != 5 || len(result.Output) == 0 || len(result.Stdout) < 12 {
+	if len(result.Input) != 6 || len(result.Output) == 0 || len(result.Stdout) < 12 {
 		t.Fatalf("stream evidence input=%d output_reads=%d stdout_bytes=%d, want five input frames and three audio responses", len(result.Input), len(result.Output), len(result.Stdout))
 	}
 	// Stdout is the PCM transport, so even a setup diagnostic corrupts audio
@@ -278,6 +278,7 @@ func (f *customerSimulationFixture) handle(writer http.ResponseWriter, request *
 
 // customerSimulationTurnState is the per-connection response bookkeeping.
 type customerSimulationTurnState struct {
+	speaking       bool // consecutive non-silent appends continue one utterance
 	activeResponse string
 	cancelPending  bool
 	responseNumber int
@@ -292,9 +293,15 @@ func (f *customerSimulationFixture) handleInputAudio(connection *websocket.Conn,
 		f.failProtocol("decode input audio: " + err.Error())
 		return false
 	}
-	if f.recordAppend(customerSimulationSilent(audio)) {
+	silent := customerSimulationSilent(audio)
+	continuing := !silent && state.speaking
+	state.speaking = !silent
+	if f.recordAppend(silent) {
 		return f.send(connection, map[string]string{"type": "input_audio_buffer.speech_stopped"}) == nil &&
 			f.send(connection, map[string]string{"type": "input_audio_buffer.committed"}) == nil
+	}
+	if continuing {
+		return true // a later frame of the same utterance
 	}
 	if state.cancelPending {
 		if !f.finishCancelledResponse(connection, state.activeResponse) {

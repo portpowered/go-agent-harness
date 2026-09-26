@@ -19,12 +19,14 @@ import (
 // the microphone, so it is conservative; a path that removes the playback from
 // the capture (a feedback gate or AEC, reported as EchoCancelled) skips it.
 //
-// Onset needs MinSpeech of such audio and a quiet gap shorter than Hangover
-// does not reset it. Both are durations at the session's input sample rate.
-// The default onset is 10 ms -- one ordinary capture frame -- because the live
-// barge-in contract requires the cancel to precede the interrupting audio at
-// the provider; a longer onset would hold that audio back or let it through
-// first. Transient clicks are filtered by the level threshold instead.
+// Onset needs MinSpeech of such audio (40 ms: two 20 ms frames) and a quiet
+// gap shorter than Hangover does not reset it; both are durations at the
+// session's input sample rate. So that one loud transient (a cough, a door)
+// does not cancel the response, frames that could be a barge-in are held
+// until onset is decided: speech sends the cancel and then releases them, so
+// the cancel still precedes the interrupting audio at the provider (the live
+// barge-in contract) at a cost of at most MinSpeech of input latency; a
+// transient is released unchanged once a quiet frame follows it.
 //
 // Speech cancels the active response before the frame reaches the provider.
 // When the provider runs turn detection (server VAD) its speech_started stops
@@ -56,7 +58,7 @@ func DefaultBargeInConfig() BargeInConfig {
 const (
 	defaultBargeInSpeechLevel = 300 // RMS separating mic noise from voiced speech (matches the energy VAD)
 	defaultBargeInEchoMargin  = 2   // 6 dB
-	defaultBargeInMinSpeech   = 10 * time.Millisecond
+	defaultBargeInMinSpeech   = 40 * time.Millisecond
 	defaultBargeInHangover    = 300 * time.Millisecond
 )
 
@@ -79,11 +81,12 @@ type bargeInDetector struct {
 	quiet  time.Duration
 }
 
-// observe reports whether pcm is user speech that should barge in.
-func (d *bargeInDetector) observe(pcm []byte, playback messages.LocalPlaybackState, rate int, config BargeInConfig) bool {
+// observe reports whether pcm completes a speech onset that should barge in,
+// and whether it is itself speech-level.
+func (d *bargeInDetector) observe(pcm []byte, playback messages.LocalPlaybackState, rate int, config BargeInConfig) (onset, loud bool) {
 	level, samples := pcm16LevelFromBytes(pcm)
 	if samples == 0 {
-		return false
+		return false, false
 	}
 	if rate <= 0 {
 		rate = defaultBargeInSampleRate
@@ -99,11 +102,11 @@ func (d *bargeInDetector) observe(pcm []byte, playback messages.LocalPlaybackSta
 		if d.quiet > config.Hangover {
 			d.speech = 0
 		}
-		return false
+		return false, false
 	}
 	d.quiet = 0
 	d.speech += duration
-	return d.speech >= config.MinSpeech
+	return d.speech >= config.MinSpeech, true
 }
 
 // pcm16LevelFromBytes returns the RMS of little-endian PCM16 audio.
@@ -151,18 +154,66 @@ func localPlayback(session messages.Session) (messages.SessionLocalPlayback, mes
 // continuation, having produced no audio). A response that was already playing
 // when the continuation was queued is not the continuation -- the request is
 // deferred until that response ends -- so it stays interruptible.
-func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) error {
+func (r *ModelRunner) admitUserAudio(ctx context.Context, session messages.Session, pcm []byte, policy messages.SessionAudioInputPolicy, state *sessionResponseState) error {
+	if policy.InterruptsResponse() {
+		held, err := r.bargeIn(ctx, session, pcm, state)
+		if held || err != nil {
+			return err
+		}
+	}
+	if err := r.releaseHeldAudio(ctx, session, state); err != nil {
+		return err
+	}
+	return forwardUserAudio(ctx, session, pcm)
+}
+
+// bargeIn applies local barge-in to one interrupting frame and reports
+// whether it holds the frame while onset is undecided.
+func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) (bool, error) {
 	providerVAD := providerOwnsTurnDetection(session)
 	playback, playing := localPlayback(session)
-	if !state.bargeIn.observe(pcm, playing, inputSampleRate(session), r.bargeInTuning()) {
-		return nil
-	}
+	onset, loud := state.bargeIn.observe(pcm, playing, inputSampleRate(session), r.bargeInTuning())
 	responseActive := state.responseInFlight || state.acknowledgementOutstanding
-	if responseActive && !state.continuationInFlight && !state.responseCancelSent {
-		return r.sendBargeInCancel(ctx, session, state, providerVAD)
-	}
-	if !providerVAD && !responseActive && playing.Active {
+	cancelTarget := responseActive && !state.continuationInFlight && !state.responseCancelSent
+	switch {
+	case onset && cancelTarget:
+		return false, r.sendBargeInCancel(ctx, session, state, providerVAD)
+	case onset && !providerVAD && !responseActive && playing.Active:
 		playback.InterruptLocalPlayback(ctx)
+	case loud && !onset && cancelTarget:
+		state.heldAudio = append(state.heldAudio, pcm)
+		return true, nil
+	}
+	return false, nil
+}
+
+// releaseHeldAudio forwards onset frames held while barge-in was undecided.
+func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Session, state *sessionResponseState) error {
+	held := state.heldAudio
+	state.heldAudio = nil
+	for _, pcm := range held {
+		if err := forwardUserAudio(ctx, session, pcm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// flushHeldAudio releases held onset audio ahead of a control input. A send
+// failure is published as the runner's terminal audio failure.
+func (r *ModelRunner) flushHeldAudio(ctx context.Context, session messages.Session, state *sessionResponseState) {
+	if err := r.releaseHeldAudio(ctx, session, state); err != nil {
+		r.publishSessionAudioFailure(err, state.hasOutput)
+	}
+}
+
+func forwardUserAudio(ctx context.Context, session messages.Session, pcm []byte) error {
+	outcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue(pcm),
+	})
+	if !outcome.OK() {
+		return sessionAudioSendError("audio", outcome)
 	}
 	return nil
 }

@@ -411,7 +411,7 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 		return msg.Type == messages.StreamTypeAudioDelta && msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement
 	})
 
-	if err := al.SendAudioInput(ctx, bytes.Repeat([]byte{0x40, 0x1f, 0xc0, 0xe0}, 160)); err != nil {
+	if err := al.SendAudioInput(ctx, bytes.Repeat([]byte{0x40, 0x1f, 0xc0, 0xe0}, 600)); err != nil {
 		t.Fatalf("SendAudioInput: %v", err)
 	}
 	waitForAcknowledgementSent(t, session, func(msg messages.StreamMessage) bool {

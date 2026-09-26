@@ -117,6 +117,7 @@ type sessionRunState struct {
 	deferredSessionEvents      []messages.StreamMessage
 	initialSessionConfigSent   bool
 	bargeIn                    bargeInDetector
+	heldAudio                  [][]byte // onset frames held until barge-in is decided
 }
 
 // sessionResponseState is retained as an alias for the identity-aware helper
@@ -283,20 +284,7 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 		// intentionally discarded without manufacturing a provider failure.
 		return nil
 	}
-	if policy.InterruptsResponse() {
-		if err := r.bargeIn(ctx, session, pcm, state); err != nil {
-			return err
-		}
-	}
-	// Forward the user audio to the inference provider.
-	audioOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
-		Type:  messages.StreamTypeAudioDelta,
-		Value: messages.NewAudioDeltaValue(pcm),
-	})
-	if !audioOutcome.OK() {
-		return sessionAudioSendError("audio", audioOutcome)
-	}
-	return nil
+	return r.admitUserAudio(ctx, session, pcm, policy, state)
 }
 
 func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {

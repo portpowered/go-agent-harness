@@ -31,6 +31,9 @@ type familyBProviderObservation struct {
 }
 
 type familyBProviderFixture struct {
+	// speaking is true while consecutive non-silent appends continue one
+	// customer utterance.
+	speaking bool
 	server   *httptest.Server
 	upgrader websocket.Upgrader
 	scenario probe.CustomerScenario

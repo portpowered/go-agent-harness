@@ -74,7 +74,7 @@ func TestShippedSessionProcessFamilyBCorrection(t *testing.T) {
 		AdditionalArgs:   []string{"--wait-for-close"},
 		Segments: []probe.DuplexAudioSegment{
 			{ID: "original-request", PCM16: familyBFrame(1)},
-			{ID: "correction-request", PCM16: familyBFrame(familyBCorrectionSeed), WaitForOutputSequence: []byte{1, 0x08, 0x52, 0x08}, Before: captureOriginal},
+			{ID: "correction-request", PCM16: familyBCorrectionSpeech(), WaitForOutputSequence: []byte{1, 0x08, 0x52, 0x08}, Before: captureOriginal},
 			{ID: "correction-silence", SilenceFor: 5 * time.Millisecond},
 		},
 	})
@@ -132,7 +132,7 @@ func TestRunCustomerSimulationSuiteFamilyBUsesRecordedCorrectionBoundaries(t *te
 	result, runErr := probe.RunCustomerSimulationSuite(context.Background(), probe.CustomerSimulationSuiteOptions{
 		BinaryPath: buildAgentBinary(t), RunRoot: filepath.Join(t.TempDir(), "runs"), Provider: "openai", Model: "gpt-realtime",
 		BaseURL: fixture.WebSocketURL(), APIKey: "hermetic-key", SystemPrompt: scenario.TextSeed,
-		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBFrame(familyBCorrectionSeed)}}},
+		Runs:      []probe.CustomerSimulationRunSpec{{Scenario: scenario, Script: script, Audio: [][]byte{familyBFrame(1), familyBCorrectionSpeech()}}},
 		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: 5 * time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
 		ReplayService: replaywire.NewService(),
 	})

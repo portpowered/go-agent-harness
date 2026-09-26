@@ -44,7 +44,7 @@ func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
 	}
 
 	// Barge-in: user sends audio while the model is streaming.
-	bargInPayload := bytes.Repeat([]byte{0x40, 0x1f, 0xc0, 0xe0}, 160) // 20 ms of speech-level PCM16
+	bargInPayload := bytes.Repeat([]byte{0x40, 0x1f, 0xc0, 0xe0}, 600) // 50 ms of speech-level PCM16
 	scenario.SendAudioInput(bargInPayload)
 
 	// Agent loop must emit RESPONSE.CANCEL to the inference provider within 500ms.

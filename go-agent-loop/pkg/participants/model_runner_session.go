@@ -290,6 +290,7 @@ func sessionEventBlockedByAdmissionForSession(session messages.Session, msg mess
 // active; tool results themselves remain deliverable so the provider can use
 // them as soon as the acknowledgement has ended.
 func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) {
+	r.flushHeldAudio(ctx, session, state) // held onset audio precedes any later control
 	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.suppressContinuation {
 		r.markSessionToolEventConsumed(evt)
 		// A result in this batch was rejected at the provider boundary. Do not
