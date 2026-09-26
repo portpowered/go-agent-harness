@@ -44,6 +44,8 @@ import (
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const (
@@ -481,6 +483,10 @@ func verifyToolDuringAudioTurnIntact(outputPath string, expected [][]int16) erro
 // call must appear in order in the replayed exchange, and the turn must
 // terminate cleanly.
 func TestSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
+	clitest.Test(t, testSessionToolDuringAudioPreservesInFlightTurnThroughCLI)
+}
+
+func testSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)
@@ -517,6 +523,10 @@ func TestSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
 // fail deterministically naming that delta's range — never via timeout or
 // transport error.
 func TestSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T) {
+	clitest.Test(t, testSessionToolDuringAudioCorruptedDeltaFailsDeterministically)
+}
+
+func testSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T) {
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)

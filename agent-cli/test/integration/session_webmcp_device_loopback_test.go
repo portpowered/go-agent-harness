@@ -20,6 +20,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 // TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio proves the customer
@@ -28,6 +30,10 @@ import (
 // recorder is asserted on both device directions so future tests can retain
 // and diagnose the exact loop without replacing either device with a file.
 func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
+	clitest.Test(t, testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio)
+}
+
+func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	registry := newWebMCPDeviceRegistry(t)
 	feed := openWebMCPVirtualStream(t, registry, "mic-feed")
 
@@ -93,6 +99,14 @@ func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("device-backed WebMCP session did not close")
 	}
+	assertWebMCPDeviceLoopEvidence(t, registry, page)
+}
+
+// assertWebMCPDeviceLoopEvidence requires audible assistant playback on the
+// speaker, exactly one cube page invocation, and both capture and render
+// device evidence.
+func assertWebMCPDeviceLoopEvidence(t *testing.T, registry *devicegw.VirtualRegistry, page *testkit.ScriptedTargetSession) {
+	t.Helper()
 	var played []int16
 	for _, observation := range registry.PCMObservations() {
 		if observation.DeviceID == "virtual:speaker" && observation.Operation == "write" {

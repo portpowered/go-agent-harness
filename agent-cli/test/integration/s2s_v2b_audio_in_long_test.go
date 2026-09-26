@@ -8,51 +8,25 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
-// The v2b proof deliberately executes the built agent binary. The temporary
-// replay capture is derived from the existing OpenAI CLI smoke fixture and
-// gets its exact append payloads from the committed long corpus WAV, so the
-// replay transport compares every client-to-server byte emitted by the real
-// command surface.
-//
-// The executable itself is built once for the whole integration package by
-// the package-level TestMain in s2s_v2d_multi_utterance_test.go and exposed
-// as agentBinaryPath; this file only drives it as a subprocess.
-
-type s2sV2BCLIResult struct {
-	exitCode int
-	stdout   string
-	stderr   string
-}
-
-func runS2SV2BAgent(t *testing.T, args ...string) s2sV2BCLIResult {
-	t.Helper()
-
-	command := exec.CommandContext(t.Context(), agentBinaryPath, args...)
-	var stdout, stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	err := command.Run()
-	exitCode := 0
-	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
-		if !ok {
-			t.Fatalf("run agent %v: %v", args, err)
-		}
-		exitCode = exitErr.ExitCode()
-	}
-	return s2sV2BCLIResult{exitCode: exitCode, stdout: stdout.String(), stderr: stderr.String()}
-}
+// The v2b proof runs the shipped command entrypoint in-process inside a
+// synctest bubble (clitest), so the long WAV streams at its real-time pacing
+// on the virtual clock. The temporary replay capture is derived from the
+// existing OpenAI CLI smoke fixture and gets its exact append payloads from
+// the committed long corpus WAV, so the replay transport compares every
+// client-to-server byte emitted by the real command surface.
 
 func locateS2SV2BLongWAV(t *testing.T) string {
 	t.Helper()
@@ -367,24 +341,34 @@ func assertS2SV2BOneTurn(capture gatewaytesting.SessionCapture) error {
 
 func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 	t.Parallel()
+	clitest.Test(t, testS2SV2BAudioInLongCLIStaysOneTurn)
+}
+
+func testS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 	wavPath := locateS2SV2BLongWAV(t)
 	capture, frameCount := buildS2SV2BLongCapture(t, wavPath)
 	capturePath := writeS2SV2BCapture(t, capture)
 	audioOutPath := filepath.Join(t.TempDir(), "response.wav")
 
-	run := runS2SV2BAgent(t,
+	started := time.Now()
+	run := clitest.Run(t, clitest.Invocation{Args: []string{
 		"--config-dir", t.TempDir(),
 		"session",
 		"--max-duration", "30s",
 		"--replay", capturePath,
 		"--audio-in", wavPath,
 		"--audio-out", audioOutPath,
-	)
-	if run.exitCode != 0 {
-		t.Fatalf("agent session exit code = %d, want 0; stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+	}})
+	if run.ExitCode != 0 {
+		t.Fatalf("agent session exit code = %d, want 0; stdout=%q stderr=%q", run.ExitCode, run.Stdout, run.Stderr)
 	}
-	if strings.Count(run.stdout, "OpenAI E2E replay complete.") != 1 || strings.Count(run.stdout, "[session closed: fixture_complete]") != 1 {
-		t.Fatalf("agent session did not expose the replayed terminal response: stdout=%q stderr=%q", run.stdout, run.stderr)
+	if strings.Count(run.Stdout, "OpenAI E2E replay complete.") != 1 || strings.Count(run.Stdout, "[session closed: fixture_complete]") != 1 {
+		t.Fatalf("agent session did not expose the replayed terminal response: stdout=%q stderr=%q", run.Stdout, run.Stderr)
+	}
+	// --audio-in streams at real-time pacing (one 30 ms frame per tick); on
+	// the bubble's virtual clock the run still spans the whole WAV.
+	if elapsed, paced := time.Since(started), time.Duration(frameCount-1)*30*time.Millisecond; elapsed < paced {
+		t.Fatalf("long audio run took %s of virtual time, want at least %s of real-time pacing", elapsed, paced)
 	}
 
 	observed, err := gatewaytesting.LoadSessionCapture(capturePath)
@@ -432,6 +416,10 @@ func TestS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 // assertions.
 func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 	t.Parallel()
+	clitest.Test(t, testS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation)
+}
+
+func testS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 	wavPath := locateS2SV2BLongWAV(t)
 	positive, _ := buildS2SV2BLongCapture(t, wavPath)
 	negative := buildS2SV2BPerChunkCommitCapture(t, positive)
@@ -443,17 +431,17 @@ func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 
 	capturePath := writeS2SV2BCapture(t, negative)
 	audioOutPath := filepath.Join(t.TempDir(), "response.wav")
-	run := runS2SV2BAgent(t,
+	run := clitest.Run(t, clitest.Invocation{Args: []string{
 		"--config-dir", t.TempDir(),
 		"session",
 		"--max-duration", "30s",
 		"--replay", capturePath,
 		"--audio-in", wavPath,
 		"--audio-out", audioOutPath,
-	)
-	diagnostics := run.stdout + "\n" + run.stderr
-	if run.exitCode == 0 && strings.Contains(run.stdout, "[session closed: fixture_complete]") {
-		t.Fatalf("per-chunk-commit fixture completed cleanly; the exactly-once proof is vacuous: stdout=%q stderr=%q", run.stdout, run.stderr)
+	}})
+	diagnostics := run.Stdout + "\n" + run.Stderr
+	if run.ExitCode == 0 && strings.Contains(run.Stdout, "[session closed: fixture_complete]") {
+		t.Fatalf("per-chunk-commit fixture completed cleanly; the exactly-once proof is vacuous: stdout=%q stderr=%q", run.Stdout, run.Stderr)
 	}
 
 	divergence := ""
@@ -464,7 +452,7 @@ func TestS2SV2BPerChunkCommitFixtureFailsIdenticalInvocation(t *testing.T) {
 		}
 	}
 	if divergence == "" {
-		t.Fatalf("failure diagnostics do not name the divergent input_audio_buffer.commit versus input_audio_buffer.append sequence: exit=%d stdout=%q stderr=%q", run.exitCode, run.stdout, run.stderr)
+		t.Fatalf("failure diagnostics do not name the divergent input_audio_buffer.commit versus input_audio_buffer.append sequence: exit=%d stdout=%q stderr=%q", run.ExitCode, run.Stdout, run.Stderr)
 	}
 	t.Logf("per-chunk-commit negative control rejected as expected: %s", strings.TrimSpace(divergence))
 }

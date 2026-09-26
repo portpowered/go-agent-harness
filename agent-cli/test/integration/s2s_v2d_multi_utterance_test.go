@@ -13,12 +13,16 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
-// The v2d vertical is verified exclusively through the actual agent binary:
-// every assertion below reads CLI output (JSONL result lines, summary
-// artifact, exit codes) produced by an exec of the built executable over the
-// hermetic record/replay transport. No internal Go function is called.
+// The v2d vertical is verified through CLI output only: every assertion below
+// reads JSONL result lines, the summary artifact and the exit status produced
+// by the shipped command over the hermetic record/replay transport. The two
+// scenario tests run the command entrypoint in-process on a virtual clock
+// (clitest); TestAgentBinaryProbeRunReportsExitStatusAcrossProcessBoundary
+// runs the same invocations through the built executable.
 //
 // Fixture structure (agent-cli/test/integration/testdata/s2s-v2d):
 //   - happy path: three distinct audio-in utterances separated by gaps; each
@@ -140,6 +144,15 @@ type s2sV2DCLIResult struct {
 	stderr   string
 }
 
+// s2sV2DRunner runs one agent invocation and reports it as a process would.
+type s2sV2DRunner func(t *testing.T, args ...string) s2sV2DCLIResult
+
+func runAgentInProcess(t *testing.T, args ...string) s2sV2DCLIResult {
+	t.Helper()
+	run := clitest.Run(t, clitest.Invocation{Args: args})
+	return s2sV2DCLIResult{exitCode: run.ExitCode, stdout: run.Stdout, stderr: run.Stderr}
+}
+
 func runAgentBinary(t *testing.T, args ...string) s2sV2DCLIResult {
 	t.Helper()
 	cmd := exec.Command(agentBinaryPath, args...)
@@ -179,11 +192,29 @@ const (
 )
 
 func TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance(t *testing.T) {
+	clitest.Test(t, func(t *testing.T) { assertS2SV2DHappyPath(t, runAgentInProcess) })
+}
+
+func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
+	clitest.Test(t, func(t *testing.T) { assertS2SV2DMisSegmented(t, runAgentInProcess) })
+}
+
+// TestAgentBinaryProbeRunReportsExitStatusAcrossProcessBoundary is the
+// real-process proof for argv parsing, the process exit status, and the
+// stdout/stderr/file outputs of the built executable, for a passing (exit 0)
+// and a failing (non-zero) probe run.
+func TestAgentBinaryProbeRunReportsExitStatusAcrossProcessBoundary(t *testing.T) {
+	assertS2SV2DHappyPath(t, runAgentBinary)
+	assertS2SV2DMisSegmented(t, runAgentBinary)
+}
+
+func assertS2SV2DHappyPath(t *testing.T, runAgent s2sV2DRunner) {
+	t.Helper()
 	scenario := locateCLIFixture(t, filepath.Join(s2sV2DFixtureDir, "scenarios", "s2s_v2d_multi_utterance.scenario.json"))
 
 	outPath := filepath.Join(t.TempDir(), "results.jsonl")
 	summaryPath := filepath.Join(t.TempDir(), "summary.jsonl")
-	run := runAgentBinary(t, "probe", "run", scenario,
+	run := runAgent(t, "probe", "run", scenario,
 		"--replay", locateCLIFixture(t, filepath.Join(s2sV2DFixtureDir, "s2s_v2d_multi_utterance.session.json")),
 		"--json", "--out", outPath, "--summary", summaryPath)
 	if run.exitCode != 0 {
@@ -219,12 +250,13 @@ func TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance(t *testing.T) {
 	}
 }
 
-func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
+func assertS2SV2DMisSegmented(t *testing.T, runAgent s2sV2DRunner) {
+	t.Helper()
 	scenario := locateCLIFixture(t, filepath.Join(s2sV2DFixtureDir, "scenarios", "s2s_v2d_multi_utterance_missegmented.scenario.json"))
 
 	outPath := filepath.Join(t.TempDir(), "results.jsonl")
 	summaryPath := filepath.Join(t.TempDir(), "summary.jsonl")
-	run := runAgentBinary(t, "probe", "run", scenario,
+	run := runAgent(t, "probe", "run", scenario,
 		"--replay", locateCLIFixture(t, filepath.Join(s2sV2DFixtureDir, "s2s_v2d_multi_utterance_merged.session.json")),
 		"--json", "--out", outPath, "--summary", summaryPath)
 	if run.exitCode == 0 {

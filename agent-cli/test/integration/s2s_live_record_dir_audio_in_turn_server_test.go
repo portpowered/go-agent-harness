@@ -6,11 +6,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 type cliLiveRecordDirServer struct {
@@ -576,4 +577,24 @@ func assertScheduledTurnPCM(t *testing.T, payloads [][]byte, want []int16, frame
 	if sample != len(want) {
 		t.Fatalf("scheduled PCM has %d samples, want %d", sample, len(want))
 	}
+}
+
+func audioLengthsFromOutbound(outbound []cliLiveOutbound) []int {
+	lengths := make([]int, 0, len(outbound))
+	for _, event := range outbound {
+		if event.typeName == rtEventInputAudioAppend {
+			lengths = append(lengths, len(event.audio))
+		}
+	}
+	return lengths
+}
+
+func audioPayloadsFromOutbound(outbound []cliLiveOutbound) [][]byte {
+	audio := make([][]byte, 0, len(outbound))
+	for _, event := range outbound {
+		if event.typeName == rtEventInputAudioAppend {
+			audio = append(audio, append([]byte(nil), event.audio...))
+		}
+	}
+	return audio
 }

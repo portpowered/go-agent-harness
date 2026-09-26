@@ -37,6 +37,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 const (
@@ -288,6 +290,10 @@ func injectVisionImagePart(t *testing.T, raw json.RawMessage, dataURL string) js
 // the real session CLI over record/replay, the reply names the image's
 // authored pixel facts, and the recorded spoken reply is non-silent.
 func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) {
+	clitest.Test(t, testSessionCommandVisionDescribeGroundsReplyInCommittedImage)
+}
+
+func testSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) {
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
@@ -332,6 +338,10 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 // image-only response or an omitted audio commit fails this test before the
 // grounded transcript can be observed.
 func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
+	clitest.Test(t, testVisionDescribeFixtureDrivesPublicSessionCommand)
+}
+
+func testVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
@@ -381,6 +391,10 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 // names no image content) must FAIL the grounding assertion, proving the
 // assertion discriminates image-grounded answers from any successful reply.
 func TestVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
+	clitest.Test(t, testVisionGroundingAssertionFailsOnGenericReply)
+}
+
+func testVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, []string{"I hear your question ", "clearly."})
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")

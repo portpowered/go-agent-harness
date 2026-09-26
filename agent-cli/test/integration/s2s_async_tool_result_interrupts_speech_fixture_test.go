@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -313,4 +314,30 @@ func validateAsyncProviderResultPlacement(indices asyncContinuationIndices, expe
 		return fmt.Errorf("%s provider result for %q was not sent between the initial tool response and its continuation response.create", asyncCollisionDisposition, asyncCollisionCallID)
 	}
 	return nil
+}
+
+// asyncCollisionTrace records the causal milestones asserted by the positive
+// proof. The observer and executor use the same mutex, so the order is based on
+// runtime events rather than elapsed time.
+type asyncCollisionTrace struct {
+	mu     sync.Mutex
+	events []string
+}
+
+func (t *asyncCollisionTrace) record(event string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.events = append(t.events, event)
+	t.mu.Unlock()
+}
+
+func (t *asyncCollisionTrace) snapshot() []string {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string(nil), t.events...)
 }

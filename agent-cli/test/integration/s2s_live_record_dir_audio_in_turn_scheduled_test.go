@@ -6,6 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -14,12 +21,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
@@ -103,6 +106,10 @@ func scheduledBoundaryArgs(configDir, recordDir string, audioPaths ...string) []
 // registry; only the OpenAI session transport is replaced by the hermetic
 // provider-shaped connection.
 func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding)
+}
+
+func testSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding(t *testing.T) {
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIGroundedScheduledBoundaryAgent(t, server)
@@ -186,6 +193,10 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 // response request, and the second scheduled turn must not receive another
 // image item or overtake the first terminal response.
 func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn)
+}
+
+func testSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *testing.T) {
 	server := newCLILiveScheduledBoundaryServer(false)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -248,25 +259,6 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 
 	assertScheduledFirstTurnImageItem(t, outbound)
 	assertCLILiveRecordingBundle(t, recordDir, 2)
-}
-
-// scheduledSessionUpdate is the session.update subset the scheduled-boundary
-// tests inspect.
-type scheduledSessionUpdate struct {
-	Instructions string `json:"instructions"`
-	Tools        []struct {
-		Name string `json:"name"`
-	} `json:"tools"`
-}
-
-func scheduledUpdatesAdvertiseToolsWithoutInstructions(updates []json.RawMessage) bool {
-	for _, raw := range updates {
-		var update scheduledSessionUpdate
-		if json.Unmarshal(raw, &update) == nil && update.Instructions == "" && len(update.Tools) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 // scheduledGroundedToolUpdateIndex returns the index of the single tool
@@ -339,6 +331,10 @@ func equalDuration24kSilenceFixture(t *testing.T, speechPath string) string {
 // initial configuration acknowledgement. The provider boundary must remain
 // free of scheduled input until the observable session.updated event arrives.
 func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated)
+}
+
+func testSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *testing.T) {
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -381,6 +377,14 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 		t.Fatal("delayed-ack production CLI session did not complete")
 	}
 
+	assertDelayedAckScheduledBoundary(t, server, stdout.String(), stderr.String())
+	assertCLILiveRecordingBundle(t, recordDir, 1)
+}
+
+// assertDelayedAckScheduledBoundary requires one clean client-owned session
+// whose single scheduled turn followed the delayed session.updated.
+func assertDelayedAckScheduledBoundary(t *testing.T, server *cliLiveScheduledBoundaryServer, stdout, stderr string) {
+	t.Helper()
 	timeline, outbound, providerErrors, dialCount, serverVADEnabled := server.snapshots()
 	if dialCount != 1 {
 		t.Fatalf("delayed-ack provider dial count = %d, want 1; timeline=%v", dialCount, timeline)
@@ -404,12 +408,11 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 	if len(appendAudio) != 1 || len(appendAudio[0]) == 0 || !hasNonZeroPCM(appendAudio[0]) {
 		t.Fatalf("delayed-ack first scheduled append = %v; want one non-empty PCM payload", audioLengths(appendAudio))
 	}
-	for _, output := range []string{stdout.String(), stderr.String()} {
+	for _, output := range []string{stdout, stderr} {
 		if strings.Contains(output, "input_audio_buffer_commit_empty") || strings.Contains(output, "conversation_already_has_active_response") {
 			t.Fatalf("delayed-ack CLI output contains a provider collision: %q", output)
 		}
 	}
-	assertCLILiveRecordingBundle(t, recordDir, 1)
 }
 
 // TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence keeps a real
@@ -418,6 +421,10 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 // stop while Server VAD is enabled, but explicit null keeps both turns under
 // the client's one-commit/one-response boundary.
 func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveScheduledAudioSpeechThenExactSilence)
+}
+
+func testSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)
@@ -488,6 +495,10 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 // and clears a speech buffer at speech stop, so the later client commit must
 // be rejected as input_audio_buffer_commit_empty.
 func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl(t *testing.T) {
+	clitest.Test(t, testSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl)
+}
+
+func testSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl(t *testing.T) {
 	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)
@@ -563,28 +574,6 @@ func assertScheduledServerVADCreateResponseFalse(t *testing.T, session json.RawM
 	if detection.Type != "server_vad" || detection.CreateResponse == nil || *detection.CreateResponse {
 		t.Fatalf("negative-control turn detection = %+v, want server_vad/create_response:false", detection)
 	}
-}
-
-func audioPayloadsFromOutbound(outbound []cliLiveOutbound) [][]byte {
-	audio := make([][]byte, 0, len(outbound))
-	for _, event := range outbound {
-		if event.typeName == rtEventInputAudioAppend {
-			audio = append(audio, append([]byte(nil), event.audio...))
-		}
-	}
-	return audio
-}
-func readScheduledWAVSamples(t *testing.T, path string) []int16 {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read scheduled WAV %q: %v", path, err)
-	}
-	_, samples, err := wavio.Read(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("decode scheduled WAV %q: %v", path, err)
-	}
-	return samples
 }
 
 // observeAppendLocked tracks one client audio append and returns the server

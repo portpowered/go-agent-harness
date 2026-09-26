@@ -3,6 +3,9 @@ package cli
 import serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 import (
+	"context"
+	"io"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +23,36 @@ func NewAgentCLI(router *Router) *AgentCLI {
 // Generate returns the root cobra command (same shape as port CLI for tests).
 func (c *AgentCLI) Generate() *cobra.Command {
 	return c.router.BuildRoot()
+}
+
+// Invocation is one command-line run: the arguments after the program name
+// and the standard streams. A nil stream keeps cobra's process default.
+type Invocation struct {
+	Args   []string
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
+// Execute runs one invocation through a generated root command and returns
+// its process exit status. cmd/agent and in-process test harnesses share this
+// path. Cobra renders a returned command error, so Execute only maps it to
+// the failing status.
+func Execute(ctx context.Context, root *cobra.Command, invocation Invocation) int {
+	root.SetArgs(invocation.Args)
+	if invocation.Stdin != nil {
+		root.SetIn(invocation.Stdin)
+	}
+	if invocation.Stdout != nil {
+		root.SetOut(invocation.Stdout)
+	}
+	if invocation.Stderr != nil {
+		root.SetErr(invocation.Stderr)
+	}
+	if err := root.ExecuteContext(ctx); err != nil {
+		return 1
+	}
+	return 0
 }
 
 // SetSessionStreamObserver installs an optional observer on the composed

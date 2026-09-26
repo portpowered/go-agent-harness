@@ -16,6 +16,8 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/spf13/cobra"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 // sessionLifecycleSafetyTimeout bounds each lifecycle wait in the hermetic
@@ -265,6 +267,10 @@ func (e interactiveTimeoutExecutor) Execute(ctx context.Context, call messages.T
 }
 
 func TestSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
+	clitest.Test(t, testSessionInteractiveToolPolicyBoundsLiveToolCalls)
+}
+
+func testSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__FAST_READ_TIMEOUT", interactiveFastTimeout.String())
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__LONG_RUNNING_TIMEOUT", "5s")
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__ACKNOWLEDGEMENT_THRESHOLD", "50ms")
@@ -431,4 +437,18 @@ func countSessionToolBargeInSent(session *sessionToolBargeInSession) (results, c
 		}
 	}
 	return results, cancels
+}
+
+func waitParallelLifecycle[T any](t *testing.T, result <-chan T, name string, timeout time.Duration) T {
+	t.Helper()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case value := <-result:
+		return value
+	case <-timer.C:
+		t.Fatalf("timed out waiting for %s within %s", name, timeout)
+		var zero T
+		return zero
+	}
 }

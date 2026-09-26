@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 )
 
@@ -14,11 +16,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Cobra owns rendering command execution errors; the process boundary
+	// only turns the status into the exit code. Nil streams keep cobra's
+	// process defaults (os.Stdin, os.Stdout, os.Stderr).
 	rootCmd := agentCLI.Generate()
-	if err := rootCmd.Execute(); err != nil {
-		// Cobra owns rendering command execution errors. Keep the process
-		// boundary responsible for the exit status so a returned command error
-		// is not rendered a second time here.
-		os.Exit(1)
-	}
+	os.Exit(cli.Execute(context.Background(), rootCmd, cli.Invocation{Args: os.Args[1:]}))
 }

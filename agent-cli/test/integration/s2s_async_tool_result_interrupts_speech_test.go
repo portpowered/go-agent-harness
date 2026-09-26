@@ -1,25 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-// s2s async-tool-result serialization vertical: CLI-verified hermetic proof
-// that a scheduled spoken turn waits for an outstanding provider tool call's
-// accepted result and grounded continuation before its own audio reaches the
-// provider, without losing the local result or wedging session teardown.
-//
-// The replay transport is deliberately gated at the supported websocket
-// dialer seam. The real CLI starts with a positional prompt that produces a
-// tool call, then holds the scheduled audio until the result-driven spoken
-// continuation reaches MESSAGE.END. The transport rejects any early audio
-// append, making the serialization causal rather than timing-based while
-// keeping the behavior assertion at the public `agent session` boundary.
-//
-// The production session path forwards normalized tool results through the
-// provider-facing stream. The verifier therefore requires the real outbound
-// function_call_output and one explicit continuation boundary, rather than
-// treating local RoleTool delivery or a scripted capture record as a substitute
-// for wire evidence.
-
 import (
 	"bytes"
 	"context"
@@ -33,11 +13,32 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+
+	// s2s async-tool-result serialization vertical: CLI-verified hermetic proof
+	// that a scheduled spoken turn waits for an outstanding provider tool call's
+	// accepted result and grounded continuation before its own audio reaches the
+	// provider, without losing the local result or wedging session teardown.
+	//
+	// The replay transport is deliberately gated at the supported websocket
+	// dialer seam. The real CLI starts with a positional prompt that produces a
+	// tool call, then holds the scheduled audio until the result-driven spoken
+	// continuation reaches MESSAGE.END. The transport rejects any early audio
+	// append, making the serialization causal rather than timing-based while
+	// keeping the behavior assertion at the public `agent session` boundary.
+	//
+	// The production session path forwards normalized tool results through the
+	// provider-facing stream. The verifier therefore requires the real outbound
+	// function_call_output and one explicit continuation boundary, rather than
+	// treating local RoleTool delivery or a scripted capture record as a substitute
+	// for wire evidence.
+
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -62,32 +63,6 @@ const (
 	asyncCollisionControlMaxDuration = 250 * time.Millisecond
 	asyncCollisionDisposition        = "queue/sequence"
 )
-
-// asyncCollisionTrace records the causal milestones asserted by the positive
-// proof. The observer and executor use the same mutex, so the order is based on
-// runtime events rather than elapsed time.
-type asyncCollisionTrace struct {
-	mu     sync.Mutex
-	events []string
-}
-
-func (t *asyncCollisionTrace) record(event string) {
-	if t == nil {
-		return
-	}
-	t.mu.Lock()
-	t.events = append(t.events, event)
-	t.mu.Unlock()
-}
-
-func (t *asyncCollisionTrace) snapshot() []string {
-	if t == nil {
-		return nil
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return append([]string(nil), t.events...)
-}
 
 // asyncCollisionToolExecutor blocks the single provider-issued call until the
 // stream observer sees the first audio delta of the unrelated later response.
@@ -648,6 +623,10 @@ func cloneAsyncCollisionDeltas(deltas [][]int16) [][]int16 {
 // positive collision proof. It validates every observable, including the
 // exact-one provider-facing result and its original call ID.
 func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
+	clitest.Test(t, testSessionAsyncToolResultInterruptsSpeechThroughCLI)
+}
+
+func testSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, true); err != nil {
@@ -736,6 +715,10 @@ func TestSessionAsyncToolResultAudioDamageFailsVerifier(t *testing.T) {
 // It withholds only the fixture's terminal event; the bounded CLI must return
 // and the shared verifier must report the missing exact terminal boundary.
 func TestSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
+	clitest.Test(t, testSessionAsyncToolResultMissingTerminalFailsBounded)
+}
+
+func testSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{
 		maxDuration:      asyncCollisionControlMaxDuration,

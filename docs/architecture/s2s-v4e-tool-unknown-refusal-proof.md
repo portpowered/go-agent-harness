@@ -5,13 +5,14 @@ lane with no network and no credentials.
 
 ## What is proven
 
-`TestUnknownToolRefusalThroughBuiltCLI`
-(`agent-cli/test/integration/tool_unknown_test.go`) launches real `agent-cli`
-processes as child processes with their production argv over the committed,
-replay-only capture
-`agent-cli/test/integration/testdata/s2s-v4e-tool-unknown.capture.json`. No
-Cobra constructor, session service, probe executor, or tool-routing function
-runs in-process. The proof has three observations:
+`TestUnknownToolRefusalThroughCLI`
+(`agent-cli/test/integration/tool_unknown_test.go`) runs the shipped
+`agent-cli` command entrypoint (`cli.Execute` over the production
+composition, the path `cmd/agent` uses) in-process on a virtual clock
+(`clitest`), with the production argv over the committed, replay-only capture
+`agent-cli/test/integration/testdata/s2s-v4e-tool-unknown.capture.json`. The
+test calls no Cobra constructor, session service, probe executor, or
+tool-routing function directly. The proof has three observations:
 
 1. **Unregistered-name condition.** `agent --config-dir <dir> tool --list`
    observes the active session registry through the public CLI: `read_file`
@@ -30,8 +31,8 @@ runs in-process. The proof has three observations:
    `tool_name` from the projected output.
 3. **Post-refusal completion signal.** The same session output records the
    close boundary (`[session closed: fixture_complete]` plus a
-   `[session terminal: ...]` line), the process exits 0 without a panic, and a
-   60s process deadline bounds every child run. Silence or bare process exit
+   `[session terminal: ...]` line), the command exits 0 without a panic, and a
+   60s deadline (on the bubble's virtual clock) bounds every run. Silence or bare process exit
    is not accepted: the close boundary must be observed in stdout.
 
 `agent probe run <scenario> --replay <fixture> --json` then runs the same

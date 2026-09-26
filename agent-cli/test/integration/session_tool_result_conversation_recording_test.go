@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -89,51 +90,16 @@ func readRecordedConversationToolEvents(t *testing.T, recordDir string) []record
 }
 
 func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
+	clitest.Test(t, testSessionToolCallConversationBrowserRecordingParity)
+}
+
+func testSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 	wavPath, reply := conversationFixtureInputs(t)
 	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
 
-	type runSnapshot struct {
-		stdout   string
-		output   []byte
-		tool     []recordedConversationToolEvent
-		provider []providerFunctionCallOutput
-	}
-	runs := make([]runSnapshot, 0, 2)
+	runs := make([]browserRecordingParityRun, 0, 2)
 	for _, enabled := range []bool{false, true} {
-		executor := &conversationResultExecutor{result: toolResultPositive}
-		stdout, outputPath, recordDir, runErr := runToolResultConversationWithBrowserRecording(t, wavPath, wirePath, executor, enabled)
-		if runErr != nil {
-			t.Fatalf("browser recording=%t session failed: %v\nstdout:\n%s", enabled, runErr, stdout)
-		}
-		calls, returned := executor.snapshot()
-		if err := validateExactlyOneToolCall(calls); err != nil {
-			t.Fatalf("browser recording=%t: %v", enabled, err)
-		}
-		if len(returned) != 1 || returned[0] != toolResultPositive {
-			t.Fatalf("browser recording=%t executor results = %q, want one exact result %s", enabled, returned, toolResultPositive)
-		}
-		outputs := functionCallOutputsInExchange(t, wirePath)
-		if len(outputs) != 1 || outputs[0].CallID != toolConversationCallID || outputs[0].Output != toolResultPositive {
-			t.Fatalf("browser recording=%t provider outputs = %#v, want one correlated exact result", enabled, outputs)
-		}
-		assertToolResultFollowUpOrdering(t, wirePath, outputs[0].Sequence)
-		if err := transcriptReflectionError(stdout); err != nil {
-			t.Fatalf("browser recording=%t reflection failed: %v", enabled, err)
-		}
-		evidence := readRecordedConversationToolEvents(t, recordDir)
-		if len(evidence) != 2 || evidence[0].Type != "tool_call" || evidence[1].Type != "tool_result" || evidence[0].ToolCallID != toolConversationCallID || evidence[1].ToolCallID != toolConversationCallID || evidence[0].Arguments != toolCallScenarioArguments || evidence[1].Content != toolResultPositive || evidence[1].Status != rtStatusCompleted {
-			t.Fatalf("browser recording=%t session-log tool evidence = %#v, want one exact call/result pair", enabled, evidence)
-		}
-		output, err := os.ReadFile(outputPath)
-		if err != nil {
-			t.Fatalf("browser recording=%t read output WAV: %v", enabled, err)
-		}
-		runs = append(runs, runSnapshot{
-			stdout:   stdout,
-			output:   output,
-			tool:     evidence,
-			provider: outputs,
-		})
+		runs = append(runs, runBrowserRecordingParityCase(t, wavPath, wirePath, enabled))
 	}
 
 	if runs[0].stdout != runs[1].stdout || !bytes.Equal(runs[0].output, runs[1].output) {
@@ -143,6 +109,51 @@ func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 		t.Fatalf("browser recording changed recorded tool/provider outcomes: disabled=%#v/%#v enabled=%#v/%#v", runs[0].tool, runs[0].provider, runs[1].tool, runs[1].provider)
 	}
 	t.Logf("browser recording parity: disabled and --browser-record/--browser-record-arguments/--browser-record-results enabled each dispatched %s once, accepted one correlated output before response.create, and retained identical sanitized call/result evidence; recording flags do not affect delivery", toolConversationCallID)
+}
+
+// browserRecordingParityRun is one session's observable outcome in the
+// browser-recording parity proof.
+type browserRecordingParityRun struct {
+	stdout   string
+	output   []byte
+	tool     []recordedConversationToolEvent
+	provider []providerFunctionCallOutput
+}
+
+// runBrowserRecordingParityCase runs the tool-result conversation with
+// browser recording enabled or disabled and requires one exact, correlated
+// tool call/result on every surface.
+func runBrowserRecordingParityCase(t *testing.T, wavPath, wirePath string, enabled bool) browserRecordingParityRun {
+	t.Helper()
+	executor := &conversationResultExecutor{result: toolResultPositive}
+	stdout, outputPath, recordDir, runErr := runToolResultConversationWithBrowserRecording(t, wavPath, wirePath, executor, enabled)
+	if runErr != nil {
+		t.Fatalf("browser recording=%t session failed: %v\nstdout:\n%s", enabled, runErr, stdout)
+	}
+	calls, returned := executor.snapshot()
+	if err := validateExactlyOneToolCall(calls); err != nil {
+		t.Fatalf("browser recording=%t: %v", enabled, err)
+	}
+	if len(returned) != 1 || returned[0] != toolResultPositive {
+		t.Fatalf("browser recording=%t executor results = %q, want one exact result %s", enabled, returned, toolResultPositive)
+	}
+	outputs := functionCallOutputsInExchange(t, wirePath)
+	if len(outputs) != 1 || outputs[0].CallID != toolConversationCallID || outputs[0].Output != toolResultPositive {
+		t.Fatalf("browser recording=%t provider outputs = %#v, want one correlated exact result", enabled, outputs)
+	}
+	assertToolResultFollowUpOrdering(t, wirePath, outputs[0].Sequence)
+	if err := transcriptReflectionError(stdout); err != nil {
+		t.Fatalf("browser recording=%t reflection failed: %v", enabled, err)
+	}
+	evidence := readRecordedConversationToolEvents(t, recordDir)
+	if len(evidence) != 2 || evidence[0].Type != "tool_call" || evidence[1].Type != "tool_result" || evidence[0].ToolCallID != toolConversationCallID || evidence[1].ToolCallID != toolConversationCallID || evidence[0].Arguments != toolCallScenarioArguments || evidence[1].Content != toolResultPositive || evidence[1].Status != rtStatusCompleted {
+		t.Fatalf("browser recording=%t session-log tool evidence = %#v, want one exact call/result pair", enabled, evidence)
+	}
+	output, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("browser recording=%t read output WAV: %v", enabled, err)
+	}
+	return browserRecordingParityRun{stdout: stdout, output: output, tool: evidence, provider: outputs}
 }
 
 // realtimeToolFixturePrelude loads the smoke capture's session handshake and
