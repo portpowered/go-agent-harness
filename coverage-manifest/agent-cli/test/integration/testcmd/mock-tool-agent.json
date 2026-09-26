@@ -1,1 +1,1 @@
-{"package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mock-tool-agent", "minimum": 45.00}
+{"package": "github.com/portpowered/go-agent-harness/agent-cli/test/integration/testcmd/mock-tool-agent", "exception": "process entrypoint only; its executor lives in testcmd/mocktool and runs in-process in the integration suite"}

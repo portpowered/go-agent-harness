@@ -1,0 +1,141 @@
+package clitest
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"sync"
+
+	"github.com/gorilla/websocket"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
+)
+
+// PipeListener is an in-memory net.Listener. Every DialContext is one
+// loopback-TCP-like stream connection (see newStreamConnPair) whose server end
+// Accept returns, so HTTP and WebSocket servers and clients inside a synctest
+// bubble block only on bubble channels and timers and advance with its
+// virtual clock. Any address dials the listener.
+type PipeListener struct {
+	conns     chan net.Conn
+	closed    chan struct{}
+	closeOnce sync.Once
+
+	acceptedMu sync.Mutex
+	accepted   []net.Conn
+}
+
+// NewPipeListener returns an open in-memory listener.
+func NewPipeListener() *PipeListener {
+	return &PipeListener{conns: make(chan net.Conn), closed: make(chan struct{})}
+}
+
+// Accept returns the server end of the next dialed pipe.
+func (l *PipeListener) Accept() (net.Conn, error) {
+	select {
+	case conn := <-l.conns:
+		l.acceptedMu.Lock()
+		l.accepted = append(l.accepted, conn)
+		l.acceptedMu.Unlock()
+		return conn, nil
+	case <-l.closed:
+		return nil, net.ErrClosed
+	}
+}
+
+// Close stops Accept and future dials; established streams stay open.
+func (l *PipeListener) Close() error {
+	l.closeOnce.Do(func() { close(l.closed) })
+	return nil
+}
+
+// closeAccepted closes every connection Accept returned, including ones an
+// HTTP handler hijacked (http.Server.Close does not close hijacked
+// connections, such as WebSocket upgrades).
+func (l *PipeListener) closeAccepted() error {
+	l.acceptedMu.Lock()
+	accepted := l.accepted
+	l.accepted = nil
+	l.acceptedMu.Unlock()
+	var result error
+	for _, conn := range accepted {
+		result = errors.Join(result, conn.Close())
+	}
+	return result
+}
+
+// Addr reports the listener's placeholder address.
+func (l *PipeListener) Addr() net.Addr { return pipeAddr{} }
+
+// DialContext connects a new stream to the listener, whatever the address.
+func (l *PipeListener) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
+	client, server := newStreamConnPair()
+	select {
+	case l.conns <- server:
+		return client, nil
+	case <-l.closed:
+		return nil, errors.Join(net.ErrClosed, client.Close(), server.Close())
+	case <-ctx.Done():
+		return nil, errors.Join(ctx.Err(), client.Close(), server.Close())
+	}
+}
+
+// pipeNetwork names the in-memory network in every stream address.
+const pipeNetwork = "pipe"
+
+type pipeAddr struct{}
+
+func (pipeAddr) Network() string { return pipeNetwork }
+func (pipeAddr) String() string  { return pipeNetwork }
+
+// WebSocketDialer is a transport.Dialer (the CLI's provider transport port)
+// that performs the real WebSocket handshake over the listener's streams,
+// exactly as the provider's default gorilla dialer does over TCP.
+func WebSocketDialer(listener *PipeListener) transport.Dialer {
+	return webSocketDialer{dialer: &websocket.Dialer{NetDialContext: listener.DialContext}}
+}
+
+type webSocketDialer struct {
+	dialer *websocket.Dialer
+}
+
+func (d webSocketDialer) Dial(url string, headers map[string]string) (transport.Conn, error) {
+	header := http.Header{}
+	for key, value := range headers {
+		header.Set(key, value)
+	}
+	conn, response, err := d.dialer.Dial(url, header)
+	if response != nil {
+		// Gorilla replaces the handshake body with an in-memory reader.
+		err = errors.Join(err, response.Body.Close())
+	}
+	if err != nil {
+		return nil, errors.Join(err, closeIfOpen(conn))
+	}
+	return conn, nil
+}
+
+func closeIfOpen(conn *websocket.Conn) error {
+	if conn == nil {
+		return nil
+	}
+	return conn.Close()
+}
+
+// Serve runs handler on listener until the test ends. t's cleanup closes the
+// server and then every connection the listener accepted: http.Server.Close
+// does not close hijacked connections (WebSocket upgrades), so the listener
+// closes them, and no handler stays blocked reading one.
+func Serve(t interface{ Cleanup(func()) }, listener *PipeListener, handler http.Handler) {
+	server := &http.Server{Handler: handler}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = server.Serve(listener) //nolint:errcheck // Serve returns ErrServerClosed or net.ErrClosed once cleanup closes it.
+	}()
+	t.Cleanup(func() {
+		_ = server.Close() //nolint:errcheck // closing an in-memory server cannot fail in a way the test acts on.
+		<-done
+		_ = listener.closeAccepted() //nolint:errcheck // in-memory stream closes cannot fail.
+	})
+}

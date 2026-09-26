@@ -1,4 +1,4 @@
-package main
+package mocktool
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 func TestFixtureExecutorSupportsOrderedOutputs(t *testing.T) {
 	observations := filepath.Join(t.TempDir(), "observations.jsonl")
-	executor := &fixtureExecutor{fixture: fixture{
+	executor := &FixtureExecutor{fixture: fixture{
 		Observations: observations,
 		Calls: []expectedToolCall{
 			{Name: "first", Arguments: `{"n":1}`, Output: `{"ok":1}`},
@@ -33,7 +33,7 @@ func TestFixtureExecutorSupportsOrderedOutputs(t *testing.T) {
 			t.Fatalf("response %d = %+v", index, response)
 		}
 	}
-	if err := executor.verify(); err != nil {
+	if err := executor.Verify(); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(observations)
@@ -46,7 +46,7 @@ func TestFixtureExecutorSupportsOrderedOutputs(t *testing.T) {
 }
 
 func TestFixtureExecutorSupportsInjectedError(t *testing.T) {
-	executor := &fixtureExecutor{fixture: fixture{
+	executor := &FixtureExecutor{fixture: fixture{
 		Observations: filepath.Join(t.TempDir(), "observations.jsonl"),
 		Calls:        []expectedToolCall{{Name: "fail", Arguments: `{}`, Error: "fixture failure"}},
 	}}
@@ -57,7 +57,7 @@ func TestFixtureExecutorSupportsInjectedError(t *testing.T) {
 }
 
 func TestFixtureExecutorDelayHonorsCancellation(t *testing.T) {
-	executor := &fixtureExecutor{fixture: fixture{
+	executor := &FixtureExecutor{fixture: fixture{
 		Observations: filepath.Join(t.TempDir(), "observations.jsonl"),
 		Calls:        []expectedToolCall{{Name: "slow", Arguments: `{}`, DelayMS: 1000}},
 	}}
@@ -70,7 +70,7 @@ func TestFixtureExecutorDelayHonorsCancellation(t *testing.T) {
 }
 
 func TestFixtureExecutorRejectsWrongCallIdentity(t *testing.T) {
-	executor := &fixtureExecutor{fixture: fixture{
+	executor := &FixtureExecutor{fixture: fixture{
 		Observations: filepath.Join(t.TempDir(), "observations.jsonl"),
 		Calls:        []expectedToolCall{{Name: "expected", Arguments: `{"id":1}`}},
 	}}

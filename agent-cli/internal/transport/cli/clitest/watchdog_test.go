@@ -45,3 +45,15 @@ func TestWatchdogFailsBubbleBlockedOnRealIO(t *testing.T) {
 		t.Fatalf("stuck bubble hit the global -timeout instead of the watchdog:\n%s", output)
 	}
 }
+
+func TestStuckBubbleReportNamesTestLimitAndGoroutines(t *testing.T) {
+	message, dump := stuckBubbleReport("TestStuck", 3*time.Second)
+	for _, want := range []string{"clitest: TestStuck ran 3s of real time", "synctest bubble never went idle", "real I/O (socket, exec or cgo)"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("report message %q lacks %q", message, want)
+		}
+	}
+	if !strings.Contains(dump, "TestStuckBubbleReportNamesTestLimitAndGoroutines") {
+		t.Fatalf("goroutine dump lacks the calling goroutine:\n%s", dump)
+	}
+}
