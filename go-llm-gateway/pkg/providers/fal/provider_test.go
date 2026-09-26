@@ -365,7 +365,7 @@ func TestFalProvider_Infer_HTTPError(t *testing.T) {
 	if !errors.As(err, &providerErr) {
 		t.Fatalf("Infer() error = %T, want ProviderError", err)
 	}
-	if providerErr.Provider != "fal" || providerErr.StatusCode != 400 {
+	if providerErr.Provider != "fal" || providerErr.StatusCode != http.StatusBadRequest {
 		t.Fatalf("ProviderError = %+v, want provider fal status 400", providerErr)
 	}
 	if !strings.Contains(providerErr.Detail, "invalid audio_url") {
@@ -499,7 +499,7 @@ func TestFalProvider_Infer_GrokImagineVideo_ValidRequestAndResponse(t *testing.T
 	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
 		t.Errorf("Authorization header = %q, want Key test-key", auth)
 	}
-	var body grokImagineVideoRequest
+	var body imageToVideoRequest
 	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
 		t.Fatalf("request body JSON: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestFalProvider_Infer_GrokImagineVideo_InlineImageDataURI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Infer() unexpected error: %v", err)
 	}
-	var body grokImagineVideoRequest
+	var body imageToVideoRequest
 	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
 		t.Fatalf("request body JSON: %v", err)
 	}
@@ -675,7 +675,7 @@ func TestFalProvider_Infer_KlingVideoV3_ValidRequestAndResponse(t *testing.T) {
 	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
 		t.Errorf("Authorization header = %q, want Key test-key", auth)
 	}
-	var body klingVideoV3Request
+	var body imageToVideoRequest
 	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
 		t.Fatalf("request body JSON: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestFalProvider_Infer_KlingVideoV3_InlineImageDataURI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Infer() unexpected error: %v", err)
 	}
-	var body klingVideoV3Request
+	var body imageToVideoRequest
 	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
 		t.Fatalf("request body JSON: %v", err)
 	}
