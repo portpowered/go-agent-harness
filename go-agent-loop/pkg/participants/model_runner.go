@@ -339,7 +339,7 @@ func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context
 	if policy.InterruptsResponse() && (state.responseInFlight || state.acknowledgementOutstanding) && !state.continuationInFlight && !state.responseCancelSent && hasPCM16Signal(pcm) {
 		cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
 			Type:  messages.StreamTypeResponseCancel,
-			Value: messages.NewResponseCancelValue(),
+			Value: messages.NewAutomaticResponseCancelValue(),
 		})
 		if !cancelOutcome.OK() {
 			return sessionAudioSendError("response cancel", cancelOutcome)

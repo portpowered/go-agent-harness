@@ -353,18 +353,19 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	responseSamplesByResponse := m.responseSamples
 	ingressResponse := m.response
 	controller := m.controller
-	for index := range m.frames {
-		m.frames[index] = PCMFrame{}
-	}
+	clear(m.frames)
 	m.frames = nil
 	m.pending = nil
 	m.epoch++
 	m.response = PlaybackResponse{}
 	m.playbackResponse = PlaybackResponse{}
 	m.responseSamples = make(map[PlaybackResponse]uint64)
-	// Discard late deltas from the interrupted ingress response.
-	m.interrupted = ingressResponse
-	m.discarding = ingressResponse.HasIdentity()
+	// Discard late deltas from the interrupted ingress response. A repeated
+	// interruption with no new ingress response (a host cancel followed by
+	// the provider's own speech_started) keeps discarding the earlier one.
+	if ingressResponse.HasIdentity() {
+		m.interrupted, m.discarding = ingressResponse, true
+	}
 	if controller == nil || response.ItemID == "" {
 		m.mu.Unlock()
 		m.notify()
@@ -377,10 +378,7 @@ func (m *sessionInboundMedia) interrupt() (PlaybackInterruption, bool) {
 	} else {
 		interruption.AudioEndMS, ok = controller.InterruptPlayback(response)
 	}
-	audioEndMS := interruption.AudioEndMS
-	if audioEndMS < 0 {
-		audioEndMS = 0
-	}
+	audioEndMS := max(interruption.AudioEndMS, 0)
 	if m.sampleRate > 0 {
 		availableSamples, known := responseSamplesByResponse[interruption.PlaybackResponse]
 		if interruption.PlaybackResponse == response {

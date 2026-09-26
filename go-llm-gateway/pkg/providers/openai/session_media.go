@@ -118,17 +118,7 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 	var err error
 	switch event.Type {
 	case models.SessionEventInputAudioBufferSpeechStarted:
-		if interruption, ok := media.InterruptInbound(); ok {
-			truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
-			outcome := s.enqueueWireEventWait(ctx, truncate)
-			if !outcome.OK() {
-				if outcome.Err != nil {
-					err = outcome.Err
-				} else {
-					err = fmt.Errorf("queue OpenAI Realtime conversation truncation: %s", outcome.Status)
-				}
-			}
-		}
+		err = s.interruptPlayback(ctx, media)
 	case models.SessionEventResponseOutputAudioDelta:
 		format := realtimeAudioMediaType(event.Data)
 		if format != "" && format != realtimePCMAudioFormat {
@@ -156,6 +146,50 @@ func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.Sess
 		media.FailInbound(err)
 	}
 	return err
+}
+
+// interruptPlayback discards queued local playback of the audible response
+// and truncates its conversation item at the audio the device actually
+// played, as the OpenAI Realtime protocol expects on an interruption.
+func (s *realtimeSession) interruptPlayback(ctx context.Context, media *sharedaudio.SessionMedia) error {
+	interruption, ok := media.InterruptInbound()
+	if !ok {
+		return nil
+	}
+	truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
+	outcome := s.enqueueWireEventWait(ctx, truncate)
+	if outcome.OK() {
+		return nil
+	}
+	if outcome.Err != nil {
+		return outcome.Err
+	}
+	return fmt.Errorf("queue OpenAI Realtime conversation truncation: %s", outcome.Status)
+}
+
+// sendResponseCancel sends RESPONSE.CANCEL outside the response intent queue:
+// it must reach the provider even while a default response is active, and it
+// invalidates queued work from the cancelled generation.
+func (s *realtimeSession) sendResponseCancel(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
+	s.responseWireMu.Lock()
+	defer s.responseWireMu.Unlock()
+	s.invalidatePendingResponseIntents()
+	return s.enqueueWireEvents(ctx, events)
+}
+
+// interruptPlaybackForCancel applies an explicit host RESPONSE.CANCEL to local
+// playback. Audio arrives faster than real time, so the cancelled response may
+// still have seconds queued; that backlog is discarded and the item truncated
+// at what was heard. A following server-VAD speech_started finds nothing
+// audible and sends no second truncation.
+func (s *realtimeSession) interruptPlaybackForCancel(ctx context.Context) {
+	media := s.currentRTCMedia()
+	if media == nil {
+		return
+	}
+	if err := s.interruptPlayback(ctx, media); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
+		s.logger.Warn("openai: playback interruption after response cancel failed", logging.Field{Key: "error", Value: err})
+	}
 }
 
 func realtimePlaybackResponse(data json.RawMessage) sharedaudio.PlaybackResponse {

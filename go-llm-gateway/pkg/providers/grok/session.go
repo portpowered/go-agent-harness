@@ -98,7 +98,13 @@ func (s *grokSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 		// adapter and keeps Grok device probes from waiting for server-side VAD.
 		events = append(events, models.NewResponseCreateEvent())
 	}
-	return s.sendEvents(ctx, events)
+	outcome := s.sendEvents(ctx, events)
+	if outcome.OK() && messages.IsExplicitResponseCancel(msg) {
+		// Audio arrives faster than real time; stop the cancelled response's
+		// backlog that is still queued for local playback.
+		s.interruptRTCPlayback()
+	}
+	return outcome
 }
 
 // RequestResponse starts a response without adding another user turn. This is

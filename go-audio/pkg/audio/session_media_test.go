@@ -457,3 +457,39 @@ func closeForTest(t testing.TB, closer io.Closer) {
 		t.Errorf("Close() error = %v", err)
 	}
 }
+
+// A host-side RESPONSE.CANCEL and the provider's server-VAD speech_started can
+// both interrupt the same response. The second interruption must not re-admit
+// late deltas of the response the first one discarded.
+func TestSessionMediaRepeatedInterruptKeepsDiscardingCancelledResponse(t *testing.T) {
+	media := audio.NewSessionMediaAtRate(nil, 24000)
+	t.Cleanup(func() {
+		if err := media.Close(); err != nil {
+			t.Errorf("SessionMedia.Close() = %v", err)
+		}
+	})
+	cancelled := audio.PlaybackResponse{ResponseID: "resp-cancelled", ItemID: "item-cancelled"}
+	media.StartInboundResponse(cancelled)
+	if err := media.PushInbound(make([]int16, 24000)); err != nil {
+		t.Fatal(err)
+	}
+	media.InterruptInbound()
+	media.InterruptInbound()
+
+	media.StartInboundResponse(cancelled)
+	if err := media.PushInbound(make([]int16, 24000)); err != nil {
+		t.Fatal(err)
+	}
+	next := audio.PlaybackResponse{ResponseID: "resp-next", ItemID: "item-next"}
+	media.StartInboundResponse(next)
+	if err := media.PushInbound(make([]int16, 720)); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := media.Endpoints().Inbound.ReadFrame(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.PlaybackResponse != next {
+		t.Fatalf("first audible frame after repeated interruption = %+v, want %+v", frame.PlaybackResponse, next)
+	}
+}

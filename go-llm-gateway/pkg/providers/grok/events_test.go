@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -126,5 +128,53 @@ func TestTranslateOutbound_ToolAcknowledgementCarriesInstructions(t *testing.T) 
 	}
 	if payload.Response.Instructions != messages.ToolAcknowledgementInstructions {
 		t.Fatalf("acknowledgement instructions = %q, want %q", payload.Response.Instructions, messages.ToolAcknowledgementInstructions)
+	}
+}
+
+// Grok delivers response audio faster than real time as well. A host-side
+// RESPONSE.CANCEL (and a server-VAD speech_started) must discard the backlog
+// queued for local playback instead of leaving it audible.
+func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
+	for name, interrupt := range map[string]func(*testing.T, *mockWebSocketConn, *grokSession){
+		"host response cancel": func(t *testing.T, _ *mockWebSocketConn, session *grokSession) {
+			if !session.Send(newGrokTestContext(t), messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}) {
+				t.Fatal("send RESPONSE.CANCEL rejected")
+			}
+		},
+		"server vad speech started": func(t *testing.T, conn *mockWebSocketConn, session *grokSession) {
+			conn.addServerEvent("input_audio_buffer.speech_started", map[string]any{"audio_start_ms": 100})
+			// Media is interrupted before the event is published to Receive.
+			for readFromSession(t, newGrokTestContext(t), session, "speech started").Type != messages.StreamTypeVADSpeechStarted {
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn := newMockConn()
+			session := newGrokSession(conn, logging.DummyLogger())
+			session.mediaSampleRate = 24000
+			endpoints := session.RTCMedia()
+			ctx := newGrokTestContext(t)
+			session.start(ctx)
+			defer closeForTest(t, session)
+
+			backlog := make([]int16, 24000*3)
+			conn.addServerEvent("response.audio.delta", map[string]any{"delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
+			if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
+				t.Fatalf("read first frame: %v", err)
+			}
+			interrupt(t, conn, session)
+			marker := make([]int16, 720)
+			for index := range marker {
+				marker[index] = 7
+			}
+			conn.addServerEvent("response.audio.delta", map[string]any{"delta": codec.EncodeBase64(codec.EncodePCM16(marker))})
+			frame, err := endpoints.Inbound.ReadFrame(ctx)
+			if err != nil {
+				t.Fatalf("read frame after interruption: %v", err)
+			}
+			if len(frame.Samples) == 0 || frame.Samples[0] != 7 {
+				t.Fatal("cancelled backlog was still audible after the interruption")
+			}
+		})
 	}
 }

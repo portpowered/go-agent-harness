@@ -10,8 +10,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
 func TestDecodeOpenAIRealtimeAudioDeltaPreservesOddPCMContext(t *testing.T) {
@@ -201,4 +203,116 @@ func (c *openAIPlaybackController) snapshot() (sharedaudio.PlaybackResponse, sha
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.started, c.interrupted
+}
+
+// An explicit host interrupt control sends RESPONSE.CANCEL. The provider
+// streams audio faster than real time, so seconds of the cancelled response
+// are already queued for local playback when the cancel is sent. Cancelling
+// only generation leaves that backlog audible: the user perceives that
+// barge-in "did not work". The cancel must flush local playback and truncate
+// the conversation item at the audio actually heard, exactly like server VAD.
+func TestRealtimeSession_HostResponseCancelFlushesQueuedPlayback(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+	}
+	controller := &openAIPlaybackController{audioEndMS: 700}
+	controlled.SetPlaybackController(controller)
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+
+	// Four seconds of audio arrive at once; one frame has reached the device.
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-host", "item_id": "item-host", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000*4)), "format": "pcm16",
+	})
+	if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
+		t.Fatalf("read first playback frame: %v", err)
+	}
+
+	outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()})
+	if !outcome.OK() {
+		t.Fatalf("send RESPONSE.CANCEL: %+v", outcome)
+	}
+	sent := waitForClientMessages(t, conn, 2, "response cancel and conversation truncation")
+	var cancel, truncate struct {
+		Type         string `json:"type"`
+		ItemID       string `json:"item_id"`
+		ContentIndex int    `json:"content_index"`
+		AudioEndMS   int    `json:"audio_end_ms"`
+	}
+	if err := json.Unmarshal(sent[0], &cancel); err != nil || cancel.Type != "response.cancel" {
+		t.Fatalf("first client event = %s (%v), want response.cancel", sent[0], err)
+	}
+	if err := json.Unmarshal(sent[1], &truncate); err != nil {
+		t.Fatalf("unmarshal truncation: %v", err)
+	}
+	if truncate.Type != string(models.SessionEventConversationItemTruncate) || truncate.ItemID != "item-host" || truncate.AudioEndMS != 700 {
+		t.Fatalf("conversation truncation = %+v, want item-host at 700 ms", truncate)
+	}
+	if _, interrupted := controller.snapshot(); interrupted.ItemID != "item-host" {
+		t.Fatalf("device playback was not interrupted: %+v", interrupted)
+	}
+
+	// A late delta of the cancelled response is discarded; the next audible
+	// frame is the next response's, not the rest of the cancelled backlog.
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-host", "item_id": "item-host", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000)), "format": "pcm16",
+	})
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-next", "item_id": "item-next", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 2400)), "format": "pcm16",
+	})
+	frame, err := endpoints.Inbound.ReadFrame(ctx)
+	if err != nil {
+		t.Fatalf("read frame after cancel: %v", err)
+	}
+	if frame.PlaybackResponse.ItemID != "item-next" {
+		t.Fatalf("frame after cancel belongs to %+v, want the next response (cancelled backlog still audible)", frame.PlaybackResponse)
+	}
+}
+
+// The session runner's automatic input-energy barge-in also matches the
+// agent's own playback echo on a device without echo cancellation. Its cancel
+// stops generation but leaves local playback to the provider's turn detection.
+func TestRealtimeSession_AutomaticResponseCancelKeepsQueuedPlayback(t *testing.T) {
+	conn := newMockWebSocketConn()
+	session := newRealtimeSession(conn, logging.DummyLogger())
+	session.mediaSampleRate = 24000
+	endpoints := session.RTCMedia()
+	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
+	if !ok {
+		t.Fatal("OpenAI SessionMedia inbound does not expose playback control")
+	}
+	controller := &openAIPlaybackController{audioEndMS: 700}
+	controlled.SetPlaybackController(controller)
+	ctx := newRealtimeTestContext(t)
+	session.start(ctx)
+	defer closeForTest(t, session)
+	conn.addServerEvent("response.output_audio.delta", map[string]any{
+		"response_id": "resp-echo", "item_id": "item-echo", "content_index": 0,
+		"delta": codec.EncodePCM16Base64(make([]int16, 24000)), "format": "pcm16",
+	})
+	if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
+		t.Fatalf("read first playback frame: %v", err)
+	}
+	outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewAutomaticResponseCancelValue()})
+	if !outcome.OK() {
+		t.Fatalf("send automatic RESPONSE.CANCEL: %+v", outcome)
+	}
+	if sent := waitForClientMessages(t, conn, 1, "automatic response cancel"); len(sent) != 1 {
+		t.Fatalf("client events = %d, want only response.cancel", len(sent))
+	}
+	if _, interrupted := controller.snapshot(); interrupted.ItemID != "" {
+		t.Fatalf("automatic cancel interrupted device playback: %+v", interrupted)
+	}
+	if frame, err := endpoints.Inbound.ReadFrame(ctx); err != nil || frame.PlaybackResponse.ItemID != "item-echo" {
+		t.Fatalf("frame after automatic cancel = %+v (%v), want the queued response audio", frame.PlaybackResponse, err)
+	}
 }

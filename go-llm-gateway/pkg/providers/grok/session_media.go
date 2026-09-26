@@ -109,6 +109,8 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 
 	var err error
 	switch event.Type {
+	case models.SessionEventInputAudioBufferSpeechStarted:
+		media.InterruptInbound()
 	case models.SessionEventResponseOutputAudioDelta, grokSessionEventResponseAudioDelta:
 		data, decodeErr := decodeGrokAudioDelta(event.Data)
 		if decodeErr != nil {
@@ -127,6 +129,15 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 		media.FailInbound(err)
 	}
 	return err
+}
+
+// interruptRTCPlayback discards response audio queued for local playback.
+// Grok audio deltas carry no conversation item identity, so no provider-side
+// truncation is possible.
+func (s *grokSession) interruptRTCPlayback() {
+	if media := s.currentRTCMedia(); media != nil {
+		media.InterruptInbound()
+	}
 }
 
 // publishRTCMediaWithLog forwards provider audio to the RTC media path. The

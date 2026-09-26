@@ -129,6 +129,11 @@ func NewSessionUpdateValue(cfg *SessionUpdateConfig) *SessionUpdateValue {
 // inference provider via session.Send to cancel an in-progress response (barge-in).
 type ResponseCancelValue struct {
 	Type string `json:"type"` // "response_cancel"
+	// Automatic marks a cancel the session runner raised from raw input audio
+	// energy. Raw energy also matches the agent's own playback echo, and the
+	// provider's turn detection owns interrupting local playback for speech,
+	// so provider adapters discard queued playback only for explicit cancels.
+	Automatic bool `json:"automatic,omitempty"`
 }
 
 func (*ResponseCancelValue) streamMessageValue() {}
@@ -136,6 +141,23 @@ func (*ResponseCancelValue) streamMessageValue() {}
 // NewResponseCancelValue returns a value for RESPONSE.CANCEL.
 func NewResponseCancelValue() *ResponseCancelValue {
 	return &ResponseCancelValue{Type: "response_cancel"}
+}
+
+// NewAutomaticResponseCancelValue returns the RESPONSE.CANCEL value for the
+// session runner's automatic input-energy barge-in.
+func NewAutomaticResponseCancelValue() *ResponseCancelValue {
+	return &ResponseCancelValue{Type: "response_cancel", Automatic: true}
+}
+
+// IsExplicitResponseCancel reports whether msg is a RESPONSE.CANCEL requested
+// explicitly by the host (an interrupt control), which must also stop the
+// cancelled response's audio already queued for local playback.
+func IsExplicitResponseCancel(msg StreamMessage) bool {
+	if msg.Type != StreamTypeResponseCancel {
+		return false
+	}
+	value, ok := msg.Value.(*ResponseCancelValue)
+	return !ok || value == nil || !value.Automatic
 }
 
 // ResponsePurpose identifies the reason a session response was requested.
