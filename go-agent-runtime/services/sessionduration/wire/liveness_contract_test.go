@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -188,5 +189,31 @@ func TestAdmissionSessionForwardsBargeInCapabilities(t *testing.T) {
 	playback, ok := session.(messages.SessionLocalPlayback)
 	if !ok || playback.LocalPlayback().Level != 1234 || !playback.InterruptLocalPlayback(context.Background()) || provider.interrupts != 1 {
 		t.Fatal("local playback was not forwarded")
+	}
+}
+
+// The recorder and the admission session each relay provider messages through
+// their own goroutine. SyncReceive must publish every message the provider had
+// queued through both relays before it returns.
+func TestAdmissionSessionSyncReceivePublishesQueuedProviderMessages(t *testing.T) {
+	service := NewService()
+	provider := newPublicSession()
+	var session messages.Session = service.NewAdmissionSession(context.Background(), gwtesting.NewSessionRecorder(provider), service.NewEventAdmission(), nil)
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close admission session: %v", err)
+		}
+	})
+	syncer, ok := session.(messages.SessionReceiveSyncer)
+	if !ok {
+		t.Fatal("admission session does not expose SyncReceive")
+	}
+	for round := range 50 {
+		id := fmt.Sprintf("resp-%d", round)
+		provider.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageStart, ResponseID: id})
+		syncer.SyncReceive(context.Background())
+		if got, ok := session.Receive().Read(); !ok || got.ResponseID != id {
+			t.Fatalf("round %d: message %q was still behind a relay after SyncReceive", round, id)
+		}
 	}
 }

@@ -24,6 +24,7 @@ type boundSession struct {
 	stopPumps                                context.CancelFunc
 	receive                                  *messages.TypedBuffer[messages.StreamMessage]
 	forwardStop, forwardDone                 chan struct{}
+	barrier                                  messages.RelayBarrier
 	forwardOnce                              sync.Once
 	terminalObserved, gracefulCloseRequested atomic.Bool
 }
@@ -93,7 +94,18 @@ func (s *boundSession) forwardMessages(ctx context.Context, source *messages.Typ
 			return
 		case <-s.forwardStop:
 			return
+		case reply := <-s.barrier.Requests():
+			s.barrier.Relay(reply, source, func(msg messages.StreamMessage) bool { return s.forwardSessionMessage(ctx, msg) })
 		}
+	}
+}
+
+// SyncReceive returns once every provider message queued before the call has
+// crossed this session's own relay into Receive.
+func (s *boundSession) SyncReceive(ctx context.Context) {
+	s.capabilities.SyncReceive(ctx)
+	if s.forwardDone != nil {
+		s.barrier.Await(ctx, s.forwardDone)
 	}
 }
 

@@ -25,6 +25,7 @@ var _ messages.BargeInCapableSession = (*SessionRecorder)(nil)
 // goroutines concurrently.
 type SessionRecorder struct {
 	messages.SessionCapabilities
+	barrier  messages.RelayBarrier
 	inner    messages.Session
 	events   []CapturedSessionEvent
 	mu       sync.Mutex
@@ -357,35 +358,11 @@ func (r *SessionRecorder) recordMessage(dir SessionEventDirection, msg messages.
 	r.mu.Unlock()
 }
 
-// recordingBuffer proxies reads from an inner TypedBuffer and records each
-// message via the SessionRecorder. Because TypedBuffer is channel-backed and
-// we cannot intercept channel reads, we use a relay goroutine that reads from
-// the inner buffer and writes to a new buffer, recording along the way.
-type recordingBuffer struct {
-	buf *messages.TypedBuffer[messages.StreamMessage]
-}
-
-func newRecordingBuffer(inner *messages.TypedBuffer[messages.StreamMessage], rec *SessionRecorder) *recordingBuffer {
-	// Create a relay buffer with the same capacity.
-	relay := messages.NewTypedBuffer[messages.StreamMessage](inner.Cap())
-
-	// Relay goroutine: read from the inner channel, record, and forward.
-	// Watches the inner session's Done() channel to terminate when the session
-	// ends, preventing goroutine leaks (TypedBuffer channels are never closed).
-	go func() {
-		for {
-			select {
-			case msg := <-inner.Chan():
-				rec.recordMessage(DirectionServerToClient, msg)
-				relay.Write(rec.relayCtx, msg)
-			case <-rec.inner.Done():
-				rec.cancel()
-				return
-			case <-rec.relayCtx.Done():
-				return
-			}
-		}
-	}()
-
-	return &recordingBuffer{buf: relay}
+// SyncReceive returns once every provider message queued before the call has
+// been recorded and relayed into Receive.
+func (r *SessionRecorder) SyncReceive(ctx context.Context) {
+	r.SessionCapabilities.SyncReceive(ctx)
+	if r.relayCtx != nil {
+		r.barrier.Await(ctx, r.relayCtx.Done())
+	}
 }

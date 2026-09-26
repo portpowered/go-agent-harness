@@ -508,3 +508,39 @@ func TestSessionModelRunner_HeldOnsetAudioReleasedAfterOnsetWindow(t *testing.T)
 		}
 	})
 }
+
+// relayedSession models a provider response that is already open at the
+// provider but still queued behind the relay that publishes provider messages
+// to the runner. SyncReceive publishes it.
+type relayedSession struct {
+	*recordingSession
+	queued []messages.StreamMessage
+}
+
+func (s *relayedSession) SyncReceive(ctx context.Context) {
+	for _, msg := range s.queued {
+		s.recv.Write(ctx, msg)
+	}
+	s.queued = nil
+}
+
+// Without a purpose echo the continuation binds to the first response opened
+// after its request. A server-VAD response already open at the provider but
+// not yet relayed would win that race, so the runner first publishes every
+// provider message queued before the request: it then sees the response in
+// flight and defers the continuation until it ends.
+func TestSessionModelRunner_ContinuationRequestSyncsProviderMessagesFirst(t *testing.T) {
+	ctx := context.Background()
+	session := &relayedSession{recordingSession: newRecordingSession(), queued: []messages.StreamMessage{sessionMessage(messages.StreamTypeMessageStart, "resp-vad")}}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newSessionResponseState()
+	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 0 || state.continuationInFlight {
+		t.Fatalf("continuation requested over the relayed server-VAD response: creates=%d state=%+v", got, state)
+	}
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-vad"))
+	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-continuation"))
+	if countSent(session.sentMessages(), messages.StreamTypeResponseCreate) != 1 || state.continuationResponseID != "resp-continuation" {
+		t.Fatalf("continuation bound to %q after the server-VAD response, want resp-continuation", state.continuationResponseID)
+	}
+}

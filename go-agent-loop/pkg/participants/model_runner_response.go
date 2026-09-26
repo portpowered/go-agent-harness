@@ -315,3 +315,36 @@ func continuationRequestRejected(state *sessionRunState) {
 	state.continuationResponseID = ""
 	state.continuationRequested = true
 }
+
+// syncProviderMessages observes every provider message queued before a tool
+// continuation request. Without a purpose echo the continuation binds to the
+// first response opened after its request, so a server-VAD response already
+// open at the provider but still behind the relay must be seen first: the
+// request is then deferred until that response ends. The relay may block
+// while Receive is full, so Receive is drained while the barrier completes.
+// A response the provider opens after this point races the request itself;
+// the provider rejects the request and the guessed binding is released.
+func (r *ModelRunner) syncProviderMessages(ctx context.Context, session messages.Session, state *sessionRunState) {
+	syncer, ok := session.(messages.SessionReceiveSyncer)
+	if !ok {
+		return
+	}
+	synced := make(chan struct{})
+	go func() {
+		defer close(synced)
+		syncer.SyncReceive(ctx)
+	}()
+	for {
+		select {
+		case <-synced:
+			r.forwardPendingSessionMessages(ctx, session, state)
+			return
+		case msg, open := <-session.Receive().Chan():
+			if !open {
+				<-synced
+				return
+			}
+			r.forwardSessionMessageState(ctx, session, state, msg)
+		}
+	}
+}

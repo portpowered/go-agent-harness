@@ -336,6 +336,9 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 	// will never arrive. Hold the event only when a cancel is actually
 	// outstanding, then replay it from flushDeferredSessionEvents once that
 	// boundary is observed.
+	if isSessionContinuationCreate(evt) {
+		r.syncProviderMessages(ctx, session, state)
+	}
 	if deferSessionResponseRequest(state, evt) {
 		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
 		return

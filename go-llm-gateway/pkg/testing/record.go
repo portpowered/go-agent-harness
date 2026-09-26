@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // RecordRoundTripper is an http.RoundTripper that records request/response pairs
@@ -187,4 +189,43 @@ func captureHeaders(headers http.Header) http.Header {
 		}
 	}
 	return result
+}
+
+// recordingBuffer proxies reads from an inner TypedBuffer and records each
+// message via the SessionRecorder. Because TypedBuffer is channel-backed and
+// we cannot intercept channel reads, we use a relay goroutine that reads from
+// the inner buffer and writes to a new buffer, recording along the way.
+type recordingBuffer struct {
+	buf *messages.TypedBuffer[messages.StreamMessage]
+}
+
+func newRecordingBuffer(inner *messages.TypedBuffer[messages.StreamMessage], rec *SessionRecorder) *recordingBuffer {
+	// Create a relay buffer with the same capacity.
+	relay := messages.NewTypedBuffer[messages.StreamMessage](inner.Cap())
+
+	// Relay goroutine: read from the inner channel, record, and forward.
+	// Watches the inner session's Done() channel to terminate when the session
+	// ends, preventing goroutine leaks (TypedBuffer channels are never closed).
+	go func() {
+		for {
+			select {
+			case msg := <-inner.Chan():
+				rec.recordMessage(DirectionServerToClient, msg)
+				relay.Write(rec.relayCtx, msg)
+			case <-rec.inner.Done():
+				rec.cancel()
+				return
+			case <-rec.relayCtx.Done():
+				return
+			case reply := <-rec.barrier.Requests():
+				rec.barrier.Relay(reply, inner, func(msg messages.StreamMessage) bool {
+					rec.recordMessage(DirectionServerToClient, msg)
+					relay.Write(rec.relayCtx, msg)
+					return true
+				})
+			}
+		}
+	}()
+
+	return &recordingBuffer{buf: relay}
 }

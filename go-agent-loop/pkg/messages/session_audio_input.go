@@ -1,6 +1,9 @@
 package messages
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 // SessionAudioInputPolicy controls whether contentful session audio is
 // allowed to interrupt the response currently owned by the session runner.
@@ -86,6 +89,15 @@ type BargeInCapableSession interface {
 	SessionTurnDetection
 	SessionLocalPlayback
 	SessionInputFormat
+	SessionReceiveSyncer
+}
+
+// SessionReceiveSyncer is implemented by sessions that relay provider messages
+// asynchronously. SyncReceive returns once every provider message queued
+// before the call is readable from Receive; it may block while Receive is full,
+// so the reader must keep draining Receive while it waits.
+type SessionReceiveSyncer interface {
+	SyncReceive(ctx context.Context)
 }
 
 // SessionCapabilities forwards the optional capabilities the session runner's
@@ -100,6 +112,7 @@ var (
 	_ SessionTurnDetection = SessionCapabilities{}
 	_ SessionLocalPlayback = SessionCapabilities{}
 	_ SessionInputFormat   = SessionCapabilities{}
+	_ SessionReceiveSyncer = SessionCapabilities{}
 )
 
 func (c SessionCapabilities) ProviderTurnDetection() bool {
@@ -124,4 +137,54 @@ func (c SessionCapabilities) InputAudioSampleRate() int {
 		return format.InputAudioSampleRate()
 	}
 	return 0
+}
+
+func (c SessionCapabilities) SyncReceive(ctx context.Context) {
+	if syncer, ok := c.Wrapped.(SessionReceiveSyncer); ok {
+		syncer.SyncReceive(ctx)
+	}
+}
+
+// RelayBarrier lets a session wrapper that relays provider messages through
+// its own goroutine honour SyncReceive. The relay goroutine selects on
+// Requests and, for each request, forwards every source message already
+// queued before closing the reply channel.
+type RelayBarrier struct {
+	once     sync.Once
+	requests chan chan struct{}
+}
+
+// Requests is the channel the relay goroutine selects on.
+func (b *RelayBarrier) Requests() chan chan struct{} {
+	b.once.Do(func() { b.requests = make(chan chan struct{}) })
+	return b.requests
+}
+
+// Await asks the relay to publish every queued message and waits until it
+// has, the relay has stopped (stopped closes), or ctx ends.
+func (b *RelayBarrier) Await(ctx context.Context, stopped <-chan struct{}) {
+	reply := make(chan struct{})
+	select {
+	case b.Requests() <- reply:
+	case <-stopped:
+		return
+	case <-ctx.Done():
+		return
+	}
+	select {
+	case <-reply:
+	case <-stopped:
+	case <-ctx.Done():
+	}
+}
+
+// Relay forwards every message already queued in source with forward and
+// then answers the barrier request reply.
+func (b *RelayBarrier) Relay(reply chan struct{}, source *TypedBuffer[StreamMessage], forward func(StreamMessage) bool) {
+	defer close(reply)
+	for msg, ok := source.Read(); ok; msg, ok = source.Read() {
+		if !forward(msg) {
+			return
+		}
+	}
 }

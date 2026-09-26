@@ -99,6 +99,7 @@ func (s *terminalDrainSession) SyncReceive(ctx context.Context) {
 	if s == nil || s.syncRequests == nil || ctx == nil {
 		return
 	}
+	s.SessionCapabilities.SyncReceive(ctx) // relays below this one first
 	ack := make(chan struct{})
 	select {
 	case s.syncRequests <- ack:
