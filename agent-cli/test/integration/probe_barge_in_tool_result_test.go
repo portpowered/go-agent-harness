@@ -14,7 +14,10 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/test/integration/testnet"
+	runtimeproviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
+	providerswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/wire"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -355,6 +358,53 @@ func TestPostDoneBargeInStopsDevicePlayback(t *testing.T) {
 		arguments := append([]string{"--base-url", "ws://provider.pipe"}, postDoneBargeInArgs()...)
 		agent := startRemoteToolAudioInProcess(t, remoteToolAudioCase{}, arguments, remoteToolAudioPaths{configDir: t.TempDir()}, listener, device)
 		runPostDoneBargeIn(t, ctx, device, provider, agent)
+	})
+}
+
+// TestPostDoneBargeInClientTurnsStopsDevicePlayback is the same scenario
+// with provider VAD off: the client owns turn boundaries, so no
+// speech_started ever arrives and only the runner's own after-response.done
+// interrupt can stop playback and truncate the item.
+func TestPostDoneBargeInClientTurnsStopsDevicePlayback(t *testing.T) {
+	clitest.Test(t, func(t *testing.T) {
+		provider := newPostDoneBargeInProvider()
+		provider.serverVAD = false
+		listener := clitest.NewPipeListener()
+		clitest.Serve(t, listener, http.HandlerFunc(provider.handle))
+		device := newInProcessDuplexDevice(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		inferencer, err := providerswire.NewService(providerswire.Dependencies{}).BuildSession(ctx, runtimeproviders.SessionConfig{
+			Provider: "openai", Model: "gpt-realtime-2.1", APIKey: "hermetic-key", RealtimeURL: "ws://provider.pipe",
+			InputAudioFormat: models.AudioFormatPCM16, OutputAudioFormat: models.AudioFormatPCM16,
+			InputAudioSampleRate: 24000, OutputAudioSampleRate: 24000,
+			ClientOwnsAudioTurnBoundaries: true, WebSocketDialer: clitest.WebSocketDialer(listener),
+		})
+		if err != nil {
+			t.Fatalf("build client-turn provider session: %v", err)
+		}
+		agent := remoteToolAudioAgent{stdout: &remoteToolAudioBuffer{}, stderr: &remoteToolAudioBuffer{}}
+		process := clitest.Start(t, clitest.Invocation{
+			Args: remoteToolAudioSessionArgs(t.TempDir(), append([]string{"--base-url", "ws://provider.pipe"}, postDoneBargeInArgs()...)),
+			Ports: []wire.PortSwap{
+				wire.NewPortSwap(wire.PortDeviceRegistry, wire.DeviceRegistry(device.registry)),
+				wire.NewPortSwap(wire.PortSessionInferencer, inferencer),
+			},
+			Stdout: agent.stdout, Stderr: agent.stderr,
+		})
+		done := make(chan error, 1)
+		go func() {
+			if result := process.Wait(); result.ExitCode != 0 {
+				done <- fmt.Errorf("exit status %d", result.ExitCode)
+				return
+			}
+			done <- nil
+		}()
+		agent.done = done
+		runPostDoneBargeIn(t, ctx, device, provider, agent)
+		if provider.Snapshot().speechStarted {
+			t.Fatal("provider VAD started speech; the client-turn scenario must not rely on it")
+		}
 	})
 }
 

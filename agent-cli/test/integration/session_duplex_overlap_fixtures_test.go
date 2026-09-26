@@ -311,6 +311,10 @@ type postDoneBargeInProvider struct {
 	upgrader websocket.Upgrader
 	response []int16
 
+	// serverVAD makes loud input start user speech, as a provider that
+	// owns turn detection does. Off, only the client can interrupt.
+	serverVAD bool
+
 	responseDone, truncated, releaseClose           chan struct{}
 	doneOnce, speechOnce, truncateOnce, releaseOnce sync.Once
 	writeMu                                         sync.Mutex
@@ -321,6 +325,7 @@ type postDoneBargeInProvider struct {
 
 func newPostDoneBargeInProvider() *postDoneBargeInProvider {
 	return &postDoneBargeInProvider{
+		serverVAD:    true,
 		response:     remoteToolAudioPCM(postDoneBargeInSamples, 900),
 		responseDone: make(chan struct{}),
 		truncated:    make(chan struct{}),
@@ -432,6 +437,9 @@ func (p *postDoneBargeInProvider) handleInputAudio(connection *websocket.Conn, e
 	if err != nil || len(decoded)%2 != 0 {
 		p.fail("decode input audio")
 		return false
+	}
+	if !p.serverVAD {
+		return true
 	}
 	loud := false
 	for index := 0; index+1 < len(decoded); index += 2 {
