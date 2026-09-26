@@ -24,7 +24,7 @@ const (
 // match the conversation.item.create record captured in the committed fixture.
 const ScenarioTextS2SV7A = "What is the weather in Paris?"
 
-func registerS2SV7AMetricsModalityScenarios(register func(Scenario, ...DeadSessionControl) error) {
+func registerS2SV7AMetricsModalityScenarios(register func(Scenario, ...DeadSessionControl) error) error {
 	expectations := []ExpectedBehavior{
 		{Type: ExpectTranscriptContains, Kind: ExpectTranscriptContains, Text: "It is sunny in Paris."},
 		{Type: ExpectMetricsReconcile, Kind: ExpectMetricsReconcile},
@@ -55,7 +55,8 @@ func registerS2SV7AMetricsModalityScenarios(register func(Scenario, ...DeadSessi
 			ExpectedBehavior: expectations,
 		}
 		if err := register(scenario); err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }

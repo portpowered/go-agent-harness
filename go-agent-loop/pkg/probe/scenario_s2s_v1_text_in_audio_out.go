@@ -1,6 +1,6 @@
 package probe
 
-func registerS2SV1TextInAudioOutScenario(register func(Scenario, ...DeadSessionControl) error) {
+func registerS2SV1TextInAudioOutScenario(register func(Scenario, ...DeadSessionControl) error) error {
 	if err := register(Scenario{
 		ID:          "s2s-v1-text-in-audio-out",
 		Name:        "s2s_v1_text_in_audio_out",
@@ -14,6 +14,7 @@ func registerS2SV1TextInAudioOutScenario(register func(Scenario, ...DeadSessionC
 			{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "synthetic"},
 		},
 	}); err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }

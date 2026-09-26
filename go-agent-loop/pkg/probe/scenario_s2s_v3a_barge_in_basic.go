@@ -43,7 +43,7 @@ const (
 	v3aPrompt = "Tell me about today's schedule."
 )
 
-func registerS2SV3ABargeInBasicScenarios(register func(Scenario, ...DeadSessionControl) error) {
+func registerS2SV3ABargeInBasicScenarios(register func(Scenario, ...DeadSessionControl) error) error {
 	cancelledExpectations := func() []ExpectedBehavior {
 		return []ExpectedBehavior{
 			{Type: ExpectResponseCancel, Kind: ExpectResponseCancel},
@@ -97,7 +97,8 @@ func registerS2SV3ABargeInBasicScenarios(register func(Scenario, ...DeadSessionC
 			ExpectedBehavior: registration.expectations,
 		}
 		if err := register(scenario); err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }

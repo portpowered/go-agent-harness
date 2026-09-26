@@ -5,17 +5,14 @@ import (
 	"testing"
 )
 
-func TestS2SV6CErrorRateLimitRegistrationFailsFast(t *testing.T) {
+func TestS2SV6CErrorRateLimitRegistrationReturnsError(t *testing.T) {
 	want := errors.New("registration failed")
-	defer func() {
-		got, ok := recover().(error)
-		if !ok || !errors.Is(got, want) {
-			t.Fatalf("registration panic = %v, want %v", got, want)
-		}
-	}()
-	registerS2SV6CErrorRateLimitScenario(func(Scenario, ...DeadSessionControl) error {
+	got := registerS2SV6CErrorRateLimitScenario(func(Scenario, ...DeadSessionControl) error {
 		return want
 	})
+	if !errors.Is(got, want) {
+		t.Fatalf("registration error = %v, want %v", got, want)
+	}
 }
 
 // anyCorpus accepts every corpus reference so built-in scenarios validate
@@ -30,7 +27,7 @@ func (anyCorpus) Has(string) bool { return true }
 // Registration does not validate, so this is the only registry-wide guard.
 func TestBuiltinScenariosValidateAndDeclareLaneInvariants(t *testing.T) {
 	registered := map[string]Scenario{}
-	for _, scenario := range newBuiltinScenarioRegistry().Snapshot() {
+	for _, scenario := range builtinScenarios(t) {
 		registered[scenario.ID] = scenario
 		if err := scenario.Validate(anyCorpus{}); err != nil {
 			t.Errorf("scenario %q does not validate: %v", scenario.ID, err)
@@ -78,4 +75,15 @@ func TestBuiltinScenariosValidateAndDeclareLaneInvariants(t *testing.T) {
 			}
 		}
 	}
+}
+
+// builtinScenarios returns the built-in scenarios, failing the test when the
+// built-in registry cannot be built.
+func builtinScenarios(t *testing.T) []Scenario {
+	t.Helper()
+	scenarios, err := Scenarios()
+	if err != nil {
+		t.Fatalf("Scenarios() error = %v", err)
+	}
+	return scenarios
 }

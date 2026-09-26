@@ -45,7 +45,10 @@ func Resolve(selection string) ([]probe.Scenario, error) {
 		}
 		return []probe.Scenario{scenario}, nil
 	}
-	registered := probe.Scenarios()
+	registered, err := probe.Scenarios()
+	if err != nil {
+		return nil, fmt.Errorf("list built-in probe scenarios: %w", err)
+	}
 	for _, scenario := range registered {
 		if scenario.ID == selection || replay.ScenarioName(scenario) == selection {
 			return []probe.Scenario{scenario}, nil

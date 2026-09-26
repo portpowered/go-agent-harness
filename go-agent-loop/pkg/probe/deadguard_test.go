@@ -3,15 +3,14 @@ package probe
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 )
 
-// TestMain registers the live-suite smoke scenario before any test observes
-// the live registry.
-func TestMain(m *testing.M) {
-	if err := RegisterScenario(Scenario{
+// liveSuiteSmokeScenario exercises the audio and transcript expectation
+// paths the built-in scenarios do not all cover.
+func liveSuiteSmokeScenario() Scenario {
+	return Scenario{
 		ID:   "live-probe-suite-smoke",
 		Name: "live probe suite smoke",
 		Steps: []Step{
@@ -23,23 +22,43 @@ func TestMain(m *testing.M) {
 			{Type: ExpectTranscriptContains, Text: "expected response"},
 			{Type: ExpectAudioEnergy},
 		},
-	}); err != nil {
-		panic(err)
 	}
-	os.Exit(m.Run())
 }
 
-func TestDeadSessionGuardCoversLiveRegistry(t *testing.T) {
-	entries := LiveScenarioRegistry().Entries()
+// builtinRegistry returns a fresh built-in registry, failing the test when
+// the built-ins cannot be registered.
+func builtinRegistry(t *testing.T) *ScenarioRegistry {
+	t.Helper()
+	registry, err := NewBuiltinScenarioRegistry()
+	if err != nil {
+		t.Fatalf("NewBuiltinScenarioRegistry() error = %v", err)
+	}
+	return registry
+}
+
+func TestDeadSessionGuardCoversBuiltinRegistry(t *testing.T) {
+	entries := builtinRegistry(t).Entries()
 	if len(entries) == 0 {
-		t.Fatal("live probe registry is empty; the guard would be vacuously green")
+		t.Fatal("built-in probe registry is empty; the guard would be vacuously green")
 	}
 
-	result, err := RunDeadSessionGuard(context.Background())
+	result, err := RunDeadSessionGuard(t.Context())
 	if err != nil {
-		t.Fatalf("live registry guard failed: %v", err)
+		t.Fatalf("built-in registry guard failed: %v", err)
 	}
 	assertGuardRunsForEntries(t, result, entries)
+}
+
+func TestDeadSessionGuardCoversLiveSuiteSmokeScenario(t *testing.T) {
+	registry := builtinRegistry(t)
+	if err := registry.Register(liveSuiteSmokeScenario()); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewDeadSessionGuard(WithScenarioRegistry(registry)).Run(t.Context())
+	if err != nil {
+		t.Fatalf("smoke registry guard failed: %v", err)
+	}
+	assertGuardRunsForEntries(t, result, registry.Entries())
 }
 
 func TestDeadSessionGuardRunsEveryApplicableControlOnceWithFreshSubjects(t *testing.T) {
@@ -114,18 +133,18 @@ func TestDeadSessionGuardRunsEveryApplicableControlOnceWithFreshSubjects(t *test
 	}
 }
 
-func TestDeadSessionGuardReadsLiveRegistryAtExecutionTime(t *testing.T) {
-	guard := NewDeadSessionGuard()
+func TestDeadSessionGuardReadsRegistryAtExecutionTime(t *testing.T) {
+	registry := builtinRegistry(t)
+	guard := NewDeadSessionGuard(WithScenarioRegistry(registry))
 
 	first := terminalScenario("first-live-entry")
-	if err := RegisterScenario(first); err != nil {
+	if err := registry.Register(first); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { UnregisterScenario(first.ID) })
-	firstSnapshot := LiveScenarioRegistry().Entries()
-	result, err := guard.Run(context.Background())
+	firstSnapshot := registry.Entries()
+	result, err := guard.Run(t.Context())
 	if err != nil {
-		t.Fatalf("first live snapshot failed: %v", err)
+		t.Fatalf("first snapshot failed: %v", err)
 	}
 	assertGuardRunsForEntries(t, result, firstSnapshot)
 	if !containsScenarioID(result.Runs, first.ID) {
@@ -133,14 +152,13 @@ func TestDeadSessionGuardReadsLiveRegistryAtExecutionTime(t *testing.T) {
 	}
 
 	second := terminalScenario("second-live-entry")
-	if err := RegisterScenario(second); err != nil {
+	if err := registry.Register(second); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { UnregisterScenario(second.ID) })
-	secondSnapshot := LiveScenarioRegistry().Entries()
-	result, err = guard.Run(context.Background())
+	secondSnapshot := registry.Entries()
+	result, err = guard.Run(t.Context())
 	if err != nil {
-		t.Fatalf("second live snapshot failed: %v", err)
+		t.Fatalf("second snapshot failed: %v", err)
 	}
 	assertGuardRunsForEntries(t, result, secondSnapshot)
 	if !containsScenarioID(result.Runs, second.ID) {
@@ -286,7 +304,7 @@ func TestDeadSessionGuardEvaluatesTypedExpectationControls(t *testing.T) {
 func TestDeadSessionRegistryLifecycleAndGuardConstructionSeams(t *testing.T) {
 	assertNilScenarioRegistryIsInert(t)
 	registry := exerciseScenarioRegistryLifecycle(t)
-	assertLiveRegistryAliasesAndTopLevelGuard(t)
+	assertBuiltinScenariosAndTopLevelGuard(t)
 	assertDeadSessionGuardOptionConstruction(t, registry)
 	assertDeadSessionSubjectSeams(t)
 }
@@ -343,29 +361,29 @@ func exerciseScenarioRegistryLifecycle(t *testing.T) *ScenarioRegistry {
 	return registry
 }
 
-func assertLiveRegistryAliasesAndTopLevelGuard(t *testing.T) {
+func assertBuiltinScenariosAndTopLevelGuard(t *testing.T) {
 	t.Helper()
-	if LiveScenarioRegistry() != LiveRegistry || LiveScenarioRegistry() != DefaultScenarioRegistry {
-		t.Fatal("live registry aliases diverged")
+	got, err := Scenarios()
+	if err != nil {
+		t.Fatalf("Scenarios() error = %v", err)
 	}
-	if err := RegisterScenario(terminalScenario("global-entry")); err != nil {
+	if len(got) == 0 || !containsScenario(got, ScenarioIDS2SV6CErrorRateLimitThrottled) {
+		t.Fatalf("Scenarios() did not return the built-in suite: %#v", got)
+	}
+	registry := builtinRegistry(t)
+	if err := registry.Register(terminalScenario("local-entry")); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { UnregisterScenario("global-entry") })
-	if got := Scenarios(); len(got) == 0 || !containsScenario(got, "global-entry") {
-		t.Fatalf("global scenarios did not retain the live suite entries: %#v", got)
+	if again, err := Scenarios(); err != nil || containsScenario(again, "local-entry") {
+		t.Fatalf("built-in registries share state: scenarios=%#v err=%v", again, err)
 	}
-	UnregisterScenario("global-entry")
-	if got := Scenarios(); len(got) == 0 || containsScenario(got, "global-entry") {
-		t.Fatalf("global unregister changed the wrong live entries: %#v", got)
-	}
-	entries := LiveScenarioRegistry().Entries()
-	if result, err := RunDeadSessionGuard(context.Background()); err != nil || !result.Passed() {
+	entries := builtinRegistry(t).Entries()
+	if result, err := RunDeadSessionGuard(t.Context()); err != nil || !result.Passed() {
 		t.Fatalf("top-level guard run: result=%#v err=%v", result, err)
 	} else {
 		assertGuardRunsForEntries(t, result, entries)
 	}
-	if err := CheckDeadSessionGuard(context.Background()); err != nil {
+	if err := CheckDeadSessionGuard(t.Context()); err != nil {
 		t.Fatalf("top-level guard check: %v", err)
 	}
 }

@@ -125,7 +125,11 @@ func TestReplayServiceInjectsOverlapCorpus(t *testing.T) {
 
 func registeredScenario(t *testing.T, id string) probe.Scenario {
 	t.Helper()
-	for _, scenario := range probe.Scenarios() {
+	scenarios, err := probe.Scenarios()
+	if err != nil {
+		t.Fatalf("probe.Scenarios() error = %v", err)
+	}
+	for _, scenario := range scenarios {
 		if scenario.ID == id {
 			return scenario
 		}

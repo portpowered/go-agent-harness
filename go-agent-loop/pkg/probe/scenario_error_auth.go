@@ -19,7 +19,7 @@ const (
 	ScenarioIDS2SV6AErrorAuthHealthyControl = ScenarioIDS2SV6AErrorAuth + "-healthy-control"
 )
 
-func registerErrorAuthScenarios(register func(Scenario, ...DeadSessionControl) error) {
+func registerErrorAuthScenarios(register func(Scenario, ...DeadSessionControl) error) error {
 	for _, registration := range []struct {
 		id          string
 		name        string
@@ -55,7 +55,8 @@ func registerErrorAuthScenarios(register func(Scenario, ...DeadSessionControl) e
 			ExpectedBehavior: []ExpectedBehavior{registration.expectation},
 		}
 		if err := register(scenario); err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }

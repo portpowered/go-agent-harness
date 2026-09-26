@@ -24,7 +24,7 @@ const (
 	ScenarioIDS2SV6DHealthyControl = ScenarioIDS2SV6DErrorMalformedResponse + "-healthy-control"
 )
 
-func registerErrorMalformedResponseScenarios(register func(Scenario, ...DeadSessionControl) error) {
+func registerErrorMalformedResponseScenarios(register func(Scenario, ...DeadSessionControl) error) error {
 	for _, registration := range []struct {
 		id          string
 		name        string
@@ -60,7 +60,8 @@ func registerErrorMalformedResponseScenarios(register func(Scenario, ...DeadSess
 			ExpectedBehavior: []ExpectedBehavior{registration.expectation},
 		}
 		if err := register(scenario); err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
