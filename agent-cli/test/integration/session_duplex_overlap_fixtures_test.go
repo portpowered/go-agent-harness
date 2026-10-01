@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -29,25 +28,12 @@ func v8PCMStats(payload []byte) (string, float64) {
 	if len(payload) == 0 || len(payload)%2 != 0 {
 		return hex.EncodeToString(digest[:]), 0
 	}
-	var energy float64
-	for offset := 0; offset < len(payload); offset += 2 {
-		sample := int16(binary.LittleEndian.Uint16(payload[offset:]))
-		energy += float64(sample) * float64(sample)
-	}
-	return hex.EncodeToString(digest[:]), math.Sqrt(energy / float64(len(payload)/2))
+	return hex.EncodeToString(digest[:]), codec.PCM16RMS(payload)
 }
 
 func v8PCMHash(payload []byte) string {
 	hash, _ := v8PCMStats(payload)
 	return hash
-}
-
-func v8PCM16Bytes(samples []int16) []byte {
-	payload := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(payload[i*2:], uint16(sample))
-	}
-	return payload
 }
 
 func v8AudioFixturePath(t *testing.T, name string) string {
@@ -112,7 +98,7 @@ func v8LoudFrameSet(t *testing.T, path string, count int) [][]byte {
 			t.Fatalf("v8 overlap fixture has fewer than %d distinct energetic frames", count)
 		}
 		starts = append(starts, bestStart)
-		frames = append(frames, v8PCM16Bytes(samples[bestStart:bestStart+audio.FrameSize]))
+		frames = append(frames, codec.EncodePCM16(samples[bestStart:bestStart+audio.FrameSize]))
 	}
 	for _, payload := range frames {
 		_, rms := v8PCMStats(payload)

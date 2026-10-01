@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -145,11 +145,7 @@ func decodeEAC8PCM16(t *testing.T, pcm []byte) []int16 {
 	if len(pcm)%2 != 0 {
 		t.Fatalf("eac8 OpenAI PCM has odd byte count %d", len(pcm))
 	}
-	samples := make([]int16, len(pcm)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:]))
-	}
-	return samples
+	return codec.PCM16Samples(pcm)
 }
 
 func writeEAC8OpenAICapture(t *testing.T, path string, deltas []string) {

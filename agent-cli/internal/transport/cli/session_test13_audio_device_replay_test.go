@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -191,11 +191,7 @@ func pcm16Bytes(t *testing.T, pcm []byte) []int16 {
 	if len(pcm)%2 != 0 {
 		t.Fatalf("PCM byte count = %d, want even", len(pcm))
 	}
-	samples := make([]int16, len(pcm)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:]))
-	}
-	return samples
+	return codec.PCM16Samples(pcm)
 }
 
 func writeOpenAIAudioBurstCapture(t *testing.T, path, fixtureName string, deltas []string) {
@@ -457,7 +453,7 @@ func (s *playbackBurstSession) startBurst(ctx context.Context) {
 	detached := context.WithoutCancel(ctx)
 	for _, message := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewMessageStartValue()},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewAudioDeltaValue(cliPCM16Bytes(s.inbound.frames[0]))},
+		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, ResponseID: "burst", Value: messages.NewAudioDeltaValue(codec.EncodePCM16(s.inbound.frames[0]))},
 	} {
 		s.receive.Write(ctx, message)
 	}

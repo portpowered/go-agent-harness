@@ -3,6 +3,8 @@ package audio
 import (
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
@@ -100,7 +102,7 @@ func (a *playbackActivity) dequeued(samples []int16, rate int) {
 		start = now
 	}
 	a.end = start.Add(pcm16DeviceDurationAtRate(len(samples), rate))
-	a.frames = append(a.frames, scheduledPlayback{start: start, end: a.end, level: PCM16RMSEnergy(samples)})
+	a.frames = append(a.frames, scheduledPlayback{start: start, end: a.end, level: codec.RMS(samples)})
 	a.prune(now)
 }
 

@@ -70,7 +70,7 @@ func parseRoomReplayAudioDeltaLine(line []byte, lineNumber int, artifact RoomRep
 	if err != nil {
 		return AudioDelta{}, false, err
 	}
-	turnID, _, turnErr := firstRoomReplayStringField(object, nil, "turn_id", "turn", "response_id")
+	turnID, _, turnErr := roomReplayStringField(object, "turn_id", "turn", "response_id")
 	if turnErr != nil {
 		return AudioDelta{}, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "turn_id"), artifact.Path, "string turn identity", "invalid", turnErr)
 	}
@@ -82,7 +82,7 @@ func parseRoomReplayDeltaPayload(line []byte, lineNumber int, artifact RoomRepla
 	if err != nil {
 		return nil, "", nil, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, ""), artifact.Path, "JSON object", "invalid", err)
 	}
-	kind, _, kindErr := firstRoomReplayStringField(object, nil, "type", "event_type", "kind")
+	kind, _, kindErr := roomReplayStringField(object, "type", "event_type", "kind")
 	if kindErr != nil {
 		return nil, "", nil, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "type"), artifact.Path, "string event type", "invalid", kindErr)
 	}
@@ -106,7 +106,7 @@ func parseRoomReplayDeltaPayload(line []byte, lineNumber int, artifact RoomRepla
 }
 
 func parseRoomReplayDeltaSequence(object roomReplayJSONObject, lineNumber int, artifact RoomReplayArtifact, participantID string) (int64, bool, error) {
-	sequence, _, hasSequence, sequenceErr := roomReplayFirstIntField(object, "sequence", "delta_index", "chunk_index", "index", "global_index", "actor_provided_index")
+	sequence, hasSequence, sequenceErr := roomReplayFirstIntField(object, "sequence", "delta_index", "chunk_index", "index", "global_index", "actor_provided_index")
 	if sequenceErr != nil {
 		return 0, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "sequence"), artifact.Path, "integer sequence", "invalid", sequenceErr)
 	}
@@ -135,7 +135,7 @@ func parseRoomReplayDeltaOffset(object roomReplayJSONObject, lineNumber int, art
 }
 
 func validateRoomReplayDeltaOwners(object roomReplayJSONObject, lineNumber int, artifact RoomReplayArtifact, participantID, streamID string) error {
-	declaredStreamID, streamPresent, streamErr := firstRoomReplayStringField(object, nil, "stream_id", "audio_stream_id", "stream_identity")
+	declaredStreamID, streamPresent, streamErr := roomReplayStringField(object, "stream_id", "audio_stream_id", "stream_identity")
 	if streamErr != nil && streamPresent {
 		return roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "stream_id"), artifact.Path, "string stream identity", "invalid", streamErr)
 	}
@@ -145,7 +145,7 @@ func validateRoomReplayDeltaOwners(object roomReplayJSONObject, lineNumber int, 
 			return roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "stream_id"), artifact.Path, streamID, declaredStreamID, nil)
 		}
 	}
-	declaredParticipantID, participantPresent, participantErr := firstRoomReplayStringField(object, nil, "participant_id")
+	declaredParticipantID, participantPresent, participantErr := roomReplayStringField(object, "participant_id")
 	if participantErr != nil && participantPresent {
 		return roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "participant_id"), artifact.Path, "string participant identity", "invalid", participantErr)
 	}
@@ -156,7 +156,7 @@ func validateRoomReplayDeltaOwners(object roomReplayJSONObject, lineNumber int, 
 }
 
 func parseRoomReplayDeltaIdentity(object roomReplayJSONObject, lineNumber int, artifact RoomReplayArtifact, participantID string, state *roomReplayDeltaParseState) (string, error) {
-	id, _, idErr := firstRoomReplayStringField(object, nil, "delta_id", "chunk_id", "id")
+	id, _, idErr := roomReplayStringField(object, "delta_id", "chunk_id", "id")
 	if idErr != nil {
 		return "", roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "id"), artifact.Path, "string delta identity", "invalid", idErr)
 	}
@@ -224,7 +224,7 @@ func roomReplayNestedAudioPayload(object roomReplayJSONObject, kind string) ([]b
 			continue
 		}
 		nestedKind := kind
-		if value, present, err := firstRoomReplayStringField(nested, nil, "type", "event_type", "kind"); err == nil && present {
+		if value, present, err := roomReplayStringField(nested, "type", "event_type", "kind"); err == nil && present {
 			nestedKind = value
 		}
 		payload, found, payloadErr := roomReplayAudioPayload(nested, nestedKind)

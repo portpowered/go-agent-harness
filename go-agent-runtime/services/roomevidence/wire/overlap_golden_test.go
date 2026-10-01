@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
@@ -36,7 +35,7 @@ func TestDeliberateOverlapRoomReplayFixturePassesPeerDeliveryAndSelfHearing(t *t
 		assertOverlapTimelineBoundaries(t, bundle.Plan.Timeline, participantID)
 	}
 
-	analysis, err := roomanalysis.AnalyzePCM16Room(bundle.AnalysisInput(), bundle.AnalysisConfig())
+	analysis, err := roomanalysis.AnalyzePCM16Room(goldenAnalysisInput(bundle), bundle.Tolerances.RoomConfig)
 	if err != nil {
 		t.Fatalf("analyze deliberate overlap bundle: %v", err)
 	}
@@ -47,7 +46,7 @@ func TestDeliberateOverlapRoomReplayFixturePassesPeerDeliveryAndSelfHearing(t *t
 	assertOverlapStreams(t, analysis)
 }
 
-func assertOverlapAnnotation(t *testing.T, bundle roomreplay.RoomReplayAudioBundle) {
+func assertOverlapAnnotation(t *testing.T, bundle roomevidence.Bundle) {
 	t.Helper()
 	if len(bundle.Participants) != 2 {
 		t.Fatalf("participants = %d, want two deliberate-overlap participants", len(bundle.Participants))
@@ -81,7 +80,7 @@ func assertOverlapProvenance(t *testing.T) {
 	}
 }
 
-func assertOverlapParticipantEvidence(t *testing.T, bundle roomreplay.RoomReplayAudioBundle, participant roomreplay.RoomReplayAudioParticipant) {
+func assertOverlapParticipantEvidence(t *testing.T, bundle roomevidence.Bundle, participant roomevidence.AudioParticipant) {
 	t.Helper()
 	planParticipant, ok := bundle.Plan.Participant(participant.ID)
 	if !ok {
@@ -112,7 +111,7 @@ func assertOverlapParticipantEvidence(t *testing.T, bundle roomreplay.RoomReplay
 	}
 }
 
-func assertOverlapTimelineBoundaries(t *testing.T, timeline []roomreplay.RoomReplayTimelineEvent, participantID string) {
+func assertOverlapTimelineBoundaries(t *testing.T, timeline []roomevidence.RoomReplayTimelineEvent, participantID string) {
 	t.Helper()
 	foundStart, foundEnd := false, false
 	for _, event := range timeline {
@@ -218,9 +217,9 @@ func TestDeliberateOverlapRoomReplayFixtureDefectsFailWithDirectionAndNumbers(t 
 func assertOverlapDefectFails(t *testing.T, test overlapDefect) {
 	t.Helper()
 	bundle := loadDeliberateOverlapBundle(t)
-	input := bundle.AnalysisInput()
+	input := goldenAnalysisInput(bundle)
 	test.mutate(&input)
-	analysis, err := roomanalysis.AnalyzePCM16Room(input, bundle.AnalysisConfig())
+	analysis, err := roomanalysis.AnalyzePCM16Room(input, bundle.Tolerances.RoomConfig)
 	if err != nil {
 		t.Fatalf("analyze mutated bundle: %v", err)
 	}
@@ -245,9 +244,9 @@ func assertOverlapDefectFails(t *testing.T, test overlapDefect) {
 	}
 }
 
-func loadDeliberateOverlapBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
+func loadDeliberateOverlapBundle(t *testing.T) roomevidence.Bundle {
 	t.Helper()
-	bundle, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), deliberateOverlapFixturePath())
+	bundle, err := loadGoldenRoomAudio(deliberateOverlapFixturePath())
 	if err != nil {
 		t.Fatalf("load deliberate-overlap bundle: %v", err)
 	}
@@ -255,8 +254,7 @@ func loadDeliberateOverlapBundle(t *testing.T) roomreplay.RoomReplayAudioBundle 
 }
 
 func deliberateOverlapFixturePath() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(filename), "testdata", "room-audio", "deliberate-overlap")
+	return roomAudioFixturePath("deliberate-overlap")
 }
 
 func deliberateOverlapStream(input *roomanalysis.PCM16RoomInput, streamID string) *roomanalysis.PCM16TimedStream {

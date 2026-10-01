@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const (
@@ -216,7 +216,7 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 	}
 	switch kind {
 	case ExpectAudioEnergy:
-		return evaluateAudioEnergy(expectation, kind, observation)
+		return evaluateAudioEnergy(expectation, kind, observation, "RMS > 300.0")
 	case ExpectTranscriptContains:
 		want, err := aliasString(expectation, kind, "substring", expectation.Text, expectation.Value)
 		if err != nil {
@@ -276,9 +276,9 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 	return nil
 }
 
-func evaluateAudioEnergy(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot) error {
-	if rms := pcm16RMS(observation.PCM16Samples); rms <= AudioEnergyThreshold {
-		return mismatch(expectation, kind, "RMS > 300.0", rms)
+func evaluateAudioEnergy(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot, want string) error {
+	if rms := codec.RMS(observation.PCM16Samples); rms <= AudioEnergyThreshold {
+		return mismatch(expectation, kind, want, rms)
 	}
 	return nil
 }
@@ -521,9 +521,6 @@ func observedIDs(ids []string) string {
 	return strings.Join(ids, ", ")
 }
 
-func pcm16RMS(samples []int16) float64 {
-	return audio.PCM16RMSEnergy(samples)
-}
 func observedBufferDisposition(value string) string {
 	if value == "" {
 		return "uncommitted"

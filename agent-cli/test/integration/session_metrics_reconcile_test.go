@@ -10,7 +10,6 @@ package integration
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +27,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -118,11 +118,7 @@ func metricsReconcileCorpusPCM(t *testing.T) []byte {
 	if rate != wavio.Rate16kHz || len(samples) < 2 {
 		t.Fatalf("committed corpus WAV = rate %d, %d samples; want 16kHz and audio", rate, len(samples))
 	}
-	audioPCM := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(audioPCM[index*2:], uint16(sample))
-	}
-	return audioPCM
+	return codec.EncodePCM16(samples)
 }
 
 // writeMetricsReconcileCapture seals the synthetic Grok stream records into a
@@ -520,11 +516,7 @@ func wavPCM(t *testing.T, name string, data []byte) []byte {
 	if err != nil {
 		t.Fatalf("parse %s: %v", name, err)
 	}
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
-	}
-	return pcm
+	return codec.EncodePCM16(samples)
 }
 
 // TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession is

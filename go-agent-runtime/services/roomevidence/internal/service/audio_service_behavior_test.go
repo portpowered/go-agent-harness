@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestLoadRoomReplayAudioBundleResolvesIdentityTimingAndExactDeltas(t *testing.T) {
@@ -148,8 +150,8 @@ func TestLoadRoomReplayAudioBundleRejectsDuplicateDeltaIdentity(t *testing.T) {
 	bundle, manifest, _ := writeRoomReplayAudioBundle(t)
 	path := filepath.Join(bundle, "participants", "alpha", "deltas.jsonl")
 	data := jsonLines(t, []map[string]any{
-		{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": "same-delta", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{1000, 2000}))},
-		{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": "same-delta", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{3000, 4000}))},
+		{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": "same-delta", "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16([]int16{1000, 2000}))},
+		{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": "same-delta", "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16([]int16{3000, 4000}))},
 	})
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("rewrite duplicate deltas: %v", err)
@@ -259,10 +261,10 @@ func assertRoomReplayBundleParticipant(t *testing.T, got Bundle, want map[string
 	if alpha.WAV.StreamID != roomReplayTestAlphaOutputStream || alpha.Sent.StreamID != roomReplayTestAlphaSentStream || alpha.Received.StreamID != "alpha:received" {
 		t.Fatalf("alpha stream identities = %q/%q/%q", alpha.WAV.StreamID, alpha.Sent.StreamID, alpha.Received.StreamID)
 	}
-	if !bytes.Equal(alpha.WAV.PCM, roomReplayAudioPCM16Bytes(want["alpha:wav"])) || len(alpha.WAV.Deltas) != 2 || alpha.WAV.SampleCount != len(want["alpha:wav"]) {
+	if !bytes.Equal(alpha.WAV.PCM, codec.EncodePCM16(want["alpha:wav"])) || len(alpha.WAV.Deltas) != 2 || alpha.WAV.SampleCount != len(want["alpha:wav"]) {
 		t.Fatalf("alpha WAV evidence = bytes:%v deltas:%d samples:%d", alpha.WAV.PCM, len(alpha.WAV.Deltas), alpha.WAV.SampleCount)
 	}
-	if !bytes.Equal(alpha.Sent.PCM, roomReplayAudioPCM16Bytes(want[roomReplayTestAlphaSentStream])) || !bytes.Equal(alpha.Received.PCM, roomReplayAudioPCM16Bytes(want["alpha:received"])) {
+	if !bytes.Equal(alpha.Sent.PCM, codec.EncodePCM16(want[roomReplayTestAlphaSentStream])) || !bytes.Equal(alpha.Received.PCM, codec.EncodePCM16(want["alpha:received"])) {
 		t.Fatal("alpha sent/received PCM was not resolved exactly")
 	}
 	if len(alpha.Events) != 2 || len(alpha.Diagnostics) != 1 {
@@ -304,8 +306,8 @@ func runRoomReplayDeltaMutationTest(t *testing.T, name string, mutate func([]map
 
 func roomReplayDeltaMutationLines() []map[string]any {
 	return []map[string]any{
-		{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": "alpha-delta-0", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{1000, 2000}))},
-		{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": "alpha-delta-1", "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes([]int16{3000, 4000}))},
+		{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": "alpha-delta-0", "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16([]int16{1000, 2000}))},
+		{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": "alpha-delta-1", "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16([]int16{3000, 4000}))},
 	}
 }
 
@@ -533,13 +535,44 @@ func assertRoomReplayStreamMetadataDurations(t *testing.T) {
 	if _, err := roomReplayDurationValue(json.RawMessage(`9223372036854775807`), true); err == nil {
 		t.Fatal("overflowing duration was accepted")
 	}
-	if value, _, present, err := roomReplayFirstIntField(roomReplayJSONObject{"sample": json.RawMessage(`4`)}, "sample"); err != nil || !present || value != 4 {
+	if value, present, err := roomReplayFirstIntField(roomReplayJSONObject{"sample": json.RawMessage(`4`)}, "sample"); err != nil || !present || value != 4 {
 		t.Fatalf("integer field = %d %v %v", value, present, err)
 	}
-	if _, _, _, err := roomReplayFirstIntField(roomReplayJSONObject{"sample": json.RawMessage(`"bad"`)}, "sample"); err == nil {
+	if _, _, err := roomReplayFirstIntField(roomReplayJSONObject{"sample": json.RawMessage(`"bad"`)}, "sample"); err == nil {
 		t.Fatal("invalid integer field was accepted")
 	}
 	if got := parseRoomReplayChunkBoundaries(json.RawMessage(`[{"id":"x","sample_index":2},{"sample_index":0},null]`)); len(got) != 1 || got[0].ID != "x" {
 		t.Fatalf("chunk boundaries = %+v", got)
+	}
+}
+
+// The retired room replay projection differed from this one; each pin below
+// is behavior its callers now inherit from room evidence.
+func TestRoomReplayProjectionInheritedBehavior(t *testing.T) {
+	plan := RoomReplayPlan{Participants: []RoomReplayParticipant{{ID: "alpha"}}, PCMFormat: RoomReplayPCMFormat{SampleRate: 16000, Channels: 1}}
+	if _, _, err := loadRoomReplayParticipants(plan, nil); !errors.Is(err, ErrRoomReplayBundleIncomplete) || !strings.Contains(err.Error(), "participants[alpha]") {
+		t.Fatalf("missing participant object = %v, want incomplete (was silently loaded without metadata)", err)
+	}
+	chunks := parseRoomReplayChunkBoundaries(json.RawMessage(`[{"id":7,"sample_index":2},{"id":"kept","sample_index":4}]`))
+	if len(chunks) != 1 || chunks[0].ID != "kept" {
+		t.Fatalf("chunk boundaries = %+v, want the non-string id entry skipped (was kept with an empty id)", chunks)
+	}
+	if _, err := roomReplayDurationValue(json.RawMessage(`9223372036854775807`), true); err == nil {
+		t.Fatal("overflowing millisecond duration was accepted (used to wrap silently)")
+	}
+	directory := t.TempDir()
+	path := filepath.Join(directory, "received.pcm")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan.BundlePath = directory
+	artifact := RoomReplayArtifact{Path: "received.pcm", AbsolutePath: path, Empty: true}
+	stream, err := loadRoomReplayPCMStream(plan, artifact, "alpha:received", "alpha", "received")
+	if err != nil || stream.SampleCount != 0 || stream.StreamID != "alpha:received" {
+		t.Fatalf("explicitly empty PCM = %+v, %v; want an empty stream (was rejected as incomplete)", stream, err)
+	}
+	artifact.Empty = false
+	if _, err := loadRoomReplayPCMStream(plan, artifact, "alpha:received", "alpha", "received"); !errors.Is(err, ErrRoomReplayBundleIncomplete) {
+		t.Fatalf("undeclared empty PCM = %v, want incomplete", err)
 	}
 }

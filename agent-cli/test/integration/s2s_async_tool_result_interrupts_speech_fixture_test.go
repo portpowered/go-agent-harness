@@ -3,7 +3,6 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -91,7 +91,7 @@ func validateAsyncOutboundInputAudio(payload []byte, want []byte) error {
 func audioDeltaPayload(samples []int16) string {
 	payload := mustMarshalFixture(map[string]string{
 		"type":  rtEventOutputAudioDelta,
-		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(samples)),
+		"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(samples)),
 	})
 	return string(payload)
 }
@@ -126,15 +126,12 @@ func asyncCollisionInputAudio() []byte {
 	for i := range samples {
 		samples[i] = int16(700 + (i % 29))
 	}
-	return pcm16LEBytes(samples)
+	return codec.EncodePCM16(samples)
 }
 
 func writeAsyncCollisionInputWAV(t *testing.T, path string, inputAudio []byte) {
 	t.Helper()
-	samples := make([]int16, len(inputAudio)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(inputAudio[index*2:]))
-	}
+	samples := codec.PCM16Samples(inputAudio)
 	var wav bytes.Buffer
 	if err := wavio.Write(&wav, wavio.Rate24kHz, samples); err != nil {
 		t.Fatalf("encode async collision input fixture: %v", err)

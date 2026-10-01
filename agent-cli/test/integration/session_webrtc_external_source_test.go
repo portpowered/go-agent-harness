@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,6 +16,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -169,7 +168,7 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 	}
 	audioDelta, marshalErr := json.Marshal(map[string]string{
 		"type":  rtEventOutputAudioDelta,
-		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytesOf(replySamples)),
+		"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(replySamples)),
 	})
 	if marshalErr != nil {
 		t.Fatalf("marshal audio delta: %v", marshalErr)
@@ -496,7 +495,7 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	if bridgeSnapshot.frameCount != len(packets) || bridgeSnapshot.videoFrameCount < externalSourceVideoPackets {
 		t.Fatalf("camera fixture sent frames = audio:%d video:%d, want audio:%d and video at least:%d", bridgeSnapshot.frameCount, bridgeSnapshot.videoFrameCount, len(packets), externalSourceVideoPackets)
 	}
-	if energy := pcmRMSEnergy(sourcePCM); energy <= externalSourceRMSThreshold {
+	if energy := codec.PCM16RMS(sourcePCM); energy <= externalSourceRMSThreshold {
 		t.Fatalf("bridged source audio RMS energy = %.1f, want > %.1f\n%s", energy, externalSourceRMSThreshold, sourceObservationDiagnostics(bridgeSnapshot))
 	}
 	if err := assertCameraMediaEvidence(cameraReport, bridgeSnapshot); err != nil {
@@ -511,7 +510,7 @@ func TestWebrtcCameraSourceDrivesReplaySessionThroughRealCLI(t *testing.T) {
 	sessionResult := runRootCLISession(t, parentCtx, cfgDir, fixture, sourcePCM, outWav)
 	elapsed := time.Since(started)
 	diagnostics := fmt.Sprintf("replay_fixture: %q; expected_append_frames=%d; pcm_bytes=%d; source_rms=%.1f; terminal_seen=%t; deadline_state=%t",
-		fixture, len(appendFrames), len(sourcePCM), pcmRMSEnergy(sourcePCM), strings.Contains(sessionResult.stdout, "[session closed:"), elapsed < externalSourceHardDeadline)
+		fixture, len(appendFrames), len(sourcePCM), codec.PCM16RMS(sourcePCM), strings.Contains(sessionResult.stdout, "[session closed:"), elapsed < externalSourceHardDeadline)
 	assertExternalSourceSessionOutcome(t, sessionResult, elapsed, cameraReplyTranscript, outWav, diagnostics)
 }
 
@@ -586,7 +585,7 @@ func TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy(t *testing.T) {
 	if bridgeSnapshot.frameCount != len(packets) {
 		t.Fatalf("audio-only fixture delivered %d audio frames, want %d\n%s", bridgeSnapshot.frameCount, len(packets), sourceObservationDiagnostics(bridgeSnapshot))
 	}
-	if energy := pcmRMSEnergy(sourcePCM); energy <= externalSourceRMSThreshold {
+	if energy := codec.PCM16RMS(sourcePCM); energy <= externalSourceRMSThreshold {
 		t.Fatalf("audio-only bridged audio RMS energy = %.1f, want > %.1f\n%s", energy, externalSourceRMSThreshold, sourceObservationDiagnostics(bridgeSnapshot))
 	}
 
@@ -608,7 +607,7 @@ func TestWebrtcAudioOnlySourceKeepsReplaySessionHealthy(t *testing.T) {
 	sessionResult := runRootCLISession(t, parentCtx, cfgDir, fixture, sourcePCM, outWav)
 	elapsed := time.Since(started)
 	diagnostics := fmt.Sprintf("replay_fixture: %q; expected_append_frames=%d; pcm_bytes=%d; source_rms=%.1f; terminal_seen=%t; deadline_state=%t",
-		fixture, len(appendFrames), len(sourcePCM), pcmRMSEnergy(sourcePCM), strings.Contains(sessionResult.stdout, "[session closed:"), elapsed < externalSourceHardDeadline)
+		fixture, len(appendFrames), len(sourcePCM), codec.PCM16RMS(sourcePCM), strings.Contains(sessionResult.stdout, "[session closed:"), elapsed < externalSourceHardDeadline)
 	assertExternalSourceSessionOutcome(t, sessionResult, elapsed, audioOnlyReplyTranscript, outWav, diagnostics)
 }
 
@@ -632,7 +631,7 @@ func TestWebrtcDeadSourceFailsPositiveDeliveryAssertions(t *testing.T) {
 
 	// And even if empty bytes were somehow carried, the energy gate rejects
 	// them: silence can never satisfy the non-silent delivery assertion.
-	if energy := pcmRMSEnergy(nil); energy > externalSourceRMSThreshold {
+	if energy := codec.PCM16RMS(nil); energy > externalSourceRMSThreshold {
 		t.Fatalf("empty source audio RMS = %.1f, want <= %.1f", energy, externalSourceRMSThreshold)
 	}
 }
@@ -866,20 +865,6 @@ func rawPCMAppendFrames(pcm []byte, frameBytes int) [][]byte {
 	return frames
 }
 
-// pcmRMSEnergy computes the linear RMS energy of a PCM16 little-endian stream.
-func pcmRMSEnergy(pcm []byte) float64 {
-	count := len(pcm) / 2
-	if count == 0 {
-		return 0
-	}
-	var sum float64
-	for i := 0; i+1 < len(pcm); i += 2 {
-		sample := int16(uint16(pcm[i]) | uint16(pcm[i+1])<<8)
-		sum += float64(sample) * float64(sample)
-	}
-	return math.Sqrt(sum / float64(count))
-}
-
 // loudestUtteranceWindow returns the highest-energy contiguous window of
 // the committed utterance so the scripted reply mirrors genuinely voiced content.
 func loudestUtteranceWindow(t *testing.T, window int) []int16 {
@@ -912,12 +897,4 @@ func loudestUtteranceWindow(t *testing.T, window int) []int16 {
 	reply := make([]int16, window)
 	copy(reply, samples[bestStart:bestStart+window])
 	return reply
-}
-
-func pcm16LEBytesOf(samples []int16) []byte {
-	data := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(data[i*2:], uint16(sample))
-	}
-	return data
 }

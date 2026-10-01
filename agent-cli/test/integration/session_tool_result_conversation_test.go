@@ -38,6 +38,7 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // toolConversationCallID is the call_id shared by the scripted provider tool
@@ -186,7 +187,7 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 
 	audioDelta := mustJSON(t, map[string]string{
 		"type":  rtEventOutputAudioDelta,
-		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples)),
+		"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(replySamples)),
 	})
 	serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)

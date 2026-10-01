@@ -1,10 +1,10 @@
 package chrome
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -18,6 +18,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const youtubeAdapterIntegrationEnv = "WEBMCP_YOUTUBE_ADAPTER_INTEGRATION"
@@ -223,27 +224,15 @@ func waitForYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *tar
 }
 
 func youtubeAdapterToneWAV(duration time.Duration, sampleRate int, frequency float64) []byte {
-	samples := int(duration.Seconds() * float64(sampleRate))
-	dataSize := samples * 2
-	result := make([]byte, 44+dataSize)
-	copy(result[0:4], "RIFF")
-	binary.LittleEndian.PutUint32(result[4:8], uint32(36+dataSize))
-	copy(result[8:12], "WAVE")
-	copy(result[12:16], "fmt ")
-	binary.LittleEndian.PutUint32(result[16:20], 16)
-	binary.LittleEndian.PutUint16(result[20:22], 1)
-	binary.LittleEndian.PutUint16(result[22:24], 1)
-	binary.LittleEndian.PutUint32(result[24:28], uint32(sampleRate))
-	binary.LittleEndian.PutUint32(result[28:32], uint32(sampleRate*2))
-	binary.LittleEndian.PutUint16(result[32:34], 2)
-	binary.LittleEndian.PutUint16(result[34:36], 16)
-	copy(result[36:40], "data")
-	binary.LittleEndian.PutUint32(result[40:44], uint32(dataSize))
-	for index := 0; index < samples; index++ {
-		value := int16(math.Sin(2*math.Pi*frequency*float64(index)/float64(sampleRate)) * 6000)
-		binary.LittleEndian.PutUint16(result[44+index*2:46+index*2], uint16(value))
+	samples := make([]int16, int(duration.Seconds()*float64(sampleRate)))
+	for index := range samples {
+		samples[index] = int16(math.Sin(2*math.Pi*frequency*float64(index)/float64(sampleRate)) * 6000)
 	}
-	return result
+	var encoded bytes.Buffer
+	if err := wavio.Write(&encoded, sampleRate, samples); err != nil {
+		panic(fmt.Sprintf("encode youtube adapter tone: %v", err))
+	}
+	return encoded.Bytes()
 }
 
 const youtubeAdapterFixtureHTML = `<!doctype html>

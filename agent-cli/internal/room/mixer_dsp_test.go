@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+
 	audiomixer "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
@@ -50,7 +52,7 @@ func TestPCMMixLegacyUsesSharedFinalClipAndSortedAttribution(t *testing.T) {
 	}
 	wantPCM := pcm16(32766, 7232, -32768, 3)
 	if !bytes.Equal(got.PCM, wantPCM) {
-		t.Fatalf("mixed samples = %v, want %v", decodePCM16(got.PCM), decodePCM16(wantPCM))
+		t.Fatalf("mixed samples = %v, want %v", codec.PCM16Samples(got.PCM), codec.PCM16Samples(wantPCM))
 	}
 	if !reflect.DeepEqual(got.Sources, []string{"alpha", "beta", "gamma"}) {
 		t.Fatalf("sources = %v, want sorted contributing inputs", got.Sources)
@@ -88,7 +90,7 @@ func TestPCMMixLegacyKeepsFullCadenceZeroPadding(t *testing.T) {
 	}
 	want := pcm16(7, 8, 0, 0)
 	if !bytes.Equal(got.PCM, want) || !reflect.DeepEqual(got.Sources, []string{"speaker"}) {
-		t.Fatalf("short legacy frame = %v sources=%v, want zero-padded frame and speaker", decodePCM16(got.PCM), got.Sources)
+		t.Fatalf("short legacy frame = %v sources=%v, want zero-padded frame and speaker", codec.PCM16Samples(got.PCM), got.Sources)
 	}
 }
 

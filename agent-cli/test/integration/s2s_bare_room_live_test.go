@@ -2,8 +2,6 @@
 
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"bufio"
 	"bytes"
@@ -18,7 +16,11 @@ import (
 	"testing"
 	"time"
 
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+
 	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
+
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -540,7 +542,7 @@ func validateBareRoomLiveArtifact(outputDir, secret, key, relativePath string) e
 		return fmt.Errorf("artifact %q contains the provider credential", key)
 	}
 	if strings.HasSuffix(key, ".wav") {
-		if len(data) < 44 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WAVE" {
+		if _, err := wavio.Inspect(bytes.NewReader(data)); err != nil {
 			return fmt.Errorf("artifact %q is not a readable WAV", key)
 		}
 		return nil

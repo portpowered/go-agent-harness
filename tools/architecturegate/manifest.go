@@ -28,34 +28,24 @@ const (
 // Policy is the reviewed architecture manifest. Patterns are repository
 // relative for directories and Go import paths for import rules.
 type Policy struct {
-	Version                int                `json:"version"`
-	ModuleDirs             []string           `json:"module_dirs"`
-	Patterns               []string           `json:"patterns"`
-	Baseline               string             `json:"baseline"`
-	ServiceRoots           []string           `json:"service_roots"`
-	CompositionRoots       []string           `json:"composition_roots"`
-	CompositionRegistry    []CompositionEntry `json:"composition_registry"`
-	ModuleRules            []ModuleRule       `json:"module_rules"`
-	ReusableModules        []string           `json:"reusable_modules"`
-	CLIModules             []string           `json:"cli_modules"`
-	ForbiddenImports       []ImportRule       `json:"forbidden_imports"`
-	ForbiddenRootImports   []string           `json:"forbidden_root_imports"`
-	GeneratedFiles         []GeneratedRule    `json:"generated_files"`
-	GlobalExceptions       []GlobalException  `json:"global_exceptions"`
-	GlobalStateScopes      []string           `json:"global_state_scopes"`
-	RootFunctionExceptions []GlobalException  `json:"root_function_exceptions"`
-	Limits                 Limits             `json:"limits"`
-}
-
-// ImportRule forbids Imports from From packages; see the README for its fields.
-type ImportRule struct {
-	From           []string `json:"from"`
-	Imports        []string `json:"imports"`
-	Except         []string `json:"except,omitempty"`
-	ExceptFrom     []string `json:"except_from,omitempty"`
-	Files          []string `json:"files,omitempty"`
-	ProductionOnly bool     `json:"production_only,omitempty"`
-	Reason         string   `json:"reason"`
+	Version                 int                 `json:"version"`
+	ModuleDirs              []string            `json:"module_dirs"`
+	Patterns                []string            `json:"patterns"`
+	Baseline                string              `json:"baseline"`
+	ServiceRoots            []string            `json:"service_roots"`
+	CompositionRoots        []string            `json:"composition_roots"`
+	CompositionRegistry     []CompositionEntry  `json:"composition_registry"`
+	ModuleRules             []ModuleRule        `json:"module_rules"`
+	ReusableModules         []string            `json:"reusable_modules"`
+	CLIModules              []string            `json:"cli_modules"`
+	ForbiddenImports        []ImportRule        `json:"forbidden_imports"`
+	ForbiddenRootImports    []string            `json:"forbidden_root_imports"`
+	ForbiddenSourcePatterns []SourcePatternRule `json:"forbidden_source_patterns,omitempty"`
+	GeneratedFiles          []GeneratedRule     `json:"generated_files"`
+	GlobalExceptions        []GlobalException   `json:"global_exceptions"`
+	GlobalStateScopes       []string            `json:"global_state_scopes"`
+	RootFunctionExceptions  []GlobalException   `json:"root_function_exceptions"`
+	Limits                  Limits              `json:"limits"`
 }
 
 type GeneratedRule struct {

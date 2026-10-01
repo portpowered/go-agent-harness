@@ -3,13 +3,11 @@ package wire
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
@@ -29,7 +27,7 @@ func TestCleanTurnTakingRoomReplayFixturePassesAudioProperties(t *testing.T) {
 		t.Fatalf("room timeline events = %d, want eight turn boundaries", len(bundle.Plan.Timeline))
 	}
 
-	analysis, err := roomanalysis.AnalyzePCM16Room(bundle.AnalysisInput(), bundle.AnalysisConfig())
+	analysis, err := roomanalysis.AnalyzePCM16Room(goldenAnalysisInput(bundle), bundle.Tolerances.RoomConfig)
 	if err != nil {
 		t.Fatalf("analyze clean turn-taking bundle: %v", err)
 	}
@@ -44,7 +42,7 @@ func TestCleanTurnTakingRoomReplayFixturePassesAudioProperties(t *testing.T) {
 	}
 }
 
-func assertCleanParticipantEvidence(t *testing.T, bundle roomreplay.RoomReplayAudioBundle, participant roomreplay.RoomReplayAudioParticipant) {
+func assertCleanParticipantEvidence(t *testing.T, bundle roomevidence.Bundle, participant roomevidence.AudioParticipant) {
 	t.Helper()
 	planParticipant, ok := bundle.Plan.Participant(participant.ID)
 	if !ok {
@@ -56,12 +54,12 @@ func assertCleanParticipantEvidence(t *testing.T, bundle roomreplay.RoomReplayAu
 	if len(participant.Events) < 4 || len(participant.Diagnostics) < 2 {
 		t.Fatalf("participant %q sidecars = events:%d diagnostics:%d, want timestamped turns", participant.ID, len(participant.Events), len(participant.Diagnostics))
 	}
-	for _, stream := range []roomreplay.RoomReplayAudioStream{participant.WAV, participant.Sent, participant.Received} {
+	for _, stream := range []roomevidence.AudioStream{participant.WAV, participant.Sent, participant.Received} {
 		assertCleanStreamDeltas(t, participant.ID, stream)
 	}
 }
 
-func assertCleanStreamDeltas(t *testing.T, participantID string, stream roomreplay.RoomReplayAudioStream) {
+func assertCleanStreamDeltas(t *testing.T, participantID string, stream roomevidence.AudioStream) {
 	t.Helper()
 	if stream.SampleCount == 0 || len(stream.PCM) == 0 {
 		t.Fatalf("participant %q stream %q is empty", participantID, stream.StreamID)
@@ -136,9 +134,9 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			bundle := loadCleanTurnTakingBundle(t)
-			input := bundle.AnalysisInput()
+			input := goldenAnalysisInput(bundle)
 			test.mutate(&input)
-			analysis, err := roomanalysis.AnalyzePCM16Room(input, bundle.AnalysisConfig())
+			analysis, err := roomanalysis.AnalyzePCM16Room(input, bundle.Tolerances.RoomConfig)
 			if err != nil {
 				t.Fatalf("analyze mutated bundle: %v", err)
 			}
@@ -161,15 +159,15 @@ func TestCleanTurnTakingRoomReplayFixtureDefectsFail(t *testing.T) {
 
 func TestCleanTurnTakingRoomReplaySelfCopyControlFails(t *testing.T) {
 	bundle := loadCleanTurnTakingBundle(t)
-	input := bundle.AnalysisInput()
+	input := goldenAnalysisInput(bundle)
 	sent := cleanStream(&input, "agent-a:sent")
 	received := cleanStream(&input, "agent-a:received")
 	interval := roomanalysis.PCM16TimeInterval{ID: "agent-a-turn-1", Start: 200 * time.Millisecond, End: time.Second}
-	if err := assertCleanSelfHearing(*sent, *received, interval, bundle.AnalysisConfig()); err != nil {
+	if err := assertCleanSelfHearing(*sent, *received, interval, bundle.Tolerances.RoomConfig); err != nil {
 		t.Fatalf("clean received stream self-hearing check: %v", err)
 	}
 	copy(received.Samples, sent.Samples)
-	err := assertCleanSelfHearing(*sent, *received, interval, bundle.AnalysisConfig())
+	err := assertCleanSelfHearing(*sent, *received, interval, bundle.Tolerances.RoomConfig)
 	if err == nil {
 		t.Fatal("self-copy mutation unexpectedly passed")
 	}
@@ -180,9 +178,9 @@ func TestCleanTurnTakingRoomReplaySelfCopyControlFails(t *testing.T) {
 	}
 }
 
-func loadCleanTurnTakingBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
+func loadCleanTurnTakingBundle(t *testing.T) roomevidence.Bundle {
 	t.Helper()
-	bundle, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), cleanTurnTakingFixturePath())
+	bundle, err := loadGoldenRoomAudio(cleanTurnTakingFixturePath())
 	if err != nil {
 		t.Fatalf("load clean turn-taking bundle: %v", err)
 	}
@@ -190,8 +188,7 @@ func loadCleanTurnTakingBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
 }
 
 func cleanTurnTakingFixturePath() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(filename), "testdata", "room-audio", "clean-turn-taking")
+	return roomAudioFixturePath("clean-turn-taking")
 }
 
 func cleanStream(input *roomanalysis.PCM16RoomInput, streamID string) *roomanalysis.PCM16TimedStream {

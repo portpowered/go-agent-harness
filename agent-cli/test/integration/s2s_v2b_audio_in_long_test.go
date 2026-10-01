@@ -3,10 +3,8 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +17,7 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // The v2b proof runs the shipped command entrypoint in-process inside a
@@ -67,10 +66,7 @@ func s2sV2BAudioFrames(t *testing.T, wavPath string) [][]byte {
 	for start := 0; start < len(samples); start += audio.FrameSize {
 		clear(frame)
 		copy(frame, samples[start:])
-		pcm := make([]byte, len(frame)*2)
-		for i, sample := range frame {
-			binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
-		}
+		pcm := codec.EncodePCM16(frame)
 		frames = append(frames, pcm)
 	}
 	if len(frames) <= 1 {
@@ -87,15 +83,14 @@ func s2sV2BResponsePCM16LE() []byte {
 	const sampleCount = 960
 	const amplitude int16 = 1600
 
-	pcm := make([]byte, sampleCount*2)
-	for i := range sampleCount {
-		sample := amplitude
+	samples := make([]int16, sampleCount)
+	for i := range samples {
+		samples[i] = amplitude
 		if i%2 != 0 {
-			sample = -amplitude
+			samples[i] = -amplitude
 		}
-		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
 	}
-	return pcm
+	return codec.EncodePCM16(samples)
 }
 
 // buildS2SV2BLongCapture turns the existing OpenAI smoke capture into the
@@ -397,11 +392,7 @@ func testS2SV2BAudioInLongCLIStaysOneTurn(t *testing.T) {
 	if len(samples) == 0 {
 		t.Fatal("recorded response WAV contains no emitted audio samples")
 	}
-	var energy float64
-	for _, sample := range samples {
-		energy += float64(sample) * float64(sample)
-	}
-	rms := math.Sqrt(energy / float64(len(samples)))
+	rms := codec.RMS(samples)
 	if rms < 500 {
 		t.Fatalf("recorded response RMS = %.1f, want > 500 for non-silent emitted audio", rms)
 	}

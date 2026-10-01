@@ -2,7 +2,6 @@ package audio
 
 import (
 	"errors"
-	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -108,18 +107,6 @@ func TestConvertPCM16BytesIdentityAndMalformedInputs(t *testing.T) {
 	}
 	if samples, decodeErr := codec.DecodePCM16(converted); decodeErr != nil || !reflect.DeepEqual(samples, []int16{1, 2, 2}) {
 		t.Fatalf("extra-channel conversion = %v, %v; want [1 2 2]", samples, decodeErr)
-	}
-}
-
-func TestPCM16RMSEnergyExactAmplitudeAndEmptyInput(t *testing.T) {
-	if got := PCM16RMSEnergy(nil); got != 0 {
-		t.Fatalf("PCM16RMSEnergy(nil) = %v, want 0", got)
-	}
-	if got := PCM16RMSEnergy([]int16{3, 4}); math.Abs(got-3.5355339059327378) > 1e-12 {
-		t.Fatalf("PCM16RMSEnergy([3 4]) = %.16f, want %.16f", got, 3.5355339059327378)
-	}
-	if got := PCM16RMSEnergy([]int16{-32768, 32767}); got <= 0 {
-		t.Fatalf("PCM16RMSEnergy(full-scale pair) = %v, want positive", got)
 	}
 }
 

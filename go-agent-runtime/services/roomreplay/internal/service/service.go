@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
+
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/audiobundle"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/support"
 )
 
 type RoomReplayBundleErrorKind = roomreplay.RoomReplayBundleErrorKind
@@ -61,14 +61,6 @@ func (s *Service) Load(ctx context.Context, bundle string) (RoomReplayPlan, erro
 		return RoomReplayPlan{}, newRoomReplayBundleError(kind, "run-manifest.json", manifestRelative, "readable JSON manifest", err.Error(), err)
 	}
 	return validateRoomReplayManifest(ctx, root, manifestPath, data, s.replayService)
-}
-
-func (s *Service) LoadAudioBundle(ctx context.Context, bundle string) (roomreplay.RoomReplayAudioBundle, error) {
-	plan, err := s.Load(ctx, bundle)
-	if err != nil {
-		return roomreplay.RoomReplayAudioBundle{}, err
-	}
-	return audiobundle.Load(plan)
 }
 
 func prepareReplayBuildRequest(request roomreplay.BuildRequest) (roomreplay.BuildRequest, error) {
@@ -198,7 +190,18 @@ func nearestExistingRoomReplayPath(output string) (string, []string, error) {
 }
 
 func newRoomReplayBundleError(kind RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
-	return support.BundleError(kind, field, artifact, expected, actual, cause)
+	if kind == "" {
+		kind = RoomReplayBundleMismatch
+	}
+	var replayCause error
+	if kind == RoomReplayBundleIncomplete {
+		replayCause = gateway.NewReplayIncompleteError(expected, actual, cause)
+	} else {
+		replayCause = gateway.NewReplayMismatchError(expected, actual, cause)
+	}
+	return &RoomReplayBundleError{
+		Kind: kind, Field: field, Artifact: artifact, Expected: expected, Actual: actual, Err: replayCause,
+	}
 }
 
 var _ roomreplay.Service = (*Service)(nil)

@@ -63,12 +63,19 @@ func generateLongConversationTermination(output string) error {
 			diagnostics: longConversationDiagnosticJSONL(audio.id, audio.turns, terminalFields, clock),
 			capture:     captureJSONForModel(audio.id, identity.model),
 		}
-		ref := addParticipant(files, audio, sidecars, identity, chunkBoundariesFor(audio.id, deltaBoundaries), longConversationDuration)
+		ref, err := addParticipant(files, audio, sidecars, identity, chunkBoundariesFor(audio.id, deltaBoundaries), longConversationDuration)
+		if err != nil {
+			return err
+		}
 		addLongConversationTerminalFields(ref, terminalFields)
 		participants[audio.id] = ref
 	}
 
-	artifacts := roomArtifacts(files, longConversationTimelineJSONL(clock, allTurns(aTurns, bTurns), terminalFields), wavBytes(mix(aSent, bSent)))
+	roomMix, err := wavBytes(mix(aSent, bSent))
+	if err != nil {
+		return err
+	}
+	artifacts := roomArtifacts(files, longConversationTimelineJSONL(clock, allTurns(aTurns, bTurns), terminalFields), roomMix)
 	manifest := baseManifest(clock, longConversationElapsed, participants, artifacts)
 	addLongConversationManifestFields(manifest)
 	return writeFixture(output, files, manifest)

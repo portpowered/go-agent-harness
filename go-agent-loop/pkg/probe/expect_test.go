@@ -1,13 +1,15 @@
 package probe
 
 import (
-	"encoding/binary"
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func TestEachMeasurableExpectationPassesAndFails(t *testing.T) {
@@ -120,26 +122,11 @@ func corpusPCM16(t *testing.T, name string) []int16 {
 	if err != nil {
 		t.Fatalf("read audio corpus %q: %v", name, err)
 	}
-	for offset := 12; offset+8 <= len(data); {
-		size := int(binary.LittleEndian.Uint32(data[offset+4 : offset+8]))
-		end := offset + 8 + size
-		if end > len(data) {
-			t.Fatalf("audio corpus %q has truncated chunk", name)
-		}
-		if string(data[offset:offset+4]) == "data" {
-			if size == 0 || size%2 != 0 {
-				t.Fatalf("audio corpus %q has invalid PCM16 data size %d", name, size)
-			}
-			samples := make([]int16, size/2)
-			for index := range samples {
-				samples[index] = int16(binary.LittleEndian.Uint16(data[offset+8+index*2 : offset+10+index*2]))
-			}
-			return samples
-		}
-		offset = end + size%2
+	_, samples, err := wavio.Read(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode audio corpus %q: %v", name, err)
 	}
-	t.Fatalf("audio corpus %q has no data chunk", name)
-	return nil
+	return samples
 }
 
 func TestS4MismatchDiagnosticsCoverEveryKind(t *testing.T) {

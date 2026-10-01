@@ -1,9 +1,10 @@
 package filesystem
 
 import (
+	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -320,21 +322,9 @@ func assertNoWriteFileTempArtifacts(t *testing.T, dir string) {
 }
 
 func minimalWAV() []byte {
-	data := make([]byte, 320)
-	wav := make([]byte, 44+len(data))
-	copy(wav[0:4], "RIFF")
-	binary.LittleEndian.PutUint32(wav[4:8], uint32(len(wav)-8))
-	copy(wav[8:12], "WAVE")
-	copy(wav[12:16], "fmt ")
-	binary.LittleEndian.PutUint32(wav[16:20], 16)
-	binary.LittleEndian.PutUint16(wav[20:22], 1)
-	binary.LittleEndian.PutUint16(wav[22:24], 1)
-	binary.LittleEndian.PutUint32(wav[24:28], 16000)
-	binary.LittleEndian.PutUint32(wav[28:32], 32000)
-	binary.LittleEndian.PutUint16(wav[32:34], 2)
-	binary.LittleEndian.PutUint16(wav[34:36], 16)
-	copy(wav[36:40], "data")
-	binary.LittleEndian.PutUint32(wav[40:44], uint32(len(data)))
-	copy(wav[44:], data)
-	return wav
+	var wav bytes.Buffer
+	if err := wavio.Write(&wav, wavio.Rate16kHz, make([]int16, 160)); err != nil {
+		panic(fmt.Sprintf("encode minimal WAV: %v", err))
+	}
+	return wav.Bytes()
 }

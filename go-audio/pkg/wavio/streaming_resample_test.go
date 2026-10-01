@@ -6,6 +6,8 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestStreamingResamplerIsChunkInvariantAcrossRateMatrix(t *testing.T) {
@@ -88,8 +90,8 @@ func TestDownsample48To16RejectsOutOfBandAlias(t *testing.T) {
 	}
 	pass := processStreaming(t, Rate48kHz, Rate16kHz, [][]int16{makeTone(1000)})
 	stop := processStreaming(t, Rate48kHz, Rate16kHz, [][]int16{makeTone(12000)})
-	passRMS := pcmRMS(pass[200:])
-	stopRMS := pcmRMS(stop[200:])
+	passRMS := codec.RMS(pass[200:])
+	stopRMS := codec.RMS(stop[200:])
 	if passRMS < 10000 {
 		t.Fatalf("passband RMS=%f", passRMS)
 	}
@@ -122,14 +124,6 @@ func processStreaming(t *testing.T, inRate, outRate int, chunks [][]int16) []int
 		result = append(result, out...)
 	}
 	return result
-}
-func pcmRMS(samples []int16) float64 {
-	var sum float64
-	for _, v := range samples {
-		x := float64(v)
-		sum += x * x
-	}
-	return math.Sqrt(sum / float64(len(samples)))
 }
 func allPCMZero(samples []int16) bool {
 	for _, v := range samples {

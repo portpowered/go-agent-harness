@@ -305,6 +305,46 @@
     "net/url",
     "syscall"
   ],
+  "forbidden_source_patterns": [
+    {
+      "name": "hand-rolled-wav-container",
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/**",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/**",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/**",
+        "github.com/portpowered/go-agent-harness/scripts/webmcp-o0/**",
+        "example.com/agent-runtime-consumer/**"
+      ],
+      "except_files": [
+        "internal/input/mimetype.go",
+        "test/integration/mimetype_validation_test.go"
+      ],
+      "literals": [
+        "RIFF"
+      ],
+      "reason": "WAV containers are written, read and sniffed only by go-audio/pkg/wavio (Write, PCM16Header, Read, Inspect, IsRIFF); the exceptions sniff RIFF-based WebP images, not audio"
+    },
+    {
+      "name": "hand-rolled-pcm16",
+      "from": [
+        "github.com/portpowered/go-agent-harness/agent-cli/**",
+        "github.com/portpowered/go-agent-harness/go-agent-loop/**",
+        "github.com/portpowered/go-agent-harness/go-agent-runtime/**",
+        "github.com/portpowered/go-agent-harness/go-device-gateway/**",
+        "github.com/portpowered/go-agent-harness/go-llm-gateway/**",
+        "github.com/portpowered/go-agent-harness/scripts/webmcp-o0/**",
+        "example.com/agent-runtime-consumer/**"
+      ],
+      "selectors": [
+        "encoding/binary.LittleEndian.PutUint16",
+        "encoding/binary.LittleEndian.AppendUint16",
+        "encoding/binary.LittleEndian.Uint16"
+      ],
+      "reason": "PCM16 samples are packed, decoded and measured only by go-audio/pkg/codec (EncodePCM16, DecodePCM16, PCM16Samples, RMS, PCM16RMS)"
+    }
+  ],
   "generated_files": [
     {
       "module": "go-agent-runtime",

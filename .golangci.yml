@@ -238,18 +238,6 @@ linters:
       # nolintlint companion rule keeps existing //nolint directives for an
       # excluded linter from being reported as unused while the exclusion
       # exists; remove it together with the linter.
-      # owned by audio-dedupe
-      - path: '^go-agent-runtime/services/roomevidence/internal/service/audio_[^/]*\.go$'
-        linters: [errname, intrange, unparam]
-      - path: '^go-agent-runtime/services/roomevidence/internal/service/audio_[^/]*\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(errname|intrange|unparam)"'
-      # owned by audio-dedupe
-      - path: '^go-agent-runtime/services/roomreplay/internal/audiobundle/'
-        linters: [intrange, unparam]
-      - path: '^go-agent-runtime/services/roomreplay/internal/audiobundle/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(intrange|unparam)"'
       # owned by session-wrappers
       - path: '^go-agent-loop/pkg/messages/session\.go$'
         linters: [iface]

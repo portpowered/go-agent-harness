@@ -3,12 +3,12 @@ package media
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // ---------------------------------------------------------------------------
@@ -48,10 +48,7 @@ func TestAudio_InputForwarded(t *testing.T) {
 	const mediaType = "audio/pcm"
 
 	// Expected PCM bytes: little-endian int16.
-	wantBytes := make([]byte, len(samples)*2)
-	for i, s := range samples {
-		binary.LittleEndian.PutUint16(wantBytes[i*2:], uint16(s))
-	}
+	wantBytes := codec.EncodePCM16(samples)
 
 	inf := new(MockInferencer).AddTextResponse("audio acknowledged")
 	tool := NewMockToolExecutor()
@@ -104,10 +101,7 @@ func TestAudio_InputStreamingForwarded(t *testing.T) {
 	samples := []int16{300, 400, -300, -400}
 	audio := &agentloop.Audio{Samples: samples, SampleRate: 16000, Channels: 1}
 
-	wantBytes := make([]byte, len(samples)*2)
-	for i, s := range samples {
-		binary.LittleEndian.PutUint16(wantBytes[i*2:], uint16(s))
-	}
+	wantBytes := codec.EncodePCM16(samples)
 
 	inf := new(MockInferencer).AddTextResponse("streaming audio acknowledged")
 	tool := NewMockToolExecutor()
@@ -154,10 +148,7 @@ func TestAudio_InputWithTextForwarded(t *testing.T) {
 	samples := []int16{500, 600, -500}
 	audio := &agentloop.Audio{Samples: samples, SampleRate: 16000, Channels: 1}
 
-	wantBytes := make([]byte, len(samples)*2)
-	for i, s := range samples {
-		binary.LittleEndian.PutUint16(wantBytes[i*2:], uint16(s))
-	}
+	wantBytes := codec.EncodePCM16(samples)
 
 	inf := new(MockInferencer).AddTextResponse("transcription: hello world")
 	tool := NewMockToolExecutor()

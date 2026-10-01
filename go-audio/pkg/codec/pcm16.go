@@ -107,11 +107,7 @@ func DecodePCM16WithLimit(encoded []byte, maxBytes int) ([]int16, error) {
 	if err := ValidatePCM16(encoded, maxBytes); err != nil {
 		return nil, err
 	}
-	samples := make([]int16, len(encoded)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
-	}
-	return samples, nil
+	return PCM16Samples(encoded), nil
 }
 
 // DecodePCM16Into decodes encoded into destination. Destination must have at
@@ -127,6 +123,18 @@ func DecodePCM16Into(destination []int16, encoded []byte) error {
 		destination[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
 	}
 	return nil
+}
+
+// PCM16Samples decodes every complete signed little-endian PCM16 sample in a
+// trusted local buffer, such as a fixture or a recorded artifact already in
+// memory. Unlike DecodePCM16 it applies no payload bound and never fails: a
+// trailing partial byte is ignored. Network input must use DecodePCM16.
+func PCM16Samples(encoded []byte) []int16 {
+	samples := make([]int16, len(encoded)/2)
+	for index := range samples {
+		samples[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
+	}
+	return samples
 }
 
 // EncodeBase64 returns standard padded base64 for an audio payload.

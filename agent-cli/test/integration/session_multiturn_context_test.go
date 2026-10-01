@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -48,10 +48,7 @@ func multiturnAudioFrames(t *testing.T, wavPath string) [][]byte {
 	for start := 0; start < len(samples); start += len(frame) {
 		clear(frame)
 		copy(frame, samples[start:])
-		pcm := make([]byte, len(frame)*2)
-		for i, sample := range frame {
-			binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
-		}
+		pcm := codec.EncodePCM16(frame)
 		frames = append(frames, pcm)
 	}
 	return frames

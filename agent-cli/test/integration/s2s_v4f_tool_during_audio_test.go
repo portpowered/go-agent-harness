@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +45,7 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const (
@@ -105,15 +105,6 @@ func toolDuringAudioCorpusSamples(t *testing.T, wavPath string) []int16 {
 		t.Fatalf("input WAV rate = %d, want %d", rate, audio.SampleRate)
 	}
 	return samples
-}
-
-// toolDuringAudioPCM16LEBytes encodes samples as little-endian PCM16 bytes.
-func toolDuringAudioPCM16LEBytes(samples []int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
-	}
-	return pcm
 }
 
 // toolDuringAudioLoudestWindow mirrors the corpus helpers: the highest-energy
@@ -192,7 +183,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 		copy(frame, inputSamples[start:])
 		clientEvent(rtEventInputAudioAppend, mustJSON(t, map[string]string{
 			"type":  rtEventInputAudioAppend,
-			"audio": base64.StdEncoding.EncodeToString(toolDuringAudioPCM16LEBytes(frame)),
+			"audio": base64.StdEncoding.EncodeToString(codec.EncodePCM16(frame)),
 		}))
 	}
 	clientEvent(rtEventInputAudioCommit, json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
@@ -212,7 +203,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 	audioDeltaPayload := func(samples []int16) string {
 		return string(mustJSON(t, map[string]string{
 			"type":  rtEventOutputAudioDelta,
-			"delta": base64.StdEncoding.EncodeToString(toolDuringAudioPCM16LEBytes(samples)),
+			"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(samples)),
 		}))
 	}
 
@@ -397,7 +388,7 @@ func verifyToolDuringAudioExchangeIntact(exchange toolDuringAudioExchange, expec
 			exchange.completedDoneIndex, lastAudioIndex)
 	}
 	for i, delta := range expected {
-		want := toolDuringAudioPCM16LEBytes(delta)
+		want := codec.EncodePCM16(delta)
 		if !bytes.Equal(exchange.streamedDeltas[i], want) {
 			return fmt.Errorf("%s content mismatch in the replayed exchange (byte-exact PCM required across the interleaved tool call)",
 				toolDuringAudioDeltaSpan(i))

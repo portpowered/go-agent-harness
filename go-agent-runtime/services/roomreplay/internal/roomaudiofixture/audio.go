@@ -1,26 +1,25 @@
 package roomaudiofixture
 
-import "encoding/binary"
+import (
+	"fmt"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+)
 
 // Pseudo-speech synthesis and PCM16/WAV encoding parameters.
 const (
-	lcgMultiplier    = 1664525
-	lcgIncrement     = 1013904223
-	lcgShift         = 8
-	amplitudeLevels  = 16001
-	amplitudeOffset  = 8000
-	edgeRampSamples  = 20
-	turnSeedStride   = 7919
-	pcm16Max         = 32767
-	pcm16Min         = -32768
-	boundaryImpulse  = 7000
-	bytesPerSample   = 2
-	bitsPerSample    = 16
-	wavHeaderBytes   = 44
-	wavRIFFOverhead  = 36
-	wavFmtChunkBytes = 16
-	wavPCMFormatTag  = 1
-	wavChannelCount  = 1
+	lcgMultiplier   = 1664525
+	lcgIncrement    = 1013904223
+	lcgShift        = 8
+	amplitudeLevels = 16001
+	amplitudeOffset = 8000
+	edgeRampSamples = 20
+	turnSeedStride  = 7919
+	pcm16Max        = 32767
+	pcm16Min        = -32768
+	boundaryImpulse = 7000
+	bitsPerSample   = 16
 )
 
 func syntheticSpeech(sampleCount int, turns []turn, seed uint32) []int16 {
@@ -87,29 +86,12 @@ func setLoudBoundaryImpulse(samples []int16, boundary int) {
 	samples[boundary] = boundaryImpulse
 }
 
-func pcmBytes(samples []int16) []byte {
-	data := make([]byte, len(samples)*bytesPerSample)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(data[index*bytesPerSample:], uint16(sample))
+// wavBytes frames samples as mono PCM16 WAV through the shared go-audio header.
+func wavBytes(samples []int16) ([]byte, error) {
+	pcm := codec.EncodePCM16(samples)
+	header, err := wavio.PCM16Header(sampleRate, uint64(len(pcm)))
+	if err != nil {
+		return nil, fmt.Errorf("room audio fixture WAV header: %w", err)
 	}
-	return data
-}
-
-func wavBytes(samples []int16) []byte {
-	pcm := pcmBytes(samples)
-	le := binary.LittleEndian
-	data := make([]byte, 0, wavHeaderBytes+len(pcm))
-	data = append(data, "RIFF"...)
-	data = le.AppendUint32(data, uint32(wavRIFFOverhead+len(pcm)))
-	data = append(data, "WAVEfmt "...)
-	data = le.AppendUint32(data, wavFmtChunkBytes)
-	data = le.AppendUint16(data, wavPCMFormatTag)
-	data = le.AppendUint16(data, wavChannelCount)
-	data = le.AppendUint32(data, sampleRate)
-	data = le.AppendUint32(data, sampleRate*bytesPerSample)
-	data = le.AppendUint16(data, bytesPerSample)
-	data = le.AppendUint16(data, bitsPerSample)
-	data = append(data, "data"...)
-	data = le.AppendUint32(data, uint32(len(pcm)))
-	return append(data, pcm...)
+	return append(header[:], pcm...), nil
 }

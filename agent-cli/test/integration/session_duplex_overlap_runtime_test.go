@@ -16,6 +16,7 @@ import (
 	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -312,7 +313,7 @@ func loadV8SilenceFrame(t *testing.T) []byte {
 	if len(silenceSamples) < audio.FrameSize {
 		t.Fatalf("v8 silence fixture has %d samples, want at least %d", len(silenceSamples), audio.FrameSize)
 	}
-	return v8PCM16Bytes(silenceSamples[:audio.FrameSize])
+	return codec.EncodePCM16(silenceSamples[:audio.FrameSize])
 }
 
 func newV8RecordingViews() map[string]*v8RecordingView {

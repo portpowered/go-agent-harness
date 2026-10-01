@@ -21,11 +21,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,6 +40,7 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // toolCallScenarioName is the named CLI tool requested by the spoken fixture.
@@ -155,7 +154,7 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 
 	audioDelta := mustJSON(t, map[string]string{
 		"type":  rtEventOutputAudioDelta,
-		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples)),
+		"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(replySamples)),
 	})
 	serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
@@ -248,11 +247,7 @@ func assertRecordedSpeech(t *testing.T, outputPath string, wantSamples int) {
 	if min, max := wantSamples/2, wantSamples*2; len(samples) < min || len(samples) > max {
 		t.Fatalf("recorded duration %d samples outside plausible bounds [%d, %d]", len(samples), min, max)
 	}
-	var energy float64
-	for _, sample := range samples {
-		energy += float64(sample) * float64(sample)
-	}
-	rms := math.Sqrt(energy / float64(len(samples)))
+	rms := codec.RMS(samples)
 	if rms <= 500.0 {
 		t.Fatalf("recorded output WAV RMS energy = %.1f, want > 500.0 (silence threshold)", rms)
 	}
@@ -354,14 +349,6 @@ func loudestWindowSamplesIntegration(t *testing.T, samples []int16, window int) 
 		}
 	}
 	return samples[bestStart : bestStart+window]
-}
-
-func pcm16LEBytes(samples []int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
-	}
-	return pcm
 }
 
 func toolBargeInCapabilities(executor messages.ToolExecutor) serviceTools.Service {

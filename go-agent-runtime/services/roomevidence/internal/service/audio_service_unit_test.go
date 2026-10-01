@@ -4,20 +4,21 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
-	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
+	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func TestRoomReplayAudioPayloadForms(t *testing.T) {
@@ -125,7 +126,11 @@ func TestRoomReplayBoundsAndPCMHelpers(t *testing.T) {
 	if _, err := readRoomReplayPath(directory, filepath.Join(directory, "missing"), 16, "missing"); err == nil {
 		t.Fatal("missing bounded path was accepted")
 	}
-	if _, err := decodeRoomReplayWAV([]byte("RIFF"), "short.wav"); err == nil {
+	var shortWAV bytes.Buffer
+	if err := wavio.Write(&shortWAV, wavio.Rate16kHz, []int16{1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodeRoomReplayWAV(shortWAV.Bytes()[:4], "short.wav"); err == nil {
 		t.Fatal("truncated WAV was accepted")
 	}
 	if _, err := decodeMonoPCM16([]byte{1}, 1, "odd.pcm"); err == nil {
@@ -214,11 +219,11 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 	for _, participantID := range []string{"alpha", "beta"} {
 		wav := mustRoomReplayWAV(t, want[participantID+":wav"])
 		paths["participants/"+participantID+"/agent.wav"] = wav
-		paths["participants/"+participantID+"/sent.pcm"] = roomReplayAudioPCM16Bytes(want[participantID+":sent"])
-		paths["participants/"+participantID+"/received.pcm"] = roomReplayAudioPCM16Bytes(want[participantID+":received"])
+		paths["participants/"+participantID+"/sent.pcm"] = codec.EncodePCM16(want[participantID+":sent"])
+		paths["participants/"+participantID+"/received.pcm"] = codec.EncodePCM16(want[participantID+":received"])
 		paths["participants/"+participantID+"/deltas.jsonl"] = jsonLines(t, []map[string]any{
-			{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": participantID + "-delta-0", "offset_ms": 0, "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes(want[participantID+":wav"][:2]))},
-			{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": participantID + "-delta-1", "offset_ms": 0, "delta": base64.StdEncoding.EncodeToString(roomReplayAudioPCM16Bytes(want[participantID+":wav"][2:]))},
+			{"type": "AUDIO.DELTA", "sequence": 0, "delta_id": participantID + "-delta-0", "offset_ms": 0, "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(want[participantID+":wav"][:2]))},
+			{"type": "AUDIO.DELTA", "sequence": 1, "delta_id": participantID + "-delta-1", "offset_ms": 0, "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(want[participantID+":wav"][2:]))},
 		})
 		paths["participants/"+participantID+"/events.jsonl"] = jsonLines(t, []map[string]any{
 			{"stream_role": "sent", "stream_id": participantID + ":sent", "timeline_start_ms": 0, "timeline_end_ms": 100, "expected_speech": []any{map[string]any{"label": "turn-1", "start_ms": 10, "end_ms": 90}}},
@@ -338,14 +343,6 @@ func mustRoomReplayWAV(t *testing.T, samples []int16) []byte {
 		t.Fatalf("write WAV: %v", err)
 	}
 	return buffer.Bytes()
-}
-
-func roomReplayAudioPCM16Bytes(samples []int16) []byte {
-	data := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(data[index*2:], uint16(sample))
-	}
-	return data
 }
 
 func jsonLines(t *testing.T, values []map[string]any) []byte {

@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -16,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 const (
@@ -156,11 +155,7 @@ func loadCrackleCaptureFirstTurn(t *testing.T) []int16 {
 	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != crackleCaptureSHA256 {
 		t.Fatalf("captured first-turn SHA-256 = %s, want %s", got, crackleCaptureSHA256)
 	}
-	samples := make([]int16, len(raw)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(raw[index*2:]))
-	}
-	return samples
+	return codec.PCM16Samples(raw)
 }
 
 func capturedFirstTurnFrames(t *testing.T, samples []int16) []audio.PCMFrame {

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestAdmissionContractForwardsCapabilities(t *testing.T) {
@@ -232,10 +232,7 @@ func TestArtifactsPreserveAcceptedAudioTranscriptAndLifecycleErrors(t *testing.T
 	audio := &artifactAudioSink{flushErr: audioErr, closeErr: audioErr}
 	transcriptSink := &artifactTranscriptSink{flushErr: transcriptErr, closeErr: transcriptErr}
 	artifacts := NewSessionDurationArtifactSetWithSinks(audio, transcriptSink)
-	pcm := make([]byte, 4)
-	binary.LittleEndian.PutUint16(pcm[0:2], 12)
-	negative := int16(-13)
-	binary.LittleEndian.PutUint16(pcm[2:4], uint16(negative))
+	pcm := codec.EncodePCM16([]int16{12, -13})
 	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}); err != nil {
 		t.Fatalf("Accept audio: %v", err)
 	}
@@ -291,8 +288,7 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 	if artifacts == nil {
 		t.Fatal("prepared artifacts missing from context")
 	}
-	pcm := make([]byte, 2)
-	binary.LittleEndian.PutUint16(pcm, 21)
+	pcm := codec.EncodePCM16([]int16{21})
 	if err := artifacts.Accept(messages.StreamMessage{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(pcm)}); err != nil {
 		t.Fatalf("prepared audio Accept: %v", err)
 	}

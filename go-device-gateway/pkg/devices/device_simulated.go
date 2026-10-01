@@ -3,7 +3,6 @@ package devices
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -717,13 +716,8 @@ func jitter(c ClockSpec, index uint64) int64 {
 	return int64(c.JitterSamples[index%uint64(len(c.JitterSamples))])
 }
 func traceFor(tap string, sequence uint64, epoch uint32, rate int, start uint64, samples []int16, before, after int, jitter int64, flags []string, faultID string) DeviceTraceEvent {
-	h := sha256.New()
-	var encoded [2]byte
-	for _, sample := range samples {
-		binary.LittleEndian.PutUint16(encoded[:], uint16(sample))
-		h.Write(encoded[:])
-	}
-	return DeviceTraceEvent{Tap: tap, Sequence: sequence, ClockEpoch: epoch, SampleRate: rate, StartSample: start, SampleCount: len(samples), DeviceTick: sequence, HostMonoSamples: int64(start) + jitter, QueueBefore: before, QueueAfter: after, Flags: flags, FaultID: faultID, PayloadSHA256: hex.EncodeToString(h.Sum(nil))}
+	digest := sha256.Sum256(codec.EncodePCM16(samples))
+	return DeviceTraceEvent{Tap: tap, Sequence: sequence, ClockEpoch: epoch, SampleRate: rate, StartSample: start, SampleCount: len(samples), DeviceTick: sequence, HostMonoSamples: int64(start) + jitter, QueueBefore: before, QueueAfter: after, Flags: flags, FaultID: faultID, PayloadSHA256: hex.EncodeToString(digest[:])}
 }
 func faultFlags(fs []FaultEvent) ([]string, string) {
 	flags := []string{}

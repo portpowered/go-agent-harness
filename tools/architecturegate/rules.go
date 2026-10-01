@@ -280,6 +280,17 @@ func moduleIsReusable(module *Module, policy Policy) bool {
 	return matchesAny(policy.ReusableModules, module.Path, module.Dir, filepath.Base(module.Dir))
 }
 
+// ImportRule forbids Imports from From packages; see the README for its fields.
+type ImportRule struct {
+	From           []string `json:"from"`
+	Imports        []string `json:"imports"`
+	Except         []string `json:"except,omitempty"`
+	ExceptFrom     []string `json:"except_from,omitempty"`
+	Files          []string `json:"files,omitempty"`
+	ProductionOnly bool     `json:"production_only,omitempty"`
+	Reason         string   `json:"reason"`
+}
+
 // appliesTo reports whether the rule governs the imports of source in pkg.
 func (rule ImportRule) appliesTo(pkg *Package, module *Module, source *SourceFile) bool {
 	if !matchesAny(rule.From, pkg.ImportPath, module.Path) || matchesAny(rule.ExceptFrom, pkg.ImportPath) {

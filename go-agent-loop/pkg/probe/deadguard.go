@@ -742,9 +742,7 @@ func evaluateGuardExpectation(expectation ExpectedBehavior, observation Observat
 			return mismatch(expectation, declaredKind(expectation), want, observation.Transcript)
 		}
 	case ExpectAudio:
-		if pcm16RMS(observation.PCM16Samples) <= AudioEnergyThreshold {
-			return mismatch(expectation, declaredKind(expectation), "non-silent audio", pcm16RMS(observation.PCM16Samples))
-		}
+		return evaluateAudioEnergy(expectation, declaredKind(expectation), observation, "non-silent audio")
 	case ExpectToolCall:
 		want := cmp.Or(expectation.ToolCallID, expectation.ToolName, expectation.Value)
 		if want == "" {

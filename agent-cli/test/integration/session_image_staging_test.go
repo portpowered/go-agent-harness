@@ -3,19 +3,9 @@ package integration
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
-	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
-	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
-	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"image"
 	"image/color"
 	"image/png"
@@ -25,6 +15,17 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
+	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing.T) {
@@ -168,10 +169,7 @@ func writeStagedAudioFixture(t *testing.T, path string) {
 	t.Helper()
 	samples := make([]int16, audio.FrameSize)
 	samples[0] = 1200
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
-	}
+	pcm := codec.EncodePCM16(samples)
 	if err := os.WriteFile(path, pcm, 0o600); err != nil {
 		t.Fatalf("write audio fixture: %v", err)
 	}

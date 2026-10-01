@@ -3,7 +3,6 @@ package replay
 import (
 	"context"
 	"errors"
-	"math"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	replaywire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -60,11 +60,7 @@ func TestCommittedOverlapCorpusCarriesSpeechEnergy(t *testing.T) {
 		if rate != variant.wantRate || len(samples) == 0 {
 			t.Fatalf("overlap corpus %s = %d samples at %d Hz, want non-empty at %d Hz", variant.id, len(samples), rate, variant.wantRate)
 		}
-		var sum float64
-		for _, sample := range samples {
-			sum += float64(sample) * float64(sample)
-		}
-		if rms := math.Sqrt(sum / float64(len(samples))); rms <= probe.AudioEnergyThreshold {
+		if rms := codec.RMS(samples); rms <= probe.AudioEnergyThreshold {
 			t.Fatalf("overlap corpus %s RMS = %.2f must exceed the VAD threshold %.2f", variant.id, rms, probe.AudioEnergyThreshold)
 		}
 	}

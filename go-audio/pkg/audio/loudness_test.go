@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -47,16 +49,11 @@ func measureRMSDBFS(samples []int16) float64 {
 	if len(samples) == 0 {
 		return math.Inf(-1)
 	}
-	var sum float64
-	for _, s := range samples {
-		f := float64(s)
-		sum += f * f
-	}
-	rms := math.Sqrt(sum / float64(len(samples)))
+	rms := codec.RMS(samples)
 	if rms <= 0 {
 		return math.Inf(-1)
 	}
-	return 20 * math.Log10(rms/32768.0)
+	return 20 * math.Log10(rms/codec.PCM16FullScale)
 }
 
 func countClipped(samples []int16, threshold int) int {

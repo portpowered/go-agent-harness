@@ -2,8 +2,9 @@ package stream
 
 import (
 	"fmt"
-	"math"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func makePCM16Frame(samples []int16, start, end, index, sampleRate, frameSamples, clipThreshold int) PCM16Frame {
@@ -15,7 +16,7 @@ func makePCM16Frame(samples []int16, start, end, index, sampleRate, frameSamples
 		Timestamp:   samplesToDuration(start, sampleRate),
 		Duration:    samplesToDuration(end-start, sampleRate),
 		Partial:     end-start < frameSamples,
-		RMS:         PCM16RMSEnergy(samples),
+		RMS:         codec.RMS(samples),
 	}
 	frame.RMSDBFS = dbfs(frame.RMS)
 	frame.AbsolutePeak = absolutePeak(samples)
@@ -59,7 +60,7 @@ func analyzeSilentRuns(samples []int16, frames []PCM16Frame, annotations []norma
 			Start:                 samplesToDuration(startSample, sampleRate),
 			End:                   samplesToDuration(endSample, sampleRate),
 			Duration:              samplesToDuration(endSample-startSample, sampleRate),
-			RMS:                   PCM16RMSEnergy(samples[startSample:endSample]),
+			RMS:                   codec.RMS(samples[startSample:endSample]),
 			ExpectedSpeechOverlap: samplesToDuration(overlapSamples, sampleRate),
 			InExpectedSpeech:      overlapSamples > 0,
 			NaturalPause:          samplesToDuration(overlapSamples, sampleRate) <= config.MaxNaturalPause,
@@ -93,8 +94,8 @@ func makeBoundaryCheck(samples []int16, boundary ChunkBoundary, sampleRate, fram
 	previous := samples[boundary.SampleIndex-1]
 	next := samples[boundary.SampleIndex]
 	delta := absoluteSampleDifference(previous, next)
-	previousRMSDBFS := dbfs(PCM16RMSEnergy(previousWindow))
-	nextRMSDBFS := dbfs(PCM16RMSEnergy(nextWindow))
+	previousRMSDBFS := dbfs(codec.RMS(previousWindow))
+	nextRMSDBFS := dbfs(codec.RMS(nextWindow))
 	quiet := previousRMSDBFS < config.BoundaryQuietDBFS && nextRMSDBFS < config.BoundaryQuietDBFS
 	largeJump := delta > config.BoundaryDelta
 	return BoundaryCheck{
@@ -125,21 +126,7 @@ func makeEdgeMeasurement(samples []int16, frameSamples int) EdgeMeasurement {
 		LastAbsValue:     absoluteSample(samples[len(samples)-1]),
 		FinalStartSample: finalStart,
 		FinalEndSample:   finalEnd,
-		FinalRMS:         PCM16RMSEnergy(finalSamples),
-		FinalRMSDBFS:     dbfs(PCM16RMSEnergy(finalSamples)),
+		FinalRMS:         codec.RMS(finalSamples),
+		FinalRMSDBFS:     dbfs(codec.RMS(finalSamples)),
 	}
-}
-
-// PCM16RMSEnergy returns the root-mean-square energy of signed PCM16 samples
-// in the original integer amplitude units. Empty input has zero energy.
-func PCM16RMSEnergy(samples []int16) float64 {
-	if len(samples) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, sample := range samples {
-		value := float64(sample)
-		sum += value * value
-	}
-	return math.Sqrt(sum / float64(len(samples)))
 }
