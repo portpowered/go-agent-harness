@@ -274,8 +274,9 @@ func newSelfHearingDetector(t *testing.T, config selfhearing.PCM16SelfHearingCon
 	return detector
 }
 
-func feedPairedSignals(t *testing.T, detector *selfhearing.PCM16SelfHearingDetector, playback, capture []int16, sampleRate, lagSamples int) selfhearing.PCM16SelfHearingObservation {
+func feedPairedSignals(t *testing.T, detector *selfhearing.PCM16SelfHearingDetector, playback, capture []int16, lagSamples int) selfhearing.PCM16SelfHearingObservation {
 	t.Helper()
+	sampleRate := 1000
 	if len(playback)%20 != 0 || len(capture)%20 != 0 {
 		t.Fatalf("test signals must be a multiple of 20 samples: playback=%d capture=%d", len(playback), len(capture))
 	}

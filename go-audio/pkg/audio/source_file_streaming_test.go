@@ -18,7 +18,7 @@ func TestFileSourceWAVUsesOneStreamingCursorForMixedReads(t *testing.T) {
 		samples[index] = int16(index - 200)
 	}
 	samples[0], samples[1], samples[2], samples[len(samples)-1] = -32768, -12345, 12345, 32767
-	path := writeStreamingWAV(t, SampleRate, samples)
+	path := writeStreamingWAV(t, samples)
 
 	source, err := NewFileSource(path, nil)
 	if err != nil {
@@ -51,7 +51,7 @@ func TestFileSourceWAVUsesOneStreamingCursorForMixedReads(t *testing.T) {
 }
 
 func TestFileSourceWAVReadsPayloadAfterOpenWithoutSnapshot(t *testing.T) {
-	path := writeStreamingWAV(t, SampleRate, []int16{11, 22})
+	path := writeStreamingWAV(t, []int16{11, 22})
 	source, err := NewFileSource(path, nil)
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
@@ -86,7 +86,7 @@ func TestFileSourceWAVReadsPayloadAfterOpenWithoutSnapshot(t *testing.T) {
 }
 
 func TestFileSourceWAVRejectsPhysicalTruncationBeforeFirstRead(t *testing.T) {
-	path := writeStreamingWAV(t, SampleRate, []int16{1, 2, 3})
+	path := writeStreamingWAV(t, []int16{1, 2, 3})
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +149,7 @@ func TestFileSourceWAVUnsupportedRatePreservesFormatIdentity(t *testing.T) {
 }
 
 func TestFileSourceWAVPostOpenTruncationReportsActualBytes(t *testing.T) {
-	path := writeStreamingWAV(t, SampleRate, []int16{1})
+	path := writeStreamingWAV(t, []int16{1})
 	source, err := NewFileSource(path, nil)
 	if err != nil {
 		t.Fatalf("NewFileSource() error = %v", err)
@@ -276,8 +276,9 @@ func TestWAVSourcePreservesPayloadStreamErrorAndClosedPrecedence(t *testing.T) {
 	}
 }
 
-func writeStreamingWAV(t *testing.T, rate int, samples []int16) string {
+func writeStreamingWAV(t *testing.T, samples []int16) string {
 	t.Helper()
+	rate := SampleRate
 	path := filepath.Join(t.TempDir(), "source.wav")
 	encoded, err := encodedStreamingWAV(rate, samples)
 	if err != nil {

@@ -201,12 +201,12 @@ func roomAnalysisFixture() roomanalysis.PCM16RoomInput {
 
 	return roomanalysis.PCM16RoomInput{
 		Streams: []roomanalysis.PCM16TimedStream{
-			pcm16TimedStream("a-sent", "alice", aSent, sampleRate, 300, 2500),
-			pcm16TimedStream("b-sent", "bob", bSent, sampleRate, 300, 2500),
-			pcm16TimedStream("a-received", "alice", aReceived, sampleRate, 340, 2540),
-			pcm16TimedStream("b-received", "bob", bReceived, sampleRate, 340, 2540),
-			pcm16TimedStream("interrupt", "alice", interrupt, sampleRate, 1000, 1200),
-			pcm16TimedStream("response", "bob", response, sampleRate, 500, 1300),
+			pcm16TimedStream("a-sent", "alice", aSent, 300, 2500),
+			pcm16TimedStream("b-sent", "bob", bSent, 300, 2500),
+			pcm16TimedStream("a-received", "alice", aReceived, 340, 2540),
+			pcm16TimedStream("b-received", "bob", bReceived, 340, 2540),
+			pcm16TimedStream("interrupt", "alice", interrupt, 1000, 1200),
+			pcm16TimedStream("response", "bob", response, 500, 1300),
 		},
 		Overlaps: []roomanalysis.PCM16OverlapInterval{
 			{
@@ -225,7 +225,8 @@ func roomAnalysisFixture() roomanalysis.PCM16RoomInput {
 	}
 }
 
-func pcm16TimedStream(streamID, participantID string, samples []int16, sampleRate, speechStart, speechEnd int) roomanalysis.PCM16TimedStream {
+func pcm16TimedStream(streamID, participantID string, samples []int16, speechStart, speechEnd int) roomanalysis.PCM16TimedStream {
+	const sampleRate = 1000
 	return roomanalysis.PCM16TimedStream{
 		PCM16Input: roomanalysis.PCM16Input{
 			StreamID:       streamID,

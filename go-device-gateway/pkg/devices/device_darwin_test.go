@@ -96,7 +96,7 @@ func TestVoiceProcessingPlaybackBurstPreservesFIFO(t *testing.T) {
 }
 
 func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
-	newBlockedWait := func(t *testing.T) (*voiceProcessingIO, *voiceProcessingEndpoint, <-chan error) {
+	newBlockedWait := func(t *testing.T) (*voiceProcessingEndpoint, <-chan error) {
 		t.Helper()
 		format := audio.PCM16DeviceFormat(24000)
 		queue, err := audio.NewPlaybackQueue(format)
@@ -118,11 +118,11 @@ func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
 		wait := make(chan error, 1)
 		go func() { wait <- endpoint.WaitForPlaybackCapacity(context.Background(), audio.FrameSize) }()
 		assertCapacityWaitBlocked(t, wait)
-		return engine, endpoint, wait
+		return endpoint, wait
 	}
 
 	t.Run("discard wakes producer", func(t *testing.T) {
-		_, endpoint, wait := newBlockedWait(t)
+		endpoint, wait := newBlockedWait(t)
 		if discarded := endpoint.DiscardPlayback(); discarded == 0 {
 			t.Fatal("AUVoiceIO discard removed no queued samples")
 		}
@@ -132,7 +132,7 @@ func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
 	})
 
 	t.Run("output close wakes producer while input remains open", func(t *testing.T) {
-		_, endpoint, wait := newBlockedWait(t)
+		endpoint, wait := newBlockedWait(t)
 		if err := endpoint.Close(); err != nil {
 			t.Fatal(err)
 		}

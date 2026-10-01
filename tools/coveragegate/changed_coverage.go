@@ -180,7 +180,7 @@ func runModuleCoverage(ctx context.Context, modulePath string, packages []Worksp
 	if workspaceFile == "" {
 		workspaceFile = "off"
 	}
-	command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
+	command.Env = setEnvironment(os.Environ(), workspaceFile)
 	command.Stdout = run.stdout
 	command.Stderr = run.stderr
 	if err := command.Run(); err != nil {

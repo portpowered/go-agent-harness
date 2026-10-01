@@ -46,7 +46,7 @@ func TestVirtualPlaybackCapacityAdversarial(t *testing.T) {
 
 func capacityZeroRequestIsANoOp(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	if err := output.WaitForPlaybackCapacity(context.Background(), 0); err != nil {
 		t.Fatalf("zero capacity request: %v", err)
 	}
@@ -54,7 +54,7 @@ func capacityZeroRequestIsANoOp(t *testing.T) {
 
 func capacityNegativeRequestIsANoOp(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	if err := output.WaitForPlaybackCapacity(context.Background(), -1); err != nil {
 		t.Fatalf("negative capacity request: %v", err)
 	}
@@ -70,7 +70,7 @@ func capacityNilStreamRequestIsANoOp(t *testing.T) {
 
 func capacityOversizedRequestIsRejected(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	_, high, err := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func capacityOversizedRequestIsRejected(t *testing.T) {
 
 func capacityBelowHighWatermarkIsAdmitted(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	if err := output.WaitForPlaybackCapacity(context.Background(), audio.FrameSize); err != nil {
 		t.Fatalf("below-high request: %v", err)
 	}
@@ -90,7 +90,7 @@ func capacityBelowHighWatermarkIsAdmitted(t *testing.T) {
 
 func capacityExactHighWatermarkIsAdmitted(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	_, high, err := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func capacityExactHighWatermarkIsAdmitted(t *testing.T) {
 
 func capacityOneSampleAboveHighWatermarkBlocks(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	_, high, err := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func capacityOneSampleAboveHighWatermarkBlocks(t *testing.T) {
 
 func capacityWaiterRemainsBlockedAboveLowWatermark(t *testing.T) {
 	t.Helper()
-	_, output, input := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, input := adversarialVirtualPair(t)
 	low, high, err := audio.PlaybackQueueWatermarks(output.DeviceFormat())
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func awaitCapacityWaitReblocked(t *testing.T, done <-chan error, ctx *blockObser
 
 func capacityContextCancellationWakesWaiter(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -199,7 +199,7 @@ func capacityContextCancellationWakesWaiter(t *testing.T) {
 
 func capacityDeadlineWakesWaiter(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -211,7 +211,7 @@ func capacityDeadlineWakesWaiter(t *testing.T) {
 
 func capacityDiscardWakesWaiter(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	wait := startCapacityWait(output, context.Background(), audio.FrameSize)
@@ -225,7 +225,7 @@ func capacityDiscardWakesWaiter(t *testing.T) {
 
 func capacityOutputCloseWakesWaiter(t *testing.T) {
 	t.Helper()
-	_, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, _ := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	wait := startCapacityWait(output, context.Background(), audio.FrameSize)
@@ -239,7 +239,7 @@ func capacityOutputCloseWakesWaiter(t *testing.T) {
 
 func capacityPeerCloseWakesWaiter(t *testing.T) {
 	t.Helper()
-	_, output, input := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, input := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	wait := startCapacityWait(output, context.Background(), audio.FrameSize)
@@ -253,7 +253,7 @@ func capacityPeerCloseWakesWaiter(t *testing.T) {
 
 func capacityOutputRemovalWakesWaiter(t *testing.T) {
 	t.Helper()
-	registry, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	registry, output, _ := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	wait := startCapacityWait(output, context.Background(), audio.FrameSize)
@@ -267,7 +267,7 @@ func capacityOutputRemovalWakesWaiter(t *testing.T) {
 
 func capacityPeerRemovalWakesWaiter(t *testing.T) {
 	t.Helper()
-	registry, output, _ := adversarialVirtualPair(t, audio.SampleRate)
+	registry, output, _ := adversarialVirtualPair(t)
 	high := playbackHighWatermark(t, output)
 	primeVirtualPlayback(t, output, high)
 	wait := startCapacityWait(output, context.Background(), audio.FrameSize)
@@ -281,7 +281,7 @@ func capacityPeerRemovalWakesWaiter(t *testing.T) {
 
 func capacityExactFinalRemainderRoundTrips(t *testing.T) {
 	t.Helper()
-	_, output, input := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, input := adversarialVirtualPair(t)
 	want := make([]int16, audio.FrameSize-1)
 	for index := range want {
 		want[index] = int16(index - 200)
@@ -300,7 +300,7 @@ func capacityExactFinalRemainderRoundTrips(t *testing.T) {
 
 func capacityCancelledExactReadReturnsContextError(t *testing.T) {
 	t.Helper()
-	_, _, input := adversarialVirtualPair(t, audio.SampleRate)
+	_, _, input := adversarialVirtualPair(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := input.ReadSamples(ctx, make([]int16, 1)); !errors.Is(err, context.Canceled) {
@@ -310,7 +310,7 @@ func capacityCancelledExactReadReturnsContextError(t *testing.T) {
 
 func capacitySustainedPacedFIFOHasNoDrops(t *testing.T) {
 	t.Helper()
-	_, output, input := adversarialVirtualPair(t, audio.SampleRate)
+	_, output, input := adversarialVirtualPair(t)
 	const frames = 40
 	producerErr := make(chan error, 1)
 	go func() {
@@ -366,8 +366,9 @@ func capacityMalformedFormatRejectsWatermarks(t *testing.T) {
 	}
 }
 
-func adversarialVirtualPair(t *testing.T, rate int) (*VirtualRegistry, *VirtualStream, *VirtualStream) {
+func adversarialVirtualPair(t *testing.T) (*VirtualRegistry, *VirtualStream, *VirtualStream) {
 	t.Helper()
+	rate := audio.SampleRate
 	capability := VirtualCapability{SampleRate: rate, Channels: audio.Channels, BitDepth: audio.DeviceBitDepthPCM16, Format: audio.DeviceEncodingPCM16}
 	registry, err := NewVirtualRegistry(VirtualBackendConfig{
 		Devices: []VirtualDeviceConfig{

@@ -136,7 +136,7 @@ func (s *rtcDevicePlaybackObservationState) consumeModelChunkLocked(deviceID dev
 	segment := &s.segments[0]
 	take := minInt(segment.remaining, remaining)
 	kind := playbackObservationKind(segment)
-	s.publishRangeLocked(deviceID, rate, kind, segment.kind, segment.response.asPlaybackResponse(), segment.generation, start+uint64(offset), take, observationPCM(samples, sampleCount, offset, take), true, segment.precise && kind == RTCDevicePlaybackConsumed, segment.response.reason())
+	s.publishRangeLocked(deviceID, rate, kind, segment.kind, segment.response.asPlaybackResponse(), segment.generation, start+uint64(offset), take, observationPCM(samples, sampleCount, offset, take), segment.precise && kind == RTCDevicePlaybackConsumed, segment.response.reason())
 	segment.remaining -= take
 	s.pendingSamples -= uint64(take)
 	if segment.remaining == 0 {
@@ -150,7 +150,7 @@ func (s *rtcDevicePlaybackObservationState) consumeUnattributedChunkLocked(devic
 	if take <= 0 {
 		return 0
 	}
-	s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnattributed, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, start+uint64(offset), take, observationPCM(samples, sampleCount, offset, take), true, false, "device consumed samples without retained admission metadata")
+	s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnattributed, RTCDevicePlaybackUnattributed, audio.PlaybackResponse{}, 0, start+uint64(offset), take, observationPCM(samples, sampleCount, offset, take), false, "device consumed samples without retained admission metadata")
 	s.pendingSamples -= uint64(take)
 	return take
 }
@@ -228,7 +228,7 @@ func (s *rtcDevicePlaybackObservationState) completeRender(id uint64, stats audi
 	s.consumeModelLocked(render.deviceID, render.rate, start, render.samples, render.sampleCount, modelSamples)
 	if modelSamples < render.sampleCount {
 		offset := modelSamples
-		s.publishRangeLocked(render.deviceID, render.rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(offset), render.sampleCount-offset, observationPCM(render.samples, render.sampleCount, offset, render.sampleCount-offset), true, false, "device callback zero-filled an unavailable queue range")
+		s.publishRangeLocked(render.deviceID, render.rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(offset), render.sampleCount-offset, observationPCM(render.samples, render.sampleCount, offset, render.sampleCount-offset), false, "device callback zero-filled an unavailable queue range")
 	}
 	s.flushPendingDiscardsLocked()
 }

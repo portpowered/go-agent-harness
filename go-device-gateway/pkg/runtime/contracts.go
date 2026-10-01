@@ -294,12 +294,13 @@ func (s *rtcDevicePlaybackObservationState) accountUntrackedRender(deviceID devi
 	s.deviceClock += uint64(len(samples))
 	s.consumeModelLocked(deviceID, rate, start, samples, len(samples), modelSamples)
 	if modelSamples < len(samples) {
-		s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(modelSamples), len(samples)-modelSamples, observationPCM(samples, len(samples), modelSamples, len(samples)-modelSamples), true, false, "device callback correlation queue saturated; remaining range was zero-filled")
+		s.publishRangeLocked(deviceID, rate, RTCDevicePlaybackUnderflow, RTCDevicePlaybackUnderflow, audio.PlaybackResponse{}, 0, start+uint64(modelSamples), len(samples)-modelSamples, observationPCM(samples, len(samples), modelSamples, len(samples)-modelSamples), false, "device callback correlation queue saturated; remaining range was zero-filled")
 	}
 	s.flushPendingDiscardsLocked()
 }
 
-func (s *rtcDevicePlaybackObservationState) publishRangeLocked(deviceID devicegw.DeviceID, rate int, kind, contentKind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, start uint64, sampleCount int, samples []int16, actual, precise bool, reason string) {
+func (s *rtcDevicePlaybackObservationState) publishRangeLocked(deviceID devicegw.DeviceID, rate int, kind, contentKind RTCDevicePlaybackObservationKind, response audio.PlaybackResponse, generation uint64, start uint64, sampleCount int, samples []int16, precise bool, reason string) {
+	actual := true
 	event := RTCDevicePlaybackObservation{
 		Kind: kind, ContentKind: contentKind, DeviceID: deviceID,
 		PlaybackResponse: response, Generation: generation, SampleRate: rate,

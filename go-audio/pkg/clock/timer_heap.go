@@ -29,9 +29,8 @@ func (h *deterministicTimerHeap) push(timer *deterministicTimer) {
 	h.up(timer.index)
 }
 
-// remove deletes and returns the timer at index i; remove(0) pops the
-// earliest timer.
-func (h *deterministicTimerHeap) remove(i int) *deterministicTimer {
+// remove deletes the timer at index i; remove(0) pops the earliest timer.
+func (h *deterministicTimerHeap) remove(i int) {
 	last := len(*h) - 1
 	if i != last {
 		h.swap(i, last)
@@ -43,7 +42,6 @@ func (h *deterministicTimerHeap) remove(i int) *deterministicTimer {
 	(*h)[last] = nil
 	timer.index = -1
 	*h = (*h)[:last]
-	return timer
 }
 
 func (h *deterministicTimerHeap) up(child int) {

@@ -27,9 +27,7 @@ func AnalyzePCM16Room(input PCM16RoomInput, config PCM16RoomAnalysisConfig) (PCM
 	if err := state.measureLoudness(); err != nil {
 		return PCM16RoomAnalysis{}, err
 	}
-	if err := state.measureBargeIns(); err != nil {
-		return PCM16RoomAnalysis{}, err
-	}
+	state.measureBargeIns()
 	return state.result, nil
 }
 

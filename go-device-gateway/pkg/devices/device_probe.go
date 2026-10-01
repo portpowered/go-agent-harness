@@ -83,7 +83,8 @@ func ProbeDeviceAvailability(registry DeviceRegistry) (DeviceProbeAvailability, 
 	result.InputDeviceCount = len(result.InputDevices)
 	result.OutputDeviceCount = len(result.OutputDevices)
 	if result.InputDeviceCount == 0 || result.OutputDeviceCount == 0 {
-		result.Status, result.ReasonCode, result.Reason = deviceProbeSkipReason(result.InputDeviceCount, result.OutputDeviceCount)
+		result.Status = DeviceProbeStatusSkip
+		result.ReasonCode, result.Reason = deviceProbeSkipReason(result.InputDeviceCount, result.OutputDeviceCount)
 		return result, nil
 	}
 	result.Status = DeviceProbeStatusReady
@@ -99,13 +100,15 @@ func sortProbeDevices(devices []Device) {
 	})
 }
 
-func deviceProbeSkipReason(inputCount, outputCount int) (DeviceProbeStatus, DeviceProbeSkipCode, string) {
+// deviceProbeSkipReason explains a skipped probe that lacks input, output or
+// both devices.
+func deviceProbeSkipReason(inputCount, outputCount int) (DeviceProbeSkipCode, string) {
 	switch {
 	case inputCount == 0 && outputCount == 0:
-		return DeviceProbeStatusSkip, DeviceProbeSkipNoDevices, "no audio input or output device"
+		return DeviceProbeSkipNoDevices, "no audio input or output device"
 	case inputCount == 0:
-		return DeviceProbeStatusSkip, DeviceProbeSkipNoInputDevice, "no audio input device"
+		return DeviceProbeSkipNoInputDevice, "no audio input device"
 	default:
-		return DeviceProbeStatusSkip, DeviceProbeSkipNoOutputDevice, "no audio output device"
+		return DeviceProbeSkipNoOutputDevice, "no audio output device"
 	}
 }

@@ -28,5 +28,5 @@ func TestFileSourceModeZeroFileOpen(t *testing.T) {
 		closeForTest(t, source)
 		return
 	}
-	assertSourceStreamError(t, err, "open", path, "raw PCM16")
+	assertSourceStreamError(t, err, "open", path)
 }

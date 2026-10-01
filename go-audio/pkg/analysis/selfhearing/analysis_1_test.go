@@ -107,7 +107,7 @@ func TestPCM16SelfHearingDetectsLaggedAndInvertedPlayback(t *testing.T) {
 			detector := newSelfHearingDetector(t, selfhearing.DefaultSelfHearingConfig())
 			playback := testSignal(160, 17)
 			capture := test.transform(playback)
-			observation := feedPairedSignals(t, detector, playback, capture, 1000, 30)
+			observation := feedPairedSignals(t, detector, playback, capture, 30)
 			if !observation.Confirmed() {
 				t.Fatalf("observation = %+v, want confirmed self-hearing", observation)
 			}
@@ -139,7 +139,7 @@ func TestPCM16SelfHearingDetectsFarFieldDelayedRoomResponse(t *testing.T) {
 		capture[index] = int16(math.Round(value))
 	}
 
-	observation := feedPairedSignals(t, detector, playback, capture, 1000, 240)
+	observation := feedPairedSignals(t, detector, playback, capture, 240)
 	if !observation.Confirmed() {
 		t.Fatalf("far-field observation = %+v, want confirmed self-hearing", observation)
 	}
@@ -205,7 +205,7 @@ func TestPCM16SelfHearingDetectsFarFieldAfterSilentCaptureResets(t *testing.T) {
 func TestPCM16SelfHearingClassifiesIndependentSpeechAndSilence(t *testing.T) {
 	t.Run("independent speech is non-feedback", func(t *testing.T) {
 		detector := newSelfHearingDetector(t, selfhearing.DefaultSelfHearingConfig())
-		observation := feedPairedSignals(t, detector, testSignal(160, 19), testSignal(160, 71), 1000, 30)
+		observation := feedPairedSignals(t, detector, testSignal(160, 19), testSignal(160, 71), 30)
 		if observation.Classification != selfhearing.PCM16SelfHearingNonFeedback {
 			t.Fatalf("classification = %q, want non-feedback; observation = %+v", observation.Classification, observation)
 		}
@@ -216,7 +216,7 @@ func TestPCM16SelfHearingClassifiesIndependentSpeechAndSilence(t *testing.T) {
 
 	t.Run("digital silence has no evidence", func(t *testing.T) {
 		detector := newSelfHearingDetector(t, selfhearing.DefaultSelfHearingConfig())
-		observation := feedPairedSignals(t, detector, make([]int16, 160), make([]int16, 160), 1000, 30)
+		observation := feedPairedSignals(t, detector, make([]int16, 160), make([]int16, 160), 30)
 		if observation.Classification != selfhearing.PCM16SelfHearingNoEvidence {
 			t.Fatalf("classification = %q, want no-evidence; observation = %+v", observation.Classification, observation)
 		}
@@ -227,7 +227,7 @@ func TestPCM16SelfHearingClassifiesIndependentSpeechAndSilence(t *testing.T) {
 		config.AnalysisWindow = 100 * time.Millisecond
 		config.MinimumEvidence = 80 * time.Millisecond
 		detector := newSelfHearingDetector(t, config)
-		observation := feedPairedSignals(t, detector, testSignal(60, 23), testSignal(60, 23), 1000, 0)
+		observation := feedPairedSignals(t, detector, testSignal(60, 23), testSignal(60, 23), 0)
 		if observation.Classification != selfhearing.PCM16SelfHearingInsufficientEvidence {
 			t.Fatalf("classification = %q, want insufficient-evidence; observation = %+v", observation.Classification, observation)
 		}
@@ -238,7 +238,7 @@ func TestPCM16SelfHearingUsesInclusiveThresholdBoundary(t *testing.T) {
 	config := selfhearing.DefaultSelfHearingConfig()
 	config.CorrelationThreshold = 1
 	detector := newSelfHearingDetector(t, config)
-	observation := feedPairedSignals(t, detector, testSignal(160, 29), testSignal(160, 29), 1000, 0)
+	observation := feedPairedSignals(t, detector, testSignal(160, 29), testSignal(160, 29), 0)
 	if !observation.Confirmed() {
 		t.Fatalf("observation = %+v, want a perfect correlation at inclusive threshold 1", observation)
 	}

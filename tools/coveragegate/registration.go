@@ -130,7 +130,7 @@ func listModuleImportPaths(ctx context.Context, goBinary, absoluteModuleDir, mod
 	if workspaceFile == "" {
 		workspaceFile = "off"
 	}
-	command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
+	command.Env = setEnvironment(os.Environ(), workspaceFile)
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
@@ -218,7 +218,8 @@ func ValidateRegistration(manifest Manifest, discovered []string) error {
 	return nil
 }
 
-func setEnvironment(environment []string, key, value string) []string {
+func setEnvironment(environment []string, value string) []string {
+	key := "GOWORK"
 	prefix := key + "="
 	result := make([]string, 0, len(environment)+1)
 	for _, entry := range environment {

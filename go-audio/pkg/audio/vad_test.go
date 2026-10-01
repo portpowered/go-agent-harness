@@ -8,7 +8,8 @@ import (
 
 // makeSpeechFrame returns one FrameSize frame of high-energy samples
 // (alternating +amplitude / -amplitude) that passes DefaultVADConfig.EnergyThreshold.
-func makeSpeechFrame(amplitude int16) []int16 {
+func makeSpeechFrame() []int16 {
+	const amplitude int16 = 1000
 	frame := make([]int16, audio.FrameSize)
 	for i := range frame {
 		if i%2 == 0 {
@@ -46,7 +47,7 @@ func TestVAD_SilenceNeverTriggersInclusion(t *testing.T) {
 // consecutive speech frames do not start an utterance.
 func TestVAD_SpeechBelow_MinSpeechFrames(t *testing.T) {
 	vad := audio.NewVAD(audio.DefaultVADConfig())
-	speech := makeSpeechFrame(1000)
+	speech := makeSpeechFrame()
 
 	below := audio.DefaultVADConfig().MinSpeechFrames - 1
 	for i := range below {
@@ -64,7 +65,7 @@ func TestVAD_SpeechBelow_MinSpeechFrames(t *testing.T) {
 // exactly when MinSpeechFrames consecutive speech frames have been seen.
 func TestVAD_SpeechDetectedAfterMinSpeechFrames(t *testing.T) {
 	vad := audio.NewVAD(audio.DefaultVADConfig())
-	speech := makeSpeechFrame(1000)
+	speech := makeSpeechFrame()
 
 	threshold := audio.DefaultVADConfig().MinSpeechFrames
 
@@ -90,7 +91,7 @@ func TestVAD_SpeechDetectedAfterMinSpeechFrames(t *testing.T) {
 // the utterance is active is included.
 func TestVAD_SpeechContinuesWhileActive(t *testing.T) {
 	vad := audio.NewVAD(audio.DefaultVADConfig())
-	speech := makeSpeechFrame(1000)
+	speech := makeSpeechFrame()
 
 	// Prime the detector until inSpeech=true.
 	for range audio.DefaultVADConfig().MinSpeechFrames {
@@ -112,7 +113,7 @@ func TestVAD_SpeechContinuesWhileActive(t *testing.T) {
 // complete=true after MaxSilenceFrames consecutive silence frames follow speech.
 func TestVAD_UtteranceEndsAfterMaxSilenceFrames(t *testing.T) {
 	vad := audio.NewVAD(audio.DefaultVADConfig())
-	speech := makeSpeechFrame(1000)
+	speech := makeSpeechFrame()
 	silence := makeSilenceFrame()
 
 	// Start an utterance.
@@ -140,7 +141,7 @@ func TestVAD_UtteranceEndsAfterMaxSilenceFrames(t *testing.T) {
 // TestVAD_Reset clears state so a subsequent call starts fresh.
 func TestVAD_Reset(t *testing.T) {
 	vad := audio.NewVAD(audio.DefaultVADConfig())
-	speech := makeSpeechFrame(1000)
+	speech := makeSpeechFrame()
 
 	// Advance into an active utterance.
 	for range audio.DefaultVADConfig().MinSpeechFrames {

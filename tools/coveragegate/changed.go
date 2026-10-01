@@ -115,7 +115,7 @@ func listModulePackagesJSON(ctx context.Context, goBinary, absoluteModuleDir, mo
 	if workspaceFile == "" {
 		workspaceFile = "off"
 	}
-	command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
+	command.Env = setEnvironment(os.Environ(), workspaceFile)
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {

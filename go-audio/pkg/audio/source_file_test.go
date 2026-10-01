@@ -180,13 +180,13 @@ func TestFileSourceUnreadableInput(t *testing.T) {
 
 		source, err := NewFileSource(path, nil)
 		if err != nil {
-			assertSourceStreamError(t, err, "open", path, "raw PCM16")
+			assertSourceStreamError(t, err, "open", path)
 			return
 		}
 		defer closeForTest(t, source)
 
 		err = source.ReadFrame(context.Background(), make([]int16, FrameSize))
-		assertSourceStreamError(t, err, "read", path, "raw PCM16")
+		assertSourceStreamError(t, err, "read", path)
 	})
 }
 
@@ -279,11 +279,12 @@ func TestFileSourceUnderlyingReadError(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("ReadFrame() = %v, want underlying read error", err)
 	}
-	assertSourceStreamError(t, err, "read", "input.raw", "raw PCM16")
+	assertSourceStreamError(t, err, "read", "input.raw")
 }
 
-func assertSourceStreamError(t *testing.T, err error, operation, path, format string) {
+func assertSourceStreamError(t *testing.T, err error, operation, path string) {
 	t.Helper()
+	format := "raw PCM16"
 	if err == nil {
 		t.Fatalf("error = nil, want %s error for %q", operation, path)
 	}

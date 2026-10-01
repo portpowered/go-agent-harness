@@ -194,7 +194,7 @@ func goListTestDeps(ctx context.Context, goBinary, moduleDir, tags string, stand
 			workspaceFile = nearest
 		}
 	}
-	command.Env = setEnvironment(os.Environ(), "GOWORK", workspaceFile)
+	command.Env = setEnvironment(os.Environ(), workspaceFile)
 	var stdout, stderr strings.Builder
 	command.Stdout = &stdout
 	command.Stderr = &stderr

@@ -48,7 +48,7 @@ func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 // It intentionally uses the virtual callback seam; it is not native WASAPI or
 // acoustic evidence.
 func TestWindowsPortablePlaybackBurstPreservesFIFOCanonicalCaptureEnergy(t *testing.T) {
-	_, output, input := adversarialVirtualPair(t, 24000)
+	_, output, input := adversarialVirtualPair(t)
 	testPacedPlaybackBackend(t, output, func(raw []byte) {
 		samples := make([]int16, audio.FrameSize)
 		if err := input.ReadFrame(context.Background(), samples); err != nil {
