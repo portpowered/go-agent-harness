@@ -21,7 +21,7 @@ import (
 func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 	nearEnd := make([]int16, audio.FrameSize*2)
 	for index := range nearEnd {
-		nearEnd[index] = int16(index + 1) //nolint:gosec // bounded deterministic fixture
+		nearEnd[index] = int16(index + 1)
 	}
 	registry, err := devicegw.NewSimulatedDuplexRegistry(devicegw.DuplexScenario{
 		Seed:    37,
@@ -69,7 +69,7 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 
 	want := make([]int16, audio.FrameSize)
 	for index := range want {
-		want[index] = int16(1000 + index) //nolint:gosec // bounded deterministic fixture
+		want[index] = int16(1000 + index)
 	}
 	if err := sink.WriteFrame(context.Background(), want); err != nil {
 		t.Fatalf("write remote playback: %v", err)

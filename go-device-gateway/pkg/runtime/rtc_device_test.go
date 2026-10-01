@@ -99,7 +99,7 @@ func TestRTCDeviceSourceConvertsSupportedCaptureRateToProviderRate(t *testing.T)
 	defer closeForTest(t, "feed", feed)
 	wantCapture := make([]int16, audio.FrameSize)
 	for index := range wantCapture {
-		wantCapture[index] = int16(index*19 - 3000) //nolint:gosec // bounded test signal
+		wantCapture[index] = int16(index*19 - 3000)
 	}
 	if err := feed.WriteFrame(context.Background(), wantCapture); err != nil {
 		t.Fatalf("feed capture frame: %v", err)
@@ -156,7 +156,7 @@ func TestRTCDeviceSourceKeepsMatchedProviderRateIdentity(t *testing.T) {
 
 	want := make([]int16, audio.FrameSize)
 	for index := range want {
-		want[index] = int16(1200 - index*7) //nolint:gosec // bounded test signal
+		want[index] = int16(1200 - index*7)
 	}
 	if err := feed.WriteFrame(context.Background(), want); err != nil {
 		t.Fatalf("feed matched-rate frame: %v", err)

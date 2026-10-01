@@ -1,17 +1,18 @@
 # golangci-lint policy
 
 `make lint` runs the pinned golangci-lint (v2.9.0, through the Makefile's
-analyzer resolver) twice for every `LINT_MODULES` module, then once more for
+analyzer resolver) once for every `LINT_MODULES` module, then once more for
 Wire injector packages. Production and test files are both checked, including
 files behind opt-in build tags and platform-specific files (see
 [Build tags](#build-tags) and [Operating systems](#operating-systems)). These
 limits are separate from the stricter [architecture gate budgets](size-baselines.md)
 and do not replace them.
 
-## Hard pass: all code
+## One policy, all code
 
-[`.golangci.yml`](../../.golangci.yml) runs with `--all-code`. It has no
-`new-from-rev` filter and no baseline, so any finding in any file fails lint.
+[`.golangci.yml`](../../.golangci.yml) is the only configuration. It has no
+`new-from-rev` filter, no new-code-only pass and no baseline: every enabled
+linter applies to every file, and any finding fails lint.
 
 | Check | Limit |
 | --- | --- |
@@ -20,7 +21,21 @@ and do not replace them.
 | `revive` `file-length-limit` | 1,000 physical lines per file |
 | `funlen` | 100 lines per function (statements are not counted) |
 | `gocyclo`, `gocognit` | 30 |
-| Also enforced | `goconst`, `nilerr`, `bodyclose`, `durationcheck`, `gochecknoinits`, `nolintlint` |
+| `nestif` | 5 |
+| `dupl` | 150 tokens |
+| Correctness and error flow | `nilerr`, `nilnesserr`, `bodyclose`, `durationcheck`, `errorlint`, `contextcheck`, `containedctx`, `noctx`, `fatcontext`, `gocritic` (diagnostic tag), `gosec` (selected rules), `makezero`, `reassign`, `asasalint`, `bidichk`, `wastedassign`, `unparam`, `recvcheck`, `errname`, `predeclared`, `iface` |
+| Policy values and finite state | `goconst`, `mnd`, `exhaustive` |
+| Package state and prohibited effects | `gochecknoglobals`, `gochecknoinits`, `forbidigo`, `depguard`, `godox` |
+| Modern standard-library idioms | `exptostd`, `canonicalheader`, `usestdlibvars`, `mirror`, `copyloopvar`, `intrange`, `misspell`, `nakedret` |
+| Tests | `testifylint`, `usetesting`, `tparallel`, `thelper` |
+| Suppression hygiene | `nolintlint` |
+
+`forbidigo` runs with `analyze-types`, so patterns match the resolved package
+and receiver type: `os.Getwd`, `os.UserHomeDir`, `fmt.Print*`, `time.Sleep`,
+`context.Background`/`TODO`, `panic`, and `Skip*` on `testing.T`, `B`, `TB`
+and `F` (through `testing.common`) are forbidden. Context roots and panics are
+allowed in `cmd/` packages, `main.go` files and tests. Generated files (for
+example Wire's `wire_gen.go`) are excluded.
 
 Every finding is reported (`uniq-by-line: false`). A `//nolint` directive must
 name one linter and give a reason. An unused directive is itself a finding.
@@ -29,27 +44,41 @@ Some errors are safe to discard, for example a `Close` failure after a
 successful read. Discard them with a documented helper instead of a blank
 assignment. Do not turn a success into a failure because cleanup failed.
 
-## New-code pass: changed code only
+Paths in findings and in exclusion rules are relative to the repository root
+(`run.relative-path-mode: gitroot`), for example `agent-cli/internal/...`,
+even though golangci-lint runs once per module directory.
 
-[`.golangci.new.yml`](../../.golangci.new.yml) runs with
-`--new-from-rev $(LINT_BASE)` (default `origin/main`). It covers linters that
-still have legacy findings: `errorlint`, `contextcheck`, `mnd`, `exhaustive`,
-`gochecknoglobals` and `forbidigo`. New and modified lines must be clean.
+## Round-3 cleanup (temporary exclusions)
+
+The single policy replaced a two-pass setup (hard limits for all code plus a
+`.golangci.new.yml` pass for changed lines only) and added linters that still
+had findings. To land it without a flag day, `.golangci.yml` ends with
+temporary `exclusions.rules`:
+
+- one rule per module group, tagged `# round-3 cleanup: lint-<group> track`
+  (`agent-cli`, `go-agent-runtime`, `loop-gateway` for go-agent-loop and
+  go-llm-gateway, `media-tools` for go-audio, go-device-gateway and the
+  tools, scripts and test modules). Each rule lists only the linters that
+  had findings in that module when the policy landed;
+- file-scoped rules tagged `# owned by <track>` for paths that a refactor
+  track is rewriting.
+
+These rules only shrink. A track removes linters from its rule as it fixes
+them and deletes the rule when it is empty. Do not add a linter or a path to a
+temporary rule; fix the finding or justify a specific `//nolint` instead.
 
 ## Build tags
 
-Both configurations set `run.build-tags` to the opt-in test tags `live`, `e2e`,
+The configuration sets `run.build-tags` to the opt-in test tags `live`, `e2e`,
 `e2e_internal`, `stress` and `sessioncapacityramp`. Files behind these tags are
 held to the same limits as default-tag code even though ordinary `go test`
 never compiles them. The tags load together because `e2e_internal` files use
-helpers defined in `live` files. A new opt-in test tag must be added to both
-configurations.
+helpers defined in `live` files. A new opt-in test tag must be added to it.
 
 `wireinject` cannot join that list: a Wire injector file replaces its package's
 `!wireinject` files, so loading both sets would redeclare every injector.
 `make lint-wireinject` (run by `make lint`) lints only the packages that hold a
-`//go:build wireinject` file, with `--build-tags wireinject`, through both
-passes. The generated `wire_gen.go` is excluded as generated code; `make
+`//go:build wireinject` file, with `--build-tags wireinject`. The generated `wire_gen.go` is excluded as generated code; `make
 wire-check` keeps it in sync with the injectors.
 
 `nomicrophone` selects the microphone stubs. Most stubs also build with cgo
@@ -70,17 +99,16 @@ the recorded regeneration command stable.
 
 | Lane | Command | Covers |
 | --- | --- | --- |
-| Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; new-code pass; wireinject |
-| Windows cross | `make lint-cross LINT_CROSS_GOOS=windows` | `GOOS=windows CGO_ENABLED=0`, hard pass (WASAPI, Win32 syscalls) |
-| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin CGO_ENABLED=0` plus `nomicrophone`, hard pass (darwin files without cgo, cgo and microphone stubs) |
-| Darwin cgo | `make lint-darwin-cgo` (macOS only) | hard pass with cgo on, for packages holding a cgo-constrained file (CoreAudio capture, display permission) |
+| Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; wireinject |
+| Windows cross | `make lint-cross LINT_CROSS_GOOS=windows` | `GOOS=windows CGO_ENABLED=0` (WASAPI, Win32 syscalls) |
+| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, cgo and microphone stubs) |
+| Darwin cgo | `make lint-darwin-cgo` (macOS only) | cgo on, for packages holding a cgo-constrained file (CoreAudio capture, display permission) |
 
 `make lint-cross` runs both cross lanes by default. Cross-linting needs no C
 toolchain because cgo is disabled. Darwin cgo files need the macOS SDK, so
 `make lint-darwin-cgo` refuses to run elsewhere. It selects packages by their
 `//go:build ... cgo` constraints, so a new cgo package is picked up without
-configuration changes. The cross lanes run only the hard pass. The new-code
-pass runs on Linux.
+configuration changes.
 
 `LINT_SHARD` limits `make lint` and `make lint-cross` to `agent-cli`, to
 `libraries` (every other lint module), or to one half of the libraries:
@@ -89,16 +117,8 @@ or `support` (the gateways, tools and scripts).
 `make lint` and `make lint-cross` lint `LINT_JOBS` modules at once (default
 4). Each module's output prints as one block when that module finishes.
 
-The new-code pass skips a module that has no Go file in `git diff
-$(LINT_BASE)`, untracked files included. `--new-from-rev` reports only issues
-on lines in that diff, so such a module cannot report anything. The module
-still runs when its `go.mod` or `go.sum`, either configuration, the `Makefile`
-or the lint scripts differ from the base, so a broken configuration or tooling
-change is always loaded. On a `main` push, where `origin/main` is the
-checked-out commit, the pass has nothing to check.
-
 Every lint entry point (`make lint`, `make lint-cross`, `make
-lint-darwin-cgo`) first loads both configurations with `golangci-lint
+lint-darwin-cgo`) first loads the configuration with `golangci-lint
 linters`, including on `main` pushes. This rejects unknown linters and
 configurations that fail to load, and works offline. `golangci-lint config
 verify` is not used because it downloads its JSON schema from GitHub. Unknown
@@ -124,27 +144,24 @@ A fixture with deliberate `go vet` and staticcheck violations gave the same 8
 `go vet` findings and all 18 standalone staticcheck findings under
 `.golangci.yml`, plus SA9003 and QF1003.
 
-## Promoting a linter to the hard pass
+## Adding a linter
 
-1. Measure its repository-wide count without `new-from-rev` on `GOOS=linux`,
-   `darwin` and `windows`, with the configured build tags and in a
-   `wireinject` pass.
+1. Measure its repository-wide count on `GOOS=linux`, `darwin` and `windows`,
+   with the configured build tags, in a `wireinject` pass and with
+   `make lint-darwin-cgo`.
 2. Fix every finding.
-3. Move the linter and its settings from `.golangci.new.yml` to `.golangci.yml`
-   in the same change.
+3. Enable the linter in `.golangci.yml` in the same change.
 
 ## Run locally
 
 ```sh
-make lint             # Linux/host: default + opt-in tags, new-code pass, wireinject
+make lint             # Linux/host: default + opt-in tags, wireinject
 make lint-cross       # GOOS=windows and GOOS=darwin, cgo disabled
 make lint-darwin-cgo  # macOS only: cgo-constrained packages
-# One module, hard pass only:
-scripts/golangci-lint-working-tree.sh --analyzer <pinned golangci-lint> \
-  --all-code --config .golangci.yml --module agent-cli --repo . -- ./...
-# One module, new-code pass only:
-scripts/golangci-lint-working-tree.sh --analyzer <pinned golangci-lint> \
-  --config .golangci.new.yml --base origin/main --module agent-cli --repo . -- ./...
+make lint-module LINT_MODULE=agent-cli   # one module
+# or directly:
+scripts/golangci-lint-module.sh --analyzer <pinned golangci-lint> \
+  --config .golangci.yml --module agent-cli --repo . -- ./...
 ```
 
 Findings depend on the target platform. When you change platform-tagged files,

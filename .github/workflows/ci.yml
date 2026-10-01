@@ -131,9 +131,9 @@ jobs:
   # plus any linux lane 163-170s (runs 36210316761, 36210652899,
   # 36211278527, 36211944579). The single lanes took 66-148s cold there.
   #
-  # Every lane enforces the hard limits in .golangci.yml (which also loads the
-  # opt-in live/e2e/e2e_internal/stress/sessioncapacityramp test tags). The
-  # linux lanes add the new-code pass and the wireinject pass; the windows
+  # Every lane enforces the single policy in .golangci.yml on all code (it
+  # also loads the opt-in live/e2e/e2e_internal/stress/sessioncapacityramp
+  # test tags). The linux lanes add the wireinject pass; the windows
   # and darwin lanes lint with cgo disabled (darwin also with the
   # nomicrophone tag). The cgo-constrained darwin packages are linted
   # natively in CI (WebMCP Chrome), which already runs on macOS. See

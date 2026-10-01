@@ -79,7 +79,7 @@ func adversarialStem(count, peak, stride int) []int16 {
 	for index := range result {
 		state = state*1664525 + 1013904223
 		value := int(state>>16)%((peak*2)+1) - peak
-		result[index] = int16(value) //nolint:gosec // peak is bounded by the callers above
+		result[index] = int16(value)
 	}
 	return result
 }
@@ -88,7 +88,7 @@ func adversarialPeriodic(count, peak int) []int16 {
 	pattern := []int{0, peak / 2, peak, peak / 2, 0, -peak / 2, -peak, -peak / 2}
 	result := make([]int16, count)
 	for index := range result {
-		result[index] = int16(pattern[index%len(pattern)]) //nolint:gosec // peak is bounded
+		result[index] = int16(pattern[index%len(pattern)])
 	}
 	return result
 }

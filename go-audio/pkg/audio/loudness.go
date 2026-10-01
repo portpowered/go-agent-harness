@@ -126,12 +126,12 @@ func (n *LoudnessNormalizer) ProcessBytes(pcm []byte) []byte {
 	}
 	samples := make([]int16, len(pcm)/2)
 	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:])) //nolint:gosec // PCM16 bit pattern is intentional
+		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:]))
 	}
 	out := n.Process(samples)
 	encoded := make([]byte, len(out)*2)
 	for index, sample := range out {
-		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample)) //nolint:gosec // PCM16 bit pattern is intentional
+		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
 	}
 	return encoded
 }

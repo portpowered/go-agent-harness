@@ -122,10 +122,10 @@ func openLoopbackTap(t *testing.T, registry *devicegw.VirtualRegistry, nativeID 
 // to an arbitrary sample count.
 func loopbackTone(n, seed int) []int16 {
 	samples := make([]int16, n)
-	state := uint32(seed*7919 + 1) //nolint:gosec // deterministic bounded fixture
+	state := uint32(seed*7919 + 1)
 	for i := range samples {
 		state = state*1664525 + 1013904223
-		samples[i] = int16(int32(state>>16)%24000 - 12000) //nolint:gosec // bounded deterministic PCM fixture
+		samples[i] = int16(int32(state>>16)%24000 - 12000)
 	}
 	return samples
 }
