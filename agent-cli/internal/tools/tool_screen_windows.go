@@ -6,31 +6,14 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"syscall"
 	"unsafe"
 )
 
-var (
-	gdi32dll = syscall.NewLazyDLL("gdi32.dll")
-
-	// user32.dll procs for screen capture. user32dll is declared in
-	// tool_mouse_windows.go; both files share the windows build tag.
-	procGetDC     = user32dll.NewProc("GetDC")
-	procReleaseDC = user32dll.NewProc("ReleaseDC")
-
-	procCreateCompatibleDC     = gdi32dll.NewProc("CreateCompatibleDC")
-	procCreateCompatibleBitmap = gdi32dll.NewProc("CreateCompatibleBitmap")
-	procSelectObject           = gdi32dll.NewProc("SelectObject")
-	procBitBlt                 = gdi32dll.NewProc("BitBlt")
-	procGetDIBits              = gdi32dll.NewProc("GetDIBits")
-	procDeleteObject           = gdi32dll.NewProc("DeleteObject")
-	procDeleteDC               = gdi32dll.NewProc("DeleteDC")
-)
-
 const (
-	srccopy      uint32 = 0x00CC0020
-	dibRGBColors uint32 = 0
-	biRGB        uint32 = 0
+	bgraBytesPerPixel        = 4
+	srccopy           uint32 = 0x00CC0020
+	dibRGBColors      uint32 = 0
+	biRGB             uint32 = 0
 )
 
 func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
@@ -67,13 +50,10 @@ type bitmapInfo struct {
 }
 
 func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return 0, err
-		}
+	if err := ctx.Err(); err != nil {
+		return 0, err
 	}
-	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	w, h := newWindowsScreenProcs().primaryDisplaySize()
 	if w == 0 || h == 0 {
 		return 0, fmt.Errorf("GetSystemMetrics returned an empty display")
 	}
@@ -81,16 +61,13 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProce
 }
 
 func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ DisplayProcess) (image.Rectangle, error) {
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return image.Rectangle{}, err
-		}
+	if err := ctx.Err(); err != nil {
+		return image.Rectangle{}, err
 	}
 	if idx != 0 {
 		return image.Rectangle{}, fmt.Errorf("display %d not available (only 1 display(s) found)", idx)
 	}
-	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	w, h := newWindowsScreenProcs().primaryDisplaySize()
 	if w == 0 || h == 0 {
 		return image.Rectangle{}, fmt.Errorf("GetSystemMetrics returned an empty display")
 	}
@@ -98,19 +75,14 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ Di
 }
 
 func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ DisplayProcess) error {
-	if ctx != nil {
-		return ctx.Err()
-	}
-	return nil
+	return ctx.Err()
 }
 
 // screenCaptureDisplayWithContextAndProcess uses the Windows GDI API to copy
 // the requested screen region into an image.RGBA.
 func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	width := bounds.Dx()
 	height := bounds.Dy()
@@ -118,32 +90,33 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 		return nil, fmt.Errorf("display bounds are empty")
 	}
 
+	procs := newWindowsScreenProcs()
 	// Obtain the device context for the entire screen.
-	hScreen, _, _ := procGetDC.Call(0)
+	hScreen, _, _ := procs.getDC.Call(0)
 	if hScreen == 0 {
 		return nil, fmt.Errorf("GetDC failed")
 	}
-	defer procReleaseDC.Call(0, hScreen)
+	defer procs.releaseDC.Call(0, hScreen)
 
 	// Create a compatible (in-memory) device context.
-	hMemDC, _, _ := procCreateCompatibleDC.Call(hScreen)
+	hMemDC, _, _ := procs.createCompatibleDC.Call(hScreen)
 	if hMemDC == 0 {
 		return nil, fmt.Errorf("CreateCompatibleDC failed")
 	}
-	defer procDeleteDC.Call(hMemDC)
+	defer procs.deleteDC.Call(hMemDC)
 
 	// Create a compatible bitmap to receive the screen content.
-	hBitmap, _, _ := procCreateCompatibleBitmap.Call(hScreen, uintptr(width), uintptr(height))
+	hBitmap, _, _ := procs.createCompatibleBitmap.Call(hScreen, uintptr(width), uintptr(height))
 	if hBitmap == 0 {
 		return nil, fmt.Errorf("CreateCompatibleBitmap failed")
 	}
-	defer procDeleteObject.Call(hBitmap)
+	defer procs.deleteObject.Call(hBitmap)
 
 	// Select the bitmap into the memory DC.
-	procSelectObject.Call(hMemDC, hBitmap)
+	procs.selectObj.Call(hMemDC, hBitmap)
 
 	// BitBlt copies the screen region into the memory bitmap.
-	ret, _, _ := procBitBlt.Call(
+	ret, _, _ := procs.bitBlt.Call(
 		hMemDC, 0, 0, uintptr(width), uintptr(height),
 		hScreen, uintptr(bounds.Min.X), uintptr(bounds.Min.Y),
 		uintptr(srccopy),
@@ -162,8 +135,8 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	bi.Header.Compression = biRGB
 
 	// Allocate a pixel buffer and copy the bitmap bits.
-	pix := make([]byte, width*height*4)
-	ret, _, _ = procGetDIBits.Call(
+	pix := make([]byte, width*height*bgraBytesPerPixel)
+	ret, _, _ = procs.getDIBits.Call(
 		hScreen, hBitmap,
 		0, uintptr(height),
 		uintptr(unsafe.Pointer(&pix[0])),
@@ -173,10 +146,8 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	if ret == 0 {
 		return nil, fmt.Errorf("GetDIBits failed")
 	}
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	// GDI returns pixels in BGRA order; convert to Go's RGBA order.

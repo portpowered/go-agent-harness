@@ -91,7 +91,7 @@ func unmarkToolExecutorReplacement(executor messages.ToolExecutor) messages.Tool
 }
 
 // FlagsSet provides global and command-specific CLI flags.
-var FlagsSet = wire.NewSet(
+var FlagsSet = wire.NewSet( //nolint:gochecknoglobals // Wire resolves provider sets only from package-level variables
 	flags.NewGlobalFlags,
 	flags.NewAskFlags,
 	flags.NewChatFlags,
@@ -297,7 +297,7 @@ func provideLiveReplayService() runtimeReplay.Service {
 }
 
 // CliSet provides CLI commands, router, and root.
-var CliSet = wire.NewSet(
+var CliSet = wire.NewSet( //nolint:gochecknoglobals // Wire resolves provider sets only from package-level variables
 	FlagsSet,
 	cli.NewRootCommand,
 	cli.NewAskCommand,
