@@ -1,11 +1,8 @@
 package cli
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -19,6 +16,8 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
@@ -128,7 +127,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	}
 
 	sessionInput := readDeviceProbeSessionInput(t, sessionContext, peers)
-	sendDeviceProbeUserTurn(t, sessionContext, runner, session, pcm16ProbeBytes(sessionInput))
+	sendDeviceProbeUserTurn(t, sessionContext, runner, session, codec.EncodePCM16(sessionInput))
 
 	// The provider-side response is delivered through the same production
 	// session runner boundary as a live session. Route its raw PCM delta to the
@@ -137,7 +136,7 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	// selected input, allowing this CI-safe proof to observe the emitted frame
 	// through the same registry binding surface.
 	responseSamples := voicedDeviceProbeFrame()
-	responsePCM := pcm16ProbeBytes(responseSamples)
+	responsePCM := codec.EncodePCM16(responseSamples)
 	deliverDeviceProbeResponse(t, sessionContext, runner, session, responsePCM)
 
 	assertDeviceProbeSpeakerEmission(t, sessionContext, sink, source, responseSamples, responsePCM)
@@ -307,7 +306,7 @@ func (t *deviceProbeOutputTap) WriteFrame(ctx context.Context, frame []int16) er
 	if err := t.sink.WriteFrame(ctx, frame); err != nil {
 		return err
 	}
-	t.rms = append(t.rms, pcm16ProbeRMS(frame))
+	t.rms = append(t.rms, codec.RMS(frame))
 	return nil
 }
 
@@ -319,7 +318,7 @@ func (t *deviceProbeOutputTap) LastRMS() float64 {
 }
 
 func assertDeviceProbeEnergy(label string, samples []int16) error {
-	rms := pcm16ProbeRMS(samples)
+	rms := codec.RMS(samples)
 	threshold := audio.DefaultVADConfig().EnergyThreshold
 	if rms <= threshold {
 		return fmt.Errorf("%s RMS = %.2f, want > %.2f (silence threshold)", label, rms, threshold)
@@ -525,26 +524,6 @@ func voicedDeviceProbeFrame() []int16 {
 		frame[index] = int16(1400 * math.Sin(2*math.Pi*440*float64(index)/audio.SampleRate))
 	}
 	return frame
-}
-
-func pcm16ProbeRMS(samples []int16) float64 {
-	if len(samples) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, sample := range samples {
-		value := float64(sample)
-		sum += value * value
-	}
-	return math.Sqrt(sum / float64(len(samples)))
-}
-
-func pcm16ProbeBytes(samples []int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
-	}
-	return pcm
 }
 
 type deviceProbeSessionInferencer struct {

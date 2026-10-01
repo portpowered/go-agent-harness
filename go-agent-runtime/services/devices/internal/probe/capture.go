@@ -26,7 +26,7 @@ func captureLiveDeviceProbeInput(ctx context.Context, source *devicegw.DeviceSou
 			return frameCount, maxRMS, fmt.Errorf("read selected microphone: %w", err)
 		}
 		pending = append(pending, readFrame...)
-		if rms := liveDeviceProbeRMS(readFrame); rms > maxRMS {
+		if rms := codec.RMS(readFrame); rms > maxRMS {
 			maxRMS = rms
 		}
 		var err error
@@ -50,7 +50,7 @@ func forwardProbeFrames(ctx context.Context, pending []int16, link *liveDevicePr
 		if err != nil {
 			return pending, frameCount, fmt.Errorf("resample microphone frame for session: %w", err)
 		}
-		if err := sendProbeAudio(ctx, runner, liveDeviceProbePCMBytes(providerFrame)); err != nil {
+		if err := sendProbeAudio(ctx, runner, codec.EncodePCM16(providerFrame)); err != nil {
 			return pending, frameCount, err
 		}
 		frameCount++
@@ -60,12 +60,4 @@ func forwardProbeFrames(ctx context.Context, pending []int16, link *liveDevicePr
 
 func sendProbeAudio(ctx context.Context, runner *participants.ModelRunner, pcm []byte) error {
 	return runner.EnqueueSessionInput(ctx, participants.SessionAudio(pcm, messages.SessionAudioInputPolicyDefault), participants.SessionAdmitWaiting)
-}
-
-func liveDeviceProbeRMS(samples []int16) float64 {
-	return audio.PCM16RMSEnergy(samples)
-}
-
-func liveDeviceProbePCMBytes(samples []int16) []byte {
-	return codec.EncodePCM16(samples)
 }

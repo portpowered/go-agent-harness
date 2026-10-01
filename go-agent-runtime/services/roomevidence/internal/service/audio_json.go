@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
@@ -13,10 +18,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
-	"io"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
@@ -46,23 +47,23 @@ func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, e
 		Artifact: artifact,
 		Expected: expected,
 		Actual:   actual,
-		Err:      &roomReplayBundleCause{cause: replayCause, classifications: classifications},
+		Err:      &roomReplayBundleCauseError{cause: replayCause, classifications: classifications},
 	}
 }
 
-type roomReplayBundleCause struct {
+type roomReplayBundleCauseError struct {
 	cause           error
 	classifications []error
 }
 
-func (e *roomReplayBundleCause) Error() string {
+func (e *roomReplayBundleCauseError) Error() string {
 	if e == nil || e.cause == nil {
 		return "<nil>"
 	}
 	return e.cause.Error()
 }
 
-func (e *roomReplayBundleCause) Unwrap() []error {
+func (e *roomReplayBundleCauseError) Unwrap() []error {
 	if e == nil {
 		return nil
 	}
@@ -109,13 +110,6 @@ func roomReplayStringField(object roomReplayJSONObject, names ...string) (string
 		return "", true, errors.New("expected string")
 	}
 	return strings.TrimSpace(value), true, nil
-}
-
-func firstRoomReplayStringField(primary, fallback roomReplayJSONObject, names ...string) (string, bool, error) {
-	if value, present, err := roomReplayStringField(primary, names...); present || err != nil {
-		return value, present, err
-	}
-	return roomReplayStringField(fallback, names...)
 }
 
 func decodeRoomReplayString(raw json.RawMessage) (string, bool) {

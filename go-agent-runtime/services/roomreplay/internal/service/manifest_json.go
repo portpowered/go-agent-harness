@@ -6,14 +6,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay/internal/support"
 )
 
-type roomReplayJSONObject = support.JSONObject
+type roomReplayJSONObject map[string]json.RawMessage
 
 func errOrDefault(err, fallback error) error {
-	return support.ErrOrDefault(err, fallback)
+	if err != nil {
+		return err
+	}
+	return fallback
 }
 
 func mustMarshal(value any) json.RawMessage {
@@ -25,7 +26,14 @@ func mustMarshal(value any) json.RawMessage {
 }
 
 func roomReplayObject(raw json.RawMessage) (roomReplayJSONObject, error) {
-	return support.Object(raw)
+	var object roomReplayJSONObject
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	if object == nil {
+		return nil, errors.New("expected JSON object")
+	}
+	return object, nil
 }
 
 func roomReplayRawField(object roomReplayJSONObject, names ...string) (json.RawMessage, bool) {
@@ -94,7 +102,18 @@ func firstRoomReplayIntField(primary, fallback roomReplayJSONObject, names ...st
 }
 
 func firstRoomReplayStringField(primary, fallback roomReplayJSONObject, names ...string) (string, bool, error) {
-	return support.FirstString(primary, fallback, names...)
+	for _, object := range []roomReplayJSONObject{primary, fallback} {
+		for _, name := range names {
+			if raw, present := object[name]; present {
+				value, ok := decodeRoomReplayString(raw)
+				if !ok {
+					return "", true, errors.New("expected string")
+				}
+				return strings.TrimSpace(value), true, nil
+			}
+		}
+	}
+	return "", false, errors.New("missing string")
 }
 
 func roomReplayTimeField(object roomReplayJSONObject, name string) (time.Time, bool, error) {
@@ -114,7 +133,11 @@ func roomReplayTimeField(object roomReplayJSONObject, name string) (time.Time, b
 }
 
 func decodeRoomReplayString(raw json.RawMessage) (string, bool) {
-	return support.String(raw)
+	var value string
+	if json.Unmarshal(raw, &value) != nil {
+		return "", false
+	}
+	return value, true
 }
 
 func int64Pointer(value int) *int64 {

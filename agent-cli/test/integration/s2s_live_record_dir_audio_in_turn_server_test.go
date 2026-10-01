@@ -3,7 +3,6 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -566,8 +566,7 @@ func assertScheduledTurnPCM(t *testing.T, payloads [][]byte, want []int16, frame
 		if len(payload)%2 != 0 || len(payload)/2 > frameBudget {
 			t.Fatalf("scheduled PCM chunk %d has invalid size %d for budget %d", index, len(payload), frameBudget)
 		}
-		for offset := 0; offset < len(payload); offset += 2 {
-			got := int16(binary.LittleEndian.Uint16(payload[offset : offset+2]))
+		for _, got := range codec.PCM16Samples(payload) {
 			if sample >= len(want) || got != want[sample] {
 				t.Fatalf("scheduled PCM differs at sample %d in chunk %d", sample, index)
 			}

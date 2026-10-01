@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
 func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (ToleranceProfile, error) {
@@ -38,7 +39,7 @@ func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (TolerancePr
 }
 
 func applyRoomReplayProfileName(profile *ToleranceProfile, object roomReplayJSONObject) error {
-	name, present, err := firstRoomReplayStringField(object, nil, "name", "profile", "id")
+	name, present, err := roomReplayStringField(object, "name", "profile", "id")
 	if err != nil && present {
 		return fmt.Errorf("%w: name: %w", ErrRoomReplayToleranceProfile, err)
 	}
@@ -318,7 +319,7 @@ func compareRoomReplayDelta(stream AudioStream, participantID string, index int,
 		if remaining := len(stream.PCM) - position; shared > remaining {
 			shared = remaining
 		}
-		for offset := 0; offset < shared; offset++ {
+		for offset := range shared {
 			if delta.PCM[offset] != stream.PCM[position+offset] {
 				return &DeltaReconstructionError{
 					ParticipantID: participantID, StreamID: stream.StreamID, DeltaID: delta.ID, DeltaIndex: index, ByteOffset: position + offset,
@@ -344,14 +345,14 @@ func isRoomReplayAudioDeltaKind(kind string) bool {
 	return strings.Contains(normalized, "audio") && (strings.Contains(normalized, "delta") || strings.Contains(normalized, "chunk")) || normalized == "deltaaudio" || normalized == "pcmdelta"
 }
 
-func roomReplayFirstIntField(object roomReplayJSONObject, names ...string) (int64, string, bool, error) {
+func roomReplayFirstIntField(object roomReplayJSONObject, names ...string) (int64, bool, error) {
 	for _, name := range names {
 		value, present, err := roomReplayInt64Field(object, name)
 		if present {
-			return value, name, true, err
+			return value, true, err
 		}
 	}
-	return 0, "", false, nil
+	return 0, false, nil
 }
 
 func roomReplayInt64Field(object roomReplayJSONObject, name string) (int64, bool, error) {

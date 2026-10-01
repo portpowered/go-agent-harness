@@ -21,8 +21,8 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	runtimeReplayWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/wire"
-
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -828,7 +828,7 @@ func writeRemoteToolFixture(t *testing.T, observationPath string, calls []remote
 func remoteToolAudioDelta(responseID, itemID string, samples []int16) map[string]any {
 	return map[string]any{
 		"type": rtEventOutputAudioDelta, "response_id": responseID, "item_id": itemID, "content_index": 0,
-		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(samples)),
+		"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(samples)),
 	}
 }
 

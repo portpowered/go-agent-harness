@@ -3,7 +3,6 @@ package fileports
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegateway "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -144,25 +144,9 @@ func TestOpenFileMediaReadsWAVRateAndStreamsStdout(t *testing.T) {
 func wavFile(t *testing.T, rate, samples int) []byte {
 	t.Helper()
 	var out bytes.Buffer
-	dataSize := samples * 2
-	write := func(value any) {
-		if err := binary.Write(&out, binary.LittleEndian, value); err != nil {
-			t.Fatalf("write wav header: %v", err)
-		}
+	if err := wavio.Write(&out, rate, make([]int16, samples)); err != nil {
+		t.Fatalf("write wav: %v", err)
 	}
-	out.WriteString("RIFF")
-	write(uint32(36 + dataSize))
-	out.WriteString("WAVEfmt ")
-	write(uint32(16))
-	write(uint16(1))
-	write(uint16(1))
-	write(uint32(rate))
-	write(uint32(rate * 2))
-	write(uint16(2))
-	write(uint16(16))
-	out.WriteString("data")
-	write(uint32(dataSize))
-	out.Write(make([]byte, dataSize))
 	return out.Bytes()
 }
 

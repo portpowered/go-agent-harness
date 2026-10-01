@@ -1,6 +1,10 @@
 package stream
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+)
 
 type preparedPCM16Analysis struct {
 	input        PCM16Input
@@ -58,7 +62,7 @@ func newPCM16Analysis(prepared preparedPCM16Analysis) PCM16Analysis {
 		FrameSamples:  prepared.frameSamples,
 		SampleCount:   len(samples),
 		Duration:      samplesToDuration(len(samples), prepared.input.SampleRate),
-		RMS:           PCM16RMSEnergy(samples),
+		RMS:           codec.RMS(samples),
 	}
 	result.RMSDBFS = dbfs(result.RMS)
 	result.AbsolutePeak = absolutePeak(samples)

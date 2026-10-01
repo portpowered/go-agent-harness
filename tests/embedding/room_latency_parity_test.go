@@ -3,7 +3,6 @@ package embedding_test
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"io"
 	"path/filepath"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	roomswire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const publicRoomLatencyTestTimeout = 3 * time.Second
@@ -374,11 +374,7 @@ func assertPublicRoomLatencyTransition(t *testing.T, transition runtimeRooms.Roo
 
 func publicRoomLatencyPCMFixture() []byte {
 	samples := []int16{0, 1, -1, 0, 2, -2, 0, 3, -3, 0, 4, -4, 0, 5, -5, 0, 1600, -1600, 0, 0}
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
-	}
-	return pcm
+	return codec.EncodePCM16(samples)
 }
 
 func advancePublicRoomLatencyResponse(clock *platformclock.Deterministic, start publicRoomLatencyResponseStart) {
@@ -532,14 +528,6 @@ func (i *publicRoomLatencyInbound) waitAdmitted(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-}
-
-func publicRoomLatencyPCMBytes(samples []int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(sample))
-	}
-	return pcm
 }
 
 func publicRoomLatencySamplesSilent(samples []int16) bool {

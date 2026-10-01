@@ -5,6 +5,17 @@ import (
 	"io"
 )
 
+// riffID is the four-byte RIFF container identifier that opens every WAV.
+const riffID = "RIFF"
+
+// IsRIFF reports whether data opens with a RIFF container identifier, i.e.
+// whether an artifact that may hold either raw PCM16 or WAV should be decoded
+// as WAV. It does not validate the container: a malformed RIFF payload still
+// reports true so the WAV decoder can say what is wrong with it.
+func IsRIFF(data []byte) bool {
+	return len(data) >= len(riffID) && string(data[:len(riffID)]) == riffID
+}
+
 // Layout describes validated mono PCM16 audio in a seekable RIFF container.
 // Inspect reads metadata only; it never loads the audio payload into memory.
 type Layout struct {

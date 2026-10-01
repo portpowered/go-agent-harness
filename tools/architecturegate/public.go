@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
+	"strconv"
 	"strings"
 )
 
@@ -212,4 +214,106 @@ func isImplementationPath(importPath string) bool {
 		}
 	}
 	return false
+}
+
+// SourcePatternRule forbids a hand-rolled encoding outside the module that owns
+// it. Literals are forbidden substrings of string literals (for example the
+// RIFF container identifier); Selectors are forbidden package-qualified
+// selector chains written as "<import path>.<Name>[.<Name>...]" (for example
+// "encoding/binary.LittleEndian.PutUint16"). A selector matches only when the
+// file imports that path, under any local name.
+type SourcePatternRule struct {
+	Name        string   `json:"name"`
+	From        []string `json:"from"`
+	ExceptFrom  []string `json:"except_from,omitempty"`
+	ExceptFiles []string `json:"except_files,omitempty"`
+	Literals    []string `json:"literals,omitempty"`
+	Selectors   []string `json:"selectors,omitempty"`
+	Reason      string   `json:"reason"`
+}
+
+func (rule SourcePatternRule) appliesTo(pkg *Package, module *Module, source *SourceFile) bool {
+	if !matchesAny(rule.From, pkg.ImportPath, module.Path) || matchesAny(rule.ExceptFrom, pkg.ImportPath, module.Path) {
+		return false
+	}
+	return !matchesAny(rule.ExceptFiles, source.RelPath)
+}
+
+func sourcePatternIssues(pkg *Package, module *Module, source *SourceFile, policy Policy) []Issue {
+	issues := make([]Issue, 0)
+	for _, rule := range policy.ForbiddenSourcePatterns {
+		if !rule.appliesTo(pkg, module, source) {
+			continue
+		}
+		selectors := rule.localSelectors(source.AST)
+		ast.Inspect(source.AST, func(node ast.Node) bool {
+			if match, ok := rule.match(node, selectors); ok {
+				issues = append(issues, Issue{
+					Rule: rule.Name, Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Symbol: match,
+					Message: fmt.Sprintf("line %d uses %s: %s", source.Fset.Position(node.Pos()).Line, match, rule.Reason),
+				})
+				return false
+			}
+			return true
+		})
+	}
+	return issues
+}
+
+// localSelectors rewrites each forbidden selector onto the local import name
+// the file uses, dropping selectors whose package the file does not import.
+func (rule SourcePatternRule) localSelectors(file *ast.File) map[string]string {
+	local := make(map[string]string, len(rule.Selectors))
+	for _, selector := range rule.Selectors {
+		for _, spec := range file.Imports {
+			path, err := strconv.Unquote(spec.Path.Value)
+			if err != nil || !strings.HasPrefix(selector, path+".") {
+				continue
+			}
+			name := path[strings.LastIndex(path, "/")+1:]
+			if spec.Name != nil {
+				name = spec.Name.Name
+			}
+			local[name+strings.TrimPrefix(selector, path)] = selector
+		}
+	}
+	return local
+}
+
+func (rule SourcePatternRule) match(node ast.Node, selectors map[string]string) (string, bool) {
+	switch node := node.(type) {
+	case *ast.BasicLit:
+		if node.Kind != token.STRING {
+			return "", false
+		}
+		value, err := strconv.Unquote(node.Value)
+		if err != nil {
+			return "", false
+		}
+		for _, literal := range rule.Literals {
+			if strings.Contains(value, literal) {
+				return strconv.Quote(literal), true
+			}
+		}
+	case *ast.SelectorExpr:
+		if selector, ok := selectors[selectorChain(node)]; ok {
+			return selector, true
+		}
+	}
+	return "", false
+}
+
+func selectorChain(expression ast.Expr) string {
+	switch expression := expression.(type) {
+	case *ast.Ident:
+		return expression.Name
+	case *ast.SelectorExpr:
+		prefix := selectorChain(expression.X)
+		if prefix == "" {
+			return ""
+		}
+		return prefix + "." + expression.Sel.Name
+	default:
+		return ""
+	}
 }

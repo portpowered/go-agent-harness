@@ -4,9 +4,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // Local barge-in onset detection.
@@ -61,7 +61,7 @@ type Detector struct {
 // Observe reports whether pcm completes a speech onset that should barge in,
 // and whether it is itself speech-level.
 func (d *Detector) Observe(pcm []byte, playback messages.LocalPlaybackState, rate int, config BargeInConfig) (onset, loud bool) {
-	level, samples := PCM16Level(pcm)
+	level, samples := codec.PCM16RMS(pcm), len(pcm)/2
 	if samples == 0 {
 		return false, false
 	}
@@ -84,20 +84,6 @@ func (d *Detector) Observe(pcm []byte, playback messages.LocalPlaybackState, rat
 	d.quiet = 0
 	d.speech += duration
 	return d.speech >= config.MinSpeech, true
-}
-
-// PCM16Level returns the RMS of little-endian PCM16 audio and its sample count.
-func PCM16Level(pcm []byte) (float64, int) {
-	samples := len(pcm) / 2
-	if samples == 0 {
-		return 0, 0
-	}
-	var sum float64
-	for i := 0; i+1 < len(pcm); i += 2 {
-		value := float64(int16(uint16(pcm[i]) | uint16(pcm[i+1])<<8))
-		sum += value * value
-	}
-	return math.Sqrt(sum / float64(samples)), samples
 }
 
 // HeldOnset holds interrupting frames while barge-in onset is undecided, so

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -22,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/rtc"
 )
 
@@ -292,7 +292,7 @@ func TestMediaProbeCredentialRedactionAcrossArtifacts(t *testing.T) {
 		Destination:      filepath.Join(root, "recording"),
 		ClientTranscript: []byte(fmt.Sprintf("{\"source\":%q,\"frame\":%v}\n", mediaURL, frame.Samples)),
 		AgentTranscript:  []byte(fmt.Sprintf("{\"source\":%q,\"capability\":%q}\n", mediaURL, caps.AudioCodec)),
-		InputSegments:    [][]byte{pcmBytes(frame.Samples)},
+		InputSegments:    [][]byte{codec.EncodePCM16(frame.Samples)},
 		OutputSegments:   [][]byte{{1, 2, 3}},
 		Credentials:      []string{password},
 		Metadata: transcript.RecordingMetadata{
@@ -539,14 +539,6 @@ func (o *cliGo2RTCObservation) waitFor(t *testing.T, event <-chan struct{}, name
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for %s: %v", name, ctx.Err())
 	}
-}
-
-func pcmBytes(samples []int16) []byte {
-	data := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(data[i*2:], uint16(sample))
-	}
-	return data
 }
 
 func equalStringSlices(got, want []string) bool {

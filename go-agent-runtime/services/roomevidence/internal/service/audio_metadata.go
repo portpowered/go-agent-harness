@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
-	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
+	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
 type roomReplayAudioStreamMetadata struct {
@@ -101,7 +102,7 @@ func parseRoomReplayStreamMetadataObject(raw json.RawMessage) roomReplayAudioStr
 	if err != nil {
 		return metadata
 	}
-	if value, _, err := firstRoomReplayStringField(object, nil, "stream_id", "id", "identity"); err == nil {
+	if value, _, err := roomReplayStringField(object, "stream_id", "id", "identity"); err == nil {
 		metadata.StreamID = value
 	}
 	if value, present, err := roomReplayFirstDurationField(object, "timeline_start_ms", "start_ms", "start_offset_ms", "timeline_start", "start"); err == nil && present {
@@ -152,7 +153,7 @@ func mergeRoomReplaySidecarMetadata(metadata map[string]roomReplayAudioStreamMet
 		if err != nil {
 			continue
 		}
-		role, _, roleErr := firstRoomReplayStringField(object, nil, "stream_role", "audio_role", "role")
+		role, _, roleErr := roomReplayStringField(object, "stream_role", "audio_role", "role")
 		if roleErr != nil {
 			continue
 		}
@@ -255,11 +256,11 @@ func parseRoomReplayChunkBoundaries(raw json.RawMessage) []streamanalysis.ChunkB
 		if err != nil {
 			continue
 		}
-		position, _, _, err := roomReplayFirstIntField(object, "sample_index", "end_sample", "offset_samples", "sample")
+		position, _, err := roomReplayFirstIntField(object, "sample_index", "end_sample", "offset_samples", "sample")
 		if err != nil {
 			continue
 		}
-		id, _, idErr := firstRoomReplayStringField(object, nil, "id", "chunk_id", "name")
+		id, _, idErr := roomReplayStringField(object, "id", "chunk_id", "name")
 		if idErr != nil {
 			continue
 		}
@@ -289,7 +290,7 @@ func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []streamanalysis.Spee
 		if startErr != nil || endErr != nil || !startPresent || !endPresent || end <= start {
 			continue
 		}
-		label, _, labelErr := firstRoomReplayStringField(object, nil, "label", "id", "name")
+		label, _, labelErr := roomReplayStringField(object, "label", "id", "name")
 		if labelErr != nil {
 			continue
 		}

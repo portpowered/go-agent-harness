@@ -5,12 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
@@ -69,14 +67,14 @@ const (
 
 func TestLongConversationTerminationGoldenReplaysCleanly(t *testing.T) {
 	fixture := longConversationTerminationFixturePath()
-	bundle, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), fixture)
+	bundle, err := loadGoldenRoomAudio(fixture)
 	if err != nil {
 		t.Fatalf("load post-fix long-conversation termination bundle: %v", err)
 	}
 	// Loading the same committed capture a second time is the replay control:
 	// admission rechecks every artifact digest and provider capture before any
 	// runtime is built, so terminal evidence cannot depend on a mutable read.
-	replayed, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), fixture)
+	replayed, err := loadGoldenRoomAudio(fixture)
 	if err != nil {
 		t.Fatalf("replay post-fix long-conversation termination bundle: %v", err)
 	}
@@ -104,7 +102,7 @@ type longConversationTimeline struct {
 	terminated map[string]int
 }
 
-func assertLongConversationTimeline(t *testing.T, timeline []roomreplay.RoomReplayTimelineEvent) {
+func assertLongConversationTimeline(t *testing.T, timeline []roomevidence.RoomReplayTimelineEvent) {
 	t.Helper()
 	tally := longConversationTimeline{bound: map[string]int{}, terminated: map[string]int{}}
 	for index, timelineEvent := range timeline {
@@ -122,7 +120,7 @@ func assertLongConversationTimeline(t *testing.T, timeline []roomreplay.RoomRepl
 	}
 }
 
-func tallyLongConversationEvent(t *testing.T, index int, timelineEvent roomreplay.RoomReplayTimelineEvent, tally *longConversationTimeline) {
+func tallyLongConversationEvent(t *testing.T, index int, timelineEvent roomevidence.RoomReplayTimelineEvent, tally *longConversationTimeline) {
 	t.Helper()
 	raw := strings.ToLower(string(timelineEvent.Raw))
 	if strings.Contains(raw, "session_failure") || strings.Contains(raw, "incomplete-final-response") {
@@ -150,7 +148,7 @@ func tallyLongConversationEvent(t *testing.T, index int, timelineEvent roomrepla
 	}
 }
 
-func assertLongConversationParticipant(t *testing.T, fixture string, bundle roomreplay.RoomReplayAudioBundle, manifest longConversationTerminationManifest, participantID string) {
+func assertLongConversationParticipant(t *testing.T, fixture string, bundle roomevidence.Bundle, manifest longConversationTerminationManifest, participantID string) {
 	t.Helper()
 	participant, ok := manifest.Participants[participantID]
 	if !ok {
@@ -280,6 +278,5 @@ func readLongConversationEvidenceRecords(t *testing.T, path string) []longConver
 }
 
 func longConversationTerminationFixturePath() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(filename), "testdata", "room-audio", "long-conversation-termination")
+	return roomAudioFixturePath("long-conversation-termination")
 }

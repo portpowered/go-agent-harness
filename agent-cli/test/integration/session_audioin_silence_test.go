@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +18,7 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // This suite proves, through the shipped 'agent session' CLI over the
@@ -125,7 +125,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		frame := samples[start:end]
 		payload, marshalErr := json.Marshal(map[string]string{
 			"type":  rtEventInputAudioAppend,
-			"audio": base64.StdEncoding.EncodeToString(pcm16LEBytes(frame)),
+			"audio": base64.StdEncoding.EncodeToString(codec.EncodePCM16(frame)),
 		})
 		if marshalErr != nil {
 			t.Fatalf("marshal append event: %v", marshalErr)
@@ -142,7 +142,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Hello there."}`)
 		audioDelta, marshalErr := json.Marshal(map[string]string{
 			"type":  rtEventOutputAudioDelta,
-			"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples(samples))),
+			"delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(replySamples(samples))),
 		})
 		if marshalErr != nil {
 			t.Fatalf("marshal audio delta: %v", marshalErr)
@@ -331,11 +331,7 @@ func testSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
 	if len(reply) == 0 {
 		t.Fatalf("--audio-out recorded zero samples; the committed turn delivered no spoken response\nstdout:\n%s", out)
 	}
-	var energy float64
-	for _, sample := range reply {
-		energy += float64(sample) * float64(sample)
-	}
-	rms := math.Sqrt(energy / float64(len(reply)))
+	rms := codec.RMS(reply)
 	if rms < 500.0 {
 		t.Fatalf("recorded reply RMS = %.1f, want > 500 (non-silent turn audio); %d samples", rms, len(reply))
 	}

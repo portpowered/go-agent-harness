@@ -2,7 +2,6 @@ package embedding_test
 
 import (
 	"context"
-	"encoding/binary"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	devicewire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type embeddedFileSink struct {
@@ -141,10 +141,11 @@ func TestExternalHostFileInputDefaultsToWallClockRealTime(t *testing.T) {
 
 func writeEmbeddedPacingClip(t *testing.T, samples int) string {
 	t.Helper()
-	pcm := make([]byte, samples*2)
-	for index := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:], uint16(1000+index%200))
+	clip := make([]int16, samples)
+	for index := range clip {
+		clip[index] = int16(1000 + index%200)
 	}
+	pcm := codec.EncodePCM16(clip)
 	path := filepath.Join(t.TempDir(), "clip.pcm")
 	if err := os.WriteFile(path, pcm, 0o600); err != nil {
 		t.Fatalf("write clip: %v", err)

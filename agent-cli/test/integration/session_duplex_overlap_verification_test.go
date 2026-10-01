@@ -2,7 +2,6 @@ package integration
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -64,10 +64,7 @@ func writeV8ViewArtifacts(t *testing.T, view *v8RecordingView, terminal v8Termin
 	if len(payload) == 0 {
 		t.Fatalf("v8 %s/%s recording has no PCM payload", view.Harness, view.Role)
 	}
-	samples := make([]int16, len(payload)/2)
-	for i := range samples {
-		samples[i] = int16(binary.LittleEndian.Uint16(payload[i*2:]))
-	}
+	samples := codec.PCM16Samples(payload)
 	var wav bytes.Buffer
 	if err := wavio.Write(&wav, audio.SampleRate, samples); err != nil {
 		t.Fatalf("encode v8 %s/%s WAV artifact: %v", view.Harness, view.Role, err)
@@ -572,7 +569,7 @@ func verifyV8WAVArtifact(viewName, wavPath string, liveRecords []v8ViewRecord) e
 	if rate != audio.SampleRate || len(samples) != len(livePayload)/2 {
 		return fmt.Errorf("%s WAV artifact shape is rate=%d samples=%d, want rate=%d samples=%d", viewName, rate, len(samples), audio.SampleRate, len(livePayload)/2)
 	}
-	if !bytes.Equal(v8PCM16Bytes(samples), livePayload) {
+	if !bytes.Equal(codec.EncodePCM16(samples), livePayload) {
 		return fmt.Errorf("%s WAV artifact payload differs from the recorded PCM", viewName)
 	}
 	return nil

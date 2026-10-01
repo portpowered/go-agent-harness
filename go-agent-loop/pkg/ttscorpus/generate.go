@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -255,7 +257,7 @@ func EmitManifest(outputDir string) error {
 				BitsPerSample:   pcm16Bits,
 				SampleCount:     len(samples),
 				DurationSeconds: float64(len(samples)) / float64(sampleFileRate),
-				RMSEnergy:       RMS(samples),
+				RMSEnergy:       codec.RMS(samples),
 				ByteSize:        int64(len(data)),
 				SHA256:          hex.EncodeToString(digest[:]),
 			})

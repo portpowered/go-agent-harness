@@ -1,6 +1,10 @@
 package roomaudiofixture
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+)
 
 // participantAudio is one participant's synthetic audio: the turns it speaks,
 // the samples it sends, and the peer audio it receives after routing delay.
@@ -57,11 +61,15 @@ func pairedParticipants(aTurns, bTurns []turn, aSent, bSent []int16, routeDelay 
 // addParticipant writes one participant's audio and sidecars into files and
 // returns its manifest reference. chunks are the output stream's chunk
 // boundaries and endMS is the shared stream timeline end.
-func addParticipant(files map[string][]byte, audio participantAudio, sidecars participantSidecars, identity participantIdentity, chunks []map[string]any, endMS int) map[string]any {
+func addParticipant(files map[string][]byte, audio participantAudio, sidecars participantSidecars, identity participantIdentity, chunks []map[string]any, endMS int) (map[string]any, error) {
 	paths := pathsFor(audio.id)
-	files[paths.wav] = wavBytes(audio.sent)
-	files[paths.sent] = pcmBytes(audio.sent)
-	files[paths.received] = pcmBytes(audio.received)
+	wav, err := wavBytes(audio.sent)
+	if err != nil {
+		return nil, err
+	}
+	files[paths.wav] = wav
+	files[paths.sent] = codec.EncodePCM16(audio.sent)
+	files[paths.received] = codec.EncodePCM16(audio.received)
 	files[paths.deltas] = sidecars.deltas
 	files[paths.events] = sidecars.events
 	files[paths.diagnostics] = sidecars.diagnostics
@@ -86,7 +94,7 @@ func addParticipant(files map[string][]byte, audio participantAudio, sidecars pa
 			"diagnostics":  artifactRefFor(paths.diagnostics, files[paths.diagnostics]),
 		},
 		"streams": participantStreams(audio, chunks, endMS),
-	}
+	}, nil
 }
 
 func participantStreams(audio participantAudio, chunks []map[string]any, endMS int) map[string]any {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"time"
 
@@ -332,17 +331,7 @@ func pcm16RMS(audio []byte) (float64, error) {
 	if len(audio)%2 != 0 {
 		return 0, fmt.Errorf("PCM16 audio has odd byte count %d", len(audio))
 	}
-
-	samples := make([]int16, len(audio)/2)
-	if err := codec.DecodePCM16Into(samples, audio); err != nil {
-		return 0, err
-	}
-	var sumSquares float64
-	for _, sampleValue := range samples {
-		sample := float64(sampleValue) / math.MaxInt16
-		sumSquares += sample * sample
-	}
-	return math.Sqrt(sumSquares / float64(len(samples))), nil
+	return codec.PCM16RMS(audio) / codec.PCM16FullScale, nil
 }
 
 // discardClose releases a probe resource whose outcome is already decided:

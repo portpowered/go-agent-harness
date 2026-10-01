@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func validateRoomReplayAudioStreamTimeline(stream AudioStream, plan RoomReplayPlan, field string) error {
@@ -173,7 +174,7 @@ func loadRoomReplayPCMStream(plan RoomReplayPlan, artifact RoomReplayArtifact, s
 	pcm := data
 	rate := plan.PCMFormat.SampleRate
 	channels := plan.PCMFormat.Channels
-	if bytes.HasPrefix(data, []byte("RIFF")) {
+	if wavio.IsRIFF(data) {
 		wav, err := decodeRoomReplayWAV(data, artifact.Path)
 		if err != nil {
 			return AudioStream{}, err
@@ -319,7 +320,7 @@ func roomReplayAudioParticipantArray(raw json.RawMessage) (map[string]roomReplay
 	}
 	result := make(map[string]roomReplayJSONObject, len(values))
 	for index, object := range values {
-		id, _, err := firstRoomReplayStringField(object, nil, "id", "participant_id")
+		id, _, err := roomReplayStringField(object, "id", "participant_id")
 		if err != nil || strings.TrimSpace(id) == "" {
 			return nil, roomReplayAudioIncomplete(fmt.Sprintf("participants[%d].id", index), "run-manifest.json", "participant identity", "missing", ErrRoomReplayBundleIncomplete)
 		}
@@ -358,7 +359,7 @@ func roomReplayAudioParticipantMap(raw json.RawMessage) (map[string]roomReplayJS
 }
 
 func roomReplayAudioParticipantID(object roomReplayJSONObject, key string) (string, error) {
-	id, present, err := firstRoomReplayStringField(object, nil, "id", "participant_id")
+	id, present, err := roomReplayStringField(object, "id", "participant_id")
 	if err != nil {
 		return "", roomReplayAudioMismatch("participants["+key+"].id", "run-manifest.json", "string participant identity", "invalid", err)
 	}

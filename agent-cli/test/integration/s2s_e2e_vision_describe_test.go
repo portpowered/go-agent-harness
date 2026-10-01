@@ -20,14 +20,12 @@ package integration
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/png"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +37,7 @@ import (
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const (
@@ -109,14 +108,6 @@ func visionReplySamples() []int16 {
 	return samples
 }
 
-func visionPCMBytes(samples []int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[i*2:], uint16(sample))
-	}
-	return pcm
-}
-
 // visionRewritePayload decodes one record payload, applies the mutation, and
 // re-encodes it. The replay transport compares parsed JSON, so key order is
 // free.
@@ -145,7 +136,7 @@ func buildVisionDescribeFixture(t *testing.T, wavPath string, transcript []strin
 	capture := captureCopy(t, visionDescribeFixturePath(t))
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(visionDescribePNG(t))
 	frames := multiturnAudioFrames(t, wavPath)
-	replyAudio := base64.StdEncoding.EncodeToString(visionPCMBytes(visionReplySamples()))
+	replyAudio := base64.StdEncoding.EncodeToString(codec.EncodePCM16(visionReplySamples()))
 
 	records := make([]gwtesting.CapturedSessionEvent, 0, len(capture.Records)+len(frames))
 	transcriptDelta := 0
@@ -321,11 +312,7 @@ func testSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 	if len(reply) == 0 {
 		t.Fatalf("--audio-out recorded zero samples; the grounded turn delivered no spoken audio\nstdout:\n%s", out)
 	}
-	var energy float64
-	for _, sample := range reply {
-		energy += float64(sample) * float64(sample)
-	}
-	rms := math.Sqrt(energy / float64(len(reply)))
+	rms := codec.RMS(reply)
 	if rms < 500.0 {
 		t.Fatalf("recorded reply RMS = %.1f, want > 500 (non-silent spoken reply); %d samples", rms, len(reply))
 	}

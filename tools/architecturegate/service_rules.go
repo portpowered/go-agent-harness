@@ -45,6 +45,7 @@ func sourceArchitectureIssues(pkg *Package, module *Module, service serviceInfo,
 	issues := generatedSourceIssues(pkg, module, source, policy)
 	issues = append(issues, declarationIssues(pkg, module, service, source, policy, globalState)...)
 	issues = append(issues, sourceImportIssues(pkg, module, service, source, policy)...)
+	issues = append(issues, sourcePatternIssues(pkg, module, source, policy)...)
 	issues = append(issues, serviceRoleIssues(pkg, module, service, source)...)
 	issues = append(issues, wireBusinessMethodIssues(pkg, module, service, source)...)
 	return issues

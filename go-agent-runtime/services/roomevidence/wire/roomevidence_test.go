@@ -3,7 +3,6 @@ package wire
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -301,10 +301,7 @@ func TestServiceRedactsCredentialFieldsWithoutConfiguredSecrets(t *testing.T) {
 func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
 	t.Parallel()
 	recorder, destination, source := openRecorder(t)
-	chunk := make([]byte, 10)
-	for index := range 5 {
-		binary.LittleEndian.PutUint16(chunk[index*2:], uint16(int16(10000)))
-	}
+	chunk := codec.EncodePCM16([]int16{10000, 10000, 10000, 10000, 10000})
 	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: "speaker", PCM: chunk}); err != nil {
 		t.Fatalf("first sent stream: %v", err)
 	}

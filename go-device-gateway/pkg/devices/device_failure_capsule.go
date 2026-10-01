@@ -85,11 +85,11 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	rendered := registry.RenderedSamples()
 	captured := registry.CapturedSamples()
 	artifacts := map[string][]byte{
-		"audio/provider-in.pcm":       encodeSamples(providerInput),
-		"audio/playback-rendered.pcm": encodeSamples(rendered),
-		"audio/capture-generated.pcm": encodeSamples(captured),
-		"audio/source-near-end.pcm":   encodeSamples(scenario.Acoustic.NearEnd),
-		"audio/source-background.pcm": encodeSamples(scenario.Acoustic.Background),
+		"audio/provider-in.pcm":       codec.EncodePCM16(providerInput),
+		"audio/playback-rendered.pcm": codec.EncodePCM16(rendered),
+		"audio/capture-generated.pcm": codec.EncodePCM16(captured),
+		"audio/source-near-end.pcm":   codec.EncodePCM16(scenario.Acoustic.NearEnd),
+		"audio/source-background.pcm": codec.EncodePCM16(scenario.Acoustic.Background),
 	}
 	eventBytes, err := marshalJSONLines(events)
 	if err != nil {
@@ -240,18 +240,15 @@ func ReplayDuplexFailureCapsule(ctx context.Context, dir string) (_ *SimulatedDu
 	if err := registry.Advance(capsule.Manifest.CallbackCount); err != nil { //nolint:contextcheck // the simulated registry advances synchronously in memory; its callbacks are a telemetry root with no caller context
 		return nil, err
 	}
-	if got := encodeSamples(registry.RenderedSamples()); !bytes.Equal(got, encodeSamples(capsule.Rendered)) {
+	if got := codec.EncodePCM16(registry.RenderedSamples()); !bytes.Equal(got, codec.EncodePCM16(capsule.Rendered)) {
 		return nil, fmt.Errorf("replayed rendered PCM hash differs from capsule")
 	}
-	if capsule.Manifest.SchemaVersion >= 2 && !bytes.Equal(encodeSamples(registry.CapturedSamples()), encodeSamples(capsule.Captured)) {
+	if capsule.Manifest.SchemaVersion >= 2 && !bytes.Equal(codec.EncodePCM16(registry.CapturedSamples()), codec.EncodePCM16(capsule.Captured)) {
 		return nil, fmt.Errorf("replayed captured PCM hash differs from capsule")
 	}
 	return registry, nil
 }
 
-func encodeSamples(samples []int16) []byte {
-	return codec.EncodePCM16(samples)
-}
 func marshalJSONLines(events []DeviceTraceEvent) ([]byte, error) {
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)

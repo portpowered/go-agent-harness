@@ -61,6 +61,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -201,10 +202,7 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 	serverEvent(rtEventOutputAudioTranscriptDelta, string(transcriptDelta))
 	serverEvent("response.output_audio_transcript.done", `{"type":"response.output_audio_transcript.done","transcript":"Both tools finished; here is your answer."}`)
 
-	audioDelta, marshalErr := json.Marshal(map[string]string{
-		"type":  rtEventOutputAudioDelta,
-		"delta": base64.StdEncoding.EncodeToString(pcm16LEBytes(replySamples)),
-	})
+	audioDelta, marshalErr := json.Marshal(map[string]string{"type": rtEventOutputAudioDelta, "delta": base64.StdEncoding.EncodeToString(codec.EncodePCM16(replySamples))})
 	if marshalErr != nil {
 		t.Fatalf("marshal audio delta: %v", marshalErr)
 	}

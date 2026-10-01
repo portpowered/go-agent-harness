@@ -16,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // Facts come only from copied product records and exclude tool arguments and raw payloads.
@@ -274,7 +275,7 @@ func (p *customerSimulationStreamParser) consumeAudioDelta(record customerSimula
 	// customer audio. Keep only the first frame of each non-silent run so the
 	// correction boundary is grounded in this same transcript clock as
 	// response audio and RESPONSE.CANCEL.
-	signal := customerSimulationPCM16HasSignal(value.Content)
+	signal := codec.PCM16RMS(value.Content) > 0
 	if signal && !p.inputSpeechActive {
 		p.facts.inputSpeechStarts = append(p.facts.inputSpeechStarts, record.at)
 	}
@@ -401,15 +402,6 @@ func recordContainsStreamType(payload []byte, want string) bool {
 		Type string `json:"type"`
 	}
 	return json.Unmarshal(payload, &envelope) == nil && envelope.Type == want
-}
-
-func customerSimulationPCM16HasSignal(data []byte) bool {
-	for _, value := range data {
-		if value != 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func fullMessageToolID(payload []byte) (string, bool) {

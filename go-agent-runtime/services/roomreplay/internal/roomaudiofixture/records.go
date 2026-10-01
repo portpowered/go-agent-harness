@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type deltaRecord struct {
@@ -38,7 +40,7 @@ func deltaJSONLWithBoundaries(id string, turns []turn, samples []int16, boundari
 			StreamID:      id + ":output",
 			ParticipantID: id,
 			TurnID:        turnAt(turns, start),
-			Delta:         base64.StdEncoding.EncodeToString(pcmBytes(samples[start:end])),
+			Delta:         base64.StdEncoding.EncodeToString(codec.EncodePCM16(samples[start:end])),
 		}
 		data := mustJSON(json.Marshal(record))
 		result.Write(data)

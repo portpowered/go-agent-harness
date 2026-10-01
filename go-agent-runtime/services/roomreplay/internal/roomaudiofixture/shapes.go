@@ -61,11 +61,19 @@ func generateCleanTurnTaking(output string) error {
 			diagnostics: diagnosticJSONL(audio.id, audio.turns),
 			capture:     captureJSONForModel(audio.id, identity.model),
 		}
-		participants[audio.id] = addParticipant(files, audio, sidecars, identity, chunkBoundaries(audio.id), duration)
+		ref, err := addParticipant(files, audio, sidecars, identity, chunkBoundaries(audio.id), duration)
+		if err != nil {
+			return err
+		}
+		participants[audio.id] = ref
 	}
 
 	clock := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
-	artifacts := roomArtifacts(files, timelineJSONL(clock, allTurns(aTurns, bTurns)), wavBytes(mix(aSent, bSent)))
+	roomMix, err := wavBytes(mix(aSent, bSent))
+	if err != nil {
+		return err
+	}
+	artifacts := roomArtifacts(files, timelineJSONL(clock, allTurns(aTurns, bTurns)), roomMix)
 	manifest := baseManifest(clock, cleanElapsed, participants, artifacts)
 	manifest["annotations"] = map[string]any{
 		"loudness": []any{loudnessAnnotation("clean-turn-balance", cleanFirstStartMS, cleanLastEndMS)},
@@ -114,13 +122,20 @@ func generateDeliberateOverlap(output string) error {
 			diagnostics: diagnosticJSONL(audio.id, audio.turns),
 			capture:     captureJSONForModel(audio.id, identity.model),
 		}
-		ref := addParticipant(files, audio, sidecars, identity, chunkBoundaries(audio.id), overlapDuration)
+		ref, err := addParticipant(files, audio, sidecars, identity, chunkBoundaries(audio.id), overlapDuration)
+		if err != nil {
+			return err
+		}
 		ref["received_audio_contract"] = "provider-bound room delivery in participants/<id>/received.pcm"
 		participants[audio.id] = ref
 	}
 
 	clock := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
-	artifacts := roomArtifacts(files, timelineJSONL(clock, allTurns(aTurns, bTurns)), wavBytes(mix(aSent, bSent)))
+	roomMix, err := wavBytes(mix(aSent, bSent))
+	if err != nil {
+		return err
+	}
+	artifacts := roomArtifacts(files, timelineJSONL(clock, allTurns(aTurns, bTurns)), roomMix)
 	manifest := baseManifest(clock, overlapElapsed, participants, artifacts)
 	manifest["annotations"] = map[string]any{
 		"overlaps": []any{overlapAnnotation()},

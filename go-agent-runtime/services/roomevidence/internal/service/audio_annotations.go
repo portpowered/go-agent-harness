@@ -106,7 +106,7 @@ func roomReplayAnnotationHeader(raw json.RawMessage, index int, plan RoomReplayP
 	if err != nil {
 		return nil, AudioAnnotation{}, "", false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d]", index), "run-manifest.json", "annotation object", "invalid", err)
 	}
-	kind, _, kindErr := firstRoomReplayStringField(object, nil, "kind", "type", "annotation", "event")
+	kind, _, kindErr := roomReplayStringField(object, "kind", "type", "annotation", "event")
 	if kindErr != nil {
 		return nil, AudioAnnotation{}, "", false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d].kind", index), "run-manifest.json", "string annotation kind", "invalid", kindErr)
 	}
@@ -114,7 +114,7 @@ func roomReplayAnnotationHeader(raw json.RawMessage, index int, plan RoomReplayP
 	if !isRoomReplayRecognizedAnnotationKind(kind) {
 		return object, AudioAnnotation{}, kind, false, nil
 	}
-	id, _, idErr := firstRoomReplayStringField(object, nil, "id", "annotation_id", "name")
+	id, _, idErr := roomReplayStringField(object, "id", "annotation_id", "name")
 	if idErr != nil {
 		return nil, AudioAnnotation{}, "", false, roomReplayAudioMismatch(fmt.Sprintf("annotations[%d].id", index), "run-manifest.json", "string annotation identity", "invalid", idErr)
 	}
@@ -289,7 +289,7 @@ func roomReplayAnnotationEndpoint(object roomReplayJSONObject, names ...string) 
 			return strings.TrimSpace(value)
 		}
 		if nested, err := roomReplayObject(raw); err == nil {
-			value, _, valueErr := firstRoomReplayStringField(nested, nil, "participant_id", "participant", "speaker_id", "id", "stream_id")
+			value, _, valueErr := roomReplayStringField(nested, "participant_id", "participant", "speaker_id", "id", "stream_id")
 			if valueErr == nil && value != "" {
 				return strings.TrimSpace(value)
 			}

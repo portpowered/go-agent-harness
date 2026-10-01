@@ -1,14 +1,11 @@
 package cli
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +16,9 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -117,11 +117,7 @@ func decodeTest7PCM16(t *testing.T, pcm []byte) []int16 {
 	if len(pcm)%2 != 0 {
 		t.Fatalf("test7 OpenAI PCM has odd byte count %d", len(pcm))
 	}
-	samples := make([]int16, len(pcm)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:]))
-	}
-	return samples
+	return codec.PCM16Samples(pcm)
 }
 
 func loadTest7LongOpenAIAudio(t *testing.T) ([]string, []byte) {

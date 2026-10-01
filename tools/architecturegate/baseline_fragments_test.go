@@ -217,6 +217,45 @@ func repositoryImportCases() []repositoryImportCase {
 	}
 }
 
+// TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio proves the
+// checked-in forbidden_source_patterns rules reject hand-rolled WAV containers
+// and PCM16 packing (under any import alias) outside go-audio, while leaving
+// 32-bit fields, the WebP sniffer and go-audio itself alone.
+func TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := loadPolicy("docs/architecture/architecture-policy.json", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const repo = "github.com/portpowered/go-agent-harness"
+	cases := []struct {
+		name, module, file, body, rule string
+	}{
+		{"pcm16 put", repo + "/agent-cli", "internal/room/pcm.go", "var _ = func(b []byte) { binary.LittleEndian.PutUint16(b, 1) }", "hand-rolled-pcm16"},
+		{"pcm16 aliased read", repo + "/go-agent-runtime", "services/x/pcm_test.go", "var _ = func(b []byte) uint16 { return le.LittleEndian.Uint16(b) }", "hand-rolled-pcm16"},
+		{"riff literal", repo + "/go-agent-loop", "pkg/x/wav.go", `var _ = []byte("RIFF")`, "hand-rolled-wav-container"},
+		{"32-bit field", repo + "/agent-cli", "internal/room/size.go", "var _ = func(b []byte) { binary.LittleEndian.PutUint32(b, 1) }", ""},
+		{"webp sniffer", repo + "/agent-cli", "internal/input/mimetype.go", `var _ = "RIFF"`, ""},
+		{"go-audio owner", repo + "/go-audio", "pkg/wavio/wavio.go", `var _ = func(b []byte) { _ = "RIFF"; binary.LittleEndian.PutUint16(b, 1) }`, ""},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			content := "package x\nimport (\n\t\"encoding/binary\"\n\tle \"encoding/binary\"\n)\nvar _ = binary.LittleEndian\nvar _ = le.LittleEndian\n" + test.body + "\n"
+			source := sourceFixture(t, filepath.Base(test.file), content, strings.HasSuffix(test.file, "_test.go"))
+			source.RelPath = test.file
+			module := &Module{Dir: "/repo", Path: test.module}
+			pkg := &Package{ImportPath: test.module + "/" + filepath.Dir(test.file), Module: module}
+			issues := sourcePatternIssues(pkg, module, source, policy)
+			if test.rule == "" && len(issues) != 0 || test.rule != "" && (len(issues) != 1 || !hasRule(issues, test.rule)) {
+				t.Fatalf("issues = %#v, want rule %q", issues, test.rule)
+			}
+		})
+	}
+}
+
 // Every type that wraps a messages.Session and is itself a session must keep
 // forwarding the runner's barge-in capabilities.
 func TestSessionWrapperAnalyzerFixture(t *testing.T) {

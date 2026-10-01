@@ -41,6 +41,17 @@ one package's public `interface.go`), and `production_only` skips `_test.go`
 files. Prefer a rule here over a test that parses imports: the gate reports
 every violation with its file and runs once for the whole workspace.
 
+`forbidden_source_patterns` rules keep a hand-rolled encoding inside the
+module that owns it. Each rule has a `name` (the issue rule), the governed
+packages (`from`, narrowed by `except_from`), optional module-relative
+`except_files`, and what it forbids: `literals` are substrings of string
+literals, and `selectors` are package-qualified selector chains such as
+`encoding/binary.LittleEndian.PutUint16`, matched under whatever local name
+the file imports that package as. The checked-in rules keep WAV containers
+(`"RIFF"`) and PCM16 packing (16-bit `binary.LittleEndian` access) inside
+go-audio; use `wavio` and `codec` instead. Tests are included, because test
+helpers were where the copies accumulated.
+
 Composition authority is explicit. A whole package may be registered for an
 external application module; a repository test gets a single exact
 `_test.go` source entry. Wildcards, production files, and paths outside the

@@ -8,11 +8,19 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
-// wavHeaderBytes is a minimal WAV file header recognized by http.DetectContentType as "audio/wave".
-// Bytes 0-3: "RIFF", bytes 4-7: size placeholder (zeroes), bytes 8-11: "WAVE".
-var wavHeaderBytes = []byte("RIFF\x00\x00\x00\x00WAVE")
+// stdinWAV is a minimal go-audio encoded WAV, which http.DetectContentType
+// recognizes as "audio/wave".
+func stdinWAV(t *testing.T) []byte {
+	t.Helper()
+	var wav bytes.Buffer
+	if err := wavio.Write(&wav, wavio.Rate16kHz, make([]int16, 16)); err != nil {
+		t.Fatalf("encode stdin WAV: %v", err)
+	}
+	return wav.Bytes()
+}
 
 // pngHeaderBytes is the 8-byte PNG file signature recognized by http.DetectContentType as "image/png".
 var pngHeaderBytes = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
@@ -94,7 +102,7 @@ func TestAskWithStdinAudioBytes(t *testing.T) {
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(testWriter.Stdout())
 	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetIn(bytes.NewReader(wavHeaderBytes))
+	rootCmd.SetIn(bytes.NewReader(stdinWAV(t)))
 	rootCmd.SetArgs([]string{"ask", "transcribe this"})
 
 	if err := rootCmd.ExecuteContext(context.Background()); err != nil {

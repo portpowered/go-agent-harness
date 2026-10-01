@@ -3,12 +3,13 @@ package room
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestPCM16MixerMixesEveryActiveInputAndClips(t *testing.T) {
@@ -39,7 +40,7 @@ func TestPCM16MixerMixesEveryActiveInputAndClips(t *testing.T) {
 	want := pcm16(32767, -32768, 0, 0, 0, 0, 0, 0, 0, 0)
 	got := readMixerFrame(t, mixer, want)
 	if !bytes.Equal(got, want) {
-		t.Fatalf("mixed frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+		t.Fatalf("mixed frame = %v, want %v", codec.PCM16Samples(got), codec.PCM16Samples(want))
 	}
 }
 
@@ -147,7 +148,7 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	got := readMixerFrameWithContext(t, mixer)
 	want := pcm16(110, 220)
 	if !bytes.Equal(got, want) {
-		t.Fatalf("first deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+		t.Fatalf("first deterministic frame = %v, want %v", codec.PCM16Samples(got), codec.PCM16Samples(want))
 	}
 	select {
 	case interval := <-factoryCalls:
@@ -162,13 +163,13 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 	got = readMixerFrameWithContext(t, mixer)
 	want = pcm16(330, 0)
 	if !bytes.Equal(got, want) {
-		t.Fatalf("second deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+		t.Fatalf("second deterministic frame = %v, want %v", codec.PCM16Samples(got), codec.PCM16Samples(want))
 	}
 	cadence.Advance()
 	got = readMixerFrameWithContext(t, mixer)
 	want = pcm16(0, 0)
 	if !bytes.Equal(got, want) {
-		t.Fatalf("silence deterministic frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+		t.Fatalf("silence deterministic frame = %v, want %v", codec.PCM16Samples(got), codec.PCM16Samples(want))
 	}
 	if got := len(mixer.Frames()); got != 0 {
 		t.Fatalf("queued frames after one output per cadence = %d, want 0", got)
@@ -204,7 +205,7 @@ func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
 	got := readMixerFrameWithContext(t, mixer)
 	want := pcm16(110, 220)
 	if !bytes.Equal(got, want) {
-		t.Fatalf("manual mixed frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+		t.Fatalf("manual mixed frame = %v, want %v", codec.PCM16Samples(got), codec.PCM16Samples(want))
 	}
 	if err := mixer.Advance(context.Background()); err != nil {
 		t.Fatalf("advance silence frame: %v", err)
@@ -212,7 +213,7 @@ func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
 	got = readMixerFrameWithContext(t, mixer)
 	want = pcm16(0, 0)
 	if !bytes.Equal(got, want) {
-		t.Fatalf("manual silence frame = %v, want %v", decodePCM16(got), decodePCM16(want))
+		t.Fatalf("manual silence frame = %v, want %v", codec.PCM16Samples(got), codec.PCM16Samples(want))
 	}
 
 	regular, err := NewPCM16MixerWithConfig(context.Background(), PCM16MixerConfig{Format: format})
@@ -266,7 +267,7 @@ func TestPCM16MixerReadFrameWithSourcesTracksContributors(t *testing.T) {
 		t.Fatalf("read frame with sources: %v", err)
 	}
 	if want := pcm16(100, 200, 0, 0); !bytes.Equal(frame.PCM, want) {
-		t.Fatalf("mixed frame = %v, want %v", decodePCM16(frame.PCM), decodePCM16(want))
+		t.Fatalf("mixed frame = %v, want %v", codec.PCM16Samples(frame.PCM), codec.PCM16Samples(want))
 	}
 	if want := []string{"alpha", "beta"}; !reflect.DeepEqual(frame.Sources, want) {
 		t.Fatalf("mixed frame sources = %v, want %v", frame.Sources, want)
@@ -495,12 +496,11 @@ func TestPCM16MixerRejectsChunkLargerThanBoundedQueue(t *testing.T) {
 }
 
 func providerPCM16Delta(delta, byteCount int) []byte {
-	pcm := make([]byte, byteCount)
-	for sample := 0; sample < byteCount/2; sample++ {
-		value := int16(1000 + delta*300 + sample%200)
-		binary.LittleEndian.PutUint16(pcm[sample*2:sample*2+2], uint16(value))
+	samples := make([]int16, byteCount/2)
+	for sample := range samples {
+		samples[sample] = int16(1000 + delta*300 + sample%200)
 	}
-	return pcm
+	return codec.EncodePCM16(samples)
 }
 
 func readMixerFrame(t *testing.T, mixer *PCM16Mixer, want []byte) []byte {
@@ -558,17 +558,5 @@ func (c *deterministicPCM16Cadence) Advance() {
 }
 
 func pcm16(samples ...int16) []byte {
-	pcm := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(pcm[index*2:index*2+2], uint16(sample))
-	}
-	return pcm
-}
-
-func decodePCM16(pcm []byte) []int16 {
-	samples := make([]int16, len(pcm)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2 : index*2+2]))
-	}
-	return samples
+	return codec.EncodePCM16(samples)
 }

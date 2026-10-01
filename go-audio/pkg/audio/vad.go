@@ -1,6 +1,8 @@
 package audio
 
-import "math"
+import (
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+)
 
 const (
 	// defaultVADEnergyThreshold is the RMS level (in int16 units) above which
@@ -58,7 +60,7 @@ func NewVAD(cfg VADConfig) *VoiceActivityDetector {
 //
 // Callers should call Reset before reusing the detector for a new utterance.
 func (v *VoiceActivityDetector) Process(frame []int16) (include bool, complete bool) {
-	energy := PCM16RMSEnergy(frame)
+	energy := codec.RMS(frame)
 	isSpeech := energy >= v.cfg.EnergyThreshold
 
 	if isSpeech {
@@ -93,18 +95,4 @@ func (v *VoiceActivityDetector) Reset() {
 	v.inSpeech = false
 	v.speechCount = 0
 	v.silenceCount = 0
-}
-
-// PCM16RMSEnergy returns the root-mean-square energy of signed PCM16 samples
-// in the original integer amplitude units. Empty input has zero energy.
-func PCM16RMSEnergy(samples []int16) float64 {
-	if len(samples) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, s := range samples {
-		f := float64(s)
-		sum += f * f
-	}
-	return math.Sqrt(sum / float64(len(samples)))
 }

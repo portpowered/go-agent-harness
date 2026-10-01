@@ -1,13 +1,10 @@
 package cli
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+
 	"bytes"
 	"context"
-	"encoding/binary"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,10 +16,11 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 func TestSessionCommandAudioOutputMatrix(t *testing.T) {
@@ -228,7 +226,7 @@ type cliAudioOutputInferencer struct {
 
 func newCLIAudioOutputInferencer(samples []int16, holdClose, holdOutputTerminal bool) *cliAudioOutputInferencer {
 	inferencer := &cliAudioOutputInferencer{
-		audioPCM:       cliPCM16Bytes(samples),
+		audioPCM:       codec.EncodePCM16(samples),
 		closeGate:      make(chan struct{}),
 		outputTerminal: make(chan struct{}),
 		sessionClosed:  make(chan struct{}),
@@ -356,7 +354,7 @@ func (s *cliAudioOutputSession) RTCMedia() servicetest.RTCMediaEndpoints {
 	if s == nil {
 		return servicetest.RTCMediaEndpoints{}
 	}
-	return servicetest.RTCMediaEndpoints{Inbound: &cliSingleFrameInboundMedia{samples: cliPCM16Samples(s.audioPCM)}}
+	return servicetest.RTCMediaEndpoints{Inbound: &cliSingleFrameInboundMedia{samples: codec.PCM16Samples(s.audioPCM)}}
 }
 
 type cliSingleFrameInboundMedia struct {
@@ -386,22 +384,6 @@ func (m *cliSingleFrameInboundMedia) ReadFrame(ctx context.Context) (audio.PCMFr
 }
 
 func (*cliSingleFrameInboundMedia) Close() error { return nil }
-
-func cliPCM16Bytes(samples []int16) []byte {
-	encoded := make([]byte, len(samples)*2)
-	for index, sample := range samples {
-		binary.LittleEndian.PutUint16(encoded[index*2:], uint16(sample))
-	}
-	return encoded
-}
-
-func cliPCM16Samples(encoded []byte) []int16 {
-	samples := make([]int16, len(encoded)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
-	}
-	return samples
-}
 
 var _ messages.SessionInferencer = (*cliAudioOutputInferencer)(nil)
 var _ messages.Session = (*cliAudioOutputSession)(nil)

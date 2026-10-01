@@ -8,6 +8,21 @@ import (
 	"testing"
 )
 
+func TestIsRIFFSniffsContainerIdentifierOnly(t *testing.T) {
+	var wav bytes.Buffer
+	if err := Write(&wav, Rate16kHz, []int16{1}); err != nil {
+		t.Fatal(err)
+	}
+	if !IsRIFF(wav.Bytes()) || !IsRIFF(wav.Bytes()[:4]) {
+		t.Fatal("encoded WAV and its truncated identifier must sniff as RIFF")
+	}
+	for _, raw := range [][]byte{nil, wav.Bytes()[:3], {1, 0, 2, 0}} {
+		if IsRIFF(raw) {
+			t.Fatalf("IsRIFF(%v) = true, want raw PCM", raw)
+		}
+	}
+}
+
 func TestInspectValidatesExtentWithoutReadingPayload(t *testing.T) {
 	for _, rate := range SupportedSampleRates() {
 		var wav bytes.Buffer

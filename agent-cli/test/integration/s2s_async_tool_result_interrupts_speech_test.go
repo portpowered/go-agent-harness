@@ -39,6 +39,7 @@ import (
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -258,9 +259,8 @@ func runAsyncCollisionScenario(t *testing.T, fixtureCollision, expectedCollision
 	options = options.normalized()
 	trace := &asyncCollisionTrace{}
 	executor := newAsyncCollisionToolExecutor(trace)
-	observer := newAsyncCollisionObserver(trace, executor, pcm16LEBytes(fixtureCollision[0]), pcm16LEBytes(fixtureCollision[1]))
-	signals := newAsyncCollisionSignals()
-	inputAudio := asyncCollisionInputAudio()
+	observer := newAsyncCollisionObserver(trace, executor, codec.EncodePCM16(fixtureCollision[0]), codec.EncodePCM16(fixtureCollision[1]))
+	signals, inputAudio := newAsyncCollisionSignals(), asyncCollisionInputAudio()
 	wirePath, capture := buildAsyncCollisionFixture(t, fixtureCollision, continuation, inputAudio)
 	outputPath, sessionOutput, outbound, runErr := runAsyncCollisionCLI(t, wirePath, capture, inputAudio, executor, observer, signals, options)
 	return asyncCollisionRunResult{

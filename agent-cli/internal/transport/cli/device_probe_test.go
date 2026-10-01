@@ -1,7 +1,5 @@
 package cli
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
@@ -11,10 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/spf13/cobra"
 )
@@ -279,13 +281,13 @@ func assertDeviceProbeSpeakerEmission(t *testing.T, ctx context.Context, sink *d
 	if err := source.ReadFrame(ctx, emitted); err != nil {
 		t.Fatalf("tap selected output device emission: %v", err)
 	}
-	if !bytes.Equal(pcm16ProbeBytes(emitted), responsePCM) {
-		t.Fatalf("emitted speaker frame changed: got %d bytes, want %d", len(pcm16ProbeBytes(emitted)), len(responsePCM))
+	if !bytes.Equal(codec.EncodePCM16(emitted), responsePCM) {
+		t.Fatalf("emitted speaker frame changed: got %d bytes, want %d", len(codec.EncodePCM16(emitted)), len(responsePCM))
 	}
 	if err := assertDeviceProbeEnergy("speaker output", emitted); err != nil {
 		t.Fatal(err)
 	}
-	if got := outputTap.LastRMS(); got != pcm16ProbeRMS(emitted) {
-		t.Fatalf("speaker tap RMS = %.2f, loopback RMS = %.2f, want equal measurements", got, pcm16ProbeRMS(emitted))
+	if got := outputTap.LastRMS(); got != codec.RMS(emitted) {
+		t.Fatalf("speaker tap RMS = %.2f, loopback RMS = %.2f, want equal measurements", got, codec.RMS(emitted))
 	}
 }

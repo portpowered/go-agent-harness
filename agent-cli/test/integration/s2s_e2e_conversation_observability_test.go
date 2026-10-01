@@ -4,19 +4,18 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -252,25 +251,6 @@ func observabilityReferenceUtterance(t *testing.T, turn int) []byte {
 	return utterance
 }
 
-// pcm16LERMS returns the root-mean-square energy of little-endian PCM16 bytes
-// on the linear scale used by the repo's audio proofs.
-func pcm16LERMS(pcm []byte) float64 {
-	if len(pcm) < 2 {
-		return 0
-	}
-	var energy float64
-	count := 0
-	for offset := 0; offset+1 < len(pcm); offset += 2 {
-		sample := float64(int16(binary.LittleEndian.Uint16(pcm[offset:])))
-		energy += sample * sample
-		count++
-	}
-	if count == 0 {
-		return 0
-	}
-	return math.Sqrt(energy / float64(count))
-}
-
 // assertConversationArtifactEvidence reconstructs the conversation purely
 // from one finalized recording directory and proves, per ordered session-log
 // entry: the input transcript, committed input audio, full response text,
@@ -374,7 +354,7 @@ func checkObservabilityReplyAudio(root string, entry observabilityLogEntry) erro
 	if len(outputAudio) == 0 {
 		return errors.New("no recorded output audio found; the reply was not captured")
 	}
-	if rms := pcm16LERMS(outputAudio); rms <= observabilityRMSThreshold {
+	if rms := codec.PCM16RMS(outputAudio); rms <= observabilityRMSThreshold {
 		return fmt.Errorf("recorded reply RMS = %.1f, want > %.1f (silence threshold)", rms, observabilityRMSThreshold)
 	}
 	return nil

@@ -2,7 +2,6 @@ package devices
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"reflect"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestDeviceSinkVirtualFramesAndLoss(t *testing.T) {
@@ -445,12 +445,12 @@ func TestDeviceSinkSampleOnlyCloseAndCapabilityPrecedence(t *testing.T) {
 	byteFrame := make([]int16, audio.FrameSize)
 	copy(byteFrame, []int16{-32768, -1, 0, 1, 32767})
 	mustSampleWrite(t, byteSink.WriteFrame(context.Background(), byteFrame))
-	if !reflect.DeepEqual(byteHandle.data, pcm16Bytes(byteFrame)) {
+	if !reflect.DeepEqual(byteHandle.data, codec.EncodePCM16(byteFrame)) {
 		t.Fatalf("byte-only full PCM = %v, want exact PCM", byteHandle.data)
 	}
 	partial := []int16{-32768, -17, 0, 19, 32767}
 	mustSampleWrite(t, byteSink.WriteSamples(context.Background(), partial))
-	if !reflect.DeepEqual(byteHandle.data, pcm16Bytes(partial)) {
+	if !reflect.DeepEqual(byteHandle.data, codec.EncodePCM16(partial)) {
 		t.Fatalf("byte-only partial PCM = %v, want exact PCM", byteHandle.data)
 	}
 }
@@ -549,11 +549,4 @@ func mustSampleWrite(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-}
-func pcm16Bytes(samples []int16) []byte {
-	encoded := make([]byte, len(samples)*2)
-	for i, sample := range samples {
-		binary.LittleEndian.PutUint16(encoded[i*2:], uint16(sample))
-	}
-	return encoded
 }

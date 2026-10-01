@@ -3,7 +3,6 @@ package embedding_test
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type publicRoomLatencyResponseStart struct {
@@ -208,10 +208,7 @@ func (p *publicRoomLatencyProvider) releaseResponse(participantID, responseID st
 }
 
 func publicRoomLatencyPCMFrame(pcm []byte) audio.PCMFrame {
-	samples := make([]int16, len(pcm)/2)
-	for index := range samples {
-		samples[index] = int16(binary.LittleEndian.Uint16(pcm[index*2:]))
-	}
+	samples := codec.PCM16Samples(pcm)
 	return audio.PCMFrame{Samples: samples, Format: audio.PCM16DeviceFormat(1000), EndOfResponse: true}
 }
 
@@ -249,7 +246,7 @@ func (p *publicRoomLatencyProvider) acceptAudio(targetID string, frame audio.PCM
 		}
 		candidate.mu.Unlock()
 	}
-	pcm := publicRoomLatencyPCMBytes(frame.Samples)
+	pcm := codec.EncodePCM16(frame.Samples)
 	target.mu.Lock()
 	acceptInput := target.turnsCompleted < 2
 	if acceptInput && len(target.pendingInput) == 0 && !target.responseActive {
@@ -369,7 +366,7 @@ func newPublicRoomLatencyLiveHandle(provider *publicRoomLatencyProvider, partici
 		if len(frame.Samples) == 0 || provider.audioEvents == nil {
 			return
 		}
-		provider.audioEvents <- publicRoomLatencyAudio{participantID: participant.id, responseID: provider.currentResponseID(participant.id), pcm: publicRoomLatencyPCMBytes(frame.Samples), tick: provider.clock.Tick()}
+		provider.audioEvents <- publicRoomLatencyAudio{participantID: participant.id, responseID: provider.currentResponseID(participant.id), pcm: codec.EncodePCM16(frame.Samples), tick: provider.clock.Tick()}
 	}
 	return handle
 }

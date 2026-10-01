@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
@@ -21,8 +23,8 @@ func TestSilentNegativeControlFailsRMS(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "silence threshold") {
 		t.Fatalf("silent clip error = %v; want silence-threshold failure", err)
 	}
-	if RMS(silent) != 0 {
-		t.Fatalf("RMS(silence) = %f", RMS(silent))
+	if codec.RMS(silent) != 0 {
+		t.Fatalf("RMS(silence) = %f", codec.RMS(silent))
 	}
 }
 

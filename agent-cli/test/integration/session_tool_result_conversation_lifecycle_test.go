@@ -1,12 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
-// Story 004 controls for the depth-5 tool-call conversation. These controls
-// keep the production session composition and its real executor/result
-// boundary intact while proving that unresolved work, missing continuation,
-// and unusable response audio cannot look like a successful conversation.
-
 import (
 	"bytes"
 	"context"
@@ -14,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,12 +14,19 @@ import (
 	"testing"
 	"time"
 
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+
+	// Story 004 controls for the depth-5 tool-call conversation. These controls
+	// keep the production session composition and its real executor/result
+	// boundary intact while proving that unresolved work, missing continuation,
+	// and unusable response audio cannot look like a successful conversation.
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 func shortConversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
@@ -300,11 +299,7 @@ func validateConversationAudioArtifact(path string, wantSamples int) error {
 	if len(samples) < wantSamples/2 || len(samples) > wantSamples*2 {
 		return &conversationAudioValidationError{kind: conversationAudioCorrupt, path: path, detail: fmt.Sprintf("sample count %d outside [%d,%d]", len(samples), wantSamples/2, wantSamples*2)}
 	}
-	var energy float64
-	for _, sample := range samples {
-		energy += float64(sample) * float64(sample)
-	}
-	if math.Sqrt(energy/float64(len(samples))) <= 500 {
+	if codec.RMS(samples) <= 500 {
 		return &conversationAudioValidationError{kind: conversationAudioSignal, path: path, detail: "response WAV has no audible signal"}
 	}
 	return nil

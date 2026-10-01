@@ -38,10 +38,6 @@ func (s replayServiceStub) Load(context.Context, string) (roomreplay.RoomReplayP
 	return s.plan, s.loadErr
 }
 
-func (replayServiceStub) LoadAudioBundle(context.Context, string) (roomreplay.RoomReplayAudioBundle, error) {
-	return roomreplay.RoomReplayAudioBundle{}, nil
-}
-
 func (s replayServiceStub) ValidateOutput(roomreplay.RoomReplayPlan, string) error {
 	return s.validateErr
 }

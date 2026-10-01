@@ -4,13 +4,13 @@ package localai
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"math"
 	"testing"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
@@ -90,23 +90,14 @@ func assertLiveAudioResponse(t *testing.T, readCtx context.Context, session mess
 }
 
 func livePCM16Tone() []byte {
-	const sampleRate, samples, frequency = 16000, 16000 / 2, 440.0
-	audio := make([]byte, samples*2)
+	const sampleRate, sampleCount, frequency = 16000, 16000 / 2, 440.0
+	samples := make([]int16, sampleCount)
 	for i := range samples {
-		value := int16(math.Sin(2*math.Pi*frequency*float64(i)/sampleRate) * 0.25 * math.MaxInt16)
-		binary.LittleEndian.PutUint16(audio[i*2:], uint16(value))
+		samples[i] = int16(math.Sin(2*math.Pi*frequency*float64(i)/sampleRate) * 0.25 * math.MaxInt16)
 	}
-	return audio
+	return codec.EncodePCM16(samples)
 }
 
 func pcm16RMS(audio []byte) float64 {
-	if len(audio) < 2 {
-		return 0
-	}
-	var sum float64
-	for i := 0; i+1 < len(audio); i += 2 {
-		sample := float64(int16(binary.LittleEndian.Uint16(audio[i:]))) / math.MaxInt16
-		sum += sample * sample
-	}
-	return math.Sqrt(sum / float64(len(audio)/2))
+	return codec.PCM16RMS(audio) / codec.PCM16FullScale
 }
