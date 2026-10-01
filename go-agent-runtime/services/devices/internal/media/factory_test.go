@@ -113,19 +113,7 @@ func TestFactoryPlaybackAppliesOneDeviceOwnedHoldToneToSilentRoomFrames(t *testi
 		cancel()
 		t.Fatal("playback pump did not reach its bounded silent gap")
 	}
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		nonSilent := 0
-		for _, observation := range registry.PCMObservations() {
-			if devicegw.DirectionOutput == observation.Direction && hasNonZeroSamples(observation.Samples) {
-				nonSilent++
-			}
-		}
-		if nonSilent == 1 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
+	waitForNonSilentOutput(t, registry)
 	nonSilent := 0
 	for _, observation := range registry.PCMObservations() {
 		if devicegw.DirectionOutput == observation.Direction && hasNonZeroSamples(observation.Samples) {
@@ -449,6 +437,26 @@ func (i *oneFrameThenBlockedInbound) ReadFrame(ctx context.Context) (audio.PCMFr
 }
 
 func (*oneFrameThenBlockedInbound) Close() error { return nil }
+
+// waitForNonSilentOutput waits on the virtual registry's PCM recorder until
+// at least one non-silent output write is retained.
+func waitForNonSilentOutput(t *testing.T, registry *devicegw.VirtualRegistry) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	for count := 1; ; count++ {
+		observations, err := registry.WaitForPCMObservations(ctx, count)
+		if err != nil {
+			t.Fatalf("no non-silent output write before the deadline: %v", err)
+		}
+		for _, observation := range observations {
+			if devicegw.DirectionOutput == observation.Direction && hasNonZeroSamples(observation.Samples) {
+				return
+			}
+		}
+		count = len(observations)
+	}
+}
 
 func hasNonZeroSamples(samples []int16) bool {
 	for _, sample := range samples {

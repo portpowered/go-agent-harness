@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -88,6 +89,7 @@ type recordingLiveSession struct {
 	close   sync.Once
 	mu      sync.Mutex
 	sent    []messages.StreamMessage
+	changed chan struct{}
 }
 
 func newRecordingLiveSession() *recordingLiveSession {
@@ -100,8 +102,22 @@ func (s *recordingLiveSession) Send(ctx context.Context, msg messages.StreamMess
 	}
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
+	if s.changed != nil {
+		close(s.changed)
+		s.changed = nil
+	}
 	s.mu.Unlock()
 	return true
+}
+
+// sentChanged returns a channel closed by the next client send.
+func (s *recordingLiveSession) sentChanged() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.changed == nil {
+		s.changed = make(chan struct{})
+	}
+	return s.changed
 }
 
 func (s *recordingLiveSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
@@ -128,7 +144,7 @@ func (s *recordingLiveSession) hasText(text string) bool {
 
 func waitForSentText(t *testing.T, provider *recordingLiveSession, text string) {
 	t.Helper()
-	waitForCondition(t, "delivery of "+text, func() bool { return provider.hasText(text) })
+	waitForSent(t, provider, "delivery of "+text, func() bool { return provider.hasText(text) })
 }
 
 func (s *recordingLiveSession) responseCreates() (acknowledgements, ordinary int) {
@@ -167,14 +183,20 @@ func closeLiveHandle(t *testing.T, handle session.LiveHandle) {
 	}
 }
 
-func waitForCondition(t *testing.T, label string, condition func() bool) {
+// waitForSent waits until a client send to provider satisfies condition.
+func waitForSent(t *testing.T, provider *recordingLiveSession, label string, condition func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(ackSignalTimeout)
-	for !condition() {
-		if time.Now().After(deadline) {
+	deadline := time.After(ackSignalTimeout)
+	for {
+		changed := provider.sentChanged()
+		if condition() {
+			return
+		}
+		select {
+		case <-changed:
+		case <-deadline:
 			t.Fatalf("timed out waiting for %s", label)
 		}
-		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -284,13 +306,13 @@ func (run *acknowledgementRun) assertRunning(t *testing.T, label string) {
 func (run *acknowledgementRun) releaseTool(t *testing.T) {
 	t.Helper()
 	close(run.tool.release)
-	waitForCondition(t, "tool result delivery", func() bool { return run.provider.toolResultSent(ackCallID) })
+	waitForSent(t, run.provider, "tool result delivery", func() bool { return run.provider.toolResultSent(ackCallID) })
 }
 
 // awaitContinuationRequest waits for the grounded continuation request.
 func (run *acknowledgementRun) awaitContinuationRequest(t *testing.T) {
 	t.Helper()
-	waitForCondition(t, "grounded continuation request", func() bool {
+	waitForSent(t, run.provider, "grounded continuation request", func() bool {
 		_, ordinary := run.provider.responseCreates()
 		return ordinary > 0
 	})
@@ -319,12 +341,13 @@ func (run *acknowledgementRun) awaitAcknowledgementRequest(t *testing.T) {
 		t.Fatal("acknowledgement threshold was not armed on the loop clock")
 	}
 	run.clock.AdvanceBy(ackThreshold - time.Millisecond)
-	time.Sleep(ackQuietWindow)
+	// Every session goroutine has reacted to the clock and blocked again.
+	synctest.Wait()
 	if acknowledgements, _ := run.provider.responseCreates(); acknowledgements != 0 {
 		t.Fatalf("acknowledgements before the threshold = %d, want 0", acknowledgements)
 	}
 	run.clock.AdvanceBy(time.Millisecond)
-	waitForCondition(t, "acknowledgement request", func() bool {
+	waitForSent(t, run.provider, "acknowledgement request", func() bool {
 		acknowledgements, _ := run.provider.responseCreates()
 		return acknowledgements == 1
 	})
@@ -346,26 +369,28 @@ func TestLongRunningToolRequestsOneSpokenAcknowledgementAtThreshold(t *testing.T
 		"acknowledgement ends after the tool result": true,
 	} {
 		t.Run(name, func(t *testing.T) {
-			run := startAcknowledgementRun(t, ackProvider, ackSlowTool, ackPolicy{})
-			run.awaitAcknowledgementRequest(t)
-			if toolFinishesFirst {
-				run.releaseTool(t)
-				run.speakAcknowledgement(t)
-			} else {
-				run.speakAcknowledgement(t)
-				run.assertRunning(t, "on the acknowledgement response")
-				if run.provider.toolResultSent(ackCallID) {
-					t.Fatal("tool result was delivered before the tool completed")
+			synctest.Test(t, func(t *testing.T) {
+				run := startAcknowledgementRun(t, ackProvider, ackSlowTool, ackPolicy{})
+				run.awaitAcknowledgementRequest(t)
+				if toolFinishesFirst {
+					run.releaseTool(t)
+					run.speakAcknowledgement(t)
+				} else {
+					run.speakAcknowledgement(t)
+					run.assertRunning(t, "on the acknowledgement response")
+					if run.provider.toolResultSent(ackCallID) {
+						t.Fatal("tool result was delivered before the tool completed")
+					}
+					run.clock.AdvanceBy(10 * ackThreshold)
+					run.releaseTool(t)
 				}
-				run.clock.AdvanceBy(10 * ackThreshold)
-				run.releaseTool(t)
-			}
-			run.awaitContinuationRequest(t)
-			run.assertRunning(t, "before the grounded continuation answered")
-			run.completeContinuation(t)
-			if acknowledgements, ordinary := run.provider.responseCreates(); acknowledgements != 1 || ordinary != 1 {
-				t.Fatalf("response.create sends = %d acknowledgements, %d ordinary; want exactly one of each", acknowledgements, ordinary)
-			}
+				run.awaitContinuationRequest(t)
+				run.assertRunning(t, "before the grounded continuation answered")
+				run.completeContinuation(t)
+				if acknowledgements, ordinary := run.provider.responseCreates(); acknowledgements != 1 || ordinary != 1 {
+					t.Fatalf("response.create sends = %d acknowledgements, %d ordinary; want exactly one of each", acknowledgements, ordinary)
+				}
+			})
 		})
 	}
 }
@@ -383,15 +408,18 @@ func TestFastToolAndPolicylessCapabilityNeverAcknowledge(t *testing.T) {
 		"provider without recoverable rejection": {provider: "grok", tool: ackSlowTool, policy: ackPolicy{}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			run := startAcknowledgementRun(t, tc.provider, tc.tool, tc.policy)
-			run.clock.AdvanceBy(10 * ackThreshold)
-			time.Sleep(ackQuietWindow)
-			if acknowledgements, _ := run.provider.responseCreates(); acknowledgements != 0 {
-				t.Fatalf("acknowledgements = %d, want none", acknowledgements)
-			}
-			run.releaseTool(t)
-			run.awaitContinuationRequest(t)
-			run.completeContinuation(t)
+			synctest.Test(t, func(t *testing.T) {
+				run := startAcknowledgementRun(t, tc.provider, tc.tool, tc.policy)
+				run.clock.AdvanceBy(10 * ackThreshold)
+				// Every session goroutine has reacted to the clock and blocked again.
+				synctest.Wait()
+				if acknowledgements, _ := run.provider.responseCreates(); acknowledgements != 0 {
+					t.Fatalf("acknowledgements = %d, want none", acknowledgements)
+				}
+				run.releaseTool(t)
+				run.awaitContinuationRequest(t)
+				run.completeContinuation(t)
+			})
 		})
 	}
 }

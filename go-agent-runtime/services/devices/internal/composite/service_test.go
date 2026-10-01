@@ -247,7 +247,11 @@ func TestOutputTapCloseJoinsConcurrentObserver(t *testing.T) {
 	}
 	closeDone := make(chan error, 1)
 	go func() { closeDone <- tap.Close() }()
-	if !waitForTapClosed(tap, time.Second) {
+	// Close closes stop while marking the tap closed, before it waits for
+	// the in-flight sender.
+	select {
+	case <-tap.stop:
+	case <-time.After(time.Second):
 		t.Fatal("Close did not mark the tap closed")
 	}
 	tap.endSend()
@@ -278,19 +282,6 @@ func TestOutputTapDrainsAdmittedSamplesAfterCallerCancellation(t *testing.T) {
 	}
 }
 
-func waitForTapClosed(tap *outputTap, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		tap.mu.Lock()
-		closed := tap.closed
-		tap.mu.Unlock()
-		if closed {
-			return true
-		}
-		time.Sleep(time.Millisecond)
-	}
-	return false
-}
 
 func TestFactoryClosesPhysicalRoleWhenFiniteAdmissionFails(t *testing.T) {
 	closeErr := errors.New("physical close")

@@ -75,7 +75,7 @@ func TestServiceKeepsViableRoomRunningAfterOneParticipantEnds(t *testing.T) {
 	awaitReady(t, ready, 3)
 	alpha := live.handle(t, alphaID)
 	alpha.finish(nil)
-	waitFor(t, "alpha close", func() bool { _, closes := alpha.counts(); return closes == 1 })
+	awaitClosed(t, alpha)
 	for _, id := range []string{betaID, gammaID} {
 		if cancels, closes := live.handle(t, id).counts(); cancels != 0 || closes != 0 {
 			t.Fatalf("peer %q cancels=%d closes=%d after alpha ended, want untouched", id, cancels, closes)
@@ -142,7 +142,7 @@ func TestServiceKeepsParticipantFailureCauseWhenRoomIsCancelled(t *testing.T) {
 	awaitReady(t, ready, 2)
 	alpha := live.handle(t, alphaID)
 	alpha.finish(providerErr)
-	waitFor(t, "alpha close", func() bool { _, closes := alpha.counts(); return closes == 1 })
+	awaitClosed(t, alpha)
 	cancel()
 	outcome := awaitOutcome(t, done)
 	if outcome.err != nil || outcome.result.TerminationReason != rooms.RoomTerminationStopped {
@@ -260,13 +260,16 @@ func TestServiceRedactsParticipantCredentialsFromRunFailures(t *testing.T) {
 	}
 }
 
-func waitFor(t *testing.T, what string, condition func() bool) {
+// awaitClosed waits until the room closes handle, then requires that it
+// closed it exactly once.
+func awaitClosed(t *testing.T, handle *contractHandle) {
 	t.Helper()
-	deadline := time.Now().Add(contractWait)
-	for !condition() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(time.Millisecond)
+	select {
+	case <-handle.closed:
+	case <-time.After(contractWait):
+		t.Fatal("timed out waiting for the participant handle to close")
+	}
+	if _, closes := handle.counts(); closes != 1 {
+		t.Fatalf("participant handle closes = %d, want 1", closes)
 	}
 }

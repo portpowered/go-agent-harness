@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -305,27 +306,31 @@ func TestMediaBridgePreservesPCMAndUsesBoundedFrames(t *testing.T) {
 }
 
 func TestEventDrainReportsOverflowWithoutBlockingProducer(t *testing.T) {
-	events := make(chan session.LiveEvent, eventQueueCapacity+32)
-	for index := 0; index < cap(events); index++ {
-		events <- session.LiveEvent{Kind: "delta"}
-	}
-	close(events)
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	drain := newEventDrain(context.Background(), events, "alice", func(string, rooms.RoomDiagnosticRecord) {
-		select {
-		case <-entered:
-		default:
-			close(entered)
+	synctest.Test(t, func(t *testing.T) {
+		events := make(chan session.LiveEvent, eventQueueCapacity+32)
+		for range cap(events) {
+			events <- session.LiveEvent{Kind: "delta"}
 		}
-		<-release
-	}, nil, nil, time.Now, nil, nil)
-	<-entered
-	time.Sleep(10 * time.Millisecond)
-	close(release)
-	if err := drain.Wait(); err == nil {
-		t.Fatal("event drain accepted an over-capacity diagnostic queue")
-	}
+		close(events)
+		entered := make(chan struct{})
+		release := make(chan struct{})
+		drain := newEventDrain(t.Context(), events, "alice", func(string, rooms.RoomDiagnosticRecord) {
+			select {
+			case <-entered:
+			default:
+				close(entered)
+			}
+			<-release
+		}, nil, nil, time.Now, nil, nil)
+		<-entered
+		// The producer runs to completion while the consumer is held, so
+		// every event past the queue capacity overflows.
+		synctest.Wait()
+		close(release)
+		if err := drain.Wait(); err == nil {
+			t.Fatal("event drain accepted an over-capacity diagnostic queue")
+		}
+	})
 }
 
 func testManifest() rooms.Manifest {

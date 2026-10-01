@@ -109,15 +109,7 @@ rateLimitObserved:
 		t.Fatal("rate-limit retry timer was not scheduled")
 	}
 	clock.AdvanceBy(5 * time.Millisecond)
-	deadline = time.After(time.Second)
-	for !provider.hasType(messages.StreamTypeResponseCreate) {
-		select {
-		case <-deadline:
-			t.Fatal("timed out waiting for retry response.create")
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
+	provider.awaitSent(t, messages.StreamTypeResponseCreate)
 	stop := errors.New("stop retry fixture")
 	handle.Cancel(stop)
 	if err := handle.Wait(); !errors.Is(err, stop) {
@@ -226,16 +218,6 @@ func (scheduler *observingScheduler) NewTimer(duration time.Duration) platformcl
 	timer := scheduler.Scheduler.NewTimer(duration)
 	scheduler.once.Do(func() { close(scheduler.timerCreated) })
 	return timer
-}
-func (s *testSession) hasType(kind messages.StreamMessageType) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, message := range s.sent {
-		if message.Type == kind {
-			return true
-		}
-	}
-	return false
 }
 func TestCapabilityAdmissionPreservesCleanupFailures(t *testing.T) {
 	for _, phase := range []string{"initialize", "refresh", "closed"} {

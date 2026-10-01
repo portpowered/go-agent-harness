@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -36,6 +37,7 @@ type testSession struct {
 	closeDoneOnDoneCall bool
 	mu                  sync.Mutex
 	sent                []messages.StreamMessage
+	sentChanged         chan struct{}
 }
 type failingLiveRecorder struct {
 	messageErr, contextErr, finalizeErr error
@@ -90,8 +92,37 @@ func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 	}
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
+	if s.sentChanged != nil {
+		close(s.sentChanged)
+		s.sentChanged = nil
+	}
 	s.mu.Unlock()
 	return true
+}
+
+// awaitSent waits until the session has been sent a message of kind.
+func (s *testSession) awaitSent(t *testing.T, kind messages.StreamMessageType) {
+	t.Helper()
+	deadline := time.After(time.Second)
+	for {
+		s.mu.Lock()
+		for _, message := range s.sent {
+			if message.Type == kind {
+				s.mu.Unlock()
+				return
+			}
+		}
+		if s.sentChanged == nil {
+			s.sentChanged = make(chan struct{})
+		}
+		changed := s.sentChanged
+		s.mu.Unlock()
+		select {
+		case <-changed:
+		case <-deadline:
+			t.Fatalf("timed out waiting for a sent %s", kind)
+		}
+	}
 }
 func (s *testSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.receive }
 func (s *testSession) Done() <-chan struct{} {
@@ -410,41 +441,45 @@ func TestProviderLivenessTimeoutUsesInjectedScheduler(t *testing.T) {
 	}
 }
 func TestLiveEventsRemainBoundedAndTerminalIsRetained(t *testing.T) {
-	s := newTestSession()
-	for i := 0; i < 500; i++ {
-		s.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("x")})
-	}
-	const participantID = "bounded-participant"
-	eventAt := time.Unix(300, 0)
-	service := New(Dependencies{EventCapacity: 4, Clock: func() time.Time { return eventAt }, InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
-		return &testInferencer{session: s}, nil
-	}})
-	handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "bounded", ParticipantID: participantID})
-	require.NoError(t, err)
-	require.NoError(t, handle.Start(context.Background()))
-	time.Sleep(20 * time.Millisecond)
-	handle.Cancel(errors.New("stop bounded fixture"))
-	if err := handle.Wait(); err != nil {
-		if !errors.Is(err, context.Canceled) && err.Error() != "stop bounded fixture" {
-			t.Fatalf("Wait: %v", err)
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestSession()
+		for range 500 {
+			s.receive.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("x")})
 		}
-	}
-	require.LessOrEqual(t, len(handle.Events()), 4, "event queue exceeded its capacity")
-	foundTerminal := false
-	foundOverflow := false
-	for event := range handle.Events() {
-		if event.Kind == string(session.LiveEventTerminal) {
-			foundTerminal = true
-		}
-		if event.Kind == string(session.LiveEventOverflow) {
-			foundOverflow = true
-			if event.ParticipantID != participantID || !event.Timestamp.Equal(eventAt) {
-				t.Fatalf("overflow metadata = %+v, want participant/timestamp preserved", event)
+		const participantID = "bounded-participant"
+		eventAt := time.Unix(300, 0)
+		service := New(Dependencies{EventCapacity: 4, Clock: func() time.Time { return eventAt }, InferencerFactory: func(_ context.Context, _ session.LiveRequest) (messages.SessionInferencer, error) {
+			return &testInferencer{session: s}, nil
+		}})
+		handle, err := service.OpenLive(context.Background(), session.LiveRequest{SessionID: "bounded", ParticipantID: participantID})
+		require.NoError(t, err)
+		require.NoError(t, handle.Start(context.Background()))
+		// The handle consumes every queued delta before it blocks on the
+		// provider again, overflowing the bounded event queue.
+		synctest.Wait()
+		handle.Cancel(errors.New("stop bounded fixture"))
+		if err := handle.Wait(); err != nil {
+			if !errors.Is(err, context.Canceled) && err.Error() != "stop bounded fixture" {
+				t.Fatalf("Wait: %v", err)
 			}
 		}
-	}
-	require.True(t, foundTerminal, "terminal event was lost")
-	require.True(t, foundOverflow, "overflow evidence was lost")
+		require.LessOrEqual(t, len(handle.Events()), 4, "event queue exceeded its capacity")
+		foundTerminal := false
+		foundOverflow := false
+		for event := range handle.Events() {
+			if event.Kind == string(session.LiveEventTerminal) {
+				foundTerminal = true
+			}
+			if event.Kind == string(session.LiveEventOverflow) {
+				foundOverflow = true
+				if event.ParticipantID != participantID || !event.Timestamp.Equal(eventAt) {
+					t.Fatalf("overflow metadata = %+v, want participant/timestamp preserved", event)
+				}
+			}
+		}
+		require.True(t, foundTerminal, "terminal event was lost")
+		require.True(t, foundOverflow, "overflow evidence was lost")
+	})
 }
 func TestCaptureCompletionWaitsForResponseAfterContinuousEOF(t *testing.T) {
 	h := &handle{
