@@ -49,8 +49,8 @@ currently carry the taxonomy without requiring callers to parse operator text:
 | Session replay outcomes | Replay errors match `gateway.ErrReplayMismatch`, `gateway.ErrReplayIncomplete`, provider replay sentinels, or caller cancellation. | Replay/session/CLI surfaces expose replay status or terminal fields where events are emitted. |
 | CLI stream/session output | Command setup failures return CLI errors; active stream/session events are rendered. | NDJSON preserves payload fields, and `agent session` renders additive key/value terminal lines for session close and error metadata. |
 
-The exact representative proof is recorded in
-`docs/internal/phase-4-typed-terminal-authoritative-reconciliation.md`.
+The exact representative proof was recorded in the Phase 4 typed-terminal
+reconciliation (removed from `docs/internal`; see git history).
 Provider-wide parity for every adapter, parser failure, and session helper is
 outside this contract note unless a path is explicitly listed as landed there.
 

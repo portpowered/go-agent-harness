@@ -38,8 +38,7 @@ executor by repeatedly rebuilding and running the entire CI matrix locally.
 
 Use `make architecture-size-check` when a change affects both service boundaries
 and size budgets. It shares one repository inventory while enforcing both rule
-sets. The individual `architecture-check` and `size-check` targets remain available
-for focused diagnosis; `verify-architecture` also checks fixtures and Wire output.
+sets; `verify-architecture` also checks fixtures and Wire output.
 
 ## What the cumulative runner covers
 

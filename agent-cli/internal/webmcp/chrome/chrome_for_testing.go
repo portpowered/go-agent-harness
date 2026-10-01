@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	chromeForTestingLockRelativePath = "scripts/webmcp-o0/chrome-for-testing.json"
+	chromeForTestingLockRelativePath = "agent-cli/internal/webmcp/chrome/chrome-for-testing.json"
 	chromeForTestingCacheDirName     = "chrome-for-testing"
 	chromeForTestingReadyName        = ".ready.json"
 	chromeForTestingArchiveName      = "chrome-for-testing.zip"

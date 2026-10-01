@@ -3,7 +3,7 @@
 ## Measurement boundary
 
 This document is the result ledger for the optional suite in
-[`test/localai`](../../test/localai). It is deliberately empirical: a skipped
+[`tests/localai`](../../tests/localai). It is deliberately empirical: a skipped
 case is not a served or not-served result. A row may be assigned a gating tier
 only after that provider/behavior case completes against a reachable endpoint.
 
@@ -76,7 +76,7 @@ Start the LocalAI fixture with:
 docker compose -f deploy/localai/docker-compose.yml up -d
 ```
 
-Run the suite from `test/localai` with `GOWORK=off`; OpenAI cases use only the
+Run the suite from `tests/localai` with `GOWORK=off`; OpenAI cases use only the
 `AGENT_MODEL__*` environment configuration and never read the repository
 `credentials` file. The nested test module uses
 `github.com/gorilla/websocket` v1.5.3 (BSD-3-Clause). The checked-in PCM16

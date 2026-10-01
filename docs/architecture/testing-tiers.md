@@ -61,7 +61,7 @@ or timeout classification. `make test` and those target-wide
 module invocations necessarily apply it to all packages in the `agent-cli`
 module, which is the narrowly scoped module-level consequence of one
 `go test ./...` invocation. Other modules and package paths retain the general
-`GO_TEST_TIMEOUT`. The composite `make ci` inherits these same settings from
+`GO_TEST_TIMEOUT`. `make prepush-full` inherits these same settings from
 the targets it composes.
 
 The integration budget is distinct from the GitHub `integration` job's
@@ -93,8 +93,7 @@ The success control uses the same runner and reports its executed fixture test.
 ## Microphone build configurations
 
 The ordinary Linux CI legs (the parallel `static`, `unit`, `integration`,
-`coverage`, and `race` jobs, which together run the same steps as
-`make ci`) run without a `nomicrophone` tag, so their Go tests compile the
+`coverage`, and `race` jobs) run without a `nomicrophone` tag, so their Go tests compile the
 CGO/malgo microphone implementation. The separate hermetic
 Linux leg runs `make test-hermetic`; that target invokes each workspace module
 with `CGO_ENABLED=0` and `-tags=nomicrophone`. The target prints the module and

@@ -1,6 +1,0 @@
-{
-  "expected_timeout_client_close": true,
-  "mode": "timeout",
-  "session_created": true,
-  "status": "PASS"
-}

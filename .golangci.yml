@@ -306,15 +306,9 @@ linters:
         linters: [nolintlint]
         text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|errname|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nestif|noctx|predeclared|recvcheck|thelper|unparam)"'
       # round-3 cleanup: lint-media-tools track
-      - path: '^scripts/webmcp-o0/'
-        linters: [containedctx, contextcheck, errorlint, forbidigo, gosec, mnd, noctx, unparam]
-      - path: '^scripts/webmcp-o0/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|contextcheck|errorlint|forbidigo|gosec|mnd|noctx|unparam)"'
-      # round-3 cleanup: lint-media-tools track
-      - path: '^test/localai/'
+      - path: '^tests/localai/'
         linters: [containedctx, copyloopvar, forbidigo, gochecknoglobals, intrange, thelper]
-      - path: '^test/localai/'
+      - path: '^tests/localai/'
         linters: [nolintlint]
         text: 'is unused for linter "(containedctx|copyloopvar|forbidigo|gochecknoglobals|intrange|thelper)"'
       # round-3 cleanup: lint-media-tools track
@@ -341,18 +335,6 @@ linters:
       - path: '^tools/coveragegate/'
         linters: [nolintlint]
         text: 'is unused for linter "(errorlint|forbidigo|mnd|noctx|unparam)"'
-      # round-3 cleanup: lint-media-tools track
-      - path: '^tools/rtc-race-gate/'
-        linters: [errname, errorlint, gochecknoglobals, mnd, noctx]
-      - path: '^tools/rtc-race-gate/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(errname|errorlint|gochecknoglobals|mnd|noctx)"'
-      # round-3 cleanup: lint-media-tools track
-      - path: '^tools/session-race-gate/'
-        linters: [errname, errorlint, gochecknoglobals, mnd, noctx]
-      - path: '^tools/session-race-gate/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(errname|errorlint|gochecknoglobals|mnd|noctx)"'
       # round-3 cleanup: lint-media-tools track
       - path: '^tools/timingate/'
         linters: [mnd, noctx]

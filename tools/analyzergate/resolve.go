@@ -26,11 +26,6 @@ var analyzerSpecs = map[string]analyzerSpec{
 		versionArgs:    []string{"version"},
 		installPackage: "github.com/golangci/golangci-lint/v2/cmd/golangci-lint",
 	},
-	"staticcheck": {
-		binaryName:     "staticcheck",
-		versionArgs:    []string{"-version"},
-		installPackage: "honnef.co/go/tools/cmd/staticcheck",
-	},
 }
 
 type config struct {

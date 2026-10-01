@@ -9,9 +9,9 @@ die() {
 
 tool_name="${1:-}"
 case "$tool_name" in
-	golangci-lint|staticcheck) ;;
+	golangci-lint) ;;
 	*)
-		die "usage: $0 golangci-lint|staticcheck"
+		die "usage: $0 golangci-lint"
 		;;
 esac
 
@@ -48,20 +48,6 @@ case "$tool_name" in
 			v2.9.0:linux-arm64) expected_sha256="94e80cdb51c73c20a313bd3afa1fb23137728813c19fd730248a1e8678fcc46d" ;;
 			v2.9.0:darwin-amd64) expected_sha256="ba29a353be54a74c45946763983808dc8305eeeca73db1761b5ab112f87f8157" ;;
 			v2.9.0:darwin-arm64) expected_sha256="a86eabba3507deddd21f2a01a1df2a0ee5bc5c8178d4165cdcaaad8597358760" ;;
-			*) die "no pinned SHA-256 is registered for ${tool_name} ${version} on ${platform_id}" ;;
-		esac
-		;;
-	staticcheck)
-		version="${STATICCHECK_VERSION:-2026.1}"
-		archive_name="staticcheck_${platform_id//-/_}.tar.gz"
-		archive_url="https://github.com/dominikh/go-tools/releases/download/${version}/${archive_name}"
-		binary_name="staticcheck"
-		expected_version_marker="staticcheck ${version}"
-		case "${version}:${platform_id}" in
-			2026.1:linux-amd64) expected_sha256="9242b4bf5b9f5481fd720ec6d1018b38fbffe0e2730e498923c6e8053e8576be" ;;
-			2026.1:linux-arm64) expected_sha256="dde37c023073aff5d910a85536a80b92a2ae0db75f6a89afcec1272c4fabd6fd" ;;
-			2026.1:darwin-amd64) expected_sha256="4b1483a2b21d555bc04dedb00823143dca66d5e53ac98db8e55ae6df87bebfad" ;;
-			2026.1:darwin-arm64) expected_sha256="f71553886fe4bb313da317d7abc3e16fe3cae2dba54f1e07a94a1ae160beced2" ;;
 			*) die "no pinned SHA-256 is registered for ${tool_name} ${version} on ${platform_id}" ;;
 		esac
 		;;

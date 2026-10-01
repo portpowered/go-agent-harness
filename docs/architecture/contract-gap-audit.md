@@ -11,9 +11,9 @@ defines the Phase 4 exported API audit shape for public contract hardening in
 This section is the row-level Phase 4 source of truth for P4-API-01 through P4-API-07 and P4-GATE-01. The older findings below remain evidence and planning context, but audit documentation alone cannot close implementation checklist rows; a row is closable only when the named public contract, runtime behavior, docs/examples, and deterministic validation evidence exist in code or tests.
 
 Validator provenance: the missing `validator-015` artifact is explicitly
-superseded by `docs/internal/phase-4-api-contract-validator.md` and this audit
-reconciliation. The reviewer-facing supersession note is
-`docs/internal/phase-4-validator-015-provenance.md`; it states that
+superseded by the Phase 4 API contract validator report and this audit
+reconciliation. The reviewer-facing supersession note (like the other `docs/internal`
+phase records, removed; see git history) states that
 validator-015 findings are replaced by current Phase 4 validator evidence and
 that no checklist row closes from provenance alone.
 
@@ -35,7 +35,7 @@ Phase 4 contract areas.
 
 | Checklist row | Current status | Mapped audit rows | Validator/provenance evidence | Closed or narrowed subset | Remaining open work |
 | --- | --- | --- | --- | --- | --- |
-| `P4-API-01` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-DI-01`, `P4-DI-03`, `P4-DI-04`, `HC-03` | Validator-015 is superseded by `docs/internal/phase-4-api-contract-validator.md`; current audit evidence is the `P4-API-01` row below plus credential-free constructor, runtime, and cancellation tests. | Explicit tool-execution constructor decisions, provider HTTP runtime ownership, gateway-to-loop inferencer adapters, and replay/record relay cancellation are narrowed by implementation and tests. | Prompt/config/filesystem loading, session/config/dialer side effects, complete timeout/cancellation ownership, and stable dependency/result errors remain open. |
+| `P4-API-01` | `fail` | `P4-CTX-01`, `P4-CTX-02`, `P4-CTX-03`, `P4-CTX-04`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-DI-01`, `P4-DI-03`, `P4-DI-04`, `HC-03` | Validator-015 is superseded by the Phase 4 API contract validator report (in git history); current audit evidence is the `P4-API-01` row below plus credential-free constructor, runtime, and cancellation tests. | Explicit tool-execution constructor decisions, provider HTTP runtime ownership, gateway-to-loop inferencer adapters, and replay/record relay cancellation are narrowed by implementation and tests. | Prompt/config/filesystem loading, session/config/dialer side effects, complete timeout/cancellation ownership, and stable dependency/result errors remain open. |
 | `P4-API-02` | representative typed-terminal repair landed; broader row remains open | `P4-ERR-01`, `P4-ERR-02`, `P4-ERR-03`, `P4-STREAM-01`, `P4-STREAM-02`, `P4-STREAM-03`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator typed-error report; current audit evidence includes public gateway error classes, provider classification strings, `messages.ErrorValue` terminal fields, direct stream normalization, session close/error metadata, replay mismatch/incomplete outcomes, cancellation tests, and CLI session tests. | Returned gateway/provider errors, direct stream `ERROR` payloads, representative session close/error events, replay divergence, replay incomplete, cancellation, and partial-output terminal metadata are narrowed by deterministic tests and public docs. | Provider-wide and parser-wide parity for every adapter, session helper, and stream failure remains open outside the representative typed-terminal scope. |
 | `P4-API-03` | representative typed-terminal repair landed; broader row remains open | `P4-CTX-01`, `P4-CTX-02`, `P4-RESULT-01`, `P4-RESULT-02`, `P4-ERR-01`, `P4-STREAM-01`, `LIFECYCLE-01`, `LIFECYCLE-02`, `COMPAT-02`, `COMPAT-03` | Superseded validator evidence is the Phase 4 validator result/lifecycle report; current audit evidence includes loop final-text and stream outcomes, gateway/PNIG terminal events, replay completion/divergence/incomplete/cancellation outcomes, session close metadata, and CLI session behavior. | Provider-authored completion, loop-synthesized completion, cancellation, provider close, terminal failure after partial output, replay divergence, replay incomplete, session close, and CLI-visible terminal fields are distinguishable on the repaired representative surfaces. | Broader result-helper and lifecycle-helper ambiguities remain where no public field, outcome value, or representative test has been landed. |
 | `P4-API-04` | `pass` for provider capability discovery | `P4-CAP-01`, `P4-VALIDATION-01`, `P4-DI-02`, `P4-HYGIENE-01`, `P4-HYGIENE-02` | Superseded validator evidence is the Phase 4 capability report; current audit evidence includes `pkg/capabilities`, `providers.CapabilityReporter`, `gateway.CapabilityReporter`, gateway/session `Capabilities()` methods, README guidance, development guidance, and credential-free capability tests. | Provider-neutral supported, unsupported, and unknown states; concrete provider-family capability reporters; gateway/session discovery; unknown fallback; overclaimed-support checks; interaction/inferencer capability closure; and fal streaming alignment are closed for this repair lane. | None for provider capability discovery. Broader stream terminal, model ownership, dependency/result/context, and API hygiene issues remain in their own rows. |
@@ -58,7 +58,7 @@ Closed or narrowed subsets with supporting evidence:
   adapters, and replay/record relay cancellation. Implementation evidence
   includes constructor tests, provider runtime tests, adapter tests, and replay
   cancellation tests; validator evidence is the current Phase 4 dependency and
-  context report in `docs/internal/phase-4-api-contract-validator.md`.
+  context report in the Phase 4 API contract validator report (in git history).
 - Typed error evidence is narrowed for public gateway/provider error classes,
   direct stream `ERROR` terminal fields, OpenAI and Grok session close/error
   metadata, PNIG timeout/provider/cancellation events, replay divergence,
@@ -131,7 +131,7 @@ Reviewer command policy: run all commands from the repository root unless a row 
 ### Final Closure Validation Check
 
 The Phase 4 validator starter artifact is available at
-`docs/internal/phase-4-api-contract-validator.md`. That starter validation
+the Phase 4 API contract validator report (in git history). That starter validation
 found the capability and local-validation rows unclosable from audit evidence
 alone. The provider capability/local validation repair lane has now added the
 runtime contracts, credential-free tests, README/development guidance, and

@@ -194,14 +194,6 @@ func analyzerFixtures() []analyzerFixture {
 			wrongVersion:    "2.3.1",
 			versionArgs:     []string{"version"},
 		},
-		{
-			tool:            "staticcheck",
-			binaryName:      "staticcheck",
-			installPackage:  "example.test/staticcheck",
-			expectedVersion: "2025.1.1",
-			wrongVersion:    "2025.1.2",
-			versionArgs:     []string{"-version"},
-		},
 	}
 }
 
@@ -238,10 +230,7 @@ func (f analyzerFixture) versionScript(version string) string {
 	if err != nil {
 		panic(fmt.Sprintf("fixture version: %v", err))
 	}
-	if f.tool == "golangci-lint" {
-		return fmt.Sprintf("#!/bin/sh\nprintf 'golangci-lint has version v%s built with go1.26.7\\n'\n", normalized)
-	}
-	return fmt.Sprintf("#!/bin/sh\nprintf 'staticcheck %s (0.6.1)\\n'\n", normalized)
+	return fmt.Sprintf("#!/bin/sh\nprintf 'golangci-lint has version v%s built with go1.26.7\\n'\n", normalized)
 }
 
 func writeFakeInstaller(t *testing.T, root, binaryName, source string, installErr error) string {

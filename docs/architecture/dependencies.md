@@ -247,10 +247,8 @@ Grok and OpenAI record/replay paths is now narrowed by the delivered repair:
   context for relay writes, which keeps cancellation ownership aligned with the
   same seam that owns dialer injection.
 
-For reviewer-facing convergence evidence, cite
-[`docs/internal/phase-2-session-runtime-ownership-validator.md`](../internal/phase-2-session-runtime-ownership-validator.md)
-alongside the session-runtime checklist rows `P2-SRO-01` through
-`P2-GATE-01`, and the broader constructor-ownership row `P2-COB-04` that this
+For reviewer-facing convergence evidence, cite the session-runtime checklist
+rows `P2-SRO-01` through `P2-GATE-01`, and the broader constructor-ownership row `P2-COB-04` that this
 slice advances.
 
 ## Decision Checklist For Future Changes

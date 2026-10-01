@@ -38,7 +38,7 @@ PREPARE_VALIDATION = _load_script(
 )
 PROBE = _load_script(
     REPO_ROOT
-    / "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py",
+    / "factory/scripts/tests/fixtures/scope-amendment/c39-probe.py",
     "scope_c39_probe_tests",
 )
 
@@ -798,7 +798,7 @@ class ScopeAmendmentTests(unittest.TestCase):
         failed = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py"),
+                str(REPO_ROOT / "factory/scripts/tests/fixtures/scope-amendment/c39-probe.py"),
                 "--source-revision",
                 "not-the-current-revision",
                 "--yui",

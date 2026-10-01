@@ -27,7 +27,7 @@ file is not supplied, `OPENAI_API_KEY` may be used directly. Keep both the key
 file and the artifact directory outside the commit.
 
 The runner obtains the exact Stable `mac-arm64` lock in
-`scripts/webmcp-o0/chrome-for-testing.json` (`152.0.7977.64`, revision
+`agent-cli/internal/webmcp/chrome/chrome-for-testing.json` (`152.0.7977.64`, revision
 `1669021`), verifies the official manifest, archive checksum, and executable
 version, and launches a temporary profile with WebMCP enabled. Browser and
 target IDs are derived by the same opaque ID mappers used by production

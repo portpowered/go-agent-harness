@@ -320,7 +320,7 @@ set — those tests would be rewritten within days.
 | `agent-cli/internal/audio/device_select*.go` | `s2s-b2-device-selection-and-fallback` |
 | `gw/pkg/wavio/**` | `s2s-b2-wavio-package` |
 | `gw/pkg/wavio/resample*.go` | `s2s-b2-audio-resampler` |
-| `scripts/gen-audio-corpus.ps1`, `go-agent-loop/testdata/audio/**` | `s2s-b2-audio-corpus-generator` |
+| `scripts/generate-audio-corpus.sh`, `go-agent-loop/testdata/audio/**` | `s2s-b2-audio-corpus-generator` |
 | `go-agent-loop/pkg/audiofixture/**` | `s2s-b2-audiofixture-loader` |
 | `agent-cli/internal/audio/source_file.go`, `sink.go`, `sink_file.go` | `s2s-b2-audio-source-and-sink` — **SPINE**, file path only |
 | `agent-cli/internal/audio/source_device.go`, `sink_device.go` | `s2s-b2-audio-device-source-and-sink` — split out so the file path never waits on devices |
@@ -684,7 +684,7 @@ PR description.
 | `deploy/localai/**` | `s2s-lai-realtime-server-fixture` (TTS model config: `s2s-lai-tts-gguf-format-check`) |
 | `go-llm-gateway/pkg/testing/localai/**` | `s2s-lai-realtime-server-fixture` |
 | `go-llm-gateway` LocalAI provider + its one registration site | `s2s-lai-gateway-localai-provider` |
-| `test/localai/**`, `docs/architecture/s2s-local-tier-conformance.md` | `s2s-lai-local-tier-conformance` |
+| `tests/localai/**`, `docs/architecture/s2s-local-tier-conformance.md` | `s2s-lai-local-tier-conformance` |
 | `test/probe/localtier/**` | `s2s-lai-blind-probe-local-tier` |
 | `docs/architecture/s2s-tts-pinning.md` | `s2s-lai-tts-gguf-format-check` |
 

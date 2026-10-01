@@ -1,6 +1,6 @@
 # S2S lane manifest — canonical coverage list
 
-Generated 2026-08-25 from `design.md` Part 8.2/8.1/8.3, `docs/architecture/s2s-program-status-2026-08-17.md` §2/§6, and a live `gh pr list --state all --limit 300` sweep. This is the source of truth the ideafy meta-planner diffs against during its periodic taxonomy audit (see `factory/workstations/ideafy/AGENTS.md`).
+Generated 2026-08-25 from `design.md` Part 8.2/8.1/8.3, the 2026-08-17 program status report §2/§6 (removed; see git history), and a live `gh pr list --state all --limit 300` sweep. This is the source of truth the ideafy meta-planner diffs against during its periodic taxonomy audit (see `factory/workstations/ideafy/AGENTS.md`).
 
 Scope note: this manifest currently covers the vertical/milestone/acceptance/WebRTC tail of the program (43 lanes) — the category that was silently never submitted for most of one overnight run because the planner only tracked its own `docs/temp/checklist.md`, not the full canonical taxonomy. It does NOT yet enumerate the full ~152-lane program (the original `batches/s2s-program.json`/`s2s-localai.json` source files referenced in the status doc are not present on this host). If those files or an equivalent full inventory are ever located, extend this manifest to the full set rather than replacing it.
 

@@ -22,7 +22,7 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("analyzergate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	tool := flags.String("tool", "", "analyzer name (golangci-lint or staticcheck)")
+	tool := flags.String("tool", "", "analyzer name (golangci-lint)")
 	expectedVersion := flags.String("expected-version", "", "pinned analyzer version")
 	candidate := flags.String("candidate", "", "PATH name or path of the candidate analyzer")
 	goBinary := flags.String("go", "go", "Go executable used to install the pinned analyzer")
@@ -85,7 +85,7 @@ type configInput struct {
 func newConfig(input configInput) (config, error) {
 	spec, ok := analyzerSpecs[input.tool]
 	if !ok {
-		return config{}, fmt.Errorf("unsupported analyzer %q; expected one of golangci-lint or staticcheck", input.tool)
+		return config{}, fmt.Errorf("unsupported analyzer %q; expected golangci-lint", input.tool)
 	}
 
 	expectedVersion, err := normalizeVersion(input.expectedVersion)

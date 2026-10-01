@@ -236,7 +236,7 @@ the repository root:
 ```bash
 make -C agent-cli test
 make typecheck
-make vet
+make -C agent-cli vet
 ```
 
 These commands prove the offline contract only; they do not establish that a
