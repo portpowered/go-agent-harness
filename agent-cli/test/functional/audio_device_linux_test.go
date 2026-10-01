@@ -1,22 +1,18 @@
-//go:build linux && cgo && !nomicrophone
+//go:build e2e && linux && cgo && !nomicrophone
 
 package functional
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestLinuxPhysicalAudioDeviceLoop(t *testing.T) {
-	if os.Getenv("AGENT_TEST_REAL_AUDIO") != "1" {
-		t.Skip("set AGENT_TEST_REAL_AUDIO=1 to exercise physical ALSA/PulseAudio devices")
-	}
 	registry := devicegw.NewDeviceRegistry()
 	if _, err := registry.Default(devicegw.DirectionInput); err != nil {
 		t.Fatalf("resolve default Linux input: %v", err)

@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -27,10 +29,10 @@ func newTestRoomRunCommand(globalFlags *flags.GlobalFlags, registry devicegw.Dev
 }
 
 // closeForTest closes a test-owned resource whose close must succeed.
-func closeForTest(t testing.TB, closeFn func() error) {
-	t.Helper()
+func closeForTest(tb testing.TB, closeFn func() error) {
+	tb.Helper()
 	if err := closeFn(); err != nil {
-		t.Errorf("close test resource: %v", err)
+		tb.Errorf("close test resource: %v", err)
 	}
 }
 
@@ -44,41 +46,41 @@ func releaseForTest(release func() error) {
 }
 
 // mustJSONMarshal encodes a test fixture value.
-func mustJSONMarshal(t testing.TB, value any) []byte {
-	t.Helper()
+func mustJSONMarshal(tb testing.TB, value any) []byte {
+	tb.Helper()
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		t.Fatalf("marshal %T: %v", value, err)
+		tb.Fatalf("marshal %T: %v", value, err)
 	}
 	return encoded
 }
 
 // jsonSlice asserts that a decoded JSON value is an array.
-func jsonSlice(t testing.TB, value any) []any {
-	t.Helper()
+func jsonSlice(tb testing.TB, value any) []any {
+	tb.Helper()
 	items, ok := value.([]any)
 	if !ok {
-		t.Fatalf("decoded JSON value %v (%T) is not an array", value, value)
+		tb.Fatalf("decoded JSON value %v (%T) is not an array", value, value)
 	}
 	return items
 }
 
 // jsonObject asserts that a decoded JSON value is an object.
-func jsonObject(t testing.TB, value any) map[string]any {
-	t.Helper()
+func jsonObject(tb testing.TB, value any) map[string]any {
+	tb.Helper()
 	object, ok := value.(map[string]any)
 	if !ok {
-		t.Fatalf("decoded JSON value %v (%T) is not an object", value, value)
+		tb.Fatalf("decoded JSON value %v (%T) is not an object", value, value)
 	}
 	return object
 }
 
 // jsonString asserts that a decoded JSON value is a string.
-func jsonString(t testing.TB, value any) string {
-	t.Helper()
+func jsonString(tb testing.TB, value any) string {
+	tb.Helper()
 	text, ok := value.(string)
 	if !ok {
-		t.Fatalf("decoded JSON value %v (%T) is not a string", value, value)
+		tb.Fatalf("decoded JSON value %v (%T) is not a string", value, value)
 	}
 	return text
 }
@@ -93,19 +95,19 @@ func jsonText(value any) string {
 }
 
 // requireFixtureStep fails the test when a fixture step fails.
-func requireFixtureStep(t testing.TB, step string, err error) {
-	t.Helper()
+func requireFixtureStep(tb testing.TB, step string, err error) {
+	tb.Helper()
 	if err != nil {
-		t.Fatalf("%s: %v", step, err)
+		tb.Fatalf("%s: %v", step, err)
 	}
 }
 
 // scriptedBrowserHandle asserts that a scripted runtime opened its own handle type.
-func scriptedBrowserHandle(t testing.TB, value any) *testkit.ScriptedBrowserHandle {
-	t.Helper()
+func scriptedBrowserHandle(tb testing.TB, value any) *testkit.ScriptedBrowserHandle {
+	tb.Helper()
 	handle, ok := value.(*testkit.ScriptedBrowserHandle)
 	if !ok {
-		t.Fatalf("browser handle = %T, want *testkit.ScriptedBrowserHandle", value)
+		tb.Fatalf("browser handle = %T, want *testkit.ScriptedBrowserHandle", value)
 	}
 	return handle
 }
@@ -146,4 +148,21 @@ func assertAskFlagError(t *testing.T, err error, wantMessage string, wantIs erro
 	if wantIs != nil && !errors.Is(err, wantIs) {
 		t.Fatalf("error = %v, want wrapped identity %v", err, wantIs)
 	}
+}
+
+// openRoomEventStream connects to a room's /events stream. The stream is read
+// after the run returns, so the request outlives the run context.
+// openRoomEventStream connects to the room event stream; the body closes at test cleanup.
+func openRoomEventStream(t *testing.T, ctx context.Context, url string) io.Reader {
+	t.Helper()
+	request, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("build event stream request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("connect event stream: %v", err)
+	}
+	t.Cleanup(func() { closeTestResource(t, response.Body) })
+	return response.Body
 }

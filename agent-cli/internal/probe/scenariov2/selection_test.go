@@ -84,14 +84,15 @@ func TestToLegacyProjectsProviderSteps(t *testing.T) {
 }
 
 func TestRecordingDirectoryIsRunScopedAndSlugged(t *testing.T) {
+	const fixtureRoot = "/root"
 	if got := RecordingDirectory("", 0, Selection{}); got != "" {
 		t.Fatalf("empty root directory = %q", got)
 	}
-	got := RecordingDirectory("/root", 1, Selection{Scenario: probe.ScenarioV2{ID: "a b/c."}})
-	if got != filepath.Join("/root", "002-a_b_c") {
+	got := RecordingDirectory(fixtureRoot, 1, Selection{Scenario: probe.ScenarioV2{ID: "a b/c."}})
+	if got != filepath.Join(fixtureRoot, "002-a_b_c") {
 		t.Fatalf("slugged directory = %q", got)
 	}
-	if got := RecordingDirectory("/root", 0, Selection{Selection: "..."}); got != filepath.Join("/root", "001-scenario") {
+	if got := RecordingDirectory(fixtureRoot, 0, Selection{Selection: "..."}); got != filepath.Join(fixtureRoot, "001-scenario") {
 		t.Fatalf("fallback directory = %q", got)
 	}
 	root, err := PrepareRecordingRoot(filepath.Join(t.TempDir(), "nested", "root"), 1)

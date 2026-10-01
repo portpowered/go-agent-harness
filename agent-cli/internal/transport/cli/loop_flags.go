@@ -59,7 +59,7 @@ type loopChatRunner struct {
 // runLoopChat runs an interactive loop chat session. The runtime service
 // drives fresh iterations and durable traces through the typed interaction
 // port; this command supplies terminal input and renders events.
-func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
+func (c *ChatCommand) runLoopChat(ctx context.Context, cmd *cobra.Command) error {
 	maxIterations := normalizedLoopMaxIterations(c.loopFlags.MaxIterations)
 	out := cmd.OutOrStdout()
 	if err := writeLoopHeader(out, maxIterations); err != nil {
@@ -84,7 +84,7 @@ func (c *ChatCommand) runLoopChat(cmd *cobra.Command) error {
 		IterationContext: runner.IterationContext,
 		OnIteration:      runner.OnIteration,
 	}
-	result, err := c.service.RunIterative(cmd.Context(), *request, session.IterativeRequest{
+	result, err := c.service.RunIterative(ctx, *request, session.IterativeRequest{
 		MaxIterations:            maxIterations,
 		StopWord:                 c.loopFlags.StopWord,
 		ContextPressureThreshold: c.loopFlags.ContextPressureThreshold,

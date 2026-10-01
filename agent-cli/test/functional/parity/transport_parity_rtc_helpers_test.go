@@ -1,6 +1,7 @@
 package parity
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -46,4 +47,20 @@ func releaseParityConn(conn io.Closer) {
 	if err := conn.Close(); err != nil {
 		return
 	}
+}
+
+func setLocalAndGather(ctx context.Context, peer *webrtc.PeerConnection, description webrtc.SessionDescription) (webrtc.SessionDescription, error) {
+	if err := peer.SetLocalDescription(description); err != nil {
+		return webrtc.SessionDescription{}, err
+	}
+	select {
+	case <-webrtc.GatheringCompletePromise(peer):
+	case <-ctx.Done():
+		return webrtc.SessionDescription{}, ctx.Err()
+	}
+	local := peer.LocalDescription()
+	if local == nil {
+		return webrtc.SessionDescription{}, errors.New("RTC peer has no local description after gathering")
+	}
+	return *local, nil
 }

@@ -295,7 +295,7 @@ func (s *cliAudioOutputSession) Send(ctx context.Context, msg messages.StreamMes
 		case <-ctx.Done():
 			return false
 		}
-		if !s.receive.Write(context.Background(), messages.StreamMessage{
+		if !s.receive.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("cli-audio-output-session", "test complete"),
 		}) {
@@ -304,25 +304,26 @@ func (s *cliAudioOutputSession) Send(ctx context.Context, msg messages.StreamMes
 		return s.Close() == nil
 	}
 	s.audioOnce.Do(func() {
-		s.receive.Write(context.Background(), messages.StreamMessage{
+		s.receive.Write(ctx, messages.StreamMessage{
 			Type:       messages.StreamTypeMessageStart,
 			Role:       messages.RoleAssistant,
 			ResponseID: "cli-audio-output-response",
 			Value:      messages.NewMessageStartValue(),
 		})
-		s.receive.Write(context.Background(), messages.StreamMessage{
+		s.receive.Write(ctx, messages.StreamMessage{
 			Type:       messages.StreamTypeAudioDelta,
 			Role:       messages.RoleAssistant,
 			ResponseID: "cli-audio-output-response",
 			Value:      messages.NewAudioDeltaValue(s.audioPCM),
 		})
+		watchCtx := context.WithoutCancel(ctx)
 		go func() {
 			select {
 			case <-s.outputTerminal:
 			case <-s.done:
 				return
 			}
-			s.receive.Write(context.Background(), messages.StreamMessage{
+			s.receive.Write(watchCtx, messages.StreamMessage{
 				Type:       messages.StreamTypeMessageEnd,
 				Role:       messages.RoleAssistant,
 				ResponseID: "cli-audio-output-response",

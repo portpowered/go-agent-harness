@@ -1,12 +1,16 @@
 package integration
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -342,4 +346,28 @@ func grokWebSocketRecord(direction gwtesting.SessionEventDirection, sequence int
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(payload),
 	}
+}
+
+// corpusAudioWAVPath locates a committed corpus WAV. The fixture is assembled
+// in a temporary directory so raw audio never enters a committed JSON capture.
+func corpusAudioWAVPath(t *testing.T, name string) string {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve corpus audio path: runtime.Caller failed")
+	}
+	path := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "go-agent-loop", "testdata", "audio", name)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("committed corpus WAV %s not found: %v", name, err)
+	}
+	return path
+}
+
+func wavPCM(t *testing.T, name string, data []byte) []byte {
+	t.Helper()
+	_, samples, err := wavio.Read(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("parse %s: %v", name, err)
+	}
+	return codec.EncodePCM16(samples)
 }

@@ -13,7 +13,7 @@ import (
 )
 
 func TestInteractionReplay_PrintsNormalizedEventsAsNDJSON(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestInteractionReplay_PrintsNormalizedEventsAsNDJSON(t *testing.T) {
 }
 
 func TestInteractionReplay_InvalidFixtureReturnsActionableError(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

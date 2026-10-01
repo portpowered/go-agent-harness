@@ -1,4 +1,4 @@
-//go:build e2e_internal
+//go:build e2e_internal && darwin && arm64
 
 package chrome
 
@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +24,6 @@ import (
 )
 
 const (
-	cubecadeAudioDeviceLiveEnv         = "WEBMCP_CUBECADE_AUDIO_DEVICE_LIVE"
 	cubecadeAudioDeviceModel           = "gpt-realtime"
 	cubecadeAudioDevicePrompt          = "Use the cube page's structured WebMCP state tools, not a screenshot. An initial get_cube_state call before any move is mandatory; verify the cube starts solved with an empty queue. Put it in this exact test position: turn the white face clockwise, the red face twice, and the green face counterclockwise. Wait for the board to settle and verify it. Then restore the cube to solved. A third get_cube_state call after the restoring moves is mandatory; wait for an empty queue and verify solved is true. Only then give the workspace's two-clause final summary; do not describe individual stickers, centers, edges, corners, or positions."
 	cubecadeAudioDeviceMaxDuration     = 45 * time.Second
@@ -43,13 +41,7 @@ var cubecadeFaceletDumpPattern = regexp.MustCompile(`(?i)(^|[^[:alnum:]])[URFDLB
 // deployment and OpenAI Realtime; assertions use only provider capture, the
 // browser DOM, and the remote audio-device server's public control endpoint.
 func TestPinnedChromeCubecadeAgentUsesAudioDeviceServer(t *testing.T) {
-	if os.Getenv(cubecadeAudioDeviceLiveEnv) != "1" {
-		t.Skipf("set %s=1 to run the billed Cubecade audio-device proof", cubecadeAudioDeviceLiveEnv)
-	}
-	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
-		t.Skipf("Cubecade audio-device proof uses the qualified %s Chrome lock; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed Cubecade audio-device proof")
+	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed Cubecade audio-device proof")
 
 	artifactRoot := cubecadeAudioDeviceArtifactRoot(t)
 	ctx, cancel := context.WithTimeout(context.Background(), cubecadeAudioDeviceTestTimeout)
@@ -149,7 +141,7 @@ func (p *cubecadeAudioDeviceProof) startChrome(t *testing.T, ctx context.Context
 	}
 	p.browser = ownLiveBrowser(t, browser, "Cubecade Chrome cleanup")
 	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, baseURL)
 	if err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}
@@ -532,7 +524,7 @@ func launchCubecadeAudioChrome(ctx context.Context, pinned pinnedChrome, pageURL
 		running.setEndpoint(value)
 		return running, nil
 	case <-running.done:
-		return nil, fmt.Errorf("Cubecade Chrome exited before DevTools: %v (stdout=%q stderr=%q)", running.waitErr, strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
+		return nil, fmt.Errorf("Cubecade Chrome exited before DevTools: %w (stdout=%q stderr=%q)", running.waitErr, strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
 	case <-ctx.Done():
 		discardSecondaryError(running.Close)
 		return nil, fmt.Errorf("wait for Cubecade Chrome DevTools: %w", ctx.Err())

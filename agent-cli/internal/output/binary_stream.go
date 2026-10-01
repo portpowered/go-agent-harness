@@ -8,19 +8,28 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// modalityStreamType maps an output modality name to the corresponding stream event type.
-var modalityStreamType = map[string]messages.StreamMessageType{
-	"image":     messages.StreamTypeImageDelta,
-	"audio":     messages.StreamTypeAudioDelta,
-	"video":     messages.StreamTypeVideoDelta,
-	"embedding": messages.StreamTypeEmbeddingDelta,
+// modalityStreamType maps an output modality name to the corresponding stream
+// event type, reporting false for unsupported modalities.
+func modalityStreamType(modality string) (messages.StreamMessageType, bool) {
+	switch modality {
+	case "image":
+		return messages.StreamTypeImageDelta, true
+	case "audio":
+		return messages.StreamTypeAudioDelta, true
+	case "video":
+		return messages.StreamTypeVideoDelta, true
+	case "embedding":
+		return messages.StreamTypeEmbeddingDelta, true
+	default:
+		return "", false
+	}
 }
 
 // WriteBinaryModalityStream drains the event stream, writing only the raw bytes
 // for the requested modality to w. All other event types are discarded.
 // Returns the number of bytes written. If no matching content is found, returns 0.
 func WriteBinaryModalityStream(w io.Writer, stream agentloop.Stream, modality string) (int64, error) {
-	targetType, ok := modalityStreamType[modality]
+	targetType, ok := modalityStreamType(modality)
 	if !ok {
 		return 0, fmt.Errorf("unsupported binary output modality: %s", modality)
 	}

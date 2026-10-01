@@ -1,3 +1,5 @@
+//go:build e2e
+
 package chrome
 
 import (
@@ -6,22 +8,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 )
 
-const siteAdaptersIntegrationEnv = "WEBMCP_SITE_ADAPTER_INTEGRATION"
-const xAdapterIntegrationEnv = "WEBMCP_X_ADAPTER_INTEGRATION"
-
 func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
-	if os.Getenv(siteAdaptersIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the stock-Chrome site-adapter journeys", siteAdaptersIntegrationEnv)
-	}
 	t.Run("spotify", testSpotifyAdapterJourney)
 	t.Run("wikipedia", testWikipediaAdapterJourney)
 	t.Run("reddit", testRedditAdapterJourney)
@@ -30,13 +26,19 @@ func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	t.Run("x", testXAdapterJourney)
 }
 
+// adapterFixtureTimeout bounds one adapter journey from browser launch to the
+// last tool call.
+const adapterFixtureTimeout = 75 * time.Second
+
 type adapterFixture struct {
-	ctx     context.Context
-	session webmcp.TargetSession
-	target  *targetSession
-	tools   map[string]webmcp.ToolDescriptor
-	count   int
-	version string
+	// deadline ends the whole journey; helpers derive their contexts from
+	// the calling test's context with this deadline.
+	deadline time.Time
+	session  webmcp.TargetSession
+	target   *targetSession
+	tools    map[string]webmcp.ToolDescriptor
+	count    int
+	version  string
 }
 
 func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, handler http.HandlerFunc) adapterFixture {
@@ -44,7 +46,8 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	chromeExecutable, chromeVersion := findQualifiedStockChromeForIntegration(t)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	ctx, cancel := context.WithTimeout(context.Background(), 75*time.Second)
+	deadline := time.Now().Add(adapterFixtureTimeout)
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	t.Cleanup(cancel)
 	launcher := NewManagedBrowserLauncher(ManagedBrowserLaunchOptions{
 		ConfigDir: t.TempDir(), StartupURL: server.URL + "/", Headless: true,
@@ -90,7 +93,7 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	}
 	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4, "x": 8}[name]
 	tools := waitForAdapterCatalog(t, ctx, session, "adapter catalog", expected)
-	return adapterFixture{ctx: ctx, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
+	return adapterFixture{deadline: deadline, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
 }
 
 func waitForAdapterCatalog(t *testing.T, ctx context.Context, session webmcp.TargetSession, label string, expected int) map[string]webmcp.ToolDescriptor {
@@ -135,7 +138,9 @@ func invokeAdapterToolEvent(t *testing.T, fixture adapterFixture, name, input st
 		}
 		t.Fatalf("adapter tool %q missing; available=%v", name, available)
 	}
-	return invokeYouTubeAdapterTool(t, fixture.ctx, fixture.session, tool, input)
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	return invokeYouTubeAdapterTool(t, ctx, fixture.session, tool, input)
 }
 
 func requireAdapterFailure(t *testing.T, fixture adapterFixture, name, input, code string) {
@@ -154,7 +159,9 @@ func requireAdapterFailure(t *testing.T, fixture adapterFixture, name, input, co
 
 func refreshAdapterAfterNavigation(t *testing.T, fixture *adapterFixture, supportedURL string) {
 	t.Helper()
-	fixture.tools = waitForAdapterCatalog(t, fixture.ctx, fixture.session, "post-navigation adapter catalog", fixture.count)
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	fixture.tools = waitForAdapterCatalog(t, ctx, fixture.session, "post-navigation adapter catalog", fixture.count)
 	fixture.target.mu.Lock()
 	fixture.target.page.URL = supportedURL
 	fixture.target.mu.Unlock()
@@ -438,3 +445,144 @@ document.querySelector('[data-testid="tweetButtonInline"]').addEventListener("cl
   composer.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"deleteContentBackward"}));
 });
 </script></body></html>`
+
+// TestCapitalOneShoppingAdapterLive is an opt-in, read-only production-site
+// gate. It launches an isolated Chrome profile, waits for the actual page to
+// settle, observes the injected page catalog, and performs a bounded scan. It
+// never invokes an offer activation or purchase control.
+func TestCapitalOneShoppingAdapterLive(t *testing.T) {
+	chromeExecutable, chromeVersion := findQualifiedStockChromeForIntegration(t)
+	deadline := time.Now().Add(150 * time.Second)
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
+	defer cancel()
+	launcher := NewManagedBrowserLauncher(ManagedBrowserLaunchOptions{
+		ConfigDir:  t.TempDir(),
+		StartupURL: "https://capitaloneshopping.com/",
+		Headless:   true,
+		Acquirer: ManagedChromeExecutableAcquirerFunc(func(context.Context) (ChromeExecutable, error) {
+			return ChromeExecutable{Path: chromeExecutable, Version: chromeVersion, Major: MinimumManagedChromeMajor, Source: ExecutableSourceStock}, nil
+		}),
+		StartupTimeout: 30 * time.Second,
+	})
+	browser, err := launcher.Launch(ctx)
+	if err != nil {
+		t.Fatalf("launch stock Chrome: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := browser.Close(); err != nil {
+			t.Logf("close stock Chrome: %v", err)
+		}
+	})
+	target, err := waitForFixturePageTarget(ctx, browserHTTPURL(browser.Endpoint().BrowserWSEndpoint), "https://capitaloneshopping.com/")
+	if err != nil {
+		t.Fatalf("discover Capital One Shopping target: %v", err)
+	}
+	runtimeAdapter := NewRuntime(WithCommandTimeout(30 * time.Second))
+	handle, err := runtimeAdapter.Open(ctx, webmcp.BrowserCandidate{
+		ID: "capital-one-shopping-live-browser", HTTPURL: browser.Endpoint().CDPURL,
+		BrowserWSURL: browser.Endpoint().BrowserWSEndpoint, Loopback: true,
+	})
+	if err != nil {
+		t.Fatalf("open browser runtime: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := handle.Close(); err != nil {
+			t.Logf("close browser runtime: %v", err)
+		}
+	})
+	session, err := handle.Attach(ctx, webmcp.TargetID(target.ID), webmcp.TargetOwnershipHarnessOwned)
+	if err != nil {
+		t.Fatalf("attach Capital One Shopping target: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Logf("close browser session: %v", err)
+		}
+	})
+	targetSession, ok := session.(*targetSession)
+	if !ok {
+		t.Fatalf("browser session has type %T, want *targetSession", session)
+	}
+
+	readiness := waitForCapitalOneShoppingDocument(t, ctx, targetSession)
+	if err := session.EnableWebMCP(ctx); err != nil {
+		t.Fatalf("enable WebMCP: %v", err)
+	}
+	catalogCtx, cancelCatalog := context.WithTimeout(ctx, 15*time.Second)
+	defer cancelCatalog()
+	tools, catalogErr := waitForCapitalOneShoppingCatalog(catalogCtx, session)
+	if catalogErr != nil {
+		readiness = inspectCapitalOneShoppingDocument(t, ctx, targetSession)
+		t.Fatalf("wait for live adapter catalog: %v; page=%+v", catalogErr, readiness)
+	}
+	fixture := adapterFixture{deadline: deadline, session: session, target: targetSession, tools: tools, count: 4, version: chromeVersion}
+	output := invokeAdapterTool(t, fixture, "capital_one_shopping_scan_offers", `{"max_pages":20,"max_cost_usd":500,"min_cashback_percent":70,"min_bonus_usd":300,"reward_match":"any","unknown_cost_policy":"separate"}`)
+	var result struct {
+		Data struct {
+			PagesScanned          int                           `json:"pages_scanned"`
+			OffersObserved        int                           `json:"offers_observed"`
+			MatchCount            int                           `json:"match_count"`
+			UnknownCostMatchCount int                           `json:"unknown_cost_match_count"`
+			StopReason            string                        `json:"stop_reason"`
+			Matches               []capitalOneShoppingLiveOffer `json:"matches"`
+			UnknownCostMatches    []capitalOneShoppingLiveOffer `json:"unknown_cost_matches"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(output, &result); err != nil || result.Data.PagesScanned < 1 || result.Data.PagesScanned > 20 || result.Data.OffersObserved == 0 || result.Data.StopReason != "max_pages" && result.Data.StopReason != "no_growth" {
+		t.Fatalf("live scan result=%s decode=%v", output, err)
+	}
+	offerEvidence, err := json.Marshal(struct {
+		Matches     []capitalOneShoppingLiveOffer `json:"matches"`
+		UnknownCost []capitalOneShoppingLiveOffer `json:"unknown_cost_matches"`
+	}{Matches: result.Data.Matches, UnknownCost: result.Data.UnknownCostMatches})
+	if err != nil {
+		t.Fatalf("encode live offer evidence: %v", err)
+	}
+	t.Logf("WEBMCP_CAPITAL_ONE_SHOPPING_LIVE_PASS chrome=%s title=%q pages=%d offers=%d matches=%d unknown_cost_matches=%d offer_evidence=%s stop=%s", chromeVersion, readiness.Title, result.Data.PagesScanned, result.Data.OffersObserved, result.Data.MatchCount, result.Data.UnknownCostMatchCount, offerEvidence, result.Data.StopReason)
+}
+
+type capitalOneShoppingLiveOffer struct {
+	Merchant        string   `json:"merchant"`
+	Description     string   `json:"description"`
+	CashbackPercent *float64 `json:"cashback_percent"`
+	BonusUSD        *float64 `json:"bonus_usd"`
+	RewardCapUSD    *float64 `json:"reward_cap_usd"`
+	QualifyingSpend *float64 `json:"qualifying_spend_usd"`
+	CostUSD         *float64 `json:"cost_usd"`
+}
+
+type capitalOneShoppingDocumentState struct {
+	Title             string `json:"title"`
+	ReadyState        string `json:"ready_state"`
+	BodyPresent       bool   `json:"body_present"`
+	ModelContext      string `json:"model_context"`
+	NavigatorContext  string `json:"navigator_context"`
+	AdapterInstalled  bool   `json:"adapter_installed"`
+	AdapterRegistered bool   `json:"adapter_registered"`
+	AdapterError      string `json:"adapter_error"`
+}
+
+func inspectCapitalOneShoppingDocument(t *testing.T, ctx context.Context, session *targetSession) capitalOneShoppingDocumentState {
+	t.Helper()
+	var state capitalOneShoppingDocumentState
+	expression := `(() => { const adapter = globalThis.__yuiCapitalOneShoppingWebMCPAdapterV1; return { title: document.title || "", ready_state: document.readyState, body_present: !!document.body, model_context: typeof document.modelContext, navigator_context: typeof navigator.modelContext, adapter_installed: !!adapter, adapter_registered: !!adapter?.registered, adapter_error: String(adapter?.error || "") }; })()`
+	if err := session.run(ctx, chromedp.Evaluate(expression, &state)); err != nil {
+		t.Fatalf("inspect Capital One Shopping document: %v", err)
+	}
+	return state
+}
+
+func waitForCapitalOneShoppingDocument(t *testing.T, ctx context.Context, session *targetSession) capitalOneShoppingDocumentState {
+	t.Helper()
+	for {
+		state := inspectCapitalOneShoppingDocument(t, ctx, session)
+		if state.BodyPresent && state.ReadyState == "complete" && state.Title != "" {
+			return state
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("wait for Capital One Shopping document: %v (last=%+v)", ctx.Err(), state)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}

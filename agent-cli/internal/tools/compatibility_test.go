@@ -34,7 +34,7 @@ func newFilesystemPolicyFixture(t *testing.T) filesystemPolicyFixture {
 	if err := os.WriteFile(filepath.Join(additional, "extra.txt"), []byte("extra"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	policy, err := ResolveFilesystemPolicy(primary, additional, additional)
+	policy, err := ResolveFilesystemPolicy(FilesystemHost{WorkDir: primary, HomeDir: t.TempDir()}, additional, additional)
 	if err != nil {
 		t.Fatalf("ResolveFilesystemPolicy: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestFilesystemPolicyAuthorizesRootsAndRejectsEscapes(t *testing.T) {
 
 func TestFilesystemPolicyConstructorsAndNilPolicy(t *testing.T) {
 	fixture := newFilesystemPolicyFixture(t)
-	fromRoots, err := NewFilesystemPolicyFromRoots(fixture.primary, []string{fixture.additional})
+	fromRoots, err := NewFilesystemPolicyFromRoots(t.TempDir(), fixture.primary, []string{fixture.additional})
 	if err != nil || fromRoots.PrimaryRoot() != fixture.canonicalPrimary {
 		t.Fatalf("NewFilesystemPolicyFromRoots = %v, %v", fromRoots, err)
 	}
@@ -123,7 +123,7 @@ func TestFilesystemPolicyConstructorsAndNilPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, badRoot := range []string{"", fileRoot, filepath.Join(t.TempDir(), "missing")} {
-		if _, err := NewFilesystemPolicy(badRoot); !errors.Is(err, ErrInvalidFilesystemRoot) {
+		if _, err := NewFilesystemPolicy(t.TempDir(), badRoot); !errors.Is(err, ErrInvalidFilesystemRoot) {
 			t.Errorf("NewFilesystemPolicy(%q) = %v, want invalid-root error", badRoot, err)
 		}
 	}
@@ -189,15 +189,15 @@ func TestFilesystemRefusalValidation(t *testing.T) {
 	const invalidValue = "wrong"
 	refusal := validFilesystemRefusal()
 	invalid := []FilesystemRefusal{
-		func() FilesystemRefusal { copy := refusal; copy.Type = ""; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Type = invalidValue; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Version = invalidValue; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.OK = true; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Status = "ok"; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Operation = " "; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Reason = invalidValue; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Message = ""; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Remediation = ""; return copy }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Type = ""; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Type = invalidValue; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Version = invalidValue; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.OK = true; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Status = "ok"; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Operation = " "; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Reason = invalidValue; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Message = ""; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Remediation = ""; return mutated }(),
 	}
 	for index, candidate := range invalid {
 		if err := candidate.Validate(); err == nil {
@@ -216,7 +216,7 @@ func TestFilesystemRefusalValidation(t *testing.T) {
 	if nilEnvelope.Error() != ErrFilesystemRefused.Error() {
 		t.Fatalf("nil FilesystemRefusalError = %q", nilEnvelope.Error())
 	}
-	if (FilesystemRefusal{}).Error() != ErrFilesystemRefused.Error() {
+	if (FilesystemRefusal{}).Summary() != ErrFilesystemRefused.Error() {
 		t.Fatal("empty refusal did not use stable sentinel")
 	}
 }
@@ -408,6 +408,34 @@ func assertDisplayDiscovery(t *testing.T, surface DisplaySurface, ctx context.Co
 	if err != nil || bounds.Empty() {
 		t.Fatalf("surface Bounds = %v, %v", bounds, err)
 	}
+	assertUnavailableDisplayDiscovery(t, ctx)
+}
+
+// assertUnavailableDisplayDiscovery proves a failed discovery command makes
+// Probe report the display unavailable. It shares assertDisplayDiscovery's
+// platform guard: the Windows discovery boundary is a host API, not a process
+// seam.
+func assertUnavailableDisplayDiscovery(t *testing.T, ctx context.Context) {
+	t.Helper()
+	process := DisplayProcessAdapter{
+		RunFunc: func(_ context.Context, name string, _ ...string) ([]byte, error) {
+			if name == "xrandr" || name == "system_profiler" {
+				return nil, errors.New("discovery failed")
+			}
+			return nil, nil
+		},
+		LookPathFunc: func(string) (string, error) { return "", errors.New("missing capture command") },
+	}
+	surface := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+		Process: process,
+		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+			return DisplayPermission{State: DisplayPermissionGranted}, nil
+		}),
+	})
+	capability, err := surface.Probe(ctx)
+	if err == nil || capability.State != ScreenCaptureUnavailable {
+		t.Fatalf("failed discovery Probe = %+v, %v", capability, err)
+	}
 }
 
 func TestDisplaySurfaceCancellationAndDefaults(t *testing.T) {
@@ -437,12 +465,12 @@ func TestDisplaySurfaceCancellationAndDefaults(t *testing.T) {
 	}
 
 	readerCtx, cancelReader := context.WithCancel(ctx)
-	reader := contextReader{ctx: readerCtx, r: cancelingReader{cancel: cancelReader}}
+	reader := newContextReader(readerCtx, cancelingReader{cancel: cancelReader})
 	buffer := make([]byte, 8)
 	if n, err := reader.Read(buffer); n != 7 || !errors.Is(err, context.Canceled) {
 		t.Fatalf("context reader = (%d, %v), want read plus cancellation", n, err)
 	}
-	if _, err := (contextReader{ctx: canceled, r: strings.NewReader("ignored")}).Read(buffer); !errors.Is(err, context.Canceled) {
+	if _, err := newContextReader(canceled, strings.NewReader("ignored")).Read(buffer); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pre-canceled context reader = %v", err)
 	}
 	if _, err := io.Copy(io.Discard, strings.NewReader("ordinary")); err != nil {
@@ -481,31 +509,6 @@ func testDisplayProcess() DisplayProcessAdapter {
 func testDisplayCapturer() DisplayCapturerFunc {
 	return func(_ context.Context, _ int, bounds image.Rectangle) (*image.RGBA, error) {
 		return image.NewRGBA(bounds), nil
-	}
-}
-
-func TestDisplaySurfaceReportsUnavailableDiscovery(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the Windows discovery boundary is a host API, not a process seam")
-	}
-	process := DisplayProcessAdapter{
-		RunFunc: func(_ context.Context, name string, _ ...string) ([]byte, error) {
-			if name == "xrandr" || name == "system_profiler" {
-				return nil, errors.New("discovery failed")
-			}
-			return nil, nil
-		},
-		LookPathFunc: func(string) (string, error) { return "", errors.New("missing capture command") },
-	}
-	surface := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
-		Process: process,
-		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
-			return DisplayPermission{State: DisplayPermissionGranted}, nil
-		}),
-	})
-	capability, err := surface.Probe(context.Background())
-	if err == nil || capability.State != ScreenCaptureUnavailable {
-		t.Fatalf("failed discovery Probe = %+v, %v", capability, err)
 	}
 }
 

@@ -57,11 +57,27 @@ func (s *unresolvedFailureSession) SendWithOutcome(ctx context.Context, msg mess
 
 	switch msg.Type {
 	case messages.StreamTypeMessageEnd:
-		s.responseOnce.Do(func() { s.emitToolTurn() })
+		s.responseOnce.Do(func() { s.emitToolTurn(ctx) })
 	case messages.StreamTypeToolCallEnd:
 		if s.resultStatus != "" {
 			return messages.SessionSendOutcome{Status: s.resultStatus, Err: s.resultErr}
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// Other client messages need no scripted response.
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
@@ -73,14 +89,14 @@ func unresolvedFailureContextOutcome(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
-func (s *unresolvedFailureSession) emitToolTurn() {
+func (s *unresolvedFailureSession) emitToolTurn(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(unresolvedToolCallID, "slow_tool")},
 		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(unresolvedToolCallID, "slow_tool", `{"value":"wait"}`)},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -143,8 +159,8 @@ type fixedUnresolvedFailureInferencer struct {
 	session *unresolvedFailureSession
 }
 
-func (i *fixedUnresolvedFailureInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+func (i *fixedUnresolvedFailureInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("unresolved-failure-session", "test"),
 	})
@@ -173,6 +189,7 @@ func assertUnresolvedFailure(t *testing.T, err error) {
 
 func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *testing.T) {
 	clitest.Subtest(t, "provider close", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		runErr := make(chan error, 1)
@@ -188,6 +205,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "buffer full result send", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession(messages.SessionSendBufferFull, errors.New("provider result queue is full"))
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{})}
 		runErr := runUnresolvedFailureSession(t, session, executor)
@@ -195,6 +213,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "caller cancellation", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -213,6 +232,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "caller deadline", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -234,6 +254,7 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 	})
 
 	clitest.Subtest(t, "explicit client close", func(t *testing.T) {
+		t.Helper()
 		session := newUnresolvedFailureSession("", nil)
 		executor := &unresolvedFailureToolExecutor{started: make(chan struct{}), block: true}
 		root := newUnresolvedFailureSessionRoot(t, session, executor)
@@ -257,3 +278,11 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 
 var _ messages.SessionInferencer = (*fixedUnresolvedFailureInferencer)(nil)
 var _ messages.ToolExecutor = (*unresolvedFailureToolExecutor)(nil)
+
+func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string {
+	types := make([]string, len(outbound))
+	for i, event := range outbound {
+		types[i] = event.Type
+	}
+	return types
+}

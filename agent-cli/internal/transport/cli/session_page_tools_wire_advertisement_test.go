@@ -93,7 +93,7 @@ func newWirePageToolsCapabilities(t *testing.T, cdpURL string, runtime *testkit.
 	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(runtime), WithWebMCPProductionDiscovery(discoveryService))
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(cfg)
+	})(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}
@@ -426,7 +426,7 @@ func runTestBrowserLiveSession(ctx context.Context, cfg *config.Config, capabili
 // borrowedTestCapabilities lends an already-initialized capability set to a
 // session without transferring its initialization or close ownership.
 func borrowedTestCapabilities(capabilities SessionToolCapabilities) SessionToolCapabilitiesFactory {
-	return func(*config.Config) (SessionToolCapabilities, error) {
+	return func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		borrowed := capabilities
 		borrowed.Initialize = nil
 		borrowed.Close = nil

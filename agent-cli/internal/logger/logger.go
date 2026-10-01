@@ -11,12 +11,15 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// log is deprecated - use context-based logging instead
-var log *zap.Logger
+const (
+	// logDirPerm is the permission for the log directory under the config dir.
+	logDirPerm os.FileMode = 0o755
+	// logFilePerm is the permission for the agent.log file.
+	logFilePerm os.FileMode = 0o644
+)
 
-// newConsoleWriteSyncer is a behavior-preserving seam for tests that need to
-// observe console routing without replacing process-wide stdout and stderr.
-var newConsoleWriteSyncer = func() zapcore.WriteSyncer {
+// newConsoleWriteSyncer returns the default console sink: stdout and stderr.
+func newConsoleWriteSyncer() zapcore.WriteSyncer {
 	return zapcore.NewMultiWriteSyncer(
 		zapcore.AddSync(os.Stdout),
 		zapcore.AddSync(os.Stderr),
@@ -26,8 +29,11 @@ var newConsoleWriteSyncer = func() zapcore.WriteSyncer {
 // LoggerConfig holds configuration for logger initialization.
 type LoggerConfig struct {
 	VerbosityLevel int    // 0 = none, 1 = info, 2+ = debug
-	ConfigDir      string // Config directory for file logging
+	ConfigDir      string // Config directory for file logging; required unless LogToStdout
 	LogToStdout    bool   // If true, log to stdout/stderr instead of file
+	// ConsoleSink overrides the stdout/stderr destination used when
+	// LogToStdout is true. Nil selects the process stdout and stderr.
+	ConsoleSink zapcore.WriteSyncer
 }
 
 // fileLoggerCloser syncs the logger and closes the log file so the directory can be removed (e.g. in tests).
@@ -62,32 +68,17 @@ func NewLoggerWithCloser(cfg LoggerConfig) (*zap.Logger, io.Closer, error) {
 
 	var writeSyncer zapcore.WriteSyncer
 	var logFile *os.File
-	if cfg.LogToStdout {
-		// Log to stdout/stderr
+	switch {
+	case cfg.LogToStdout && cfg.ConsoleSink != nil:
+		writeSyncer = cfg.ConsoleSink
+	case cfg.LogToStdout:
 		writeSyncer = newConsoleWriteSyncer()
-	} else {
-		// Log to file in config directory
-		if cfg.ConfigDir == "" {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return nil, nil, err
-			}
-			cfg.ConfigDir = filepath.Join(home, ".agent-cli")
-		}
-
-		// Ensure config directory exists
-		if err := os.MkdirAll(cfg.ConfigDir, 0755); err != nil {
-			return nil, nil, err
-		}
-
-		// Create log file path
-		logPath := filepath.Join(cfg.ConfigDir, "agent.log")
+	default:
 		var err error
-		logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		logFile, err = openLogFile(cfg.ConfigDir)
 		if err != nil {
 			return nil, nil, err
 		}
-
 		writeSyncer = zapcore.AddSync(logFile)
 	}
 
@@ -107,6 +98,19 @@ func NewLoggerWithCloser(cfg LoggerConfig) (*zap.Logger, io.Closer, error) {
 	return l, closer, nil
 }
 
+// openLogFile opens agent.log for appending in configDir, creating the
+// directory when needed. The host resolves the config directory.
+func openLogFile(configDir string) (*os.File, error) {
+	if configDir == "" {
+		return nil, errors.New("file logging requires a config directory")
+	}
+	if err := os.MkdirAll(configDir, logDirPerm); err != nil {
+		return nil, err
+	}
+	logPath := filepath.Join(configDir, "agent.log")
+	return os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, logFilePerm)
+}
+
 // NewLogger creates a logger based on the provided configuration.
 // By default, logs are written to a file in the config directory.
 // If LogToStdout is true, logs are written to stdout/stderr instead.
@@ -116,30 +120,16 @@ func NewLogger(cfg LoggerConfig) (*zap.Logger, error) {
 	return l, err
 }
 
-// NewDefaultLogger creates a logger with default settings (no verbosity, file logging).
-func NewDefaultLogger() *zap.Logger {
-	cfg := LoggerConfig{
-		VerbosityLevel: 0,
-		LogToStdout:    false,
-	}
-	l, err := NewLogger(cfg)
-	if err != nil {
-		// Fallback to no-op logger if file logging fails
-		return zap.NewNop()
-	}
-	return l
-}
-
-// NewRequestLogger creates a new logger instance that includes the request ID from the context
-// in every log entry. If no request ID is found, it returns the default logger.
+// NewRequestLogger returns the context's logger (see GetRequestLoggerFromContext)
+// annotated with the request ID from the context in every log entry. If no
+// request ID is found, it returns the context's logger unchanged.
 func NewRequestLogger(ctx context.Context) *zap.Logger {
+	base := GetRequestLoggerFromContext(ctx)
 	requestID := GetRequestID(ctx)
 	if requestID == "" {
-		return GetDefaultLogger()
+		return base
 	}
-
-	// Create a new logger with the request ID field
-	return GetDefaultLogger().With(zap.String("request_id", requestID))
+	return base.With(zap.String("request_id", requestID))
 }
 
 // GetRequestID retrieves the request ID from the context
@@ -150,22 +140,10 @@ func GetRequestID(ctx context.Context) string {
 	return ""
 }
 
-// WithRequestID creates a logger with a specific request ID
-func WithRequestID(requestID string) *zap.Logger {
-	if requestID == "" {
-		return GetDefaultLogger()
-	}
-
-	return GetDefaultLogger().With(zap.String("request_id", requestID))
-}
-
-// GetDefaultLogger returns the default logger instance
-// If the logger hasn't been initialized, it returns a no-op logger
+// GetDefaultLogger returns the default logger used when no logger is attached
+// to a context: a no-op logger. Attach a real logger with WithLogger.
 func GetDefaultLogger() *zap.Logger {
-	if log == nil {
-		return zap.NewNop()
-	}
-	return log
+	return zap.NewNop()
 }
 
 // GetRequestLoggerFromContext retrieves the logger from the request context
@@ -179,7 +157,7 @@ func GetRequestLoggerFromContext(ctx context.Context) *zap.Logger {
 
 // NewVerboseLogger creates a logger based on verbosity level and config directory.
 // verbosityLevel: 0 = none, 1 = info, 2+ = debug
-// configDir: directory for file logging (empty uses default ~/.agent-cli)
+// configDir: directory for file logging (required unless logToStdout; empty yields a no-op logger)
 // logToStdout: if true, log to stdout/stderr instead of file
 func NewVerboseLogger(verbosityLevel int, configDir string, logToStdout bool) *zap.Logger {
 	l, _ := NewVerboseLoggerWithCloser(verbosityLevel, configDir, logToStdout)

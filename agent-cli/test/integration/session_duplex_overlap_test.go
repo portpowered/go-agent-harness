@@ -360,13 +360,14 @@ type startupAnnouncementConversation struct {
 	finalSent    bool
 }
 
-func newStartupAnnouncementFixture(t testing.TB, toolPath, toolContent string) *startupAnnouncementFixture {
+func newStartupAnnouncementFixture(tb testing.TB, toolPath, toolContent string) *startupAnnouncementFixture {
+	tb.Helper()
 	fixture := &startupAnnouncementFixture{
 		upgrader:    websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		toolPath:    toolPath,
 		toolContent: toolContent,
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 
@@ -563,9 +564,14 @@ func (f *startupAnnouncementFixture) sendFinalResponse(connection *websocket.Con
 	f.mu.Lock()
 	f.finalResponses++
 	f.mu.Unlock()
-	time.Sleep(20 * time.Millisecond)
+	// Let the client drain the final response before the provider closes.
+	drain := time.NewTimer(startupAnnouncementCloseDelay)
+	<-drain.C
 	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "startup_routing_complete"})
 }
+
+// startupAnnouncementCloseDelay separates the final response from session close.
+const startupAnnouncementCloseDelay = 20 * time.Millisecond
 
 func (f *startupAnnouncementFixture) send(connection *websocket.Conn, event any) error {
 	return connection.WriteJSON(event)

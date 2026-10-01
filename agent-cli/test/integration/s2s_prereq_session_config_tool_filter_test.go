@@ -103,7 +103,7 @@ func runSessionConfigToolFilterCase(t *testing.T, tc sessionConfigToolFilterCase
 	var resultText strings.Builder
 	results := make([]sessionConfigToolResult, 0, len(tc.calls))
 	currentResult := make(map[string]string)
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
 	)
 	if err != nil {
@@ -170,16 +170,16 @@ func assertSessionConfigSleepResults(t *testing.T, tc sessionConfigToolFilterCas
 		if len(results) != 1 || results[0].Content != "Slept for 0s (no-op)." {
 			t.Fatalf("default sleep result = %#v, want one successful no-op result", results)
 		}
-	} else {
-		if strings.Contains(resultText, "Slept for 0s (no-op).") {
-			t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText)
-		}
-		if len(results) == 0 || !isRejectedSleepResult(results[0]) {
-			t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
-		}
-		if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
-			t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
-		}
+		return
+	}
+	if strings.Contains(resultText, "Slept for 0s (no-op).") {
+		t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText)
+	}
+	if len(results) == 0 || !isRejectedSleepResult(results[0]) {
+		t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
+	}
+	if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
+		t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
 	}
 }
 
@@ -222,7 +222,7 @@ func TestSessionConfigToolFilterRejectsInvalidConfigBeforeConnect(t *testing.T) 
 	}
 
 	sessionInferencer := newSessionConfigToolInferencer(nil)
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
 	)
 	if err != nil {
@@ -268,17 +268,17 @@ func newSessionConfigToolInferencer(calls []sessionConfigToolCall) *sessionConfi
 	return &sessionConfigToolInferencer{calls: append([]sessionConfigToolCall(nil), calls...)}
 }
 
-func (i *sessionConfigToolInferencer) ConnectSession(context.Context) (messages.Session, error) {
+func (i *sessionConfigToolInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.sess = &sessionConfigToolSession{
 		inferencer: i,
 		recv:       messages.NewTypedBuffer[messages.StreamMessage](64),
 		done:       make(chan struct{}),
 	}
-	i.sess.recv.Write(context.Background(), messages.StreamMessage{
+	i.sess.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("session-config-tool-filter", "deterministic"),
 	})
-	i.sess.recv.Write(context.Background(), messages.StreamMessage{
+	i.sess.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionCreated,
 		Value: messages.NewSessionCreatedValue("session-config-tool-filter", "deterministic"),
 	})
@@ -359,7 +359,7 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		closeAfterAcceptance := s.acceptedCalls == len(s.inferencer.calls)
 		s.mu.Unlock()
 		if closeAfterAcceptance {
-			s.emitContinuation()
+			s.emitContinuation(ctx)
 			s.mu.Lock()
 			s.continuationSent = true
 			s.mu.Unlock()
@@ -396,7 +396,7 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 	for _, delta := range deltas {
-		if !s.recv.Write(context.Background(), delta) {
+		if !s.recv.Write(ctx, delta) {
 			return false
 		}
 	}
@@ -422,7 +422,7 @@ func (s *sessionConfigToolSession) closeWhenObserved() {
 	}
 }
 
-func (s *sessionConfigToolSession) emitContinuation() {
+func (s *sessionConfigToolSession) emitContinuation(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
@@ -430,7 +430,7 @@ func (s *sessionConfigToolSession) emitContinuation() {
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		if !s.recv.Write(context.Background(), msg) {
+		if !s.recv.Write(ctx, msg) {
 			return
 		}
 	}

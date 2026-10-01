@@ -33,6 +33,7 @@ func TestRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
 }
 
 func testRemoteToolAudioSlowDeviceEdgeOracleControl(t *testing.T) {
+	t.Helper()
 	want := remoteToolAudioSlowDeviceControlPCM(t)
 	if len(want) < audio.FrameSize {
 		t.Fatalf("expected control audio to contain at least one frame: %d samples", len(want))
@@ -236,9 +237,11 @@ func TestDefaultHoldToneIsSeparateFromProviderPCM(t *testing.T) {
 	// Both subtests wait out a 3s tool delay to cross the 2.5s hold-tone gap
 	// threshold, on the virtual clock.
 	clitest.Subtest(t, "default_cue", func(t *testing.T) {
+		t.Helper()
 		runRemoteToolAudioScenario(t, testCase, 0, 3*time.Second, time.Millisecond, 0, 0, 0)
 	})
 	clitest.Subtest(t, "provider_only_fixture", func(t *testing.T) {
+		t.Helper()
 		providerOnly := testCase
 		providerOnly.name = "provider_only_hold_tone_policy"
 		providerOnly.holdToneControl = false

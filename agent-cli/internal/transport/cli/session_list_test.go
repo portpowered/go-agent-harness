@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +15,7 @@ func TestSessionListCommandBoundsAndComposesMetadataFilters(t *testing.T) {
 	configDir := t.TempDir()
 	storage := newManagedSessionStoreForTest(t, configDir)
 	base := time.Date(2026, time.August, 31, 12, 0, 0, 0, time.UTC)
-	for i := 0; i < 105; i++ {
+	for i := range 105 {
 		id := fmt.Sprintf("bulk-%03d", i)
 		if err := storage.Save(t.Context(), id, nil); err != nil {
 			t.Fatalf("Save %q: %v", id, err)
@@ -29,7 +28,7 @@ func TestSessionListCommandBoundsAndComposesMetadataFilters(t *testing.T) {
 
 	list := func(extra ...string) cliResult {
 		args := []string{"--config-dir", configDir, "session", "list"}
-		return executeGeneratedCLI(context.Background(), configDir, append(args, extra...)...)
+		return executeGeneratedCLI(t, configDir, append(args, extra...)...)
 	}
 
 	defaultResult := list()
@@ -98,7 +97,7 @@ func TestSessionListCommandRejectsInvalidQueriesBeforeOutput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			args := append([]string{"--config-dir", configDir, "session", "list"}, tt.args...)
-			result := executeGeneratedCLI(context.Background(), configDir, args...)
+			result := executeGeneratedCLI(t, configDir, args...)
 			if result.err == nil {
 				t.Fatal("expected invalid query error")
 			}
@@ -113,7 +112,7 @@ func TestSessionListCommandRejectsInvalidQueriesBeforeOutput(t *testing.T) {
 }
 
 func TestSessionListCommandEmptyStateIsUnchanged(t *testing.T) {
-	result := executeGeneratedCLI(context.Background(), t.TempDir(), "session", "list")
+	result := executeGeneratedCLI(t, t.TempDir(), "session", "list")
 	if result.err != nil {
 		t.Fatalf("empty list: %v", result.err)
 	}

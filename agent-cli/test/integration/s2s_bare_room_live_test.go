@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	bareRoomLiveProbeOptInEnv        = "AGENT_HARNESS_LIVE_BARE_ROOM"
 	bareRoomLiveProbeStartupTimeout  = 10 * time.Second
 	bareRoomLiveProbeTeardownTimeout = 10 * time.Second
 	bareRoomLiveProbeKillTimeout     = 2 * time.Second
@@ -41,22 +40,19 @@ const (
 // test only confirms that the shipped binary reaches the same readiness shape
 // on the host's current default devices and then exits cleanly on SIGINT.
 func TestLiveBareRoomRunDefaultDevices(t *testing.T) {
-	if os.Getenv(bareRoomLiveProbeOptInEnv) != "1" {
-		t.Skipf("SKIP: %s!=1; bare-room live probe is explicit opt-in", bareRoomLiveProbeOptInEnv)
-	}
 	apiKey := strings.TrimSpace(os.Getenv(bareRoomCredentialEnv))
 	if apiKey == "" {
-		t.Skipf("BLOCKED: %s is not set; bare-room live probe has no credential", bareRoomCredentialEnv)
+		t.Fatalf("BLOCKED: %s is not set; bare-room live probe has no credential", bareRoomCredentialEnv)
 	}
 
 	registry := devicegw.NewHostDeviceRegistry()
 	input, err := registry.Default(devicegw.DirectionInput)
 	if err != nil {
-		t.Skipf("BLOCKED: host default input is unavailable: %v", err)
+		t.Fatalf("BLOCKED: host default input is unavailable: %v", err)
 	}
 	output, err := registry.Default(devicegw.DirectionOutput)
 	if err != nil {
-		t.Skipf("BLOCKED: host default output is unavailable: %v", err)
+		t.Fatalf("BLOCKED: host default output is unavailable: %v", err)
 	}
 
 	configDir := t.TempDir()
@@ -138,7 +134,7 @@ type bareRoomLiveProcess struct {
 
 func startBareRoomLiveProbe(t *testing.T, configDir, apiKey string) (*bareRoomLiveProcess, error) {
 	t.Helper()
-	command := exec.Command(buildAgentBinary(t), bareRoomLiveProbeArgs(configDir)...)
+	command := exec.CommandContext(t.Context(), buildAgentBinary(t), bareRoomLiveProbeArgs(configDir)...)
 	command.Dir = agentCLIRoot(t)
 	command.Env = bareRoomLiveProbeEnvironment(apiKey)
 

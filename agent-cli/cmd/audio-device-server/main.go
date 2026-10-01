@@ -1,8 +1,7 @@
 package main
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,8 +12,13 @@ import (
 	"os"
 	"time"
 
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+// httpReadHeaderTimeout bounds how long the loopback control server waits for request headers.
+const httpReadHeaderTimeout = 5 * time.Second
 
 func main() {
 	listenAddress := flag.String("listen", "127.0.0.1:0", "loopback listen address")
@@ -24,7 +28,8 @@ func main() {
 	manualClock := flag.Bool("manual-clock", false, "advance device callbacks only through the test control API")
 	flag.Parse()
 
-	listener, err := net.Listen("tcp", *listenAddress)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(context.Background(), "tcp", *listenAddress)
 	if err != nil {
 		fatal(err)
 	}
@@ -65,7 +70,7 @@ func main() {
 		fatal(errors.Join(err, listener.Close()))
 	}
 
-	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: httpReadHeaderTimeout}
 	if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}

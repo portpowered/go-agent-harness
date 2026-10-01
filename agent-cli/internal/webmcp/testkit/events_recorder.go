@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -182,7 +183,7 @@ func (r *Recorder) writeLocked(event Event) error {
 	}
 	encoded, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("%w: encode event: %v", ErrRecorderWrite, err)
+		return fmt.Errorf("%w: encode event: %w", ErrRecorderWrite, err)
 	}
 	encoded = append(encoded, '\n')
 	n, writeErr := r.writer.Write(encoded)
@@ -190,7 +191,7 @@ func (r *Recorder) writeLocked(event Event) error {
 		writeErr = io.ErrShortWrite
 	}
 	if writeErr != nil {
-		return fmt.Errorf("%w: %v", ErrRecorderWrite, writeErr)
+		return fmt.Errorf("%w: %w", ErrRecorderWrite, writeErr)
 	}
 	if event.Sequence == ^uint64(0) {
 		return fmt.Errorf("%w: sequence overflow", ErrRecorderWrite)
@@ -198,5 +199,26 @@ func (r *Recorder) writeLocked(event Event) error {
 	r.nextSequence = event.Sequence + 1
 	r.lastMonotonic = event.MonotonicMS
 	r.hasEvents = true
+	return nil
+}
+
+// WriteRedactedEvents serializes redacted events to a writer only after the
+// complete artifact has been transformed and credential-checked. A failed
+// transformation never writes a partial event stream.
+func WriteRedactedEvents(writer io.Writer, events []Event, policy RedactionPolicy, credentials ...[]string) error {
+	if writer == nil {
+		return newRedactionError(ErrRecorderWrite, "write events", "writer", errors.New("writer is nil"), nil)
+	}
+	data, err := MarshalRedactedEvents(events, policy, credentials...)
+	if err != nil {
+		return err
+	}
+	n, err := writer.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		return newRedactionError(ErrRecorderWrite, "write events", "writer", err, nil)
+	}
 	return nil
 }

@@ -3,25 +3,23 @@ package webmcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"time"
 )
 
 type targetCancellation struct {
 	session TargetSession
 	id      InvocationID
-	ctx     context.Context
 	done    chan struct{}
 }
 
-func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation, cancelCtx context.Context) *targetCancellation {
+func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation) *targetCancellation {
 	if invocation == nil || invocation.cancelSent || !invocation.invocation.CancelRequested || invocation.browserID == "" {
 		return nil
 	}
-	if cancelCtx == nil {
-		cancelCtx = context.Background()
-	}
 	invocation.cancelSent = true
 	invocation.cancelDone = make(chan struct{})
-	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, ctx: cancelCtx, done: invocation.cancelDone}
+	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, done: invocation.cancelDone}
 }
 
 func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, action *targetCancellation) <-chan struct{} {
@@ -31,7 +29,10 @@ func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, ac
 	return invocation.cancelDone
 }
 
-func performTargetCancellation(action *targetCancellation) {
+// performTargetCancellation sends the claimed browser cancel with ctx. Callers
+// on detached paths (timeouts, lane workers) pass a context that is not tied
+// to the canceled caller so the cancel command itself is not aborted.
+func performTargetCancellation(ctx context.Context, action *targetCancellation) {
 	if action == nil {
 		return
 	}
@@ -42,7 +43,7 @@ func performTargetCancellation(action *targetCancellation) {
 	// Cancellation is best effort after the broker has claimed the request.
 	// A target that has already detached or replied is still
 	// reconciled by the broker's bounded browser-terminal cache.
-	if err := action.session.CancelWebMCP(action.ctx, action.id); err != nil {
+	if err := action.session.CancelWebMCP(ctx, action.id); err != nil {
 		return
 	}
 }
@@ -145,4 +146,74 @@ func (b *StatefulBroker) directCancelDispatchFailed(selected *brokerSession, ope
 		return directCancellationResult(operation, observation)
 	}
 	return directCancellationDispatchFailure(operation, err)
+}
+
+// callerBinding is what the lane worker needs from the admitting caller: its
+// done channel, its cancellation cause, and its deadline. It exposes no
+// context, so the worker never derives contexts from, or reads values of, the
+// caller's context. The cause closure does keep the caller's context reachable
+// for as long as the invocation lease lives; the lease is dropped when the
+// invocation terminates.
+type callerBinding struct {
+	done        <-chan struct{}
+	cause       func() error
+	deadline    time.Time
+	hasDeadline bool
+}
+
+func newCallerBinding(ctx context.Context) callerBinding {
+	deadline, hasDeadline := ctx.Deadline()
+	return callerBinding{
+		done:        ctx.Done(),
+		cause:       func() error { return context.Cause(ctx) },
+		deadline:    deadline,
+		hasDeadline: hasDeadline,
+	}
+}
+
+// callerBoundContext derives the dispatch context from the worker context and
+// mirrors the caller: it carries the caller's deadline (so an expired caller
+// deadline surfaces as context.DeadlineExceeded) and is canceled, with the
+// caller's cancellation cause as its cause, once the caller is canceled.
+func callerBoundContext(ctx context.Context, caller callerBinding) (context.Context, func()) {
+	dispatchCtx, cancelCause := context.WithCancelCause(ctx)
+	stopDeadline := context.CancelFunc(func() {})
+	if caller.hasDeadline {
+		dispatchCtx, stopDeadline = context.WithDeadline(dispatchCtx, caller.deadline)
+	}
+	release := func() {
+		stopDeadline()
+		cancelCause(nil)
+	}
+	// An expired caller deadline is mirrored by the dispatch deadline itself.
+	mirrorCancel := func() {
+		cause := caller.cause()
+		if caller.hasDeadline && errors.Is(cause, context.DeadlineExceeded) {
+			return
+		}
+		cancelCause(cause)
+	}
+	select {
+	case <-caller.done:
+		mirrorCancel()
+		return dispatchCtx, release
+	default:
+	}
+	go func() {
+		select {
+		case <-caller.done:
+			mirrorCancel()
+		case <-dispatchCtx.Done():
+		}
+	}()
+	return dispatchCtx, release
+}
+
+// dispatchQueuedInvocationWithCallerCancellation dispatches invocation with a
+// context derived from the worker context that mirrors the admitting caller's
+// cancellation and deadline for the browser call.
+func (b *StatefulBroker) dispatchQueuedInvocationWithCallerCancellation(ctx context.Context, invocation *brokerInvocation) {
+	dispatchCtx, release := callerBoundContext(ctx, invocation.caller)
+	defer release()
+	b.dispatchQueuedInvocationWithLock(dispatchCtx, invocation)
 }

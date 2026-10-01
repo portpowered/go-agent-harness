@@ -319,6 +319,7 @@ func assertConversationAcceptedExchange(t *testing.T, stdout, wirePath string, e
 
 func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *testing.T) {
 	clitest.Subtest(t, "provider close while unresolved", func(t *testing.T) {
+		t.Helper()
 		wavPath, reply := shortConversationFixtureInputs(t)
 		_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
 			insertConversationProviderCloseBeforeResult(t, capture)
@@ -359,10 +360,11 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 	})
 
 	clitest.Subtest(t, "accepted result then completion", func(t *testing.T) {
+		t.Helper()
 		wavPath, reply := shortConversationFixtureInputs(t)
 		executor := newGatedConversationExecutor(toolResultPositive)
 		defer executor.releaseResult()
-		wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+		wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 
 		runResult := make(chan conversationRunResult, 1)
 		go func() {
@@ -435,6 +437,7 @@ func TestSessionToolResultConversationMissingContinuationIsBounded(t *testing.T)
 }
 
 func testSessionToolResultConversationMissingContinuationIsBounded(t *testing.T) {
+	t.Helper()
 	wavPath, reply := shortConversationFixtureInputs(t)
 	_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
 		removeConversationContinuationAfterResult(t, capture)
@@ -470,12 +473,14 @@ func TestSessionToolResultConversationAudioAbsenceAndSignalControls(t *testing.T
 	}{
 		{name: "missing response delta", mutate: removeConversationAudioDelta, wantKind: conversationAudioMissing},
 		{name: "silent response signal", mutate: func(t *testing.T, capture *gwtesting.SessionCapture) {
+			t.Helper()
 			replaceConversationAudioDelta(t, capture, func(raw []byte) []byte { return make([]byte, len(raw)) })
 		}, wantKind: conversationAudioSignal},
 	}
 
 	for _, testCase := range tests {
 		clitest.Subtest(t, testCase.name, func(t *testing.T) {
+			t.Helper()
 			wavPath, reply := shortConversationFixtureInputs(t)
 			_, wirePath := buildConversationControlFixtureFromInputs(t, wavPath, reply, func(capture *gwtesting.SessionCapture) {
 				testCase.mutate(t, capture)

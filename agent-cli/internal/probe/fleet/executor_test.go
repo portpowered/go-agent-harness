@@ -17,7 +17,7 @@ func executionTestManifest(t *testing.T, entries, concurrency int) Manifest {
 		Concurrency:   concurrency,
 		EntryLimit:    entries,
 	}
-	for repeatIndex := 0; repeatIndex < entries; repeatIndex++ {
+	for repeatIndex := range entries {
 		manifest.Entries = append(manifest.Entries, Entry{
 			ID:           EntryID("scenario", TransportReplay, repeatIndex),
 			ScenarioID:   "scenario",
@@ -65,7 +65,7 @@ func TestExecuteHonorsConcurrencyAndPreservesManifestOrder(t *testing.T) {
 		executionDone <- execution
 	}()
 
-	for index := 0; index < concurrency; index++ {
+	for range concurrency {
 		<-started
 	}
 	if got := peak.Load(); got > concurrency {

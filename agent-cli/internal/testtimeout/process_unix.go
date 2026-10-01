@@ -3,6 +3,7 @@
 package testtimeout
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -13,7 +14,7 @@ func prepareCommand(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-func terminateCommand(cmd *exec.Cmd) error {
+func terminateCommand(_ context.Context, cmd *exec.Cmd) error {
 	return signalProcessGroup(cmd, syscall.SIGKILL)
 }
 

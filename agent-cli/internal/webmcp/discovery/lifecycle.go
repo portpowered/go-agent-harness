@@ -13,9 +13,6 @@ const maxLifecycleReason = 64
 // pair named by the event. Target close/detach invalidates that pair and
 // releases its external handle through the detach-only contract.
 func (s *Service) HandleLifecycle(ctx context.Context, event LifecycleEvent) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -46,7 +43,7 @@ func (s *Service) HandleLifecycle(ctx context.Context, event LifecycleEvent) (Se
 	case LifecycleNavigation, LifecycleDocumentReplaced:
 		selection, lifecycleFailure = s.applyNavigationLocked(ctx, event)
 	case LifecycleTargetClosed, LifecycleTargetDetached:
-		selection, release, lifecycleFailure = s.applyTargetClosedLocked(event)
+		selection, release = s.applyTargetClosedLocked(event)
 	default:
 		lifecycleFailure = newProtocolInvalidAt("lifecycle", "unknown", "unsupported_lifecycle_event", nil)
 	}
@@ -56,7 +53,7 @@ func (s *Service) HandleLifecycle(ctx context.Context, event LifecycleEvent) (Se
 	// adapter reported a close is still detach-only and idempotent; importantly,
 	// this package never receives a close-target or browser-process operation.
 	if release != nil {
-		discardRelease(release)
+		discardTargetHandle(ctx, release)
 	}
 	if lifecycleFailure != nil {
 		return selection, lifecycleFailure
@@ -144,9 +141,6 @@ func (s *Service) HandleTargetDetached(ctx context.Context, browserID, targetID 
 // A target that no longer proves WebMCP is left non-ready and returns
 // unsupported_webmcp.
 func (s *Service) RefreshSelection(ctx context.Context) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -186,9 +180,6 @@ func (s *Service) ValidateSelection(ctx context.Context, selection Selection) (S
 
 // ValidateSelectionGeneration validates an exact generation-bearing identity.
 func (s *Service) ValidateSelectionGeneration(ctx context.Context, request SelectionValidationRequest) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -329,10 +320,10 @@ func (s *Service) applyNavigationLocked(ctx context.Context, event LifecycleEven
 	return refreshed, nil
 }
 
-func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *TargetHandle, *DiscoveryError) {
+func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *TargetHandle) {
 	state, _, current, applied := s.advanceTargetGenerationLocked(event)
 	if !applied {
-		return s.currentSelectionLocked(), nil, nil
+		return s.currentSelectionLocked(), nil
 	}
 	state.closed = true
 	state.target.Generation = current
@@ -360,7 +351,7 @@ func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *Tar
 		"reason":         reason,
 		"ownership_mode": ownership,
 	})
-	return Selection{}, release, nil
+	return Selection{}, release
 }
 
 func (s *Service) advanceTargetGenerationLocked(event LifecycleEvent) (targetState, uint64, uint64, bool) {

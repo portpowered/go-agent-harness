@@ -29,7 +29,7 @@ func classifiedOpenError(candidate webmcp.BrowserCandidate, cause error) error {
 	}
 }
 
-func classifiedHandleError(candidate webmcp.BrowserCandidate, code webmcp.ErrorCode, phase string, cause error) error {
+func classifiedHandleError(code webmcp.ErrorCode, phase string, cause error) error {
 	var classified *webmcp.ClassifiedError
 	if errors.As(cause, &classified) && classified != nil {
 		return classified
@@ -192,12 +192,11 @@ func sessionLifecycleError(session *targetSession) *webmcp.ClassifiedError {
 	if !errors.As(session.Err(), &classified) {
 		return nil
 	}
-	switch classified.Code {
-	case webmcp.ErrorTargetDetached, webmcp.ErrorBrowserDisconnected:
+	// Only a detached target or a lost browser ends the session lifecycle.
+	if classified.Code == webmcp.ErrorTargetDetached || classified.Code == webmcp.ErrorBrowserDisconnected {
 		return classified
-	default:
-		return nil
 	}
+	return nil
 }
 
 func classifyTargetCleanupError(session *targetSession, phase string, cause error) error {

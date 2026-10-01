@@ -30,7 +30,7 @@ func TestGeneratedRootCLI_WebRTCRejectsBeforeProductionSideEffects(t *testing.T)
 	audioSource := &recordingAudioSource{}
 	audioSink := &recordingAudioSink{}
 	toolExecutor := &recordingToolExecutor{}
-	app, err := ComposeAgentCLI(
+	app, err := ComposeAgentCLI(t.Context(),
 		toolExecutor,
 		transportDialer,
 		registry,
@@ -112,12 +112,12 @@ func testLivePortSwap(t *testing.T, definition portDefinition) {
 	}
 
 	var observation assemblyObservation
-	root, err := initializeAgentCLIWithPorts(true, observation.record, swaps...)
+	root, err := initializeAgentCLIWithPorts(t.Context(), true, observation.record, swaps...)
 	if err != nil {
-		t.Fatalf("InitializeMockAgentCLIWithPorts(%q): %v", definition.descriptor.Name, err)
+		t.Fatalf("InitializeMockAgentCLIWithPorts(t.Context(), %q): %v", definition.descriptor.Name, err)
 	}
 	if root == nil {
-		t.Fatalf("InitializeMockAgentCLIWithPorts(%q) returned nil root", definition.descriptor.Name)
+		t.Fatalf("InitializeMockAgentCLIWithPorts(t.Context(), %q) returned nil root", definition.descriptor.Name)
 	}
 	if observation.calls != 1 {
 		t.Fatalf("assembly boundary calls for %q = %d, want exactly 1", definition.descriptor.Name, observation.calls)
@@ -259,7 +259,7 @@ func testOptionalToolService(t *testing.T, definition portDefinition) {
 	t.Helper()
 	t.Run("available_with_option", func(t *testing.T) {
 		service := &recordingToolService{}
-		root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithToolService(service))
+		root, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{}, WithToolService(service))
 		if err != nil || root == nil {
 			t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 		}
@@ -269,7 +269,7 @@ func testOptionalToolService(t *testing.T, definition portDefinition) {
 func testOptionalInferencer(t *testing.T, definition portDefinition) {
 	t.Helper()
 	t.Run("unavailable_without_option", func(t *testing.T) {
-		root, err := composeTestAgentCLI(&recordingToolExecutor{})
+		root, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{})
 		if err != nil || root == nil {
 			t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
 		}
@@ -280,7 +280,7 @@ func testOptionalInferencer(t *testing.T, definition portDefinition) {
 	})
 	t.Run("available_with_option", func(t *testing.T) {
 		inferencer := &recordingInferencer{response: "option"}
-		root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithInferencer(inferencer))
+		root, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{}, WithInferencer(inferencer))
 		if err != nil || root == nil {
 			t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 		}
@@ -296,7 +296,7 @@ func testOptionalInferencer(t *testing.T, definition portDefinition) {
 func testOptionalSessionInferencer(t *testing.T, definition portDefinition) {
 	t.Helper()
 	t.Run("unavailable_without_option", func(t *testing.T) {
-		root, err := composeTestAgentCLI(&recordingToolExecutor{})
+		root, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{})
 		if err != nil || root == nil {
 			t.Fatalf("ComposeAgentCLI without %q: root=%v err=%v", definition.descriptor.Name, root, err)
 		}
@@ -307,7 +307,7 @@ func testOptionalSessionInferencer(t *testing.T, definition portDefinition) {
 	})
 	t.Run("available_with_option", func(t *testing.T) {
 		sessionInferencer := &recordingSessionInferencer{}
-		root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithSessionInferencer(sessionInferencer))
+		root, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{}, WithSessionInferencer(sessionInferencer))
 		if err != nil || root == nil {
 			t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 		}
@@ -324,7 +324,7 @@ func testOptionalRuntimeObserver(t *testing.T, definition portDefinition) {
 	t.Helper()
 	t.Run("available_with_option", func(t *testing.T) {
 		observer := recordingSessionRuntimeObserver{}
-		root, err := composeTestAgentCLI(&recordingToolExecutor{}, WithSessionRuntimeObserver(observer))
+		root, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{}, WithSessionRuntimeObserver(observer))
 		if err != nil || root == nil {
 			t.Fatalf("ComposeAgentCLI with %q: root=%v err=%v", definition.descriptor.Name, root, err)
 		}
@@ -333,7 +333,7 @@ func testOptionalRuntimeObserver(t *testing.T, definition portDefinition) {
 
 func TestGeneratedRootLiveSessionUsesInjectedTransportPort(t *testing.T) {
 	dialer := &recordingDialer{}
-	agentCLI, err := InitializeMockAgentCLIWithPorts(NewPortSwap(PortTransportDialer, dialer))
+	agentCLI, err := InitializeMockAgentCLIWithPorts(t.Context(), NewPortSwap(PortTransportDialer, dialer))
 	if err != nil {
 		t.Fatal(err)
 	}

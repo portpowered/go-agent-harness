@@ -17,9 +17,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -135,7 +133,7 @@ func resampleTest6PCM(t *testing.T, pcm []byte) []int16 {
 		t.Fatalf("test6 PCM byte count = %d, want even PCM16", len(pcm))
 	}
 	samples := codec.PCM16Samples(pcm)
-	return mustResampleStream(t, [][]int16{samples}, wavio.Rate24kHz, audio.SampleRate)
+	return mustResampleProviderToDevice(t, [][]int16{samples})
 }
 
 func writeTest6BargeInCapture(t *testing.T, path string, providerAudio [][]byte) {

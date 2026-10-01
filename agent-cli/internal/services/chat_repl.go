@@ -73,7 +73,7 @@ type ChatModel struct {
 	sessionID   string
 	globalFlags *flags.GlobalFlags
 	askFlags    *flags.AskFlags
-	ctx         context.Context
+	ctx         context.Context //nolint:containedctx // bubbletea's Update/tea.Cmd carry no context; the model lives exactly as long as the Run(ctx) that owns the program
 	out         io.Writer
 	errOut      io.Writer
 	lines       []chatLine       // conversation history (user, assistant, thinking, tool, media)
@@ -99,13 +99,13 @@ type ChatModel struct {
 }
 
 // NewChatModel constructs a ChatModel ready for use.
-func NewChatModel(service session.Service, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) ChatModel {
+func NewChatModel(service session.Service, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) *ChatModel {
 	ti := textinput.New()
 	ti.Prompt = "> "
-	ti.PromptStyle = stylePrompt
+	ti.PromptStyle = stylePrompt()
 	ti.Placeholder = "Type a message..."
 	ti.Width = 78
-	return ChatModel{
+	return &ChatModel{
 		service:     service,
 		sessionID:   sessionID,
 		globalFlags: globalFlags,
@@ -119,55 +119,24 @@ func NewChatModel(service session.Service, sessionID string, globalFlags *flags.
 
 // IsQuitting reports whether the model has received an exit signal.
 // Useful in tests to verify the model responded correctly to "exit"/"quit".
-func (m ChatModel) IsQuitting() bool { return m.quitting }
+func (m *ChatModel) IsQuitting() bool { return m.quitting }
 
 // InputFocused reports whether the Bubbles textinput has focus (for tests).
-func (m ChatModel) InputFocused() bool { return m.input.Focused() }
+func (m *ChatModel) InputFocused() bool { return m.input.Focused() }
 
 // SessionID returns the current session ID (for tests).
-func (m ChatModel) SessionID() string { return m.sessionID }
+func (m *ChatModel) SessionID() string { return m.sessionID }
 
 // Init implements tea.Model. Send FocusInputMsg so Update can focus the input on the real model, then start blink.
-func (m ChatModel) Init() tea.Cmd {
+func (m *ChatModel) Init() tea.Cmd {
 	return tea.Sequence(func() tea.Msg { return FocusInputMsg{} }, textinput.Blink)
 }
 
 // Update implements tea.Model. It handles keyboard events and agent results.
-func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// When any autocomplete is active, intercept navigation keys.
-		if m.interceptAutocompleteKey(msg) {
-			return m, nil
-		}
-
-		switch msg.Type {
-		case tea.KeyCtrlC:
-			m.quitting = true
-			return m, tea.Quit
-
-		case tea.KeyEnter:
-			m.fileAutocomplete.Reset()
-			m.cmdAutocomplete.Reset()
-			rawInput := strings.TrimSpace(m.input.Value())
-			m.input.SetValue("")
-			if rawInput == "" {
-				return m, nil
-			}
-			if rawInput == "exit" || rawInput == "quit" {
-				m.writeChatTerminal(m.out, "Goodbye!\n")
-				m.quitting = true
-				return m, tea.Quit
-			}
-			return m.submitInput(rawInput)
-		}
-		// Delegate all other keys to Bubbles textinput (cursor, backspace, runes, etc.)
-		var cmd tea.Cmd
-		*m.input, cmd = m.input.Update(msg)
-		// After updating input, check for @ or / prefix to activate autocomplete.
-		m.updateFileAutocomplete()
-		m.updateCmdAutocomplete()
-		return m, cmd
+		return m.updateKey(msg)
 
 	case FocusInputMsg:
 		// Focus the input on the actual model (Init cannot do this because it has value receiver).
@@ -213,6 +182,43 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateKey handles one keyboard event: autocomplete navigation, Ctrl+C,
+// Enter, and everything else delegated to the text input.
+func (m *ChatModel) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When any autocomplete is active, intercept navigation keys.
+	if m.interceptAutocompleteKey(msg) {
+		return m, nil
+	}
+
+	// Only Ctrl+C and Enter are handled here; every other tea.KeyType goes to the input below.
+	if msg.Type == tea.KeyCtrlC {
+		m.quitting = true
+		return m, tea.Quit
+	}
+	if msg.Type == tea.KeyEnter {
+		m.fileAutocomplete.Reset()
+		m.cmdAutocomplete.Reset()
+		rawInput := strings.TrimSpace(m.input.Value())
+		m.input.SetValue("")
+		if rawInput == "" {
+			return m, nil
+		}
+		if rawInput == "exit" || rawInput == "quit" {
+			m.writeChatTerminal(m.out, "Goodbye!\n")
+			m.quitting = true
+			return m, tea.Quit
+		}
+		return m.submitInput(rawInput)
+	}
+	// Delegate all other keys to Bubbles textinput (cursor, backspace, runes, etc.)
+	var cmd tea.Cmd
+	*m.input, cmd = m.input.Update(msg)
+	// After updating input, check for @ or / prefix to activate autocomplete.
+	m.updateFileAutocomplete()
+	m.updateCmdAutocomplete()
+	return m, cmd
+}
+
 // isFromTool returns true when the stream event is from a tool (tool result), not the assistant.
 func isFromTool(evt messages.StreamMessage) bool {
 	return evt.Role == messages.RoleTool || evt.ToolCallId != ""
@@ -240,14 +246,8 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 		if v, ok := evt.Value.(*messages.ToolCallStartValue); ok {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineTool, content: v.Name})
 		}
-	case messages.StreamTypeImageStart:
-		m.appendToolMediaLine(evt, "[Image returned]")
-	case messages.StreamTypeAudioStart:
-		m.appendToolMediaLine(evt, "[Audio returned]")
-	case messages.StreamTypeVideoStart:
-		m.appendToolMediaLine(evt, "[Video returned]")
-	case messages.StreamTypeFileStart:
-		m.appendToolMediaLine(evt, toolFileLabel(evt))
+	case messages.StreamTypeImageStart, messages.StreamTypeAudioStart, messages.StreamTypeVideoStart, messages.StreamTypeFileStart:
+		m.appendToolMediaLine(evt, toolMediaLabel(evt))
 	case messages.StreamTypeTextStart:
 		if isFromTool(evt) {
 			m.toolTextPartial = ""
@@ -259,6 +259,19 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
 			m.toolTextPartial = ""
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeToolCallEnd, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoDelta,
+		messages.StreamTypeVideoEnd, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// The chat view does not render the remaining stream types.
 	}
 }
 
@@ -293,13 +306,15 @@ func (m *ChatModel) interceptAutocompleteKey(msg tea.KeyMsg) bool {
 
 // submitInput dispatches a non-empty, non-exit input line: slash commands run
 // locally, and anything else starts an agent turn with its @file references.
-func (m ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
+func (m *ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
 	// Slash commands: dispatch locally without sending to the LLM.
 	if strings.HasPrefix(rawInput, "/") {
 		return m.handleSlashCommand(rawInput)
 	}
 	// Parse @file references before sending to the LLM.
-	cleanedText, contentParts, refErr := parseAtReferences(rawInput)
+	// Without a host working directory parseAtReferences leaves the input as is.
+	workDir := m.globalFlags.HostWorkDirOrEmpty()
+	cleanedText, contentParts, refErr := parseAtReferences(workDir, rawInput)
 	if refErr != "" {
 		errLine := chatLine{kind: chatLineSystem, content: refErr}
 		m.lines = append(m.lines, errLine)
@@ -328,74 +343,36 @@ func consumeOneStreamEvent(stream agentloop.Stream, handle session.SessionHandle
 }
 
 // effectiveWidth returns the terminal width to use for wrapping (default 80 if not set).
-func (m ChatModel) effectiveWidth() int {
+func (m *ChatModel) effectiveWidth() int {
 	if m.width > 0 {
 		return m.width
 	}
-	return 80
+	return defaultTerminalWidth
 }
+
+// defaultTerminalWidth is the wrap width used before the terminal reports one.
+const defaultTerminalWidth = 80
 
 // runAgentWithInput starts a streaming turn: builds the loop, runs ExecuteStreamingTurn,
 // and returns a tea.Cmd that emits streamReadyMsg with the event stream. The
 // model then drains the stream via consumeOneStreamEvent and renders partials in View.
-func (m ChatModel) runAgentWithInput(execInput agentloop.ExecuteInput) tea.Cmd {
+func (m *ChatModel) runAgentWithInput(execInput agentloop.ExecuteInput) tea.Cmd {
+	// Snapshot the fields the command reads: it runs on a bubbletea goroutine
+	// while Update keeps mutating the model.
+	service, globalFlags, askFlags, sessionID, ctx := m.service, m.globalFlags, m.askFlags, m.sessionID, m.ctx
 	return func() tea.Msg {
-		cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
-		if m.service == nil {
+		cfg := BuildAgentConfigFromFlags(globalFlags, askFlags, nil, sessionID)
+		if service == nil {
 			return streamReadyMsg{err: fmt.Errorf("session service is not configured")}
 		}
-		handle, err := m.service.Open(m.ctx, *cfg)
+		handle, err := service.Open(ctx, *cfg)
 		if err != nil {
 			return streamReadyMsg{err: err}
 		}
-		stream, err := handle.Stream(m.ctx, execInput)
+		stream, err := handle.Stream(ctx, execInput)
 		if err != nil {
 			return streamReadyMsg{err: errors.Join(err, closeChatHandle(handle))}
 		}
 		return streamReadyMsg{stream: stream, handle: handle}
 	}
-}
-
-// ChatService runs interactive text chat sessions backed by a bubbletea TUI.
-type ChatService struct {
-	service     session.Service
-	globalFlags *flags.GlobalFlags
-	askFlags    *flags.AskFlags
-}
-
-// NewChatService creates a ChatService backed by the given agent executor and flags.
-func NewChatService(service session.Service, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags) *ChatService {
-	return &ChatService{service: service, globalFlags: globalFlags, askFlags: askFlags}
-}
-
-// Run starts the interactive chat loop.
-//
-// It prints the session banner, then hands control to a bubbletea program
-// that reads keystrokes from in and writes the rendered UI and agent responses
-// to out. The program exits when the user types "exit", "quit", or presses
-// Ctrl+C, or when in reaches EOF.
-func (s *ChatService) Run(ctx context.Context, in io.Reader, out, errOut io.Writer) error {
-	cfg := BuildAgentConfigFromFlags(s.globalFlags, s.askFlags, nil, "")
-	if s.service == nil {
-		return fmt.Errorf("session service is not configured")
-	}
-	sessionID, err := s.service.NewSessionID(ctx, *cfg)
-	if err != nil {
-		return fmt.Errorf("create chat session: %w", err)
-	}
-
-	if _, err := fmt.Fprintln(out, "Port OS Agent Chat (type 'exit' or 'quit' to end)"); err != nil {
-		return fmt.Errorf("write chat banner: %w", err)
-	}
-	if _, err := fmt.Fprintln(out, "---"); err != nil {
-		return fmt.Errorf("write chat banner separator: %w", err)
-	}
-
-	model := NewChatModel(s.service, sessionID, s.globalFlags, s.askFlags, ctx, out, errOut)
-	p := tea.NewProgram(model,
-		tea.WithInput(in),
-		tea.WithOutput(out),
-	)
-	_, err = p.Run()
-	return err
 }

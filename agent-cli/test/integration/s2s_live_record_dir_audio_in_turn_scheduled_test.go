@@ -27,24 +27,13 @@ import (
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortTransportDialer, server),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer should not be called")}),
 	)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
-	}
-	return agentCLI
-}
-
-func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
-	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
-		wire.NewPortSwap(wire.PortTransportDialer, server),
-	)
-	if err != nil {
-		t.Fatalf("initialize grounded production CLI: %v", err)
 	}
 	return agentCLI
 }
@@ -72,7 +61,7 @@ func newCLIServerVADBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 			},
 		}}),
 	)
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -110,6 +99,7 @@ func TestSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGroundin
 }
 
 func testSessionCommand_LiveScheduledAudioWithoutPromptSendsToolsWithoutGrounding(t *testing.T) {
+	t.Helper()
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIGroundedScheduledBoundaryAgent(t, server)
@@ -197,6 +187,7 @@ func TestSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *test
 }
 
 func testSessionCommand_LiveScheduledImageAudioAttachesImagesToFirstTurn(t *testing.T) {
+	t.Helper()
 	server := newCLILiveScheduledBoundaryServer(false)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -335,6 +326,7 @@ func TestSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *t
 }
 
 func testSessionCommand_LiveScheduledAudioDoesNotCrossDelayedSessionUpdated(t *testing.T) {
+	t.Helper()
 	server := newCLILiveScheduledBoundaryServer(true)
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -425,6 +417,7 @@ func TestSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
 }
 
 func testSessionCommand_LiveScheduledAudioSpeechThenExactSilence(t *testing.T) {
+	t.Helper()
 	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)
@@ -499,6 +492,7 @@ func TestSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeCo
 }
 
 func testSessionCommand_LiveScheduledAudioServerVADCreateResponseFalseNegativeControl(t *testing.T) {
+	t.Helper()
 	speechPath := scheduledSpeechSliceWAV(t)
 	silencePath := equalDuration24kSilenceFixture(t, speechPath)
 	server := newCLILiveScheduledBoundaryServer(false)

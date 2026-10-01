@@ -250,7 +250,7 @@ func WithStrictModelValidation() CompositionOption {
 // Optional inference capabilities are supplied through CompositionOption.
 // Validation runs before any graph constructor is called.
 func ComposeAgentCLI(
-	toolExecutor messages.ToolExecutor,
+	ctx context.Context, toolExecutor messages.ToolExecutor,
 	transportDialer transport.Dialer,
 	deviceRegistry DeviceRegistry,
 	audioSource AudioSource,
@@ -282,11 +282,11 @@ func ComposeAgentCLI(
 		return nil, err
 	}
 
-	toolDefaults, err := newToolDefaults()
+	toolDefaults, err := newToolDefaults(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return assembleAgentCLI(
+	return assembleAgentCLI(ctx,
 		markToolExecutorReplacement(values.toolExecutor),
 		values.transportDialer,
 		values.deviceRegistry,
@@ -308,37 +308,37 @@ func ComposeAgentCLI(
 // InitializeAgentCLI builds the production CLI with the registry-backed tool
 // executor. It shares the same live-port defaults and explicit assembly helper
 // as all test paths.
-func InitializeAgentCLI() (*cli.AgentCLI, error) {
-	return initializeAgentCLIWithPorts(false, nil)
+func InitializeAgentCLI(ctx context.Context) (*cli.AgentCLI, error) {
+	return initializeAgentCLIWithPorts(ctx, false, nil)
 }
 
 // InitializeMockAgentCLIWithPorts is the one uniform mock-injection entry
 // point. Its cases are named replacements, validated against the same live
 // port definitions used by defaults, discovery, and required-port validation.
-func InitializeMockAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
-	return initializeAgentCLIWithPorts(true, nil, swaps...)
+func InitializeMockAgentCLIWithPorts(ctx context.Context, swaps ...PortSwap) (*cli.AgentCLI, error) {
+	return initializeAgentCLIWithPorts(ctx, true, nil, swaps...)
 }
 
 // InitializeMockAgentCLI is retained for existing integration callers and
 // forwards to the same composition path as InitializeMockAgentCLIWithPorts.
-func InitializeMockAgentCLI(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
-	return composeInjectedAgentCLI(executor, inferencer, nil, true)
+func InitializeMockAgentCLI(ctx context.Context, executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
+	return composeInjectedAgentCLI(ctx, executor, inferencer, nil, true)
 }
 
 // InitializeMockAgentCLIWithSessionInferencer is a compatibility forwarder;
 // it does not create a second mock swap mechanism.
-func InitializeMockAgentCLIWithSessionInferencer(executor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer) (*cli.AgentCLI, error) {
-	return composeInjectedAgentCLI(executor, inferencer, sessionInferencer, true)
+func InitializeMockAgentCLIWithSessionInferencer(ctx context.Context, executor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer) (*cli.AgentCLI, error) {
+	return composeInjectedAgentCLI(ctx, executor, inferencer, sessionInferencer, true)
 }
 
 // InitializeAgentCLIWithInferencerOverride is retained for tests that need
 // strict model validation while replacing the one-shot inferencer.
-func InitializeAgentCLIWithInferencerOverride(executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
-	return composeInjectedAgentCLI(executor, inferencer, nil, false)
+func InitializeAgentCLIWithInferencerOverride(ctx context.Context, executor messages.ToolExecutor, inferencer messages.Inferencer) (*cli.AgentCLI, error) {
+	return composeInjectedAgentCLI(ctx, executor, inferencer, nil, false)
 }
 
-func composeInjectedAgentCLI(toolExecutor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
-	return initializeAgentCLIWithPorts(
+func composeInjectedAgentCLI(ctx context.Context, toolExecutor messages.ToolExecutor, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool) (*cli.AgentCLI, error) {
+	return initializeAgentCLIWithPorts(ctx,
 		relaxModelValidation,
 		nil,
 		NewPortSwap(PortToolExecutor, toolExecutor),
@@ -359,12 +359,12 @@ type assemblyObserver func(compositionValues)
 // not explicitly replaced, which keeps a displaced real implementation from
 // running its constructor alongside a supplied double. The package-local
 // observer is nil for all production entry points.
-func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObserver, swaps ...PortSwap) (*cli.AgentCLI, error) {
+func initializeAgentCLIWithPorts(ctx context.Context, relaxModelValidation bool, observer assemblyObserver, swaps ...PortSwap) (*cli.AgentCLI, error) {
 	definitions := livePortDefinitions()
 	if err := validatePortSwaps(definitions, swaps); err != nil {
 		return nil, err
 	}
-	toolDefaults, err := newToolDefaults()
+	toolDefaults, err := newToolDefaults(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func initializeAgentCLIWithPorts(relaxModelValidation bool, observer assemblyObs
 	if err != nil {
 		return nil, err
 	}
-	return assembleAgentCLI(
+	return assembleAgentCLI(ctx,
 		markToolExecutorReplacementIfSwapped(values.toolExecutor, swaps),
 		values.transportDialer,
 		values.deviceRegistry,
@@ -409,12 +409,12 @@ type toolDefaults struct {
 // newToolDefaults resolves the reusable runtime's built-in surface at the CLI
 // composition edge. The CLI owns the process working directory resolution;
 // the reusable service never infers host paths from ambient process state.
-func newToolDefaults() (toolDefaults, error) {
+func newToolDefaults(ctx context.Context) (toolDefaults, error) {
 	workdir, err := hostServices.ResolveCLIWorkDir(flags.NewGlobalFlags())
 	if err != nil {
 		return toolDefaults{}, fmt.Errorf("resolve tool working directory: %w", err)
 	}
-	capability, err := runtimeToolsWire.NewService().Resolve(context.Background(), runtimeTools.Request{
+	capability, err := runtimeToolsWire.NewService().Resolve(ctx, runtimeTools.Request{
 		WorkDir:        workdir,
 		UseDefaultTool: true,
 	})

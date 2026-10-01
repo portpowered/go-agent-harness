@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -20,14 +19,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
-const chromeRecoveryEnv = "WEBMCP_CHROME_RECOVERY"
-
 // TestPinnedChromeTopologyRecoverySuite is the browser-real Lane H proof. It
 // builds only with the live tag, and its env check runs before acquisition.
 func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
-	if os.Getenv(chromeRecoveryEnv) != "1" {
-		t.Skipf("set %s=1 to run the pinned Chrome topology recovery suite", chromeRecoveryEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -126,12 +120,12 @@ type recoverySelection struct {
 	initialCancel   webmcp.ToolDescriptor
 }
 
-func newRecoverySelection(t *testing.T, ctx context.Context, pinned pinnedChrome, fixture *fixtureServer, port int) *recoverySelection {
+func newRecoverySelection(t *testing.T, ctx context.Context, pinned pinnedChrome, fixture *fixtureServer) *recoverySelection {
 	t.Helper()
 	assertFixtureHeaders(t, ctx, fixture.URL())
 	runPinned := pinned
 	runPinned.WorkDir = t.TempDir()
-	browser, err := launchPinnedChromeAtPort(ctx, runPinned, fixture.URL(), port)
+	browser, err := launchPinnedChrome(ctx, runPinned, fixture.URL())
 	if err != nil {
 		t.Fatalf("launch O0-pinned Chrome: %v", err)
 	}
@@ -141,12 +135,12 @@ func newRecoverySelection(t *testing.T, ctx context.Context, pinned pinnedChrome
 		}
 	})
 
-	version, err := waitForDevToolsVersion(ctx, browserHTTPURL(browser.endpoint()), lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, browserHTTPURL(browser.endpoint()))
 	if err != nil {
 		t.Fatalf("read pinned Chrome identity: %v", err)
 	}
 	discoveryService := discovery.New(discovery.Options{})
-	candidate, err := recoveryCandidate(ctx, discoveryService, browser, version)
+	candidate, err := recoveryCandidate(ctx, discoveryService, version)
 	if err != nil {
 		t.Fatalf("normalize pinned Chrome candidate: %v", err)
 	}
@@ -216,7 +210,7 @@ func newRecoverySelection(t *testing.T, ctx context.Context, pinned pinnedChrome
 	}
 }
 
-func recoveryCandidate(ctx context.Context, discoveryService *discovery.Service, browser *runningChrome, version devToolsVersion) (webmcp.BrowserCandidate, error) {
+func recoveryCandidate(ctx context.Context, discoveryService *discovery.Service, version devToolsVersion) (webmcp.BrowserCandidate, error) {
 	baseURL := browserHTTPURL(version.WebSocketDebuggerURL)
 	laneCandidate, err := discoveryService.Discover(ctx, discovery.ConnectionInputs{CDPURL: baseURL})
 	if err != nil {
@@ -247,9 +241,10 @@ func recoveryFixtureTarget(ctx context.Context, adapter *Runtime, candidate webm
 }
 
 func testRecoveryLossAndReplacement(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+	selection := newRecoverySelection(t, ctx, pinned, fixture)
 	oldPort, err := recoveryEndpointPort(selection.browser.endpoint())
 	if err != nil {
 		t.Fatalf("read original Chrome port: %v", err)
@@ -336,11 +331,11 @@ func (s *recoverySelection) launchSamePortReplacement(t *testing.T, ctx context.
 			t.Logf("replacement Chrome cleanup: %v", closeErr)
 		}
 	})
-	replacementVersion, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint()), lockedChromeVersion)
+	replacementVersion, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint()))
 	if err != nil {
 		t.Fatalf("read replacement Chrome identity: %v", err)
 	}
-	replacementCandidate, err := recoveryCandidate(ctx, s.discovery, replacement, replacementVersion)
+	replacementCandidate, err := recoveryCandidate(ctx, s.discovery, replacementVersion)
 	if err != nil {
 		t.Fatalf("normalize replacement Chrome candidate: %v", err)
 	}
@@ -374,9 +369,10 @@ func (s *recoverySelection) awaitTerminal(t *testing.T, ctx context.Context, id 
 }
 
 func testRecoveryNavigationStorm(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+	selection := newRecoverySelection(t, ctx, pinned, fixture)
 	retiredRefs := recoveryCatalogRefs(selection.initialCatalog)
 	admitted, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
 		ToolRef: selection.initialCancel.Ref,
@@ -489,9 +485,10 @@ func lastRecoveryGeneration(t *testing.T, events []webmcp.BrokerEvent, previousG
 }
 
 func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+	selection := newRecoverySelection(t, ctx, pinned, fixture)
 
 	// The two requests model the original customer intent followed by an
 	// explicit spoken correction. The HTTP fixture oracle is independent from
@@ -565,9 +562,10 @@ func testRecoverySpokenCorrection(t *testing.T, ctx context.Context, pinned pinn
 }
 
 func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+	selection := newRecoverySelection(t, ctx, pinned, fixture)
 
 	// The invocation-created broker event is the synchronization point. No
 	// timer is used to guess when the page-side operation became cancellable.
@@ -640,9 +638,10 @@ func testRecoveryInFlightCancellation(t *testing.T, ctx context.Context, pinned 
 }
 
 func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedChrome) {
+	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	selection := newRecoverySelection(t, ctx, pinned, fixture, 0)
+	selection := newRecoverySelection(t, ctx, pinned, fixture)
 	admitted, err := selection.broker.Invoke(ctx, webmcp.InvokeRequest{
 		ToolRef: selection.initialCancel.Ref,
 		Input:   recoveryInput("page-navigation"),
@@ -700,7 +699,7 @@ func testRecoveryTargetClosure(t *testing.T, ctx context.Context, pinned pinnedC
 	if _, err := waitForFixtureTarget(ctx, browserHTTPURL(selection.browser.endpoint()), selection.target.ID, navigationURL, false); err != nil {
 		t.Fatalf("target remained after browser target close: %v", err)
 	}
-	if _, err := waitForDevToolsVersion(ctx, browserHTTPURL(selection.browser.endpoint()), lockedChromeVersion); err != nil {
+	if _, err := waitForDevToolsVersion(ctx, browserHTTPURL(selection.browser.endpoint())); err != nil {
 		t.Fatalf("browser did not remain available after target close: %v", err)
 	}
 	selectionFailure := waitForRecoverySelectionFailure(ctx, selection.broker)

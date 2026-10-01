@@ -31,14 +31,16 @@ const (
 	remoteToolAudioResult       = `{"ok":true,"source":"mock-tool-edge"}`
 )
 
-var remoteToolAudioNames = []string{
-	"webmcp_list_tabs",
-	"webmcp_select_tab",
-	"webmcp_list_tools",
-	"list_decks",
-	"select_deck",
-	"webmcp_list_tools",
-	"get_state",
+func remoteToolAudioNames() []string {
+	return []string{
+		"webmcp_list_tabs",
+		"webmcp_select_tab",
+		"webmcp_list_tools",
+		"list_decks",
+		"select_deck",
+		"webmcp_list_tools",
+		"get_state",
+	}
 }
 
 type remoteToolAudioCase struct {
@@ -88,6 +90,7 @@ func TestNaturalCloseDrainsDevicePCM(t *testing.T) {
 	} {
 		testCase.inProcess = true
 		clitest.Subtest(t, testCase.name, func(t *testing.T) {
+			t.Helper()
 			promptBytes := 0
 			if testCase.naturalClose {
 				promptBytes = 32
@@ -174,6 +177,7 @@ func remoteToolAudioContinuationCases() []remoteToolAudioCase {
 // observations, tool observations and device-rendered PCM, never session
 // queue or sink implementation state.
 func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range remoteToolAudioContinuationCases() {
 		for _, delivery := range remoteToolAudioDeliveries() {
 			if testCase.healthyControl && delivery.name != "provider_burst" {
@@ -182,6 +186,7 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
 				t.Parallel() // each scenario is CPU-bound in its own bubble
 				clitest.Test(t, func(t *testing.T) {
+					t.Helper()
 					scenario := testCase
 					scenario.inProcess = true
 					runRemoteToolAudioContinuation(t, scenario, delivery)
@@ -197,20 +202,33 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 // audio-device-server binary whose manual callback clock the test advances
 // over HTTP. Its device-cadence deliveries drain in real time (11-22 s each).
 // Pull requests keep test45/captured_cadence as the representative real-time
-// continuation across the three processes; the rest of the matrix runs with
-// YUI_AUDIO_STRESS=1 (make test-audio-device-server-integration and the
-// nightly audio stress workflow).
+// continuation across the three processes; the rest of the matrix is
+// TestAgentBinaryToolContinuationStressMatrix (stress tag).
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
+	t.Parallel()
+	runAgentBinaryContinuationMatrix(t, isRepresentativeRemoteToolAudioContinuation)
+}
+
+// isRepresentativeRemoteToolAudioContinuation selects the one real-time
+// continuation that runs on every pull request.
+func isRepresentativeRemoteToolAudioContinuation(testCase remoteToolAudioCase, delivery remoteToolAudioDelivery) bool {
+	return testCase.name == "test45" && delivery.name == "captured_cadence"
+}
+
+// runAgentBinaryContinuationMatrix runs the fresh-process continuation cases
+// that include selects, bounding concurrent process/device pairs.
+func runAgentBinaryContinuationMatrix(t *testing.T, include func(remoteToolAudioCase, remoteToolAudioDelivery) bool) {
+	t.Helper()
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	for _, testCase := range remoteToolAudioContinuationCases() {
 		for _, delivery := range remoteToolAudioDeliveries() {
 			if testCase.healthyControl && delivery.name != "provider_burst" {
 				continue
 			}
+			if !include(testCase, delivery) {
+				continue
+			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
-				if testCase.name != "test45" || delivery.name != "captured_cadence" {
-					requireRemoteToolAudioStress(t)
-				}
 				// Bound real process/device pairs so callback clocks retain CPU under the full package.
 				t.Parallel()
 				scenarioSlots <- struct{}{}
@@ -227,48 +245,6 @@ func runRemoteToolAudioContinuation(t *testing.T, scenario remoteToolAudioCase, 
 		scenario.drainInterval = remoteToolAudioDrainInterval
 	}
 	runRemoteToolAudioScenario(t, scenario, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
-}
-
-func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
-	requireRemoteToolAudioStress(t)
-	slots := make(chan struct{}, 2)
-	testCase := remoteToolAudioCase{
-		name:            "test45_high_rate",
-		responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
-		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
-	}
-	for trial := 0; trial < 20; trial++ {
-		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
-			t.Parallel()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
-		})
-	}
-}
-func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
-	requireRemoteToolAudioStress(t)
-	slots := make(chan struct{}, 2)
-	testCase := remoteToolAudioCase{
-		name:            "test46_high_rate",
-		responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
-		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
-	}
-	for trial := 0; trial < 20; trial++ {
-		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
-			t.Parallel()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
-		})
-	}
-}
-
-func requireRemoteToolAudioStress(t *testing.T) {
-	t.Helper()
-	if os.Getenv("YUI_AUDIO_STRESS") != "1" {
-		t.Skip("set YUI_AUDIO_STRESS=1 to run fresh-process high-rate audio stress")
-	}
 }
 
 func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, deltaDelay, toolDelay, callbackInterval time.Duration, promptBytes, toolResultBytes, inputFrames int) {
@@ -435,7 +411,7 @@ type remoteToolCallFixture struct {
 }
 
 func remoteToolAudioCalls(testCase remoteToolAudioCase, resultBytes int) []remoteToolCallFixture {
-	calls := make([]remoteToolCallFixture, 0, len(remoteToolAudioNames))
+	calls := make([]remoteToolCallFixture, 0, len(remoteToolAudioNames()))
 	toolNumber := 0
 	for response := range testCase.responseSamples {
 		if !testCase.toolResponses[response] {
@@ -447,7 +423,7 @@ func remoteToolAudioCalls(testCase remoteToolAudioCase, resultBytes int) []remot
 		}
 		calls = append(calls, remoteToolCallFixture{
 			ID:        fmt.Sprintf("call-%s-%d", testCase.name, toolNumber),
-			Name:      remoteToolAudioNames[toolNumber],
+			Name:      remoteToolAudioNames()[toolNumber],
 			Arguments: fmt.Sprintf(`{"step":%d,"trace":%q}`, toolNumber, testCase.name),
 			Output:    output,
 		})
@@ -729,7 +705,7 @@ func (p *remoteToolAudioProvider) sendReadyResponses(connection *websocket.Conn)
 		callIndex := -1
 		if tool {
 			callIndex = 0
-			for response := 0; response < index; response++ {
+			for response := range index {
 				if p.toolAt[response] {
 					callIndex++
 				}
@@ -763,7 +739,10 @@ func (p *remoteToolAudioProvider) sendResponse(connection *websocket.Conn, index
 		}
 		p.firstAudioOnce.Do(func() { close(p.firstAudioSent) })
 		if p.deltaDelay > 0 {
-			time.Sleep(p.deltaDelay)
+			// Pace deltas at the provider's cadence (virtual time inside a
+			// synctest bubble, real time for the agent-binary variant).
+			pace := time.NewTimer(p.deltaDelay)
+			<-pace.C
 		}
 	}
 	if len(p.responses[index]) > 0 {

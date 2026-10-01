@@ -28,7 +28,6 @@ import (
 const (
 	mixedModalityLiveModel     = "gpt-realtime-2.1-mini"
 	mixedModalityLiveMaxRun    = 60 * time.Second
-	mixedModalityLiveOptIn     = "AGENT_HARNESS_LIVE_MIXED_MODALITY"
 	mixedModalityLiveArtifact  = "AGENT_HARNESS_LIVE_MIXED_MODALITY_ARTIFACT_DIR"
 	mixedModalityLiveSystem    = "You are a terse visual assistant. Answer in five words or fewer. For the first spoken question, use the supplied image and say red square and blue diagonal when those facts are visible. Answer later spoken turns briefly, and do not call tools."
 	mixedModalityLiveImageName = "red-square-blue-diagonal.png"
@@ -83,10 +82,7 @@ func requireMixedModalityLiveOptIn(t *testing.T) string {
 	t.Helper()
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live mixed-modality confirmation")
-	}
-	if os.Getenv(mixedModalityLiveOptIn) != "1" {
-		t.Skip(mixedModalityLiveOptIn + "!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live mixed-modality confirmation")
 	}
 	return apiKey
 }
@@ -100,7 +96,7 @@ func runMixedModalityLiveSession(t *testing.T, apiKey, imagePath, audioPath stri
 	writeSessionToolConfig(t, workDir, false)
 	recordDir := filepath.Join(workDir, "mixed-modality-recording")
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}
@@ -217,8 +213,8 @@ func writeMixedModalityImage(t *testing.T) string {
 	t.Helper()
 	const size = 64
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := range size {
+		for x := range size {
 			img.SetRGBA(x, y, color.RGBA{R: 245, G: 245, B: 245, A: 255})
 		}
 	}

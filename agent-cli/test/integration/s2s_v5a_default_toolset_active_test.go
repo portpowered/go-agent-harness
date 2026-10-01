@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -81,7 +80,7 @@ func TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess(t 
 func executeV5ADefaultSleepSession(t *testing.T, capturePath, configDir string) (string, error) {
 	t.Helper()
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI: %v", err)
 	}
@@ -98,7 +97,7 @@ func executeV5ADefaultSleepSession(t *testing.T, capturePath, configDir string) 
 		v5aDefaultSleepPrompt,
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return writer.StdoutString(), err

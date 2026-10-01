@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -22,10 +21,9 @@ import (
 )
 
 const (
-	cubecadeSharedBrowserIntegrationEnv = "WEBMCP_CUBECADE_SHARED_BROWSER_INTEGRATION"
-	cubecadeSharedBrowserTestTimeout    = 8 * time.Minute
-	cubecadeSharedBrowserQueueTool      = "queue_cube_moves"
-	cubecadeSharedBrowserStateTool      = "get_cube_state"
+	cubecadeSharedBrowserTestTimeout = 8 * time.Minute
+	cubecadeSharedBrowserQueueTool   = "queue_cube_moves"
+	cubecadeSharedBrowserStateTool   = "get_cube_state"
 )
 
 // The fixture is served by a test-owned HTTP server so this proof never needs
@@ -42,10 +40,6 @@ var cubecadeSharedBrowserFixtureHTML []byte
 // Both brokers attach to the same externally owned target through separate
 // production runtimes; no provider session or API key is involved.
 func TestPinnedChromeCubecadeTwoIndependentBrokerSessions(t *testing.T) {
-	// Keep the gate before lock-file access, network access, or browser startup.
-	if os.Getenv(cubecadeSharedBrowserIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the credit-free two-broker Cubecade proof", cubecadeSharedBrowserIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for %s, observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
 	}
@@ -115,7 +109,7 @@ func launchCubecadeShared(t *testing.T, ctx context.Context) *cubecadeSharedRun 
 	})
 
 	run.baseURL = browserHTTPURL(run.browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}

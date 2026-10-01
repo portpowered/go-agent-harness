@@ -15,9 +15,9 @@ import (
 // DefaultDeadline bounds one scenario execution when Runner.Deadline is unset.
 const DefaultDeadline = 30 * time.Second
 
-// Divergence is the stable, redacted explanation of the first failed
+// DivergenceError is the stable, redacted explanation of the first failed
 // expectation.
-type Divergence = objective.Divergence
+type DivergenceError = objective.DivergenceError
 
 // EvidenceSummary locates the finalized evidence bundle of one run.
 type EvidenceSummary = bundle.Summary
@@ -44,7 +44,7 @@ type Result struct {
 	BrowserExecutor    BrowserExecutorMode           `json:"browser_executor"`
 	Error              string                        `json:"error,omitempty"`
 	ErrorCode          string                        `json:"error_code,omitempty"`
-	Divergence         *Divergence                   `json:"divergence,omitempty"`
+	Divergence         *DivergenceError              `json:"divergence,omitempty"`
 	InputDropCount     uint64                        `json:"input_drop_count"`
 	OutputDropCount    uint64                        `json:"output_drop_count"`
 	ObjectiveEvidence  probe.ObjectiveEvidence       `json:"objective_evidence"`

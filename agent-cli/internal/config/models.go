@@ -74,15 +74,11 @@ type ModelsConfigStorage struct {
 	path string
 }
 
-// NewModelsConfigStorage creates a storage handler for models.yaml.
-// If configDir is empty the default ~/.agent-cli directory is used.
+// NewModelsConfigStorage creates a storage handler for models.yaml in
+// configDir, which the caller resolves at the host boundary.
 func NewModelsConfigStorage(configDir string) (*ModelsConfigStorage, error) {
 	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("get home dir: %w", err)
-		}
-		configDir = filepath.Join(home, ConfigDirName)
+		return nil, ErrConfigDirRequired
 	}
 	abs, err := filepath.Abs(configDir)
 	if err != nil {
@@ -112,12 +108,12 @@ func (s *ModelsConfigStorage) Load() (*ModelsConfig, error) {
 }
 
 func (s *ModelsConfigStorage) write(cfg *ModelsConfig) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), configDirPerm); err != nil {
 		return err
 	}
 	data, err := yamlv3.Marshal(cfg)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0644)
+	return os.WriteFile(s.path, data, modelsFilePerm)
 }

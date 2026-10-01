@@ -70,7 +70,7 @@ type executor struct {
 	providerSteps       []probe.Step
 	closed              bool
 	cleanupErr          error
-	objectiveDivergence *objective.Divergence
+	objectiveDivergence *objective.DivergenceError
 }
 
 func newExecutor(ctx context.Context, scenario probe.ScenarioV2, runner Runner, options ...BrowserExecutorOption) (*executor, error) {

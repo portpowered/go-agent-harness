@@ -140,9 +140,7 @@ func (w *failAfterWriter) Write(p []byte) (int, error) {
 
 func executeChatWithWriters(t *testing.T, agentCLI *AgentCLI, args []string, input string, out, errOut io.Writer) error {
 	t.Helper()
-	original := chatInputIsInteractive
-	chatInputIsInteractive = func(*cobra.Command) bool { return true }
-	t.Cleanup(func() { chatInputIsInteractive = original })
+	agentCLI.router.ChatCommand.inputIsInteractive = func(*cobra.Command) bool { return true }
 	root := agentCLI.Generate()
 	root.SetIn(strings.NewReader(input))
 	root.SetOut(out)
@@ -210,7 +208,7 @@ func TestChatCommand_AudioWriterErrors(t *testing.T) {
 			samples := []int16(nil)
 			if tt.withSpeech {
 				samples = make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig().MaxSilenceFrames))
-				for i := 0; i < audio.FrameSize*3; i++ {
+				for i := range audio.FrameSize * 3 {
 					samples[i] = 1000
 				}
 			}
@@ -263,7 +261,7 @@ func testAudioSpeechDispatch(t *testing.T) {
 	ask := flags.NewAskFlags()
 	ask.NoSystemInformation = true
 	samples := make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig().MaxSilenceFrames))
-	for i := 0; i < audio.FrameSize*3; i++ {
+	for i := range audio.FrameSize * 3 {
 		samples[i] = 1000
 	}
 	var out, errOut bytes.Buffer
@@ -351,7 +349,7 @@ func TestLiveHostReportsUnadmittedWAVFinalizationFailure(t *testing.T) {
 // streams a few RTP packets once the peer connection is established.
 type cliGo2RTCFixtureHandler struct {
 	observed             *cliGo2RTCObservation
-	fixtureContext       context.Context
+	fixtureDone          <-chan struct{}
 	upgrader             websocket.Upgrader
 	sendAudio, sendVideo bool
 	handlerDone          chan struct{}
@@ -367,7 +365,7 @@ func (h *cliGo2RTCFixtureHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	defer cancelHandler()
 	go func() {
 		select {
-		case <-h.fixtureContext.Done():
+		case <-h.fixtureDone:
 			cancelHandler()
 		case <-handlerContext.Done():
 		}
@@ -489,7 +487,7 @@ func answerCLIGo2RTCOffer(ctx context.Context, conn *websocket.Conn, pc *webrtc.
 }
 
 func (h *cliGo2RTCFixtureHandler) streamFrames(tracks cliGo2RTCFixtureTracks) error {
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if h.sendAudio {
 			packet := &rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * 160)}, Payload: []byte{0xff, 0x00, 0x7f}}
 			if err := tracks.audio.WriteRTP(packet); err != nil {

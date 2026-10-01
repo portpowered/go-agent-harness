@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 )
 
@@ -115,5 +116,28 @@ func summarizeFixtureEvent(value FixtureEvent) ReplayEventSummary {
 		Status:       value.Status != "",
 		Output:       summarizeReplayJSON(value.Output),
 		Error:        summarizeReplayJSON(value.Error),
+	}
+}
+
+// scriptReleaser returns the close-time step that consumes a scripted
+// close/detach operation. It is bound to the attach context without its
+// cancellation, so Close still runs it after the attaching caller is gone.
+func scriptReleaser(ctx context.Context, runtime *BrowserScriptRuntime) func(OperationType) error {
+	cleanupContext := context.WithoutCancel(ctx)
+	return func(operation OperationType) error {
+		switch operation {
+		case OperationCloseTarget:
+			return runtime.CloseTarget(cleanupContext)
+		case OperationDetachTarget:
+			return runtime.DetachTarget(cleanupContext)
+		case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool,
+			OperationNavigate, OperationDiscover, OperationList, OperationListTargets, OperationListTools,
+			OperationBrowserDiscover, OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor,
+			OperationContext, OperationBrowsers, OperationTabs, OperationTools:
+			// No teardown operation is expected; close without driving the fixture.
+			return nil
+		default:
+			return nil
+		}
 	}
 }

@@ -116,7 +116,7 @@ type RedactionMetadata struct {
 type Redaction = RedactionMetadata
 
 // Validate checks the event-level redaction metadata.
-func (r RedactionMetadata) Validate() error {
+func (r *RedactionMetadata) Validate() error {
 	if r.Mode != RedactionNone && r.Mode != RedactionRedacted && r.Mode != RedactionDigest {
 		return fmt.Errorf("redaction.mode must be one of %q, %q, or %q", RedactionNone, RedactionRedacted, RedactionDigest)
 	}
@@ -133,13 +133,13 @@ func (r RedactionMetadata) Validate() error {
 	return nil
 }
 
-func (r RedactionMetadata) normalized() RedactionMetadata {
+func (r *RedactionMetadata) normalized() RedactionMetadata {
 	if len(r.Rules) == 0 {
 		return RedactionMetadata{Mode: r.Mode}
 	}
 	seen := make(map[string]struct{}, len(r.Rules))
 	rules := make([]string, 0, len(r.Rules))
-	for _, rule := range redactionRuleOrder {
+	for _, rule := range redactionRuleOrder() {
 		for _, supplied := range r.Rules {
 			if supplied == rule {
 				if _, alreadyAdded := seen[supplied]; alreadyAdded {
@@ -202,16 +202,19 @@ func (r *RedactionMetadata) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var redactionRuleOrder = []string{
-	RedactionRuleURLQuery,
-	RedactionRuleURLFragment,
-	RedactionRuleToolArguments,
-	RedactionRuleResultJSONPointers,
-	RedactionRuleRawCDPDisabled,
+// redactionRuleOrder returns the known redaction rules in canonical order.
+func redactionRuleOrder() []string {
+	return []string{
+		RedactionRuleURLQuery,
+		RedactionRuleURLFragment,
+		RedactionRuleToolArguments,
+		RedactionRuleResultJSONPointers,
+		RedactionRuleRawCDPDisabled,
+	}
 }
 
 func isRedactionRule(rule string) bool {
-	for _, allowed := range redactionRuleOrder {
+	for _, allowed := range redactionRuleOrder() {
 		if rule == allowed {
 			return true
 		}
@@ -278,14 +281,14 @@ func JSONValue(value any) (json.RawMessage, error) {
 func MustJSONValue(value any) json.RawMessage {
 	raw, err := JSONValue(value)
 	if err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // must-style test-support helper over literal fixture values that always encode
 	}
 	return raw
 }
 
 // Validate checks one event independently of stream ordering.
-func (e Event) Validate() error {
-	return validateEvent(e)
+func (e *Event) Validate() error {
+	return validateEvent(*e)
 }
 
 // MarshalJSON enforces the canonical field order and omits context fields that
@@ -450,29 +453,6 @@ func LoadEventsFile(path string) ([]Event, error) {
 	return ValidateEventStream(data)
 }
 
-// MarshalEvents validates stream ordering and emits canonical UTF-8 JSONL.
-func MarshalEvents(events []Event) ([]byte, error) {
-	if len(events) == 0 {
-		return nil, newEventValidationError(0, "stream", "event stream is empty")
-	}
-	var output bytes.Buffer
-	for index, event := range events {
-		if event.Sequence != uint64(index+1) {
-			return nil, newEventValidationError(index+1, "sequence", "want contiguous sequence %d, got %d", index+1, event.Sequence)
-		}
-		if index > 0 && event.MonotonicMS < events[index-1].MonotonicMS {
-			return nil, newEventValidationError(index+1, "monotonic_ms", "decreased from %d to %d", events[index-1].MonotonicMS, event.MonotonicMS)
-		}
-		encoded, err := json.Marshal(event)
-		if err != nil {
-			return nil, withLine(err, index+1)
-		}
-		output.Write(encoded)
-		output.WriteByte('\n')
-	}
-	return output.Bytes(), nil
-}
-
 func validateEvent(event Event) error {
 	if event.Version != BrowserEventsVersion {
 		return newEventValidationError(0, "version", "want %q, got %q", BrowserEventsVersion, event.Version)
@@ -480,7 +460,7 @@ func validateEvent(event Event) error {
 	if event.Sequence == 0 {
 		return newEventValidationError(0, "sequence", "must be at least 1")
 	}
-	definition, ok := eventDefinitions[event.Type]
+	definition, ok := lookupEventDefinition(event.Type)
 	if !ok {
 		return newEventValidationError(0, jsonFieldType, "unknown event type %q", event.Type)
 	}
@@ -511,17 +491,16 @@ func validateEvent(event Event) error {
 }
 
 func validateEventContext(event Event, definition eventDefinition) error {
-	if definition.requiresBrowser || definition.optionalBrowser {
-		if definition.requiresBrowser && strings.TrimSpace(event.BrowserID) == "" {
-			return newEventValidationError(0, "browser_id", "is required for %s", event.Type)
-		}
-		if event.BrowserID != "" {
-			if err := validateOpaqueID(event.BrowserID); err != nil {
-				return newEventValidationError(0, "browser_id", "%v", err)
-			}
-		}
-	} else if event.BrowserID != "" {
+	switch {
+	case definition.requiresBrowser && strings.TrimSpace(event.BrowserID) == "":
+		return newEventValidationError(0, "browser_id", "is required for %s", event.Type)
+	case event.BrowserID == "":
+	case !definition.requiresBrowser && !definition.optionalBrowser:
 		return newEventValidationError(0, "browser_id", "is not valid for %s", event.Type)
+	default:
+		if err := validateOpaqueID(event.BrowserID); err != nil {
+			return newEventValidationError(0, "browser_id", "%v", err)
+		}
 	}
 	if definition.requiresTarget {
 		if strings.TrimSpace(event.TargetID) == "" {
@@ -625,131 +604,150 @@ func fieldsWithKinds(entries map[string]payloadFieldKind) map[string]payloadFiel
 	return result
 }
 
-var eventDefinitions = map[EventType]eventDefinition{
-	EventBrowserDiscoveryStarted: {
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"source": payloadString, "attempt": payloadInteger, "mode": payloadString, "reason": payloadString,
-		}),
-	},
-	EventBrowserDiscoveryCompleted: {
-		optionalBrowser: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"candidate_count": payloadInteger, "candidates": payloadAny, "selected": payloadAny, "source": payloadString, "reason": payloadString,
-		}),
-	},
-	EventBrowserEndpointVersion: {
-		requiresBrowser: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"Browser": payloadString, "Protocol-Version": payloadString, "webSocketDebuggerUrl": payloadString,
-			"browser": payloadString, "protocol_version": payloadString, "websocket_debugger_url": payloadString, "product": payloadString, "version": payloadString,
-		}),
-	},
-	EventBrowserTargetsSnapshot: {
-		requiresBrowser: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"targets": payloadAny, "target_count": payloadInteger, "selected_target_id": payloadIdentifier,
-		}),
-	},
-	EventBrowserTargetSelected: {
-		requiresBrowser: true, requiresTarget: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"generation": payloadInteger, "reason": payloadString, "selection_reason": payloadString,
-		}),
-	},
-	EventBrowserChromeTargetAttached: {
-		requiresBrowser: true, requiresTarget: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"phase": payloadString, "ownership": payloadString, "ownership_mode": payloadString, "reason": payloadString,
-		}),
-	},
-	EventBrowserWebMCPEnabled: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"enabled": payloadBoolean, "result": payloadAny, "capability": payloadString, "status": payloadString, "error": payloadAny,
-		}),
-	},
-	EventBrowserCatalogToolAdded: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"tools": payloadAny, "tool": payloadAny, "tool_count": payloadInteger,
-		}),
-	},
-	EventBrowserCatalogToolRemoved: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"tool_refs": payloadAny, "tools": payloadAny, "refs": payloadAny,
-		}),
-	},
-	EventBrowserCatalogReady: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"tool_count": payloadInteger, "schema_digest": payloadString,
-		}),
-	},
-	EventBrowserInvocationCreated: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "frame_id": payloadIdentifier,
-		}),
-	},
-	EventBrowserInvocationApproval: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "approved": payloadBoolean, "decision": payloadString, "reason": payloadString,
-		}),
-	},
-	EventBrowserInvocationDispatched: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "input": payloadAny, "input_sha256": payloadString, "input_digest": payloadString,
-		}),
-	},
-	EventBrowserInvocationCompleted: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "status": payloadString, "output": payloadAny, "output_sha256": payloadString, "output_digest": payloadString, "error": payloadAny,
-		}),
-	},
-	EventBrowserInvocationError: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "code": payloadString, "error": payloadAny, "message": payloadString,
-		}),
-	},
-	EventBrowserInvocationCancel: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "source": payloadString, "reason": payloadString,
-		}),
-	},
-	EventBrowserInvocationCanceled: {
-		requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			jsonFieldInvocationID: payloadIdentifier, "source": payloadString, "reason": payloadString,
-		}),
-	},
-	EventBrowserPageGenerationChanged: {
-		requiresBrowser: true, requiresTarget: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"previous_generation": payloadInteger, "current_generation": payloadInteger, "generation": payloadInteger, "reason": payloadString,
-		}),
-	},
-	EventBrowserTargetDetached: {
-		requiresBrowser: true, requiresTarget: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"reason": payloadString, "ownership": payloadString, "ownership_mode": payloadString,
-		}),
-	},
-	EventBrowserChromeTargetClosed: {
-		requiresBrowser: true, requiresTarget: true,
-		payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
-			"reason": payloadString, "ownership": payloadString, "ownership_mode": payloadString,
-		}),
-	},
+// lookupEventDefinition looks up the context and payload contract of one event type.
+func lookupEventDefinition(eventType EventType) (eventDefinition, bool) {
+	if definition, ok := connectionEventDefinitions()[eventType]; ok {
+		return definition, true
+	}
+	definition, ok := invocationEventDefinitions()[eventType]
+	return definition, ok
+}
+
+// connectionEventDefinitions covers discovery, attachment and catalog events.
+func connectionEventDefinitions() map[EventType]eventDefinition {
+	return map[EventType]eventDefinition{
+		EventBrowserDiscoveryStarted: {
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"source": payloadString, "attempt": payloadInteger, "mode": payloadString, "reason": payloadString,
+			}),
+		},
+		EventBrowserDiscoveryCompleted: {
+			optionalBrowser: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"candidate_count": payloadInteger, "candidates": payloadAny, "selected": payloadAny, "source": payloadString, "reason": payloadString,
+			}),
+		},
+		EventBrowserEndpointVersion: {
+			requiresBrowser: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"Browser": payloadString, "Protocol-Version": payloadString, "webSocketDebuggerUrl": payloadString,
+				"browser": payloadString, "protocol_version": payloadString, "websocket_debugger_url": payloadString, "product": payloadString, "version": payloadString,
+			}),
+		},
+		EventBrowserTargetsSnapshot: {
+			requiresBrowser: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"targets": payloadAny, "target_count": payloadInteger, "selected_target_id": payloadIdentifier,
+			}),
+		},
+		EventBrowserTargetSelected: {
+			requiresBrowser: true, requiresTarget: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"generation": payloadInteger, "reason": payloadString, "selection_reason": payloadString,
+			}),
+		},
+		EventBrowserChromeTargetAttached: {
+			requiresBrowser: true, requiresTarget: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"phase": payloadString, "ownership": payloadString, "ownership_mode": payloadString, "reason": payloadString,
+			}),
+		},
+		EventBrowserWebMCPEnabled: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"enabled": payloadBoolean, "result": payloadAny, "capability": payloadString, "status": payloadString, "error": payloadAny,
+			}),
+		},
+		EventBrowserCatalogToolAdded: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"tools": payloadAny, "tool": payloadAny, "tool_count": payloadInteger,
+			}),
+		},
+		EventBrowserCatalogToolRemoved: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"tool_refs": payloadAny, "tools": payloadAny, "refs": payloadAny,
+			}),
+		},
+		EventBrowserCatalogReady: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"tool_count": payloadInteger, "schema_digest": payloadString,
+			}),
+		},
+	}
+}
+
+// invocationEventDefinitions covers invocation, page generation and teardown events.
+func invocationEventDefinitions() map[EventType]eventDefinition {
+	return map[EventType]eventDefinition{
+		EventBrowserInvocationCreated: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "frame_id": payloadIdentifier,
+			}),
+		},
+		EventBrowserInvocationApproval: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "approved": payloadBoolean, "decision": payloadString, "reason": payloadString,
+			}),
+		},
+		EventBrowserInvocationDispatched: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "input": payloadAny, "input_sha256": payloadString, "input_digest": payloadString,
+			}),
+		},
+		EventBrowserInvocationCompleted: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "status": payloadString, "output": payloadAny, "output_sha256": payloadString, "output_digest": payloadString, "error": payloadAny,
+			}),
+		},
+		EventBrowserInvocationError: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "tool_ref": payloadIdentifier, "tool_name": payloadString, "code": payloadString, "error": payloadAny, "message": payloadString,
+			}),
+		},
+		EventBrowserInvocationCancel: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "source": payloadString, "reason": payloadString,
+			}),
+		},
+		EventBrowserInvocationCanceled: {
+			requiresBrowser: true, requiresTarget: true, requiresGeneration: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				jsonFieldInvocationID: payloadIdentifier, "source": payloadString, "reason": payloadString,
+			}),
+		},
+		EventBrowserPageGenerationChanged: {
+			requiresBrowser: true, requiresTarget: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"previous_generation": payloadInteger, "current_generation": payloadInteger, "generation": payloadInteger, "reason": payloadString,
+			}),
+		},
+		EventBrowserTargetDetached: {
+			requiresBrowser: true, requiresTarget: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"reason": payloadString, "ownership": payloadString, "ownership_mode": payloadString,
+			}),
+		},
+		EventBrowserChromeTargetClosed: {
+			requiresBrowser: true, requiresTarget: true,
+			payloadFields: fieldsWithKinds(map[string]payloadFieldKind{
+				"reason": payloadString, "ownership": payloadString, "ownership_mode": payloadString,
+			}),
+		},
+	}
 }
 
 func definitionFor(eventType EventType) eventDefinition {
-	return eventDefinitions[eventType]
+	definition, _ := lookupEventDefinition(eventType)
+	return definition
 }
 
 func validatePayloadControls(eventType EventType, raw json.RawMessage, allowed map[string]payloadFieldKind) error {

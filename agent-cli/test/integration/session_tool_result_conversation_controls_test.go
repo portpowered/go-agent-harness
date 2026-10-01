@@ -37,7 +37,7 @@ const (
 func conversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
 	t.Helper()
 	fullPath := toolSingleCallWAVPath(t)
-	return writeVoicedWAVSlice(t, fullPath, shortVoicedSlice), toolSingleCallReplyWindow(t, fullPath)
+	return writeVoicedWAVSlice(t, fullPath), toolSingleCallReplyWindow(t, fullPath)
 }
 
 // buildConversationControlFixture starts from the passing depth-5 capture and
@@ -51,7 +51,7 @@ func buildConversationControlFixture(t *testing.T, mutate func(*gwtesting.Sessio
 
 func buildConversationControlFixtureFromInputs(t *testing.T, wavPath string, reply []int16, mutate func(*gwtesting.SessionCapture)) (string, string) {
 	t.Helper()
-	basePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+	basePath := buildToolResultConversationFixture(t, wavPath, reply)
 	capture, err := gwtesting.LoadSessionCapture(basePath)
 	if err != nil {
 		t.Fatalf("load base conversation capture: %v", err)
@@ -142,11 +142,11 @@ func duplicateConversationCall(t *testing.T, capture *gwtesting.SessionCapture) 
 		}
 		switch record.Type {
 		case rtEventOutputItemAdded:
-			copy := record
-			added = &copy
+			cloned := record
+			added = &cloned
 		case rtEventFunctionCallArgumentsDone:
-			copy := record
-			arguments = &copy
+			cloned := record
+			arguments = &cloned
 		}
 	}
 	if added == nil || arguments == nil {
@@ -247,8 +247,8 @@ func duplicateExpectedConversationResult(t *testing.T, capture *gwtesting.Sessio
 	var result *gwtesting.CapturedSessionEvent
 	for index := range capture.Records {
 		if functionCallOutputRecord(t, &capture.Records[index]) {
-			copy := capture.Records[index]
-			result = &copy
+			cloned := capture.Records[index]
+			result = &cloned
 			break
 		}
 	}
@@ -326,6 +326,7 @@ func TestSessionToolCallConversationWrongToolNameIsRejected(t *testing.T) {
 }
 
 func testSessionToolCallConversationWrongToolNameIsRejected(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateConversationCallIdentity(t, capture, conversationWrongToolName, "")
 	})
@@ -364,6 +365,7 @@ func TestSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
 }
 
 func testSessionToolCallConversationDuplicateCallIsDeduplicated(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateConversationCall(t, capture)
 	})
@@ -392,6 +394,7 @@ func TestSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) 
 }
 
 func testSessionToolCallConversationMissingResultIsRejectedAtGate(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		removeExpectedConversationResult(t, capture)
 		removeConversationFollowUp(t, capture)
@@ -416,6 +419,7 @@ func TestSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness
 }
 
 func testSessionToolCallConversationDuplicateResultIsRejectedWithBoundedLiveness(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		duplicateExpectedConversationResult(t, capture)
 	})
@@ -446,6 +450,7 @@ func TestSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *te
 }
 
 func testSessionToolCallConversationMismatchedResultCallIDIsRejectedAtGate(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateExpectedConversationResult(t, capture, conversationOtherCallID, toolResultPositive)
 	})
@@ -465,6 +470,7 @@ func TestSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate(t *testing
 }
 
 func testSessionToolCallConversationEmptyResultCallIDIsRejectedAtGate(t *testing.T) {
+	t.Helper()
 	wavPath, wirePath := buildConversationControlFixture(t, func(capture *gwtesting.SessionCapture) {
 		mutateExpectedConversationResult(t, capture, "", toolResultPositive)
 	})
@@ -510,14 +516,14 @@ func checkParallelToolDeltaIDs(toolDeltas []messages.StreamMessage) error {
 			if delta.ToolCallId == "" {
 				return fmt.Errorf("observed %s tool-result delta has no ToolCallID", delta.Type)
 			}
-			if _, expected := parallelResultContent[delta.ToolCallId]; !expected {
+			if _, expected := parallelResultContent()[delta.ToolCallId]; !expected {
 				return fmt.Errorf("observed %s tool-result delta has unknown ToolCallID %q", delta.Type, delta.ToolCallId)
 			}
 			seenDeltaIDs[delta.ToolCallId]++
 		}
 	}
-	if len(seenDeltaIDs) != len(parallelRequestOrder) {
-		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder)
+	if len(seenDeltaIDs) != len(parallelRequestOrder()) {
+		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder())
 	}
 	return nil
 }
@@ -529,14 +535,14 @@ func checkParallelResultMessage(observed messages.Message, contentByCall map[str
 		return fmt.Errorf("reconstructed message has role %q, want %q", observed.Role, messages.RoleTool)
 	}
 	id := observed.ToolCallID
-	if _, expected := parallelResultContent[id]; !expected {
+	if _, expected := parallelResultContent()[id]; !expected {
 		return fmt.Errorf("reconstructed result has unknown ToolCallID %q", id)
 	}
 	if _, duplicate := contentByCall[id]; duplicate {
 		return fmt.Errorf("reconstructed duplicate result for call %q", id)
 	}
 	content := observed.TextContent()
-	want := parallelResultContent[id]
+	want := parallelResultContent()[id]
 	if content == want {
 		return nil
 	}

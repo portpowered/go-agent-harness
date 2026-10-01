@@ -29,7 +29,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
@@ -166,7 +165,7 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 
 	baseCapture.Session.ID = "sess_tool_single_call"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -174,6 +173,7 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_single_call","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	return writeReplayCaptureFixture(t, baseCapture, "tool-single-call.session.json")
 }
 
@@ -201,13 +201,13 @@ func (e *toolCallRecordingExecutor) Execute(ctx context.Context, call messages.T
 func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, executor *toolCallRecordingExecutor, definitions []messages.ToolDefinition) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	toolService := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	toolService := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor:    executor,
 			Definitions: append([]messages.ToolDefinition(nil), definitions...),
 		}, nil
 	})
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(wire.NewToolServicePort(toolService))
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(), wire.NewToolServicePort(toolService))
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}
@@ -223,7 +223,7 @@ func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, ex
 		"--wait-for-close",
 		"--max-duration", "3s",
 	})
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return outputPath, err
@@ -244,8 +244,8 @@ func assertRecordedSpeech(t *testing.T, outputPath string, wantSamples int) {
 	if rate != audio.SampleRate {
 		t.Fatalf("recorded output WAV rate = %d, want %d", rate, audio.SampleRate)
 	}
-	if min, max := wantSamples/2, wantSamples*2; len(samples) < min || len(samples) > max {
-		t.Fatalf("recorded duration %d samples outside plausible bounds [%d, %d]", len(samples), min, max)
+	if minSamples, maxSamples := wantSamples/2, wantSamples*2; len(samples) < minSamples || len(samples) > maxSamples {
+		t.Fatalf("recorded duration %d samples outside plausible bounds [%d, %d]", len(samples), minSamples, maxSamples)
 	}
 	rms := codec.RMS(samples)
 	if rms <= 500.0 {
@@ -298,7 +298,8 @@ func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 }
 
 func testSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
-	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t), shortVoicedSlice)
+	t.Helper()
+	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t))
 	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
 	executor := &toolCallRecordingExecutor{}
 	_, runErr := runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, nil)
@@ -352,7 +353,7 @@ func loudestWindowSamplesIntegration(t *testing.T, samples []int16, window int) 
 }
 
 func toolBargeInCapabilities(executor messages.ToolExecutor) serviceTools.Service {
-	return serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	return serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor: executor,
 			Definitions: []messages.ToolDefinition{{

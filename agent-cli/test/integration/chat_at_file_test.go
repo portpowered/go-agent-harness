@@ -46,7 +46,7 @@ func TestAtFile_TextFileIncludedInResponse(t *testing.T) {
 	// Use absolute path so parseAtReferences can find it regardless of cwd.
 	input := "@" + filepath.ToSlash(filePath) + " explain this"
 	model = typeInput(model, input)
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	history := model.ViewHistory()
 	// Agent should have been called and responded.
@@ -99,7 +99,7 @@ func TestAtFile_ImageIncludesImagePart(t *testing.T) {
 
 	input := "@" + filepath.ToSlash(imagePath) + " describe"
 	model = typeInput(model, input)
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	history := model.ViewHistory()
 	// Agent should have been called (image was included as content part).
@@ -142,7 +142,7 @@ func TestAtFile_DirectoryListsContents(t *testing.T) {
 
 	input := "@" + filepath.ToSlash(subDir) + " what is here"
 	model = typeInput(model, input)
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	history := model.ViewHistory()
 	// Agent should have been called with directory listing.

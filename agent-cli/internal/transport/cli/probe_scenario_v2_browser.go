@@ -58,7 +58,10 @@ func (c *ProbeRunCommand) probeScenarioV2BrowserExecutorOptions(cmd *cobra.Comma
 	}
 	globalFlags := c.globalFlags
 	if globalFlags == nil && c.ConfigDir != "" {
-		globalFlags = &flags.GlobalFlags{ConfigDirPath: c.ConfigDir}
+		// Keep the process host directories so the WebMCP lock search and
+		// filesystem policy see the real working and home directories.
+		globalFlags = flags.NewGlobalFlags()
+		globalFlags.ConfigDirPath = c.ConfigDir
 	}
 	resolved, configErr := resolveSessionBrowserConfig(globalFlags, cmd, c.browserFlags)
 	options.ConfigError = configErr

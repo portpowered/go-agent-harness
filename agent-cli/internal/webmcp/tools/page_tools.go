@@ -23,6 +23,10 @@ import (
 // page's own name so a model can call exactly what the catalog listed.
 const PageToolNamePrefix = "page_"
 
+// pageToolRunReserveDivisor reserves 1/N of the caller's remaining deadline
+// for the page tool's own run, leaving the rest for browser setup.
+const pageToolRunReserveDivisor = 3
+
 // pageToolState guards the dynamic first-class page-tool surface. The name
 // map is rebuilt on every definition snapshot and consulted (with a live
 // catalog re-resolution) on every dynamic call, so executor routing follows
@@ -281,7 +285,7 @@ func (s *BrokerToolSet) executePageTool(ctx context.Context, call messages.ToolC
 	setupContext := ctx
 	cancelSetup := func() {}
 	if deadline, ok := ctx.Deadline(); ok {
-		reserve := time.Until(deadline) / 3
+		reserve := time.Until(deadline) / pageToolRunReserveDivisor
 		if reserve > 0 {
 			setupContext, cancelSetup = context.WithDeadline(ctx, deadline.Add(-reserve))
 		}
@@ -357,10 +361,10 @@ func pageToolGuidanceEnvelope(requested string, catalog webmcp.ToolCatalogSnapsh
 		available = append(available, descriptor.Name)
 	}
 	sort.Strings(available)
-	close := closeToolMatches(requested, available)
+	closeMatches := closeToolMatches(requested, available)
 	message := fmt.Sprintf("tool %q is not in the connected page catalog", requested)
-	if len(close) > 0 {
-		message += fmt.Sprintf("; close matches: %s", strings.Join(close, ", "))
+	if len(closeMatches) > 0 {
+		message += fmt.Sprintf("; close matches: %s", strings.Join(closeMatches, ", "))
 	}
 	if len(available) > 0 {
 		message += fmt.Sprintf(". Available page tools: %s. Call one directly by name, or use webmcp_list_tools and webmcp_invoke.", strings.Join(available, ", "))

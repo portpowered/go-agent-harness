@@ -254,7 +254,7 @@ type asyncCollisionRunResult struct {
 	runErr        error
 }
 
-func runAsyncCollisionScenario(t *testing.T, fixtureCollision, expectedCollision, continuation [][]int16, options asyncCollisionRunOptions) asyncCollisionRunResult {
+func runAsyncCollisionScenario(t *testing.T, fixtureCollision, continuation [][]int16, options asyncCollisionRunOptions) asyncCollisionRunResult {
 	t.Helper()
 	options = options.normalized()
 	trace := &asyncCollisionTrace{}
@@ -293,7 +293,7 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 		t.Fatalf("build OpenAI realtime session inferencer: %v", err)
 	}
 	sessionInferencer = &asyncCollisionSessionInferencer{inner: sessionInferencer, trace: executor.trace}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "unused"},
 		sessionInferencer,
@@ -404,9 +404,10 @@ func validateAsyncCollisionToolDeltas(deltas []messages.StreamMessage) error {
 		// The enclosing MESSAGE.START/END delimiters belong to the whole
 		// batch and intentionally carry no individual ToolCallID. Content
 		// deltas are the per-call correlation evidence.
-		switch delta.Type {
-		case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd:
-		default:
+		isTextContent := delta.Type == messages.StreamTypeTextStart ||
+			delta.Type == messages.StreamTypeTextDelta ||
+			delta.Type == messages.StreamTypeTextEnd
+		if !isTextContent {
 			continue
 		}
 		if delta.ToolCallId != asyncCollisionCallID {
@@ -627,8 +628,9 @@ func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 }
 
 func testSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
+	t.Helper()
 	collision, continuation := asyncCollisionAudio(t)
-	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{})
+	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, true); err != nil {
 		calls, returned := run.executor.snapshot()
 		t.Logf("async collision run: err=%v trace=%v outbound=%v calls=%+v returned=%+v deltas=%v", run.runErr, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned, summarizeAsyncCollisionDeltas(run.observer.snapshot()))
@@ -649,14 +651,6 @@ func testSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	t.Logf("provider-facing result delivered exactly once for %q", asyncCollisionCallID)
 }
 
-func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string {
-	types := make([]string, len(outbound))
-	for i, event := range outbound {
-		types[i] = event.Type
-	}
-	return types
-}
-
 func summarizeAsyncCollisionDeltas(deltas []messages.StreamMessage) []string {
 	types := make([]string, len(deltas))
 	for i, delta := range deltas {
@@ -672,7 +666,7 @@ func summarizeAsyncCollisionDeltas(deltas []messages.StreamMessage) []string {
 // unrelated outcome before the targeted result-loss assertion names the call.
 func TestSessionAsyncToolResultProviderResultLossFailsVerifier(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
-	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{
+	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{
 		dropProviderResult: true,
 	})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, false); err != nil {
@@ -696,7 +690,7 @@ func TestSessionAsyncToolResultAudioDamageFailsVerifier(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	damaged := cloneAsyncCollisionDeltas(collision)
 	damaged[1][0] ^= 1
-	run := runAsyncCollisionScenario(t, damaged, collision, continuation, asyncCollisionRunOptions{})
+	run := runAsyncCollisionScenario(t, damaged, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, false, true); err != nil {
 		calls, returned := run.executor.snapshot()
 		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v\ntrace=%v outbound=%v calls=%+v returned=%+v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned)
@@ -719,8 +713,9 @@ func TestSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 }
 
 func testSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
+	t.Helper()
 	collision, continuation := asyncCollisionAudio(t)
-	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{
+	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{
 		maxDuration:      asyncCollisionControlMaxDuration,
 		withholdTerminal: true,
 	})

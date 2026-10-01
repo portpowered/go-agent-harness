@@ -34,14 +34,14 @@ type Initializer interface {
 
 // initialBrowserState derives the browser capability state of a delegate
 // after a successful bootstrap that did not record a state of its own.
-func initialBrowserState(broker webmcp.Broker) webmcp.BrowserCapabilityState {
+func initialBrowserState(ctx context.Context, broker webmcp.Broker) webmcp.BrowserCapabilityState {
 	if broker == nil {
 		return webmcp.BrowserCapabilityUnavailable
 	}
 	if _, initializer := broker.(Initializer); initializer {
 		return webmcp.BrowserCapabilityInitializing
 	}
-	selected, err := broker.Selected(context.Background())
+	selected, err := broker.Selected(context.WithoutCancel(ctx))
 	if err == nil && selected.Connected && selected.Key.BrowserID != "" && selected.Key.TargetID != "" {
 		return webmcp.BrowserCapabilitySelected
 	}

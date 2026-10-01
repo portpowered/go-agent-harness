@@ -1,16 +1,15 @@
+//go:build e2e
+
 package chrome
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -34,9 +33,6 @@ const (
 // launches the pinned Chrome for Testing artifact, while the ordinary package
 // tests remain hermetic and offline.
 func TestPinnedChromeWebMCPProbe03ThroughActualBinary(t *testing.T) {
-	if os.Getenv(chromeIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the actual-binary Probe 03 proof", chromeIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -126,7 +122,7 @@ func launchProbe03(t *testing.T, ctx context.Context) *probe03Run {
 	})
 
 	run.baseURL = browserHTTPURL(run.browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
@@ -540,15 +536,6 @@ func renderProbe03Page(page, toolName, stateURL string) string {
 `, page, page, page, toolName, page, strconv.Quote(page), strconv.Quote(toolName), strconv.Quote(stateURL))
 }
 
-func probe03RandomToken(t *testing.T) string {
-	t.Helper()
-	bytes := make([]byte, 8)
-	if _, err := rand.Read(bytes); err != nil {
-		t.Fatalf("generate randomized Probe 03 fixture token: %v", err)
-	}
-	return hex.EncodeToString(bytes)
-}
-
 func writeProbe03Config(configDir, userDataDir, origin string) error {
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		return err
@@ -580,36 +567,6 @@ func writeProbe03Config(configDir, userDataDir, origin string) error {
 func probe03Input(message string) string {
 	encoded := mustFixtureJSON(map[string]string{"message": message})
 	return string(encoded)
-}
-
-func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir string, args ...string) (*gateCLIProcess, error) {
-	if parent == nil {
-		parent = context.Background()
-	}
-	commandContext, cancel := context.WithCancel(parent)
-	fullArgs := append([]string(nil), args...)
-	if configDir != "" {
-		fullArgs = append([]string{"--config-dir", configDir}, fullArgs...)
-	}
-	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
-	command.Dir = mustRepositoryRoot()
-	command.Env = probe03ChildEnvironment(homeDir)
-	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
-	command.Stdout = &process.stdout
-	command.Stderr = &process.stderr
-	if err := command.Start(); err != nil {
-		cancel()
-		return nil, err
-	}
-	go func() {
-		err := command.Wait()
-		exitCode := 0
-		if command.ProcessState != nil {
-			exitCode = command.ProcessState.ExitCode()
-		}
-		process.done <- gateCLIResult{Args: append([]string(nil), process.args...), Stdout: process.stdout.String(), Stderr: process.stderr.String(), ExitCode: exitCode, Err: err}
-	}()
-	return process, nil
 }
 
 func probe03FindTab(t *testing.T, data gateTabsData, browserID, origin, pageURL string) gateTab {
@@ -679,7 +636,7 @@ func waitForProbe03Oracle(ctx context.Context, endpoint string, match func(probe
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for Probe 03 oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for Probe 03 oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		case <-ticker.C:
 		}
 	}

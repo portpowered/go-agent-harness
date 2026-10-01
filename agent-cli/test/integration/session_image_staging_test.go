@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
@@ -44,13 +43,13 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	if err != nil {
 		t.Fatalf("resolve runtime tools: %v", err)
 	}
-	toolService := serviceTools.Factory(func(_ *config.Config) (serviceTools.Capabilities, error) {
+	toolService := serviceTools.Factory(func(_ context.Context, _ *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor:    capability.Executor,
 			Definitions: append([]messages.ToolDefinition(nil), capability.Definitions...),
 		}, nil
 	})
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewToolServicePort(toolService),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer must not be used")}),
 		wire.NewPortSwap(wire.PortSessionInferencer, &exactStagedImageInferencer{session: session}),
@@ -76,7 +75,7 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 		"--audio-in-turn", audioPath,
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	if err := rootCommand.ExecuteContext(ctx); err != nil {
 		t.Fatalf("execute image/audio session: %v\noutput:\n%s", err, output.String())
@@ -256,7 +255,7 @@ func (s *exactStagedImageSession) Send(ctx context.Context, event messages.Strea
 		s.captureAdvertisedPath(event)
 	}
 	if event.Type == messages.StreamTypeMessageEnd {
-		s.toolCall.Do(func() { s.emitToolCall() })
+		s.toolCall.Do(func() { s.emitToolCall(ctx) })
 	}
 	return true
 }
@@ -267,7 +266,7 @@ func (s *exactStagedImageSession) SendMessage(ctx context.Context, message messa
 	}
 	if message.Role == messages.RoleTool {
 		s.captureToolResult(message)
-		s.continuation.Do(func() { s.emitContinuation() })
+		s.continuation.Do(func() { s.emitContinuation(ctx) })
 	}
 	return true
 }
@@ -339,7 +338,7 @@ func (s *exactStagedImageSession) captureAdvertisedPath(event messages.StreamMes
 	s.recordFailure(errors.New("session.update did not advertise read_image"))
 }
 
-func (s *exactStagedImageSession) emitToolCall() {
+func (s *exactStagedImageSession) emitToolCall(ctx context.Context) {
 	s.mu.Lock()
 	path := s.advertisedPath
 	s.toolCallPath = path
@@ -358,7 +357,7 @@ func (s *exactStagedImageSession) emitToolCall() {
 		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, runtimeTools.ReadImageToolID, string(arguments))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		if !s.recv.Write(context.Background(), event) {
+		if !s.recv.Write(ctx, event) {
 			return
 		}
 	}
@@ -392,7 +391,7 @@ func (s *exactStagedImageSession) captureToolResult(message messages.Message) {
 	}
 }
 
-func (s *exactStagedImageSession) emitContinuation() {
+func (s *exactStagedImageSession) emitContinuation(ctx context.Context) {
 	if err := s.capture.server(`{"type":"response.output_text.delta","delta":"staged image verified"}`); err != nil {
 		s.recordFailure(err)
 	}
@@ -405,7 +404,7 @@ func (s *exactStagedImageSession) emitContinuation() {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("exact-staged-image", "done")},
 	} {
-		if !s.recv.Write(context.Background(), event) {
+		if !s.recv.Write(ctx, event) {
 			return
 		}
 	}
@@ -520,4 +519,23 @@ func assertScheduledFirstTurnImageItem(t *testing.T, outbound []cliLiveOutbound)
 			t.Fatalf("first-turn image part %d = %#v, want input_image with %q URL", index, part, wantMIME)
 		}
 	}
+}
+
+func expectedReadImageMissingError(t *testing.T, imagePath string) string {
+	t.Helper()
+	_, err := os.ReadFile(imagePath)
+	if err == nil {
+		t.Fatalf("missing read_image path unexpectedly exists: %s", imagePath)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing read_image path returned unexpected error: %v", err)
+	}
+	return fmt.Sprintf("session image %q is missing: %v", imagePath, err)
+}
+
+func readImageSpokenRecordPayload(record gwtesting.CapturedSessionEvent) []byte {
+	if len(record.Payload) > 0 {
+		return record.Payload
+	}
+	return record.Data
 }

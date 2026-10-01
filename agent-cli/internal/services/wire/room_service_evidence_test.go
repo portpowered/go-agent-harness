@@ -58,9 +58,26 @@ func (c humanCapture) Pump(ctx context.Context, room audio.OutboundMedia) error 
 		if err := room.WriteFrame(ctx, audio.PCMFrame{Samples: c.frame}); err != nil {
 			return unlessStopping(ctx, err)
 		}
-		time.Sleep(time.Millisecond)
+		if !paceHumanCapture(ctx) {
+			return nil
+		}
 	}
 	return nil
+}
+
+// humanCaptureFrameInterval paces the fake microphone between frames.
+const humanCaptureFrameInterval = time.Millisecond
+
+// paceHumanCapture waits one frame interval, reporting false once ctx ends.
+func paceHumanCapture(ctx context.Context) bool {
+	pace := time.NewTimer(humanCaptureFrameInterval)
+	defer pace.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-pace.C:
+		return true
+	}
 }
 
 type humanPlayback struct{ *humanMedia }
@@ -263,15 +280,50 @@ func (r *degradingRecorder) Observe(observation roomevidence.Observation) error 
 }
 
 type countingSink struct {
-	mu     sync.Mutex
-	events map[string]int
+	mu        sync.Mutex
+	events    map[string]int
+	published chan struct{}
+}
+
+func newCountingSink() *countingSink {
+	return &countingSink{events: map[string]int{}, published: make(chan struct{}, 1)}
 }
 
 func (s *countingSink) Publish(_ context.Context, participantID string, _ session.LiveEvent) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.events[participantID]++
+	s.mu.Unlock()
+	select {
+	case s.published <- struct{}{}:
+	default:
+	}
 	return nil
+}
+
+// awaitCounts waits on published events until every participant has exactly
+// one, failing after contractWait.
+func (s *countingSink) awaitCounts(t *testing.T, ids ...string) {
+	t.Helper()
+	timeout := time.After(contractWait)
+	for {
+		if s.eachCountedOnce(ids) {
+			return
+		}
+		select {
+		case <-s.published:
+		case <-timeout:
+			t.Fatalf("timed out waiting for one live event from each of %v", ids)
+		}
+	}
+}
+
+func (s *countingSink) eachCountedOnce(ids []string) bool {
+	for _, id := range ids {
+		if s.count(id) != 1 {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *countingSink) count(id string) int {
@@ -284,7 +336,7 @@ func TestServiceDegradesEvidenceFailureWithoutStoppingParticipants(t *testing.T)
 	live := newContractLive()
 	service := evidenceService(live, nil, degradingEvidence{Service: NewRoomEvidenceService(), participant: "alpha"})
 	output := filepath.Join(t.TempDir(), "evidence")
-	sink := &countingSink{events: map[string]int{}}
+	sink := newCountingSink()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done, ready := startRun(ctx, service, rooms.RoomRunOptions{Manifest: agentRoom(rooms.Room{Interactive: true}, "alpha", "beta"), OutputDir: output, EventSink: sink})
@@ -292,7 +344,7 @@ func TestServiceDegradesEvidenceFailureWithoutStoppingParticipants(t *testing.T)
 	for _, id := range []string{"alpha", "beta"} {
 		live.handle(t, id).events <- session.LiveEvent{Kind: string(session.LiveEventText), SessionID: id, Message: &messages.StreamMessage{Type: messages.StreamTypeTextDelta}}
 	}
-	waitFor(t, "both live events", func() bool { return sink.count("alpha") == 1 && sink.count("beta") == 1 })
+	sink.awaitCounts(t, "alpha", "beta")
 	for _, id := range []string{"alpha", "beta"} {
 		if cancels, closes := live.handle(t, id).counts(); cancels != 0 || closes != 0 {
 			t.Fatalf("participant %q cancels=%d closes=%d after evidence degraded, want still running", id, cancels, closes)

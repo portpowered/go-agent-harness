@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -39,9 +38,6 @@ func (c *ProbeRunCommand) runScenarioV2(cmd *cobra.Command, selections []string)
 		return err
 	}
 	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	runner := scenariov2.Runner{Replay: c.replayService, Analyze: replay.Analyze, Deadline: probescenario.DefaultDeadline}
 	emit := func(result scenariov2.Result) error { return writeProbeScenarioV2Result(resultsOut, result) }
 	summary, err := runner.Run(ctx, entries, recordingRoot, emit, browserOptions.Options()...)

@@ -86,9 +86,6 @@ func (e *Error) Unwrap() error { return e.Cause }
 // finish. When the finite timeout or parent context expires, the process
 // group is terminated before the result is returned.
 func Run(ctx context.Context, cfg Config) (Result, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if strings.TrimSpace(cfg.Command) == "" {
 		return Result{}, errors.New("test timeout runner requires a command")
 	}
@@ -97,7 +94,8 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 	}
 
 	commandText := formatCommand(cfg.Command, cfg.Args)
-	cmd := exec.Command(cfg.Command, cfg.Args...)
+	// Cancellation terminates the whole process group below, not just cmd.
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), cfg.Command, cfg.Args...)
 	cmd.Dir = cfg.Dir
 	if cfg.Env != nil {
 		cmd.Env = append([]string(nil), cfg.Env...)
@@ -140,14 +138,14 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 
 	if timedOut || contextCanceled {
 		termination = descendantsTerminated
-		cleanupErr := terminateCommand(cmd)
+		cleanupErr := terminateCommand(context.WithoutCancel(ctx), cmd)
 		if cleanupErr != nil {
 			termination = "descendant termination reported: " + cleanupErr.Error()
 		}
 		select {
 		case commandErr = <-done:
 		case <-time.After(waitAfterTermination):
-			if retryErr := terminateCommand(cmd); retryErr != nil {
+			if retryErr := terminateCommand(context.WithoutCancel(ctx), cmd); retryErr != nil {
 				termination += "; retry termination reported: " + retryErr.Error()
 			}
 			select {

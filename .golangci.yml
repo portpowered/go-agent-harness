@@ -268,9 +268,3 @@ linters:
       - path: '^go-llm-gateway/pkg/testing/session_record\.go$'
         linters: [nolintlint]
         text: 'is unused for linter "(containedctx|forbidigo|mnd)"'
-      # round-3 cleanup: lint-agent-cli track
-      - path: '^agent-cli/'
-        linters: [containedctx, contextcheck, copyloopvar, dupl, errname, errorlint, exhaustive, fatcontext, forbidigo, gochecknoglobals, gocritic, godox, gosec, iface, intrange, mirror, mnd, nestif, nilnesserr, noctx, predeclared, recvcheck, thelper, tparallel, unparam, usestdlibvars, usetesting, wastedassign]
-      - path: '^agent-cli/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|dupl|errname|errorlint|exhaustive|fatcontext|forbidigo|gochecknoglobals|gocritic|godox|gosec|iface|intrange|mirror|mnd|nestif|nilnesserr|noctx|predeclared|recvcheck|thelper|tparallel|unparam|usestdlibvars|usetesting|wastedassign)"'

@@ -29,7 +29,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 
 	recordPath := filepath.Join(t.TempDir(), "cutoff.session.json")
 	recordDir := filepath.Join(t.TempDir(), "cutoff-recording")
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: os.ErrNotExist},
 	)
@@ -53,7 +53,7 @@ func TestSessionCommand_MaxDurationKeepsRawCaptureAndSidecarHonest(t *testing.T)
 		"respond while streaming",
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	errCh := make(chan error, 1)
 	go func() { errCh <- rootCmd.ExecuteContext(ctx) }()
@@ -124,7 +124,7 @@ func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T)
 	defer server.Close()
 
 	recordPath := filepath.Join(t.TempDir(), "cutoff.session.json")
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: os.ErrNotExist},
 	)
@@ -147,7 +147,7 @@ func TestSessionCommand_MaxDurationRecordOnlyWritesSemanticSidecar(t *testing.T)
 		"respond while streaming",
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	errCh := make(chan error, 1)
 	go func() { errCh <- rootCmd.ExecuteContext(ctx) }()
@@ -174,7 +174,7 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 	const responseText = "prompt-only response"
 	server := newCLILiveRecordDirPromptServer(responseText)
 	t.Cleanup(server.shutdown)
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortTransportDialer, server),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: os.ErrNotExist}),
@@ -197,7 +197,7 @@ func TestSessionCommand_PromptOnlyRecordDirFinalizesCompleteBundle(t *testing.T)
 		"--prompt", "prompt-only request",
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		t.Fatalf("prompt-only record-dir CLI returned an error: %v; stdout=%q stderr=%q", err, testWriter.StdoutString(), testWriter.StderrString())

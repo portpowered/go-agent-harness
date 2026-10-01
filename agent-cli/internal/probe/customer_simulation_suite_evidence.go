@@ -19,6 +19,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
+// Product transcript lines are JSON events; tool results can be large.
+const (
+	transcriptScanInitialBytes = 4 << 10
+	transcriptScanMaxLineBytes = 4 << 20
+)
+
 // Facts come only from copied product records and exclude tool arguments and raw payloads.
 type customerSimulationRecordingFacts struct {
 	responses         []customerSimulationResponse
@@ -98,16 +104,16 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 		for scanner.Scan() {
 			var entry customerSimulationSessionLogEntry
 			if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-				failures = append(failures, fmt.Errorf("decode session-log entry: %v", err))
+				failures = append(failures, fmt.Errorf("decode session-log entry: %w", err))
 				continue
 			}
 			sessionLogResponses = append(sessionLogResponses, customerSimulationResponse{Text: entry.Response.Text, Complete: entry.Response.Complete, AudioBytes: entry.Response.AudioBytes})
 		}
 		if err := scanner.Err(); err != nil {
-			failures = append(failures, fmt.Errorf("read session-log: %v", err))
+			failures = append(failures, fmt.Errorf("read session-log: %w", err))
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		failures = append(failures, fmt.Errorf("read session-log: %v", err))
+		failures = append(failures, fmt.Errorf("read session-log: %w", err))
 	}
 
 	var streamFacts customerSimulationRecordingFacts
@@ -135,18 +141,18 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if errors.Is(err, os.ErrNotExist) {
 			return facts, nil
 		}
-		return facts, fmt.Errorf("open product transcript: %v", err)
+		return facts, fmt.Errorf("open product transcript: %w", err)
 	}
 	defer closeReadOnlyFile(file)
 	var records []customerSimulationRecordedMessage
 	var base time.Time
 	completedToolIDs := make(map[string]time.Duration)
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 4096), 4<<20)
+	scanner.Buffer(make([]byte, transcriptScanInitialBytes), transcriptScanMaxLineBytes)
 	for scanner.Scan() {
 		record, decodeErr := transcript.Decode(scanner.Bytes())
 		if decodeErr != nil {
-			return facts, fmt.Errorf("decode product transcript: %v", decodeErr)
+			return facts, fmt.Errorf("decode product transcript: %w", decodeErr)
 		}
 		if !isCustomerSimulationAgentRecord(record) {
 			continue
@@ -168,7 +174,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return facts, fmt.Errorf("read product transcript: %v", err)
+		return facts, fmt.Errorf("read product transcript: %w", err)
 	}
 
 	parser := customerSimulationStreamParser{
@@ -215,6 +221,20 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 		p.consumeResponseCancel(record)
 	case messages.StreamTypeMessageEnd:
 		p.consumeMessageEnd(record, isAssistant)
+	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
+		messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeInputItemAdded,
+		messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// Other stream types carry no customer-simulation response evidence.
 	}
 	return p.responseIndex > len(p.scenario.Actions)+p.knownResponses+1
 }
@@ -496,52 +516,6 @@ func controllerPatienceEvidence(controller *PatienceController, process ProcessF
 	}
 	evidence, err := controller.Evidence(controllerProcess, toolObservationIDsNotComplete(tools), FamilyEPatienceEvidenceRefs())
 	return evidence, err == nil
-}
-
-// settleUnfinishedPatience records a terminal outcome for a controller that
-// never reached one. A rejected transition leaves the controller's ledger
-// unchanged, and the subsequent Evidence call reports that state, so the
-// transition error carries no additional information here.
-func settleUnfinishedPatience(controller *PatienceController, timedOut bool) {
-	var err error
-	if timedOut {
-		err = controller.Timeout()
-	} else {
-		err = controller.Cancel()
-	}
-	if err != nil {
-		return
-	}
-}
-
-// fallbackPatienceEvidence is only a fail-closed compatibility fallback for
-// callers that do not have a live PatienceController. Product runs always
-// construct the controller; without it, stdout alone cannot prove completion
-// or distinguish a terminal response from a stalled one.
-func fallbackPatienceEvidence(process ProcessFacts, result DuplexRunResult, tools []ToolObservation) PatienceEvidence {
-	turnID := FamilyETurnID
-	terminal := process.EndedAt
-	if terminal <= 0 {
-		terminal = time.Millisecond
-	}
-	events, responseStart, firstProgress, lastProgress := fallbackPatienceProgressEvents(result, terminal)
-	outcome := PatienceOutcomeCancelled
-	if result.TimedOut {
-		outcome = PatienceOutcomeTimeout
-	}
-	switch outcome {
-	case PatienceOutcomeCompleted:
-		events = append(events, PatienceEvent{ID: "response-completed", TurnID: turnID, Kind: PatienceEventResponseCompleted, At: terminal})
-	case PatienceOutcomeTimeout:
-		events = append(events, PatienceEvent{ID: "timeout", TurnID: turnID, Kind: PatienceEventTimeout, At: terminal, Detail: "the shipped session reached its deadline before a terminal customer response"})
-	case PatienceOutcomeCancelled, PatienceOutcomeDeadAir:
-		events = append(events, PatienceEvent{ID: string(PatienceEventCancelled), TurnID: turnID, Kind: PatienceEventCancelled, At: terminal, Detail: "the shipped session was cancelled before a terminal customer response"})
-	}
-	return PatienceEvidence{
-		ActionID: FamilyEActionID, TurnID: turnID, ListenStartedAt: 0, ResponseStartedAt: responseStart, FirstProgressAt: firstProgress, LastProgressAt: lastProgress,
-		TerminalAt: terminal, Outcome: outcome, ActivityState: PatienceActivityDeadAir, Events: events, Process: process,
-		OutstandingToolIDs: toolObservationIDsNotComplete(tools), CustomerImpact: "The customer could not rely on a timely, observable response.", EvidenceRefs: FamilyEPatienceEvidenceRefs(),
-	}
 }
 
 func fallbackPatienceProgressEvents(result DuplexRunResult, terminal time.Duration) (events []PatienceEvent, responseStart, firstProgress, lastProgress time.Duration) {

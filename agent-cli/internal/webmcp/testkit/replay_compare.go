@@ -2,10 +2,12 @@ package testkit
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // JSON field names shared by fixture decoding, validation and replay
@@ -42,6 +44,11 @@ func compareReplayOperation(expected OperationExpectation, actual OperationReque
 		if expected.URL != actual.URL {
 			return "url", "URL differs"
 		}
+	case OperationEnableLifecycle, OperationEnableWebMCP, OperationCloseTarget, OperationDetachTarget,
+		OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover, OperationBrowserListTargets,
+		OperationBrowserListTools, OperationDoctor, OperationContext, OperationBrowsers, OperationTabs,
+		OperationTools:
+		// These operations carry no fields beyond the already-compared type.
 	}
 	return "", ""
 }
@@ -207,4 +214,43 @@ func replayJSONFieldPath(base, key string) string {
 
 func replayJSONIdentifierRune(index int, char rune) bool {
 	return char == '_' || char == '-' || char == '.' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || index > 0 && char >= '0' && char <= '9'
+}
+
+// validateInvokeToolRequest requires a frame, a tool name, and an object input
+// (an absent input is the empty object).
+func validateInvokeToolRequest(request OperationRequest) error {
+	if err := validateScriptID(request.FrameID); err != nil {
+		return fmt.Errorf("frame_id: %w", err)
+	}
+	if strings.TrimSpace(request.ToolName) == "" {
+		return errors.New("tool_name is required")
+	}
+	if len(request.Input) > 0 && !isJSONObject(request.Input) {
+		return errors.New("input must be a JSON object")
+	}
+	return nil
+}
+
+// Validate checks an endpoint and all target records.
+func (e *BrowserEndpoint) Validate() error {
+	if strings.TrimSpace(e.Version.Browser) == "" {
+		return newScriptError("version.Browser", "is required")
+	}
+	if strings.TrimSpace(e.Version.ProtocolVersion) == "" {
+		return newScriptError("version.Protocol-Version", "is required")
+	}
+	if strings.TrimSpace(e.Version.WebSocketDebuggerURL) == "" {
+		return newScriptError("version.webSocketDebuggerUrl", "is required")
+	}
+	seen := make(map[string]struct{}, len(e.Targets))
+	for index, target := range e.Targets {
+		if err := target.Validate(); err != nil {
+			return wrapScriptError(fmt.Sprintf("targets[%d]", index), err)
+		}
+		if _, exists := seen[target.ID]; exists {
+			return newScriptError(fmt.Sprintf("targets[%d].id", index), "duplicate target ID %q", target.ID)
+		}
+		seen[target.ID] = struct{}{}
+	}
+	return nil
 }

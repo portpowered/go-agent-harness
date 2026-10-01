@@ -17,7 +17,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(mocktool.Ports(executor)...)
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(context.Background(), mocktool.Ports(executor)...)
 	if err != nil {
 		fatal(err)
 	}

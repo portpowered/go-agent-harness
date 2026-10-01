@@ -155,7 +155,7 @@ func TestConfigAddLocalLeadingTildeWritesBelowHome(t *testing.T) {
 
 	server := newProbeServer(t, map[string]int{"/models": 200})
 	defer server.Close()
-	got := executeGeneratedCLI(context.Background(), "", "-C", "~/x", "config", "add-local", "--base-url", server.URL, "--model", "home-model")
+	got := executeGeneratedCLI(t, "", "-C", "~/x", "config", "add-local", "--base-url", server.URL, "--model", "home-model")
 	if got.err != nil {
 		t.Fatalf("execute config add-local: %v", got.err)
 	}

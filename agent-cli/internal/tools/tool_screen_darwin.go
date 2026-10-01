@@ -63,12 +63,15 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, proc
 	return resolutions[idx], nil
 }
 
+// darwinResolutionSubmatchCount is the full match plus width and height groups.
+const darwinResolutionSubmatchCount = 3
+
 func darwinDisplayResolutions(output string) []image.Rectangle {
 	lines := strings.Split(output, "\n")
 	resolutions := make([]image.Rectangle, 0, len(lines))
 	for _, line := range lines {
 		match := darwinDisplayResolutionPattern.FindStringSubmatch(line)
-		if len(match) != 3 {
+		if len(match) != darwinResolutionSubmatchCount {
 			continue
 		}
 		var width, height int
@@ -86,9 +89,6 @@ func darwinDisplayResolutions(output string) []image.Rectangle {
 }
 
 func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, process DisplayProcess) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -111,9 +111,6 @@ func isScreenRecordingPermissionDenied(output []byte, err error) bool {
 }
 
 func screenCaptureDisplayWithContextAndProcess(ctx context.Context, display int, _ image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, process); err != nil {
 		return nil, err
 	}
@@ -161,7 +158,7 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, er
 	}
 	defer discardScreenshotCleanup(f.Close)
 
-	img, err := png.Decode(contextReader{ctx: ctx, r: f})
+	img, err := png.Decode(newContextReader(ctx, f))
 	if err != nil {
 		return nil, fmt.Errorf("decode screenshot: %w", err)
 	}

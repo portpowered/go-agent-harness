@@ -22,9 +22,6 @@ func (b *Broker) ensureInitialized(ctx context.Context) error {
 	if b == nil || b.Broker == nil {
 		return webmcp.ErrClosed
 	}
-	if ctx == nil {
-		ctx = context.Background() //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	}
 	b.initMu.Lock()
 	done := b.doneLocked()
 	b.initMu.Unlock()
@@ -89,9 +86,9 @@ func (b *Broker) runInitialization(ctx context.Context, cancel context.CancelFun
 	// Do not cancel a successful initialization context here: the production
 	// browser handle and selected target session may still be using it. Close
 	// cancels this context after the provider/session lifecycle has finished.
-	// Status derivation reads the delegate with a fresh context so a late
-	// bootstrap cancellation cannot rewrite the settled browser state.
-	if err = b.finishInitialization(err); err != nil { //nolint:contextcheck // see above
+	// Status derivation reads the delegate without the bootstrap's
+	// cancellation so a late cancellation cannot rewrite the settled state.
+	if err = b.finishInitialization(ctx, err); err != nil {
 		cancel()
 	}
 }
@@ -99,14 +96,14 @@ func (b *Broker) runInitialization(ctx context.Context, cancel context.CancelFun
 // finishInitialization records the bootstrap outcome and releases waiters.
 // It returns the recorded error, which is ErrClosed when the broker closed
 // during a successful bootstrap.
-func (b *Broker) finishInitialization(err error) error {
+func (b *Broker) finishInitialization(ctx context.Context, err error) error {
 	b.initMu.Lock()
 	defer b.initMu.Unlock()
 	if b.closed && err == nil {
 		err = webmcp.ErrClosed
 	}
 	b.initErr = err
-	b.browserState = b.settledBrowserStateLocked(err)
+	b.browserState = b.settledBrowserStateLocked(ctx, err)
 	if err == nil {
 		b.initState = StateReady
 	} else {
@@ -116,14 +113,14 @@ func (b *Broker) finishInitialization(err error) error {
 	return err
 }
 
-func (b *Broker) settledBrowserStateLocked(err error) webmcp.BrowserCapabilityState {
+func (b *Broker) settledBrowserStateLocked(ctx context.Context, err error) webmcp.BrowserCapabilityState {
 	switch {
 	case b.closed:
 		return webmcp.BrowserCapabilityDisconnected
 	case b.browserState != "" && b.browserState != webmcp.BrowserCapabilityInitializing:
 		return b.browserState
 	case err == nil:
-		return initialBrowserState(b.Broker)
+		return initialBrowserState(ctx, b.Broker)
 	default:
 		return browserStateForError(err)
 	}

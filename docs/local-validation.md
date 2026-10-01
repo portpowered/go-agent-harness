@@ -113,7 +113,7 @@ everything. CI uses the same test cache, restored with each job's build cache (s
   `test-audio-stability-race`, `test-sessions-race`), `lint-cross`,
   `lint-darwin-cgo`, the WebMCP Chrome and macOS audio release jobs.
 - Neither the prepush gate nor pull-request CI runs the fresh-process
-  Test45/Test46 audio stress trials (`YUI_AUDIO_STRESS=1`). The scheduled
+  Test45/Test46 audio stress trials (`-tags stress`). The scheduled
   Nightly audio stress workflow runs them on main and opens a "Nightly audio
   stress failed" issue when they fail; run them locally with
   `make test-audio-stress AUDIO_STRESS_COUNT=N`.

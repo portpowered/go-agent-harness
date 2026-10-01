@@ -200,7 +200,7 @@ func (r CustomerSimulationValidatorRunner) Run(ctx context.Context, input Valida
 func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input ValidatorInput, manifest *CustomerEvidenceManifest, allowedRefs map[string]struct{}) (CustomerSimulationValidatorResult, error) {
 	baseResult := CustomerSimulationValidatorResult{Mechanical: input.Mechanical}
 	if err := input.Validate(); err != nil {
-		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusInputInvalid, fmt.Errorf("%w: %v", ErrValidatorInputInvalid, err), allowedRefs)
+		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusInputInvalid, fmt.Errorf("%w: %w", ErrValidatorInputInvalid, err), allowedRefs)
 	}
 	if allowedRefs == nil {
 		allowedRefs = evidenceReferenceSet(input.EvidenceRefs)
@@ -212,7 +212,7 @@ func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input Valida
 		Manifest: manifest,
 	}
 	if err := request.Validate(); err != nil {
-		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusInputInvalid, fmt.Errorf("%w: %v", ErrValidatorInputInvalid, err), allowedRefs)
+		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusInputInvalid, fmt.Errorf("%w: %w", ErrValidatorInputInvalid, err), allowedRefs)
 	}
 	if r.Agent == nil {
 		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusUnavailable, ErrValidatorUnavailable, allowedRefs)
@@ -221,9 +221,6 @@ func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input Valida
 	timeout := r.Timeout
 	if timeout <= 0 {
 		timeout = DefaultCustomerSimulationValidatorTimeout
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	// The validator is a post-run actor. Strip product/simulator cancellation
 	// and impose a fresh finite budget so a cancelled child cannot cancel the
@@ -242,7 +239,7 @@ func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input Valida
 		} else if errors.Is(validatorContext.Err(), context.Canceled) || errors.Is(err, context.Canceled) || errors.Is(err, ErrValidatorCancelled) {
 			status, kind = ValidatorStatusCancelled, ErrValidatorCancelled
 		}
-		return customerSimulationValidatorFailure(baseResult, input, status, fmt.Errorf("%w: %v", kind, err), allowedRefs)
+		return customerSimulationValidatorFailure(baseResult, input, status, fmt.Errorf("%w: %w", kind, err), allowedRefs)
 	}
 	if err := validatorContext.Err(); err != nil {
 		kind := ErrValidatorCancelled
@@ -255,11 +252,11 @@ func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input Valida
 
 	verdict, err := ParseCustomerSimulationValidatorVerdict(raw)
 	if err != nil {
-		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusMalformed, fmt.Errorf("%w: %v", ErrValidatorMalformedResponse, err), allowedRefs)
+		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusMalformed, fmt.Errorf("%w: %w", ErrValidatorMalformedResponse, err), allowedRefs)
 	}
 	baseResult.AgentVerdict = &verdict
 	if err := validateValidatorEvidenceRefs(verdict.EvidenceRefs, allowedRefs); err != nil {
-		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusMalformed, fmt.Errorf("%w: %v", ErrValidatorMalformedResponse, err), allowedRefs)
+		return customerSimulationValidatorFailure(baseResult, input, ValidatorStatusMalformed, fmt.Errorf("%w: %w", ErrValidatorMalformedResponse, err), allowedRefs)
 	}
 	if verdict.Verdict == ValidatorBroken {
 		baseResult.Status = ValidatorStatusBroken
@@ -515,18 +512,18 @@ func (a GatewayCustomerSimulationValidator) ValidateCustomerSimulation(ctx conte
 func RunFinalizedCustomerSimulationValidator(ctx context.Context, root string, agent CustomerSimulationValidatorAgent, timeout time.Duration) (CustomerSimulationValidatorResult, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict("validator", err), Error: safeValidatorFailureDetail(fmt.Errorf("%w: %v", ErrValidatorFinalization, err))}
-		return result, fmt.Errorf("%w: %v", ErrValidatorFinalization, err)
+		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict("validator", err), Error: safeValidatorFailureDetail(fmt.Errorf("%w: %w", ErrValidatorFinalization, err))}
+		return result, fmt.Errorf("%w: %w", ErrValidatorFinalization, err)
 	}
 	manifest, err := VerifyCustomerEvidenceBundle(absRoot)
 	if err != nil {
-		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict("validator", err), Error: safeValidatorFailureDetail(fmt.Errorf("%w: %v", ErrValidatorFinalization, err))}
-		return result, fmt.Errorf("%w: %v", ErrValidatorFinalization, err)
+		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict("validator", err), Error: safeValidatorFailureDetail(fmt.Errorf("%w: %w", ErrValidatorFinalization, err))}
+		return result, fmt.Errorf("%w: %w", ErrValidatorFinalization, err)
 	}
 	input, err := readFinalizedCustomerSimulationValidatorInput(absRoot, manifest)
 	if err != nil {
-		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict(firstValidatorFailureTurn(input), err), Mechanical: input.Mechanical, Error: safeValidatorFailureDetail(fmt.Errorf("%w: %v", ErrValidatorEvidenceMismatch, err))}
-		return result, fmt.Errorf("%w: %v", ErrValidatorEvidenceMismatch, err)
+		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Verdict: validatorFinalizationFailureVerdict(firstValidatorFailureTurn(input), err), Mechanical: input.Mechanical, Error: safeValidatorFailureDetail(fmt.Errorf("%w: %w", ErrValidatorEvidenceMismatch, err))}
+		return result, fmt.Errorf("%w: %w", ErrValidatorEvidenceMismatch, err)
 	}
 	if !input.Process.ChildWaited || input.Process.WaitCount != 1 {
 		result := CustomerSimulationValidatorResult{Status: ValidatorStatusInputInvalid, Mechanical: input.Mechanical, Verdict: validatorFinalizationFailureVerdict(firstValidatorFailureTurn(input), errors.New("the child process was not reaped exactly once")), Error: ErrValidatorFinalization.Error()}

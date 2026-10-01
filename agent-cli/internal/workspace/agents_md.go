@@ -10,6 +10,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// agentsMDFileMode keeps the generated AGENTS.md readable by workspace tools.
+const agentsMDFileMode = 0o644
+
 const AgentsMDFileName = "AGENTS.md"
 
 const (
@@ -27,7 +30,7 @@ func EnsureAgentsMD(workspaceDir string, toolDefs []messages.ToolDefinition) err
 	if _, err := os.Stat(path); err != nil {
 		// Keep creation/error behavior for a missing file (and for an invalid
 		// parent path) identical to the original implementation.
-		return os.WriteFile(path, []byte(generateAgentsMD(workspaceDir, toolDefs)), 0644)
+		return os.WriteFile(path, []byte(generateAgentsMD(workspaceDir, toolDefs)), agentsMDFileMode)
 	}
 
 	content, readable := readExistingAgentsMD(path)
@@ -43,7 +46,7 @@ func EnsureAgentsMD(workspaceDir string, toolDefs []messages.ToolDefinition) err
 	if !changed {
 		return nil
 	}
-	return os.WriteFile(path, []byte(reconciled), 0644)
+	return os.WriteFile(path, []byte(reconciled), agentsMDFileMode)
 }
 
 // generateAgentsMD produces the full AGENTS.md content.

@@ -133,9 +133,6 @@ func (s *duplexProgressState) waitForOutputSequence(ctx context.Context, sequenc
 }
 
 func (s *duplexProgressState) waitForOutput(ctx context.Context, minimum int64, reads bool) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		s.mu.Lock()
 		met := s.outputBytes >= minimum
@@ -163,9 +160,6 @@ func (s *duplexProgressState) outputEvents() []DuplexOutputEvent {
 }
 
 func (s *duplexProgressState) waitForChange(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	s.mu.Lock()
 	if s.outputClosed {
 		s.mu.Unlock()
@@ -346,4 +340,54 @@ func (r startupReader) Read(p []byte) (int, error) {
 		r.mark()
 	}
 	return n, err
+}
+
+// fallbackPatienceEvidence is only a fail-closed compatibility fallback for
+// callers that do not have a live PatienceController. Product runs always
+// construct the controller; without it, stdout alone cannot prove completion
+// or distinguish a terminal response from a stalled one.
+func fallbackPatienceEvidence(process ProcessFacts, result DuplexRunResult, tools []ToolObservation) PatienceEvidence {
+	turnID := FamilyETurnID
+	terminal := process.EndedAt
+	if terminal <= 0 {
+		terminal = time.Millisecond
+	}
+	events, responseStart, firstProgress, lastProgress := fallbackPatienceProgressEvents(result, terminal)
+	outcome := PatienceOutcomeCancelled
+	if result.TimedOut {
+		outcome = PatienceOutcomeTimeout
+	}
+	switch outcome {
+	case PatienceOutcomeCompleted:
+		events = append(events, PatienceEvent{ID: "response-completed", TurnID: turnID, Kind: PatienceEventResponseCompleted, At: terminal})
+	case PatienceOutcomeTimeout:
+		events = append(events, PatienceEvent{ID: "timeout", TurnID: turnID, Kind: PatienceEventTimeout, At: terminal, Detail: "the shipped session reached its deadline before a terminal customer response"})
+	case PatienceOutcomeCancelled, PatienceOutcomeDeadAir:
+		events = append(events, PatienceEvent{ID: string(PatienceEventCancelled), TurnID: turnID, Kind: PatienceEventCancelled, At: terminal, Detail: "the shipped session was cancelled before a terminal customer response"})
+	}
+	return PatienceEvidence{
+		ActionID: FamilyEActionID, TurnID: turnID, ListenStartedAt: 0, ResponseStartedAt: responseStart, FirstProgressAt: firstProgress, LastProgressAt: lastProgress,
+		TerminalAt: terminal, Outcome: outcome, ActivityState: PatienceActivityDeadAir, Events: events, Process: process,
+		OutstandingToolIDs: toolObservationIDsNotComplete(tools), CustomerImpact: "The customer could not rely on a timely, observable response.", EvidenceRefs: FamilyEPatienceEvidenceRefs(),
+	}
+}
+
+// settleUnfinishedPatience records a terminal outcome for a controller that
+// never reached one. A rejected transition leaves the controller's ledger
+// unchanged, and the subsequent Evidence call reports that state, so the
+// transition error carries no additional information here.
+func settleUnfinishedPatience(controller *PatienceController, timedOut bool) {
+	var err error
+	if timedOut {
+		err = controller.Timeout()
+	} else {
+		err = controller.Cancel()
+	}
+	if err != nil {
+		return
+	}
+}
+
+func duplexProcessError(kind error, operation string, cause error) error {
+	return fmt.Errorf("%w: %s: %w", kind, operation, cause)
 }

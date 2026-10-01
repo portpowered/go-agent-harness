@@ -179,7 +179,6 @@ func (r *ScriptedBrowserRuntime) WaitForPublishedEvent(ctx context.Context, afte
 	if r == nil {
 		return PublishedEvent{}, webmcp.ErrClosed
 	}
-	ctx = nonNilContext(ctx)
 	for {
 		r.eventMu.Lock()
 		oldest := uint64(0)
@@ -252,7 +251,6 @@ func (r *ScriptedBrowserRuntime) WaitForOperationAfter(ctx context.Context, afte
 	if r == nil {
 		return Operation{}, webmcp.ErrClosed
 	}
-	ctx = nonNilContext(ctx)
 	for {
 		r.operationMu.Lock()
 		for _, operation := range r.operations {
@@ -841,7 +839,6 @@ func (h *ScriptedBrowserHandle) CloseTarget(ctx context.Context, targetID webmcp
 	if h == nil {
 		return webmcp.ErrClosed
 	}
-	ctx = nonNilContext(ctx)
 	if err := contextError(ctx); err != nil {
 		return err
 	}

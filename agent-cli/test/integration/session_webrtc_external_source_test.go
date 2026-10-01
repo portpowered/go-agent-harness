@@ -93,7 +93,7 @@ func collectExternalSourceAudio(rawURL string, wantPackets int, frameWait time.D
 	}
 	defer discardCloseError(stream)
 	pcm := make([]byte, 0, wantPackets*externalSourcePacketSamples*2)
-	for packet := 0; packet < wantPackets; packet++ {
+	for packet := range wantPackets {
 		ctx, cancel := context.WithTimeout(context.Background(), frameWait)
 		frame, readErr := stream.ReadFrame(ctx)
 		cancel()
@@ -220,11 +220,11 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 // are retained because Cobra may put usage and errors on stderr.
 func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath string, stdinPCM []byte, outWavPath string) rootCLIResult {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(ctx, &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI composition: %v", err)
 	}
-	rootCmd := agentCLI.Generate()
+	rootCmd := agentCLI.Generate() //nolint:contextcheck // Generate only builds the cobra tree; the command runs under ctx via ExecuteContext below
 	stdout := &syncBuffer{}
 	stderr := &syncBuffer{}
 	rootCmd.SetOut(stdout)
@@ -251,11 +251,11 @@ func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath st
 // useful diagnostics without exposing source credentials.
 func runRootCLIMediaCommand(t *testing.T, ctx context.Context, cfgDir, operation, rawURL string) rootCLIResult {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(ctx, &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI composition: %v", err)
 	}
-	rootCmd := agentCLI.Generate()
+	rootCmd := agentCLI.Generate() //nolint:contextcheck // Generate only builds the cobra tree; the command runs under ctx via ExecuteContext below
 	stdout := &syncBuffer{}
 	stderr := &syncBuffer{}
 	rootCmd.SetOut(stdout)
@@ -389,7 +389,7 @@ func sqrtOf(value float64) float64 {
 		return 0
 	}
 	guess := value
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		guess = (guess + value/guess) / 2
 	}
 	return guess
@@ -699,7 +699,7 @@ func stripSDPMediaSection(sdp, media string) string {
 func splitSDPLines(sdp string) []string {
 	lines := []string{}
 	start := 0
-	for i := 0; i < len(sdp); i++ {
+	for i := range len(sdp) {
 		if sdp[i] == '\n' {
 			end := i
 			if end > start && sdp[end-1] == '\r' {

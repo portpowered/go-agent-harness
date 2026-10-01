@@ -22,7 +22,10 @@ const (
 // pinned to its session and is never resolved through the current selection.
 type brokerInvocation struct {
 	selected *brokerSession
-	ctx      context.Context
+	// caller is the admitting caller's cancellation signal, error and
+	// deadline. The lane worker derives its dispatch context from its own
+	// context and mirrors these, so no caller context is retained here.
+	caller callerBinding
 
 	invocation Invocation
 
@@ -94,9 +97,6 @@ func invokeWebMCP(ctx context.Context, session TargetSession, publicID Invocatio
 }
 
 func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequest) (InvokeResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := contextError(ctx); err != nil {
 		return InvokeResult{}, err
 	}
@@ -117,7 +117,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 	}
 	selected := b.selected
 	b.mu.Unlock()
-	if err := b.selectedStateError(selected, "lifecycle", "selection_not_connected"); err != nil {
+	if err := b.selectedStateError(selected, "lifecycle"); err != nil {
 		return InvokeResult{}, err
 	}
 	b.mu.Lock()
@@ -156,7 +156,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 	invocation := b.newBrokerInvocationLocked(ctx, selected, id, request, descriptor, input, invocationTimeout)
 	b.invocations[id] = invocation
 	selected.queue = append(selected.queue, invocation)
-	b.startInvocationTimerLocked(invocation)
+	b.startInvocationTimerLocked(context.WithoutCancel(ctx), invocation)
 	b.emitLocked(BrokerEvent{
 		Type:         BrokerEventInvocationCreated,
 		BrowserID:    descriptor.BrowserID,
@@ -175,7 +175,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 }
 
 func (b *StatefulBroker) mintInvocationIDLocked() (InvocationID, error) {
-	for attempt := 0; attempt < maxInvocationIDMintAttempts; attempt++ {
+	for range maxInvocationIDMintAttempts {
 		id, err := b.ids.NewInvocationID()
 		if err != nil {
 			return "", err
@@ -203,7 +203,10 @@ func (b *StatefulBroker) mintInvocationIDLocked() (InvocationID, error) {
 	return "", errors.New("webmcp: invocation ID source did not produce a unique non-empty ID")
 }
 
-func (b *StatefulBroker) startInvocationTimerLocked(invocation *brokerInvocation) {
+// startInvocationTimerLocked arms the invocation deadline. ctx must not be
+// canceled by the caller's cancellation: the timeout path must still be able
+// to send its browser cancel after the caller has gone away.
+func (b *StatefulBroker) startInvocationTimerLocked(ctx context.Context, invocation *brokerInvocation) {
 	if invocation == nil || b.timers == nil || b.invocationTimeout <= 0 {
 		return
 	}
@@ -213,20 +216,20 @@ func (b *StatefulBroker) startInvocationTimerLocked(invocation *brokerInvocation
 	}
 	invocation.timer = timer
 	b.wg.Add(1)
-	go b.watchInvocationDeadline(invocation, timer)
+	go b.watchInvocationDeadline(ctx, invocation, timer)
 }
 
-func (b *StatefulBroker) watchInvocationDeadline(invocation *brokerInvocation, timer Timer) {
+func (b *StatefulBroker) watchInvocationDeadline(ctx context.Context, invocation *brokerInvocation, timer Timer) {
 	defer b.wg.Done()
 	select {
 	case <-timer.C():
-		b.timeoutInvocation(invocation)
+		b.timeoutInvocation(ctx, invocation)
 	case <-invocation.terminal:
 	case <-b.closedCh:
 	}
 }
 
-func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
+func (b *StatefulBroker) timeoutInvocation(ctx context.Context, invocation *brokerInvocation) {
 	if invocation == nil {
 		return
 	}
@@ -241,7 +244,7 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	} else {
 		removeQueuedInvocationLocked(invocation.selected, invocation)
 	}
-	action := b.claimTargetCancellationLocked(invocation, context.Background())
+	action := b.claimTargetCancellationLocked(invocation)
 	wait := b.cancellationWaitLocked(invocation, action)
 	phase := invocationTimeoutPhase(invocation.invocation.State)
 	timeoutMilliseconds := b.invocationTimeout.Milliseconds()
@@ -254,7 +257,7 @@ func (b *StatefulBroker) timeoutInvocation(invocation *brokerInvocation) {
 	if action != nil || wait != nil {
 		b.mu.Unlock()
 		if action != nil {
-			performTargetCancellation(action)
+			performTargetCancellation(ctx, action)
 		} else {
 			<-wait
 		}
@@ -278,8 +281,9 @@ func invocationTimeoutPhase(state InvocationState) string {
 // runInvocationQueue owns one target-local FIFO. It intentionally waits for
 // terminal reconciliation before taking the next item, which makes the
 // default policy safe for both mutating tools and descriptors without a
-// trusted read-only annotation.
-func (b *StatefulBroker) runInvocationQueue(selected *brokerSession) {
+// trusted read-only annotation. ctx is the worker's lifetime context; it must
+// not carry the selecting caller's cancellation.
+func (b *StatefulBroker) runInvocationQueue(ctx context.Context, selected *brokerSession) {
 	defer b.wg.Done()
 	defer close(selected.queueWorkerDone)
 	for {
@@ -292,7 +296,7 @@ func (b *StatefulBroker) runInvocationQueue(selected *brokerSession) {
 			}
 			continue
 		}
-		b.dispatchQueuedInvocation(invocation)
+		b.dispatchQueuedInvocation(ctx, invocation)
 		b.clearCurrentInvocation(selected, invocation)
 	}
 }
@@ -318,16 +322,16 @@ func (b *StatefulBroker) nextQueuedInvocation(selected *brokerSession) *brokerIn
 	return nil
 }
 
-func (b *StatefulBroker) dispatchQueuedInvocation(invocation *brokerInvocation) {
+func (b *StatefulBroker) dispatchQueuedInvocation(ctx context.Context, invocation *brokerInvocation) {
 	selected := invocation.selected
 	selected.dispatchMu.Lock()
-	b.dispatchQueuedInvocationWithLock(invocation)
+	b.dispatchQueuedInvocationWithCallerCancellation(ctx, invocation)
 	b.mu.Lock()
-	action := b.claimTargetCancellationLocked(invocation, context.Background())
+	action := b.claimTargetCancellationLocked(invocation)
 	b.mu.Unlock()
 	selected.dispatchMu.Unlock()
-	performTargetCancellation(action)
-	b.waitForInvocationLane(invocation)
+	performTargetCancellation(ctx, action)
+	b.waitForInvocationLane(ctx, invocation)
 }
 
 func (b *StatefulBroker) clearCurrentInvocation(selected *brokerSession, invocation *brokerInvocation) {
@@ -338,11 +342,11 @@ func (b *StatefulBroker) clearCurrentInvocation(selected *brokerSession, invocat
 	b.mu.Unlock()
 }
 
-func (b *StatefulBroker) waitForInvocationLane(invocation *brokerInvocation) {
+func (b *StatefulBroker) waitForInvocationLane(ctx context.Context, invocation *brokerInvocation) {
 	select {
 	case <-invocation.terminal:
-	case <-invocation.ctx.Done():
-		b.cancelContextInvocation(invocation)
+	case <-invocation.caller.done:
+		b.cancelContextInvocation(ctx, invocation)
 	case <-invocation.selected.queueStop:
 	}
 }
@@ -358,7 +362,7 @@ func (b *StatefulBroker) reportDispatchLocked(invocation *brokerInvocation, resu
 	invocation.dispatchDone <- invocationDispatch{result: cloneInvokeResult(result), err: err}
 }
 
-func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
+func (b *StatefulBroker) cancelContextInvocation(ctx context.Context, invocation *brokerInvocation) {
 	b.mu.Lock()
 	if invocation.terminalized {
 		b.mu.Unlock()
@@ -375,7 +379,7 @@ func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
 	}
 	invocation.invocation.CancelRequested = true
 	invocation.cancelPending = true
-	action := b.claimTargetCancellationLocked(invocation, context.Background())
+	action := b.claimTargetCancellationLocked(invocation)
 	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(invocation.invocation.ID),
@@ -384,7 +388,7 @@ func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
 	if action != nil || wait != nil {
 		b.mu.Unlock()
 		if action != nil {
-			performTargetCancellation(action)
+			performTargetCancellation(ctx, action)
 		} else {
 			<-wait
 		}
@@ -395,9 +399,6 @@ func (b *StatefulBroker) cancelContextInvocation(invocation *brokerInvocation) {
 }
 
 func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelRequest) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -439,7 +440,7 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 	}
 	invocation.invocation.CancelRequested = true
 	invocation.cancelPending = true
-	action := b.claimTargetCancellationLocked(invocation, ctx)
+	action := b.claimTargetCancellationLocked(invocation)
 	wait := b.cancellationWaitLocked(invocation, action)
 	result := invocationFailureResult(invocation, InvocationCanceled, ErrorInvocationCanceled, map[string]any{
 		"invocation_id": string(request.InvocationID),
@@ -448,7 +449,7 @@ func (b *StatefulBroker) cancelInvocation(ctx context.Context, request CancelReq
 	if action != nil || wait != nil {
 		b.mu.Unlock()
 		if action != nil {
-			performTargetCancellation(action)
+			performTargetCancellation(ctx, action)
 		} else {
 			<-wait
 		}
@@ -602,7 +603,7 @@ func (b *StatefulBroker) applyTerminalObservationLocked(invocation *brokerInvoca
 		output = json.RawMessage("null")
 	}
 	if observation.outputBytes > b.maxResultBytes {
-		b.finishInvocationLocked(invocation, resultTooLargeResult(invocation, estimatedInvocationResultSize(invocation, output, observation.outputBytes), b.maxResultBytes))
+		b.finishInvocationLocked(invocation, resultTooLargeResult(invocation, estimatedInvocationResultSize(invocation, observation.outputBytes), b.maxResultBytes))
 		return
 	}
 	output, err := oneJSONValue(output)
@@ -693,7 +694,7 @@ func invocationResultSize(invocation *brokerInvocation, output json.RawMessage) 
 	return len(wire)
 }
 
-func estimatedInvocationResultSize(invocation *brokerInvocation, output json.RawMessage, outputBytes int) int {
+func estimatedInvocationResultSize(invocation *brokerInvocation, outputBytes int) int {
 	placeholder := invocationResultSize(invocation, json.RawMessage("null"))
 	if placeholder == 0 {
 		return outputBytes
@@ -926,9 +927,6 @@ func (b *StatefulBroker) terminalizeSessionInvocationsLocked(selected *brokerSes
 // bounded terminal cache entry. Invoke itself remains non-blocking after
 // dispatch; terminal-aware adapters wait here before returning a tool result.
 func (b *StatefulBroker) WaitInvocation(ctx context.Context, id InvocationID) (InvokeResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := contextError(ctx); err != nil {
 		return InvokeResult{}, err
 	}

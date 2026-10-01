@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,6 @@ import (
 )
 
 const (
-	sessionPaperieMarginLiveEnv      = "WEBMCP_PAPERIE_MARGIN_LIVE"
 	sessionPaperieMarginCDPEnv       = "WEBMCP_PAPERIE_MARGIN_LIVE_CDP_URL"
 	sessionPaperieMarginArtifactEnv  = "WEBMCP_PAPERIE_MARGIN_ARTIFACT_DIR"
 	sessionPaperieMarginModel        = "gpt-realtime-2.1-mini"
@@ -34,18 +34,22 @@ const (
 	sessionPaperieMarginEvidenceMode = 0o600
 )
 
-var sessionPaperieTools = []string{
-	"apply_generated_artwork", "get_card_state", "list_print_options",
-	"review_and_print", "select_card_template", "set_card_design",
-	"set_card_message", "set_card_size", "set_envelope",
-	"set_print_quantity", "set_preview", "set_recipient_context",
-	"start_custom_card",
+func sessionPaperieTools() []string {
+	return []string{
+		"apply_generated_artwork", "get_card_state", "list_print_options",
+		"review_and_print", "select_card_template", "set_card_design",
+		"set_card_message", "set_card_size", "set_envelope",
+		"set_print_quantity", "set_preview", "set_recipient_context",
+		"start_custom_card",
+	}
 }
 
-var sessionMarginTools = []string{
-	"add_comment", "create_document", "get_document", "list_comments",
-	"list_documents", "open_document", "reopen_comment", "reply_to_comment",
-	"resolve_comment", "update_document",
+func sessionMarginTools() []string {
+	return []string{
+		"add_comment", "create_document", "get_document", "list_comments",
+		"list_documents", "open_document", "reopen_comment", "reply_to_comment",
+		"resolve_comment", "update_document",
+	}
 }
 
 // TestSessionPaperieMarginFromBaselineAgentsMD is the billed outside-in proof
@@ -54,13 +58,10 @@ var sessionMarginTools = []string{
 // WebMCP-enabled Chrome with Paperie as its only page and pass /json/version in
 // WEBMCP_PAPERIE_MARGIN_LIVE_CDP_URL; the test opens Margin itself.
 func TestSessionPaperieMarginFromBaselineAgentsMD(t *testing.T) {
-	if os.Getenv(sessionPaperieMarginLiveEnv) != "1" {
-		t.Skipf("set %s=1 to run the credentialed Paperie/Margin acceptance proof", sessionPaperieMarginLiveEnv)
-	}
 	apiKey, keySource := sessionPageToolsSwitchVoiceAPIKey(t)
 	cdpURL := strings.TrimSpace(os.Getenv(sessionPaperieMarginCDPEnv))
 	if cdpURL == "" {
-		t.Skipf("set %s to a fresh WebMCP-enabled Chrome /json/version endpoint", sessionPaperieMarginCDPEnv)
+		t.Fatalf("set %s to a fresh WebMCP-enabled Chrome /json/version endpoint", sessionPaperieMarginCDPEnv)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
@@ -137,13 +138,13 @@ func TestSessionPaperieMarginFromBaselineAgentsMD(t *testing.T) {
 		t.Fatalf("validate production trace: %v", err)
 	}
 
-	paperieCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, paperie, sessionPaperieTools)
+	paperieCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, paperie, sessionPaperieTools())
 	cardState := directLiveInvoke(t, ctx, agentBinary, cdpURL, paperie, findDirectToolRef(t, paperieCatalog, "get_card_state"), map[string]any{})
 	requireLiveSuccess(t, cardState, "direct Paperie state oracle")
 	if !paperieMarginJSONContains(cardState.Data, "Maya", "Jordan", eyebrow, front, inside) {
 		t.Fatalf("Paperie state does not contain the exact requested fields: %s", truncateLiveText(cardState.Data, 3000))
 	}
-	marginCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, margin, sessionMarginTools)
+	marginCatalog := directLiveCatalog(t, ctx, agentBinary, cdpURL, margin, sessionMarginTools())
 	document := directLiveInvoke(t, ctx, agentBinary, cdpURL, margin, findDirectToolRef(t, marginCatalog, liveGetDocumentToolName), map[string]any{"document_id": documentID})
 	requireLiveSuccess(t, document, "direct Margin document oracle")
 	if !paperieMarginJSONContains(document.Data, title, initial, appendText) {
@@ -166,7 +167,7 @@ func discoverPaperieMarginTargets(t *testing.T, ctx context.Context, cdpURL stri
 	browser.Selection.Persist = false
 	browser.Policy.AllowedOrigins = []string{sessionPaperieMarginOrigin, sessionPageToolsLiveMarginOrigin}
 	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(ctx, cfg)
 	if err != nil {
 		t.Fatalf("create target-discovery capabilities: %v", err)
 	}
@@ -229,8 +230,8 @@ func paperieMarginArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, sessionPaperieMarginArtifactMode); err != nil {
 		t.Fatalf("create artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "paperie-margin-")
-	if err != nil {
+	root := filepath.Join(parent, "paperie-margin-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create artifact root: %v", err)
 	}
 	return root
@@ -260,7 +261,7 @@ func preparePaperieMarginWorkspace(t *testing.T) (artifactRoot, workspace, confi
 func writePaperieMarginBrowserOnlyConfig(configDir string) error {
 	var builder strings.Builder
 	builder.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		fmt.Fprintf(&builder, "    - id: %q\n      enabled: false\n", id)
 	}
 	return os.WriteFile(filepath.Join(configDir, config.ConfigFileName), []byte(builder.String()), sessionPaperieMarginEvidenceMode)
@@ -270,7 +271,7 @@ func validatePaperieMarginObservation(observation sessionPageToolsSwitchVoiceObs
 	if observation.Provider != config.ProviderOpenAI || observation.Model != sessionPaperieMarginModel || observation.SessionCreated != 1 {
 		return "", fmt.Errorf("provider=(%q,%q) session.created=%d, want openai/%s and one session", observation.Provider, observation.Model, observation.SessionCreated, sessionPaperieMarginModel)
 	}
-	if !paperieMarginSurfaceContains(observation.Surfaces, sessionPaperieTools) || !paperieMarginSurfaceContains(observation.Surfaces, sessionMarginTools) {
+	if !paperieMarginSurfaceContains(observation.Surfaces, sessionPaperieTools()) || !paperieMarginSurfaceContains(observation.Surfaces, sessionMarginTools()) {
 		return "", errors.New("dynamic tool surfaces did not advertise both Paperie and Margin page tools")
 	}
 	state := paperieMarginCallState{
@@ -311,9 +312,9 @@ func (state *paperieMarginCallState) observe(call sessionPageToolsSwitchVoiceCal
 	switch {
 	case call.Name == webmcp.SelectTabToolName:
 		return state.observeSelection(call)
-	case containsSessionPageToolsSwitchVoice(sessionPaperieTools, call.Name):
+	case containsSessionPageToolsSwitchVoice(sessionPaperieTools(), call.Name):
 		return state.observePaperieCall(call)
-	case containsSessionPageToolsSwitchVoice(sessionMarginTools, call.Name):
+	case containsSessionPageToolsSwitchVoice(sessionMarginTools(), call.Name):
 		return state.observeMarginCall(call, output)
 	case !containsSessionPageToolsSwitchVoice(webmcp.StableToolNames(), call.Name):
 		return fmt.Errorf("unexpected tool call %q", call.Name)
@@ -478,12 +479,12 @@ func TestValidatePaperieMarginObservationRejectsIncompleteOrMisroutedRuns(t *tes
 			}
 			outputs[index] = sessionPageToolsSwitchVoiceOutput{Index: index*3 + 2, CallID: calls[index].CallID, Envelope: webmcp.ToolResultEnvelope{OK: true, Data: data}}
 		}
-		paperieSurface := make([]sessionPageToolsSwitchVoiceTool, 0, len(sessionPaperieTools))
-		for _, name := range sessionPaperieTools {
+		paperieSurface := make([]sessionPageToolsSwitchVoiceTool, 0, len(sessionPaperieTools()))
+		for _, name := range sessionPaperieTools() {
 			paperieSurface = append(paperieSurface, sessionPageToolsSwitchVoiceTool{Name: name})
 		}
-		marginSurface := make([]sessionPageToolsSwitchVoiceTool, 0, len(sessionMarginTools))
-		for _, name := range sessionMarginTools {
+		marginSurface := make([]sessionPageToolsSwitchVoiceTool, 0, len(sessionMarginTools()))
+		for _, name := range sessionMarginTools() {
 			marginSurface = append(marginSurface, sessionPageToolsSwitchVoiceTool{Name: name})
 		}
 		return sessionPageToolsSwitchVoiceObservation{

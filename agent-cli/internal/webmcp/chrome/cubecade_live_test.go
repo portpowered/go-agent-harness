@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -33,21 +33,19 @@ import (
 )
 
 const (
-	cubecadeLiveEnv                  = "WEBMCP_CUBECADE_LIVE"
-	cubecadeScreenshotIntegrationEnv = "WEBMCP_CUBECADE_SCREENSHOT_INTEGRATION"
-	cubecadeArtifactEnv              = "WEBMCP_CUBECADE_ARTIFACT_DIR"
-	cubecadeURL                      = "https://cubecade.openai.chatgpt.site/"
-	cubecadeOrigin                   = "https://cubecade.openai.chatgpt.site"
-	cubecadeModel                    = "gpt-realtime-2.1-mini"
-	cubecadeMaxDuration              = 30 * time.Second
-	cubecadeScreenshotBudget         = 5 * time.Second
-	cubecadeScreenshotTestTimeout    = 2 * time.Minute
-	cubecadeLaunchDelay              = 4 * time.Second
-	cubecadeRunGrace                 = 20 * time.Second
-	cubecadeArtifactMode             = 0o700
-	cubecadeEvidenceMode             = 0o600
-	cubecadeScreenshotCallID         = "cubecade-screenshot-call"
-	cubecadeQueueLogEntry            = "$ queue_cube_moves [6]"
+	cubecadeArtifactEnv           = "WEBMCP_CUBECADE_ARTIFACT_DIR"
+	cubecadeURL                   = "https://cubecade.openai.chatgpt.site/"
+	cubecadeOrigin                = "https://cubecade.openai.chatgpt.site"
+	cubecadeModel                 = "gpt-realtime-2.1-mini"
+	cubecadeMaxDuration           = 30 * time.Second
+	cubecadeScreenshotBudget      = 5 * time.Second
+	cubecadeScreenshotTestTimeout = 2 * time.Minute
+	cubecadeLaunchDelay           = 4 * time.Second
+	cubecadeRunGrace              = 20 * time.Second
+	cubecadeArtifactMode          = 0o700
+	cubecadeEvidenceMode          = 0o600
+	cubecadeScreenshotCallID      = "cubecade-screenshot-call"
+	cubecadeQueueLogEntry         = "$ queue_cube_moves [6]"
 )
 
 // The fixture is served by the test-owned HTTP server so the screenshot proof
@@ -62,13 +60,7 @@ var cubecadeScreenshotFixtureHTML []byte
 // and opt-in: ordinary test runs never inspect credentials, download Chrome,
 // contact the remote page, or call the provider.
 func TestPinnedChromeCubecadeProductionSessionRecoversLateCatalog(t *testing.T) {
-	if os.Getenv(cubecadeLiveEnv) != "1" {
-		t.Skipf("set %s=1 to run the credentialed Cubecade production-session proof", cubecadeLiveEnv)
-	}
-	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
-		t.Skipf("Cubecade proof uses the qualified %s Chrome lock; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed Cubecade proof")
+	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed Cubecade proof")
 
 	artifactRoot := cubecadeArtifactRoot(t)
 	configDir, systemPromptPath := prepareCubecadeProductionInputs(t, artifactRoot)
@@ -302,9 +294,6 @@ func wrapLiveError(context string, err error) error {
 // page oracle is independent of the returned screenshot: it supplies the
 // rendered solved-status marker whose pixels must be present in the capture.
 func TestPinnedChromeCubecadeSelectedPageScreenshot(t *testing.T) {
-	if os.Getenv(cubecadeScreenshotIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the credential-free Cubecade screenshot proof", cubecadeScreenshotIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for %s, observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
 	}
@@ -371,7 +360,7 @@ func startCubecadeScreenshotChrome(t *testing.T, ctx context.Context) *cubecadeS
 	}
 	sight.browser = ownLiveBrowser(t, browser, "Cubecade screenshot Chrome cleanup")
 	sight.baseURL = browserHTTPURL(browser.endpoint())
-	if sight.version, err = waitForDevToolsVersion(ctx, sight.baseURL, lockedChromeVersion); err != nil {
+	if sight.version, err = waitForDevToolsVersion(ctx, sight.baseURL); err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
 	if sight.rawTarget, err = waitForFixturePageTarget(ctx, sight.baseURL, sight.fixtureURL); err != nil {
@@ -920,7 +909,7 @@ func waitForCubecadePageTarget(ctx context.Context, baseURL string) (devToolsTar
 		}
 		select {
 		case <-ctx.Done():
-			return devToolsTarget{}, fmt.Errorf("wait for Cubecade page target: %w (last error: %v)", ctx.Err(), lastErr)
+			return devToolsTarget{}, fmt.Errorf("wait for Cubecade page target: %w (last error: %w)", ctx.Err(), lastErr)
 		case <-ticker.C:
 		}
 	}

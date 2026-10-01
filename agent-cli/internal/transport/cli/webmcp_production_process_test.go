@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/spf13/cobra"
@@ -130,6 +129,7 @@ func TestProductionWebMCPDirectCommandsCancelAcrossOSProcessesAndRecover(t *test
 }
 
 func receiptLine(t *testing.T, receipt WebMCPDirectInvocationReceipt) string {
+	t.Helper()
 	return string(append(mustJSONMarshal(t, receipt), '\n'))
 }
 
@@ -141,7 +141,7 @@ type osProcessWebMCPChild struct {
 
 func startOSProcessWebMCPChild(t *testing.T, mode, endpoint, configDir, toolRef, invocationID string) *osProcessWebMCPChild {
 	t.Helper()
-	command := exec.Command(os.Args[0], "-test.run=^TestProductionWebMCPDirectCommandsCancelAcrossOSProcessesAndRecover$", "-test.v=false")
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestProductionWebMCPDirectCommandsCancelAcrossOSProcessesAndRecover$", "-test.v=false")
 	command.Env = append(os.Environ(),
 		osProcessFixtureChildEnv+"="+mode,
 		osProcessFixtureEndpointEnv+"="+endpoint,
@@ -164,6 +164,7 @@ func (p *osProcessWebMCPChild) Wait() error {
 }
 
 func runOSProcessWebMCPChild(t *testing.T) {
+	t.Helper()
 	mode := os.Getenv(osProcessFixtureChildEnv)
 	endpoint := os.Getenv(osProcessFixtureEndpointEnv)
 	configDir := os.Getenv(osProcessFixtureConfigDirEnv)
@@ -207,12 +208,6 @@ func runOSProcessDirectCommand(t *testing.T, configDir string, store WebMCPSelec
 	root.SetErr(os.Stderr)
 	root.SetArgs(args)
 	return root.Execute()
-}
-
-func newDirectGlobalFlags(configDir string) *flags.GlobalFlags {
-	globalFlags := flags.NewGlobalFlags()
-	globalFlags.ConfigDirPath = configDir
-	return globalFlags
 }
 
 func osProcessFixtureFactory(endpoint string) WebMCPDoctorFactory {
@@ -577,7 +572,7 @@ func (s *osProcessWebMCPFixtureSession) InvokeWebMCP(ctx context.Context, frameI
 		return "", errors.New("fixture returned an empty invocation ID")
 	}
 	s.send(webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, FrameID: frameID, ToolName: toolName, Input: append(json.RawMessage(nil), input...), InvocationID: response.InvocationID})
-	go s.watchInvocation(response.InvocationID)
+	go s.watchInvocation(context.WithoutCancel(ctx), response.InvocationID)
 	return response.InvocationID, nil
 }
 
@@ -592,11 +587,11 @@ func (s *osProcessWebMCPFixtureSession) CancelWebMCP(ctx context.Context, invoca
 	}, &response); err != nil {
 		return err
 	}
-	go s.watchInvocation(invocationID)
+	go s.watchInvocation(context.WithoutCancel(ctx), invocationID)
 	return nil
 }
 
-func (s *osProcessWebMCPFixtureSession) watchInvocation(invocationID webmcp.InvocationID) {
+func (s *osProcessWebMCPFixtureSession) watchInvocation(ctx context.Context, invocationID webmcp.InvocationID) {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -606,7 +601,7 @@ func (s *osProcessWebMCPFixtureSession) watchInvocation(invocationID webmcp.Invo
 		case <-ticker.C:
 		}
 		var response osProcessFixtureInvokeResponse
-		if err := s.runtime.doJSON(context.Background(), http.MethodGet, "/fixture/status?invocation_id="+url.QueryEscape(string(invocationID)), nil, &response); err != nil {
+		if err := s.runtime.doJSON(ctx, http.MethodGet, "/fixture/status?invocation_id="+url.QueryEscape(string(invocationID)), nil, &response); err != nil {
 			continue
 		}
 		if response.Status == testPendingStatus {

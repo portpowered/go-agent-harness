@@ -86,9 +86,8 @@ Run the billed test on the qualified Darwin arm64 host with:
 
 ```bash
 cd agent-cli
-WEBMCP_CUBECADE_AUDIO_DEVICE_LIVE=1 \
 OPENAI_API_KEY_FILE=/absolute/path/to/key \
-go test -tags=live ./internal/webmcp/chrome \
+go test -tags=live,e2e_internal ./internal/webmcp/chrome \
   -run '^TestPinnedChromeCubecadeAgentUsesAudioDeviceServer$' -count=1 -v
 ```
 

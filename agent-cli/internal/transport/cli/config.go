@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +14,9 @@ import (
 )
 
 const redactedAPIKey = "<redacted>"
+
+// modelServerProbeTimeout bounds each reachability probe of a configured model server's models endpoint.
+const modelServerProbeTimeout = 5 * time.Second
 
 // ConfigCommand is the config group (parent command); subcommands are wired in core_router.go.
 type ConfigCommand struct{}
@@ -69,13 +71,6 @@ func (c *ConfigAddLocalCommand) Generate() *cobra.Command {
 func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	// Resolve config path
 	configDir := c.globalFlags.ConfigDir()
-	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("get home directory: %w", err)
-		}
-		configDir = filepath.Join(home, config.ConfigDirName)
-	}
 
 	// Load existing config (or create default)
 	storage, err := config.NewDefaultConfigStorage(configDir)
@@ -106,7 +101,7 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := storage.Commit(expectedRevision, data); err != nil {
+	if err := storage.Commit(cmd.Context(), expectedRevision, data); err != nil {
 		return fmt.Errorf("commit config: %w", err)
 	}
 	configPath := storage.Path()
@@ -166,9 +161,13 @@ func (c *ConfigAddLocalCommand) probeServer(cmd *cobra.Command, baseURL string) 
 		urls = append(urls, strings.TrimRight(baseURL, "/")+"/v1/models")
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: modelServerProbeTimeout}
 	for _, url := range urls {
-		resp, err := client.Get(url)
+		req, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, url, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := client.Do(req)
 		if err == nil {
 			discardCloseError(resp.Body.Close())
 			if resp.StatusCode == http.StatusOK {

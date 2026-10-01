@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -250,6 +251,9 @@ func TestSanitizeDuplexArgsRedactsFlagValuesAndSecrets(t *testing.T) {
 const (
 	duplexChildName       = "duplex-child"
 	duplexSIGINTChildName = "duplex-sigint-child"
+	// blindEnvironmentAgentName runs the test binary as the acceptance agent
+	// that fails if the parent workspace environment leaks into it.
+	blindEnvironmentAgentName = "blind-environment-agent"
 )
 
 func TestMain(m *testing.M) {
@@ -260,6 +264,8 @@ func TestMain(m *testing.M) {
 	case duplexSIGINTChildName:
 		runDuplexSIGINTChild()
 		os.Exit(0)
+	case blindEnvironmentAgentName:
+		os.Exit(runBlindEnvironmentAgent())
 	}
 	os.Exit(m.Run())
 }
@@ -283,8 +289,10 @@ func runDuplexTestChild(args []string) {
 		case "--duplex-exit-immediately":
 			return
 		case "--duplex-slow-start":
-			// Emulates a cold exec that outlives MaxDuration before any output.
-			time.Sleep(4 * duplexSlowStartBudget)
+			// Emulates a cold exec that outlives MaxDuration before any output;
+			// the startup delay is real elapsed time in this separate process.
+			startup := time.NewTimer(4 * duplexSlowStartBudget)
+			<-startup.C
 		}
 	}
 	frame := make([]byte, 960)
@@ -296,12 +304,27 @@ func runDuplexTestChild(args []string) {
 			}
 		}
 		if hold && n > 0 {
-			time.Sleep(time.Hour)
+			blockUntilKilled()
 			return
 		}
 		if err != nil {
 			return
 		}
+	}
+}
+
+// blockUntilKilled parks the duplex child until the runner kills it: it reads
+// a private pipe whose write end stays open for as long as it is parked.
+func blockUntilKilled() {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		return
+	}
+	// The open write end is what keeps the read blocked; the process exits by
+	// being killed, so it is never closed.
+	defer runtime.KeepAlive(writer)
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return
 	}
 }
 
@@ -434,3 +457,27 @@ func TestDuplexProgressWaitForOutputSequenceRejectsOversizedSequence(t *testing.
 		t.Fatalf("WaitForOutputSequence error = %v, want ErrDuplexConfigInvalid", err)
 	}
 }
+
+// runBlindEnvironmentAgent is the live acceptance agent: it exits with
+// blindEnvironmentLeakExitCode when the parent workspace environment leaked
+// into it, and otherwise writes its objective artifact and claim report.
+func runBlindEnvironmentAgent() int {
+	if os.Getenv("GITHUB_WORKSPACE") != "" || os.Getenv("OLDPWD") != "" {
+		if _, err := os.Stderr.WriteString("parent workspace environment leaked\n"); err != nil {
+			return 1
+		}
+		return blindEnvironmentLeakExitCode
+	}
+	if err := os.WriteFile("result.txt", []byte("blind environment attained\n"), 0o600); err != nil {
+		return 1
+	}
+	report := `{"claimed_success":true,"objective_artifact_path":"result.txt","checked_claim":"blind environment attained","subjective_rating":"easy"}` + "\n"
+	if _, err := os.Stdout.WriteString(report); err != nil {
+		return 1
+	}
+	return 0
+}
+
+// blindEnvironmentLeakExitCode is the agent's exit status for a leaked
+// parent workspace environment.
+const blindEnvironmentLeakExitCode = 7

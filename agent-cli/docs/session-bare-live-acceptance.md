@@ -24,8 +24,7 @@ KEY=$(tr -d '\r\n' < ~/.you-agent-factory/secrets/OPENAPI_API_KEY)
 export OPENAI_API_KEY="$KEY"
 unset KEY
 
-AGENT_HARNESS_LIVE_BARE_SESSION=1 \
-  CGO_ENABLED=1 \
+CGO_ENABLED=1 \
   go test -tags live -v ./agent-cli/test/integration/ \
   -run '^TestLiveBareSessionDefaultDevicesStartsAndStops$'
 ```

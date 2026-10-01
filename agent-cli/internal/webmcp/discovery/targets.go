@@ -70,12 +70,9 @@ func (s *Service) ListTargets(ctx context.Context, browser BrowserCandidate, opt
 // supplied C0 filters, and emits browser.targets.snapshot. It never selects a
 // different browser when options.BrowserID is supplied.
 func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandidate, options ...TargetListOptions) (TargetSnapshot, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	listOptions := resolvedTargetListOptions(firstTargetListOptions(options))
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.unlockDiscovery(ctx)
 
 	if browser.ID == "" {
 		return TargetSnapshot{}, newNoEligibleTab("", listOptions, 0)
@@ -162,11 +159,8 @@ func (s *Service) List(ctx context.Context, inputs ConnectionInputs, options Tar
 // configured/process candidates remain visible so callers can fail closed with
 // ambiguous_browser instead of selecting an arbitrary endpoint.
 func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]BrowserCandidate, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.unlockDiscovery(ctx)
 
 	s.emitDiscoveryStarted()
 
@@ -377,7 +371,7 @@ func (s *Service) listTargetDescriptorsLocked(ctx context.Context, browser Brows
 	if response.Body != nil {
 		defer closeAfterRead(response.Body)
 	}
-	if response.StatusCode == 404 {
+	if response.StatusCode == http.StatusNotFound {
 		return nil, newEndpointNotFound(EndpointKindCDPHTTP, browser.Source)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -839,12 +833,14 @@ func endpointAddressKey(endpoint targetEndpoint) string {
 		if err != nil || parsed == nil || parsed.Hostname() == "" {
 			continue
 		}
-		return browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port())
+		return browserAddressKey(parsed.Hostname(), parsed.Port())
 	}
 	return ""
 }
 
-func browserAddressKey(scheme, host, port string) string {
+// browserAddressKey identifies a browser endpoint by host and port; the
+// scheme (http or ws) addresses the same endpoint.
+func browserAddressKey(host, port string) string {
 	return strings.ToLower(strings.TrimSpace(host)) + "\x00" + strings.TrimSpace(port)
 }
 

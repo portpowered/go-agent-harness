@@ -38,11 +38,11 @@ func NewFilesystemOracle(root string) (*FilesystemOracle, error) {
 	}
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return nil, fmt.Errorf("%w: resolve root: %v", ErrFilesystemOracleInvalidRoot, err)
+		return nil, fmt.Errorf("%w: resolve root: %w", ErrFilesystemOracleInvalidRoot, err)
 	}
 	info, err := os.Lstat(absRoot)
 	if err != nil {
-		return nil, fmt.Errorf("%w: inspect root: %v", ErrFilesystemOracleInvalidRoot, err)
+		return nil, fmt.Errorf("%w: inspect root: %w", ErrFilesystemOracleInvalidRoot, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return nil, fmt.Errorf("%w: root %q is not a non-symlink directory", ErrFilesystemOracleInvalidRoot, absRoot)
@@ -146,14 +146,14 @@ func (o *FilesystemOracle) observe(relative string) (FilesystemCheckpointEntry, 
 		return FilesystemCheckpointEntry{Path: relative, Type: FileTypeAbsent}, nil
 	}
 	if err != nil {
-		return FilesystemCheckpointEntry{}, fmt.Errorf("%w: inspect %q: %v", ErrFilesystemOracleObservation, relative, err)
+		return FilesystemCheckpointEntry{}, fmt.Errorf("%w: inspect %q: %w", ErrFilesystemOracleObservation, relative, err)
 	}
 
 	switch {
 	case info.Mode()&os.ModeSymlink != 0:
 		target, err := os.Readlink(absPath)
 		if err != nil {
-			return FilesystemCheckpointEntry{}, fmt.Errorf("%w: read symlink %q: %v", ErrFilesystemOracleObservation, relative, err)
+			return FilesystemCheckpointEntry{}, fmt.Errorf("%w: read symlink %q: %w", ErrFilesystemOracleObservation, relative, err)
 		}
 		return FilesystemCheckpointEntry{
 			Path: relative, Type: FileTypeSymlink, Size: int64(len(target)),
@@ -162,13 +162,13 @@ func (o *FilesystemOracle) observe(relative string) (FilesystemCheckpointEntry, 
 	case info.IsDir():
 		digest, err := filesystemDirectorySHA256(absPath)
 		if err != nil {
-			return FilesystemCheckpointEntry{}, fmt.Errorf("%w: fingerprint directory %q: %v", ErrFilesystemOracleObservation, relative, err)
+			return FilesystemCheckpointEntry{}, fmt.Errorf("%w: fingerprint directory %q: %w", ErrFilesystemOracleObservation, relative, err)
 		}
 		return FilesystemCheckpointEntry{Path: relative, Type: FileTypeDirectory, SHA256: digest}, nil
 	case info.Mode().IsRegular():
 		data, err := os.ReadFile(absPath)
 		if err != nil {
-			return FilesystemCheckpointEntry{}, fmt.Errorf("%w: read file %q: %v", ErrFilesystemOracleObservation, relative, err)
+			return FilesystemCheckpointEntry{}, fmt.Errorf("%w: read file %q: %w", ErrFilesystemOracleObservation, relative, err)
 		}
 		return FilesystemCheckpointEntry{
 			Path: relative, Type: FileTypeFile, Size: int64(len(data)), SHA256: sha256HexBytes(data),
@@ -181,11 +181,11 @@ func (o *FilesystemOracle) observe(relative string) (FilesystemCheckpointEntry, 
 func safeFilesystemPath(root, relative string) (string, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return "", fmt.Errorf("%w: resolve root: %v", ErrFilesystemOracleInvalidRoot, err)
+		return "", fmt.Errorf("%w: resolve root: %w", ErrFilesystemOracleInvalidRoot, err)
 	}
 	path, err := filepath.Abs(filepath.Join(absRoot, filepath.FromSlash(relative)))
 	if err != nil {
-		return "", fmt.Errorf("%w: resolve path %q: %v", ErrFilesystemOracleObservation, relative, err)
+		return "", fmt.Errorf("%w: resolve path %q: %w", ErrFilesystemOracleObservation, relative, err)
 	}
 	rel, err := filepath.Rel(absRoot, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
@@ -202,11 +202,11 @@ func safeFilesystemPath(root, relative string) (string, error) {
 func FilesystemDirectorySHA256(root string) (string, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return "", fmt.Errorf("%w: resolve directory: %v", ErrFilesystemOracleInvalidRoot, err)
+		return "", fmt.Errorf("%w: resolve directory: %w", ErrFilesystemOracleInvalidRoot, err)
 	}
 	info, err := os.Lstat(absRoot)
 	if err != nil {
-		return "", fmt.Errorf("%w: inspect directory: %v", ErrFilesystemOracleInvalidRoot, err)
+		return "", fmt.Errorf("%w: inspect directory: %w", ErrFilesystemOracleInvalidRoot, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return "", fmt.Errorf("%w: %q is not a non-symlink directory", ErrFilesystemOracleInvalidRoot, absRoot)
@@ -259,22 +259,22 @@ func filesystemDirectorySHA256(root string) (string, error) {
 	return sha256HexBytes([]byte(strings.Join(records, "\n") + "\n")), nil
 }
 
-// FilesystemOracleMismatch identifies one falsifiable mismatch between a
+// FilesystemOracleMismatchError identifies one falsifiable mismatch between a
 // declared expectation and the checkpoint captured at that action boundary.
-type FilesystemOracleMismatch struct {
+type FilesystemOracleMismatchError struct {
 	Path     string
 	Expected string
 	Actual   string
 }
 
-func (e *FilesystemOracleMismatch) Error() string {
+func (e *FilesystemOracleMismatchError) Error() string {
 	if e == nil {
 		return ErrFilesystemOracleMismatch.Error()
 	}
 	return fmt.Sprintf("filesystem expectation %q: expected %s, observed %s: %v", e.Path, e.Expected, e.Actual, ErrFilesystemOracleMismatch)
 }
 
-func (e *FilesystemOracleMismatch) Unwrap() error { return ErrFilesystemOracleMismatch }
+func (e *FilesystemOracleMismatchError) Unwrap() error { return ErrFilesystemOracleMismatch }
 
 // VerifyFilesystemExpectations compares a checkpoint with exactly the facts
 // declared by an action. It deliberately does not inspect a later snapshot,
@@ -291,11 +291,11 @@ func VerifyFilesystemExpectations(expectations []FilesystemExpectation, checkpoi
 	for _, expectation := range expectations {
 		actual, ok := entries[expectation.Path]
 		if !ok {
-			mismatches = append(mismatches, &FilesystemOracleMismatch{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: "missing observation"})
+			mismatches = append(mismatches, &FilesystemOracleMismatchError{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: "missing observation"})
 			continue
 		}
 		if actual.Type != expectation.Type {
-			mismatches = append(mismatches, &FilesystemOracleMismatch{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: filesystemCheckpointDescription(actual)})
+			mismatches = append(mismatches, &FilesystemOracleMismatchError{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: filesystemCheckpointDescription(actual)})
 			continue
 		}
 		if expectation.Type == FileTypeAbsent {
@@ -306,11 +306,11 @@ func VerifyFilesystemExpectations(expectations []FilesystemExpectation, checkpoi
 			expectedHash = sha256HexBytes([]byte(expectation.Content))
 		}
 		if actual.SHA256 != expectedHash {
-			mismatches = append(mismatches, &FilesystemOracleMismatch{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: filesystemCheckpointDescription(actual)})
+			mismatches = append(mismatches, &FilesystemOracleMismatchError{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: filesystemCheckpointDescription(actual)})
 			continue
 		}
 		if expectation.Type == FileTypeFile && expectation.Content != "" && actual.Size != int64(len(expectation.Content)) {
-			mismatches = append(mismatches, &FilesystemOracleMismatch{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: filesystemCheckpointDescription(actual)})
+			mismatches = append(mismatches, &FilesystemOracleMismatchError{Path: expectation.Path, Expected: filesystemExpectationDescription(expectation), Actual: filesystemCheckpointDescription(actual)})
 		}
 	}
 	return errors.Join(mismatches...)

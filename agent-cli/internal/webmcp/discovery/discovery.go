@@ -20,7 +20,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +27,10 @@ import (
 )
 
 const defaultProbeTimeout = 5 * time.Second
+
+// protocolVersionSubmatches is the full match plus the major and minor
+// captures of protocolVersionPattern.
+const protocolVersionSubmatches = 3
 
 var (
 	protocolVersionPattern = regexp.MustCompile(`^([0-9]+)\.([0-9]+)$`)
@@ -220,7 +223,7 @@ func (s *Service) Browser(browserID string) (BrowserCandidate, bool) {
 		return BrowserCandidate{}, false
 	}
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.mu.Unlock()
 	candidate, ok := s.browsers[strings.TrimSpace(browserID)]
 	return candidate, ok
 }
@@ -246,11 +249,8 @@ func (HashIDMapper) BrowserID(identity BrowserIdentity) string {
 // a successful source stops discovery immediately. The returned error is a
 // safe classified DiscoveryError.
 func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (BrowserCandidate, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.unlockDiscovery(ctx)
 
 	s.emitDiscoveryStarted()
 
@@ -435,8 +435,12 @@ type endpointAttempt struct {
 	resolve func(context.Context) (Endpoint, error)
 }
 
+// explicitEndpointInputCount is the number of explicit endpoint inputs: CDP
+// URL, browser WebSocket endpoint and user data dir.
+const explicitEndpointInputCount = 3
+
 func (s *Service) explicitAttempts(inputs ConnectionInputs) []endpointAttempt {
-	attempts := make([]endpointAttempt, 0, 3+len(inputs.ConfiguredSources))
+	attempts := make([]endpointAttempt, 0, explicitEndpointInputCount+len(inputs.ConfiguredSources))
 	if strings.TrimSpace(inputs.CDPURL) != "" {
 		endpoint := Endpoint{CDPURL: inputs.CDPURL}
 		attempts = append(attempts, endpointAttempt{
@@ -471,7 +475,7 @@ func (s *Service) explicitAttempts(inputs ConnectionInputs) []endpointAttempt {
 		if configured == nil {
 			continue
 		}
-		configured := configured
+
 		attempts = append(attempts, endpointAttempt{
 			source: SourceConfigured,
 			kind:   EndpointKindConfigured,
@@ -564,7 +568,7 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 		identity := rememberedBrowserIdentity(version, nil)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
 			httpURL:     targetListBaseURL(parsed),
-			addressKey:  browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port()),
+			addressKey:  browserAddressKey(parsed.Hostname(), parsed.Port()),
 			identityKey: browserIdentityKey(identity),
 		})
 	}
@@ -596,7 +600,7 @@ func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source
 		identity := rememberedBrowserIdentity(version, normalized.url)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
 			browserWS:   normalized.url.String(),
-			addressKey:  browserAddressKey(normalized.url.Scheme, normalized.url.Hostname(), normalized.url.Port()),
+			addressKey:  browserAddressKey(normalized.url.Hostname(), normalized.url.Port()),
 			identityKey: browserIdentityKey(identity),
 		})
 	}
@@ -666,7 +670,7 @@ func (s *Service) candidateFromVersion(version BrowserVersion, source Source, ki
 // unlockDiscovery releases any target handles retired while a discovery pass
 // held Service.mu. Detach callbacks are external code and must not run while
 // the service lock is held.
-func (s *Service) unlockDiscovery() {
+func (s *Service) unlockDiscovery(ctx context.Context) {
 	if s == nil {
 		return
 	}
@@ -675,7 +679,7 @@ func (s *Service) unlockDiscovery() {
 	s.mu.Unlock()
 	for _, handle := range releases {
 		if handle != nil {
-			discardRelease(handle)
+			discardTargetHandle(ctx, handle)
 		}
 	}
 }
@@ -691,7 +695,7 @@ func browserInstanceMetadata(version BrowserVersion) string {
 	return ""
 }
 
-func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *parseURLFailure) {
+func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *parseURLError) {
 	wsRaw := strings.TrimSpace(version.WebSocketDebuggerURL)
 	if wsRaw == "" && fallback != nil {
 		wsRaw = fallback.String()
@@ -772,62 +776,6 @@ func browserReplacementID(publicID, instanceID string) string {
 	return "browser-" + hex.EncodeToString(digest[:12])
 }
 
-func (s *Service) replacedBrowserIDLocked(identity BrowserIdentity, publicID string) string {
-	address := browserAddressKey(identity.Scheme, identity.Host, identity.Port)
-	identityKey := browserIdentityKey(identity)
-	if endpoint, ok := s.endpoints[publicID]; ok && endpoint.identityKey != "" && endpoint.identityKey != identityKey {
-		return publicID
-	}
-	ids := make([]string, 0, len(s.endpoints))
-	for browserID, endpoint := range s.endpoints {
-		if browserID == publicID || endpointAddressKey(endpoint) == address {
-			if endpoint.identityKey != "" && endpoint.identityKey != identityKey {
-				ids = append(ids, browserID)
-			}
-		}
-	}
-	if len(ids) == 0 {
-		return ""
-	}
-	sort.Strings(ids)
-	return ids[0]
-}
-
-func (s *Service) retireReplacedBrowserLocked(browserID string) {
-	if browserID == "" {
-		return
-	}
-	if s.retiredBrowsers == nil {
-		s.retiredBrowsers = make(map[string]struct{})
-	}
-	s.retiredBrowsers[browserID] = struct{}{}
-	delete(s.endpoints, browserID)
-	delete(s.browsers, browserID)
-	if targetStates := s.targets[browserID]; targetStates != nil {
-		for targetID, state := range targetStates {
-			state.closed = true
-			state.target.Eligible = false
-			state.target.EligibilityReason = staleReasonBrowserReplaced
-			targetStates[targetID] = state
-		}
-	}
-	if s.selection == nil || s.selection.BrowserID != browserID {
-		return
-	}
-	selection := *s.selection
-	ownership := string(TargetOwnershipExternal)
-	if selection.Handle != nil {
-		ownership = string(selection.Handle.Ownership())
-		s.pendingReleases = append(s.pendingReleases, selection.Handle)
-	}
-	s.selection = nil
-	s.emitTarget(EventTargetDetached, selection.BrowserID, selection.TargetID, selection.Generation, map[string]any{
-		"generation":     selection.Generation,
-		"reason":         staleReasonBrowserReplaced,
-		"ownership_mode": ownership,
-	})
-}
-
 func safeProduct(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -856,7 +804,7 @@ func safeProtocol(value string, required bool) (string, string) {
 		return value, ""
 	}
 	matches := protocolVersionPattern.FindStringSubmatch(value)
-	if len(matches) != 3 {
+	if len(matches) != protocolVersionSubmatches {
 		return value, "unsupported_protocol_version"
 	}
 	major, err := strconv.Atoi(matches[1])
@@ -874,10 +822,10 @@ func normalizePublicID(value string, identity BrowserIdentity) string {
 	return HashIDMapper{}.BrowserID(identity)
 }
 
-func boundedLabel(value string, max int) string {
+func boundedLabel(value string, maxLen int) string {
 	value = strings.TrimSpace(value)
-	if len(value) > max {
-		value = value[:max]
+	if len(value) > maxLen {
+		value = value[:maxLen]
 	}
 	for _, r := range value {
 		if r < 0x20 || r == 0x7f {
@@ -910,20 +858,34 @@ func preferFailure(current, next *DiscoveryError) *DiscoveryError {
 	return current
 }
 
+// Failure ranks order discovery failures from least to most informative; the
+// highest-ranked failure across attempts is reported.
+const (
+	failureRankNone = iota
+	failureRankNotFound
+	failureRankUnreachable
+	failureRankProtocolInvalid
+	failureRankRemoteDenied
+	failureRankBrowserDisconnected
+)
+
 func failureRank(code Code) int {
 	switch code {
 	case CodeBrowserDisconnected:
-		return 5
+		return failureRankBrowserDisconnected
 	case CodeRemoteEndpointDenied:
-		return 4
+		return failureRankRemoteDenied
 	case CodeBrowserProtocolInvalid:
-		return 3
+		return failureRankProtocolInvalid
 	case CodeEndpointUnreachable:
-		return 2
+		return failureRankUnreachable
 	case CodeEndpointNotFound:
-		return 1
+		return failureRankNotFound
+	case CodeUnsupportedWebMCP, CodeNoEligibleTab, CodeAmbiguousBrowser, CodeAmbiguousTab, CodeStaleSelection,
+		CodeTargetAttachFailed, CodeTargetDetached:
+		return failureRankNone
 	default:
-		return 0
+		return failureRankNone
 	}
 }
 

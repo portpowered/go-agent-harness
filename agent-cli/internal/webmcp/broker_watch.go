@@ -87,9 +87,6 @@ func (b *StatefulBroker) drainSessionEvents(selected *brokerSession, events <-ch
 // event with BrokerWatchBufferFullReason and then closes; events are never
 // silently discarded.
 func (b *StatefulBroker) Watch(ctx context.Context) <-chan BrokerEvent {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	out := make(chan BrokerEvent, defaultBrokerWatchBuffer+1)
 	if b == nil {
 		close(out)
@@ -121,9 +118,6 @@ func (b *StatefulBroker) Watch(ctx context.Context) <-chan BrokerEvent {
 // broker's target-session loop. The broker remains the sole consumer of the
 // target session itself; this method only fans out copies to observers.
 func (b *StatefulBroker) WatchBrowserEvents(ctx context.Context) <-chan BrowserEvent {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	out := make(chan BrowserEvent, defaultBrokerWatchBuffer+1)
 	if b == nil {
 		close(out)

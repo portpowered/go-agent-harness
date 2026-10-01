@@ -679,7 +679,7 @@ func TestStatefulBrokerCloseBoundsNonCooperativeHandle(t *testing.T) {
 	default:
 		t.Fatal("non-cooperative handle was not asked to close")
 	}
-	if repeatedErr := broker.Close(); repeatedErr != closeErr {
+	if repeatedErr := broker.Close(); !errors.Is(repeatedErr, closeErr) {
 		t.Fatalf("repeated close error = %v, want recorded error %v", repeatedErr, closeErr)
 	}
 
@@ -813,7 +813,7 @@ type externalProbeHandle struct {
 func (externalProbeHandle) Close() error { return nil }
 
 func TestStatefulBrokerCancelAndResultRaceHasOneTerminalTransition(t *testing.T) {
-	for iteration := 0; iteration < 16; iteration++ {
+	for iteration := range 16 {
 		clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 		ids := testkit.NewDeterministicIDs()
 		candidate := webmcp.BrowserCandidate{ID: "browser-a", Loopback: true}
@@ -910,7 +910,7 @@ func newInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, 
 		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	session := scriptedPrimaryTargetSession(t, handleValue)
 	if session == nil {
 		closeFailedSetupBroker(t, broker)
 		t.Fatal("fixture session is nil")

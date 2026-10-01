@@ -14,6 +14,9 @@ const (
 	lifecycleReasonTargetDetached = string(EventTargetDetached)
 )
 
+// pageErrorCodeMaxBytes bounds page-supplied error codes echoed to callers.
+const pageErrorCodeMaxBytes = 64
+
 func classifyOperation(descriptor ToolDescriptor) OperationClass {
 	if descriptor.Annotations.ReadOnly == nil {
 		return OperationUnknown
@@ -47,8 +50,8 @@ func safePageErrorCode(code string) string {
 	if code == "" {
 		return ""
 	}
-	if len(code) > 64 {
-		return code[:64]
+	if len(code) > pageErrorCodeMaxBytes {
+		return code[:pageErrorCodeMaxBytes]
 	}
 	for _, character := range code {
 		if (character < 'A' || character > 'Z') && (character < 'a' || character > 'z') &&
@@ -59,7 +62,7 @@ func safePageErrorCode(code string) string {
 	return code
 }
 
-func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvocation) {
+func (b *StatefulBroker) dispatchQueuedInvocationWithLock(ctx context.Context, invocation *brokerInvocation) {
 	selected := invocation.selected
 	b.mu.Lock()
 	if b.dispatchPreconditionFailedLocked(invocation) {
@@ -69,7 +72,6 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	handle := selected.handle
 	session := selected.session
 	descriptor := cloneToolDescriptor(invocation.invocation.Tool)
-	ctx := invocation.ctx
 	b.mu.Unlock()
 
 	// The target check is repeated for every dequeued call. This prevents a
@@ -106,7 +108,7 @@ func (b *StatefulBroker) dispatchPreconditionFailedLocked(invocation *brokerInvo
 		return true
 	}
 	if b.closed || b.selected != selected || !selected.active || !selected.context.Connected {
-		err := selectionStateErrorLocked(selected, "lifecycle", "selection_changed_before_dispatch")
+		err := selectionStateErrorLocked(selected, "selection_changed_before_dispatch")
 		result := invocationFailureResultForError(invocation, err, ErrorStaleSelection)
 		b.reportDispatchLocked(invocation, result, err)
 		b.finishInvocationLocked(invocation, result)
@@ -279,9 +281,9 @@ func closeInvocationQueueLocked(selected *brokerSession) {
 	signalInvocationQueueLocked(selected)
 }
 
-func removeQueuedInvocationLocked(selected *brokerSession, target *brokerInvocation) bool {
+func removeQueuedInvocationLocked(selected *brokerSession, target *brokerInvocation) {
 	if selected == nil || target == nil {
-		return false
+		return
 	}
 	for i, invocation := range selected.queue {
 		if invocation != target {
@@ -291,9 +293,8 @@ func removeQueuedInvocationLocked(selected *brokerSession, target *brokerInvocat
 		selected.queue[len(selected.queue)-1] = nil
 		selected.queue = selected.queue[:len(selected.queue)-1]
 		signalInvocationQueueLocked(selected)
-		return true
+		return
 	}
-	return false
 }
 
 func signalInvocationQueueLocked(selected *brokerSession) {

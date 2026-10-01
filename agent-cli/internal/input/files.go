@@ -9,22 +9,40 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// MIME types by file extension (lowercase). Used when loading files for ask input.
-var mimeByExt = map[string]string{
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".png":  "image/png",
-	".gif":  "image/gif",
-	".webp": "image/webp",
-	".mp3":  "audio/mpeg",
-	".wav":  "audio/wav",
-	".ogg":  "audio/ogg",
-	".m4a":  "audio/mp4",
-	".flac": "audio/flac",
-	".mp4":  "video/mp4",
-	".webm": "video/webm",
-	".mov":  "video/quicktime",
-	".mkv":  "video/x-matroska",
+// mimeTypeForExtension returns the MIME type for a lowercase file extension
+// (including the leading dot), or "" when the extension is unknown. Used when
+// loading files for ask input.
+func mimeTypeForExtension(ext string) string {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return mimeJPEG
+	case ".png":
+		return mimePNG
+	case ".gif":
+		return mimeGIF
+	case ".webp":
+		return mimeWebP
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/wav"
+	case ".ogg":
+		return "audio/ogg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".flac":
+		return "audio/flac"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".mkv":
+		return "video/x-matroska"
+	default:
+		return ""
+	}
 }
 
 const (

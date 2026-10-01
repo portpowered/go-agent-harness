@@ -66,7 +66,7 @@ func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
 // getCapability loads config and resolves a request-scoped runtime tool
 // capability. The CLI owns the host path snapshot; registry construction and
 // tool execution stay inside the reusable tools service.
-func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
+func (c *ToolCommand) getCapability(ctx context.Context) (runtimeTools.Capability, error) {
 	policy, err := c.filesystemPolicy()
 	if err != nil {
 		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("filesystem scope: %v", err), err)
@@ -98,7 +98,7 @@ func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
 	for _, entry := range cfg.Tools.List {
 		selections = append(selections, runtimeTools.ToolSelection{ID: entry.ID, Enabled: entry.Enabled})
 	}
-	capability, err := service.Resolve(context.Background(), runtimeTools.Request{
+	capability, err := service.Resolve(ctx, runtimeTools.Request{
 		WorkDir:    policy.PrimaryRoot(),
 		AllowPaths: policy.AdditionalRoots(),
 		Selections: selections,
@@ -116,16 +116,28 @@ func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
 }
 
 func (c *ToolCommand) filesystemPolicy() (*tools.FilesystemPolicy, error) {
-	if c == nil {
-		return tools.ResolveFilesystemPolicy("")
+	var globalFlags *flags.GlobalFlags
+	if c != nil {
+		globalFlags = c.globalFlags
 	}
-	var workdir string
-	var allowPaths []string
-	if c.globalFlags != nil {
-		workdir = c.globalFlags.WorkDir()
-		allowPaths = c.globalFlags.AllowPaths()
+	host, err := filesystemHost(globalFlags)
+	if err != nil {
+		return nil, err
 	}
-	return tools.ResolveFilesystemPolicy(workdir, allowPaths...)
+	return tools.ResolveFilesystemPolicy(host, globalFlags.AllowPaths()...)
+}
+
+// filesystemHost captures the effective workdir (--workdir, else the host
+// working directory) and the injected home directory for a filesystem policy.
+// An unavailable home directory protects only the system roots, as before.
+func filesystemHost(globalFlags *flags.GlobalFlags) (tools.FilesystemHost, error) {
+	// No home directory leaves only the system roots protected.
+	homeDir := globalFlags.HostHomeDirOrEmpty()
+	workDir, err := globalFlags.EffectiveWorkDir()
+	if err != nil {
+		return tools.FilesystemHost{HomeDir: homeDir}, fmt.Errorf("%w: %w", tools.ErrInvalidFilesystemRoot, err)
+	}
+	return tools.FilesystemHost{WorkDir: workDir, HomeDir: homeDir}, nil
 }
 
 // parseKeyValueArgs parses args of the form "key=value" into a map.
@@ -199,7 +211,7 @@ func (c *ToolCommand) run(cmd *cobra.Command, args []string) error {
 	if err := validateToolCommandArgs(list, args); err != nil {
 		return err
 	}
-	capability, err := c.getCapability()
+	capability, err := c.getCapability(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -251,15 +263,15 @@ func (c *ToolCommand) execute(cmd *cobra.Command, ctx context.Context, capabilit
 	if err != nil {
 		return fmt.Errorf("tool %q: %w", toolID, err)
 	}
-	return c.writeToolResponse(cmd, toolID, response)
+	return c.writeToolResponse(cmd, response)
 }
 
-func (c *ToolCommand) writeToolResponse(cmd *cobra.Command, toolID string, response messages.ToolCallResponse) error {
+func (c *ToolCommand) writeToolResponse(cmd *cobra.Command, response messages.ToolCallResponse) error {
 	if refusal, ok := filesystemRefusalFromResponse(response); ok {
 		if err := c.writeRefusal(cmd.ErrOrStderr(), refusal); err != nil {
 			return err
 		}
-		return newToolCommandError(errToolRefusal, refusal.Error(), &tools.FilesystemRefusalError{Refusal: refusal})
+		return newToolCommandError(errToolRefusal, refusal.Summary(), &tools.FilesystemRefusalError{Refusal: refusal})
 	}
 	return c.writeResponse(cmd.OutOrStdout(), response)
 }

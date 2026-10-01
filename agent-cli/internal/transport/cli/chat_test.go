@@ -71,17 +71,13 @@ func executeRoot(t *testing.T, agentCLI *AgentCLI, args []string, input string) 
 
 func executeInteractiveRoot(t *testing.T, agentCLI *AgentCLI, args []string, input string) chatRun {
 	t.Helper()
-	original := chatInputIsInteractive
-	chatInputIsInteractive = func(*cobra.Command) bool { return true }
-	t.Cleanup(func() { chatInputIsInteractive = original })
+	agentCLI.router.ChatCommand.inputIsInteractive = func(*cobra.Command) bool { return true }
 	return executeRoot(t, agentCLI, args, input)
 }
 
 func executeRootWithMicrophone(t *testing.T, agentCLI *AgentCLI, args []string, input string, factory func() (audio.AudioSource, error)) chatRun {
 	t.Helper()
-	originalMicrophoneSource := newMicrophoneSource
-	newMicrophoneSource = factory
-	t.Cleanup(func() { newMicrophoneSource = originalMicrophoneSource })
+	agentCLI.router.ChatCommand.openMicrophone = factory
 
 	var stdout, stderr bytes.Buffer
 	root := agentCLI.Generate()

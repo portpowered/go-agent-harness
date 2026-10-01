@@ -1,3 +1,8 @@
+// The live proofs reuse this file's pinned-Chrome fixture, so it builds
+// with either opt-in tag; its own adapter proof is credential-free.
+
+//go:build e2e || live
+
 package chrome
 
 import (
@@ -10,7 +15,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"regexp"
 	"runtime"
 	"slices"
@@ -26,8 +30,6 @@ import (
 )
 
 const (
-	chromeIntegrationEnv = "WEBMCP_CHROME_INTEGRATION"
-
 	lockedChromeChannel  = "Stable"
 	lockedChromePlatform = "mac-arm64"
 	lockedChromeVersion  = "152.0.7977.64"
@@ -143,7 +145,7 @@ func (p *liveCDPProxy) Close() {
 
 func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request) {
 	delay := false
-	dead := false
+	var dead bool
 	if request.URL.Path == jsonListPath {
 		p.mu.Lock()
 		delay = p.delayNextList
@@ -203,12 +205,6 @@ func closeLiveCDPProxyConnection(writer http.ResponseWriter) {
 var devToolsEndpointPattern = regexp.MustCompile(`DevTools listening on (ws://127\.0\.0\.1:[0-9]+/devtools/browser/[^[:space:]]+)`)
 
 func TestPinnedChromeWebMCPAdapterIntegration(t *testing.T) {
-	// This check must remain the first observable operation: ordinary tests
-	// neither read the O0 lock nor make a network request or start Chrome.
-	if os.Getenv(chromeIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the pinned Chrome integration proof", chromeIntegrationEnv)
-	}
-
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -284,7 +280,7 @@ func launchAdapterIntegration(t *testing.T, ctx context.Context) *adapterIntegra
 	})
 
 	run.baseURL = browserHTTPURL(run.browser.endpoint())
-	run.version, err = waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	run.version, err = waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
@@ -740,7 +736,7 @@ func waitForFixtureOracle(ctx context.Context, endpoint string, match func(fixtu
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for fixture oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for fixture oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		case <-ticker.C:
 		}
 	}
@@ -772,27 +768,30 @@ func waitForFixtureTarget(ctx context.Context, baseURL string, targetID webmcp.T
 	var lastErr error
 	for {
 		targets, err := readDevToolsTargets(ctx, baseURL)
+		lastErr = err
 		if err == nil {
-			for _, target := range targets {
-				if target.ID == string(targetID) && target.URL == fixtureURL {
-					if wantPresent {
-						return target, nil
-					}
-					lastErr = errors.New("target remains present")
-				}
+			target, present := findDevToolsFixtureTarget(targets, targetID, fixtureURL)
+			if present == wantPresent {
+				return target, nil
 			}
-			if !wantPresent {
-				return devToolsTarget{}, nil
-			}
-		} else {
-			lastErr = err
+			lastErr = fmt.Errorf("target present=%t", present)
 		}
 		select {
 		case <-ctx.Done():
-			return devToolsTarget{}, fmt.Errorf("wait for target presence=%t: %w (last error: %v)", wantPresent, ctx.Err(), lastErr)
+			return devToolsTarget{}, fmt.Errorf("wait for target presence=%t: %w (last error: %w)", wantPresent, ctx.Err(), lastErr)
 		case <-ticker.C:
 		}
 	}
+}
+
+// findDevToolsFixtureTarget returns the DevTools target with targetID at fixtureURL.
+func findDevToolsFixtureTarget(targets []devToolsTarget, targetID webmcp.TargetID, fixtureURL string) (devToolsTarget, bool) {
+	for _, target := range targets {
+		if target.ID == string(targetID) && target.URL == fixtureURL {
+			return target, true
+		}
+	}
+	return devToolsTarget{}, false
 }
 
 type inspectedPageState struct {
@@ -851,7 +850,7 @@ func detachExternalIntegrationTarget(targetContext context.Context, cancelTarget
 	targetClient := client.Target
 	var detachErr error
 	if targetClient.SessionID != "" {
-		detachContext, cancelDetach := context.WithTimeout(context.Background(), 5*time.Second)
+		detachContext, cancelDetach := context.WithTimeout(context.WithoutCancel(targetContext), 5*time.Second)
 		detachErr = cdpTarget.DetachFromTarget().WithSessionID(targetClient.SessionID).Do(cdp.WithExecutor(detachContext, client.Browser))
 		cancelDetach()
 	}

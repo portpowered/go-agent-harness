@@ -36,7 +36,7 @@ type Input struct {
 type Output struct {
 	Summary    Summary
 	Objective  probe.ObjectiveEvidence
-	Divergence *objective.Divergence
+	Divergence *objective.DivergenceError
 }
 
 type preparedArtifacts struct {

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -21,20 +20,16 @@ import (
 )
 
 const (
-	lateCatalogIntegrationEnv = "WEBMCP_CHROME_LATE_CATALOG"
-	lateCatalogToolName       = "webmcp_late_registration"
-	lateCatalogPath           = "/late"
-	producerlessPath          = "/producerless"
-	emptyCatalogPath          = "/empty"
+	lateCatalogToolName = "webmcp_late_registration"
+	lateCatalogPath     = "/late"
+	producerlessPath    = "/producerless"
+	emptyCatalogPath    = "/empty"
 )
 
 // TestPinnedChromeLateCatalogReevaluation is the real-browser companion to
 // the broker and adapter regressions. It downloads the locked Chrome for
 // Testing artifact, so its env gate precedes any lock, network, or browser use.
 func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
-	if os.Getenv(lateCatalogIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the pinned late-catalog integration proof", lateCatalogIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -93,7 +88,7 @@ func launchLateCatalog(t *testing.T, ctx context.Context) *lateCatalogRun {
 	})
 
 	run.baseURL = browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
@@ -456,11 +451,11 @@ func (f *lateCatalogFixture) WaitForOracle(ctx context.Context, match func(lateC
 func (f *lateCatalogFixture) handle(writer http.ResponseWriter, request *http.Request) {
 	switch request.URL.Path {
 	case lateCatalogPath:
-		f.writeHTML(writer, request, lateCatalogFixtureHTML)
+		f.writeHTML(writer, request, []byte(lateCatalogFixtureHTML))
 	case producerlessPath:
-		f.writeHTML(writer, request, producerlessFixtureHTML)
+		f.writeHTML(writer, request, []byte(producerlessFixtureHTML))
 	case emptyCatalogPath:
-		f.writeHTML(writer, request, emptyCatalogFixtureHTML)
+		f.writeHTML(writer, request, []byte(emptyCatalogFixtureHTML))
 	case "/__test/load-block":
 		f.handleLoadingBlock(writer, request)
 	case "/__test/ready":
@@ -546,7 +541,7 @@ func (f *lateCatalogFixture) handleState(writer http.ResponseWriter, request *ht
 	}
 }
 
-var lateCatalogFixtureHTML = []byte(`<!doctype html>
+const lateCatalogFixtureHTML = `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>WebMCP delayed registration fixture</title></head>
 <body><main><h1>Delayed WebMCP registration</h1><p id="status">waiting for registration gate</p></main>
@@ -599,13 +594,13 @@ var lateCatalogFixtureHTML = []byte(`<!doctype html>
     publish();
   }
 })();
-</script></body></html>`)
+</script></body></html>`
 
-var producerlessFixtureHTML = []byte(`<!doctype html>
+const producerlessFixtureHTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>WebMCP producerless fixture</title></head>
-<body><p>no WebMCP producer</p></body></html>`)
+<body><p>no WebMCP producer</p></body></html>`
 
-var emptyCatalogFixtureHTML = []byte(`<!doctype html>
+const emptyCatalogFixtureHTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>WebMCP empty catalog fixture</title></head>
 <body><p>explicit empty catalog</p>
 <script>
@@ -628,4 +623,4 @@ window.addEventListener("load", async () => {
   } catch (_) {}
   fetch("/__test/ready?path=/empty", { method: "POST" }).catch(() => {});
 });
-</script></body></html>`)
+</script></body></html>`

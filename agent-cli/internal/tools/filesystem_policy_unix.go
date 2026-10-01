@@ -3,7 +3,6 @@
 package tools
 
 import (
-	"os"
 	"path/filepath"
 	"runtime"
 )
@@ -12,7 +11,7 @@ import (
 // credential stores that filesystem tools must never read through a widened
 // policy. The list is intentionally path-based and independent of file
 // permissions: a readable secret is still a protected secret.
-func platformProtectedReadRoots() []string {
+func platformProtectedReadRoots(home string) []string {
 	roots := []string{
 		"/etc",
 		"/private/etc",
@@ -23,8 +22,7 @@ func platformProtectedReadRoots() []string {
 		"/root",
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
+	if home == "" {
 		return roots
 	}
 	roots = append(roots,

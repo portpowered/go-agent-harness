@@ -90,11 +90,10 @@ func TestLoad_EnvOverrides_ProviderAndOpenAI(t *testing.T) {
 	}
 
 	// Override provider and openai block via environment (use __ for each nesting level)
-	setEnv(t, "AGENT_MODEL__PROVIDER", "openai")
-	setEnv(t, "AGENT_MODEL__OPENAI__MODEL", "env-model")
-	setEnv(t, "AGENT_MODEL__OPENAI__API_KEY", "env-api-key")
-	setEnv(t, "AGENT_MODEL__OPENAI__BASE_URL", "https://env.openai.example.com")
-	defer unsetEnv(t, "AGENT_MODEL__PROVIDER", "AGENT_MODEL__OPENAI__MODEL", "AGENT_MODEL__OPENAI__API_KEY", "AGENT_MODEL__OPENAI__BASE_URL")
+	t.Setenv("AGENT_MODEL__PROVIDER", "openai")
+	t.Setenv("AGENT_MODEL__OPENAI__MODEL", "env-model")
+	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", "env-api-key")
+	t.Setenv("AGENT_MODEL__OPENAI__BASE_URL", "https://env.openai.example.com")
 
 	storage := NewConfigStorage(configPath)
 	cfg, err := storage.Load()
@@ -126,11 +125,10 @@ func TestLoad_EnvOverrides_OpenRouter(t *testing.T) {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	setEnv(t, "AGENT_MODEL__PROVIDER", ProviderOpenRouter)
-	setEnv(t, "AGENT_MODEL__OPENROUTER__MODEL", "env-openrouter-model")
-	setEnv(t, "AGENT_MODEL__OPENROUTER__API_KEY", "env-openrouter-key")
-	setEnv(t, "AGENT_MODEL__OPENROUTER__BASE_URL", "https://env.openrouter.example.com")
-	defer unsetEnv(t, "AGENT_MODEL__PROVIDER", "AGENT_MODEL__OPENROUTER__MODEL", "AGENT_MODEL__OPENROUTER__API_KEY", "AGENT_MODEL__OPENROUTER__BASE_URL")
+	t.Setenv("AGENT_MODEL__PROVIDER", ProviderOpenRouter)
+	t.Setenv("AGENT_MODEL__OPENROUTER__MODEL", "env-openrouter-model")
+	t.Setenv("AGENT_MODEL__OPENROUTER__API_KEY", "env-openrouter-key")
+	t.Setenv("AGENT_MODEL__OPENROUTER__BASE_URL", "https://env.openrouter.example.com")
 
 	storage := NewConfigStorage(configPath)
 	cfg, err := storage.Load()
@@ -254,11 +252,10 @@ session:
 	if err := os.WriteFile(configPath, []byte(sessionYAML), 0600); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
-	setEnv(t, "AGENT_SESSION__PROVIDER", ProviderOpenAI)
-	setEnv(t, "AGENT_SESSION__MODEL", "env-session-model")
-	setEnv(t, "AGENT_SESSION__VAD__ENABLED", "false")
-	setEnv(t, "AGENT_SESSION__INPUT_TRANSCRIPTION__ENABLED", "true")
-	defer unsetEnv(t, "AGENT_SESSION__PROVIDER", "AGENT_SESSION__MODEL", "AGENT_SESSION__VAD__ENABLED", "AGENT_SESSION__INPUT_TRANSCRIPTION__ENABLED")
+	t.Setenv("AGENT_SESSION__PROVIDER", ProviderOpenAI)
+	t.Setenv("AGENT_SESSION__MODEL", "env-session-model")
+	t.Setenv("AGENT_SESSION__VAD__ENABLED", "false")
+	t.Setenv("AGENT_SESSION__INPUT_TRANSCRIPTION__ENABLED", "true")
 
 	cfg, err := NewConfigStorage(configPath).Load()
 	if err != nil {
@@ -282,11 +279,10 @@ func TestLoad_EnvOverrides_Grok(t *testing.T) {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	setEnv(t, "AGENT_MODEL__PROVIDER", ProviderGrok)
-	setEnv(t, "AGENT_MODEL__GROK__MODEL", "env-grok-model")
-	setEnv(t, "AGENT_MODEL__GROK__API_KEY", "env-grok-key")
-	setEnv(t, "AGENT_MODEL__GROK__BASE_URL", "wss://env.grok.example.test/realtime")
-	defer unsetEnv(t, "AGENT_MODEL__PROVIDER", "AGENT_MODEL__GROK__MODEL", "AGENT_MODEL__GROK__API_KEY", "AGENT_MODEL__GROK__BASE_URL")
+	t.Setenv("AGENT_MODEL__PROVIDER", ProviderGrok)
+	t.Setenv("AGENT_MODEL__GROK__MODEL", "env-grok-model")
+	t.Setenv("AGENT_MODEL__GROK__API_KEY", "env-grok-key")
+	t.Setenv("AGENT_MODEL__GROK__BASE_URL", "wss://env.grok.example.test/realtime")
 
 	storage := NewConfigStorage(configPath)
 	cfg, err := storage.Load()
@@ -523,8 +519,8 @@ func TestToolsConfig_ToolEnabled(t *testing.T) {
 
 func TestDefaultToolsList_ContainsAllToolIDs(t *testing.T) {
 	list := DefaultToolsList()
-	if len(list) != len(DefaultToolIDs) {
-		t.Errorf("DefaultToolsList length %d, want %d", len(list), len(DefaultToolIDs))
+	if len(list) != len(DefaultToolIDs()) {
+		t.Errorf("DefaultToolsList length %d, want %d", len(list), len(DefaultToolIDs()))
 	}
 	ids := make(map[string]bool)
 	for _, e := range list {
@@ -533,9 +529,9 @@ func TestDefaultToolsList_ContainsAllToolIDs(t *testing.T) {
 		}
 		ids[e.ID] = true
 	}
-	for _, id := range DefaultToolIDs {
+	for _, id := range DefaultToolIDs() {
 		if !ids[id] {
-			t.Errorf("DefaultToolIDs contains %q but DefaultToolsList does not", id)
+			t.Errorf("DefaultToolIDs() contains %q but DefaultToolsList does not", id)
 		}
 	}
 }
@@ -671,21 +667,5 @@ func TestApplyOverrides_BaseURL_OnOpenAI(t *testing.T) {
 	out := base.ApplyOverrides("", "", "", "http://custom-endpoint/v1")
 	if out.Model.OpenAI.BaseURL != "http://custom-endpoint/v1" {
 		t.Errorf("BaseURL: got %q", out.Model.OpenAI.BaseURL)
-	}
-}
-
-func setEnv(t *testing.T, key, value string) {
-	t.Helper()
-	if err := os.Setenv(key, value); err != nil {
-		t.Fatalf("Setenv(%q): %v", key, err)
-	}
-}
-
-func unsetEnv(t *testing.T, keys ...string) {
-	t.Helper()
-	for _, k := range keys {
-		if err := os.Unsetenv(k); err != nil {
-			t.Fatalf("Unsetenv(%q): %v", k, err)
-		}
 	}
 }

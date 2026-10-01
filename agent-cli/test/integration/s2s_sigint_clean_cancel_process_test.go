@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -450,7 +451,7 @@ func runSIGINTAgent(t *testing.T, fixture *sigintRealtimeFixture, workDir, recor
 		"--max-duration", "30s",
 		"sigint " + toolName,
 	}
-	command := exec.Command(buildAgentBinary(t), args...)
+	command := exec.CommandContext(t.Context(), buildAgentBinary(t), args...)
 	command.Dir = workDir
 	command.Env = append(os.Environ(),
 		"HTTP_PROXY=http://127.0.0.1:1",
@@ -507,29 +508,11 @@ func waitForSIGINTFixture(t *testing.T, command *exec.Cmd, ready <-chan struct{}
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
-func waitForSIGINTFile(path string, timeout time.Duration) bool {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if _, err := os.Stat(path); err == nil {
-			return true
-		} else if !os.IsNotExist(err) {
-			return false
-		}
-		select {
-		case <-ticker.C:
-		case <-timer.C:
-			return false
-		}
-	}
-}
 func sigintExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode()
 	}
 	return -1

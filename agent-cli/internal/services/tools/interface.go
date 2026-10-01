@@ -59,18 +59,20 @@ type Capabilities struct {
 }
 
 // Factory resolves a config-scoped capability surface.
-type Factory func(*config.Config) (Capabilities, error)
+type Factory func(context.Context, *config.Config) (Capabilities, error)
 
 // Service resolves capability surfaces while keeping composition in the
 // private services implementation.
 type Service interface {
-	Resolve(*config.Config) (Capabilities, error)
+	Resolve(context.Context, *config.Config) (Capabilities, error)
 }
 
 // Resolve lets an injected factory satisfy Service without another adapter.
-func (factory Factory) Resolve(cfg *config.Config) (Capabilities, error) {
+func (factory Factory) Resolve(ctx context.Context, cfg *config.Config) (Capabilities, error) {
 	if factory == nil {
 		return Capabilities{}, errors.New("tool capability factory is required")
 	}
-	return factory(cfg)
+	return factory(ctx, cfg)
 }
+
+var _ Service = Factory(nil)

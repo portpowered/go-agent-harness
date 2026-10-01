@@ -50,7 +50,7 @@ for current in "${modes[@]}"; do
     echo "==> session CI regressions: mode=$current package=$package count=$count"
     # Preserve the existing eight-minute command/test bound and shorter child deadlines.
     # Stress is hermetic: loopback devices and a fake provider, no live API credentials.
-    CGO_ENABLED=$cgo YUI_AUDIO_STRESS=1 go run ./cmd/testtimeout --timeout 480s --       go test "$package" -tags=nomicrophone -timeout 480s       "${flags[@]}" -run "$selected" -v || failed=1
+    CGO_ENABLED=$cgo go run ./cmd/testtimeout --timeout 480s --       go test "$package" -tags=nomicrophone,stress -timeout 480s       "${flags[@]}" -run "$selected" -v || failed=1
   done
   echo "==> session CI regressions: mode=$current package=go-device-gateway/pkg/devices count=$count"
   (cd "$root/go-device-gateway" && CGO_ENABLED=$cgo go test ./pkg/devices \

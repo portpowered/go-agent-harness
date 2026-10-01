@@ -38,6 +38,9 @@ type Skill struct {
 // frontmatterRegex matches YAML frontmatter block at the start of a file (--- on its own line, then YAML, then ---, then body).
 var frontmatterRegex = regexp.MustCompile(`(?s)^---\r?\n(.*?)\r?\n---\r?\n(.*)$`)
 
+// frontmatterSubmatchCount is the full match plus the frontmatter and body groups.
+const frontmatterSubmatchCount = 3
+
 // ParseSkillFile reads skillPath (SKILL.md) and returns metadata and body.
 // The body is the Markdown content after the frontmatter (instructions).
 func ParseSkillFile(skillPath string) (meta Meta, body string, err error) {
@@ -47,7 +50,7 @@ func ParseSkillFile(skillPath string) (meta Meta, body string, err error) {
 	}
 	content := string(data)
 	matches := frontmatterRegex.FindStringSubmatch(content)
-	if len(matches) != 3 {
+	if len(matches) != frontmatterSubmatchCount {
 		return Meta{}, "", fmt.Errorf("SKILL.md must have YAML frontmatter between --- delimiters")
 	}
 	if err := yaml.Unmarshal([]byte(matches[1]), &meta); err != nil {
@@ -70,7 +73,7 @@ func ParseSkillFileMetadataOnly(skillPath string) (Meta, error) {
 	}
 	content := string(data)
 	matches := frontmatterRegex.FindStringSubmatch(content)
-	if len(matches) != 3 {
+	if len(matches) != frontmatterSubmatchCount {
 		return Meta{}, fmt.Errorf("SKILL.md must have YAML frontmatter between --- delimiters")
 	}
 	var meta Meta

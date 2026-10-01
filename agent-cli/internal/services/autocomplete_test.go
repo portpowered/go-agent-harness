@@ -124,7 +124,7 @@ func TestAutocomplete_KeyboardNavigationAndStateTransitions(t *testing.T) {
 	}
 	ac = updated
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ac, _ = ac.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 	if ac.Selected() != "item-k" {
@@ -138,7 +138,7 @@ func TestAutocomplete_KeyboardNavigationAndStateTransitions(t *testing.T) {
 	if ac.Selected() != "item-k" {
 		t.Fatalf("down at last candidate selected %q", ac.Selected())
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ac, _ = ac.Update(tea.KeyMsg{Type: tea.KeyUp})
 	}
 	if ac.Selected() != firstAutocompleteItem {

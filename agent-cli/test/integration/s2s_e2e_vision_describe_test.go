@@ -50,10 +50,12 @@ const (
 // deterministic synthetic image: a magenta top-left pixel, a cyan
 // bottom-right pixel, and a navy fill on a four by four grid. A reply that
 // does not come from the actual image content cannot contain them.
-var visionDescribeContentMarkers = []string{
-	"four by four grid",
-	"magenta pixel in the top left corner",
-	"cyan pixel in the bottom right corner",
+func visionDescribeContentMarkers() []string {
+	return []string{
+		"four by four grid",
+		"magenta pixel in the top left corner",
+		"cyan pixel in the bottom right corner",
+	}
 }
 
 // visionDescribeQuestionWAVPath returns a short voiced slice of the committed
@@ -63,7 +65,7 @@ var visionDescribeContentMarkers = []string{
 // real-time-paced input stays short.
 func visionDescribeQuestionWAVPath(t *testing.T) string {
 	t.Helper()
-	return writeVoicedWAVSlice(t, locateCLIFixture(t, visionDescribeQuestionWAV), shortVoicedSlice)
+	return writeVoicedWAVSlice(t, locateCLIFixture(t, visionDescribeQuestionWAV))
 }
 
 // visionDescribeFixturePath locates the committed lane fixture.
@@ -199,10 +201,12 @@ func buildVisionDescribeFixture(t *testing.T, wavPath string, transcript []strin
 // the captured stdout. It waits for the terminal close marker so
 // asynchronous terminal formatting is always observed.
 func runVisionDescribeSession(t *testing.T, fixturePath, wavPath, imagePath, audioOutPath string) (string, error) {
+	t.Helper()
 	return runVisionDescribeSessionMode(t, fixturePath, wavPath, imagePath, audioOutPath, true)
 }
 
 func runVisionDescribeSessionWithoutRecordingDirectory(t *testing.T, fixturePath, wavPath, imagePath string) (string, error) {
+	t.Helper()
 	return runVisionDescribeSessionMode(t, fixturePath, wavPath, imagePath, "", false)
 }
 
@@ -241,7 +245,7 @@ func assertVisionDescribeGrounded(output string) error {
 	if !strings.Contains(output, "[session closed: fixture_complete]") {
 		return fmt.Errorf("vision session did not complete cleanly, got:\n%s", output)
 	}
-	for _, marker := range visionDescribeContentMarkers {
+	for _, marker := range visionDescribeContentMarkers() {
 		if !strings.Contains(output, marker) {
 			return fmt.Errorf("transcript missing image-grounded content %q, got:\n%s", marker, output)
 		}
@@ -285,6 +289,7 @@ func TestSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) 
 }
 
 func testSessionCommandVisionDescribeGroundsReplyInCommittedImage(t *testing.T) {
+	t.Helper()
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
@@ -329,6 +334,7 @@ func TestVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
 }
 
 func testVisionDescribeFixtureDrivesPublicSessionCommand(t *testing.T) {
+	t.Helper()
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, nil)
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")
@@ -366,7 +372,7 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 	if !errors.Is(runErr, providers.ErrReplayMismatch) {
 		t.Fatalf("run without --image failed with %v, want typed replay mismatch", runErr)
 	}
-	for _, marker := range visionDescribeContentMarkers {
+	for _, marker := range visionDescribeContentMarkers() {
 		if strings.Contains(stdout.String(), marker) {
 			t.Fatalf("run without --image produced image-grounded content %q; grounding is not discriminative\nstdout:\n%s", marker, stdout.String())
 		}
@@ -382,6 +388,7 @@ func TestVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
 }
 
 func testVisionGroundingAssertionFailsOnGenericReply(t *testing.T) {
+	t.Helper()
 	wavPath := visionDescribeQuestionWAVPath(t)
 	fixture := buildVisionDescribeFixture(t, wavPath, []string{"I hear your question ", "clearly."})
 	imagePath := filepath.Join(t.TempDir(), "vision-describe.png")

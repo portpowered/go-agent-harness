@@ -269,7 +269,7 @@ func TestToolCommandLoadsTemporaryConfig(t *testing.T) {
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	command := NewToolCommand(globalFlags)
-	capability, err := command.getCapability()
+	capability, err := command.getCapability(t.Context())
 	if err != nil {
 		t.Fatalf("getCapability: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestToolCommandConfigLoadError(t *testing.T) {
 	}
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = dir
-	_, err := NewToolCommand(globalFlags).getCapability()
+	_, err := NewToolCommand(globalFlags).getCapability(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "load config") {
 		t.Fatalf("getCapability error = %v, want load config context", err)
 	}

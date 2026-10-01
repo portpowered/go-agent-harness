@@ -23,6 +23,11 @@ const (
 
 	defaultChromeVersionTimeout = 2 * time.Second
 	maxChromeVersionOutputBytes = 64 << 10
+
+	// acquisitionCategoryMaxBytes and platformLabelMaxBytes bound labels
+	// echoed in acquisition diagnostics.
+	acquisitionCategoryMaxBytes = 48
+	platformLabelMaxBytes       = 32
 )
 
 // ExecutableSource identifies how a Chrome executable was obtained.
@@ -135,6 +140,9 @@ type ManagedChromeAcquisitionOptions struct {
 	LockPath        string
 	CacheDir        string
 	HTTPClient      *http.Client
+	// WorkingDir is the injected host working directory where the Chrome for
+	// Testing lock search starts.
+	WorkingDir string
 }
 
 // ManagedChromeAcquirer selects a qualified stock Chrome or the verified
@@ -190,9 +198,6 @@ func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, 
 			FallbackCategory: "selector_unavailable",
 		}
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return ChromeExecutable{}, err
 	}
@@ -230,6 +235,7 @@ func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, 
 	fallback := a.options.PinnedAcquirer
 	if fallback == nil {
 		fallback = NewChromeForTestingAcquirer(ChromeForTestingOptions{
+			WorkingDir:     a.options.WorkingDir,
 			LockPath:       a.options.LockPath,
 			CacheDir:       a.options.CacheDir,
 			HTTPClient:     a.options.HTTPClient,
@@ -463,23 +469,6 @@ func ChromeForTestingPlatform(goos, goarch string) (string, error) {
 	}
 }
 
-func uniquePaths(paths []string) []string {
-	seen := make(map[string]struct{}, len(paths))
-	result := make([]string, 0, len(paths))
-	for _, path := range paths {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			continue
-		}
-		if _, ok := seen[path]; ok {
-			continue
-		}
-		seen[path] = struct{}{}
-		result = append(result, path)
-	}
-	return result
-}
-
 func fallbackFailureCategory(err error) string {
 	var fallbackErr *ChromeForTestingError
 	if errors.As(err, &fallbackErr) && fallbackErr != nil && fallbackErr.Category != "" {
@@ -502,7 +491,7 @@ func safeAcquisitionCategory(value string) string {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			builder.WriteRune(r)
 		}
-		if builder.Len() >= 48 {
+		if builder.Len() >= acquisitionCategoryMaxBytes {
 			break
 		}
 	}
@@ -511,8 +500,8 @@ func safeAcquisitionCategory(value string) string {
 
 func safePlatformLabel(value string) string {
 	value = strings.TrimSpace(value)
-	if len(value) > 32 {
-		value = value[:32]
+	if len(value) > platformLabelMaxBytes {
+		value = value[:platformLabelMaxBytes]
 	}
 	for _, r := range value {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '/' && r != '-' && r != '_' {

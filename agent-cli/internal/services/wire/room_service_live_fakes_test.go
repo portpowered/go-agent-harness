@@ -237,14 +237,3 @@ func assertParticipant(t *testing.T, result rooms.RoomResult, id string, want ro
 	}
 	return value
 }
-
-func waitFor(t *testing.T, what string, condition func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(contractWait)
-	for !condition() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(time.Millisecond)
-	}
-}

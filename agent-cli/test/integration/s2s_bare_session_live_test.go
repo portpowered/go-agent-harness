@@ -30,7 +30,6 @@ import (
 )
 
 const (
-	bareSessionLiveOptIn          = "AGENT_HARNESS_LIVE_BARE_SESSION"
 	bareSessionLiveModel          = "gpt-realtime-2.1-mini"
 	bareSessionLiveListeningBound = 10 * time.Second
 	bareSessionLiveShutdownBound  = 5 * time.Second
@@ -43,14 +42,11 @@ const (
 func TestLiveBareSessionDefaultDevicesStartsAndStops(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the billed bare-session live probe")
-	}
-	if os.Getenv(bareSessionLiveOptIn) != "1" {
-		t.Skip(bareSessionLiveOptIn + "!=1; this live test bills provider and opens host audio devices")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the billed bare-session live probe")
 	}
 
 	home := t.TempDir()
-	cmd := exec.Command(buildAgentBinary(t), "session")
+	cmd := exec.CommandContext(t.Context(), buildAgentBinary(t), "session")
 	cmd.Dir = agentCLIRoot(t)
 	cmd.Env = bareSessionLiveEnvironment(home, apiKey)
 	if len(cmd.Args) != 2 || cmd.Args[1] != "session" {
@@ -210,16 +206,13 @@ func killLiveProcess(process *os.Process) {
 func TestLiveSession_MaxDurationRecordDirTerminalAgreement(t *testing.T) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime max-duration record-dir proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_MAX_DURATION") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_MAX_DURATION!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime max-duration record-dir proof")
 	}
 
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "max-duration-live.session.json")
 	recordDir := filepath.Join(workDir, "max-duration-live-recording")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

@@ -30,10 +30,7 @@ type Request struct {
 // Diagnose runs every doctor check and returns the report. A failed check
 // yields an *Error that carries the report and the classified cause; a
 // negative CommandTimeout returns the invalid-input cause directly.
-func Diagnose(ctx context.Context, request Request) (Report, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func Diagnose(ctx context.Context, request Request) (Report, error) {
 	report := NewReport()
 	commandTimeout := request.CommandTimeout
 	if commandTimeout == 0 {

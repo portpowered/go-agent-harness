@@ -20,12 +20,16 @@ const watchdogHelperEnv = "CLITEST_WATCHDOG_HELPER"
 func TestWatchdogFailsBubbleBlockedOnRealIO(t *testing.T) {
 	if os.Getenv(watchdogHelperEnv) != "" {
 		testWithin(t, 200*time.Millisecond, func(t *testing.T) {
-			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			t.Helper()
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatalf("listen: %v", err)
 			}
 			go func() { _, _ = listener.Accept() }() //nolint:errcheck // blocks forever by design.
-			time.Sleep(time.Hour)
+			// A virtual hour: it can only end if the bubble goes idle, which
+			// the goroutine blocked in Accept prevents.
+			virtualHour := time.NewTimer(time.Hour)
+			<-virtualHour.C
 		})
 		return
 	}

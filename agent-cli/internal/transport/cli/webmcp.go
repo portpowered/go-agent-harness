@@ -27,29 +27,31 @@ func NewWebMCPCommand(globalFlags *flags.GlobalFlags, factories ...WebMCPDoctorF
 	}
 }
 
-func (c *WebMCPCommand) Generate() *cobra.Command {
-	var (
-		doctor      *WebMCPDoctorCommand
-		operations  *WebMCPOperationsCommand
-		globalFlags *flags.GlobalFlags
-		factory     WebMCPDoctorFactory
-	)
-	if c != nil {
-		doctor = c.DoctorCommand
-		operations = c.OperationsCommand
-		if doctor != nil {
-			globalFlags = doctor.globalFlags
-			factory = doctor.factory
+// configuredParts returns the subcommands and the shared flags/factory they
+// were built with; any part may be nil when the command was built partially.
+func (c *WebMCPCommand) configuredParts() (*WebMCPDoctorCommand, *WebMCPOperationsCommand, *flags.GlobalFlags, WebMCPDoctorFactory) {
+	if c == nil {
+		return nil, nil, nil, nil
+	}
+	doctor, operations := c.DoctorCommand, c.OperationsCommand
+	var globalFlags *flags.GlobalFlags
+	var factory WebMCPDoctorFactory
+	if doctor != nil {
+		globalFlags, factory = doctor.globalFlags, doctor.factory
+	}
+	if operations != nil {
+		if globalFlags == nil {
+			globalFlags = operations.globalFlags
 		}
-		if operations != nil {
-			if globalFlags == nil {
-				globalFlags = operations.globalFlags
-			}
-			if factory == nil {
-				factory = operations.factory
-			}
+		if factory == nil {
+			factory = operations.factory
 		}
 	}
+	return doctor, operations, globalFlags, factory
+}
+
+func (c *WebMCPCommand) Generate() *cobra.Command {
+	doctor, operations, globalFlags, factory := c.configuredParts()
 	if factory == nil {
 		factory = defaultWebMCPDoctorFactory(globalFlags)
 	}

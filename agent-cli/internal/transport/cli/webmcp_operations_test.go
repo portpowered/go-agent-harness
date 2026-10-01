@@ -100,7 +100,7 @@ func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
 		return
 	}
 
-	command := exec.Command(os.Args[0], "-test.run=^TestWebMCPDirectInvokeSIGINTChildProcess$", "-test.v=false")
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestWebMCPDirectInvokeSIGINTChildProcess$", "-test.v=false")
 	command.Env = append(os.Environ(), "WEBMCP_DIRECT_SIGINT_CHILD=1")
 	stdout := &childProcessOutputBuffer{}
 	stderr := newChildProcessStderrBuffer()
@@ -204,6 +204,7 @@ func (b *childProcessStderrBuffer) Write(value []byte) (int, error) {
 }
 
 func runWebMCPDirectInvokeSIGINTChild(t *testing.T) {
+	t.Helper()
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	page, target, candidate, tool := directFixture()
@@ -712,6 +713,7 @@ func TestWebMCPDirectSelectBrowserDeathAtEveryStage(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+				t.Helper()
 				runSelectBrowserDeathCase(t, testCase, jsonMode)
 			})
 		})
@@ -748,6 +750,7 @@ func newBrowserDeathRuntime(t *testing.T, testCase browserDeathCase) *testkit.Sc
 }
 
 func runSelectBrowserDeathCase(t *testing.T, testCase browserDeathCase, jsonMode bool) {
+	t.Helper()
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	_, target, candidate, _ := directFixture()
@@ -822,12 +825,5 @@ func requireBrowserDeathJSON(t *testing.T, result directCommandResult, testCase 
 	}
 	if got := details["reconnect_required"]; got != true {
 		t.Errorf("reconnect_required = %#v, want true", got)
-	}
-}
-
-func killSIGINTChild(t *testing.T, command *exec.Cmd) {
-	t.Helper()
-	if err := command.Process.Kill(); err != nil {
-		t.Logf("kill SIGINT child: %v", err)
 	}
 }

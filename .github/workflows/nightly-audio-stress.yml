@@ -2,7 +2,7 @@ name: Nightly audio stress
 
 # Stress trials that hunt rare races rather than prove behavior. They used to
 # run on every pull request inside the agent-cli integration coverage job
-# (YUI_AUDIO_STRESS=1: 40 fresh agent/device process pairs, ~140 CPU-s on a
+# (the stress build tag: 40 fresh agent/device process pairs, ~140 CPU-s on a
 # 4-vCPU runner already running the timing-bound integration shards). They
 # run here once a day against main instead, and on demand. The same gate
 # holds the fresh-process tool-continuation matrix, whose device-cadence

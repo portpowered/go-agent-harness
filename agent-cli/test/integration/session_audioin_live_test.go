@@ -29,17 +29,14 @@ const liveAudioInTimeout = 60 * time.Second
 func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime audio-in round trip")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_AUDIOIN") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_AUDIOIN!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime audio-in round trip")
 	}
 
 	workDir := t.TempDir()
 	outputPath := filepath.Join(workDir, "response.wav")
 	capturePath := filepath.Join(workDir, "live-audioin.json")
 
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -92,10 +89,7 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime record-dir audio-in-turn proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_AUDIOIN") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_AUDIOIN!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime record-dir audio-in-turn proof")
 	}
 
 	for _, testCase := range []struct {
@@ -109,7 +103,7 @@ func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 			workDir := t.TempDir()
 			recordDir := filepath.Join(workDir, "recording")
 
-			agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+			agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 			if err != nil {
 				t.Fatalf("initialize CLI: %v", err)
 			}
@@ -125,7 +119,7 @@ func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 				"--record-dir", recordDir,
 				"--max-duration", liveAudioInTimeout.String(),
 			}
-			for index := 0; index < testCase.turns; index++ {
+			for range testCase.turns {
 				args = append(args, "--audio-in-turn", liveAudioInWAVPath(t))
 			}
 			rootCmd.SetArgs(args)
@@ -237,7 +231,7 @@ func assertLiveRecordDirAudioSegments(t *testing.T, destination string, wantTurn
 	t.Helper()
 	inputCount := 0
 	outputCount := 0
-	for index := 0; index < wantTurns; index++ {
+	for index := range wantTurns {
 		for _, side := range []string{"in", "out"} {
 			path := filepath.Join(destination, "audio", side+"-"+liveRecordingDigits(index)+".pcm")
 			info, err := os.Stat(path)

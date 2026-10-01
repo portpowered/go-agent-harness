@@ -49,9 +49,10 @@ func runIntegrationTests(m *testing.M) int {
 		return m.Run()
 	}
 	if os.Getenv(toolErrorPanicHelperEnv) != "" {
-		// The panic control's re-executed helper runs one in-process test and
-		// execs no process-boundary binary.
-		return m.Run()
+		// The panic control's re-executed helper runs in place of the tests
+		// and execs no process-boundary binary.
+		fmt.Fprintf(os.Stderr, "%v\n", runToolErrorPanicHelper())
+		return 1
 	}
 
 	// A shared directory (scripts/go-test-shards.sh --shared-dir-env) lets
@@ -69,7 +70,11 @@ func runIntegrationTests(m *testing.M) int {
 			}
 		}()
 	}
-	if err := buildIntegrationBinaries(dir); err != nil {
+	if err := buildIntegrationBinaries(context.Background(), dir); err != nil {
+		panic(err.Error())
+	}
+	// Tests resolve the binaries from this directory (integrationBinaryPath).
+	if err := os.Setenv(sharedBinaryDirEnv, dir); err != nil {
 		panic(err.Error())
 	}
 	return m.Run()
@@ -79,16 +84,13 @@ func runIntegrationTests(m *testing.M) int {
 // for this package. Missing binaries are built into it and kept for reuse.
 const sharedBinaryDirEnv = "AGENT_CLI_INTEGRATION_SHARED_DIR"
 
-func buildIntegrationBinaries(dir string) error {
-	agentBinaryPath = filepath.Join(dir, "agent")
-	audioDeviceServerBinaryPath = filepath.Join(dir, "audio-device-server")
-	mockToolAgentBinaryPath = filepath.Join(dir, "mock-tool-agent")
+func buildIntegrationBinaries(ctx context.Context, dir string) error {
 	// The binaries are independent link targets over a shared build cache;
 	// building them concurrently removes two serial links from package setup.
 	builds := []struct{ name, output, source string }{
-		{name: "agent", output: agentBinaryPath, source: "../../cmd/agent"},
-		{name: "audio-device-server", output: audioDeviceServerBinaryPath, source: "../../cmd/audio-device-server"},
-		{name: "mock-tool-agent", output: mockToolAgentBinaryPath, source: "./testcmd/mock-tool-agent"},
+		{name: "agent", output: filepath.Join(dir, "agent"), source: "../../cmd/agent"},
+		{name: "audio-device-server", output: filepath.Join(dir, "audio-device-server"), source: "../../cmd/audio-device-server"},
+		{name: "mock-tool-agent", output: filepath.Join(dir, "mock-tool-agent"), source: "./testcmd/mock-tool-agent"},
 	}
 	errs := make([]error, len(builds))
 	var wg sync.WaitGroup
@@ -102,7 +104,7 @@ func buildIntegrationBinaries(dir string) error {
 			// Link to a temporary name and rename, so a concurrent reader of
 			// the shared directory never executes a partially written binary.
 			partial := fmt.Sprintf("%s.partial-%d", build.output, os.Getpid())
-			cmd := exec.Command("go", "build", "-o", partial, build.source)
+			cmd := exec.CommandContext(ctx, "go", "build", "-o", partial, build.source)
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
 				errs[index] = fmt.Errorf("build %s binary: %w", build.name, err)
@@ -112,7 +114,7 @@ func buildIntegrationBinaries(dir string) error {
 				errs[index] = fmt.Errorf("install %s binary: %w", build.name, err)
 				return
 			}
-			warmBinary(build.output)
+			warmBinary(ctx, build.output)
 		}()
 	}
 	wg.Wait()
@@ -122,8 +124,8 @@ func buildIntegrationBinaries(dir string) error {
 // warmBinary executes a freshly linked binary once. The first exec of a new
 // binary on macOS waits for a code assessment that can take seconds on a
 // loaded machine; paying it here keeps it out of tests' readiness bounds.
-func warmBinary(path string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+func warmBinary(ctx context.Context, path string) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	// Only the exec matters; a non-zero help exit status is irrelevant.
 	var exitErr *exec.ExitError
@@ -132,11 +134,20 @@ func warmBinary(path string) {
 	}
 }
 
-var (
-	agentBinaryPath             string
-	audioDeviceServerBinaryPath string
-	mockToolAgentBinaryPath     string
-)
+// integrationBinaryPath returns the process-boundary binary built by TestMain
+// into the shared binary directory, or "" when TestMain built none (a test
+// listing or a re-executed helper).
+func integrationBinaryPath(name string) string {
+	dir := os.Getenv(sharedBinaryDirEnv)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, name)
+}
+
+func agentBinaryPath() string             { return integrationBinaryPath("agent") }
+func audioDeviceServerBinaryPath() string { return integrationBinaryPath("audio-device-server") }
+func mockToolAgentBinaryPath() string     { return integrationBinaryPath("mock-tool-agent") }
 
 type s2sV2DCLIResult struct {
 	exitCode int
@@ -155,14 +166,14 @@ func runAgentInProcess(t *testing.T, args ...string) s2sV2DCLIResult {
 
 func runAgentBinary(t *testing.T, args ...string) s2sV2DCLIResult {
 	t.Helper()
-	cmd := exec.Command(agentBinaryPath, args...)
+	cmd := exec.CommandContext(t.Context(), agentBinaryPath(), args...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	exitCode := 0
 	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
+		exitErr, ok := errors.AsType[*exec.ExitError](err)
 		if !ok {
 			t.Fatalf("run agent %v: %v", args, err)
 		}
@@ -192,11 +203,17 @@ const (
 )
 
 func TestS2SV2DMultiUtteranceHappyPathOneCommitPerUtterance(t *testing.T) {
-	clitest.Test(t, func(t *testing.T) { assertS2SV2DHappyPath(t, runAgentInProcess) })
+	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
+		assertS2SV2DHappyPath(t, runAgentInProcess)
+	})
 }
 
 func TestS2SV2DMisSegmentedFixtureFailsViaCLI(t *testing.T) {
-	clitest.Test(t, func(t *testing.T) { assertS2SV2DMisSegmented(t, runAgentInProcess) })
+	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
+		assertS2SV2DMisSegmented(t, runAgentInProcess)
+	})
 }
 
 // TestAgentBinaryProbeRunReportsExitStatusAcrossProcessBoundary is the

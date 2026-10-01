@@ -301,6 +301,7 @@ func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, 
 var _ Broker = (*StatefulBroker)(nil)
 var _ DirectCanceller = (*StatefulBroker)(nil)
 var _ BrowserEventWatcher = (*StatefulBroker)(nil)
+var _ InvocationWaiter = (*StatefulBroker)(nil)
 
 // Discover obtains candidates from the injected discovery seam and retains
 // their normalized identity for exact later selection.
@@ -379,7 +380,7 @@ func (b *StatefulBroker) ListTargets(ctx context.Context, selector BrowserSelect
 		return nil, ErrClosed
 	}
 	if selected := b.selectedForBrowser(selector.BrowserID); selected != nil {
-		if err := b.selectedStateError(selected, "list_targets", "selection_not_connected"); err != nil {
+		if err := b.selectedStateError(selected, "list_targets"); err != nil {
 			return nil, err
 		}
 	}
@@ -461,7 +462,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	b.wg.Add(2)
 	go b.runSession(newSession)
-	go b.runInvocationQueue(newSession)
+	go b.runInvocationQueue(context.WithoutCancel(ctx), newSession)
 	b.mu.Unlock()
 
 	if old != nil {
@@ -860,7 +861,7 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	if !selected.active {
 		return
 	}
-	rememberLifecycleFailureLocked(selected, code, reason)
+	rememberLifecycleFailureLocked(selected, code)
 	b.terminalizeSessionInvocationsLocked(selected, code, reason)
 	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)
@@ -937,7 +938,7 @@ func (b *StatefulBroker) retireRefLocked(ref ToolRef) {
 }
 
 func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, error) {
-	for attempt := 0; attempt < maxToolRefMintAttempts; attempt++ {
+	for range maxToolRefMintAttempts {
 		var (
 			ref ToolRef
 			err error
@@ -974,17 +975,4 @@ func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, 
 		}
 	}
 	return "", errors.New("webmcp: tool ref source did not produce a unique valid ref")
-}
-
-// toolRefUnusedLocked reports whether ref is valid and neither active nor
-// retired.
-func (b *StatefulBroker) toolRefUnusedLocked(ref ToolRef) bool {
-	if validateToolRefSyntax(ref) != nil {
-		return false
-	}
-	if _, active := b.refs[ref]; active {
-		return false
-	}
-	_, wasRetired := b.retired[ref]
-	return !wasRetired
 }

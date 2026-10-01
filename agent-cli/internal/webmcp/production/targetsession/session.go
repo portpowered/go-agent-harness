@@ -136,12 +136,9 @@ func (s *Session) Close() error {
 	return s.closeErr
 }
 
-func (s *Session) flushEvents(ctx context.Context) error { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
+func (s *Session) flushEvents(ctx context.Context) error {
 	if s == nil {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	ack := make(chan struct{})
 	select {

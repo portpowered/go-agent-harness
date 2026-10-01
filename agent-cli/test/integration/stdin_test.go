@@ -23,7 +23,7 @@ func stdinWAV(t *testing.T) []byte {
 }
 
 // pngHeaderBytes is the 8-byte PNG file signature recognized by http.DetectContentType as "image/png".
-var pngHeaderBytes = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+func pngHeaderBytes() []byte { return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'} }
 
 // TestAskNoArgsNoStdin validates that running ask with neither args nor piped
 // stdin returns an error instead of hanging or panicking.
@@ -31,7 +31,7 @@ func TestAskNoArgsNoStdin(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestAskStdinWhitespaceOnlyTreatedAsEmpty(t *testing.T) {
 	inf := &mockInferencer{response: fakeResponse}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -88,33 +88,10 @@ func TestAskStdinWhitespaceOnlyTreatedAsEmpty(t *testing.T) {
 //
 //	ffmpeg -i recording.wav -f wav - | agent ask "transcribe this"
 func TestAskWithStdinAudioBytes(t *testing.T) {
-	const fakeResponse = "Transcription here."
-
-	rec := &recordingInferencer{response: fakeResponse}
-	exec := &mockToolExecutor{}
-
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
-	if err != nil {
-		t.Fatalf("failed to initialize mock CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetIn(bytes.NewReader(stdinWAV(t)))
-	rootCmd.SetArgs([]string{"ask", "transcribe this"})
-
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute ask: %v", err)
-	}
-
+	rec := runAskWithStdinBytes(t, stdinWAV(t), "transcribe this", "Transcription here.")
 	// WAV bytes must be received as an AudioPart (audio/wave), not as text.
 	if !rec.hasUserMessageWithAudioPart("audio/wave") {
 		t.Error("inference request should contain an AudioPart (audio/wave) from WAV stdin")
-	}
-	if !rec.containsSystemPrompt("transcribe this") {
-		t.Error("inference request should contain the arg prompt \"transcribe this\"")
 	}
 }
 
@@ -123,34 +100,35 @@ func TestAskWithStdinAudioBytes(t *testing.T) {
 //
 //	ffmpeg -i photo.png -f image2 - | agent ask "describe this image"
 func TestAskWithStdinImageBytes(t *testing.T) {
-	const fakeResponse = "It looks like a landscape."
-
-	rec := &recordingInferencer{response: fakeResponse}
-	exec := &mockToolExecutor{}
-
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
-	if err != nil {
-		t.Fatalf("failed to initialize mock CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetIn(bytes.NewReader(pngHeaderBytes))
-	rootCmd.SetArgs([]string{"ask", "describe this image"})
-
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("execute ask: %v", err)
-	}
-
+	rec := runAskWithStdinBytes(t, pngHeaderBytes(), "describe this image", "It looks like a landscape.")
 	// PNG bytes must be received as an ImagePart (image/png), not as text.
 	if !rec.hasUserMessageWithImagePart("image/png") {
 		t.Error("inference request should contain an ImagePart (image/png) from PNG stdin")
 	}
-	if !rec.containsSystemPrompt("describe this image") {
-		t.Error("inference request should contain the arg prompt \"describe this image\"")
+}
+
+// runAskWithStdinBytes runs `ask prompt` with stdin piped from data and
+// requires the argument prompt to reach the inference request.
+func runAskWithStdinBytes(t *testing.T, data []byte, prompt, response string) *recordingInferencer {
+	t.Helper()
+	rec := &recordingInferencer{response: response}
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, rec)
+	if err != nil {
+		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
+	testWriter := NewTestWriter()
+	rootCmd := agentCLI.Generate()
+	rootCmd.SetOut(testWriter.Stdout())
+	rootCmd.SetErr(testWriter.Stderr())
+	rootCmd.SetIn(bytes.NewReader(data))
+	rootCmd.SetArgs([]string{"ask", prompt})
+	if err := rootCmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("execute ask: %v", err)
+	}
+	if !rec.containsSystemPrompt(prompt) {
+		t.Errorf("inference request should contain the arg prompt %q", prompt)
+	}
+	return rec
 }
 
 // TestAskWithStdinUnknownBinaryBytes validates that unrecognized binary data piped via stdin
@@ -165,7 +143,7 @@ func TestAskWithStdinUnknownBinaryBytes(t *testing.T) {
 	rec := &recordingInferencer{response: fakeResponse}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}

@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -20,8 +20,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +33,6 @@ import (
 )
 
 const (
-	gateI2OptIn       = "WEBMCP_GATE_I2"
 	gateI2ArtifactEnv = "WEBMCP_GATE_I2_ARTIFACT_DIR"
 	gateI2KeyFileEnv  = "OPENAI_API_KEY_FILE"
 	gateI2Model       = "gpt-realtime-2.1-mini"
@@ -49,15 +48,7 @@ var errGateI2MissingAPIKey = errors.New("OpenAI API key is not configured")
 // audio input; browser IDs, tool refs, and encoded page arguments are not
 // passed through a prompt, flag, or fixture-side shortcut.
 func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
-	// Keep this guard first. Normal tests must not inspect credentials, read the
-	// Chrome lock, make network requests, create a fixture, or start Chrome.
-	if os.Getenv(gateI2OptIn) != "1" {
-		t.Skipf("set %s=1 to run the credentialed OpenAI Realtime Gate I2 measurement", gateI2OptIn)
-	}
-	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
-		t.Skipf("Gate I2 uses the qualified %s Chrome lock; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed Gate I2 measurement")
+	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed Gate I2 measurement")
 
 	run := prepareGateI2Run(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
@@ -143,7 +134,7 @@ func prepareGateI2Run(t *testing.T) *gateI2Run {
 	}
 	run.inputPath = gateI2SpokenInput(t.Context(), t, run.artifactRoot, run.request)
 	run.systemPromptPath = filepath.Join(run.artifactRoot, "system-prompt.txt")
-	if err := os.WriteFile(run.systemPromptPath, []byte(gateI2SystemPrompt), 0o600); err != nil {
+	if err := os.WriteFile(run.systemPromptPath, []byte(gateI2SystemPrompt()), 0o600); err != nil {
 		t.Fatalf("write Gate I2 system prompt: %v", err)
 	}
 	run.capturePath = filepath.Join(run.artifactRoot, "provider.json")
@@ -176,7 +167,7 @@ func (r *gateI2Run) startChrome(t *testing.T, ctx context.Context) {
 	}
 	r.browser = ownLiveBrowser(t, browser, "Gate I2 Chrome cleanup")
 	r.baseURL = browserHTTPURL(browser.endpoint())
-	if r.version, err = waitForDevToolsVersion(ctx, r.baseURL, lockedChromeVersion); err != nil {
+	if r.version, err = waitForDevToolsVersion(ctx, r.baseURL); err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}
 	rawTarget, err := waitForFixturePageTarget(ctx, r.baseURL, r.fixtureURL)
@@ -234,7 +225,7 @@ func (r *gateI2Run) runSession(t *testing.T, ctx context.Context, binaryPath, ap
 	}
 	runErr := err
 	if runErr == nil && (sessionResult.Err != nil || sessionResult.ExitCode != 0) {
-		runErr = fmt.Errorf("agent session exit=%d err=%v", sessionResult.ExitCode, sessionResult.Err)
+		runErr = fmt.Errorf("agent session exit=%d err=%w", sessionResult.ExitCode, sessionResult.Err)
 	}
 	if runErr != nil {
 		t.Logf("Gate I2 session returned an error (capture validation remains authoritative): %v", runErr)
@@ -332,15 +323,18 @@ func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evid
 	return evidence
 }
 
-var gateI2SystemPrompt = strings.Join([]string{
-	"You are measuring a real WebMCP page through the browser capability. The user's spoken request is authoritative. Follow this exact protocol:",
-	"- First call webmcp_list_tabs and find the one eligible page exposed by the browser.",
-	"- Call webmcp_select_tab with the browser_id and target_id returned by webmcp_list_tabs.",
-	"- Call webmcp_list_tools and find webmcp_lane_d_complete.",
-	"- Call webmcp_invoke using the exact tool_ref returned by webmcp_list_tools. The input_json field must be one syntactically valid JSON object encoded as a JSON string, not prose or a flattened argument. Put the spoken message exactly in that JSON object. The reason field must be a concise user-facing explanation of the requested action.",
-	"- Do not invent or rewrite a tool_ref, silently coerce malformed JSON, retry an invocation, or claim that the page changed before the terminal tool result.",
-	"- After the terminal tool result, speak one concise confirmation grounded in its returned message and the final page state. Do not put tool refs or encoded arguments in the spoken request or final confirmation.",
-}, "\n")
+// gateI2SystemPrompt returns the realtime protocol prompt for the Gate I2 run.
+func gateI2SystemPrompt() string {
+	return strings.Join([]string{
+		"You are measuring a real WebMCP page through the browser capability. The user's spoken request is authoritative. Follow this exact protocol:",
+		"- First call webmcp_list_tabs and find the one eligible page exposed by the browser.",
+		"- Call webmcp_select_tab with the browser_id and target_id returned by webmcp_list_tabs.",
+		"- Call webmcp_list_tools and find webmcp_lane_d_complete.",
+		"- Call webmcp_invoke using the exact tool_ref returned by webmcp_list_tools. The input_json field must be one syntactically valid JSON object encoded as a JSON string, not prose or a flattened argument. Put the spoken message exactly in that JSON object. The reason field must be a concise user-facing explanation of the requested action.",
+		"- Do not invent or rewrite a tool_ref, silently coerce malformed JSON, retry an invocation, or claim that the page changed before the terminal tool result.",
+		"- After the terminal tool result, speak one concise confirmation grounded in its returned message and the final page state. Do not put tool refs or encoded arguments in the spoken request or final confirmation.",
+	}, "\n")
+}
 
 type gateI2Pins struct {
 	Channel             string   `json:"channel"`
@@ -682,7 +676,7 @@ func gateI2PublicIDs(endpoint, rawTargetID string) (string, string, error) {
 func writeGateI2Config(configDir, cdpURL, origin, browserID, targetID string) error {
 	var builder strings.Builder
 	builder.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		fmt.Fprintf(&builder, "    - id: %q\n      enabled: false\n", id)
 	}
 	builder.WriteString("browser:\n")
@@ -737,7 +731,7 @@ func writeLiveBrowserConfig(configDir string, browser liveBrowserConfig) error {
 	return os.WriteFile(filepath.Join(configDir, liveConfigFileName), []byte(contents), 0o600)
 }
 
-func loadGateI2APIKey() (string, string, error) {
+func loadGateI2APIKey(ctx context.Context) (string, string, error) {
 	path := strings.TrimSpace(os.Getenv(gateI2KeyFileEnv))
 	if path != "" {
 		file, err := os.Open(path)
@@ -747,7 +741,7 @@ func loadGateI2APIKey() (string, string, error) {
 		defer discardSecondaryError(file.Close)
 		// This is the documented operator protocol:
 		// Run tr with CR/LF deletion, as in: OPENAI_API_KEY="$(tr -d '\r\n' < "$OPENAI_API_KEY_FILE")"
-		command := exec.Command("tr", "-d", "\\r\\n")
+		command := exec.CommandContext(ctx, "tr", "-d", "\\r\\n")
 		command.Stdin = file
 		var output bytes.Buffer
 		command.Stdout = &output
@@ -783,7 +777,7 @@ func gateI2SpokenInput(parent context.Context, t *testing.T, artifactRoot, reque
 	t.Helper()
 	for _, command := range []string{"say", "afconvert"} {
 		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("Gate I2 spoken input requires %s", command)
+			t.Fatalf("Gate I2 spoken input requires %s: %v", command, err)
 		}
 	}
 	aiffPath := filepath.Join(artifactRoot, "request.aiff")
@@ -808,8 +802,8 @@ func gateI2ArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		t.Fatalf("create Gate I2 artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "webmcp-gate-i2-")
-	if err != nil {
+	root := filepath.Join(parent, "webmcp-gate-i2-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create Gate I2 artifact directory: %v", err)
 	}
 	return root
@@ -898,13 +892,13 @@ func gateI2ErrorString(err error) string {
 	return err.Error()
 }
 
-// requireLiveOpenAIKey loads the operator's OpenAI key, skipping the proof
-// with skipMessage when none is configured.
-func requireLiveOpenAIKey(t *testing.T, skipMessage string) (string, string) {
+// requireLiveOpenAIKey loads the operator's OpenAI key, failing the proof
+// with missingMessage when none is configured.
+func requireLiveOpenAIKey(t *testing.T, missingMessage string) (string, string) {
 	t.Helper()
-	apiKey, keySource, err := loadGateI2APIKey()
+	apiKey, keySource, err := loadGateI2APIKey(t.Context())
 	if errors.Is(err, errGateI2MissingAPIKey) {
-		t.Skip(skipMessage)
+		t.Fatal(missingMessage)
 	}
 	if err != nil {
 		t.Fatalf("load OpenAI API key: %v", err)

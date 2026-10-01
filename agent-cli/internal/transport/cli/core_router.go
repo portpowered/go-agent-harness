@@ -98,7 +98,7 @@ func NewRouter(
 	}
 	return &Router{
 		Flags:                     flags,
-		pathResolver:              newPathResolver(),
+		pathResolver:              newPathResolver(flags),
 		deviceService:             deviceService,
 		RootCommand:               rootCommand,
 		AskCommand:                askCommand,
@@ -139,7 +139,7 @@ func (r *Router) resolveConfigDir() error {
 	}
 	resolver := r.pathResolver
 	if resolver == nil {
-		resolver = newPathResolver()
+		resolver = newPathResolver(r.Flags)
 	}
 	resolved, err := resolver.Resolve(value)
 	if err != nil {

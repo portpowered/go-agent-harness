@@ -35,7 +35,7 @@ func TestNewline_StreamedResponsePreservesNewlines(t *testing.T) {
 	model = runInit(model)
 
 	model = typeInput(model, "show lines")
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	history := model.ViewHistory()
 
@@ -92,7 +92,7 @@ func TestNewline_MarkdownCodeBlockPreservesNewlines(t *testing.T) {
 	model = runInit(model)
 
 	model = typeInput(model, "show code")
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	history := model.ViewHistory()
 
@@ -146,7 +146,7 @@ func TestNewline_ChunkedStreamPreservesNewlines(t *testing.T) {
 	model = runInit(model)
 
 	model = typeInput(model, "stream lines")
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	history := model.ViewHistory()
 

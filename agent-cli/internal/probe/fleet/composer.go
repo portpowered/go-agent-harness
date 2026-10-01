@@ -3,6 +3,7 @@ package fleet
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -78,7 +79,7 @@ func (Composer) Compose(input ComposeInput) (Manifest, error) {
 	}
 	for _, scenario := range scenarios {
 		for _, transport := range transports {
-			for repeatIndex := 0; repeatIndex < input.RepeatCount; repeatIndex++ {
+			for repeatIndex := range input.RepeatCount {
 				manifest.Entries = append(manifest.Entries, Entry{
 					ID:           EntryID(scenario.ID, transport, repeatIndex),
 					ScenarioID:   scenario.ID,
@@ -165,7 +166,7 @@ func readScenarioRef(path string) (ScenarioRef, error) {
 		return ScenarioRef{}, fmt.Errorf("load scenario file %q: %w", path, err)
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = fmt.Errorf("contains more than one JSON value")
 		}

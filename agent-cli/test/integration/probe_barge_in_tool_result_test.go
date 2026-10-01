@@ -24,36 +24,27 @@ import (
 // v3bFixtureDir holds the recorded barge-in-during-tool-call session fixtures
 // for the s2s v3b vertical. All evidence flows through the real CLI probe run
 // command in replay mode; no internal loop functions are called directly.
-var v3bFixtureDir = "testdata"
+const v3bFixtureDir = "testdata"
 
 func TestV3BBargeInDuringToolCallDeliversToolResult(t *testing.T) {
-	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-delivered.session.json")
-	scenarioPath := writeV3BScenario(t, "v3b-delivered", fixture, true)
-
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
-	if err != nil {
-		t.Fatalf("initialize CLI: %v", err)
-	}
-	writer := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(writer.Stdout())
-	rootCmd.SetErr(writer.Stderr())
-	rootCmd.SetArgs([]string{"probe", "run", scenarioPath, "--replay", fixture, "--json"})
-	if execErr := rootCmd.ExecuteContext(context.Background()); execErr != nil {
-		t.Fatalf("delivered-result scenario must pass via CLI: %v\nstderr=%s", execErr, writer.StderrString())
-	}
-	result := decodeSingleV3BResult(t, writer.StdoutString())
-	if result["pass"] != true {
-		t.Fatalf("scenario must pass: %v", result)
-	}
-	assertExpectationKindsPass(t, result, "tool-result-delivered", "no-orphaned-tool-result", "terminal-reason")
+	runPassingV3BScenario(t, "v3b-delivered", "s2s-v3b-barge-in-tool-result-delivered.session.json",
+		"delivered-result scenario must pass via CLI", "tool-result-delivered", "no-orphaned-tool-result", "terminal-reason")
 }
 
 func TestV3BBargeInDuringToolCallExplicitDiscard(t *testing.T) {
-	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-discarded.session.json")
-	scenarioPath := writeV3BScenario(t, "v3b-discarded", fixture, true)
+	runPassingV3BScenario(t, "v3b-discarded", "s2s-v3b-barge-in-tool-result-discarded.session.json",
+		"discard scenario must exit cleanly", "tool-result-discarded", "no-orphaned-tool-result", "terminal-reason")
+}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+// runPassingV3BScenario replays one recorded v3b fixture through the real CLI
+// probe run command and requires the scenario and each named expectation kind
+// to pass.
+func runPassingV3BScenario(t *testing.T, id, fixtureName, execFailure string, expectationKinds ...string) {
+	t.Helper()
+	fixture := filepath.Join(v3bFixtureDir, fixtureName)
+	scenarioPath := writeV3BScenario(t, id, true)
+
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -63,20 +54,20 @@ func TestV3BBargeInDuringToolCallExplicitDiscard(t *testing.T) {
 	rootCmd.SetErr(writer.Stderr())
 	rootCmd.SetArgs([]string{"probe", "run", scenarioPath, "--replay", fixture, "--json"})
 	if execErr := rootCmd.ExecuteContext(context.Background()); execErr != nil {
-		t.Fatalf("discard scenario must exit cleanly: %v\nstderr=%s", execErr, writer.StderrString())
+		t.Fatalf("%s: %v\nstderr=%s", execFailure, execErr, writer.StderrString())
 	}
 	result := decodeSingleV3BResult(t, writer.StdoutString())
 	if result["pass"] != true {
 		t.Fatalf("scenario must pass: %v", result)
 	}
-	assertExpectationKindsPass(t, result, "tool-result-discarded", "no-orphaned-tool-result", "terminal-reason")
+	assertExpectationKindsPass(t, result, expectationKinds...)
 }
 
 func TestV3BNegativeControlOrphanedToolResultFails(t *testing.T) {
 	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-orphaned.session.json")
-	scenarioPath := writeV3BScenario(t, "v3b-orphaned", fixture, false)
+	scenarioPath := writeV3BScenario(t, "v3b-orphaned", false)
 
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -120,7 +111,7 @@ func TestV3BWrongFunctionCallOutputSubtypeFails(t *testing.T) {
 		item := mustAs[map[string]any](t, payload["item"])
 		item["type"] = rtItemMessage
 	})
-	scenarioPath := writeV3BScenario(t, "v3b-delivered-wrong-subtype", fixture, true)
+	scenarioPath := writeV3BScenario(t, "v3b-delivered-wrong-subtype", true)
 
 	result, execErr := runV3BScenario(t, scenarioPath, fixture)
 	if execErr == nil {
@@ -135,7 +126,7 @@ func TestV3BWrongDirectionDiscardFails(t *testing.T) {
 	fixture := writeMutatedV3BFixture(t, source, "tool.result.discarded", func(record map[string]any) {
 		record["direction"] = "server_to_client"
 	})
-	scenarioPath := writeV3BScenario(t, "v3b-discarded-wrong-direction", fixture, true)
+	scenarioPath := writeV3BScenario(t, "v3b-discarded-wrong-direction", true)
 
 	result, execErr := runV3BScenario(t, scenarioPath, fixture)
 	if execErr == nil {
@@ -147,7 +138,7 @@ func TestV3BWrongDirectionDiscardFails(t *testing.T) {
 
 func runV3BScenario(t *testing.T, scenarioPath, fixture string) (map[string]any, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -212,7 +203,7 @@ func writeMutatedV3BFixture(t *testing.T, source, recordType string, mutate func
 
 // writeV3BScenario writes an on-disk scenario JSON selecting the new
 // measurable expectations, exercising the CLI scenario-file loading path.
-func writeV3BScenario(t *testing.T, id, fixture string, expectNoOrphan bool) string {
+func writeV3BScenario(t *testing.T, id string, expectNoOrphan bool) string {
 	t.Helper()
 	expectations := `[
 		{"type": "tool_result_delivered", "tool_call_id": "call_v3b_weather"},
@@ -349,6 +340,7 @@ func TestAgentBinaryPostDoneBargeInStopsRemoteDevicePlayback(t *testing.T) {
 // device the audio-device-server serves.
 func TestPostDoneBargeInStopsDevicePlayback(t *testing.T) {
 	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
 		provider := newPostDoneBargeInProvider()
 		listener := clitest.NewPipeListener()
 		clitest.Serve(t, listener, http.HandlerFunc(provider.handle))
@@ -367,6 +359,7 @@ func TestPostDoneBargeInStopsDevicePlayback(t *testing.T) {
 // interrupt can stop playback and truncate the item.
 func TestPostDoneBargeInClientTurnsStopsDevicePlayback(t *testing.T) {
 	clitest.Test(t, func(t *testing.T) {
+		t.Helper()
 		provider := newPostDoneBargeInProvider()
 		provider.serverVAD = false
 		listener := clitest.NewPipeListener()
@@ -423,7 +416,7 @@ func postDoneBargeInArgs() []string {
 
 func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudioDevice, provider *postDoneBargeInProvider, agent remoteToolAudioAgent) {
 	t.Helper()
-	run := &postDoneBargeInRun{t: t, ctx: ctx, device: device, provider: provider, agent: agent, clock: time.NewTicker(postDoneBargeInCallbackInterval)}
+	run := &postDoneBargeInRun{t: t, device: device, provider: provider, agent: agent, clock: time.NewTicker(postDoneBargeInCallbackInterval)}
 	defer run.clock.Stop()
 	select {
 	case <-provider.responseDone:
@@ -433,19 +426,19 @@ func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudi
 		run.fail("provider response did not complete: %v", ctx.Err())
 	}
 	// The response is done; play part of its queued audio, then speak.
-	for _, heard := run.rendered(); heard < postDoneBargeInHeard; _, heard = run.rendered() {
-		run.advance(postDoneBargeInCallbacksPerCheck)
+	for _, heard := run.rendered(ctx); heard < postDoneBargeInHeard; _, heard = run.rendered(ctx) {
+		run.advance(ctx, postDoneBargeInCallbacksPerCheck)
 	}
 	if err := device.InjectCapture(ctx, postDoneBargeInSpeechPCM()); err != nil {
 		run.fail("inject near-end speech: %v", err)
 	}
-	run.awaitTruncation()
+	run.awaitTruncation(ctx)
 
 	// Playback stopped: further callbacks render nothing more of the response.
-	run.advance(postDoneBargeInSettleCallbacks)
-	stopped, heard := run.rendered()
-	run.advance(postDoneBargeInSettleCallbacks)
-	after, heardAfter := run.rendered()
+	run.advance(ctx, postDoneBargeInSettleCallbacks)
+	stopped, heard := run.rendered(ctx)
+	run.advance(ctx, postDoneBargeInSettleCallbacks)
+	after, heardAfter := run.rendered(ctx)
 	if heardAfter != heard || after.Playback.QueuedSamples != 0 {
 		run.fail("playback continued after the barge-in: rendered %d then %d samples, queued=%d", heard, heardAfter, after.Playback.QueuedSamples)
 	}
@@ -464,7 +457,6 @@ func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudi
 // postDoneBargeInRun drives one scenario's device clock.
 type postDoneBargeInRun struct {
 	t        *testing.T
-	ctx      context.Context
 	device   remoteToolAudioDevice
 	provider *postDoneBargeInProvider
 	agent    remoteToolAudioAgent
@@ -477,24 +469,24 @@ func (r *postDoneBargeInRun) fail(format string, args ...any) {
 }
 
 // advance renders callbacks on the device clock, one per tick.
-func (r *postDoneBargeInRun) advance(callbacks int) {
+func (r *postDoneBargeInRun) advance(ctx context.Context, callbacks int) {
 	r.t.Helper()
 	for range callbacks {
 		select {
 		case <-r.clock.C:
-		case <-r.ctx.Done():
-			r.fail("device clock cancelled: %v", r.ctx.Err())
+		case <-ctx.Done():
+			r.fail("device clock cancelled: %v", ctx.Err())
 		}
-		if err := r.device.Advance(r.ctx, 1); err != nil {
+		if err := r.device.Advance(ctx, 1); err != nil {
 			r.fail("advance device clock: %v", err)
 		}
 	}
 }
 
 // rendered reads the device evidence and how much response audio it rendered.
-func (r *postDoneBargeInRun) rendered() (devicegw.DeviceServerSnapshot, int) {
+func (r *postDoneBargeInRun) rendered(ctx context.Context) (devicegw.DeviceServerSnapshot, int) {
 	r.t.Helper()
-	snapshot, err := r.device.Snapshot(r.ctx)
+	snapshot, err := r.device.Snapshot(ctx)
 	if err != nil {
 		r.fail("read device evidence: %v", err)
 	}
@@ -503,12 +495,12 @@ func (r *postDoneBargeInRun) rendered() (devicegw.DeviceServerSnapshot, int) {
 
 // awaitTruncation keeps the device clock running until the provider sees
 // the interrupted item truncated.
-func (r *postDoneBargeInRun) awaitTruncation() {
+func (r *postDoneBargeInRun) awaitTruncation(ctx context.Context) {
 	r.t.Helper()
 	interrupt := time.NewTimer(postDoneBargeInInterruptWait)
 	defer interrupt.Stop()
 	for {
-		r.advance(1)
+		r.advance(ctx, 1)
 		select {
 		case <-r.provider.truncated:
 			return

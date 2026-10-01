@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -20,7 +20,7 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
-	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +31,6 @@ import (
 )
 
 const (
-	cubecadeLiveVoiceEnv          = "WEBMCP_CUBECADE_LIVE_VOICE"
 	cubecadeLiveVoiceArtifactEnv  = "WEBMCP_CUBECADE_ARTIFACT_DIR"
 	cubecadeLiveVoiceQuestion     = "What do you see on the page?"
 	cubecadeLiveVoiceMaxDuration  = 30 * time.Second
@@ -46,13 +45,7 @@ const (
 // question, calls show_page once, gets one image projection, and must answer
 // with at least two facts that are visible in the returned page pixels.
 func TestPinnedChromeCubecadeSpokenPageSight(t *testing.T) {
-	if os.Getenv(cubecadeLiveVoiceEnv) != "1" {
-		t.Skipf("set %s=1 to run the one billed spoken page-sight proof", cubecadeLiveVoiceEnv)
-	}
-	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
-		t.Skipf("spoken Cubecade proof uses the qualified %s Chrome lock; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed spoken page-sight proof")
+	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed spoken page-sight proof")
 
 	artifactRoot := cubecadeLiveVoiceArtifactRoot(t)
 	ctx, cancel := context.WithTimeout(context.Background(), cubecadeLiveVoiceTestTimeout)
@@ -132,7 +125,7 @@ func startCubecadeLiveVoiceChrome(t *testing.T, ctx context.Context, workDir str
 	}
 	sight.browser = ownLiveBrowser(t, browser, "spoken sight Chrome cleanup")
 	sight.baseURL = browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, sight.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, sight.baseURL)
 	if err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}
@@ -286,8 +279,8 @@ func cubecadeNestedArtifactRoot(t *testing.T, prefix, label string) string {
 	} else if err := os.MkdirAll(parent, cubecadeLiveVoiceArtifactMode); err != nil {
 		t.Fatalf("create %s artifact parent: %v", label, err)
 	}
-	root, err := os.MkdirTemp(parent, prefix)
-	if err != nil {
+	root := filepath.Join(parent, prefix+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create %s artifact directory: %v", label, err)
 	}
 	return root

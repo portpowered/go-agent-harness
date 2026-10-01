@@ -181,15 +181,14 @@ func TestSelectTargetActivatesOnlyWhenRequestedAndEmitsSelection(t *testing.T) {
 	})
 	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
 
-	selected, err := service.SelectTarget(context.Background(), browser, targetID)
-	if err != nil {
+	if _, err := service.SelectTarget(context.Background(), browser, targetID); err != nil {
 		t.Fatalf("non-activating selection error = %v", err)
 	}
 	if activator.calls != 0 {
 		t.Fatalf("activation calls for default selection = %d, want 0", activator.calls)
 	}
 
-	selected, err = service.SelectTarget(context.Background(), browser, targetID, SelectionOptions{Activate: true, Reason: "operator_request"})
+	selected, err := service.SelectTarget(context.Background(), browser, targetID, SelectionOptions{Activate: true, Reason: "operator_request"})
 	if err != nil {
 		t.Fatalf("activating selection error = %v", err)
 	}
@@ -276,17 +275,17 @@ func TestSelectTargetUsesDetachOnlyExternalHandle(t *testing.T) {
 	if got := detachers[firstID].detachCalls; got != 1 {
 		t.Fatalf("replacement detach calls = %d, want 1", got)
 	}
-	if err := second.Handle.Close(); err != nil {
+	if err := second.Handle.Close(t.Context()); err != nil {
 		t.Fatalf("close selected handle: %v", err)
 	}
-	if err := second.Handle.Close(); err != nil {
+	if err := second.Handle.Close(t.Context()); err != nil {
 		t.Fatalf("close selected handle twice: %v", err)
 	}
 	detacher := detachers[secondID]
 	if detacher.detachCalls != 1 || detacher.closeTarget != 0 || detacher.closeBrowser != 0 || detacher.terminate != 0 || detacher.deleteProfile != 0 {
 		t.Fatalf("lifecycle operations = %#v, want one detach and no close/terminate/delete", *detacher)
 	}
-	if err := service.ReleaseSelection(); err != nil {
+	if err := service.ReleaseSelection(t.Context()); err != nil {
 		t.Fatalf("release service selection: %v", err)
 	}
 	if _, ok := service.Selected(); ok {

@@ -160,7 +160,7 @@ func testCustomerSimulationInputAndIntervalFallbacks(t *testing.T, result Duplex
 
 func testCustomerSimulationFamilyEvidenceFallbacks(t *testing.T, product []TranscriptEvent) {
 	t.Helper()
-	mixed := customerSimulationMixedModalEvidence(NewFamilyCScenario(), PairedTranscripts{Product: product}, DuplexRunResult{})
+	mixed := customerSimulationMixedModalEvidence(NewFamilyCScenario(), PairedTranscripts{Product: product})
 	if mixed.PriorActionCompletedAt != 5*time.Second || mixed.Delivery != MixedModalDeliveryUnsupported || mixed.Supported {
 		t.Fatalf("mixed-modal fallback evidence = %+v, want explicit unsupported gap", mixed)
 	}

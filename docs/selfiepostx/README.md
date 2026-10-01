@@ -309,6 +309,10 @@ $env:WEBMCP_SITE_ADAPTER_INTEGRATION='1'
 go test ./agent-cli/internal/webmcp/chrome -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v
 ```
 
+(Historical record. The stock-Chrome journey is now selected by the `e2e`
+build tag instead of `WEBMCP_SITE_ADAPTER_INTEGRATION=1`:
+`go test -tags e2e ./agent-cli/internal/webmcp/chrome -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v`.)
+
 The fixture covers text publishing, missing confirmation, mismatched text,
 duplicate tokens, video transfer, incomplete upload, wrong account, reordered
 chunks, wrong hash, changed media/account, cancellation, and conservative video

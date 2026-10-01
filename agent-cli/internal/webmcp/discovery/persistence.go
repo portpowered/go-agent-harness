@@ -186,7 +186,7 @@ func newSelectionStateError(reason string, cause error) *DiscoveryError {
 		Details: map[string]any{
 			"phase":       "selection_state",
 			"protocol":    "selection_state.v1",
-			"reason_code": boundedLabel(reason, 64),
+			"reason_code": boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }
@@ -198,17 +198,14 @@ func newSelectionPersistenceError(phase, reason string, cause error) *DiscoveryE
 		Retryable: phase == "save",
 		Cause:     cause,
 		Details: map[string]any{
-			"phase":       boundedLabel("selection_"+phase, 32),
+			"phase":       boundedLabel("selection_"+phase, maxPhaseLabelBytes),
 			"protocol":    "selection_state.v1",
-			"reason_code": boundedLabel(reason, 64),
+			"reason_code": boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }
 
 func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	return ctx.Err()
 }
 
@@ -251,9 +248,6 @@ func (s *Service) LoadSelection(ctx context.Context) (PersistedSelection, error)
 }
 
 func (s *Service) loadPersistedSelection(ctx context.Context) (PersistedSelection, bool, *DiscoveryError) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return PersistedSelection{}, false, newSelectionPersistenceError("load", "context_canceled", err)
 	}
@@ -343,9 +337,6 @@ func (options ReconnectOptions) hasExplicitSelection() bool {
 // state without ever substituting a different target. Explicit IDs take
 // precedence over persisted state; automatic modes are deliberately opt-in.
 func (s *Service) Reconnect(ctx context.Context, inputs ConnectionInputs, options ...ReconnectOptions) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	reconnectOptions := firstReconnectOptions(options)
 	if err := validateReconnectOptions(reconnectOptions); err != nil {
 		return Selection{}, err
@@ -773,7 +764,7 @@ func (s *Service) reconnectPersisted(ctx context.Context, inputs ConnectionInput
 		return Selection{}, selectionFailure
 	}
 	if previousHandle != nil && previousHandle != selected.Handle {
-		discardRelease(previousHandle)
+		discardTargetHandle(ctx, previousHandle)
 	}
 	return selected, nil
 }
@@ -813,7 +804,7 @@ func (s *Service) reconnectUniqueTarget(ctx context.Context, browser BrowserCand
 		return Selection{}, selectionFailure
 	}
 	if previousHandle != nil && previousHandle != selected.Handle {
-		discardRelease(previousHandle)
+		discardTargetHandle(ctx, previousHandle)
 	}
 	return selected, nil
 }
@@ -862,19 +853,11 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 		}
 		handle = NewDetachOnlyTargetHandle(detacher)
 	}
-	if options.Activate && s.activator != nil {
-		if activateErr := s.activator.Activate(ctx, browser, target); activateErr != nil {
-			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
-			if failure.Code == CodeBrowserDisconnected {
-				if handle != nil {
-					discardRelease(handle)
-				}
-				s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
-				return Selection{}, nil, failure
-			}
-			// Foreground activation is ancillary. Keep the exact reconnect
-			// selection when the browser remains reachable and attachable.
+	if failure := s.activateSelectionLocked(ctx, options, browser, target); failure != nil {
+		if handle != nil {
+			discardTargetHandle(ctx, handle)
 		}
+		return Selection{}, nil, failure
 	}
 	if selectedAt.IsZero() {
 		if s.clock != nil {
@@ -901,7 +884,7 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 	}
 	if failure := s.persistSelectionLocked(ctx, browser, target, selected.SelectedAt); failure != nil {
 		if handle != nil {
-			discardRelease(handle)
+			discardTargetHandle(ctx, handle)
 		}
 		return Selection{}, nil, failure
 	}

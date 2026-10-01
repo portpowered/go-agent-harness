@@ -125,7 +125,7 @@ func (c *SessionCommand) runRuntimeLiveSessionWithAnnouncements(ctx context.Cont
 		LiveService:        c.liveService,
 		ReplayInspection:   replayInspection,
 		BuildRequest:       c.runtimeLiveRequest,
-		WriteAnnouncements: writeRuntimeLiveAnnouncements,
+		WriteAnnouncements: c.liveAnnouncements,
 		AnnouncementOutput: announcementOut,
 		DeviceService:      c.deviceService,
 		FileDeviceService:  livehost.FileDeviceService{Service: c.fileDeviceService.Service, Scheduler: c.fileDeviceService.Scheduler},
@@ -179,7 +179,7 @@ func (c *SessionCommand) runtimeLiveCapabilities(ctx context.Context, cfg *confi
 	if c.liveCapabilities == nil || cfg == nil {
 		return nil, nil
 	}
-	capabilities, err := c.liveCapabilities(cfg)
+	capabilities, err := c.liveCapabilities(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -213,12 +213,29 @@ func newLiveEventRenderer(replay bool) livehost.EventRenderer {
 	return output.NewLiveEventRenderer(replay).Render
 }
 
+// liveAnnouncements binds the startup announcements to this command's
+// injected host directories. An explicit request workdir needs no host
+// working directory.
+func (c *SessionCommand) liveAnnouncements(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, replayInspection *runtimeReplay.CaptureInspection) error {
+	var globalFlags *flags.GlobalFlags
+	if c != nil {
+		globalFlags = c.globalFlags
+	}
+	host, err := filesystemHost(globalFlags)
+	if request.WorkDir != "" {
+		host.WorkDir = request.WorkDir
+	} else if err != nil {
+		return fmt.Errorf("resolve live filesystem scope: %w", err)
+	}
+	return writeRuntimeLiveAnnouncements(out, host, request, liveRequest, replayInspection)
+}
+
 // writeRuntimeLiveAnnouncements preserves the CLI's operator-facing startup
 // contract while keeping filesystem policy and tool names out of the neutral
 // runtime request. The reusable service receives only the already-composed
 // capability binding; the host prints its immutable scope before provider
 // output can start.
-func writeRuntimeLiveAnnouncements(out io.Writer, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, replayInspection *runtimeReplay.CaptureInspection) error {
+func writeRuntimeLiveAnnouncements(out io.Writer, host cliTools.FilesystemHost, request serviceSession.Request, liveRequest runtimeSession.LiveRequest, replayInspection *runtimeReplay.CaptureInspection) error {
 	if out == nil {
 		return errors.New("live output writer is nil")
 	}
@@ -228,7 +245,7 @@ func writeRuntimeLiveAnnouncements(out io.Writer, request serviceSession.Request
 			return err
 		}
 	}
-	policy, err := cliTools.ResolveFilesystemPolicy(request.WorkDir, request.AllowPaths...)
+	policy, err := cliTools.ResolveFilesystemPolicy(host, request.AllowPaths...)
 	if err != nil {
 		return fmt.Errorf("resolve live filesystem scope: %w", err)
 	}

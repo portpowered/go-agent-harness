@@ -63,7 +63,7 @@ func (e *BrowserDisconnectedError) Is(target error) bool {
 	if e == nil {
 		return false
 	}
-	var codeErr *classifiedCode
+	var codeErr *classifiedCodeError
 	return errors.As(target, &codeErr) && codeErr.code == CodeBrowserDisconnected
 }
 
@@ -154,6 +154,10 @@ func (s *Service) promoteRetainedBrowserEndpointLossLocked(failure *DiscoveryErr
 	switch failure.Code {
 	case CodeEndpointNotFound, CodeEndpointUnreachable:
 		return newBrowserDisconnectedFromError(failure, browserID, targetID, phase)
+	case CodeRemoteEndpointDenied, CodeBrowserProtocolInvalid, CodeUnsupportedWebMCP, CodeNoEligibleTab,
+		CodeAmbiguousBrowser, CodeAmbiguousTab, CodeStaleSelection, CodeTargetAttachFailed, CodeTargetDetached,
+		CodeBrowserDisconnected:
+		return failure
 	default:
 		return failure
 	}
@@ -190,7 +194,7 @@ func normalizeDisconnectEvent(event DisconnectEvent) (DisconnectEvent, *Discover
 	if event.TargetID != "" && (hasControl(event.TargetID) || !publicIDPattern.MatchString(event.TargetID)) {
 		return DisconnectEvent{}, newProtocolInvalidAt("disconnect", "unknown", "normalized_target_id_required", nil)
 	}
-	event.Phase = boundedLabel(event.Phase, 32)
+	event.Phase = boundedLabel(event.Phase, maxPhaseLabelBytes)
 	if event.Phase == "" {
 		event.Phase = phaseDisconnect
 	}
@@ -238,9 +242,6 @@ func disconnectEventInput(input any, args []any) (DisconnectEvent, *DiscoveryErr
 // classified failure that callers should surface. The flexible input accepts a
 // DisconnectEvent or the convenient (browserID, targetID, phase) spelling.
 func (s *Service) HandleDisconnect(ctx context.Context, input any, args ...any) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -300,7 +301,7 @@ func (s *Service) markBrowserDisconnectedLocked(browserID, targetID, phase strin
 	if publicIDPattern.MatchString(strings.TrimSpace(targetID)) {
 		state.TargetID = strings.TrimSpace(targetID)
 	}
-	state.Phase = boundedLabel(phase, 32)
+	state.Phase = boundedLabel(phase, maxPhaseLabelBytes)
 	if state.Phase == "" {
 		state.Phase = phaseDisconnect
 	}
@@ -399,39 +400,4 @@ func (s *Service) IsBrowserDisconnected(browserID string) bool {
 	defer s.mu.Unlock()
 	_, ok := s.disconnected[strings.TrimSpace(browserID)]
 	return ok
-}
-
-func (s *Service) browserIDForEndpoint(endpoint Endpoint) string {
-	if s == nil {
-		return ""
-	}
-	if raw := strings.TrimSpace(endpoint.BrowserWSEndpoint); raw != "" {
-		if normalized, failure := parseBrowserWebSocketURL(raw); failure == nil {
-			identity := BrowserIdentity{
-				Scheme: normalized.url.Scheme,
-				Host:   normalized.url.Hostname(),
-				Port:   normalized.url.Port(),
-				Path:   normalized.url.EscapedPath(),
-			}
-			return normalizePublicID(s.idMapper.BrowserID(identity), identity)
-		}
-	}
-	if raw := strings.TrimSpace(endpoint.CDPURL); raw != "" {
-		if parsed, failure := parseHTTPURL(raw); failure == nil {
-			base := targetListBaseURL(parsed)
-			for browserID, known := range s.endpoints {
-				if known.httpURL == base {
-					return browserID
-				}
-			}
-			identity := BrowserIdentity{
-				Scheme: parsed.Scheme,
-				Host:   parsed.Hostname(),
-				Port:   parsed.Port(),
-				Path:   parsed.EscapedPath(),
-			}
-			return normalizePublicID(s.idMapper.BrowserID(identity), identity)
-		}
-	}
-	return ""
 }

@@ -109,11 +109,11 @@ func (e MixedModalEvidence) Validate(scenario CustomerScenario) error {
 	if !e.Delivery.valid() {
 		return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.delivery", fmt.Sprintf("%q is invalid", e.Delivery))
 	}
-	if err := validateSHA256("mixed_modal.expected_sha256", e.ExpectedSHA256, true); err != nil {
+	if err := validateSHA256("mixed_modal.expected_sha256", e.ExpectedSHA256); err != nil {
 		return err
 	}
 	if e.ImageObserved {
-		if err := validateSHA256("mixed_modal.observed_sha256", e.ObservedSHA256, true); err != nil {
+		if err := validateSHA256("mixed_modal.observed_sha256", e.ObservedSHA256); err != nil {
 			return err
 		}
 	} else if e.ObservedSHA256 != "" {
@@ -238,12 +238,9 @@ func NewFamilyCScenario() CustomerScenario {
 		},
 		Sandbox:      SandboxSpec{Name: "fresh-family-c-sandbox", Root: ".", Fresh: true},
 		Interruption: InterruptionTrigger{Kind: InterruptionNone},
-		Patience: PatienceThresholds{
-			ListenBeforeFollowUp: 250 * time.Millisecond, ResponseStart: time.Second, InProgressWork: 2 * time.Second,
-			Reprompt: 3 * time.Second, AbsoluteDeadAir: 10 * time.Second, MaxReprompts: 1,
-		},
-		Termination: TerminationNatural,
-		Deadline:    30 * time.Second,
+		Patience:     customerPatience(customerFollowUpListen, customerAbsoluteDeadAir, customerSingleReprompt),
+		Termination:  TerminationNatural,
+		Deadline:     customerScenarioDeadline,
 	}
 }
 
@@ -366,7 +363,7 @@ func (e MixedModalEvidence) ImageActionID() string {
 	return FamilyCImageActionID
 }
 
-func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts, result DuplexRunResult) MixedModalEvidence {
+func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts) MixedModalEvidence {
 	priorAt := time.Duration(0)
 	if len(transcripts.Product) > 1 {
 		priorAt = transcripts.Product[1].At
@@ -378,4 +375,19 @@ func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts
 		Delivery: MixedModalDeliveryUnsupported, Supported: false, ImageMeaningInCustomerSpeech: false, ProductGapCode: FamilyCMidSessionImageGapCode, ProductGap: FamilyCMidSessionImageGap,
 		EvidenceRefs: []string{"events/mixed-modal.json", "transcripts/product.jsonl", "process.json"},
 	}
+}
+
+// Customer-simulation timing policy shared by the scenario families.
+const (
+	customerFollowUpListen, familyAFollowUpListen                               = 250 * time.Millisecond, 500 * time.Millisecond
+	customerResponseStartWait, customerInProgressWorkWait, customerRepromptWait = time.Second, 2 * time.Second, 3 * time.Second
+	customerAbsoluteDeadAir, familyEAbsoluteDeadAir                             = 10 * time.Second, 8 * time.Second
+	customerScenarioDeadline, familyEScenarioDeadline                           = 30 * time.Second, 20 * time.Second
+	customerSingleReprompt, familyAMaxReprompts                                 = 1, 2
+)
+
+// customerPatience returns the shared patience thresholds for a scenario family.
+func customerPatience(listen, deadAir time.Duration, maxReprompts int) PatienceThresholds {
+	return PatienceThresholds{ListenBeforeFollowUp: listen, ResponseStart: customerResponseStartWait, InProgressWork: customerInProgressWorkWait,
+		Reprompt: customerRepromptWait, AbsoluteDeadAir: deadAir, MaxReprompts: maxReprompts}
 }

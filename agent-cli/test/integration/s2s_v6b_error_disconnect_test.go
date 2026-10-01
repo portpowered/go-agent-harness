@@ -49,7 +49,7 @@ func (r v6bCLIResult) diagnostics() string {
 func runV6BRootCommand(t *testing.T, description string, args ...string) v6bCLIResult {
 	t.Helper()
 
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer must not run during v6b replay")},
 	)

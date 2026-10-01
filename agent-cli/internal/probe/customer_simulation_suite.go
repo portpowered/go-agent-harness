@@ -203,9 +203,6 @@ func customerSimulationSelectorScenarioIDs(selector string) ([]string, bool) {
 // The returned error is aggregate-only; callers should inspect each run's
 // structured verdict for the reviewable diagnosis.
 func RunCustomerSimulationSuite(ctx context.Context, options CustomerSimulationSuiteOptions) (CustomerSimulationSuiteResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := validateCustomerSimulationOptions(options); err != nil {
 		return CustomerSimulationSuiteResult{}, err
 	}
@@ -288,24 +285,24 @@ func customerSimulationRunRoot(raw string) (string, func(), error) {
 	if strings.TrimSpace(raw) == "" {
 		root, err := os.MkdirTemp("", "agent-customer-simulation-")
 		if err != nil {
-			return "", func() {}, fmt.Errorf("%w: create isolated run root: %v", ErrCustomerSimulationRun, err)
+			return "", func() {}, fmt.Errorf("%w: create isolated run root: %w", ErrCustomerSimulationRun, err)
 		}
 		return root, func() {}, nil
 	}
 	root, err := filepath.Abs(raw)
 	if err != nil {
-		return "", func() {}, fmt.Errorf("%w: resolve run root: %v", ErrCustomerSimulationRun, err)
+		return "", func() {}, fmt.Errorf("%w: resolve run root: %w", ErrCustomerSimulationRun, err)
 	}
 	if info, statErr := os.Lstat(root); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return "", func() {}, fmt.Errorf("%w: run root must be a non-symlink directory", ErrCustomerSimulationRun)
 		}
 	} else if errors.Is(statErr, os.ErrNotExist) {
-		if err := os.MkdirAll(root, 0o700); err != nil {
-			return "", func() {}, fmt.Errorf("%w: create run root: %v", ErrCustomerSimulationRun, err)
+		if err := os.MkdirAll(root, privateDirMode); err != nil {
+			return "", func() {}, fmt.Errorf("%w: create run root: %w", ErrCustomerSimulationRun, err)
 		}
 	} else {
-		return "", func() {}, fmt.Errorf("%w: inspect run root: %v", ErrCustomerSimulationRun, statErr)
+		return "", func() {}, fmt.Errorf("%w: inspect run root: %w", ErrCustomerSimulationRun, statErr)
 	}
 	return root, func() {}, nil
 }
@@ -339,16 +336,6 @@ func sortFilesystemCheckpoints(checkpoints []FilesystemCheckpoint) {
 		}
 		checkpoints[j+1] = value
 	}
-}
-
-func customerSimulationTurnID(scenario CustomerScenario, index int) string {
-	if scenario.Family == ScenarioFamilyD {
-		return FamilyDActiveTurnID
-	}
-	if scenario.Family == ScenarioFamilyE {
-		return FamilyETurnID
-	}
-	return fmt.Sprintf("turn-%d", index+1)
 }
 
 func customerSimulationAudioEvents(scenario CustomerScenario, result DuplexRunResult, frameDuration time.Duration, facts customerSimulationRecordingFacts) []AudioTurnEvent {
@@ -552,24 +539,29 @@ func waitForCustomerSimulationPatienceReprompt(
 			return err
 		}
 		if err := waitForCustomerSimulationPatienceChange(ctx, progress); err != nil {
-			// A shipped child may close its provider stream immediately after a
-			// finite response. The runner cancels its context while reaping that
-			// already-completed child, so take the closed-output boundary as the
-			// authoritative terminal signal before classifying the wait as a
-			// customer cancellation. This final observation also captures output
-			// bytes that raced the stdout pump's EOF notification.
-			if progress.OutputClosed() {
-				if observeErr := observeCustomerSimulationOutput(controller, progress, outputIndex); observeErr != nil {
-					return observeErr
-				}
-				if completeErr := completeCustomerSimulationPatience(controller); completeErr != nil {
-					return completeErr
-				}
-				return errDuplexInputComplete
-			}
-			return finishCustomerSimulationPatienceOnContext(controller, ctx, err)
+			return finishCustomerSimulationPatienceWait(ctx, controller, progress, outputIndex, err)
 		}
 	}
+}
+
+// finishCustomerSimulationPatienceWait ends an interrupted patience wait. A
+// shipped child may close its provider stream immediately after a finite
+// response. The runner cancels its context while reaping that
+// already-completed child, so take the closed-output boundary as the
+// authoritative terminal signal before classifying the wait as a customer
+// cancellation. This final observation also captures output bytes that raced
+// the stdout pump's EOF notification.
+func finishCustomerSimulationPatienceWait(ctx context.Context, controller *PatienceController, progress *DuplexProgress, outputIndex *int, waitErr error) error {
+	if !progress.OutputClosed() {
+		return finishCustomerSimulationPatienceOnContext(controller, ctx, waitErr)
+	}
+	if err := observeCustomerSimulationOutput(controller, progress, outputIndex); err != nil {
+		return err
+	}
+	if err := completeCustomerSimulationPatience(controller); err != nil {
+		return err
+	}
+	return errDuplexInputComplete
 }
 
 // stepCustomerSimulationPatienceReprompt performs one observation and policy
@@ -840,6 +832,8 @@ func customerSimulationTextConfirmsAction(action ActionIntent, text string) bool
 func customerSimulationActionEvidenceRefs(scenario CustomerScenario) []string {
 	refs := []string{"transcripts/customer.jsonl", "transcripts/product.jsonl", "events/audio-turn-events.jsonl", "tool-observations.jsonl", "filesystem-checkpoints.jsonl", "process.json"}
 	switch scenario.Family {
+	case ScenarioFamilyA:
+		// Family A records only the common evidence set.
 	case ScenarioFamilyB:
 		refs = append(refs, "events/correction.json")
 	case ScenarioFamilyC:
@@ -860,7 +854,7 @@ func customerSimulationMechanicalVerdict(scenario CustomerScenario, actions []Ac
 		correction := customerSimulationCorrectionEvidence(scenario, product, process, facts)
 		verdict, err = EvaluateCustomerSimulationCorrection(scenario, actions, checkpoints, tools, product, correction)
 	case ScenarioFamilyC:
-		mixed := customerSimulationMixedModalEvidence(scenario, PairedTranscripts{Product: product}, DuplexRunResult{})
+		mixed := customerSimulationMixedModalEvidence(scenario, PairedTranscripts{Product: product})
 		verdict, err = EvaluateCustomerSimulationMixedModal(scenario, actions, checkpoints, tools, product, mixed)
 	case ScenarioFamilyD:
 		termination := customerSimulationTerminationEvidence(scenario, product, process, DuplexRunResult{}, facts)
@@ -871,6 +865,8 @@ func customerSimulationMechanicalVerdict(scenario CustomerScenario, actions []Ac
 			patience = &value
 		}
 		verdict, err = EvaluateCustomerSimulationPatience(scenario, actions, checkpoints, tools, product, *patience)
+	case ScenarioFamilyA:
+		fallthrough
 	default:
 		verdict, err = EvaluateCustomerSimulation(scenario, actions, checkpoints, tools, product)
 	}

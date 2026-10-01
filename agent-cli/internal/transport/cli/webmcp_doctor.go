@@ -62,9 +62,6 @@ func (c *WebMCPDoctorCommand) Generate() *cobra.Command {
 // Run executes doctor without command-line overrides. It is useful to
 // embedding callers that already supplied the config directory on GlobalFlags.
 func (c *WebMCPDoctorCommand) Run(ctx context.Context, out io.Writer) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	report, err := c.diagnose(ctx, nil)
 	if writeErr := writeWebMCPDoctorReport(out, report, c.json); writeErr != nil {
 		return writeErr

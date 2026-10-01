@@ -69,10 +69,7 @@ func (s selectors) explicit() bool {
 	return s.browserID != "" || s.targetID != "" || s.origin != ""
 }
 
-func (b *bootstrapper) run(ctx context.Context) error { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func (b *bootstrapper) run(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

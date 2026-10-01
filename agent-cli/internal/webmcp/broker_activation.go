@@ -27,13 +27,13 @@ func (b *StatefulBroker) Activate(ctx context.Context, selector TargetSelector) 
 	selected := b.selected
 	b.mu.Unlock()
 	if selected != nil && selected.context.Key.BrowserID == selector.BrowserID && selected.context.Key.TargetID == selector.TargetID {
-		if err := b.selectedStateError(selected, "activate", "selection_not_connected"); err != nil {
+		if err := b.selectedStateError(selected, "activate"); err != nil {
 			return err
 		}
 		return b.activateExactTarget(ctx, selected.handle, selected, selector)
 	}
 	if selected != nil && selected.context.Key.BrowserID == selector.BrowserID {
-		if err := b.selectedStateError(selected, "activate", "selection_not_connected"); err != nil {
+		if err := b.selectedStateError(selected, "activate"); err != nil {
 			return err
 		}
 	}
@@ -116,7 +116,7 @@ func (b *StatefulBroker) reuseSelection(ctx context.Context, selector TargetSele
 	}
 	b.mu.Unlock()
 	if current != nil && current.context.Key.BrowserID == selector.BrowserID {
-		if err := b.selectedStateError(current, "selection", "selection_not_connected"); err != nil {
+		if err := b.selectedStateError(current, "selection"); err != nil {
 			return current, PageContext{}, true, err
 		}
 	}
@@ -124,7 +124,7 @@ func (b *StatefulBroker) reuseSelection(ctx context.Context, selector TargetSele
 }
 
 func (b *StatefulBroker) confirmActiveSelection(ctx context.Context, current *brokerSession, handle BrowserHandle, contextValue PageContext, selector TargetSelector, options SelectOptions) (PageContext, error) {
-	if err := b.selectedStateError(current, "lifecycle", "selection_not_connected"); err != nil {
+	if err := b.selectedStateError(current, "lifecycle"); err != nil {
 		return PageContext{}, err
 	}
 	if !options.Activate {
@@ -141,7 +141,7 @@ func (b *StatefulBroker) confirmActiveSelection(ctx context.Context, current *br
 		// session. A live browser may reject the operation (notably in
 		// headless mode) without making the exact WebMCP selection unusable.
 	}
-	if failure := b.selectedStateError(current, "activate", "selection_not_connected"); failure != nil {
+	if failure := b.selectedStateError(current, "activate"); failure != nil {
 		return PageContext{}, failure
 	}
 	return contextValue, nil
@@ -305,7 +305,7 @@ func (b *StatefulBroker) confirmNewSelection(ctx context.Context, newSession *br
 		// catalog readiness have succeeded. Check the session after the
 		// operation so a concurrent target/browser loss still wins.
 	}
-	if failure := b.selectedStateError(newSession, "activate", "selection_not_connected"); failure != nil {
+	if failure := b.selectedStateError(newSession, "activate"); failure != nil {
 		discardCloseError(session.Close)
 		return PageContext{}, failure
 	}

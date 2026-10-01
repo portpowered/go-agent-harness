@@ -80,7 +80,7 @@ func (run v6cExecution) failureDetail() string {
 // any command error means a non-zero exit.
 func runV6CProbe(t *testing.T, fixture string, argv ...string) v6cExecution {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}
@@ -212,30 +212,7 @@ func TestV6CSuitePrefixSelectionResolvesThrottledCase(t *testing.T) {
 // the unchanged rate_limited expectation: the run must fail closed naming
 // observed actual=error:authentication beside expected=error:rate_limited.
 func TestV6CNegativeAuthControlFailsClosed(t *testing.T) {
-	fixture := v6cSharedFixture(t, v6cNegativeAuthFixture)
-	run := runV6CProbe(t, fixture,
-		"probe", "run", "--scenario", v6cCaseID, "--replay", fixture, "--json")
-
-	if run.exitCode == 0 {
-		t.Fatalf("auth control must not satisfy the rate_limited expectation:\n%s", run.failureDetail())
-	}
-	if run.deadlineExceeded {
-		t.Fatalf("auth control exceeded its %s deadline instead of failing on classification:\n%s",
-			v6cProbeDeadline, run.failureDetail())
-	}
-	if run.execErr == nil || !strings.Contains(run.execErr.Error(), "1 of 1 probe scenarios failed") {
-		t.Fatalf("control must fail as a scenario classification mismatch, not a launch or fixture-read error:\n%s",
-			run.failureDetail())
-	}
-	result := v6cRequireSingleResult(t, run)
-	if result["pass"] != false || result["terminal_reason"] != "error:authentication" {
-		t.Fatalf("auth control must fail with observed error:authentication: %v", result)
-	}
-	outcome := v6cOutcome(t, result)
-	if !strings.Contains(fmt.Sprint(outcome["expected"]), "error:rate_limited") ||
-		!strings.Contains(fmt.Sprint(outcome["actual"]), "error:authentication") {
-		t.Fatalf("failed outcome must report expected vs actual classifications: %v", outcome)
-	}
+	assertV6CControlFailsClosed(t, "auth", v6cNegativeAuthFixture, "error:authentication")
 }
 
 // TestV6CNegativeInvalidRequestControlFailsClosed feeds the
@@ -243,28 +220,36 @@ func TestV6CNegativeAuthControlFailsClosed(t *testing.T) {
 // expectation: the run must fail closed naming observed
 // actual=error:provider_rejected beside expected=error:rate_limited.
 func TestV6CNegativeInvalidRequestControlFailsClosed(t *testing.T) {
-	fixture := v6cSharedFixture(t, v6cNegativeInvalidFixture)
+	assertV6CControlFailsClosed(t, "invalid-request", v6cNegativeInvalidFixture, "error:provider_rejected")
+}
+
+// assertV6CControlFailsClosed replays a negative-control capture against the
+// unchanged rate_limited expectation and requires a classification failure
+// that reports expected=error:rate_limited beside the observed classification.
+func assertV6CControlFailsClosed(t *testing.T, control, fixtureName, observed string) {
+	t.Helper()
+	fixture := v6cSharedFixture(t, fixtureName)
 	run := runV6CProbe(t, fixture,
 		"probe", "run", "--scenario", v6cCaseID, "--replay", fixture, "--json")
 
 	if run.exitCode == 0 {
-		t.Fatalf("invalid-request control must not satisfy the rate_limited expectation:\n%s", run.failureDetail())
+		t.Fatalf("%s control must not satisfy the rate_limited expectation:\n%s", control, run.failureDetail())
 	}
 	if run.deadlineExceeded {
-		t.Fatalf("invalid-request control exceeded its %s deadline instead of failing on classification:\n%s",
-			v6cProbeDeadline, run.failureDetail())
+		t.Fatalf("%s control exceeded its %s deadline instead of failing on classification:\n%s",
+			control, v6cProbeDeadline, run.failureDetail())
 	}
 	if run.execErr == nil || !strings.Contains(run.execErr.Error(), "1 of 1 probe scenarios failed") {
 		t.Fatalf("control must fail as a scenario classification mismatch, not a launch or fixture-read error:\n%s",
 			run.failureDetail())
 	}
 	result := v6cRequireSingleResult(t, run)
-	if result["pass"] != false || result["terminal_reason"] != "error:provider_rejected" {
-		t.Fatalf("invalid-request control must fail with observed error:provider_rejected: %v", result)
+	if result["pass"] != false || result["terminal_reason"] != observed {
+		t.Fatalf("%s control must fail with observed %s: %v", control, observed, result)
 	}
 	outcome := v6cOutcome(t, result)
 	if !strings.Contains(fmt.Sprint(outcome["expected"]), "error:rate_limited") ||
-		!strings.Contains(fmt.Sprint(outcome["actual"]), "error:provider_rejected") {
+		!strings.Contains(fmt.Sprint(outcome["actual"]), observed) {
 		t.Fatalf("failed outcome must report expected vs actual classifications: %v", outcome)
 	}
 }

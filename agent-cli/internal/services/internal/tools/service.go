@@ -106,24 +106,24 @@ func New(staticExecutor messages.ToolExecutor, brokerFactory serviceTools.Browse
 	return service
 }
 
-func (s *Service) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) {
+func (s *Service) Resolve(ctx context.Context, cfg *config.Config) (serviceTools.Capabilities, error) {
 	if cfg != nil {
 		if err := cfg.ValidateBrowser(); err != nil {
 			return serviceTools.Capabilities{}, fmt.Errorf("resolve browser config: %w", err)
 		}
 	}
-	displayCapability := resolveDisplayCapability(cfg, s.displayProbe, s.displayProbeTimeout)
-	resolvedStatic, definitions, err := s.resolveStatic(cfg, displayCapability)
+	displayCapability := resolveDisplayCapability(ctx, cfg, s.displayProbe, s.displayProbeTimeout)
+	resolvedStatic, definitions, err := s.resolveStatic(ctx, cfg, displayCapability)
 	if err != nil {
 		return serviceTools.Capabilities{}, err
 	}
 	if cfg == nil || !cfg.Browser.BrowserBackendEnabled() {
 		return serviceTools.Capabilities{Executor: resolvedStatic, Definitions: definitions, BrowserCapabilityState: webmcp.BrowserCapabilityDisabled, DisplayCapability: displayCapability}, nil
 	}
-	return s.resolveBrowser(cfg, displayCapability, resolvedStatic, definitions)
+	return s.resolveBrowser(ctx, cfg, displayCapability, resolvedStatic, definitions)
 }
 
-func (s *Service) resolveBrowser(cfg *config.Config, displayCapability cliTools.DisplayCapability, resolvedStatic messages.ToolExecutor, definitions []messages.ToolDefinition) (serviceTools.Capabilities, error) {
+func (s *Service) resolveBrowser(ctx context.Context, cfg *config.Config, displayCapability cliTools.DisplayCapability, resolvedStatic messages.ToolExecutor, definitions []messages.ToolDefinition) (serviceTools.Capabilities, error) {
 	if s.brokerFactory == nil {
 		return serviceTools.Capabilities{}, errors.New("construct WebMCP broker: browser factory is nil")
 	}
@@ -147,7 +147,7 @@ func (s *Service) resolveBrowser(cfg *config.Config, displayCapability cliTools.
 	if s.runtimeService == nil {
 		return serviceTools.Capabilities{}, closeFailedBrowser(browser, errors.New("resolve tools: runtime service is nil"))
 	}
-	capability, err := s.runtimeService.Resolve(context.Background(), runtimeTools.Request{
+	capability, err := s.runtimeService.Resolve(ctx, runtimeTools.Request{
 		Executor:                adaptRuntimeDisplayExecutor(resolvedStatic),
 		Definitions:             definitions,
 		FilesystemPolicyApplied: true,
@@ -231,7 +231,7 @@ func stableDefinitionsFirst(stable, refreshed []messages.ToolDefinition) []messa
 	return append(result, page...)
 }
 
-func (s *Service) resolveStatic(cfg *config.Config, display cliTools.DisplayCapability) (messages.ToolExecutor, []messages.ToolDefinition, error) {
+func (s *Service) resolveStatic(ctx context.Context, cfg *config.Config, display cliTools.DisplayCapability) (messages.ToolExecutor, []messages.ToolDefinition, error) {
 	if s != nil && s.staticExecutor != nil {
 		return s.staticExecutor, nil, nil
 	}
@@ -259,7 +259,7 @@ func (s *Service) resolveStatic(cfg *config.Config, display cliTools.DisplayCapa
 			Configured:         true,
 		}
 	}
-	capability, err := s.runtimeService.Resolve(context.Background(), runtimeTools.Request{
+	capability, err := s.runtimeService.Resolve(ctx, runtimeTools.Request{
 		WorkDir:              workdir,
 		AllowPaths:           append([]string(nil), allowPaths...),
 		Selections:           selections,
@@ -275,14 +275,14 @@ func (s *Service) resolveStatic(cfg *config.Config, display cliTools.DisplayCapa
 	return capability.Executor, capability.Definitions, nil
 }
 
-func resolveDisplayCapability(cfg *config.Config, probe cliTools.DisplayCapabilityProbe, timeout time.Duration) cliTools.DisplayCapability {
+func resolveDisplayCapability(ctx context.Context, cfg *config.Config, probe cliTools.DisplayCapabilityProbe, timeout time.Duration) cliTools.DisplayCapability {
 	if cfg != nil && !cfg.Tools.ToolEnabled("show") && !cfg.Tools.ToolEnabled("mouse") {
 		return cliTools.UnavailableDisplayCapability("display-dependent tools are disabled by configuration")
 	}
 	if probe == nil {
 		return cliTools.UnavailableDisplayCapability("display capability probe is not configured")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	type result struct {
 		capability cliTools.DisplayCapability

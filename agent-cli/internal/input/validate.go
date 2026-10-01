@@ -8,35 +8,46 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// Image media types the input boundary detects and suggests conversions to.
+const (
+	mimeJPEG = "image/jpeg"
+	mimePNG  = "image/png"
+	mimeGIF  = "image/gif"
+	mimeWebP = "image/webp"
+	mimeTIFF = "image/tiff"
+)
+
 // conversionHint describes a possible format conversion for a rejected MIME type.
 type conversionHint struct {
 	targetMime     string
 	convertCommand string
 }
 
-// conversionHints maps a rejected MIME type to possible conversions.
+// conversionHints returns the possible conversions for a rejected MIME type.
 // A hint is shown only when the target MIME type is in the model's supported list.
-var conversionHints = map[string][]conversionHint{
-	"image/webp": {
-		{targetMime: "image/png", convertCommand: "convert input.webp output.png"},
-		{targetMime: "image/jpeg", convertCommand: "convert input.webp output.jpg"},
-	},
-	"image/png": {
-		{targetMime: "image/webp", convertCommand: "convert input.png output.webp"},
-	},
-	"image/jpeg": {
-		{targetMime: "image/webp", convertCommand: "convert input.jpg output.webp"},
-	},
-	"image/tiff": {
-		{targetMime: "image/png", convertCommand: "convert input.tiff output.png"},
-	},
+func conversionHints(rejectedMime string) []conversionHint {
+	switch rejectedMime {
+	case mimeWebP:
+		return []conversionHint{
+			{targetMime: mimePNG, convertCommand: "convert input.webp output.png"},
+			{targetMime: mimeJPEG, convertCommand: "convert input.webp output.jpg"},
+		}
+	case mimePNG:
+		return []conversionHint{{targetMime: mimeWebP, convertCommand: "convert input.png output.webp"}}
+	case mimeJPEG:
+		return []conversionHint{{targetMime: mimeWebP, convertCommand: "convert input.jpg output.webp"}}
+	case mimeTIFF:
+		return []conversionHint{{targetMime: mimePNG, convertCommand: "convert input.tiff output.png"}}
+	default:
+		return nil
+	}
 }
 
 // findConversionHint returns a tip string if a known conversion exists from the
 // rejected MIME type to one of the supported types. Returns empty string otherwise.
 func findConversionHint(rejectedMime string, supportedTypes []string) string {
-	hints, ok := conversionHints[rejectedMime]
-	if !ok {
+	hints := conversionHints(rejectedMime)
+	if len(hints) == 0 {
 		return ""
 	}
 	supported := make(map[string]bool, len(supportedTypes))

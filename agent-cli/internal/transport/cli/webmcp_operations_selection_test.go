@@ -220,6 +220,7 @@ func requireNoSelectionSideEffects(t *testing.T, broker *directCommandBroker) {
 
 func TestWebMCPDirectStaleSelectionRendersOnceAndOffersSelectRecovery(t *testing.T) {
 	forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+		t.Helper()
 		configDir := writeDirectConfig(t, "")
 		store := NewFileWebMCPSelectionStore(configDir)
 		if err := store.Save(WebMCPSelection{
@@ -284,6 +285,7 @@ func TestWebMCPDirectDiscoveryUsesOnlyExactPageTargets(t *testing.T) {
 	targets := []webmcp.Target{uiTarget, nonExactPageTarget, target}
 
 	forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+		t.Helper()
 		broker := &directCommandBroker{candidates: []webmcp.BrowserCandidate{candidate}, targets: targets, selected: page}
 		result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), withDirectOutputMode([]string{"tabs", "--browser", string(candidate.ID)}, jsonMode)...)
 		if result.err != nil {
@@ -343,6 +345,7 @@ func TestWebMCPDirectNoEligibleTabUsesC0DetailsInHumanAndJSONModes(t *testing.T)
 		EligibilityReason: "internal_url",
 	}
 	forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+		t.Helper()
 		broker := &directCommandBroker{candidates: []webmcp.BrowserCandidate{candidate}, targets: []webmcp.Target{ineligible}}
 		result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), withDirectOutputMode([]string{"select", "--browser", browserID}, jsonMode)...)
 		if result.err == nil {
@@ -388,6 +391,7 @@ func TestWebMCPDirectAmbiguousTabReturnsSortedCandidatesWithoutSelection(t *test
 	sort.Strings(wantIDs)
 
 	forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+		t.Helper()
 		broker := &directCommandBroker{candidates: []webmcp.BrowserCandidate{candidate}, targets: targets}
 		result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), withDirectOutputMode([]string{"select", "--browser", browserID}, jsonMode)...)
 		if result.err == nil {
@@ -438,6 +442,7 @@ func TestWebMCPDirectAmbiguousBrowserReturnsSortedCandidatesWithoutFallback(t *t
 	sort.Strings(wantIDs)
 
 	forEachDirectOutputMode(t, func(t *testing.T, jsonMode bool) {
+		t.Helper()
 		broker := &directCommandBroker{candidates: []webmcp.BrowserCandidate{second, first, first}}
 		result := executeDirectCommand(t, writeDirectConfig(t, ""), nil, directFactory(broker), withDirectOutputMode([]string{"select"}, jsonMode)...)
 		if result.err == nil {

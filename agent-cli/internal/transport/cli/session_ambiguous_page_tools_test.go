@@ -182,7 +182,7 @@ func newAmbiguousBrowserFixture(t *testing.T, ctx context.Context, cubeTools ...
 	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(f.runtime), WithWebMCPProductionDiscovery(discoveryService))
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(f.cfg)
+	})(ctx, f.cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}
@@ -450,9 +450,6 @@ func newAmbiguousCubeConversationSession() *ambiguousCubeConversationSession {
 }
 
 func (s *ambiguousCubeConversationSession) Send(ctx context.Context, message messages.StreamMessage) bool {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return false
 	}
@@ -503,6 +500,20 @@ func (s *ambiguousCubeConversationSession) advanceLocked(message messages.Stream
 		}
 	case messages.StreamTypeSessionClose:
 		s.closeOnce.Do(func() { close(s.done) })
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart,
+		messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
+		messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeResponseCancel, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// Other stream types do not advance the scripted conversation.
 	}
 	return emits
 }
@@ -540,20 +551,20 @@ func (s *ambiguousCubeConversationSession) recordToolResultLocked(raw any) {
 
 func (s *ambiguousCubeConversationSession) emit(ctx context.Context, emits ambiguousCubeConversationEmits) {
 	if emits.list {
-		s.emitAssistantToolCall("call-list-tabs", webmcp.ListTabsToolName, `{"include_zero_tool_pages":true}`)
+		s.emitAssistantToolCall(ctx, "call-list-tabs", webmcp.ListTabsToolName, `{"include_zero_tool_pages":true}`)
 	}
 	if emits.question {
-		s.emitChoiceQuestion()
+		s.emitChoiceQuestion(ctx)
 	}
 	if emits.selection {
-		s.emitSelectionTurn()
+		s.emitSelectionTurn(ctx)
 	}
 	if emits.pageCall {
 		go s.emitPageToolWhenReady(ctx)
 	}
 	if emits.final {
-		s.emitAssistantText("Cubecade is ready for inspection.")
-		s.write(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("ambiguous-session", "complete")})
+		s.emitAssistantText(ctx, "Cubecade is ready for inspection.")
+		s.write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("ambiguous-session", "complete")})
 	}
 }
 
@@ -568,7 +579,7 @@ func (s *ambiguousCubeConversationSession) Close() error {
 	return nil
 }
 
-func (s *ambiguousCubeConversationSession) emitAssistantToolCall(id, name, arguments string) {
+func (s *ambiguousCubeConversationSession) emitAssistantToolCall(ctx context.Context, id, name, arguments string) {
 	s.mu.Lock()
 	s.assistantCalls = append(s.assistantCalls, messages.ToolCall{ID: id, Name: name, Arguments: arguments})
 	s.mu.Unlock()
@@ -578,7 +589,7 @@ func (s *ambiguousCubeConversationSession) emitAssistantToolCall(id, name, argum
 	if name == ambiguousCubeStateTool {
 		s.pageCallOnce.Do(func() { close(s.pageCallSent) })
 	}
-	s.write(
+	s.write(ctx,
 		messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		messages.StreamMessage{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(id, name)},
 		messages.StreamMessage{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(id, name, arguments)},
@@ -586,18 +597,18 @@ func (s *ambiguousCubeConversationSession) emitAssistantToolCall(id, name, argum
 	)
 }
 
-func (s *ambiguousCubeConversationSession) emitChoiceQuestion() {
+func (s *ambiguousCubeConversationSession) emitChoiceQuestion(ctx context.Context) {
 	s.questionOnce.Do(func() {
-		s.emitAssistantText("Which page should I use: Cubecade (https://cube.example.test) or Margin (https://margin.example.test)?")
+		s.emitAssistantText(ctx, "Which page should I use: Cubecade (https://cube.example.test) or Margin (https://margin.example.test)?")
 		close(s.questionSent)
 	})
 }
 
-func (s *ambiguousCubeConversationSession) emitSelectionTurn() {
-	s.write(
+func (s *ambiguousCubeConversationSession) emitSelectionTurn(ctx context.Context) {
+	s.write(ctx,
 		messages.StreamMessage{Type: messages.StreamTypeTranscriptEnd, Role: messages.RoleUser, Value: messages.NewTranscriptEndValue("Use Cubecade.")},
 	)
-	s.emitAssistantToolCall(webmcpSelectionCallID, webmcp.SelectTabToolName, `{"browser_id":"browser-ambiguous","target_id":"tab-cube"}`)
+	s.emitAssistantToolCall(ctx, webmcpSelectionCallID, webmcp.SelectTabToolName, `{"browser_id":"browser-ambiguous","target_id":"tab-cube"}`)
 }
 
 func (s *ambiguousCubeConversationSession) emitPageToolWhenReady(ctx context.Context) {
@@ -615,11 +626,11 @@ func (s *ambiguousCubeConversationSession) emitPageToolWhenReady(ctx context.Con
 	}
 	s.phase = ambiguousCubeConversationAwaitingPageResult
 	s.mu.Unlock()
-	s.emitAssistantToolCall("call-cube-state", "get_cube_state", `{}`)
+	s.emitAssistantToolCall(ctx, "call-cube-state", "get_cube_state", `{}`)
 }
 
-func (s *ambiguousCubeConversationSession) emitAssistantText(text string) {
-	s.write(
+func (s *ambiguousCubeConversationSession) emitAssistantText(ctx context.Context, text string) {
+	s.write(ctx,
 		messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 		messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(text)},
@@ -628,13 +639,13 @@ func (s *ambiguousCubeConversationSession) emitAssistantText(text string) {
 	)
 }
 
-func (s *ambiguousCubeConversationSession) write(messagesToWrite ...messages.StreamMessage) bool {
+// write stops at the first message the receiver rejects (it has closed).
+func (s *ambiguousCubeConversationSession) write(ctx context.Context, messagesToWrite ...messages.StreamMessage) {
 	for _, message := range messagesToWrite {
-		if !s.recv.Write(context.Background(), message) {
-			return false
+		if !s.recv.Write(ctx, message) {
+			return
 		}
 	}
-	return true
 }
 
 func (s *ambiguousCubeConversationSession) assistantCallsSnapshot() []messages.ToolCall {
@@ -836,28 +847,6 @@ func (d *ambiguousSessionDiscovery) Reconnect(_ context.Context, _ discovery.Con
 	}
 }
 
-func ambiguousSessionLaneTarget(target webmcp.Target, toolCount int) discovery.Target {
-	return discovery.Target{
-		BrowserID:             string(target.BrowserID),
-		ID:                    string(target.ID),
-		Type:                  target.Type,
-		Title:                 target.Title,
-		URL:                   target.URL,
-		Origin:                target.Origin,
-		Generation:            target.Generation,
-		WebSocketPresent:      true,
-		WebMCP:                true,
-		WebMCPKnown:           true,
-		WebMCPDomainSupported: true,
-		WebMCPDomainKnown:     true,
-		PageToolsReady:        true,
-		PageToolsKnown:        true,
-		ToolCount:             toolCount,
-		ToolCountKnown:        true,
-		Eligible:              true,
-	}
-}
-
 type ambiguousPageToolsInferencer struct {
 	mu          sync.Mutex
 	session     *ambiguousPageToolsSession
@@ -906,9 +895,6 @@ func newAmbiguousPageToolsSession() *ambiguousPageToolsSession {
 }
 
 func (s *ambiguousPageToolsSession) Send(ctx context.Context, message messages.StreamMessage) bool {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	select {
 	case <-s.done:
 		return false

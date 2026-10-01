@@ -183,16 +183,9 @@ func NewFamilyBScenario() CustomerScenario {
 			Description:    "Begin the correction after the original confirmation audio starts but before that response reaches its terminal event.",
 			BeforeTerminal: true,
 		},
-		Patience: PatienceThresholds{
-			ListenBeforeFollowUp: 250 * time.Millisecond,
-			ResponseStart:        time.Second,
-			InProgressWork:       2 * time.Second,
-			Reprompt:             3 * time.Second,
-			AbsoluteDeadAir:      10 * time.Second,
-			MaxReprompts:         1,
-		},
+		Patience:    customerPatience(customerFollowUpListen, customerAbsoluteDeadAir, customerSingleReprompt),
 		Termination: TerminationNatural,
-		Deadline:    30 * time.Second,
+		Deadline:    customerScenarioDeadline,
 	}
 }
 

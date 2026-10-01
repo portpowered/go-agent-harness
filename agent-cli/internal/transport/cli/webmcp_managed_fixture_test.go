@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -50,7 +51,7 @@ func newManagedCompositionTestManager(configDir string, control *managedComposit
 				return chrome.ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: chrome.ExecutableSourceStock}, nil
 			}),
 			HTTPClient: &http.Client{Transport: managedCompositionVersionTransport{}},
-			ProcessStarter: func(string, []string) (chrome.ManagedBrowserProcess, error) {
+			ProcessStarter: func(context.Context, string, []string) (chrome.ManagedBrowserProcess, error) {
 				starts.Add(1)
 				return control.newProcess(7002), nil
 			},
@@ -164,6 +165,7 @@ type directCommandResult struct {
 }
 
 func executeDirectCommand(t *testing.T, configDir string, store WebMCPSelectionStore, factory WebMCPDoctorFactory, args ...string) directCommandResult {
+	t.Helper()
 	return executeDirectCommandContext(t, context.Background(), configDir, store, factory, args...)
 }
 
@@ -497,4 +499,17 @@ func assertCanceledInvokeEnvelope(t *testing.T, stdout, invocationID string) {
 	if invokeEnvelope.Error.Details["invocation_id"] != invocationID {
 		t.Fatalf("canceled invoke ID = %#v, want %q", invokeEnvelope.Error.Details["invocation_id"], invocationID)
 	}
+}
+
+func killSIGINTChild(t *testing.T, command *exec.Cmd) {
+	t.Helper()
+	if err := command.Process.Kill(); err != nil {
+		t.Logf("kill SIGINT child: %v", err)
+	}
+}
+
+func newDirectGlobalFlags(configDir string) *flags.GlobalFlags {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	return globalFlags
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"sort"
 	"sync"
 )
 
@@ -36,15 +37,9 @@ func adaptSelectionStore(value any) (selectionStoreAdapter, error) {
 		return selectionStoreAdapter{}, nil
 	}
 	switch store := value.(type) {
-	case interface {
-		Load(context.Context) (PersistedSelection, error)
-		SaveAtomic(context.Context, PersistedSelection) error
-	}:
+	case AtomicSelectionStore:
 		return selectionStoreAdapter{load: store.Load, save: store.SaveAtomic}, nil
-	case interface {
-		Load(context.Context) (PersistedSelection, error)
-		Save(context.Context, PersistedSelection) error
-	}:
+	case SelectionStore:
 		return selectionStoreAdapter{load: store.Load, save: store.Save}, nil
 	case interface {
 		LoadSelection(context.Context) (PersistedSelection, error)
@@ -56,15 +51,9 @@ func adaptSelectionStore(value any) (selectionStoreAdapter, error) {
 		SaveSelection(context.Context, PersistedSelection) error
 	}:
 		return selectionStoreAdapter{load: store.LoadSelection, save: store.SaveSelection}, nil
-	case interface {
-		Load(context.Context) ([]byte, error)
-		SaveAtomic(context.Context, []byte) error
-	}:
+	case AtomicByteSelectionStore:
 		return byteSelectionStoreAdapter(store.Load, store.SaveAtomic), nil
-	case interface {
-		Load(context.Context) ([]byte, error)
-		Save(context.Context, []byte) error
-	}:
+	case ByteSelectionStore:
 		return byteSelectionStoreAdapter(store.Load, store.Save), nil
 	case interface {
 		LoadSelection(context.Context) ([]byte, error)
@@ -227,14 +216,6 @@ func discardTargetHandle(ctx context.Context, handle *TargetHandle) {
 	}
 }
 
-// discardRelease closes a detach-only handle on a superseded, failing, or
-// abandoned path; the release error cannot change that decided outcome.
-func discardRelease(handle interface{ Close() error }) {
-	if err := handle.Close(); err != nil {
-		return
-	}
-}
-
 // rememberedBrowserIdentity returns the identity recorded for an accepted
 // candidate's endpoint. An unparsable debugger URL leaves the identity empty:
 // the candidate itself was already validated, so there is nothing to record.
@@ -286,7 +267,7 @@ func (s *Service) CurrentSelection() (Selection, bool) { return s.Selected() }
 
 // ReleaseSelection clears and detaches the current selection. Releasing an
 // already empty service is a successful no-op.
-func (s *Service) ReleaseSelection() error {
+func (s *Service) ReleaseSelection(ctx context.Context) error {
 	s.mu.Lock()
 	if s.selection == nil {
 		s.mu.Unlock()
@@ -298,22 +279,112 @@ func (s *Service) ReleaseSelection() error {
 	if previous.Handle == nil {
 		return nil
 	}
-	return previous.Handle.Close()
+	return previous.Handle.Close(ctx)
 }
 
 // Close is the service-level selection cleanup hook. Discovery itself owns no
 // browser process, so closing the service only releases its attached target.
-func (s *Service) Close() error { return s.ReleaseSelection() }
+func (s *Service) Close(ctx context.Context) error { return s.ReleaseSelection(ctx) }
 
 // Close releases the selected target handle, if this selection owns one.
 // Selection values remain safe to close after the service selects another
 // target because the handle is independently idempotent.
-func (s Selection) Close() error {
+func (s Selection) Close(ctx context.Context) error {
 	if s.Handle == nil {
 		return nil
 	}
-	return s.Handle.Close()
+	return s.Handle.Close(ctx)
 }
 
 // Release is an alias for Selection.Close.
-func (s Selection) Release() error { return s.Close() }
+func (s Selection) Release(ctx context.Context) error { return s.Close(ctx) }
+
+func (s *Service) replacedBrowserIDLocked(identity BrowserIdentity, publicID string) string {
+	address := browserAddressKey(identity.Host, identity.Port)
+	identityKey := browserIdentityKey(identity)
+	if endpoint, ok := s.endpoints[publicID]; ok && endpoint.identityKey != "" && endpoint.identityKey != identityKey {
+		return publicID
+	}
+	ids := make([]string, 0, len(s.endpoints))
+	for browserID, endpoint := range s.endpoints {
+		if browserID == publicID || endpointAddressKey(endpoint) == address {
+			if endpoint.identityKey != "" && endpoint.identityKey != identityKey {
+				ids = append(ids, browserID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	sort.Strings(ids)
+	return ids[0]
+}
+
+func (s *Service) retireReplacedBrowserLocked(browserID string) {
+	if browserID == "" {
+		return
+	}
+	if s.retiredBrowsers == nil {
+		s.retiredBrowsers = make(map[string]struct{})
+	}
+	s.retiredBrowsers[browserID] = struct{}{}
+	delete(s.endpoints, browserID)
+	delete(s.browsers, browserID)
+	if targetStates := s.targets[browserID]; targetStates != nil {
+		for targetID, state := range targetStates {
+			state.closed = true
+			state.target.Eligible = false
+			state.target.EligibilityReason = staleReasonBrowserReplaced
+			targetStates[targetID] = state
+		}
+	}
+	if s.selection == nil || s.selection.BrowserID != browserID {
+		return
+	}
+	selection := *s.selection
+	ownership := string(TargetOwnershipExternal)
+	if selection.Handle != nil {
+		ownership = string(selection.Handle.Ownership())
+		s.pendingReleases = append(s.pendingReleases, selection.Handle)
+	}
+	s.selection = nil
+	s.emitTarget(EventTargetDetached, selection.BrowserID, selection.TargetID, selection.Generation, map[string]any{
+		"generation":     selection.Generation,
+		"reason":         staleReasonBrowserReplaced,
+		"ownership_mode": ownership,
+	})
+}
+
+func newStaleSelection(browserID, targetID string, selectedGeneration uint64, reason string) *DiscoveryError {
+	return &DiscoveryError{
+		Code:      CodeStaleSelection,
+		Message:   "the selected browser target is no longer current",
+		Retryable: true,
+		Details: map[string]any{
+			"browser_id":          boundedLabel(browserID, maxDetailLabelBytes),
+			"target_id":           boundedLabel(targetID, maxDetailLabelBytes),
+			"selected_generation": selectedGeneration,
+			"reason":              boundedLabel(reason, maxDetailLabelBytes),
+		},
+	}
+}
+
+// activateSelectionLocked brings the selected tab to the foreground when asked.
+// Foreground activation is ancillary: only a browser disconnect fails the
+// selection; otherwise the exact reconnect selection is kept while the browser
+// remains reachable and attachable.
+func (s *Service) activateSelectionLocked(ctx context.Context, options ReconnectOptions, browser BrowserCandidate, target Target) *DiscoveryError {
+	if !options.Activate || s.activator == nil {
+		return nil
+	}
+	activateErr := s.activator.Activate(ctx, browser, target)
+	if activateErr == nil {
+		return nil
+	}
+	failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
+	if failure.Code != CodeBrowserDisconnected {
+		return nil
+	}
+	s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
+	return failure
+}

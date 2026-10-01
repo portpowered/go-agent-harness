@@ -22,15 +22,12 @@ import (
 func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping billed device EAC acceptance")
-	}
-	if os.Getenv("AGENT_TEST_REAL_AUDIO") != "1" || os.Getenv("AGENT_HARNESS_LIVE_DEVICE_EAC") != "1" {
-		t.Skip("AGENT_TEST_REAL_AUDIO=1 and AGENT_HARNESS_LIVE_DEVICE_EAC=1 are required")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the billed device EAC acceptance")
 	}
 
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "darwin-device-eac.session.json")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI: %v", err)
 	}

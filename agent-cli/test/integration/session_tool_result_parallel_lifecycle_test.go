@@ -26,14 +26,18 @@ const (
 	parallelLifecycleBravoArgs = `{"zone":"UTC"}`
 )
 
-var parallelLifecycleResultContent = map[string]string{
-	parallelLifecycleAlphaID: `{"temperature_c":24,"origin":"alpha"}`,
-	parallelLifecycleBravoID: `{"utc":"12:34","origin":"bravo"}`,
+func parallelLifecycleResultContent() map[string]string {
+	return map[string]string{
+		parallelLifecycleAlphaID: `{"temperature_c":24,"origin":"alpha"}`,
+		parallelLifecycleBravoID: `{"utc":"12:34","origin":"bravo"}`,
+	}
 }
 
-var parallelLifecycleRequestOrder = []string{
-	parallelLifecycleAlphaID,
-	parallelLifecycleBravoID,
+func parallelLifecycleRequestOrder() []string {
+	return []string{
+		parallelLifecycleAlphaID,
+		parallelLifecycleBravoID,
+	}
 }
 
 // parallelLifecycleSession is a provider-shaped session double used through the
@@ -63,12 +67,12 @@ type parallelLifecycleSession struct {
 }
 
 func newParallelLifecycleSession(blockedResultID, rejectedResultID string) *parallelLifecycleSession {
-	accepted := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	acceptedOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder))
-	blockedResultStart := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	blockedResultOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder))
-	resultRelease := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	for _, id := range parallelLifecycleRequestOrder {
+	accepted := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	acceptedOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder()))
+	blockedResultStart := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	blockedResultOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder()))
+	resultRelease := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	for _, id := range parallelLifecycleRequestOrder() {
 		accepted[id] = make(chan struct{})
 		acceptedOnce[id] = &sync.Once{}
 		blockedResultStart[id] = make(chan struct{})
@@ -107,10 +111,10 @@ func (s *parallelLifecycleSession) SendWithOutcome(ctx context.Context, msg mess
 	s.mu.Unlock()
 
 	if responseNumber == 1 {
-		s.emitTwoCallResponse()
+		s.emitTwoCallResponse(ctx)
 	}
 	if msg.Type == messages.StreamTypeResponseCreate {
-		s.continuationOnce.Do(s.emitContinuation)
+		s.continuationOnce.Do(func() { s.emitContinuation(ctx) })
 	}
 
 	if msg.Type != messages.StreamTypeToolCallEnd {
@@ -154,7 +158,7 @@ func parallelLifecycleContextOutcome(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
-func (s *parallelLifecycleSession) emitTwoCallResponse() {
+func (s *parallelLifecycleSession) emitTwoCallResponse(ctx context.Context) {
 	for _, call := range []struct {
 		id, name, args string
 	}{
@@ -166,7 +170,7 @@ func (s *parallelLifecycleSession) emitTwoCallResponse() {
 			{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ToolCallId: call.id, Value: messages.NewToolCallStartValue(call.id, call.name)},
 			{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: call.id, Value: messages.NewToolCallEndValue(call.id, call.name, call.args)},
 		} {
-			s.recv.Write(context.Background(), msg)
+			s.recv.Write(ctx, msg)
 		}
 	}
 	for _, msg := range []messages.StreamMessage{
@@ -174,22 +178,22 @@ func (s *parallelLifecycleSession) emitTwoCallResponse() {
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
-	s.recv.Write(context.Background(), messages.StreamMessage{
+	s.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 }
 
-func (s *parallelLifecycleSession) emitContinuation() {
+func (s *parallelLifecycleSession) emitContinuation(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("parallel grounded continuation")},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -248,12 +252,12 @@ func newParallelLifecycleInferencer(session *parallelLifecycleSession) *parallel
 	return &parallelLifecycleInferencer{ready: make(chan struct{}), session: session}
 }
 
-func (i *parallelLifecycleInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+func (i *parallelLifecycleInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("parallel-tool-lifecycle", "test"),
 	})
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionUpdated,
 		Value: messages.NewSessionUpdatedValue("parallel-tool-lifecycle"),
 	})
@@ -283,12 +287,12 @@ type parallelLifecycleExecutor struct {
 }
 
 func newParallelLifecycleExecutor() *parallelLifecycleExecutor {
-	release := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	for _, id := range parallelLifecycleRequestOrder {
+	release := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	for _, id := range parallelLifecycleRequestOrder() {
 		release[id] = make(chan struct{})
 	}
 	return &parallelLifecycleExecutor{
-		started:        make(map[string]struct{}, len(parallelLifecycleRequestOrder)),
+		started:        make(map[string]struct{}, len(parallelLifecycleRequestOrder())),
 		allStarted:     make(chan struct{}),
 		release:        release,
 		bravoCompleted: make(chan struct{}),
@@ -299,7 +303,7 @@ func (e *parallelLifecycleExecutor) Execute(ctx context.Context, call messages.T
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
 	e.started[call.ID] = struct{}{}
-	allStarted := len(e.started) == len(parallelLifecycleRequestOrder)
+	allStarted := len(e.started) == len(parallelLifecycleRequestOrder())
 	release, known := e.release[call.ID]
 	e.mu.Unlock()
 	if allStarted {
@@ -338,7 +342,7 @@ func (e *parallelLifecycleExecutor) Execute(ctx context.Context, call messages.T
 	return messages.ToolCallResponse{
 		ToolCallID: call.ID,
 		Name:       call.Name,
-		Content:    parallelLifecycleResultContent[call.ID],
+		Content:    parallelLifecycleResultContent()[call.ID],
 	}, nil
 }
 
@@ -351,7 +355,7 @@ func (e *parallelLifecycleExecutor) releaseCall(callID string) {
 }
 
 func (e *parallelLifecycleExecutor) releaseAll() {
-	for _, id := range parallelLifecycleRequestOrder {
+	for _, id := range parallelLifecycleRequestOrder() {
 		e.releaseCall(id)
 	}
 }
@@ -399,8 +403,8 @@ func (o *parallelLifecycleObservation) closeCount() int {
 
 func assertParallelLifecycleCalls(t *testing.T, calls []messages.ToolCall) {
 	t.Helper()
-	if len(calls) != len(parallelLifecycleRequestOrder) {
-		t.Fatalf("executor observed %d calls, want exactly %d: %#v", len(calls), len(parallelLifecycleRequestOrder), calls)
+	if len(calls) != len(parallelLifecycleRequestOrder()) {
+		t.Fatalf("executor observed %d calls, want exactly %d: %#v", len(calls), len(parallelLifecycleRequestOrder()), calls)
 	}
 	seen := map[string]int{}
 	for _, call := range calls {
@@ -410,18 +414,11 @@ func assertParallelLifecycleCalls(t *testing.T, calls []messages.ToolCall) {
 			t.Fatalf("executor call %#v has wrong identity, want ID %q name %q args %q", call, call.ID, wantName, wantArgs)
 		}
 	}
-	for _, id := range parallelLifecycleRequestOrder {
+	for _, id := range parallelLifecycleRequestOrder() {
 		if seen[id] != 1 {
 			t.Fatalf("executor observed call %q %d times, want exactly once; calls=%#v", id, seen[id], calls)
 		}
 	}
-}
-
-func parallelLifecycleIdentity(callID string) (name, args string) {
-	if callID == parallelLifecycleAlphaID {
-		return parallelLifecycleAlphaName, parallelLifecycleAlphaArgs
-	}
-	return parallelLifecycleBravoName, parallelLifecycleBravoArgs
 }
 
 func assertParallelLifecycleResults(t *testing.T, sent []messages.StreamMessage, wantIDs ...string) {
@@ -443,8 +440,8 @@ func assertParallelLifecycleResults(t *testing.T, sent []messages.StreamMessage,
 			t.Fatalf("provider received result for unexpected call ID %q", value.ToolCallID)
 		}
 		counts[value.ToolCallID]++
-		if value.Arguments != parallelLifecycleResultContent[value.ToolCallID] {
-			t.Fatalf("provider result for %q carries %q, want %q", value.ToolCallID, value.Arguments, parallelLifecycleResultContent[value.ToolCallID])
+		if value.Arguments != parallelLifecycleResultContent()[value.ToolCallID] {
+			t.Fatalf("provider result for %q carries %q, want %q", value.ToolCallID, value.Arguments, parallelLifecycleResultContent()[value.ToolCallID])
 		}
 	}
 	for _, id := range wantIDs {
@@ -456,7 +453,7 @@ func assertParallelLifecycleResults(t *testing.T, sent []messages.StreamMessage,
 
 func runParallelLifecycleCLI(t *testing.T, executor *parallelLifecycleExecutor, inferencer *parallelLifecycleInferencer, observation *parallelLifecycleObservation) <-chan error {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,
@@ -500,6 +497,7 @@ func TestSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
 }
 
 func testSessionCommand_OverlappingToolResultsWaitIndependently(t *testing.T) {
+	t.Helper()
 	session := newParallelLifecycleSession(parallelLifecycleBravoID, "")
 	inferencer := newParallelLifecycleInferencer(session)
 	executor := newParallelLifecycleExecutor()

@@ -144,7 +144,7 @@ func NewScriptedFixtureRuntime(script BrowserScript, options ...FixtureRuntimeOp
 		pending:    make(map[string]struct{}),
 		done:       make(chan struct{}),
 		stream:     make(chan FixtureEvent, countScriptEvents(script)),
-		state:      mustNewDefaultStateOracle(),
+		state:      newDefaultStateOracle(),
 		outcome:    BrowserScriptOutcome{Status: BrowserScriptOpen},
 	}
 	for _, option := range options {
@@ -227,12 +227,11 @@ func countScriptEvents(script BrowserScript) int {
 	return count
 }
 
-func mustNewDefaultStateOracle() *FixtureStateOracle {
-	oracle, err := NewFixtureStateOracle(map[string]any{})
-	if err != nil {
-		panic(err)
-	}
-	return oracle
+// newDefaultStateOracle starts from the canonical empty JSON object, which
+// needs no normalization.
+func newDefaultStateOracle() *FixtureStateOracle {
+	empty := json.RawMessage(`{}`)
+	return &FixtureStateOracle{initial: cloneRaw(empty), value: cloneRaw(empty)}
 }
 
 // Execute consumes exactly the next expected operation and returns its
@@ -389,19 +388,7 @@ func validateOperationRequest(request OperationRequest) error {
 			return errors.New("operation does not accept additional fields")
 		}
 	case OperationInvokeTool:
-		if err := validateScriptID(request.FrameID); err != nil {
-			return fmt.Errorf("frame_id: %w", err)
-		}
-		if strings.TrimSpace(request.ToolName) == "" {
-			return errors.New("tool_name is required")
-		}
-		input := request.Input
-		if len(input) == 0 {
-			input = json.RawMessage(`{}`)
-		}
-		if !isJSONObject(input) {
-			return errors.New("input must be a JSON object")
-		}
+		return validateInvokeToolRequest(request)
 	case OperationCancelTool:
 		if err := validateScriptID(request.InvocationID); err != nil {
 			return fmt.Errorf("invocation_id: %w", err)
@@ -416,6 +403,10 @@ func validateOperationRequest(request OperationRequest) error {
 		if request.FrameID != "" || request.ToolName != "" || request.Input != nil || request.InvocationID != "" {
 			return errors.New("operation accepts only url")
 		}
+	case OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
+		OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
+		OperationBrowsers, OperationTabs, OperationTools:
+		return fmt.Errorf("unsupported operation type %q", request.Type)
 	}
 	return nil
 }
@@ -447,6 +438,11 @@ func compareOperation(expected OperationExpectation, actual OperationRequest) (s
 		if expected.URL != actual.URL {
 			return "url", errors.New("URL values differ")
 		}
+	case OperationEnableLifecycle, OperationEnableWebMCP, OperationCloseTarget, OperationDetachTarget,
+		OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover, OperationBrowserListTargets,
+		OperationBrowserListTools, OperationDoctor, OperationContext, OperationBrowsers, OperationTabs,
+		OperationTools:
+		// These operations carry no fields beyond the already-compared type.
 	}
 	return "", nil
 }
@@ -514,21 +510,8 @@ func semanticValueEqual(left, right any) bool {
 }
 
 func (r *BrowserScriptRuntime) invocationIDForResult(result json.RawMessage) (string, error) {
-	if len(result) > 0 {
-		fields, err := decodeJSONObject(result)
-		if err != nil {
-			return "", err
-		}
-		if raw, ok := fields[jsonFieldInvocationID]; ok {
-			id, err := parseScriptString(raw)
-			if err != nil {
-				return "", err
-			}
-			if err := validateScriptID(id); err != nil {
-				return "", err
-			}
-			return id, nil
-		}
+	if id, found, err := scriptedResultInvocationID(result); found || err != nil {
+		return id, err
 	}
 	id := r.ids.NextID("invocation")
 	if err := validateScriptID(id); err != nil {

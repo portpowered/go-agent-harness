@@ -1,14 +1,15 @@
+//go:build e2e
+
 package chrome
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,12 +18,8 @@ import (
 )
 
 const (
-	gateFixtureQuerySecret    = "gate-fixture-query-secret"
-	gateFixtureFragmentSecret = "gate-fixture-fragment-secret"
-	gateEndpointQuerySecret   = "gate-endpoint-query-secret"
-	gateEndpointFragment      = "gate-endpoint-fragment"
-	gateCompleteMessage       = "gate-complete"
-	gateWatchMessage          = "gate-watch"
+	gateCompleteMessage = "gate-complete"
+	gateWatchMessage    = "gate-watch"
 )
 
 // TestPinnedChromeWebMCPGateI1ThroughActualBinary is the release-facing
@@ -30,13 +27,6 @@ const (
 // harness so it reuses the qualified Chrome lock, flags, local fixture, and
 // detach-only browser oracle without duplicating those security boundaries.
 func TestPinnedChromeWebMCPGateI1ThroughActualBinary(t *testing.T) {
-	// Keep this as the first observable operation. In ordinary CI this test
-	// must not read the lock, make network requests, create a server, or start
-	// a browser.
-	if os.Getenv(chromeIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the actual-binary Gate I1 proof", chromeIntegrationEnv)
-	}
-
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -121,7 +111,7 @@ func launchGateI1(t *testing.T, ctx context.Context) *gateI1Run {
 	})
 
 	run.baseURL = browserHTTPURL(run.browser.endpoint())
-	run.version, err = waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	run.version, err = waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
@@ -381,76 +371,6 @@ func (r *gateI1Run) closeBrowser(t *testing.T) int {
 	return chromePID
 }
 
-func startGateCommand(parent context.Context, binaryPath, configDir string, args ...string) (*gateCLIProcess, error) {
-	return startGateCommandWithEnvironment(parent, binaryPath, configDir, nil, args...)
-}
-
-func startGateCommandWithEnvironment(parent context.Context, binaryPath, configDir string, extraEnvironment []string, args ...string) (*gateCLIProcess, error) {
-	if parent == nil {
-		parent = context.Background()
-	}
-	commandContext, cancel := context.WithCancel(parent)
-	fullArgs := append([]string{"--config-dir", configDir}, args...)
-	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
-	command.Dir = mustRepositoryRoot()
-	command.Env = gateChildEnvironment()
-	for _, extra := range extraEnvironment {
-		key, _, ok := strings.Cut(extra, "=")
-		if !ok || key == "" {
-			continue
-		}
-		filtered := command.Env[:0]
-		for _, value := range command.Env {
-			if strings.HasPrefix(value, key+"=") {
-				continue
-			}
-			filtered = append(filtered, value)
-		}
-		command.Env = append(filtered, extra)
-	}
-	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
-	command.Stdout = &process.stdout
-	command.Stderr = &process.stderr
-	if err := command.Start(); err != nil {
-		cancel()
-		return nil, err
-	}
-	go func() {
-		err := command.Wait()
-		exitCode := 0
-		if command.ProcessState != nil {
-			exitCode = command.ProcessState.ExitCode()
-		}
-		process.done <- gateCLIResult{Args: append([]string(nil), process.args...), Stdout: process.stdout.String(), Stderr: process.stderr.String(), ExitCode: exitCode, Err: err}
-	}()
-	return process, nil
-}
-
-func (p *gateCLIProcess) wait(ctx context.Context) (gateCLIResult, error) {
-	if p == nil {
-		return gateCLIResult{}, errors.New("nil Gate I1 child process")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	select {
-	case result := <-p.done:
-		p.cancel()
-		return result, nil
-	case <-ctx.Done():
-		p.cancel()
-		return gateCLIResult{}, ctx.Err()
-	}
-}
-
-// abandon reaps a child process on a failure path; its exit status cannot
-// change the failure already being reported.
-func (p *gateCLIProcess) abandon(ctx context.Context) {
-	if _, err := p.wait(context.WithoutCancel(ctx)); err != nil {
-		return
-	}
-}
-
 func assertGateWatchSequence(t *testing.T, data gateWatchData, browserID, targetID, toolRef string) {
 	t.Helper()
 	if len(data.Events) < 4 {
@@ -489,15 +409,6 @@ func assertGateWatchSequence(t *testing.T, data gateWatchData, browserID, target
 	}
 }
 
-func hasFixtureInvocation(oracle fixtureOracle, want string) bool {
-	for _, invocation := range oracle.Invocations {
-		if invocation == want {
-			return true
-		}
-	}
-	return false
-}
-
 func waitForGateFixtureOracle(ctx context.Context, endpoint string, match func(fixtureOracle) bool) (fixtureOracle, error) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -517,8 +428,109 @@ func waitForGateFixtureOracle(ctx context.Context, endpoint string, match func(f
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for Gate I1 fixture oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for Gate I1 fixture oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		case <-ticker.C:
 		}
+	}
+}
+
+// TestPinnedChromeConnectionSurvivesOpenerContextCancel locks the fix for the
+// in-session attach failure observed live on 2026-08-29: the adapter bound the
+// chromedp browser connection's lifetime to the ctx of whichever call first
+// dialed the endpoint. A session's first bounded tool call therefore tore the
+// websocket down when it returned, the sticky disconnected flag poisoned the
+// broker's cached handle, and every later select failed browser_disconnected
+// at phase=attach while Chrome stayed healthy. The opener's ctx must bound
+// only the dial: after Open returns, cancellation of that ctx must not end
+// the connection, and both ListTargets and Attach must still succeed.
+func TestPinnedChromeConnectionSurvivesOpenerContextCancel(t *testing.T) {
+	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
+		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	pinned, err := acquirePinnedChrome(ctx, t.TempDir())
+	if err != nil {
+		t.Fatalf("acquire locked Chrome for Testing: %v", err)
+	}
+	fixture := newFixtureServer()
+	t.Cleanup(func() { fixture.Close() })
+	browser, err := launchPinnedChrome(ctx, pinned, fixture.URL())
+	if err != nil {
+		t.Fatalf("launch locked Chrome for Testing: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := browser.Close(); closeErr != nil {
+			t.Logf("Chrome cleanup: %v", closeErr)
+		}
+	})
+	version, err := waitForDevToolsVersion(ctx, browserHTTPURL(browser.endpoint()))
+	if err != nil {
+		t.Fatalf("read pinned Chrome DevTools version: %v", err)
+	}
+	fixtureTarget, err := waitForFixturePageTarget(ctx, browserHTTPURL(browser.endpoint()), fixture.URL())
+	if err != nil {
+		t.Fatalf("discover fixture target: %v", err)
+	}
+
+	candidate := webmcp.BrowserCandidate{
+		ID:           webmcp.BrowserID("chrome-cft-" + lockedChromeVersion),
+		Source:       webmcp.DiscoverySourceExplicit,
+		Product:      version.Browser,
+		Protocol:     version.ProtocolVersion,
+		HTTPURL:      browserHTTPURL(browser.endpoint()),
+		BrowserWSURL: version.WebSocketDebuggerURL,
+		Loopback:     true,
+		Explicit:     true,
+	}
+	adapter := NewRuntime(WithEventBuffer(128), WithCommandTimeout(20*time.Second))
+
+	// The session shape: the first tool call's bounded ctx dials the handle
+	// and is canceled as soon as that call returns.
+	openContext, cancelOpen := context.WithCancel(ctx)
+	handleValue, err := adapter.Open(openContext, candidate)
+	if err != nil {
+		t.Fatalf("open adapter handle: %v", err)
+	}
+	t.Cleanup(func() { discardSecondaryError(handleValue.Close) })
+	cancelOpen()
+
+	// Give a lifetime regression time to surface: the old binding delivered
+	// chromedp's LostConnection promptly after cancellation.
+	observation := time.NewTimer(3 * time.Second)
+	defer observation.Stop()
+	healthCheck := time.NewTicker(100 * time.Millisecond)
+	defer healthCheck.Stop()
+	for observing := true; observing; {
+		if health, ok := handleValue.(webmcp.BrowserHandleHealth); ok && health.Disconnected() {
+			t.Fatalf("handle reported disconnected after opener ctx cancel; connection lifetime is still bound to the opener")
+		}
+		select {
+		case <-observation.C:
+			observing = false
+		case <-healthCheck.C:
+		}
+	}
+
+	targets, err := handleValue.ListTargets(ctx)
+	if err != nil {
+		t.Fatalf("list targets after opener ctx cancel: %v", err)
+	}
+	listed := slices.ContainsFunc(targets, func(candidate webmcp.Target) bool {
+		return candidate.ID == webmcp.TargetID(fixtureTarget.ID)
+	})
+	if !listed {
+		t.Fatalf("fixture target %q missing after opener ctx cancel: %+v", fixtureTarget.ID, targets)
+	}
+
+	session, err := handleValue.Attach(ctx, webmcp.TargetID(fixtureTarget.ID), webmcp.TargetOwnershipExternal)
+	if err != nil {
+		t.Fatalf("attach after opener ctx cancel: %v", err)
+	}
+	defer discardSecondaryError(session.Close)
+	if err := session.EnableWebMCP(ctx); err != nil {
+		t.Fatalf("enable WebMCP after opener ctx cancel: %v", err)
 	}
 }

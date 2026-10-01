@@ -22,26 +22,20 @@ const (
 	OperationTools              OperationType = "tools"
 )
 
-var diagnosticReadOnlyOperationTypes = map[OperationType]struct{}{
-	OperationDiscover:           {},
-	OperationList:               {},
-	OperationListTargets:        {},
-	OperationListTools:          {},
-	OperationBrowserDiscover:    {},
-	OperationBrowserListTargets: {},
-	OperationBrowserListTools:   {},
-	OperationDoctor:             {},
-	OperationContext:            {},
-	OperationBrowsers:           {},
-	OperationTabs:               {},
-	OperationTools:              {},
-}
-
 // IsDiagnosticReadOnlyOperation reports whether request belongs to the fixed
 // discovery/list vocabulary. Shape validation is intentionally separate.
 func IsDiagnosticReadOnlyOperation(request OperationRequest) bool {
-	_, ok := diagnosticReadOnlyOperationTypes[request.Type]
-	return ok
+	switch request.Type {
+	case OperationDiscover, OperationList, OperationListTargets, OperationListTools,
+		OperationBrowserDiscover, OperationBrowserListTargets, OperationBrowserListTools,
+		OperationDoctor, OperationContext, OperationBrowsers, OperationTabs, OperationTools:
+		return true
+	case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool,
+		OperationNavigate, OperationCloseTarget, OperationDetachTarget:
+		return false
+	default:
+		return false
+	}
 }
 
 func isDiagnosticReadOnlyOperation(request OperationRequest) bool {

@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -36,21 +35,6 @@ const (
 	metricsReconcileText     = "Reconciled text."
 	metricsReconcileDeadline = 30 * time.Second
 )
-
-// corpusAudioWAVPath locates a committed corpus WAV. The fixture is assembled
-// in a temporary directory so raw audio never enters a committed JSON capture.
-func corpusAudioWAVPath(t *testing.T, name string) string {
-	t.Helper()
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve corpus audio path: runtime.Caller failed")
-	}
-	path := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "go-agent-loop", "testdata", "audio", name)
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("committed corpus WAV %s not found: %v", name, err)
-	}
-	return path
-}
 
 func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 	t.Helper()
@@ -351,6 +335,21 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 			}
 			inTurn = false
 			turnHasOutput = false
+		case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
+			messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart,
+			messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta,
+			messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
+			messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
+			messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
+			messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
+			messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+			messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded,
+			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
+			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+			messages.StreamTypeSystemFullMessage:
+			// Other stream types do not contribute to accounting.
 		}
 	}
 	if inTurn {
@@ -449,7 +448,7 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 	audioOutPath := filepath.Join(filepath.Dir(fixturePath), "assistant-reply.wav")
 
 	runtimeObserver := &runtimeObservationCapture{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)
@@ -508,15 +507,6 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 		t.Fatalf("runtime terminal observations = %d, final accounting nil = %t (run error: %v)", terminalCount, finalAccounting == nil, runErr)
 	}
 	return fixturePath, expectedPCM, stdout, fixtureLedger, finalAccounting, audioOut, runErr
-}
-
-func wavPCM(t *testing.T, name string, data []byte) []byte {
-	t.Helper()
-	_, samples, err := wavio.Read(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
-	return codec.EncodePCM16(samples)
 }
 
 // TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession is
@@ -623,7 +613,7 @@ func TestSessionCommandMetricsReconcileMissingOutputTextDeltaFails(t *testing.T)
 func TestSessionCommandFinalAccountingIsEmittedOnceOnError(t *testing.T) {
 	fixturePath := gwtesting.SharedSessionFixturePath("session_failure_auth.session.json")
 	runtimeObserver := &runtimeObservationCapture{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)

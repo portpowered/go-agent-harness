@@ -36,7 +36,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "recorded.session.json")
 	recordDialer := newHandshakeReplayDialer()
 
-	recordTools := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	recordTools := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{Definitions: []messages.ToolDefinition{{
 			Name:        sessionHandshakeReplayTool,
 			Description: "recorded schema",
@@ -47,7 +47,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 			}},
 		}}}, nil
 	})
-	recordCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	recordCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortTransportDialer, recordDialer),
 		wire.NewToolServicePort(recordTools),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
@@ -87,7 +87,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	// provider handshake, and this config intentionally contains no API key.
 	replayConfigDir := t.TempDir()
 	writeSessionToolConfig(t, replayConfigDir, false)
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}
@@ -192,6 +192,10 @@ func (c *handshakeReplayConn) Close() error {
 var _ transport.Dialer = (*handshakeReplayDialer)(nil)
 var _ transport.Conn = (*handshakeReplayConn)(nil)
 
+// scriptedSessionOpenSettle separates the scripted session.open from the
+// scripted events so the command observes the open first.
+const scriptedSessionOpenSettle = 150 * time.Millisecond
+
 type integrationScriptedSessionInferencer struct {
 	events    []messages.StreamMessage
 	connected bool
@@ -209,7 +213,14 @@ func (s *integrationScriptedSessionInferencer) ConnectSession(ctx context.Contex
 			Type:  messages.StreamTypeSessionOpen,
 			Value: messages.NewSessionOpenValue("integration-session", "openai"),
 		})
-		time.Sleep(150 * time.Millisecond)
+		// Runs in the caller's synctest bubble, so this settle is virtual time.
+		settle := time.NewTimer(scriptedSessionOpenSettle)
+		select {
+		case <-ctx.Done():
+			settle.Stop()
+			return
+		case <-settle.C:
+		}
 		for _, evt := range s.events {
 			session.recv.Write(ctx, evt)
 		}

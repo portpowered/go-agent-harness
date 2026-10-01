@@ -7,11 +7,6 @@ import (
 
 const chatInteractiveTerminalMessage = "agent chat requires an interactive terminal; use agent ask for scripted or piped input."
 
-// chatInputIsInteractive is a seam for composed command tests. Production
-// uses detectInteractiveTerminal, which only admits an input that exposes a
-// terminal file descriptor.
-var chatInputIsInteractive = detectInteractiveTerminal
-
 // detectInteractiveTerminal reports whether a command's input is attached to
 // a terminal. Readers injected by Cobra tests, pipes, redirected files, and
 // closed descriptors are intentionally not treated as interactive input.

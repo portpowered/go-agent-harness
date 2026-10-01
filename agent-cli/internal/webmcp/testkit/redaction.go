@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -111,6 +110,13 @@ func (r *Redactor) RedactEvents(events []Event) ([]Event, error) {
 			switch event.Type {
 			case EventBrowserInvocationCreated, EventBrowserInvocationDispatched:
 				invocationTools[invocationID] = tool
+			case EventBrowserDiscoveryStarted, EventBrowserDiscoveryCompleted, EventBrowserEndpointVersion,
+				EventBrowserTargetsSnapshot, EventBrowserTargetSelected, EventBrowserChromeTargetAttached,
+				EventBrowserWebMCPEnabled, EventBrowserCatalogToolAdded, EventBrowserCatalogToolRemoved,
+				EventBrowserCatalogReady, EventBrowserInvocationApproval, EventBrowserInvocationCompleted,
+				EventBrowserInvocationError, EventBrowserInvocationCancel, EventBrowserInvocationCanceled,
+				EventBrowserPageGenerationChanged, EventBrowserTargetDetached, EventBrowserChromeTargetClosed:
+				// Only creation and dispatch events bind an invocation to its tool.
 			}
 		}
 	}
@@ -378,7 +384,7 @@ func (t *redactionTrace) merge(other redactionTrace) {
 	}
 }
 
-func (t redactionTrace) applyTo(event *Event) {
+func (t *redactionTrace) applyTo(event *Event) {
 	mode := RedactionNone
 	if t.digest {
 		mode = RedactionDigest
@@ -386,7 +392,7 @@ func (t redactionTrace) applyTo(event *Event) {
 		mode = RedactionRedacted
 	}
 	rules := make([]string, 0, len(t.rules))
-	for _, rule := range redactionRuleOrder {
+	for _, rule := range redactionRuleOrder() {
 		if t.rules[rule] {
 			rules = append(rules, rule)
 		}
@@ -584,27 +590,30 @@ func (r *Redactor) redactString(value string) (string, bool, bool, bool) {
 	queryChanged := false
 	fragmentChanged := false
 	if parsed, ok := parseRedactableURL(value); ok {
-		if r.policy.URLQuery && (parsed.RawQuery != "" || parsed.ForceQuery) {
-			parsed.RawQuery = ""
-			parsed.ForceQuery = false
-			queryChanged = true
-		}
-		if r.policy.URLFragment && (parsed.Fragment != "" || parsed.RawFragment != "") {
-			parsed.Fragment = ""
-			parsed.RawFragment = ""
-			fragmentChanged = true
-		}
-		if parsed.User != nil {
-			if _, hasPassword := parsed.User.Password(); hasPassword {
-				parsed.User = url.UserPassword(parsed.User.Username(), RedactionMarker)
-			}
-		}
+		queryChanged, fragmentChanged = r.redactURL(parsed)
 		redacted = parsed.String()
 	}
 	redactedWithCredentials, credentialChanged := redactPlainString(redacted, r.credentials)
 	redacted = redactedWithCredentials
 	changed := redacted != value || queryChanged || fragmentChanged || credentialChanged
 	return redacted, changed, queryChanged, fragmentChanged
+}
+
+// redactURL strips the policy-selected query and fragment and masks a URL
+// password in place, reporting which of query and fragment changed.
+func (r *Redactor) redactURL(parsed *url.URL) (queryChanged, fragmentChanged bool) {
+	if r.policy.URLQuery && (parsed.RawQuery != "" || parsed.ForceQuery) {
+		parsed.RawQuery, parsed.ForceQuery, queryChanged = "", false, true
+	}
+	if r.policy.URLFragment && (parsed.Fragment != "" || parsed.RawFragment != "") {
+		parsed.Fragment, parsed.RawFragment, fragmentChanged = "", "", true
+	}
+	if parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			parsed.User = url.UserPassword(parsed.User.Username(), RedactionMarker)
+		}
+	}
+	return queryChanged, fragmentChanged
 }
 
 func redactPlainString(value string, credentials [][]byte) (string, bool) {
@@ -820,27 +829,6 @@ func RedactRawDiagnostics(data []byte, credentials []string) ([]byte, error) {
 		return nil, newRedactionError(ErrRedactionCredentialSurvived, "redact diagnostics", "diagnostic", nil, secretBytes)
 	}
 	return redacted, nil
-}
-
-// WriteRedactedEvents serializes redacted events to a writer only after the
-// complete artifact has been transformed and credential-checked. A failed
-// transformation never writes a partial event stream.
-func WriteRedactedEvents(writer io.Writer, events []Event, policy RedactionPolicy, credentials ...[]string) error {
-	if writer == nil {
-		return newRedactionError(ErrRecorderWrite, "write events", "writer", errors.New("writer is nil"), nil)
-	}
-	data, err := MarshalRedactedEvents(events, policy, credentials...)
-	if err != nil {
-		return err
-	}
-	n, err := writer.Write(data)
-	if err == nil && n != len(data) {
-		err = io.ErrShortWrite
-	}
-	if err != nil {
-		return newRedactionError(ErrRecorderWrite, "write events", "writer", err, nil)
-	}
-	return nil
 }
 
 // sameJSONStructure is intentionally used only to avoid marking a page-owned

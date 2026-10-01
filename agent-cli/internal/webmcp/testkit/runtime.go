@@ -252,6 +252,9 @@ type ScriptedBrowserRuntime struct {
 	clock           webmcp.Clock
 	closeDone       chan struct{}
 	closeErr        error
+	// configErr records constructor configs that AddBrowser rejected; Open
+	// reports it so an invalid fixture fails the test through the runtime.
+	configErr error
 }
 
 func NewScriptedBrowserRuntime(configs ...BrowserConfig) *ScriptedBrowserRuntime {
@@ -281,7 +284,7 @@ func NewScriptedBrowserRuntimeWithOptions(options RuntimeOptions, configs ...Bro
 	}
 	for _, config := range configs {
 		if err := runtime.AddBrowser(config); err != nil {
-			panic(err)
+			runtime.configErr = errors.Join(runtime.configErr, fmt.Errorf("scripted browser runtime config: %w", err))
 		}
 	}
 	return runtime
@@ -322,7 +325,7 @@ func (r *ScriptedBrowserRuntime) AddCandidate(candidate webmcp.BrowserCandidate,
 }
 
 func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
-	if err := contextError(ctx); err != nil {
+	if err := r.openAdmission(ctx); err != nil {
 		return nil, err
 	}
 	r.mu.Lock()
@@ -383,6 +386,15 @@ func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.Brow
 
 // Close is not part of webmcp.BrowserRuntime because ownership belongs to
 // the browser handle, but it is useful for fixture teardown and is idempotent.
+// openAdmission rejects a canceled context and any constructor config that
+// AddBrowser refused.
+func (r *ScriptedBrowserRuntime) openAdmission(ctx context.Context) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	return r.configErr
+}
+
 func (r *ScriptedBrowserRuntime) Close() error {
 	r.mu.Lock()
 	if r.closed {
@@ -458,32 +470,6 @@ func (r *ScriptedBrowserRuntime) record(operation Operation) {
 	close(r.operationChanges)
 	r.operationChanges = make(chan struct{})
 	r.operationMu.Unlock()
-}
-
-func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browserID webmcp.BrowserID, targetID webmcp.TargetID, generation, sequence uint64) webmcp.BrowserEvent {
-	if event.Version == "" {
-		event.Version = webmcp.BrowserEventsVersion
-	}
-	if event.Sequence == 0 {
-		event.Sequence = sequence
-	}
-	if event.At.IsZero() {
-		event.At = r.clock.Now()
-	}
-	if event.BrowserID == "" {
-		event.BrowserID = browserID
-	}
-	if event.TargetID == "" {
-		event.TargetID = targetID
-	}
-	if event.Generation == 0 {
-		event.Generation = generation
-	}
-	event.Tools = cloneTools(event.Tools)
-	event.RemovedToolNames = append([]string(nil), event.RemovedToolNames...)
-	event.Input = cloneBytes(event.Input)
-	event.Output = cloneBytes(event.Output)
-	return event
 }
 
 func newScriptedBrowserHandle(runtime *ScriptedBrowserRuntime, config BrowserConfig) *ScriptedBrowserHandle {
@@ -815,9 +801,6 @@ func (s *ScriptedTargetSession) emitLocalPublishedLocked(event webmcp.BrowserEve
 }
 
 func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

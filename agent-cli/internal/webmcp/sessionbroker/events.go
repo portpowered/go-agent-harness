@@ -27,7 +27,7 @@ func LiveBrokerEvents(source func(context.Context) <-chan webmcp.BrokerEvent) fu
 
 func liveCapabilityEvents[Event any](source func(context.Context) <-chan Event, convert func(Event) session.LiveCapabilityEvent) func(context.Context) <-chan session.LiveCapabilityEvent {
 	return func(ctx context.Context) <-chan session.LiveCapabilityEvent {
-		if source == nil || ctx == nil {
+		if source == nil {
 			return nil
 		}
 		return projectBufferedEvents(ctx, source(ctx), convert, liveCapabilityEventBuffer)

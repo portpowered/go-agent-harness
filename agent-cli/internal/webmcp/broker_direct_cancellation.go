@@ -37,9 +37,6 @@ type directCancellationObservation struct {
 }
 
 func (b *StatefulBroker) cancelDirectInvocation(ctx context.Context, request DirectCancelRequest) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -185,15 +182,15 @@ func isDirectCancellationLifecycleEvent(eventType BrowserEventType) bool {
 	switch eventType {
 	case EventPageNavigated, EventFrameNavigated, EventTargetDetached, EventBrowserDisconnected, EventSessionClosed:
 		return true
+	case EventToolsAdded, EventToolsRemoved, EventCatalogReady, EventToolInvoked, EventToolResponded,
+		EventTargetAttached:
+		return false
 	default:
 		return false
 	}
 }
 
 func (b *StatefulBroker) waitForDirectCancellation(ctx context.Context, operation *directCancellation) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	waitCtx, cancel := context.WithTimeout(ctx, DefaultDirectCancellationTimeout)
 	defer cancel()
 
@@ -319,6 +316,9 @@ func directCancellationLifecycleError(operation *directCancellation, eventType B
 			outcome = "event_stream_closed"
 			message = "the browser event stream closed before cancellation was confirmed"
 		}
+	case EventToolsAdded, EventToolsRemoved, EventCatalogReady, EventToolInvoked, EventToolResponded,
+		EventTargetAttached:
+		// Non-lifecycle events keep the caller's unconfirmed-cancellation outcome.
 	}
 	details := directCancellationDetails(operation, eventType, outcome)
 	if safeReason := safePageErrorCode(reason); safeReason != "" {

@@ -58,10 +58,10 @@ func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra
 	for _, name := range options.toolNames {
 		definitions = append(definitions, messages.ToolDefinition{Name: name, Description: "Hermetic " + name + " fixture."})
 	}
-	capabilities := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	capabilities := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{Executor: options.executor, Definitions: definitions}, nil
 	})
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewToolServicePort(capabilities),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
 		wire.NewPortSwap(wire.PortSessionInferencer, options.inferencer),
@@ -162,6 +162,22 @@ func (s *interactiveTimeoutSession) Send(ctx context.Context, msg messages.Strea
 			s.elapsed[value.ToolCallID] = time.Since(s.started)
 			s.mu.Unlock()
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeRefusal,
+		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		// Other client messages need no scripted response.
 	}
 	return true
 }
@@ -271,6 +287,7 @@ func TestSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
 }
 
 func testSessionInteractiveToolPolicyBoundsLiveToolCalls(t *testing.T) {
+	t.Helper()
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__FAST_READ_TIMEOUT", interactiveFastTimeout.String())
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__LONG_RUNNING_TIMEOUT", "5s")
 	t.Setenv("AGENT_TOOLS__INTERACTIVE__ACKNOWLEDGEMENT_THRESHOLD", "50ms")
@@ -397,7 +414,7 @@ func (o *followOnToolObserver) observe(msg messages.StreamMessage) {
 // newActiveScheduledToolObserver drives the active scheduled session from its
 // stream: it releases the pending barge-in continuation on the ready session
 // update, marks the final grounded response, and records the client close.
-func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) func(messages.StreamMessage) {
+func newActiveScheduledToolObserver(ctx context.Context, inferencer *sessionToolBargeInInferencer) func(messages.StreamMessage) {
 	var finalResponseTextObserved bool
 	return func(msg messages.StreamMessage) {
 		session := inferencer.connectedSession()
@@ -405,7 +422,7 @@ func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) fu
 		case msg.Type == messages.StreamTypeSessionUpdated:
 			value, ok := msg.Value.(*messages.SessionUpdatedValue)
 			if ok && value != nil && value.SessionID == sessionToolBargeInContinuationReadyID && session != nil {
-				session.emitPendingBargeInContinuation()
+				session.emitPendingBargeInContinuation(ctx)
 			}
 		case msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeTextDelta:
 			value, ok := msg.Value.(*messages.TextDeltaValue)
@@ -414,7 +431,7 @@ func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) fu
 			}
 		case msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeMessageEnd:
 			if msg.ResponseID == sessionToolBargeInFinalResponseID && finalResponseTextObserved && session != nil {
-				session.markFinalResponseObserved()
+				session.markFinalResponseObserved(ctx)
 			}
 		case msg.Type == messages.StreamTypeSessionClose:
 			if session != nil {

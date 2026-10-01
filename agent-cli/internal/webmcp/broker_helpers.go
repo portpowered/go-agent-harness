@@ -72,9 +72,6 @@ func browserCandidatesReplaced(previous, current BrowserCandidate) bool {
 }
 
 func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -94,6 +91,12 @@ func lifecycleClassifiedError(err error) (*ClassifiedError, bool) {
 	switch classified.Code {
 	case ErrorBrowserDisconnected, ErrorTargetDetached:
 		return classified, true
+	case ErrorWebMCPDisabled, ErrorEndpointNotFound, ErrorEndpointUnreachable, ErrorRemoteEndpointDenied,
+		ErrorBrowserProtocol, ErrorUnsupportedWebMCP, ErrorNoEligibleTab, ErrorAmbiguousBrowser, ErrorAmbiguousTab,
+		ErrorStaleSelection, ErrorStaleToolRef, ErrorOriginDenied, ErrorApprovalRequired, ErrorApprovalDenied,
+		ErrorInvalidToolInput, ErrorResultTooLarge, ErrorTargetAttachFailed, ErrorPageNavigated,
+		ErrorInvocationFailed, ErrorInvocationCanceled, ErrorInvocationTimedOut, ErrorInvocationOrphaned:
+		return nil, false
 	default:
 		return nil, false
 	}
@@ -129,7 +132,7 @@ func targetSessionLifecycleFailure(selected *brokerSession) error {
 	return nil
 }
 
-func rememberLifecycleFailureLocked(selected *brokerSession, code ErrorCode, reason string) {
+func rememberLifecycleFailureLocked(selected *brokerSession, code ErrorCode) {
 	if selected == nil || selected.lifecycleFailure != nil {
 		return
 	}
@@ -235,4 +238,17 @@ func (randomIDs) NewInvocationID() (InvocationID, error) {
 		return "", err
 	}
 	return InvocationID("inv-" + base64.RawURLEncoding.EncodeToString(token[:])), nil
+}
+
+// toolRefUnusedLocked reports whether ref is valid and neither active nor
+// retired.
+func (b *StatefulBroker) toolRefUnusedLocked(ref ToolRef) bool {
+	if validateToolRefSyntax(ref) != nil {
+		return false
+	}
+	if _, active := b.refs[ref]; active {
+		return false
+	}
+	_, wasRetired := b.retired[ref]
+	return !wasRetired
 }

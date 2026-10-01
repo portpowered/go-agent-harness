@@ -66,7 +66,7 @@ func TestWebMCPLiveSessionAndDirectQueryPayloadParity(t *testing.T) {
 			t.Fatalf("live/direct decoded page payloads differ: live=%s direct=%s", liveOutput, directOutput)
 		}
 		fixture.assertUnchangedSelection(t)
-		fixture.assertOneTerminalPerInvocation(t, 2)
+		fixture.assertOneTerminalPerInvocation(t)
 	})
 
 	t.Run("fresh_empty", func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestWebMCPLiveSessionAndDirectQueryPayloadParity(t *testing.T) {
 			t.Fatalf("live/direct decoded empty payloads differ: live=%s direct=%s", liveOutput, directOutput)
 		}
 		fixture.assertUnchangedSelection(t)
-		fixture.assertOneTerminalPerInvocation(t, 2)
+		fixture.assertOneTerminalPerInvocation(t)
 	})
 
 	t.Run("stale_terminal_fails_closed_and_followup_works", func(t *testing.T) {
@@ -126,11 +126,12 @@ func TestWebMCPLiveSessionAndDirectQueryPayloadParity(t *testing.T) {
 		directOutput := decodeDirectQueryOutput(t, direct, fixture.ref)
 		assertWelcomeDocument(t, directOutput)
 		fixture.assertUnchangedSelection(t)
-		fixture.assertOneTerminalPerInvocation(t, 2)
+		fixture.assertOneTerminalPerInvocation(t)
 	})
 }
 
 func newQueryParityFixture(t *testing.T) queryParityFixture {
+	t.Helper()
 	return newQueryParityFixtureWithTool(t, webmcp.ToolDescriptor{
 		Name:        queryParityToolName,
 		Description: "List documents in the current Margin page.",
@@ -233,7 +234,7 @@ func (f queryParityFixture) liveExecutor(t *testing.T) messages.ToolExecutor {
 	capabilityFactory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return f.broker, nil
 	})
-	capabilities, err := capabilityFactory(capabilityConfig)
+	capabilities, err := capabilityFactory(t.Context(), capabilityConfig)
 	if err != nil {
 		t.Fatalf("construct live session capabilities: %v", err)
 	}
@@ -400,8 +401,13 @@ func (f queryParityFixture) assertUnchangedSelection(t *testing.T) {
 	}
 }
 
-func (f queryParityFixture) assertOneTerminalPerInvocation(t *testing.T, expected int) {
+// queryParityInvocations counts the two invocations every parity case makes:
+// one through the live session and one through the direct CLI command.
+const queryParityInvocations = 2
+
+func (f queryParityFixture) assertOneTerminalPerInvocation(t *testing.T) {
 	t.Helper()
+	expected := queryParityInvocations
 	counts := make(map[webmcp.InvocationID]int)
 	for _, publication := range f.runtime.PublishedEvents() {
 		if publication.Event.Type == webmcp.EventToolResponded {

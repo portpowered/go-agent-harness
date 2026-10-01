@@ -26,9 +26,6 @@ import (
 // WAV ingress, OpenAI Realtime websocket, tool execution/continuation, capture,
 // and WAV egress boundaries and compares the provider bytes with both files.
 func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
-	if os.Getenv("OPENAI_REALTIME_21_LIVE") != "1" {
-		t.Skip("set OPENAI_REALTIME_21_LIVE=1 to run the billed gpt-realtime-2.1 scenario")
-	}
 	if os.Getenv("AGENT_MODEL__OPENAI__API_KEY") == "" {
 		t.Fatal("AGENT_MODEL__OPENAI__API_KEY is required")
 	}
@@ -36,7 +33,7 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 	root := repositoryRoot(t)
 	tmp := t.TempDir()
 	binaryPath := filepath.Join(tmp, "yui")
-	build := exec.Command("go", "build", "-o", binaryPath, "./agent-cli/cmd/yui")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binaryPath, "./agent-cli/cmd/yui")
 	build.Dir = root
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build binary: %v\n%s", err, output)

@@ -24,7 +24,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -64,7 +63,7 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 		}
 		providerChunks = append(providerChunks, pcm16Bytes(t, packet))
 	}
-	want := mustResampleStream(t, providerChunks, wavio.Rate24kHz, audio.SampleRate)
+	want := mustResampleProviderToDevice(t, providerChunks)
 
 	capturePath := filepath.Join(t.TempDir(), fixtureName+"-audio-device.session.json")
 	writeOpenAIAudioBurstCapture(t, capturePath, fixtureName, deltas)
@@ -170,7 +169,7 @@ func loadTest13ProviderPackets(t *testing.T) ([]string, []byte) {
 
 	deltas := make([]string, 0, test13ProviderPacketCount)
 	providerPCM := make([]byte, 0, test13ProviderBytes)
-	for index := 0; index < test13ProviderPacketCount-1; index++ {
+	for index := range test13ProviderPacketCount - 1 {
 		packet := seeds[index%4]
 		deltas = append(deltas, base64.StdEncoding.EncodeToString(packet))
 		providerPCM = append(providerPCM, packet...)
@@ -281,7 +280,7 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	frames := playbackBurstFrames(capacity/audio.FrameSize + playbackBurstExtraFrames)
 	// The realtime provider speaks 24 kHz; the device sink owns one continuous
 	// resampler, so the exact device reference is the streamed conversion.
-	want := mustResampleStream(t, frames, wavio.Rate24kHz, audio.SampleRate)
+	want := mustResampleProviderToDevice(t, frames)
 
 	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {

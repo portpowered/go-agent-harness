@@ -87,7 +87,7 @@ func toolDuringAudioWAVPath(t *testing.T) string {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("committed corpus WAV %s not found: %v", toolDuringAudioCorpusWAV, err)
 	}
-	return writeVoicedWAVSlice(t, path, shortVoicedSlice)
+	return writeVoicedWAVSlice(t, path)
 }
 
 // toolDuringAudioCorpusSamples reads and validates the committed corpus WAV.
@@ -236,7 +236,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 
 	baseCapture.Session.ID = toolDuringAudioSessionID
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -244,6 +244,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"` + toolDuringAudioSessionID + `","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 
 	return writeReplayCaptureFixture(t, baseCapture, "tool-during-audio.session.json")
 }
@@ -254,7 +255,7 @@ func runToolDuringAudio(t *testing.T, wavPath, wirePath string) (string, string,
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
 	executor := &toolCallRecordingExecutor{}
-	toolService := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	toolService := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor: executor,
 			Definitions: []messages.ToolDefinition{{
@@ -397,14 +398,6 @@ func verifyToolDuringAudioExchangeIntact(exchange toolDuringAudioExchange, expec
 	return nil
 }
 
-// toolDuringAudioDeltaSpan renders the canonical affected-range identifier
-// for delta k of the scripted response.
-func toolDuringAudioDeltaSpan(k int) string {
-	start := k * toolDuringAudioDeltaSamples
-	end := start + toolDuringAudioDeltaSamples
-	return fmt.Sprintf("audio delta #%d (samples [%d,%d))", k, start, end)
-}
-
 // verifyToolDuringAudioTurnIntact proves the recorded --audio-out turn carries
 // every scripted output-audio delta intact across the interleaved tool call:
 // none missing, duplicated, reordered, or truncated. It returns a descriptive
@@ -478,6 +471,7 @@ func TestSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
 }
 
 func testSessionToolDuringAudioPreservesInFlightTurnThroughCLI(t *testing.T) {
+	t.Helper()
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)
@@ -518,6 +512,7 @@ func TestSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T
 }
 
 func testSessionToolDuringAudioCorruptedDeltaFailsDeterministically(t *testing.T) {
+	t.Helper()
 	wavPath := toolDuringAudioWAVPath(t)
 	inputSamples := toolDuringAudioCorpusSamples(t, wavPath)
 	deltas := toolDuringAudioScriptedDeltas(t, inputSamples)

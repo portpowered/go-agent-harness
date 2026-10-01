@@ -78,6 +78,7 @@ func loadCorpusHarnessSamples(t *testing.T, wavPath string) []int16 {
 // and no response.create. The server side closes the session immediately,
 // so any turn activity on either side diverges the replay and fails the run.
 func buildZeroCommitFixture(t *testing.T, samples []int16) string {
+	t.Helper()
 	return buildAudioInWireFixture(t, samples, false)
 }
 
@@ -86,6 +87,7 @@ func buildZeroCommitFixture(t *testing.T, samples []int16) string {
 // response.create) and delivers a spoken transcript turn in response, so the
 // run can only complete when a real commit is sent.
 func buildSpeechCommitFixture(t *testing.T, samples []int16) string {
+	t.Helper()
 	return buildAudioInWireFixture(t, samples, true)
 }
 
@@ -154,7 +156,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 
 	baseCapture.Session.ID = "sess_audio_in_silence_lane"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -162,6 +164,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_audio_in_silence_lane","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	wirePath := filepath.Join(t.TempDir(), "audio-in-lane.session.json")
 	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
 	if err != nil {
@@ -276,6 +279,7 @@ func containsFold(s, substr string) bool {
 // silence corpus fixtures through the agent session CLI over the hermetic
 // replay transport and asserts zero commits and zero turns.
 func TestSessionAudioInSilenceFixturesProduceZeroCommitsAndTurns(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"silence_16k", "silence_24k"} {
 		t.Run(name, func(t *testing.T) {
 			// Each subtest is an independent session over its own replay
@@ -290,6 +294,7 @@ func TestSessionAudioInSilenceFixturesProduceZeroCommitsAndTurns(t *testing.T) {
 // corpus fixtures through the identical CLI path and asserts zero commits and
 // zero turns so background noise is never treated as speech.
 func TestSessionAudioInNoiseFixturesProduceZeroCommitsAndTurns(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"noise_16k", "noise_24k"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -307,6 +312,7 @@ func TestSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
 }
 
 func testSessionAudioInUtteranceFixtureProducesRealCommit(t *testing.T) {
+	t.Helper()
 	wavPath := locateCorpusWAV(t, "utt_short_16k")
 	samples := loadCorpusHarnessSamples(t, wavPath)
 	wirePath := buildSpeechCommitFixture(t, samples)
@@ -350,7 +356,7 @@ const shortVoicedSlice = 300 * time.Millisecond
 // its path. Picking the loudest window keeps the slice genuinely voiced rather
 // than leading silence; the same source and duration always yield the same
 // slice.
-func writeVoicedWAVSlice(t *testing.T, sourcePath string, duration time.Duration) string {
+func writeVoicedWAVSlice(t *testing.T, sourcePath string) string {
 	t.Helper()
 	encoded, err := os.ReadFile(sourcePath)
 	if err != nil {
@@ -360,7 +366,7 @@ func writeVoicedWAVSlice(t *testing.T, sourcePath string, duration time.Duration
 	if err != nil {
 		t.Fatalf("parse WAV %s: %v", sourcePath, err)
 	}
-	window := loudestWindowSamplesIntegration(t, all, int(int64(rate)*int64(duration)/int64(time.Second)))
+	window := loudestWindowSamplesIntegration(t, all, int(int64(rate)*int64(shortVoicedSlice)/int64(time.Second)))
 	var out bytes.Buffer
 	if err := wavio.Write(&out, rate, window); err != nil {
 		t.Fatalf("encode WAV slice of %s: %v", sourcePath, err)
@@ -378,7 +384,7 @@ func writeVoicedWAVSlice(t *testing.T, sourcePath string, duration time.Duration
 // streamed turns against whatever WAVs were scheduled.
 func multiturnTurnSliceWAV(t *testing.T, name string) string {
 	t.Helper()
-	return writeVoicedWAVSlice(t, locateCLIFixture(t, name), shortVoicedSlice)
+	return writeVoicedWAVSlice(t, locateCLIFixture(t, name))
 }
 
 // scheduledSpeechSliceWAV returns a 0.3s voiced slice of the committed 24 kHz
@@ -387,5 +393,5 @@ func multiturnTurnSliceWAV(t *testing.T, name string) string {
 // so the real-time-paced speech and its equal-duration silence stay short.
 func scheduledSpeechSliceWAV(t *testing.T) string {
 	t.Helper()
-	return writeVoicedWAVSlice(t, locateCorpusWAV(t, "truncated_24k"), shortVoicedSlice)
+	return writeVoicedWAVSlice(t, locateCorpusWAV(t, "truncated_24k"))
 }

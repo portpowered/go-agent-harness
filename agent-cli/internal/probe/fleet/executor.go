@@ -54,9 +54,6 @@ type Result struct {
 // failed entry results; only invalid setup (or a missing executor) returns an
 // error before execution starts.
 func Execute(ctx context.Context, manifest Manifest, executor EntryExecutor) (Execution, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := manifest.Validate(); err != nil {
 		return Execution{}, fmt.Errorf("validate fleet before execution: %w", err)
 	}
@@ -77,7 +74,7 @@ func Execute(ctx context.Context, manifest Manifest, executor EntryExecutor) (Ex
 	}
 	var workers sync.WaitGroup
 	workers.Add(workerCount)
-	for worker := 0; worker < workerCount; worker++ {
+	for range workerCount {
 		go func() {
 			defer workers.Done()
 			for index := range jobs {

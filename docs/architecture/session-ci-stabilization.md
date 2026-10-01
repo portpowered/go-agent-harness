@@ -178,7 +178,7 @@ Both high-rate remote-audio cases retain twenty fresh-process trials and all
 sample, tool and protocol assertions. Independent trials now use Go's standard
 parallel-subtest limit, with unique provider/device ports and temporary files;
 the built executables are read-only. On the same restored production source,
-normal Test45+46 with YUI_AUDIO_STRESS=1, -count=1 and -parallel=2 took 37.85s
+normal Test45+46 with YUI_AUDIO_STRESS=1 (now `-tags stress`), -count=1 and -parallel=2 took 37.85s
 wall time with the serial baseline (Go overlay), versus 25.92s in the candidate
 (about 31.5% less). Go-reported package durations were 36.408s and 23.380s.
 Candidate coverage and race modes passed all forty trials in 26.07s and 101.14s

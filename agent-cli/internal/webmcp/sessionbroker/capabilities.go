@@ -58,16 +58,16 @@ type ToolCapabilities struct {
 // ToolCapabilitiesFactory builds the session tool surface from the config selected by
 // --config-dir. It is optional so direct command constructors and callers
 // that intentionally inject a no-tools session keep their existing behavior.
-type ToolCapabilitiesFactory func(*config.Config) (ToolCapabilities, error)
+type ToolCapabilitiesFactory func(context.Context, *config.Config) (ToolCapabilities, error)
 
 // FactoryFromService adapts the injected service contract to the command's
 // lifecycle value without constructing a registry or browser.
 func FactoryFromService(resolver serviceTools.Service) ToolCapabilitiesFactory {
-	return func(cfg *config.Config) (ToolCapabilities, error) {
+	return func(ctx context.Context, cfg *config.Config) (ToolCapabilities, error) {
 		if resolver == nil {
 			return ToolCapabilities{}, errors.New("session tool capability service is not configured")
 		}
-		capabilities, err := resolver.Resolve(cfg)
+		capabilities, err := resolver.Resolve(ctx, cfg)
 		if err != nil {
 			return ToolCapabilities{}, err
 		}
@@ -77,11 +77,11 @@ func FactoryFromService(resolver serviceTools.Service) ToolCapabilitiesFactory {
 
 // Resolve adapts the capability factory to the injected tool service
 // contract. Production composition injects its private service.
-func (factory ToolCapabilitiesFactory) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) {
+func (factory ToolCapabilitiesFactory) Resolve(ctx context.Context, cfg *config.Config) (serviceTools.Capabilities, error) {
 	if factory == nil {
 		return serviceTools.Capabilities{}, errors.New("session capability factory is required")
 	}
-	capabilities, err := factory(cfg)
+	capabilities, err := factory(ctx, cfg)
 	if err != nil {
 		return serviceTools.Capabilities{}, err
 	}

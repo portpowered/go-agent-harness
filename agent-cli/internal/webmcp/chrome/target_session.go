@@ -26,7 +26,7 @@ type targetSession struct {
 	focusMu          sync.Mutex
 	focusUsers       int
 	handle           *handle
-	targetContext    context.Context
+	targetContext    context.Context //nolint:containedctx // chromedp encodes the attached target as a context (chromedp.FromContext); this is the target handle, not a request scope
 	cancelTarget     context.CancelFunc
 	runAction        func(context.Context, ...chromedp.Action) error
 	mu               sync.Mutex
@@ -99,7 +99,7 @@ func newTargetSession(
 		finishDone:     make(chan struct{}),
 		castUpdate:     make(chan struct{}),
 	}
-	go session.routeProtocolEvents()
+	go session.routeProtocolEvents(targetContext)
 	return session
 }
 
@@ -147,8 +147,8 @@ func (s *targetSession) recordWireBeforeDispatch(method string, invocationID web
 	}
 }
 
-func (s *targetSession) publishAttached() {
-	s.publish(webmcp.BrowserEvent{Type: webmcp.EventTargetAttached})
+func (s *targetSession) publishAttached(ctx context.Context) {
+	s.publish(ctx, webmcp.BrowserEvent{Type: webmcp.EventTargetAttached})
 }
 
 func (s *targetSession) enqueueProtocolEvent(event any) {
@@ -179,14 +179,15 @@ func (s *targetSession) enqueueBrowserEvent(event any) {
 	}
 }
 
-func (s *targetSession) routeProtocolEvents() {
+// routeProtocolEvents runs for the session; ctx (the target context) roots overflow cleanup.
+func (s *targetSession) routeProtocolEvents(ctx context.Context) {
 	defer close(s.routerDone)
 	for {
 		select {
 		case <-s.stopRouter:
 			return
 		case <-s.overflowSignal:
-			s.finishFromEventBufferOverflow()
+			s.finishFromEventBufferOverflow(ctx)
 			return
 		case event := <-s.protocolEvents:
 			if s.observeCastProtocolEvent(event) {
@@ -197,18 +198,18 @@ func (s *targetSession) routeProtocolEvents() {
 					s.finishFromProtocol(converted)
 					return
 				}
-				s.publish(converted)
+				s.publish(ctx, converted)
 			}
 		}
 	}
 }
 
-func (s *targetSession) publish(event webmcp.BrowserEvent) {
+func (s *targetSession) publish(ctx context.Context, event webmcp.BrowserEvent) {
 	s.eventsMu.Lock()
 	overflowed := s.publishLocked(event, false)
 	s.eventsMu.Unlock()
 	if overflowed {
-		s.finishFromEventBufferOverflow()
+		s.finishFromEventBufferOverflow(ctx)
 	}
 }
 
@@ -325,7 +326,7 @@ func eventBufferFullError() error {
 // stream has reported loss. The failure event is already queued (or is queued
 // here for protocol-queue overflow), so callers can distinguish this outcome
 // from an ordinary clean close while still receiving the events that fit.
-func (s *targetSession) finishFromEventBufferOverflow() {
+func (s *targetSession) finishFromEventBufferOverflow(ctx context.Context) {
 	if !s.beginFinish(false) {
 		return
 	}
@@ -342,7 +343,7 @@ func (s *targetSession) finishFromEventBufferOverflow() {
 	// signal, or immediately after publish returns on that same path. Closing
 	// stopRouter is therefore safe without waiting for routerDone here.
 	s.stopOnce.Do(func() { close(s.stopRouter) })
-	cleanupErr := s.cleanupTarget()
+	cleanupErr := s.cleanupTarget(context.WithoutCancel(ctx))
 	s.mu.Lock()
 	s.closeErr = cleanupErr
 	s.mu.Unlock()
@@ -420,7 +421,7 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 		s.page.CatalogEvidence = "page_producer"
 		s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported
 		s.mu.Unlock()
-		s.publish(webmcp.BrowserEvent{
+		s.publish(ctx, webmcp.BrowserEvent{
 			Type:           webmcp.EventCatalogReady,
 			CatalogReady:   true,
 			ToolCount:      0,
@@ -523,6 +524,8 @@ func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
 		s.page.DocumentLoadingKnown = false
 	case webmcp.EventTargetDetached, webmcp.EventBrowserDisconnected, webmcp.EventSessionClosed:
 		s.page.Connected = false
+	case webmcp.EventToolInvoked, webmcp.EventToolResponded, webmcp.EventTargetAttached:
+		// Invocation and attach events do not change page readiness.
 	}
 	s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported && s.page.CatalogReady
 }
@@ -636,7 +639,7 @@ func (s *targetSession) run(ctx context.Context, action chromedp.Action) error {
 		runner = chromedp.Run
 	}
 	boundContext, releaseDisconnect := s.handle.bindDisconnect(commandContext)
-	err := runner(boundContext, action)
+	err := runner(boundContext, action) //nolint:contextcheck // chromedp requires the target-derived context; ctx cancellation is forwarded by the watcher above
 	close(watchDone)
 	releaseDisconnect()
 	cancelCommand()
@@ -649,7 +652,7 @@ func validateObjectInput(input json.RawMessage) error {
 	}
 	if len(input) > webmcp.DefaultMaxInputBytes {
 		err := invalidInputError("too_large")
-		if classified, ok := err.(*webmcp.ClassifiedError); ok {
+		if classified, ok := errors.AsType[*webmcp.ClassifiedError](err); ok {
 			classified.Details["observed_bytes"] = len(input)
 			classified.Details["max_bytes"] = webmcp.DefaultMaxInputBytes
 		}
@@ -687,7 +690,7 @@ func (s *targetSession) Close() error {
 	s.mu.Unlock()
 
 	s.stopProtocolRouter()
-	cleanupErr := s.cleanupTarget()
+	cleanupErr := s.cleanupTarget(s.detachedCleanupContext())
 	s.mu.Lock()
 	s.closeErr = cleanupErr
 	if cleanupErr != nil && s.err == nil {
@@ -705,7 +708,7 @@ func (s *targetSession) Close() error {
 	return s.closeErr
 }
 
-func (s *targetSession) abortOpen() error {
+func (s *targetSession) abortOpen(ctx context.Context) error {
 	if !s.beginFinish(true) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -716,7 +719,7 @@ func (s *targetSession) abortOpen() error {
 	s.closed = true
 	s.mu.Unlock()
 	s.stopProtocolRouter()
-	cleanupErr := s.cleanupTarget()
+	cleanupErr := s.cleanupTarget(ctx)
 	s.mu.Lock()
 	s.closeErr = cleanupErr
 	if cleanupErr != nil && s.err == nil {
@@ -756,8 +759,8 @@ func (s *targetSession) completeFinish() {
 // cleanupTarget is the ownership boundary for an attached target. The
 // explicit detach must complete (or fail) before the chromedp target
 // reference is cleared and the target context is canceled. chromedp v0.16.0
-// otherwise follows cancellation with Target.closeTarget.
-func (s *targetSession) cleanupTarget() error {
+// otherwise follows cancellation with Target.closeTarget. ctx roots the commands.
+func (s *targetSession) cleanupTarget(ctx context.Context) error {
 	s.mu.Lock()
 	targetValue := s.protocolTarget
 	sessionID := s.protocolSession
@@ -768,9 +771,7 @@ func (s *targetSession) cleanupTarget() error {
 	s.mu.Unlock()
 
 	if targetValue == nil {
-		if data := chromedp.FromContext(s.targetContext); data != nil {
-			targetValue = data.Target
-		}
+		targetValue = s.clientTarget()
 	}
 	if targetValue != nil {
 		if sessionID == "" {
@@ -788,40 +789,26 @@ func (s *targetSession) cleanupTarget() error {
 	}
 	var joined error
 	if sessionID != "" {
-		if executor == nil {
-			if handle.isDisconnected() {
-				s.cancelClientTarget(targetValue)
-				return nil
-			}
-			joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", errors.New("browser connection is unavailable")))
-		} else {
-			detachContext, release := handle.operationContext(context.Background())
-			err := cdpTarget.DetachFromTarget().WithSessionID(sessionID).Do(cdp.WithExecutor(detachContext, executor))
-			release()
-			if err != nil {
-				joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", err))
-			}
+		disconnected, err := s.runTargetCleanupStep(ctx, handle, executor, targetValue, "detach", func(stepContext context.Context) error {
+			return cdpTarget.DetachFromTarget().WithSessionID(sessionID).Do(stepContext)
+		})
+		if disconnected {
+			return nil
 		}
+		joined = errors.Join(joined, err)
 	}
 	if ownership == webmcp.TargetOwnershipHarnessOwned && targetID != "" {
 		if handle.isDisconnected() {
 			s.cancelClientTarget(targetValue)
 			return joined
 		}
-		if executor == nil {
-			if handle.isDisconnected() {
-				s.cancelClientTarget(targetValue)
-				return joined
-			}
-			joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", errors.New("browser connection is unavailable")))
-		} else {
-			closeContext, release := handle.operationContext(context.Background())
-			err := cdpTarget.CloseTarget(targetID).Do(cdp.WithExecutor(closeContext, executor))
-			release()
-			if err != nil {
-				joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", err))
-			}
+		disconnected, err := s.runTargetCleanupStep(ctx, handle, executor, targetValue, "close_target", func(stepContext context.Context) error {
+			return cdpTarget.CloseTarget(targetID).Do(stepContext)
+		})
+		if disconnected {
+			return joined
 		}
+		joined = errors.Join(joined, err)
 	}
 
 	// Clear the protocol IDs before cancellation so chromedp's cleanup

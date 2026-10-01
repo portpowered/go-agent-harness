@@ -42,6 +42,12 @@ func WithWebMCPProductionConfigDir(configDir string) WebMCPProductionOption {
 	return production.WithConfigDir(configDir)
 }
 
+// WithWebMCPProductionWorkingDir injects the host working directory for
+// managed Chrome for Testing lock discovery.
+func WithWebMCPProductionWorkingDir(workingDir string) WebMCPProductionOption {
+	return production.WithWorkingDir(workingDir)
+}
+
 // WithWebMCPProductionManagedBrowserManager injects the managed-browser
 // lifecycle manager.
 func WithWebMCPProductionManagedBrowserManager(manager *chrome.ManagedBrowserManager) WebMCPProductionOption {
@@ -136,8 +142,12 @@ func configDirForGlobalFlags(globalFlags *flags.GlobalFlags) string {
 // after flags have been parsed, so --config-dir applies consistently without
 // making command construction touch the filesystem.
 func defaultWebMCPDoctorFactory(globalFlags *flags.GlobalFlags) WebMCPDoctorFactory {
+	// Without a host working directory the lock search starts from the
+	// executable and source directories only.
+	workingDir := globalFlags.HostWorkDirOrEmpty()
 	return NewProductionWebMCPDoctorFactory(
 		WithWebMCPProductionConfigDir(configDirForGlobalFlags(globalFlags)),
+		WithWebMCPProductionWorkingDir(workingDir),
 		WithWebMCPProductionSelectionStoreFactory(func() any {
 			return NewFileWebMCPSelectionStore(configDirForGlobalFlags(globalFlags))
 		}),

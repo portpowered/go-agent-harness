@@ -466,6 +466,7 @@ type faultScenarioResult struct {
 }
 
 func runFaultScenario(t *testing.T, options ...Option) faultScenarioResult {
+	t.Helper()
 	return runFaultScenarioFrames(t, faultScenarioFrames(), options...)
 }
 
@@ -525,6 +526,21 @@ func runFaultScenarioWithConn(t *testing.T, rawConn transport.Conn, options ...O
 			}
 			result.errorValue = value
 			return result
+		case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
+			messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
+			messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
+			messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
+			messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
+			messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
+			messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
+			messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
+			messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart,
+			messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded,
+			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
+			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeSystemFullMessage:
+			// Other stream types do not affect the fault-transport observation.
 		}
 	}
 }
@@ -547,24 +563,13 @@ func audioBurstScenarioFrames() []faultTestFrame {
 		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-audio-burst","model":"grok-fault-injection"}`)},
 		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
 	}
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
 	}
 	return append(frames,
 		faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.done"}`)},
 		faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.done"}`)},
 	)
-}
-
-func fullReceiveBufferFaultFrames() []faultTestFrame {
-	frames := []faultTestFrame{
-		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-full-buffer","model":"grok-fault-injection"}`)},
-		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
-	}
-	for i := 0; i < 70; i++ {
-		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
-	}
-	return frames
 }
 
 type faultTestFrame struct {
@@ -600,31 +605,6 @@ func newScheduledFaultTestConn(frames []faultTestFrame, clock *platformclock.Det
 		faultTestConn: newFaultTestConn(frames),
 		clock:         clock,
 	}
-}
-
-func (c *scheduledFaultTestConn) ReadMessage() (int, []byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return 0, nil, io.EOF
-	}
-
-	currentTick := c.clock.Tick()
-	for c.readIdx < len(c.frames) && c.nextTick < currentTick {
-		c.readIdx++
-		c.nextTick++
-		c.sourceDrops++
-	}
-	if c.readIdx >= len(c.frames) {
-		return 0, nil, io.EOF
-	}
-	if currentTick < c.nextTick {
-		c.clock.AdvanceTo(c.nextTick)
-	}
-	frame := c.frames[c.readIdx]
-	c.readIdx++
-	c.nextTick++
-	return frame.Type, append([]byte(nil), frame.Payload...), nil
 }
 
 func (c *scheduledFaultTestConn) SourceDrops() int {

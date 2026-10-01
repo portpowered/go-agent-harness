@@ -124,35 +124,35 @@ func endpointFromActivePort(record ActivePortRecord) (Endpoint, error) {
 	}, nil
 }
 
-type parseURLFailure struct{ reason string }
+type parseURLError struct{ reason string }
 
-func (e *parseURLFailure) Error() string {
+func (e *parseURLError) Error() string {
 	if e == nil {
 		return "invalid endpoint"
 	}
 	return e.reason
 }
 
-func parseHTTPURL(raw string) (*url.URL, *parseURLFailure) {
+func parseHTTPURL(raw string) (*url.URL, *parseURLError) {
 	trimmed := strings.TrimSpace(raw)
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed == nil {
-		return nil, &parseURLFailure{reason: "malformed_endpoint"}
+		return nil, &parseURLError{reason: "malformed_endpoint"}
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
-		return nil, &parseURLFailure{reason: "unsupported_endpoint_scheme"}
+		return nil, &parseURLError{reason: "unsupported_endpoint_scheme"}
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" {
-		return nil, &parseURLFailure{reason: "missing_endpoint_host"}
+		return nil, &parseURLError{reason: "missing_endpoint_host"}
 	}
 	if parsed.User != nil {
-		return nil, &parseURLFailure{reason: "credentials_not_allowed"}
+		return nil, &parseURLError{reason: "credentials_not_allowed"}
 	}
 	if parsed.Port() != "" {
 		port, err := strconv.Atoi(parsed.Port())
 		if err != nil || port < 1 || port > 65535 {
-			return nil, &parseURLFailure{reason: "invalid_endpoint_port"}
+			return nil, &parseURLError{reason: "invalid_endpoint_port"}
 		}
 	}
 	parsed.RawQuery = ""
@@ -165,32 +165,32 @@ type normalizedWebSocketURL struct {
 	loopback bool
 }
 
-func parseBrowserWebSocketURL(raw string) (normalizedWebSocketURL, *parseURLFailure) {
+func parseBrowserWebSocketURL(raw string) (normalizedWebSocketURL, *parseURLError) {
 	trimmed := strings.TrimSpace(raw)
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed == nil {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "malformed_browser_websocket"}
+		return normalizedWebSocketURL{}, &parseURLError{reason: "malformed_browser_websocket"}
 	}
 	parsed.Scheme = strings.ToLower(parsed.Scheme)
 	if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "unsupported_websocket_scheme"}
+		return normalizedWebSocketURL{}, &parseURLError{reason: "unsupported_websocket_scheme"}
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "missing_websocket_host"}
+		return normalizedWebSocketURL{}, &parseURLError{reason: "missing_websocket_host"}
 	}
 	if parsed.User != nil {
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "credentials_not_allowed"}
+		return normalizedWebSocketURL{}, &parseURLError{reason: "credentials_not_allowed"}
 	}
 	if !strings.HasPrefix(parsed.Path, "/devtools/browser/") || strings.TrimPrefix(parsed.Path, "/devtools/browser/") == "" {
 		if strings.HasPrefix(parsed.Path, "/devtools/page/") {
-			return normalizedWebSocketURL{}, &parseURLFailure{reason: "page_websocket_not_browser_websocket"}
+			return normalizedWebSocketURL{}, &parseURLError{reason: "page_websocket_not_browser_websocket"}
 		}
-		return normalizedWebSocketURL{}, &parseURLFailure{reason: "browser_websocket_path_required"}
+		return normalizedWebSocketURL{}, &parseURLError{reason: "browser_websocket_path_required"}
 	}
 	if parsed.Port() != "" {
 		port, err := strconv.Atoi(parsed.Port())
 		if err != nil || port < 1 || port > 65535 {
-			return normalizedWebSocketURL{}, &parseURLFailure{reason: "invalid_websocket_port"}
+			return normalizedWebSocketURL{}, &parseURLError{reason: "invalid_websocket_port"}
 		}
 	}
 	parsed.RawQuery = ""
@@ -230,4 +230,39 @@ func addressClassFromEndpointKind(kind EndpointKind) string {
 		return "loopback"
 	}
 	return "non_loopback"
+}
+
+func (s *Service) browserIDForEndpoint(endpoint Endpoint) string {
+	if s == nil {
+		return ""
+	}
+	if raw := strings.TrimSpace(endpoint.BrowserWSEndpoint); raw != "" {
+		if normalized, failure := parseBrowserWebSocketURL(raw); failure == nil {
+			identity := BrowserIdentity{
+				Scheme: normalized.url.Scheme,
+				Host:   normalized.url.Hostname(),
+				Port:   normalized.url.Port(),
+				Path:   normalized.url.EscapedPath(),
+			}
+			return normalizePublicID(s.idMapper.BrowserID(identity), identity)
+		}
+	}
+	if raw := strings.TrimSpace(endpoint.CDPURL); raw != "" {
+		if parsed, failure := parseHTTPURL(raw); failure == nil {
+			base := targetListBaseURL(parsed)
+			for browserID, known := range s.endpoints {
+				if known.httpURL == base {
+					return browserID
+				}
+			}
+			identity := BrowserIdentity{
+				Scheme: parsed.Scheme,
+				Host:   parsed.Hostname(),
+				Port:   parsed.Port(),
+				Path:   parsed.EscapedPath(),
+			}
+			return normalizePublicID(s.idMapper.BrowserID(identity), identity)
+		}
+	}
+	return ""
 }

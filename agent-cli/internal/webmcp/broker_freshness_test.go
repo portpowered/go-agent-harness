@@ -67,7 +67,7 @@ func newFreshnessFixtureWithTool(t *testing.T, tool webmcp.ToolDescriptor) fresh
 	if err != nil {
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	session := scriptedPrimaryTargetSession(t, handleValue)
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}

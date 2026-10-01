@@ -34,7 +34,7 @@ func NewBrowserReplay(script BrowserScript, options ...ReplayOption) (*BrowserRe
 		return nil, fmt.Errorf("%w: unknown replay mode %q", ErrInvalidReplayRequest, replay.mode)
 	}
 	if err := validateScriptID(replay.browserID); err != nil {
-		return nil, fmt.Errorf("%w: browser ID: %v", ErrInvalidReplayRequest, err)
+		return nil, fmt.Errorf("%w: browser ID: %w", ErrInvalidReplayRequest, err)
 	}
 	if replay.targetID == "" && len(replay.script.Endpoint.Targets) > 0 {
 		replay.targetID = replay.script.Endpoint.Targets[0].ID
@@ -330,7 +330,7 @@ func (r *BrowserReplay) Wait(ctx context.Context) error {
 			return err
 		}
 		done := r.done
-		replayContext := r.replayContext
+		replayDone, replayErr := r.replayDone, r.replayErr
 		r.mu.Unlock()
 
 		select {
@@ -338,8 +338,8 @@ func (r *BrowserReplay) Wait(ctx context.Context) error {
 			return r.Err()
 		case <-ctx.Done():
 			return r.cancelFromContext(ctx.Err())
-		case <-replayContextDone(replayContext):
-			return r.cancelFromContext(replayContext.Err())
+		case <-replayDone:
+			return r.cancelFromContext(replayErr())
 		}
 	}
 }

@@ -25,8 +25,9 @@ type Server struct {
 	done     chan error
 }
 
-// Start listens on address and serves stream at GET /events.
-func Start(address string, stream rooms.RoomEventStream) (*Server, error) {
+// Start listens on address and serves stream at GET /events. ctx bounds only
+// the listen call; the server lives until Shutdown.
+func Start(ctx context.Context, address string, stream rooms.RoomEventStream) (*Server, error) {
 	address = strings.TrimSpace(address)
 	if address == "" {
 		return nil, errors.New("room stream address is empty")
@@ -34,7 +35,7 @@ func Start(address string, stream rooms.RoomEventStream) (*Server, error) {
 	if stream == nil {
 		return nil, errors.New("room stream is nil")
 	}
-	listener, err := net.Listen("tcp", address)
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("listen room stream on %q: %w", address, err)
 	}

@@ -151,7 +151,7 @@ func mustAs[T any](t testReporter, value any) T {
 func mustMarshalFixture(value any) []byte {
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		panic(fmt.Sprintf("marshal fixture %T: %v", value, err))
+		panic(fmt.Sprintf("marshal fixture %T: %v", value, err)) //nolint:forbidigo // must-style over static fixture literals; callers have no test handle
 	}
 	return encoded
 }

@@ -42,7 +42,7 @@ func runTurnStartPlainSpeechCLI(t *testing.T) plainSpeechRun {
 	t.Cleanup(server.shutdown)
 	recorder := newPlainSpeechRecordingDialer(server)
 
-	agentCLI, err := newPlainSpeechSessionCLI(recorder)
+	agentCLI, err := newPlainSpeechSessionCLI(t.Context(), recorder)
 	if err != nil {
 		t.Fatalf("initialize turn-start CLI: %v", err)
 	}
@@ -63,7 +63,7 @@ func runTurnStartPlainSpeechCLI(t *testing.T) plainSpeechRun {
 		"--max-duration", plainSpeechRunTimeout.String(),
 	})
 
-	ctx, cancel := diagnosticDeadline(t, plainSpeechRunTimeout)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
@@ -91,8 +91,8 @@ func newPlainSpeechRecordingDialer(server *plainSpeechServer) *gwtesting.Recordi
 	return gwtesting.NewRecordingWebSocketDialer(server, "openai", "gpt-realtime")
 }
 
-func newPlainSpeechSessionCLI(recorder *gwtesting.RecordingWebSocketDialer) (*cli.AgentCLI, error) {
-	return wire.InitializeMockAgentCLIWithPorts(
+func newPlainSpeechSessionCLI(ctx context.Context, recorder *gwtesting.RecordingWebSocketDialer) (*cli.AgentCLI, error) {
+	return wire.InitializeMockAgentCLIWithPorts(ctx,
 		wire.NewPortSwap(wire.PortTransportDialer, recorder),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "stateless inferencer should not be called"}),
@@ -131,10 +131,11 @@ func validateTurnStartPlainSpeechCapture(capture gwtesting.SessionCapture) error
 	return normalizePlainSpeechCapture(capture, "").Validate(turnStartPlainSpeechContract())
 }
 
-func turnStartResponseRecordIndex(capture gwtesting.SessionCapture, eventType, responseID string, occurrence int) int {
+// turnStartResponseRecordIndex returns the first record of eventType for responseID.
+func turnStartResponseRecordIndex(capture gwtesting.SessionCapture, eventType, responseID string) int {
 	return plainSpeechRecordIndex(capture, func(record gwtesting.CapturedSessionEvent) bool {
 		return record.Type == eventType && plainSpeechRecordResponseID(record) == responseID
-	}, occurrence)
+	}, 0)
 }
 
 func turnStartClientRecordIndex(capture gwtesting.SessionCapture, eventType string, occurrence int) int {
@@ -186,14 +187,14 @@ func TestS2SLiveBargeInTurnStartCollisionMatrix(t *testing.T) {
 		t.Fatalf("turn-start identity-aware ledger failed: %v; stream=%v", err, run.trace.snapshot())
 	}
 
-	firstCreated := turnStartResponseRecordIndex(run.capture, rtEventResponseCreated, rtPlainResponseID, 0)
-	firstOutput := turnStartResponseRecordIndex(run.capture, rtEventOutputAudioDelta, rtPlainResponseID, 0)
+	firstCreated := turnStartResponseRecordIndex(run.capture, rtEventResponseCreated, rtPlainResponseID)
+	firstOutput := turnStartResponseRecordIndex(run.capture, rtEventOutputAudioDelta, rtPlainResponseID)
 	firstCancel := turnStartClientRecordIndex(run.capture, rtEventResponseCancel, 0)
 	secondAppend := turnStartClientRecordIndex(run.capture, rtEventInputAudioAppend, 1)
-	firstTerminal := turnStartResponseRecordIndex(run.capture, rtEventResponseDone, rtPlainResponseID, 0)
-	secondTerminal := turnStartResponseRecordIndex(run.capture, rtEventResponseDone, "response-plain-2", 0)
+	firstTerminal := turnStartResponseRecordIndex(run.capture, rtEventResponseDone, rtPlainResponseID)
+	secondTerminal := turnStartResponseRecordIndex(run.capture, rtEventResponseDone, "response-plain-2")
 	thirdAppend := turnStartClientRecordIndex(run.capture, rtEventInputAudioAppend, 2)
-	thirdCreated := turnStartResponseRecordIndex(run.capture, rtEventResponseCreated, "response-plain-3", 0)
+	thirdCreated := turnStartResponseRecordIndex(run.capture, rtEventResponseCreated, "response-plain-3")
 	secondCancel := turnStartClientRecordIndex(run.capture, rtEventResponseCancel, 1)
 	if firstCreated < 0 || firstCancel < 0 || secondAppend < 0 || firstTerminal < 0 || secondTerminal < 0 || thirdAppend < 0 || thirdCreated < 0 {
 		t.Fatalf("turn-start boundaries are incomplete: created=%d first_output=%d cancel=%d second_append=%d first_terminal=%d second_terminal=%d third_append=%d third_created=%d records=%v", firstCreated, firstOutput, firstCancel, secondAppend, firstTerminal, secondTerminal, thirdAppend, thirdCreated, run.capture.Records)
@@ -276,7 +277,7 @@ func TestS2SLiveBargeInTurnStartOracleRejectsNamedMutations(t *testing.T) {
 		{
 			name: "completion assigned to wrong turn",
 			mutate: func(capture *gwtesting.SessionCapture) bool {
-				index := turnStartResponseRecordIndex(*capture, rtEventResponseDone, "response-plain-2", 0)
+				index := turnStartResponseRecordIndex(*capture, rtEventResponseDone, "response-plain-2")
 				if index < 0 {
 					return false
 				}
@@ -300,7 +301,7 @@ func TestS2SLiveBargeInTurnStartOracleRejectsNamedMutations(t *testing.T) {
 		{
 			name: "clean unresolved close",
 			mutate: func(capture *gwtesting.SessionCapture) bool {
-				return removeTurnStartRecord(capture, turnStartResponseRecordIndex(*capture, rtEventResponseDone, "response-plain-3", 0))
+				return removeTurnStartRecord(capture, turnStartResponseRecordIndex(*capture, rtEventResponseDone, "response-plain-3"))
 			},
 			want: `response "response-3" has unresolved terminal disposition`,
 		},
@@ -414,8 +415,8 @@ func removeTurnStartRecord(capture *gwtesting.SessionCapture, index int) bool {
 // leakTurnStartReplacementOutput relabels the replacement's first audio as
 // output of the cancelled first response, directly after that response began.
 func leakTurnStartReplacementOutput(capture *gwtesting.SessionCapture) bool {
-	outputIndex := turnStartResponseRecordIndex(*capture, rtEventOutputAudioDelta, "response-plain-2", 0)
-	createdIndex := turnStartResponseRecordIndex(*capture, rtEventResponseCreated, rtPlainResponseID, 0)
+	outputIndex := turnStartResponseRecordIndex(*capture, rtEventOutputAudioDelta, "response-plain-2")
+	createdIndex := turnStartResponseRecordIndex(*capture, rtEventResponseCreated, rtPlainResponseID)
 	if outputIndex < 0 || createdIndex < 0 {
 		return false
 	}

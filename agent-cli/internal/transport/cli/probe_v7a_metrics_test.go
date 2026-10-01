@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,5 +95,39 @@ func TestProbeRunS2SV7AOvercountFailsNamingOutputTool(t *testing.T) {
 	actual := jsonText(outcome["actual"])
 	if !strings.Contains(expected, "16") || !strings.Contains(actual, "17") {
 		t.Fatalf("detail must show observed sum 16 vs reported total 17, got expected=%q actual=%q", expected, actual)
+	}
+}
+
+// deliverDeviceProbeResponse queues the scripted provider response and
+// requires the runner to surface its transcript and unchanged audio delta.
+func deliverDeviceProbeResponse(t *testing.T, ctx context.Context, runner *participants.ModelRunner, session *deviceProbeSession, responsePCM []byte) {
+	t.Helper()
+	for _, responseMessage := range []messages.StreamMessage{
+		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device ")},
+		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("round trip")},
+		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(deviceProbeExpectedTranscript)},
+		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
+		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
+		{Type: messages.StreamTypeMessageEnd},
+	} {
+		if !session.receive.Write(ctx, responseMessage) {
+			t.Fatalf("queue session response event %s: %v", responseMessage.Type, ctx.Err())
+		}
+	}
+	recognizedTranscript, err := readDeviceProbeTranscript(t, ctx, runner.DeltaOutbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if violation := assertDeviceProbeTranscript(recognizedTranscript, deviceProbeExpectedTranscript); violation != nil {
+		t.Fatal(violation)
+	}
+	responseDelta := readDeviceProbeDelta(t, ctx, runner.DeltaOutbox, messages.StreamTypeAudioDelta)
+	responseValue, ok := responseDelta.Value.(*messages.AudioDeltaValue)
+	if !ok {
+		t.Fatalf("response audio delta value = %T, want *messages.AudioDeltaValue", responseDelta.Value)
+	}
+	if !bytes.Equal(responseValue.Content, responsePCM) {
+		t.Fatalf("response audio bytes changed before speaker emission: got %d bytes, want %d", len(responseValue.Content), len(responsePCM))
 	}
 }

@@ -18,6 +18,6 @@ type MetricsSeries = probe.MetricsSeries
 // runtime with an injected metrics recorder and independently checks the raw
 // provider wire deltas. Implementations must not construct live devices,
 // network transports, or executable tools.
-type MetricsCollector interface {
+type MetricsCollector interface { //nolint:iface // contract-only package: implemented by services/wire, consumed by transport/cli and probe/replay
 	Collect(context.Context, string, string) ([]MetricsSeries, error)
 }

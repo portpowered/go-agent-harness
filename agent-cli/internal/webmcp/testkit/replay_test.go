@@ -333,7 +333,7 @@ func replayTestScript(operations ...BrowserScriptOperation) BrowserScript {
 // ExpectRequest is intentionally a test-only convenience for translating the
 // frozen fixture expectation into a caller request without decoding its raw
 // input through map[string]any.
-func (o BrowserScriptOperation) ExpectRequest() OperationRequest {
+func (o *BrowserScriptOperation) ExpectRequest() OperationRequest {
 	return OperationRequest{
 		Type:         o.Expect.Type,
 		FrameID:      o.Expect.FrameID,

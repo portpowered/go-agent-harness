@@ -1,3 +1,5 @@
+//go:build e2e
+
 package chrome
 
 import (
@@ -15,13 +17,12 @@ import (
 	"testing"
 	"time"
 
+	cdpRuntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
-
-const youtubeAdapterIntegrationEnv = "WEBMCP_YOUTUBE_ADAPTER_INTEGRATION"
 
 // TestYouTubeAdapterStockChromeJourney is the credential-free, real-browser
 // activation gate. It injects the production adapter through the same target
@@ -29,10 +30,6 @@ const youtubeAdapterIntegrationEnv = "WEBMCP_YOUTUBE_ADAPTER_INTEGRATION"
 // loopback fixture, then proves search, selection, audible play, and advancing
 // media time through the generated WebMCP domain.
 func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
-	if os.Getenv(youtubeAdapterIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the real-Chrome YouTube adapter journey", youtubeAdapterIntegrationEnv)
-	}
-
 	chromeExecutable, chromeVersion := findQualifiedStockChromeForIntegration(t)
 	tone := youtubeAdapterToneWAV(4*time.Second, 24000, 440)
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -119,7 +116,7 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	assertYouTubeAdapterMediaTools(t, ctx, session, tools)
 
 	first := waitForYouTubeAdapterPlayer(t, ctx, targetSession, "tone1234567")
-	time.Sleep(1200 * time.Millisecond)
+	waitForYouTubeAdapterPlaybackAdvance(t, ctx, targetSession, first.CurrentTime+youtubeAdapterPlaybackAdvanceSeconds)
 	second := inspectYouTubeAdapterPlayer(t, ctx, targetSession)
 	if first.Path != "/watch" || first.VideoID != "tone1234567" || first.Paused || first.ReadyState < 2 || second.CurrentTime <= first.CurrentTime || second.Muted || second.Volume <= 0 {
 		t.Fatalf("independent player oracle first=%+v second=%+v", first, second)
@@ -206,6 +203,28 @@ func inspectYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *tar
 		t.Fatalf("inspect player: %v", err)
 	}
 	return oracle
+}
+
+// youtubeAdapterPlaybackAdvanceSeconds is how much media time must elapse
+// between the two independent player observations.
+const youtubeAdapterPlaybackAdvanceSeconds = 1.0
+
+// waitForYouTubeAdapterPlaybackAdvance resolves inside the page once the
+// video's own timeupdate events report a current time of at least target
+// seconds, so the oracle waits on the media clock instead of a fixed delay.
+func waitForYouTubeAdapterPlaybackAdvance(t *testing.T, ctx context.Context, session *targetSession, target float64) {
+	t.Helper()
+	expression := fmt.Sprintf(`new Promise((resolve) => { const video = document.querySelector("video"); if (!video) { resolve(false); return; } const check = () => { if (video.currentTime >= %f) { video.removeEventListener("timeupdate", check); resolve(true); } }; video.addEventListener("timeupdate", check); check(); })`, target)
+	var advanced bool
+	await := func(params *cdpRuntime.EvaluateParams) *cdpRuntime.EvaluateParams {
+		return params.WithAwaitPromise(true)
+	}
+	if err := session.run(ctx, chromedp.Evaluate(expression, &advanced, await)); err != nil {
+		t.Fatalf("wait for playback to reach %.3fs: %v", target, err)
+	}
+	if !advanced {
+		t.Fatal("player video disappeared while waiting for playback to advance")
+	}
 }
 
 func waitForYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *targetSession, videoID string) youtubeAdapterPlayerOracle {
@@ -307,6 +326,9 @@ func testXAdapterJourney(t *testing.T) {
 
 func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
 	t.Helper()
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	t.Helper()
 	var prepared xPreparedReply
 	// File selection can precede its preview while Post is still enabled.
 	pending := invokeAdapterTool(t, fixture, "x_prepare_post", `{"text":"text only pending guard"}`)
@@ -314,7 +336,7 @@ func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
 		t.Fatalf("pending draft=%s error=%v", pending, err)
 	}
 	var pendingState bool
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`(() => {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`(() => {
       window.deferMediaPreview = true;
       window.addPendingFile = () => {
         const input = document.querySelector('input[type="file"]');
@@ -330,22 +352,25 @@ func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
 	}
 	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"text only pending guard","confirm":true}`, prepared.Data.Token), "media_changed")
 	var ignored any
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
 	// Inject media synchronously on caption entry, after preparation's initial
 	// media check and before its delayed verification.
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"media during preparation"}`, "existing_media")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
+	t.Helper()
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
 	t.Helper()
 	var prepared xPreparedReply
 	var ignored any
@@ -380,16 +405,16 @@ func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
 	}
 	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"unrelated"}`, "existing_media")
 	requireAdapterFailure(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token), "manual_clear_required")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	publishVideo := fmt.Sprintf(`{"draft_token":%q,"text":"video test","confirm":true}`, prepared.Data.Token)
 	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "account_mismatch")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "media_changed")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	invokeAdapterTool(t, fixture, "x_publish_post", publishVideo)
@@ -408,8 +433,8 @@ func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
 // Chrome to decode a caller-supplied MP4 before preparation can finish.
 func TestXAdapterRealMP4Decode(t *testing.T) {
 	path := os.Getenv("WEBMCP_X_VIDEO_FILE")
-	if os.Getenv(xAdapterIntegrationEnv) != "1" || path == "" {
-		t.Skip("set WEBMCP_X_ADAPTER_INTEGRATION=1 and WEBMCP_X_VIDEO_FILE to an MP4")
+	if path == "" {
+		t.Fatal("set WEBMCP_X_VIDEO_FILE to an MP4 for the real media decode proof")
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 64*1024*1024 {
@@ -428,12 +453,14 @@ func TestXAdapterRealMP4Decode(t *testing.T) {
 			t.Errorf("write X media fixture: %v", err)
 		}
 	})
-	release, err := fixture.target.AcquirePageFocus(fixture.ctx)
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	release, err := fixture.target.AcquirePageFocus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		if err := release(fixture.ctx); err != nil {
+		if err := release(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -463,9 +490,27 @@ func TestXAdapterRealMP4Decode(t *testing.T) {
 			return
 		}
 		select {
-		case <-fixture.ctx.Done():
+		case <-ctx.Done():
 			t.Fatal("real MP4 never became ready")
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+func waitForCapitalOneShoppingCatalog(ctx context.Context, session webmcp.TargetSession) (map[string]webmcp.ToolDescriptor, error) {
+	tools := make(map[string]webmcp.ToolDescriptor, 4)
+	for len(tools) < 4 {
+		added, err := waitForIntegrationEvent(ctx, session.Events(), "Capital One Shopping live adapter catalog", func(event webmcp.BrowserEvent) bool {
+			return event.Type == webmcp.EventToolsAdded && len(event.Tools) > 0
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, tool := range added.Tools {
+			if len(tool.Name) >= len("capital_one_shopping_") && tool.Name[:len("capital_one_shopping_")] == "capital_one_shopping_" {
+				tools[tool.Name] = tool
+			}
+		}
+	}
+	return tools, nil
 }

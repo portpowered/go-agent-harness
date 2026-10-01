@@ -13,25 +13,38 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// styles for the chat UI (safe when terminal has no color)
-var (
-	styleUser          = lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // bright blue
-	styleAssistant     = lipgloss.NewStyle().Foreground(lipgloss.Color("15")) // white
-	styleThinking      = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Italic(true)
-	styleThinkingBlock = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Italic(true)
-	styleTool          = lipgloss.NewStyle().Foreground(lipgloss.Color("14")) // yellow
-	styleToolResult    = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green (tool output, distinct from assistant)
-	styleMedia         = lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // magenta
-	styleSystem        = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))  // dim gray (local-only output)
-	stylePrompt        = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+// Terminal palette colors for the chat UI (safe when terminal has no color).
+const (
+	colorBrightBlue = lipgloss.Color("12")
+	colorWhite      = lipgloss.Color("15")
+	colorDimGray    = lipgloss.Color("8")
+	colorYellow     = lipgloss.Color("14")
+	colorGreen      = lipgloss.Color("10")
+	colorMagenta    = lipgloss.Color("13")
 )
+
+func styleUser() lipgloss.Style      { return lipgloss.NewStyle().Foreground(colorBrightBlue) }
+func styleAssistant() lipgloss.Style { return lipgloss.NewStyle().Foreground(colorWhite) }
+func styleThinking() lipgloss.Style  { return lipgloss.NewStyle().Foreground(colorDimGray).Italic(true) }
+func styleThinkingBlock() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(colorDimGray).Italic(true)
+}
+func styleTool() lipgloss.Style { return lipgloss.NewStyle().Foreground(colorYellow) }
+
+// styleToolResult renders tool output distinct from assistant text.
+func styleToolResult() lipgloss.Style { return lipgloss.NewStyle().Foreground(colorGreen) }
+func styleMedia() lipgloss.Style      { return lipgloss.NewStyle().Foreground(colorMagenta) }
+
+// styleSystem renders local-only output.
+func styleSystem() lipgloss.Style { return lipgloss.NewStyle().Foreground(colorDimGray) }
+func stylePrompt() lipgloss.Style { return lipgloss.NewStyle().Foreground(colorDimGray) }
 
 // View implements tea.Model. It renders only the current in-progress turn
 // (thinking/tool/media lines, partials) and the input line with cursor.
 // Committed conversation history is NOT rendered here — it is flushed to
 // terminal scrollback via tea.Println so that it persists when scrolling up.
 // Returns an empty string when the session is ending.
-func (m ChatModel) View() string {
+func (m *ChatModel) View() string {
 	if m.quitting {
 		return ""
 	}
@@ -43,18 +56,18 @@ func (m ChatModel) View() string {
 	}
 	if m.thinkingActive && m.reasoningPartial != "" {
 		for _, line := range wrapToWidth(m.reasoningPartial, width) {
-			b.WriteString(styleThinkingBlock.Render(line))
+			b.WriteString(styleThinkingBlock().Render(line))
 			b.WriteByte('\n')
 		}
 	}
 	if m.toolTextPartial != "" {
-		b.WriteString(styleToolResult.Render("  [Tool result]"))
+		b.WriteString(styleToolResult().Render("  [Tool result]"))
 		b.WriteByte('\n')
 		b.WriteString(renderMarkdown(m.toolTextPartial, width))
 		b.WriteByte('\n')
 	}
 	if m.assistantPartial != "" {
-		b.WriteString(styleAssistant.Render("Assistant:"))
+		b.WriteString(styleAssistant().Render("Assistant:"))
 		b.WriteByte('\n')
 		b.WriteString(renderMarkdown(m.assistantPartial, width))
 		b.WriteByte('\n')
@@ -77,7 +90,7 @@ func (m ChatModel) View() string {
 // ViewHistory returns the rendered committed conversation lines as a single
 // string. This is used by tests to verify committed content that has been
 // flushed to scrollback (and is no longer in View()).
-func (m ChatModel) ViewHistory() string {
+func (m *ChatModel) ViewHistory() string {
 	width := m.effectiveWidth()
 	var b strings.Builder
 	for _, ln := range m.lines {
@@ -135,17 +148,20 @@ func renderMarkdown(content string, width int) string {
 func renderChatLineWrapped(ln chatLine, width int) string {
 	switch ln.kind {
 	case chatLineAssistant:
-		label := styleAssistant.Render("Assistant:") + "\n"
+		label := styleAssistant().Render("Assistant:") + "\n"
 		if ln.content == "" {
 			return label
 		}
 		return label + renderMarkdown(ln.content, width) + "\n"
 	case chatLineToolResult:
-		label := styleToolResult.Render("  [Tool result]") + "\n"
+		label := styleToolResult().Render("  [Tool result]") + "\n"
 		if ln.content == "" {
 			return label
 		}
 		return label + renderMarkdown(ln.content, width) + "\n"
+	case chatLineUser, chatLineThinking, chatLineThinkingBlock, chatLineTool,
+		chatLineMedia, chatLineSystem:
+		// Non-markdown kinds use the plain styled rendering below.
 	}
 
 	plain := getPlainLine(ln)
@@ -154,18 +170,21 @@ func renderChatLineWrapped(ln chatLine, width int) string {
 	for i := 1; i < len(lines); i++ {
 		lines[i] = "  " + strings.TrimLeft(lines[i], " ")
 	}
-	var style *lipgloss.Style
+	var style lipgloss.Style
 	switch ln.kind {
 	case chatLineUser:
-		style = &styleUser
+		style = styleUser()
 	case chatLineThinking, chatLineThinkingBlock:
-		style = &styleThinking
+		style = styleThinking()
 	case chatLineTool:
-		style = &styleTool
+		style = styleTool()
 	case chatLineMedia:
-		style = &styleMedia
+		style = styleMedia()
 	case chatLineSystem:
-		style = &styleSystem
+		style = styleSystem()
+	case chatLineAssistant, chatLineToolResult:
+		// Markdown kinds return above; keep the plain fallback for completeness.
+		return plain + "\n"
 	default:
 		return plain + "\n"
 	}
@@ -280,6 +299,18 @@ func (m *ChatModel) appendToolMediaLine(evt messages.StreamMessage, label string
 	if isFromTool(evt) {
 		m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineMedia, content: label})
 	}
+}
+
+// toolMediaLabel is the placeholder line for media a tool returned.
+func toolMediaLabel(evt messages.StreamMessage) string {
+	if evt.Type == messages.StreamTypeFileStart {
+		return toolFileLabel(evt)
+	}
+	return map[messages.StreamMessageType]string{
+		messages.StreamTypeImageStart: "[Image returned]",
+		messages.StreamTypeAudioStart: "[Audio returned]",
+		messages.StreamTypeVideoStart: "[Video returned]",
+	}[evt.Type]
 }
 
 func toolFileLabel(evt messages.StreamMessage) string {

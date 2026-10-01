@@ -1,9 +1,10 @@
+//go:build !windows
+
 package main
 
 import (
 	"bytes"
 	"errors"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -39,9 +40,6 @@ func TestRunReportsNonTimeoutCommandFailure(t *testing.T) {
 }
 
 func TestRunReportsTimeoutWithoutUsingProductionBudget(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell process-group fixture is Unix-specific")
-	}
 	var stdout, stderr bytes.Buffer
 	err := run([]string{
 		"--timeout", "40ms",
@@ -66,9 +64,6 @@ func TestRunReportsTimeoutWithoutUsingProductionBudget(t *testing.T) {
 
 func runCommandForTest(t *testing.T, shellCommand string) (string, string, error) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("shell command fixture is Unix-specific")
-	}
 	var stdout, stderr bytes.Buffer
 	err := run([]string{
 		"--timeout", "2s",

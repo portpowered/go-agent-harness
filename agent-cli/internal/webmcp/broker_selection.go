@@ -18,9 +18,6 @@ func (b *StatefulBroker) waitForCatalog(ctx context.Context, selected *brokerSes
 	if selected == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	wait := b.catalogWaitDuration(selected, initial)
 	timerFactory := TimerFactory(wallTimerFactory{})
 	if b != nil && b.timers != nil {
@@ -317,7 +314,7 @@ func (b *StatefulBroker) SelectedWithRefresh(ctx context.Context, refresh bool) 
 	}
 	selected := b.selected
 	b.mu.Unlock()
-	if err := b.selectedStateError(selected, "lifecycle", "selection_not_connected"); err != nil {
+	if err := b.selectedStateError(selected, "lifecycle"); err != nil {
 		return PageContext{}, err
 	}
 	if refresh {
@@ -328,7 +325,7 @@ func (b *StatefulBroker) SelectedWithRefresh(ctx context.Context, refresh bool) 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected != selected || !selected.active || !selected.context.Connected {
-		return PageContext{}, selectionStateErrorLocked(selected, "lifecycle", "selection_changed")
+		return PageContext{}, selectionStateErrorLocked(selected, "selection_changed")
 	}
 	return clonePageContext(selected.context), nil
 }
@@ -350,7 +347,7 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 	}
 	selected := b.selected
 	b.mu.Unlock()
-	if err := b.selectedStateError(selected, "lifecycle", "selection_not_connected"); err != nil {
+	if err := b.selectedStateError(selected, "lifecycle"); err != nil {
 		return ToolCatalogSnapshot{}, err
 	}
 	if options.Refresh {
@@ -365,7 +362,7 @@ func (b *StatefulBroker) ListTools(ctx context.Context, options ListToolsOptions
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected != selected || !selected.active || !selected.context.Connected {
-		return ToolCatalogSnapshot{}, selectionStateErrorLocked(selected, "lifecycle", "selection_changed")
+		return ToolCatalogSnapshot{}, selectionStateErrorLocked(selected, "selection_changed")
 	}
 	if selected.catalogError != nil {
 		return ToolCatalogSnapshot{}, catalogInvalidErrorLocked(selected)

@@ -21,7 +21,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -29,7 +28,6 @@ import (
 
 const (
 	liveBargeInAPIKeyEnv = "OPENAI_API_KEY"
-	liveBargeInOptInEnv  = "AGENT_HARNESS_LIVE_S2S_BARGE_IN_V3"
 	liveBargeInModel     = "gpt-realtime"
 	liveBargeInTurns     = 4
 
@@ -387,32 +385,6 @@ func (e *liveBargeInInconclusiveError) Error() string {
 	return "live barge-in observation was inconclusive: " + e.Reason
 }
 
-func liveBargeInTraceBoundary(trace *liveBargeInTrace, response, turn int, output bool) (before, after int, ok bool) {
-	events, starts := trace.snapshot()
-	start, ok := starts[turn]
-	if !ok {
-		return 0, 0, false
-	}
-	for index, event := range events {
-		if event.ResponseOrdinal != response {
-			continue
-		}
-		matched := event.Type == messages.StreamTypeMessageStart
-		if output {
-			matched = event.AudioBytes > 0 || event.TextBytes > 0
-		}
-		if !matched {
-			continue
-		}
-		if index < start {
-			before++
-		} else {
-			after++
-		}
-	}
-	return before, after, true
-}
-
 // validateLiveBargeInBoundaries separates an unavailable provider or missed
 // timing gate from a completed run that violated the identity contract. This
 // keeps setup/rate-limit/slow-provider outcomes inconclusive while making
@@ -431,7 +403,7 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 	if first.FirstAudio == 0 {
 		return &liveBargeInInconclusiveError{Reason: "active assistant audio was not observed"}
 	}
-	activeBefore, _, activeOK := liveBargeInTraceBoundary(trace, 1, 2, true)
+	activeBefore, activeOK := liveBargeInEventsBeforeTurn(trace, 1, 2, true)
 	if !activeOK || activeBefore == 0 {
 		return &liveBargeInInconclusiveError{Reason: "active assistant audio did not precede input 2 before response 1 terminality"}
 	}
@@ -439,7 +411,7 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 		return &liveBargeInInconclusiveError{Reason: "active-speech input was not observed while response 1 was non-terminal"}
 	}
 
-	createdBefore, _, createdOK := liveBargeInTraceBoundary(trace, 2, 3, false)
+	createdBefore, createdOK := liveBargeInEventsBeforeTurn(trace, 2, 3, false)
 	if !createdOK || createdBefore == 0 || facts.InputStarts[2] <= second.Created || second.Created == 0 {
 		return &liveBargeInInconclusiveError{Reason: "response 2 creation did not precede input 3"}
 	}
@@ -600,17 +572,14 @@ func liveBargeInSanitizedLedger(facts liveBargeInCaptureFacts, trace *liveBargeI
 // provider setup failure, unavailable service, timeout, or missed timing gate
 // is reported as inconclusive; it is never turned into a successful ledger.
 func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
-	if os.Getenv(liveBargeInOptInEnv) != "1" {
-		t.Skipf("%s!=1; live OpenAI Realtime barge-in confirmation is explicit opt-in", liveBargeInOptInEnv)
-	}
 	apiKey := os.Getenv(liveBargeInAPIKeyEnv)
 	if apiKey == "" {
-		t.Skipf("%s is not set; live OpenAI Realtime barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)
+		t.Fatalf("%s is not set; live OpenAI Realtime barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)
 	}
 
 	trace := newLiveBargeInTrace()
 	runtimeObserver := &liveBargeInRuntimeObserver{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)
 	if err != nil {
@@ -648,7 +617,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 	capture, loadErr := gwtesting.LoadSessionCapture(capturePath)
 	if loadErr != nil {
 		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Skipf("INCONCLUSIVE live barge-in proof: provider/setup result did not produce a capture")
+			t.Fatalf("INCONCLUSIVE live barge-in proof: provider/setup result did not produce a capture")
 		}
 		t.Fatalf("live barge-in capture was not written; result class=%s", liveBargeInRunErrorClass(runErr))
 	}
@@ -656,27 +625,17 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 	ledger, facts, validationErr := normalizeLiveBargeInCapture(capture)
 	var inconclusive *liveBargeInInconclusiveError
 	if errors.As(validationErr, &inconclusive) {
-		t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+		t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
 	if runErr != nil {
-		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Skipf("INCONCLUSIVE live barge-in proof: provider result class=%s; capture=%s; trace=%s", liveBargeInRunErrorClass(runErr), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
-		}
-		if validationErr == nil {
-			if boundaryErr := validateLiveBargeInBoundaries(facts, trace); boundaryErr != nil {
-				if errors.As(boundaryErr, &inconclusive) {
-					t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
-				}
-			}
-		}
-		t.Fatalf("live barge-in command returned a contract failure; capture=%s; trace=%s", liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+		t.Fatalf("%s; capture=%s; trace=%s", liveBargeInRunFailure(runErr, validationErr, facts, trace), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
 	if validationErr != nil {
 		t.Fatalf("live barge-in capture adapter failed; capture=%s", liveBargeInCaptureSummary(facts, len(capture.Records)))
 	}
 	if boundaryErr := validateLiveBargeInBoundaries(facts, trace); boundaryErr != nil {
 		if errors.As(boundaryErr, &inconclusive) {
-			t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+			t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 		}
 		t.Fatalf("live barge-in collision boundary failed: %v; capture=%s; trace=%s", boundaryErr, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
@@ -701,7 +660,7 @@ func writeLiveBargeInNoToolConfig(t *testing.T, directory string) {
 	}
 	var contents strings.Builder
 	contents.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		fmt.Fprintf(&contents, "    - id: %s\n      enabled: false\n", id)
 	}
 	if err := os.WriteFile(filepath.Join(directory, config.ConfigFileName), []byte(contents.String()), 0o600); err != nil {
@@ -731,9 +690,28 @@ func validateLiveBargeInRuntime(t *testing.T, observations []liveBargeInRuntimeF
 			if !observation.Clean || observation.HasError || !observation.HasAccounting {
 				t.Fatalf("live runtime terminal was not clean and accounted: %s", liveBargeInRuntimeEvidence(observations))
 			}
+		case runtimecontract.SessionRuntimeObservationAudioInput,
+			runtimecontract.SessionRuntimeObservationAudioPlaybackReceipt,
+			runtimecontract.SessionRuntimeObservationAudioRenderTapUnavailable,
+			runtimecontract.SessionRuntimeObservationResponseCreate:
+			// Not part of the input/turn/output/terminal reconciliation.
 		}
 	}
 	if inputCommits != liveBargeInTurns || turns != liveBargeInTurns || terminals != 1 || outputBytes == 0 {
 		t.Fatalf("live runtime did not reconcile inputs, turns, output, and terminal: %s", liveBargeInRuntimeEvidence(observations))
 	}
+}
+
+// liveBargeInRunFailure classifies a failed live barge-in command: a provider
+// or setup failure, or an inconclusive collision boundary, is INCONCLUSIVE;
+// anything else is a runtime contract failure.
+func liveBargeInRunFailure(runErr, validationErr error, facts liveBargeInCaptureFacts, trace *liveBargeInTrace) string {
+	if class := liveBargeInRunErrorClass(runErr); class != liveBargeInRuntimeContractFailure {
+		return fmt.Sprintf("INCONCLUSIVE live barge-in proof: provider result class=%s", class)
+	}
+	var inconclusive *liveBargeInInconclusiveError
+	if validationErr == nil && errors.As(validateLiveBargeInBoundaries(facts, trace), &inconclusive) {
+		return "INCONCLUSIVE live barge-in proof: " + inconclusive.Reason
+	}
+	return "live barge-in command returned a contract failure"
 }

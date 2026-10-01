@@ -14,7 +14,7 @@ type Verification struct {
 	CheckedClaim string
 	Verified     bool
 	Error        string
-	Divergence   *Divergence
+	Divergence   *DivergenceError
 }
 
 type providerCheck func(runtimeReplay.CaptureProbeObservation, probe.ScenarioV2Expectation) Check

@@ -1,3 +1,5 @@
+//go:build e2e || live
+
 package chrome
 
 // Shared pinned Chrome for Testing harness: acquisition, isolated launch,
@@ -68,7 +70,7 @@ func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, err
 		return pinnedChrome{}, err
 	}
 	lockPath := filepath.Join(root, filepath.FromSlash(chromeForTestingLockRelativePath))
-	lock, err := LoadChromeForTestingLock(lockPath)
+	lock, err := LoadChromeForTestingLock(lockPath, root)
 	if err != nil {
 		return pinnedChrome{}, fmt.Errorf("read O0 Chrome lock: %w", err)
 	}
@@ -133,7 +135,8 @@ func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureU
 		return nil, fmt.Errorf("Chrome debugging port is invalid: %d", port)
 	}
 	args := pinnedChromeLaunchFlags(profileDir, fixtureURL, port)
-	cmd := exec.Command(pinned.Executable, args...)
+	// Chrome outlives the launch deadline in ctx; runningChrome owns shutdown.
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), pinned.Executable, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("capture Chrome stdout: %w", err)
@@ -255,17 +258,19 @@ func (p *runningChrome) Kill() error {
 	return p.closeErr
 }
 
-func waitForDevToolsVersion(ctx context.Context, baseURL, expectedVersion string) (devToolsVersion, error) {
+// waitForDevToolsVersion waits until the browser at baseURL reports the locked
+// Chrome version.
+func waitForDevToolsVersion(ctx context.Context, baseURL string) (devToolsVersion, error) {
 	var lastErr error
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		version, err := readDevToolsVersion(ctx, baseURL)
 		if err == nil {
-			if strings.Contains(version.Browser, expectedVersion) {
+			if strings.Contains(version.Browser, lockedChromeVersion) {
 				return version, nil
 			}
-			lastErr = fmt.Errorf("browser identity = %q, want %s", version.Browser, expectedVersion)
+			lastErr = fmt.Errorf("browser identity = %q, want %s", version.Browser, lockedChromeVersion)
 		} else {
 			lastErr = err
 		}
@@ -360,14 +365,6 @@ func readDevToolsTargets(ctx context.Context, baseURL string) ([]devToolsTarget,
 		return nil, err
 	}
 	return targets, nil
-}
-
-// discardSecondaryError runs a best-effort release on a path whose outcome is
-// already determined; its error cannot change that outcome.
-func discardSecondaryError(release func() error) {
-	if err := release(); err != nil {
-		return
-	}
 }
 
 func closeRecoveryTarget(ctx context.Context, baseURL string, targetID webmcp.TargetID) error {
@@ -498,45 +495,4 @@ func mustRepositoryRoot() string {
 		panic(err)
 	}
 	return root
-}
-
-// mustFixtureJSON encodes a test-owned fixture value. Fixture types are plain
-// data, so an encoding failure is a programming error in the test itself.
-func mustFixtureJSON(value any) []byte {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		panic(fmt.Sprintf("encode fixture %T: %v", value, err))
-	}
-	return encoded
-}
-
-// writeFixtureBody serves a fixture HTTP response. A failed write means the
-// client abandoned the request, which the client-side assertion reports.
-func writeFixtureBody(writer io.Writer, body []byte) {
-	if _, err := writer.Write(body); err != nil {
-		return
-	}
-}
-
-// encodeFixtureJSON serves a JSON fixture response; see writeFixtureBody.
-func encodeFixtureJSON(writer io.Writer, value any) {
-	writeFixtureBody(writer, append(mustFixtureJSON(value), '\n'))
-}
-
-// closeForTest closes a resource whose close is expected to succeed.
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
-	if err := closer.Close(); err != nil {
-		t.Errorf("close: %v", err)
-	}
-}
-
-// mustType asserts the dynamic type of value and fails the test otherwise.
-func mustType[T any](t testing.TB, value any) T {
-	t.Helper()
-	typed, ok := value.(T)
-	if !ok {
-		t.Fatalf("value has type %T, want %T", value, typed)
-	}
-	return typed
 }

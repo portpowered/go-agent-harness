@@ -204,7 +204,7 @@ type liveBargeInAudioSegment struct {
 func newLiveBargeInAudioReader(t *testing.T, trace *liveBargeInTrace) *liveBargeInAudioReader {
 	t.Helper()
 	frameSets := make([][][]byte, 0, liveBargeInTurns)
-	for _, name := range multiturnTurnWAVs {
+	for _, name := range multiturnTurnWAVs() {
 		frameSets = append(frameSets, multiturnAudioFrames(t, locateCLIFixture(t, name)))
 	}
 	return &liveBargeInAudioReader{
@@ -530,4 +530,27 @@ func (a *liveBargeInCaptureAdapter) observeResponseDone(record gwtesting.Capture
 	}
 	identity.terminal = true
 	a.providerResponses[providerID] = identity
+}
+
+// liveBargeInEventsBeforeTurn counts the response's matching events (message
+// starts, or output when output is set) traced before the turn started.
+func liveBargeInEventsBeforeTurn(trace *liveBargeInTrace, response, turn int, output bool) (before int, ok bool) {
+	events, starts := trace.snapshot()
+	start, ok := starts[turn]
+	if !ok {
+		return 0, false
+	}
+	for _, event := range events[:min(start, len(events))] {
+		if event.ResponseOrdinal != response {
+			continue
+		}
+		matched := event.Type == messages.StreamTypeMessageStart
+		if output {
+			matched = event.AudioBytes > 0 || event.TextBytes > 0
+		}
+		if matched {
+			before++
+		}
+	}
+	return before, true
 }

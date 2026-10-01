@@ -36,12 +36,9 @@ type managedLaunch struct {
 // composition. Concurrent commands wait for the first acquisition and then
 // share the exact persisted browser instead of starting overlapping Chrome
 // processes.
-func (p *composition) ensureManagedBrowser(ctx context.Context) (*chrome.ManagedBrowser, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
+func (p *composition) ensureManagedBrowser(ctx context.Context) (*chrome.ManagedBrowser, error) {
 	if !p.managedEnabled() {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	for {
 		claim := p.claimManagedBrowser()

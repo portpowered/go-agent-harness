@@ -62,6 +62,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 }
 
 func testSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) {
+	t.Helper()
 	server := newCLILiveRecordDirServer(false)
 	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -71,7 +72,7 @@ func testSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -148,6 +149,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundar
 }
 
 func testSessionCommand_LiveRecordDirAudioInTurnBargeInUsesActiveResponseBoundary(t *testing.T) {
+	t.Helper()
 	server := newCLILiveBargeScheduledBoundaryServer()
 	t.Cleanup(server.shutdown)
 	agentCLI := newCLIScheduledBoundaryAgent(t, server)
@@ -259,6 +261,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 }
 
 func testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInput(t *testing.T) {
+	t.Helper()
 	server := newCLILiveRecordDirCloseAfterTurnServer(2)
 	t.Cleanup(server.shutdown)
 	sessionInferencer, err := servicetest.NewOpenAIRealtimeSessionInferencerWithOptions(
@@ -268,7 +271,7 @@ func testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -295,7 +298,7 @@ func testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
@@ -337,7 +340,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -361,7 +364,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
@@ -382,7 +385,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -405,7 +408,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 		"--audio-in-turn", multiturnTurnSliceWAV(t, "multiturn_turn1.wav"),
 	})
 
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	if err == nil {
@@ -496,7 +499,7 @@ func assertCLILiveRecordingBundle(t *testing.T, destination string, turns int, e
 
 func readCLIRecordingAudio(t *testing.T, destination string, expected [][]byte) ([]byte, []byte) {
 	t.Helper()
-	paths := []string{filepath.Join(destination, "audio/in-000.pcm"), filepath.Join(destination, "audio/out-000.pcm")}
+	paths := []string{filepath.Join(destination, "audio", "in-000.pcm"), filepath.Join(destination, "audio", "out-000.pcm")}
 	data := make([][]byte, len(paths))
 	for index, path := range paths {
 		var err error

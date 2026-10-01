@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"sort"
 	"strings"
 
@@ -64,9 +65,9 @@ func (s *LaneBToolSet) laneBContextData(selected discovery.Selection) laneBConte
 	}
 	return laneBContextData{
 		BrowserID:      safeID(selected.BrowserID),
-		BrowserProduct: safeLabel(browserProduct, 128),
+		BrowserProduct: safeLabel(browserProduct, textLabelMaxBytes),
 		TargetID:       safeID(selected.TargetID),
-		Title:          boundedOutputLabel(selected.Title, 512),
+		Title:          boundedOutputLabel(selected.Title, pageTitleMaxBytes),
 		URL:            pageURL,
 		Origin:         pageOrigin,
 		Generation:     selected.Generation,
@@ -116,8 +117,8 @@ func browserChoices(candidates []discovery.BrowserCandidate) []browserChoice {
 	for _, candidate := range ordered {
 		result = append(result, browserChoice{
 			BrowserID: candidate.ID,
-			Product:   safeLabel(candidate.Product, 128),
-			Protocol:  safeLabel(candidate.Protocol, 32),
+			Product:   safeLabel(candidate.Product, textLabelMaxBytes),
+			Protocol:  safeLabel(candidate.Protocol, codeLabelMaxBytes),
 		})
 	}
 	return result
@@ -130,8 +131,8 @@ func targetChoices(targets []discovery.Target) []targetChoice {
 		result = append(result, targetChoice{
 			BrowserID:         safeID(target.BrowserID),
 			TargetID:          safeID(target.ID),
-			Type:              boundedOutputLabel(target.Type, 32),
-			Title:             boundedOutputLabel(target.Title, 512),
+			Type:              boundedOutputLabel(target.Type, codeLabelMaxBytes),
+			Title:             boundedOutputLabel(target.Title, pageTitleMaxBytes),
 			URL:               pageURL,
 			Origin:            pageOrigin,
 			Generation:        target.Generation,
@@ -139,7 +140,7 @@ func targetChoices(targets []discovery.Target) []targetChoice {
 			ToolCount:         target.ToolCount,
 			ToolCountKnown:    target.ToolCountKnown,
 			Eligible:          target.Eligible,
-			EligibilityReason: safeLabel(target.EligibilityReason, 64),
+			EligibilityReason: safeLabel(target.EligibilityReason, labelMaxBytes),
 		})
 	}
 	return result
@@ -202,4 +203,36 @@ func (s *LaneBToolSet) browser(browserID string) (discovery.BrowserCandidate, bo
 		return lookup.Browser(browserID)
 	}
 	return discovery.BrowserCandidate{}, false
+}
+
+func filterTargets(targets []webmcp.Target, originContains string, eligibleOnly bool) []webmcp.Target {
+	filtered := make([]webmcp.Target, 0, len(targets))
+	for _, target := range targets {
+		if eligibleOnly && !target.Eligible {
+			continue
+		}
+		if originContains != "" && !strings.Contains(target.Origin, originContains) {
+			continue
+		}
+		filtered = append(filtered, target)
+	}
+	return filtered
+}
+
+func targetDataList(targets []webmcp.Target) []targetData {
+	result := make([]targetData, 0, len(targets))
+	for _, target := range targets {
+		result = append(result, targetData{
+			BrowserID:         target.BrowserID,
+			TargetID:          target.ID,
+			Type:              target.Type,
+			Title:             target.Title,
+			URL:               target.URL,
+			Origin:            target.Origin,
+			Attached:          target.Attached,
+			Eligible:          target.Eligible,
+			EligibilityReason: target.EligibilityReason,
+		})
+	}
+	return result
 }

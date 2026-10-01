@@ -33,7 +33,7 @@ type v8DuplexRun struct {
 
 func newV8CLI(t *testing.T, logicalClock *clock.Deterministic, observer *v8RuntimeObserver) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortClock, logicalClock),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, observer),
 	)
@@ -59,35 +59,33 @@ func prepareV8SessionExecutor(commandCLI *cli.AgentCLI, input io.Reader, output 
 	return root.ExecuteContext
 }
 
+// v8MultiTurnStartGate starts both harnesses together: the run context (and
+// its timeout) is created only once both are ready, then handed to each.
 type v8MultiTurnStartGate struct {
-	gate  chan struct{}
+	gate  chan context.Context
 	ready chan struct{}
-	ctx   context.Context
 }
 
 func newV8MultiTurnStartGate() *v8MultiTurnStartGate {
-	return &v8MultiTurnStartGate{gate: make(chan struct{}), ready: make(chan struct{}, 2)}
+	return &v8MultiTurnStartGate{gate: make(chan context.Context, 2), ready: make(chan struct{}, 2)}
 }
 
-func (g *v8MultiTurnStartGate) signalReadyAndWait() {
+// signalReadyAndWait reports one harness ready and returns the shared run
+// context once the gate is released.
+func (g *v8MultiTurnStartGate) signalReadyAndWait() context.Context {
 	g.ready <- struct{}{}
-	<-g.gate
+	return <-g.gate
 }
 
-func (g *v8MultiTurnStartGate) startContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+func (g *v8MultiTurnStartGate) startContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	<-g.ready
 	<-g.ready
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	g.ctx = ctx
-	return ctx, cancel
+	return context.WithTimeout(parent, timeout)
 }
 
-func (g *v8MultiTurnStartGate) context() context.Context {
-	return g.ctx
-}
-
-func (g *v8MultiTurnStartGate) release() {
-	close(g.gate)
+func (g *v8MultiTurnStartGate) release(ctx context.Context) {
+	g.gate <- ctx
+	g.gate <- ctx
 }
 
 func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun {
@@ -133,7 +131,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 			defer wg.Done()
 			<-startGate
 			started := time.Now()
-			root := commandCLI.Generate()
+			root := commandCLI.Generate() //nolint:contextcheck // Generate only builds the cobra tree; the command runs under ctx via ExecuteContext below
 			root.SetIn(input)
 			root.SetOut(output)
 			root.SetErr(io.Discard)
@@ -234,13 +232,13 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			startGate.signalReadyAndWait()
+			runContext := startGate.signalReadyAndWait()
 			started := time.Now()
 			results <- v8HarnessResult{
 				Name:        name,
 				Instruction: instruction,
 				ReplayPath:  replayPath,
-				Err:         execute(startGate.context()),
+				Err:         execute(runContext),
 				Elapsed:     time.Since(started),
 				Runtime:     observer.snapshot(),
 				Stream:      stream.snapshot(),
@@ -249,9 +247,9 @@ func runV8MultiTurnDuplex(t *testing.T, aToB, bToA [][]byte) v8DuplexRun {
 	}
 	start("A", v8HarnessAInstruction, aReplay, aExecute, aObserver, aStream)
 	start("B", v8HarnessBInstruction, bReplay, bExecute, bObserver, bStream)
-	ctx, cancel := startGate.startContext(v8MultiTurnRunTimeout)
+	ctx, cancel := startGate.startContext(t.Context(), v8MultiTurnRunTimeout)
 	defer cancel()
-	startGate.release()
+	startGate.release(ctx)
 
 	harnesses := collectV8HarnessResults(t, ctx, results, v8MultiTurnRunTimeout, func() { coordinator.abortRun(); cancel() }, "v8 multi-turn CLI harnesses")
 	waitForV8MultiTurnCompletion(t, &wg, ctx, aToBBridge, bToABridge)
@@ -295,6 +293,7 @@ func waitForV8MultiTurnEOFs(t *testing.T, ctx context.Context, aToBBridge, bToAB
 }
 
 func waitForV8MultiTurnCompletion(t *testing.T, wg *sync.WaitGroup, ctx context.Context, aToBBridge, bToABridge *v8MultiTurnBridge) {
+	t.Helper()
 	wg.Wait()
 	waitForV8MultiTurnEOFs(t, ctx, aToBBridge, bToABridge)
 }

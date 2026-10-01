@@ -65,7 +65,7 @@ type ChatCommand struct {
 	Summary                 string
 	AutocompleteDescription string
 	Hidden                  bool
-	Handler                 func(m ChatModel) (tea.Model, tea.Cmd)
+	Handler                 func(m *ChatModel) (tea.Model, tea.Cmd)
 }
 
 // chatCommands is the ordered registry of built-in chat commands; dispatch
@@ -93,19 +93,19 @@ func builtinChatCommands() []ChatCommand {
 			Name:                    "system",
 			Summary:                 "Show the system prompt for this session",
 			AutocompleteDescription: "Show the system prompt",
-			Handler:                 ChatModel.handleSystemCommand,
+			Handler:                 (*ChatModel).handleSystemCommand,
 		},
 		{
 			Name:                    "help",
 			Summary:                 "Show this help message",
 			AutocompleteDescription: "Show available commands",
-			Handler:                 ChatModel.handleHelpCommand,
+			Handler:                 (*ChatModel).handleHelpCommand,
 		},
 		{
 			Name:                    "clear",
 			Summary:                 "Clear conversation history and start fresh",
 			AutocompleteDescription: "Clear conversation history",
-			Handler:                 ChatModel.handleClearCommand,
+			Handler:                 (*ChatModel).handleClearCommand,
 		},
 	}
 }
@@ -124,7 +124,7 @@ func lookupChatCommand(token string) (ChatCommand, bool) {
 // handleSlashCommand dispatches slash commands (/system, /help, /clear) through
 // the chatCommands registry; unmatched names fall through to skill lookup.
 // It returns the updated model and any tea.Cmd to execute.
-func (m ChatModel) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
+func (m *ChatModel) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 	token := strings.TrimSpace(strings.TrimPrefix(input, "/"))
 	if cmd, ok := lookupChatCommand(token); ok {
 		return cmd.Handler(m)
@@ -134,7 +134,7 @@ func (m ChatModel) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 }
 
 // handleSystemCommand displays the resolved system prompt.
-func (m ChatModel) handleSystemCommand() (tea.Model, tea.Cmd) {
+func (m *ChatModel) handleSystemCommand() (tea.Model, tea.Cmd) {
 	prompt, err := m.resolveSystemPrompt()
 	if err != nil {
 		errLine := chatLine{kind: chatLineSystem, content: "Error loading system prompt: " + err.Error()}
@@ -173,7 +173,7 @@ func renderChatHelp() string {
 }
 
 // handleHelpCommand displays available commands and syntax.
-func (m ChatModel) handleHelpCommand() (tea.Model, tea.Cmd) {
+func (m *ChatModel) handleHelpCommand() (tea.Model, tea.Cmd) {
 	helpLine := chatLine{kind: chatLineSystem, content: renderChatHelp()}
 	m.lines = append(m.lines, helpLine)
 	rendered := strings.TrimSuffix(renderChatLineWrapped(helpLine, m.effectiveWidth()), "\n")
@@ -181,7 +181,7 @@ func (m ChatModel) handleHelpCommand() (tea.Model, tea.Cmd) {
 }
 
 // handleClearCommand resets conversation history, generates a new session ID, and clears the terminal.
-func (m ChatModel) handleClearCommand() (tea.Model, tea.Cmd) {
+func (m *ChatModel) handleClearCommand() (tea.Model, tea.Cmd) {
 	// Generate a new session ID so cleared history doesn't pollute the old session.
 	cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
 	if m.service == nil {
@@ -207,7 +207,7 @@ func (m ChatModel) handleClearCommand() (tea.Model, tea.Cmd) {
 	m.reasoningPartial = ""
 	m.thinkingActive = false
 	m.stream = nil
-	reportChatHandleError(&m, "closing session", closeChatHandle(m.handle))
+	reportChatHandleError(m, "closing session", closeChatHandle(m.handle))
 	m.handle = nil
 
 	// Show confirmation after clearing the screen.
@@ -219,7 +219,7 @@ func (m ChatModel) handleClearCommand() (tea.Model, tea.Cmd) {
 
 // handleSkillCommand loads a skill's instructions by name and injects them as a system message.
 // If the skill is not found, it displays an error listing available skills.
-func (m ChatModel) handleSkillCommand(skillName string) (tea.Model, tea.Cmd) {
+func (m *ChatModel) handleSkillCommand(skillName string) (tea.Model, tea.Cmd) {
 	loader, err := m.newSkillsLoader()
 	if err != nil {
 		errLine := chatLine{kind: chatLineSystem, content: "Error loading skills: " + err.Error()}
@@ -254,7 +254,7 @@ func (m ChatModel) handleSkillCommand(skillName string) (tea.Model, tea.Cmd) {
 
 // newSkillsLoader creates a skills.Loader using the same workspace and config
 // directories selected by the CLI host resolver.
-func (m ChatModel) newSkillsLoader() (*skills.Loader, error) {
+func (m *ChatModel) newSkillsLoader() (*skills.Loader, error) {
 	configDir, err := cliConfigDir(m.globalFlags)
 	if err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ func (m ChatModel) newSkillsLoader() (*skills.Loader, error) {
 }
 
 // listSkillNames returns a comma-separated list of available skill names, or empty string if none.
-func (m ChatModel) listSkillNames(loader *skills.Loader) string {
+func (m *ChatModel) listSkillNames(loader *skills.Loader) string {
 	list, err := loader.List()
 	if err != nil || len(list) == 0 {
 		return ""
@@ -280,7 +280,7 @@ func (m ChatModel) listSkillNames(loader *skills.Loader) string {
 }
 
 // resolveSystemPrompt loads the system prompt using the same logic as runAgent/BuildLoop.
-func (m ChatModel) resolveSystemPrompt() (string, error) {
+func (m *ChatModel) resolveSystemPrompt() (string, error) {
 	workDir, err := cliWorkDir(m.globalFlags)
 	if err != nil {
 		return "", err

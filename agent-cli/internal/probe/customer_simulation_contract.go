@@ -308,7 +308,7 @@ func (s CustomerScenario) validateImageEvents() error {
 		if err := validateRelativePath(field+".path", image.Path, false); err != nil {
 			return err
 		}
-		if err := validateSHA256(field+".sha256", image.SHA256, true); err != nil {
+		if err := validateSHA256(field+".sha256", image.SHA256); err != nil {
 			return err
 		}
 	}
@@ -385,7 +385,7 @@ func (e FilesystemExpectation) validate(field string) error {
 		}
 		return nil
 	}
-	return validateSHA256(field+".sha256", e.SHA256, true)
+	return validateSHA256(field+".sha256", e.SHA256)
 }
 func validateSandbox(s SandboxSpec) error {
 	if strings.TrimSpace(s.Name) == "" {
@@ -422,7 +422,7 @@ func validateInterruption(t InterruptionTrigger, actions []ActionIntent) error {
 func ParseCustomerScenario(data []byte) (CustomerScenario, error) {
 	var scenario CustomerScenario
 	if err := decodeStrictJSON(data, &scenario); err != nil {
-		return CustomerScenario{}, fmt.Errorf("%w: decode scenario: %v", ErrInvalidCustomerScenario, err)
+		return CustomerScenario{}, fmt.Errorf("%w: decode scenario: %w", ErrInvalidCustomerScenario, err)
 	}
 	if err := scenario.Validate(); err != nil {
 		return CustomerScenario{}, err
@@ -437,10 +437,10 @@ func WriteCustomerScenario(path string, scenario CustomerScenario) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	return os.WriteFile(path, append(data, '\n'), privateFileMode)
 }
 
 func validateRelativePath(field, raw string, allowDot bool) error {
@@ -461,10 +461,7 @@ func validateRelativePath(field, raw string, allowDot bool) error {
 
 var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-func validateSHA256(field, value string, required bool) error {
-	if value == "" && !required {
-		return nil
-	}
+func validateSHA256(field, value string) error {
 	if !sha256Pattern.MatchString(value) {
 		return contractFieldError(ErrUnhashedEvidenceArtifact, field, "must be a lowercase SHA-256 hex digest")
 	}

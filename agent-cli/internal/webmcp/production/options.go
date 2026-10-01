@@ -44,6 +44,7 @@ type Options struct {
 	Catalog                      webmcp.DevToolsCatalog
 	Discovery                    DiscoveryService
 	ConfigDir                    string
+	WorkingDir                   string
 	ManagedBrowserManager        *chrome.ManagedBrowserManager
 	ManagedBrowserManagerFactory func(string) *chrome.ManagedBrowserManager
 	HTTPClient                   discovery.HTTPClient
@@ -78,6 +79,12 @@ func WithDiscovery(service DiscoveryService) Option {
 // same resolved config directory.
 func WithConfigDir(configDir string) Option {
 	return func(options *Options) { options.ConfigDir = configDir }
+}
+
+// WithWorkingDir injects the host working directory where managed Chrome for
+// Testing acquisition starts its lock search.
+func WithWorkingDir(workingDir string) Option {
+	return func(options *Options) { options.WorkingDir = workingDir }
 }
 
 // WithManagedBrowserManager injects the lifecycle manager used by

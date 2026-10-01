@@ -2,7 +2,6 @@ package output
 
 import (
 	"bytes"
-	"os"
 	"strings"
 	"testing"
 
@@ -145,34 +144,12 @@ func TestSessionPresentationBinaryClassification(t *testing.T) {
 	}
 }
 
-func TestStreamToStdoutWritesContentAndTrailingNewline(t *testing.T) {
-	file, err := os.CreateTemp(t.TempDir(), "stdout-capture")
-	if err != nil {
-		t.Fatalf("create stdout capture: %v", err)
+func TestStreamToWritesContentAndTrailingNewline(t *testing.T) {
+	var out strings.Builder
+	if err := StreamTo(&out, strings.NewReader("hello")); err != nil {
+		t.Fatalf("StreamTo: %v", err)
 	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			t.Logf("close stdout capture: %v", err)
-		}
-	}()
-	original := os.Stdout
-	os.Stdout = file
-	defer func() { os.Stdout = original }()
-
-	if err := StreamToStdout(strings.NewReader("hello")); err != nil {
-		t.Fatalf("StreamToStdout: %v", err)
-	}
-	if err := file.Sync(); err != nil {
-		t.Fatalf("sync stdout capture: %v", err)
-	}
-	if _, err := file.Seek(0, 0); err != nil {
-		t.Fatalf("seek stdout capture: %v", err)
-	}
-	data, err := os.ReadFile(file.Name())
-	if err != nil {
-		t.Fatalf("read stdout capture: %v", err)
-	}
-	if got, want := string(data), "hello\n"; got != want {
-		t.Fatalf("captured stdout = %q, want %q", got, want)
+	if got, want := out.String(), "hello\n"; got != want {
+		t.Fatalf("streamed output = %q, want %q", got, want)
 	}
 }

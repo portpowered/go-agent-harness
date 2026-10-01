@@ -19,7 +19,7 @@ type adapterTestService struct {
 	capabilities serviceTools.Capabilities
 }
 
-func (s *adapterTestService) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) {
+func (s *adapterTestService) Resolve(ctx context.Context, cfg *config.Config) (serviceTools.Capabilities, error) {
 	s.calls.Add(1)
 	s.config = cfg
 	return s.capabilities, nil

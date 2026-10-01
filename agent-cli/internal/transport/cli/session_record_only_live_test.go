@@ -87,6 +87,7 @@ func TestIsPassiveLiveInvocationMatrix(t *testing.T) {
 //     scripted exchange; omitting --record must not remove the implicit
 //     microphone or close the client immediately after session.open.
 func TestSessionPassiveLiveInvocationsOpenDevicesAndStayInteractive(t *testing.T) {
+	t.Parallel()
 	grokConfig := `
 model:
   provider: grok

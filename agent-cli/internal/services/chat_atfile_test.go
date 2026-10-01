@@ -35,10 +35,10 @@ func writeAtReferenceWorkspace(t *testing.T, workspace string) {
 }
 
 // assertAtTextAndDirectoryReferences checks text-file and directory @references
-// relative to the current working directory.
-func assertAtTextAndDirectoryReferences(t *testing.T) {
+// relative to workspace.
+func assertAtTextAndDirectoryReferences(t *testing.T, workspace string) {
 	t.Helper()
-	cleaned, parts, errMsg := parseAtReferences("before @notes.txt after")
+	cleaned, parts, errMsg := parseAtReferences(workspace, "before @notes.txt after")
 	if errMsg != "" || cleaned != "before after" || len(parts) != 1 {
 		t.Fatalf("text reference = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}
@@ -47,7 +47,7 @@ func assertAtTextAndDirectoryReferences(t *testing.T) {
 		t.Fatalf("text part = %#v, want exact file context", parts[0])
 	}
 
-	cleaned, parts, errMsg = parseAtReferences("@dir inspect")
+	cleaned, parts, errMsg = parseAtReferences(workspace, "@dir inspect")
 	if errMsg != "" || cleaned != "inspect" || len(parts) != 1 {
 		t.Fatalf("directory reference = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}
@@ -58,10 +58,10 @@ func assertAtTextAndDirectoryReferences(t *testing.T) {
 }
 
 // assertAtFileKindReferences checks image, binary, and empty-file @references
-// relative to the current working directory.
-func assertAtFileKindReferences(t *testing.T) {
+// relative to workspace.
+func assertAtFileKindReferences(t *testing.T, workspace string) {
 	t.Helper()
-	_, parts, errMsg := parseAtReferences("@photo.PnG")
+	_, parts, errMsg := parseAtReferences(workspace, "@photo.PnG")
 	if errMsg != "" || len(parts) != 1 {
 		t.Fatalf("image reference = (%#v, %q)", parts, errMsg)
 	}
@@ -70,7 +70,7 @@ func assertAtFileKindReferences(t *testing.T) {
 		t.Fatalf("image part = %#v", parts[0])
 	}
 
-	_, parts, errMsg = parseAtReferences("@document.dat")
+	_, parts, errMsg = parseAtReferences(workspace, "@document.dat")
 	if errMsg != "" || len(parts) != 1 {
 		t.Fatalf("binary reference = (%#v, %q)", parts, errMsg)
 	}
@@ -79,7 +79,7 @@ func assertAtFileKindReferences(t *testing.T) {
 		t.Fatalf("binary part = %#v", parts[0])
 	}
 
-	_, parts, errMsg = parseAtReferences("@empty.txt")
+	_, parts, errMsg = parseAtReferences(workspace, "@empty.txt")
 	if errMsg != "" || len(parts) != 1 {
 		t.Fatalf("empty reference = (%#v, %q)", parts, errMsg)
 	}
@@ -91,16 +91,15 @@ func assertAtFileKindReferences(t *testing.T) {
 
 func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
 	workspace := t.TempDir()
-	t.Chdir(workspace)
 	writeAtReferenceWorkspace(t, workspace)
-	assertAtTextAndDirectoryReferences(t)
-	assertAtFileKindReferences(t)
+	assertAtTextAndDirectoryReferences(t, workspace)
+	assertAtFileKindReferences(t, workspace)
 
-	cleaned, parts, errMsg := parseAtReferences("plain @ text")
+	cleaned, parts, errMsg := parseAtReferences(workspace, "plain @ text")
 	if errMsg != "" || cleaned != "plain @ text" || len(parts) != 0 {
 		t.Fatalf("literal at sign = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}
-	cleaned, parts, errMsg = parseAtReferences("")
+	cleaned, parts, errMsg = parseAtReferences(workspace, "")
 	if errMsg != "" || cleaned != "" || parts != nil {
 		t.Fatalf("empty input = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}
@@ -108,11 +107,10 @@ func TestChatAtFile_ParseReferencesSuccessShapes(t *testing.T) {
 
 func TestChatAtFile_ParseReferencesFailuresAndOrdering(t *testing.T) {
 	workspace := t.TempDir()
-	t.Chdir(workspace)
 	if err := os.WriteFile(filepath.Join(workspace, "safe.txt"), []byte("safe"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cleaned, parts, errMsg := parseAtReferences("@missing.txt keep @safe.txt")
+	cleaned, parts, errMsg := parseAtReferences(workspace, "@missing.txt keep @safe.txt")
 	if errMsg != "File not found: missing.txt" || cleaned != "" || parts != nil {
 		t.Fatalf("missing plus safe reference = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}
@@ -120,7 +118,7 @@ func TestChatAtFile_ParseReferencesFailuresAndOrdering(t *testing.T) {
 		t.Fatal("failure message leaked successful file content")
 	}
 
-	cleaned, parts, errMsg = parseAtReferences("first @safe.txt second")
+	cleaned, parts, errMsg = parseAtReferences(workspace, "first @safe.txt second")
 	if errMsg != "" || cleaned != "first second" || len(parts) != 1 {
 		t.Fatalf("ordered safe reference = (%q, %#v, %q)", cleaned, parts, errMsg)
 	}
@@ -129,7 +127,7 @@ func TestChatAtFile_ParseReferencesFailuresAndOrdering(t *testing.T) {
 		t.Fatalf("ordered safe content = %#v", parts[0])
 	}
 
-	_, _, errMsg = parseAtReferences("@missing-one @missing-two")
+	_, _, errMsg = parseAtReferences(workspace, "@missing-one @missing-two")
 	if errMsg != "File not found: missing-one\nFile not found: missing-two" {
 		t.Fatalf("multiple missing errors = %q", errMsg)
 	}

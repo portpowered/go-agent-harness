@@ -259,12 +259,13 @@ func loadFamilyCScenario(t *testing.T) probe.CustomerScenario {
 	return scenario
 }
 
-func newFamilyCProviderFixture(t testing.TB, scenario probe.CustomerScenario) *familyCProviderFixture {
+func newFamilyCProviderFixture(tb testing.TB, scenario probe.CustomerScenario) *familyCProviderFixture {
+	tb.Helper()
 	fixture := &familyCProviderFixture{
 		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		scenario: scenario,
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 
@@ -343,7 +344,7 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 			}
 		case rtEventConversationItemCreate:
 			if event.Item.Type == rtItemFunctionCallOutput {
-				if err := f.handleToolResult(connection, event.Item.CallID, event.Item.Output); err != nil {
+				if err := f.handleToolResult(event.Item.CallID, event.Item.Output); err != nil {
 					f.failProtocol(err.Error())
 					return
 				}
@@ -433,7 +434,7 @@ func (f *familyCProviderFixture) handleCustomerUtterance(connection *websocket.C
 	return f.sendToolCall(connection, "response-turn-tool-"+fmt.Sprint(index+1), call)
 }
 
-func (f *familyCProviderFixture) handleToolResult(connection *websocket.Conn, callID, output string) error {
+func (f *familyCProviderFixture) handleToolResult(callID, output string) error {
 	f.mu.Lock()
 	pending := f.pendingCall
 	if pending == nil || pending.ID != callID {
@@ -486,19 +487,8 @@ func (f *familyCProviderFixture) handleContinuation(connection *websocket.Conn) 
 }
 
 func (f *familyCProviderFixture) sendToolCall(connection *websocket.Conn, responseID string, call familyCFunctionCall) error {
-	if err := f.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": responseID}}); err != nil {
-		return err
-	}
-	if err := f.send(connection, map[string]any{
-		"type": rtEventOutputItemAdded,
-		"item": map[string]string{"type": rtItemFunctionCall, "id": call.ID, "call_id": call.ID, "name": call.Name, "arguments": ""},
-	}); err != nil {
-		return err
-	}
-	if err := f.send(connection, map[string]any{"type": rtEventFunctionCallArgumentsDone, "call_id": call.ID, "name": call.Name, "arguments": call.Args}); err != nil {
-		return err
-	}
-	return f.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": responseID, "status": rtStatusCompleted}})
+	return sendRealtimeToolCallResponse(func(event any) error { return f.send(connection, event) },
+		responseID, call.ID, call.Name, call.Args)
 }
 
 func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, turnID, text string, marker byte) error {
@@ -524,7 +514,7 @@ func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		return err
 	}
 	if marker == 3 {
-		time.Sleep(25 * time.Millisecond)
+		<-time.After(25 * time.Millisecond) // let the client drain the final response
 		return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_c_complete"})
 	}
 	return nil
@@ -696,14 +686,6 @@ func assertFamilyCTranscriptOrder(t *testing.T, transcript []probe.TranscriptEve
 			t.Fatalf("customer transcript turn %d = %q, want turn-%d", index, transcript[index].TurnID, index+1)
 		}
 	}
-}
-
-func familyCFrame(seed byte) []byte {
-	frame := make([]byte, probe.DefaultDuplexFrameSamples*2)
-	for index := range frame {
-		frame[index] = seed
-	}
-	return frame
 }
 
 // handleInputAudio answers one appended frame and reports whether the

@@ -40,7 +40,7 @@ func TestInteractionReplayS2FlagMatrix(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := executeGeneratedCLI(context.Background(), t.TempDir(), tc.args...)
+			got := executeGeneratedCLI(t, t.TempDir(), tc.args...)
 			if tc.wantErr != "" {
 				if got.err == nil || !strings.Contains(got.err.Error(), tc.wantErr) {
 					t.Fatalf("error = %v, want context %q", got.err, tc.wantErr)

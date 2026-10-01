@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
@@ -106,6 +107,11 @@ func TestExternalProductionCompositionDoesNotAcquireManagedBrowser(t *testing.T)
 }
 
 func TestManagedProductionCloseOnExitClearsStateAndStopsExactBrowser(t *testing.T) {
+	synctest.Test(t, testManagedProductionCloseOnExitClearsStateAndStopsExactBrowser)
+}
+
+func testManagedProductionCloseOnExitClearsStateAndStopsExactBrowser(t *testing.T) {
+	t.Helper()
 	configDir := t.TempDir()
 	control := &managedCompositionTestControl{}
 	var starts atomic.Int32
@@ -142,17 +148,11 @@ func TestManagedProductionCloseOnExitClearsStateAndStopsExactBrowser(t *testing.
 	if _, err := os.Stat(statePath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("state after close-on-exit = %v, want removed", err)
 	}
-	deadline := time.Now().Add(time.Second)
+	// The exit watcher releases the lifecycle lock; wait for it to settle.
+	synctest.Wait()
 	lockPath := filepath.Join(filepath.Dir(statePath), ".managed-browser.lock")
-	for {
-		_, err := os.Stat(lockPath)
-		if errors.Is(err, os.ErrNotExist) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("close-on-exit lifecycle lock remains: %v", err)
-		}
-		time.Sleep(time.Millisecond)
+	if _, err := os.Stat(lockPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("close-on-exit lifecycle lock remains: %v", err)
 	}
 }
 
@@ -166,7 +166,7 @@ func newManagedCompositionTestManager(configDir string, control *managedComposit
 				return chrome.ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: chrome.ExecutableSourceStock}, nil
 			}),
 			HTTPClient: &http.Client{Transport: managedCompositionVersionTransport{}},
-			ProcessStarter: func(string, []string) (chrome.ManagedBrowserProcess, error) {
+			ProcessStarter: func(context.Context, string, []string) (chrome.ManagedBrowserProcess, error) {
 				starts.Add(1)
 				return control.newProcess(7002), nil
 			},

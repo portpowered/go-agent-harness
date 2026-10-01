@@ -216,3 +216,39 @@ func closeFaultedSession(session io.Closer) {
 		return
 	}
 }
+
+func fullReceiveBufferFaultFrames() []faultTestFrame {
+	frames := []faultTestFrame{
+		{Type: 1, Payload: []byte(`{"type":"session.created","session_id":"fault-full-buffer","model":"grok-fault-injection"}`)},
+		{Type: 1, Payload: []byte(`{"type":"response.created"}`)},
+	}
+	for range 70 {
+		frames = append(frames, faultTestFrame{Type: 1, Payload: []byte(`{"type":"response.audio.delta","delta":"AQIDBA=="}`)})
+	}
+	return frames
+}
+
+func (c *scheduledFaultTestConn) ReadMessage() (int, []byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return 0, nil, io.EOF
+	}
+
+	currentTick := c.clock.Tick()
+	for c.readIdx < len(c.frames) && c.nextTick < currentTick {
+		c.readIdx++
+		c.nextTick++
+		c.sourceDrops++
+	}
+	if c.readIdx >= len(c.frames) {
+		return 0, nil, io.EOF
+	}
+	if currentTick < c.nextTick {
+		c.clock.AdvanceTo(c.nextTick)
+	}
+	frame := c.frames[c.readIdx]
+	c.readIdx++
+	c.nextTick++
+	return frame.Type, append([]byte(nil), frame.Payload...), nil
+}

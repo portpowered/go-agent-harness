@@ -310,7 +310,7 @@ func (h *BrowserScriptHandle) Attach(ctx context.Context, targetID webmcp.Target
 	h.adapter.mu.Lock()
 	target := h.adapter.currentTargetLocked()
 	h.adapter.mu.Unlock()
-	session := newBrowserScriptSession(h, target, ownership)
+	session := newBrowserScriptSession(ctx, h, target, ownership)
 	h.session = session
 	h.mu.Unlock()
 	if err := session.emit(webmcp.BrowserEvent{
@@ -353,6 +353,7 @@ type BrowserScriptSession struct {
 	target    webmcp.Target
 	ownership webmcp.TargetOwnership
 
+	release func(OperationType) error // see scriptReleaser
 	mu      sync.Mutex
 	context webmcp.PageContext
 	events  chan webmcp.BrowserEvent
@@ -361,13 +362,17 @@ type BrowserScriptSession struct {
 	err     error
 }
 
-func newBrowserScriptSession(handle *BrowserScriptHandle, target webmcp.Target, ownership webmcp.TargetOwnership) *BrowserScriptSession {
-	capacity := 32
+// Scripted session event buffers hold every scripted event plus headroom for
+// runtime-emitted events, and never fall below the minimum size.
+const (
+	minScriptEventBuffer      = 32
+	scriptEventBufferHeadroom = 8
+)
+
+func newBrowserScriptSession(ctx context.Context, handle *BrowserScriptHandle, target webmcp.Target, ownership webmcp.TargetOwnership) *BrowserScriptSession {
+	capacity := minScriptEventBuffer
 	if handle != nil && handle.adapter != nil {
-		capacity = countScriptEvents(handle.adapter.script()) + 8
-		if capacity < 32 {
-			capacity = 32
-		}
+		capacity = max(countScriptEvents(handle.adapter.script())+scriptEventBufferHeadroom, minScriptEventBuffer)
 	}
 	page := webmcp.PageContext{
 		Key:        webmcp.PageKey{BrowserID: target.BrowserID, TargetID: target.ID},
@@ -381,6 +386,7 @@ func newBrowserScriptSession(handle *BrowserScriptHandle, target webmcp.Target, 
 	return &BrowserScriptSession{
 		handle:    handle,
 		runtime:   handle.adapter.runtime,
+		release:   scriptReleaser(ctx, handle.adapter.runtime),
 		target:    target,
 		ownership: ownership,
 		context:   page,
@@ -573,12 +579,7 @@ func (s *BrowserScriptSession) Close() error {
 
 	var closeErr error
 	if operation, ok := s.runtime.NextExpectedOperationType(); ok {
-		switch operation {
-		case OperationCloseTarget:
-			closeErr = s.runtime.CloseTarget(context.Background())
-		case OperationDetachTarget:
-			closeErr = s.runtime.DetachTarget(context.Background())
-		}
+		closeErr = s.release(operation)
 	}
 	s.mu.Lock()
 	s.err = closeErr
@@ -691,9 +692,6 @@ func fixtureEventTime(monotonicMS uint64) time.Time {
 }
 
 func adapterContextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

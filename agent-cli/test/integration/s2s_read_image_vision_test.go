@@ -17,7 +17,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -42,9 +41,11 @@ func readImageToolImageItemID(callID string) string {
 	return "item_tool_result_" + base64.RawURLEncoding.EncodeToString(digest[:11])
 }
 
-var readImageGroundedMarkers = []string{
-	"one-by-one image",
-	"indigo pixel",
+func readImageGroundedMarkers() []string {
+	return []string{
+		"one-by-one image",
+		"indigo pixel",
+	}
 }
 
 func readImageFixturePath(t *testing.T) string {
@@ -128,6 +129,7 @@ func (o *readImageSessionObserver) snapshot() []messages.StreamMessage {
 }
 
 func materializeReadImageReplayFixture(t *testing.T, committedPath, imagePath string, imageBytes []byte) string {
+	t.Helper()
 	return materializeReadImageReplayFixtureMode(t, committedPath, imagePath, imageBytes, true)
 }
 
@@ -203,18 +205,6 @@ func materializeReadImageReplayResultFixture(t *testing.T, committedPath, imageP
 	return path
 }
 
-func expectedReadImageMissingError(t *testing.T, imagePath string) string {
-	t.Helper()
-	_, err := os.ReadFile(imagePath)
-	if err == nil {
-		t.Fatalf("missing read_image path unexpectedly exists: %s", imagePath)
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("missing read_image path returned unexpected error: %v", err)
-	}
-	return fmt.Sprintf("session image %q is missing: %v", imagePath, err)
-}
-
 func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataURL, result string) json.RawMessage {
 	t.Helper()
 	var value any
@@ -248,6 +238,7 @@ func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataU
 }
 
 func writeReadImageConfig(t *testing.T, readImageEnabled bool) string {
+	t.Helper()
 	return writeReadImageModelConfig(t, readImageEnabled, "gpt-realtime")
 }
 
@@ -257,7 +248,7 @@ func writeReadImageModelConfig(t *testing.T, readImageEnabled bool, model string
 	var configYAML strings.Builder
 	fmt.Fprintf(&configYAML, "model:\n  provider: openai\n  openai:\n    model: %s\n", model)
 	configYAML.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		enabled := readImageEnabled && id == rtToolReadImage
 		fmt.Fprintf(&configYAML, "    - id: %s\n      enabled: %t\n", id, enabled)
 	}
@@ -269,7 +260,7 @@ func writeReadImageModelConfig(t *testing.T, readImageEnabled bool, model string
 
 func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string, observer *readImageSessionObserver) (string, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}
@@ -289,7 +280,7 @@ func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string,
 		"--model", "gpt-realtime",
 		prompt,
 	})
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return stdout.String(), err
@@ -628,7 +619,7 @@ func assertReadImageGroundedWithProviderClose(output string, events []messages.S
 	if requireProviderClose && !strings.Contains(output, "[session closed: fixture_complete]") {
 		return fmt.Errorf("session did not complete cleanly, got:\n%s", output)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if !strings.Contains(output, marker) {
 			return fmt.Errorf("response missing grounded visual fact %q, got:\n%s", marker, output)
 		}
@@ -708,7 +699,7 @@ func (e *readImageStreamEvidence) observeToolImage(index int, event messages.Str
 
 // verify requires one correlated read_image call whose exact PNG bytes were
 // streamed as a tool image before the post-image provider response began.
-func (e readImageStreamEvidence) verify(imagePath string, expectedBytes []byte) error {
+func (e *readImageStreamEvidence) verify(imagePath string, expectedBytes []byte) error {
 	if len(e.toolCalls) != 1 {
 		return fmt.Errorf("read_image tool calls = %d, want exactly one", len(e.toolCalls))
 	}
@@ -802,7 +793,7 @@ func TestReadImageCLI_DefaultLifecycleRejectsEmptyFunctionOutput(t *testing.T) {
 	if !errors.Is(runErr, providers.ErrReplayMismatch) {
 		t.Fatalf("empty function_call_output error = %v, want typed replay mismatch", runErr)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(output, marker) {
 			t.Fatalf("empty function_call_output released fabricated grounded reply %q: %s", marker, output)
 		}
@@ -835,7 +826,7 @@ func TestReadImageCLI_DefaultLifecycleMissingFileContinues(t *testing.T) {
 	if !strings.Contains(strings.ToLower(output), "could not read the image") || !strings.Contains(strings.ToLower(output), "missing") {
 		t.Fatalf("missing read_image response did not explain the missing file: %s", output)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(output, marker) {
 			t.Fatalf("missing read_image response fabricated grounded marker %q: %s", marker, output)
 		}
@@ -855,7 +846,7 @@ func assertReadImageNoToolGrounding(output string, events []messages.StreamMessa
 	if !strings.Contains(output, "cannot inspect") || !strings.Contains(output, "determine") {
 		return fmt.Errorf("no-tool response did not state that image content is unavailable, got:\n%s", output)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(output, marker) {
 			return fmt.Errorf("no-tool response leaked grounded marker %q: %s", marker, output)
 		}

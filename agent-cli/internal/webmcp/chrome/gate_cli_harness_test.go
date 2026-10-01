@@ -1,3 +1,5 @@
+//go:build e2e || live
+
 package chrome
 
 // Actual-binary CLI harness for the Gate I1 family of live proofs: child
@@ -6,6 +8,8 @@ package chrome
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +22,13 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+)
+
+const (
+	gateFixtureQuerySecret    = "gate-fixture-query-secret"
+	gateFixtureFragmentSecret = "gate-fixture-fragment-secret"
+	gateEndpointQuerySecret   = "gate-endpoint-query-secret"
+	gateEndpointFragment      = "gate-endpoint-fragment"
 )
 
 type gateCLIResult struct {
@@ -377,4 +388,114 @@ func requireProbe03Failure(t *testing.T, result gateCLIResult, wantCode webmcp.E
 		t.Fatalf("Probe 03 failure envelope = %+v, want code %q", envelope, wantCode)
 	}
 	return envelope
+}
+
+func startGateCommand(parent context.Context, binaryPath, configDir string, args ...string) (*gateCLIProcess, error) {
+	return startGateCommandWithEnvironment(parent, binaryPath, configDir, nil, args...)
+}
+
+func startGateCommandWithEnvironment(parent context.Context, binaryPath, configDir string, extraEnvironment []string, args ...string) (*gateCLIProcess, error) {
+	commandContext, cancel := context.WithCancel(parent)
+	fullArgs := append([]string{"--config-dir", configDir}, args...)
+	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
+	command.Dir = mustRepositoryRoot()
+	command.Env = gateChildEnvironment()
+	for _, extra := range extraEnvironment {
+		key, _, ok := strings.Cut(extra, "=")
+		if !ok || key == "" {
+			continue
+		}
+		filtered := command.Env[:0]
+		for _, value := range command.Env {
+			if strings.HasPrefix(value, key+"=") {
+				continue
+			}
+			filtered = append(filtered, value)
+		}
+		filtered = append(filtered, extra)
+		command.Env = filtered
+	}
+	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
+	command.Stdout = &process.stdout
+	command.Stderr = &process.stderr
+	if err := command.Start(); err != nil {
+		cancel()
+		return nil, err
+	}
+	go func() {
+		err := command.Wait()
+		exitCode := 0
+		if command.ProcessState != nil {
+			exitCode = command.ProcessState.ExitCode()
+		}
+		process.done <- gateCLIResult{Args: append([]string(nil), process.args...), Stdout: process.stdout.String(), Stderr: process.stderr.String(), ExitCode: exitCode, Err: err}
+	}()
+	return process, nil
+}
+
+func (p *gateCLIProcess) wait(ctx context.Context) (gateCLIResult, error) {
+	if p == nil {
+		return gateCLIResult{}, errors.New("nil Gate I1 child process")
+	}
+	select {
+	case result := <-p.done:
+		p.cancel()
+		return result, nil
+	case <-ctx.Done():
+		p.cancel()
+		return gateCLIResult{}, ctx.Err()
+	}
+}
+
+// abandon reaps a child process on a failure path; its exit status cannot
+// change the failure already being reported.
+func (p *gateCLIProcess) abandon(ctx context.Context) {
+	if _, err := p.wait(context.WithoutCancel(ctx)); err != nil {
+		return
+	}
+}
+
+func hasFixtureInvocation(oracle fixtureOracle, want string) bool {
+	for _, invocation := range oracle.Invocations {
+		if invocation == want {
+			return true
+		}
+	}
+	return false
+}
+
+func probe03RandomToken(t *testing.T) string {
+	t.Helper()
+	bytes := make([]byte, 8)
+	if _, err := rand.Read(bytes); err != nil {
+		t.Fatalf("generate randomized Probe 03 fixture token: %v", err)
+	}
+	return hex.EncodeToString(bytes)
+}
+
+func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir string, args ...string) (*gateCLIProcess, error) {
+	commandContext, cancel := context.WithCancel(parent)
+	fullArgs := append([]string(nil), args...)
+	if configDir != "" {
+		fullArgs = append([]string{"--config-dir", configDir}, fullArgs...)
+	}
+	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
+	command.Dir = mustRepositoryRoot()
+	command.Env = probe03ChildEnvironment(homeDir)
+	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
+	command.Stdout = &process.stdout
+	command.Stderr = &process.stderr
+	if err := command.Start(); err != nil {
+		cancel()
+		return nil, err
+	}
+	go func() {
+		err := command.Wait()
+		exitCode := 0
+		if command.ProcessState != nil {
+			exitCode = command.ProcessState.ExitCode()
+		}
+		process.done <- gateCLIResult{Args: append([]string(nil), process.args...), Stdout: process.stdout.String(), Stderr: process.stderr.String(), ExitCode: exitCode, Err: err}
+	}()
+	return process, nil
 }

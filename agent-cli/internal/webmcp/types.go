@@ -64,6 +64,8 @@ type WireTraceSink interface {
 // WireTraceFunc adapts a function to WireTraceSink.
 type WireTraceFunc func(WebMCPWireTrace)
 
+var _ WireTraceSink = WireTraceFunc(nil)
+
 func (f WireTraceFunc) RecordWebMCPWireTrace(trace WebMCPWireTrace) {
 	if f != nil {
 		f(trace)

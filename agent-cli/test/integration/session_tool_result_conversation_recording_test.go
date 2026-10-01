@@ -39,7 +39,7 @@ func runToolResultConversationWithBrowserRecording(t *testing.T, wavPath, wirePa
 	outputPath = filepath.Join(t.TempDir(), "response.wav")
 	recordDir = filepath.Join(t.TempDir(), "recording")
 	stdoutBuffer := &testStdoutBuffer{}
-	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), executor, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}
@@ -95,8 +95,9 @@ func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 }
 
 func testSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
+	t.Helper()
 	wavPath, reply := conversationFixtureInputs(t)
-	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+	wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 
 	runs := make([]browserRecordingParityRun, 0, 2)
 	for _, enabled := range []bool{false, true} {
@@ -200,4 +201,11 @@ func realtimeToolFixturePrelude(t *testing.T, wavPath string) (gwtesting.Session
 	clientEvent(rtEventInputAudioCommit, json.RawMessage(`{"type":"input_audio_buffer.commit"}`))
 	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
 	return baseCapture, records
+}
+
+func parallelLifecycleIdentity(callID string) (name, args string) {
+	if callID == parallelLifecycleAlphaID {
+		return parallelLifecycleAlphaName, parallelLifecycleAlphaArgs
+	}
+	return parallelLifecycleBravoName, parallelLifecycleBravoArgs
 }

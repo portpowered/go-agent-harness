@@ -91,7 +91,7 @@ func unmarkToolExecutorReplacement(executor messages.ToolExecutor) messages.Tool
 }
 
 // FlagsSet provides global and command-specific CLI flags.
-var FlagsSet = wire.NewSet(
+var FlagsSet = wire.NewSet( //nolint:gochecknoglobals // Wire resolves provider sets only from package-level variables
 	flags.NewGlobalFlags,
 	flags.NewAskFlags,
 	flags.NewChatFlags,
@@ -169,7 +169,10 @@ func (l sessionLoopLogger) emit(level, message string, fields []looplogging.Fiel
 	for _, field := range fields {
 		values[field.Key] = fmt.Sprint(field.Value)
 	}
-	discardLogError(l.sink.Log(context.Background(), observability.LogRecord{Level: level, Message: message, Fields: values}))
+	// looplogging.Logger (go-agent-loop) methods carry no context, so this
+	// adapter is the root for the sink call.
+	record := observability.LogRecord{Level: level, Message: message, Fields: values}
+	discardLogError(l.sink.Log(context.Background(), record)) //nolint:forbidigo // looplogging.Logger (go-agent-loop contract) passes no caller context to thread
 }
 
 // discardLogError marks a loop log sink failure as deliberately ignored: the
@@ -294,7 +297,7 @@ func provideLiveReplayService() runtimeReplay.Service {
 }
 
 // CliSet provides CLI commands, router, and root.
-var CliSet = wire.NewSet(
+var CliSet = wire.NewSet( //nolint:gochecknoglobals // Wire resolves provider sets only from package-level variables
 	FlagsSet,
 	cli.NewRootCommand,
 	cli.NewAskCommand,
@@ -356,6 +359,7 @@ var CliSet = wire.NewSet(
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
 func assembleAgentCLI(
+	ctx context.Context,
 	toolExecutor messages.ToolExecutor,
 	transportDialer transport.Dialer,
 	deviceRegistry DeviceRegistry,

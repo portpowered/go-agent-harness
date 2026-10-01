@@ -338,3 +338,15 @@ func (t *asyncCollisionTrace) snapshot() []string {
 	defer t.mu.Unlock()
 	return append([]string(nil), t.events...)
 }
+
+func parallelToolResultPayload(callID, output string) json.RawMessage {
+	payload := map[string]any{
+		"type": rtEventConversationItemCreate,
+		"item": map[string]any{
+			"type":    rtItemFunctionCallOutput,
+			"call_id": callID,
+			"output":  output,
+		},
+	}
+	return mustMarshalFixture(payload)
+}

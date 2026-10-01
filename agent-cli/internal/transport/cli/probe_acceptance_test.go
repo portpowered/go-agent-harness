@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -159,38 +159,6 @@ func TestProbeAcceptanceTimeoutReturnsStuckVerdict(t *testing.T) {
 	}
 }
 
-func TestProbeAcceptanceLiveTimeoutStopsHangingBinary(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("sleep executable fixture is POSIX-specific")
-	}
-	if _, err := exec.LookPath("sleep"); err != nil {
-		t.Skipf("sleep executable is unavailable: %v", err)
-	}
-
-	runner := acceptanceprobe.NewLiveRunner(nil)
-	runner.ArtifactRoot = t.TempDir()
-	root := newTestRootCommandWithAcceptance(runner, 40*time.Millisecond)
-	var stdout bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetArgs([]string{"probe", "acceptance", "sleep", "60"})
-
-	started := time.Now()
-	err := root.ExecuteContext(context.Background())
-	if elapsed := time.Since(started); elapsed > time.Second {
-		t.Fatalf("hanging binary took %s to stop", elapsed)
-	}
-	if err == nil || !errors.Is(err, acceptanceprobe.ErrProbeAgentStuck) {
-		t.Fatalf("error = %v, want stuck error", err)
-	}
-	var verdict loopprobe.AcceptanceVerdict
-	if decodeErr := json.Unmarshal(stdout.Bytes(), &verdict); decodeErr != nil {
-		t.Fatalf("decode verdict %q: %v", stdout.String(), decodeErr)
-	}
-	if verdict.Pass || verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream {
-		t.Fatalf("verdict = %+v, want non-passing stuck verdict", verdict)
-	}
-}
-
 func TestProbeAcceptanceCLIControlsUseRecordedArtifacts(t *testing.T) {
 	binary, err := os.Executable()
 	if err != nil {
@@ -313,4 +281,68 @@ func TestProbeAcceptanceHelpDoesNotLeakFixtureOrInternalHints(t *testing.T) {
 	if stderr.Len() != 0 {
 		t.Fatalf("help stderr = %q, want empty", stderr.String())
 	}
+}
+
+func TestProbeAcceptanceLiveTimeoutStopsHangingBinary(t *testing.T) {
+	runner := acceptanceprobe.NewLiveRunner(nil)
+	runner.ArtifactRoot = t.TempDir()
+	root := newTestRootCommandWithAcceptance(runner, 40*time.Millisecond)
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetArgs([]string{"probe", "acceptance", linkHangingAgent(t), "60"})
+
+	started := time.Now()
+	err := root.ExecuteContext(context.Background())
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("hanging binary took %s to stop", elapsed)
+	}
+	if err == nil || !errors.Is(err, acceptanceprobe.ErrProbeAgentStuck) {
+		t.Fatalf("error = %v, want stuck error", err)
+	}
+	var verdict loopprobe.AcceptanceVerdict
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &verdict); decodeErr != nil {
+		t.Fatalf("decode verdict %q: %v", stdout.String(), decodeErr)
+	}
+	if verdict.Pass || verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream {
+		t.Fatalf("verdict = %+v, want non-passing stuck verdict", verdict)
+	}
+}
+
+// hangingAgentName is the basename under which TestMain runs this test binary
+// as an acceptance agent that never answers until it is killed.
+const hangingAgentName = "hanging-acceptance-agent"
+
+// runAsHangingAgent reports whether this test binary was re-executed under
+// hangingAgentName; TestMain then runs the hanging acceptance agent.
+func runAsHangingAgent() bool {
+	return strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == hangingAgentName
+}
+
+// blockHangingAgent parks the agent on a private pipe whose write end stays
+// open, so only the runner's timeout kill ends it.
+func blockHangingAgent() {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		return
+	}
+	defer runtime.KeepAlive(writer)
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return
+	}
+}
+
+// linkHangingAgent links the running test binary as the hanging agent.
+func linkHangingAgent(t *testing.T) string {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("locate test binary: %v", err)
+	}
+	agent := filepath.Join(t.TempDir(), hangingAgentName+filepath.Ext(executable))
+	if linkErr := os.Link(executable, agent); linkErr != nil {
+		if err := os.Symlink(executable, agent); err != nil {
+			t.Fatalf("link hanging agent: %v; symlink: %v", linkErr, err)
+		}
+	}
+	return agent
 }

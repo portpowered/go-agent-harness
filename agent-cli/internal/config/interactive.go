@@ -91,3 +91,11 @@ func (c Config) ValidateInteractive() error {
 	_, err := c.ResolveInteractiveToolConfig()
 	return err
 }
+
+func interactiveConfigFieldSpecs() []interactiveConfigFieldSpec {
+	return []interactiveConfigFieldSpec{
+		{path: "tools.interactive.fast_read_timeout"},
+		{path: "tools.interactive.long_running_timeout"},
+		{path: "tools.interactive.acknowledgement_threshold"},
+	}
+}

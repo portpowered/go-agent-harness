@@ -87,7 +87,7 @@ type DeviceProbeAvailability struct {
 }
 
 // DeviceService is the narrow use-case contract consumed by CLI transports.
-type DeviceService interface {
+type DeviceService interface { //nolint:iface // contract-only package: implemented by services/internal/devices, consumed by transport/cli
 	Enumerate(context.Context) (DeviceList, error)
 	Select(context.Context, DeviceSelectionRequest) (DeviceSelection, error)
 	ProbeAvailability(context.Context) (DeviceProbeAvailability, error)

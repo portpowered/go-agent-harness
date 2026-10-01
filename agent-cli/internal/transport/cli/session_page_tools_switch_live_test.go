@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -46,7 +47,7 @@ const (
 func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 	cdpURL := strings.TrimSpace(os.Getenv("WEBMCP_PAGETOOLS_SWITCH_LIVE_CDP_URL"))
 	if cdpURL == "" {
-		t.Skip("set WEBMCP_PAGETOOLS_SWITCH_LIVE_CDP_URL to an externally launched pinned Chrome /json/version endpoint")
+		t.Fatal("set WEBMCP_PAGETOOLS_SWITCH_LIVE_CDP_URL to an externally launched pinned Chrome /json/version endpoint")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -149,6 +150,7 @@ func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 const livePageTargetType = "page"
 
 func newSessionPageToolsSwitchLiveConfig(t *testing.T, cdpURL string) *config.Config {
+	t.Helper()
 	cfg := livePageToolsConfig(t, cdpURL)
 	cfg.Model = config.ModelConfig{
 		Provider: config.ProviderGrok,
@@ -162,7 +164,7 @@ func newSessionPageToolsSwitchLiveConfig(t *testing.T, cdpURL string) *config.Co
 
 func initSessionPageToolsSwitchLiveCapabilities(t *testing.T, ctx context.Context, cfg *config.Config) SessionToolCapabilities {
 	t.Helper()
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(ctx, cfg)
 	if err != nil {
 		t.Fatalf("capability factory: %v", err)
 	}
@@ -182,6 +184,7 @@ func initSessionPageToolsSwitchLiveCapabilities(t *testing.T, ctx context.Contex
 }
 
 func closeSessionPageToolsSwitchLiveCapabilities(t *testing.T, capabilities SessionToolCapabilities) {
+	t.Helper()
 	if capabilities.Close != nil {
 		if closeErr := capabilities.Close(); closeErr != nil {
 			t.Logf("capability close: %v", closeErr)
@@ -192,6 +195,7 @@ func closeSessionPageToolsSwitchLiveCapabilities(t *testing.T, capabilities Sess
 // startSessionPageToolsSwitchLiveRun runs the production session command with
 // the fake provider; the returned func cancels it and waits for shutdown.
 func startSessionPageToolsSwitchLiveRun(t *testing.T, ctx context.Context, cfg *config.Config, capabilities SessionToolCapabilities, provider *sessionPageToolsLiveInferencer) (<-chan error, func()) {
+	t.Helper()
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 	runErr := make(chan error, 1)
 	go func() {
@@ -338,14 +342,8 @@ func waitForLivePageTargets(t *testing.T, ctx context.Context, executor messages
 		})
 		cancel()
 		if err == nil {
-			var envelope webmcp.ToolResultEnvelope
-			if unmarshalErr := json.Unmarshal([]byte(response.Content), &envelope); unmarshalErr == nil && envelope.OK {
-				var tabs sessionPageToolsLiveTabs
-				if decodeErr := json.Unmarshal(envelope.Data, &tabs); decodeErr == nil {
-					if hasLiveOrigin(tabs.Targets, sessionPageToolsLiveCubecadeOrigin) && hasLiveOrigin(tabs.Targets, sessionPageToolsLiveMarginOrigin) {
-						return tabs
-					}
-				}
+			if tabs, ok := decodeLivePageTargets(response.Content); ok {
+				return tabs
 			}
 		}
 		select {
@@ -358,30 +356,19 @@ func waitForLivePageTargets(t *testing.T, ctx context.Context, executor messages
 	}
 }
 
-func requireLivePageTargets(t *testing.T, tabs sessionPageToolsLiveTabs) (sessionPageToolsLiveTarget, sessionPageToolsLiveTarget) {
-	t.Helper()
-	var cube, margin sessionPageToolsLiveTarget
-	for _, target := range tabs.Targets {
-		if target.Type != livePageTargetType || !target.Eligible {
-			continue
-		}
-		switch target.Origin {
-		case sessionPageToolsLiveCubecadeOrigin:
-			if cube.TargetID != "" {
-				t.Fatalf("multiple eligible Cubecade targets: %#v", tabs.Targets)
-			}
-			cube = target
-		case sessionPageToolsLiveMarginOrigin:
-			if margin.TargetID != "" {
-				t.Fatalf("multiple eligible Margin targets: %#v", tabs.Targets)
-			}
-			margin = target
-		}
+// decodeLivePageTargets reports the listed tabs once both the Cubecade and
+// Margin origins are present in a successful list-tabs result.
+func decodeLivePageTargets(content string) (sessionPageToolsLiveTabs, bool) {
+	var envelope webmcp.ToolResultEnvelope
+	if err := json.Unmarshal([]byte(content), &envelope); err != nil || !envelope.OK {
+		return sessionPageToolsLiveTabs{}, false
 	}
-	if cube.TargetID == "" || margin.TargetID == "" {
-		t.Fatalf("eligible page targets = %#v, want one Cubecade and one Margin", tabs.Targets)
+	var tabs sessionPageToolsLiveTabs
+	if err := json.Unmarshal(envelope.Data, &tabs); err != nil {
+		return sessionPageToolsLiveTabs{}, false
 	}
-	return cube, margin
+	ready := hasLiveOrigin(tabs.Targets, sessionPageToolsLiveCubecadeOrigin) && hasLiveOrigin(tabs.Targets, sessionPageToolsLiveMarginOrigin)
+	return tabs, ready
 }
 
 func hasLiveOrigin(targets []sessionPageToolsLiveTarget, origin string) bool {
@@ -585,15 +572,6 @@ func findDirectToolRef(t *testing.T, data WebMCPDirectToolsData, name string) st
 	return ""
 }
 
-func directLiveInvoke(t *testing.T, ctx context.Context, binary, cdpURL string, target sessionPageToolsLiveTarget, toolRef string, input any) webmcp.ToolResultEnvelope {
-	t.Helper()
-	encoded, err := json.Marshal(input)
-	if err != nil {
-		t.Fatalf("marshal direct CLI input: %v", err)
-	}
-	return runDirectLiveCLI(t, ctx, binary, cdpURL, target, "invoke", "--tool-ref", toolRef, "--input-json", string(encoded), "--timeout", "90s", "--invocation-timeout", "120s")
-}
-
 func runDirectLiveCLI(t *testing.T, parent context.Context, binary, cdpURL string, target sessionPageToolsLiveTarget, operation string, operationArgs ...string) webmcp.ToolResultEnvelope {
 	t.Helper()
 	commandCtx, cancel := context.WithTimeout(parent, 150*time.Second)
@@ -627,10 +605,11 @@ func runDirectLiveCLI(t *testing.T, parent context.Context, binary, cdpURL strin
 
 func liveRepositoryRoot(t *testing.T) string {
 	t.Helper()
-	directory, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get test working directory: %v", err)
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate live test source")
 	}
+	directory := filepath.Dir(source)
 	for {
 		if _, err := os.Stat(filepath.Join(directory, "go.work")); err == nil {
 			return directory

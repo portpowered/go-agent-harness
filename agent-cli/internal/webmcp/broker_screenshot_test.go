@@ -161,8 +161,8 @@ func TestStatefulBrokerCaptureIsolatedAcrossConcurrentSelections(t *testing.T) {
 func screenshotPNG(t *testing.T, fill color.RGBA) []byte {
 	t.Helper()
 	imageValue := image.NewRGBA(image.Rect(0, 0, 2, 2))
-	for y := 0; y < 2; y++ {
-		for x := 0; x < 2; x++ {
+	for y := range 2 {
+		for x := range 2 {
 			imageValue.SetRGBA(x, y, fill)
 		}
 	}

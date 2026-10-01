@@ -138,11 +138,7 @@ func (c *WebMCPOperationsCommand) executeDirect(cmd *cobra.Command, values *webm
 	if cmd == nil {
 		return errors.New("WebMCP command is required")
 	}
-	ctx := cmd.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return c.executeDirectWithParentContext(cmd, ctx, values, kind, fallback, operation)
+	return c.executeDirectWithParentContext(cmd, cmd.Context(), values, kind, fallback, operation)
 }
 
 func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Command, ctx context.Context, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation webmcpDirectOperation) error {

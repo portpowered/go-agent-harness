@@ -26,9 +26,9 @@ import (
 )
 
 func TestMediaProbeCommandRendersDeterministicCapabilityReport(t *testing.T) {
-	var gotContext context.Context
+	var probeHadDeadline bool
 	probe := func(ctx context.Context, raw string) (rtc.MediaCapabilities, error) {
-		gotContext = ctx
+		_, probeHadDeadline = ctx.Deadline()
 		if raw != "rtsp://camera:secret@host:554/main" {
 			t.Fatalf("probe URL = %q", raw)
 		}
@@ -40,8 +40,8 @@ func TestMediaProbeCommandRendersDeterministicCapabilityReport(t *testing.T) {
 	if err := command.Run(context.Background(), &out, "rtsp://camera:secret@host:554/main"); err != nil {
 		t.Fatal(err)
 	}
-	if gotContext == nil {
-		t.Fatal("probe did not receive a context")
+	if !probeHadDeadline {
+		t.Fatal("probe did not receive the command's timeout-bound context")
 	}
 	want := "Source: rtsp://camera:<redacted>@host:554/main\nAudio codec: PCMU\nSample rate: 8000\nChannels: 1\nVideo presence: true\n"
 	if out.String() != want {
@@ -345,7 +345,7 @@ type cliRTSPObservation struct {
 
 func startCLIRTSPFixture(t *testing.T, password string) (string, *cliRTSPObservation, func()) {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func startCLIGo2RTCFixtureWithMedia(t *testing.T, sendAudio, sendVideo bool) (st
 	}
 	fixtureContext, cancelFixture := context.WithCancel(context.Background())
 	handler := &cliGo2RTCFixtureHandler{
-		observed: observed, fixtureContext: fixtureContext, sendAudio: sendAudio, sendVideo: sendVideo,
+		observed: observed, fixtureDone: fixtureContext.Done(), sendAudio: sendAudio, sendVideo: sendVideo,
 		handlerDone: make(chan struct{}),
 		upgrader:    websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	}

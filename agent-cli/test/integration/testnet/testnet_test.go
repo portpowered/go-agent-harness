@@ -36,7 +36,8 @@ func TestWANSegmentServerSegmentsFitClampedReceiveWindow(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, err := net.DialTimeout("tcp", server.Listener.Addr().String(), 5*time.Second)
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(t.Context(), "tcp", server.Listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial fixture: %v", err)
 	}

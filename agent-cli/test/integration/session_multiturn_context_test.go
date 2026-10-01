@@ -22,11 +22,13 @@ import (
 // multiturnTurnWAVs are its committed per-turn corpus WAVs.
 const multiturnPositiveFixture = "multiturn_zephyr_4turn.session.json"
 
-var multiturnTurnWAVs = []string{
-	"multiturn_turn1.wav",
-	"multiturn_turn2.wav",
-	"multiturn_turn3.wav",
-	"multiturn_turn4.wav",
+func multiturnTurnWAVs() []string {
+	return []string{
+		"multiturn_turn1.wav",
+		"multiturn_turn2.wav",
+		"multiturn_turn3.wav",
+		"multiturn_turn4.wav",
+	}
 }
 
 // multiturnAudioFrames reads one committed per-turn corpus WAV and returns its

@@ -95,14 +95,14 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 		s.mu.Unlock()
 		switch response {
 		case 1:
-			s.emitFirstResponse()
+			s.emitFirstResponse(ctx)
 		case 2:
 			if bargeIn {
 				s.mu.Lock()
 				s.secondResponsePending = true
 				s.mu.Unlock()
 			} else {
-				s.emitThirdResponse()
+				s.emitThirdResponse(ctx)
 			}
 		}
 	case messages.StreamTypeResponseCreate:
@@ -123,10 +123,10 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 		}
 		s.mu.Unlock()
 		if !bargeIn {
-			s.continuationOnce.Do(s.emitSecondResponse)
+			s.continuationOnce.Do(func() { s.emitSecondResponse(ctx) })
 			break
 		}
-		s.queueActiveContinuationReady()
+		s.queueActiveContinuationReady(ctx)
 	case messages.StreamTypeResponseCancel:
 		s.mu.Lock()
 		bargeIn := s.bargeIn
@@ -134,7 +134,7 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 		if bargeIn {
 			// Keep the provider response active until the client cancellation is
 			// observed, then terminate that response without emitting stale audio.
-			s.firstResponseEndOnce.Do(s.emitFirstResponseEnd)
+			s.firstResponseEndOnce.Do(func() { s.emitFirstResponseEnd(ctx) })
 		}
 	case messages.StreamTypeToolCallEnd:
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
@@ -145,9 +145,24 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 				s.mu.Unlock()
 				s.recordLifecycle("result_accepted")
 				close(s.resultAccepted)
-				s.queueActiveContinuationReady()
+				s.queueActiveContinuationReady(ctx)
 			})
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
+		messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeRefusal,
+		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		// Other client messages need no scripted response.
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }
@@ -159,11 +174,11 @@ func sessionToolBargeInContextOutcome(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
-func (s *sessionToolBargeInSession) markFinalResponseObserved() {
+func (s *sessionToolBargeInSession) markFinalResponseObserved(ctx context.Context) {
 	s.finalResponseOnce.Do(func() {
 		s.recordLifecycle("final_response_observed")
 		close(s.finalResponseObserved)
-		s.recv.Write(context.Background(), messages.StreamMessage{
+		s.recv.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionClose,
 			Value: messages.NewSessionCloseValue("session-tool-barge-in", "final assistant response observed"),
 		})
@@ -175,7 +190,7 @@ func (s *sessionToolBargeInSession) markFinalResponseObserved() {
 // assistant responses only after this marker crosses the session loop, so the
 // continuation request has been observed before final-response delivery can
 // race scheduled-session close.
-func (s *sessionToolBargeInSession) queueActiveContinuationReady() {
+func (s *sessionToolBargeInSession) queueActiveContinuationReady(ctx context.Context) {
 	s.mu.Lock()
 	ready := s.bargeIn && s.toolResultAccepted && s.continuationRequested && s.secondResponsePending && !s.continuationEmitted
 	s.mu.Unlock()
@@ -183,14 +198,14 @@ func (s *sessionToolBargeInSession) queueActiveContinuationReady() {
 		return
 	}
 	s.continuationReadyOnce.Do(func() {
-		s.recv.Write(context.Background(), messages.StreamMessage{
+		s.recv.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeSessionUpdated,
 			Value: messages.NewSessionUpdatedValue(sessionToolBargeInContinuationReadyID),
 		})
 	})
 }
 
-func (s *sessionToolBargeInSession) emitPendingBargeInContinuation() {
+func (s *sessionToolBargeInSession) emitPendingBargeInContinuation(ctx context.Context) {
 	s.mu.Lock()
 	if !s.bargeIn || !s.secondResponsePending || s.continuationEmitted {
 		s.mu.Unlock()
@@ -200,11 +215,11 @@ func (s *sessionToolBargeInSession) emitPendingBargeInContinuation() {
 	s.secondResponsePending = false
 	s.mu.Unlock()
 
-	s.emitSecondResponse()
-	s.emitThirdResponse()
+	s.emitSecondResponse(ctx)
+	s.emitThirdResponse(ctx)
 }
 
-func (s *sessionToolBargeInSession) emitFirstResponse() {
+func (s *sessionToolBargeInSession) emitFirstResponse(ctx context.Context) {
 	msgs := []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, Value: messages.NewAudioStartValue()},
@@ -218,12 +233,12 @@ func (s *sessionToolBargeInSession) emitFirstResponse() {
 	}
 	msgs = sessionToolBargeInWithResponseID(sessionToolBargeInFirstResponseID, msgs)
 	for _, msg := range msgs {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
-func (s *sessionToolBargeInSession) emitFirstResponseEnd() {
-	s.recv.Write(context.Background(), messages.StreamMessage{
+func (s *sessionToolBargeInSession) emitFirstResponseEnd(ctx context.Context) {
+	s.recv.Write(ctx, messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
 		Role:       messages.RoleAssistant,
 		ResponseID: sessionToolBargeInFirstResponseID,
@@ -231,7 +246,7 @@ func (s *sessionToolBargeInSession) emitFirstResponseEnd() {
 	})
 }
 
-func (s *sessionToolBargeInSession) emitSecondResponse() {
+func (s *sessionToolBargeInSession) emitSecondResponse(ctx context.Context) {
 	msgs := []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
@@ -244,11 +259,11 @@ func (s *sessionToolBargeInSession) emitSecondResponse() {
 	}
 	msgs = sessionToolBargeInWithResponseID(sessionToolBargeInContinuationResponseID, msgs)
 	for _, msg := range msgs {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
-func (s *sessionToolBargeInSession) emitThirdResponse() {
+func (s *sessionToolBargeInSession) emitThirdResponse(ctx context.Context) {
 	for _, msg := range sessionToolBargeInWithResponseID(sessionToolBargeInFinalResponseID, []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
@@ -259,7 +274,7 @@ func (s *sessionToolBargeInSession) emitThirdResponse() {
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	}) {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -314,13 +329,13 @@ func newActiveSessionToolBargeInInferencer() *sessionToolBargeInInferencer {
 	return &sessionToolBargeInInferencer{ready: make(chan struct{}), bargeIn: true}
 }
 
-func (i *sessionToolBargeInInferencer) ConnectSession(context.Context) (messages.Session, error) {
+func (i *sessionToolBargeInInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := newSessionToolBargeInSessionWithMode(i.bargeIn)
-	session.recv.Write(context.Background(), messages.StreamMessage{
+	session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("session-tool-barge-in", "test"),
 	})
-	session.recv.Write(context.Background(), messages.StreamMessage{
+	session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionUpdated,
 		Value: messages.NewSessionUpdatedValue("session-tool-barge-in"),
 	})
@@ -392,6 +407,7 @@ func TestSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 }
 
 func testSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testing.T) {
+	t.Helper()
 	inferencer := newSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
 
@@ -402,7 +418,7 @@ func testSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	}
 	var releaseObserverOnce sync.Once
 
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,
@@ -497,9 +513,10 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 }
 
 func testSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *testing.T) {
+	t.Helper()
 	inferencer := newActiveSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,
@@ -507,7 +524,7 @@ func testSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
-	agentCLI.SetSessionStreamObserver(newActiveScheduledToolObserver(inferencer))
+	agentCLI.SetSessionStreamObserver(newActiveScheduledToolObserver(t.Context(), inferencer))
 
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(io.Discard)

@@ -38,20 +38,24 @@ const (
 	observabilityRMSThreshold = 500.0
 )
 
-var observabilityInputTranscripts = []string{
-	"Remember the word ZEPHYR.",
-	"What is the weather like?",
-	"What was the word?",
-	"Spell that word backwards.",
+func observabilityInputTranscripts() []string {
+	return []string{
+		"Remember the word ZEPHYR.",
+		"What is the weather like?",
+		"What was the word?",
+		"Spell that word backwards.",
+	}
 }
 
 // observabilityReplies are the full assistant replies each turn must show in
 // the session log, in conversation order.
-var observabilityReplies = []string{
-	"ZEPHYR noted. I will remember it.",
-	"Sunny and mild today.",
-	"The word was ZEPHYR.",
-	"Backwards it is RYHPEZ.",
+func observabilityReplies() []string {
+	return []string{
+		"ZEPHYR noted. I will remember it.",
+		"Sunny and mild today.",
+		"The word was ZEPHYR.",
+		"Backwards it is RYHPEZ.",
+	}
 }
 
 // observabilityLogEntry is intentionally local to the proof. The test models
@@ -166,7 +170,7 @@ func observabilityOutputAudioRecord(t *testing.T, turn int) gwtesting.CapturedSe
 func observabilityInputTranscriptRecords(t *testing.T, turn int) []gwtesting.CapturedSessionEvent {
 	t.Helper()
 
-	text := observabilityInputTranscripts[turn-1]
+	text := observabilityInputTranscripts()[turn-1]
 	split := strings.LastIndex(text, " ")
 	if split < 0 {
 		split = len(text)
@@ -203,6 +207,7 @@ func observabilityInputTranscriptRecords(t *testing.T, turn int) []gwtesting.Cap
 }
 
 func observabilityJSONPayload(t *testing.T, value map[string]any) json.RawMessage {
+	t.Helper()
 	data, err := json.Marshal(value)
 	if err != nil {
 		t.Fatalf("marshal observability provider event: %v", err)
@@ -219,7 +224,7 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 	args := []string{"--replay", fixturePath, "--record-dir", recordDir, "--audio-in-pacing", "unpaced"}
 	references := make([][]byte, 0, observabilityTurnCount)
 	for turn := 1; turn <= observabilityTurnCount; turn++ {
-		wavPath := locateCLIFixture(t, multiturnTurnWAVs[turn-1])
+		wavPath := locateCLIFixture(t, multiturnTurnWAVs()[turn-1])
 		references = append(references, observabilityReferenceUtterance(t, turn))
 		args = append(args, "--audio-in-turn", wavPath)
 	}
@@ -239,7 +244,7 @@ func runObservabilityConversation(t *testing.T, fixturePath, recordDir string) [
 func observabilityReferenceUtterance(t *testing.T, turn int) []byte {
 	t.Helper()
 
-	frames := multiturnAudioFrames(t, locateCLIFixture(t, multiturnTurnWAVs[turn-1]))
+	frames := multiturnAudioFrames(t, locateCLIFixture(t, multiturnTurnWAVs()[turn-1]))
 	total := 0
 	for _, frame := range frames {
 		total += len(frame)
@@ -295,7 +300,7 @@ func assertConversationArtifactEvidence(root string, wantInputs, wantReplies []s
 	if limit > len(wantReplies) {
 		limit = len(wantReplies)
 	}
-	for index := 0; index < limit; index++ {
+	for index := range limit {
 		violations = append(violations, checkObservabilityTurn(root, index, entries[index], wantInputs, wantReplies, referenceUtterances)...)
 	}
 
@@ -481,7 +486,7 @@ func TestSessionCommandConversationObservabilityProvesConversationFromArtifactsO
 	root := t.TempDir()
 	references := runObservabilityConversation(t, fixturePath, root)
 
-	if err := assertConversationArtifactEvidence(root, observabilityInputTranscripts, observabilityReplies, references); err != nil {
+	if err := assertConversationArtifactEvidence(root, observabilityInputTranscripts(), observabilityReplies(), references); err != nil {
 		t.Fatalf("on-disk artifacts do not prove the conversation: %v", err)
 	}
 	t.Run("negative control fails truncated artifacts", func(t *testing.T) {
@@ -508,7 +513,7 @@ func assertObservabilityRejectsTruncatedArtifacts(t *testing.T, root string, ref
 		t.Fatalf("redact negative control reply audio: %v", err)
 	}
 
-	err = assertConversationArtifactEvidence(negativeRoot, observabilityInputTranscripts, observabilityReplies, references)
+	err = assertConversationArtifactEvidence(negativeRoot, observabilityInputTranscripts(), observabilityReplies(), references)
 	if err == nil {
 		t.Fatal("artifact assertions passed on a truncated, redacted artifact set; the check is vacuous")
 	}

@@ -37,10 +37,7 @@ const (
 // the post-tool continuation has produced its terminal response.
 func TestLiveReadImageCLI_DefaultReadableAndMissing(t *testing.T) {
 	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime read_image proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_READ_IMAGE") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_READ_IMAGE!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime read_image proof")
 	}
 
 	imagePath := readImageFixturePath(t)
@@ -99,10 +96,7 @@ func TestLiveReadImageCLI_DefaultReadableAndMissing(t *testing.T) {
 func TestLiveReadImageCLI_SpokenReadableImage(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("AGENT_MODEL__OPENAI__API_KEY"))
 	if apiKey == "" {
-		t.Skip("AGENT_MODEL__OPENAI__API_KEY is not set; skipping the live spoken read_image proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_READ_IMAGE") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_READ_IMAGE!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("AGENT_MODEL__OPENAI__API_KEY is not set; it is required by the live spoken read_image proof")
 	}
 
 	imageBytes := readImageFixtureBytes(t)
@@ -142,10 +136,12 @@ type liveReadImageRun struct {
 }
 
 func runLiveReadImageSession(t *testing.T, apiKey, configDir, prompt string) liveReadImageRun {
+	t.Helper()
 	return runLiveReadImageSessionWithInput(t, apiKey, configDir, prompt, "", "")
 }
 
 func runLiveReadImageSpokenSession(t *testing.T, configDir, audioPath, systemPrompt string) liveReadImageRun {
+	t.Helper()
 	return runLiveReadImageSessionWithInput(t, "", configDir, "", audioPath, systemPrompt)
 }
 
@@ -153,7 +149,7 @@ func runLiveReadImageSessionWithInput(t *testing.T, apiKey, configDir, prompt, a
 	t.Helper()
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "read-image-live.session.json")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -365,4 +366,20 @@ type credentialEchoInferencer struct{ secret string }
 
 func (i credentialEchoInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return nil, fmt.Errorf("realtime connect: 401 Unauthorized: Incorrect API key provided: %s", i.secret)
+}
+
+func TestNewSessionSignalContextParentCancellationDoesNotMarkSIGINT(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	ctx, stop, intent := newSessionSignalContext(parent)
+	cancelParent()
+	defer stop()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("parent cancellation did not stop session context")
+	}
+	if intent.SIGINTReceived() {
+		t.Fatal("parent cancellation was recorded as SIGINT")
+	}
 }

@@ -3,7 +3,6 @@
 package testnet
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -28,8 +27,8 @@ const WANSegmentBytes = 1448
 // while the agent waited in read(2). WAN-sized segments keep the fixture's
 // traffic shaped like a remote provider's, and always fit such a window.
 // Platforms where that stall was not observed keep their loopback segment.
-func NewWANSegmentServer(t testing.TB, handler http.Handler) *httptest.Server {
-	t.Helper()
+func NewWANSegmentServer(tb testing.TB, handler http.Handler) *httptest.Server {
+	tb.Helper()
 	config := net.ListenConfig{Control: func(_, _ string, raw syscall.RawConn) error {
 		var optionErr error
 		if err := raw.Control(func(fd uintptr) { optionErr = setWANSegmentSize(fd) }); err != nil {
@@ -37,9 +36,9 @@ func NewWANSegmentServer(t testing.TB, handler http.Handler) *httptest.Server {
 		}
 		return optionErr
 	}}
-	listener, err := config.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	listener, err := config.Listen(tb.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("listen for WAN-segment fixture: %v", err)
+		tb.Fatalf("listen for WAN-segment fixture: %v", err)
 	}
 	server := &httptest.Server{Listener: listener, Config: &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}}
 	server.Start()

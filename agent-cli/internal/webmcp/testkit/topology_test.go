@@ -29,7 +29,7 @@ func TestTopologyChurnDisconnectsBlockedEnableAtDeterministicBoundaries(t *testi
 		t.Fatalf("attach target: %v", err)
 	}
 	session := mustType[*ScriptedTargetSession](t, sessionValue)
-	attached := waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	attached := waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached
 	})
 	if attached.Event.BrowserID != candidate.ID || attached.Event.TargetID != defaultTargetID || attached.Event.Generation != 1 || attached.Event.Sequence != 1 {
@@ -272,10 +272,10 @@ func TestTopologyChurnSupportsBlockedInvocationTargetCloseAndTerminalBarrier(t *
 		t.Fatalf("attach second target: %v", err)
 	}
 	second := mustType[*ScriptedTargetSession](t, secondValue)
-	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.TargetID == defaultTargetID
 	})
-	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.TargetID == secondTargetID
 	})
 
@@ -338,10 +338,10 @@ func TestTopologyChurnClosesOneTargetWithoutDisconnectingBrowser(t *testing.T) {
 		t.Fatalf("attach retained target: %v", err)
 	}
 	keep := mustType[*ScriptedTargetSession](t, keepValue)
-	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-external"
 	})
-	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.TargetID == "tab-keep"
 	})
 
@@ -451,7 +451,7 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 		t.Fatalf("attach old target: %v", err)
 	}
 	oldSession := mustType[*ScriptedTargetSession](t, oldSessionValue)
-	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.BrowserID == oldCandidate.ID
 	})
 	oldContext := oldSession.Context()
@@ -495,7 +495,7 @@ func TestTopologyChurnReplacesIdentityPreservesLateSourceAndEmitsNavigationBurst
 		t.Fatalf("attach replacement target: %v", err)
 	}
 	newSession := mustType[*ScriptedTargetSession](t, newSessionValue)
-	waitPublishedEvent(t, runtime, 0, func(event webmcp.BrowserEvent) bool {
+	waitPublishedEvent(t, runtime, func(event webmcp.BrowserEvent) bool {
 		return event.Type == webmcp.EventTargetAttached && event.BrowserID == newCandidate.ID
 	})
 
@@ -548,9 +548,10 @@ func assertMonotonicNavigationBurst(t *testing.T, runtime *ScriptedBrowserRuntim
 	}
 }
 
-func waitPublishedEvent(t *testing.T, runtime *ScriptedBrowserRuntime, after uint64, match EventMatcher) PublishedEvent {
+// waitPublishedEvent waits for a matching event from the start of the log.
+func waitPublishedEvent(t *testing.T, runtime *ScriptedBrowserRuntime, match EventMatcher) PublishedEvent {
 	t.Helper()
-	return waitPublishedEventAfter(t, runtime, after, match)
+	return waitPublishedEventAfter(t, runtime, 0, match)
 }
 
 func waitPublishedEventAfter(t *testing.T, runtime *ScriptedBrowserRuntime, after uint64, match EventMatcher) PublishedEvent {

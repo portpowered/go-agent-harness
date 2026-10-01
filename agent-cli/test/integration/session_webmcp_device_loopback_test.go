@@ -1,11 +1,11 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,15 +34,16 @@ func TestSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 }
 
 func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
+	t.Helper()
 	registry := newWebMCPDeviceRegistry(t)
 	feed := openWebMCPVirtualStream(t, registry, "mic-feed")
 
 	broker, page := newWebMCPCubeBroker(t)
 	toolSet := webmcpTools.NewBrokerToolSet(broker)
 	provider := newWebMCPDeviceProvider()
-	capabilityFactory := func(*config.Config) (cli.SessionToolCapabilities, error) {
+	capabilityFactory := func(ctx context.Context, _ *config.Config) (cli.SessionToolCapabilities, error) {
 		return cli.SessionToolCapabilities{
-			Executor: toolSet.Executor(), Definitions: append(toolSet.Definitions(), toolSet.PageToolDefinitions(context.Background())...),
+			Executor: toolSet.Executor(), Definitions: append(toolSet.Definitions(), toolSet.PageToolDefinitions(ctx)...),
 			BrowserWatch: broker.Watch, Close: broker.Close,
 		}, nil
 	}
@@ -73,7 +74,7 @@ func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 
 	// Only a device write triggers the provider script. There is no audio file
 	// or direct provider event injection in this integration path.
-	for frame := 0; frame < 12; frame++ {
+	for frame := range 12 {
 		before := registry.PCMObservations()
 		if err := feed.WriteFrame(ctx, webMCPDeviceSignal(audio.FrameSize, 4100+frame)); err != nil {
 			t.Fatalf("write customer turn frame %d to microphone device: %v", frame, err)
@@ -84,7 +85,7 @@ func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	}
 	select {
 	case result := <-provider.toolResult:
-		if result.Name != "queue_cube_moves" || !bytes.Contains([]byte(result.Arguments), []byte("ok")) {
+		if result.Name != "queue_cube_moves" || !strings.Contains(result.Arguments, "ok") {
 			t.Fatalf("provider tool result = %+v", result)
 		}
 	case <-ctx.Done():
@@ -239,14 +240,14 @@ func (m *webMCPDeviceInbound) Close() error { m.once.Do(func() { close(m.done) }
 
 type webMCPDeviceOutbound struct {
 	once    sync.Once
-	onAudio func()
+	onAudio func(context.Context)
 }
 
 func (m *webMCPDeviceOutbound) WriteFrame(ctx context.Context, _ audio.PCMFrame) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	m.once.Do(m.onAudio)
+	m.once.Do(func() { m.onAudio(ctx) })
 	return nil
 }
 func (*webMCPDeviceOutbound) Close() error { return nil }
@@ -286,38 +287,55 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 	}
 	if message.Type == messages.StreamTypeResponseCreate {
 		s.continueOnce.Do(func() {
+			// The provider answers after this send returns; keep the send's
+			// values but not its cancellation.
+			providerContext := context.WithoutCancel(ctx)
 			go func() {
 				// Provider events are asynchronous to the client send boundary.
 				// Preserve that ordering so the session observer registers the
 				// continuation request before its response begins.
-				time.Sleep(25 * time.Millisecond)
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
+				waitWebMCPDeviceProviderDelay(webMCPDeviceContinuationDelay)
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
 				s.inbound.frames <- audio.PCMFrame{Samples: webMCPDeviceSignal(720, 9300), EndOfResponse: true}
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextStartValue()})
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextDeltaValue("Cube moves queued.")})
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextEndValue()})
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioEndValue()})
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextStartValue()})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextDeltaValue("Cube moves queued.")})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextEndValue()})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioEndValue()})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageEndValue(messages.TokenUsage{})})
 				select {
 				case <-s.inbound.read:
 				case <-time.After(time.Second):
 				}
-				time.Sleep(100 * time.Millisecond)
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("webmcp-device", "fixture complete")})
+				waitWebMCPDeviceProviderDelay(webMCPDeviceCloseDelay)
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("webmcp-device", "fixture complete")})
 			}()
 		})
 	}
 	return true
 }
+
+const (
+	// webMCPDeviceContinuationDelay is the scripted provider latency before the
+	// continuation response begins.
+	webMCPDeviceContinuationDelay = 25 * time.Millisecond
+	// webMCPDeviceCloseDelay lets playback drain before the scripted close.
+	webMCPDeviceCloseDelay = 100 * time.Millisecond
+)
+
+// waitWebMCPDeviceProviderDelay waits one scripted provider delay.
+func waitWebMCPDeviceProviderDelay(delay time.Duration) {
+	timer := time.NewTimer(delay)
+	<-timer.C
+}
+
 func (s *webMCPDeviceSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
 func (s *webMCPDeviceSession) Done() <-chan struct{}                                  { return s.done }
 func (s *webMCPDeviceSession) Close() (err error) {
 	s.closeOnce.Do(func() { close(s.done); err = s.inbound.Close() })
 	return err
 }
-func (s *webMCPDeviceSession) emitCubeCall() {
-	ctx := context.Background()
+func (s *webMCPDeviceSession) emitCubeCall(ctx context.Context) {
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewMessageStartValue()})
 	s.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-response", Value: messages.NewAudioStartValue()})
 	s.inbound.frames <- audio.PCMFrame{Samples: webMCPDeviceSignal(720, 7300), EndOfResponse: true}
@@ -337,17 +355,17 @@ type webMCPDeviceProvider struct {
 func newWebMCPDeviceProvider() *webMCPDeviceProvider {
 	return &webMCPDeviceProvider{opened: make(chan struct{}), toolResult: make(chan messages.ToolCallEndValue, 1)}
 }
-func (p *webMCPDeviceProvider) ConnectSession(context.Context) (messages.Session, error) {
+func (p *webMCPDeviceProvider) ConnectSession(ctx context.Context) (messages.Session, error) {
 	session := &webMCPDeviceSession{
 		recv: messages.NewTypedBuffer[messages.StreamMessage](64), done: make(chan struct{}),
 		inbound: &webMCPDeviceInbound{frames: make(chan audio.PCMFrame, 4), done: make(chan struct{}), read: make(chan struct{}, 1)}, result: p.toolResult,
 	}
-	session.outbound = &webMCPDeviceOutbound{onAudio: func() {
+	session.outbound = &webMCPDeviceOutbound{onAudio: func(ctx context.Context) {
 		p.frames.Add(1)
-		session.emitCubeCall()
+		session.emitCubeCall(ctx)
 	}}
-	session.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("webmcp-device", "fixture")})
-	session.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("webmcp-device")})
+	session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("webmcp-device", "fixture")})
+	session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue("webmcp-device")})
 	p.once.Do(func() { close(p.opened) })
 	return session, nil
 }

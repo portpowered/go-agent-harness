@@ -162,7 +162,7 @@ func (a ArtifactEntry) validate(field string) error {
 		if a.Size < 0 {
 			return contractFieldError(ErrInvalidCustomerEvidence, field+".size", "must not be negative")
 		}
-		if err := validateSHA256(field+".sha256", a.SHA256, true); err != nil {
+		if err := validateSHA256(field+".sha256", a.SHA256); err != nil {
 			return errors.Join(err, ErrUnhashedEvidenceArtifact)
 		}
 		if a.Reason != "" {
@@ -261,7 +261,7 @@ func NewCustomerEvidenceBundle(root string, scenario CustomerScenario, runID str
 			return nil, contractFieldError(ErrInvalidCustomerEvidence, "root", "must be a non-symlink directory")
 		}
 	} else if errors.Is(statErr, os.ErrNotExist) {
-		if err := os.MkdirAll(absRoot, 0o700); err != nil {
+		if err := os.MkdirAll(absRoot, privateDirMode); err != nil {
 			return nil, err
 		}
 	} else {
@@ -284,7 +284,28 @@ func (b *CustomerEvidenceBundle) Root() string {
 	return b.root
 }
 
-func (b CustomerEvidenceBundle) Validate() error {
+func (b *CustomerEvidenceBundle) Validate() error {
+	if err := b.validateRecord(); err != nil {
+		return err
+	}
+	if err := b.validateVerdicts(); err != nil {
+		return err
+	}
+	if err := validateArtifactEntries(b.Artifacts, true); err != nil {
+		return err
+	}
+	if err := validateRequiredArtifactKinds(b.Artifacts); err != nil {
+		return err
+	}
+	if b.MechanicalVerdict.Pass && (len(b.Transcripts.Customer) == 0 || len(b.Transcripts.Product) == 0 || len(b.AudioTurnEvents) == 0 || len(b.FilesystemCheckpoints) == 0) {
+		return contractFieldError(ErrMissingEvidence, "bundle", "a passing run needs paired transcripts, audio/turn events, and checkpoints")
+	}
+	return b.validateEvidenceRefs(availableArtifactPaths(b.Artifacts))
+}
+
+// validateRecord checks the bundle identity, finalization, transcripts, and
+// observed facts.
+func (b *CustomerEvidenceBundle) validateRecord() error {
 	if b.SchemaVersion != CustomerEvidenceSchemaVersion {
 		return contractFieldError(ErrInvalidCustomerEvidence, "schema_version", "must be 1")
 	}
@@ -300,9 +321,12 @@ func (b CustomerEvidenceBundle) Validate() error {
 	if err := b.Transcripts.validate(); err != nil {
 		return err
 	}
-	if err := validateObservedFacts("", b.AudioTurnEvents, b.ToolObservations, b.FilesystemCheckpoints); err != nil {
-		return err
-	}
+	return validateObservedFacts("", b.AudioTurnEvents, b.ToolObservations, b.FilesystemCheckpoints)
+}
+
+// validateVerdicts checks the family evidence, process record, and the
+// mechanical and validator verdicts against each other.
+func (b *CustomerEvidenceBundle) validateVerdicts() error {
 	if b.MechanicalVerdict == nil || b.ValidatorInput == nil || b.ValidatorVerdict == nil {
 		return contractFieldError(ErrMissingEvidence, "bundle", "mechanical verdict, validator input, and validator verdict are required")
 	}
@@ -325,19 +349,10 @@ func (b CustomerEvidenceBundle) Validate() error {
 	if b.ValidatorVerdict.Verdict == ValidatorWorked && !b.MechanicalVerdict.Pass {
 		return contractFieldError(ErrValidatorMechanicalDisagreement, "validator_verdict.verdict", "WORKED requires a passing mechanical verdict")
 	}
-	if err := validateArtifactEntries(b.Artifacts, true); err != nil {
-		return err
-	}
-	if err := validateRequiredArtifactKinds(b.Artifacts); err != nil {
-		return err
-	}
-	if b.MechanicalVerdict.Pass && (len(b.Transcripts.Customer) == 0 || len(b.Transcripts.Product) == 0 || len(b.AudioTurnEvents) == 0 || len(b.FilesystemCheckpoints) == 0) {
-		return contractFieldError(ErrMissingEvidence, "bundle", "a passing run needs paired transcripts, audio/turn events, and checkpoints")
-	}
-	return b.validateEvidenceRefs(availableArtifactPaths(b.Artifacts))
+	return nil
 }
 
-func (b CustomerEvidenceBundle) validateFamilyEvidence() error {
+func (b *CustomerEvidenceBundle) validateFamilyEvidence() error {
 	slot, ok := familyEvidenceSlotFor(b.Scenario.Family)
 	if !ok {
 		return nil
@@ -357,7 +372,7 @@ func (b CustomerEvidenceBundle) validateFamilyEvidence() error {
 
 // validateEvidenceRefs requires every verdict and family evidence reference to
 // name an available artifact. It runs after all structural validation.
-func (b CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct{}) error {
+func (b *CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct{}) error {
 	for i, result := range b.MechanicalVerdict.ActionResults {
 		if !allEvidenceRefsAvailable(result.EvidenceRefs, available) {
 			return contractFieldError(ErrMissingEvidence, fmt.Sprintf("mechanical_verdict.action_results[%d].evidence_refs", i), unavailableEvidenceMessage)
@@ -388,7 +403,7 @@ func (b CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct
 
 const unavailableEvidenceMessage = "references unavailable evidence"
 
-func (b CustomerEvidenceBundle) Manifest() CustomerEvidenceManifest {
+func (b *CustomerEvidenceBundle) Manifest() CustomerEvidenceManifest {
 	artifacts := append([]ArtifactEntry(nil), b.Artifacts...)
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Path < artifacts[j].Path })
 	m := CustomerEvidenceManifest{SchemaVersion: CustomerEvidenceSchemaVersion, RunID: b.RunID, ScenarioID: b.Scenario.ID, Finalized: b.Finalized, FinalizedAt: b.FinalizedAt, Artifacts: artifacts}
@@ -481,7 +496,7 @@ func (b *CustomerEvidenceBundle) AddProductRecordDir(source string) error {
 	}
 	info, err := os.Lstat(absSource)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrMissingEvidence, err)
+		return fmt.Errorf("%w: %w", ErrMissingEvidence, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return contractFieldError(ErrInvalidCustomerEvidence, "product_record_dir", "must be a non-symlink directory")
@@ -522,54 +537,54 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 			writeErrors = append(writeErrors, err)
 		}
 	}
-	add(b.writeJSONArtifact("scenario.json", ArtifactKindScenario, b.Scenario, true))
-	add(b.writeJSONLinesArtifact("transcripts/customer.jsonl", ArtifactKindCustomerTranscript, b.Transcripts.Customer, true))
-	add(b.writeJSONLinesArtifact("transcripts/product.jsonl", ArtifactKindProductTranscript, b.Transcripts.Product, true))
-	add(b.writeJSONLinesArtifact("events/audio-turn-events.jsonl", ArtifactKindAudioTurnEvents, b.AudioTurnEvents, true))
-	add(b.writeJSONLinesArtifact("tool-observations.jsonl", ArtifactKindToolObservations, b.ToolObservations, true))
-	add(b.writeJSONLinesArtifact("filesystem-checkpoints.jsonl", ArtifactKindFilesystemCheckpoints, b.FilesystemCheckpoints, true))
-	add(b.writeJSONArtifact("process.json", ArtifactKindProcessFacts, b.Process, true))
+	add(b.writeJSONArtifact("scenario.json", ArtifactKindScenario, b.Scenario))
+	add(b.writeJSONLinesArtifact("transcripts/customer.jsonl", ArtifactKindCustomerTranscript, b.Transcripts.Customer))
+	add(b.writeJSONLinesArtifact("transcripts/product.jsonl", ArtifactKindProductTranscript, b.Transcripts.Product))
+	add(b.writeJSONLinesArtifact("events/audio-turn-events.jsonl", ArtifactKindAudioTurnEvents, b.AudioTurnEvents))
+	add(b.writeJSONLinesArtifact("tool-observations.jsonl", ArtifactKindToolObservations, b.ToolObservations))
+	add(b.writeJSONLinesArtifact("filesystem-checkpoints.jsonl", ArtifactKindFilesystemCheckpoints, b.FilesystemCheckpoints))
+	add(b.writeJSONArtifact("process.json", ArtifactKindProcessFacts, b.Process))
 	if b.Scenario.Family == ScenarioFamilyC {
 		if b.MixedModal == nil {
 			add(b.RecordMissingArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, true, "mixed-modal boundary evidence was not produced"))
 		} else {
-			add(b.writeJSONArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, b.MixedModal, true))
+			add(b.writeJSONArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, b.MixedModal))
 		}
 	}
 	if b.Scenario.Family == ScenarioFamilyD {
 		if b.Termination == nil {
 			add(b.RecordMissingArtifact("events/termination.json", ArtifactKindTerminationEvidence, true, "termination evidence was not produced"))
 		} else {
-			add(b.writeJSONArtifact("events/termination.json", ArtifactKindTerminationEvidence, b.Termination, true))
+			add(b.writeJSONArtifact("events/termination.json", ArtifactKindTerminationEvidence, b.Termination))
 		}
 	}
 	if b.Scenario.Family == ScenarioFamilyE {
 		if b.Patience == nil {
 			add(b.RecordMissingArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, true, "patience timing evidence was not produced"))
 		} else {
-			add(b.writeJSONArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, b.Patience, true))
+			add(b.writeJSONArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, b.Patience))
 		}
 	}
 	if b.MechanicalVerdict == nil {
 		add(b.RecordMissingArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, true, "mechanical verdict was not produced"))
 	} else {
-		add(b.writeJSONArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, b.MechanicalVerdict, true))
+		add(b.writeJSONArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, b.MechanicalVerdict))
 	}
 	if b.ValidatorInput == nil {
 		add(b.RecordMissingArtifact("validator-input.json", ArtifactKindValidatorInput, true, "validator input was not produced"))
 	} else {
-		add(b.writeJSONArtifact("validator-input.json", ArtifactKindValidatorInput, b.ValidatorInput, true))
+		add(b.writeJSONArtifact("validator-input.json", ArtifactKindValidatorInput, b.ValidatorInput))
 	}
 	if b.ValidatorVerdict == nil {
 		add(b.RecordMissingArtifact("validator-verdict.json", ArtifactKindValidatorVerdict, true, "validator verdict was not produced"))
 	} else {
-		add(b.writeJSONArtifact("validator-verdict.json", ArtifactKindValidatorVerdict, b.ValidatorVerdict, true))
+		add(b.writeJSONArtifact("validator-verdict.json", ArtifactKindValidatorVerdict, b.ValidatorVerdict))
 	}
 	if !hasArtifactKind(b.Artifacts, ArtifactKindProductRecordDir) {
 		add(b.writeJSONArtifact("product-record-dir/index.json", ArtifactKindProductRecordDir, struct {
 			SourceRegistered bool     `json:"source_registered"`
 			Files            []string `json:"files"`
-		}{b.productRecordAdded, productRecordPaths(b.Artifacts)}, true))
+		}{b.productRecordAdded, productRecordPaths(b.Artifacts)}))
 	}
 	b.Finalized = true
 	b.FinalizedAt = time.Now().UTC()
@@ -589,19 +604,23 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 	}
 	return errors.Join(writeErrors...)
 }
-func (b *CustomerEvidenceBundle) writeJSONArtifact(path string, kind ArtifactKind, value any, required bool) error {
+
+// writeJSONArtifact adds a required indented-JSON artifact to the bundle.
+func (b *CustomerEvidenceBundle) writeJSONArtifact(path string, kind ArtifactKind, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	return b.AddArtifactBytes(path, kind, append(data, '\n'), required)
+	return b.AddArtifactBytes(path, kind, append(data, '\n'), true)
 }
-func (b *CustomerEvidenceBundle) writeJSONLinesArtifact(path string, kind ArtifactKind, value any, required bool) error {
+
+// writeJSONLinesArtifact adds a required JSON-lines artifact to the bundle.
+func (b *CustomerEvidenceBundle) writeJSONLinesArtifact(path string, kind ArtifactKind, value any) error {
 	data, err := jsonLines(value)
 	if err != nil {
 		return err
 	}
-	return b.AddArtifactBytes(path, kind, data, required)
+	return b.AddArtifactBytes(path, kind, data, true)
 }
 func jsonLines(value any) ([]byte, error) {
 	encoded, err := json.Marshal(value)
@@ -740,7 +759,7 @@ func productRecordPaths(entries []ArtifactEntry) []string {
 func ParseCustomerEvidenceManifest(data []byte) (CustomerEvidenceManifest, error) {
 	var manifest CustomerEvidenceManifest
 	if err := decodeStrictJSON(data, &manifest); err != nil {
-		return CustomerEvidenceManifest{}, fmt.Errorf("%w: decode manifest: %v", ErrInvalidCustomerEvidence, err)
+		return CustomerEvidenceManifest{}, fmt.Errorf("%w: decode manifest: %w", ErrInvalidCustomerEvidence, err)
 	}
 	if err := manifest.Validate(); err != nil {
 		return CustomerEvidenceManifest{}, err
@@ -775,14 +794,14 @@ func VerifyCustomerEvidenceManifest(root string, manifest CustomerEvidenceManife
 			continue
 		}
 		if statErr != nil {
-			return fmt.Errorf("%w: %v", ErrMissingEvidence, statErr)
+			return fmt.Errorf("%w: %w", ErrMissingEvidence, statErr)
 		}
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return fmt.Errorf("%w: artifact is not regular", ErrArtifactHashMismatch)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrArtifactHashMismatch, err)
+			return fmt.Errorf("%w: %w", ErrArtifactHashMismatch, err)
 		}
 		if int64(len(data)) != entry.Size {
 			return fmt.Errorf("%w: size mismatch for %q", ErrArtifactHashMismatch, entry.Path)
@@ -868,28 +887,6 @@ func removeTemporaryEvidenceFile(name string) {
 	if err := os.Remove(name); err != nil {
 		return
 	}
-}
-
-func writePrivateFile(path, temporaryPattern string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), temporaryPattern)
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	defer removeTemporaryEvidenceFile(name)
-	if _, err := temporary.Write(data); err != nil {
-		return errors.Join(err, temporary.Close())
-	}
-	if err := temporary.Chmod(0o600); err != nil {
-		return errors.Join(err, temporary.Close())
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }
 
 func addCustomerSimulationProductRecord(bundle *CustomerEvidenceBundle, recordRoot string) error {

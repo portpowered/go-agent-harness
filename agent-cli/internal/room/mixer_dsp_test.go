@@ -34,13 +34,13 @@ func TestPCMMixLegacyUsesSharedFinalClipAndSortedAttribution(t *testing.T) {
 			t.Fatalf("add input %s: %v", id, err)
 		}
 	}
-	if err := mixer.Write("alpha", pcm16(32767, 30000, -32768, 1)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", pcm16(32767, 30000, -32768, 1)); err != nil {
 		t.Fatalf("write alpha: %v", err)
 	}
-	if err := mixer.Write("beta", pcm16(32767, 10000, -32768, 2)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "beta", pcm16(32767, 10000, -32768, 2)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
-	if err := mixer.Write("gamma", pcm16(-32768, -32768, 32767, 0)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "gamma", pcm16(-32768, -32768, 32767, 0)); err != nil {
 		t.Fatalf("write gamma: %v", err)
 	}
 	if err := mixer.Advance(context.Background()); err != nil {
@@ -78,7 +78,7 @@ func TestPCMMixLegacyKeepsFullCadenceZeroPadding(t *testing.T) {
 	if err := mixer.AddInput("speaker"); err != nil {
 		t.Fatalf("add input: %v", err)
 	}
-	if err := mixer.Write("speaker", pcm16(7, 8)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "speaker", pcm16(7, 8)); err != nil {
 		t.Fatalf("write short input: %v", err)
 	}
 	if err := mixer.Advance(context.Background()); err != nil {

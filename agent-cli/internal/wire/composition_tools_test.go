@@ -1,10 +1,12 @@
 package wire
 
 import (
+	"context"
+	"testing"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"testing"
 )
 
 type recordingToolService struct {
@@ -12,7 +14,7 @@ type recordingToolService struct {
 	capabilities serviceTools.Capabilities
 }
 
-func (s *recordingToolService) Resolve(*config.Config) (serviceTools.Capabilities, error) {
+func (s *recordingToolService) Resolve(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 	s.resolves++
 	return s.capabilities, nil
 }
@@ -36,7 +38,7 @@ func TestToolServicePort_AdvertisesAndExecutesCompleteCustomSurface(t *testing.T
 		{Message: messages.NewTextMessage(messages.RoleAssistant, "custom tool complete")},
 	}}
 	fallbackExecutor := &recordingToolExecutor{}
-	root, err := composeTestAgentCLI(
+	root, err := composeTestAgentCLI(t.Context(),
 		fallbackExecutor,
 		WithToolService(toolService),
 		WithInferencer(inferencer),

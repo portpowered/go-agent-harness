@@ -17,10 +17,14 @@ type Suggestion struct {
 }
 
 // styleSelected is the highlight style for the currently selected suggestion.
-var styleSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("12"))
+func styleSelected() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("12"))
+}
 
 // styleDescription renders the description text in a dimmer color.
-var styleDescription = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+func styleDescription() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+}
 
 // Autocomplete is a reusable Bubble Tea sub-model that renders a list of
 // suggestions below the input line and supports keyboard navigation.
@@ -58,13 +62,13 @@ func (a *Autocomplete) SetFilter(prefix string) {
 }
 
 // IsActive reports whether the autocomplete popup is visible (has filtered matches).
-func (a Autocomplete) IsActive() bool {
+func (a *Autocomplete) IsActive() bool {
 	return a.active
 }
 
 // Selected returns the label of the currently selected suggestion, or empty
 // string if nothing is selected or the popup is inactive.
-func (a Autocomplete) Selected() string {
+func (a *Autocomplete) Selected() string {
 	if !a.active || len(a.filtered) == 0 {
 		return ""
 	}
@@ -75,7 +79,7 @@ func (a Autocomplete) Selected() string {
 }
 
 // FilteredCount returns the number of suggestions matching the current filter.
-func (a Autocomplete) FilteredCount() int {
+func (a *Autocomplete) FilteredCount() int {
 	return len(a.filtered)
 }
 
@@ -91,52 +95,52 @@ func (a *Autocomplete) Reset() {
 // Update handles key events for the autocomplete popup. It consumes Up, Down,
 // Tab, and Escape when active. Returns the updated model and an optional Cmd.
 // The parent should check IsActive() before delegating.
-func (a Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
+func (a *Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
+	next := *a
 	keyMsg, ok := msg.(tea.KeyMsg)
-	if !ok || !a.active {
-		return a, nil
+	if !ok || !next.active {
+		return next, nil
 	}
 
-	switch keyMsg.Type {
-	case tea.KeyUp:
-		if a.selected > 0 {
-			a.selected--
-			// Scroll up if needed.
-			if a.selected < a.offset {
-				a.offset = a.selected
-			}
-		}
-		return a, nil
-
-	case tea.KeyDown:
-		if a.selected < len(a.filtered)-1 {
-			a.selected++
-			// Scroll down if needed.
-			if a.selected >= a.offset+maxSuggestions {
-				a.offset = a.selected - maxSuggestions + 1
-			}
-		}
-		return a, nil
-
-	case tea.KeyTab:
-		// Tab completes the selected suggestion — parent reads Selected().
-		// We don't deactivate here; the parent will update the input and
-		// may want to re-filter or dismiss.
-		return a, nil
-
-	case tea.KeyEsc:
-		a.active = false
-		a.selected = 0
-		a.offset = 0
-		return a, nil
+	// Only Up, Down, and Esc change popup state (tea.KeyType has ~85 members,
+	// so an if-chain states that directly). Tab completes the selected
+	// suggestion: the parent reads Selected() and decides whether to dismiss.
+	if keyType := keyMsg.Type; keyType == tea.KeyUp {
+		next.moveUp()
+	} else if keyType == tea.KeyDown {
+		next.moveDown()
+	} else if keyType == tea.KeyEsc {
+		next.active = false
+		next.selected = 0
+		next.offset = 0
 	}
 
-	return a, nil
+	return next, nil
+}
+
+// moveUp selects the previous suggestion, scrolling up when needed.
+func (a *Autocomplete) moveUp() {
+	if a.selected == 0 {
+		return
+	}
+	a.selected--
+	a.offset = min(a.offset, a.selected)
+}
+
+// moveDown selects the next suggestion, scrolling down when needed.
+func (a *Autocomplete) moveDown() {
+	if a.selected >= len(a.filtered)-1 {
+		return
+	}
+	a.selected++
+	if a.selected >= a.offset+maxSuggestions {
+		a.offset = a.selected - maxSuggestions + 1
+	}
 }
 
 // View renders the autocomplete popup as a string. Returns empty string when
 // inactive or no matches. The output is meant to be appended below the input line.
-func (a Autocomplete) View() string {
+func (a *Autocomplete) View() string {
 	if !a.active || len(a.filtered) == 0 {
 		return ""
 	}
@@ -151,15 +155,15 @@ func (a Autocomplete) View() string {
 		s := a.filtered[i]
 		line := s.Label
 		if s.Description != "" {
-			line += "  " + styleDescription.Render(s.Description)
+			line += "  " + styleDescription().Render(s.Description)
 		}
 
 		if i == a.selected {
 			// Re-render the whole line with selection style (label part only for highlight).
 			if s.Description != "" {
-				line = styleSelected.Render(s.Label) + "  " + styleDescription.Render(s.Description)
+				line = styleSelected().Render(s.Label) + "  " + styleDescription().Render(s.Description)
 			} else {
-				line = styleSelected.Render(s.Label)
+				line = styleSelected().Render(s.Label)
 			}
 		}
 

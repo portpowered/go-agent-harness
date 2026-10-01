@@ -174,6 +174,7 @@ func (b *xBroker) AcquirePageFocus(context.Context) (func(context.Context) error
 }
 
 func prepareRequest(t *testing.T, size int, recovery *bytes.Buffer) Request {
+	t.Helper()
 	return Request{
 		Selector: operations.Selector{Browser: config.BrowserConfig{Selection: config.BrowserSelectionConfig{Tab: testTarget}}},
 		File:     writeVideo(t, size),

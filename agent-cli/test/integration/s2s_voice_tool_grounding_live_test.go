@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,6 @@ const (
 	liveVoiceToolGroundingTimeout     = 60 * time.Second
 	liveVoiceToolGroundingMissingPath = "/tmp/definitely_missing_file.txt"
 	liveVoiceToolGroundingProbeDelay  = 15 * time.Second
-	liveVoiceToolGroundingOptIn       = "AGENT_HARNESS_LIVE_VOICE_GROUNDING"
 	liveVoiceToolGroundingInputDir    = "AGENT_HARNESS_LIVE_VOICE_GROUNDING_AUDIO_DIR"
 	liveVoiceToolGroundingArtifactDir = "AGENT_HARNESS_LIVE_VOICE_GROUNDING_ARTIFACT_DIR"
 )
@@ -44,25 +44,27 @@ type liveVoiceToolGroundingCase struct {
 	ExpectedTool string
 }
 
-var liveVoiceToolGroundingCases = []liveVoiceToolGroundingCase{
-	{
-		Name:         "missing-file",
-		Request:      "read me the file at /tmp/definitely-missing-file.txt",
-		AudioName:    "missing-file.wav",
-		ExpectedTool: "read_file",
-	},
-	{
-		Name:         "exit-42",
-		Request:      "run the command exit 42 and tell me what happened",
-		AudioName:    "exit-42.wav",
-		ExpectedTool: "exec",
-	},
-	{
-		Name:         "date-control",
-		Request:      "run the command date -u +%Y-%m-%d and tell me the returned date",
-		AudioName:    "date-control.wav",
-		ExpectedTool: "exec",
-	},
+func liveVoiceToolGroundingCases() []liveVoiceToolGroundingCase {
+	return []liveVoiceToolGroundingCase{
+		{
+			Name:         "missing-file",
+			Request:      "read me the file at /tmp/definitely-missing-file.txt",
+			AudioName:    "missing-file.wav",
+			ExpectedTool: "read_file",
+		},
+		{
+			Name:         "exit-42",
+			Request:      "run the command exit 42 and tell me what happened",
+			AudioName:    "exit-42.wav",
+			ExpectedTool: "exec",
+		},
+		{
+			Name:         "date-control",
+			Request:      "run the command date -u +%Y-%m-%d and tell me the returned date",
+			AudioName:    "date-control.wav",
+			ExpectedTool: "exec",
+		},
+	}
 }
 
 // TestLiveVoiceToolGroundingFailuresTwiceAndDateControl runs the two required
@@ -71,20 +73,17 @@ var liveVoiceToolGroundingCases = []liveVoiceToolGroundingCase{
 func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live voice grounding proof")
-	}
-	if os.Getenv(liveVoiceToolGroundingOptIn) != "1" {
-		t.Skipf("%s!=1; this proof makes five OpenAI Realtime calls and requires explicit opt-in", liveVoiceToolGroundingOptIn)
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live voice grounding proof")
 	}
 
 	artifactRoot := liveVoiceToolGroundingArtifactRoot(t)
-	inputs := make(map[string]string, len(liveVoiceToolGroundingCases))
-	for _, testCase := range liveVoiceToolGroundingCases {
+	inputs := make(map[string]string, len(liveVoiceToolGroundingCases()))
+	for _, testCase := range liveVoiceToolGroundingCases() {
 		inputs[testCase.Name] = liveVoiceToolGroundingInput(t, testCase)
 	}
 
 	evidence := make([]liveVoiceToolGroundingEvidence, 0, 5)
-	for _, testCase := range liveVoiceToolGroundingCases {
+	for _, testCase := range liveVoiceToolGroundingCases() {
 		runs := 1
 		if testCase.Name != "date-control" {
 			runs = 2
@@ -94,7 +93,7 @@ func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 				// The live model is token-rate limited. Space independent probes
 				// so the required five-run matrix does not turn its final control
 				// into a provider rate-limit failure.
-				time.Sleep(liveVoiceToolGroundingProbeDelay)
+				<-time.After(liveVoiceToolGroundingProbeDelay)
 			}
 			if testCase.Name == "missing-file" {
 				assertMissingVoiceToolGroundingPath(t)
@@ -153,7 +152,7 @@ func runLiveVoiceToolGrounding(t *testing.T, apiKey, artifactRoot string, testCa
 	recordDir := filepath.Join(artifactRoot, runName+"-recording")
 	audioPath := filepath.Join(artifactRoot, runName+".wav")
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI: %v", err)
 	}
@@ -260,7 +259,7 @@ func validateLiveVoiceToolGroundingCase(observation liveVoiceToolGroundingObserv
 	case "exit-42":
 		return validateLiveVoiceExit42Case(observation, arguments, result, reply)
 	case "date-control":
-		return validateLiveVoiceDateControlCase(observation, arguments, result, reply)
+		return validateLiveVoiceDateControlCase(observation, arguments)
 	}
 	return nil
 }
@@ -294,7 +293,7 @@ func validateLiveVoiceExit42Case(observation liveVoiceToolGroundingObservation, 
 	return nil
 }
 
-func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments, result, reply string) error {
+func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments) error {
 	if !strings.Contains(strings.ToLower(arguments.Command), "date") {
 		return fmt.Errorf("date control command=%q does not run date", arguments.Command)
 	}
@@ -309,8 +308,8 @@ func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservat
 }
 
 func hasExactlyDefaultLiveTools(got []string) bool {
-	want := make(map[string]struct{}, len(config.DefaultToolIDs))
-	for _, name := range config.DefaultToolIDs {
+	want := make(map[string]struct{}, len(config.DefaultToolIDs()))
+	for _, name := range config.DefaultToolIDs() {
 		want[name] = struct{}{}
 	}
 	seen := make(map[string]struct{}, len(got))
@@ -462,11 +461,11 @@ func liveVoiceToolGroundingInput(t *testing.T, testCase liveVoiceToolGroundingCa
 		return path
 	}
 	if runtime.GOOS != "darwin" {
-		t.Skipf("live input %s requires macOS say/afconvert or %s", testCase.AudioName, liveVoiceToolGroundingInputDir)
+		t.Fatalf("live input %s requires macOS say/afconvert or %s", testCase.AudioName, liveVoiceToolGroundingInputDir)
 	}
 	for _, command := range []string{"say", "afconvert"} {
 		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("live input generation requires %s or %s", command, liveVoiceToolGroundingInputDir)
+			t.Fatalf("live input generation requires %s or %s", command, liveVoiceToolGroundingInputDir)
 		}
 	}
 
@@ -493,8 +492,8 @@ func liveVoiceToolGroundingArtifactRoot(t *testing.T) string {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		t.Fatalf("create live grounding artifact parent: %v", err)
 	}
-	root, err := os.MkdirTemp(parent, "s2s-voice-tool-grounding-")
-	if err != nil {
+	root := filepath.Join(parent, "s2s-voice-tool-grounding-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatalf("create live grounding artifact directory: %v", err)
 	}
 	return root

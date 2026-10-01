@@ -272,18 +272,15 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 	}
 }
 
-func TestCLIHostDefaultWorkDirUsesLaunchDirectory(t *testing.T) {
+func TestCLIHostDefaultWorkDirUsesHostWorkDir(t *testing.T) {
 	launchDir := t.TempDir()
-	t.Chdir(launchDir)
 
-	workDir, err := cliWorkDir(&flags.GlobalFlags{ConfigDirPath: t.TempDir()})
+	workDir, err := cliWorkDir(&flags.GlobalFlags{ConfigDirPath: t.TempDir(), Host: flags.FixedHostDirs(t.TempDir(), launchDir)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.Getwd(); err != nil {
-		t.Fatalf("get launch directory: %v", err)
-	} else if workDir != got {
-		t.Fatalf("default WorkDir = %q, want launch directory %q", workDir, got)
+	if workDir != filepath.Clean(launchDir) {
+		t.Fatalf("default WorkDir = %q, want host work directory %q", workDir, launchDir)
 	}
 }
 

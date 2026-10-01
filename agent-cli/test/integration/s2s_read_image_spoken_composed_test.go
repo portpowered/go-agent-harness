@@ -127,13 +127,6 @@ func isReadImageSeedMessage(record gatewaytesting.CapturedSessionEvent) bool {
 	return payload.Item.Type == rtItemMessage
 }
 
-func readImageSpokenRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
-	if len(record.Payload) > 0 {
-		return record.Payload
-	}
-	return record.Data
-}
-
 func readImageSpokenClientEvent(t *testing.T, eventType string, payload map[string]string) gatewaytesting.CapturedSessionEvent {
 	t.Helper()
 	data, err := json.Marshal(payload)
@@ -219,7 +212,7 @@ func assertReadImageFailedContinuationFixture(t *testing.T, fixturePath string) 
 
 func runSpokenReadImageSession(t *testing.T, fixturePath, configDir, imagePath, wavPath string) readImageSpokenRun {
 	t.Helper()
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}
@@ -273,7 +266,7 @@ func assertReadImageContinuationFailure(t *testing.T, run readImageSpokenRun) {
 	if !strings.Contains(continuationErr.ProviderDetails[readImageCallID], "token_limit") && !strings.Contains(continuationErr.ProviderDetails[readImageCallID], "max_output_tokens") {
 		t.Fatalf("failed continuation detail = %q, want token-limit provider context", continuationErr.ProviderDetails[readImageCallID])
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(strings.ToLower(run.stdout+"\n"+run.stderr), marker) {
 			t.Fatalf("failed empty continuation fabricated grounded marker %q", marker)
 		}
@@ -286,97 +279,96 @@ func assertReadImageContinuationFailure(t *testing.T, run readImageSpokenRun) {
 	}
 }
 
+// readImageSpokenCounts tallies the read_image tool call and the tool-role
+// typed image lifecycle shared by the spoken success and failure assertions.
+type readImageSpokenCounts struct {
+	toolCalls, imageStarts, imageDeltas, imageEnds int
+	imageEndIndex                                  int
+}
+
+func (c *readImageSpokenCounts) observe(index int, event messages.StreamMessage) {
+	switch event.Type {
+	case messages.StreamTypeToolCallEnd:
+		if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == rtToolReadImage {
+			c.toolCalls++
+		}
+	case messages.StreamTypeImageStart:
+		if event.Role == messages.RoleTool {
+			c.imageStarts++
+		}
+	case messages.StreamTypeImageDelta:
+		if event.Role == messages.RoleTool {
+			c.imageDeltas++
+		}
+	case messages.StreamTypeImageEnd:
+		if event.Role == messages.RoleTool {
+			c.imageEnds++
+			c.imageEndIndex = index
+		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart,
+		messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
+		messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta,
+		messages.StreamTypeAudioEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
+		messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
+		messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
+		messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
+		messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// Other stream types are not part of the read-image tool evidence.
+	}
+}
+
+func (c *readImageSpokenCounts) assertOneImage(t *testing.T, outcome string) {
+	t.Helper()
+	if c.toolCalls != 1 {
+		t.Fatalf("spoken %s observed %d read_image tool calls, want exactly one", outcome, c.toolCalls)
+	}
+	if c.imageStarts != 1 || c.imageDeltas == 0 || c.imageEnds != 1 {
+		t.Fatalf("spoken %s image lifecycle = starts %d, deltas %d, ends %d; want one complete typed image", outcome, c.imageStarts, c.imageDeltas, c.imageEnds)
+	}
+}
+
 func assertReadImageSpokenSuccessLifecycle(t *testing.T, events []messages.StreamMessage) {
 	t.Helper()
-	toolCalls := 0
-	imageStarts := 0
-	imageDeltas := 0
-	imageEnds := 0
-	imageEndIndex := -1
+	counts := readImageSpokenCounts{imageEndIndex: -1}
 	finalAssistantEnd := -1
 	for index, event := range events {
-		switch event.Type {
-		case messages.StreamTypeToolCallEnd:
-			if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == rtToolReadImage {
-				toolCalls++
-			}
-		case messages.StreamTypeImageStart:
-			if event.Role == messages.RoleTool {
-				imageStarts++
-			}
-		case messages.StreamTypeImageDelta:
-			if event.Role == messages.RoleTool {
-				imageDeltas++
-			}
-		case messages.StreamTypeImageEnd:
-			if event.Role == messages.RoleTool {
-				imageEnds++
-				imageEndIndex = index
-			}
-		case messages.StreamTypeMessageEnd:
-			if event.Role == messages.RoleTool || index <= imageEndIndex {
-				continue
-			}
-			terminal, ok := event.Value.(*messages.MessageEndValue)
-			if !ok || terminal == nil || terminal.Status != rtStatusCompleted {
-				continue
-			}
+		counts.observe(index, event)
+		if event.Type != messages.StreamTypeMessageEnd || event.Role == messages.RoleTool || index <= counts.imageEndIndex {
+			continue
+		}
+		if terminal, ok := event.Value.(*messages.MessageEndValue); ok && terminal != nil && terminal.Status == rtStatusCompleted {
 			finalAssistantEnd = index
 		}
 	}
-	if toolCalls != 1 {
-		t.Fatalf("spoken success observed %d read_image tool calls, want exactly one", toolCalls)
-	}
-	if imageStarts != 1 || imageDeltas == 0 || imageEnds != 1 {
-		t.Fatalf("spoken success image lifecycle = starts %d, deltas %d, ends %d; want one complete typed image", imageStarts, imageDeltas, imageEnds)
-	}
-	if finalAssistantEnd <= imageEndIndex {
-		t.Fatalf("spoken success has no completed assistant terminal after image: image_end=%d assistant_end=%d events=%#v", imageEndIndex, finalAssistantEnd, events)
+	counts.assertOneImage(t, "success")
+	if finalAssistantEnd <= counts.imageEndIndex {
+		t.Fatalf("spoken success has no completed assistant terminal after image: image_end=%d assistant_end=%d events=%#v", counts.imageEndIndex, finalAssistantEnd, events)
 	}
 }
 
 func assertReadImageSpokenFailureLifecycle(t *testing.T, events []messages.StreamMessage) {
 	t.Helper()
-	toolCalls := 0
-	imageStarts := 0
-	imageDeltas := 0
-	imageEnds := 0
+	counts := readImageSpokenCounts{imageEndIndex: -1}
 	failedTerminal := -1
 	for index, event := range events {
-		switch event.Type {
-		case messages.StreamTypeToolCallEnd:
-			if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == rtToolReadImage {
-				toolCalls++
-			}
-		case messages.StreamTypeImageStart:
-			if event.Role == messages.RoleTool {
-				imageStarts++
-			}
-		case messages.StreamTypeImageDelta:
-			if event.Role == messages.RoleTool {
-				imageDeltas++
-			}
-		case messages.StreamTypeImageEnd:
-			if event.Role == messages.RoleTool {
-				imageEnds++
-			}
-		case messages.StreamTypeMessageEnd:
-			terminal, ok := event.Value.(*messages.MessageEndValue)
-			if ok && terminal != nil && terminal.Status == rtStatusFailed {
+		counts.observe(index, event)
+		if event.Type == messages.StreamTypeMessageEnd {
+			if terminal, ok := event.Value.(*messages.MessageEndValue); ok && terminal != nil && terminal.Status == rtStatusFailed {
 				failedTerminal = index
 			}
-		case messages.StreamTypeTextDelta, messages.StreamTypeTranscriptDelta, messages.StreamTypeAudioDelta:
-			if failedTerminal >= 0 && event.Role != messages.RoleTool {
-				t.Fatalf("failed spoken continuation emitted assistant output after failed terminal at %d: event %d=%#v", failedTerminal, index, event)
-			}
+		}
+		assistantOutput := event.Type == messages.StreamTypeTextDelta || event.Type == messages.StreamTypeTranscriptDelta || event.Type == messages.StreamTypeAudioDelta
+		if assistantOutput && failedTerminal >= 0 && event.Role != messages.RoleTool {
+			t.Fatalf("failed spoken continuation emitted assistant output after failed terminal at %d: event %d=%#v", failedTerminal, index, event)
 		}
 	}
-	if toolCalls != 1 {
-		t.Fatalf("spoken failure observed %d read_image tool calls, want exactly one", toolCalls)
-	}
-	if imageStarts != 1 || imageDeltas == 0 || imageEnds != 1 {
-		t.Fatalf("spoken failure image lifecycle = starts %d, deltas %d, ends %d; want one complete typed image", imageStarts, imageDeltas, imageEnds)
-	}
+	counts.assertOneImage(t, "failure")
 	if failedTerminal < 0 {
 		t.Fatalf("spoken failure observed no provider failed terminal: events=%#v", events)
 	}
@@ -390,6 +382,7 @@ func TestReadImageSpokenProductionComposition(t *testing.T) {
 }
 
 func testReadImageSpokenProductionComposition(t *testing.T) {
+	t.Helper()
 	imagePath := filepath.Join(t.TempDir(), "photo.png")
 	imageBytes := readImageFixtureBytes(t)
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
@@ -423,6 +416,7 @@ func TestReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
 }
 
 func testReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
+	t.Helper()
 	imagePath := filepath.Join(t.TempDir(), "photo.png")
 	imageBytes := readImageFixtureBytes(t)
 	if err := os.WriteFile(imagePath, imageBytes, 0o600); err != nil {
@@ -477,6 +471,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 		},
 	} {
 		clitest.Subtest(t, testCase.name, func(t *testing.T) {
+			t.Helper()
 			fixture := rewriteReadImageCapture(t, validFixture, testCase.mutate)
 			run := runSpokenReadImageSession(t, fixture, configDir, imagePath, wavPath)
 			if run.err == nil {
@@ -485,7 +480,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 			if !errors.Is(run.err, providers.ErrReplayMismatch) {
 				t.Fatalf("strict replay control error = %v, want replay mismatch at provider result gate", run.err)
 			}
-			for _, marker := range readImageGroundedMarkers {
+			for _, marker := range readImageGroundedMarkers() {
 				if strings.Contains(strings.ToLower(run.stdout+"\n"+run.stderr), marker) {
 					t.Fatalf("strict replay control released grounded marker %q after malformed result", marker)
 				}

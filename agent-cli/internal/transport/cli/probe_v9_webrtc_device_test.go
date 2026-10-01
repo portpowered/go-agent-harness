@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -144,40 +143,6 @@ func TestS2SV9WebRTCDeviceCaptureProvesRegistryToSession(t *testing.T) {
 	observations := registry.Observations()
 	if observations.OpenCount != 2 || observations.ReleaseCount != 0 {
 		t.Fatalf("registry observations before cleanup = %+v, want two opens and live handles", observations)
-	}
-}
-
-// deliverDeviceProbeResponse queues the scripted provider response and
-// requires the runner to surface its transcript and unchanged audio delta.
-func deliverDeviceProbeResponse(t *testing.T, ctx context.Context, runner *participants.ModelRunner, session *deviceProbeSession, responsePCM []byte) {
-	t.Helper()
-	for _, responseMessage := range []messages.StreamMessage{
-		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue()},
-		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("device ")},
-		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("round trip")},
-		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue(deviceProbeExpectedTranscript)},
-		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(responsePCM)},
-		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue()},
-		{Type: messages.StreamTypeMessageEnd},
-	} {
-		if !session.receive.Write(ctx, responseMessage) {
-			t.Fatalf("queue session response event %s: %v", responseMessage.Type, ctx.Err())
-		}
-	}
-	recognizedTranscript, err := readDeviceProbeTranscript(t, ctx, runner.DeltaOutbox)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if violation := assertDeviceProbeTranscript(recognizedTranscript, deviceProbeExpectedTranscript); violation != nil {
-		t.Fatal(violation)
-	}
-	responseDelta := readDeviceProbeDelta(t, ctx, runner.DeltaOutbox, messages.StreamTypeAudioDelta)
-	responseValue, ok := responseDelta.Value.(*messages.AudioDeltaValue)
-	if !ok {
-		t.Fatalf("response audio delta value = %T, want *messages.AudioDeltaValue", responseDelta.Value)
-	}
-	if !bytes.Equal(responseValue.Content, responsePCM) {
-		t.Fatalf("response audio bytes changed before speaker emission: got %d bytes, want %d", len(responseValue.Content), len(responsePCM))
 	}
 }
 
@@ -364,6 +329,21 @@ func readDeviceProbeTranscript(t *testing.T, ctx context.Context, out *messages.
 			return deltas.String(), nil
 		case messages.StreamTypeMessageEnd:
 			return deltas.String(), fmt.Errorf("recognized transcript missing TRANSCRIPT.END before MESSAGE.END; actual transcript = %q", deltas.String())
+		case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+			messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+			messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta,
+			messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta,
+			messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
+			messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
+			messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
+			messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
+			messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+			messages.StreamTypeTranscriptStart, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+			messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+			messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel,
+			messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
+			messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+			// Other stream types do not carry the recognized transcript.
 		}
 	}
 }

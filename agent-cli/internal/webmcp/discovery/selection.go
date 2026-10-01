@@ -58,9 +58,6 @@ func (h *TargetHandle) Detach(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	h.once.Do(func() {
 		if h.detacher != nil {
 			h.err = h.detacher.Detach(ctx)
@@ -69,21 +66,21 @@ func (h *TargetHandle) Detach(ctx context.Context) error {
 	return h.err
 }
 
-// Release is an alias for detach-only cleanup.
-func (h *TargetHandle) Release() error { return h.Detach(context.Background()) }
+// Release is an alias for detach-only cleanup. The detach ignores the
+// caller's cancellation so cleanup still runs after the caller is cancelled.
+func (h *TargetHandle) Release(ctx context.Context) error {
+	return h.Detach(context.WithoutCancel(ctx))
+}
 
 // Close is intentionally equivalent to Release. It never invokes a target,
 // browser, process, or profile close operation.
-func (h *TargetHandle) Close() error { return h.Release() }
+func (h *TargetHandle) Close(ctx context.Context) error { return h.Release(ctx) }
 
 // Select refreshes the supplied browser's targets and selects one exact
 // normalized browser/target pair. An empty TargetID is accepted only to make
 // the fail-closed ambiguity/no-match paths observable; it never authorizes a
 // selection based on list order or a page's display metadata.
 func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	s.mu.Lock()
 	browser, failure := s.resolveSelectionBrowserLocked(request)
@@ -154,7 +151,7 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	}
 	if failure := s.persistSelectionLocked(ctx, browser, target, selected.SelectedAt); failure != nil {
 		if handle != nil {
-			discardRelease(handle)
+			discardTargetHandle(ctx, handle)
 		}
 		s.mu.Unlock()
 		return Selection{}, failure
@@ -177,7 +174,7 @@ func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (S
 	// remains an independent snapshot, so an in-flight caller cannot be
 	// redirected to the newly selected target.
 	if previous != nil && previous.Handle != nil && previous.Handle != handle {
-		discardRelease(previous.Handle)
+		discardTargetHandle(ctx, previous.Handle)
 	}
 	return selected, nil
 }

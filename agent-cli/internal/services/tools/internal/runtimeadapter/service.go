@@ -44,7 +44,7 @@ func (a *runtimeToolServiceAdapter) Resolve(ctx context.Context, request runtime
 	if err := ctx.Err(); err != nil {
 		return runtimeTools.Capability{}, err
 	}
-	capabilities, err := a.host.Resolve(cliToolConfig(request))
+	capabilities, err := a.host.Resolve(ctx, cliToolConfig(request))
 	if err != nil {
 		return runtimeTools.Capability{}, fmt.Errorf("resolve host tool capabilities: %w", err)
 	}

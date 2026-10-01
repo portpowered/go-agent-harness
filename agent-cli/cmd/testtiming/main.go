@@ -14,6 +14,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/testtiming"
 )
 
+// defaultTopEntries is how many slow package and test entries are printed by default.
+const defaultTopEntries = 20
+
 func main() {
 	if err := run(os.Stdout, os.Stderr, os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -26,7 +29,7 @@ func run(stdout, stderr io.Writer, args []string) error {
 	flags.SetOutput(stderr)
 	goCommand := flags.String("go", "go", "Go command to invoke")
 	timeout := flags.String("timeout", "120s", "go test package timeout")
-	top := flags.Int("top", 20, "number of slow package and test entries to print")
+	top := flags.Int("top", defaultTopEntries, "number of slow package and test entries to print")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}

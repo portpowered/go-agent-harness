@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -484,7 +483,7 @@ func recordProductionPromptCapture(t *testing.T) string {
 
 func executeProductionSessionCommand(t *testing.T, args []string) (string, string, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}
@@ -493,7 +492,7 @@ func executeProductionSessionCommand(t *testing.T, args []string) (string, strin
 	root.SetOut(writer.Stdout())
 	root.SetErr(writer.Stderr())
 	root.SetArgs(args)
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = root.ExecuteContext(ctx)
 	return writer.StdoutString(), writer.StderrString(), err

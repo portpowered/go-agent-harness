@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -527,11 +527,11 @@ func assertCubecadeScreenshotMarker(t *testing.T, screenshot image.Image, oracle
 func parseCSSRGB(value string) ([3]uint8, bool) {
 	value = strings.TrimSpace(value)
 	open := strings.IndexByte(value, '(')
-	close := strings.LastIndexByte(value, ')')
-	if open < 0 || close <= open || (!strings.HasPrefix(value, "rgb(") && !strings.HasPrefix(value, "rgba(")) {
+	closeIdx := strings.LastIndexByte(value, ')')
+	if open < 0 || closeIdx <= open || (!strings.HasPrefix(value, "rgb(") && !strings.HasPrefix(value, "rgba(")) {
 		return [3]uint8{}, false
 	}
-	components := strings.Split(value[open+1:close], ",")
+	components := strings.Split(value[open+1:closeIdx], ",")
 	if len(components) < 3 {
 		return [3]uint8{}, false
 	}

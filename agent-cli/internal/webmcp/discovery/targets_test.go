@@ -44,8 +44,8 @@ func (c *cannedResponse) httpResponse() *http.Response {
 	return c.built
 }
 
-func targetJSONResponse(body string, status int) *cannedResponse {
-	return &cannedResponse{body: body, status: status}
+func targetJSONResponse(body string) *cannedResponse {
+	return &cannedResponse{body: body, status: http.StatusOK}
 }
 
 func targetDescriptor(rawID, title, pageURL string, tools int) TargetDescriptor {
@@ -70,8 +70,8 @@ func TestListTargetsNormalizesJSONListAndRedactsTransportData(t *testing.T) {
   {"id":"no-websocket","type":"page","title":"No socket","url":"https://socketless.test","webmcpSupported":true,"toolCount":1}
 ]`
 	client := &targetHTTPClient{responses: []*cannedResponse{
-		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/browser-secret"), http.StatusOK),
-		targetJSONResponse(listJSON, http.StatusOK),
+		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/browser-secret")),
+		targetJSONResponse(listJSON),
 	}}
 	recorder := &eventRecorder{}
 	service := New(Options{HTTPClient: client, EventSink: recorder})
@@ -234,8 +234,8 @@ func TestListTargetsReturnsNoEligibleAndUnsupportedClassifications(t *testing.T)
 
 func TestDiscoverAndListTargetsRequiresExactBrowserWhenSeveralConfigured(t *testing.T) {
 	client := &targetHTTPClient{responses: []*cannedResponse{
-		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/one"), http.StatusOK),
-		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9223/devtools/browser/two"), http.StatusOK),
+		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9222/devtools/browser/one")),
+		targetJSONResponse(validVersionJSON("ws://127.0.0.1:9223/devtools/browser/two")),
 	}}
 	service := New(Options{HTTPClient: client})
 	inputs := ConnectionInputs{ConfiguredSources: []ConfiguredSource{

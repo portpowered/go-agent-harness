@@ -62,13 +62,14 @@ func newPressureTraceMixer(ctx context.Context, t *testing.T, format PCM16Format
 
 func pressureTraceWantPCM(capacity int) []byte {
 	want := make([]byte, 0, capacity)
-	for delta := 0; delta < pressureTraceDeltas; delta++ {
-		want = append(want, providerPCM16Delta(delta, pressureTraceDeltaBytes)...)
+	for delta := range pressureTraceDeltas {
+		want = append(want, providerPCM16Delta(delta)...)
 	}
 	return want
 }
 
 func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFrames int) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	mixer := newPressureTraceMixer(ctx, t, format)
@@ -81,7 +82,7 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 	got := make([]byte, 0, len(want))
 	readErr := make(chan error, 1)
 	go func() {
-		for frame := 0; frame < pressureTraceDeltas*providerFrames; frame++ {
+		for range pressureTraceDeltas * providerFrames {
 			pcm, frameErr := mixer.ReadFrame(ctx)
 			if frameErr != nil {
 				readErr <- frameErr
@@ -92,8 +93,8 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 		readErr <- nil
 	}()
 
-	for delta := 0; delta < pressureTraceDeltas; delta++ {
-		if err := mixer.Write("alpha", providerPCM16Delta(delta, pressureTraceDeltaBytes)); err != nil {
+	for delta := range pressureTraceDeltas {
+		if err := mixer.WriteContext(t.Context(), "alpha", providerPCM16Delta(delta)); err != nil {
 			t.Fatalf("provider delta %d: %v", delta, err)
 		}
 		stats := mixer.Stats()
@@ -126,7 +127,7 @@ func startPressureTraceStalledReader(ctx context.Context, mixer *PCM16Mixer, fra
 	readResultCh := make(chan pressureTraceReadResult, 1)
 	go func() {
 		got := make([]byte, 0, allFrames*frameBytes)
-		for frameIndex := 0; frameIndex < allFrames; frameIndex++ {
+		for frameIndex := range allFrames {
 			frame, frameErr := mixer.ReadFrame(ctx)
 			if frameErr != nil {
 				readResultCh <- pressureTraceReadResult{err: frameErr}
@@ -150,6 +151,7 @@ func startPressureTraceStalledReader(ctx context.Context, mixer *PCM16Mixer, fra
 }
 
 func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameBytes, providerFrames int) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	mixer := newPressureTraceMixer(ctx, t, format)
@@ -170,7 +172,7 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 		}
 	}()
 
-	if err := mixer.Write("alpha", providerPCM16Delta(0, pressureTraceDeltaBytes)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", providerPCM16Delta(0)); err != nil {
 		t.Fatalf("first provider delta: %v", err)
 	}
 	// One frame reaches the stalled reader and the output queue fills behind
@@ -188,12 +190,12 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 	// Two more provider deltas arrive while the consumer is stalled. The
 	// first still fits in the bounded input queue; the next must wait rather
 	// than be rejected.
-	if err := mixer.Write("alpha", providerPCM16Delta(1, pressureTraceDeltaBytes)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", providerPCM16Delta(1)); err != nil {
 		t.Fatalf("provider delta 1: %v", err)
 	}
 	writeDone := make(chan error, 1)
 	go func() {
-		writeDone <- mixer.WriteContext(ctx, "alpha", providerPCM16Delta(2, pressureTraceDeltaBytes))
+		writeDone <- mixer.WriteContext(ctx, "alpha", providerPCM16Delta(2))
 	}()
 	assertPressureTraceStalled(t, mixer, writeDone)
 
@@ -219,7 +221,7 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 // while the output queue is full, as the production cadence would.
 func advancePressureTrace(ctx context.Context, t *testing.T, mixer *PCM16Mixer, frames int) {
 	t.Helper()
-	for frame := 0; frame < frames; frame++ {
+	for frame := range frames {
 		if err := mixer.Advance(ctx); err != nil {
 			t.Fatalf("advance cadence frame %d/%d: %v", frame+1, frames, err)
 		}

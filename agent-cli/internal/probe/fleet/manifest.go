@@ -317,7 +317,7 @@ func (m Manifest) validateEntryCoordinates() error {
 	entryIndex := 0
 	for _, scenario := range m.Scenarios {
 		for _, transport := range m.Transports {
-			for repeatIndex := 0; repeatIndex < m.RepeatCount; repeatIndex++ {
+			for repeatIndex := range m.RepeatCount {
 				entry := m.Entries[entryIndex]
 				if _, exists := seen[entry.ID]; exists {
 					return validation(fmt.Sprintf("entries[%d].id", entryIndex), entry.ID, "must be unique", ErrDuplicateEntry)
@@ -352,7 +352,7 @@ func ParseManifest(data []byte) (Manifest, error) {
 		return Manifest{}, validation("document", "", err.Error(), ErrInvalidManifest)
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = errors.New("contains more than one JSON value")
 		}

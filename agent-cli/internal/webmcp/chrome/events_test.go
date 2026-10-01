@@ -127,6 +127,7 @@ func executeTargetActions(ctx context.Context, executor cdp.Executor, actions []
 
 // injectEvaluateResult replaces every Runtime.evaluate result with value.
 func injectEvaluateResult(t *testing.T, value []byte) func(string, any) {
+	t.Helper()
 	return func(method string, result any) {
 		if method != runtime.CommandEvaluate {
 			return
@@ -431,7 +432,7 @@ func (h *listenBeforeEnableHarness) assertBrowserDetachClosesEvents(t *testing.T
 	}
 }
 
-func newLifecycleTestSession(t *testing.T) (*handle, *targetSession, *chromedp.Target, *int) {
+func newLifecycleTestSession(t *testing.T) (*targetSession, *chromedp.Target, *int) {
 	t.Helper()
 	executor := &recordingExecutor{}
 	handle := testHandle(executor)
@@ -451,11 +452,11 @@ func newLifecycleTestSession(t *testing.T) (*handle, *targetSession, *chromedp.T
 	}, webmcp.TargetOwnershipExternal)
 	session.setProtocolTarget(protocolTarget)
 	handle.sessions[session] = struct{}{}
-	return handle, session, protocolTarget, &cancelCount
+	return session, protocolTarget, &cancelCount
 }
 
 func TestTargetDetachPublishesTerminalEventAndClosesLifecycleOnce(t *testing.T) {
-	_, session, protocolTarget, cancelCount := newLifecycleTestSession(t)
+	session, protocolTarget, cancelCount := newLifecycleTestSession(t)
 	session.enqueueProtocolEvent(&cdpTarget.EventDetachedFromTarget{SessionID: protocolTarget.SessionID})
 
 	terminal := nextBrowserEvent(t, session.Events())
@@ -499,7 +500,7 @@ func TestTargetDetachPublishesTerminalEventAndClosesLifecycleOnce(t *testing.T) 
 }
 
 func TestTargetDestroyedPublishesTargetClosureNotNavigation(t *testing.T) {
-	_, session, protocolTarget, _ := newLifecycleTestSession(t)
+	session, protocolTarget, _ := newLifecycleTestSession(t)
 	session.enqueueProtocolEvent(&cdpTarget.EventTargetDestroyed{TargetID: protocolTarget.TargetID})
 
 	terminal := nextBrowserEvent(t, session.Events())
@@ -522,7 +523,7 @@ func TestTargetDestroyedPublishesTargetClosureNotNavigation(t *testing.T) {
 }
 
 func TestBrowserDisconnectPublishesTerminalEventAndClosesLifecycleOnce(t *testing.T) {
-	_, session, protocolTarget, cancelCount := newLifecycleTestSession(t)
+	session, protocolTarget, cancelCount := newLifecycleTestSession(t)
 	session.transportLost()
 
 	terminal := nextBrowserEvent(t, session.Events())
@@ -554,14 +555,14 @@ func TestBrowserDisconnectPublishesTerminalEventAndClosesLifecycleOnce(t *testin
 }
 
 func TestTargetSessionEventOverflowPublishesExplicitFailure(t *testing.T) {
-	_, session, _, _ := newLifecycleTestSession(t)
+	session, _, _ := newLifecycleTestSession(t)
 	// The helper uses a larger physical channel so this test can exercise the
 	// ordinary-capacity guard without depending on a scheduler race. Production
 	// construction reserves the same terminal slot for the configured buffer.
 	session.eventBuffer = 1
 
-	session.publish(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded})
-	session.publish(webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, InvocationID: "overflowed"})
+	session.publish(t.Context(), webmcp.BrowserEvent{Type: webmcp.EventToolsAdded})
+	session.publish(t.Context(), webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, InvocationID: "overflowed"})
 
 	first := nextBrowserEvent(t, session.Events())
 	if first.Type != webmcp.EventToolsAdded {

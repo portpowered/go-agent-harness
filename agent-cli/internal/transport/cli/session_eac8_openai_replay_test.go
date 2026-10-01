@@ -18,7 +18,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
@@ -45,7 +44,7 @@ func TestSessionCommandReplaysEAC8OpenAIAudioTo16kLoopback(t *testing.T) {
 		}
 		providerChunks = append(providerChunks, decodeEAC8PCM16(t, chunk))
 	}
-	want := mustResampleStream(t, providerChunks, wavio.Rate24kHz, audio.SampleRate)
+	want := mustResampleProviderToDevice(t, providerChunks)
 
 	capturePath := filepath.Join(t.TempDir(), "eac8-openai-edge-replay.session.json")
 	writeEAC8OpenAICapture(t, capturePath, deltas)
@@ -150,19 +149,42 @@ func decodeEAC8PCM16(t *testing.T, pcm []byte) []int16 {
 
 func writeEAC8OpenAICapture(t *testing.T, path string, deltas []string) {
 	t.Helper()
+	writeOpenAIAudioReplayCapture(t, path, openAIAudioReplayCapture{
+		label: "eac8", model: "gpt-realtime-2.1-mini", sessionID: "sess-eac8-edge", responseID: "resp-eac8-edge",
+		itemID: "item-eac8-edge", prompt: "replay eac8 audio", startedAtUTC: "2026-09-01T21:16:03.816284Z",
+	}, deltas)
+}
+
+// openAIAudioReplayCapture names one synthesized OpenAI realtime capture that
+// streams a single audio response made of the given base64 PCM deltas.
+type openAIAudioReplayCapture struct {
+	label        string
+	model        string
+	sessionID    string
+	responseID   string
+	itemID       string
+	prompt       string
+	startedAtUTC string
+}
+
+// openAIReplayOutputRateHz is the 24 kHz PCM output rate OpenAI realtime sessions negotiate.
+const openAIReplayOutputRateHz = 24000
+
+func writeOpenAIAudioReplayCapture(t *testing.T, path string, spec openAIAudioReplayCapture, deltas []string) {
+	t.Helper()
 	sequence := 0
 	records := make([]gwtesting.CapturedSessionEvent, 0, len(deltas)+7)
 	add := func(direction gwtesting.SessionEventDirection, payload any) {
 		sequence++
 		data, err := json.Marshal(payload)
 		if err != nil {
-			t.Fatalf("marshal eac8 replay event %d: %v", sequence, err)
+			t.Fatalf("marshal %s replay event %d: %v", spec.label, sequence, err)
 		}
 		var envelope struct {
 			Type string `json:"type"`
 		}
 		if err := json.Unmarshal(data, &envelope); err != nil {
-			t.Fatalf("read eac8 replay event type %d: %v", sequence, err)
+			t.Fatalf("read %s replay event type %d: %v", spec.label, sequence, err)
 		}
 		records = append(records, gwtesting.CapturedSessionEvent{
 			Sequence: sequence, Direction: direction, TimestampMs: int64(sequence),
@@ -170,53 +192,50 @@ func writeEAC8OpenAICapture(t *testing.T, path string, deltas []string) {
 		})
 	}
 
+	outputAudio := map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": openAIReplayOutputRateHz}}}
 	add(gwtesting.DirectionClientToServer, map[string]any{
-		"type": "session.update", "session": map[string]any{
-			"model": "gpt-realtime-2.1-mini",
-			"audio": map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}}},
-		},
+		"type": "session.update", "session": map[string]any{"model": spec.model, "audio": outputAudio},
 	})
 	add(gwtesting.DirectionServerToClient, map[string]any{
 		"type": "session.created", "session": map[string]any{
-			"id": "sess-eac8-edge", "type": "realtime", "model": "gpt-realtime-2.1-mini",
-			"audio": map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}}},
+			"id": spec.sessionID, "type": "realtime", "model": spec.model, "audio": outputAudio,
 		},
 	})
 	add(gwtesting.DirectionClientToServer, map[string]any{
 		"type": "conversation.item.create", "item": map[string]any{
-			"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": "replay eac8 audio"}},
+			"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": spec.prompt}},
 		},
 	})
 	add(gwtesting.DirectionClientToServer, map[string]any{"type": "response.create"})
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.created", "response": map[string]any{"id": "resp-eac8-edge", "status": "in_progress"},
+		"type": "response.created", "response": map[string]any{"id": spec.responseID, "status": "in_progress"},
 	})
 	for _, delta := range deltas {
 		add(gwtesting.DirectionServerToClient, map[string]any{
-			"type": "response.output_audio.delta", "response_id": "resp-eac8-edge", "item_id": "item-eac8-edge",
+			"type": "response.output_audio.delta", "response_id": spec.responseID, "item_id": spec.itemID,
 			"output_index": 0, "content_index": 0, "delta": delta,
 		})
 	}
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.output_audio.done", "response_id": "resp-eac8-edge", "item_id": "item-eac8-edge",
+		"type": "response.output_audio.done", "response_id": spec.responseID, "item_id": spec.itemID,
 		"output_index": 0, "content_index": 0,
 	})
 	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.done", "response": map[string]any{"id": "resp-eac8-edge", "status": "completed"},
+		"type": "response.done", "response": map[string]any{"id": spec.responseID, "status": "completed"},
 	})
 
 	capture := gwtesting.SessionCapture{
 		Version:  gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime-2.1-mini"},
-		Session:  gwtesting.SessionMetadata{ID: "sess-eac8-edge", StartedAtUTC: "2026-09-01T21:16:03.816284Z"},
+		Provider: gwtesting.SessionProviderMetadata{Name: "openai", Model: spec.model},
+		Session:  gwtesting.SessionMetadata{ID: spec.sessionID, StartedAtUTC: spec.startedAtUTC},
 		Records:  records,
 	}
 	data, err := json.Marshal(capture)
 	if err != nil {
-		t.Fatalf("marshal protected eac8 replay capture: %v", err)
+		t.Fatalf("marshal %s replay capture: %v", spec.label, err)
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write protected eac8 replay capture: %v", err)
+		t.Fatalf("write %s replay capture: %v", spec.label, err)
 	}
 }
 

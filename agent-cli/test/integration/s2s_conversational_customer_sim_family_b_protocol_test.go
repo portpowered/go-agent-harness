@@ -77,7 +77,7 @@ func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, e
 		return f.handleInputAudio(connection, event.Audio)
 	case rtEventConversationItemCreate:
 		if event.Item.Type == rtItemFunctionCallOutput {
-			return f.handleToolResult(connection, event.Item.CallID, event.Item.Output)
+			return f.handleToolResult(event.Item.CallID, event.Item.Output)
 		}
 	case familyBResponseCancelEvent:
 		f.recordCancellation()
@@ -181,34 +181,42 @@ func (f *familyBProviderFixture) handleCustomerUtterance(connection *websocket.C
 }
 
 func (f *familyBProviderFixture) sendToolCall(connection *websocket.Conn, responseID string, call familyBFunctionCall) error {
-	if err := f.send(connection, map[string]any{
+	return sendRealtimeToolCallResponse(func(event any) error { return f.send(connection, event) },
+		responseID, call.ID, call.Name, call.Args)
+}
+
+// sendRealtimeToolCallResponse emits one complete Realtime response carrying a
+// single function call: response.created, the function-call output item, its
+// completed arguments, and response.done.
+func sendRealtimeToolCallResponse(send func(event any) error, responseID, callID, name, args string) error {
+	if err := send(map[string]any{
 		"type":     rtEventResponseCreated,
 		"response": map[string]string{"id": responseID},
 	}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]any{
+	if err := send(map[string]any{
 		"type": rtEventOutputItemAdded,
 		"item": map[string]string{
-			"type": rtItemFunctionCall, "id": call.ID, "call_id": call.ID,
-			"name": call.Name, "arguments": "",
+			"type": rtItemFunctionCall, "id": callID, "call_id": callID,
+			"name": name, "arguments": "",
 		},
 	}); err != nil {
 		return err
 	}
-	if err := f.send(connection, map[string]any{
-		"type": rtEventFunctionCallArgumentsDone, "call_id": call.ID,
-		"name": call.Name, "arguments": call.Args,
+	if err := send(map[string]any{
+		"type": rtEventFunctionCallArgumentsDone, "call_id": callID,
+		"name": name, "arguments": args,
 	}); err != nil {
 		return err
 	}
-	return f.send(connection, map[string]any{
+	return send(map[string]any{
 		"type":     rtEventResponseDone,
 		"response": map[string]string{"id": responseID, "status": rtStatusCompleted},
 	})
 }
 
-func (f *familyBProviderFixture) handleToolResult(connection *websocket.Conn, callID, output string) error {
+func (f *familyBProviderFixture) handleToolResult(callID, output string) error {
 	f.mu.Lock()
 	var expected string
 	var actionID string

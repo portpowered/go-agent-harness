@@ -7,6 +7,7 @@ type GlobalFlags struct {
 	LogToStdout   bool     // Override default file logging and log to stdout/stderr instead
 	WorkDirPath   string   // Filesystem-tool workdir (default: process current directory)
 	AllowPathList []string // Additional filesystem-tool roots (repeatable)
+	Host          HostDirs // Host directory lookups injected by the CLI host boundary
 }
 
 // NewGlobalFlags returns default global flags.
@@ -17,15 +18,21 @@ func NewGlobalFlags() *GlobalFlags {
 		LogToStdout:   false,
 		WorkDirPath:   "",
 		AllowPathList: nil,
+		Host:          ProcessHostDirs(),
 	}
 }
 
-// ConfigDir returns the config directory override (empty means use default ~/.agent-cli).
+// ConfigDir returns the config directory: the --config-dir override, else
+// ~/.agent-cli below the injected home directory. It is empty only when no
+// override is set and the home directory is unavailable.
 func (f *GlobalFlags) ConfigDir() string {
 	if f == nil {
 		return ""
 	}
-	return f.ConfigDirPath
+	if f.ConfigDirPath != "" {
+		return f.ConfigDirPath
+	}
+	return f.defaultConfigDir()
 }
 
 // WorkDir returns the requested filesystem-tool workdir. An empty value means
@@ -93,10 +100,18 @@ type LoopFlags struct {
 	TraceID                  string  // Resume from an existing trace ID
 }
 
+const (
+	// defaultLoopMaxIterations is the default iteration cap for --loop mode.
+	defaultLoopMaxIterations = 5
+	// defaultContextPressureThreshold is the default context-window fill ratio (0-1)
+	// at which the loop warns about context pressure.
+	defaultContextPressureThreshold = 0.8
+)
+
 // NewLoopFlags returns default loop flags.
 func NewLoopFlags() *LoopFlags {
 	return &LoopFlags{
-		MaxIterations:            5,
-		ContextPressureThreshold: 0.8,
+		MaxIterations:            defaultLoopMaxIterations,
+		ContextPressureThreshold: defaultContextPressureThreshold,
 	}
 }

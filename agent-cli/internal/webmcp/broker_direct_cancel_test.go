@@ -3,7 +3,10 @@ package webmcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
+	"testing/synctest"
+	"time"
 )
 
 type mismatchedDirectCancelSession struct {
@@ -58,11 +61,38 @@ func TestDirectCancelRejectsSessionIdentityMismatchBeforeDispatch(t *testing.T) 
 		Target:       TargetSelector{BrowserID: browserID, TargetID: targetID},
 		InvocationID: "browser-receipt-exact",
 	})
-	classified, ok := err.(*ClassifiedError)
+	classified, ok := errors.AsType[*ClassifiedError](err)
 	if !ok || classified.Code != ErrorStaleSelection || classified.Details["reason"] != "exact_target_session_mismatch" {
 		t.Fatalf("direct cancel error = %#v, want exact target-session stale selection", err)
 	}
 	if session.cancelCount != 0 {
 		t.Fatalf("cancel dispatch count = %d, want zero on session mismatch", session.cancelCount)
+	}
+}
+
+// TestCallerBoundContextMirrorsCallerDeadlineAndCancellation proves the queued
+// dispatch context reports an expired caller deadline as DeadlineExceeded (so
+// target diagnostics classify a timeout) and a caller cancellation as Canceled
+// carrying the caller's exact cancellation cause.
+func TestCallerBoundContextMirrorsCallerDeadlineAndCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		caller, cancelCaller := context.WithTimeout(t.Context(), time.Second)
+		defer cancelCaller()
+		dispatch, release := callerBoundContext(t.Context(), newCallerBinding(caller))
+		defer release()
+		<-dispatch.Done()
+		if !errors.Is(dispatch.Err(), context.DeadlineExceeded) {
+			t.Fatalf("dispatch after caller deadline = %v, want %v", dispatch.Err(), context.DeadlineExceeded)
+		}
+	})
+
+	callerStopped := errors.New("caller stopped the invocation")
+	caller, cancelCaller := context.WithCancelCause(t.Context())
+	dispatch, release := callerBoundContext(t.Context(), newCallerBinding(caller))
+	defer release()
+	cancelCaller(callerStopped)
+	<-dispatch.Done()
+	if !errors.Is(dispatch.Err(), context.Canceled) || !errors.Is(context.Cause(dispatch), callerStopped) {
+		t.Fatalf("dispatch after caller cancel = %v (cause %v), want %v caused by %v", dispatch.Err(), context.Cause(dispatch), context.Canceled, callerStopped)
 	}
 }

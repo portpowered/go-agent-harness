@@ -33,6 +33,7 @@ func TestRoomUsesLiveTimeoutForPeerFilteredEventsAndEvidence(t *testing.T) {
 }
 
 func runRoomLiveLivenessCase(t *testing.T, timeoutCase bool) {
+	t.Helper()
 	fixture := newRoomLiveLivenessFixture(t, timeoutCase)
 	fixture.startRoom()
 	if timeoutCase {

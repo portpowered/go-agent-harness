@@ -11,10 +11,9 @@ import (
 
 // runtimeDiagnosis carries one run's browser-facing checks. Each stage
 // records its check and returns the primary failure that ends the run. It
-// lives only for the duration of one diagnoseRuntime call, so it holds that
-// call's context.
+// lives only for the duration of one diagnoseRuntime call; each stage takes
+// that call's context as a parameter.
 type runtimeDiagnosis struct {
-	ctx     context.Context
 	browser config.BrowserConfig
 	runtime direct.Runtime
 	report  *Report
@@ -23,16 +22,16 @@ type runtimeDiagnosis struct {
 // diagnoseRuntime runs discovery, version, target, policy, selection,
 // WebMCP, and catalog checks against the constructed runtime.
 func diagnoseRuntime(ctx context.Context, browser config.BrowserConfig, runtime direct.Runtime, report *Report) error {
-	diagnosis := &runtimeDiagnosis{ctx: ctx, browser: browser, runtime: runtime, report: report}
-	candidates, err := diagnosis.discover()
+	diagnosis := &runtimeDiagnosis{browser: browser, runtime: runtime, report: report}
+	candidates, err := diagnosis.discover(ctx)
 	if err != nil {
 		return err
 	}
-	candidate, err := diagnosis.checkVersion(candidates)
+	candidate, err := diagnosis.checkVersion(ctx, candidates)
 	if err != nil {
 		return err
 	}
-	targets, err := diagnosis.listTargets(candidate)
+	targets, err := diagnosis.listTargets(ctx, candidate)
 	if err != nil {
 		return err
 	}
@@ -40,15 +39,15 @@ func diagnoseRuntime(ctx context.Context, browser config.BrowserConfig, runtime 
 	if err != nil || selected == nil {
 		return err
 	}
-	if err := diagnosis.selectPage(selected); err != nil {
+	if err := diagnosis.selectPage(ctx, selected); err != nil {
 		return err
 	}
-	return diagnosis.checkCatalog(selected)
+	return diagnosis.checkCatalog(ctx, selected)
 }
 
-func (d *runtimeDiagnosis) discover() ([]webmcp.BrowserCandidate, error) {
+func (d *runtimeDiagnosis) discover(ctx context.Context) ([]webmcp.BrowserCandidate, error) {
 	connection := d.browser.Connection
-	candidates, err := d.runtime.Broker.Discover(d.ctx, webmcp.DiscoverOptions{
+	candidates, err := d.runtime.Broker.Discover(ctx, webmcp.DiscoverOptions{
 		BrowserID:        webmcp.BrowserID(d.browser.Selection.Browser),
 		ExplicitOnly:     connection.CDPURL != "" || connection.WSEndpoint != "",
 		AllowProcessScan: connection.AllowProcessScan,
@@ -86,7 +85,7 @@ func (d *runtimeDiagnosis) discover() ([]webmcp.BrowserCandidate, error) {
 }
 
 // checkVersion chooses the browser and records its product and protocol.
-func (d *runtimeDiagnosis) checkVersion(candidates []webmcp.BrowserCandidate) (webmcp.BrowserCandidate, error) {
+func (d *runtimeDiagnosis) checkVersion(ctx context.Context, candidates []webmcp.BrowserCandidate) (webmcp.BrowserCandidate, error) {
 	candidate, err := chooseCandidate(candidates, d.browser.Selection.Browser)
 	if err != nil {
 		d.report.notReady(err, webmcp.ErrorAmbiguousBrowser, phaseDetails("browser_selection"))
@@ -94,7 +93,7 @@ func (d *runtimeDiagnosis) checkVersion(candidates []webmcp.BrowserCandidate) (w
 		return webmcp.BrowserCandidate{}, err
 	}
 	setBrowserVersion(d.report, candidate)
-	version, available, err := browserVersion(d.ctx, d.runtime, candidate)
+	version, available, err := browserVersion(ctx, d.runtime, candidate)
 	if err != nil {
 		d.report.notReady(err, webmcp.ErrorBrowserProtocol, phaseDetails(checkVersion))
 		d.report.setCheck(checkVersion, CheckFail, "The browser protocol version check failed.", phaseDetails(checkVersion))
@@ -118,8 +117,8 @@ func (d *runtimeDiagnosis) checkVersion(candidates []webmcp.BrowserCandidate) (w
 
 // listTargets records the browser's targets, filling any missing browser ID
 // from the candidate.
-func (d *runtimeDiagnosis) listTargets(candidate webmcp.BrowserCandidate) ([]webmcp.Target, error) {
-	targets, err := d.runtime.Broker.ListTargets(d.ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
+func (d *runtimeDiagnosis) listTargets(ctx context.Context, candidate webmcp.BrowserCandidate) ([]webmcp.Target, error) {
+	targets, err := d.runtime.Broker.ListTargets(ctx, webmcp.BrowserSelector{BrowserID: candidate.ID})
 	if err != nil {
 		d.report.notReady(err, webmcp.ErrorEndpointUnreachable, phaseDetails(checkTargets))
 		d.report.setCheck(checkTargets, CheckFail, "Browser target discovery failed.", phaseDetails(checkTargets))

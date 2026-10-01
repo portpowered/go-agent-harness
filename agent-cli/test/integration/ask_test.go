@@ -62,7 +62,7 @@ func TestAskWithToolCall(t *testing.T) {
 	}
 	exec := &mockToolExecutorWithResults{results: map[string]string{"get_weather": "sunny, 22C"}}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -138,6 +138,22 @@ func (m *mockToolExecutorWithResults) Execute(ctx context.Context, call messages
 	return messages.ToolCallResponse{ToolCallID: call.ID, Content: content}, nil
 }
 
+// textResultStream replays a completed text inference result as the stream a
+// provider would emit for it: text start, one delta (when non-empty), text
+// end, and message end with the result's token usage.
+func textResultStream(result messages.InferenceResult) <-chan messages.StreamMessage {
+	ch := make(chan messages.StreamMessage, 8)
+	text := result.Message.TextContent()
+	ch <- messages.StreamMessage{Type: messages.StreamTypeTextStart, ActorProvidedIndex: 0, Value: messages.NewTextStartValue()}
+	if text != "" {
+		ch <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, ActorProvidedIndex: 0, Value: messages.NewTextDeltaValue(text)}
+	}
+	ch <- messages.StreamMessage{Type: messages.StreamTypeTextEnd, ActorProvidedIndex: 0, Value: messages.NewTextEndValue()}
+	ch <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ActorProvidedIndex: 0, Value: messages.NewMessageEndValue(result.TokenUsage)}
+	close(ch)
+	return ch
+}
+
 // recordingInferencer records the messages passed to Infer so tests can assert on them.
 type recordingInferencer struct {
 	response string
@@ -156,16 +172,7 @@ func (r *recordingInferencer) InferStream(ctx context.Context, req messages.Infe
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan messages.StreamMessage, 8)
-	text := result.Message.TextContent()
-	ch <- messages.StreamMessage{Type: messages.StreamTypeTextStart, ActorProvidedIndex: 0, Value: messages.NewTextStartValue()}
-	if text != "" {
-		ch <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, ActorProvidedIndex: 0, Value: messages.NewTextDeltaValue(text)}
-	}
-	ch <- messages.StreamMessage{Type: messages.StreamTypeTextEnd, ActorProvidedIndex: 0, Value: messages.NewTextEndValue()}
-	ch <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ActorProvidedIndex: 0, Value: messages.NewMessageEndValue(result.TokenUsage)}
-	close(ch)
-	return ch, nil
+	return textResultStream(result), nil
 }
 
 // containsSystemPrompt returns true if any recorded Infer call had a message containing the given substring.
@@ -204,7 +211,7 @@ func TestAskLoadsAGENTSMDFromConfigDir(t *testing.T) {
 	rec := &recordingInferencer{response: "ok"}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeAgentCLIWithInferencerOverride(exec, rec)
+	agentCLI, err := wire.InitializeAgentCLIWithInferencerOverride(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize CLI: %v", err)
 	}

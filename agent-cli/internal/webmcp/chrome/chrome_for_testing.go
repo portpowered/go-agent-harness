@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -30,6 +29,16 @@ const (
 	chromeForTestingArchiveLimit     = 1<<30 + 1
 	chromeForTestingReadyLimit       = 64 << 10
 	chromeForTestingLockStaleAfter   = 10 * time.Minute
+	chromeForTestingLockFileLimit    = 64 << 10
+	chromeForTestingLockPollInterval = 50 * time.Millisecond
+	// chromeForTestingLockSearchRoots counts the lock search roots: the
+	// working directory, the executable directory and the source directory.
+	chromeForTestingLockSearchRoots = 3
+
+	// ownerOnlyDirMode and ownerOnlyFileMode keep the managed browser cache
+	// and profile private to the current user.
+	ownerOnlyDirMode  os.FileMode = 0o700
+	ownerOnlyFileMode os.FileMode = 0o600
 
 	chromeForTestingManifestPrefix = "https://googlechromelabs.github.io/chrome-for-testing/"
 	chromeForTestingDownloadPrefix = "https://storage.googleapis.com/chrome-for-testing-public/"
@@ -77,9 +86,12 @@ type ChromeForTestingDownload struct {
 // Empty values resolve from the request or repository/cache defaults.
 type ChromeForTestingOptions struct {
 	LockPath, CacheDir string
-	HTTPClient         *http.Client
-	VersionTimeout     time.Duration
-	VersionQuery       VersionQuery
+	// WorkingDir is the injected host working directory; the lock search
+	// starts there when LockPath is empty.
+	WorkingDir     string
+	HTTPClient     *http.Client
+	VersionTimeout time.Duration
+	VersionQuery   VersionQuery
 }
 
 // ChromeForTestingAcquirer downloads and verifies the repository-pinned
@@ -98,14 +110,11 @@ func (a *ChromeForTestingAcquirer) AcquirePinnedChrome(ctx context.Context, requ
 	if a == nil {
 		return ChromeExecutable{}, newChromeForTestingError("acquirer_unavailable", errors.New("chrome for testing acquirer is nil"))
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return ChromeExecutable{}, err
 	}
 	lockPath := firstNonEmpty(request.LockPath, a.options.LockPath)
-	lock, err := LoadChromeForTestingLock(lockPath)
+	lock, err := LoadChromeForTestingLock(lockPath, a.options.WorkingDir)
 	if err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("lock_unavailable", err)
 	}
@@ -173,9 +182,12 @@ func matchingChromeForTestingManifestEntry(manifest ChromeForTestingManifest, lo
 // LoadChromeForTestingLock reads and validates the JSON shape of the pin. It
 // does not trust the lock until ValidateChromeForTestingLock checks its source
 // URLs, digest, platform, and executable layout.
-func LoadChromeForTestingLock(lockPath string) (ChromeForTestingLock, error) {
+//
+// An empty lockPath is located by ResolveChromeForTestingLockPath, starting
+// from workingDir.
+func LoadChromeForTestingLock(lockPath, workingDir string) (ChromeForTestingLock, error) {
 	if strings.TrimSpace(lockPath) == "" {
-		resolved, err := ResolveChromeForTestingLockPath("")
+		resolved, err := ResolveChromeForTestingLockPath("", workingDir)
 		if err != nil {
 			return ChromeForTestingLock{}, err
 		}
@@ -187,7 +199,7 @@ func LoadChromeForTestingLock(lockPath string) (ChromeForTestingLock, error) {
 	}
 	defer closeAfterRead(file)
 	var lock ChromeForTestingLock
-	decoder := json.NewDecoder(io.LimitReader(file, 64<<10))
+	decoder := json.NewDecoder(io.LimitReader(file, chromeForTestingLockFileLimit))
 	if err := decoder.Decode(&lock); err != nil {
 		return ChromeForTestingLock{}, err
 	}
@@ -230,8 +242,10 @@ func ValidateChromeForTestingLock(lock ChromeForTestingLock, requiredMajor int, 
 
 // ResolveChromeForTestingLockPath locates the one repository-owned pin. An
 // explicit path is used as-is; the environment override is intended for
-// packaged installations and hermetic tests.
-func ResolveChromeForTestingLockPath(explicit string) (string, error) {
+// packaged installations and hermetic tests. Otherwise the search walks up
+// from workingDir (the injected host working directory, when known), the
+// executable directory, and this package's source directory.
+func ResolveChromeForTestingLockPath(explicit, workingDir string) (string, error) {
 	if strings.TrimSpace(explicit) != "" {
 		return explicit, nil
 	}
@@ -240,8 +254,8 @@ func ResolveChromeForTestingLockPath(explicit string) (string, error) {
 			return value, nil
 		}
 	}
-	starts := make([]string, 0, 3)
-	if workingDir, err := os.Getwd(); err == nil {
+	starts := make([]string, 0, chromeForTestingLockSearchRoots)
+	if strings.TrimSpace(workingDir) != "" {
 		starts = append(starts, workingDir)
 	}
 	if executable, err := os.Executable(); err == nil {
@@ -261,15 +275,15 @@ func ResolveChromeForTestingLockPath(explicit string) (string, error) {
 }
 
 func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *http.Client, lock ChromeForTestingLock, platform string, requiredMajor int, cacheDir string) (ChromeExecutable, error) {
-	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+	if err := os.MkdirAll(cacheDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
-	if err := os.Chmod(cacheDir, 0o700); err != nil {
+	if err := os.Chmod(cacheDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	key := chromeForTestingCacheKey(platform, lock)
 	finalDir := filepath.Join(cacheDir, chromeForTestingCacheDirName, key)
-	if err := os.MkdirAll(filepath.Dir(finalDir), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(finalDir), ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	unlock, err := acquireChromeForTestingLock(ctx, finalDir+chromeForTestingLockName)
@@ -289,7 +303,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	defer removeBestEffort(os.RemoveAll, stagingDir)
-	if err := os.Chmod(stagingDir, 0o700); err != nil {
+	if err := os.Chmod(stagingDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 
@@ -298,7 +312,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 		return ChromeExecutable{}, newChromeForTestingError("archive_integrity", err)
 	}
 	extractDir := filepath.Join(stagingDir, chromeForTestingExtractedName)
-	if err := os.Mkdir(extractDir, 0o700); err != nil {
+	if err := os.Mkdir(extractDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("archive_layout", err)
 	}
 	if err := extractManagedChromeArchive(archivePath, extractDir, chromeArchiveExtractLimit); err != nil {
@@ -334,7 +348,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	}
 	markerTempName := markerTemp.Name()
 	defer removeBestEffort(os.Remove, markerTempName)
-	if chmodErr := markerTemp.Chmod(0o600); chmodErr != nil {
+	if chmodErr := markerTemp.Chmod(ownerOnlyFileMode); chmodErr != nil {
 		discardCleanupError(markerTemp.Close)
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", chmodErr)
 	}
@@ -397,11 +411,11 @@ func readReadyChromeCache(ctx context.Context, finalDir string, lock ChromeForTe
 }
 
 func acquireChromeForTestingLock(ctx context.Context, lockPath string) (func(), error) {
-	if err := os.Mkdir(filepath.Dir(lockPath), 0o700); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(filepath.Dir(lockPath), ownerOnlyDirMode); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 	for {
-		err := os.Mkdir(lockPath, 0o700)
+		err := os.Mkdir(lockPath, ownerOnlyDirMode)
 		if err == nil {
 			return func() { removeBestEffort(os.Remove, lockPath) }, nil
 		}
@@ -412,7 +426,7 @@ func acquireChromeForTestingLock(ctx context.Context, lockPath string) (func(), 
 			removeBestEffort(os.Remove, lockPath)
 			continue
 		}
-		timer := time.NewTimer(50 * time.Millisecond)
+		timer := time.NewTimer(chromeForTestingLockPollInterval)
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
@@ -455,7 +469,7 @@ func downloadAndVerifyManagedChrome(ctx context.Context, client *http.Client, en
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("chrome for testing archive returned HTTP status %d", response.StatusCode)
 	}
-	file, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_EXCL, ownerOnlyFileMode)
 	if err != nil {
 		return err
 	}
@@ -557,39 +571,6 @@ func extractManagedChromeEntry(entry *zip.File, target string, remaining *int64)
 	return os.Chmod(target, mode)
 }
 
-func extractManagedChromeSymlink(entry *zip.File, destination string) error {
-	name, err := validateChromeArchivePathValue(entry.Name)
-	if err != nil {
-		return err
-	}
-	linkPath := filepath.Join(destination, filepath.FromSlash(name))
-	reader, err := entry.Open()
-	if err != nil {
-		return err
-	}
-	linkTargetBytes, readErr := io.ReadAll(io.LimitReader(reader, chromeArchiveSymlinkTargetLimit))
-	closeErr := reader.Close()
-	if readErr != nil {
-		return readErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	linkTarget := strings.TrimSpace(string(linkTargetBytes))
-	if linkTarget == "" || filepath.IsAbs(filepath.FromSlash(linkTarget)) {
-		return errors.New("chrome archive symlink target is unsafe")
-	}
-	resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(linkPath), filepath.FromSlash(linkTarget)))
-	relativeTarget, err := filepath.Rel(destination, resolvedTarget)
-	if err != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
-		return errors.New("chrome archive symlink escapes extraction directory")
-	}
-	if err := os.MkdirAll(filepath.Dir(linkPath), chromeArchiveDirMode); err != nil {
-		return err
-	}
-	return os.Symlink(linkTarget, linkPath)
-}
-
 const chromeArchiveDefaultFileMode os.FileMode = 0o600
 
 const chromeArchiveDirMode os.FileMode = 0o700
@@ -609,19 +590,6 @@ func (e chromeArchiveError) Error() string { return string(e) }
 func validateChromeArchivePath(raw string) error {
 	_, err := validateChromeArchivePathValue(raw)
 	return err
-}
-
-func validateChromeArchivePathValue(raw string) (string, error) {
-	if strings.ContainsRune(raw, '\x00') {
-		return "", errors.New("chrome archive path contains NUL")
-	}
-	normalized := strings.ReplaceAll(raw, "\\", "/")
-	cleaned := path.Clean(normalized)
-	converted := filepath.FromSlash(cleaned)
-	if normalized == "" || normalized == "." || strings.HasPrefix(normalized, "/") || cleaned == ".." || strings.HasPrefix(cleaned, "../") || filepath.IsAbs(converted) || filepath.VolumeName(converted) != "" {
-		return "", errors.New("chrome archive contains an unsafe path")
-	}
-	return cleaned, nil
 }
 
 func validateOfficialChromeURL(raw, prefix string) error {

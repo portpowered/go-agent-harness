@@ -22,15 +22,12 @@ type Execution struct {
 
 // Execute validates the bounds and runs one command under the end-to-end
 // deadline, preferring a browser_disconnected cause in the result.
-func Execute(ctx context.Context, execution Execution, run func(context.Context) (any, error)) (any, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
+func Execute(ctx context.Context, execution Execution, run func(context.Context) (any, error)) (any, error) {
 	if execution.CommandTimeout < 0 {
 		return nil, direct.InvalidInputError("--command-timeout must not be negative", "/command_timeout")
 	}
 	if execution.Timeout < 0 {
 		return nil, direct.InvalidInputError("--timeout must be positive", "/timeout")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	commandTimeout := execution.CommandTimeout
 	if commandTimeout == 0 {
@@ -79,10 +76,7 @@ func Watch(ctx context.Context, broker webmcp.Broker, request WatchRequest) (Wat
 
 // RunWatchStream collects events until the stream ends, ctx is done, the
 // first event arrives in once mode, or bounded delivery is lost.
-func RunWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WatchData, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func RunWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WatchData, error) {
 	data := WatchData{Status: WatchStatusEnded, Events: []Event{}}
 	for {
 		if canceled(ctx) {

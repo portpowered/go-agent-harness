@@ -66,7 +66,7 @@ func TestWriteBinaryModalityStream_ImageOnly(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expected := append(imgChunk1, imgChunk2...)
+	expected := bytes.Join([][]byte{imgChunk1, imgChunk2}, nil)
 	if !bytes.Equal(buf.Bytes(), expected) {
 		t.Errorf("got %x, want %x", buf.Bytes(), expected)
 	}

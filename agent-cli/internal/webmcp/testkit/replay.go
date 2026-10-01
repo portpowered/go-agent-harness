@@ -258,12 +258,12 @@ func WithReplayStrictness(strict bool) ReplayOption {
 }
 
 // WithReplayContext supplies a context that is checked by replay calls and
-// Wait. It does not start a watcher goroutine.
+// Wait. It does not start a watcher goroutine: the replay keeps only the
+// context's done channel and error accessor.
 func WithReplayContext(ctx context.Context) ReplayOption {
 	return func(replay *BrowserReplay) {
-		if ctx != nil {
-			replay.replayContext = ctx
-		}
+		replay.replayDone = ctx.Done()
+		replay.replayErr = ctx.Err
 	}
 }
 
@@ -326,7 +326,8 @@ type BrowserReplay struct {
 	mode            ReplayMode
 	clock           Clock
 	ids             IDSource
-	replayContext   context.Context
+	replayDone      <-chan struct{}
+	replayErr       func() error
 	browserID       string
 	targetID        string
 	generation      uint64
@@ -367,8 +368,8 @@ func (r *BrowserReplay) prepareLocked(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return r.cancelLocked(err)
 	}
-	if r.replayContext != nil {
-		if err := r.replayContext.Err(); err != nil {
+	if r.replayErr != nil {
+		if err := r.replayErr(); err != nil {
 			return r.cancelLocked(err)
 		}
 	}
@@ -464,21 +465,8 @@ func (r *BrowserReplay) fixtureEventLocked(emitted EmittedEvent, now uint64) Fix
 }
 
 func (r *BrowserReplay) invocationIDForResult(result json.RawMessage) (string, error) {
-	if len(result) > 0 {
-		fields, err := decodeJSONObject(result)
-		if err != nil {
-			return "", err
-		}
-		if raw, ok := fields[jsonFieldInvocationID]; ok {
-			id, err := parseScriptString(raw)
-			if err != nil {
-				return "", err
-			}
-			if err := validateScriptID(id); err != nil {
-				return "", err
-			}
-			return id, nil
-		}
+	if id, found, err := scriptedResultInvocationID(result); found || err != nil {
+		return id, err
 	}
 	if r.ids == nil {
 		return "", errors.New("invocation ID source is unavailable")
@@ -781,13 +769,6 @@ func safeReplayCause(err error) error {
 		return ErrFixtureClock
 	}
 	return errors.New(safeReplayDifference(err))
-}
-
-func replayContextDone(ctx context.Context) <-chan struct{} {
-	if ctx == nil {
-		return nil
-	}
-	return ctx.Done()
 }
 
 func replayEventValue(value any) (FixtureEvent, error) {

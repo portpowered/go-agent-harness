@@ -90,14 +90,16 @@ const (
 )
 
 // parallelResultContent holds the distinct result payload owned by each call.
-var parallelResultContent = map[string]string{
-	parallelCallAlphaID: `{"temperature_c":24,"condition":"clear","origin":"alpha"}`,
-	parallelCallBravoID: `{"utc":"12:34","zone":"UTC","origin":"bravo"}`,
+func parallelResultContent() map[string]string {
+	return map[string]string{
+		parallelCallAlphaID: `{"temperature_c":24,"condition":"clear","origin":"alpha"}`,
+		parallelCallBravoID: `{"utc":"12:34","zone":"UTC","origin":"bravo"}`,
+	}
 }
 
 // parallelRequestOrder is the request order encoded by the fixture; the
 // positive path forces completion order to be exactly its reverse.
-var parallelRequestOrder = []string{parallelCallAlphaID, parallelCallBravoID}
+func parallelRequestOrder() []string { return []string{parallelCallAlphaID, parallelCallBravoID} }
 
 // parallelUserItemCreatePayload reproduces byte-for-byte what the gateway
 // serializes for the duplex session's user-turn conversation.item.create: the
@@ -112,18 +114,6 @@ func parallelUserItemCreatePayload(text string) json.RawMessage {
 			"content": []map[string]any{
 				{"type": "input_text", "text": text},
 			},
-		},
-	}
-	return mustMarshalFixture(payload)
-}
-
-func parallelToolResultPayload(callID, output string) json.RawMessage {
-	payload := map[string]any{
-		"type": rtEventConversationItemCreate,
-		"item": map[string]any{
-			"type":    rtItemFunctionCallOutput,
-			"call_id": callID,
-			"output":  output,
 		},
 	}
 	return mustMarshalFixture(payload)
@@ -187,8 +177,8 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 	// The session loop forwards both completed results and then emits one
 	// explicit provider continuation boundary. The strict replay keeps the
 	// continuation behind those exact correlated function_call_output frames.
-	clientEvent(rtEventConversationItemCreate, parallelToolResultPayload(parallelCallAlphaID, parallelResultContent[parallelCallAlphaID]))
-	clientEvent(rtEventConversationItemCreate, parallelToolResultPayload(parallelCallBravoID, parallelResultContent[parallelCallBravoID]))
+	clientEvent(rtEventConversationItemCreate, parallelToolResultPayload(parallelCallAlphaID, parallelResultContent()[parallelCallAlphaID]))
+	clientEvent(rtEventConversationItemCreate, parallelToolResultPayload(parallelCallBravoID, parallelResultContent()[parallelCallBravoID]))
 	clientEventRaw(rtEventResponseCreate, `{"type":"response.create"}`)
 
 	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_parallel_2"}}`)
@@ -212,7 +202,7 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 
 	baseCapture.Session.ID = "sess_tool_parallel_calls"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -220,6 +210,7 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_parallel_calls","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	wirePath := filepath.Join(t.TempDir(), "tool-parallel-calls.session.json")
 	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
 	if err != nil {
@@ -262,7 +253,7 @@ type parallelToolExecutor struct {
 
 func newParallelToolExecutor() *parallelToolExecutor {
 	return &parallelToolExecutor{
-		expectedIDs:   parallelRequestOrder,
+		expectedIDs:   parallelRequestOrder(),
 		callsByID:     map[string]messages.ToolCall{},
 		allInFlight:   make(chan struct{}),
 		bravoComplete: make(chan struct{}),
@@ -291,7 +282,7 @@ func (e *parallelToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 	response := messages.ToolCallResponse{
 		ToolCallID: call.ID,
 		Name:       call.Name,
-		Content:    parallelResultContent[call.ID],
+		Content:    parallelResultContent()[call.ID],
 	}
 
 	// Barrier phase 2: force completion order to the reverse of request order.
@@ -319,7 +310,7 @@ func (e *parallelToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 		// and name, while the wrong content must still be rejected downstream.
 		response.ToolCallID = parallelCallBravoID
 		response.Name = parallelCallBravoName
-		response.Content = parallelResultContent[parallelCallBravoID]
+		response.Content = parallelResultContent()[parallelCallBravoID]
 	}
 
 	e.mu.Lock()
@@ -350,14 +341,14 @@ func copyParallelCalls(src map[string]messages.ToolCall) map[string]messages.Too
 // independent of result delivery: every expected call arrived exactly once
 // with its fixture name and arguments.
 func validateParallelToolInvocations(arrivals []string, calls map[string]messages.ToolCall) error {
-	if len(arrivals) != len(parallelRequestOrder) {
-		return fmt.Errorf("executor observed %d arrivals %v, want exactly %d calls %v", len(arrivals), arrivals, len(parallelRequestOrder), parallelRequestOrder)
+	if len(arrivals) != len(parallelRequestOrder()) {
+		return fmt.Errorf("executor observed %d arrivals %v, want exactly %d calls %v", len(arrivals), arrivals, len(parallelRequestOrder()), parallelRequestOrder())
 	}
 	seen := map[string]int{}
 	for _, id := range arrivals {
 		seen[id]++
 	}
-	for _, id := range parallelRequestOrder {
+	for _, id := range parallelRequestOrder() {
 		if seen[id] != 1 {
 			return fmt.Errorf("call %q observed %d times, want exactly once", id, seen[id])
 		}
@@ -423,8 +414,8 @@ func validateObservedParallelToolResults(allDeltas []messages.StreamMessage) err
 	}
 
 	observedMessages := messages.ReconstructToolMessagesFromDeltas(toolDeltas)
-	if len(observedMessages) != len(parallelRequestOrder) {
-		return fmt.Errorf("reconstructed %d tool-result messages, want exactly %d: %v", len(observedMessages), len(parallelRequestOrder), describeMessages(observedMessages))
+	if len(observedMessages) != len(parallelRequestOrder()) {
+		return fmt.Errorf("reconstructed %d tool-result messages, want exactly %d: %v", len(observedMessages), len(parallelRequestOrder()), describeMessages(observedMessages))
 	}
 	contentByCall := map[string]string{}
 	for _, observed := range observedMessages {
@@ -433,7 +424,7 @@ func validateObservedParallelToolResults(allDeltas []messages.StreamMessage) err
 		}
 		contentByCall[observed.ToolCallID] = observed.TextContent()
 	}
-	for _, id := range parallelRequestOrder {
+	for _, id := range parallelRequestOrder() {
 		if _, paired := contentByCall[id]; !paired {
 			return fmt.Errorf("no observed result paired back to call %q; reconstructed messages were %s", id, describeMessages(observedMessages))
 		}
@@ -442,7 +433,7 @@ func validateObservedParallelToolResults(allDeltas []messages.StreamMessage) err
 }
 
 func parallelContentOwner(content string) string {
-	for id, want := range parallelResultContent {
+	for id, want := range parallelResultContent() {
 		if content == want {
 			return id
 		}
@@ -480,7 +471,7 @@ func describeResponses(resps []messages.ToolCallResponse) string {
 func runParallelToolCalls(t *testing.T, wirePath string, executor *parallelToolExecutor, observer *parallelStreamObserver) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), executor, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}
@@ -600,8 +591,8 @@ func verifyFollowUpUserTurn(t *testing.T, wirePath string) {
 	if seeded != 1 {
 		t.Fatalf("exchange shows %d seeded user turns, want exactly 1", seeded)
 	}
-	if functionOutputCount != len(parallelRequestOrder) {
-		t.Fatalf("exchange shows %d function_call_output items, want exactly %d", functionOutputCount, len(parallelRequestOrder))
+	if functionOutputCount != len(parallelRequestOrder()) {
+		t.Fatalf("exchange shows %d function_call_output items, want exactly %d", functionOutputCount, len(parallelRequestOrder()))
 	}
 	if len(responseCreates) != 2 || responseCreates[1] <= lastFunctionOutputIndex {
 		t.Fatalf("exchange response.create boundaries = %v, last function_call_output = %d; want initial plus one continuation after all results", responseCreates, lastFunctionOutputIndex)
@@ -677,7 +668,7 @@ func TestSessionParallelToolCallsRoundTripThroughCLI(t *testing.T) {
 	if len(exchangeCalls) != 2 {
 		t.Fatalf("replayed exchange contains %d function tool calls %v, want exactly 2", len(exchangeCalls), exchangeCalls)
 	}
-	for i, wantID := range parallelRequestOrder {
+	for i, wantID := range parallelRequestOrder() {
 		got := exchangeCalls[i]
 		wantName, wantArgs := parallelExpectedIdentity(wantID)
 		if got.CallID != wantID || got.Name != wantName || got.Arguments != wantArgs {
@@ -726,11 +717,11 @@ func TestSessionParallelToolCallsRoundTripThroughCLI(t *testing.T) {
 	// Outbound exchange pairing: each function_call_output delivered to the
 	// provider must pair 1:1 with an executed call and its own content.
 	executedContents := map[string]string{}
-	for _, id := range parallelRequestOrder {
-		executedContents[id] = parallelResultContent[id]
+	for _, id := range parallelRequestOrder() {
+		executedContents[id] = parallelResultContent()[id]
 	}
-	if delivered := countOutboundFunctionCallOutputs(t, wirePath, executedContents); delivered != len(parallelRequestOrder) {
-		t.Fatalf("outbound exchange delivered %d function_call_output events, want %d", delivered, len(parallelRequestOrder))
+	if delivered := countOutboundFunctionCallOutputs(t, wirePath, executedContents); delivered != len(parallelRequestOrder()) {
+		t.Fatalf("outbound exchange delivered %d function_call_output events, want %d", delivered, len(parallelRequestOrder()))
 	}
 }
 

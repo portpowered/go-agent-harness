@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -59,4 +60,26 @@ func resolveSessionToolSurface(ctx context.Context, capabilities SessionToolCapa
 		result.definitions = capabilities.RefreshDefinitions(ctx)
 	}
 	return result
+}
+
+func ambiguousSessionLaneTarget(target webmcp.Target, toolCount int) discovery.Target {
+	return discovery.Target{
+		BrowserID:             string(target.BrowserID),
+		ID:                    string(target.ID),
+		Type:                  target.Type,
+		Title:                 target.Title,
+		URL:                   target.URL,
+		Origin:                target.Origin,
+		Generation:            target.Generation,
+		WebSocketPresent:      true,
+		WebMCP:                true,
+		WebMCPKnown:           true,
+		WebMCPDomainSupported: true,
+		WebMCPDomainKnown:     true,
+		PageToolsReady:        true,
+		PageToolsKnown:        true,
+		ToolCount:             toolCount,
+		ToolCountKnown:        true,
+		Eligible:              true,
+	}
 }

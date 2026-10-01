@@ -169,12 +169,13 @@ type customerSimulationSnapshot struct {
 	protocolError            string
 }
 
-func newCustomerSimulationFixture(t testing.TB) *customerSimulationFixture {
+func newCustomerSimulationFixture(tb testing.TB) *customerSimulationFixture {
+	tb.Helper()
 	fixture := &customerSimulationFixture{
 		upgrader:   websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		closeReady: make(chan struct{}),
 	}
-	fixture.server = testnet.NewWANSegmentServer(t, http.HandlerFunc(fixture.handle))
+	fixture.server = testnet.NewWANSegmentServer(tb, http.HandlerFunc(fixture.handle))
 	return fixture
 }
 

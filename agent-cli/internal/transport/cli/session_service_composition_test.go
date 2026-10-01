@@ -229,7 +229,7 @@ func TestChatCommand_FlagMatrix(t *testing.T) {
 		chatFlagMatrixParseCases,
 	} {
 		for _, tt := range makeCases() {
-			tt := tt
+
 			t.Run(tt.name, func(t *testing.T) {
 				runChatFlagMatrixCase(t, tt)
 			})
@@ -305,6 +305,7 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			wantExit:   0,
 			wantOutput: chatAudioEOFOutput,
 			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, _ *flags.LoopFlags) {
+				t.Helper()
 				if !chatFlags.ActivateAudioIn {
 					t.Fatal("ActivateAudioIn = false, want true")
 				}
@@ -317,6 +318,7 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			wantExit:   0,
 			wantOutput: chatTextCancelOutput,
 			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, _ *flags.LoopFlags) {
+				t.Helper()
 				if !chatFlags.ActivateAudioOut {
 					t.Fatal("ActivateAudioOut = false, want true")
 				}
@@ -330,6 +332,7 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			wantOutputParts: []string{"Port OS Agent Loop Chat (up to 5 iterations)", "Loop complete: 5 iteration(s)"},
 			wantInferCalls:  5,
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if !loopFlags.Loop || loopFlags.MaxIterations != 5 {
 					t.Fatalf("loop flags = %+v, want Loop=true MaxIterations=5", *loopFlags)
 				}
@@ -342,6 +345,7 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			wantExit:      1,
 			wantErrorPart: "--max-iterations requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if loopFlags.MaxIterations != 2 {
 					t.Fatalf("MaxIterations = %d, want 2", loopFlags.MaxIterations)
 				}
@@ -354,6 +358,7 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			wantExit:      1,
 			wantErrorPart: "--stop-word requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if loopFlags.StopWord != "DONE" {
 					t.Fatalf("StopWord = %q, want %q", loopFlags.StopWord, "DONE")
 				}
@@ -366,6 +371,7 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			wantExit:      1,
 			wantErrorPart: "--context-pressure-threshold requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if loopFlags.ContextPressureThreshold != 0.4 {
 					t.Fatalf("ContextPressureThreshold = %v, want 0.4", loopFlags.ContextPressureThreshold)
 				}
@@ -409,6 +415,7 @@ func chatFlagMatrixValidationCases() []chatFlagMatrixCase {
 			wantExit:      1,
 			wantErrorPart: "--context-pressure-message requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if loopFlags.ContextPressureMessage != "warning" {
 					t.Fatalf("ContextPressureMessage = %q, want %q", loopFlags.ContextPressureMessage, "warning")
 				}
@@ -421,6 +428,7 @@ func chatFlagMatrixValidationCases() []chatFlagMatrixCase {
 			wantExit:      1,
 			wantErrorPart: "--trace-id requires --loop",
 			checkFlags: func(t *testing.T, _ *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if loopFlags.TraceID != "ignored-trace" {
 					t.Fatalf("TraceID = %q, want %q", loopFlags.TraceID, "ignored-trace")
 				}
@@ -433,6 +441,7 @@ func chatFlagMatrixValidationCases() []chatFlagMatrixCase {
 			wantExit:      1,
 			wantErrorPart: "--activate-audio-in cannot be combined with --loop",
 			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, loopFlags *flags.LoopFlags) {
+				t.Helper()
 				if !chatFlags.ActivateAudioIn || !loopFlags.Loop || loopFlags.MaxIterations != 1 {
 					t.Fatalf("flags = chat=%+v loop=%+v, want audio input, loop, max iterations 1", *chatFlags, *loopFlags)
 				}

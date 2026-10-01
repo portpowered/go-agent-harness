@@ -7,23 +7,35 @@ import (
 	"strings"
 )
 
-func selectionStateErrorLocked(selected *brokerSession, phase, reason string) error {
+// brokerPhaseMaxBytes bounds the lifecycle phase label echoed in disconnect errors.
+const brokerPhaseMaxBytes = 32
+
+const (
+	// brokerLifecyclePhase labels selection failures detected while checking
+	// the selected session's lifecycle state.
+	brokerLifecyclePhase = "lifecycle"
+	// reasonSelectionNotConnected is the stale-selection reason for a
+	// selection whose session is no longer connected.
+	reasonSelectionNotConnected = "selection_not_connected"
+)
+
+func selectionStateErrorLocked(selected *brokerSession, reason string) error {
 	if selected != nil && selected.invalidatedCode == ErrorBrowserDisconnected {
-		return browserDisconnectedErrorForSession(selected, phase, nil)
+		return browserDisconnectedErrorForSession(selected, brokerLifecyclePhase, nil)
 	}
 	return staleSelectionForSession(selected, reason)
 }
 
-func (b *StatefulBroker) selectedStateError(selected *brokerSession, phase, reason string) error {
+func (b *StatefulBroker) selectedStateError(selected *brokerSession, phase string) error {
 	if selected == nil {
-		return staleSelectionForSession(nil, reason)
+		return staleSelectionForSession(nil, reasonSelectionNotConnected)
 	}
 	selected.dispatchMu.Lock()
 	defer selected.dispatchMu.Unlock()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.selected != selected {
-		return staleSelectionForSession(selected, reason)
+		return staleSelectionForSession(selected, reasonSelectionNotConnected)
 	}
 	cause := selected.session.Err()
 	if selected.invalidatedCode == ErrorBrowserDisconnected || isBrowserEndpointLossError(cause) {
@@ -31,7 +43,7 @@ func (b *StatefulBroker) selectedStateError(selected *brokerSession, phase, reas
 		return browserDisconnectedErrorForSession(selected, phase, cause)
 	}
 	if !selected.active || !selected.context.Connected {
-		return staleSelectionForSession(selected, reason)
+		return staleSelectionForSession(selected, reasonSelectionNotConnected)
 	}
 	return nil
 }
@@ -61,8 +73,8 @@ func safeBrokerPhase(phase string) string {
 	if phase == "" {
 		return "lifecycle"
 	}
-	if len(phase) > 32 {
-		phase = phase[:32]
+	if len(phase) > brokerPhaseMaxBytes {
+		phase = phase[:brokerPhaseMaxBytes]
 	}
 	for _, character := range phase {
 		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
@@ -159,22 +171,34 @@ func isExplicitBrowserLossError(err error) bool {
 		errors.Is(err, net.ErrClosed)
 }
 
+// selectedLifecycleDisconnect invalidates selected and returns its browser
+// disconnect error when it is still selected and its session lifecycle already
+// recorded a browser disconnect; it returns nil otherwise.
+func (b *StatefulBroker) selectedLifecycleDisconnect(selected *brokerSession, phase string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.selected != selected {
+		return nil
+	}
+	failure := sessionLifecycleFailure(selected)
+	if failure == nil {
+		return nil
+	}
+	if classified, ok := lifecycleClassifiedError(failure); !ok || classified.Code != ErrorBrowserDisconnected {
+		return nil
+	}
+	b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, phase)
+	return browserDisconnectedErrorForSession(selected, phase, failure)
+}
+
 func (b *StatefulBroker) promoteBrowserLossWithPredicate(selected *brokerSession, selector TargetSelector, phase string, cause error, isLoss func(error) bool) error {
 	if selected != nil && selector.BrowserID != "" && selected.context.Key.BrowserID != selector.BrowserID {
 		selected = nil
 	}
 	if selected != nil {
-		b.mu.Lock()
-		if b.selected == selected {
-			if failure := sessionLifecycleFailure(selected); failure != nil {
-				if classified, ok := lifecycleClassifiedError(failure); ok && classified.Code == ErrorBrowserDisconnected {
-					b.invalidateSessionWithCodeLocked(selected, ErrorBrowserDisconnected, phase)
-					b.mu.Unlock()
-					return browserDisconnectedErrorForSession(selected, phase, failure)
-				}
-			}
+		if err := b.selectedLifecycleDisconnect(selected, phase); err != nil {
+			return err
 		}
-		b.mu.Unlock()
 		if !isLoss(cause) {
 			return nil
 		}

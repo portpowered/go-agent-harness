@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -41,7 +43,7 @@ func TestSessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay(t *test
 	capturePath := filepath.Join(t.TempDir(), "openai-exec-round-trip.session.json")
 	writeStrictOpenAIExecRoundTripCapture(t, capturePath, execCommand)
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}
@@ -81,7 +83,7 @@ func TestSessionCommand_StrictOpenAIReplayRejectsRecordedExecCallWithoutCurrentA
 	capturePath := filepath.Join(t.TempDir(), "openai-exec-round-trip.session.json")
 	writeStrictOpenAIExecRoundTripCapture(t, capturePath, execCommand)
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}
@@ -109,7 +111,7 @@ func writeSessionToolConfig(t *testing.T, configDir string, execEnabled bool) {
 	t.Helper()
 	var yaml strings.Builder
 	yaml.WriteString("model:\n  provider: openai\n  openai:\n    model: gpt-realtime\ntools:\n  exec:\n    enable_deny_patterns: true\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		enabled := id == "exec" && execEnabled
 		fmt.Fprintf(&yaml, "    - id: %s\n      enabled: %t\n", id, enabled)
 	}
@@ -173,4 +175,15 @@ func strictOpenAIWebSocketRecord(sequence int, direction gwtesting.SessionEventD
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(payload),
 	}
+}
+
+func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
+	t.Helper()
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
+		wire.NewPortSwap(wire.PortTransportDialer, server),
+	)
+	if err != nil {
+		t.Fatalf("initialize grounded production CLI: %v", err)
+	}
+	return agentCLI
 }

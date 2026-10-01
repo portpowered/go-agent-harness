@@ -119,15 +119,14 @@ go test ./agent-cli/internal/webmcp/siteadapter \
   ./agent-cli/internal/webmcp/tools
 ```
 
-Run the credential-free stock-Chrome site journeys:
+Run the credential-free stock-Chrome site journeys (the `e2e` build tag
+selects them; they fail when no qualified stock Chrome is installed):
 
 ```bash
-WEBMCP_SITE_ADAPTER_INTEGRATION=1 \
-  go test ./agent-cli/internal/webmcp/chrome \
+go test -tags e2e ./agent-cli/internal/webmcp/chrome \
   -run '^TestBundledSiteAdaptersStockChromeJourneys$' -count=1 -v
 
-WEBMCP_YOUTUBE_ADAPTER_INTEGRATION=1 \
-  go test ./agent-cli/internal/webmcp/chrome \
+go test -tags e2e ./agent-cli/internal/webmcp/chrome \
   -run '^TestYouTubeAdapterStockChromeJourney$' -count=1 -v
 ```
 
