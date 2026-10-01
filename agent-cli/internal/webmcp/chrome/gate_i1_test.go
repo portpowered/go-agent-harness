@@ -431,9 +431,6 @@ func (p *gateCLIProcess) wait(ctx context.Context) (gateCLIResult, error) {
 	if p == nil {
 		return gateCLIResult{}, errors.New("nil Gate I1 child process")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	select {
 	case result := <-p.done:
 		p.cancel()

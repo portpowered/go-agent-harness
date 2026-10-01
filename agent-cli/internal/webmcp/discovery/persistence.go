@@ -764,7 +764,7 @@ func (s *Service) reconnectPersisted(ctx context.Context, inputs ConnectionInput
 		return Selection{}, selectionFailure
 	}
 	if previousHandle != nil && previousHandle != selected.Handle {
-		discardRelease(previousHandle)
+		discardTargetHandle(ctx, previousHandle)
 	}
 	return selected, nil
 }
@@ -804,7 +804,7 @@ func (s *Service) reconnectUniqueTarget(ctx context.Context, browser BrowserCand
 		return Selection{}, selectionFailure
 	}
 	if previousHandle != nil && previousHandle != selected.Handle {
-		discardRelease(previousHandle)
+		discardTargetHandle(ctx, previousHandle)
 	}
 	return selected, nil
 }
@@ -858,7 +858,7 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 			failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
 			if failure.Code == CodeBrowserDisconnected {
 				if handle != nil {
-					discardRelease(handle)
+					discardTargetHandle(ctx, handle)
 				}
 				s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
 				return Selection{}, nil, failure
@@ -892,7 +892,7 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 	}
 	if failure := s.persistSelectionLocked(ctx, browser, target, selected.SelectedAt); failure != nil {
 		if handle != nil {
-			discardRelease(handle)
+			discardTargetHandle(ctx, handle)
 		}
 		return Selection{}, nil, failure
 	}

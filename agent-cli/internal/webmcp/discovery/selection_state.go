@@ -215,14 +215,6 @@ func discardTargetHandle(ctx context.Context, handle *TargetHandle) {
 	}
 }
 
-// discardRelease closes a detach-only handle on a superseded, failing, or
-// abandoned path; the release error cannot change that decided outcome.
-func discardRelease(handle interface{ Close() error }) {
-	if err := handle.Close(); err != nil {
-		return
-	}
-}
-
 // rememberedBrowserIdentity returns the identity recorded for an accepted
 // candidate's endpoint. An unparsable debugger URL leaves the identity empty:
 // the candidate itself was already validated, so there is nothing to record.
@@ -274,7 +266,7 @@ func (s *Service) CurrentSelection() (Selection, bool) { return s.Selected() }
 
 // ReleaseSelection clears and detaches the current selection. Releasing an
 // already empty service is a successful no-op.
-func (s *Service) ReleaseSelection() error {
+func (s *Service) ReleaseSelection(ctx context.Context) error {
 	s.mu.Lock()
 	if s.selection == nil {
 		s.mu.Unlock()
@@ -286,22 +278,22 @@ func (s *Service) ReleaseSelection() error {
 	if previous.Handle == nil {
 		return nil
 	}
-	return previous.Handle.Close()
+	return previous.Handle.Close(ctx)
 }
 
 // Close is the service-level selection cleanup hook. Discovery itself owns no
 // browser process, so closing the service only releases its attached target.
-func (s *Service) Close() error { return s.ReleaseSelection() }
+func (s *Service) Close(ctx context.Context) error { return s.ReleaseSelection(ctx) }
 
 // Close releases the selected target handle, if this selection owns one.
 // Selection values remain safe to close after the service selects another
 // target because the handle is independently idempotent.
-func (s Selection) Close() error {
+func (s Selection) Close(ctx context.Context) error {
 	if s.Handle == nil {
 		return nil
 	}
-	return s.Handle.Close()
+	return s.Handle.Close(ctx)
 }
 
 // Release is an alias for Selection.Close.
-func (s Selection) Release() error { return s.Close() }
+func (s Selection) Release(ctx context.Context) error { return s.Close(ctx) }

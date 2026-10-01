@@ -10,18 +10,18 @@ import (
 )
 
 func TestInitialBrowserState(t *testing.T) {
-	if got := initialBrowserState(nil); got != webmcp.BrowserCapabilityUnavailable {
+	if got := initialBrowserState(t.Context(), nil); got != webmcp.BrowserCapabilityUnavailable {
 		t.Fatalf("nil broker state = %q", got)
 	}
 	nested := readyBroker(&baseBroker{}, nil)
-	if got := initialBrowserState(nested); got != webmcp.BrowserCapabilityInitializing {
+	if got := initialBrowserState(t.Context(), nested); got != webmcp.BrowserCapabilityInitializing {
 		t.Fatalf("nested initializer state = %q", got)
 	}
-	if got := initialBrowserState(&baseBroker{}); got != webmcp.BrowserCapabilityConnectedUnselected {
+	if got := initialBrowserState(t.Context(), &baseBroker{}); got != webmcp.BrowserCapabilityConnectedUnselected {
 		t.Fatalf("unselected state = %q", got)
 	}
 	disconnected := &discovery.DiscoveryError{Code: discovery.CodeBrowserDisconnected, Message: "gone"}
-	if got := initialBrowserState(&baseBroker{selectedErr: disconnected}); got != webmcp.BrowserCapabilityDisconnected {
+	if got := initialBrowserState(t.Context(), &baseBroker{selectedErr: disconnected}); got != webmcp.BrowserCapabilityDisconnected {
 		t.Fatalf("disconnected discovery state = %q", got)
 	}
 	if got := browserStateForError(errors.New("other")); got != webmcp.BrowserCapabilityUnavailable {

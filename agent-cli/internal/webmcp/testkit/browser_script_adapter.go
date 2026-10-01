@@ -310,7 +310,7 @@ func (h *BrowserScriptHandle) Attach(ctx context.Context, targetID webmcp.Target
 	h.adapter.mu.Lock()
 	target := h.adapter.currentTargetLocked()
 	h.adapter.mu.Unlock()
-	session := newBrowserScriptSession(h, target, ownership)
+	session := newBrowserScriptSession(ctx, h, target, ownership)
 	h.session = session
 	h.mu.Unlock()
 	if err := session.emit(webmcp.BrowserEvent{
@@ -353,6 +353,11 @@ type BrowserScriptSession struct {
 	target    webmcp.Target
 	ownership webmcp.TargetOwnership
 
+	// release consumes the scripted close/detach operation. It is bound to the
+	// attach context without its cancellation, so Close still runs it after
+	// the attaching caller has been cancelled.
+	release func(OperationType) error
+
 	mu      sync.Mutex
 	context webmcp.PageContext
 	events  chan webmcp.BrowserEvent
@@ -368,7 +373,7 @@ const (
 	scriptEventBufferHeadroom = 8
 )
 
-func newBrowserScriptSession(handle *BrowserScriptHandle, target webmcp.Target, ownership webmcp.TargetOwnership) *BrowserScriptSession {
+func newBrowserScriptSession(ctx context.Context, handle *BrowserScriptHandle, target webmcp.Target, ownership webmcp.TargetOwnership) *BrowserScriptSession {
 	capacity := minScriptEventBuffer
 	if handle != nil && handle.adapter != nil {
 		capacity = max(countScriptEvents(handle.adapter.script())+scriptEventBufferHeadroom, minScriptEventBuffer)
@@ -382,9 +387,21 @@ func newBrowserScriptSession(handle *BrowserScriptHandle, target webmcp.Target, 
 		Connected:  true,
 		Ready:      false,
 	}
+	runtime := handle.adapter.runtime
+	cleanupContext := context.WithoutCancel(ctx)
 	return &BrowserScriptSession{
-		handle:    handle,
-		runtime:   handle.adapter.runtime,
+		handle:  handle,
+		runtime: runtime,
+		release: func(operation OperationType) error {
+			switch operation {
+			case OperationCloseTarget:
+				return runtime.CloseTarget(cleanupContext)
+			case OperationDetachTarget:
+				return runtime.DetachTarget(cleanupContext)
+			default:
+				return nil
+			}
+		},
 		target:    target,
 		ownership: ownership,
 		context:   page,
@@ -577,17 +594,7 @@ func (s *BrowserScriptSession) Close() error {
 
 	var closeErr error
 	if operation, ok := s.runtime.NextExpectedOperationType(); ok {
-		switch operation {
-		case OperationCloseTarget:
-			closeErr = s.runtime.CloseTarget(context.Background())
-		case OperationDetachTarget:
-			closeErr = s.runtime.DetachTarget(context.Background())
-		case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool,
-			OperationNavigate, OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
-			OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
-			OperationBrowsers, OperationTabs, OperationTools:
-			// No teardown operation is expected; close without driving the fixture.
-		}
+		closeErr = s.release(operation)
 	}
 	s.mu.Lock()
 	s.err = closeErr

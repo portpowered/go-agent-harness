@@ -40,7 +40,10 @@ func NewDeviceProbeSessionFactory(providerService runtimeProviders.SessionServic
 			return nil, "", err
 		}
 		transcription := audioService.ResolveTranscription(audioio.TranscriptionRequest{Provider: resolved.provider, AcceptsAudioInput: true})
-		inferencer, err := providerService.BuildSession(context.Background(), runtimeProviders.SessionConfig{
+		// go-agent-runtime's devices.ProbeSessionFactory contract carries no
+		// context, so this adapter is the root for session construction.
+		inferencer, err := providerService.BuildSession(context.Background(), runtimeProviders.SessionConfig{ //nolint:forbidigo // devices.ProbeSessionFactory (go-agent-runtime contract) passes no caller context to thread
+
 			Provider: resolved.provider, Model: resolved.model, APIKey: resolved.apiKey, BaseURL: resolved.baseURL,
 			Instructions: instructions, ReasoningEffort: resolved.reasoningEffort,
 			InputAudioFormat: models.AudioFormatPCM16, OutputAudioFormat: models.AudioFormatPCM16,

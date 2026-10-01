@@ -72,7 +72,7 @@ func (s *Service) ListTargets(ctx context.Context, browser BrowserCandidate, opt
 func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandidate, options ...TargetListOptions) (TargetSnapshot, error) {
 	listOptions := resolvedTargetListOptions(firstTargetListOptions(options))
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.unlockDiscovery(ctx)
 
 	if browser.ID == "" {
 		return TargetSnapshot{}, newNoEligibleTab("", listOptions, 0)
@@ -160,7 +160,7 @@ func (s *Service) List(ctx context.Context, inputs ConnectionInputs, options Tar
 // ambiguous_browser instead of selecting an arbitrary endpoint.
 func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]BrowserCandidate, error) {
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.unlockDiscovery(ctx)
 
 	s.emitDiscoveryStarted()
 

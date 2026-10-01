@@ -58,7 +58,6 @@ func (s *ScriptedTargetSession) WaitForTerminalObservation(ctx context.Context, 
 	if id == "" {
 		return TerminalObservation{}, fmt.Errorf("%w: empty invocation ID", webmcp.ErrInvocationNotFound)
 	}
-	ctx = nonNilContext(ctx)
 	for {
 		s.mu.Lock()
 		if observation, ok := s.terminalObserved[id]; ok {
@@ -297,11 +296,4 @@ func (s *ScriptedTargetSession) decorateProducedEventLocked(event webmcp.Browser
 		}
 	}
 	return s.runtime.decorateEvent(event, s.target.BrowserID, s.target.ID, s.context.Generation, event.Sequence)
-}
-
-func nonNilContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
 }

@@ -306,13 +306,13 @@ func TestReleaseAfterDisconnectIsIdempotentAndDetachOnly(t *testing.T) {
 	if _, err := service.HandleDisconnect(context.Background(), browser.ID, targetID, "transport"); err == nil {
 		t.Fatal("HandleDisconnect returned nil")
 	}
-	if err := service.ReleaseSelection(); err != nil {
+	if err := service.ReleaseSelection(t.Context()); err != nil {
 		t.Fatalf("release after disconnect: %v", err)
 	}
-	if err := service.ReleaseSelection(); err != nil {
+	if err := service.ReleaseSelection(t.Context()); err != nil {
 		t.Fatalf("second release after disconnect: %v", err)
 	}
-	if err := selected.Close(); err != nil {
+	if err := selected.Close(t.Context()); err != nil {
 		t.Fatalf("snapshot close after release: %v", err)
 	}
 	if detacher.detachCalls != 1 || detacher.closeTarget != 0 || detacher.closeBrowser != 0 || detacher.terminate != 0 || detacher.deleteProfile != 0 {

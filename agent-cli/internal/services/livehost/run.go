@@ -85,7 +85,7 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	if traceRun != nil {
 		defer func() {
 			bundle := strings.TrimSpace(request.RecordDirectory)
-			runErr = errors.Join(runErr, finishTrace(traceRun, traceContext(ctx), bundle, runErr == nil))
+			runErr = errors.Join(runErr, finishTrace(traceRun, context.WithoutCancel(ctx), bundle, runErr == nil))
 		}()
 	}
 	cleanupImages, err := stageOpeningImages(request, &liveRequest, deps.ImageStager)
@@ -124,13 +124,6 @@ func Run(ctx context.Context, out io.Writer, request serviceSession.Request, dep
 	}
 	options := liveRunOptions(out, request, liveRequest, recorder, media, deps, traceRun, redactor)
 	return suppressExpectedDuration(runner.RunLive(ctx, options))
-}
-
-func traceContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return context.WithoutCancel(ctx)
 }
 
 type liveRunAdmission struct {

@@ -207,7 +207,7 @@ func assertPersistedReplacementRejected(t *testing.T, fixture replacementFixture
 		}),
 	})
 	t.Cleanup(func() {
-		if err := replacementService.Close(); err != nil {
+		if err := replacementService.Close(t.Context()); err != nil {
 			t.Errorf("close replacement service: %v", err)
 		}
 	})
@@ -235,7 +235,7 @@ func assertPersistedReplacementRejected(t *testing.T, fixture replacementFixture
 // release is a real teardown defect.
 func closeServiceForTest(t *testing.T, service *Service) {
 	t.Helper()
-	if err := service.Close(); err != nil {
+	if err := service.Close(t.Context()); err != nil {
 		t.Errorf("close discovery service: %v", err)
 	}
 }

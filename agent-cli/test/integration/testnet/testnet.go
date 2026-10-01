@@ -3,7 +3,6 @@
 package testnet
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +36,7 @@ func NewWANSegmentServer(t testing.TB, handler http.Handler) *httptest.Server {
 		}
 		return optionErr
 	}}
-	listener, err := config.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	listener, err := config.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for WAN-segment fixture: %v", err)
 	}

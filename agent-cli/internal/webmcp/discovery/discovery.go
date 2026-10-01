@@ -224,7 +224,7 @@ func (s *Service) Browser(browserID string) (BrowserCandidate, bool) {
 		return BrowserCandidate{}, false
 	}
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.mu.Unlock()
 	candidate, ok := s.browsers[strings.TrimSpace(browserID)]
 	return candidate, ok
 }
@@ -251,7 +251,7 @@ func (HashIDMapper) BrowserID(identity BrowserIdentity) string {
 // safe classified DiscoveryError.
 func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (BrowserCandidate, error) {
 	s.mu.Lock()
-	defer s.unlockDiscovery()
+	defer s.unlockDiscovery(ctx)
 
 	s.emitDiscoveryStarted()
 
@@ -671,7 +671,7 @@ func (s *Service) candidateFromVersion(version BrowserVersion, source Source, ki
 // unlockDiscovery releases any target handles retired while a discovery pass
 // held Service.mu. Detach callbacks are external code and must not run while
 // the service lock is held.
-func (s *Service) unlockDiscovery() {
+func (s *Service) unlockDiscovery(ctx context.Context) {
 	if s == nil {
 		return
 	}
@@ -680,7 +680,7 @@ func (s *Service) unlockDiscovery() {
 	s.mu.Unlock()
 	for _, handle := range releases {
 		if handle != nil {
-			discardRelease(handle)
+			discardTargetHandle(ctx, handle)
 		}
 	}
 }
