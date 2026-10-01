@@ -4,7 +4,7 @@
 package siteadapter
 
 import (
-	_ "embed"
+	"embed"
 	"net/url"
 	"strings"
 )
@@ -34,11 +34,8 @@ var redditSource string
 //go:embed extensions/google_maps/google_maps.js
 var googleMapsSource string
 
-//go:embed extensions/capital_one_shopping/capital_one_shopping.js
-var capitalOneShoppingSource string
-
-//go:embed extensions/x/x.js
-var xSource string
+//go:embed extensions/capital_one_shopping/capital_one_shopping.js extensions/x/x.js
+var bootstrapSource embed.FS
 
 // Script is a main-world page adapter selected for one target URL.
 type Script struct {
@@ -112,7 +109,7 @@ func registry() []definition {
 		},
 		{
 			info:   Info{Name: CapitalOneShoppingName, URLPatterns: []string{"https://capitaloneshopping.com/*", "https://www.capitaloneshopping.com/*"}, ToolPrefix: "capital_one_shopping_"},
-			source: capitalOneShoppingSource,
+			source: embeddedSource("extensions/capital_one_shopping/capital_one_shopping.js"),
 			match: func(parsed *url.URL) bool {
 				switch strings.ToLower(parsed.Hostname()) {
 				case "capitaloneshopping.com", "www.capitaloneshopping.com":
@@ -124,7 +121,7 @@ func registry() []definition {
 		},
 		{
 			info:   Info{Name: XName, URLPatterns: []string{"https://x.com/*", "https://www.x.com/*", "https://twitter.com/*", "https://www.twitter.com/*"}, ToolPrefix: "x_"},
-			source: xSource,
+			source: embeddedSource("extensions/x/x.js"),
 			match: func(parsed *url.URL) bool {
 				switch strings.ToLower(parsed.Hostname()) {
 				case "x.com", "www.x.com", "twitter.com", "www.twitter.com":
@@ -135,6 +132,15 @@ func registry() []definition {
 			},
 		},
 	}
+}
+
+// embeddedSource reads an adapter compiled into bootstrapSource.
+func embeddedSource(path string) string {
+	source, err := bootstrapSource.ReadFile(path)
+	if err != nil {
+		panic("siteadapter: read embedded source " + path + ": " + err.Error()) //nolint:forbidigo // must-style: path names a go:embed file fixed at compile time
+	}
+	return string(source)
 }
 
 func stringSet(values ...string) map[string]struct{} {
