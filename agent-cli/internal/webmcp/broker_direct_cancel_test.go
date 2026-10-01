@@ -73,7 +73,7 @@ func TestDirectCancelRejectsSessionIdentityMismatchBeforeDispatch(t *testing.T) 
 // TestCallerBoundContextMirrorsCallerDeadlineAndCancellation proves the queued
 // dispatch context reports an expired caller deadline as DeadlineExceeded (so
 // target diagnostics classify a timeout) and a caller cancellation as Canceled
-// with the caller's error as its cause.
+// carrying the caller's exact cancellation cause.
 func TestCallerBoundContextMirrorsCallerDeadlineAndCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		caller, cancelCaller := context.WithTimeout(t.Context(), time.Second)
@@ -86,12 +86,13 @@ func TestCallerBoundContextMirrorsCallerDeadlineAndCancellation(t *testing.T) {
 		}
 	})
 
-	caller, cancelCaller := context.WithCancel(t.Context())
+	callerStopped := errors.New("caller stopped the invocation")
+	caller, cancelCaller := context.WithCancelCause(t.Context())
 	dispatch, release := callerBoundContext(t.Context(), newCallerBinding(caller))
 	defer release()
-	cancelCaller()
+	cancelCaller(callerStopped)
 	<-dispatch.Done()
-	if !errors.Is(dispatch.Err(), context.Canceled) || !errors.Is(context.Cause(dispatch), context.Canceled) {
-		t.Fatalf("dispatch after caller cancel = %v (cause %v), want %v", dispatch.Err(), context.Cause(dispatch), context.Canceled)
+	if !errors.Is(dispatch.Err(), context.Canceled) || !errors.Is(context.Cause(dispatch), callerStopped) {
+		t.Fatalf("dispatch after caller cancel = %v (cause %v), want %v caused by %v", dispatch.Err(), context.Cause(dispatch), context.Canceled, callerStopped)
 	}
 }

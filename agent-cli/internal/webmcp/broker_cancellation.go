@@ -148,24 +148,33 @@ func (b *StatefulBroker) directCancelDispatchFailed(selected *brokerSession, ope
 	return directCancellationDispatchFailure(operation, err)
 }
 
-// callerBinding captures what the lane worker needs from the admitting
-// caller's context without retaining the context itself.
+// callerBinding is what the lane worker needs from the admitting caller: its
+// done channel, its cancellation cause, and its deadline. It exposes no
+// context, so the worker never derives contexts from, or reads values of, the
+// caller's context. The cause closure does keep the caller's context reachable
+// for as long as the invocation lease lives; the lease is dropped when the
+// invocation terminates.
 type callerBinding struct {
 	done        <-chan struct{}
-	err         func() error
+	cause       func() error
 	deadline    time.Time
 	hasDeadline bool
 }
 
 func newCallerBinding(ctx context.Context) callerBinding {
 	deadline, hasDeadline := ctx.Deadline()
-	return callerBinding{done: ctx.Done(), err: ctx.Err, deadline: deadline, hasDeadline: hasDeadline}
+	return callerBinding{
+		done:        ctx.Done(),
+		cause:       func() error { return context.Cause(ctx) },
+		deadline:    deadline,
+		hasDeadline: hasDeadline,
+	}
 }
 
 // callerBoundContext derives the dispatch context from the worker context and
 // mirrors the caller: it carries the caller's deadline (so an expired caller
 // deadline surfaces as context.DeadlineExceeded) and is canceled, with the
-// caller's error as its cause, once the caller is canceled.
+// caller's cancellation cause as its cause, once the caller is canceled.
 func callerBoundContext(ctx context.Context, caller callerBinding) (context.Context, func()) {
 	dispatchCtx, cancelCause := context.WithCancelCause(ctx)
 	stopDeadline := context.CancelFunc(func() {})
@@ -178,11 +187,11 @@ func callerBoundContext(ctx context.Context, caller callerBinding) (context.Cont
 	}
 	// An expired caller deadline is mirrored by the dispatch deadline itself.
 	mirrorCancel := func() {
-		err := caller.err()
-		if caller.hasDeadline && errors.Is(err, context.DeadlineExceeded) {
+		cause := caller.cause()
+		if caller.hasDeadline && errors.Is(cause, context.DeadlineExceeded) {
 			return
 		}
-		cancelCause(err)
+		cancelCause(cause)
 	}
 	select {
 	case <-caller.done:
