@@ -26,6 +26,9 @@ const (
 	ErrProviderLivenessTimeout sessionDurationError = "silent provider response timed out"
 	ErrSchedulerUnavailable    sessionDurationError = "session duration scheduler is required"
 	ErrFinalizationPanic       sessionDurationError = "session finalization panicked"
+	// ErrContextRequired rejects a nil caller context. The service never
+	// substitutes a root context for a missing caller lifetime.
+	ErrContextRequired sessionDurationError = "session duration context is required"
 )
 
 // Timer is the timer contract shared by duration and liveness controllers.
@@ -161,11 +164,11 @@ type RetryPolicy struct {
 	MaxDelay     time.Duration
 }
 
-// Options creates one isolated controller. Context cancellation stops timing
-// workers; no provider, filesystem, or device effect occurs here.
+// Options creates one isolated controller. Cancellation of the context passed
+// to Begin stops timing workers; no provider, filesystem, or device effect
+// occurs here.
 type Options struct {
-	Context context.Context
-	Clock   TimerScheduler
+	Clock TimerScheduler
 	// DeferStart leaves max-duration timer creation to Controller.Start. It is
 	// used by Run to construct the host loop before scheduler effects occur.
 	DeferStart bool
@@ -290,8 +293,10 @@ type LifecycleFailures struct {
 // Service owns terminal precedence, output projection, publication ordering,
 // terminal synthesis, and normalized error composition.
 type Service interface {
-	Begin(Options) (Controller, error)
-	Run(RunRequest) error
+	// Begin and Run bind the controller and loop lifetimes to ctx, which must
+	// be non-nil (ErrContextRequired).
+	Begin(context.Context, Options) (Controller, error)
+	Run(context.Context, RunRequest) error
 	NewFinalizer(FinalizationPorts) Finalizer
 	NewState(TerminalSource) State
 	PublishMaxDuration(Publication, messages.TerminalOutputState) error

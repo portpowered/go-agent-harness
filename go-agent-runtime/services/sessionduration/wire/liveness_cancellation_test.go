@@ -18,7 +18,7 @@ func TestPublicCancellationDisarmsTimerCreatedConcurrently(t *testing.T) {
 	scheduler := &publicGatedScheduler{
 		entered: make(chan struct{}), release: release, created: make(chan *publicManualTimer, 2),
 	}
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Liveness:      sessionduration.LivenessOptions{Enabled: true, Timeout: time.Millisecond},
 		LivenessClock: scheduler,
 	})
@@ -73,7 +73,7 @@ func TestPublicCancellationDisarmsTimerCreatedConcurrently(t *testing.T) {
 
 func TestPublicParallelLocalToolsKeepProviderWatchdogDisarmed(t *testing.T) {
 	scheduler := &publicManualScheduler{created: make(chan *publicManualTimer, 4)}
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Liveness:      sessionduration.LivenessOptions{Enabled: true, Timeout: time.Millisecond},
 		LivenessClock: scheduler,
 	})
@@ -114,8 +114,7 @@ func TestPublicParallelLocalToolsKeepProviderWatchdogDisarmed(t *testing.T) {
 func TestPublicCancelledContextCannotRearmProviderWatchdog(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	scheduler := &publicManualScheduler{created: make(chan *publicManualTimer, 3)}
-	controller, err := NewService().Begin(sessionduration.Options{
-		Context:       ctx,
+	controller, err := NewService().Begin(ctx, sessionduration.Options{
 		Liveness:      sessionduration.LivenessOptions{Enabled: true, Timeout: time.Millisecond},
 		LivenessClock: scheduler,
 	})
@@ -158,8 +157,7 @@ func TestPublicRetryNilTimerPreservesUnavailableSchedulerIdentity(t *testing.T) 
 	}) {
 		t.Fatal("rate-limit terminal was not queued")
 	}
-	err := NewService().Run(sessionduration.RunRequest{
-		Context:     context.Background(),
+	err := NewService().Run(context.Background(), sessionduration.RunRequest{
 		Inferencer:  publicInferencer{session: newPublicSession()},
 		Clock:       publicNilTimerScheduler{},
 		DrainPolicy: sessionduration.DrainPolicy{Clock: publicImmediateTimerScheduler{}},
@@ -177,7 +175,7 @@ func TestPublicRetryNilTimerPreservesUnavailableSchedulerIdentity(t *testing.T) 
 }
 
 func TestPublicFinalizeNilDrainTimerPreservesUnavailableSchedulerIdentity(t *testing.T) {
-	controller, err := NewService().Begin(sessionduration.Options{})
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -193,7 +191,7 @@ func TestPublicFinalizeNilDrainTimerPreservesUnavailableSchedulerIdentity(t *tes
 func TestPublicFinalizeNilResetTimerPreservesUnavailableSchedulerIdentity(t *testing.T) {
 	deltas := messages.NewTypedBuffer[messages.StreamMessage](1)
 	scheduler := &publicOneTimerThenNilScheduler{created: make(chan *publicManualTimer, 1)}
-	controller, err := NewService().Begin(sessionduration.Options{})
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -359,14 +357,23 @@ func TestPublicArtifactLifecycleTakesPrecedenceOverConfiguredPaths(t *testing.T)
 	}
 }
 
-func TestPublicArtifactLifecycleAcceptsNilContext(t *testing.T) {
+func TestPublicNilContextIsRejectedNotReplaced(t *testing.T) {
 	service := NewService()
 	existing := &publicArtifactLifecycleProbe{}
 	var nilContext context.Context
-	ctx := service.WithArtifacts(nilContext, existing)
-	if ctx == nil {
-		t.Fatal("WithArtifacts(nil, lifecycle) returned a nil context")
+	if ctx := service.WithArtifacts(nilContext, existing); ctx != nil {
+		t.Fatalf("WithArtifacts(nil, lifecycle) = %v, want nil left for Run to reject", ctx)
 	}
+	if ctx := service.WithArtifactPaths(nilContext, sessionduration.SessionDurationArtifactPaths{}); ctx != nil {
+		t.Fatalf("WithArtifactPaths(nil) = %v, want nil", ctx)
+	}
+	if err := service.Run(nilContext, sessionduration.RunRequest{}); !errors.Is(err, sessionduration.ErrContextRequired) {
+		t.Fatalf("Run(nil ctx) = %v, want ErrContextRequired", err)
+	}
+	if err := service.DrainStragglers(nilContext, sessionduration.StragglerDrain{}); !errors.Is(err, sessionduration.ErrContextRequired) {
+		t.Fatalf("DrainStragglers(nil ctx) = %v, want ErrContextRequired", err)
+	}
+	ctx := service.WithArtifacts(context.Background(), existing)
 	if got := service.ArtifactsFromContext(ctx); got != existing {
 		t.Fatalf("attached lifecycle = %T, want injected lifecycle", got)
 	}
@@ -376,8 +383,7 @@ func TestPublicRunBoundsLoopThatIgnoresCancellation(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 	loop := &publicStubbornLoop{deltas: messages.NewTypedBuffer[messages.StreamMessage](1), release: make(chan struct{}), exited: make(chan struct{})}
-	err := NewService().Run(sessionduration.RunRequest{
-		Context:    context.Background(),
+	err := NewService().Run(context.Background(), sessionduration.RunRequest{
 		Inferencer: publicInferencer{session: newPublicSession()},
 		Done:       done,
 		DrainPolicy: sessionduration.DrainPolicy{

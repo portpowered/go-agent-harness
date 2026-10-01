@@ -16,17 +16,19 @@ const defaultLoopJoinTimeout = 5 * time.Second
 // Run is the single bounded-session loop boundary. Host-specific prompt,
 // scheduled-input, and rendering behavior is supplied as a handler; deadline,
 // admission, terminal publication, and cleanup remain service-owned.
-func (s *Service) Run(request sessionduration.RunRequest) error {
-	ctx := nonNilRunContext(request.Context)
+//
+// ctx bounds the run: the loop, its handlers, and the signal fan-in run under
+// a context derived from it, and finalization detaches from its cancellation
+// so ordered cleanup still completes.
+func (s *Service) Run(ctx context.Context, request sessionduration.RunRequest) error {
+	if ctx == nil {
+		return sessionduration.ErrContextRequired
+	}
 	if err := validateRunRequest(s, request); err != nil {
 		return err
 	}
-	admitted, err := runAdmission(request)
-	if err != nil {
-		return err
-	}
-	durationController, err := s.Begin(sessionduration.Options{
-		Context:       ctx,
+	admitted := runAdmission(request)
+	durationController, err := s.Begin(ctx, sessionduration.Options{
 		Clock:         request.Clock,
 		LivenessClock: request.LivenessClock,
 		MaxDuration:   request.MaxDuration,
@@ -40,7 +42,7 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 	if err != nil {
 		return err
 	}
-	runCtx, cancel := newRunContext(ctx)
+	runCtx, cancel := context.WithCancel(ctx)
 	loop, err := buildRunLoop(request, admitted, durationController, runCtx)
 	if err != nil {
 		admitted.CloseAdmission()
@@ -54,8 +56,6 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 		return finalizeErr
 	}
 	runner := &runLoop{
-		ctx:        ctx,
-		runCtx:     runCtx,
 		cancel:     cancel,
 		controller: durationController,
 		admitted:   admitted,
@@ -64,19 +64,12 @@ func (s *Service) Run(request sessionduration.RunRequest) error {
 		runErrs:    make(chan error, 1),
 		service:    s,
 	}
-	runner.bindSources()
-	runner.start()
+	runner.bindSources(runCtx)
+	runner.start(runCtx)
 	if err := durationController.Start(); err != nil {
-		return runner.finish(false, err)
+		return runner.finish(runCtx, false, err)
 	}
-	return runner.run()
-}
-
-func nonNilRunContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
+	return runner.run(runCtx)
 }
 
 func validateRunRequest(s *Service, request sessionduration.RunRequest) error {
@@ -92,11 +85,11 @@ func validateRunRequest(s *Service, request sessionduration.RunRequest) error {
 	return nil
 }
 
-func runAdmission(request sessionduration.RunRequest) (sessionduration.AdmissionInferencer, error) {
+func runAdmission(request sessionduration.RunRequest) sessionduration.AdmissionInferencer {
 	if request.Admission != nil {
-		return request.Admission, nil
+		return request.Admission
 	}
-	return NewAdmissionInferencer(request.Inferencer, NewEventAdmission(), nil), nil
+	return NewAdmissionInferencer(request.Inferencer, NewEventAdmission(), nil)
 }
 
 func runTerminalSource(source sessionduration.TerminalSource, admitted sessionduration.AdmissionInferencer) sessionduration.TerminalSource {
@@ -120,13 +113,9 @@ func buildRunLoop(request sessionduration.RunRequest, admitted sessionduration.A
 	return loop, nil
 }
 
-func newRunContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithCancel(ctx)
-}
-
+// runLoop owns one run's event state. The run context is passed to each
+// method rather than stored; the loop keeps only its cancel function.
 type runLoop struct {
-	ctx        context.Context
-	runCtx     context.Context
 	cancel     context.CancelFunc
 	controller sessionduration.Controller
 	admitted   sessionduration.AdmissionInferencer
@@ -167,24 +156,24 @@ const (
 	runLoopSessionUpdated
 )
 
-func (r *runLoop) run() error {
+func (r *runLoop) run(ctx context.Context) error {
 	defer r.cancelRun()
 	defer r.stopSessionUpdated()
-	r.start()
+	r.start(ctx)
 	for {
-		if result, done := r.handleEvent(r.nextEvent()); done {
+		if result, done := r.handleEvent(ctx, r.nextEvent(ctx)); done {
 			return result
 		}
 	}
 }
 
-func (r *runLoop) start() {
+func (r *runLoop) start(ctx context.Context) {
 	r.startOnce.Do(func() {
-		go func() { r.runErrs <- r.loop.Run(r.runCtx) }()
+		go func(ctx context.Context) { r.runErrs <- r.loop.Run(ctx) }(ctx)
 	})
 }
 
-func (r *runLoop) nextEvent() runLoopEvent {
+func (r *runLoop) nextEvent(ctx context.Context) runLoopEvent {
 	select {
 	case err := <-r.controller.Errors():
 		return runLoopEvent{kind: runLoopControllerError, err: err}
@@ -204,54 +193,54 @@ func (r *runLoop) nextEvent() runLoopEvent {
 		return runLoopEvent{kind: runLoopSessionUpdated}
 	case msg, ok := <-r.loop.Deltas().Chan():
 		return runLoopEvent{kind: runLoopMessage, msg: msg, valid: ok}
-	case <-r.ctx.Done():
-		return runLoopEvent{kind: runLoopContext, err: r.ctx.Err()}
+	case <-ctx.Done():
+		return runLoopEvent{kind: runLoopContext, err: ctx.Err()}
 	}
 }
 
-func (r *runLoop) handleEvent(event runLoopEvent) (error, bool) {
+func (r *runLoop) handleEvent(ctx context.Context, event runLoopEvent) (error, bool) {
 	switch event.kind {
 	case runLoopControllerError:
-		return r.finishControllerError(event.err), true
+		return r.finishControllerError(ctx, event.err), true
 	case runLoopError:
 		r.loopErr = event.err
 		r.loopDone = true
-		return r.finish(false, runLoopFailure(r.ctx, event.err)), true
+		return r.finish(ctx, false, runLoopFailure(ctx, event.err)), true
 	case runLoopExternalError:
-		return r.finish(false, event.err), true
+		return r.finish(ctx, false, event.err), true
 	case runLoopWake:
-		return r.handleWake()
+		return r.handleWake(ctx)
 	case runLoopWakeClosed:
 		return nil, false
 	case runLoopDone:
-		return r.finish(false, runLoopDoneError(r.request)), true
+		return r.finish(ctx, false, runLoopDoneError(r.request)), true
 	case runLoopMessage:
 		if !event.valid {
-			return r.finish(false, nil), true
+			return r.finish(ctx, false, nil), true
 		}
-		if err := r.process(event.msg); err != nil {
-			return r.finish(false, err), true
+		if err := r.process(ctx, event.msg); err != nil {
+			return r.finish(ctx, false, err), true
 		}
 		if r.finished {
 			return r.finishErr, true
 		}
 		return nil, false
 	case runLoopContext:
-		return r.finish(false, event.err), true
+		return r.finish(ctx, false, event.err), true
 	case runLoopSessionUpdated:
 		r.stopSessionUpdated()
-		return r.finish(false, r.request.SessionUpdated.TimeoutError), true
+		return r.finish(ctx, false, r.request.SessionUpdated.TimeoutError), true
 	default:
 		return nil, false
 	}
 }
 
-func (r *runLoop) handleWake() (error, bool) {
+func (r *runLoop) handleWake(ctx context.Context) (error, bool) {
 	if r.request.OnWake == nil {
 		return nil, false
 	}
-	if err := r.request.OnWake(r.runCtx, r.loop, r.controller); err != nil {
-		return r.finish(false, err), true
+	if err := r.request.OnWake(ctx, r.loop, r.controller); err != nil {
+		return r.finish(ctx, false, err), true
 	}
 	return nil, false
 }
@@ -263,14 +252,14 @@ func runLoopDoneError(request sessionduration.RunRequest) error {
 	return request.DoneError()
 }
 
-func (r *runLoop) finishControllerError(err error) error {
+func (r *runLoop) finishControllerError(ctx context.Context, err error) error {
 	if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
-		return r.finish(true, nil)
+		return r.finish(ctx, true, nil)
 	}
-	return r.finish(false, err)
+	return r.finish(ctx, false, err)
 }
 
-func (r *runLoop) process(msg messages.StreamMessage) error {
+func (r *runLoop) process(ctx context.Context, msg messages.StreamMessage) error {
 	admission := r.controller.Observe(msg)
 	if !admission.Accepted {
 		r.pending = append(r.pending, msg)
@@ -282,9 +271,9 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 	if admission.LivenessErr != nil {
 		return admission.LivenessErr
 	}
-	if err := r.retry(admission.Message); err != nil {
+	if err := r.retry(ctx, admission.Message); err != nil {
 		if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
-			return r.finish(true, nil)
+			return r.finish(ctx, true, nil)
 		}
 		return err
 	}
@@ -294,31 +283,34 @@ func (r *runLoop) process(msg messages.StreamMessage) error {
 	if r.request.Handle == nil {
 		return r.observeSessionUpdated(admission.Message)
 	}
-	result, err := r.request.Handle(r.runCtx, r.loop, r.controller, admission.Message)
+	result, err := r.request.Handle(ctx, r.loop, r.controller, admission.Message)
 	if err != nil {
 		if errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
-			return r.finish(true, nil)
+			return r.finish(ctx, true, nil)
 		}
 		return err
 	}
 	if !result.Stop {
 		return r.observeSessionUpdated(admission.Message)
 	}
-	return r.finish(result.Planned, nil)
+	return r.finish(ctx, result.Planned, nil)
 }
 
-func (r *runLoop) finish(planned bool, primary error) error {
+// finish runs ordered finalization once. ctx is the run context; Finalize
+// detaches from its cancellation, and the loop join below is bounded by its
+// own timeout on a detached copy.
+func (r *runLoop) finish(ctx context.Context, planned bool, primary error) error {
 	r.finishOnce.Do(func() {
 		r.admitted.CloseAdmission()
 		if planned {
-			primary = errors.Join(primary, sendLoopClose(r.runCtx, r.loop))
+			primary = errors.Join(primary, sendLoopClose(ctx, r.loop))
 		}
 		drainPolicy := r.request.DrainPolicy
 		if drainPolicy.Clock == nil {
 			drainPolicy.Clock = r.request.Clock
 		}
 		r.stopSessionUpdated()
-		result, finalizeErr := r.controller.Finalize(r.ctx, sessionduration.FinalizeRequest{
+		result, finalizeErr := r.controller.Finalize(ctx, sessionduration.FinalizeRequest{
 			Primary: primary,
 			Drain: func(ctx context.Context) error {
 				drainErr := r.drainPending()
@@ -335,7 +327,7 @@ func (r *runLoop) finish(planned bool, primary error) error {
 				if r.request.Close != nil {
 					closeErr = r.request.Close()
 				}
-				joinCtx, cancel := context.WithTimeout(context.Background(), loopJoinTimeout(drainPolicy))
+				joinCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loopJoinTimeout(drainPolicy))
 				defer cancel()
 				loopErr := r.waitForLoop(joinCtx)
 				if errors.Is(primary, loopErr) {
@@ -359,15 +351,15 @@ func (r *runLoop) finish(planned bool, primary error) error {
 
 // bindSources evaluates host signal sources once the loop exists. Forwarding
 // workers stop with the run context, so no worker outlives the run.
-func (r *runLoop) bindSources() {
+func (r *runLoop) bindSources(ctx context.Context) {
 	errorSources := []<-chan error{r.request.ExternalErrors}
 	if r.request.ExternalErrorSources != nil {
 		errorSources = append(errorSources, r.request.ExternalErrorSources()...)
 	}
-	r.external = stream.FanInErrors(r.runCtx, errorSources)
+	r.external = stream.FanInErrors(ctx, errorSources)
 	doneSources := []<-chan struct{}{r.request.Done}
 	if r.request.DoneSources != nil {
 		doneSources = append(doneSources, r.request.DoneSources()...)
 	}
-	r.done = stream.FanInDone(r.runCtx, doneSources)
+	r.done = stream.FanInDone(ctx, doneSources)
 }

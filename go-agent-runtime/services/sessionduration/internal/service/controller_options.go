@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration"
@@ -19,9 +18,6 @@ func normalizeOptions(options sessionduration.Options) (sessionduration.Options,
 	}
 	if options.Retry.MaxRetries != 0 || options.Retry.DefaultDelay != 0 || options.Retry.MaxDelay != 0 {
 		options.Retry.Enabled = true
-	}
-	if options.Context == nil {
-		options.Context = context.Background()
 	}
 	if options.LivenessClock == nil {
 		options.LivenessClock = options.Clock

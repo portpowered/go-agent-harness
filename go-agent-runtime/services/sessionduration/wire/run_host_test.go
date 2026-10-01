@@ -35,8 +35,8 @@ func TestPublicRunDispatchesHostClaimedRetry(t *testing.T) {
 	dispatched := make(chan messages.StreamMessage, 1)
 	result := make(chan error, 1)
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context: ctx, Inferencer: publicInferencer{session: newPublicSession()}, LoopFactory: publicLoopFactory(loop),
+		result <- NewService().Run(ctx, sessionduration.RunRequest{
+			Inferencer: publicInferencer{session: newPublicSession()}, LoopFactory: publicLoopFactory(loop),
 			RetryClaim: func(responseID string, _ *messages.MessageEndValue) (time.Duration, bool) {
 				claimed = responseID
 				return 0, true
@@ -64,8 +64,8 @@ func TestPublicRunFansInHostErrorAndDoneSources(t *testing.T) {
 	failure := errors.New("device pump failed")
 	errorsSource := make(chan error, 1)
 	errorsSource <- failure
-	err := NewService().Run(sessionduration.RunRequest{
-		Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, LoopFactory: publicLoopFactory(queuedPublicLoop(context.Background(), t)),
+	err := NewService().Run(context.Background(), sessionduration.RunRequest{
+		Inferencer: publicInferencer{session: newPublicSession()}, LoopFactory: publicLoopFactory(queuedPublicLoop(context.Background(), t)),
 		ExternalErrors:       make(chan error),
 		ExternalErrorSources: func() []<-chan error { return []<-chan error{nil, errorsSource} },
 	})
@@ -75,8 +75,8 @@ func TestPublicRunFansInHostErrorAndDoneSources(t *testing.T) {
 	doneErr := errors.New("provider completed")
 	providerDone := make(chan struct{})
 	close(providerDone)
-	err = NewService().Run(sessionduration.RunRequest{
-		Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, LoopFactory: publicLoopFactory(queuedPublicLoop(context.Background(), t)),
+	err = NewService().Run(context.Background(), sessionduration.RunRequest{
+		Inferencer: publicInferencer{session: newPublicSession()}, LoopFactory: publicLoopFactory(queuedPublicLoop(context.Background(), t)),
 		Done:        make(chan struct{}),
 		DoneSources: func() []<-chan struct{} { return []<-chan struct{}{providerDone} },
 		DoneError:   func() error { return doneErr },
@@ -92,8 +92,8 @@ func TestPublicRunBoundsSessionUpdatedAcknowledgement(t *testing.T) {
 	scheduler := &publicManualScheduler{created: make(chan *publicManualTimer, 2)}
 	result := make(chan error, 1)
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, Clock: scheduler,
+		result <- NewService().Run(context.Background(), sessionduration.RunRequest{
+			Inferencer: publicInferencer{session: newPublicSession()}, Clock: scheduler,
 			LoopFactory:    publicLoopFactory(queuedPublicLoop(context.Background(), t, open)),
 			SessionUpdated: sessionduration.SessionUpdatedWait{Timeout: time.Second, Pending: func() bool { return true }, Ready: func() bool { return false }, TimeoutError: timeoutErr},
 			DrainPolicy:    sessionduration.DrainPolicy{WallSafety: time.Millisecond},
@@ -107,8 +107,8 @@ func TestPublicRunBoundsSessionUpdatedAcknowledgement(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	scheduler = &publicManualScheduler{created: make(chan *publicManualTimer, 2)}
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context: ctx, Inferencer: publicInferencer{session: newPublicSession()}, Clock: scheduler,
+		result <- NewService().Run(ctx, sessionduration.RunRequest{
+			Inferencer: publicInferencer{session: newPublicSession()}, Clock: scheduler,
 			LoopFactory: publicLoopFactory(queuedPublicLoop(ctx, t, open)),
 			Handle: func(context.Context, sessionduration.Loop, sessionduration.Controller, messages.StreamMessage) (sessionduration.MessageResult, error) {
 				return sessionduration.MessageResult{}, nil
@@ -128,8 +128,8 @@ func TestPublicRunSessionUpdatedRequiresScheduler(t *testing.T) {
 	open := messages.StreamMessage{Type: messages.StreamTypeSessionOpen, Value: messages.NewSessionOpenValue("session", "model")}
 	for name, clock := range map[string]sessionduration.TimerScheduler{"missing": nil, "nil timer": nilTimerScheduler{}} {
 		t.Run(name, func(t *testing.T) {
-			err := NewService().Run(sessionduration.RunRequest{
-				Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, Clock: clock,
+			err := NewService().Run(context.Background(), sessionduration.RunRequest{
+				Inferencer: publicInferencer{session: newPublicSession()}, Clock: clock,
 				LoopFactory:    publicLoopFactory(queuedPublicLoop(context.Background(), t, open)),
 				SessionUpdated: sessionduration.SessionUpdatedWait{Timeout: time.Second},
 				DrainPolicy:    sessionduration.DrainPolicy{Clock: &publicManualScheduler{created: make(chan *publicManualTimer, 1)}, WallSafety: time.Millisecond},
@@ -166,8 +166,8 @@ func TestPublicRunAwaitsAdmissionCloseAndReportsCompletion(t *testing.T) {
 	var observedErr error
 	result := make(chan error, 1)
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context: ctx, Inferencer: closingInferencer{session: session, closeErr: closeErr}, AwaitAdmissionClose: true,
+		result <- NewService().Run(ctx, sessionduration.RunRequest{
+			Inferencer: closingInferencer{session: session, closeErr: closeErr}, AwaitAdmissionClose: true,
 			LoopFactory: func(ctx context.Context, inferencer sessionduration.AdmissionInferencer, _ sessionduration.Controller) (sessionduration.Loop, error) {
 				connected, err := inferencer.ConnectSession(ctx)
 				if err != nil {

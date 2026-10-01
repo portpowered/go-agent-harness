@@ -38,7 +38,7 @@ func TestStateProjectsOutputStates(t *testing.T) {
 			}
 		})
 	}
-	controller, err := New().Begin(sessionduration.Options{})
+	controller, err := New().Begin(context.Background(), sessionduration.Options{})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -410,7 +410,6 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			request := sessionduration.RunRequest{
-				Context:    context.Background(),
 				Inferencer: contractInferencer{session: newContractSession()},
 				LoopFactory: func(ctx context.Context, _ sessionduration.AdmissionInferencer, _ sessionduration.Controller) (sessionduration.Loop, error) {
 					loop := &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
@@ -428,7 +427,7 @@ func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
 				Drain:       func(context.Context, sessionduration.Loop, sessionduration.Controller) error { return nil },
 				DrainPolicy: sessionduration.DrainPolicy{WallSafety: time.Millisecond},
 			}
-			if err := New().Run(request); !errors.Is(err, test.want) {
+			if err := New().Run(context.Background(), request); !errors.Is(err, test.want) {
 				t.Fatalf("Run() = %v, want %v", err, test.want)
 			}
 		})
@@ -441,8 +440,8 @@ func TestRunOwnsRateLimitRetryWaitAndDispatch(t *testing.T) {
 	loop := &retryRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1), sent: make(chan messages.StreamMessage, 1)}
 	dispatched, result := make(chan messages.StreamMessage, 1), make(chan error, 1)
 	go func(runCtx context.Context) {
-		result <- New().Run(sessionduration.RunRequest{ //nolint:contextcheck // Run receives context through RunRequest.Context.
-			Context: runCtx, Inferencer: contractInferencer{session: newContractSession()}, Clock: scheduler,
+		result <- New().Run(runCtx, sessionduration.RunRequest{
+			Inferencer: contractInferencer{session: newContractSession()}, Clock: scheduler,
 			Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 2, DefaultDelay: time.Second},
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return loop, nil
@@ -505,8 +504,7 @@ func assertRetryControl(t *testing.T, got <-chan messages.StreamMessage, timeout
 
 func TestRunRejectsRetryWhenLoopCannotSendSessionEvents(t *testing.T) {
 	loop := &retryRunLoopWithoutSessionEvents{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
-	err := New().Run(sessionduration.RunRequest{
-		Context:    context.Background(),
+	err := New().Run(context.Background(), sessionduration.RunRequest{
 		Inferencer: contractInferencer{session: newContractSession()},
 		Retry:      sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1},
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
@@ -522,8 +520,7 @@ func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 	scheduler := &triggerScheduler{created: make(chan *triggerTimer, 1)}
 	result := make(chan error, 1)
 	go func() {
-		result <- New().Run(sessionduration.RunRequest{
-			Context:     context.Background(),
+		result <- New().Run(context.Background(), sessionduration.RunRequest{
 			Inferencer:  contractInferencer{session: newContractSession()},
 			Clock:       scheduler,
 			MaxDuration: time.Second,
@@ -569,8 +566,14 @@ func TestFinalizerOrdersOwnedCleanupAndIsIdempotent(t *testing.T) {
 	})
 	finalizer.SetDeviceBinding(step("binding"))
 	primary := errors.New("primary")
-	var finalizerContext context.Context
-	if err := finalizer.Finish(finalizerContext, &bytes.Buffer{}, primary); !errors.Is(err, primary) {
+	var nilContext context.Context
+	if err := finalizer.Finish(nilContext, &bytes.Buffer{}, primary); !errors.Is(err, primary) || !errors.Is(err, sessionduration.ErrContextRequired) {
+		t.Fatalf("Finish(nil ctx) = %v, want primary and context-required identities", err)
+	}
+	if len(order) != 0 {
+		t.Fatalf("Finish(nil ctx) ran cleanup %v", order)
+	}
+	if err := finalizer.Finish(context.Background(), &bytes.Buffer{}, primary); !errors.Is(err, primary) {
 		t.Fatalf("Finish() = %v, want primary identity", err)
 	}
 	if err := finalizer.Finish(context.Background(), nil, nil); err != nil {

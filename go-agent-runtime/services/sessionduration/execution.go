@@ -46,7 +46,6 @@ type LoopFactory func(context.Context, AdmissionInferencer, Controller) (Loop, e
 // explicit ports so construction remains inert and the service retains the
 // shutdown order without importing a host or transport package.
 type RunRequest struct {
-	Context       context.Context
 	Inferencer    messages.SessionInferencer
 	Admission     AdmissionInferencer
 	Clock         TimerScheduler

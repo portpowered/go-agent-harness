@@ -50,7 +50,7 @@ func TestPublicLivenessIgnoresUserAndSystemMessages(t *testing.T) {
 
 func TestPublicLivenessSeparatesToolAcknowledgementFromNewResponse(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(120, 0), time.Millisecond)
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})
@@ -128,7 +128,7 @@ func assertNoPublicLivenessError(t *testing.T, controller sessionduration.Contro
 func assertPublicLivenessRole(t *testing.T, role messages.Role) {
 	t.Helper()
 	clock := platformclock.NewDeterministic(time.Unix(60, 0), time.Millisecond)
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})
@@ -207,8 +207,7 @@ func TestPublicRunSurfacesMissingRetryScheduler(t *testing.T) {
 	}) {
 		t.Fatal("rate-limit terminal was not queued")
 	}
-	err := NewService().Run(sessionduration.RunRequest{
-		Context:    context.Background(),
+	err := NewService().Run(context.Background(), sessionduration.RunRequest{
 		Inferencer: publicInferencer{session: newPublicSession()},
 		Retry:      sessionduration.RetryPolicy{Enabled: true},
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
@@ -239,8 +238,7 @@ func TestPublicRunDoneSignalInterruptsRateLimitBackoff(t *testing.T) {
 	}
 	result := make(chan error, 1)
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context:    context.Background(),
+		result <- NewService().Run(context.Background(), sessionduration.RunRequest{
 			Inferencer: publicInferencer{session: newPublicSession()},
 			Clock:      scheduler,
 			Retry:      sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1},
@@ -284,8 +282,8 @@ func TestPublicRunBoundsContinuouslyReplenishedDrain(t *testing.T) {
 	close(done)
 	runDone := make(chan error, 1)
 	go func() {
-		runDone <- NewService().Run(sessionduration.RunRequest{
-			Context: context.Background(), Inferencer: publicInferencer{session: newPublicSession()}, Done: done,
+		runDone <- NewService().Run(context.Background(), sessionduration.RunRequest{
+			Inferencer: publicInferencer{session: newPublicSession()}, Done: done,
 			DrainPolicy: sessionduration.DrainPolicy{Clock: scheduler, QuietPeriod: time.Minute, WallSafety: 30 * time.Millisecond},
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return loop, nil
@@ -321,8 +319,7 @@ func TestPublicRunDeadlineInterruptsRateLimitBackoff(t *testing.T) {
 	}
 	result := make(chan error, 1)
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context:     context.Background(),
+		result <- NewService().Run(context.Background(), sessionduration.RunRequest{
 			Inferencer:  publicInferencer{session: newPublicSession()},
 			Clock:       scheduler,
 			MaxDuration: time.Second,
@@ -435,14 +432,13 @@ func TestPublicRunPropagatesHostAndPublicationFailures(t *testing.T) {
 				t.Fatal("test message was not queued")
 			}
 			request := sessionduration.RunRequest{
-				Context:    context.Background(),
 				Inferencer: publicInferencer{session: newPublicSession()},
 				LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 					return loop, nil
 				},
 			}
 			test.configure(&request, loop)
-			if err := NewService().Run(request); !errors.Is(err, test.want) {
+			if err := NewService().Run(context.Background(), request); !errors.Is(err, test.want) {
 				t.Fatalf("Run() = %v, want %v", err, test.want)
 			}
 		})
@@ -459,8 +455,7 @@ func TestPublicRunDisablesClosedWakeChannel(t *testing.T) {
 	result := make(chan error, 1)
 	session := newPublicSession()
 	go func() {
-		result <- NewService().Run(sessionduration.RunRequest{
-			Context:    ctx,
+		result <- NewService().Run(ctx, sessionduration.RunRequest{
 			Inferencer: publicInferencer{session: session},
 			Wake:       wake,
 			OnWake: func(context.Context, sessionduration.Loop, sessionduration.Controller) error {

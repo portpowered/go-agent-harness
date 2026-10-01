@@ -41,6 +41,17 @@ func writeAdmittedMessage(receive *messages.TypedBuffer[messages.StreamMessage],
 	return receive.Write(ctx, msg)
 }
 
+// writeAdmittedMessageAfterClose is the context-free variant used by the final
+// drain inside Close: terminal records keep their eviction guarantee and
+// ordinary records are written only if the buffer has room.
+func writeAdmittedMessageAfterClose(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) {
+	if IsDurationShutdownMessage(msg) {
+		receive.WriteTerminal(msg)
+		return
+	}
+	receive.TryWrite(msg)
+}
+
 var _ messages.SessionInferencer = (*AdmissionInferencer)(nil)
 var _ messages.Session = (*AdmissionSession)(nil)
 
@@ -93,7 +104,7 @@ func (s *AdmissionSession) drainSourceAfterClose() {
 		}
 		s.observeProviderMessage(msg)
 		if IsDurationForwardMessage(msg) {
-			writeAdmittedMessage(s.receive, context.Background(), msg)
+			writeAdmittedMessageAfterClose(s.receive, msg)
 		}
 	}
 }
