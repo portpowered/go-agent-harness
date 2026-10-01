@@ -222,7 +222,7 @@ func TestSessionIngress_AdmissionPreconditions(t *testing.T) {
 
 // heldOnsetFrame is 20 ms of speech at 24 kHz: loud enough to be held, too
 // short to complete the default 40 ms onset alone.
-func heldOnsetFrame() []byte { return pcmFrameAtLevel(9000, 480) }
+func heldOnsetFrame() []byte { return pcmFrameAtLevel(9000) }
 
 func expiryReady(state *sessionRunState) bool {
 	select {

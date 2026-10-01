@@ -21,7 +21,6 @@ import (
 type MockSession = sessionmock.Session
 type MockSessionInferencer = sessionmock.Inferencer
 
-// NewMockSessionInferencer forwards to sessionmock.NewInferencer.
 func NewMockSessionInferencer() *sessionmock.Inferencer { return sessionmock.NewInferencer() }
 
 // SessionTranscript is a scenario-local, concurrency-safe transcript
@@ -202,25 +201,17 @@ const sessionOpenWait = 50 * time.Millisecond
 
 // SendControlPlane sends a control plane message to the session (e.g. session_close, stop, ping).
 func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageType) {
-	msg := messages.Message{
-		Role: messages.RoleUser,
-		ContentParts: []messages.ContentPart{
-			messages.ControlPlanePart{ControlPlaneMessageType: cpType},
-		},
-	}
-	if err := s.Loop.Send(s.t.Context(), []messages.Message{msg}); err != nil {
-		s.t.Fatalf("SessionScenario.SendControlPlane: %v", err)
-	}
-	if s.capture != nil {
-		s.capture.clientToAgent(transcript.StreamWS, messagePayload(msg))
-	}
+	part := messages.ControlPlanePart{ControlPlaneMessageType: cpType}
+	s.sendMessage(s.t.Context(), messages.Message{Role: messages.RoleUser, ContentParts: []messages.ContentPart{part}})
 }
 
-// SendAudioInput sends raw PCM audio to the session loop for user audio forwarding
-// and barge-in. Panics if the loop is not in session mode.
-func (s *SessionScenario) SendAudioInput(pcm []byte) {
+// SendAudioInput sends raw PCM audio to the session loop (forwarding, barge-in).
+func (s *SessionScenario) SendAudioInput(pcm []byte) { s.SendAudioInputContext(s.t.Context(), pcm) }
+
+// SendAudioInputContext is SendAudioInput bounded by ctx.
+func (s *SessionScenario) SendAudioInputContext(ctx context.Context, pcm []byte) {
 	s.t.Helper()
-	if err := s.Loop.SendAudioInput(s.t.Context(), pcm); err != nil {
+	if err := s.Loop.SendAudioInput(ctx, pcm); err != nil {
 		s.t.Fatalf("SessionScenario.SendAudioInput: %v", err)
 	}
 	if s.capture != nil {
@@ -229,10 +220,18 @@ func (s *SessionScenario) SendAudioInput(pcm []byte) {
 }
 
 // SendText sends a text message to the session.
-func (s *SessionScenario) SendText(text string) {
-	msg := messages.NewTextMessage(messages.RoleUser, text)
-	if err := s.Loop.Send(s.t.Context(), []messages.Message{msg}); err != nil {
-		s.t.Fatalf("SessionScenario.SendText: %v", err)
+func (s *SessionScenario) SendText(text string) { s.SendTextContext(s.t.Context(), text) }
+
+// SendTextContext is SendText bounded by ctx.
+func (s *SessionScenario) SendTextContext(ctx context.Context, text string) {
+	s.sendMessage(ctx, messages.NewTextMessage(messages.RoleUser, text))
+}
+
+// sendMessage sends msg to the session and records it on the capture.
+func (s *SessionScenario) sendMessage(ctx context.Context, msg messages.Message) {
+	s.t.Helper()
+	if err := s.Loop.Send(ctx, []messages.Message{msg}); err != nil {
+		s.t.Fatalf("SessionScenario.Send: %v", err)
 	}
 	if s.capture != nil {
 		s.capture.clientToAgent(transcript.StreamWS, messagePayload(msg))

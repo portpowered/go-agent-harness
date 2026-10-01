@@ -28,15 +28,17 @@ const (
 // canonicalDuplexTrace is intentionally literal. The trace has one retained
 // event per tick so the observed order cannot be hidden by sorting or by
 // comparing only aggregate counts. The speech windows overlap on ticks 3-6.
-var canonicalDuplexTrace = []duplexEvent{
-	{Tick: 1, Direction: directionAToB, Kind: "speech.start", Payload: "a-open"},
-	{Tick: 2, Direction: directionAToB, Kind: "speech.frame", Payload: "a-frame-1"},
-	{Tick: 3, Direction: directionBToA, Kind: "speech.start", Payload: "b-open"},
-	{Tick: 4, Direction: directionAToB, Kind: "speech.frame", Payload: "a-overlap"},
-	{Tick: 5, Direction: directionBToA, Kind: "speech.frame", Payload: "b-overlap"},
-	{Tick: 6, Direction: directionAToB, Kind: "speech.stop", Payload: "a-close"},
-	{Tick: 7, Direction: directionBToA, Kind: "speech.frame", Payload: "b-frame-2"},
-	{Tick: 8, Direction: directionBToA, Kind: "speech.stop", Payload: "b-close"},
+func canonicalDuplexTrace() []duplexEvent {
+	return []duplexEvent{
+		{Tick: 1, Direction: directionAToB, Kind: "speech.start", Payload: "a-open"},
+		{Tick: 2, Direction: directionAToB, Kind: "speech.frame", Payload: "a-frame-1"},
+		{Tick: 3, Direction: directionBToA, Kind: "speech.start", Payload: "b-open"},
+		{Tick: 4, Direction: directionAToB, Kind: "speech.frame", Payload: "a-overlap"},
+		{Tick: 5, Direction: directionBToA, Kind: "speech.frame", Payload: "b-overlap"},
+		{Tick: 6, Direction: directionAToB, Kind: "speech.stop", Payload: "a-close"},
+		{Tick: 7, Direction: directionBToA, Kind: "speech.frame", Payload: "b-frame-2"},
+		{Tick: 8, Direction: directionBToA, Kind: "speech.stop", Payload: "b-close"},
+	}
 }
 
 type duplexEvent struct {
@@ -214,7 +216,7 @@ func runDirection(path directionPath, trace *traceRecorder, completions chan<- t
 		defer workers.Done()
 		defer path.participant.Complete()
 
-		for tick := uint64(1); tick <= uint64(len(canonicalDuplexTrace)); tick++ {
+		for tick := uint64(1); tick <= uint64(len(canonicalDuplexTrace())); tick++ {
 			observation, err := path.participant.Observe(tick)
 			if err != nil {
 				workerErrors <- fmt.Errorf("%s failed to observe tick %d: %w", path.name, tick, err)
@@ -262,8 +264,8 @@ func TestDuplexFunctionalOverlappingSpeechIsExactAndParityStable(t *testing.T) {
 	for run := 1; run <= duplexRepetitions; run++ {
 		result := runDuplexScenario(t, run)
 
-		if !reflect.DeepEqual(result.trace, canonicalDuplexTrace) {
-			t.Fatalf("run %d observed trace differs from the literal canonical trace:\n got: %#v\nwant: %#v", run, result.trace, canonicalDuplexTrace)
+		if !reflect.DeepEqual(result.trace, canonicalDuplexTrace()) {
+			t.Fatalf("run %d observed trace differs from the literal canonical trace:\n got: %#v\nwant: %#v", run, result.trace, canonicalDuplexTrace())
 		}
 		if run == 1 {
 			firstTrace = append([]duplexEvent(nil), result.trace...)
@@ -384,7 +386,7 @@ func driveDuplexTicks(t *testing.T, run int, functionalTime *timeharness.Scenari
 		runDirection(path, trace, completions, workerErrors, &workers)
 	}
 
-	for tick := uint64(1); tick <= uint64(len(canonicalDuplexTrace)); tick++ {
+	for tick := uint64(1); tick <= uint64(len(canonicalDuplexTrace())); tick++ {
 		if _, err := functionalTime.AdvanceTo(tick); err != nil {
 			t.Fatalf("run %d advance to logical tick %d: %v", run, tick, err)
 		}
@@ -404,7 +406,7 @@ func driveDuplexTicks(t *testing.T, run int, functionalTime *timeharness.Scenari
 
 func eventsForDirection(direction string) map[uint64]duplexEvent {
 	events := make(map[uint64]duplexEvent)
-	for _, event := range canonicalDuplexTrace {
+	for _, event := range canonicalDuplexTrace() {
 		if event.Direction == direction {
 			events[event.Tick] = event
 		}

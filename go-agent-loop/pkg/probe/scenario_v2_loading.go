@@ -95,16 +95,16 @@ func decodeScenarioV2Header(root scenarioV2Object) (ScenarioV2, error) {
 	if result.ID, err = requiredScenarioV2String(root, "scenario", "id"); err != nil {
 		return ScenarioV2{}, err
 	}
-	if result.Name, err = optionalScenarioV2String(root, "scenario", "name"); err != nil {
+	if result.Name, err = optionalScenarioV2RootString(root, "name"); err != nil {
 		return ScenarioV2{}, err
 	}
-	if result.Description, err = optionalScenarioV2String(root, "scenario", "description"); err != nil {
+	if result.Description, err = optionalScenarioV2RootString(root, "description"); err != nil {
 		return ScenarioV2{}, err
 	}
-	if result.BrowserFixture, err = optionalScenarioV2String(root, "scenario", "browser_fixture"); err != nil {
+	if result.BrowserFixture, err = optionalScenarioV2RootString(root, "browser_fixture"); err != nil {
 		return ScenarioV2{}, err
 	}
-	if result.ProviderFixture, err = optionalScenarioV2String(root, "scenario", "provider_fixture"); err != nil {
+	if result.ProviderFixture, err = optionalScenarioV2RootString(root, "provider_fixture"); err != nil {
 		return ScenarioV2{}, err
 	}
 	if err := rejectBlankScenarioV2Fixture(root, "browser_fixture", result.BrowserFixture); err != nil {

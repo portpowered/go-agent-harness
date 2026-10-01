@@ -114,12 +114,14 @@ func requiredScenarioV2String(value scenarioV2Object, location, fieldName string
 	return result, nil
 }
 
-func optionalScenarioV2String(value scenarioV2Object, location, fieldName string) (string, error) {
+// optionalScenarioV2RootString decodes an optional string field of the
+// scenario root object.
+func optionalScenarioV2RootString(value scenarioV2Object, fieldName string) (string, error) {
 	raw, ok := value[fieldName]
 	if !ok {
 		return "", nil
 	}
-	return scenarioV2String(raw, location+"."+fieldName)
+	return scenarioV2String(raw, "scenario."+fieldName)
 }
 
 func scenarioV2String(raw json.RawMessage, location string) (string, error) {

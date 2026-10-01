@@ -24,12 +24,12 @@ func TestCancellingOneMidRunSessionLeavesOthersUndisturbed(t *testing.T) {
 
 	reference := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 	cancelled := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     0,
 		CancelAfter:  1,
 	})

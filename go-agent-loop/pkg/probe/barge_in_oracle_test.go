@@ -343,9 +343,10 @@ func (s *bargeInTestStream) input(id, turn string) {
 	s.observe(BargeInEvent{Kind: BargeInEventUserTurn, InputID: id, TurnID: turn})
 }
 
-func (s *bargeInTestStream) response(id, inputID, turn string) {
-	s.input(inputID, turn)
-	s.observe(BargeInEvent{Kind: BargeInEventResponseCreated, ResponseID: id, InputID: inputID, TurnID: turn})
+// response observes input i1 in turn t1 and creates response r1 for it.
+func (s *bargeInTestStream) response() {
+	s.input("i1", "t1")
+	s.observe(BargeInEvent{Kind: BargeInEventResponseCreated, ResponseID: "r1", InputID: "i1", TurnID: "t1"})
 }
 
 func requireBargeInViolation(t *testing.T, ledger *BargeInLedger, want string) {
@@ -471,16 +472,16 @@ func TestBargeInLedgerRejectsMalformedResponseEvidence(t *testing.T) {
 			s.observe(BargeInEvent{Kind: BargeInEventResponseOutput, ResponseID: "missing", Bytes: 1})
 		}},
 		{name: "empty and negative output", want: "output byte count must not be negative", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseOutput, ResponseID: "r1", Bytes: -1})
 		}},
 		{name: "stale output after cancel", want: "stale output after cancellation", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "r1", InputID: "i2"})
 			s.observe(BargeInEvent{Kind: BargeInEventResponseOutput, ResponseID: "r1", Bytes: 1})
 		}},
 		{name: "stale output after terminal", want: "stale output after terminality", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCompleted})
 			s.observe(BargeInEvent{Kind: BargeInEventResponseOutput, ResponseID: "r1", Bytes: 1})
 		}},
@@ -488,16 +489,16 @@ func TestBargeInLedgerRejectsMalformedResponseEvidence(t *testing.T) {
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "missing", InputID: "i2"})
 		}},
 		{name: "cancel missing input identity", want: "cancellation must identify interrupting input", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "r1"})
 		}},
 		{name: "cancel after terminal", want: "cancelled after terminality", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCompleted})
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "r1", InputID: "i2"})
 		}},
 		{name: "duplicate cancel", want: "duplicate cancellation", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "r1", InputID: "i2"})
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "r1", InputID: "i2"})
 		}},
@@ -505,25 +506,25 @@ func TestBargeInLedgerRejectsMalformedResponseEvidence(t *testing.T) {
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "missing", Disposition: BargeInDispositionCompleted})
 		}},
 		{name: "duplicate terminal", want: "duplicate terminal disposition", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCompleted})
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCompleted})
 		}},
 		{name: "undocumented response disposition", want: "undocumented terminal disposition", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: unknownLabel})
 		}},
 		{name: "failed response without reason", want: "has no reason", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionFailed})
 		}},
 		{name: "cancelled response ends completed", want: "ended as \"completed\"", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseCancel, ResponseID: "r1", InputID: "i2"})
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCompleted})
 		}},
 		{name: "cancelled disposition without cancel", want: "marked cancelled without a cancellation event", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCancelled})
 		}},
 	})
@@ -536,7 +537,7 @@ func TestBargeInLedgerRejectsMalformedToolContinuationAndSessionEvidence(t *test
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ResponseID: "r1", TurnID: "t1"})
 		}},
 		{name: "duplicate tool call", want: "issued more than once", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 		}},
@@ -544,40 +545,40 @@ func TestBargeInLedgerRejectsMalformedToolContinuationAndSessionEvidence(t *test
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "missing", TurnID: "t1"})
 		}},
 		{name: "tool call after response terminal", want: "issued after response terminality", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventResponseTerminal, ResponseID: "r1", Disposition: BargeInDispositionCompleted})
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 		}},
 		{name: "tool call wrong owner turn", want: "has wrong owner turn", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t2"})
 		}},
 		{name: "tool result unknown call", want: "tool result references unknown call", run: func(s *bargeInTestStream) {
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "missing", Disposition: BargeInDispositionDelivered})
 		}},
 		{name: "duplicate tool result", want: "duplicate result disposition", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1", Disposition: BargeInDispositionDelivered})
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1", Disposition: BargeInDispositionDelivered})
 		}},
 		{name: "tool result wrong response", want: "wrong response identity", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r2", TurnID: "t1", Disposition: BargeInDispositionDelivered})
 		}},
 		{name: "tool result wrong turn", want: "wrong turn identity", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t2", Disposition: BargeInDispositionDelivered})
 		}},
 		{name: "undocumented tool disposition", want: "undocumented result disposition", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1", Disposition: unknownLabel})
 		}},
 		{name: "rejected tool result without reason", want: "no rejection or cancellation reason", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventToolCall, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventToolResult, ToolCallID: "c1", ResponseID: "r1", TurnID: "t1", Disposition: BargeInDispositionRejected})
 		}},
@@ -585,16 +586,16 @@ func TestBargeInLedgerRejectsMalformedToolContinuationAndSessionEvidence(t *test
 			s.observe(BargeInEvent{Kind: BargeInEventContinuation, ResponseID: "missing", InputID: "i1"})
 		}},
 		{name: "continuation unknown input", want: "continuation references unknown input", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventContinuation, ResponseID: "r1", InputID: "missing"})
 		}},
 		{name: "continuation wrong input identity", want: "attributed to the wrong input", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.input("i2", "t2")
 			s.observe(BargeInEvent{Kind: BargeInEventContinuation, ResponseID: "r1", InputID: "i2", TurnID: "t2"})
 		}},
 		{name: "duplicate continuation", want: "duplicate continuation identity", run: func(s *bargeInTestStream) {
-			s.response("r1", "i1", "t1")
+			s.response()
 			s.observe(BargeInEvent{Kind: BargeInEventContinuation, ResponseID: "r1", InputID: "i1", TurnID: "t1"})
 			s.observe(BargeInEvent{Kind: BargeInEventContinuation, ResponseID: "r1", InputID: "i1", TurnID: "t1"})
 		}},

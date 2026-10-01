@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
@@ -66,27 +67,9 @@ func (s *Subsystem) Execute(ctx context.Context, curr *state.LoopState) error {
 	if pass > s.passID {
 		// Pass changes alone also include normal turns, so only queue a
 		// playback interrupt when an explicit interrupt control arrived.
-		for _, msg := range curr.Inputs.UserControlPlaneMessage {
-			if isInterrupt(msg) {
-				var playbackEpoch uint64
-				if s.ports.Playback != nil {
-					playbackEpoch = s.ports.Playback.Snapshot().Epoch
-				}
-				if s.ports.Commands != nil {
-					s.commandID++
-					// Epoch is owned by the playback worker. The loop pass only
-					// identifies this scheduling pass and must never be used as a
-					// device generation. With no playback port, zero asks the
-					// worker to apply an unconditional discard.
-					epoch := uint64(0)
-					if s.ports.Playback != nil {
-						epoch = playbackEpoch + 1
-					}
-					if err := s.ports.Commands.TrySubmit(media.Command{ID: s.commandID, Epoch: epoch, Kind: media.CommandInterrupt}); err != nil {
-						return fmt.Errorf("queue audio interrupt: %w", err)
-					}
-				}
-				break
+		if slices.ContainsFunc(curr.Inputs.UserControlPlaneMessage, isInterrupt) {
+			if err := s.queueInterrupt(); err != nil {
+				return err
 			}
 		}
 		s.passID = pass
@@ -110,4 +93,24 @@ func isInterrupt(msg messages.Message) bool {
 		}
 	}
 	return false
+}
+
+// queueInterrupt submits a playback interrupt command when a command port
+// exists. Epoch is owned by the playback worker: the loop pass only
+// identifies the scheduling pass and must never be used as a device
+// generation. With no playback port, zero asks the worker to apply an
+// unconditional discard.
+func (s *Subsystem) queueInterrupt() error {
+	if s.ports.Commands == nil {
+		return nil
+	}
+	s.commandID++
+	epoch := uint64(0)
+	if s.ports.Playback != nil {
+		epoch = s.ports.Playback.Snapshot().Epoch + 1
+	}
+	if err := s.ports.Commands.TrySubmit(media.Command{ID: s.commandID, Epoch: epoch, Kind: media.CommandInterrupt}); err != nil {
+		return fmt.Errorf("queue audio interrupt: %w", err)
+	}
+	return nil
 }

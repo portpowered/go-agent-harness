@@ -18,7 +18,7 @@ import (
 func TestConcurrentSessionsPerEventOrderingUnderInterleaving(t *testing.T) {
 	run := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 

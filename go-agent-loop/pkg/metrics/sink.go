@@ -10,7 +10,7 @@ const maxUint64 = ^uint64(0)
 
 // Sink records stream observations and exposes an exact read snapshot.
 type Sink interface {
-	Record(direction Direction, modality Modality, byteSize int64) error
+	Recorder
 	Snapshot() Snapshot
 }
 

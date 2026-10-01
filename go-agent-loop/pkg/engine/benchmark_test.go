@@ -41,7 +41,7 @@ func newBenchDeltas(textChunks int) []messages.StreamMessage {
 }
 
 // newBenchEngineWithCap creates a minimal engine with the given buffer capacity.
-func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *participants.ToolRunner, *participants.UserRunner, *participants.KernelRunner) {
+func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *participants.UserRunner) {
 	modelRunner := participants.NewModelRunner(&noopInferencer{}, bufCap)
 	toolRunner := participants.NewToolRunner(&messages.DefaultToolExecutor{}, bufCap)
 	userRunner := participants.NewUserRunner(bufCap)
@@ -52,7 +52,7 @@ func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *par
 	hlps := []subsystems.Subsystem{coord, coordDelta}
 
 	eng := NewEngine(ModeAskOnce, nil, hlps, modelRunner, toolRunner, userRunner, kernelRunner, nil)
-	return eng, modelRunner, toolRunner, userRunner, kernelRunner
+	return eng, modelRunner, userRunner
 }
 
 // --- ReadTick throughput benchmarks ---
@@ -64,7 +64,7 @@ func BenchmarkReadTick(b *testing.B) {
 		b.Run(fmt.Sprintf("history=%d", preload), func(b *testing.B) {
 			// Buffer capacity must be >= b.N so all pre-filled writes succeed.
 			bufCap := b.N + 1
-			eng, modelRunner, _, userRunner, _ := newBenchEngineWithCap(bufCap)
+			eng, modelRunner, userRunner := newBenchEngineWithCap(bufCap)
 			ordering := NewGlobalOrdering(modelRunner, nil, userRunner, nil)
 			ctx := context.Background()
 			ls := eng.State().LoopState
@@ -101,7 +101,7 @@ func BenchmarkReadTick(b *testing.B) {
 func BenchmarkUpdateWorldHistory(b *testing.B) {
 	for _, histLen := range []int{0, 10, 50, 200} {
 		b.Run(fmt.Sprintf("history=%d", histLen), func(b *testing.B) {
-			eng, modelRunner, _, userRunner, _ := newBenchEngineWithCap(64)
+			eng, modelRunner, userRunner := newBenchEngineWithCap(64)
 			ordering := NewGlobalOrdering(modelRunner, nil, userRunner, nil)
 			ls := eng.State().LoopState
 
@@ -136,7 +136,7 @@ func BenchmarkUpdateWorldHistory(b *testing.B) {
 // UpdateWorldHistory + executeWorldState + FlushInputs.
 func BenchmarkFullTickCycle(b *testing.B) {
 	bufCap := b.N + 1
-	eng, modelRunner, _, _, _ := newBenchEngineWithCap(bufCap)
+	eng, modelRunner, _ := newBenchEngineWithCap(bufCap)
 	ctx := context.Background()
 
 	for range b.N {

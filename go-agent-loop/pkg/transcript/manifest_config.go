@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -205,7 +206,7 @@ func (n *normalizedRecording) planArtifactLayout(config RecordingConfig, redacto
 		expectedPaths = append(expectedPaths, artifact.path)
 	}
 	n.artifactPaths = artifactPaths
-	n.expectedPaths = append(expectedPaths, "manifest.json")
+	n.expectedPaths = slices.Concat(expectedPaths, []string{"manifest.json"})
 	n.additional = additional
 	return nil
 }

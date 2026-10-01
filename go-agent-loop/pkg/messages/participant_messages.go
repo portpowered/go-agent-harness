@@ -33,7 +33,7 @@ type ToolCallResponse struct {
 }
 
 // Inferencer is implemented by go-llm-gateway to provide model inference.
-type Inferencer interface {
+type Inferencer interface { //nolint:iface // Exported contract implemented and consumed outside this package; nothing here asserts against it.
 	Infer(ctx context.Context, req InferenceRequest) (InferenceResult, error)
 	InferStream(ctx context.Context, req InferenceRequest) (<-chan StreamMessage, error)
 }
@@ -46,7 +46,7 @@ type InferenceResult struct {
 }
 
 // ToolExecutor executes tool calls. Implemented by the consumer of the library.
-type ToolExecutor interface {
+type ToolExecutor interface { //nolint:iface // Exported contract implemented and consumed outside this package; nothing here asserts against it.
 	Execute(ctx context.Context, call ToolCall) (ToolCallResponse, error)
 }
 

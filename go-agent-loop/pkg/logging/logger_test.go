@@ -432,9 +432,11 @@ const (
 	crossingAllocationRuns      = 100
 )
 
-var benchmarkCrossingEvent = CrossingEvent{
-	Direction: CrossingDirectionOut, Buffer: "model.delta_outbox", MessageType: "StreamMessage",
-	Modality: CrossingModalityAudio, ByteSize: 640, LogicalTick: 17,
+func benchmarkCrossingEvent() CrossingEvent {
+	return CrossingEvent{
+		Direction: CrossingDirectionOut, Buffer: "model.delta_outbox", MessageType: "StreamMessage",
+		Modality: CrossingModalityAudio, ByteSize: 640, LogicalTick: 17,
+	}
 }
 
 type allocationBenchmarkLogger struct {
@@ -466,8 +468,9 @@ func measureCrossingAllocations(b *testing.B, enabled bool) float64 {
 	b.Helper()
 	emitter, _ := newAllocationBenchmarkSubject(enabled)
 	var emitErr error
+	event := benchmarkCrossingEvent()
 	allocations := testing.AllocsPerRun(crossingAllocationRuns, func() {
-		_, emitErr = emitter.Emit(benchmarkCrossingEvent)
+		_, emitErr = emitter.Emit(event)
 	})
 	if emitErr != nil {
 		b.Fatalf("%s crossing benchmark call: %v", crossingLevelName(enabled), emitErr)
@@ -496,9 +499,10 @@ func assertCrossingAllocationBudget(b *testing.B, path string, measured float64,
 func BenchmarkCrossingEmitterDisabledInfoAllocations(b *testing.B) {
 	b.ReportAllocs()
 	emitter, logger := newAllocationBenchmarkSubject(false)
+	event := benchmarkCrossingEvent()
 	b.ResetTimer()
 	for range b.N {
-		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
+		if _, err := emitter.Emit(event); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -519,9 +523,10 @@ func BenchmarkCrossingEmitterDisabledInfoAllocations(b *testing.B) {
 func BenchmarkCrossingEmitterEnabledInfoAllocations(b *testing.B) {
 	b.ReportAllocs()
 	emitter, logger := newAllocationBenchmarkSubject(true)
+	event := benchmarkCrossingEvent()
 	b.ResetTimer()
 	for range b.N {
-		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
+		if _, err := emitter.Emit(event); err != nil {
 			b.Fatal(err)
 		}
 	}

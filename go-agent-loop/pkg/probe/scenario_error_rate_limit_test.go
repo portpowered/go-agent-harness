@@ -97,10 +97,3 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 	os.Exit(m.Run())
 }
-
-// goldenUpdateRequested reports whether the named golden-update flag was set
-// on the test command line.
-func goldenUpdateRequested(name string) bool {
-	f := flag.Lookup(name)
-	return f != nil && f.Value.String() == "true"
-}

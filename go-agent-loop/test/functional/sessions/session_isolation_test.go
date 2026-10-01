@@ -18,7 +18,7 @@ import (
 func TestConcurrentSessionsZeroCrossSessionLeakage(t *testing.T) {
 	run := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 
@@ -27,7 +27,7 @@ func TestConcurrentSessionsZeroCrossSessionLeakage(t *testing.T) {
 		checkSessionIsolation(t, state.Token, tokens, state.Records, state.Deltas)
 
 		// End-state equals this session's own script, never another's.
-		if want := len(concurrentDefaultTurns); state.MessageEndCount != want {
+		if want := len(concurrentDefaultTurns()); state.MessageEndCount != want {
 			t.Fatalf("session %s turn count: got %d, want %d", state.Token, state.MessageEndCount, want)
 		}
 		if len(state.ToolCalls) != 1 {

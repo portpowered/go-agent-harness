@@ -280,7 +280,7 @@ func parseStepPayload(step Step, fields object, location string) (Step, error) {
 	case StepSendToolResult:
 		return parseSendToolResultStep(step, fields, location)
 	case StepAdvanceTo:
-		if step.At, _, ok, err = logicalField(fields, location, "at", "time", "logical_time", "logicalTime"); err != nil {
+		if step.At, ok, err = logicalField(fields, location, "at", "time", "logical_time", "logicalTime"); err != nil {
 			return Step{}, err
 		}
 		if !ok {
@@ -288,7 +288,7 @@ func parseStepPayload(step Step, fields object, location string) (Step, error) {
 		}
 		step.Time = step.At
 	case StepWait:
-		if step.Duration, _, ok, err = logicalField(fields, location, "duration"); err != nil {
+		if step.Duration, ok, err = logicalField(fields, location, "duration"); err != nil {
 			return Step{}, err
 		}
 		if !ok {
@@ -359,13 +359,13 @@ func requiredValue(raw json.RawMessage, location string) (string, error) {
 	}
 	return value, nil
 }
-func logicalField(value object, location string, names ...string) (LogicalTime, string, bool, error) {
+func logicalField(value object, location string, names ...string) (LogicalTime, bool, error) {
 	raw, key, ok, err := field(value, location, names...)
 	if err != nil || !ok {
-		return 0, "", false, err
+		return 0, false, err
 	}
 	tick, err := parseLogical(raw, location+"."+key)
-	return tick, key, true, err
+	return tick, true, err
 }
 func parseLogical(raw json.RawMessage, location string) (LogicalTime, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))

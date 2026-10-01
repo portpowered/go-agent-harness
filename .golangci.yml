@@ -149,6 +149,11 @@ linters:
       includes: [G110, G112, G114, G201, G202, G203, G402, G403, G501, G502, G503, G504, G505, G601]
     iface:
       enable: [identical, unused]
+    recvcheck:
+      # encoding/json and encoding.TextUnmarshaler require pointer-receiver
+      # decoders while encoders stay on value receivers (so values marshal);
+      # the builtin exclusions already cover the Marshal* half.
+      exclusions: ["*.UnmarshalJSON", "*.UnmarshalText"]
     godox:
       keywords: [FIXME, HACK, XXX, BUG, TODO]
     depguard:
@@ -275,18 +280,6 @@ linters:
       - path: '^go-agent-runtime/'
         linters: [nolintlint]
         text: 'is unused for linter "(containedctx|copyloopvar|depguard|dupl|errname|forbidigo|gochecknoglobals|gocritic|iface|intrange|mirror|mnd|nestif|nilnesserr|noctx|predeclared|recvcheck|thelper|tparallel|unparam|usestdlibvars)"'
-      # round-3 cleanup: lint-loop-gateway track
-      - path: '^go-agent-loop/'
-        linters: [containedctx, contextcheck, copyloopvar, depguard, dupl, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nestif, noctx, predeclared, recvcheck, thelper, tparallel, unparam]
-      - path: '^go-agent-loop/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|depguard|dupl|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nestif|noctx|predeclared|recvcheck|thelper|tparallel|unparam)"'
-      # round-3 cleanup: lint-loop-gateway track
-      - path: '^go-llm-gateway/'
-        linters: [containedctx, contextcheck, copyloopvar, dupl, errname, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nakedret, nestif, noctx, predeclared, thelper, unparam, usestdlibvars]
-      - path: '^go-llm-gateway/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|dupl|errname|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nakedret|nestif|noctx|predeclared|thelper|unparam|usestdlibvars)"'
       # round-3 cleanup: lint-media-tools track
       - path: '^go-audio/'
         linters: [containedctx, contextcheck, errname, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nestif, predeclared, recvcheck, thelper, unparam]

@@ -57,6 +57,7 @@ func reportChildFailure(stderr io.Writer, diagnosis string) int {
 }
 
 func TestDiagnosticNegativeControls(t *testing.T) {
+	t.Parallel()
 	t.Run("forbidden sleep", func(t *testing.T) {
 		t.Parallel()
 		runFailureChild(t, sleepChildEnv+"=sleep", "sleeper", "time.Sleep", "forbidden")

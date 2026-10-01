@@ -3,7 +3,7 @@ package messages
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -330,24 +330,24 @@ func newConcurrentBufferRun(iteration int) *concurrentBufferRun {
 }
 
 func (run *concurrentBufferRun) produce(producer int) {
-	rng := rand.New(rand.NewSource(int64(0x51f15e + run.iteration*97 + producer*13)))
+	rng := rand.New(rand.NewPCG(uint64(0x51f15e+run.iteration*97+producer*13), 0))
 	for sequence := range concurrentValuesPerProducer {
-		if rng.Intn(3) == 0 {
+		if rng.IntN(3) == 0 {
 			runtime.Gosched()
 		}
 		value := concurrentBufferValueFor(run.iteration, producer, sequence)
 		run.statuses[producer][sequence] = run.buffer.WriteContext(context.Background(), value).Status
 		recordBufferMaxLen(run.buffer, &run.maxLen)
-		if rng.Intn(4) == 0 {
+		if rng.IntN(4) == 0 {
 			runtime.Gosched()
 		}
 	}
 }
 
 func (run *concurrentBufferRun) consume(consumer int) {
-	rng := rand.New(rand.NewSource(int64(0x9e3779b9 + run.iteration*101 + consumer*17)))
+	rng := rand.New(rand.NewPCG(uint64(0x9e3779b9+run.iteration*101+consumer*17), 0))
 	for {
-		if rng.Intn(3) == 0 {
+		if rng.IntN(3) == 0 {
 			runtime.Gosched()
 		}
 
@@ -365,7 +365,7 @@ func (run *concurrentBufferRun) consume(consumer int) {
 		run.delivered = append(run.delivered, value)
 		recordBufferMaxLen(run.buffer, &run.maxLen)
 		run.deliveryMu.Unlock()
-		if rng.Intn(4) == 0 {
+		if rng.IntN(4) == 0 {
 			runtime.Gosched()
 		}
 	}

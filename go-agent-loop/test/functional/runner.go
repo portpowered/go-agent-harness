@@ -36,7 +36,7 @@ func DiscoverFunctionalInventory(ctx context.Context, moduleRoot string) (Invent
 	cmd.Dir = moduleRoot
 	output, err := cmd.Output()
 	if err != nil {
-		return Inventory{}, fmt.Errorf("discover functional packages: %w", commandError(cmd, err, output))
+		return Inventory{}, fmt.Errorf("discover functional packages: %w", commandError(err, output))
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(output))
@@ -143,7 +143,7 @@ func goCommandArgs(command string, args ...string) []string {
 	return append(commandArgs, args...)
 }
 
-func commandError(cmd *exec.Cmd, err error, output []byte) error {
+func commandError(err error, output []byte) error {
 	detail := strings.TrimSpace(string(output))
 	if detail == "" {
 		return err
@@ -270,26 +270,23 @@ func packageRunPattern(selected []TestSelector) (string, error) {
 	for _, selector := range selected {
 		allowed[selector.Test] = struct{}{}
 	}
-	var names []string
-	if runFlag := flag.CommandLine.Lookup("test.run"); runFlag != nil {
-		original := runFlag.Value.String()
-		if original != "" {
-			filter, err := regexp.Compile(original)
-			if err != nil {
-				return "", fmt.Errorf("compile existing test.run filter %q: %w", original, err)
-			}
-			for name := range allowed {
-				if filter.MatchString(name) {
-					names = append(names, name)
-				}
-			}
-		} else {
-			for name := range allowed {
-				names = append(names, name)
-			}
-		}
-	} else {
+	runFlag := flag.CommandLine.Lookup("test.run")
+	if runFlag == nil {
 		return "", errors.New("test.run flag is unavailable")
+	}
+	filter := regexp.MustCompile("")
+	if original := runFlag.Value.String(); original != "" {
+		compiled, err := regexp.Compile(original)
+		if err != nil {
+			return "", fmt.Errorf("compile existing test.run filter %q: %w", original, err)
+		}
+		filter = compiled
+	}
+	var names []string
+	for name := range allowed {
+		if filter.MatchString(name) {
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 	if len(names) == 0 {

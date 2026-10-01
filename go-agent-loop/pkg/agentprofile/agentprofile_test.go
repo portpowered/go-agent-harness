@@ -26,7 +26,7 @@ func TestCatalogGoldenAndOneToOne(t *testing.T) {
 	if err != nil || json.Unmarshal(data, &golden) != nil {
 		t.Fatalf("read/decode golden: %v", err)
 	}
-	loader := agentprofile.NewLoader(realCatalogFS(t))
+	loader := agentprofile.NewLoader(realCatalogFS())
 	names, err := loader.Names()
 	if err != nil {
 		t.Fatalf("Names: %v", err)
@@ -101,7 +101,7 @@ func mapFS(files map[string]string) fstest.MapFS {
 	return result
 }
 
-func realCatalogFS(t *testing.T) fs.FS {
+func realCatalogFS() fs.FS {
 	_, source, _, _ := runtime.Caller(0)
 	return os.DirFS(filepath.Join(filepath.Dir(source), "..", "..", "..", "agent-cli", "testdata", "agents-profiles"))
 }

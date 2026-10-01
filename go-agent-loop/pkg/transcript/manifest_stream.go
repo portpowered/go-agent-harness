@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 )
 
 func defaultRecordingWriteStream(path string, source io.Reader, mode os.FileMode) (int64, error) {
@@ -60,7 +61,7 @@ func (r *redactingReader) Read(p []byte) (int, error) {
 		buffer := make([]byte, 64*1024)
 		n, err := r.source.Read(buffer)
 		if n > 0 {
-			combined := append(r.pending, buffer[:n]...)
+			combined := slices.Concat(r.pending, buffer[:n])
 			keep := r.redactor.maxSecretLength() - 1
 			if keep < 0 {
 				keep = 0
@@ -121,13 +122,13 @@ func maxInt(left, right int) int {
 }
 
 func (r credentialRedactor) maxSecretLength() int {
-	max := 0
+	longest := 0
 	for _, secret := range r.values {
-		if len(secret) > max {
-			max = len(secret)
+		if len(secret) > longest {
+			longest = len(secret)
 		}
 	}
-	return max
+	return longest
 }
 
 func digestRecordingFile(path string) ([sha256.Size]byte, error) {
@@ -179,7 +180,7 @@ func readerContainsCredential(source io.Reader, secrets [][]byte, maxSecret int)
 	for {
 		n, readErr := source.Read(buffer)
 		if n > 0 {
-			combined := append(pending, buffer[:n]...)
+			combined := slices.Concat(pending, buffer[:n])
 			if containsCredential(combined, secrets) {
 				return true, nil
 			}

@@ -124,26 +124,31 @@ var (
 	ErrGoalTextNotBlindProbeReady = errors.New("probe: goal text is not blind-probe-ready")
 )
 
-var blindProbeGoalTextRules = []struct {
+// goalTextRule rejects goal text that matches pattern, naming the leak.
+type goalTextRule struct {
 	name    string
 	pattern *regexp.Regexp
-}{
-	{
-		name:    "internal package vocabulary",
-		pattern: regexp.MustCompile(`(?i)(?:^|[^[:alnum:]_])(?:agent-cli|go-agent-loop|go-llm-gateway|internal|pkg|probe)(?:[^[:alnum:]_]|$)`),
-	},
-	{
-		name:    "flag spelling",
-		pattern: regexp.MustCompile(`(?:^|[[:space:]])-{1,2}[[:alpha:]][[:alnum:]-]*(?:$|[[:space:][:punct:]])`),
-	},
-	{
-		name:    "repository file path",
-		pattern: regexp.MustCompile(`(?i)(?:^|[^[:alnum:]_])(?:\.{0,2}[\\/]|[a-z]:[\\/])|\b[[:alnum:]_.-]+\.(?:go|md|json|mod|yaml|yml|txt)\b`),
-	},
-	{
-		name:    "program documentation reference",
-		pattern: regexp.MustCompile(`(?i)(?:^|[^[:alnum:]_])(?:readme|documentation|docs|manual|manifest|prd|program rules)(?:[^[:alnum:]_]|$)`),
-	},
+}
+
+func blindProbeGoalTextRules() []goalTextRule {
+	return []goalTextRule{
+		{
+			name:    "internal package vocabulary",
+			pattern: regexp.MustCompile(`(?i)(?:^|[^[:alnum:]_])(?:agent-cli|go-agent-loop|go-llm-gateway|internal|pkg|probe)(?:[^[:alnum:]_]|$)`),
+		},
+		{
+			name:    "flag spelling",
+			pattern: regexp.MustCompile(`(?:^|[[:space:]])-{1,2}[[:alpha:]][[:alnum:]-]*(?:$|[[:space:][:punct:]])`),
+		},
+		{
+			name:    "repository file path",
+			pattern: regexp.MustCompile(`(?i)(?:^|[^[:alnum:]_])(?:\.{0,2}[\\/]|[a-z]:[\\/])|\b[[:alnum:]_.-]+\.(?:go|md|json|mod|yaml|yml|txt)\b`),
+		},
+		{
+			name:    "program documentation reference",
+			pattern: regexp.MustCompile(`(?i)(?:^|[^[:alnum:]_])(?:readme|documentation|docs|manual|manifest|prd|program rules)(?:[^[:alnum:]_]|$)`),
+		},
+	}
 }
 
 // GoalCatalogValidationError identifies the first invalid catalog entry.
@@ -292,7 +297,7 @@ func blindProbeGoalTextViolation(text string) string {
 	if strings.ContainsAny(text, "\r\n") {
 		return "must be a single-line customer request"
 	}
-	for _, rule := range blindProbeGoalTextRules {
+	for _, rule := range blindProbeGoalTextRules() {
 		if rule.pattern.MatchString(text) {
 			return "must not contain " + rule.name
 		}
