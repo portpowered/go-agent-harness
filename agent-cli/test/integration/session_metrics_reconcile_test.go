@@ -450,7 +450,7 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 	audioOutPath := filepath.Join(filepath.Dir(fixturePath), "assistant-reply.wav")
 
 	runtimeObserver := &runtimeObservationCapture{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)
@@ -624,7 +624,7 @@ func TestSessionCommandMetricsReconcileMissingOutputTextDeltaFails(t *testing.T)
 func TestSessionCommandFinalAccountingIsEmittedOnceOnError(t *testing.T) {
 	fixturePath := gwtesting.SharedSessionFixturePath("session_failure_auth.session.json")
 	runtimeObserver := &runtimeObservationCapture{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)

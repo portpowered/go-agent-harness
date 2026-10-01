@@ -1,7 +1,5 @@
 package integration
 
-import servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
-
 import (
 	"context"
 	"encoding/json"
@@ -15,11 +13,15 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
+	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -483,7 +485,7 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
 	sessionInferencer = &toolBargeInCaptureInferencer{SessionInferencer: sessionInferencer, recorder: recorder}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewToolServicePort(toolBargeInCapabilities(executor)),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "stateless inferencer should not be called"}),
 		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),

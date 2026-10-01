@@ -61,7 +61,7 @@ func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra
 	capabilities := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{Executor: options.executor, Definitions: definitions}, nil
 	})
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewToolServicePort(capabilities),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
 		wire.NewPortSwap(wire.PortSessionInferencer, options.inferencer),

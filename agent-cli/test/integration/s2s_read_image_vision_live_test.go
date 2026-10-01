@@ -153,7 +153,7 @@ func runLiveReadImageSessionWithInput(t *testing.T, apiKey, configDir, prompt, a
 	t.Helper()
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "read-image-live.session.json")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

@@ -80,7 +80,7 @@ func TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess(t 
 func executeV5ADefaultSleepSession(t *testing.T, capturePath, configDir string) (string, error) {
 	t.Helper()
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI: %v", err)
 	}

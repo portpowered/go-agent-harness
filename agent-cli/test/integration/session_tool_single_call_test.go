@@ -207,7 +207,7 @@ func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, ex
 			Definitions: append([]messages.ToolDefinition(nil), definitions...),
 		}, nil
 	})
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(wire.NewToolServicePort(toolService))
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(), wire.NewToolServicePort(toolService))
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}

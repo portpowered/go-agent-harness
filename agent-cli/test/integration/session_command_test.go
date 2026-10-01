@@ -22,7 +22,7 @@ import (
 )
 
 func TestSessionCommand_ReplayMissingFileReturnsActionableError(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestSessionCommand_ReplayMissingFileReturnsActionableError(t *testing.T) {
 }
 
 func TestSessionCommand_RejectsNonJSONCapturePath(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestSessionCommand_RejectsNonJSONCapturePath(t *testing.T) {
 }
 
 func TestSessionCommand_RecordDefaultsToOpenAIAndRequiresCredentials(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestSessionCommand_RecordDefaultsToOpenAIAndRequiresCredentials(t *testing.
 }
 
 func TestSessionCommand_RecordUsesConfiguredGrokProviderAndRequiresCredentials(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -128,7 +128,7 @@ func testSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer(t *tes
 			{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("integration-session", "test complete")},
 		},
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInf,
@@ -163,7 +163,7 @@ func testSessionCommand_OpenAIRealtimeRecordUsesInjectedSessionInferencer(t *tes
 }
 
 func TestSessionCommand_OpenAIRecordRejectsNonRealtimeModel(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestSessionCommand_OpenAIRecordRejectsNonRealtimeModel(t *testing.T) {
 }
 
 func TestSessionCommand_ReplayBypassesConfiguredGrokCredentials(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -219,7 +219,7 @@ model:
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayWithoutVoicePreservesProviderDefault(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -249,7 +249,7 @@ func TestSessionCommand_OpenAIRealtimeReplayWithoutVoicePreservesProviderDefault
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsCompletion(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -295,7 +295,7 @@ func TestSessionCommand_OpenAIRealtimeReplayBareUsesRecordedPromptAndReportsComp
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -358,7 +358,7 @@ func writeAudioTurnReplayFixture(t *testing.T, path string) {
 // recorded transcript, and self-terminate honestly instead of hanging until an
 // external duration bound reaps it.
 func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecordedFramesAndReportsCompletion(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -435,7 +435,7 @@ func TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnIsByteDeterministic(t *
 	writeAudioTurnReplayFixture(t, capturePath)
 
 	run := func() string {
-		agentCLI, err := wire.InitializeMockAgentCLI(
+		agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 			&mockToolExecutor{},
 			&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		)
@@ -472,7 +472,7 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t
 }
 
 func testSessionCommand_OpenAIRealtimeReplayAudioInTurnDoesNotRequireRecordDir(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -512,7 +512,7 @@ func TestSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithM
 }
 
 func testSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithMismatch(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -563,7 +563,7 @@ func defaultFilesystemScopePrefix(t *testing.T) string {
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -596,7 +596,7 @@ func TestSessionCommand_OpenAIRealtimeReplayExplicitEmptyPromptRemainsStrict(t *
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayVoiceMatchesCurrentWire(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -627,7 +627,7 @@ func TestSessionCommand_OpenAIRealtimeReplayVoiceMatchesCurrentWire(t *testing.T
 
 func TestSessionCommand_OpenAIRealtimeReplayInvalidVoiceFailsBeforeFixtureLoad(t *testing.T) {
 	const rejected = "not-a-voice"
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -665,7 +665,7 @@ func TestSessionCommand_OpenAIRealtimeReplayInvalidVoiceFailsBeforeFixtureLoad(t
 }
 
 func TestSessionCommand_OpenAIRealtimeReplayReportsProviderError(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -692,7 +692,7 @@ func TestSessionCommand_OpenAIRealtimeReplayReportsProviderError(t *testing.T) {
 }
 
 func TestSessionCommand_OpenAIRealtimeReplay_EndToEndSmoke(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)
@@ -736,7 +736,7 @@ func TestSessionCommand_OpenAIRealtimeReplay_EndToEndSmoke(t *testing.T) {
 }
 
 func TestSessionCommand_ReplayGrokWebSocketCapture_EndToEndSmoke(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -787,7 +787,7 @@ model:
 }
 
 func TestSessionCommand_ReplayGrokWebSocketCaptureFailsOnDivergentOutbound(t *testing.T) {
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

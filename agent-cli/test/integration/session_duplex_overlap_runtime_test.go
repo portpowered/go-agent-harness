@@ -33,7 +33,7 @@ type v8DuplexRun struct {
 
 func newV8CLI(t *testing.T, logicalClock *clock.Deterministic, observer *v8RuntimeObserver) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortClock, logicalClock),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, observer),
 	)

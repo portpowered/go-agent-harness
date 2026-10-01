@@ -403,7 +403,7 @@ func testSessionCommand_FollowOnToolCallWaitsForResultBeforeClientClose(t *testi
 	}
 	var releaseObserverOnce sync.Once
 
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,
@@ -500,7 +500,7 @@ func TestSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *test
 func testSessionCommand_ActiveScheduledAudioPreservesToolResultLifecycle(t *testing.T) {
 	inferencer := newActiveSessionToolBargeInInferencer()
 	executor := newSessionToolBargeInExecutor()
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,

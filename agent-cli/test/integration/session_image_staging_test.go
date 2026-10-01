@@ -50,7 +50,7 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 			Definitions: append([]messages.ToolDefinition(nil), capability.Definitions...),
 		}, nil
 	})
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewToolServicePort(toolService),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer must not be used")}),
 		wire.NewPortSwap(wire.PortSessionInferencer, &exactStagedImageInferencer{session: session}),

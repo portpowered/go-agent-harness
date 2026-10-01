@@ -100,7 +100,7 @@ func runMixedModalityLiveSession(t *testing.T, apiKey, imagePath, audioPath stri
 	writeSessionToolConfig(t, workDir, false)
 	recordDir := filepath.Join(workDir, "mixed-modality-recording")
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

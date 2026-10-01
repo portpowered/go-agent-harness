@@ -169,7 +169,10 @@ func (l sessionLoopLogger) emit(level, message string, fields []looplogging.Fiel
 	for _, field := range fields {
 		values[field.Key] = fmt.Sprint(field.Value)
 	}
-	discardLogError(l.sink.Log(context.Background(), observability.LogRecord{Level: level, Message: message, Fields: values}))
+	// looplogging.Logger (go-agent-loop) methods carry no context, so this
+	// adapter is the root for the sink call.
+	record := observability.LogRecord{Level: level, Message: message, Fields: values}
+	discardLogError(l.sink.Log(context.Background(), record)) //nolint:forbidigo // looplogging.Logger (go-agent-loop contract) passes no caller context to thread
 }
 
 // discardLogError marks a loop log sink failure as deliberately ignored: the

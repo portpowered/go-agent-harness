@@ -293,7 +293,7 @@ func runAsyncCollisionCLI(t *testing.T, wirePath string, capture gwtesting.Sessi
 		t.Fatalf("build OpenAI realtime session inferencer: %v", err)
 	}
 	sessionInferencer = &asyncCollisionSessionInferencer{inner: sessionInferencer, trace: executor.trace}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "unused"},
 		sessionInferencer,

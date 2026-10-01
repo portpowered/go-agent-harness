@@ -115,7 +115,7 @@ func Run(t testing.TB, inv Invocation) Result {
 // A composition failure fails the test before anything runs.
 func Start(t testing.TB, inv Invocation) *Process {
 	t.Helper()
-	agentCLI, err := compose(inv)
+	agentCLI, err := compose(t.Context(), inv)
 	if err != nil {
 		t.Fatalf("compose agent CLI: %v", err)
 	}
@@ -155,14 +155,14 @@ func (p *Process) Wait() Result {
 // Cancel cancels the command's context, as a caller's cancellation would.
 func (p *Process) Cancel() { p.cancel() }
 
-func compose(inv Invocation) (*cli.AgentCLI, error) {
+func compose(ctx context.Context, inv Invocation) (*cli.AgentCLI, error) {
 	switch {
 	case inv.RelaxModelValidation:
-		return wire.InitializeMockAgentCLIWithPorts(inv.Ports...)
+		return wire.InitializeMockAgentCLIWithPorts(ctx, inv.Ports...)
 	case len(inv.Ports) > 0:
-		return wire.InitializeAgentCLIWithPorts(inv.Ports...)
+		return wire.InitializeAgentCLIWithPorts(ctx, inv.Ports...)
 	default:
-		return wire.InitializeAgentCLI()
+		return wire.InitializeAgentCLI(ctx)
 	}
 }
 

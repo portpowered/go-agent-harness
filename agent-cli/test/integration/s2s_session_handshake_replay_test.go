@@ -47,7 +47,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 			}},
 		}}}, nil
 	})
-	recordCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	recordCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortTransportDialer, recordDialer),
 		wire.NewToolServicePort(recordTools),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "unused"}),
@@ -87,7 +87,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	// provider handshake, and this config intentionally contains no API key.
 	replayConfigDir := t.TempDir()
 	writeSessionToolConfig(t, replayConfigDir, false)
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}

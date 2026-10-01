@@ -44,7 +44,7 @@ func runPassingV3BScenario(t *testing.T, id, fixtureName, execFailure string, ex
 	fixture := filepath.Join(v3bFixtureDir, fixtureName)
 	scenarioPath := writeV3BScenario(t, id, true)
 
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestV3BNegativeControlOrphanedToolResultFails(t *testing.T) {
 	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-orphaned.session.json")
 	scenarioPath := writeV3BScenario(t, "v3b-orphaned", false)
 
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestV3BWrongDirectionDiscardFails(t *testing.T) {
 
 func runV3BScenario(t *testing.T, scenarioPath, fixture string) (map[string]any, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

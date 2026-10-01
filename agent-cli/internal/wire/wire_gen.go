@@ -244,7 +244,9 @@ func (l sessionLoopLogger) emit(level, message string, fields []logging.Field) {
 	for _, field := range fields {
 		values[field.Key] = fmt.Sprint(field.Value)
 	}
-	discardLogError(l.sink.Log(context.Background(), observability.LogRecord{Level: level, Message: message, Fields: values}))
+
+	record := observability.LogRecord{Level: level, Message: message, Fields: values}
+	discardLogError(l.sink.Log(context.Background(), record))
 }
 
 // discardLogError marks a loop log sink failure as deliberately ignored: the

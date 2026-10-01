@@ -28,7 +28,7 @@ func TestAskReplayUsesInjectedRuntimeWithoutLiveCredentials(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestAskRecordFlushesCaptureFromInjectedRuntime(t *testing.T) {
 	}
 
 	recordPath := filepath.Join(tmpDir, "capture.json")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

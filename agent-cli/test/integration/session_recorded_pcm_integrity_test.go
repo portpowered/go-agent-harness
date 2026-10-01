@@ -96,7 +96,7 @@ func TestSessionRecordedPCMIntegrity(t *testing.T) {
 
 func runRecordedPCMIntegrityCLI(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestSessionCommand_OpenAIRealtimeReplayPositiveMaxDurationPreservesComplete
 func runCompletedReplay(t *testing.T, capturePath, maxDuration string) completedReplayRun {
 	t.Helper()
 	artifactPath := filepath.Join(t.TempDir(), "assistant.wav")
-	agentCLI, err := wire.InitializeMockAgentCLI(
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 	)

@@ -39,7 +39,7 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 	outputPath := filepath.Join(workDir, "response.wav")
 	capturePath := filepath.Join(workDir, "live-audioin.json")
 
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 			workDir := t.TempDir()
 			recordDir := filepath.Join(workDir, "recording")
 
-			agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+			agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 			if err != nil {
 				t.Fatalf("initialize CLI: %v", err)
 			}

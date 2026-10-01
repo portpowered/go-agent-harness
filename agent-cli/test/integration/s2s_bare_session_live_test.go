@@ -219,7 +219,7 @@ func TestLiveSession_MaxDurationRecordDirTerminalAgreement(t *testing.T) {
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "max-duration-live.session.json")
 	recordDir := filepath.Join(workDir, "max-duration-live-recording")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

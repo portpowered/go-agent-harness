@@ -212,8 +212,8 @@ func (o *assemblyObservation) record(values compositionValues) {
 	o.values = values
 }
 
-func composeTestAgentCLI(toolExecutor messages.ToolExecutor, options ...CompositionOption) (*cli.AgentCLI, error) {
-	return ComposeAgentCLI(
+func composeTestAgentCLI(ctx context.Context, toolExecutor messages.ToolExecutor, options ...CompositionOption) (*cli.AgentCLI, error) {
+	return ComposeAgentCLI(ctx,
 		toolExecutor,
 		&recordingDialer{},
 		&recordingDeviceRegistry{},
@@ -224,8 +224,8 @@ func composeTestAgentCLI(toolExecutor messages.ToolExecutor, options ...Composit
 	)
 }
 
-func composeTestAgentCLIWithDialer(toolExecutor messages.ToolExecutor, dialer transport.Dialer, options ...CompositionOption) (*cli.AgentCLI, error) {
-	return ComposeAgentCLI(
+func composeTestAgentCLIWithDialer(ctx context.Context, toolExecutor messages.ToolExecutor, dialer transport.Dialer, options ...CompositionOption) (*cli.AgentCLI, error) {
+	return ComposeAgentCLI(ctx,
 		toolExecutor,
 		dialer,
 		&recordingDeviceRegistry{},
@@ -243,7 +243,7 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 	}
 	registry := &trackingDeviceRegistry{inner: inner}
 
-	app, err := ComposeAgentCLI(
+	app, err := ComposeAgentCLI(t.Context(),
 		&recordingToolExecutor{},
 		&recordingDialer{},
 		registry,
@@ -297,7 +297,7 @@ func TestComposeAgentCLIUsesSharedRegistryForDevicesAndSession(t *testing.T) {
 		t.Fatalf("composed device list omitted IDs: %#v", wantDevices)
 	}
 
-	sessionApp, err := ComposeAgentCLI(
+	sessionApp, err := ComposeAgentCLI(t.Context(),
 		&recordingToolExecutor{},
 		&recordingDialer{},
 		registry,
@@ -464,7 +464,7 @@ func TestS4_PortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
 	assertInvalid := func(name string, swaps []PortSwap, sentinel error, attemptedName string) {
 		t.Run(name, func(t *testing.T) {
 			var observation assemblyObservation
-			root, err := initializeAgentCLIWithPorts(true, observation.record, swaps...)
+			root, err := initializeAgentCLIWithPorts(t.Context(), true, observation.record, swaps...)
 			if root != nil {
 				t.Fatal("invalid swap unexpectedly returned a root")
 			}
@@ -511,7 +511,7 @@ func TestS4_PortSwaps_RejectUnknownIncompatibleAndRequiredNil(t *testing.T) {
 		if !definition.descriptor.Required {
 			t.Run(definition.descriptor.Name+"/optional-nil", func(t *testing.T) {
 				var observation assemblyObservation
-				root, err := initializeAgentCLIWithPorts(true, observation.record, NewPortSwap(definition.descriptor.Name, nil))
+				root, err := initializeAgentCLIWithPorts(t.Context(), true, observation.record, NewPortSwap(definition.descriptor.Name, nil))
 				if err != nil || root == nil {
 					t.Fatalf("optional nil swap returned root=%v err=%v", root, err)
 				}
@@ -548,7 +548,7 @@ func TestCompositionOptions_InstallOptionalCapabilities(t *testing.T) {
 	if err != nil || strict.relaxModelValidation {
 		t.Fatalf("strict option did not override relaxed option: %#v, %v", strict, err)
 	}
-	if _, err := composeTestAgentCLI(&recordingToolExecutor{}, nil); err == nil || !strings.Contains(err.Error(), "option 0") {
+	if _, err := composeTestAgentCLI(t.Context(), &recordingToolExecutor{}, nil); err == nil || !strings.Contains(err.Error(), "option 0") {
 		t.Fatalf("nil composition option was not rejected: %v", err)
 	}
 
@@ -621,7 +621,7 @@ func TestCompositionConstruction_IsInert(t *testing.T) {
 	}()
 	before := runtime.NumGoroutine()
 
-	root, err := composeTestAgentCLIWithDialer(
+	root, err := composeTestAgentCLIWithDialer(t.Context(),
 		toolExecutor,
 		dialer,
 		WithInferencer(inferencer),

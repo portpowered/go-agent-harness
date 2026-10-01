@@ -65,7 +65,7 @@ func TestMimeValidation_UnsupportedWebP(t *testing.T) {
 	rec := &recordingInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeAgentCLIWithInferencerOverride(exec, rec)
+	agentCLI, err := wire.InitializeAgentCLIWithInferencerOverride(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

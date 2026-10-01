@@ -31,7 +31,7 @@ func TestAskNoArgsNoStdin(t *testing.T) {
 	inf := &mockInferencer{response: "should not be called"}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestAskStdinWhitespaceOnlyTreatedAsEmpty(t *testing.T) {
 	inf := &mockInferencer{response: fakeResponse}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestAskWithStdinAudioBytes(t *testing.T) {
 	rec := &recordingInferencer{response: fakeResponse}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestAskWithStdinImageBytes(t *testing.T) {
 	rec := &recordingInferencer{response: fakeResponse}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestAskWithStdinUnknownBinaryBytes(t *testing.T) {
 	rec := &recordingInferencer{response: fakeResponse}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}

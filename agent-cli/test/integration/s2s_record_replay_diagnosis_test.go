@@ -483,7 +483,7 @@ func recordProductionPromptCapture(t *testing.T) string {
 
 func executeProductionSessionCommand(t *testing.T, args []string) (string, string, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}

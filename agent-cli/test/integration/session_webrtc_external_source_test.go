@@ -220,7 +220,7 @@ func buildExternalSourceReplayFixture(t *testing.T, appendFrames [][]byte, trans
 // are retained because Cobra may put usage and errors on stderr.
 func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath string, stdinPCM []byte, outWavPath string) rootCLIResult {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(ctx, &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI composition: %v", err)
 	}
@@ -251,7 +251,7 @@ func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath st
 // useful diagnostics without exposing source credentials.
 func runRootCLIMediaCommand(t *testing.T, ctx context.Context, cfgDir, operation, rawURL string) rootCLIResult {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(ctx, &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI composition: %v", err)
 	}

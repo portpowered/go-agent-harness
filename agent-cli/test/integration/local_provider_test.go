@@ -55,7 +55,7 @@ func TestLocalProvider_NoAuthHeader(t *testing.T) {
 	}
 
 	// 3. Run ask command with real executor (no inferencer override) to exercise full HTTP path.
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestLocalProvider_ResponseParsedCorrectly_Streaming(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

@@ -29,9 +29,9 @@ func newTestSessionRootCommand(t testing.TB, swaps ...agentwire.PortSwap) *cobra
 	var agentCLI *cli.AgentCLI
 	var err error
 	if len(swaps) == 0 {
-		agentCLI, err = agentwire.InitializeAgentCLI()
+		agentCLI, err = agentwire.InitializeAgentCLI(t.Context())
 	} else {
-		agentCLI, err = agentwire.InitializeMockAgentCLIWithPorts(swaps...)
+		agentCLI, err = agentwire.InitializeMockAgentCLIWithPorts(t.Context(), swaps...)
 	}
 	if err != nil {
 		t.Fatalf("initialize composed agent CLI: %v", err)

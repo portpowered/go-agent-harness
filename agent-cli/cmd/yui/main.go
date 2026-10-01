@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to initialize CLI: %v\n", err)
 		os.Exit(1)

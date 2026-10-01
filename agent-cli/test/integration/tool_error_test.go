@@ -103,7 +103,7 @@ func newToolErrorConfigDir(t *testing.T) string {
 func TestFailingToolCallEmitsTypedDeltaErrorAndSessionSurvives(t *testing.T) {
 	configDir := newToolErrorConfigDir(t)
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

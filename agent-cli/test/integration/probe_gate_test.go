@@ -47,7 +47,7 @@ func writeGateArtifact(t *testing.T, dir, name string, lines ...string) string {
 
 func runGateCLI(t *testing.T, args []string, stdin io.Reader) (string, string, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

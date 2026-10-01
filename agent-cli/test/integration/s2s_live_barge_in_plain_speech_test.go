@@ -410,7 +410,7 @@ func runPlainSpeechCLI(t *testing.T) plainSpeechRun {
 	server := newPlainSpeechServer()
 	t.Cleanup(server.shutdown)
 	recorder := gwtesting.NewRecordingWebSocketDialer(server, "openai", "gpt-realtime")
-	agentCLI, err := newPlainSpeechSessionCLI(recorder)
+	agentCLI, err := newPlainSpeechSessionCLI(t.Context(), recorder)
 	if err != nil {
 		t.Fatalf("initialize CLI: %v", err)
 	}

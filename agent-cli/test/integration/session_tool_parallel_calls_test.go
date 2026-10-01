@@ -483,7 +483,7 @@ func describeResponses(resps []messages.ToolCallResponse) string {
 func runParallelToolCalls(t *testing.T, wirePath string, executor *parallelToolExecutor, observer *parallelStreamObserver) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), executor, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}

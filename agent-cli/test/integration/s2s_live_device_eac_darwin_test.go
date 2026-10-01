@@ -30,7 +30,7 @@ func TestLiveDarwinDeviceEACRoundTrip(t *testing.T) {
 
 	workDir := t.TempDir()
 	capturePath := filepath.Join(workDir, "darwin-device-eac.session.json")
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI: %v", err)
 	}

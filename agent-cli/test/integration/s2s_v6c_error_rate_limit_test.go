@@ -80,7 +80,7 @@ func (run v6cExecution) failureDetail() string {
 // any command error means a non-zero exit.
 func runV6CProbe(t *testing.T, fixture string, argv ...string) v6cExecution {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), &mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

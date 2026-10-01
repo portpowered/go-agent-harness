@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -343,8 +344,8 @@ func sessionRuntimeObserverPort() portDefinition {
 // InitializeAgentCLIWithPorts is InitializeMockAgentCLIWithPorts with the
 // production (strict) model validation: named replacements, the same
 // composition path, and the same checks the shipped binary applies.
-func InitializeAgentCLIWithPorts(swaps ...PortSwap) (*cli.AgentCLI, error) {
-	return initializeAgentCLIWithPorts(false, nil, swaps...)
+func InitializeAgentCLIWithPorts(ctx context.Context, swaps ...PortSwap) (*cli.AgentCLI, error) {
+	return initializeAgentCLIWithPorts(ctx, false, nil, swaps...)
 }
 
 // provideProviderLogger adapts the application's explicit logging port to the

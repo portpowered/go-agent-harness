@@ -71,7 +71,7 @@ func testSessionCommand_LiveRecordDirAudioInTurnUsesLiveLifecycle(t *testing.T) 
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -268,7 +268,7 @@ func testSessionCommand_LiveRecordDirAudioInTurnRejectsUndispatchedScheduledInpu
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -337,7 +337,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnProviderErrorWinsOverRecordingVa
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,
@@ -382,7 +382,7 @@ func TestSessionCommand_LiveRecordDirAudioInTurnUnexpectedProviderCloseWinsOverI
 	if err != nil {
 		t.Fatalf("create hermetic OpenAI session inferencer: %v", err)
 	}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,

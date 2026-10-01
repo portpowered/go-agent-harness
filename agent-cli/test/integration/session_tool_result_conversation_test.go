@@ -234,7 +234,7 @@ func runToolResultConversationWithOptions(t *testing.T, wavPath, wirePath string
 	t.Helper()
 	outputPath = filepath.Join(t.TempDir(), "response.wav")
 	stdoutBuffer := &testStdoutBuffer{}
-	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), executor, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}

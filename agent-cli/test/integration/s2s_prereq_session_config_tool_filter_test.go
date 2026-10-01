@@ -103,7 +103,7 @@ func runSessionConfigToolFilterCase(t *testing.T, tc sessionConfigToolFilterCase
 	var resultText strings.Builder
 	results := make([]sessionConfigToolResult, 0, len(tc.calls))
 	currentResult := make(map[string]string)
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
 	)
 	if err != nil {
@@ -222,7 +222,7 @@ func TestSessionConfigToolFilterRejectsInvalidConfigBeforeConnect(t *testing.T) 
 	}
 
 	sessionInferencer := newSessionConfigToolInferencer(nil)
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionInferencer, sessionInferencer),
 	)
 	if err != nil {

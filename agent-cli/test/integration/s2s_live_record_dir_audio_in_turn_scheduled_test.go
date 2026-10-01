@@ -27,7 +27,7 @@ import (
 
 func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortTransportDialer, server),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencerError{err: errors.New("stateless inferencer should not be called")}),
@@ -40,7 +40,7 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 
 func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortTransportDialer, server),
 	)
 	if err != nil {
@@ -72,7 +72,7 @@ func newCLIServerVADBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 			},
 		}}),
 	)
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		&mockToolExecutor{},
 		&mockInferencerError{err: errors.New("stateless inferencer should not be called")},
 		sessionInferencer,

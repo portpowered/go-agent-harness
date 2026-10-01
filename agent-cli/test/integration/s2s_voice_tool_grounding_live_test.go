@@ -155,7 +155,7 @@ func runLiveVoiceToolGrounding(t *testing.T, apiKey, artifactRoot string, testCa
 	recordDir := filepath.Join(artifactRoot, runName+"-recording")
 	audioPath := filepath.Join(artifactRoot, runName+".wav")
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI: %v", err)
 	}

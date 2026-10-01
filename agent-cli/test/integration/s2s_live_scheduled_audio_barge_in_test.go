@@ -43,7 +43,7 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 
 	runtimeObserver := &liveBargeInRuntimeObserver{}
 	streamTrace := newLiveBargeInTrace()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)
 	if err != nil {

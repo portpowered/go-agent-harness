@@ -460,7 +460,7 @@ func assertParallelLifecycleResults(t *testing.T, sent []messages.StreamMessage,
 
 func runParallelLifecycleCLI(t *testing.T, executor *parallelLifecycleExecutor, inferencer *parallelLifecycleInferencer, observation *parallelLifecycleObservation) <-chan error {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,

@@ -62,7 +62,7 @@ func TestAskWithToolCall(t *testing.T) {
 	}
 	exec := &mockToolExecutorWithResults{results: map[string]string{"get_weather": "sunny, 22C"}}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestAskLoadsAGENTSMDFromConfigDir(t *testing.T) {
 	rec := &recordingInferencer{response: "ok"}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeAgentCLIWithInferencerOverride(exec, rec)
+	agentCLI, err := wire.InitializeAgentCLIWithInferencerOverride(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize CLI: %v", err)
 	}

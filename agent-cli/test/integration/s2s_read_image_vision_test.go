@@ -270,7 +270,7 @@ func writeReadImageModelConfig(t *testing.T, readImageEnabled bool, model string
 
 func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string, observer *readImageSessionObserver) (string, error) {
 	t.Helper()
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

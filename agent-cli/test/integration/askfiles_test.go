@@ -83,7 +83,7 @@ func runAskWithAttachment(t *testing.T, fileName string, content []byte, prompt,
 	rec := &recordingInferencer{response: response}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, rec)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}

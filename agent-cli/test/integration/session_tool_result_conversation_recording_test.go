@@ -39,7 +39,7 @@ func runToolResultConversationWithBrowserRecording(t *testing.T, wavPath, wirePa
 	outputPath = filepath.Join(t.TempDir(), "response.wav")
 	recordDir = filepath.Join(t.TempDir(), "recording")
 	stdoutBuffer := &testStdoutBuffer{}
-	agentCLI, err := wire.InitializeMockAgentCLI(executor, &mockInferencer{response: "unused"})
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), executor, &mockInferencer{response: "unused"})
 	if err != nil {
 		t.Fatalf("initialize agent CLI: %v", err)
 	}

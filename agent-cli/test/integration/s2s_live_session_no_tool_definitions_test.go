@@ -41,7 +41,7 @@ func TestSessionCommand_DefaultRegistryExecRoundTripInStrictOpenAIReplay(t *test
 	capturePath := filepath.Join(t.TempDir(), "openai-exec-round-trip.session.json")
 	writeStrictOpenAIExecRoundTripCapture(t, capturePath, execCommand)
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSessionCommand_StrictOpenAIReplayRejectsRecordedExecCallWithoutCurrentA
 	capturePath := filepath.Join(t.TempDir(), "openai-exec-round-trip.session.json")
 	writeStrictOpenAIExecRoundTripCapture(t, capturePath, execCommand)
 
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production agent CLI: %v", err)
 	}

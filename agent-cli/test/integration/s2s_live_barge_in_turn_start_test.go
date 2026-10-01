@@ -42,7 +42,7 @@ func runTurnStartPlainSpeechCLI(t *testing.T) plainSpeechRun {
 	t.Cleanup(server.shutdown)
 	recorder := newPlainSpeechRecordingDialer(server)
 
-	agentCLI, err := newPlainSpeechSessionCLI(recorder)
+	agentCLI, err := newPlainSpeechSessionCLI(t.Context(), recorder)
 	if err != nil {
 		t.Fatalf("initialize turn-start CLI: %v", err)
 	}
@@ -91,8 +91,8 @@ func newPlainSpeechRecordingDialer(server *plainSpeechServer) *gwtesting.Recordi
 	return gwtesting.NewRecordingWebSocketDialer(server, "openai", "gpt-realtime")
 }
 
-func newPlainSpeechSessionCLI(recorder *gwtesting.RecordingWebSocketDialer) (*cli.AgentCLI, error) {
-	return wire.InitializeMockAgentCLIWithPorts(
+func newPlainSpeechSessionCLI(ctx context.Context, recorder *gwtesting.RecordingWebSocketDialer) (*cli.AgentCLI, error) {
+	return wire.InitializeMockAgentCLIWithPorts(ctx,
 		wire.NewPortSwap(wire.PortTransportDialer, recorder),
 		wire.NewPortSwap(wire.PortToolExecutor, &mockToolExecutor{}),
 		wire.NewPortSwap(wire.PortInferencer, &mockInferencer{response: "stateless inferencer should not be called"}),

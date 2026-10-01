@@ -607,7 +607,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 
 	trace := newLiveBargeInTrace()
 	runtimeObserver := &liveBargeInRuntimeObserver{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
 		wire.NewPortSwap(wire.PortSessionRuntimeObserver, runtimeObserver),
 	)
 	if err != nil {

@@ -219,7 +219,7 @@ func assertReadImageFailedContinuationFixture(t *testing.T, fixturePath string) 
 
 func runSpokenReadImageSession(t *testing.T, fixturePath, configDir, imagePath, wavPath string) readImageSpokenRun {
 	t.Helper()
-	agentCLI, err := wire.InitializeAgentCLI()
+	agentCLI, err := wire.InitializeAgentCLI(t.Context())
 	if err != nil {
 		t.Fatalf("initialize production CLI composition: %v", err)
 	}

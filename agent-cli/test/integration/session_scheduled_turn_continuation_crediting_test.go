@@ -255,7 +255,7 @@ func testSessionCommand_CreditsConsecutiveScheduledToolContinuations(t *testing.
 	secondContinuationObserved := make(chan struct{})
 	inferencer := newScheduledContinuationInferencer(secondContinuationObserved)
 	executor := &scheduledContinuationExecutor{}
-	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(
+	agentCLI, err := wire.InitializeMockAgentCLIWithSessionInferencer(t.Context(),
 		executor,
 		&mockInferencer{response: "stateless inferencer should not be called"},
 		inferencer,
