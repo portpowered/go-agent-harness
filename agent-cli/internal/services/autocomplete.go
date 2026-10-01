@@ -62,13 +62,13 @@ func (a *Autocomplete) SetFilter(prefix string) {
 }
 
 // IsActive reports whether the autocomplete popup is visible (has filtered matches).
-func (a Autocomplete) IsActive() bool {
+func (a *Autocomplete) IsActive() bool {
 	return a.active
 }
 
 // Selected returns the label of the currently selected suggestion, or empty
 // string if nothing is selected or the popup is inactive.
-func (a Autocomplete) Selected() string {
+func (a *Autocomplete) Selected() string {
 	if !a.active || len(a.filtered) == 0 {
 		return ""
 	}
@@ -79,7 +79,7 @@ func (a Autocomplete) Selected() string {
 }
 
 // FilteredCount returns the number of suggestions matching the current filter.
-func (a Autocomplete) FilteredCount() int {
+func (a *Autocomplete) FilteredCount() int {
 	return len(a.filtered)
 }
 
@@ -95,43 +95,44 @@ func (a *Autocomplete) Reset() {
 // Update handles key events for the autocomplete popup. It consumes Up, Down,
 // Tab, and Escape when active. Returns the updated model and an optional Cmd.
 // The parent should check IsActive() before delegating.
-func (a Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
+func (a *Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
+	next := *a
 	keyMsg, ok := msg.(tea.KeyMsg)
-	if !ok || !a.active {
-		return a, nil
+	if !ok || !next.active {
+		return next, nil
 	}
 
 	// Only Up, Down, and Esc change popup state (tea.KeyType has ~85 members,
 	// so an if-chain states that directly). Tab completes the selected
 	// suggestion: the parent reads Selected() and decides whether to dismiss.
 	if keyType := keyMsg.Type; keyType == tea.KeyUp {
-		if a.selected > 0 {
-			a.selected--
+		if next.selected > 0 {
+			next.selected--
 			// Scroll up if needed.
-			if a.selected < a.offset {
-				a.offset = a.selected
+			if next.selected < next.offset {
+				next.offset = next.selected
 			}
 		}
 	} else if keyType == tea.KeyDown {
-		if a.selected < len(a.filtered)-1 {
-			a.selected++
+		if next.selected < len(next.filtered)-1 {
+			next.selected++
 			// Scroll down if needed.
-			if a.selected >= a.offset+maxSuggestions {
-				a.offset = a.selected - maxSuggestions + 1
+			if next.selected >= next.offset+maxSuggestions {
+				next.offset = next.selected - maxSuggestions + 1
 			}
 		}
 	} else if keyType == tea.KeyEsc {
-		a.active = false
-		a.selected = 0
-		a.offset = 0
+		next.active = false
+		next.selected = 0
+		next.offset = 0
 	}
 
-	return a, nil
+	return next, nil
 }
 
 // View renders the autocomplete popup as a string. Returns empty string when
 // inactive or no matches. The output is meant to be appended below the input line.
-func (a Autocomplete) View() string {
+func (a *Autocomplete) View() string {
 	if !a.active || len(a.filtered) == 0 {
 		return ""
 	}

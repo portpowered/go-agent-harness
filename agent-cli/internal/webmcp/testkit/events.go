@@ -281,7 +281,7 @@ func JSONValue(value any) (json.RawMessage, error) {
 func MustJSONValue(value any) json.RawMessage {
 	raw, err := JSONValue(value)
 	if err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // must-style test-support helper over literal fixture values that always encode
 	}
 	return raw
 }

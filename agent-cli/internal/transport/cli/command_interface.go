@@ -55,7 +55,7 @@ func (c *BasePath) AddCommand(command CommandPath) {
 func requireFlags(cmd *cobra.Command, names ...string) {
 	for _, name := range names {
 		if err := cmd.MarkFlagRequired(name); err != nil {
-			panic(fmt.Sprintf("mark flag %q required: %v", name, err))
+			panic(fmt.Sprintf("mark flag %q required: %v", name, err)) //nolint:forbidigo // must-style: names are constants of the command definition; an unregistered name is a programming defect
 		}
 	}
 }

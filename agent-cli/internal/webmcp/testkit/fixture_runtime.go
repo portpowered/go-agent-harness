@@ -144,7 +144,7 @@ func NewScriptedFixtureRuntime(script BrowserScript, options ...FixtureRuntimeOp
 		pending:    make(map[string]struct{}),
 		done:       make(chan struct{}),
 		stream:     make(chan FixtureEvent, countScriptEvents(script)),
-		state:      mustNewDefaultStateOracle(),
+		state:      newDefaultStateOracle(),
 		outcome:    BrowserScriptOutcome{Status: BrowserScriptOpen},
 	}
 	for _, option := range options {
@@ -227,12 +227,11 @@ func countScriptEvents(script BrowserScript) int {
 	return count
 }
 
-func mustNewDefaultStateOracle() *FixtureStateOracle {
-	oracle, err := NewFixtureStateOracle(map[string]any{})
-	if err != nil {
-		panic(err)
-	}
-	return oracle
+// newDefaultStateOracle starts from the canonical empty JSON object, which
+// needs no normalization.
+func newDefaultStateOracle() *FixtureStateOracle {
+	empty := json.RawMessage(`{}`)
+	return &FixtureStateOracle{initial: cloneRaw(empty), value: cloneRaw(empty)}
 }
 
 // Execute consumes exactly the next expected operation and returns its

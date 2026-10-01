@@ -296,10 +296,6 @@ func (f *filePacingFlag) Set(value string) error {
 func (f *filePacingFlag) Type() string { return "pacing" }
 
 // registerSessionPacingFlag registers the hidden --audio-in-pacing option.
-// MarkHidden fails only for an unknown name, a programming error.
 func registerSessionPacingFlag(cmd *cobra.Command, target *runtimeDevices.FilePacing) {
-	cmd.Flags().Var(&filePacingFlag{target: target}, sessionAudioInPacingFlag, "Test harness: deliver finite file audio inputs at realtime (default), unpaced, or a speed multiplier such as 20x")
-	if err := cmd.Flags().MarkHidden(sessionAudioInPacingFlag); err != nil {
-		panic(err)
-	}
+	cmd.Flags().VarPF(&filePacingFlag{target: target}, sessionAudioInPacingFlag, "", "Test harness: deliver finite file audio inputs at realtime (default), unpaced, or a speed multiplier such as 20x").Hidden = true
 }

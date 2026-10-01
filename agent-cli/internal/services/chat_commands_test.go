@@ -194,7 +194,7 @@ func TestChatCommands_AutocompleteUsesVisibleRegistryAndPreservesSkillOrder(t *t
 			Summary:                 "Hidden test-only command",
 			AutocompleteDescription: "Hidden autocomplete command",
 			Hidden:                  true,
-			Handler:                 func(m ChatModel) (tea.Model, tea.Cmd) { return m, nil },
+			Handler:                 func(m *ChatModel) (tea.Model, tea.Cmd) { return m, nil },
 		},
 	}, original...)
 
@@ -378,7 +378,7 @@ func TestChatCommands_HiddenEntriesExcludedFromRenderedHelp(t *testing.T) {
 		Name:    "secret",
 		Summary: "Hidden test-only command",
 		Hidden:  true,
-		Handler: func(m ChatModel) (tea.Model, tea.Cmd) { return m, nil },
+		Handler: func(m *ChatModel) (tea.Model, tea.Cmd) { return m, nil },
 	})
 
 	got := renderChatHelp()

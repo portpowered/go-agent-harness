@@ -8,10 +8,10 @@ import (
 )
 
 // asChatModel narrows a bubbletea model returned by Update back to the chat model.
-func asChatModel(model tea.Model) services.ChatModel {
-	chat, ok := model.(services.ChatModel)
+func asChatModel(model tea.Model) *services.ChatModel {
+	chat, ok := model.(*services.ChatModel)
 	if !ok {
-		panic(fmt.Sprintf("model is %T, want services.ChatModel", model))
+		panic(fmt.Sprintf("model is %T, want *services.ChatModel", model))
 	}
 	return chat
 }

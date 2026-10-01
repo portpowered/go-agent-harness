@@ -44,7 +44,7 @@ func stylePrompt() lipgloss.Style { return lipgloss.NewStyle().Foreground(colorD
 // Committed conversation history is NOT rendered here — it is flushed to
 // terminal scrollback via tea.Println so that it persists when scrolling up.
 // Returns an empty string when the session is ending.
-func (m ChatModel) View() string {
+func (m *ChatModel) View() string {
 	if m.quitting {
 		return ""
 	}
@@ -90,7 +90,7 @@ func (m ChatModel) View() string {
 // ViewHistory returns the rendered committed conversation lines as a single
 // string. This is used by tests to verify committed content that has been
 // flushed to scrollback (and is no longer in View()).
-func (m ChatModel) ViewHistory() string {
+func (m *ChatModel) ViewHistory() string {
 	width := m.effectiveWidth()
 	var b strings.Builder
 	for _, ln := range m.lines {

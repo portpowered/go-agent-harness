@@ -99,13 +99,13 @@ type ChatModel struct {
 }
 
 // NewChatModel constructs a ChatModel ready for use.
-func NewChatModel(service session.Service, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) ChatModel {
+func NewChatModel(service session.Service, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) *ChatModel {
 	ti := textinput.New()
 	ti.Prompt = "> "
 	ti.PromptStyle = stylePrompt()
 	ti.Placeholder = "Type a message..."
 	ti.Width = 78
-	return ChatModel{
+	return &ChatModel{
 		service:     service,
 		sessionID:   sessionID,
 		globalFlags: globalFlags,
@@ -119,21 +119,21 @@ func NewChatModel(service session.Service, sessionID string, globalFlags *flags.
 
 // IsQuitting reports whether the model has received an exit signal.
 // Useful in tests to verify the model responded correctly to "exit"/"quit".
-func (m ChatModel) IsQuitting() bool { return m.quitting }
+func (m *ChatModel) IsQuitting() bool { return m.quitting }
 
 // InputFocused reports whether the Bubbles textinput has focus (for tests).
-func (m ChatModel) InputFocused() bool { return m.input.Focused() }
+func (m *ChatModel) InputFocused() bool { return m.input.Focused() }
 
 // SessionID returns the current session ID (for tests).
-func (m ChatModel) SessionID() string { return m.sessionID }
+func (m *ChatModel) SessionID() string { return m.sessionID }
 
 // Init implements tea.Model. Send FocusInputMsg so Update can focus the input on the real model, then start blink.
-func (m ChatModel) Init() tea.Cmd {
+func (m *ChatModel) Init() tea.Cmd {
 	return tea.Sequence(func() tea.Msg { return FocusInputMsg{} }, textinput.Blink)
 }
 
 // Update implements tea.Model. It handles keyboard events and agent results.
-func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// When any autocomplete is active, intercept navigation keys.
@@ -306,7 +306,7 @@ func (m *ChatModel) interceptAutocompleteKey(msg tea.KeyMsg) bool {
 
 // submitInput dispatches a non-empty, non-exit input line: slash commands run
 // locally, and anything else starts an agent turn with its @file references.
-func (m ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
+func (m *ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
 	// Slash commands: dispatch locally without sending to the LLM.
 	if strings.HasPrefix(rawInput, "/") {
 		return m.handleSlashCommand(rawInput)
@@ -341,7 +341,7 @@ func consumeOneStreamEvent(stream agentloop.Stream, handle session.SessionHandle
 }
 
 // effectiveWidth returns the terminal width to use for wrapping (default 80 if not set).
-func (m ChatModel) effectiveWidth() int {
+func (m *ChatModel) effectiveWidth() int {
 	if m.width > 0 {
 		return m.width
 	}
@@ -354,17 +354,20 @@ const defaultTerminalWidth = 80
 // runAgentWithInput starts a streaming turn: builds the loop, runs ExecuteStreamingTurn,
 // and returns a tea.Cmd that emits streamReadyMsg with the event stream. The
 // model then drains the stream via consumeOneStreamEvent and renders partials in View.
-func (m ChatModel) runAgentWithInput(execInput agentloop.ExecuteInput) tea.Cmd {
+func (m *ChatModel) runAgentWithInput(execInput agentloop.ExecuteInput) tea.Cmd {
+	// Snapshot the fields the command reads: it runs on a bubbletea goroutine
+	// while Update keeps mutating the model.
+	service, globalFlags, askFlags, sessionID, ctx := m.service, m.globalFlags, m.askFlags, m.sessionID, m.ctx
 	return func() tea.Msg {
-		cfg := BuildAgentConfigFromFlags(m.globalFlags, m.askFlags, nil, m.sessionID)
-		if m.service == nil {
+		cfg := BuildAgentConfigFromFlags(globalFlags, askFlags, nil, sessionID)
+		if service == nil {
 			return streamReadyMsg{err: fmt.Errorf("session service is not configured")}
 		}
-		handle, err := m.service.Open(m.ctx, *cfg)
+		handle, err := service.Open(ctx, *cfg)
 		if err != nil {
 			return streamReadyMsg{err: err}
 		}
-		stream, err := handle.Stream(m.ctx, execInput)
+		stream, err := handle.Stream(ctx, execInput)
 		if err != nil {
 			return streamReadyMsg{err: errors.Join(err, closeChatHandle(handle))}
 		}

@@ -207,7 +207,7 @@ func testWithin(t *testing.T, limit time.Duration, body func(t *testing.T)) {
 func failStuckBubble(name string, limit time.Duration) {
 	message, dump := stuckBubbleReport(name, limit)
 	_, _ = os.Stderr.WriteString(dump) //nolint:errcheck // best-effort diagnostics before the panic
-	panic(message)
+	panic(message)                     //nolint:forbidigo // watchdog outside the synctest bubble: a stuck bubble cannot be unblocked or failed via t, so crash the test binary with the dump
 }
 
 // stuckBubbleReport returns the watchdog's panic message and the goroutine

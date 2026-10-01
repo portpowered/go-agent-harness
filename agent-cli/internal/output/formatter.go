@@ -3,15 +3,16 @@ package output
 import (
 	"fmt"
 	"io"
-	"os"
 )
 
-// StreamToStdout reads from reader and writes to stdout in real-time.
-func StreamToStdout(reader io.Reader) error {
-	_, err := io.Copy(os.Stdout, reader)
-	if err != nil {
+// StreamTo copies reader to w in real time and finishes with a trailing
+// newline. The caller owns w (for example the command's stdout).
+func StreamTo(w io.Writer, reader io.Reader) error {
+	if _, err := io.Copy(w, reader); err != nil {
 		return fmt.Errorf("failed to stream output: %w", err)
 	}
-	fmt.Println() // trailing newline
+	if _, err := io.WriteString(w, "\n"); err != nil {
+		return fmt.Errorf("failed to stream output: %w", err)
+	}
 	return nil
 }

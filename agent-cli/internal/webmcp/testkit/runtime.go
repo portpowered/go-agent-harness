@@ -252,6 +252,9 @@ type ScriptedBrowserRuntime struct {
 	clock           webmcp.Clock
 	closeDone       chan struct{}
 	closeErr        error
+	// configErr records constructor configs that AddBrowser rejected; Open
+	// reports it so an invalid fixture fails the test through the runtime.
+	configErr error
 }
 
 func NewScriptedBrowserRuntime(configs ...BrowserConfig) *ScriptedBrowserRuntime {
@@ -281,7 +284,7 @@ func NewScriptedBrowserRuntimeWithOptions(options RuntimeOptions, configs ...Bro
 	}
 	for _, config := range configs {
 		if err := runtime.AddBrowser(config); err != nil {
-			panic(err)
+			runtime.configErr = errors.Join(runtime.configErr, fmt.Errorf("scripted browser runtime config: %w", err))
 		}
 	}
 	return runtime
@@ -324,6 +327,9 @@ func (r *ScriptedBrowserRuntime) AddCandidate(candidate webmcp.BrowserCandidate,
 func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
+	}
+	if r.configErr != nil {
+		return nil, r.configErr
 	}
 	r.mu.Lock()
 	if r.closed {

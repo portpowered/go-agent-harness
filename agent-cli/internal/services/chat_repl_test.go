@@ -37,7 +37,7 @@ func updateGoldensRequested() bool {
 var chatTimestampPattern = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\b`)
 
 type chatTestHarness struct {
-	model       ChatModel
+	model       *ChatModel
 	globalFlags *flags.GlobalFlags
 	askFlags    *flags.AskFlags
 	out         *bytes.Buffer
@@ -129,7 +129,7 @@ func newChatTestHarness(t *testing.T, responses ...string) *chatTestHarness {
 	}
 }
 
-func typeChatInput(model ChatModel, input string) ChatModel {
+func typeChatInput(model *ChatModel, input string) *ChatModel {
 	for _, r := range input {
 		keyType := tea.KeyRunes
 		if r == ' ' {
@@ -141,14 +141,14 @@ func typeChatInput(model ChatModel, input string) ChatModel {
 	return model
 }
 
-func submitChatInput(model ChatModel, input string) ChatModel {
+func submitChatInput(model *ChatModel, input string) *ChatModel {
 	model = typeChatInput(model, input)
 	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = chatModelOf(updated)
 	return drainChatCommands(model, cmd)
 }
 
-func drainChatCommands(model ChatModel, first tea.Cmd) ChatModel {
+func drainChatCommands(model *ChatModel, first tea.Cmd) *ChatModel {
 	commands := []tea.Cmd{first}
 	for len(commands) > 0 {
 		cmd := commands[0]
@@ -386,8 +386,8 @@ func (s *chatTestStream) Close() error {
 
 // chatModelOf returns the ChatModel produced by an Update call. ChatModel.Update
 // always returns a ChatModel, so any other type is a test failure.
-func chatModelOf(updated tea.Model) ChatModel {
-	model, ok := updated.(ChatModel)
+func chatModelOf(updated tea.Model) *ChatModel {
+	model, ok := updated.(*ChatModel)
 	if !ok {
 		panic(fmt.Sprintf("ChatModel.Update returned %T", updated))
 	}
