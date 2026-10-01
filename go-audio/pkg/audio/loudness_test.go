@@ -14,7 +14,8 @@ import (
 // The signal sums two incommensurate tones so it is not a pure sine (whose
 // crest factor would be unrealistically low) while remaining fully
 // deterministic across test runs.
-func syntheticVoiceChunks(rmsDBFS float64, seconds float64, sampleRate int) [][]int16 {
+func syntheticVoiceChunks(rmsDBFS float64, seconds float64) [][]int16 {
+	sampleRate := 24000
 	totalSamples := int(seconds * float64(sampleRate))
 	amplitude := 32768.0 * math.Pow(10, rmsDBFS/20) * math.Sqrt(2)
 	samples := make([]int16, totalSamples)
@@ -87,9 +88,8 @@ func processAll(n *audio.LoudnessNormalizer, chunks [][]int16) []int16 {
 // its own voice's fixed gain -- 0 dB for the "alloy" stand-in, +7.3 dB
 // (the measured deficit) for the "verse" stand-in.
 func TestLoudnessNormalizerConvergesDifferentVoicesToSharedTarget(t *testing.T) {
-	const sampleRate = 24000
-	loudChunks := syntheticVoiceChunks(-19.0, 1.0, sampleRate)  // "alloy"
-	quietChunks := syntheticVoiceChunks(-26.3, 1.0, sampleRate) // "verse"
+	loudChunks := syntheticVoiceChunks(-19.0, 1.0)  // "alloy"
+	quietChunks := syntheticVoiceChunks(-26.3, 1.0) // "verse"
 
 	loudNorm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 0})
 	quietNorm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 7.3})
@@ -116,7 +116,7 @@ func TestLoudnessNormalizerConvergesDifferentVoicesToSharedTarget(t *testing.T) 
 // round-trips) are disturbed by normalization being present.
 func TestLoudnessNormalizerZeroGainIsExactNoOp(t *testing.T) {
 	norm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 0})
-	chunks := syntheticVoiceChunks(-12.0, 0.25, 24000)
+	chunks := syntheticVoiceChunks(-12.0, 0.25)
 	// Include a chunk that already touches full scale, to confirm the
 	// no-boost path never engages the peak ceiling either.
 	hot := make([]int16, 480)
@@ -146,7 +146,7 @@ func TestLoudnessNormalizerZeroGainIsExactNoOp(t *testing.T) {
 // regression: normalization must not introduce clipping, including when the
 // input is already loud, using the production +7.3 dB verse gain.
 func TestLoudnessNormalizerDoesNotClipAlreadyHotInput(t *testing.T) {
-	chunks := syntheticVoiceChunks(-1.0, 1.0, 24000)
+	chunks := syntheticVoiceChunks(-1.0, 1.0)
 	norm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 7.3})
 
 	out := processAll(norm, chunks)
@@ -227,7 +227,7 @@ func TestLoudnessNormalizerDoesNotAmplifySilence(t *testing.T) {
 // []int16 API and never changes length.
 func TestLoudnessNormalizerProcessBytesRoundTrips(t *testing.T) {
 	norm := audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: 7.3})
-	chunks := syntheticVoiceChunks(-20.0, 0.5, 24000)
+	chunks := syntheticVoiceChunks(-20.0, 0.5)
 
 	for _, chunk := range chunks {
 		pcm := make([]byte, len(chunk)*2)

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,21 +19,31 @@ import (
 
 const DuplexCapsuleSchemaVersion = 2
 
-var duplexCapsuleArtifacts = []string{
-	"audio/provider-in.pcm",
-	"audio/playback-rendered.pcm",
-	"audio/capture-generated.pcm",
-	"audio/source-near-end.pcm",
-	"audio/source-background.pcm",
-	"events.jsonl",
-}
+const (
+	capsuleDirMode  = 0o755
+	capsuleFileMode = 0o644
+)
 
-var duplexCapsuleV1Artifacts = []string{
-	"audio/provider-in.pcm",
-	"audio/playback-rendered.pcm",
-	"audio/source-near-end.pcm",
-	"audio/source-background.pcm",
-	"events.jsonl",
+// duplexCapsuleArtifacts lists the files a capsule of schemaVersion must hold.
+// Version 1 predates the generated-capture stem.
+func duplexCapsuleArtifacts(schemaVersion int) []string {
+	if schemaVersion == 1 {
+		return []string{
+			"audio/provider-in.pcm",
+			"audio/playback-rendered.pcm",
+			"audio/source-near-end.pcm",
+			"audio/source-background.pcm",
+			"events.jsonl",
+		}
+	}
+	return []string{
+		"audio/provider-in.pcm",
+		"audio/playback-rendered.pcm",
+		"audio/capture-generated.pcm",
+		"audio/source-near-end.pcm",
+		"audio/source-background.pcm",
+		"events.jsonl",
+	}
 }
 
 type CapsuleArtifact struct {
@@ -61,7 +72,7 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 		return fmt.Errorf("nil simulated duplex registry")
 	}
 	parent := filepath.Dir(dir)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, capsuleDirMode); err != nil {
 		return err
 	}
 	tmp, err := os.MkdirTemp(parent, ".audio-capsule-")
@@ -88,10 +99,10 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	metadata := make(map[string]CapsuleArtifact, len(artifacts))
 	for name, data := range artifacts {
 		path := filepath.Join(tmp, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), capsuleDirMode); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, data, 0o644); err != nil {
+		if err := os.WriteFile(path, data, capsuleFileMode); err != nil {
 			return err
 		}
 		sum := sha256.Sum256(data)
@@ -108,7 +119,7 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "run-manifest.json"), append(manifestBytes, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "run-manifest.json"), append(manifestBytes, '\n'), capsuleFileMode); err != nil {
 		return err
 	}
 	if _, err := os.Stat(dir); err == nil {
@@ -134,10 +145,7 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	if !manifest.Finalized {
 		return nil, fmt.Errorf("audio capsule is not finalized")
 	}
-	requiredArtifacts := duplexCapsuleArtifacts
-	if manifest.SchemaVersion == 1 {
-		requiredArtifacts = duplexCapsuleV1Artifacts
-	}
+	requiredArtifacts := duplexCapsuleArtifacts(manifest.SchemaVersion)
 	if len(manifest.Artifacts) != len(requiredArtifacts) {
 		return nil, fmt.Errorf("audio capsule artifact inventory has %d entries; want %d", len(manifest.Artifacts), len(requiredArtifacts))
 	}
@@ -208,7 +216,7 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	return &DuplexFailureCapsule{Manifest: manifest, ProviderInput: provider, Rendered: rendered, Captured: captured, NearEnd: near, Background: background, Events: events}, nil
 }
 
-func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err error) {
+func ReplayDuplexFailureCapsule(ctx context.Context, dir string) (_ *SimulatedDuplexRegistry, err error) {
 	capsule, err := LoadDuplexFailureCapsule(dir)
 	if err != nil {
 		return nil, err
@@ -226,10 +234,10 @@ func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err err
 	if !ok {
 		return nil, fmt.Errorf("simulated duplex registry opened %T", opened)
 	}
-	if err := stream.WriteSamples(context.Background(), capsule.ProviderInput); err != nil {
+	if err := stream.WriteSamples(ctx, capsule.ProviderInput); err != nil {
 		return nil, err
 	}
-	if err := registry.Advance(capsule.Manifest.CallbackCount); err != nil {
+	if err := registry.Advance(capsule.Manifest.CallbackCount); err != nil { //nolint:contextcheck // the simulated registry advances synchronously in memory; its callbacks are a telemetry root with no caller context
 		return nil, err
 	}
 	if got := encodeSamples(registry.RenderedSamples()); !bytes.Equal(got, encodeSamples(capsule.Rendered)) {
@@ -261,11 +269,46 @@ const duplexTapRender = "render"
 // sample records simulated device telemetry. Observability is best effort:
 // TrySample already isolates sampler panics, and a failing sampler must not
 // change simulated device behavior.
-func (r *SimulatedDuplexRegistry) sample(ctx context.Context, sampler observability.MetricSampler, sample observability.MetricSample) {
-	_ = observability.TrySample(ctx, sampler, sample) //nolint:errcheck // best-effort telemetry must not change simulated device behavior.
+// Simulated callbacks run on the virtual hardware clock, not on behalf of a
+// caller, so their telemetry has no caller context to inherit.
+func (r *SimulatedDuplexRegistry) sample(sampler observability.MetricSampler, sample observability.MetricSample) {
+	_ = observability.TrySample(context.Background(), sampler, sample) //nolint:errcheck,forbidigo // best-effort telemetry from a simulated hardware callback: no caller context, and errors must not change device behavior
 }
 
 // log records a simulated device diagnostic with the same best-effort policy.
-func (r *SimulatedDuplexRegistry) log(ctx context.Context, logger observability.Logger, record observability.LogRecord) {
-	_ = observability.TryLog(ctx, logger, record) //nolint:errcheck // best-effort diagnostics must not change simulated device behavior.
+func (r *SimulatedDuplexRegistry) log(logger observability.Logger, record observability.LogRecord) {
+	_ = observability.TryLog(context.Background(), logger, record) //nolint:errcheck,forbidigo // best-effort diagnostics from a simulated hardware callback: no caller context, and errors must not change device behavior
+}
+
+func scaleQ15(sample int16, gain int32) int16 {
+	product := int64(sample) * int64(gain)
+	// Round half away from zero before dropping the Q15 fraction.
+	if product >= 0 {
+		product += q15One / 2
+	} else {
+		product -= q15One / 2
+	}
+	return saturatePCM16Int64(product / q15One)
+}
+
+// q15One is 1.0 in Q15 fixed point.
+const q15One = 1 << 15
+
+func saturatingAdd(a, b int16) int16 { return saturatePCM16Int64(int64(a) + int64(b)) }
+
+func saturatePCM16Int64(v int64) int16 {
+	if v < math.MinInt16 {
+		return math.MinInt16
+	}
+	if v > math.MaxInt16 {
+		return math.MaxInt16
+	}
+	return int16(v)
+}
+
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }

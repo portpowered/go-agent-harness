@@ -95,7 +95,7 @@ func TestProcessorRejectsCrossStreamHistoryWithoutReset(t *testing.T) {
 		}
 		next := first
 		change(&next)
-		if _, err := processor.Process(next); err != audio.ErrStreamIdentityChanged {
+		if _, err := processor.Process(next); !errors.Is(err, audio.ErrStreamIdentityChanged) {
 			t.Fatalf("cross-stream audio accepted: %v", err)
 		}
 		if _, err := processor.Reset(); err != nil {

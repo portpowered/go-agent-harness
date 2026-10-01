@@ -25,9 +25,10 @@ const publicRoomLatencyTestTimeout = 3 * time.Second
 // delivered to peers without self-hearing, two turns are admitted per agent,
 // and the finalized room latency artifact remains reproducible.
 func TestServicePreservesHermeticTurnToTurnLatency(t *testing.T) {
+	roomCtx, cancel := context.WithTimeout(t.Context(), publicRoomLatencyTestTimeout)
+	defer cancel()
 	run := newPublicRoomLatencyRun(t)
-	defer run.cancel()
-	run.start(t)
+	run.start(t, roomCtx)
 	run.waitReady(t)
 	run.provider.audioEvents = run.audioEvents
 	run.provider.fanouts = run.fanouts
@@ -51,9 +52,8 @@ type publicRoomLatencyRun struct {
 	audioEvents           chan publicRoomLatencyAudio
 	fanouts               chan publicRoomLatencyFanout
 	ready                 chan string
-	roomCtx               context.Context
-	cancel                context.CancelFunc
-	runDone               chan publicRoomLatencyRunOutcome
+
+	runDone chan publicRoomLatencyRunOutcome
 }
 
 func newPublicRoomLatencyRun(t *testing.T) *publicRoomLatencyRun {
@@ -82,15 +82,15 @@ func newPublicRoomLatencyRun(t *testing.T) *publicRoomLatencyRun {
 	}
 	run.outputDir = filepath.Join(t.TempDir(), "room-latency")
 	run.ready = make(chan string, len(run.manifest.Participants))
-	run.roomCtx, run.cancel = context.WithTimeout(context.Background(), publicRoomLatencyTestTimeout)
+
 	run.runDone = make(chan publicRoomLatencyRunOutcome, 1)
 	return run
 }
 
-func (run *publicRoomLatencyRun) start(t *testing.T) {
+func (run *publicRoomLatencyRun) start(t *testing.T, roomCtx context.Context) {
 	t.Helper()
 	go func() {
-		result, err := run.roomService.Run(run.roomCtx, io.Discard, runtimeRooms.RoomRunOptions{
+		result, err := run.roomService.Run(roomCtx, io.Discard, runtimeRooms.RoomRunOptions{
 			Manifest:    run.manifest,
 			OutputDir:   run.outputDir,
 			AudioFormat: runtimeRooms.AudioFormat{SampleRate: 1000, Channels: 1, FrameDuration: 20 * time.Millisecond},
@@ -142,7 +142,7 @@ const publicRoomLatencyFramePeriod = 20 * time.Millisecond
 // will not mix again until the test advances the clock.
 func (run *publicRoomLatencyRun) waitMixersIdle(t *testing.T, timers int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(run.roomCtx, publicRoomLatencyTestTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), publicRoomLatencyTestTimeout)
 	defer cancel()
 	if err := run.clock.WaitForTimers(ctx, timers); err != nil {
 		t.Fatalf("room did not arm %d room-clock timers: %v", timers, err)
@@ -178,7 +178,7 @@ func (run *publicRoomLatencyRun) releaseResponse(t *testing.T, participantID str
 // advance mixes the admitted frame without real-time settling.
 func (run *publicRoomLatencyRun) advanceMixer(t *testing.T, sourceID string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(run.roomCtx, publicRoomLatencyTestTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), publicRoomLatencyTestTimeout)
 	defer cancel()
 	if err := run.provider.participant(sourceID).handle.inbound.waitAdmitted(ctx); err != nil {
 		t.Fatalf("room did not admit %s audio to its peer mixers: %v", sourceID, err)
@@ -459,9 +459,10 @@ func waitPublicRoomLatencyFanout(t *testing.T, fanouts <-chan publicRoomLatencyF
 // room must keep running until that audio has been handed to the peer, then
 // stop for max_turns.
 func TestServiceDeliversFinalTurnAudioWhenMessageEndPrecedesPlayback(t *testing.T) {
+	roomCtx, cancel := context.WithTimeout(t.Context(), publicRoomLatencyTestTimeout)
+	defer cancel()
 	run := newPublicRoomLatencyRun(t)
-	defer run.cancel()
-	run.start(t)
+	run.start(t, roomCtx)
 	run.waitReady(t)
 	run.provider.audioEvents = run.audioEvents
 	run.provider.fanouts = run.fanouts
@@ -489,7 +490,7 @@ func TestServiceDeliversFinalTurnAudioWhenMessageEndPrecedesPlayback(t *testing.
 // published, so the peer cannot hold the frame until the clock advances.
 func (run *publicRoomLatencyRun) assertFinalTurnHeld(t *testing.T) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(run.roomCtx, publicRoomLatencyTestTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), publicRoomLatencyTestTimeout)
 	defer cancel()
 	held := make(chan error, 1)
 	go func() { held <- run.clock.WaitForTimers(ctx, publicRoomLatencyIdleTimers+1) }()

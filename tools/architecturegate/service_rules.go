@@ -35,7 +35,7 @@ func moduleShapeIssues(pkg *Package, module *Module, policy Policy) []Issue {
 	if rule == nil || moduleTopLevelAllowed(pkg, module, rule) {
 		return nil
 	}
-	return []Issue{moduleShapeIssue(pkg, module, rule)}
+	return []Issue{moduleShapeIssue(pkg, module)}
 }
 
 func sourceArchitectureIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, policy Policy, globalState bool) []Issue {
@@ -60,7 +60,7 @@ func generatedSourceIssues(pkg *Package, module *Module, source *SourceFile, pol
 func declarationIssues(pkg *Package, module *Module, service serviceInfo, source *SourceFile, policy Policy, globalState bool) []Issue {
 	issues := make([]Issue, 0)
 	for _, declaration := range source.AST.Decls {
-		issues = append(issues, declarationIssue(pkg, module, service, source, declaration, policy, globalState)...)
+		issues = append(issues, declarationIssue(pkg, module, source, declaration, policy, globalState)...)
 	}
 	if service.Role == roleRoot && !source.Test {
 		issues = append(issues, rootExportIssues(pkg, module, source, policy)...)
@@ -68,7 +68,7 @@ func declarationIssues(pkg *Package, module *Module, service serviceInfo, source
 	return issues
 }
 
-func declarationIssue(pkg *Package, module *Module, service serviceInfo, source *SourceFile, declaration ast.Decl, policy Policy, globalState bool) []Issue {
+func declarationIssue(pkg *Package, module *Module, source *SourceFile, declaration ast.Decl, policy Policy, globalState bool) []Issue {
 	switch declaration := declaration.(type) {
 	case *ast.GenDecl:
 		if declaration.Tok == token.VAR && globalState {
@@ -135,7 +135,7 @@ func globalIssues(pkg *Package, module *Module, source *SourceFile, declaration 
 func globalValueIssues(pkg *Package, module *Module, source *SourceFile, valueSpec *ast.ValueSpec, policy Policy) []Issue {
 	issues := make([]Issue, 0, len(valueSpec.Names))
 	for _, name := range valueSpec.Names {
-		if name.Name == "_" || globalExceptionMatches(pkg, module, source, name.Name, policy) {
+		if name.Name == "_" || globalExceptionMatches(pkg, source, name.Name, policy) {
 			continue
 		}
 		issues = append(issues, Issue{Rule: "mutable-global", Module: module.Path, Package: pkg.ImportPath, File: source.RelPath, Symbol: name.Name, Message: "mutable package state must be owned by an injected service"})
@@ -143,7 +143,7 @@ func globalValueIssues(pkg *Package, module *Module, source *SourceFile, valueSp
 	return issues
 }
 
-func globalExceptionMatches(pkg *Package, module *Module, source *SourceFile, name string, policy Policy) bool {
+func globalExceptionMatches(pkg *Package, source *SourceFile, name string, policy Policy) bool {
 	for _, exception := range policy.GlobalExceptions {
 		if exceptionMatches(exception, pkg.ImportPath, source, name) {
 			return true

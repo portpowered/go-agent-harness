@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const (
@@ -66,7 +68,7 @@ func NewSessionMediaAtRate(writer SessionMediaWriter, sampleRate int) *SessionMe
 	if sampleRate <= 0 {
 		sampleRate = DefaultSessionMediaSampleRate
 	}
-	frameSamples := sampleRate * sessionMediaFrameMillis / 1000
+	frameSamples := sampleRate * sessionMediaFrameMillis / millisecondsPerSecond
 	if frameSamples <= 0 {
 		frameSamples = DefaultSessionMediaFrameSamples
 	}
@@ -204,7 +206,7 @@ func newSessionInboundMedia(frameSamples, sampleRate int, padPartial bool) *sess
 
 func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return PCMFrame{}, contract.ErrNilContext
 	}
 	for {
 		m.mu.Lock()
@@ -510,12 +512,5 @@ func (m *sessionInboundMedia) appendCompleteFramesLocked() {
 		copy(samples, m.pending[:m.frameSamples])
 		m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response, Epoch: m.epoch})
 		m.pending = m.pending[m.frameSamples:]
-	}
-}
-
-func (m *sessionInboundMedia) notify() {
-	select {
-	case m.wake <- struct{}{}:
-	default:
 	}
 }

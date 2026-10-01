@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -18,7 +17,6 @@ import (
 
 const (
 	wasapiBackend       = "wasapi"
-	wasapiPollInterval  = 25 * time.Millisecond // paces WASAPI packet and padding polls
 	coinitMultithreaded = 0
 	clsctxAll           = 0x17
 	deviceStateActive   = 0x1
@@ -53,8 +51,21 @@ const (
 	waveFormatPCM                             = 0x0001
 	waveFormatIEEEFloat                       = 0x0003
 	waveFormatExtensible                      = 0xfffe
+	// waveFormatExtensibleExtraBytes is the WAVEFORMATEXTENSIBLE cbSize.
+	waveFormatExtensibleExtraBytes = 22
+	// hresultEPointer is E_POINTER, returned for a call on a released object.
+	hresultEPointer = 0x80004003
+	// IMMDeviceEnumerator vtable slots.
+	mmDeviceEnumeratorVTableGetDefaultAudioEndpoint = 4
+	mmDeviceEnumeratorVTableGetDevice               = 5
+	bitsPerByte                                     = 8
 )
 
+// The ole32 bindings are lazily resolved, concurrency-safe handles to
+// system DLL procedures, and the GUIDs and property key are fixed COM
+// identifiers: the standard Windows binding pattern, holding no program state.
+//
+//nolint:gochecknoglobals,mnd // immutable lazy DLL procedure bindings and COM identifiers whose fields are fixed binary IDs, not tunables (see above)
 var (
 	wasapiOle32                   = syscall.NewLazyDLL("ole32.dll")
 	wasapiCoInitializeEx          = wasapiOle32.NewProc("CoInitializeEx")
@@ -98,9 +109,12 @@ type wasapiFlow struct {
 	direction Direction
 }
 
-var wasapiFlows = [...]wasapiFlow{
-	{value: mmdeviceDataFlowCapture, direction: DirectionInput},
-	{value: mmdeviceDataFlowRender, direction: DirectionOutput},
+// wasapiFlows lists the endpoint data flows the registry enumerates.
+func wasapiFlows() [2]wasapiFlow {
+	return [...]wasapiFlow{
+		{value: mmdeviceDataFlowCapture, direction: DirectionInput},
+		{value: mmdeviceDataFlowRender, direction: DirectionOutput},
+	}
 }
 
 // List returns a fresh active-endpoint snapshot. Endpoint IDs come directly
@@ -119,7 +133,7 @@ func (r *wasapiDeviceRegistry) List() ([]Device, error) {
 	}()
 
 	devices := make([]Device, 0)
-	for _, flow := range wasapiFlows {
+	for _, flow := range wasapiFlows() {
 		listed, err := r.listFlow(enumerator, flow)
 		if err != nil {
 			return nil, err
@@ -151,7 +165,7 @@ func (r *wasapiDeviceRegistry) listFlow(enumerator wasapiCOM, flow wasapiFlow) (
 		return nil, fmt.Errorf("count WASAPI %s devices: %w", flow.direction, err)
 	}
 	devices := make([]Device, 0, count)
-	for index := uint32(0); index < count; index++ {
+	for index := range count {
 		endpoint, err := collection.item(index)
 		if err != nil {
 			return nil, fmt.Errorf("get WASAPI %s device %d: %w", flow.direction, index, err)
@@ -202,7 +216,7 @@ func (r *wasapiDeviceRegistry) Default(direction Direction) (Device, error) {
 
 	var endpointPtr unsafe.Pointer
 	flow := flowForDirection(direction)
-	hresult, callErr := enumerator.call(4, uintptr(flow), roleConsole, uintptr(unsafe.Pointer(&endpointPtr)))
+	hresult, callErr := enumerator.call(mmDeviceEnumeratorVTableGetDefaultAudioEndpoint, uintptr(flow), roleConsole, uintptr(unsafe.Pointer(&endpointPtr)))
 	if callErr != nil {
 		if isNoDeviceHRESULT(hresult) {
 			return Device{}, NewNoDefaultDeviceError(direction)
@@ -271,7 +285,7 @@ func (r *wasapiDeviceRegistry) findDirection(nativeID string) (Direction, error)
 		enumerator.release()
 		cleanup()
 	}()
-	for _, flow := range wasapiFlows {
+	for _, flow := range wasapiFlows() {
 		collection, err := enumerateEndpoints(enumerator, flow.value)
 		if err != nil {
 			hr := wasapiErrorCode(err)
@@ -285,7 +299,7 @@ func (r *wasapiDeviceRegistry) findDirection(nativeID string) (Direction, error)
 			collection.release()
 			return "", fmt.Errorf("count WASAPI %s devices: %w", flow.direction, err)
 		}
-		for index := uint32(0); index < count; index++ {
+		for index := range count {
 			endpoint, err := collection.item(index)
 			if err != nil {
 				continue
@@ -325,30 +339,11 @@ func (r *wasapiDeviceRegistry) releaseReservation(id DeviceID) {
 	r.mu.Unlock()
 }
 
-func (r *wasapiDeviceRegistry) observations() DeviceRegistryObservations {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return DeviceRegistryObservations{
-		ListCalls:    r.listCalls,
-		DefaultCalls: r.defaultCalls,
-		OpenCount:    r.openCount,
-		ReleaseCount: r.releaseCount,
-	}
-}
-
 func (r *wasapiDeviceRegistry) isHidden(id DeviceID) bool {
 	r.mu.Lock()
 	hidden := r.hidden[id]
 	r.mu.Unlock()
 	return hidden
-}
-
-// hideForTest lets the shared conformance fixture model a device disappearing
-// after enumeration without changing the production registry contract.
-func (r *wasapiDeviceRegistry) hideForTest(id DeviceID) {
-	r.mu.Lock()
-	r.hidden[id] = true
-	r.mu.Unlock()
 }
 
 type wasapiOpenedDevice struct {
@@ -361,137 +356,6 @@ type wasapiOpenedDevice struct {
 	formatErr error
 	mu        sync.Mutex
 	closed    bool
-}
-
-// verifyDataPathForTest observes the live client rather than only checking
-// that COM activation returned a handle. Capture must expose and consume a
-// packet with measurable energy, while render is fed an explicit silent packet
-// and must show that the audio engine consumes the submitted frames.
-func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
-	cleanup, err := initializeCOM()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	if d.direction == DirectionInput {
-		return d.verifyCaptureDataPath()
-	}
-	return d.verifyRenderDataPath()
-}
-
-// verifyCaptureDataPath polls until the capture client exposes a non-empty
-// packet. Energy is measured for every packet so a malformed buffer fails,
-// while a valid but currently silent microphone remains a usable capability.
-func (d *wasapiOpenedDevice) verifyCaptureDataPath() error {
-	if d.formatErr != nil {
-		return fmt.Errorf("inspect WASAPI capture format: %w", d.formatErr)
-	}
-	for attempt := 0; attempt < 40; attempt++ {
-		var packets uint32
-		if _, err := d.service.call(audioCaptureClientVTableGetNextPacketSize, uintptr(unsafe.Pointer(&packets))); err != nil {
-			return fmt.Errorf("read WASAPI capture packet size: %w", err)
-		}
-		if packets == 0 {
-			time.Sleep(wasapiPollInterval)
-			continue
-		}
-		frames, err := d.consumeCapturePacket()
-		if err != nil || frames > 0 {
-			// A non-empty packet is the positive data-path signal.
-			return err
-		}
-	}
-	return fmt.Errorf("WASAPI capture produced no positive signal: frames=0 max-energy=0")
-}
-
-// consumeCapturePacket acquires, measures, and releases one capture packet and
-// returns its frame count.
-func (d *wasapiOpenedDevice) consumeCapturePacket() (uint32, error) {
-	var data unsafe.Pointer
-	var frames, flags uint32
-	if _, err := d.service.call(audioCaptureClientVTableGetBuffer, uintptr(unsafe.Pointer(&data)), uintptr(unsafe.Pointer(&frames)), uintptr(unsafe.Pointer(&flags)), 0, 0); err != nil {
-		return 0, fmt.Errorf("acquire WASAPI capture buffer: %w", err)
-	}
-	if frames == 0 {
-		return 0, nil
-	}
-	_, energyErr := wasapiCapturePacketEnergy(data, frames, flags, d.format)
-	if _, releaseErr := d.service.call(audioCaptureClientVTableReleaseBuffer, uintptr(frames)); releaseErr != nil {
-		return 0, fmt.Errorf("release WASAPI capture buffer: %w", releaseErr)
-	}
-	return frames, energyErr
-}
-
-// verifyRenderDataPath feeds an explicit silent packet and requires the audio
-// engine to consume the submitted frames.
-func (d *wasapiOpenedDevice) verifyRenderDataPath() error {
-	var bufferSize uint32
-	if _, err := d.client.call(audioClientVTableGetBufferSize, uintptr(unsafe.Pointer(&bufferSize))); err != nil {
-		return fmt.Errorf("read WASAPI render buffer size: %w", err)
-	}
-	if bufferSize == 0 {
-		return fmt.Errorf("WASAPI render buffer size is zero")
-	}
-	var lastBefore, lastAfter, lastSubmitted uint32
-	for attempt := 0; attempt < 40; attempt++ {
-		padding, err := d.renderPadding("read WASAPI render padding")
-		if err != nil {
-			return err
-		}
-		if padding >= bufferSize {
-			time.Sleep(wasapiPollInterval)
-			continue
-		}
-		frames := bufferSize - padding
-		submittedPadding, err := d.submitSilentRenderPacket(frames)
-		if err != nil {
-			return err
-		}
-		lastBefore, lastAfter, lastSubmitted = padding, submittedPadding, frames
-		if submittedPadding <= padding {
-			// The engine may have consumed the packet between ReleaseBuffer
-			// and this observation. Retry until a queued packet is observable.
-			time.Sleep(wasapiPollInterval)
-			continue
-		}
-		return d.awaitRenderConsumption(padding, submittedPadding, frames)
-	}
-	return fmt.Errorf("WASAPI render submission was not observable: before=%d after=%d submitted=%d", lastBefore, lastAfter, lastSubmitted)
-}
-
-func (d *wasapiOpenedDevice) renderPadding(operation string) (uint32, error) {
-	var padding uint32
-	if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&padding))); err != nil {
-		return 0, fmt.Errorf("%s: %w", operation, err)
-	}
-	return padding, nil
-}
-
-// submitSilentRenderPacket submits frames of silence and returns the padding
-// observed immediately after submission.
-func (d *wasapiOpenedDevice) submitSilentRenderPacket(frames uint32) (uint32, error) {
-	var buffer unsafe.Pointer
-	if _, err := d.service.call(audioRenderClientVTableGetBuffer, uintptr(frames), uintptr(unsafe.Pointer(&buffer))); err != nil {
-		return 0, fmt.Errorf("acquire WASAPI render buffer: %w", err)
-	}
-	if _, err := d.service.call(audioRenderClientVTableReleaseBuffer, uintptr(frames), audclntBufferFlagsSilent); err != nil {
-		return 0, fmt.Errorf("release WASAPI render buffer: %w", err)
-	}
-	return d.renderPadding("read WASAPI render padding after submission")
-}
-
-func (d *wasapiOpenedDevice) awaitRenderConsumption(padding, submittedPadding, frames uint32) error {
-	for consumeAttempt := 0; consumeAttempt < 40; consumeAttempt++ {
-		time.Sleep(wasapiPollInterval)
-		consumedPadding, err := d.renderPadding("read WASAPI render padding during consumption")
-		if err != nil {
-			return err
-		}
-		if consumedPadding < submittedPadding {
-			return nil
-		}
-	}
-	return fmt.Errorf("WASAPI render engine did not consume submitted frames: before=%d after=%d submitted=%d", padding, submittedPadding, frames)
 }
 
 func (d *wasapiOpenedDevice) Close() error {
@@ -549,9 +413,9 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 		return openedWASAPIEndpoint{}, NewDeviceNotFoundError(wasapiBackend + ":" + nativeID)
 	}
 	var endpointPtr unsafe.Pointer
-	hresult, callErr := enumerator.call(5, uintptr(unsafe.Pointer(nativeIDPtr)), uintptr(unsafe.Pointer(&endpointPtr)))
+	hresult, callErr := enumerator.call(mmDeviceEnumeratorVTableGetDevice, uintptr(unsafe.Pointer(nativeIDPtr)), uintptr(unsafe.Pointer(&endpointPtr)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "get endpoint"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "get endpoint"}
 	}
 	endpoint := wasapiCOM{ptr: endpointPtr}
 	defer endpoint.release()
@@ -560,7 +424,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var clientPtr unsafe.Pointer
 	hresult, callErr = endpoint.call(immDeviceVTableActivate, uintptr(unsafe.Pointer(&iid)), clsctxAll, 0, uintptr(unsafe.Pointer(&clientPtr)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "activate audio client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "activate audio client"}
 	}
 	client := wasapiCOM{ptr: clientPtr}
 	defer func() {
@@ -572,7 +436,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var mixFormat unsafe.Pointer
 	hresult, callErr = client.call(audioClientVTableGetMixFormat, uintptr(unsafe.Pointer(&mixFormat)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "get mix format"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "get mix format"}
 	}
 	if mixFormat == nil {
 		return openedWASAPIEndpoint{}, fmt.Errorf("WASAPI returned an empty mix format")
@@ -582,7 +446,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 
 	hresult, callErr = client.call(audioClientVTableInitialize, shareModeShared, 0, 0, 0, uintptr(mixFormat), 0)
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "initialize audio client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "initialize audio client"}
 	}
 
 	serviceIID := wasapiIIDAudioRenderClient
@@ -592,7 +456,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var servicePtr unsafe.Pointer
 	hresult, callErr = client.call(audioClientVTableGetService, uintptr(unsafe.Pointer(&serviceIID)), uintptr(unsafe.Pointer(&servicePtr)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "get audio data client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "get audio data client"}
 	}
 	service := wasapiCOM{ptr: servicePtr}
 	defer func() {
@@ -603,7 +467,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 
 	hresult, callErr = client.call(audioClientVTableStart)
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "start audio client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "start audio client"}
 	}
 	opened := openedWASAPIEndpoint{client: client, service: service, format: format, formatErr: formatErr}
 	client.ptr = nil
@@ -612,7 +476,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 }
 
 func mapWASAPIOpenError(id DeviceID, operation string, err error) error {
-	var coded wasapiHRESULTWithCode
+	var coded wasapiCodedError
 	if !errors.As(err, &coded) {
 		return fmt.Errorf("WASAPI %s %q: %w", operation, id, err)
 	}
@@ -629,18 +493,18 @@ func mapWASAPIOpenError(id DeviceID, operation string, err error) error {
 	}
 }
 
-type wasapiHRESULTWithCode struct {
+type wasapiCodedError struct {
 	hr        uint32
 	err       error
 	operation string
 }
 
-func (e wasapiHRESULTWithCode) Error() string { return e.err.Error() }
-func (e wasapiHRESULTWithCode) Unwrap() error { return e.err }
+func (e wasapiCodedError) Error() string { return e.err.Error() }
+func (e wasapiCodedError) Unwrap() error { return e.err }
 
 // wasapiErrorCode returns the HRESULT carried by a WASAPI call error, or zero.
 func wasapiErrorCode(err error) uint32 {
-	if coded, ok := err.(wasapiHRESULTWithCode); ok {
+	if coded, ok := errors.AsType[wasapiCodedError](err); ok {
 		return coded.hr
 	}
 	return 0
@@ -677,25 +541,25 @@ func enumerateEndpoints(enumerator wasapiCOM, flow uint32) (wasapiCOM, error) {
 	var collectionPtr unsafe.Pointer
 	hresult, err := enumerator.call(immDeviceEnumeratorVTable, uintptr(flow), deviceStateActive, uintptr(unsafe.Pointer(&collectionPtr)))
 	if err != nil {
-		return wasapiCOM{}, wasapiHRESULTWithCode{hr: hresult, err: err}
+		return wasapiCOM{}, wasapiCodedError{hr: hresult, err: err}
 	}
 	return wasapiCOM{ptr: collectionPtr}, nil
 }
 
-func (c wasapiCOM) count() (uint32, error) {
+func (c *wasapiCOM) count() (uint32, error) {
 	var count uint32
 	hresult, err := c.call(immDeviceCollectionVTable, uintptr(unsafe.Pointer(&count)))
 	if err != nil {
-		return 0, wasapiHRESULTWithCode{hr: hresult, err: err}
+		return 0, wasapiCodedError{hr: hresult, err: err}
 	}
 	return count, nil
 }
 
-func (c wasapiCOM) item(index uint32) (wasapiCOM, error) {
+func (c *wasapiCOM) item(index uint32) (wasapiCOM, error) {
 	var endpointPtr unsafe.Pointer
 	hresult, err := c.call(immDeviceCollectionVTable+1, uintptr(index), uintptr(unsafe.Pointer(&endpointPtr)))
 	if err != nil {
-		return wasapiCOM{}, wasapiHRESULTWithCode{hr: hresult, err: err}
+		return wasapiCOM{}, wasapiCodedError{hr: hresult, err: err}
 	}
 	return wasapiCOM{ptr: endpointPtr}, nil
 }
@@ -789,7 +653,7 @@ func parseWASAPIAudioFormat(raw unsafe.Pointer) (wasapiAudioFormat, error) {
 	case waveFormatIEEEFloat:
 		format.subFormat = wasapiSubtypeIEEEFloat
 	case waveFormatExtensible:
-		if base.cbSize < 22 {
+		if base.cbSize < waveFormatExtensibleExtraBytes {
 			return wasapiAudioFormat{}, fmt.Errorf("WASAPI extensible format has %d extra bytes, want at least 22", base.cbSize)
 		}
 		extended := *(*wasapiWaveFormatExtensible)(raw)
@@ -807,7 +671,7 @@ func parseWASAPIAudioFormat(raw unsafe.Pointer) (wasapiAudioFormat, error) {
 	if format.subFormat != wasapiSubtypePCM && format.subFormat != wasapiSubtypeIEEEFloat {
 		return wasapiAudioFormat{}, fmt.Errorf("unsupported WASAPI audio subformat %v", format.subFormat)
 	}
-	if uint32(format.channels)*uint32(format.bitsPerSample/8) > uint32(format.blockAlign) {
+	if uint32(format.channels)*uint32(format.bitsPerSample/bitsPerByte) > uint32(format.blockAlign) {
 		return wasapiAudioFormat{}, fmt.Errorf("WASAPI block alignment %d is smaller than one frame", format.blockAlign)
 	}
 	return format, nil
@@ -880,9 +744,9 @@ func utf16PtrString(ptr *uint16) string {
 
 type wasapiCOM struct{ ptr unsafe.Pointer }
 
-func (c wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
+func (c *wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
 	if c.ptr == nil {
-		return 0x80004003, wasapiHRESULT(0x80004003)
+		return hresultEPointer, wasapiHRESULTError(hresultEPointer)
 	}
 	method := c.vtableMethod(index)
 	callArgs := make([]uintptr, 1, len(args)+1)
@@ -891,12 +755,12 @@ func (c wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
 	r1, _, _ := syscall.SyscallN(method, callArgs...)
 	hresult := uint32(r1)
 	if int32(hresult) < 0 {
-		return hresult, wasapiHRESULT(hresult)
+		return hresult, wasapiHRESULTError(hresult)
 	}
 	return hresult, nil
 }
 
-func (c wasapiCOM) vtableMethod(index int) uintptr {
+func (c *wasapiCOM) vtableMethod(index int) uintptr {
 	vtable := *(*unsafe.Pointer)(c.ptr)
 	return *(*uintptr)(unsafe.Add(vtable, uintptr(index)*unsafe.Sizeof(uintptr(0))))
 }
@@ -910,9 +774,9 @@ func (c *wasapiCOM) release() {
 	c.ptr = nil
 }
 
-type wasapiHRESULT uint32
+type wasapiHRESULTError uint32
 
-func (e wasapiHRESULT) Error() string {
+func (e wasapiHRESULTError) Error() string {
 	return fmt.Sprintf("WASAPI call failed with HRESULT 0x%08x", uint32(e))
 }
 
@@ -926,7 +790,7 @@ func initializeCOM() (func(), error) {
 	hresult := uint32(r1)
 	if int32(hresult) < 0 {
 		runtime.UnlockOSThread()
-		return nil, wasapiHRESULT(hresult)
+		return nil, wasapiHRESULTError(hresult)
 	}
 	return func() {
 		_, _, _ = wasapiCoUninitialize.Call()
@@ -952,7 +816,7 @@ func newWASAPIEnumerator() (wasapiCOM, func(), error) {
 		if enumeratorPtr == nil && int32(uint32(hresult)) >= 0 {
 			return wasapiCOM{}, nil, fmt.Errorf("WASAPI returned an empty device enumerator")
 		}
-		return wasapiCOM{}, nil, wasapiHRESULT(uint32(hresult))
+		return wasapiCOM{}, nil, wasapiHRESULTError(uint32(hresult))
 	}
 	return wasapiCOM{ptr: enumeratorPtr}, cleanup, nil
 }

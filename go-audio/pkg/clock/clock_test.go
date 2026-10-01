@@ -319,11 +319,11 @@ func TestDeterministicConcurrentTimerLifecycleAndAdvancement(t *testing.T) {
 	start := make(chan struct{})
 	var group sync.WaitGroup
 	group.Add(workers)
-	for worker := 0; worker < workers; worker++ {
+	for worker := range workers {
 		go func(worker int) {
 			defer group.Done()
 			<-start
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				timer := clock.NewTimer(time.Duration((worker+i)%17) * time.Microsecond)
 				if (worker+i)%2 == 0 {
 					timer.Stop()
@@ -335,7 +335,7 @@ func TestDeterministicConcurrentTimerLifecycleAndAdvancement(t *testing.T) {
 	go func() {
 		defer group.Done()
 		<-start
-		for i := 0; i < workers*iterations; i++ {
+		for range workers * iterations {
 			clock.AdvanceBy(time.Microsecond)
 		}
 	}()
@@ -455,7 +455,7 @@ func applyS7Step(clock *Deterministic, modelTick uint64, index int, value byte) 
 // of the first monotonicity or tick-lattice violation, or "" when none occurs.
 func observeS8MonotonicLattice(clock *Deterministic, base time.Time, tickDuration time.Duration, iterations int) string {
 	var previous time.Time
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		observed := clock.Now()
 		if i > 0 && observed.Before(previous) {
 			return "reader observed time moving backward"
@@ -487,7 +487,7 @@ func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
 	var advancers sync.WaitGroup
 	readerErrors := make(chan string, readerCount)
 
-	for reader := 0; reader < readerCount; reader++ {
+	for range readerCount {
 		readers.Add(1)
 		go func() {
 			defer readers.Done()
@@ -498,12 +498,12 @@ func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
 		}()
 	}
 
-	for advancer := 0; advancer < advancerCount; advancer++ {
+	for advancer := range advancerCount {
 		advancers.Add(1)
 		go func(id int) {
 			defer advancers.Done()
 			<-start
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				if id%2 == 0 {
 					clock.Advance()
 					continue
@@ -531,7 +531,7 @@ func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
 	expectedTime := base.Add(time.Duration(expectedTick) * tickDuration)
 	reads := make(chan time.Time, readerCount)
 	var stableReaders sync.WaitGroup
-	for i := 0; i < readerCount; i++ {
+	for range readerCount {
 		stableReaders.Add(1)
 		go func() {
 			defer stableReaders.Done()

@@ -274,9 +274,9 @@ func (s *RTCDeviceSink) reconcilePlaybackObservationDrops(before, after audio.Pl
 		return
 	}
 	delta := after.DroppedSamples - before.DroppedSamples
-	max := uint64(^uint(0) >> 1)
-	if delta > max {
-		delta = max
+	limit := uint64(^uint(0) >> 1)
+	if delta > limit {
+		delta = limit
 	}
 	s.playbackObservations.dropQueued(int(delta))
 }
@@ -284,7 +284,7 @@ func (s *RTCDeviceSink) reconcilePlaybackObservationDrops(before, after audio.Pl
 func (s *RTCDeviceSink) runPlaybackCommands() {
 	defer close(s.commandDone)
 	for {
-		request, err := s.commands.Receive(s.lifeCtx)
+		request, err := s.commands.ReceiveUntilClosed()
 		if err != nil {
 			return
 		}

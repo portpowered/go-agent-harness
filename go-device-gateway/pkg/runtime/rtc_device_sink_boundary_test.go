@@ -171,6 +171,7 @@ func TestC21ConsumptionBoundary(t *testing.T) {
 }
 
 func testC21ConsumptionBoundaryResponses(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 16000, 5)
 	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(64)
@@ -215,6 +216,7 @@ func testC21ConsumptionBoundaryResponses(t *testing.T) {
 }
 
 func testC21ConsumptionBoundaryHoldTone(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 16000, 5)
 	sub, err := sink.SubscribePlaybackObservations(16)
 	if err != nil {
@@ -276,6 +278,7 @@ func TestC21ConsumptionInterruptionAtIncompleteSpanBoundary(t *testing.T) {
 }
 
 func testC21ConsumptionInterruption(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 24000, 2000)
 	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(32)
@@ -317,6 +320,7 @@ func testC21ConsumptionInterruption(t *testing.T) {
 }
 
 func testC21ConsumptionRate(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 16000, 320)
 	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(16)
@@ -351,7 +355,7 @@ func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("subscribe bounded observations: %v", err)
 	}
-	for index := 0; index < 300; index++ {
+	for index := range 300 {
 		response := audio.PlaybackResponse{ResponseID: "c21-many-response", ItemID: "c21-item-" + fmt.Sprint(index)}
 		sink.StartPlayback(response)
 		c21WritePlayback(t, sink, fmt.Sprintf("write response %d", index), []int16{int16(index + 1)})
@@ -510,7 +514,7 @@ func TestRTCDeviceSinkBoundsStatsPollingWithoutRenderBoundary(t *testing.T) {
 	response := audio.PlaybackResponse{ResponseID: "stats-response", ItemID: "stats-item"}
 	sink.StartPlayback(response)
 	frame := make([]int16, audio.FrameSize)
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		if err := sink.WritePlayback(context.Background(), frame); err != nil {
 			t.Fatalf("write frame %d: %v", index, err)
 		}

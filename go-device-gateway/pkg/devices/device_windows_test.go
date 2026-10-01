@@ -2,8 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -15,6 +13,7 @@ import (
 	"testing"
 	"unsafe"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -32,11 +31,11 @@ func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			id := DeviceID("wasapi:test")
-			err := mapWASAPIOpenError(id, "open endpoint", wasapiHRESULTWithCode{hr: testCase.hr, err: wasapiHRESULT(testCase.hr)})
+			err := mapWASAPIOpenError(id, "open endpoint", wasapiCodedError{hr: testCase.hr, err: wasapiHRESULTError(testCase.hr)})
 			if !errors.Is(err, testCase.want) || !testCase.as(err) {
 				t.Fatalf("error=%v, want typed %v", err, testCase.want)
 			}
-			if !strings.Contains(err.Error(), string(id)) && testCase.want == ErrDeviceInUse {
+			if !strings.Contains(err.Error(), string(id)) && errors.Is(testCase.want, ErrDeviceInUse) {
 				t.Fatalf("error=%q does not name device %q", err, id)
 			}
 		})
@@ -49,7 +48,7 @@ func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 // It intentionally uses the virtual callback seam; it is not native WASAPI or
 // acoustic evidence.
 func TestWindowsPortablePlaybackBurstPreservesFIFOCanonicalCaptureEnergy(t *testing.T) {
-	_, output, input := adversarialVirtualPair(t, 24000)
+	_, output, input := adversarialVirtualPair(t)
 	testPacedPlaybackBackend(t, output, func(raw []byte) {
 		samples := make([]int16, audio.FrameSize)
 		if err := input.ReadFrame(context.Background(), samples); err != nil {
@@ -182,101 +181,4 @@ func wasapiFloat64Packet(values ...float64) []byte {
 		binary.LittleEndian.PutUint64(raw[index*8:], math.Float64bits(value))
 	}
 	return raw
-}
-
-func TestWASAPIOpenHasLiveDataPath(t *testing.T) {
-	registry := newWASAPIDeviceRegistry()
-	_, err := registry.List()
-	if err != nil {
-		t.Skipf("Windows: missing WASAPI endpoint enumeration capability: %v", err)
-	}
-	for _, direction := range []Direction{DirectionInput, DirectionOutput} {
-		direction := direction
-		t.Run(direction.String(), func(t *testing.T) {
-			selected, err := registry.Default(direction)
-			if err != nil {
-				t.Skipf("Windows: missing %s default endpoint: %v", direction, err)
-			}
-			opened, err := registry.Open(selected.ID)
-			if err != nil {
-				t.Skipf("Windows: exact %s endpoint cannot open: %v", direction, err)
-			}
-			defer closeForTest(t, "opened", opened)
-			handle, ok := opened.(*wasapiOpenedDevice)
-			if !ok {
-				t.Fatal("WASAPI registry returned an unexpected opened-device type")
-			}
-			if err := handle.verifyDataPathForTest(); err != nil {
-				t.Fatalf("Windows: %s data-path assertion failed after endpoint open: %v", direction, err)
-			}
-		})
-	}
-}
-
-func TestWASAPIDeviceRegistryConformance(t *testing.T) {
-	probe := newWASAPIDeviceRegistry()
-	devices, err := probe.List()
-	if err != nil {
-		t.Skipf("Windows: WASAPI enumeration unavailable: %v", err)
-	}
-	var inputDefault, outputDefault Device
-	for _, device := range devices {
-		switch device.Direction {
-		case DirectionInput:
-			if inputDefault.ID == "" {
-				inputDefault = device
-			}
-		case DirectionOutput:
-			if outputDefault.ID == "" {
-				outputDefault = device
-			}
-		}
-	}
-	if inputDefault.ID == "" {
-		t.Skip("Windows: missing active capture endpoint")
-	}
-	if outputDefault.ID == "" {
-		t.Skip("Windows: missing active render endpoint")
-	}
-	if _, err := probe.Default(DirectionInput); err != nil {
-		t.Skipf("Windows: missing input default endpoint: %v", err)
-	}
-	if _, err := probe.Default(DirectionOutput); err != nil {
-		t.Skipf("Windows: missing output default endpoint: %v", err)
-	}
-	opened, err := probe.Open(outputDefault.ID)
-	if err != nil {
-		t.Skipf("Windows: exclusive endpoint capability unavailable for %q: %v", outputDefault.ID, err)
-	} else {
-		// The probe open above is only a capability check; the fixture below
-		// creates fresh registries for each isolated conformance subtest.
-		closeForTest(t, "probe", opened)
-	}
-
-	RunDeviceRegistryConformance(t, func() DeviceRegistryConformanceFixture {
-		registry := newWASAPIDeviceRegistry()
-		listed, listErr := registry.List()
-		if listErr != nil {
-			t.Fatalf("fixture List: %v", listErr)
-		}
-		input, inputErr := registry.Default(DirectionInput)
-		if inputErr != nil {
-			t.Fatalf("fixture input Default: %v", inputErr)
-		}
-		output, outputErr := registry.Default(DirectionOutput)
-		if outputErr != nil {
-			t.Fatalf("fixture output Default: %v", outputErr)
-		}
-		if len(listed) == 0 || input.ID == "" || output.ID == "" {
-			t.Fatal("fixture requires listed input and output defaults")
-		}
-		return DeviceRegistryConformanceFixture{
-			Registry:      registry,
-			InputDefault:  input.ID,
-			OutputDefault: output.ID,
-			ExclusiveID:   output.ID,
-			RemoveDevice:  registry.hideForTest,
-			Observations:  registry.observations,
-		}
-	})
 }

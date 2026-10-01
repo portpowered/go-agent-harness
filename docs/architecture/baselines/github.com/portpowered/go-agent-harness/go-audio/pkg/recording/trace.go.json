@@ -17,7 +17,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-audio",
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/recording",
       "file": "pkg/recording/trace.go",
-      "value": 450,
+      "value": 444,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -27,16 +27,6 @@
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/recording",
       "file": "pkg/recording/trace.go",
       "symbol": "ErrIncomplete",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/go-audio",
-      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/recording",
-      "file": "pkg/recording/trace.go",
-      "symbol": "sessionAudioTraceFiles",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
       "message": "mutable package state must be owned by an injected service"

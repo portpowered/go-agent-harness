@@ -300,7 +300,7 @@ func TestCommandFailureExitsNonZero(t *testing.T) {
 		t.Fatalf("write profile: %v", err)
 	}
 
-	command := exec.Command("go", "run", ".", "--manifest", manifestPath, profilePath)
+	command := exec.CommandContext(t.Context(), "go", "run", ".", "--manifest", manifestPath, profilePath)
 	command.Dir = "."
 	command.Env = append(os.Environ(), "GOWORK=off")
 	output, err := command.CombinedOutput()

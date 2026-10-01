@@ -2,13 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
-/*
-#include <stdlib.h>
-*/
-import "C"
-
 import (
 	"context"
 	"errors"
@@ -20,11 +13,19 @@ import (
 	"sync/atomic"
 
 	"github.com/gen2brain/malgo"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
+
+/*
+#include <stdlib.h>
+*/
+import "C"
 
 const coreAudioBackend = "coreaudio"
 
-var coreAudioBackends = []malgo.Backend{malgo.BackendCoreaudio}
+// coreAudioBackends restricts malgo to the CoreAudio backend.
+func coreAudioBackends() []malgo.Backend { return []malgo.Backend{malgo.BackendCoreaudio} }
 
 // CoreAudioDeviceRegistry exposes macOS's current CoreAudio endpoints.
 type CoreAudioDeviceRegistry struct {
@@ -130,7 +131,7 @@ func (r *CoreAudioDeviceRegistry) OpenDuplexWithFormat(inputID DeviceID, inputFo
 	}
 	inputHandle, outputHandle, err := newVoiceProcessingIO(inputID, outputID, inputFormat, outputFormat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrDuplexDeviceUnavailable, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrDuplexDeviceUnavailable, err)
 	}
 	return inputHandle, outputHandle, nil
 }
@@ -181,7 +182,7 @@ func releaseCoreAudioContext(ctx *malgo.AllocatedContext) error {
 	return ctx.Uninit()
 }
 func enumerateCoreAudioDevices() (endpoints []coreAudioEndpoint, err error) {
-	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
+	ctx, err := malgo.InitContext(coreAudioBackends(), malgo.ContextConfig{}, nil)
 	if err != nil {
 		if isCoreAudioUnavailable(err) {
 			return []coreAudioEndpoint{}, nil
@@ -196,7 +197,7 @@ func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {
 }
 
 func openCoreAudioDeviceWithFormat(endpoint coreAudioEndpoint, format audio.DeviceFormat) (OpenedDevice, error) {
-	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
+	ctx, err := malgo.InitContext(coreAudioBackends(), malgo.ContextConfig{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +292,7 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	}
 	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, format: format, playback: playback, playbackWake: make(chan struct{})}
 	if direction == DirectionInput {
-		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
+		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, microphoneFrameBuffer)}
 	}
 	device, err := malgo.InitDevice(ctx.Context, config, malgo.DeviceCallbacks{Data: handle.onData})
 	if err != nil {
@@ -383,9 +384,6 @@ func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	}
 	if h.capture == nil {
 		return fmt.Errorf("audio device %q has no capture source", h.id)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	return h.capture.ReadFrame(ctx, frame)
 }
@@ -483,7 +481,7 @@ func (h *coreAudioHandle) WaitForPlaybackCapacity(ctx context.Context, samples i
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	low, high, err := audio.PlaybackQueueWatermarks(h.format)
 	if err != nil {
@@ -528,7 +526,7 @@ func (h *coreAudioHandle) WaitForPlayback(ctx context.Context) error {
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	for {
 		h.mu.Lock()

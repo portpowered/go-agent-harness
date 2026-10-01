@@ -2,8 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -11,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/gen2brain/malgo"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -19,6 +18,10 @@ import (
 //
 // Frames are buffered in a channel; ReadFrame blocks until a frame is
 // available or the context is cancelled.
+// microphoneFrameBuffer is the capture frames (~1.9 s) buffered before the
+// oldest is dropped.
+const microphoneFrameBuffer = 64
+
 type MicrophoneSource struct {
 	malgoCtx *malgo.AllocatedContext
 	device   *malgo.Device
@@ -39,9 +42,8 @@ func NewMicrophoneSource() (*MicrophoneSource, error) {
 
 	m := &MicrophoneSource{
 		malgoCtx: malgoCtx,
-		// Buffer up to 64 frames (~1.9 s) before dropping.
-		frameCh: make(chan []int16, 64),
-		stats:   audio.CaptureQueueStats{DropPolicy: captureDropOldest},
+		frameCh:  make(chan []int16, microphoneFrameBuffer),
+		stats:    audio.CaptureQueueStats{DropPolicy: captureDropOldest},
 	}
 
 	cfg := malgo.DefaultDeviceConfig(malgo.Capture)

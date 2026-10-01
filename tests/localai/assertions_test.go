@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"strings"
 	"testing"
 )
@@ -69,7 +70,7 @@ func TestNegativeControlsRejectFalsePositives(t *testing.T) {
 		{
 			name: "no-tools",
 			check: func() error {
-				return requireExactlyOneToolCall(nil, lookupWeatherTool.name)
+				return requireExactlyOneToolCall(nil, lookupWeatherTool().name)
 			},
 		},
 		{
@@ -127,8 +128,8 @@ func fixtureImageDataURI() (string, error) {
 	width := padding*2 + (glyphWidth*scale+spacing*scale)*(len(word)-1) + glyphWidth*scale
 	height := padding*2 + glyphHeight*scale
 	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			canvas.Set(x, y, color.RGBA{R: 245, G: 249, B: 255, A: 255})
 		}
 	}
@@ -142,8 +143,8 @@ func fixtureImageDataURI() (string, error) {
 				if bit != '1' {
 					continue
 				}
-				for y := 0; y < scale; y++ {
-					for x := 0; x < scale; x++ {
+				for y := range scale {
+					for x := range scale {
 						canvas.Set(padding+charIndex*(glyphWidth+spacing)*scale+column*scale+x, padding+row*scale+y, color.RGBA{R: 15, G: 55, B: 95, A: 255})
 					}
 				}
@@ -155,4 +156,34 @@ func fixtureImageDataURI() (string, error) {
 		return "", fmt.Errorf("encode fixture image: %w", err)
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes()), nil
+}
+
+const contextFact = "cobalt-17"
+
+// discardClose closes a connection or body whose exchange already produced
+// its result. A close failure on a finished exchange cannot change the
+// observed behavior, so it must not turn a passing observation into a failure.
+func discardClose(closer io.Closer) {
+	_ = closer.Close() //nolint:errcheck // the exchange already produced its result; a close failure cannot change the observed behavior
+}
+
+const imageFact = "ORBIT"
+
+// lookupWeatherTool is the single tool offered to the model-chosen function
+// call behavior and its controls.
+func lookupWeatherTool() toolDefinition {
+	return toolDefinition{
+		name:        "lookup_weather",
+		description: "Look up the weather for one city.",
+		parameters: map[string]toolParameter{
+			"city": {typeName: "string", description: "City name."},
+		},
+		required: []string{"city"},
+	}
+}
+
+func openAIInputRate() int {
+	// Keep the behavior body shared while allowing endpoint-specific audio
+	// encoding details required by the two realtime services.
+	return 24000
 }

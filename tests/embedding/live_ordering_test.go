@@ -155,6 +155,12 @@ func TestExternalFiniteCaptureTurnsRemainOrderedAndResponseGated(t *testing.T) {
 	}
 }
 
+// advanceBubbleClock advances the synctest bubble's fake clock by d. The slow
+// provider runs only inside synctest.Test, where time.Sleep is virtual.
+func advanceBubbleClock(d time.Duration) {
+	time.Sleep(d) //nolint:forbidigo // inside synctest.Test, Sleep advances the bubble's fake clock instead of waiting on the wall clock
+}
+
 // slowAudioProvider models a provider whose audio sends take network time, so
 // an unpaced capture outruns it and fills the ordered session ingress. It
 // answers a commit after a short provider delay, as a realtime model would.
@@ -173,7 +179,7 @@ func (provider *slowAudioProvider) Send(ctx context.Context, message messages.St
 	defer provider.mu.Unlock()
 	switch value := message.Value.(type) {
 	case *messages.AudioDeltaValue:
-		time.Sleep(time.Millisecond)
+		advanceBubbleClock(time.Millisecond)
 		provider.audioBytes += len(value.Content)
 	case *messages.MessageEndValue:
 		provider.commits++
@@ -183,7 +189,7 @@ func (provider *slowAudioProvider) Send(ctx context.Context, message messages.St
 }
 
 func (provider *slowAudioProvider) respond(ctx context.Context, responseID string) {
-	time.Sleep(10 * time.Millisecond)
+	advanceBubbleClock(10 * time.Millisecond)
 	for _, message := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTextDeltaValue("ok")},

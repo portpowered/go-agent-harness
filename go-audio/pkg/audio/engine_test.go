@@ -26,7 +26,7 @@ func TestRouteEngineDrainsPartialTailThroughBuffers(t *testing.T) {
 	ends := 0
 	for {
 		f, err := ports.Output.Receive(context.Background())
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -69,7 +69,7 @@ func TestRouteEngineBlockedConsumerDoesNotPreventInvalidation(t *testing.T) {
 	var got []int16
 	for {
 		f, err := ports.Output.Receive(ctx)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

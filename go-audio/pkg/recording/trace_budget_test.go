@@ -1,14 +1,15 @@
 package recording
 
 import (
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestRuntimeEvidenceByteBudgetPrecedesPacketLimit(t *testing.T) {
 	trace := &Trace{clock: clock.Real{}, events: make(chan sessionAudioTraceBlock, 100)}
 	payload := make([]byte, 512<<10)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		trace.ObserveRuntime(RuntimeEvent{Kind: "tool_result", Payload: payload})
 	}
 	if trace.queuedBytes.Load() > MaxQueuedBytes || len(trace.events) >= 100 || trace.droppedRuntime.Load() == 0 {

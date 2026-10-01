@@ -299,8 +299,7 @@ func TestSessionMediaInvalidCallsAndWriterFailures(t *testing.T) {
 
 	media := audio.NewSessionMedia(nil)
 	endpoints := media.Endpoints()
-	var nilContext context.Context
-	if err := endpoints.Outbound.WriteFrame(nilContext, audio.PCMFrame{}); !errors.Is(err, audio.ErrSessionMediaEmptyFrame) {
+	if err := endpoints.Outbound.WriteFrame(t.Context(), audio.PCMFrame{}); !errors.Is(err, audio.ErrSessionMediaEmptyFrame) {
 		t.Fatalf("empty outbound frame = %v, want ErrSessionMediaEmptyFrame", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -308,7 +307,7 @@ func TestSessionMediaInvalidCallsAndWriterFailures(t *testing.T) {
 	if err := endpoints.Outbound.WriteFrame(ctx, audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled outbound frame = %v, want context.Canceled", err)
 	}
-	if err := endpoints.Outbound.WriteFrame(nilContext, audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, audio.ErrSessionMediaNoWriter) {
+	if err := endpoints.Outbound.WriteFrame(t.Context(), audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, audio.ErrSessionMediaNoWriter) {
 		t.Fatalf("outbound without writer = %v, want ErrSessionMediaNoWriter", err)
 	}
 	if err := endpoints.Outbound.Close(); err != nil {
@@ -343,13 +342,12 @@ func TestSessionMediaInboundFailuresAndEndpointLifecycle(t *testing.T) {
 	if err := media.PushInbound(frame); err != nil {
 		t.Fatalf("inbound push = %v", err)
 	}
-	var nilContext context.Context
-	got, err := endpoints.Inbound.ReadFrame(nilContext)
+	got, err := endpoints.Inbound.ReadFrame(t.Context())
 	if err != nil {
-		t.Fatalf("nil-context inbound read = %v", err)
+		t.Fatalf("inbound read = %v", err)
 	}
 	if len(got.Samples) == 0 || got.Samples[0] != 42 {
-		t.Fatalf("nil-context inbound frame = %v, want first sample 42", got.Samples)
+		t.Fatalf("inbound frame = %v, want first sample 42", got.Samples)
 	}
 
 	wantErr := errors.New("provider inbound failed")
@@ -402,13 +400,13 @@ func TestSessionMediaInboundQueuePreservesFramesBeyondLegacyLimit(t *testing.T) 
 	media := audio.NewSessionMedia(func(context.Context, audio.PCMFrame) error { return nil })
 	const queuedFrames = 257
 	samples := make([]int16, queuedFrames*audio.DefaultSessionMediaFrameSamples)
-	for frameIndex := 0; frameIndex < queuedFrames; frameIndex++ {
+	for frameIndex := range queuedFrames {
 		samples[frameIndex*audio.DefaultSessionMediaFrameSamples] = int16(frameIndex + 1)
 	}
 	if err := media.PushInbound(samples); err != nil {
 		t.Fatalf("push queued inbound frames = %v", err)
 	}
-	for frameIndex := 0; frameIndex < queuedFrames; frameIndex++ {
+	for frameIndex := range queuedFrames {
 		frame, err := media.Endpoints().Inbound.ReadFrame(context.Background())
 		if err != nil {
 			t.Fatalf("read inbound frame %d: %v", frameIndex, err)
@@ -452,10 +450,16 @@ func TestSessionMediaInboundBacklogLimitFailsInsteadOfDroppingPCM(t *testing.T) 
 }
 
 // closeForTest closes a test-owned resource and reports an unexpected failure.
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
+// advanceBubbleClock advances the synctest bubble's fake clock by d. Call it
+// only inside synctest.Test, where time.Sleep is virtual.
+func advanceBubbleClock(d time.Duration) {
+	time.Sleep(d) //nolint:forbidigo // inside synctest.Test, Sleep advances the bubble's fake clock instead of waiting on the wall clock
+}
+
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("Close() error = %v", err)
+		tb.Errorf("Close() error = %v", err)
 	}
 }
 
@@ -512,9 +516,9 @@ func TestSessionMediaPlaybackActivityFollowsAudibleAudio(t *testing.T) {
 			_, err := media.Endpoints().Inbound.ReadFrame(t.Context())
 			requireNoError(t, err)
 		}
-		time.Sleep(500 * time.Millisecond)
+		advanceBubbleClock(500 * time.Millisecond)
 		assertPlaybackActivity(t, media, "mid-playback", true, 2900, 3100)
-		time.Sleep(time.Second) // past the audio and its acoustic tail
+		advanceBubbleClock(time.Second) // past the audio and its acoustic tail
 		assertPlaybackActivity(t, media, "finished", false, 0, 0)
 
 		pushSpeech(t, media, "resp-next")

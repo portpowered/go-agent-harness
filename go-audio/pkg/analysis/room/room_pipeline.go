@@ -222,7 +222,7 @@ func (s *pcm16RoomAnalysisState) measureLoudness() error {
 	return nil
 }
 
-func (s *pcm16RoomAnalysisState) measureBargeIns() error {
+func (s *pcm16RoomAnalysisState) measureBargeIns() {
 	for _, annotation := range s.normalized.BargeIns {
 		interrupter := s.streams[annotation.InterrupterStreamID]
 		interrupted := s.streams[annotation.InterruptedStreamID]
@@ -230,5 +230,4 @@ func (s *pcm16RoomAnalysisState) measureBargeIns() error {
 		s.result.BargeIns = append(s.result.BargeIns, measurement)
 		appendBargeInFailures(&s.result.Failures, measurement, interrupter, interrupted, s.config.BargeInSpeechThresholdDBFS, s.config.MaxBargeInLatency)
 	}
-	return nil
 }

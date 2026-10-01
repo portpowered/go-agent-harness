@@ -85,7 +85,7 @@ func implementationTypeArguments(value *types.Named, visited map[types.Type]bool
 	if arguments == nil {
 		return ""
 	}
-	for index := 0; index < arguments.Len(); index++ {
+	for index := range arguments.Len() {
 		if leak := implementationType(arguments.At(index), visited); leak != "" {
 			return leak
 		}
@@ -98,7 +98,7 @@ func implementationTypeParameters(value *types.Named, visited map[types.Type]boo
 	if parameters == nil {
 		return ""
 	}
-	for index := 0; index < parameters.Len(); index++ {
+	for index := range parameters.Len() {
 		if leak := implementationType(parameters.At(index).Constraint(), visited); leak != "" {
 			return leak
 		}
@@ -117,7 +117,7 @@ func implementationMethodSet(value types.Type, visited map[types.Type]bool) stri
 }
 
 func implementationMethods(methods *types.MethodSet, visited map[types.Type]bool) string {
-	for index := 0; index < methods.Len(); index++ {
+	for index := range methods.Len() {
 		method := methods.At(index).Obj()
 		if !method.Exported() {
 			continue
@@ -147,7 +147,7 @@ func implementationSignature(value *types.Signature, visited map[types.Type]bool
 	if parameters == nil {
 		return ""
 	}
-	for index := 0; index < parameters.Len(); index++ {
+	for index := range parameters.Len() {
 		if leak := implementationType(parameters.At(index).Constraint(), visited); leak != "" {
 			return leak
 		}
@@ -156,7 +156,7 @@ func implementationSignature(value *types.Signature, visited map[types.Type]bool
 }
 
 func implementationStruct(value *types.Struct, visited map[types.Type]bool) string {
-	for index := 0; index < value.NumFields(); index++ {
+	for index := range value.NumFields() {
 		field := value.Field(index)
 		if !field.Exported() && !field.Embedded() {
 			continue
@@ -169,7 +169,7 @@ func implementationStruct(value *types.Struct, visited map[types.Type]bool) stri
 }
 
 func implementationInterface(value *types.Interface, visited map[types.Type]bool) string {
-	for index := 0; index < value.NumMethods(); index++ {
+	for index := range value.NumMethods() {
 		method := value.Method(index)
 		if !method.Exported() {
 			continue
@@ -178,7 +178,7 @@ func implementationInterface(value *types.Interface, visited map[types.Type]bool
 			return leak
 		}
 	}
-	for index := 0; index < value.NumEmbeddeds(); index++ {
+	for index := range value.NumEmbeddeds() {
 		if leak := implementationType(value.EmbeddedType(index), visited); leak != "" {
 			return leak
 		}
@@ -187,7 +187,7 @@ func implementationInterface(value *types.Interface, visited map[types.Type]bool
 }
 
 func implementationTuple(tuple *types.Tuple, visited map[types.Type]bool) string {
-	for index := 0; index < tuple.Len(); index++ {
+	for index := range tuple.Len() {
 		if leak := implementationType(tuple.At(index).Type(), visited); leak != "" {
 			return leak
 		}
@@ -196,7 +196,7 @@ func implementationTuple(tuple *types.Tuple, visited map[types.Type]bool) string
 }
 
 func implementationUnion(value *types.Union, visited map[types.Type]bool) string {
-	for index := 0; index < value.Len(); index++ {
+	for index := range value.Len() {
 		if leak := implementationType(value.Term(index).Type(), visited); leak != "" {
 			return leak
 		}

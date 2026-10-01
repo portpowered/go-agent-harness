@@ -1,10 +1,9 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -13,7 +12,9 @@ import (
 	"sync"
 	"time"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
 
@@ -164,8 +165,14 @@ func NewSimulatedDuplexRegistryWithObservability(s DuplexScenario, sampler obser
 	if s.Acoustic.GainQ15 == 0 {
 		s.Acoustic.GainQ15 = 32768
 	}
-	input := constantDevice(SimulatedDuplexBackendName, "input", "Simulated Duplex Input", DirectionInput)
-	output := constantDevice(SimulatedDuplexBackendName, "output", "Simulated Duplex Output", DirectionOutput)
+	input, err := NewDevice(SimulatedDuplexBackendName, "input", "Simulated Duplex Input", DirectionInput)
+	if err != nil {
+		return nil, err
+	}
+	output, err := NewDevice(SimulatedDuplexBackendName, "output", "Simulated Duplex Output", DirectionOutput)
+	if err != nil {
+		return nil, err
+	}
 	return &SimulatedDuplexRegistry{
 		scenario: s, format: format, input: input, output: output,
 		playback: playback, captureCapacity: captureCapacity,
@@ -272,7 +279,7 @@ func (s *SimulatedDuplexStream) ReadFrame(ctx context.Context, frame []int16) er
 		return err
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	for {
 		s.registry.mu.Lock()
@@ -391,7 +398,7 @@ func (r *SimulatedDuplexRegistry) Advance(count int) error {
 	}
 	r.mu.Lock()
 	traceStart := len(r.trace)
-	for i := 0; i < count; i++ {
+	for range count {
 		if err := r.advanceRenderLocked(); err != nil {
 			r.mu.Unlock()
 			return err
@@ -423,10 +430,10 @@ func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
 			"clock_epoch": strconv.FormatUint(uint64(event.ClockEpoch), 10),
 			"sample_rate": strconv.Itoa(event.SampleRate),
 		}
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: "audio.device.callbacks", Kind: "counter", Value: 1, Unit: "callbacks", Fields: fields,
 		})
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: "audio.device.queue.depth", Kind: "gauge", Value: float64(event.QueueAfter), Unit: "samples", Fields: fields,
 		})
 		if len(event.Flags) == 0 {
@@ -439,10 +446,10 @@ func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
 			"flags":       strings.Join(event.Flags, ","),
 			"fault_id":    event.FaultID,
 		}
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: "audio.device.faults", Kind: "counter", Value: 1, Unit: "events", Fields: faultFields,
 		})
-		r.log(context.Background(), r.logger, observability.LogRecord{
+		r.log(r.logger, observability.LogRecord{
 			Level: "warn", Message: "simulated audio device callback fault", Fields: faultFields,
 		})
 	}
@@ -470,12 +477,12 @@ func (r *SimulatedDuplexRegistry) observeQueueDeltas(playback, previousPlayback 
 			continue
 		}
 		loss = true
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: metric.name, Kind: "counter", Value: float64(metric.value), Unit: metric.unit, Fields: fields,
 		})
 	}
 	if loss {
-		r.log(context.Background(), r.logger, observability.LogRecord{
+		r.log(r.logger, observability.LogRecord{
 			Level: "warn", Message: "simulated audio buffer loss", Fields: fields,
 		})
 	}
@@ -643,6 +650,9 @@ func (r *SimulatedDuplexRegistry) applyTimelineFaultsLocked(faults []FaultEvent,
 				r.capturePosition += uint64(repeated(r.scenario.Capture.Quanta, r.captureCallback-1))
 			}
 			return true
+		case FaultDuplicateCallback:
+			// Duplicate callbacks replay data in the render and capture
+			// paths; they do not move the timeline.
 		}
 	}
 	return false
@@ -708,8 +718,10 @@ func jitter(c ClockSpec, index uint64) int64 {
 }
 func traceFor(tap string, sequence uint64, epoch uint32, rate int, start uint64, samples []int16, before, after int, jitter int64, flags []string, faultID string) DeviceTraceEvent {
 	h := sha256.New()
+	var encoded [2]byte
 	for _, sample := range samples {
-		h.Write([]byte{byte(sample), byte(uint16(sample) >> 8)})
+		binary.LittleEndian.PutUint16(encoded[:], uint16(sample))
+		h.Write(encoded[:])
 	}
 	return DeviceTraceEvent{Tap: tap, Sequence: sequence, ClockEpoch: epoch, SampleRate: rate, StartSample: start, SampleCount: len(samples), DeviceTick: sequence, HostMonoSamples: int64(start) + jitter, QueueBefore: before, QueueAfter: after, Flags: flags, FaultID: faultID, PayloadSHA256: hex.EncodeToString(h.Sum(nil))}
 }
@@ -739,29 +751,4 @@ func stemSample(stem []int16, position *int) int16 {
 	value := stem[*position]
 	*position++
 	return value
-}
-func scaleQ15(sample int16, gain int32) int16 {
-	product := int64(sample) * int64(gain)
-	if product >= 0 {
-		product += 16384
-	} else {
-		product -= 16384
-	}
-	return saturatePCM16Int64(product / 32768)
-}
-func saturatingAdd(a, b int16) int16 { return saturatePCM16Int64(int64(a) + int64(b)) }
-func saturatePCM16Int64(v int64) int16 {
-	if v < -32768 {
-		return -32768
-	}
-	if v > 32767 {
-		return 32767
-	}
-	return int16(v)
-}
-func max64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }

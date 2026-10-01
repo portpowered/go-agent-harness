@@ -133,7 +133,7 @@ func TestServiceRunVirtualProbeUsesInputAndOutputContracts(t *testing.T) {
 	if observation.Transcript != "virtual response" {
 		t.Fatalf("transcript = %q, want provider transcript", observation.Transcript)
 	}
-	if len(observation.PCM16Samples) == 0 || audio.PCM16RMSEnergy(observation.PCM16Samples) <= audio.DefaultVADConfig.EnergyThreshold {
+	if len(observation.PCM16Samples) == 0 || audio.PCM16RMSEnergy(observation.PCM16Samples) <= audio.DefaultVADConfig().EnergyThreshold {
 		t.Fatalf("output samples/RMS = %d/%.2f, want voiced output", len(observation.PCM16Samples), audio.PCM16RMSEnergy(observation.PCM16Samples))
 	}
 	// Run must release the input and output it bound; only the test's seed

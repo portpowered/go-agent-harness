@@ -1,10 +1,12 @@
 package recording
 
 import (
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"errors"
 	"io"
 	"sync"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestConcurrentTapAdmissionHasReplayableSampleOrder(t *testing.T) {
@@ -14,11 +16,11 @@ func TestConcurrentTapAdmissionHasReplayableSampleOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	var producers sync.WaitGroup
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		producers.Add(1)
 		go func(value int16) {
 			defer producers.Done()
-			for n := 0; n < 8; n++ {
+			for range 8 {
 				trace.CaptureMicrophonePreGate(16000, []int16{value})
 			}
 		}(int16(i))
@@ -34,7 +36,7 @@ func TestConcurrentTapAdmissionHasReplayableSampleOrder(t *testing.T) {
 	samples := 0
 	for {
 		_, frame, err := replay.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

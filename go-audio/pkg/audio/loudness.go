@@ -97,8 +97,11 @@ func (n *LoudnessNormalizer) GainDB() float64 {
 	if n == nil || n.gainLinear <= 0 {
 		return 0
 	}
-	return 20 * math.Log10(n.gainLinear)
+	return decibelsPerDecade * math.Log10(n.gainLinear)
 }
+
+// decibelsPerDecade converts an amplitude ratio's base-10 log to decibels.
+const decibelsPerDecade = 20
 
 // Process applies the configured gain to samples and returns a new slice;
 // the input is never mutated. An empty input returns nil. A normalizer with
@@ -166,15 +169,15 @@ func (n *LoudnessNormalizer) applyGain(samples []int16) []int16 {
 }
 
 func dbToLinear(db float64) float64 {
-	return math.Pow(10, db/20)
+	return math.Pow(10, db/decibelsPerDecade)
 }
 
 func clampInt16(value float64) int16 {
 	switch {
-	case value >= 32767:
-		return 32767
-	case value <= -32768:
-		return -32768
+	case value >= math.MaxInt16:
+		return math.MaxInt16
+	case value <= math.MinInt16:
+		return math.MinInt16
 	default:
 		return int16(math.Round(value))
 	}

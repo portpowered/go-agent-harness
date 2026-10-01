@@ -3,12 +3,17 @@
 package devices
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
 )
 
+// Lazily resolved, concurrency-safe kernel32 procedure bindings, the standard
+// Windows binding pattern; they hold no program state.
+//
+//nolint:gochecknoglobals // immutable lazy DLL procedure bindings (see above)
 var (
 	interruptibleKernel32       = syscall.NewLazyDLL("kernel32.dll")
 	interruptibleGetCurrentProc = interruptibleKernel32.NewProc("GetCurrentProcess")
@@ -31,7 +36,7 @@ func openInterruptibleInput(file *os.File) (*os.File, error) {
 		2, // DUPLICATE_SAME_ACCESS
 	)
 	if result == 0 {
-		if callErr == syscall.Errno(0) {
+		if errors.Is(callErr, syscall.Errno(0)) {
 			callErr = syscall.EINVAL
 		}
 		return nil, fmt.Errorf("duplicate input %q: %w", file.Name(), callErr)

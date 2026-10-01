@@ -35,7 +35,7 @@ func TestSessionAudioFailureCapsuleRoundTripAndIntegrity(t *testing.T) {
 	if !reflect.DeepEqual(capsule.Captured, r.CapturedSamples()) {
 		t.Fatal("capsule did not retain the capture-device output tap")
 	}
-	if replay, err := ReplayDuplexFailureCapsule(dir); err != nil {
+	if replay, err := ReplayDuplexFailureCapsule(t.Context(), dir); err != nil {
 		t.Fatal(err)
 	} else if !reflect.DeepEqual(replay.Trace(), r.Trace()) {
 		t.Fatal("capsule replay trace changed")
@@ -97,7 +97,7 @@ func TestFailureCapsuleLoadsAndReplaysVersionOneWithoutCaptureTap(t *testing.T) 
 	if capsule.Captured != nil {
 		t.Fatalf("version-one capsule unexpectedly synthesized capture evidence: %v", capsule.Captured)
 	}
-	if _, err := ReplayDuplexFailureCapsule(dir); err != nil {
+	if _, err := ReplayDuplexFailureCapsule(t.Context(), dir); err != nil {
 		t.Fatalf("replay version-one capsule: %v", err)
 	}
 }

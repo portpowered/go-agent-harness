@@ -7,6 +7,22 @@ import (
 
 var ErrResamplerEnded = errors.New("streaming PCM16 resampler already ended")
 
+const (
+	// downsampleTaps is the windowed-sinc low-pass filter length used when
+	// the output rate is below the input rate.
+	downsampleTaps = 47
+	// downsampleCutoffRatio places the low-pass cutoff just under the output
+	// Nyquist frequency, relative to the input rate.
+	downsampleCutoffRatio = 0.46
+	// Blackman window coefficients: a0 - a1*cos(2*pi*n/N) + a2*cos(4*pi*n/N).
+	blackmanA0 = 0.42
+	blackmanA1 = 0.5
+	blackmanA2 = 0.08
+	// interpolationSourceSamples is the source history interpolation needs
+	// before older samples may be trimmed.
+	interpolationSourceSamples = 3
+)
+
 // PCM16Resampler preserves rational phase and filter history across arbitrary
 // input chunks. Downsampling uses a causal windowed-sinc low-pass filter;
 // identity conversion remains bit exact.
@@ -47,7 +63,7 @@ func (r *streamingPCM16Resampler) Reset(inputRate, outputRate int) error {
 	r.history, r.source = nil, nil
 	r.sourceBase, r.nextOutput, r.totalInput, r.ended = 0, 0, 0, false
 	if outputRate < inputRate {
-		r.taps = lowPassTaps(47, 0.46*float64(outputRate)/float64(inputRate))
+		r.taps = lowPassTaps(downsampleTaps, downsampleCutoffRatio*float64(outputRate)/float64(inputRate))
 	} else {
 		r.taps = nil
 	}
@@ -130,7 +146,7 @@ func (r *streamingPCM16Resampler) sourceAt(index uint64) (int16, bool) {
 }
 
 func (r *streamingPCM16Resampler) trimSource() {
-	if len(r.source) < 3 {
+	if len(r.source) < interpolationSourceSamples {
 		return
 	}
 	needed := r.nextOutput * uint64(r.inputRate) / uint64(r.outputRate)
@@ -160,7 +176,7 @@ func lowPassTaps(count int, cutoff float64) []float64 {
 		} else {
 			sinc = math.Sin(2*math.Pi*cutoff*x) / (math.Pi * x)
 		}
-		window := 0.42 - 0.5*math.Cos(2*math.Pi*float64(i)/float64(count-1)) + 0.08*math.Cos(4*math.Pi*float64(i)/float64(count-1))
+		window := blackmanA0 - blackmanA1*math.Cos(2*math.Pi*float64(i)/float64(count-1)) + blackmanA2*math.Cos(4*math.Pi*float64(i)/float64(count-1))
 		taps[i] = sinc * window
 		sum += taps[i]
 	}

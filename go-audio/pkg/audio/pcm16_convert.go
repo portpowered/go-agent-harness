@@ -113,7 +113,7 @@ func ConvertPCM16Bytes(pcm []byte, sourceChannels, sourceRate, targetChannels, t
 	}
 	source := pcm16FrameSource{samples: sourceSamples, channels: sourceChannels, frames: sourceFrames}
 	outputSamples := make([]int16, outputSampleCount)
-	for outputFrame := 0; outputFrame < outputFrames; outputFrame++ {
+	for outputFrame := range outputFrames {
 		position := float64(outputFrame) * float64(sourceRate) / float64(targetRate)
 		lower := int(position)
 		if lower >= sourceFrames {
@@ -124,7 +124,7 @@ func ConvertPCM16Bytes(pcm []byte, sourceChannels, sourceRate, targetChannels, t
 			upper = sourceFrames - 1
 		}
 		fraction := position - float64(lower)
-		for targetChannel := 0; targetChannel < targetChannels; targetChannel++ {
+		for targetChannel := range targetChannels {
 			value := source.interpolate(lower, upper, fraction, targetChannel, targetChannels)
 			outputSamples[outputFrame*targetChannels+targetChannel] = int16(math.Round(clampPCM16Float(value)))
 		}
@@ -153,7 +153,7 @@ func (s pcm16FrameSource) interpolate(lower, upper int, fraction float64, target
 		return interpolatePCM16(s.sample(lower, 0), s.sample(upper, 0), fraction)
 	case targetChannels == 1:
 		var lowerSum, upperSum int64
-		for sourceChannel := 0; sourceChannel < s.channels; sourceChannel++ {
+		for sourceChannel := range s.channels {
 			lowerSum += int64(s.sample(lower, sourceChannel))
 			upperSum += int64(s.sample(upper, sourceChannel))
 		}

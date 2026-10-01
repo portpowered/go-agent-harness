@@ -2,8 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gen2brain/malgo"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -90,7 +89,7 @@ func TestLinuxPositiveAudioEvidence(t *testing.T) {
 func TestLinuxPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
 	const providerRate = 24000
 	writer := &linuxOpenedDevice{direction: DirectionOutput, format: audio.PCM16DeviceFormat(providerRate)}
-	for frameIndex := 0; frameIndex < 16; frameIndex++ {
+	for frameIndex := range 16 {
 		frame := make([]int16, audio.FrameSize)
 		for sampleIndex := range frame {
 			frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)
@@ -170,4 +169,14 @@ func TestLinuxPlaybackBurstPreservesFIFO(t *testing.T) {
 func mustLinuxRecord(backend, nativeID, name string, direction Direction, defaulted bool) linuxDeviceRecord {
 	device := constantDevice(backend, direction.String()+":"+nativeID, name, direction)
 	return linuxDeviceRecord{Device: device, defaulted: defaulted}
+}
+
+// constantDevice builds a device descriptor from test-constant identifiers.
+// Invalid constants are a fixture bug, not a runtime state.
+func constantDevice(backend, nativeID, name string, direction Direction) Device {
+	device, err := NewDevice(backend, nativeID, name, direction)
+	if err != nil {
+		panic(fmt.Sprintf("devices: invalid constant device %s/%s: %v", backend, nativeID, err))
+	}
+	return device
 }

@@ -335,8 +335,8 @@ func runC42PCM16Padded(t *testing.T) {
 	}
 	wantSamples := []float64{16385.0 / 32768.0, -0.5, 0.25, 0, -1, -0.25}
 	wantEnergy := 1744863233.0 / 1073741824.0
-	assertC42PacketSamples(t, data, 2, 3, 8, format, wantSamples)
-	assertC42PacketMutations(t, data, 2, 3, 8, format, []int{6, 7, 14, 15, 16, 17}, 0, 0x01, wantEnergy)
+	assertC42PacketSamples(t, data, 3, 8, format, wantSamples)
+	assertC42PacketMutations(t, data, 3, 8, format, []int{6, 7, 14, 15, 16, 17}, 0, wantEnergy)
 }
 
 func runC42PCM24Padded(t *testing.T) {
@@ -346,8 +346,8 @@ func runC42PCM24Padded(t *testing.T) {
 		0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0xbe, 0xef,
 		0x5a,
 	}
-	assertC42PacketSamples(t, data, 2, 2, 8, format, []float64{0.5, -0.5, 8388607.0 / 8388608.0, 0})
-	assertC42PacketMutations(t, data, 2, 2, 8, format, []int{6, 7, 14, 15, 16}, 0, 0x01, 0.5+(8388607.0/8388608.0)*(8388607.0/8388608.0))
+	assertC42PacketSamples(t, data, 2, 8, format, []float64{0.5, -0.5, 8388607.0 / 8388608.0, 0})
+	assertC42PacketMutations(t, data, 2, 8, format, []int{6, 7, 14, 15, 16}, 0, 0.5+(8388607.0/8388608.0)*(8388607.0/8388608.0))
 }
 
 func runC42PCM32Padded(t *testing.T) {
@@ -357,8 +357,8 @@ func runC42PCM32Padded(t *testing.T) {
 		0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x60, 0x11, 0x22, 0x33, 0x44,
 		0x55, 0x66,
 	}
-	assertC42PacketSamples(t, data, 2, 2, 12, format, []float64{0.5, -0.25, -1, 0.75})
-	assertC42PacketMutations(t, data, 2, 2, 12, format, []int{8, 9, 10, 11, 20, 21, 22, 23, 24, 25}, 0, 0x01, 1.875)
+	assertC42PacketSamples(t, data, 2, 12, format, []float64{0.5, -0.25, -1, 0.75})
+	assertC42PacketMutations(t, data, 2, 12, format, []int{8, 9, 10, 11, 20, 21, 22, 23, 24, 25}, 0, 1.875)
 }
 
 func runC42Float64Padded(t *testing.T) {
@@ -369,12 +369,14 @@ func runC42Float64Padded(t *testing.T) {
 		data[index] = 0xd3
 	}
 	format := floatFormat(64)
-	assertC42PacketSamples(t, data, 2, 2, 24, format, []float64{0.5, -0.25, -1, 0.75})
-	assertC42PacketMutations(t, data, 2, 2, 24, format, []int{16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, 7, 0x01, 1.875)
+	assertC42PacketSamples(t, data, 2, 24, format, []float64{0.5, -0.25, -1, 0.75})
+	assertC42PacketMutations(t, data, 2, 24, format, []int{16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, 7, 1.875)
 }
 
-func assertC42PacketMutations(t *testing.T, data []byte, frames, channels, stride int, format codec.SampleFormat, padding []int, measuredIndex int, measuredXor byte, wantEnergy float64) {
+func assertC42PacketMutations(t *testing.T, data []byte, channels, stride int, format codec.SampleFormat, padding []int, measuredIndex int, wantEnergy float64) {
 	t.Helper()
+	frames := 2
+	const measuredXor byte = 0x01
 	before := append([]byte(nil), data...)
 	energy, err := codec.PacketEnergy(data, frames, channels, stride, format)
 	if err != nil {
@@ -544,15 +546,16 @@ func runC42Allocations(t *testing.T) {
 	}
 }
 
-func assertC42PacketSamples(t *testing.T, data []byte, frames, channels, stride int, format codec.SampleFormat, want []float64) {
+func assertC42PacketSamples(t *testing.T, data []byte, channels, stride int, format codec.SampleFormat, want []float64) {
 	t.Helper()
+	frames := 2
 	width, err := format.ByteWidth()
 	if err != nil {
 		t.Fatal(err)
 	}
 	index := 0
-	for frame := 0; frame < frames; frame++ {
-		for channel := 0; channel < channels; channel++ {
+	for frame := range frames {
+		for channel := range channels {
 			value, err := codec.DecodeSampleValue(data[frame*stride+channel*width:], format)
 			if err != nil {
 				t.Fatalf("literal sample frame=%d channel=%d error = %v", frame, channel, err)

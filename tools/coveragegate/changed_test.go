@@ -120,7 +120,7 @@ exit 92
 	writeExecutable(t, fakeGo, fakeGoScript)
 
 	var stdout, stderr bytes.Buffer
-	err := runChangedCoverage(manifestPath, "git", fakeGo, repo, base, "30s", modules, &stdout, &stderr)
+	err := runChangedCoverage(t.Context(), manifestPath, "git", fakeGo, repo, base, "30s", modules, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("runChangedCoverage() error = %v (stdout %q, stderr %q)", err, stdout.String(), stderr.String())
 	}
@@ -192,7 +192,7 @@ func newChangedPackageRepository(t *testing.T) (string, []string, string) {
 
 func runTestGit(t *testing.T, directory string, arguments ...string) string {
 	t.Helper()
-	command := exec.Command("git", append([]string{"-C", directory}, arguments...)...)
+	command := exec.CommandContext(t.Context(), "git", append([]string{"-C", directory}, arguments...)...)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(arguments, " "), err, output)

@@ -114,3 +114,10 @@ func (f DeviceFormat) Equal(other DeviceFormat) bool {
 func DefaultDeviceFormatAvailability() []DeviceFormat {
 	return []DeviceFormat{DefaultDeviceFormat()}
 }
+
+func ValidateFrame(operation string, frame []int16) error {
+	if len(frame) == FrameSize {
+		return nil
+	}
+	return &FrameSizeError{Operation: operation, Got: len(frame), Want: FrameSize}
+}

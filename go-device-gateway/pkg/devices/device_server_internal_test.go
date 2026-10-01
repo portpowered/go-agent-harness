@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -11,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 type deviceServerStubRegistry struct {
@@ -214,8 +214,9 @@ func (s stubResponseTransport) RoundTrip(req *http.Request) (*http.Response, err
 	}, nil
 }
 
-func newStubResponseRegistry(t *testing.T, status int, body []byte) *RemoteDeviceRegistry {
+func newStubResponseRegistry(t *testing.T, body []byte) *RemoteDeviceRegistry {
 	t.Helper()
+	status := http.StatusOK
 	remote, err := NewRemoteDeviceRegistry("127.0.0.1:1")
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +230,7 @@ func TestRemoteDeviceSuccessIgnoresBodyCloseFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	device, err := newStubResponseRegistry(t, http.StatusOK, encoded).Default(DirectionOutput)
+	device, err := newStubResponseRegistry(t, encoded).Default(DirectionOutput)
 	if err != nil {
 		t.Fatalf("Default with failing body close error = %v, want success", err)
 	}
@@ -240,7 +241,7 @@ func TestRemoteDeviceSuccessIgnoresBodyCloseFailure(t *testing.T) {
 	frame := make([]int16, audio.FrameSize)
 	pcm := make([]byte, len(frame)*2)
 	pcm[0] = 1
-	opened := &remoteOpenedDevice{registry: newStubResponseRegistry(t, http.StatusOK, pcm), id: "in", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
+	opened := &remoteOpenedDevice{registry: newStubResponseRegistry(t, pcm), id: "in", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
 	if err := opened.ReadFrame(context.Background(), frame); err != nil {
 		t.Fatalf("ReadFrame with failing body close error = %v, want success", err)
 	}
@@ -251,11 +252,11 @@ func TestRemoteDeviceSuccessIgnoresBodyCloseFailure(t *testing.T) {
 
 func TestRemoteDeviceFailureJoinsBodyCloseFailure(t *testing.T) {
 	var closeErr stubBodyCloseError
-	_, err := newStubResponseRegistry(t, http.StatusOK, []byte("not-json")).Default(DirectionOutput)
+	_, err := newStubResponseRegistry(t, []byte("not-json")).Default(DirectionOutput)
 	if !errors.As(err, &closeErr) {
 		t.Fatalf("Default decode failure error = %v, want joined body close failure", err)
 	}
-	opened := &remoteOpenedDevice{registry: newStubResponseRegistry(t, http.StatusOK, []byte{1}), id: "in", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
+	opened := &remoteOpenedDevice{registry: newStubResponseRegistry(t, []byte{1}), id: "in", direction: DirectionInput, format: audio.DefaultDeviceFormat()}
 	err = opened.ReadFrame(context.Background(), make([]int16, audio.FrameSize))
 	var sizeErr *audio.FrameSizeError
 	if !errors.As(err, &sizeErr) || !errors.As(err, &closeErr) {
@@ -274,6 +275,7 @@ func marshalForTest(t *testing.T, value any) []byte {
 
 // writeJSONForTest writes a fixture response from an HTTP handler goroutine.
 func writeJSONForTest(t *testing.T, w http.ResponseWriter, value any) {
+	t.Helper()
 	if raw, ok := value.(json.RawMessage); ok {
 		if _, err := w.Write(raw); err != nil {
 			t.Errorf("write fixture body: %v", err)

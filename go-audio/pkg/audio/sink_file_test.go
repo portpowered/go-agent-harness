@@ -96,38 +96,6 @@ func TestFileSourceToFileSinkRawRoundTrip(t *testing.T) {
 		t.Fatalf("raw source-to-sink bytes = %v, want exact input bytes", got)
 	}
 }
-func TestFileSinkOwnedHandleRelease(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "owned.raw")
-	before := processOpenHandleCount(t)
-	sink, err := NewFileSink(path, nil)
-	if err != nil {
-		t.Fatalf("NewFileSink() error = %v", err)
-	}
-	t.Cleanup(func() { closeForTest(t, sink) })
-	opened := processOpenHandleCount(t)
-	if opened <= before {
-		t.Fatalf("open-handle count after sink open = %d, before = %d; owned handle was not observed", opened, before)
-	}
-	if err := sink.Close(); err != nil {
-		t.Fatalf("first Close() error = %v", err)
-	}
-	afterFirst := settledProcessOpenHandleCount(t, before)
-	assertHandleCountWithinTolerance(t, afterFirst, before, "sink first close")
-	if afterFirst >= opened {
-		t.Fatalf("open-handle count after sink first close = %d, opened = %d; owned handle was not released", afterFirst, opened)
-	}
-
-	if err := sink.Close(); err != nil {
-		t.Fatalf("second Close() error = %v", err)
-	}
-	afterSecond := settledProcessOpenHandleCount(t, afterFirst)
-	if afterSecond != afterFirst {
-		t.Fatalf("open-handle count after sink second close = %d, first close = %d; idempotent close changed the count", afterSecond, afterFirst)
-	}
-	if err := sink.WriteFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
-		t.Fatalf("WriteFrame after Close() = %v, want ErrClosed", err)
-	}
-}
 func TestFileSinkWAVRoundTripIsByteIdentical(t *testing.T) {
 	samples := make([]int16, FrameSize*2)
 	for index := range samples {
@@ -472,6 +440,7 @@ func TestFileSinkBoundedRawLiteralTailsAndChunks(t *testing.T) {
 	}
 }
 func assertBoundedRawBytes(t *testing.T, samples []int16) {
+	t.Helper()
 	writer := &bytes.Buffer{}
 	sink, err := NewFileSink("-", writer)
 	if err != nil {

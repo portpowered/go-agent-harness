@@ -10,10 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"sync"
+
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	"sync"
 )
 
 // Replay validates the complete evidence before exposing any frame. Stepping
@@ -115,7 +116,7 @@ func readReplayTimeline(directory string, timeline io.Reader) (*Replay, error) {
 		}
 	}
 	if err := scan.Err(); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrIncomplete, err)
+		return nil, fmt.Errorf("%w: %w", ErrIncomplete, err)
 	}
 	return builder.finish()
 }
@@ -146,20 +147,27 @@ func (b *replayBuilder) admit(line []byte) error {
 }
 
 func (b *replayBuilder) admitTimestamp(event Event, eventCount int) error {
-	if event.Timestamp == "" && event.Kind != replayEventClosed {
-		return fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
-	} else if event.Timestamp != "" {
-		timestamp, timestampErr := time.Parse(time.RFC3339Nano, event.Timestamp)
-		if timestampErr != nil {
+	if event.Timestamp == "" {
+		// Only the closing event may omit its timestamp, and never as the
+		// first event that fixes the recording epoch.
+		if event.Kind != replayEventClosed {
 			return fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
 		}
 		if eventCount == 0 {
-			b.base = timestamp
-		} else if timestamp.Sub(b.base) != time.Duration(event.ElapsedNS) {
-			return fmt.Errorf("%w: timeline timestamp does not match elapsed time", ErrIncomplete)
+			return fmt.Errorf("%w: invalid recording epoch", ErrIncomplete)
 		}
-	} else if eventCount == 0 {
-		return fmt.Errorf("%w: invalid recording epoch", ErrIncomplete)
+		return nil
+	}
+	timestamp, timestampErr := time.Parse(time.RFC3339Nano, event.Timestamp)
+	if timestampErr != nil {
+		return fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
+	}
+	if eventCount == 0 {
+		b.base = timestamp
+		return nil
+	}
+	if timestamp.Sub(b.base) != time.Duration(event.ElapsedNS) {
+		return fmt.Errorf("%w: timeline timestamp does not match elapsed time", ErrIncomplete)
 	}
 	return nil
 }
@@ -213,9 +221,9 @@ func (b *replayBuilder) loadStream(tap string) error {
 }
 
 func replayTraceFileName(tap string) string {
-	for i := 0; i < audioTraceTapCount; i++ {
+	for i := range audioTraceTapCount {
 		if traceTapName(i) == tap {
-			return sessionAudioTraceFiles[i]
+			return sessionAudioTraceFiles()[i]
 		}
 	}
 	return ""
@@ -261,4 +269,24 @@ func pooledSamples(pool *sync.Pool) *[]int16 {
 		return buffer
 	}
 	return new([]int16)
+}
+
+const (
+	traceDirMode  = 0o755
+	traceFileMode = 0o600
+	// tracePooledSamples is the capacity of pooled sample buffers.
+	tracePooledSamples = 4096
+	// traceRecordOverheadBytes approximates the per-record bookkeeping charged
+	// against MaxQueuedBytes beside the payload.
+	traceRecordOverheadBytes = 128
+)
+
+// sessionAudioTraceFiles names the WAV file of each trace tap, by tap index.
+func sessionAudioTraceFiles() [audioTraceTapCount]string {
+	return [audioTraceTapCount]string{
+		"microphone-pre-gate.wav",
+		"microphone-uploaded.wav",
+		"speaker-enqueued.wav",
+		"speaker-rendered.wav",
+	}
 }

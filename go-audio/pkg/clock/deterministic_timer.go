@@ -1,7 +1,6 @@
 package clock
 
 import (
-	"container/heap"
 	"context"
 	"time"
 )
@@ -33,7 +32,7 @@ func (t *deterministicTimer) Stop() bool {
 	}
 	t.active = false
 	if t.index >= 0 {
-		heap.Remove(&t.clock.timers, t.index)
+		t.clock.timers.remove(t.index)
 		t.index = -1
 		t.clock.notifyTimersChangedLocked()
 	}

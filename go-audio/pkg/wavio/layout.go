@@ -26,10 +26,10 @@ func Inspect(r io.ReadSeeker) (Layout, error) {
 		return Layout{}, &MalformedError{Property: "container", Observed: string(descriptor[:]), Reason: "want RIFF/WAVE"}
 	}
 	size := uint64(binary.LittleEndian.Uint32(descriptor[4:8]))
-	if size < 4 {
+	if size < waveFormIDBytes {
 		return Layout{}, &MalformedError{Property: "RIFF size", Observed: size, Reason: "must include WAVE form"}
 	}
-	remaining := size - 4
+	remaining := size - waveFormIDBytes
 	scan := layoutScan{r: r}
 	for remaining > 0 {
 		consumed, err := scan.next(remaining)
@@ -47,8 +47,8 @@ func Inspect(r io.ReadSeeker) (Layout, error) {
 	if err != nil {
 		return Layout{}, err
 	}
-	if end < start+int64(size)+8 {
-		return Layout{}, &TruncatedError{Property: "RIFF payload", Expected: size + 8, Read: uint64(max(0, end-start))}
+	if end < start+int64(size)+chunkHeaderBytes {
+		return Layout{}, &TruncatedError{Property: "RIFF payload", Expected: size + chunkHeaderBytes, Read: uint64(max(0, end-start))}
 	}
 	if _, err := r.Seek(scan.layout.DataOffset, io.SeekStart); err != nil {
 		return Layout{}, err
@@ -127,3 +127,14 @@ func (s *layoutScan) inspectData(n, padded uint64) error {
 	_, err = s.r.Seek(int64(padded), io.SeekCurrent)
 	return err
 }
+
+// Canonical RIFF/WAVE container sizes.
+const (
+	// waveFormIDBytes is the "WAVE" form type the RIFF size counts.
+	waveFormIDBytes = 4
+	// riffHeaderOverheadBytes is the canonical PCM WAV RIFF size beyond the
+	// data bytes: form type, fmt chunk and data chunk header.
+	riffHeaderOverheadBytes = 36
+	// canonicalHeaderBytes is the full canonical PCM WAV header length.
+	canonicalHeaderBytes = 44
+)

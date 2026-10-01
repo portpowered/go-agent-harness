@@ -177,7 +177,7 @@ func readFixture(t *testing.T, name string) []byte {
 
 func runFixtureCommand(t *testing.T, name string) (string, error) {
 	t.Helper()
-	command := exec.Command("go", "run", ".")
+	command := exec.CommandContext(t.Context(), "go", "run", ".")
 	command.Env = append(os.Environ(), "GOWORK=off")
 	command.Stdin = bytes.NewReader(readFixture(t, name))
 	output, err := command.CombinedOutput()

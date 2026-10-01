@@ -1,7 +1,5 @@
 package runtime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
@@ -9,6 +7,9 @@ import (
 	"io"
 	"reflect"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -88,8 +89,9 @@ type RTCDeviceSource struct {
 	preGateSamplesObserver  RTCDeviceCaptureSamplesObserver
 	uploadedSamplesObserver RTCDeviceCaptureSamplesObserver
 
-	lifeCtx    context.Context
-	lifeCancel context.CancelCauseFunc
+	// runCancel cancels the active pump; Close calls it so an in-flight pump
+	// observes ErrRTCDeviceSourceClosed. Guarded by mu.
+	runCancel context.CancelCauseFunc
 
 	mu        sync.Mutex
 	closed    bool
@@ -123,14 +125,11 @@ func NewRTCDeviceSourceAtRate(registry devicegw.DeviceRegistry, id devicegw.Devi
 }
 
 func newRTCDeviceSourceFromOpened(source *devicegw.DeviceSource, sourceRate, providerRate int) *RTCDeviceSource {
-	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	return &RTCDeviceSource{
 		source:       source,
 		id:           source.DeviceID(),
 		sourceRate:   sourceRate,
 		providerRate: providerRate,
-		lifeCtx:      lifeCtx,
-		lifeCancel:   lifeCancel,
 	}
 }
 
@@ -272,22 +271,18 @@ func (s *RTCDeviceSource) pumpWithUploadedObserver(ctx context.Context, outbound
 		return ErrNilRTCOutboundMedia
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
-
-	lifeCtx, finish, err := s.beginPump()
-	if err != nil {
-		return err
-	}
-	defer finish()
 
 	operationCtx, cancel := context.WithCancelCause(ctx)
-	stopLifeHook := context.AfterFunc(lifeCtx, func() {
-		cancel(ErrRTCDeviceSourceClosed)
-	})
-	defer func() {
-		stopLifeHook()
+	finish, err := s.beginPump(cancel)
+	if err != nil {
 		cancel(nil)
+		return err
+	}
+	defer func() {
+		cancel(nil)
+		finish()
 	}()
 	if s.filter != nil {
 		defer s.filter.DiscardHeld()
@@ -337,9 +332,12 @@ func (s *RTCDeviceSource) Close() error {
 		s.mu.Lock()
 		s.closed = true
 		done := s.runDone
+		cancelRun := s.runCancel
 		s.mu.Unlock()
 
-		s.lifeCancel(ErrRTCDeviceSourceClosed)
+		if cancelRun != nil {
+			cancelRun(ErrRTCDeviceSourceClosed)
+		}
 		s.closeErr = s.source.Close()
 		if done != nil {
 			<-done
@@ -351,23 +349,24 @@ func (s *RTCDeviceSource) Close() error {
 	return s.closeErr
 }
 
-func (s *RTCDeviceSource) beginPump() (context.Context, func(), error) {
+func (s *RTCDeviceSource) beginPump(cancel context.CancelCauseFunc) (func(), error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, nil, ErrRTCDeviceSourceClosed
+		return nil, ErrRTCDeviceSourceClosed
 	}
 	if s.running {
 		s.mu.Unlock()
-		return nil, nil, ErrRTCDeviceSourceRunning
+		return nil, ErrRTCDeviceSourceRunning
 	}
 	s.running = true
 	s.runDone = make(chan struct{})
-	lifeCtx := s.lifeCtx
+	s.runCancel = cancel
 	s.mu.Unlock()
 
-	return lifeCtx, func() {
+	return func() {
 		s.mu.Lock()
+		s.runCancel = nil
 		if s.running {
 			s.running = false
 			close(s.runDone)
@@ -377,17 +376,19 @@ func (s *RTCDeviceSource) beginPump() (context.Context, func(), error) {
 	}, nil
 }
 
-func nilRTCOutboundMedia(media audio.OutboundMedia) bool {
-	if media == nil {
+func nilRTCOutboundMedia(media audio.OutboundMedia) bool { return isNilValue(media) }
+
+// isNilValue reports whether value is nil, including a typed nil pointer,
+// map, slice, channel or function hidden behind an interface.
+func isNilValue(value any) bool {
+	if value == nil {
 		return true
 	}
-	value := reflect.ValueOf(media)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	v := reflect.ValueOf(value)
+	kind := v.Kind()
+	nilable := kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface ||
+		kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice
+	return nilable && v.IsNil()
 }
 
 // IsNilOutboundMedia reports whether an outbound endpoint is nil, including a

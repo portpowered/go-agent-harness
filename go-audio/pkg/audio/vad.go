@@ -2,18 +2,27 @@ package audio
 
 import "math"
 
-// DefaultVADConfig provides sensible defaults for real-time speech detection.
-var DefaultVADConfig = VADConfig{
-	// EnergyThreshold is the RMS level (in int16 units) above which a frame is
-	// considered speech.  A value of 300 comfortably separates typical mic
-	// noise from voiced speech.
-	EnergyThreshold: 300.0,
-	// MinSpeechFrames is the number of consecutive high-energy frames required
-	// before an utterance is considered to have started (3 × 30 ms = 90 ms).
-	MinSpeechFrames: 3,
-	// MaxSilenceFrames is the number of consecutive low-energy frames after
-	// speech that triggers end-of-utterance (30 × 30 ms = 900 ms).
-	MaxSilenceFrames: 30,
+const (
+	// defaultVADEnergyThreshold is the RMS level (in int16 units) above which
+	// a frame is considered speech. A value of 300 comfortably separates
+	// typical mic noise from voiced speech.
+	defaultVADEnergyThreshold = 300.0
+	// defaultVADMinSpeechFrames is the number of consecutive high-energy
+	// frames required before an utterance is considered to have started
+	// (3 × 30 ms = 90 ms).
+	defaultVADMinSpeechFrames = 3
+	// defaultVADMaxSilenceFrames is the number of consecutive low-energy
+	// frames after speech that triggers end-of-utterance (30 × 30 ms = 900 ms).
+	defaultVADMaxSilenceFrames = 30
+)
+
+// DefaultVADConfig returns sensible defaults for real-time speech detection.
+func DefaultVADConfig() VADConfig {
+	return VADConfig{
+		EnergyThreshold:  defaultVADEnergyThreshold,
+		MinSpeechFrames:  defaultVADMinSpeechFrames,
+		MaxSilenceFrames: defaultVADMaxSilenceFrames,
+	}
 }
 
 // VADConfig holds the thresholds used by VoiceActivityDetector.

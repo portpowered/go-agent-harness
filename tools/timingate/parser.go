@@ -27,8 +27,12 @@ type packageState struct {
 
 // Parse extracts every package-level terminal timing from go test -json output.
 func Parse(r io.Reader) ([]Observation, error) {
+	const (
+		initialLineBufferBytes = 64 << 10
+		maxLineBytes           = 16 << 20
+	)
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	scanner.Buffer(make([]byte, initialLineBufferBytes), maxLineBytes)
 	parser := timingParser{states: make(map[string]packageState), observations: make([]Observation, 0)}
 	lineNumber := 0
 

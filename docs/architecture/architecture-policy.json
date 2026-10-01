@@ -999,6 +999,12 @@
       "reason": "Reviewed sentinel error identity used by errors.Is across audio lifecycle or analysis boundaries; not mutable configuration or invocation state."
     },
     {
+      "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/contract",
+      "file": "pkg/contract/errors.go",
+      "name": "ErrNilContext",
+      "reason": "Reviewed sentinel error identity returned when an audio or device operation receives a nil context; not mutable configuration or invocation state."
+    },
+    {
       "package": "github.com/portpowered/go-agent-harness/go-audio/pkg/mixer",
       "file": "pkg/mixer/mixer.go",
       "name": "ErrClockUnavailable",

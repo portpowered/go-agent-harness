@@ -56,11 +56,11 @@ func Read(r io.Reader) (sampleRate int, samples []int16, err error) {
 	}
 
 	riffSize := uint64(binary.LittleEndian.Uint32(header[4:8]))
-	if riffSize < 4 {
+	if riffSize < waveFormIDBytes {
 		return 0, nil, &MalformedError{Property: "RIFF size", Observed: riffSize, Reason: "must include the WAVE form"}
 	}
 
-	format, data, err := readChunks(r, riffSize-4)
+	format, data, err := readChunks(r, riffSize-waveFormIDBytes)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -92,8 +92,8 @@ func Write(w io.Writer, sampleRate int, samples []int16) error {
 	}
 
 	dataSize := uint64(len(samples)) * pcm16BlockAlign
-	maximumDataSize := uint64(maxUint32) - 36
-	maximumIntSize := uint64(^uint(0)>>1) - 44
+	maximumDataSize := uint64(maxUint32) - riffHeaderOverheadBytes
+	maximumIntSize := uint64(^uint(0)>>1) - canonicalHeaderBytes
 	if maximumIntSize < maximumDataSize {
 		maximumDataSize = maximumIntSize
 	}

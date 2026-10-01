@@ -7,16 +7,6 @@
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_server_test.go",
-      "symbol": "TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations",
-      "value": 21,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
-      "file": "pkg/devices/device_server_test.go",
       "symbol": "TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock",
       "value": 26,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",

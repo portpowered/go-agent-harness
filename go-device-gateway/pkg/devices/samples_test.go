@@ -2,14 +2,13 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"reflect"
 	"testing"
 	"time"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -17,15 +16,36 @@ type pacedPlaybackBackendForTest interface {
 	WaitForPlaybackCapacity(context.Context, int) error
 	WriteFrame(context.Context, []int16) error
 	PlaybackStats() audio.PlaybackQueueStats
+	DeviceFormat() audio.DeviceFormat
 }
 
 // testPacedPlaybackBackend drives a provider-shaped burst through one native
 // queue contract while callbacks consume it. Platform tests supply their real
 // callback seam; the shared assertions require exact FIFO PCM and zero loss.
+// awaitQueuedFrame waits, polling on a ticker, until the producer has queued
+// at least one frame for the next render callback.
+func awaitQueuedFrame(t *testing.T, backend pacedPlaybackBackendForTest, frameIndex int) {
+	t.Helper()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	for backend.PlaybackStats().QueuedSamples < audio.FrameSize {
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Fatalf("frame %d did not reach the native playback queue", frameIndex)
+		}
+	}
+}
+
 func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest, render func([]byte)) {
 	t.Helper()
 	const frameCount = 40
-	_, high, err := audio.PlaybackQueueWatermarks(audio.PCM16DeviceFormat(24000))
+	// Prime to the high watermark of the backend's own format: a fixed rate
+	// would expect more (or fewer) frames than the queue admits before
+	// capacity waits block the producer.
+	_, high, err := audio.PlaybackQueueWatermarks(backend.DeviceFormat())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +53,7 @@ func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest,
 	primed := make(chan struct{})
 	producerDone := make(chan error, 1)
 	go func() {
-		for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
+		for frameIndex := range frameCount {
 			frame := int16Samples(frameIndex*audio.FrameSize, audio.FrameSize)
 			if err := backend.WaitForPlaybackCapacity(context.Background(), len(frame)); err != nil {
 				producerDone <- err
@@ -58,14 +78,8 @@ func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest,
 		t.Fatal("producer did not prime the playback high watermark")
 	}
 
-	for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
-		deadline := time.Now().Add(time.Second)
-		for backend.PlaybackStats().QueuedSamples < audio.FrameSize {
-			if time.Now().After(deadline) {
-				t.Fatalf("frame %d did not reach the native playback queue", frameIndex)
-			}
-			time.Sleep(time.Millisecond)
-		}
+	for frameIndex := range frameCount {
+		awaitQueuedFrame(t, backend, frameIndex)
 		raw := make([]byte, audio.FrameSize*2)
 		render(raw)
 		got := make([]int16, audio.FrameSize)

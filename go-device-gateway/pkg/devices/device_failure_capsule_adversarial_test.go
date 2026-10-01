@@ -12,9 +12,12 @@ import (
 // quiet/far-field speech, loud speech near clipping, shaped room noise,
 // music-like periodic background, long echo, and callback irregularity.
 // Every row must replay both sides of the device, not merely its event log.
+// adversarialCallbacks is the callback count of every adversarial capsule.
+const adversarialCallbacks = 12
+
 func TestDuplexCapsuleAdversarialAcousticMatrix(t *testing.T) {
-	const callbacks = 12
-	provider := adversarialStem(callbacks*480, 17000, 47)
+	const callbacks = adversarialCallbacks
+	provider := adversarialStem(17000, 47)
 	tests := []struct {
 		name       string
 		near       []int16
@@ -24,12 +27,12 @@ func TestDuplexCapsuleAdversarialAcousticMatrix(t *testing.T) {
 		impulse    []int16
 		faults     []FaultEvent
 	}{
-		{name: "quiet_far_field", near: adversarialStem(callbacks*480, 700, 61), gain: 9000, delay: 3840, impulse: []int16{32767, 9000, -3500}},
-		{name: "ordinary_voice", near: adversarialStem(callbacks*480, 6000, 67), gain: 16000, delay: 960, impulse: []int16{32767, 6000}},
-		{name: "loud_near_clipping", near: adversarialStem(callbacks*480, 30000, 71), gain: 30000, delay: 240},
-		{name: "noisy_room", near: adversarialStem(callbacks*480, 4500, 73), background: adversarialStem(callbacks*480, 9000, 79), gain: 19000, delay: 1440},
-		{name: "music_like_background", near: adversarialStem(callbacks*480, 3500, 83), background: adversarialPeriodic(callbacks*480, 11000), gain: 21000, delay: 1920, impulse: []int16{28000, 8000, -5000, 2500}},
-		{name: "jitter_missing_and_duplicate_callbacks", near: adversarialStem(callbacks*480, 5000, 89), background: adversarialStem(callbacks*480, 2500, 97), gain: 20000, delay: 720, faults: []FaultEvent{
+		{name: "quiet_far_field", near: adversarialStem(700, 61), gain: 9000, delay: 3840, impulse: []int16{32767, 9000, -3500}},
+		{name: "ordinary_voice", near: adversarialStem(6000, 67), gain: 16000, delay: 960, impulse: []int16{32767, 6000}},
+		{name: "loud_near_clipping", near: adversarialStem(30000, 71), gain: 30000, delay: 240},
+		{name: "noisy_room", near: adversarialStem(4500, 73), background: adversarialStem(9000, 79), gain: 19000, delay: 1440},
+		{name: "music_like_background", near: adversarialStem(3500, 83), background: adversarialPeriodic(callbacks*480, 11000), gain: 21000, delay: 1920, impulse: []int16{28000, 8000, -5000, 2500}},
+		{name: "jitter_missing_and_duplicate_callbacks", near: adversarialStem(5000, 89), background: adversarialStem(2500, 97), gain: 20000, delay: 720, faults: []FaultEvent{
 			{Callback: 3, Direction: DirectionInput, Type: FaultMissingCallback, ID: "capture-gap"},
 			{Callback: 7, Direction: DirectionOutput, Type: FaultDuplicateCallback, ID: "render-duplicate"},
 		}},
@@ -59,7 +62,7 @@ func TestDuplexCapsuleAdversarialAcousticMatrix(t *testing.T) {
 			if err := WriteDuplexFailureCapsule(dir, scenario, provider, registry); err != nil {
 				t.Fatal(err)
 			}
-			replayed, err := ReplayDuplexFailureCapsule(dir)
+			replayed, err := ReplayDuplexFailureCapsule(t.Context(), dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -73,7 +76,8 @@ func TestDuplexCapsuleAdversarialAcousticMatrix(t *testing.T) {
 	}
 }
 
-func adversarialStem(count, peak, stride int) []int16 {
+func adversarialStem(peak, stride int) []int16 {
+	count := adversarialCallbacks * 480
 	result := make([]int16, count)
 	state := uint32(stride)
 	for index := range result {

@@ -436,15 +436,15 @@ func (g *PCM16FeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 		g.suppressUntil = g.playbackTailEndLocked()
 		g.state = pcm16FeedbackGateSuppressing
 		return nil, nil
-	default:
-		// Confirmed feedback or a rate mismatch remains consistent with echo.
-		// Extend the acoustic tail and drop ambiguous held frames.
-		g.pending = nil
-		g.probeIndependentEvidence = 0
-		g.suppressUntil = g.playbackTailEndLocked()
-		g.state = pcm16FeedbackGateSuppressing
-		return nil, nil
+	case selfhearing.PCM16SelfHearingConfirmed, selfhearing.PCM16SelfHearingRateMismatch:
 	}
+	// Confirmed feedback or a rate mismatch remains consistent with echo.
+	// Extend the acoustic tail and drop ambiguous held frames.
+	g.pending = nil
+	g.probeIndependentEvidence = 0
+	g.suppressUntil = g.playbackTailEndLocked()
+	g.state = pcm16FeedbackGateSuppressing
+	return nil, nil
 }
 
 // DiscardHeld applies the terminal policy for source cancellation, device
@@ -513,7 +513,7 @@ func (g *PCM16FeedbackGate) releaseExpiredLocked(currentEnd time.Duration) [][]i
 		return nil
 	}
 	released := make([][]int16, count)
-	for index := 0; index < count; index++ {
+	for index := range count {
 		released[index] = g.pending[index].samples
 		g.pending[index].samples = nil
 	}

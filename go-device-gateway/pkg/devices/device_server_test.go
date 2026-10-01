@@ -1,7 +1,5 @@
 package devices_test
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
@@ -14,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -264,7 +264,7 @@ func TestRemoteDeviceServerRejectsAmbiguousAndOversizedRequests(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := http.NewRequest(test.method, httpServer.URL+test.path, bytes.NewReader(test.body))
+			request, err := http.NewRequestWithContext(t.Context(), test.method, httpServer.URL+test.path, bytes.NewReader(test.body))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -300,31 +300,8 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 	defer httpServer.Close()
 	base := httpServer.URL + "/v1/audio-device"
 
-	openHandle := func(t *testing.T, deviceID string) string {
-		t.Helper()
-		body, err := json.Marshal(map[string]any{"device_id": deviceID, "format": audio.PCM16DeviceFormat(16000)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		response, err := http.Post(base+"/open", "application/json", bytes.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer closeResponseBodyForTest(t, response.Body)
-		if response.StatusCode != http.StatusOK {
-			data, readErr := io.ReadAll(response.Body)
-			t.Fatalf("open %s status=%d body=%q read=%v", deviceID, response.StatusCode, data, readErr)
-		}
-		var result struct {
-			HandleID string `json:"handle_id"`
-		}
-		if err := json.NewDecoder(response.Body).Decode(&result); err != nil || result.HandleID == "" {
-			t.Fatalf("decode open handle: id=%q err=%v", result.HandleID, err)
-		}
-		return result.HandleID
-	}
-	inputHandle := openHandle(t, "simulated-duplex:input")
-	outputHandle := openHandle(t, "simulated-duplex:output")
+	inputHandle := openRemoteHandleForTest(t, base, "simulated-duplex:input")
+	outputHandle := openRemoteHandleForTest(t, base, "simulated-duplex:output")
 
 	format := marshalJSONForTest(t, audio.PCM16DeviceFormat(16000))
 	tests := []struct {
@@ -349,7 +326,7 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := http.NewRequest(test.method, base+test.path, bytes.NewReader(test.body))
+			request, err := http.NewRequestWithContext(t.Context(), test.method, base+test.path, bytes.NewReader(test.body))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -424,4 +401,35 @@ func marshalJSONForTest(t *testing.T, value any) []byte {
 		t.Fatalf("encode %T: %v", value, err)
 	}
 	return encoded
+}
+
+// openRemoteHandleForTest opens deviceID through the remote server API at
+// base and returns its handle ID.
+func openRemoteHandleForTest(t *testing.T, base, deviceID string) string {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"device_id": deviceID, "format": audio.PCM16DeviceFormat(16000)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/open", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeResponseBodyForTest(t, response.Body)
+	if response.StatusCode != http.StatusOK {
+		data, readErr := io.ReadAll(response.Body)
+		t.Fatalf("open %s status=%d body=%q read=%v", deviceID, response.StatusCode, data, readErr)
+	}
+	var result struct {
+		HandleID string `json:"handle_id"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil || result.HandleID == "" {
+		t.Fatalf("decode open handle: id=%q err=%v", result.HandleID, err)
+	}
+	return result.HandleID
 }

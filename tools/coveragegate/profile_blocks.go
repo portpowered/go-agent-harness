@@ -124,3 +124,10 @@ func addProfileLine(blocks map[string]profileBlock, line string) string {
 	}
 	return ""
 }
+
+const (
+	// maxPercentCents is 100.00% in hundredths of a percent.
+	maxPercentCents = 100 * 100
+	// permille scales a coverage ratio to tenths of a percent.
+	permille = 1000
+)

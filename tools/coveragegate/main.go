@@ -67,7 +67,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if len(opts.profilePaths) > 0 {
 			return errors.New("changed coverage does not accept explicit coverage profiles")
 		}
-		return runChangedCoverage(opts.manifestPath, opts.gitBinary, opts.goBinary, opts.repoDir, opts.base, opts.testTimeout, opts.moduleDirs, stdout, stderr)
+		return runChangedCoverage(context.Background(), opts.manifestPath, opts.gitBinary, opts.goBinary, opts.repoDir, opts.base, opts.testTimeout, opts.moduleDirs, stdout, stderr)
 	case opts.validateRegistration:
 		if len(opts.profilePaths) > 0 {
 			return errors.New("registration validation does not accept coverage profiles")

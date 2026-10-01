@@ -220,8 +220,8 @@ func expectedSpeechOverlap(start, end int, annotations []normalizedSpeechAnnotat
 	return overlap, label
 }
 
-func analysisFailure(property, streamID, participantID string) PropertyFailure {
-	return PropertyFailure{
+func analysisFailure(property, streamID, participantID string) PropertyError {
+	return PropertyError{
 		Property:      property,
 		StreamID:      streamID,
 		ParticipantID: participantID,

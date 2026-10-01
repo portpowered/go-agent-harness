@@ -170,7 +170,7 @@ func (d *PCM16SelfHearingDetector) ResetCapture() {
 // ObservePlayback records exactly the PCM accepted by the local speaker.
 // Callers that need cancellation should use ObservePlaybackContext.
 func (d *PCM16SelfHearingDetector) ObservePlayback(frame PCM16TimedFrame) error {
-	return d.ObservePlaybackContext(context.Background(), frame)
+	return d.observePlayback(frame)
 }
 
 // ObservePlaybackContext records a speaker-bound PCM frame after checking ctx.
@@ -179,6 +179,10 @@ func (d *PCM16SelfHearingDetector) ObservePlaybackContext(ctx context.Context, f
 	if err := selfHearingContextError(ctx); err != nil {
 		return err
 	}
+	return d.observePlayback(frame)
+}
+
+func (d *PCM16SelfHearingDetector) observePlayback(frame PCM16TimedFrame) error {
 	end, err := validatePCM16SelfHearingFrame(frame, "playback")
 	if err != nil {
 		return err
@@ -218,7 +222,7 @@ func (d *PCM16SelfHearingDetector) ObservePlaybackContext(ctx context.Context, f
 // ObserveCapture classifies one raw microphone frame before provider delivery.
 // It copies the frame into bounded storage and returns a content-free result.
 func (d *PCM16SelfHearingDetector) ObserveCapture(frame PCM16TimedFrame) (PCM16SelfHearingObservation, error) {
-	return d.ObserveCaptureContext(context.Background(), frame)
+	return d.observeCapture(frame)
 }
 
 // ObserveCaptureContext classifies one raw microphone frame after checking
@@ -227,6 +231,10 @@ func (d *PCM16SelfHearingDetector) ObserveCaptureContext(ctx context.Context, fr
 	if err := selfHearingContextError(ctx); err != nil {
 		return PCM16SelfHearingObservation{}, err
 	}
+	return d.observeCapture(frame)
+}
+
+func (d *PCM16SelfHearingDetector) observeCapture(frame PCM16TimedFrame) (PCM16SelfHearingObservation, error) {
 	end, err := validatePCM16SelfHearingFrame(frame, "capture")
 	if err != nil {
 		return PCM16SelfHearingObservation{}, err

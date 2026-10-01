@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -9,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -40,7 +39,7 @@ func (e *DeviceAdapterError) Error() string {
 	if e.Err != nil {
 		return fmt.Sprintf("open %s device %q: %v", e.Direction, e.ID, e.Err)
 	}
-	if e.Kind == ErrDeviceDirectionMismatch {
+	if errors.Is(e.Kind, ErrDeviceDirectionMismatch) {
 		return fmt.Sprintf("device %q is %s; want %s", e.ID, e.Got, e.Want)
 	}
 	return fmt.Sprintf("device %q has no %s capability for %s", e.ID, e.Direction, e.Operation)
@@ -96,7 +95,7 @@ func (a *deviceAdapter) finish(operation string, err error) error {
 		if errors.As(err, &lost) && lost.ID == a.id && lost.Direction == a.direction {
 			return err
 		}
-		return fmt.Errorf("%w: %v", &DeviceLostError{ID: a.id, Direction: a.direction}, err)
+		return fmt.Errorf("%w: %w", &DeviceLostError{ID: a.id, Direction: a.direction}, err)
 	}
 	select {
 	case <-a.closed:
@@ -189,7 +188,7 @@ func (s *DeviceSource) CaptureStats() audio.CaptureQueueStats {
 	if s == nil || s.adapter == nil {
 		return audio.CaptureQueueStats{}
 	}
-	if provider, ok := s.adapter.handle.(audio.CaptureStatsProvider); ok {
+	if provider, ok := s.adapter.handle.(CaptureStatsProvider); ok {
 		return provider.CaptureStats()
 	}
 	return audio.CaptureQueueStats{}
@@ -198,9 +197,6 @@ func (s *DeviceSource) CaptureStats() audio.CaptureQueueStats {
 func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
 	if err := audio.ContextError(ctx); err != nil {
 		return err
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
@@ -236,12 +232,13 @@ func nilInterface(value any) bool {
 		return true
 	}
 	v := reflect.ValueOf(value)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return v.IsNil()
-	default:
-		return false
-	}
+	return reflectNilable(v.Kind()) && v.IsNil()
+}
+
+// reflectNilable reports whether values of kind can be nil.
+func reflectNilable(kind reflect.Kind) bool {
+	return kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface ||
+		kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice
 }
 
 func openedDeviceDirection(handle OpenedDevice) (Direction, bool) {

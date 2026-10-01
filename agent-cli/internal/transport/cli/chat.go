@@ -141,7 +141,7 @@ func RunChatWithAudio(ctx context.Context, out, errOut io.Writer, service sessio
 	if err != nil || done {
 		return err
 	}
-	pipeline := audio.NewPipeline(src, audio.NewVAD(audio.DefaultVADConfig), audio.DefaultPipelineConfig)
+	pipeline := audio.NewPipeline(src, audio.NewVAD(audio.DefaultVADConfig()), audio.DefaultPipelineConfig())
 	if err := writeAudioChatHeader(out); err != nil {
 		return err
 	}

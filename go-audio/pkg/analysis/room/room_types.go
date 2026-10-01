@@ -19,7 +19,7 @@ type (
 	SpeechAnnotation               = stream.SpeechAnnotation
 	PCM16AnalysisConfig            = stream.PCM16AnalysisConfig
 	PCM16Analysis                  = stream.PCM16Analysis
-	PropertyFailure                = stream.PropertyFailure
+	PropertyError                  = stream.PropertyError
 	PCM16LagWindow                 = stream.PCM16LagWindow
 	PCM16CorrelationMeasurement    = stream.PCM16CorrelationMeasurement
 	InvalidPCM16AnalysisInputError = stream.InvalidPCM16AnalysisInputError
@@ -258,7 +258,7 @@ type PCM16RoomAnalysis struct {
 	BargeIns       []PCM16BargeInMeasurement
 	Loudness       []PCM16LoudnessMeasurement
 	Drift          []PCM16DriftMeasurement
-	Failures       []PropertyFailure
+	Failures       []PropertyError
 }
 
 // Passed reports whether all valid room evidence satisfied every configured
@@ -266,13 +266,13 @@ type PCM16RoomAnalysis struct {
 func (a PCM16RoomAnalysis) Passed() bool { return len(a.Failures) == 0 }
 
 // FailuresCopy returns caller-owned failure storage.
-func (a PCM16RoomAnalysis) FailuresCopy() []PropertyFailure {
-	return append([]PropertyFailure(nil), a.Failures...)
+func (a PCM16RoomAnalysis) FailuresCopy() []PropertyError {
+	return append([]PropertyError(nil), a.Failures...)
 }
 
 // PCM16RoomAssertionError wraps all valid-room property failures.
 type PCM16RoomAssertionError struct {
-	Failures []PropertyFailure
+	Failures []PropertyError
 }
 
 func (e *PCM16RoomAssertionError) Error() string {
@@ -292,11 +292,11 @@ func (e *PCM16RoomAssertionError) Error() string {
 func (e *PCM16RoomAssertionError) Unwrap() error { return ErrPCM16AnalysisFailed }
 
 // FailuresCopy returns caller-owned failure storage.
-func (e *PCM16RoomAssertionError) FailuresCopy() []PropertyFailure {
+func (e *PCM16RoomAssertionError) FailuresCopy() []PropertyError {
 	if e == nil {
 		return nil
 	}
-	return append([]PropertyFailure(nil), e.Failures...)
+	return append([]PropertyError(nil), e.Failures...)
 }
 
 // NormalizedPCM16CrossCorrelation measures one explicitly identified source

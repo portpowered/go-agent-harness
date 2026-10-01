@@ -1,10 +1,12 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+import (
+	"context"
 
-import "context"
-
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+)
 
 type devicePlaybackWaiter interface {
 	WaitForPlayback(context.Context) error
@@ -101,7 +103,7 @@ func (s *DeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 		return audio.PlaybackQueueStats{}
 	}
 	if s.adapter != nil {
-		if provider, ok := s.adapter.handle.(audio.PlaybackStatsProvider); ok {
+		if provider, ok := s.adapter.handle.(PlaybackStatsProvider); ok {
 			return provider.PlaybackStats()
 		}
 	}
@@ -115,7 +117,7 @@ func (s *DeviceSink) DiscardPlayback() int {
 	if s == nil || s.adapter == nil {
 		return 0
 	}
-	if discarder, ok := s.adapter.handle.(audio.PlaybackDiscarder); ok {
+	if discarder, ok := s.adapter.handle.(PlaybackDiscarder); ok {
 		return discarder.DiscardPlayback()
 	}
 	return 0
@@ -139,9 +141,6 @@ func (s *DeviceSink) SetPlaybackRenderObserver(observer audio.PlaybackRenderObse
 func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 	if err := audio.ContextError(ctx); err != nil {
 		return err
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if err := audio.ValidateFrame("write", frame); err != nil {
 		return err
@@ -168,7 +167,7 @@ func (s *DeviceSink) WaitForPlayback(ctx context.Context) error {
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	return s.adapter.finish("wait for playback", s.playbackWaiter.WaitForPlayback(ctx))
 }
@@ -181,7 +180,7 @@ func (s *DeviceSink) WaitForPlaybackCapacity(ctx context.Context, samples int) e
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	return s.adapter.finish("wait for playback capacity", s.capacityWaiter.WaitForPlaybackCapacity(ctx, samples))
 }
@@ -198,9 +197,6 @@ func (s *DeviceSink) WriteSamples(ctx context.Context, samples []int16) error {
 	}
 	if len(samples) == audio.FrameSize {
 		return s.WriteFrame(ctx, samples)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if err := s.adapter.begin("write"); err != nil {
 		return err

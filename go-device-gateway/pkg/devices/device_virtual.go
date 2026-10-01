@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -11,6 +9,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const VirtualBackendName = "virtual"
@@ -122,7 +123,7 @@ func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 	}
 	caps := append([]VirtualCapability(nil), s.Capabilities...)
 	if len(caps) == 0 {
-		caps = []VirtualCapability{{SampleRate: audio.SampleRate, Channels: audio.Channels, BitDepth: 16, Format: "pcm16"}}
+		caps = []VirtualCapability{{SampleRate: audio.SampleRate, Channels: audio.Channels, BitDepth: audio.DeviceBitDepthPCM16, Format: audio.DeviceEncodingPCM16}}
 	}
 	var loopback DeviceID
 	if s.LoopbackID != "" {
@@ -320,7 +321,7 @@ func (r *VirtualRegistry) WaitForPCMObservations(ctx context.Context, count int)
 		return r.PCMObservations(), nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, contract.ErrNilContext
 	}
 	for {
 		r.mu.Lock()
@@ -449,7 +450,7 @@ func (s *VirtualStream) WriteSamples(ctx context.Context, samples []int16) error
 }
 func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, contract.ErrNilContext
 	}
 	for {
 		if err := audio.ContextError(ctx); err != nil {
@@ -483,9 +484,6 @@ func (s *VirtualStream) ReadFrame(ctx context.Context, frame []int16) error {
 	}
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	for {
 		if err := audio.ContextError(ctx); err != nil {
@@ -523,9 +521,6 @@ func (s *VirtualStream) ReadSamples(ctx context.Context, samples []int16) error 
 	if len(samples) == 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		if err := audio.ContextError(ctx); err != nil {
 			return err
@@ -560,7 +555,7 @@ func (s *VirtualStream) WaitForPlaybackCapacity(ctx context.Context, samples int
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	low, high, err := audio.PlaybackQueueWatermarks(s.format)
 	if err != nil {

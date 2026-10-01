@@ -1,10 +1,10 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"errors"
 	"fmt"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // DeviceFormatOpener is the optional registry capability for opening a
@@ -23,10 +23,23 @@ type DuplexDeviceFormatOpener interface {
 	OpenDuplexWithFormat(inputID DeviceID, inputFormat audio.DeviceFormat, outputID DeviceID, outputFormat audio.DeviceFormat) (OpenedDevice, OpenedDevice, error)
 }
 
-// VoiceProcessingProvider reports whether a device endpoint is backed by a
-// native duplex voice-processing graph rather than the portable fallback.
-type VoiceProcessingProvider interface {
-	VoiceProcessingActive() bool
+// PlaybackStatsProvider exposes the queue observation owned by a playback
+// device. It is optional so existing third-party OpenedDevice implementations
+// remain source-compatible.
+type PlaybackStatsProvider interface {
+	PlaybackStats() audio.PlaybackQueueStats
+}
+
+// CaptureStatsProvider is the optional device capability for synchronized
+// native capture queue and loss counters.
+type CaptureStatsProvider interface {
+	CaptureStats() audio.CaptureQueueStats
+}
+
+// PlaybackDiscarder exposes cancellation-scoped removal of queued samples.
+// It is optional for compatibility with non-queueing device implementations.
+type PlaybackDiscarder interface {
+	DiscardPlayback() int
 }
 
 // DeviceFormatProvider is implemented by opened devices that can report the

@@ -159,11 +159,11 @@ func TestTraceCaptureCloseIsSafeConcurrently(t *testing.T) {
 	}
 	var wg sync.WaitGroup
 	frame := make([]int16, 256)
-	for worker := 0; worker < 8; worker++ {
+	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for index := 0; index < 100; index++ {
+			for range 100 {
 				trace.CaptureMicrophonePreGate(16000, frame)
 			}
 		}()

@@ -2,16 +2,16 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/gen2brain/malgo"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -97,7 +97,7 @@ func TestVoiceProcessingPlaybackBurstPreservesFIFO(t *testing.T) {
 }
 
 func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
-	newBlockedWait := func(t *testing.T) (*voiceProcessingIO, *voiceProcessingEndpoint, <-chan error) {
+	newBlockedWait := func(t *testing.T) (*voiceProcessingEndpoint, <-chan error) {
 		t.Helper()
 		format := audio.PCM16DeviceFormat(24000)
 		queue, err := audio.NewPlaybackQueue(format)
@@ -119,11 +119,11 @@ func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
 		wait := make(chan error, 1)
 		go func() { wait <- endpoint.WaitForPlaybackCapacity(context.Background(), audio.FrameSize) }()
 		assertCapacityWaitBlocked(t, wait)
-		return engine, endpoint, wait
+		return endpoint, wait
 	}
 
 	t.Run("discard wakes producer", func(t *testing.T) {
-		_, endpoint, wait := newBlockedWait(t)
+		endpoint, wait := newBlockedWait(t)
 		if discarded := endpoint.DiscardPlayback(); discarded == 0 {
 			t.Fatal("AUVoiceIO discard removed no queued samples")
 		}
@@ -133,7 +133,7 @@ func TestVoiceProcessingPlaybackCapacityWaitLifecycle(t *testing.T) {
 	})
 
 	t.Run("output close wakes producer while input remains open", func(t *testing.T) {
-		_, endpoint, wait := newBlockedWait(t)
+		endpoint, wait := newBlockedWait(t)
 		if err := endpoint.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +171,7 @@ func coreAudioPortableFixture() DeviceRegistryConformanceFixture {
 func TestCoreAudioPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
 	const providerRate = 24000
 	handle := &coreAudioHandle{direction: DirectionOutput, format: audio.PCM16DeviceFormat(providerRate)}
-	for frameIndex := 0; frameIndex < 16; frameIndex++ {
+	for frameIndex := range 16 {
 		frame := make([]int16, audio.FrameSize)
 		for sampleIndex := range frame {
 			frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)
@@ -281,4 +281,14 @@ func (s *coreAudioPortableState) remove(id DeviceID) {
 }
 func (s *coreAudioPortableState) observations() DeviceRegistryObservations {
 	return DeviceRegistryObservations{OpenCount: s.opens, ReleaseCount: s.releases}
+}
+
+// constantDevice builds a device descriptor from test-constant identifiers.
+// Invalid constants are a fixture bug, not a runtime state.
+func constantDevice(backend, nativeID, name string, direction Direction) Device {
+	device, err := NewDevice(backend, nativeID, name, direction)
+	if err != nil {
+		panic(fmt.Sprintf("devices: invalid constant device %s/%s: %v", backend, nativeID, err))
+	}
+	return device
 }

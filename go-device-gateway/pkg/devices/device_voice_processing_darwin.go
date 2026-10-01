@@ -2,8 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -13,6 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // voiceProcessingIO is Apple's duplex AUVoiceIO endpoint. Unlike two
@@ -115,12 +115,6 @@ type voiceProcessingAPI struct {
 	audioUnitRender               func(uintptr, uintptr, uintptr, uint32, uint32, *audioBufferList1) int32
 }
 
-var (
-	voiceProcessingAPIOnce sync.Once
-	voiceProcessingAPIOne  *voiceProcessingAPI
-	voiceProcessingAPIErr  error
-)
-
 const (
 	auScopeGlobal = 0
 	auScopeInput  = 1
@@ -141,39 +135,37 @@ func fourCC(value string) uint32 {
 	return uint32(value[0])<<24 | uint32(value[1])<<16 | uint32(value[2])<<8 | uint32(value[3])
 }
 
+// loadVoiceProcessingAPI resolves the AudioToolbox entry points. It runs once
+// per duplex open; dlopen reference-counts the framework, so resolving per
+// open needs no process-wide cache.
 func loadVoiceProcessingAPI() (*voiceProcessingAPI, error) {
-	voiceProcessingAPIOnce.Do(func() {
-		handle, err := purego.Dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", purego.RTLD_LAZY|purego.RTLD_LOCAL)
-		if err != nil {
-			voiceProcessingAPIErr = fmt.Errorf("load AudioToolbox: %w", err)
-			return
+	handle, err := purego.Dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", purego.RTLD_LAZY|purego.RTLD_LOCAL)
+	if err != nil {
+		return nil, fmt.Errorf("load AudioToolbox: %w", err)
+	}
+	api := &voiceProcessingAPI{}
+	registrations := []struct {
+		name string
+		dst  any
+	}{
+		{"AudioComponentFindNext", &api.audioComponentFindNext},
+		{"AudioComponentInstanceNew", &api.audioComponentInstanceNew},
+		{"AudioComponentInstanceDispose", &api.audioComponentInstanceDispose},
+		{"AudioUnitSetProperty", &api.audioUnitSetProperty},
+		{"AudioUnitInitialize", &api.audioUnitInitialize},
+		{"AudioUnitUninitialize", &api.audioUnitUninitialize},
+		{"AudioOutputUnitStart", &api.audioOutputUnitStart},
+		{"AudioOutputUnitStop", &api.audioOutputUnitStop},
+		{"AudioUnitRender", &api.audioUnitRender},
+	}
+	for _, registration := range registrations {
+		symbol, symbolErr := purego.Dlsym(handle, registration.name)
+		if symbolErr != nil {
+			return nil, fmt.Errorf("resolve AudioToolbox %s: %w", registration.name, symbolErr)
 		}
-		api := &voiceProcessingAPI{}
-		registrations := []struct {
-			name string
-			dst  any
-		}{
-			{"AudioComponentFindNext", &api.audioComponentFindNext},
-			{"AudioComponentInstanceNew", &api.audioComponentInstanceNew},
-			{"AudioComponentInstanceDispose", &api.audioComponentInstanceDispose},
-			{"AudioUnitSetProperty", &api.audioUnitSetProperty},
-			{"AudioUnitInitialize", &api.audioUnitInitialize},
-			{"AudioUnitUninitialize", &api.audioUnitUninitialize},
-			{"AudioOutputUnitStart", &api.audioOutputUnitStart},
-			{"AudioOutputUnitStop", &api.audioOutputUnitStop},
-			{"AudioUnitRender", &api.audioUnitRender},
-		}
-		for _, registration := range registrations {
-			symbol, symbolErr := purego.Dlsym(handle, registration.name)
-			if symbolErr != nil {
-				voiceProcessingAPIErr = fmt.Errorf("resolve AudioToolbox %s: %w", registration.name, symbolErr)
-				return
-			}
-			purego.RegisterFunc(registration.dst, symbol)
-		}
-		voiceProcessingAPIOne = api
-	})
-	return voiceProcessingAPIOne, voiceProcessingAPIErr
+		purego.RegisterFunc(registration.dst, symbol)
+	}
+	return api, nil
 }
 
 func newVoiceProcessingIO(inputID, outputID DeviceID, inputFormat, outputFormat audio.DeviceFormat) (*voiceProcessingEndpoint, *voiceProcessingEndpoint, error) {
@@ -203,7 +195,7 @@ func newVoiceProcessingIO(inputID, outputID DeviceID, inputFormat, outputFormat 
 	engine := &voiceProcessingIO{
 		api: api, unit: unit, inputID: inputID, outputID: outputID,
 		inputFormat: inputFormat, outputFormat: outputFormat,
-		capture:      &MicrophoneSource{frameCh: make(chan []int16, 64)},
+		capture:      &MicrophoneSource{frameCh: make(chan []int16, microphoneFrameBuffer)},
 		playbackWake: make(chan struct{}),
 	}
 	engine.playback, err = audio.NewPlaybackQueue(outputFormat)
@@ -222,20 +214,21 @@ func newVoiceProcessingIO(inputID, outputID DeviceID, inputFormat, outputFormat 
 
 func (e *voiceProcessingIO) configureAndStart() error {
 	one, zero := uint32(1), uint32(0)
+	flagSize := uint32(unsafe.Sizeof(one))
 	set := func(operation string, property, scope, element uint32, value unsafe.Pointer, size uint32) error {
 		if status := e.api.audioUnitSetProperty(e.unit, property, scope, element, value, size); status != 0 {
 			return voiceProcessingStatusError(operation, status)
 		}
 		return nil
 	}
-	if err := set("enable AUVoiceIO microphone", auPropertyEnableIO, auScopeInput, 1, unsafe.Pointer(&one), 4); err != nil {
+	if err := set("enable AUVoiceIO microphone", auPropertyEnableIO, auScopeInput, 1, unsafe.Pointer(&one), flagSize); err != nil {
 		return err
 	}
-	if err := set("enable AUVoiceIO speaker", auPropertyEnableIO, auScopeOutput, 0, unsafe.Pointer(&one), 4); err != nil {
+	if err := set("enable AUVoiceIO speaker", auPropertyEnableIO, auScopeOutput, 0, unsafe.Pointer(&one), flagSize); err != nil {
 		return err
 	}
 	maxFrames := uint32(voiceProcessingMaxFrames)
-	if err := set("set AUVoiceIO maximum callback frames", auPropertyMaximumFrames, auScopeGlobal, 0, unsafe.Pointer(&maxFrames), 4); err != nil {
+	if err := set("set AUVoiceIO maximum callback frames", auPropertyMaximumFrames, auScopeGlobal, 0, unsafe.Pointer(&maxFrames), uint32(unsafe.Sizeof(maxFrames))); err != nil {
 		return err
 	}
 	inputASBD := voiceProcessingASBD(e.inputFormat)
@@ -257,10 +250,10 @@ func (e *voiceProcessingIO) configureAndStart() error {
 	if err := set("install AUVoiceIO microphone callback", auPropertySetInputCallback, auScopeGlobal, 1, unsafe.Pointer(&input), uint32(unsafe.Sizeof(input))); err != nil {
 		return err
 	}
-	if err := set("enable AUVoiceIO voice processing", auPropertyBypassVoice, auScopeGlobal, 0, unsafe.Pointer(&zero), 4); err != nil {
+	if err := set("enable AUVoiceIO voice processing", auPropertyBypassVoice, auScopeGlobal, 0, unsafe.Pointer(&zero), flagSize); err != nil {
 		return err
 	}
-	if err := set("enable AUVoiceIO automatic gain control", auPropertyEnableAGC, auScopeGlobal, 0, unsafe.Pointer(&one), 4); err != nil {
+	if err := set("enable AUVoiceIO automatic gain control", auPropertyEnableAGC, auScopeGlobal, 0, unsafe.Pointer(&one), flagSize); err != nil {
 		return err
 	}
 	if status := e.api.audioUnitInitialize(e.unit); status != 0 {
@@ -274,9 +267,9 @@ func (e *voiceProcessingIO) configureAndStart() error {
 }
 
 func voiceProcessingASBD(format audio.DeviceFormat) audioStreamBasicDescription {
-	bytesPerFrame := uint32(format.Channels * format.BitDepth / 8)
+	bytesPerFrame := uint32(format.Channels * format.BitDepth / bitsPerByte)
 	return audioStreamBasicDescription{
-		SampleRate: float64(format.SampleRate), FormatID: fourCC("lpcm"), FormatFlags: 0x4 | 0x8,
+		SampleRate: float64(format.SampleRate), FormatID: fourCC("lpcm"), FormatFlags: audioFormatFlagIsSignedInteger | audioFormatFlagIsPacked,
 		BytesPerPacket: bytesPerFrame, FramesPerPacket: 1, BytesPerFrame: bytesPerFrame,
 		ChannelsPerFrame: uint32(format.Channels), BitsPerChannel: uint32(format.BitDepth),
 	}
@@ -316,7 +309,7 @@ func (e *voiceProcessingIO) renderBuffers(actionFlags *uint32, frames uint32, li
 	}
 	e.mu.Unlock()
 	if actionFlags != nil && read == 0 {
-		*actionFlags |= 1 << 4
+		*actionFlags |= audioUnitRenderActionOutputIsSilence
 	}
 	return 0
 }
@@ -386,7 +379,8 @@ func voiceProcessingIgnoreStopped(status int32) error {
 
 func (h *voiceProcessingEndpoint) DeviceDirection() Direction       { return h.direction }
 func (h *voiceProcessingEndpoint) DeviceFormat() audio.DeviceFormat { return h.format }
-func (h *voiceProcessingEndpoint) VoiceProcessingActive() bool      { return true }
+
+func (h *voiceProcessingEndpoint) VoiceProcessingActive() bool { return true }
 
 func (h *voiceProcessingEndpoint) ReadFrame(ctx context.Context, frame []int16) error {
 	if h.direction != DirectionInput {
@@ -461,7 +455,7 @@ func (h *voiceProcessingEndpoint) WaitForPlaybackCapacity(ctx context.Context, s
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	low, high, err := audio.PlaybackQueueWatermarks(h.format)
 	if err != nil {

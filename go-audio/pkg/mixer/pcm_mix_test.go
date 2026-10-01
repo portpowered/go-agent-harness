@@ -48,7 +48,7 @@ func TestMixPCM16SamplesSumsBeforeOneFinalClip(t *testing.T) {
 			intermediate = pcm16MinSample
 		}
 	}
-	if got[0] == int16(intermediate) {
+	if int32(got[0]) == intermediate {
 		t.Fatalf("mix matches intermediate-clipping control: got %d", got[0])
 	}
 }

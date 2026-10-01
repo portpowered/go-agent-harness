@@ -123,7 +123,7 @@ func NewPlaybackQueueWithLatency(format DeviceFormat, latency time.Duration) (*P
 // legacy audio.FrameSize constant.
 func PlaybackQueueCapacity(format DeviceFormat, latency time.Duration) (int, error) {
 	if err := format.Validate(); err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrInvalidPlaybackQueue, err)
+		return 0, fmt.Errorf("%w: %w", ErrInvalidPlaybackQueue, err)
 	}
 	if latency <= 0 {
 		return 0, fmt.Errorf("%w: latency target must be positive; got %s", ErrInvalidPlaybackQueue, latency)
@@ -322,10 +322,8 @@ func (q *PlaybackQueue) ReadPCM16(destination []byte) int {
 	requested := len(destination) / 2
 	queuedBefore := q.size
 	n := min(requested, q.size)
-	for index := 0; index < n; index++ {
-		value := uint16(q.samples[(q.head+index)%q.capacity])
-		destination[index*2] = byte(value)
-		destination[index*2+1] = byte(value >> 8)
+	for index := range n {
+		binary.LittleEndian.PutUint16(destination[index*2:], uint16(q.samples[(q.head+index)%q.capacity]))
 	}
 	clear(destination[n*2 : requested*2])
 	q.consumeLocked(n)
@@ -403,25 +401,6 @@ func MaxIntValue(value, floor int) int {
 		return floor
 	}
 	return value
-}
-
-// PlaybackStatsProvider exposes the queue observation owned by a playback
-// device. It is optional so existing third-party OpenedDevice implementations
-// remain source-compatible.
-type PlaybackStatsProvider interface {
-	PlaybackStats() PlaybackQueueStats
-}
-
-// CaptureStatsProvider is the optional device capability for synchronized
-// native capture queue and loss counters.
-type CaptureStatsProvider interface {
-	CaptureStats() CaptureQueueStats
-}
-
-// PlaybackDiscarder exposes cancellation-scoped removal of queued samples.
-// It is optional for compatibility with non-queueing device implementations.
-type PlaybackDiscarder interface {
-	DiscardPlayback() int
 }
 
 func EmptyPlaybackQueueStats(format DeviceFormat) PlaybackQueueStats {

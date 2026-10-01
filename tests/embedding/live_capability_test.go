@@ -107,25 +107,25 @@ func awaitCapabilityEvent(t *testing.T, ctx context.Context, events <-chan sessi
 }
 
 func TestExternalLiveCapabilityCatalogChangeRefreshesProviderInOrder(t *testing.T) {
-	fixture := newLiveCapabilityRefreshFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	fixture := newLiveCapabilityRefreshFixture(t, ctx)
 	defer fixture.close(t)
 	fixture.changed.Store(true)
 	fixture.capability.events <- session.LiveCapabilityEvent{Type: "catalog_changed", Sequence: 1}
-	fixture.waitForOrderedUpdate(t)
+	fixture.waitForOrderedUpdate(t, ctx)
 	// A second catalog event arriving while the provider update is admitted is
 	// coalesced into one follow-up refresh after the ordered barrier releases.
 	fixture.capability.events <- session.LiveCapabilityEvent{Type: "generation_changed", Sequence: 2}
-	fixture.assertTextWaitsForUpdate(t)
+	fixture.assertTextWaitsForUpdate(t, ctx)
 	close(fixture.releaseUpdate)
-	fixture.assertOrderedMessages(t)
+	fixture.assertOrderedMessages(t, ctx)
 	if got := fixture.capability.refreshCalls.Load(); got < 2 {
 		t.Fatalf("catalog refresh calls = %d, want admission and event refresh", got)
 	}
 }
 
 type liveCapabilityRefreshFixture struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
 	provider      *embeddedLiveProvider
 	capability    *embeddedCapability
 	changed       atomic.Bool
@@ -136,11 +136,10 @@ type liveCapabilityRefreshFixture struct {
 	handle        session.LiveHandle
 }
 
-func newLiveCapabilityRefreshFixture(t *testing.T) *liveCapabilityRefreshFixture {
+func newLiveCapabilityRefreshFixture(t *testing.T, ctx context.Context) *liveCapabilityRefreshFixture {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	fixture := &liveCapabilityRefreshFixture{
-		ctx: ctx, cancel: cancel, provider: newEmbeddedLiveProvider(),
+		provider:   newEmbeddedLiveProvider(),
 		capability: &embeddedCapability{events: make(chan session.LiveCapabilityEvent, 2), watchContext: make(chan context.Context, 1)},
 		sent:       make(chan messages.StreamMessage, 8), enteredUpdate: make(chan struct{}), releaseUpdate: make(chan struct{}),
 	}
@@ -176,22 +175,18 @@ func newLiveCapabilityRefreshFixture(t *testing.T) *liveCapabilityRefreshFixture
 	})
 	handle, err := host.OpenLive(ctx, session.LiveRequest{ParticipantID: "browser", Capabilities: &session.LiveCapabilities{Handle: fixture.capability}})
 	if err != nil {
-		cancel()
 		t.Fatal(err)
 	}
 	fixture.handle = handle
 	if err := handle.Start(ctx); err != nil {
-		cancel()
 		t.Fatal(err)
 	}
 	select {
 	case <-fixture.capability.watchContext:
 	case <-ctx.Done():
-		cancel()
 		t.Fatal("capability watcher did not start")
 	}
 	if got := fixture.capability.refreshCalls.Load(); got != 1 {
-		cancel()
 		t.Fatalf("initial capability refresh calls = %d, want one", got)
 	}
 	return fixture
@@ -201,23 +196,22 @@ func (fixture *liveCapabilityRefreshFixture) close(t *testing.T) {
 	t.Helper()
 	closeForTest(t, fixture.handle)
 	closeForTest(t, fixture.provider)
-	fixture.cancel()
 }
 
-func (fixture *liveCapabilityRefreshFixture) waitForOrderedUpdate(t *testing.T) {
+func (fixture *liveCapabilityRefreshFixture) waitForOrderedUpdate(t *testing.T, ctx context.Context) {
 	t.Helper()
 	select {
 	case <-fixture.enteredUpdate:
-	case <-fixture.ctx.Done():
+	case <-ctx.Done():
 		t.Fatal("catalog change did not reach ordered provider update")
 	}
 }
 
-func (fixture *liveCapabilityRefreshFixture) assertTextWaitsForUpdate(t *testing.T) {
+func (fixture *liveCapabilityRefreshFixture) assertTextWaitsForUpdate(t *testing.T, ctx context.Context) {
 	t.Helper()
 	controlDone := make(chan error, 1)
 	go func() {
-		controlDone <- fixture.handle.Send(fixture.ctx, session.LiveControl{Kind: session.LiveControlText, Text: "after catalog"})
+		controlDone <- fixture.handle.Send(ctx, session.LiveControl{Kind: session.LiveControlText, Text: "after catalog"})
 	}()
 	select {
 	case message := <-fixture.sent:
@@ -229,14 +223,14 @@ func (fixture *liveCapabilityRefreshFixture) assertTextWaitsForUpdate(t *testing
 	fixture.controlDone = controlDone
 }
 
-func (fixture *liveCapabilityRefreshFixture) assertOrderedMessages(t *testing.T) {
+func (fixture *liveCapabilityRefreshFixture) assertOrderedMessages(t *testing.T, ctx context.Context) {
 	t.Helper()
 	select {
 	case err := <-fixture.controlDone:
 		if err != nil {
 			t.Fatalf("ordered text control: %v", err)
 		}
-	case <-fixture.ctx.Done():
+	case <-ctx.Done():
 		t.Fatal("ordered text control did not complete")
 	}
 	var sawUpdate, sawText bool

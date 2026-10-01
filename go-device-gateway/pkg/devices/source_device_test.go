@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -9,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestDeviceSourceConformanceAndValidation(t *testing.T) {
@@ -91,8 +91,7 @@ func TestDeviceSourceEdgeContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var nilContext context.Context
-	if err := source.ReadFrame(nilContext, make([]int16, audio.FrameSize)); !errors.Is(err, audio.ErrInvalidFrameSize) {
+	if err := source.ReadFrame(t.Context(), make([]int16, audio.FrameSize)); !errors.Is(err, audio.ErrInvalidFrameSize) {
 		t.Fatalf("malformed raw frame error=%v", err)
 	}
 	if err := source.Close(); err != nil {
@@ -216,9 +215,9 @@ func (h *adapterByteHandle) Read(context.Context) ([]byte, error) {
 func (h *adapterByteHandle) Close() error { return nil }
 
 type adapterReadyContext struct {
-	context.Context
-	ready chan<- struct{}
-	once  sync.Once
+	context.Context //nolint:containedctx // this type is a context.Context that signals its first Done call; it must wrap its parent
+	ready           chan<- struct{}
+	once            sync.Once
 }
 
 func (c *adapterReadyContext) Done() <-chan struct{} {

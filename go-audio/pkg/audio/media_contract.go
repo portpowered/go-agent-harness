@@ -73,6 +73,11 @@ type PlaybackControlledInbound interface {
 	SetPlaybackController(PlaybackController)
 }
 
+var _ PlaybackControlledInbound = (*sessionInboundMedia)(nil)
+
+// millisecondsPerSecond converts millisecond media durations to rates.
+const millisecondsPerSecond = 1000
+
 // MediaEndpoint is the lifecycle seam shared by inbound and outbound media.
 //
 // Each endpoint returned with a nil error is caller-owned. The caller closes
@@ -131,7 +136,7 @@ type MediaSessionOptions struct {
 // ConfigurableMediaSession is an optional extension of MediaSession. Providers
 // that can choose their inbound framing implement it without forcing every
 // embedded session or test double to grow a provider-specific method.
-type ConfigurableMediaSession interface {
+type ConfigurableMediaSession interface { //nolint:iface // shared optional capability: provider sessions in go-llm-gateway implement it and runtime session wrappers consume it; go-audio owns the contract
 	MediaSession
 	RTCMediaWithOptions(MediaSessionOptions) MediaEndpoints
 }
@@ -182,4 +187,11 @@ func (r PlaybackResponse) sameResponse(other PlaybackResponse) bool {
 		return true
 	}
 	return r == other
+}
+
+func (m *sessionInboundMedia) notify() {
+	select {
+	case m.wake <- struct{}{}:
+	default:
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pion/opus"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const (
@@ -188,7 +189,7 @@ func NewOpusEncoder(configs ...OpusCodecConfig) (*OpusEncoder, error) {
 // packet storage. The input is neither mutated nor retained.
 func (e *OpusEncoder) Encode(ctx context.Context, samples []int16) ([]byte, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, contract.ErrNilContext
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()

@@ -293,7 +293,7 @@ func TestS2SV9WebRTCDeviceOutputSilenceFailsEnergyAssertion(t *testing.T) {
 		t.Fatal("silent speaker output passed the energy assertion")
 	}
 	if !strings.Contains(violation.Error(), "speaker output RMS = 0.00") ||
-		!strings.Contains(violation.Error(), fmt.Sprintf("want > %.2f", audio.DefaultVADConfig.EnergyThreshold)) {
+		!strings.Contains(violation.Error(), fmt.Sprintf("want > %.2f", audio.DefaultVADConfig().EnergyThreshold)) {
 		t.Fatalf("silence assertion error = %q, want measured RMS and threshold", violation)
 	}
 }
@@ -320,7 +320,7 @@ func (t *deviceProbeOutputTap) LastRMS() float64 {
 
 func assertDeviceProbeEnergy(label string, samples []int16) error {
 	rms := pcm16ProbeRMS(samples)
-	threshold := audio.DefaultVADConfig.EnergyThreshold
+	threshold := audio.DefaultVADConfig().EnergyThreshold
 	if rms <= threshold {
 		return fmt.Errorf("%s RMS = %.2f, want > %.2f (silence threshold)", label, rms, threshold)
 	}

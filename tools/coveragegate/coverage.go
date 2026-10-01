@@ -170,7 +170,7 @@ const coverageComparisonBandCents = 10
 func LoadManifest(path string) (Manifest, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("%w: stat coverage manifest %q: %v", ErrManifestInvalid, path, err)
+		return Manifest{}, fmt.Errorf("%w: stat coverage manifest %q: %w", ErrManifestInvalid, path, err)
 	}
 	if info.IsDir() {
 		return LoadManifestDir(path)
@@ -178,7 +178,7 @@ func LoadManifest(path string) (Manifest, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("%w: read coverage manifest %q: %v", ErrManifestInvalid, path, err)
+		return Manifest{}, fmt.Errorf("%w: read coverage manifest %q: %w", ErrManifestInvalid, path, err)
 	}
 	manifest, err := ParseManifest(data)
 	if err != nil {
@@ -195,7 +195,7 @@ func LoadManifest(path string) (Manifest, error) {
 func LoadManifestDir(path string) (Manifest, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("%w: stat coverage manifest directory %q: %v", ErrManifestInvalid, path, err)
+		return Manifest{}, fmt.Errorf("%w: stat coverage manifest directory %q: %w", ErrManifestInvalid, path, err)
 	}
 	if !info.IsDir() {
 		return Manifest{}, fmt.Errorf("%w: coverage manifest path %q is not a directory", ErrManifestInvalid, path)
@@ -204,7 +204,7 @@ func LoadManifestDir(path string) (Manifest, error) {
 	var fragmentPaths []string
 	walkErr := filepath.WalkDir(path, func(fragmentPath string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			return fmt.Errorf("%w: inspect coverage manifest fragment %q: %v", ErrManifestInvalid, fragmentPath, err)
+			return fmt.Errorf("%w: inspect coverage manifest fragment %q: %w", ErrManifestInvalid, fragmentPath, err)
 		}
 		if entry.IsDir() {
 			return nil
@@ -223,7 +223,7 @@ func LoadManifestDir(path string) (Manifest, error) {
 	for _, fragmentPath := range fragmentPaths {
 		data, err := os.ReadFile(fragmentPath)
 		if err != nil {
-			return Manifest{}, fmt.Errorf("%w: read coverage manifest fragment %q: %v", ErrManifestInvalid, fragmentPath, err)
+			return Manifest{}, fmt.Errorf("%w: read coverage manifest fragment %q: %w", ErrManifestInvalid, fragmentPath, err)
 		}
 		entry, err := ParseManifestFragment(data)
 		if err != nil {
@@ -266,14 +266,14 @@ func ParseManifestFragment(data []byte) (PackageEntry, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	var rawEntry json.RawMessage
 	if err := decoder.Decode(&rawEntry); err != nil {
-		return PackageEntry{}, fmt.Errorf("%w: %v", ErrManifestInvalid, err)
+		return PackageEntry{}, fmt.Errorf("%w: %w", ErrManifestInvalid, err)
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		if err == nil {
 			return PackageEntry{}, fmt.Errorf("%w: manifest fragment contains more than one JSON value", ErrManifestInvalid)
 		}
-		return PackageEntry{}, fmt.Errorf("%w: %v", ErrManifestInvalid, err)
+		return PackageEntry{}, fmt.Errorf("%w: %w", ErrManifestInvalid, err)
 	}
 	return parseEntry(rawEntry)
 }
@@ -286,14 +286,14 @@ func ParseManifest(data []byte) (Manifest, error) {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&document); err != nil {
-		return Manifest{}, fmt.Errorf("%w: %v", ErrManifestInvalid, err)
+		return Manifest{}, fmt.Errorf("%w: %w", ErrManifestInvalid, err)
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		if err == nil {
 			return Manifest{}, fmt.Errorf("%w: manifest contains more than one JSON value", ErrManifestInvalid)
 		}
-		return Manifest{}, fmt.Errorf("%w: %v", ErrManifestInvalid, err)
+		return Manifest{}, fmt.Errorf("%w: %w", ErrManifestInvalid, err)
 	}
 	if document.Packages == nil {
 		return Manifest{}, fmt.Errorf("%w: packages must be an array", ErrManifestInvalid)
@@ -339,7 +339,7 @@ func ParseManifest(data []byte) (Manifest, error) {
 func parseEntry(raw json.RawMessage) (PackageEntry, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil {
-		return PackageEntry{}, fmt.Errorf("%w: package entry must be an object: %v", ErrManifestInvalid, err)
+		return PackageEntry{}, fmt.Errorf("%w: package entry must be an object: %w", ErrManifestInvalid, err)
 	}
 
 	var importPath string
@@ -407,7 +407,7 @@ func parseEntry(raw json.RawMessage) (PackageEntry, error) {
 		}
 	}
 	minimumCents := whole*100 + fraction
-	if minimumCents > 10000 {
+	if minimumCents > maxPercentCents {
 		return PackageEntry{}, &ManifestError{
 			Kind:       ErrManifestMinimumPrecision,
 			ImportPath: importPath,
@@ -428,7 +428,7 @@ func ReadProfiles(paths []string) (map[string]Coverage, error) {
 	for _, path := range paths {
 		file, err := os.Open(path)
 		if err != nil {
-			return nil, fmt.Errorf("%w: open %q: %v", ErrProfileInvalid, path, err)
+			return nil, fmt.Errorf("%w: open %q: %w", ErrProfileInvalid, path, err)
 		}
 		profileMode, parseErr := parseProfile(file, path, blocks)
 		closeErr := file.Close()
@@ -436,7 +436,7 @@ func ReadProfiles(paths []string) (map[string]Coverage, error) {
 			return nil, parseErr
 		}
 		if closeErr != nil {
-			return nil, fmt.Errorf("%w: close %q: %v", ErrProfileInvalid, path, closeErr)
+			return nil, fmt.Errorf("%w: close %q: %w", ErrProfileInvalid, path, closeErr)
 		}
 		if mode == "" {
 			mode = profileMode
@@ -615,7 +615,7 @@ func (c Coverage) actualCents() int {
 	}
 	// Go's package coverage report records one decimal place. Preserve that
 	// measurement before comparing it to the manifest's lexical two decimals.
-	tenths := int(math.Floor((1000*float64(c.Covered))/float64(c.Total) + 0.5))
+	tenths := int(math.Round(permille * float64(c.Covered) / float64(c.Total)))
 	return tenths * 10
 }
 

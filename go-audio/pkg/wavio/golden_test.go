@@ -9,7 +9,16 @@ import (
 	"testing"
 )
 
-var updateGoldens = flag.Bool("update", false, "rewrite pkg/wavio golden WAV fixtures")
+func TestMain(m *testing.M) {
+	flag.Bool("update", false, "rewrite pkg/wavio golden WAV fixtures")
+	os.Exit(m.Run())
+}
+
+// updateGoldensRequested reports whether the test run passed -update.
+func updateGoldensRequested() bool {
+	f := flag.Lookup("update")
+	return f != nil && f.Value.String() == "true"
+}
 
 func TestGoldenFixtures(t *testing.T) {
 	tests := []struct {
@@ -40,7 +49,7 @@ func TestGoldenFixtures(t *testing.T) {
 			}
 
 			path := filepath.Join("testdata", test.filename)
-			if *updateGoldens {
+			if updateGoldensRequested() {
 				writeGoldenFixture(t, path, encoded.Bytes())
 			}
 

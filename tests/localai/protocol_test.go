@@ -49,7 +49,7 @@ type endpointConfig struct {
 	outputRate           int
 	manualResponseCreate bool
 	available            bool
-	skipReason           string
+	unavailableReason    string
 }
 
 type sessionSettings struct {
@@ -494,7 +494,7 @@ func resamplePCM16(audio []byte, inputRate, outputRate int) ([]byte, error) {
 		return nil, fmt.Errorf("PCM16 resample output is empty for %d input samples", inputSamples)
 	}
 	resampled := make([]byte, outputSamples*2)
-	for outputIndex := 0; outputIndex < outputSamples; outputIndex++ {
+	for outputIndex := range outputSamples {
 		sourcePosition := float64(outputIndex) * float64(inputRate) / float64(outputRate)
 		leftIndex := int(sourcePosition)
 		if leftIndex >= inputSamples-1 {

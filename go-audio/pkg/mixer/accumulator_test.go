@@ -203,7 +203,7 @@ func TestPCMAccumulatorBoundsSourceTimelineState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index := 0; index < maxSourceTimelines; index++ {
+	for index := range maxSourceTimelines {
 		if err := accumulator.AddSource(SourceKey{SourceID: fmt.Sprintf("source-%d", index)}, 0, 0, true, false, []int16{1}); err != nil {
 			t.Fatalf("AddSource %d: %v", index, err)
 		}

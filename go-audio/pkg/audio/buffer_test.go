@@ -35,7 +35,7 @@ func TestFrameBufferTailOwnershipAndAccounting(t *testing.T) {
 	if err != nil || !tail.EndOfResponse || !reflect.DeepEqual(tail.Samples, []int16{6, 7}) {
 		t.Fatalf("tail=%+v err=%v", tail, err)
 	}
-	if _, err = c.Receive(context.Background()); err != io.EOF {
+	if _, err = c.Receive(context.Background()); !errors.Is(err, io.EOF) {
 		t.Fatalf("after drain=%v", err)
 	}
 	s := ctl.Snapshot()
@@ -87,22 +87,22 @@ func TestFrameBufferCancellationAndEmptyBoundaryCapacity(t *testing.T) {
 	if err := p.TrySubmit(audio.PCMFrame{EndOfResponse: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.TrySubmit(audio.PCMFrame{EndOfResponse: true}); err != audio.ErrBufferFull {
+	if err := p.TrySubmit(audio.PCMFrame{EndOfResponse: true}); !errors.Is(err, audio.ErrBufferFull) {
 		t.Fatalf("unbounded markers: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := p.Submit(ctx, audio.PCMFrame{}); err != context.Canceled {
+	if err := p.Submit(ctx, audio.PCMFrame{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel=%v", err)
 	}
-	if _, err := c.Receive(ctx); err != context.Canceled {
+	if _, err := c.Receive(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("receive cancellation=%v", err)
 	}
-	if err := p.TrySubmit(audio.PCMFrame{Samples: make([]int16, 5)}); err != audio.ErrFrameTooLarge {
+	if err := p.TrySubmit(audio.PCMFrame{Samples: make([]int16, 5)}); !errors.Is(err, audio.ErrFrameTooLarge) {
 		t.Fatalf("oversize=%v", err)
 	}
 	p.Close()
-	if err := p.TrySubmit(audio.PCMFrame{}); err != audio.ErrBufferClosed {
+	if err := p.TrySubmit(audio.PCMFrame{}); !errors.Is(err, audio.ErrBufferClosed) {
 		t.Fatalf("closed=%v", err)
 	}
 }

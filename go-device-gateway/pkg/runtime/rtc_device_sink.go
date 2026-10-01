@@ -1,15 +1,16 @@
 package runtime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 import (
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -91,8 +92,9 @@ type RTCDeviceSink struct {
 	playbackObservations    rtcDevicePlaybackObservationState
 	loudness                *audio.LoudnessNormalizer
 
-	lifeCtx        context.Context
-	lifeCancel     context.CancelCauseFunc
+	// runCancel cancels the active pump; Close calls it so an in-flight pump
+	// observes ErrRTCDeviceSinkClosed. Guarded by mu.
+	runCancel      context.CancelCauseFunc
 	commands       *audio.PlaybackCommands
 	commandDone    chan struct{}
 	renderWork     chan uint64
@@ -144,8 +146,7 @@ func newRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.Device
 	return newRTCDeviceSinkFromOpened(sink, deviceRate, rate, voice, playbackObserver), nil
 }
 func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, playbackObserver RTCDevicePlaybackObserver) *RTCDeviceSink {
-	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
-	commands := newRTCDevicePlaybackCommands()
+	commands := audio.NewDefaultPlaybackCommands()
 	result := &RTCDeviceSink{
 		sink:             sink,
 		commands:         commands,
@@ -158,8 +159,6 @@ func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerR
 		deviceRate:       deviceRate,
 		playbackObserver: playbackObserver,
 		loudness:         audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: audio.VoiceLoudnessGainDB(voice)}),
-		lifeCtx:          lifeCtx,
-		lifeCancel:       lifeCancel,
 		holdToneConfig:   audio.DefaultHoldToneConfig(),
 		holdToneTick:     defaultRTCDeviceHoldToneTick,
 	}
@@ -353,27 +352,21 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 		return ErrNilRTCInboundMedia
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 
-	lifeCtx, finish, err := s.beginPump()
+	operationCtx, cancel := context.WithCancelCause(ctx)
+	finish, err := s.beginPump(cancel)
 	if err != nil {
+		cancel(nil)
 		return err
 	}
 	defer finish()
 	if controlled, ok := inbound.(audio.PlaybackControlledInbound); ok {
-		controlled.SetPlaybackController(audio.BufferedPlaybackController{Context: s.lifeCtx, Commands: s.commands})
+		controlled.SetPlaybackController(audio.BufferedPlaybackController{Commands: s.commands})
 		defer controlled.SetPlaybackController(nil)
 	}
-
-	operationCtx, cancel := context.WithCancelCause(ctx)
-	stopLifeHook := context.AfterFunc(lifeCtx, func() {
-		cancel(ErrRTCDeviceSinkClosed)
-	})
-	defer func() {
-		stopLifeHook()
-		cancel(nil)
-	}()
+	defer cancel(nil)
 
 	stopHoldTone := s.startHoldTone(operationCtx)
 	defer stopHoldTone()
@@ -385,16 +378,10 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 	for {
 		generation, blocked := s.playbackState()
 		frame, err := inbound.ReadFrame(operationCtx)
+		if errors.Is(err, io.EOF) || errors.Is(err, audio.ErrSessionMediaClosed) {
+			return s.finishProviderPlayback(operationCtx, pending)
+		}
 		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, audio.ErrSessionMediaClosed) {
-				if flushErr := s.flushProviderPlayback(operationCtx, pending); flushErr != nil {
-					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: flushErr}
-				}
-				if drainErr := s.sink.WaitForPlayback(operationCtx); drainErr != nil {
-					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "drain", Err: drainErr}
-				}
-				return nil
-			}
 			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "read", Err: err}
 		}
 		if frame.PlaybackResponse.ItemID != "" {
@@ -406,6 +393,19 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 		}
 	}
 }
+
+// finishProviderPlayback flushes buffered provider audio at the end of the
+// inbound stream and waits for the device to play it out.
+func (s *RTCDeviceSink) finishProviderPlayback(ctx context.Context, pending *audio.PlaybackProcessor) error {
+	if err := s.flushProviderPlayback(ctx, pending); err != nil {
+		return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: err}
+	}
+	if err := s.sink.WaitForPlayback(ctx); err != nil {
+		return &RTCDeviceSinkError{DeviceID: s.id, Operation: "drain", Err: err}
+	}
+	return nil
+}
+
 func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *audio.PlaybackProcessor, providerFrame audio.PCMFrame, generation uint64, blocked bool) error {
 	samples := providerFrame.Samples
 	if s.loudness != nil {
@@ -599,30 +599,17 @@ func (s *RTCDeviceSink) Close() error {
 		s.closed = true
 		s.snapshotClosed.Store(true)
 		done := s.runDone
+		cancelRun := s.runCancel
 		s.mu.Unlock()
 
-		s.lifeCancel(ErrRTCDeviceSinkClosed)
+		if cancelRun != nil {
+			cancelRun(ErrRTCDeviceSinkClosed)
+		}
 		if s.commands != nil {
 			s.commands.Close()
 			<-s.commandDone
 		}
-		var playbackSnapshot audio.PlaybackQueueStats
-		if s.playbackObserver != nil {
-			s.pacingMu.Lock()
-			s.playbackMu.Lock()
-			playbackSnapshot = s.PlaybackStats()
-			if s.renderBoundarySupported.Load() {
-				s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
-			}
-			s.playbackMu.Unlock()
-			s.pacingMu.Unlock()
-		} else {
-			s.playbackMu.Lock()
-			if s.renderBoundarySupported.Load() {
-				s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
-			}
-			s.playbackMu.Unlock()
-		}
+		playbackSnapshot := s.closePlaybackState()
 		s.closeErr = s.sink.Close()
 		s.renderStopOnce.Do(func() { close(s.renderStop) })
 		<-s.renderDone
@@ -637,6 +624,26 @@ func (s *RTCDeviceSink) Close() error {
 	return s.closeErr
 }
 
+// closePlaybackState discards pending render observations at close and,
+// when a playback observer is installed, returns the final queue snapshot
+// taken under the pacing lock.
+func (s *RTCDeviceSink) closePlaybackState() audio.PlaybackQueueStats {
+	var snapshot audio.PlaybackQueueStats
+	if s.playbackObserver != nil {
+		s.pacingMu.Lock()
+		defer s.pacingMu.Unlock()
+	}
+	s.playbackMu.Lock()
+	defer s.playbackMu.Unlock()
+	if s.playbackObserver != nil {
+		snapshot = s.PlaybackStats()
+	}
+	if s.renderBoundarySupported.Load() {
+		s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
+	}
+	return snapshot
+}
+
 func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 	if s == nil {
 		return nil
@@ -648,7 +655,7 @@ func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return contract.ErrNilContext
 	}
 	select {
 	case <-done:
@@ -658,23 +665,24 @@ func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 	}
 }
 
-func (s *RTCDeviceSink) beginPump() (context.Context, func(), error) {
+func (s *RTCDeviceSink) beginPump(cancel context.CancelCauseFunc) (func(), error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, nil, ErrRTCDeviceSinkClosed
+		return nil, ErrRTCDeviceSinkClosed
 	}
 	if s.running {
 		s.mu.Unlock()
-		return nil, nil, ErrRTCDeviceSinkRunning
+		return nil, ErrRTCDeviceSinkRunning
 	}
 	s.running = true
 	s.runDone = make(chan struct{})
-	lifeCtx := s.lifeCtx
+	s.runCancel = cancel
 	s.mu.Unlock()
 
-	return lifeCtx, func() {
+	return func() {
 		s.mu.Lock()
+		s.runCancel = nil
 		if s.running {
 			s.running = false
 			close(s.runDone)
@@ -684,18 +692,7 @@ func (s *RTCDeviceSink) beginPump() (context.Context, func(), error) {
 	}, nil
 }
 
-func nilRTCInboundMedia(media audio.InboundMedia) bool {
-	if media == nil {
-		return true
-	}
-	value := reflect.ValueOf(media)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
-}
+func nilRTCInboundMedia(media audio.InboundMedia) bool { return isNilValue(media) }
 
 // WaitForPump waits for the active playback pump to finish. It is useful to
 // drain provider media before closing the owning session.

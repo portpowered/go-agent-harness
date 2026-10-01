@@ -309,4 +309,4 @@ func (d *test6RecordingPlaybackDevice) snapshot() (queued, accepted []int16, dis
 }
 
 var _ devicegw.DeviceRegistry = (*test6PlaybackRegistry)(nil)
-var _ audio.PlaybackDiscarder = (*test6RecordingPlaybackDevice)(nil)
+var _ devicegw.PlaybackDiscarder = (*test6RecordingPlaybackDevice)(nil)

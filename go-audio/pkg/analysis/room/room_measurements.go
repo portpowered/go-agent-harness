@@ -103,7 +103,7 @@ func normalizeBargeAnnotation(annotation PCM16BargeInAnnotation) (PCM16BargeInAn
 	return annotation, nil
 }
 
-func appendCorrelationFailures(failures *[]PropertyFailure, measurement PCM16PeerDeliveryMeasurement, bound float64) {
+func appendCorrelationFailures(failures *[]PropertyError, measurement PCM16PeerDeliveryMeasurement, bound float64) {
 	if measurement.Passed {
 		return
 	}
@@ -125,7 +125,7 @@ func appendCorrelationFailures(failures *[]PropertyFailure, measurement PCM16Pee
 	*failures = append(*failures, failure)
 }
 
-func appendSelfHearingFailures(failures *[]PropertyFailure, measurement PCM16SelfHearingMeasurement, bound float64) {
+func appendSelfHearingFailures(failures *[]PropertyError, measurement PCM16SelfHearingMeasurement, bound float64) {
 	if measurement.Passed {
 		return
 	}
@@ -144,7 +144,7 @@ func appendSelfHearingFailures(failures *[]PropertyFailure, measurement PCM16Sel
 	*failures = append(*failures, failure)
 }
 
-func appendLoudnessFailure(failures *[]PropertyFailure, measurement PCM16LoudnessMeasurement, bound float64) {
+func appendLoudnessFailure(failures *[]PropertyError, measurement PCM16LoudnessMeasurement, bound float64) {
 	if measurement.Passed {
 		return
 	}
@@ -162,7 +162,7 @@ func appendLoudnessFailure(failures *[]PropertyFailure, measurement PCM16Loudnes
 	*failures = append(*failures, failure)
 }
 
-func appendBargeInFailures(failures *[]PropertyFailure, measurement PCM16BargeInMeasurement, interrupter, interrupted PCM16TimedStream, thresholdDBFS float64, maxLatency time.Duration) {
+func appendBargeInFailures(failures *[]PropertyError, measurement PCM16BargeInMeasurement, interrupter, interrupted PCM16TimedStream, thresholdDBFS float64, maxLatency time.Duration) {
 	if !measurement.InterrupterOnsetFound {
 		failure := analysisFailure("barge-in-onset", interrupter.StreamID, interrupter.ParticipantID)
 		failure.SourceStreamID = interrupter.StreamID
@@ -209,7 +209,7 @@ func appendBargeInFailures(failures *[]PropertyFailure, measurement PCM16BargeIn
 	}
 }
 
-func roomFailure(property string, stream PCM16TimedStream, direction string) PropertyFailure {
+func roomFailure(property string, stream PCM16TimedStream, direction string) PropertyError {
 	failure := analysisFailure(property, stream.StreamID, stream.ParticipantID)
 	failure.Direction = direction
 	return failure

@@ -209,7 +209,7 @@ func TestChatCommand_AudioWriterErrors(t *testing.T) {
 			ask.NoSystemInformation = true
 			samples := []int16(nil)
 			if tt.withSpeech {
-				samples = make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig.MaxSilenceFrames))
+				samples = make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig().MaxSilenceFrames))
 				for i := 0; i < audio.FrameSize*3; i++ {
 					samples[i] = 1000
 				}
@@ -262,7 +262,7 @@ func testAudioSpeechDispatch(t *testing.T) {
 	global.ConfigDirPath = t.TempDir()
 	ask := flags.NewAskFlags()
 	ask.NoSystemInformation = true
-	samples := make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig.MaxSilenceFrames))
+	samples := make([]int16, audio.FrameSize*(3+audio.DefaultVADConfig().MaxSilenceFrames))
 	for i := 0; i < audio.FrameSize*3; i++ {
 		samples[i] = 1000
 	}

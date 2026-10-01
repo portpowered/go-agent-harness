@@ -1,13 +1,11 @@
 package runtime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"errors"
 	"fmt"
 
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 // RTCDeviceSinkRateError describes a provider-to-playback conversion that
@@ -92,17 +90,4 @@ func openRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.Devic
 		DeviceRate:   observedRate,
 		Err:          errors.Join(err, errors.Join(fallbackErrs...)),
 	}
-}
-
-// rtcDevicePlaybackCommandCapacity bounds queued playback control requests.
-const rtcDevicePlaybackCommandCapacity = 32
-
-// newRTCDevicePlaybackCommands builds the sink's playback command queue. The
-// capacity is a positive constant, so construction cannot fail at runtime.
-func newRTCDevicePlaybackCommands() *audio.PlaybackCommands {
-	commands, err := audio.NewPlaybackCommands(rtcDevicePlaybackCommandCapacity)
-	if err != nil {
-		panic(fmt.Sprintf("runtime: playback command queue: %v", err))
-	}
-	return commands
 }

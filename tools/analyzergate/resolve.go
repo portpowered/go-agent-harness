@@ -20,12 +20,16 @@ type analyzerSpec struct {
 	installPackage string
 }
 
-var analyzerSpecs = map[string]analyzerSpec{
-	"golangci-lint": {
+// lookupAnalyzerSpec returns how to version-check and install tool.
+func lookupAnalyzerSpec(tool string) (analyzerSpec, bool) {
+	if tool != "golangci-lint" {
+		return analyzerSpec{}, false
+	}
+	return analyzerSpec{
 		binaryName:     "golangci-lint",
 		versionArgs:    []string{"version"},
 		installPackage: "github.com/golangci/golangci-lint/v2/cmd/golangci-lint",
-	},
+	}, true
 }
 
 type config struct {
@@ -119,7 +123,7 @@ func resolve(ctx context.Context, cfg config, diagnostics io.Writer) (string, er
 
 func resolveWithLog(ctx context.Context, cfg config, log *diagnosticLog) (string, error) {
 	cachePath := installedPath(cfg)
-	observed := make([]string, 0, 3)
+	observed := make([]string, 0, observedPathCapacity)
 	if resolved, ok := resolveCandidate(ctx, cfg, log, &observed); ok {
 		return resolved, nil
 	}
@@ -173,7 +177,7 @@ func installPinned(ctx context.Context, cfg config, cachePath string, log *diagn
 	installPackage := cfg.installPackage + "@" + cfg.pinnedVersion
 	installDirectory := filepath.Dir(cachePath)
 	attempted := fmt.Sprintf("install %s into %s", installPackage, installDirectory)
-	if err := os.MkdirAll(installDirectory, 0o755); err != nil {
+	if err := os.MkdirAll(installDirectory, installDirMode); err != nil {
 		return "", &resolutionError{
 			Tool:      cfg.tool,
 			Expected:  cfg.expectedVersion,
@@ -304,7 +308,7 @@ func probeVersion(ctx context.Context, path string, cfg config) (string, error) 
 	command.Stdout = &output
 	command.Stderr = &output
 	if err := command.Run(); err != nil {
-		return "", fmt.Errorf("command exited with %v: %s", err, compactOutput(output.String()))
+		return "", fmt.Errorf("command exited with %w: %s", err, compactOutput(output.String()))
 	}
 	version, err := reportedVersion(output.String())
 	if err != nil {
@@ -344,10 +348,19 @@ func absolutePath(path string) (string, error) {
 	return filepath.Clean(absolute), nil
 }
 
+const (
+	// installDirMode is the permission of the analyzer install directory.
+	installDirMode = 0o755
+	// maxDiagnosticOutputBytes bounds command output quoted in diagnostics.
+	maxDiagnosticOutputBytes = 400
+	// observedPathCapacity covers the candidate, cached and installed paths.
+	observedPathCapacity = 3
+)
+
 func compactOutput(output string) string {
 	output = strings.Join(strings.Fields(output), " ")
-	if len(output) > 400 {
-		return output[:400] + "..."
+	if len(output) > maxDiagnosticOutputBytes {
+		return output[:maxDiagnosticOutputBytes] + "..."
 	}
 	return output
 }

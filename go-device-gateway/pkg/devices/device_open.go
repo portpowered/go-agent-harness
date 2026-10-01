@@ -1,8 +1,14 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
 
-import "fmt"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+)
 
 // NewDuplexDeviceSourceSinkWithFormat resolves both selectors and asks a
 // duplex-capable registry to acquire them as one graph. The returned adapters
@@ -156,12 +162,11 @@ func acquireDeviceWithFormat(registry DeviceRegistry, id DeviceID, direction Dir
 	return handle, nil
 }
 
-// constantDevice builds a device descriptor from compile-time constant
-// identifiers. Invalid constants are a programming error, not a runtime state.
-func constantDevice(backend, nativeID, name string, direction Direction) Device {
-	device, err := NewDevice(backend, nativeID, name, direction)
-	if err != nil {
-		panic(fmt.Sprintf("devices: invalid constant device %s/%s: %v", backend, nativeID, err))
+// newRemoteRequest builds an audio-device server request bound to the
+// caller's context, which must be non-nil.
+func newRemoteRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	if ctx == nil {
+		return nil, contract.ErrNilContext
 	}
-	return device
+	return http.NewRequestWithContext(ctx, method, url, body)
 }

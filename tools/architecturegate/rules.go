@@ -64,7 +64,7 @@ func moduleTopLevelAllowed(pkg *Package, module *Module, rule *ModuleRule) bool 
 	return false
 }
 
-func moduleShapeIssue(pkg *Package, module *Module, rule *ModuleRule) Issue {
+func moduleShapeIssue(pkg *Package, module *Module) Issue {
 	rel, err := filepath.Rel(module.Dir, pkg.Dir)
 	if err != nil {
 		rel = pkg.Dir

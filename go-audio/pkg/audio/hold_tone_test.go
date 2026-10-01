@@ -185,7 +185,7 @@ func assertNonIntegralQuantumPosition(t *testing.T, rate, samples int) {
 	for index := range frame {
 		frame[index] = seed[index%len(seed)]
 	}
-	for index := 0; index < 64; index++ {
+	for index := range 64 {
 		if err := gate.WritePlayback(context.Background(), frame, func() error { return nil }); err != nil {
 			t.Fatalf("playback callback %d: %v", index, err)
 		}
@@ -223,7 +223,7 @@ func TestLocalFeedbackGateFeedbackConfirmedTracksWarningState(t *testing.T) {
 		t.Fatal("FeedbackConfirmed() = true before any loop was ever observed")
 	}
 
-	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+	for frameIndex := range 5 {
 		loop := feedbackSignal(frameIndex, 31)
 		if err := gate.WritePlayback(context.Background(), loop, func() error { return nil }); err != nil {
 			t.Fatalf("observe playback frame %d: %v", frameIndex, err)
@@ -270,7 +270,7 @@ func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 	// A live microphone is already pumping while the provider is preparing its
 	// first response. Those frames are ordinary input and must not make the
 	// first later speaker frame look unrelated on the gate's logical timeline.
-	for frameIndex := 0; frameIndex < 20; frameIndex++ {
+	for frameIndex := range 20 {
 		released, filterErr := gate.FilterCapture(context.Background(), feedbackSignal(frameIndex, 73))
 		if filterErr != nil {
 			t.Fatalf("filter pre-playback capture frame %d: %v", frameIndex, filterErr)
@@ -280,7 +280,7 @@ func TestLocalFeedbackGateReanchorsCaptureAfterPrePlaybackLead(t *testing.T) {
 		}
 	}
 
-	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+	for frameIndex := range 5 {
 		playback := feedbackSignal(frameIndex, 17)
 		if err := gate.WritePlayback(context.Background(), playback, func() error { return nil }); err != nil {
 			t.Fatalf("observe playback frame %d: %v", frameIndex, err)
@@ -316,7 +316,7 @@ func TestLocalFeedbackGateReleasesIndependentCaptureOnceInOrder(t *testing.T) {
 		}
 	}()
 
-	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+	for frameIndex := range 5 {
 		if err := gate.WritePlayback(context.Background(), feedbackSignal(frameIndex, 23), func() error { return nil }); err != nil {
 			t.Fatalf("observe playback frame %d: %v", frameIndex, err)
 		}
@@ -357,12 +357,12 @@ func TestLocalFeedbackGateBlockedWarningWriterCannotBlockMedia(t *testing.T) {
 		}
 	}()
 
-	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+	for frameIndex := range 5 {
 		if err := gate.WritePlayback(context.Background(), feedbackSignal(frameIndex, 17), func() error { return nil }); err != nil {
 			t.Fatalf("observe playback frame %d: %v", frameIndex, err)
 		}
 	}
-	for frameIndex := 0; frameIndex < 5; frameIndex++ {
+	for frameIndex := range 5 {
 		if _, err := gate.FilterCapture(context.Background(), feedbackSignal(frameIndex, 17)); err != nil {
 			t.Fatalf("filter looped capture frame %d: %v", frameIndex, err)
 		}

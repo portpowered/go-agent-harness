@@ -109,7 +109,6 @@ type holdToneHarness struct {
 	sink     *RTCDeviceSink
 	clock    *platformclock.Deterministic
 	inbound  *stepRTCInboundMedia
-	ctx      context.Context
 	cancel   context.CancelFunc
 	pumpDone chan error
 }
@@ -151,9 +150,10 @@ func startHoldToneHarness(t *testing.T, config *audio.HoldToneConfig) *holdToneH
 		first[i] = int16(i%50 + 1)
 	}
 	h.inbound.frames <- audio.PCMFrame{Samples: first}
-	h.ctx, h.cancel = context.WithCancel(WithTimingClock(context.Background(), h.clock))
+	ctx, cancel := context.WithCancel(WithTimingClock(context.Background(), h.clock))
+	h.cancel = cancel
 	t.Cleanup(h.cancel)
-	go func() { h.pumpDone <- sink.Pump(h.ctx, h.inbound) }()
+	go func() { h.pumpDone <- sink.Pump(ctx, h.inbound) }()
 
 	got := make([]int16, audio.FrameSize)
 	readCtx, readCancel := context.WithTimeout(context.Background(), 5*time.Second)
