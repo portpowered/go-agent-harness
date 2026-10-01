@@ -1,88 +1,20 @@
 package grok
 
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/internal/realtime"
 )
 
-var _ sharedaudio.MediaSession = (*grokSession)(nil)
-
-// InitialSessionConfigSent reports that ConnectSession already sent the
-// provider-owned session.update before the read loop started.
-func (*grokSession) InitialSessionConfigSent() bool { return true }
-
-// RTCMedia exposes the provider-owned PCM media endpoints for the live Grok
-// realtime session. The endpoint writer feeds the same input-audio event path
-// used by StreamMessage audio, while inbound provider deltas are fanned out to
-// the media reader without removing them from the normal session stream.
-func (s *grokSession) RTCMedia() sharedaudio.MediaEndpoints {
-	return s.rtcMedia(sharedaudio.MediaSessionOptions{})
-}
-
-func (s *grokSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
-	return s.rtcMedia(options)
-}
-
-func (s *grokSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
-	s.mediaMu.Lock()
-	var previous *sharedaudio.SessionMedia
-	if s.media != nil && !s.mediaClaimed && s.mediaContinuous != options.InboundContinuous {
-		previous = s.media
-		s.media = nil
-	}
-	s.mediaClaimed = true
-	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)
-		s.mediaContinuous = options.InboundContinuous
-	}
-	endpoints := s.media.Endpoints()
-	s.mediaMu.Unlock()
-	if previous != nil {
-		if err := previous.Close(); err != nil {
-			s.setTerminalError(fmt.Errorf("close replaced Grok RTC media: %w", err))
-		}
-	}
-	return endpoints
-}
-
-func (s *grokSession) prepareRTCMedia() {
-	s.mediaMu.Lock()
-	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
-		s.mediaContinuous = false
-	}
-	s.mediaMu.Unlock()
-}
-
-func (s *grokSession) releaseUnclaimedRTCMedia() {
-	s.mediaMu.Lock()
-	if s.mediaClaimed || s.media == nil {
-		s.mediaMu.Unlock()
-		return
-	}
-	media := s.media
-	s.media = nil
-	s.mediaContinuous = false
-	s.mediaMu.Unlock()
-	if err := media.Close(); err != nil {
-		s.logger.Warn("grok: release unclaimed RTC media", logging.Field{Key: "error", Value: err})
-	}
-}
-
-func (s *grokSession) currentRTCMedia() *sharedaudio.SessionMedia {
-	s.mediaMu.Lock()
-	defer s.mediaMu.Unlock()
-	return s.media
-}
-
+// writeRTCMediaFrame feeds one captured RTC frame through the same input-audio
+// event path used by StreamMessage audio.
 func (s *grokSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
 	encoded, err := codec.EncodePCM16WithLimit(frame.Samples, codec.MaxPCM16Bytes)
 	if err != nil {
@@ -101,14 +33,15 @@ func (s *grokSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.
 	return fmt.Errorf("grok RTC media write: %s", outcome.Status)
 }
 
+// publishRTCMedia fans inbound provider audio out to the media reader without
+// removing it from the normal session stream.
 func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
-	media := s.currentRTCMedia()
+	media := s.CurrentRTCMedia()
 	if media == nil {
 		return nil
 	}
-
 	var err error
-	switch event.Type {
+	switch event.Type { //nolint:exhaustive // Only audio and response-boundary events touch RTC media.
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		media.InterruptInbound()
 	case models.SessionEventResponseCreated:
@@ -119,61 +52,19 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 		// The response identity lets an interruption discard this response's
 		// late deltas.
 		media.StartInboundResponse(sharedaudio.PlaybackResponse{ResponseID: responseEventID(event.Data)})
-		data, decodeErr := decodeGrokAudioDelta(event.Data)
-		if decodeErr != nil {
-			err = decodeErr
-		} else if len(data) > 0 {
-			var samples []int16
-			samples, err = codec.DecodePCM16(data)
-			if err == nil {
-				err = media.PushInbound(samples)
-			}
+		var data []byte
+		if data, err = decodeGrokAudioDelta(event.Data); err == nil {
+			err = realtime.PushInboundPCM(media, data)
 		}
 	case models.SessionEventResponseOutputAudioDone, grokSessionEventResponseAudioDone:
 		err = media.FlushInbound()
 	}
-	if err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
-		media.FailInbound(err)
-	}
-	return err
-}
-
-// ProviderTurnDetection reports that Grok always runs server VAD.
-func (*grokSession) ProviderTurnDetection() bool { return true }
-
-// InputAudioSampleRate reports the rate of the PCM16 audio the client sends,
-// 24 kHz unless configured.
-func (s *grokSession) InputAudioSampleRate() int {
-	if s.inputSampleRate > 0 {
-		return s.inputSampleRate
-	}
-	return defaultGrokInputSampleRate
-}
-
-// defaultGrokInputSampleRate is the Grok realtime PCM16 input rate.
-const defaultGrokInputSampleRate = 24000
-
-// LocalPlayback reports provider audio still queued for or audible on the
-// local device.
-func (s *grokSession) LocalPlayback() messages.LocalPlaybackState {
-	activity := s.currentRTCMedia().PlaybackActivity()
-	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}
-}
-
-// InterruptLocalPlayback discards audio not yet heard.
-func (s *grokSession) InterruptLocalPlayback(context.Context) bool {
-	if !s.LocalPlayback().Active {
-		return false
-	}
-	s.interruptRTCPlayback()
-	return true
+	return realtime.FailInboundOnError(media, err)
 }
 
 // interruptRTCPlayback discards response audio queued for local playback.
-// Grok audio deltas carry no conversation item identity, so no provider-side
-// truncation is possible.
 func (s *grokSession) interruptRTCPlayback() {
-	if media := s.currentRTCMedia(); media != nil {
+	if media := s.CurrentRTCMedia(); media != nil {
 		media.InterruptInbound()
 	}
 }
@@ -182,7 +73,7 @@ func (s *grokSession) interruptRTCPlayback() {
 // media path records its own failure; the read loop keeps translating events.
 func (s *grokSession) publishRTCMediaWithLog(event models.SessionEvent) {
 	if err := s.publishRTCMedia(event); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
-		s.logger.Warn("grok: RTC media event failed", logging.Field{Key: "error", Value: err})
+		s.Logger().Warn("grok: RTC media event failed", logging.Field{Key: "error", Value: err})
 	}
 }
 

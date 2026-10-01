@@ -226,18 +226,6 @@ linters:
       - path: '^go-agent-runtime/services/roomreplay/internal/audiobundle/'
         linters: [nolintlint]
         text: 'is unused for linter "(intrange|unparam)"'
-      # owned by provider-base
-      - path: '^go-llm-gateway/pkg/providers/grok/'
-        linters: [exhaustive, mnd, thelper]
-      - path: '^go-llm-gateway/pkg/providers/grok/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(exhaustive|mnd|thelper)"'
-      # owned by provider-base
-      - path: '^go-llm-gateway/pkg/providers/openai/session[^/]*\.go$'
-        linters: [contextcheck, exhaustive, forbidigo, intrange, mnd, nestif, thelper, unparam]
-      - path: '^go-llm-gateway/pkg/providers/openai/session[^/]*\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(contextcheck|exhaustive|forbidigo|intrange|mnd|nestif|thelper|unparam)"'
       # owned by session-wrappers
       - path: '^go-agent-loop/pkg/messages/session\.go$'
         linters: [iface]

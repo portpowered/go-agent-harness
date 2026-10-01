@@ -436,6 +436,10 @@ jobs:
         if: always()
         run: make test-loop-race
 
+      - name: Run realtime provider session race corpus
+        if: always()
+        run: make test-providers-race
+
       - name: Run native Linux device backend race tests
         if: always()
         run: make test-linux-devices-race

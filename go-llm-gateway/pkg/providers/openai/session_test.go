@@ -19,7 +19,7 @@ func TestRealtimeReadLoop_BackpressuresBurstWithoutDroppingAudioOrToolCall(t *te
 	conn := newMockWebSocketConn()
 	conn.addServerEvent("session.created", map[string]any{"session": map[string]any{"id": "sess-burst", "model": "gpt-realtime-2.1"}})
 	wantAudio := make([]byte, 0, 96)
-	for i := 0; i < 96; i++ {
+	for i := range 96 {
 		chunk := []byte{byte(i)}
 		wantAudio = append(wantAudio, chunk...)
 		conn.addServerEvent("response.output_audio.delta", map[string]any{
@@ -50,7 +50,7 @@ func TestRealtimeReadLoop_BackpressuresBurstWithoutDroppingAudioOrToolCall(t *te
 		if !ok {
 			t.Fatalf("stream ended early: audio=%d/%d tool_end=%v", len(gotAudio), len(wantAudio), gotToolEnd)
 		}
-		switch msg.Type {
+		switch msg.Type { //nolint:exhaustive // The helper skips every type but the ones it collects.
 		case messages.StreamTypeAudioDelta:
 			gotAudio = append(gotAudio, audioDeltaContentForTest(t, msg)...)
 		case messages.StreamTypeToolCallEnd:
@@ -413,6 +413,7 @@ func TestConnectSession_ClientOwnedAudioTurnBoundariesDisableTurnDetection(t *te
 }
 
 func assertClientOwnedTurnDetectionIsNull(t *testing.T, legacy bool) {
+	t.Helper()
 	conn := newMockWebSocketConn()
 	options := []Option{WithClientOwnedAudioTurnBoundaries()}
 	if legacy {
@@ -456,25 +457,24 @@ func assertClientOwnedTurnDetectionIsNull(t *testing.T, legacy bool) {
 // legacy flat payload or the GA audio.input payload.
 func clientOwnedTurnDetection(t *testing.T, sessionPayload map[string]json.RawMessage, legacy bool) json.RawMessage {
 	t.Helper()
-	var turnDetection json.RawMessage
 	if legacy {
-		turnDetection = sessionPayload["turn_detection"]
+		turnDetection := sessionPayload["turn_detection"]
 		if len(turnDetection) == 0 {
 			t.Fatal("legacy turn_detection field is missing")
 		}
-	} else {
-		var audio map[string]json.RawMessage
-		if err := json.Unmarshal(sessionPayload["audio"], &audio); err != nil {
-			t.Fatalf("decode audio config: %v", err)
-		}
-		var input map[string]json.RawMessage
-		if err := json.Unmarshal(audio["input"], &input); err != nil {
-			t.Fatalf("decode audio.input config: %v", err)
-		}
-		turnDetection = input["turn_detection"]
-		if len(turnDetection) == 0 {
-			t.Fatal("audio.input.turn_detection field is missing")
-		}
+		return turnDetection
+	}
+	var audio map[string]json.RawMessage
+	if err := json.Unmarshal(sessionPayload["audio"], &audio); err != nil {
+		t.Fatalf("decode audio config: %v", err)
+	}
+	var input map[string]json.RawMessage
+	if err := json.Unmarshal(audio["input"], &input); err != nil {
+		t.Fatalf("decode audio.input config: %v", err)
+	}
+	turnDetection := input["turn_detection"]
+	if len(turnDetection) == 0 {
+		t.Fatal("audio.input.turn_detection field is missing")
 	}
 	return turnDetection
 }

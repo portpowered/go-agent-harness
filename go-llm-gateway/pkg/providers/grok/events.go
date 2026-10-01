@@ -2,7 +2,6 @@ package grok
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -12,15 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
-
-// wireEvent is the JSON shape sent/received over the Grok WebSocket.
-// The "type" field determines the event kind; remaining fields are
-// event-specific payload. This structure matches the OpenAI Realtime API
-// wire format that Grok follows.
-type wireEvent struct {
-	Type  string                     `json:"type"`
-	Extra map[string]json.RawMessage `json:"-"`
-}
 
 const (
 	grokSessionEventResponseAudioDelta           models.SessionEventType = "response.audio.delta"
@@ -32,49 +22,12 @@ const (
 	grokMaxStatusDetailBytes                                             = 256
 )
 
-// MarshalJSON produces a flat JSON object with "type" plus any Extra fields.
-func (w wireEvent) MarshalJSON() ([]byte, error) {
-	m := make(map[string]json.RawMessage, len(w.Extra)+1)
-	for k, v := range w.Extra {
-		m[k] = v
-	}
-	typeBytes, err := json.Marshal(w.Type)
-	if err != nil {
-		return nil, err
-	}
-	m["type"] = typeBytes
-	return json.Marshal(m)
-}
-
-// parseServerEvent converts raw WebSocket JSON into a gateway SessionEvent.
-// The "type" field is extracted and the remaining payload is kept as Data.
-func parseServerEvent(raw []byte) (models.SessionEvent, error) {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return models.SessionEvent{}, fmt.Errorf("unmarshal event type: %w", err)
-	}
-	if envelope.Type == "" {
-		return models.SessionEvent{}, fmt.Errorf("event missing type field")
-	}
-
-	eventType := models.SessionEventType(envelope.Type)
-
-	// Keep the full payload as Data (minus the type field is unnecessary
-	// to strip — consumers use the typed SessionEventType for dispatch).
-	return models.SessionEvent{
-		Type: eventType,
-		Data: raw,
-	}, nil
-}
-
 // translateInbound converts a server-sent SessionEvent into zero or more
 // agent loop StreamMessages. This is the canonical inbound translation for
 // the Grok provider — consumers only see generic StreamMessage types.
 func translateInbound(event models.SessionEvent) []messages.StreamMessage {
 	responseID := responseEventID(event.Data)
-	switch event.Type {
+	switch event.Type { //nolint:exhaustive // Translates the provider events that map to stream messages; every other wire event has none.
 	case models.SessionEventSessionCreated:
 		// session.created from the server signals the session is established.
 		// Emit SESSION.OPEN (agent loop signal) and SESSION.CREATED (carries server config).
@@ -249,7 +202,7 @@ func grokResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndValue 
 }
 
 func grokResponseDoneStatusDetails(data json.RawMessage) string {
-	parts := make([]string, 0, 4)
+	var parts []string
 	appendField := func(label string, paths ...string) {
 		value := boundedGrokStatusDetail(firstGrokStringField(data, paths...))
 		if value == "" {
@@ -311,7 +264,7 @@ func boundedGrokStatusDetail(value string) string {
 // for transmission to the Grok server. Returns an empty SessionEvent and false
 // if the message type is not applicable for outbound transmission.
 func translateOutbound(msg messages.StreamMessage) (models.SessionEvent, bool) {
-	switch msg.Type {
+	switch msg.Type { //nolint:exhaustive // Translates the stream types Grok has a wire event for; every other type has no outbound representation.
 	case messages.StreamTypeAudioDelta:
 		v, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok || v == nil {

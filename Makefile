@@ -197,7 +197,7 @@ endef
 
 .DEFAULT_GOAL := help
 .PHONY: architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
+.PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-providers-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -418,6 +418,16 @@ test-loop-race: ## Run the go-agent-loop session, engine, participant, agent-loo
 	echo "==> test-loop-race go-agent-loop $(LOOP_RACE_PACKAGES)"; \
 	skip="$$(cd tools/racegate && GOWORK=off $(GO) run . -required "$(SESSIONS_RACE_TESTS)" -print-run-pattern)"; \
 	(cd go-agent-loop && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race -tags=nomicrophone $(LOOP_RACE_PACKAGES) -skip "$$skip" -count=1 -timeout "$(SESSIONS_RACE_TIMEOUT)")
+
+# The OpenAI and Grok realtime session adapters and their shared WebSocket
+# session base: response admission, barge-in and the read/write loops are
+# concurrent by design.
+PROVIDERS_RACE_PACKAGES := ./pkg/providers/openai ./pkg/providers/grok ./pkg/providers/internal/realtime
+PROVIDERS_RACE_TIMEOUT ?= 120s
+test-providers-race: ## Run the realtime provider session tests (OpenAI, Grok, shared base) with the race detector.
+	@set -euo pipefail; \
+	echo "==> test-providers-race go-llm-gateway $(PROVIDERS_RACE_PACKAGES)"; \
+	(cd go-llm-gateway && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race $(PROVIDERS_RACE_PACKAGES) -count=1 -timeout "$(PROVIDERS_RACE_TIMEOUT)")
 
 # The native (cgo, real malgo backend) Linux device tests: the hermetic
 # coverage build uses the nomicrophone stub, so no other job compiles them.

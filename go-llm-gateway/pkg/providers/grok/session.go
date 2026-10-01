@@ -2,19 +2,17 @@ package grok
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
-	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/internal/realtime"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -25,56 +23,46 @@ var (
 	_ messages.SessionResponseCapability = (*grokSession)(nil)
 	_ messages.SessionDropCounters       = (*grokSession)(nil)
 	_ messages.SessionOutboundFlusher    = (*grokSession)(nil)
+	_ sharedaudio.MediaSession           = (*grokSession)(nil)
+	_ realtime.Handler                   = (*grokSession)(nil)
 )
 
-// grokSession wraps a WebSocket connection as a bidirectional StreamMessage session.
-// It translates between agent loop StreamMessages and the Grok wire protocol
-// (OpenAI Realtime API conventions) internally, so consumers only see generic
-// StreamMessage types.
+// grokSession wraps a WebSocket connection as a bidirectional StreamMessage
+// session. The shared realtime skeleton owns the queues, loops and RTC media;
+// this type translates between StreamMessages and the Grok wire protocol
+// (OpenAI Realtime API conventions).
 type grokSession struct {
-	conn   transport.Conn
-	logger logging.Logger
+	*realtime.Session
+}
 
-	// sendQueue buffers outbound wire events (client-to-provider, the
-	// session's input path). Overflow drops are counted by the buffer itself
-	// and logged through the default drop observer attached in newGrokSession.
-	sendQueue *messages.TypedBuffer[models.SessionEvent]
-	outbound  providers.OutboundWireDrain
-
-	// recvBuf is the inbound typed buffer of translated StreamMessages.
-	// Populated by readLoop() after translating from wire events; it is the
-	// provider-to-client output path of the session.
-	recvBuf *messages.TypedBuffer[messages.StreamMessage]
-
-	done        chan struct{}
-	closeOnce   sync.Once
-	errMu       sync.Mutex
-	terminalErr error
-
-	mediaMu                          sync.Mutex
-	media                            *sharedaudio.SessionMedia
-	mediaClaimed                     bool
-	mediaContinuous                  bool
-	mediaSampleRate, inputSampleRate int
+// grokSessionSettings are the per-connection session options.
+type grokSessionSettings struct {
+	outputSampleRate, inputSampleRate int
 }
 
 func newGrokSession(conn transport.Conn, logger logging.Logger) *grokSession {
-	s := &grokSession{
-		conn:      conn,
-		logger:    logger,
-		sendQueue: messages.NewTypedBuffer[models.SessionEvent](64),
-		recvBuf:   messages.NewTypedBuffer[messages.StreamMessage](64),
-		done:      make(chan struct{}),
-	}
-	providers.AttachSessionDropLoggers(logger, s.sendQueue, s.recvBuf)
+	return newConfiguredGrokSession(conn, logger, grokSessionSettings{})
+}
+
+func newConfiguredGrokSession(conn transport.Conn, logger logging.Logger, settings grokSessionSettings) *grokSession {
+	s := &grokSession{}
+	s.Session = realtime.NewSession(conn, logger, realtime.Config{
+		LogPrefix:        "grok",
+		MediaName:        "Grok",
+		OutputSampleRate: settings.outputSampleRate,
+		InputSampleRate:  settings.inputSampleRate,
+		WriteMediaFrame:  s.writeRTCMediaFrame,
+		// Grok audio deltas carry no conversation item identity, so no
+		// provider-side truncation is possible.
+		InterruptPlayback: func(context.Context) { s.interruptRTCPlayback() },
+	})
 	return s
 }
 
 // start launches the read and write goroutines.
-func (s *grokSession) start(ctx context.Context) {
-	go s.readLoop(ctx)
-	go s.writeLoop(ctx)
-}
+func (s *grokSession) start(ctx context.Context) { s.Start(ctx, s) }
+
+func (s *grokSession) writeLoop(ctx context.Context) { s.WriteLoop(ctx, s) }
 
 // Send writes a StreamMessage to the session's outbound queue.
 // It translates the StreamMessage to a Grok wire event. Returns false
@@ -117,265 +105,36 @@ func (s *grokSession) RequestResponse(ctx context.Context) messages.SessionSendO
 	})
 }
 
+// SupportsResponseRequests reports that RequestResponse is implemented.
 func (*grokSession) SupportsResponseRequests() bool { return true }
 
+// ProviderTurnDetection reports that Grok always runs server VAD.
+func (*grokSession) ProviderTurnDetection() bool { return true }
+
 func (s *grokSession) sendEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
-	select {
-	case <-ctx.Done():
-		return sessionSendContextOutcome(ctx)
-	default:
+	if ctx.Err() != nil {
+		return realtime.ContextOutcome(ctx)
 	}
-	// A terminated session reports closed regardless of remaining outbound
-	// buffer capacity.
-	select {
-	case <-s.done:
-		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-	default:
-	}
-	select {
-	case <-ctx.Done():
-		return sessionSendContextOutcome(ctx)
-	case <-s.done:
-		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-	default:
-	}
-	for _, event := range events {
-		// A terminated session reports closed regardless of remaining outbound
-		// buffer capacity.
-		select {
-		case <-s.done:
-			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-		default:
-		}
-		outcome := s.enqueueWireEvent(ctx, event)
-		switch outcome.Status {
-		case messages.BufferWriteSucceeded:
-		case messages.BufferWriteBufferFull:
-			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
-		default:
-			return sessionSendContextOutcome(ctx)
-		}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	return s.EnqueueEvents(ctx, events)
 }
 
-func sessionSendContextOutcome(ctx context.Context) messages.SessionSendOutcome {
-	err := ctx.Err()
-	if err == context.DeadlineExceeded {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
+// HandleEvent forwards provider audio to the RTC media path and translates the
+// event for the normalized stream.
+func (s *grokSession) HandleEvent(_ context.Context, event models.SessionEvent) []messages.StreamMessage {
+	s.publishRTCMediaWithLog(event)
+	return translateInbound(event)
 }
 
-func (s *grokSession) enqueueWireEvent(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
-	s.outbound.Begin()
-	outcome := s.sendQueue.WriteContext(ctx, event)
-	if !outcome.OK() {
-		s.outbound.Complete()
-	}
-	return outcome
+// ExpectedReadClose treats a plain EOF or closed connection as an orderly
+// close, unless a probe injected it or replay diverged.
+func (*grokSession) ExpectedReadClose(err error) bool {
+	expected := errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed)
+	return expected && !transport.IsInjectedFault(err) && !errors.Is(err, providers.ErrReplayMismatch)
 }
 
-// Receive returns the inbound typed buffer of StreamMessages translated from
-// the Grok server. Callers read from this buffer to consume session events.
-func (s *grokSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
-	s.releaseUnclaimedRTCMedia()
-	return s.recvBuf
-}
+// ExpectedWriteClose treats any write failure during shutdown as orderly;
+// every other Grok write failure is terminal.
+func (s *grokSession) ExpectedWriteClose(ctx context.Context, _ error) bool { return s.Stopping(ctx) }
 
-// InputDrops reports cumulative drops on the client-to-provider send queue.
-func (s *grokSession) InputDrops() int64 { return s.sendQueue.Drops() }
-
-// OutputDrops reports cumulative drops on the provider-to-client receive buffer.
-func (s *grokSession) OutputDrops() int64 { return s.recvBuf.Drops() }
-
-// Done returns a channel closed when the session terminates.
-func (s *grokSession) Done() <-chan struct{} {
-	return s.done
-}
-
-// TerminalError returns the unexpected provider-side transport or protocol
-// error that terminated the session, if one was observed. A clean caller-side
-// Close and context cancellation do not set this value.
-func (s *grokSession) TerminalError() error {
-	if s == nil {
-		return nil
-	}
-	s.errMu.Lock()
-	defer s.errMu.Unlock()
-	return s.terminalErr
-}
-
-func (s *grokSession) setTerminalError(err error) {
-	if s == nil || err == nil {
-		return
-	}
-	s.errMu.Lock()
-	if s.terminalErr == nil {
-		s.terminalErr = err
-	}
-	s.errMu.Unlock()
-}
-
-func (s *grokSession) isStopping(ctx context.Context) bool {
-	select {
-	case <-s.done:
-		return true
-	default:
-	}
-	return ctx.Err() != nil
-}
-
-func isExpectedGrokReadClose(err error) bool {
-	return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed)
-}
-
-func (s *grokSession) handleReadError(ctx context.Context, err error) {
-	if s.isStopping(ctx) {
-		s.closeWithLog()
-		return
-	}
-	if isExpectedGrokReadClose(err) &&
-		!transport.IsInjectedFault(err) &&
-		!errors.Is(err, providers.ErrReplayMismatch) {
-		s.closeWithLog()
-		return
-	}
-	s.setTerminalError(err)
-	s.logger.Error("grok: websocket read error", logging.Field{Key: "error", Value: err})
-	s.recvBuf.WriteTerminal(messages.StreamMessage{
-		Type:  messages.StreamTypeError,
-		Value: providers.NewStreamTransportErrorValue(err),
-	})
-	s.closeWithLog()
-}
-
-func (s *grokSession) handleParseError(raw []byte, err error) {
-	s.setTerminalError(err)
-	s.logger.Warn("grok: failed to parse server event",
-		logging.Field{Key: "error", Value: err},
-		logging.Field{Key: "raw", Value: string(raw)},
-	)
-	// An unparseable provider frame is a protocol violation, not a
-	// skippable event: surface a classified terminal ERROR so consumers
-	// can diagnose the failure instead of silently losing the stream.
-	s.recvBuf.WriteTerminal(messages.StreamMessage{
-		Type: messages.StreamTypeError,
-		Value: messages.NewErrorValueWithTerminal(
-			fmt.Sprintf("malformed provider event: %v", err),
-			providers.ErrorClassInvalidRequest,
-			messages.TerminalReasonTerminalFailure,
-			messages.TerminalProvenanceGateway,
-			messages.TerminalOutputNone,
-		),
-	})
-	s.closeWithLog()
-}
-
-// readLoop reads messages from the WebSocket, translates them to StreamMessages,
-// and writes them to recvBuf.
-func (s *grokSession) readLoop(ctx context.Context) {
-	for {
-		_, data, err := s.conn.ReadMessage()
-		if err != nil {
-			s.handleReadError(ctx, err)
-			return
-		}
-
-		event, err := parseServerEvent(data)
-		if err != nil {
-			s.handleParseError(data, err)
-			return
-		}
-
-		s.publishRTCMediaWithLog(event)
-		msgs := translateInbound(event)
-		for _, m := range msgs {
-			if !s.recvBuf.Write(ctx, m) {
-				select {
-				case <-s.done:
-					return
-				case <-ctx.Done():
-					s.closeWithLog()
-					return
-				default:
-					// Buffer full — drop the message (onDrop callback can log if set).
-				}
-			}
-		}
-	}
-}
-
-// writeLoop reads events from the send queue and writes them to the WebSocket.
-func (s *grokSession) writeLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			s.closeWithLog()
-			return
-		case <-s.done:
-			return
-		case event := <-s.sendQueue.Chan():
-			if err := s.writeEvent(event); err != nil {
-				s.outbound.Complete()
-				if s.isStopping(ctx) {
-					s.closeWithLog()
-					return
-				}
-				s.setTerminalError(err)
-				s.logger.Error("grok: websocket write error", logging.Field{Key: "error", Value: err})
-				s.closeWithLog()
-				return
-			}
-			s.outbound.Complete()
-		}
-	}
-}
-
-// FlushOutbound waits until events already admitted to the provider queue have
-// completed their websocket writes before a finite audio session is stopped.
-func (s *grokSession) FlushOutbound(ctx context.Context) error {
-	if s == nil {
-		return nil
-	}
-	return s.outbound.Flush(ctx, s.done, s.TerminalError)
-}
-
-// writeEvent serializes a SessionEvent to JSON and writes it to the WebSocket.
-func (s *grokSession) writeEvent(event models.SessionEvent) error {
-	msg := wireEvent{
-		Type: string(event.Type),
-	}
-
-	// Merge Data fields into the top-level wire message.
-	if len(event.Data) > 0 {
-		var dataMap map[string]json.RawMessage
-		if err := json.Unmarshal(event.Data, &dataMap); err == nil {
-			msg.Extra = dataMap
-		}
-	}
-
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	// WebSocket text message type = 1.
-	return s.conn.WriteMessage(1, data)
-}
-
-// Close terminates the session, closing the WebSocket and signalling done.
-func (s *grokSession) Close() error {
-	var closeErr error
-	s.closeOnce.Do(func() {
-		close(s.done)
-		closeErr = errors.Join(s.currentRTCMedia().Close(), s.conn.Close())
-	})
-	return closeErr
-}
-
-func (s *grokSession) closeWithLog() {
-	if err := s.Close(); err != nil {
-		s.logger.Warn("grok: session close error", logging.Field{Key: "error", Value: err})
-	}
-}
+// EventWritten has no Grok-specific bookkeeping.
+func (*grokSession) EventWritten(models.SessionEvent) {}

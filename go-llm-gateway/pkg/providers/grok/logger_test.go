@@ -14,10 +14,10 @@ const testGrokSessionID = "sess-xyz"
 
 // closeForTest closes a test-owned resource and reports an unexpected close
 // failure without stopping the test.
-func closeForTest(t testing.TB, resource io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, resource io.Closer) {
+	tb.Helper()
 	if err := resource.Close(); err != nil {
-		t.Errorf("close %T: %v", resource, err)
+		tb.Errorf("close %T: %v", resource, err)
 	}
 }
 
@@ -31,11 +31,11 @@ func mustMarshalFixture(value any) []byte {
 	return data
 }
 
-func grokSessionForTest(t testing.TB, session messages.Session) *grokSession {
-	t.Helper()
+func grokSessionForTest(tb testing.TB, session messages.Session) *grokSession {
+	tb.Helper()
 	grok, ok := session.(*grokSession)
 	if !ok {
-		t.Fatalf("session type = %T, want *grokSession", session)
+		tb.Fatalf("session type = %T, want *grokSession", session)
 	}
 	return grok
 }

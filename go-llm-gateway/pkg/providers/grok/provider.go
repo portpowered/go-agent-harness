@@ -89,9 +89,11 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 
 	p.logger.Info("grok: websocket connected", logging.Field{Key: "url", Value: url})
 
-	gs := newGrokSession(conn, p.logger)
-	gs.mediaSampleRate, gs.inputSampleRate = int(config.OutputAudioSampleRate), int(config.InputAudioSampleRate)
-	gs.prepareRTCMedia()
+	gs := newConfiguredGrokSession(conn, p.logger, grokSessionSettings{
+		outputSampleRate: int(config.OutputAudioSampleRate),
+		inputSampleRate:  int(config.InputAudioSampleRate),
+	})
+	gs.PrepareRTCMedia()
 
 	// Send initial session.update with config.
 	sessionUpdate, err := buildSessionUpdate(config)
@@ -99,7 +101,7 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 		return nil, errors.Join(fmt.Errorf("grok: build session update: %w", err), conn.Close())
 	}
 
-	if err := gs.writeEvent(sessionUpdate); err != nil {
+	if err := gs.WriteEvent(sessionUpdate); err != nil {
 		return nil, errors.Join(fmt.Errorf("grok: send session update: %w", err), conn.Close())
 	}
 

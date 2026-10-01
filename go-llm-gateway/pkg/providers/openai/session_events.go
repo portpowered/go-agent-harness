@@ -3,7 +3,6 @@ package openai
 // This file owns OpenAI Realtime event parsing and inbound/outbound translation, including nested event-field helpers.
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -28,22 +27,9 @@ const (
 	realtimeMaxStatusDetailBytes        = 256
 )
 
-func parseRealtimeServerEvent(raw []byte) (models.SessionEvent, error) {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return models.SessionEvent{}, fmt.Errorf("unmarshal event type: %w", err)
-	}
-	if envelope.Type == "" {
-		return models.SessionEvent{}, fmt.Errorf("event missing type field")
-	}
-	return models.SessionEvent{Type: models.SessionEventType(envelope.Type), Data: raw}, nil
-}
-
 func realtimeInboundMessages(event models.SessionEvent) []messages.StreamMessage {
 	responseID := firstStringField(event.Data, "response_id", "response.id")
-	switch event.Type {
+	switch event.Type { //nolint:exhaustive // Inbound translation covers server events; client-only event types never arrive.
 	case models.SessionEventSessionCreated:
 		sessionID := firstStringField(event.Data, "session_id", "session.id", "id")
 		model := firstStringField(event.Data, "model", "session.model")
@@ -244,7 +230,7 @@ func realtimeResponseDoneMessageEnd(data json.RawMessage) *messages.MessageEndVa
 // provider detail fields. Keeping the detail text bounded and field-based
 // prevents raw response JSON or image-sized values from reaching diagnostics.
 func realtimeResponseDoneStatusDetails(data json.RawMessage) string {
-	parts := make([]string, 0, 4)
+	var parts []string
 	appendField := func(label string, paths ...string) {
 		value := boundedRealtimeStatusDetail(firstStringField(data, paths...))
 		if value == "" {
@@ -303,7 +289,7 @@ func boundedRealtimeStatusDetail(value string) string {
 }
 
 func realtimeOutboundEvents(msg messages.StreamMessage) ([]models.SessionEvent, bool) {
-	switch msg.Type {
+	switch msg.Type { //nolint:exhaustive // Translates the stream types OpenAI has a wire event for; every other type has no outbound representation.
 	case messages.StreamTypeAudioDelta:
 		v, ok := msg.Value.(*messages.AudioDeltaValue)
 		if !ok || v == nil {

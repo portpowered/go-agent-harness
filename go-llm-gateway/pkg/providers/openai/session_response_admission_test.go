@@ -62,7 +62,7 @@ func TestRealtimeSession_ToolResultBufferFullDoesNotAdmitResult(t *testing.T) {
 		Data: []byte(`{"response":{"id":"resp-tool"}}`),
 	})
 	session.responseMu.Lock()
-	session.pendingResponseIntents = make([]responseIntent, maxPendingResponseIntents)
+	session.response.pending = make([]responseIntent, maxPendingResponseIntents)
 	session.responseMu.Unlock()
 	if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,
@@ -71,7 +71,7 @@ func TestRealtimeSession_ToolResultBufferFullDoesNotAdmitResult(t *testing.T) {
 		t.Fatalf("tool result admission = %#v, want buffer full", outcome)
 	}
 	session.responseMu.Lock()
-	admitted := session.toolResultAdmitted
+	admitted := session.response.tool.resultAdmitted()
 	session.responseMu.Unlock()
 	if admitted {
 		t.Fatal("buffer-full tool result was marked admitted")
@@ -132,7 +132,7 @@ func TestRealtimeSession_ResponseIntentOverflowIsExplicit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	session.observeResponseCreated(models.SessionEvent{Type: models.SessionEventResponseCreated})
-	for i := 0; i < maxPendingResponseIntents; i++ {
+	for i := range maxPendingResponseIntents {
 		if outcome := session.RequestResponse(ctx); !outcome.OK() {
 			t.Fatalf("pending response intent %d: %#v", i, outcome)
 		}
@@ -146,7 +146,7 @@ func TestRealtimeSession_ResponseIntentOverflowIsExplicit(t *testing.T) {
 func realtimeResponseActive(session *realtimeSession) bool {
 	session.responseMu.Lock()
 	defer session.responseMu.Unlock()
-	return session.responseActive
+	return session.response.slot != responseSlotIdle
 }
 
 // Reviewer repro: the user ends a turn while a function-call response is

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -93,17 +94,25 @@ func finishComposedResponse(t *testing.T, conn *mockWebSocketConn, session messa
 	if !ok {
 		t.Fatalf("session type = %T, want *realtimeSession", session)
 	}
-	realtime.responseMu.Lock()
-	done := realtime.responseDone
-	realtime.responseMu.Unlock()
+	conn.mu.Lock()
+	doneIndex := len(conn.serverMessages) + 2
+	conn.mu.Unlock()
 	addServerEvent(conn, "response.created", map[string]any{"response": map[string]string{"id": responseID}})
 	addServerEvent(conn, "response.done", map[string]any{"response": map[string]string{"id": responseID, "status": "completed"}})
-	timer := time.NewTimer(time.Until(deadline))
-	defer timer.Stop()
-	select {
-	case <-done:
-	case <-timer.C:
-		t.Fatal("provider did not finish the admitted response")
+	// The read loop handles frames in order: once response.done has been read,
+	// response.created has taken the slot, so an idle slot means the done was
+	// handled.
+	for {
+		conn.mu.Lock()
+		read := conn.readIdx >= doneIndex
+		conn.mu.Unlock()
+		if read && !realtimeResponseActive(realtime) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("provider did not finish the admitted response")
+		}
+		runtime.Gosched()
 	}
 }
 
