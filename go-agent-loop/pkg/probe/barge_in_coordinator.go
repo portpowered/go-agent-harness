@@ -12,7 +12,7 @@ import (
 // function; StopAndWait gives them a second, bounded join boundary during
 // teardown instead of using an unbounded WaitGroup.Wait.
 type BargeInCoordinator struct {
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx // The coordinator owns this derived proof context (like errgroup.WithContext); Context() exposes it and StopAndWait cancels it.
 	cancel context.CancelFunc
 	ledger *BargeInLedger
 	bound  time.Duration

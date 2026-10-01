@@ -45,7 +45,7 @@ type acknowledgementSession struct {
 	ackEndOnce           sync.Once
 	// answerAcknowledgement, when set, replaces the provider's acknowledgement
 	// response (for example with an active-response rejection).
-	answerAcknowledgement func(*acknowledgementSession)
+	answerAcknowledgement func(context.Context, *acknowledgementSession)
 }
 
 func newAcknowledgementSession(completeAck bool) *acknowledgementSession {
@@ -59,7 +59,7 @@ func newAcknowledgementSession(completeAck bool) *acknowledgementSession {
 	}
 }
 
-func (s *acknowledgementSession) Send(_ context.Context, msg messages.StreamMessage) bool {
+func (s *acknowledgementSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
 	s.mu.Unlock()
@@ -76,10 +76,10 @@ func (s *acknowledgementSession) Send(_ context.Context, msg messages.StreamMess
 			s.acknowledgementOpen = s.answerAcknowledgement == nil
 			s.mu.Unlock()
 			if s.answerAcknowledgement != nil {
-				s.answerAcknowledgement(s)
+				s.answerAcknowledgement(ctx, s)
 				break
 			}
-			s.emitAcknowledgement(s.completeAck)
+			s.emitAcknowledgement(ctx, s.completeAck)
 		} else {
 			s.mu.Lock()
 			acknowledgementOpen := s.acknowledgementOpen
@@ -87,7 +87,7 @@ func (s *acknowledgementSession) Send(_ context.Context, msg messages.StreamMess
 			if acknowledgementOpen {
 				panic("normal continuation was sent while acknowledgement was open")
 			}
-			s.emitFinalResponse()
+			s.emitFinalResponse(ctx)
 		}
 	case messages.StreamTypeResponseCancel:
 		s.mu.Lock()
@@ -95,7 +95,7 @@ func (s *acknowledgementSession) Send(_ context.Context, msg messages.StreamMess
 		s.acknowledgementOpen = false
 		s.mu.Unlock()
 		if acknowledgementOpen {
-			s.emitAcknowledgementEnd()
+			s.emitAcknowledgementEnd(ctx)
 		}
 	}
 	return true
@@ -122,43 +122,43 @@ func (s *acknowledgementSession) sentMessages() []messages.StreamMessage {
 	return copyOfSent
 }
 
-func (s *acknowledgementSession) emitAcknowledgement(complete bool) {
+func (s *acknowledgementSession) emitAcknowledgement(ctx context.Context, complete bool) {
 	s.ackStartOnce.Do(func() { close(s.acknowledgementStart) })
-	s.recv.Write(context.Background(), messages.StreamMessage{
+	s.recv.Write(ctx, messages.StreamMessage{
 		Type:       messages.StreamTypeMessageStart,
 		Role:       messages.RoleAssistant,
 		ResponseID: "response-ack",
 		Value:      messages.NewMessageStartValue(),
 	})
-	s.recv.Write(context.Background(), messages.StreamMessage{
+	s.recv.Write(ctx, messages.StreamMessage{
 		Type:       messages.StreamTypeAudioStart,
 		Role:       messages.RoleAssistant,
 		ResponseID: "response-ack",
 		Value:      messages.NewAudioStartValue(),
 	})
-	s.recv.Write(context.Background(), messages.StreamMessage{
+	s.recv.Write(ctx, messages.StreamMessage{
 		Type:       messages.StreamTypeAudioDelta,
 		Role:       messages.RoleAssistant,
 		ResponseID: "response-ack",
 		Value:      messages.NewAudioDeltaValue([]byte{1, 2, 3}),
 	})
 	if complete {
-		s.emitAcknowledgementEnd()
+		s.emitAcknowledgementEnd(ctx)
 	}
 }
 
-func (s *acknowledgementSession) emitAcknowledgementEnd() {
+func (s *acknowledgementSession) emitAcknowledgementEnd(ctx context.Context) {
 	s.ackEndOnce.Do(func() {
 		s.mu.Lock()
 		s.acknowledgementOpen = false
 		s.mu.Unlock()
-		s.recv.Write(context.Background(), messages.StreamMessage{
+		s.recv.Write(ctx, messages.StreamMessage{
 			Type:       messages.StreamTypeAudioEnd,
 			Role:       messages.RoleAssistant,
 			ResponseID: "response-ack",
 			Value:      messages.NewAudioEndValue(),
 		})
-		s.recv.Write(context.Background(), messages.StreamMessage{
+		s.recv.Write(ctx, messages.StreamMessage{
 			Type:       messages.StreamTypeMessageEnd,
 			Role:       messages.RoleAssistant,
 			ResponseID: "response-ack",
@@ -168,7 +168,7 @@ func (s *acknowledgementSession) emitAcknowledgementEnd() {
 	})
 }
 
-func (s *acknowledgementSession) emitFinalResponse() {
+func (s *acknowledgementSession) emitFinalResponse(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{
 			Type:       messages.StreamTypeMessageStart,
@@ -201,7 +201,7 @@ func (s *acknowledgementSession) emitFinalResponse() {
 			Value:      messages.NewMessageEndValue(messages.TokenUsage{}),
 		},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -229,8 +229,7 @@ func (e *blockingToolExecutor) Execute(ctx context.Context, call messages.ToolCa
 	}
 }
 
-func writeAcknowledgementToolCall(s *acknowledgementSession) {
-	ctx := context.Background()
+func writeAcknowledgementToolCall(ctx context.Context, s *acknowledgementSession) {
 	s.recv.Write(ctx, messages.StreamMessage{
 		Type:       messages.StreamTypeMessageStart,
 		Role:       messages.RoleAssistant,
@@ -318,7 +317,7 @@ func TestDuplexSession_LongRunningToolAcknowledgementPrecedesGroundedContinuatio
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() { runErr <- al.Run(ctx) }()
-	writeAcknowledgementToolCall(session)
+	writeAcknowledgementToolCall(t.Context(), session)
 
 	select {
 	case <-executor.started:
@@ -392,7 +391,7 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() { runErr <- al.Run(ctx) }()
-	writeAcknowledgementToolCall(session)
+	writeAcknowledgementToolCall(t.Context(), session)
 	select {
 	case <-executor.started:
 	case <-time.After(3 * time.Second):
@@ -492,8 +491,8 @@ func contextWithTestTimeout(t *testing.T) context.Context {
 // before the acknowledgement request arrives: the provider rejects the request
 // as an active-response collision, before or after announcing its own
 // response, and then streams that ordinary response.
-func rejectAcknowledgement(startFirst bool) func(*acknowledgementSession) {
-	return func(s *acknowledgementSession) {
+func rejectAcknowledgement(startFirst bool) func(context.Context, *acknowledgementSession) {
+	return func(ctx context.Context, s *acknowledgementSession) {
 		start := messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewMessageStartValue()}
 		rejection := messages.StreamMessage{Type: messages.StreamTypeError, Value: &messages.ErrorValue{
 			Type: "error", Message: "conversation already has an active response", NonTerminal: true,
@@ -510,7 +509,7 @@ func rejectAcknowledgement(startFirst bool) func(*acknowledgementSession) {
 			messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: "response-server", Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 		)
 		for _, msg := range ordered {
-			s.recv.Write(context.Background(), msg)
+			s.recv.Write(ctx, msg)
 		}
 	}
 }
@@ -526,7 +525,7 @@ func TestDuplexSession_RejectedAcknowledgementKeepsServerResponseOrdinary(t *tes
 			defer cancel()
 			runErr := make(chan error, 1)
 			go func() { runErr <- al.Run(ctx) }()
-			writeAcknowledgementToolCall(session)
+			writeAcknowledgementToolCall(t.Context(), session)
 
 			server := waitForAgentDelta(t, contextWithTestTimeout(t), al, func(msg messages.StreamMessage) bool {
 				return msg.Type == messages.StreamTypeMessageEnd && msg.ResponseID == "response-server"

@@ -360,7 +360,7 @@ func registerDuplexPaths(t *testing.T, run int, functionalTime *timeharness.Scen
 			clientDirection: transcript.DirectionIn,
 			agentDirection:  transcript.DirectionOut,
 			sendAudio: func(payload []byte) {
-				inferencer.AddServerEvent(messages.StreamMessage{
+				inferencer.AddServerEvent(t.Context(), messages.StreamMessage{
 					Type:  messages.StreamTypeAudioDelta,
 					Role:  messages.RoleAssistant,
 					Value: messages.NewAudioDeltaValue(payload),

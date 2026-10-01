@@ -71,10 +71,10 @@ func TestSessionLifecycleOrder(t *testing.T) {
 	}
 
 	// Inject some events in between.
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hi"), Role: messages.RoleAssistant,
 	})
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant,
 	})
 	scenario.SendText("trigger")

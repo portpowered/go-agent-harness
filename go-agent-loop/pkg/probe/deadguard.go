@@ -441,9 +441,6 @@ func (g *DeadSessionGuard) Run(ctx context.Context) (DeadSessionGuardResult, err
 		result.Findings = []DeadSessionFinding{finding}
 		return result, &DeadSessionGuardError{Findings: result.Findings}
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	entries := g.registry.Entries()
 	if len(entries) == 0 {
 		finding := DeadSessionFinding{

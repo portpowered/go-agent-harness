@@ -357,7 +357,7 @@ func TestExecute_MultiTurn(t *testing.T) {
 			{Name: "get_weather", Description: "Get weather for a city"},
 		}),
 		WithSystemPrompt("You are a weather assistant."),
-		WithLogger(test_logging.NewPrintLogger()),
+		WithLogger(test_logging.NewTestLogger(t)),
 	)
 	if err != nil {
 		t.Fatalf("failed to create loop: %v", err)

@@ -3,26 +3,30 @@ package test_logging
 import (
 	"fmt"
 	"strings"
+	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/logging"
 )
 
 // ---------------------------------------------------------------------------
-// PrintLogger (test debugging)
+// TestLogger (test debugging)
 // ---------------------------------------------------------------------------
 
-// PrintLogger implements logging.Logger by writing level, message, and fields
-// to stdout via fmt.Println. Use it in functional tests to see agent-loop
-// logs when debugging (e.g. go test -v ./test/functional/...).
-type PrintLogger struct{}
-
-// NewPrintLogger returns a logger that prints to stdout. Safe for use from
-// multiple goroutines for debugging; not intended for production.
-func NewPrintLogger() *PrintLogger {
-	return &PrintLogger{}
+// TestLogger implements logging.Logger by writing level, message, and fields
+// to the test log. Use it in functional tests to see agent-loop logs when
+// debugging (e.g. go test -v ./test/functional/...). A Panic-level entry
+// fails the test instead of crashing the test binary.
+type TestLogger struct {
+	tb testing.TB
 }
 
-func (p *PrintLogger) format(level, msg string, fields ...logging.Field) string {
+// NewTestLogger returns a logger that writes to tb's log. It is safe for use
+// from multiple goroutines while the test runs.
+func NewTestLogger(tb testing.TB) *TestLogger {
+	return &TestLogger{tb: tb}
+}
+
+func (p *TestLogger) format(level, msg string, fields ...logging.Field) string {
 	if len(fields) == 0 {
 		return fmt.Sprintf("[%s] %s", level, msg)
 	}
@@ -34,31 +38,30 @@ func (p *PrintLogger) format(level, msg string, fields ...logging.Field) string 
 	return strings.Join(parts, " ")
 }
 
-func (p *PrintLogger) Debug(msg string, fields ...logging.Field) {
-	fmt.Println(p.format("DEBUG", msg, fields...))
+func (p *TestLogger) Debug(msg string, fields ...logging.Field) {
+	p.tb.Log(p.format("DEBUG", msg, fields...))
 }
 
-func (p *PrintLogger) Info(msg string, fields ...logging.Field) {
-	fmt.Println(p.format("INFO", msg, fields...))
+func (p *TestLogger) Info(msg string, fields ...logging.Field) {
+	p.tb.Log(p.format("INFO", msg, fields...))
 }
 
-func (p *PrintLogger) Warn(msg string, fields ...logging.Field) {
-	fmt.Println(p.format("WARN", msg, fields...))
+func (p *TestLogger) Warn(msg string, fields ...logging.Field) {
+	p.tb.Log(p.format("WARN", msg, fields...))
 }
 
-func (p *PrintLogger) Error(msg string, fields ...logging.Field) {
-	fmt.Println(p.format("ERROR", msg, fields...))
+func (p *TestLogger) Error(msg string, fields ...logging.Field) {
+	p.tb.Log(p.format("ERROR", msg, fields...))
 }
 
-func (p *PrintLogger) Fatal(msg string, fields ...logging.Field) {
-	fmt.Println(p.format("FATAL", msg, fields...))
+func (p *TestLogger) Fatal(msg string, fields ...logging.Field) {
+	p.tb.Log(p.format("FATAL", msg, fields...))
 }
 
-func (p *PrintLogger) Panic(msg string, fields ...logging.Field) {
-	s := p.format("PANIC", msg, fields...)
-	fmt.Println(s)
-	panic(s)
+// Panic records a panic-level entry as a test failure.
+func (p *TestLogger) Panic(msg string, fields ...logging.Field) {
+	p.tb.Error(p.format("PANIC", msg, fields...))
 }
 
-// Ensure PrintLogger implements logging.Logger.
-var _ logging.Logger = (*PrintLogger)(nil)
+// Ensure TestLogger implements logging.Logger.
+var _ logging.Logger = (*TestLogger)(nil)

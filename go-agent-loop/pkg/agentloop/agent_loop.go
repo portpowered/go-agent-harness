@@ -394,13 +394,13 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 	// Forward kernel delta events to the consumer-facing Deltas() buffer.
 	// Must be set up before RunHotLoopContinuous starts (KernelRunner reads it on startup).
 	kernelDeltaCh := al.engine.GetKernelRunner().NewDeltaEventReader(256)
-	forwardCtx, forwardCancel := context.WithCancel(context.Background())
-	// If the caller cancels after the engine has reported an error, Run may
-	// already be waiting for the forwarding worker in finish. Tie cancellation
-	// directly to that worker as well as handling it in the select below so a
-	// full public buffer cannot strand shutdown.
-	stopForwardOnCancel := context.AfterFunc(ctx, forwardCancel)
-	defer stopForwardOnCancel()
+	// Derive from ctx, not loopCtx: Run cancels the engine during shutdown
+	// while the worker still drains deltas published before that. If the
+	// caller cancels after an engine error, Run may already wait for the worker
+	// in finish; deriving from ctx releases it, so a full public buffer cannot
+	// strand shutdown.
+	forwardCtx, forwardCancel := context.WithCancel(ctx)
+	defer forwardCancel()
 	forwardDone := make(chan struct{})
 	go func() {
 		defer close(forwardDone)

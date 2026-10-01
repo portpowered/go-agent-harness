@@ -20,31 +20,44 @@ type Difference struct {
 // fields are compared through their JSON representation so the public field
 // names, byte encoding, optional fields, and collection order are preserved.
 // The returned findings are ordered by JSON object path and collection index.
+//
+// A projection that cannot be encoded is reported as a single root
+// difference naming the encoding failure instead of being compared.
 func Compare(expected, actual Projection) []Difference {
-	expectedValue := projectionJSONValue(expected)
-	actualValue := projectionJSONValue(actual)
+	expectedValue, expectedErr := projectionJSONValue(expected)
+	actualValue, actualErr := projectionJSONValue(actual)
+	if expectedErr != nil || actualErr != nil {
+		return []Difference{{Path: "$", Expected: encodingOutcome(expectedErr), Actual: encodingOutcome(actualErr)}}
+	}
 	differences := make([]Difference, 0)
 	compareJSONValue("", expectedValue, actualValue, &differences)
 	return differences
 }
 
-func projectionJSONValue(projection Projection) any {
+// encodingOutcome renders a projection encoding result for a root
+// difference.
+func encodingOutcome(err error) string {
+	if err == nil {
+		return "encodable projection"
+	}
+	return "unencodable projection: " + err.Error()
+}
+
+// projectionJSONValue decodes the JSON form of projection into generic JSON
+// values, keeping numbers exact.
+func projectionJSONValue(projection Projection) (any, error) {
 	encoded, err := json.Marshal(projection)
 	if err != nil {
-		// Projection contains only encoding/json-supported fields. Keep this
-		// invariant explicit if that public type changes in the future.
-		panic(fmt.Sprintf("parity: marshal projection: %v", err))
+		return nil, fmt.Errorf("parity: marshal projection: %w", err)
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
-		// The value was produced by encoding/json immediately above, so this is
-		// an invariant failure rather than an input validation case.
-		panic(fmt.Sprintf("parity: decode projection: %v", err))
+		return nil, fmt.Errorf("parity: decode projection: %w", err)
 	}
-	return value
+	return value, nil
 }
 
 func compareJSONValue(path string, expected, actual any, differences *[]Difference) {
@@ -64,7 +77,9 @@ func compareJSONValue(path string, expected, actual any, differences *[]Differen
 		}
 		compareJSONArray(path, expectedValue, actualValue, differences)
 	default:
-		if !sameJSONValue(expected, actual) {
+		// Scalars decoded from JSON (string, json.Number, bool, nil) are
+		// comparable, so equality matches their encoded form.
+		if expected != actual {
 			appendDifference(differences, path, expected, actual)
 		}
 	}
@@ -120,18 +135,12 @@ func appendDifference(differences *[]Difference, path string, expected, actual a
 	})
 }
 
-func sameJSONValue(expected, actual any) bool {
-	return bytes.Equal(mustMarshalJSONValue(expected), mustMarshalJSONValue(actual))
-}
-
+// renderJSONValue renders a decoded JSON value compactly. Values decoded by
+// projectionJSONValue always encode; any other value renders its failure.
 func renderJSONValue(value any) string {
-	return string(mustMarshalJSONValue(value))
-}
-
-func mustMarshalJSONValue(value any) []byte {
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		panic(fmt.Sprintf("parity: marshal comparison value: %v", err))
+		return fmt.Sprintf("unencodable %T: %v", value, err)
 	}
-	return encoded
+	return string(encoded)
 }

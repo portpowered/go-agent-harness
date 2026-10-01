@@ -25,7 +25,7 @@ func TestSessionAudioServerToClient(t *testing.T) {
 	audioChunk1 := []byte{0x01, 0x02, 0x03}
 	audioChunk2 := []byte{0x04, 0x05, 0x06}
 
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(audioChunk1), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(audioChunk2), Role: messages.RoleAssistant},
@@ -71,19 +71,19 @@ func TestSessionMultipleAudioChunks(t *testing.T) {
 	}
 
 	// Queue 12 audio chunks that will be delivered when InferStream is called.
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue(), Role: messages.RoleAssistant,
 	})
 	for i := range 12 {
 		chunk := []byte{byte(i), byte(i + 1)}
-		inf.AddServerEvent(messages.StreamMessage{
+		inf.AddServerEvent(t.Context(), messages.StreamMessage{
 			Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue(chunk), Role: messages.RoleAssistant,
 		})
 	}
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue(), Role: messages.RoleAssistant,
 	})
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant,
 	})
 
@@ -125,7 +125,7 @@ func TestSessionAudioWithMessageLifecycle(t *testing.T) {
 	}
 
 	// Queue a complete audio response.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0xFF}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue(), Role: messages.RoleAssistant},
@@ -169,7 +169,7 @@ func TestSessionConcurrentAudioBidirectional(t *testing.T) {
 	}
 
 	// Inject server audio response.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Value: messages.NewMessageStartValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0xAA, 0xBB}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},

@@ -55,23 +55,23 @@ func (m *Inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 	return s, nil
 }
 
-func (m *Inferencer) AddServerEvent(event messages.StreamMessage) {
+func (m *Inferencer) AddServerEvent(ctx context.Context, event messages.StreamMessage) {
 	m.mu.Lock()
 	sess := m.session
 	m.mu.Unlock()
 	if sess != nil {
-		sess.recvBuf.Write(context.Background(), event)
+		sess.recvBuf.Write(ctx, event)
 	}
 }
 
-func (m *Inferencer) AddServerEventSequence(events []messages.StreamMessage) {
+func (m *Inferencer) AddServerEventSequence(ctx context.Context, events []messages.StreamMessage) {
 	for _, event := range events {
-		m.AddServerEvent(event)
+		m.AddServerEvent(ctx, event)
 	}
 }
 
-func (m *Inferencer) SimulateError(msg string) {
-	m.AddServerEvent(messages.StreamMessage{
+func (m *Inferencer) SimulateError(ctx context.Context, msg string) {
+	m.AddServerEvent(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeError,
 		Value: messages.NewErrorValue(msg),
 	})
@@ -88,8 +88,8 @@ func (m *Inferencer) SimulateDisconnect() {
 
 func (m *Inferencer) Close() { m.SimulateDisconnect() }
 
-func (m *Inferencer) WaitForSentMessage(msgType messages.StreamMessageType, timeout time.Duration) (messages.StreamMessage, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (m *Inferencer) WaitForSentMessage(ctx context.Context, msgType messages.StreamMessageType, timeout time.Duration) (messages.StreamMessage, bool) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	var sess *Session

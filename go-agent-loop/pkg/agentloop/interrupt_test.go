@@ -109,8 +109,9 @@ func TestSendInterrupt_MidModelStream(t *testing.T) {
 		t.Fatal("timed out waiting for first inference to start")
 	}
 
-	// Give the engine a few ticks to consume the partial deltas into history.
-	time.Sleep(50 * time.Millisecond)
+	// Wait until the engine has published the partial delta, which proves it
+	// consumed the partial stream before the interrupt arrives.
+	awaitTextDelta(t, result.EventStream, "partial")
 
 	// Interrupt with a follow-up instruction.
 	followUp := messages.NewTextMessage(messages.RoleUser, "new direction")
@@ -206,7 +207,7 @@ func TestSendInterrupt_StalesDeltasDropped(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("timed out waiting for first inference")
 	}
-	time.Sleep(50 * time.Millisecond)
+	awaitTextDelta(t, result.EventStream, "initial")
 
 	if err := loop.SendInterrupt(ctx, nil); err != nil {
 		t.Fatalf("SendInterrupt: %v", err)
@@ -294,4 +295,20 @@ func (s *stubbornInferencer) InferStream(ctx context.Context, req messages.Infer
 		}()
 	}
 	return ch, nil
+}
+
+// awaitTextDelta consumes the event stream until a TEXT.DELTA carrying want
+// is published, failing the test if the stream ends first.
+func awaitTextDelta(t *testing.T, stream Stream, want string) {
+	t.Helper()
+	for stream.HasNext() {
+		evt := stream.Response()
+		if evt.Type != messages.StreamTypeTextDelta {
+			continue
+		}
+		if v, ok := evt.Value.(*messages.TextDeltaValue); ok && v.Content == want {
+			return
+		}
+	}
+	t.Fatalf("event stream ended before text delta %q", want)
 }

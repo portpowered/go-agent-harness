@@ -260,9 +260,8 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 		t.Fatalf("failed to create loop: %v", err)
 	}
 
-	// Baseline goroutine count after GC + settle.
+	// Baseline goroutine count after GC.
 	runtime.GC()
-	time.Sleep(50 * time.Millisecond)
 	baseline := runtime.NumGoroutine()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -280,8 +279,7 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 
 	// Allow goroutines to settle.
 	runtime.GC()
-	time.Sleep(200 * time.Millisecond)
-	final := runtime.NumGoroutine()
+	final := settleGoroutines(baseline+10, 2*time.Second)
 
 	// Allow a margin of 10 goroutines for runtime overhead.
 	if final > baseline+10 {
@@ -329,9 +327,6 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() { runErr <- loop.Run(ctx) }()
 
-	// Wait a moment for the loop to start.
-	time.Sleep(50 * time.Millisecond)
-
 	var wg sync.WaitGroup
 	// Sends and interrupts race loop shutdown by design; a rejection is not a
 	// failure, but the count is reported so an unexpected surge is visible.
@@ -348,9 +343,9 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 				if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
 					rejected.Add(1)
 				}
-				// Small jitter to mix sends and interrupts.
+				// Yield to mix sends and interrupts.
 				if m%3 == 0 {
-					time.Sleep(time.Millisecond)
+					runtime.Gosched()
 				}
 			}
 		}(s)
@@ -365,14 +360,17 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 			if err := loop.SendInterrupt(ctx, &followUp); err != nil {
 				rejected.Add(1)
 			}
-			time.Sleep(2 * time.Millisecond)
+			runtime.Gosched()
 		}
 	}()
 
 	wg.Wait()
 
-	// Give the loop time to process remaining messages.
-	time.Sleep(500 * time.Millisecond)
+	// Cancel only once the loop has published at least one response, so
+	// shutdown races in-flight processing rather than an idle loop.
+	if !out.waitFor("response-", 5*time.Second) {
+		t.Logf("no response published before cancellation; output %q", out.String())
+	}
 	cancel()
 
 	select {

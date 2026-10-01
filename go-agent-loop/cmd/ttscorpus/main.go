@@ -10,6 +10,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -21,13 +22,14 @@ func main() {
 	endpoint := flag.String("endpoint", ttscorpus.DefaultEndpoint, "base URL of the pinned LocalAI backend")
 	output := flag.String("output", "", "directory for generated WAVs and manifest.json")
 	flag.Parse()
-	if err := run(*modelsRoot, *endpoint, *output); err != nil {
+	if err := run(context.Background(), os.Stdout, *modelsRoot, *endpoint, *output); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(modelsRoot, endpoint, output string) error {
+// run generates the corpus, reporting progress lines to stdout.
+func run(ctx context.Context, stdout io.Writer, modelsRoot, endpoint, output string) error {
 	if err := ttscorpus.CheckPlatform(); err != nil {
 		return err
 	}
@@ -39,18 +41,21 @@ func run(modelsRoot, endpoint, output string) error {
 		return err
 	}
 	for _, artifact := range verified {
-		fmt.Printf("ARTIFACT_HASH=PASS role=%s sha256=%s\n", artifact.Role, artifact.Actual)
+		if _, err := fmt.Fprintf(stdout, "ARTIFACT_HASH=PASS role=%s sha256=%s\n", artifact.Role, artifact.Actual); err != nil {
+			return fmt.Errorf("ttscorpus: write progress: %w", err)
+		}
 	}
 	generator := ttscorpus.NewGenerator(endpoint)
-	ctx := context.Background()
 	if err := generator.WaitReady(ctx); err != nil {
 		return err
 	}
-	for i, text := range ttscorpus.Utterances {
-		for _, rate := range ttscorpus.SampleRates {
+	for i, text := range ttscorpus.Utterances() {
+		for _, rate := range ttscorpus.SampleRates() {
 			name := fmt.Sprintf("qwen_utt%02d_%dk.wav", i+1, rate/1000)
 			path := filepath.Join(output, name)
-			fmt.Printf("SYNTHESIZE file=%s rate=%d\n", name, rate)
+			if _, err := fmt.Fprintf(stdout, "SYNTHESIZE file=%s rate=%d\n", name, rate); err != nil {
+				return fmt.Errorf("ttscorpus: write progress: %w", err)
+			}
 			if err := generator.Synthesize(ctx, text, path); err != nil {
 				return err
 			}
@@ -59,6 +64,8 @@ func run(modelsRoot, endpoint, output string) error {
 	if err := ttscorpus.EmitManifest(output); err != nil {
 		return err
 	}
-	fmt.Println("CORPUS=PASS")
+	if _, err := fmt.Fprintln(stdout, "CORPUS=PASS"); err != nil {
+		return fmt.Errorf("ttscorpus: write result: %w", err)
+	}
 	return nil
 }

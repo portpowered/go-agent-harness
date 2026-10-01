@@ -18,7 +18,7 @@ func TestSessionTranscriptDelta(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("hello"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTranscriptEnd, Value: messages.NewTranscriptEndValue("hello world"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},
@@ -53,7 +53,7 @@ func TestSessionTranscriptWithAudio(t *testing.T) {
 	}
 
 	// Interleave audio and transcript.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTranscriptDelta, Value: messages.NewTranscriptDeltaValue("hello"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x02}), Role: messages.RoleAssistant},

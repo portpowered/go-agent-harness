@@ -385,6 +385,9 @@ type MockToolExecutor struct {
 	Results       map[string]string
 	CustomResults map[string]messages.ToolCallResponse // keyed by tool name; ToolCallID is set from call.ID at Execute time
 	CallLog       []messages.ToolCall
+	// callSignal is closed and cleared by the next Execute so waiters block
+	// on a signal instead of polling.
+	callSignal chan struct{}
 }
 
 // NewMockToolExecutor returns an empty MockToolExecutor ready for use.
@@ -421,10 +424,38 @@ func (m *MockToolExecutor) Calls() []messages.ToolCall {
 	return calls
 }
 
+// WaitForCalls blocks until at least want calls were observed or timeout
+// elapses, and returns the calls observed so far.
+func (m *MockToolExecutor) WaitForCalls(want int, timeout time.Duration) []messages.ToolCall {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		m.mu.Lock()
+		calls := append([]messages.ToolCall(nil), m.CallLog...)
+		if m.callSignal == nil {
+			m.callSignal = make(chan struct{})
+		}
+		signal := m.callSignal
+		m.mu.Unlock()
+		if len(calls) >= want {
+			return calls
+		}
+		select {
+		case <-signal:
+		case <-deadline.C:
+			return calls
+		}
+	}
+}
+
 // Execute implements messages.ToolExecutor.
 func (m *MockToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	m.mu.Lock()
 	m.CallLog = append(m.CallLog, call)
+	if m.callSignal != nil {
+		close(m.callSignal)
+		m.callSignal = nil
+	}
 	if custom, ok := m.CustomResults[call.Name]; ok {
 		custom.ToolCallID = call.ID
 		m.mu.Unlock()
@@ -466,7 +497,7 @@ func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts
 	allOpts := []agentloop.Option{
 		agentloop.WithInferencer(inf),
 		agentloop.WithToolExecutor(tool),
-		// agentloop.WithLogger(test_logging.NewPrintLogger()),
+		// agentloop.WithLogger(test_logging.NewTestLogger(t)),
 	}
 	allOpts = append(allOpts, opts...)
 
@@ -488,7 +519,7 @@ func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts
 // returns the result. The test is failed immediately if Execute returns an error.
 func (s *Scenario) Execute(message string) agentloop.ExecuteResult {
 	s.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
+	ctx, cancel := context.WithTimeout(s.t.Context(), s.Timeout)
 	defer cancel()
 	result, err := s.Loop.Execute(ctx, agentloop.NewExecuteInput(message))
 	if err != nil {
@@ -526,7 +557,7 @@ func streamTextFromEvents(stream agentloop.Stream) string {
 // The test is failed immediately on any error.
 func (s *Scenario) ExecuteStreamingText(message string) (streamText string) {
 	s.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
+	ctx, cancel := context.WithTimeout(s.t.Context(), s.Timeout)
 	defer cancel()
 
 	result, err := s.Loop.ExecuteStreaming(ctx, agentloop.NewExecuteInput(message))

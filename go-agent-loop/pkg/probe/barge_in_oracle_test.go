@@ -752,17 +752,17 @@ func TestBargeInLedgerWaitForBoundaries(t *testing.T) {
 
 	for _, testCase := range []struct {
 		name string
-		ctx  context.Context
+		ctx  func(*testing.T) context.Context
 		gate string
 		time time.Duration
 		want string
 	}{
-		{name: "missing boundary", ctx: context.Background(), gate: "", time: time.Second, want: "wait boundary is required"},
-		{name: "non-positive timeout", ctx: context.Background(), gate: "ready", time: 0, want: "requires a positive timeout"},
-		{name: "missing context", ctx: missingContext, gate: "ready", time: time.Second, want: "requires a context"},
+		{name: "missing boundary", ctx: (*testing.T).Context, gate: "", time: time.Second, want: "wait boundary is required"},
+		{name: "non-positive timeout", ctx: (*testing.T).Context, gate: "ready", time: 0, want: "requires a positive timeout"},
+		{name: "missing context", ctx: func(*testing.T) context.Context { return missingContext }, gate: "ready", time: time.Second, want: "requires a context"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if err := ledger.WaitFor(testCase.ctx, testCase.gate, ready, testCase.time); err == nil || !errors.Is(err, ErrBargeInWait) || !strings.Contains(err.Error(), testCase.want) {
+			if err := ledger.WaitFor(testCase.ctx(t), testCase.gate, ready, testCase.time); err == nil || !errors.Is(err, ErrBargeInWait) || !strings.Contains(err.Error(), testCase.want) {
 				t.Fatalf("wait error = %v, want ErrBargeInWait containing %q", err, testCase.want)
 			}
 		})

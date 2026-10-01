@@ -45,7 +45,7 @@ func TestSessionScenarioCapturesTickCorrelatedCrossings(t *testing.T) {
 	awaitCapturedRecords(t, recordsReady, 2)
 
 	logicalClock.AdvanceTo(2)
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewTextDeltaValue("agent response"),

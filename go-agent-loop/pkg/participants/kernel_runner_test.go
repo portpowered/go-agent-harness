@@ -498,7 +498,7 @@ func TestSessionModelRunner_HeldOnsetAudioReleasedAfterOnsetWindow(t *testing.T)
 		if got := len(session.sentMessages()); got != 0 {
 			t.Fatalf("sent %d messages while onset was undecided, want the frame held", got)
 		}
-		time.Sleep(DefaultBargeInConfig().MinSpeech)
+		time.Sleep(DefaultBargeInConfig().MinSpeech) //nolint:forbidigo // Inside a synctest bubble: advances virtual time past the onset window; no wall-clock wait.
 		synctest.Wait()
 		sent := session.sentMessages()
 		stop()

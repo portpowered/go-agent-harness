@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -235,8 +236,13 @@ func TestWriterSinkFailureIsOneWayAndReportedOnce(t *testing.T) {
 	}
 }
 
+// The synctest bubble fails the test if Close leaves any goroutine the
+// writer started still running.
 func TestWriterCloseReleasesFileAndStabilizesPostCloseWrites(t *testing.T) {
-	beforeGoroutines := runtime.NumGoroutine()
+	synctest.Test(t, testWriterCloseReleasesFile)
+}
+
+func testWriterCloseReleasesFile(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "close.jsonl")
 	writer, err := NewWriter(path)
@@ -261,10 +267,6 @@ func TestWriterCloseReleasesFileAndStabilizesPostCloseWrites(t *testing.T) {
 	renamed := filepath.Join(directory, "renamed.jsonl")
 	if err := os.Rename(path, renamed); err != nil {
 		t.Fatalf("rename after Close: %v", err)
-	}
-	afterGoroutines := settleGoroutineCount(beforeGoroutines+2, 500*time.Millisecond)
-	if afterGoroutines > beforeGoroutines+2 {
-		t.Fatalf("goroutines after Close = %d, before = %d, want within bounded tolerance", afterGoroutines, beforeGoroutines)
 	}
 }
 
@@ -424,17 +426,6 @@ func readRecordsFromSegments(t *testing.T, path string, maxBackups int) []Record
 		t.Fatalf("stat active segment %s: %v", path, err)
 	}
 	return append(records, readRecordsFromFile(t, path)...)
-}
-
-func settleGoroutineCount(maximum int, timeout time.Duration) int {
-	deadline := time.Now().Add(timeout)
-	count := runtime.NumGoroutine()
-	for count > maximum && time.Now().Before(deadline) {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		count = runtime.NumGoroutine()
-	}
-	return count
 }
 
 func readRecordsFromFile(t *testing.T, path string) []Record {

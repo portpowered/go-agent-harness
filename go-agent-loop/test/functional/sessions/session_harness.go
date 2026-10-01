@@ -21,7 +21,8 @@ import (
 type MockSession = sessionmock.Session
 type MockSessionInferencer = sessionmock.Inferencer
 
-var NewMockSessionInferencer = sessionmock.NewInferencer
+// NewMockSessionInferencer forwards to sessionmock.NewInferencer.
+func NewMockSessionInferencer() *sessionmock.Inferencer { return sessionmock.NewInferencer() }
 
 // SessionTranscript is a scenario-local, concurrency-safe transcript
 // collector. It implements transcript.RecordSink so callers can provide it to
@@ -153,7 +154,7 @@ func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockTool
 func (s *SessionScenario) Start() {
 	s.t.Helper()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.t.Context())
 	s.cancel = cancel
 	s.runDone = make(chan struct{})
 
@@ -207,7 +208,7 @@ func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageTy
 			messages.ControlPlanePart{ControlPlaneMessageType: cpType},
 		},
 	}
-	if err := s.Loop.Send(context.Background(), []messages.Message{msg}); err != nil {
+	if err := s.Loop.Send(s.t.Context(), []messages.Message{msg}); err != nil {
 		s.t.Fatalf("SessionScenario.SendControlPlane: %v", err)
 	}
 	if s.capture != nil {
@@ -219,7 +220,7 @@ func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageTy
 // and barge-in. Panics if the loop is not in session mode.
 func (s *SessionScenario) SendAudioInput(pcm []byte) {
 	s.t.Helper()
-	if err := s.Loop.SendAudioInput(context.Background(), pcm); err != nil {
+	if err := s.Loop.SendAudioInput(s.t.Context(), pcm); err != nil {
 		s.t.Fatalf("SessionScenario.SendAudioInput: %v", err)
 	}
 	if s.capture != nil {
@@ -230,7 +231,7 @@ func (s *SessionScenario) SendAudioInput(pcm []byte) {
 // SendText sends a text message to the session.
 func (s *SessionScenario) SendText(text string) {
 	msg := messages.NewTextMessage(messages.RoleUser, text)
-	if err := s.Loop.Send(context.Background(), []messages.Message{msg}); err != nil {
+	if err := s.Loop.Send(s.t.Context(), []messages.Message{msg}); err != nil {
 		s.t.Fatalf("SessionScenario.SendText: %v", err)
 	}
 	if s.capture != nil {

@@ -57,7 +57,6 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 	workers.Add(aliasedCount)
 	workerErrors := make(chan error, aliasedCount)
 	for _, result := range results {
-
 		participant, err := functionalTime.Register("aliased-" + result.Token)
 		if err != nil {
 			t.Fatalf("register %s: %v", result.Token, err)
@@ -65,7 +64,7 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 		participant.Run(func() {
 			defer workers.Done()
 			defer atomic.AddInt64(&live, -1)
-			runSessionScript(participant, result, concurrentDefaultTurns, func() {}, func(err error) { workerErrors <- err })
+			runSessionScript(t.Context(), participant, result, concurrentDefaultTurns, func() {}, func(err error) { workerErrors <- err })
 		})
 	}
 

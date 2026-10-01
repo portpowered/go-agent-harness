@@ -255,7 +255,7 @@ func TestScenarioV2FixtureResolutionIsContainedAndCanonical(t *testing.T) {
 	}
 	link := filepath.Join(filepath.Dir(scenarioPath), "outside-link.json")
 	if err := os.Symlink(outside, link); err != nil {
-		t.Skipf("symlink test unavailable: %v", err)
+		t.Fatalf("create outside symlink: %v", err)
 	}
 	if _, err := ResolveScenarioV2FixturePath(scenarioPath, "outside-link.json"); err == nil || !errors.Is(err, ErrScenarioV2FixturePath) {
 		t.Fatalf("external symlink error = %v", err)
@@ -267,7 +267,7 @@ func TestScenarioV2FixtureResolutionIsContainedAndCanonical(t *testing.T) {
 	}
 	insideLink := filepath.Join(filepath.Dir(scenarioPath), "inside-link.json")
 	if err := os.Symlink(insideTarget, insideLink); err != nil {
-		t.Skipf("inside symlink test unavailable: %v", err)
+		t.Fatalf("create inside symlink: %v", err)
 	}
 	resolved, err := ResolveScenarioV2FixturePath(scenarioPath, "inside-link.json")
 	if err != nil {

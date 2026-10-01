@@ -94,12 +94,7 @@ func TestCancellingOneMidRunSessionLeavesOthersUndisturbed(t *testing.T) {
 	// tick generation, so it never substitutes for logical synchronization.
 	const settleDeadline = 10 * time.Second
 	const allowedResidual = 4
-	deadline := time.Now().Add(settleDeadline)
-	final := runtime.NumGoroutine()
-	for final > baselineGoroutines+allowedResidual && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
-		final = runtime.NumGoroutine()
-	}
+	final := settleGoroutines(baselineGoroutines+allowedResidual, settleDeadline)
 	if final > baselineGoroutines+allowedResidual {
 		t.Fatalf("goroutines after cancellation runs: baseline=%d final=%d residual exceeds allowance %d", baselineGoroutines, final, allowedResidual)
 	}

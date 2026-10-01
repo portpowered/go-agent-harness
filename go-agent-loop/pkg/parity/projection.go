@@ -9,9 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // Projection is the complete, ordered, transport-independent speech-to-speech

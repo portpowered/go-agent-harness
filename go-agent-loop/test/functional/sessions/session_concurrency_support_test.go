@@ -2,7 +2,9 @@ package sessions
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -235,10 +237,10 @@ func (k concurrentTurnKind) String() string {
 // queueServerEvents enqueues the scripted provider response for one turn of
 // the named session. Events are consumed by the mock session transport in FIFO
 // order, mirroring a replay source feeding a live provider connection.
-func queueServerEvents(inf *MockSessionInferencer, token string, kind concurrentTurnKind) {
+func queueServerEvents(ctx context.Context, inf *MockSessionInferencer, token string, kind concurrentTurnKind) {
 	switch kind {
 	case turnText:
-		inf.AddServerEventSequence([]messages.StreamMessage{
+		inf.AddServerEventSequence(ctx, []messages.StreamMessage{
 			{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(fmt.Sprintf("ack %s text turn", token))},
 			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
@@ -264,10 +266,10 @@ func queueServerEvents(inf *MockSessionInferencer, token string, kind concurrent
 				Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 			},
 		)
-		inf.AddServerEventSequence(events)
+		inf.AddServerEventSequence(ctx, events)
 	case turnTool:
 		callID := fmt.Sprintf("call-%s-1", token)
-		inf.AddServerEventSequence([]messages.StreamMessage{
+		inf.AddServerEventSequence(ctx, []messages.StreamMessage{
 			{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(callID, concurrentToolName)},
 			{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, concurrentToolName, fmt.Sprintf(`{"session":"%s","query":"marker"}`, token))},
 			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
@@ -470,7 +472,7 @@ func (d *concurrentDriver) launchWorkers() {
 		participant.Run(func() {
 			defer d.workers.Done()
 			defer atomic.AddInt64(&d.live, -1)
-			runSessionScript(participant, result, turns, done, report)
+			runSessionScript(d.t.Context(), participant, result, turns, done, report)
 		})
 	}
 }
@@ -605,12 +607,12 @@ func sessionScriptPlan(result *concurrentSessionResult, turns []concurrentTurnKi
 // inputs synchronously. No wall clock, no sleeps. Failures flow through
 // report exactly once so the coordinator fails the test from its own
 // goroutine; done runs exactly once after the full scripted prefix succeeds.
-func runSessionScript(participant *timeharness.Participant, result *concurrentSessionResult, turns []concurrentTurnKind, done func(), report func(error)) {
+func runSessionScript(ctx context.Context, participant *timeharness.Participant, result *concurrentSessionResult, turns []concurrentTurnKind, done func(), report func(error)) {
 	ops := sessionScriptOps{
 		token: result.Token,
 		open:  func() bool { return sessionOpen(result) },
 		send: func(kind concurrentTurnKind) {
-			queueServerEvents(result.Inferencer, result.Token, kind)
+			queueServerEvents(ctx, result.Inferencer, result.Token, kind)
 			sendClientInputs(result, kind)
 		},
 		completions: func() int { return messageEndProgress(result) },
@@ -705,3 +707,28 @@ func sessionOpen(result *concurrentSessionResult) bool {
 		return delta.Type == messages.StreamTypeSessionOpen
 	}) > 0
 }
+
+// settleGoroutines waits until at most limit goroutines run or timeout
+// elapses, and returns the last count. Goroutine exit publishes no signal,
+// so the count is resampled on a ticker; the wait ends as soon as the
+// count is within the limit.
+func settleGoroutines(limit int, timeout time.Duration) int {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	resample := time.NewTicker(settleResampleInterval)
+	defer resample.Stop()
+	for {
+		count := runtime.NumGoroutine()
+		if count <= limit {
+			return count
+		}
+		select {
+		case <-resample.C:
+		case <-deadline.C:
+			return runtime.NumGoroutine()
+		}
+	}
+}
+
+// settleResampleInterval is how often settleGoroutines resamples the count.
+const settleResampleInterval = 10 * time.Millisecond
