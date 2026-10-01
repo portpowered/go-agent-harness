@@ -440,14 +440,14 @@ test-linux-devices-race: ## Run the native Linux cgo device backend tests with t
 test-audio-device-server-integration: ## Build both binaries and run the process-boundary OpenAI audio replay.
 	@set -euo pipefail; \
 	echo "==> test-audio-device-server-integration agent + audio-device-server replay"; \
-	(cd agent-cli && YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration \
-		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=stress \
+		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryToolContinuationStressMatrix|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 # The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
 # trials each per repetition) and the fresh-process continuation matrix
-# TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio other than
-# test45/captured_cadence (whose device-cadence deliveries drain in real
-# time) skip unless YUI_AUDIO_STRESS=1. They hunt rare races rather than
+# TestAgentBinaryToolContinuationStressMatrix (every case other than
+# test45/captured_cadence, whose device-cadence deliveries drain in real
+# time) build only with the stress tag. They hunt rare races rather than
 # prove behavior, so pull requests run only test45/captured_cadence as the
 # real-process representative (every topology and delivery also runs
 # in-process on a virtual clock in TestToolContinuationPreservesDeviceAudio);
@@ -457,8 +457,8 @@ AUDIO_STRESS_COUNT ?= 1
 test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
 	@set -euo pipefail; \
 	echo "==> test-audio-stress Test45/Test46 high-rate tool audio (20 trials each) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
-	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) YUI_AUDIO_STRESS=1 $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone \
-		-run '^TestAgentBinary(Test4[56]HighRateToolAudioRegression|ToolContinuationPreservesRemoteDeviceAudio)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone,stress \
+		-run '^TestAgentBinary(Test4[56]HighRateToolAudioRegression|ToolContinuationPreservesRemoteDeviceAudio|ToolContinuationStressMatrix)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
