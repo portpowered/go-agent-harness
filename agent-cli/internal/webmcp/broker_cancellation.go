@@ -3,6 +3,8 @@ package webmcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"time"
 )
 
 type targetCancellation struct {
@@ -146,25 +148,63 @@ func (b *StatefulBroker) directCancelDispatchFailed(selected *brokerSession, ope
 	return directCancellationDispatchFailure(operation, err)
 }
 
-// dispatchQueuedInvocationWithCallerCancellation dispatches invocation with a
-// context derived from the worker context that is canceled once the admitting
-// caller cancels, mirroring the caller's cancellation for the browser call.
-func (b *StatefulBroker) dispatchQueuedInvocationWithCallerCancellation(ctx context.Context, invocation *brokerInvocation) {
-	dispatchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+// callerBinding captures what the lane worker needs from the admitting
+// caller's context without retaining the context itself.
+type callerBinding struct {
+	done        <-chan struct{}
+	err         func() error
+	deadline    time.Time
+	hasDeadline bool
+}
+
+func newCallerBinding(ctx context.Context) callerBinding {
+	deadline, hasDeadline := ctx.Deadline()
+	return callerBinding{done: ctx.Done(), err: ctx.Err, deadline: deadline, hasDeadline: hasDeadline}
+}
+
+// callerBoundContext derives the dispatch context from the worker context and
+// mirrors the caller: it carries the caller's deadline (so an expired caller
+// deadline surfaces as context.DeadlineExceeded) and is canceled, with the
+// caller's error as its cause, once the caller is canceled.
+func callerBoundContext(ctx context.Context, caller callerBinding) (context.Context, func()) {
+	dispatchCtx, cancelCause := context.WithCancelCause(ctx)
+	stopDeadline := context.CancelFunc(func() {})
+	if caller.hasDeadline {
+		dispatchCtx, stopDeadline = context.WithDeadline(dispatchCtx, caller.deadline)
+	}
+	release := func() {
+		stopDeadline()
+		cancelCause(nil)
+	}
+	// An expired caller deadline is mirrored by the dispatch deadline itself.
+	mirrorCancel := func() {
+		err := caller.err()
+		if caller.hasDeadline && errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
+		cancelCause(err)
+	}
 	select {
-	case <-invocation.callerDone:
-		// The caller is already gone: dispatch with an already-canceled
-		// context, exactly as the caller's own context would behave.
-		cancel()
+	case <-caller.done:
+		mirrorCancel()
+		return dispatchCtx, release
 	default:
 	}
 	go func() {
 		select {
-		case <-invocation.callerDone:
-			cancel()
+		case <-caller.done:
+			mirrorCancel()
 		case <-dispatchCtx.Done():
 		}
 	}()
+	return dispatchCtx, release
+}
+
+// dispatchQueuedInvocationWithCallerCancellation dispatches invocation with a
+// context derived from the worker context that mirrors the admitting caller's
+// cancellation and deadline for the browser call.
+func (b *StatefulBroker) dispatchQueuedInvocationWithCallerCancellation(ctx context.Context, invocation *brokerInvocation) {
+	dispatchCtx, release := callerBoundContext(ctx, invocation.caller)
+	defer release()
 	b.dispatchQueuedInvocationWithLock(dispatchCtx, invocation)
 }

@@ -22,10 +22,10 @@ const (
 // pinned to its session and is never resolved through the current selection.
 type brokerInvocation struct {
 	selected *brokerSession
-	// callerDone is the admitting caller's cancellation signal. The lane
-	// worker derives its dispatch context from its own context and cancels it
-	// when callerDone closes, so no caller context is retained here.
-	callerDone <-chan struct{}
+	// caller is the admitting caller's cancellation signal, error and
+	// deadline. The lane worker derives its dispatch context from its own
+	// context and mirrors these, so no caller context is retained here.
+	caller callerBinding
 
 	invocation Invocation
 
@@ -345,7 +345,7 @@ func (b *StatefulBroker) clearCurrentInvocation(selected *brokerSession, invocat
 func (b *StatefulBroker) waitForInvocationLane(ctx context.Context, invocation *brokerInvocation) {
 	select {
 	case <-invocation.terminal:
-	case <-invocation.callerDone:
+	case <-invocation.caller.done:
 		b.cancelContextInvocation(ctx, invocation)
 	case <-invocation.selected.queueStop:
 	}

@@ -96,7 +96,7 @@ func (b *StatefulBroker) newBrokerInvocationLocked(ctx context.Context, selected
 	now := b.clock.Now()
 	return &brokerInvocation{
 		selected:   selected,
-		callerDone: ctx.Done(),
+		caller:     newCallerBinding(ctx),
 		invocation: Invocation{
 			ID:          id,
 			Tool:        cloneToolDescriptor(descriptor),
