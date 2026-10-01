@@ -9,6 +9,17 @@ import (
 )
 
 func TestRunS11(t *testing.T) {
+	RunS11(t, memoryHarness())
+}
+
+// TestRunConformance runs the same harness through the descriptive alias.
+func TestRunConformance(t *testing.T) {
+	RunConformance(t, memoryHarness())
+}
+
+// memoryHarness is an in-memory S11 harness whose failure cases each inject
+// one sentinel error.
+func memoryHarness() ConformanceHarness {
 	dialErr := errors.New("dial sentinel")
 	readErr := errors.New("read sentinel")
 	writeErr := errors.New("write sentinel")
@@ -24,7 +35,7 @@ func TestRunS11(t *testing.T) {
 	h.ReadFailure = FailureCase{New: func() transport.Dialer { return newFailureFixture(nil, readErr, nil, nil) }, WantErr: readErr}
 	h.WriteFailure = FailureCase{New: func() transport.Dialer { return newFailureFixture(nil, nil, writeErr, nil) }, WantErr: writeErr}
 	h.CloseFailure = FailureCase{New: func() transport.Dialer { return newFailureFixture(nil, nil, nil, closeErr) }, WantErr: closeErr}
-	RunS11(t, h)
+	return h
 }
 
 type fixtureObserver struct {

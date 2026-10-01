@@ -317,9 +317,9 @@ func FuzzReconstructMessages_S7RoundTrip(f *testing.F) {
 	})
 }
 
-// The current public reconstruction result has no completion marker. Keep the
-// intended assertion visible and skipped until the API can distinguish a
-// positive partial result from a complete message.
+// The current public reconstruction result has no completion marker. The
+// intended assertion stays visible as a known reconstruction defect until the
+// API can distinguish a positive partial result from a complete message.
 func TestReconstructModelMessageFromDeltas_TruncatedStreamContract(t *testing.T) {
 	deltas := []StreamMessage{
 		modelDelta(StreamTypeMessageStart, NewMessageStartValue()),
@@ -330,13 +330,13 @@ func TestReconstructModelMessageFromDeltas_TruncatedStreamContract(t *testing.T)
 	if got.TextContent() != "partial" {
 		t.Fatalf("current partial payload changed: got %q", got.TextContent())
 	}
-	// Known gap: reconstruction has no partial/completion marker. Add the
-	// intended partial-result assertion when the public contract exposes one.
+	reconstructionContractHolds(t, "completion-marker", messageHasCompletionMarker(),
+		"reconstructed message %q carries no partial/completion marker", got.TextContent())
 }
 
 // StreamMessage carries ordering metadata, but reconstruction currently ignores
-// it and returns no typed reorder error. Keep the intended safety case skipped
-// rather than blessing silently reordered content as a supported contract.
+// it and returns no typed reorder error. The intended canonical-order check is
+// a known reconstruction defect rather than a blessed contract.
 func TestReconstructModelMessageFromDeltas_OutOfOrderContract(t *testing.T) {
 	deltas := []StreamMessage{
 		{Type: StreamTypeTextDelta, GlobalIndex: 2, Value: NewTextDeltaValue("second")},
@@ -346,9 +346,49 @@ func TestReconstructModelMessageFromDeltas_OutOfOrderContract(t *testing.T) {
 	if got.TextContent() != "secondfirst" {
 		t.Fatalf("unexpected current observation: got %q", got.TextContent())
 	}
-	// Known gap: reconstruction ignores GlobalIndex and has no typed
-	// out-of-order error. Add a canonical-order or typed-error assertion when
-	// the public contract exists.
+	reconstructionContractHolds(t, "canonical-order", got.TextContent() == "firstsecond",
+		"reconstruction ignored GlobalIndex: got %q, want canonical %q", got.TextContent(), "firstsecond")
+}
+
+// knownReconstructionDefects lists reconstruction contract checks, keyed by
+// "<test name>:<check>", that currently fail. reconstructionContractHolds logs
+// a listed failure instead of failing and fails once it stops reproducing, so
+// this list can only shrink.
+func knownReconstructionDefects() map[string]string {
+	return map[string]string{
+		"TestReconstructModelMessageFromDeltas_TruncatedStreamContract:completion-marker": "reconstruction has no partial/completion marker",
+		"TestReconstructModelMessageFromDeltas_OutOfOrderContract:canonical-order":        "reconstruction ignores GlobalIndex and has no typed out-of-order error",
+	}
+}
+
+// reconstructionContractHolds checks one intended reconstruction contract.
+// A listed known defect is logged while it reproduces and fails the test once
+// it no longer does; any other failure fails the test.
+func reconstructionContractHolds(t *testing.T, check string, ok bool, format string, args ...any) {
+	t.Helper()
+	key := t.Name() + ":" + check
+	_, known := knownReconstructionDefects()[key]
+	switch {
+	case ok && known:
+		t.Errorf("known reconstruction defect %s no longer reproduces; remove it from knownReconstructionDefects and assert the contract", key)
+	case ok:
+	case known:
+		t.Logf("known reconstruction defect %s: %s", key, fmt.Sprintf(format, args...))
+	default:
+		t.Fatalf("reconstruction defect %s: %s", key, fmt.Sprintf(format, args...))
+	}
+}
+
+// messageHasCompletionMarker reports whether Message exposes a field that
+// distinguishes a partial reconstruction from a complete one.
+func messageHasCompletionMarker() bool {
+	messageType := reflect.TypeFor[Message]()
+	for _, name := range []string{"Partial", "Incomplete", "Complete", "Completed", "Truncated"} {
+		if _, ok := messageType.FieldByName(name); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func modelDelta(typ StreamMessageType, value StreamMessageValue) StreamMessage {
