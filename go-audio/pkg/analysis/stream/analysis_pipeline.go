@@ -127,7 +127,7 @@ func measurePCM16Boundaries(result *PCM16Analysis, prepared preparedPCM16Analysi
 	}
 }
 
-func pcm16BoundaryFailure(prepared preparedPCM16Analysis, boundaryIndex int, boundary ChunkBoundary, check BoundaryCheck) PropertyFailure {
+func pcm16BoundaryFailure(prepared preparedPCM16Analysis, boundaryIndex int, boundary ChunkBoundary, check BoundaryCheck) PropertyError {
 	failure := analysisFailure("quiet-boundary-click", prepared.streamID, prepared.input.ParticipantID)
 	failure.Interval = boundaryLabel(boundary)
 	failure.SampleIndex = boundary.SampleIndex
@@ -169,7 +169,7 @@ func measurePCM16Edges(result *PCM16Analysis, prepared preparedPCM16Analysis) {
 	}
 }
 
-func pcm16EdgeFailure(prepared preparedPCM16Analysis, property, interval string, sampleIndex, frameIndex, measured int, detail string) PropertyFailure {
+func pcm16EdgeFailure(prepared preparedPCM16Analysis, property, interval string, sampleIndex, frameIndex, measured int, detail string) PropertyError {
 	failure := analysisFailure(property, prepared.streamID, prepared.input.ParticipantID)
 	failure.Interval = interval
 	failure.SampleIndex = sampleIndex

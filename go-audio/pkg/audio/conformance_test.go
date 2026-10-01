@@ -40,6 +40,7 @@ func TestSourceConformancePartialFinalFrame(t *testing.T) {
 	}{
 		name: "file",
 		open: func(t *testing.T) AudioSource {
+			t.Helper()
 			source, err := NewFileSource(rawPath, bytes.NewReader(nil))
 			if err != nil {
 				t.Fatalf("NewFileSource() error = %v", err)
@@ -99,9 +100,9 @@ func minInt(left, right int) int {
 }
 
 // closeForTest closes a test-owned resource and reports an unexpected failure.
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("Close() error = %v", err)
+		tb.Errorf("Close() error = %v", err)
 	}
 }

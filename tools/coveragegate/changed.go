@@ -190,11 +190,11 @@ func listedPackageDirectory(listed listedPackage, absoluteModuleDir, moduleDir s
 func SelectChangedPackages(ctx context.Context, gitBinary, goBinary, repoDir, base string, moduleDirs []string) (ChangedPackageSelection, error) {
 	repoRoot, err := filepath.Abs(repoDir)
 	if err != nil {
-		return ChangedPackageSelection{}, fmt.Errorf("%w: resolve repository directory %q: %v", ErrChangedPackageSelection, repoDir, err)
+		return ChangedPackageSelection{}, fmt.Errorf("%w: resolve repository directory %q: %w", ErrChangedPackageSelection, repoDir, err)
 	}
 	info, err := os.Stat(repoRoot)
 	if err != nil {
-		return ChangedPackageSelection{}, fmt.Errorf("%w: inspect repository directory %q: %v", ErrChangedPackageSelection, repoDir, err)
+		return ChangedPackageSelection{}, fmt.Errorf("%w: inspect repository directory %q: %w", ErrChangedPackageSelection, repoDir, err)
 	}
 	if !info.IsDir() {
 		return ChangedPackageSelection{}, fmt.Errorf("%w: repository path %q is not a directory", ErrChangedPackageSelection, repoDir)
@@ -290,7 +290,7 @@ func collectGitChanges(ctx context.Context, gitBinary, repoRoot, base string) ([
 		}
 		parsed, err := parseGitNameStatus(output)
 		if err != nil {
-			return nil, fmt.Errorf("%w: parse git diff output: %v", ErrChangedPackageSelection, err)
+			return nil, fmt.Errorf("%w: parse git diff output: %w", ErrChangedPackageSelection, err)
 		}
 		changes = append(changes, parsed...)
 	}
@@ -362,9 +362,9 @@ func externalCommandError(kind error, commandName string, commandErr error, stdo
 		detail = strings.TrimSpace(stdout)
 	}
 	if detail != "" {
-		return fmt.Errorf("%w: %s in %q failed: %v: %s", kind, commandName, scope, commandErr, detail)
+		return fmt.Errorf("%w: %s in %q failed: %w: %s", kind, commandName, scope, commandErr, detail)
 	}
-	return fmt.Errorf("%w: %s in %q failed: %v", kind, commandName, scope, commandErr)
+	return fmt.Errorf("%w: %s in %q failed: %w", kind, commandName, scope, commandErr)
 }
 
 func repositoryPath(repoRoot, repositoryRelativePath string) (string, error) {

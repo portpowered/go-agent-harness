@@ -59,7 +59,7 @@ func TestOpenInterruptibleInputInheritedPipeSubprocess(t *testing.T) {
 	}
 	defer closeForTest(t, "read", read)
 	defer closeForTest(t, "write", write)
-	cmd := exec.Command(os.Args[0], "-test.run", "^TestOpenInterruptibleInputInheritedPipeSubprocess$")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run", "^TestOpenInterruptibleInputInheritedPipeSubprocess$")
 	cmd.Env = append(os.Environ(), "GO_AGENT_INTERRUPTIBLE_INPUT_CHILD=1")
 	cmd.ExtraFiles = []*os.File{read}
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -70,6 +70,7 @@ func TestOpenInterruptibleInputInheritedPipeSubprocess(t *testing.T) {
 // runInheritedPipeChild runs the child half and returns its exit code, so the
 // deferred closes run before the caller exits the process.
 func runInheritedPipeChild(t *testing.T) int {
+	t.Helper()
 	inherited := os.NewFile(uintptr(3), "inherited-pipe")
 	if inherited == nil {
 		return 2

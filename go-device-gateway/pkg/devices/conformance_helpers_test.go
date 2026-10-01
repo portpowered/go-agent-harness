@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -11,6 +9,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 const processHandleCountSettleTolerance = 1
@@ -84,42 +84,42 @@ func assertSourceFrames(t *testing.T, source audio.AudioSource, samples []int16)
 
 // closeForTest closes a test-owned resource and reports a close failure
 // without aborting the remaining deferred cleanup.
-func closeForTest(t testing.TB, name string, closer io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, name string, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("close %s: %v", name, err)
+		tb.Errorf("close %s: %v", name, err)
 	}
 }
 
 // noErrorForTest fails the test immediately on an unexpected error.
-func noErrorForTest(t testing.TB, err error) {
-	t.Helper()
+func noErrorForTest(tb testing.TB, err error) {
+	tb.Helper()
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 
 // simulatedStreamForTest opens one simulated duplex stream and fails the test
 // when the registry refuses it or returns another handle type.
-func simulatedStreamForTest(t testing.TB, r *SimulatedDuplexRegistry, id DeviceID) *SimulatedDuplexStream {
-	t.Helper()
+func simulatedStreamForTest(tb testing.TB, r *SimulatedDuplexRegistry, id DeviceID) *SimulatedDuplexStream {
+	tb.Helper()
 	opened, err := r.Open(id)
 	if err != nil {
-		t.Fatalf("open simulated %s: %v", id, err)
+		tb.Fatalf("open simulated %s: %v", id, err)
 	}
 	stream, ok := opened.(*SimulatedDuplexStream)
 	if !ok {
-		t.Fatalf("open simulated %s returned %T", id, opened)
+		tb.Fatalf("open simulated %s returned %T", id, opened)
 	}
 	return stream
 }
 
 // virtualStreamForTest narrows a virtual registry handle to its stream type.
-func virtualStreamForTest(t testing.TB, opened OpenedDevice) *VirtualStream {
-	t.Helper()
+func virtualStreamForTest(tb testing.TB, opened OpenedDevice) *VirtualStream {
+	tb.Helper()
 	stream, ok := opened.(*VirtualStream)
 	if !ok {
-		t.Fatalf("virtual registry returned %T", opened)
+		tb.Fatalf("virtual registry returned %T", opened)
 	}
 	return stream
 }

@@ -1,10 +1,10 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"errors"
 	"testing"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestDeviceAdaptersResolveDirectionalDefaultsAndExposeIDs(t *testing.T) {
@@ -152,6 +152,7 @@ func TestDuplexDeviceOpenLifecycleFailuresAndSuccess(t *testing.T) {
 // assertDuplexOpenValidationClosesGraph covers the post-open validation
 // failures that must release both halves of the graph.
 func assertDuplexOpenValidationClosesGraph(t *testing.T, format audio.DeviceFormat, newHandle func(Direction) *adapterFormatHandle) {
+	t.Helper()
 	t.Run("output validation closes graph", func(t *testing.T) {
 		input, output := newHandle(DirectionInput), newHandle(DirectionInput)
 		_, _, err := NewDuplexDeviceSourceSinkWithFormat(&adversarialDuplexRegistry{input: input, output: output}, "input", format, "output", format)
@@ -191,6 +192,7 @@ func assertDuplexOpenValidationClosesGraph(t *testing.T, format audio.DeviceForm
 // assertDuplexOpenTransfersOwnership checks that a validated duplex graph is
 // handed to the returned source and sink with resolved default IDs.
 func assertDuplexOpenTransfersOwnership(t *testing.T, format audio.DeviceFormat, newHandle func(Direction) *adapterFormatHandle) {
+	t.Helper()
 	t.Run("success transfers graph ownership", func(t *testing.T) {
 		input, output := newHandle(DirectionInput), newHandle(DirectionOutput)
 		source, sink, err := NewDuplexDeviceSourceSinkWithFormat(&adversarialDuplexRegistry{input: input, output: output}, "", format, "", format)

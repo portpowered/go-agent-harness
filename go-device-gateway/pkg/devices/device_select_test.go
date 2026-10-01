@@ -92,7 +92,7 @@ func TestSelectionValidationAndAcquisition(t *testing.T) {
 			require.ErrorIs(t, err, tc.want)
 			o := r.observations()
 			require.Equal(t, 0, o.ListCalls+o.DefaultCalls+o.OpenCount)
-			if tc.want == devicegw.ErrDeviceSelectionConflict {
+			if errors.Is(tc.want, devicegw.ErrDeviceSelectionConflict) {
 				require.Contains(t, err.Error(), "--audio-in")
 				require.Contains(t, err.Error(), "--audio-in-device")
 			}
@@ -137,6 +137,7 @@ func TestHandleDeviceLossPolicies(t *testing.T) {
 }
 
 func runDeviceLossCase(t *testing.T, tc deviceLossCase) {
+	t.Helper()
 	r := newSelectionRegistry(t)
 	selection, err := devicegw.OpenDeviceSelection(r, devicegw.DeviceSelectionRequest{})
 	require.NoError(t, err)

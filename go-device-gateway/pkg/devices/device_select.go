@@ -124,7 +124,7 @@ func HandleDeviceLoss(registry DeviceRegistry, lost Device, policy DeviceLossPol
 	if err != nil {
 		return result, err
 	}
-	if err = validateSelectedDevice(lost, lost.Direction); err != nil {
+	if err := validateSelectedDevice(lost, lost.Direction); err != nil {
 		return result, err
 	}
 	switch policy {
@@ -138,7 +138,7 @@ func HandleDeviceLoss(registry DeviceRegistry, lost Device, policy DeviceLossPol
 		if err != nil {
 			return result, err
 		}
-		if err = validateSelectedDevice(replacement, lost.Direction); err != nil {
+		if err := validateSelectedDevice(replacement, lost.Direction); err != nil {
 			return result, err
 		}
 		if replacement.ID == lost.ID {

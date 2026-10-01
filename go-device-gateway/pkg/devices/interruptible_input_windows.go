@@ -3,6 +3,7 @@
 package devices
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -31,7 +32,7 @@ func openInterruptibleInput(file *os.File) (*os.File, error) {
 		2, // DUPLICATE_SAME_ACCESS
 	)
 	if result == 0 {
-		if callErr == syscall.Errno(0) {
+		if errors.Is(callErr, syscall.Errno(0)) {
 			callErr = syscall.EINVAL
 		}
 		return nil, fmt.Errorf("duplicate input %q: %w", file.Name(), callErr)

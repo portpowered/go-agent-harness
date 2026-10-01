@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -11,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 type deviceServerStubRegistry struct {
@@ -274,6 +274,7 @@ func marshalForTest(t *testing.T, value any) []byte {
 
 // writeJSONForTest writes a fixture response from an HTTP handler goroutine.
 func writeJSONForTest(t *testing.T, w http.ResponseWriter, value any) {
+	t.Helper()
 	if raw, ok := value.(json.RawMessage); ok {
 		if _, err := w.Write(raw); err != nil {
 			t.Errorf("write fixture body: %v", err)

@@ -314,8 +314,8 @@ func samplesToDuration(samples, sampleRate int) time.Duration {
 
 func isFinite(value float64) bool { return analysisstream.PCM16IsFinite(value) }
 
-func analysisFailure(property, streamID, participantID string) PropertyFailure {
-	return PropertyFailure{
+func analysisFailure(property, streamID, participantID string) PropertyError {
+	return PropertyError{
 		Property:      property,
 		StreamID:      streamID,
 		ParticipantID: participantID,

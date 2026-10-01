@@ -10,10 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"sync"
+
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	"sync"
 )
 
 // Replay validates the complete evidence before exposing any frame. Stepping
@@ -115,7 +116,7 @@ func readReplayTimeline(directory string, timeline io.Reader) (*Replay, error) {
 		}
 	}
 	if err := scan.Err(); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrIncomplete, err)
+		return nil, fmt.Errorf("%w: %w", ErrIncomplete, err)
 	}
 	return builder.finish()
 }

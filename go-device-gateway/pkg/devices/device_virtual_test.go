@@ -1,7 +1,5 @@
 package devices_test
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
@@ -9,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/stretchr/testify/require"
@@ -449,6 +449,7 @@ func runS8(start <-chan struct{}, done chan<- struct{}, n int, fn func(int)) {
 	}()
 }
 func pendingReadCloses(t *testing.T, in *devicegw.VirtualStream) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	ready, result := make(chan struct{}, 1), make(chan error, 1)

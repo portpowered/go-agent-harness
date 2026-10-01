@@ -66,10 +66,10 @@ func (provider *embeddedLiveProvider) Close() error {
 	return provider.closeErr
 }
 
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("close test resource: %v", err)
+		tb.Errorf("close test resource: %v", err)
 	}
 }
 

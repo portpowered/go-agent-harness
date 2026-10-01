@@ -39,7 +39,7 @@ func makePCM16Frame(samples []int16, start, end, index, sampleRate, frameSamples
 	return frame
 }
 
-func analyzeSilentRuns(samples []int16, frames []PCM16Frame, annotations []normalizedSpeechAnnotation, sampleRate int, config PCM16AnalysisConfig, streamID, participantID string, failures *[]PropertyFailure) []SilentRun {
+func analyzeSilentRuns(samples []int16, frames []PCM16Frame, annotations []normalizedSpeechAnnotation, sampleRate int, config PCM16AnalysisConfig, streamID, participantID string, failures *[]PropertyError) []SilentRun {
 	runs := make([]SilentRun, 0)
 	for frameIndex := 0; frameIndex < len(frames); {
 		if frames[frameIndex].RMSDBFS > config.SilenceFloorDBFS {

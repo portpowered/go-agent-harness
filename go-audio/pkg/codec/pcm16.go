@@ -176,7 +176,7 @@ func DecodeLegacyBase64WithLimit(encoded string, maxBytes int) ([]byte, error) {
 		}
 		lastErr = err
 	}
-	return nil, fmt.Errorf("%w: %v", ErrInvalidBase64, lastErr)
+	return nil, fmt.Errorf("%w: %w", ErrInvalidBase64, lastErr)
 }
 
 // DecodeBase64WithLimit is DecodeBase64 with an explicit decoded-byte bound.
@@ -194,7 +194,7 @@ func DecodeBase64WithLimit(encoded string, maxBytes int) ([]byte, error) {
 	}
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidBase64, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidBase64, err)
 	}
 	if len(decoded) > maxBytes {
 		return nil, fmt.Errorf("%w: %d bytes exceeds %d", ErrPayloadTooLarge, len(decoded), maxBytes)

@@ -1,7 +1,5 @@
 package devices_test
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"bytes"
 	"context"
@@ -14,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -264,7 +264,7 @@ func TestRemoteDeviceServerRejectsAmbiguousAndOversizedRequests(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := http.NewRequest(test.method, httpServer.URL+test.path, bytes.NewReader(test.body))
+			request, err := http.NewRequestWithContext(t.Context(), test.method, httpServer.URL+test.path, bytes.NewReader(test.body))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -306,7 +306,12 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		response, err := http.Post(base+"/open", "application/json", bytes.NewReader(body))
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/open", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -349,7 +354,7 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := http.NewRequest(test.method, base+test.path, bytes.NewReader(test.body))
+			request, err := http.NewRequestWithContext(t.Context(), test.method, base+test.path, bytes.NewReader(test.body))
 			if err != nil {
 				t.Fatal(err)
 			}

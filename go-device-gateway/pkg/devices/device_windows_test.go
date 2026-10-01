@@ -2,8 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bytes"
 	"context"
@@ -15,6 +13,7 @@ import (
 	"testing"
 	"unsafe"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -32,11 +31,11 @@ func TestWASAPIOpenErrorMappingPreservesTypedIdentities(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			id := DeviceID("wasapi:test")
-			err := mapWASAPIOpenError(id, "open endpoint", wasapiHRESULTWithCode{hr: testCase.hr, err: wasapiHRESULT(testCase.hr)})
+			err := mapWASAPIOpenError(id, "open endpoint", wasapiCodedError{hr: testCase.hr, err: wasapiHRESULTError(testCase.hr)})
 			if !errors.Is(err, testCase.want) || !testCase.as(err) {
 				t.Fatalf("error=%v, want typed %v", err, testCase.want)
 			}
-			if !strings.Contains(err.Error(), string(id)) && testCase.want == ErrDeviceInUse {
+			if !strings.Contains(err.Error(), string(id)) && errors.Is(testCase.want, ErrDeviceInUse) {
 				t.Fatalf("error=%q does not name device %q", err, id)
 			}
 		})

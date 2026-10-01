@@ -114,6 +114,7 @@ func openAIInputRate() int {
 }
 
 func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
+	t.Helper()
 	started := time.Now()
 	conn, err := endpoint.connect(ctx, sessionSettings{
 		modalities:   []string{"audio"},
@@ -155,6 +156,7 @@ func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfi
 const contextFact = "cobalt-17"
 
 func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
+	t.Helper()
 	started := time.Now()
 	instructions := "You are a strict conformance subject. If a fact is absent from this conversation, say UNKNOWN and never guess. Keep replies short."
 	conn, err := endpoint.connect(ctx, sessionSettings{modalities: []string{"text"}, instructions: instructions})
@@ -206,6 +208,7 @@ func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointCon
 }
 
 func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
+	t.Helper()
 	started := time.Now()
 	conn, err := endpoint.connect(ctx, sessionSettings{
 		modalities:   []string{"audio"},
@@ -360,6 +363,7 @@ var lookupWeatherTool = toolDefinition{
 const functionCallPrompt = "Use the lookup_weather tool exactly once for Seattle. Do not answer in text before choosing the tool."
 
 func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
+	t.Helper()
 	started := time.Now()
 	conn, err := endpoint.connect(ctx, sessionSettings{
 		modalities:   []string{"text"},
@@ -404,6 +408,7 @@ func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig)
 const imageFact = "ORBIT"
 
 func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
+	t.Helper()
 	started := time.Now()
 	imageURI, err := fixtureImageDataURI()
 	if err != nil {

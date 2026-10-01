@@ -15,7 +15,7 @@ import (
 // own changed Go files. The temporary profiles are removed before returning;
 // the repository's full coverage target remains responsible for full-suite
 // profiles.
-func runChangedCoverage(manifestPath, gitBinary, goBinary, repoDir, base, testTimeout string, moduleDirs []string, stdout, stderr io.Writer) error {
+func runChangedCoverage(ctx context.Context, manifestPath, gitBinary, goBinary, repoDir, base, testTimeout string, moduleDirs []string, stdout, stderr io.Writer) error {
 	if manifestPath == "" {
 		return fmt.Errorf("%w: changed coverage requires --manifest", ErrChangedPackageCoverage)
 	}
@@ -33,13 +33,13 @@ func runChangedCoverage(manifestPath, gitBinary, goBinary, repoDir, base, testTi
 	if err != nil {
 		return err
 	}
-	selection, err := SelectChangedPackages(context.Background(), gitBinary, goBinary, repoDir, base, moduleDirs)
+	selection, err := SelectChangedPackages(ctx, gitBinary, goBinary, repoDir, base, moduleDirs)
 	if err != nil {
 		return err
 	}
 	report := &progressReport{writer: stdout}
 	run := coverageRun{goBinary: goBinary, base: base, testTimeout: testTimeout, stdout: stdout, stderr: stderr}
-	if err := coverSelection(manifest, selection, run, report); err != nil {
+	if err := coverSelection(ctx, manifest, selection, run, report); err != nil {
 		return err
 	}
 	return report.err
@@ -66,7 +66,7 @@ type coverageRun struct {
 	stdout, stderr              io.Writer
 }
 
-func coverSelection(manifest Manifest, selection ChangedPackageSelection, run coverageRun, report *progressReport) error {
+func coverSelection(ctx context.Context, manifest Manifest, selection ChangedPackageSelection, run coverageRun, report *progressReport) error {
 	if len(selection.UnownedGoFiles) > 0 {
 		report.printf("changed coverage ignored Go files without a current workspace package:\n")
 		for _, path := range selection.UnownedGoFiles {
@@ -87,7 +87,7 @@ func coverSelection(manifest Manifest, selection ChangedPackageSelection, run co
 		return nil
 	}
 
-	measurements, profileCount, err := measureChangedModules(byModule, run, report)
+	measurements, profileCount, err := measureChangedModules(ctx, byModule, run, report)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func partitionChangedPackages(manifest Manifest, selected []WorkspacePackage, re
 
 // measureChangedModules runs one coverage profile per module in a temporary
 // directory and removes that directory before returning.
-func measureChangedModules(byModule map[string][]WorkspacePackage, run coverageRun, report *progressReport) (measurements map[string]Coverage, profileCount int, returnErr error) {
+func measureChangedModules(ctx context.Context, byModule map[string][]WorkspacePackage, run coverageRun, report *progressReport) (measurements map[string]Coverage, profileCount int, returnErr error) {
 	profileDirectory, err := os.MkdirTemp("", "coveragegate-changed-")
 	if err != nil {
 		return nil, 0, fmt.Errorf("%w: create temporary coverage directory: %w", ErrChangedPackageCoverage, err)
@@ -149,7 +149,7 @@ func measureChangedModules(byModule map[string][]WorkspacePackage, run coverageR
 	profilePaths := make([]string, 0, len(modulePaths))
 	for index, modulePath := range modulePaths {
 		profilePath := filepath.Join(profileDirectory, fmt.Sprintf("module-%d.out", index))
-		if err := runModuleCoverage(modulePath, byModule[modulePath], profilePath, run, report); err != nil {
+		if err := runModuleCoverage(ctx, modulePath, byModule[modulePath], profilePath, run, report); err != nil {
 			return nil, 0, err
 		}
 		profilePaths = append(profilePaths, profilePath)
@@ -161,7 +161,7 @@ func measureChangedModules(byModule map[string][]WorkspacePackage, run coverageR
 	return measurements, len(profilePaths), nil
 }
 
-func runModuleCoverage(modulePath string, packages []WorkspacePackage, profilePath string, run coverageRun, report *progressReport) error {
+func runModuleCoverage(ctx context.Context, modulePath string, packages []WorkspacePackage, profilePath string, run coverageRun, report *progressReport) error {
 	sort.Slice(packages, func(i, j int) bool {
 		return packages[i].ImportPath < packages[j].ImportPath
 	})
@@ -174,7 +174,7 @@ func runModuleCoverage(modulePath string, packages []WorkspacePackage, profilePa
 		arguments = append(arguments, packageArgument)
 	}
 	report.printf("changed coverage testing %d package(s) in %s\n", len(packages), modulePath)
-	command := exec.Command(run.goBinary, arguments...)
+	command := exec.CommandContext(ctx, run.goBinary, arguments...)
 	command.Dir = modulePath
 	workspaceFile := nearestWorkspaceFile(modulePath)
 	if workspaceFile == "" {

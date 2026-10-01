@@ -2,13 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
-/*
-#include <stdlib.h>
-*/
-import "C"
-
 import (
 	"context"
 	"errors"
@@ -20,7 +13,13 @@ import (
 	"sync/atomic"
 
 	"github.com/gen2brain/malgo"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
+
+/*
+#include <stdlib.h>
+*/
+import "C"
 
 const coreAudioBackend = "coreaudio"
 
@@ -130,7 +129,7 @@ func (r *CoreAudioDeviceRegistry) OpenDuplexWithFormat(inputID DeviceID, inputFo
 	}
 	inputHandle, outputHandle, err := newVoiceProcessingIO(inputID, outputID, inputFormat, outputFormat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrDuplexDeviceUnavailable, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrDuplexDeviceUnavailable, err)
 	}
 	return inputHandle, outputHandle, nil
 }

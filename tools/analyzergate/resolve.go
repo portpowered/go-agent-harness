@@ -304,7 +304,7 @@ func probeVersion(ctx context.Context, path string, cfg config) (string, error) 
 	command.Stdout = &output
 	command.Stderr = &output
 	if err := command.Run(); err != nil {
-		return "", fmt.Errorf("command exited with %v: %s", err, compactOutput(output.String()))
+		return "", fmt.Errorf("command exited with %w: %s", err, compactOutput(output.String()))
 	}
 	version, err := reportedVersion(output.String())
 	if err != nil {

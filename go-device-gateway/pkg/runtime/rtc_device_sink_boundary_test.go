@@ -171,6 +171,7 @@ func TestC21ConsumptionBoundary(t *testing.T) {
 }
 
 func testC21ConsumptionBoundaryResponses(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 16000, 5)
 	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(64)
@@ -215,6 +216,7 @@ func testC21ConsumptionBoundaryResponses(t *testing.T) {
 }
 
 func testC21ConsumptionBoundaryHoldTone(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 16000, 5)
 	sub, err := sink.SubscribePlaybackObservations(16)
 	if err != nil {
@@ -276,6 +278,7 @@ func TestC21ConsumptionInterruptionAtIncompleteSpanBoundary(t *testing.T) {
 }
 
 func testC21ConsumptionInterruption(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 24000, 2000)
 	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(32)
@@ -317,6 +320,7 @@ func testC21ConsumptionInterruption(t *testing.T) {
 }
 
 func testC21ConsumptionRate(t *testing.T) {
+	t.Helper()
 	registry, sink := newC21SimulatedSink(t, 16000, 320)
 	defer closeC21Sink(t, sink)
 	sub, err := sink.SubscribePlaybackObservations(16)

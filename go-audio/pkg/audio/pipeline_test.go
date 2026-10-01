@@ -2,6 +2,7 @@ package audio_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestPipeline_EOFWithNoSpeech(t *testing.T) {
 	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
 
 	_, err := pipeline.ReadUtterance(context.Background())
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Fatalf("expected io.EOF for empty speech source, got: %v", err)
 	}
 }

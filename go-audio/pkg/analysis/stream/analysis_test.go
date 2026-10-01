@@ -130,6 +130,7 @@ func TestAnalyzePCM16SyntheticDefects(t *testing.T) {
 }
 
 func runSyntheticDefectCase(t *testing.T, test syntheticDefectCase) {
+	t.Helper()
 	input := cleanAnalysisInput()
 	if test.mutate != nil {
 		test.mutate(&input)
@@ -143,7 +144,7 @@ func runSyntheticDefectCase(t *testing.T, test syntheticDefectCase) {
 	assertSyntheticDefectDetails(t, test.name, result)
 }
 
-func failureProperties(failures []stream.PropertyFailure) map[string]bool {
+func failureProperties(failures []stream.PropertyError) map[string]bool {
 	properties := make(map[string]bool, len(failures))
 	for _, failure := range failures {
 		properties[failure.Property] = true
@@ -151,7 +152,7 @@ func failureProperties(failures []stream.PropertyFailure) map[string]bool {
 	return properties
 }
 
-func assertExpectedProperties(t *testing.T, properties map[string]bool, failures []stream.PropertyFailure, want, wantAbsent []string) {
+func assertExpectedProperties(t *testing.T, properties map[string]bool, failures []stream.PropertyError, want, wantAbsent []string) {
 	t.Helper()
 	for _, property := range want {
 		if !properties[property] {
@@ -282,7 +283,7 @@ func TestPCM16AnalysisErrorTypesHandleNilAndEmptyState(t *testing.T) {
 	if got, want := emptyAssertionErr.Error(), stream.ErrPCM16AnalysisFailed.Error(); got != want {
 		t.Errorf("empty-failures *PCM16AssertionError.Error() = %q, want %q", got, want)
 	}
-	populatedAssertionErr := &stream.PCM16AssertionError{StreamID: "s", Failures: []stream.PropertyFailure{{Property: clippingProperty}}}
+	populatedAssertionErr := &stream.PCM16AssertionError{StreamID: "s", Failures: []stream.PropertyError{{Property: clippingProperty}}}
 	if failures := populatedAssertionErr.FailuresCopy(); len(failures) != 1 || failures[0].Property != clippingProperty {
 		t.Errorf("populated *PCM16AssertionError.FailuresCopy() = %v, want one clipping failure", failures)
 	}

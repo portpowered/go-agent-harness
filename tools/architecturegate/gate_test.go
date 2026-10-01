@@ -565,7 +565,7 @@ func sourceFixtureAt(t *testing.T, name, content string, test bool) *SourceFile 
 
 func gitTestCommand(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	command := exec.Command("git", args...)
+	command := exec.CommandContext(t.Context(), "git", args...)
 	command.Dir = dir
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)

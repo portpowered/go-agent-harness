@@ -89,14 +89,14 @@ func (e *RouteEngine) Run(ctx context.Context) (runErr error) {
 	for {
 		frame, err := e.input.Receive(ctx)
 		if err != nil {
-			if err == io.EOF && !ended {
+			if errors.Is(err, io.EOF) && !ended {
 				last.Samples = nil
 				last.EndOfResponse = true
 				if flushErr := e.process(ctx, last); flushErr != nil && !errors.Is(flushErr, ErrStaleEpoch) {
 					return flushErr
 				}
 			}
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err

@@ -79,7 +79,7 @@ func (p FrameProducer) Submit(ctx context.Context, frame PCMFrame) error {
 		}
 		p.q.mu.Lock()
 		err := p.q.canSubmitLocked(frame)
-		if err != ErrBufferFull {
+		if !errors.Is(err, ErrBufferFull) {
 			if err == nil {
 				err = p.q.submitLocked(frame)
 			} else {

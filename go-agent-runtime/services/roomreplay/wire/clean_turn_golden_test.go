@@ -203,13 +203,13 @@ func cleanStream(input *roomanalysis.PCM16RoomInput, streamID string) *roomanaly
 	panic(fmt.Sprintf("stream %q is not in clean fixture", streamID))
 }
 
-func firstFailure(failures []roomanalysis.PropertyFailure, property, streamID string) (roomanalysis.PropertyFailure, bool) {
+func firstFailure(failures []roomanalysis.PropertyError, property, streamID string) (roomanalysis.PropertyError, bool) {
 	for _, failure := range failures {
 		if failure.Property == property && failure.StreamID == streamID {
 			return failure, true
 		}
 	}
-	return roomanalysis.PropertyFailure{}, false
+	return roomanalysis.PropertyError{}, false
 }
 
 func hasGoldenNonZeroSamples(samples []int16) bool {
@@ -229,7 +229,7 @@ func assertCleanSelfHearing(source, received roomanalysis.PCM16TimedStream, inte
 	if measurement.BestAbsoluteCorrelation < config.MaxSelfCorrelation {
 		return nil
 	}
-	return roomanalysis.PropertyFailure{
+	return roomanalysis.PropertyError{
 		Property:         "self-hearing",
 		StreamID:         measurement.ReceivedStreamID,
 		ParticipantID:    measurement.ReceivedParticipantID,

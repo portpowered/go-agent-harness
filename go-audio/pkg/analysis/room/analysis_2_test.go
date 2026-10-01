@@ -298,7 +298,7 @@ func TestPCM16RoomLoudnessBarExpressesTightThreeDBBound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AnalyzePCM16Room() error = %v", err)
 	}
-	var failure roomanalysis.PropertyFailure
+	var failure roomanalysis.PropertyError
 	var ok bool
 	for _, candidate := range result.Failures {
 		if candidate.Property == "inter-speaker-loudness" && candidate.StreamID == "b-sent" {

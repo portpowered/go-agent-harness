@@ -274,7 +274,7 @@ func TestOpusLifecycleAndOperationErrors(t *testing.T) {
 		t.Fatalf("wrapped error = %v, want cause and ErrOpusEncode", wrapped)
 	}
 	var operationErr *OpusOperationError
-	if !errors.As(wrapped, &operationErr) || operationErr.Unwrap() != cause {
+	if !errors.As(wrapped, &operationErr) || !errors.Is(operationErr.Unwrap(), cause) {
 		t.Fatalf("wrapped error type/unwrap = %#v, want OpusOperationError with cause", operationErr)
 	}
 	if wrapOpus("test", ErrOpusEncode, nil) != nil {
@@ -348,9 +348,9 @@ func int16Bytes(samples []int16) []byte {
 }
 
 // closeForTest closes a test-owned resource and reports an unexpected failure.
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("Close() error = %v", err)
+		tb.Errorf("Close() error = %v", err)
 	}
 }

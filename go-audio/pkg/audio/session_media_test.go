@@ -452,10 +452,10 @@ func TestSessionMediaInboundBacklogLimitFailsInsteadOfDroppingPCM(t *testing.T) 
 }
 
 // closeForTest closes a test-owned resource and reports an unexpected failure.
-func closeForTest(t testing.TB, closer io.Closer) {
-	t.Helper()
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil {
-		t.Errorf("Close() error = %v", err)
+		tb.Errorf("Close() error = %v", err)
 	}
 }
 

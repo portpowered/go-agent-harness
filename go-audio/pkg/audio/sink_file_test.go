@@ -472,6 +472,7 @@ func TestFileSinkBoundedRawLiteralTailsAndChunks(t *testing.T) {
 	}
 }
 func assertBoundedRawBytes(t *testing.T, samples []int16) {
+	t.Helper()
 	writer := &bytes.Buffer{}
 	sink, err := NewFileSink("-", writer)
 	if err != nil {

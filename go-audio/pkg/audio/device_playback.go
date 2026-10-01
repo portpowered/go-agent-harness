@@ -123,7 +123,7 @@ func NewPlaybackQueueWithLatency(format DeviceFormat, latency time.Duration) (*P
 // legacy audio.FrameSize constant.
 func PlaybackQueueCapacity(format DeviceFormat, latency time.Duration) (int, error) {
 	if err := format.Validate(); err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrInvalidPlaybackQueue, err)
+		return 0, fmt.Errorf("%w: %w", ErrInvalidPlaybackQueue, err)
 	}
 	if latency <= 0 {
 		return 0, fmt.Errorf("%w: latency target must be positive; got %s", ErrInvalidPlaybackQueue, latency)

@@ -551,7 +551,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var endpointPtr unsafe.Pointer
 	hresult, callErr := enumerator.call(5, uintptr(unsafe.Pointer(nativeIDPtr)), uintptr(unsafe.Pointer(&endpointPtr)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "get endpoint"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "get endpoint"}
 	}
 	endpoint := wasapiCOM{ptr: endpointPtr}
 	defer endpoint.release()
@@ -560,7 +560,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var clientPtr unsafe.Pointer
 	hresult, callErr = endpoint.call(immDeviceVTableActivate, uintptr(unsafe.Pointer(&iid)), clsctxAll, 0, uintptr(unsafe.Pointer(&clientPtr)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "activate audio client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "activate audio client"}
 	}
 	client := wasapiCOM{ptr: clientPtr}
 	defer func() {
@@ -572,7 +572,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var mixFormat unsafe.Pointer
 	hresult, callErr = client.call(audioClientVTableGetMixFormat, uintptr(unsafe.Pointer(&mixFormat)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "get mix format"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "get mix format"}
 	}
 	if mixFormat == nil {
 		return openedWASAPIEndpoint{}, fmt.Errorf("WASAPI returned an empty mix format")
@@ -582,7 +582,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 
 	hresult, callErr = client.call(audioClientVTableInitialize, shareModeShared, 0, 0, 0, uintptr(mixFormat), 0)
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "initialize audio client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "initialize audio client"}
 	}
 
 	serviceIID := wasapiIIDAudioRenderClient
@@ -592,7 +592,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	var servicePtr unsafe.Pointer
 	hresult, callErr = client.call(audioClientVTableGetService, uintptr(unsafe.Pointer(&serviceIID)), uintptr(unsafe.Pointer(&servicePtr)))
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "get audio data client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "get audio data client"}
 	}
 	service := wasapiCOM{ptr: servicePtr}
 	defer func() {
@@ -603,7 +603,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 
 	hresult, callErr = client.call(audioClientVTableStart)
 	if callErr != nil {
-		return openedWASAPIEndpoint{}, wasapiHRESULTWithCode{hr: hresult, err: callErr, operation: "start audio client"}
+		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "start audio client"}
 	}
 	opened := openedWASAPIEndpoint{client: client, service: service, format: format, formatErr: formatErr}
 	client.ptr = nil
@@ -612,7 +612,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 }
 
 func mapWASAPIOpenError(id DeviceID, operation string, err error) error {
-	var coded wasapiHRESULTWithCode
+	var coded wasapiCodedError
 	if !errors.As(err, &coded) {
 		return fmt.Errorf("WASAPI %s %q: %w", operation, id, err)
 	}
@@ -629,18 +629,18 @@ func mapWASAPIOpenError(id DeviceID, operation string, err error) error {
 	}
 }
 
-type wasapiHRESULTWithCode struct {
+type wasapiCodedError struct {
 	hr        uint32
 	err       error
 	operation string
 }
 
-func (e wasapiHRESULTWithCode) Error() string { return e.err.Error() }
-func (e wasapiHRESULTWithCode) Unwrap() error { return e.err }
+func (e wasapiCodedError) Error() string { return e.err.Error() }
+func (e wasapiCodedError) Unwrap() error { return e.err }
 
 // wasapiErrorCode returns the HRESULT carried by a WASAPI call error, or zero.
 func wasapiErrorCode(err error) uint32 {
-	if coded, ok := err.(wasapiHRESULTWithCode); ok {
+	if coded, ok := errors.AsType[wasapiCodedError](err); ok {
 		return coded.hr
 	}
 	return 0
@@ -677,7 +677,7 @@ func enumerateEndpoints(enumerator wasapiCOM, flow uint32) (wasapiCOM, error) {
 	var collectionPtr unsafe.Pointer
 	hresult, err := enumerator.call(immDeviceEnumeratorVTable, uintptr(flow), deviceStateActive, uintptr(unsafe.Pointer(&collectionPtr)))
 	if err != nil {
-		return wasapiCOM{}, wasapiHRESULTWithCode{hr: hresult, err: err}
+		return wasapiCOM{}, wasapiCodedError{hr: hresult, err: err}
 	}
 	return wasapiCOM{ptr: collectionPtr}, nil
 }
@@ -686,7 +686,7 @@ func (c wasapiCOM) count() (uint32, error) {
 	var count uint32
 	hresult, err := c.call(immDeviceCollectionVTable, uintptr(unsafe.Pointer(&count)))
 	if err != nil {
-		return 0, wasapiHRESULTWithCode{hr: hresult, err: err}
+		return 0, wasapiCodedError{hr: hresult, err: err}
 	}
 	return count, nil
 }
@@ -695,7 +695,7 @@ func (c wasapiCOM) item(index uint32) (wasapiCOM, error) {
 	var endpointPtr unsafe.Pointer
 	hresult, err := c.call(immDeviceCollectionVTable+1, uintptr(index), uintptr(unsafe.Pointer(&endpointPtr)))
 	if err != nil {
-		return wasapiCOM{}, wasapiHRESULTWithCode{hr: hresult, err: err}
+		return wasapiCOM{}, wasapiCodedError{hr: hresult, err: err}
 	}
 	return wasapiCOM{ptr: endpointPtr}, nil
 }
@@ -882,7 +882,7 @@ type wasapiCOM struct{ ptr unsafe.Pointer }
 
 func (c wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
 	if c.ptr == nil {
-		return 0x80004003, wasapiHRESULT(0x80004003)
+		return 0x80004003, wasapiHRESULTError(0x80004003)
 	}
 	method := c.vtableMethod(index)
 	callArgs := make([]uintptr, 1, len(args)+1)
@@ -891,7 +891,7 @@ func (c wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
 	r1, _, _ := syscall.SyscallN(method, callArgs...)
 	hresult := uint32(r1)
 	if int32(hresult) < 0 {
-		return hresult, wasapiHRESULT(hresult)
+		return hresult, wasapiHRESULTError(hresult)
 	}
 	return hresult, nil
 }
@@ -910,9 +910,9 @@ func (c *wasapiCOM) release() {
 	c.ptr = nil
 }
 
-type wasapiHRESULT uint32
+type wasapiHRESULTError uint32
 
-func (e wasapiHRESULT) Error() string {
+func (e wasapiHRESULTError) Error() string {
 	return fmt.Sprintf("WASAPI call failed with HRESULT 0x%08x", uint32(e))
 }
 
@@ -926,7 +926,7 @@ func initializeCOM() (func(), error) {
 	hresult := uint32(r1)
 	if int32(hresult) < 0 {
 		runtime.UnlockOSThread()
-		return nil, wasapiHRESULT(hresult)
+		return nil, wasapiHRESULTError(hresult)
 	}
 	return func() {
 		_, _, _ = wasapiCoUninitialize.Call()
@@ -952,7 +952,7 @@ func newWASAPIEnumerator() (wasapiCOM, func(), error) {
 		if enumeratorPtr == nil && int32(uint32(hresult)) >= 0 {
 			return wasapiCOM{}, nil, fmt.Errorf("WASAPI returned an empty device enumerator")
 		}
-		return wasapiCOM{}, nil, wasapiHRESULT(uint32(hresult))
+		return wasapiCOM{}, nil, wasapiHRESULTError(uint32(hresult))
 	}
 	return wasapiCOM{ptr: enumeratorPtr}, cleanup, nil
 }

@@ -205,7 +205,7 @@ func runRoomSyntheticDefectCase(t *testing.T, test roomSyntheticDefectCase) {
 	}
 }
 
-func roomFailureProperties(t *testing.T, failures []roomanalysis.PropertyFailure) map[string]bool {
+func roomFailureProperties(t *testing.T, failures []roomanalysis.PropertyError) map[string]bool {
 	t.Helper()
 	properties := make(map[string]bool, len(failures))
 	for _, failure := range failures {

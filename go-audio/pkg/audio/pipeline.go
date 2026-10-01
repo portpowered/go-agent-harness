@@ -2,6 +2,7 @@ package audio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -55,7 +56,7 @@ func (p *Pipeline) ReadUtterance(ctx context.Context) ([]int16, error) {
 
 	for {
 		if err := p.source.ReadFrame(ctx, buf); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				if len(accumulated) > 0 {
 					// Return whatever speech was buffered before the stream ended.
 					return accumulated, nil

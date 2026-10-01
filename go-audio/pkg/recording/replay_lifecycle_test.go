@@ -46,6 +46,7 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 		{
 			name: "early close runtime later close",
 			build: func(t *testing.T) string {
+				t.Helper()
 				directory := newRecordingFixture(t)
 				events := decodeTimelineEvents(t, directory)
 				terminal := events[len(events)-1]
@@ -59,6 +60,7 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 		{
 			name: "audio after early close",
 			build: func(t *testing.T) string {
+				t.Helper()
 				directory := newRecordingFixture(t)
 				events := decodeTimelineEvents(t, directory)
 				terminal := events[len(events)-1]
@@ -70,6 +72,7 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 		{
 			name: "duplicate start",
 			build: func(t *testing.T) string {
+				t.Helper()
 				directory := newRecordingFixture(t)
 				events := decodeTimelineEvents(t, directory)
 				writeTimelineEvents(t, directory, append([]Event{events[0], events[0]}, events[1:]...))
@@ -79,6 +82,7 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 		{
 			name: "duplicate close",
 			build: func(t *testing.T) string {
+				t.Helper()
 				directory := t.TempDir()
 				base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 				closeEvent := Event{Kind: replayEventClosed, ElapsedNS: int64(time.Millisecond), Timestamp: base.Add(time.Millisecond).Format(time.RFC3339Nano), Clean: true}
@@ -93,6 +97,7 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 		{
 			name: "nonleading start after runtime",
 			build: func(t *testing.T) string {
+				t.Helper()
 				directory := t.TempDir()
 				base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 				writeTimelineEvents(t, directory, []Event{
@@ -107,6 +112,7 @@ func TestReplayLifecycleRejectsMalformedSessionBeforeExposure(t *testing.T) {
 		{
 			name: "missing leading start",
 			build: func(t *testing.T) string {
+				t.Helper()
 				directory := t.TempDir()
 				base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 				writeTimelineEvents(t, directory, []Event{

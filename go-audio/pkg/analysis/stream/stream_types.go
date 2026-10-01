@@ -207,10 +207,10 @@ type EdgeMeasurement struct {
 	FinalRMSDBFS     float64
 }
 
-// PropertyFailure is a structured, user-actionable property failure. Indexes
+// PropertyError is a structured, user-actionable property failure. Indexes
 // use -1 when a particular coordinate is not applicable. Measured and Bound
 // use Unit to make numeric diagnostics unambiguous.
-type PropertyFailure struct {
+type PropertyError struct {
 	Property         string
 	StreamID         string
 	ParticipantID    string
@@ -238,7 +238,7 @@ type PropertyFailure struct {
 
 // Error formats the complete diagnostic while keeping the structured fields
 // available to callers through errors.As.
-func (f PropertyFailure) Error() string {
+func (f PropertyError) Error() string {
 	parts := []string{f.Property}
 	parts = append(parts, f.identityDetails()...)
 	parts = append(parts, f.locationDetails()...)
@@ -246,7 +246,7 @@ func (f PropertyFailure) Error() string {
 	return strings.Join(parts, " ")
 }
 
-func (f PropertyFailure) identityDetails() []string {
+func (f PropertyError) identityDetails() []string {
 	parts := make([]string, 0, propertyFailureDetailCapacity)
 	if f.StreamID != "" {
 		parts = append(parts, fmt.Sprintf("stream=%q", f.StreamID))
@@ -269,7 +269,7 @@ func (f PropertyFailure) identityDetails() []string {
 	return parts
 }
 
-func (f PropertyFailure) locationDetails() []string {
+func (f PropertyError) locationDetails() []string {
 	parts := make([]string, 0, propertyFailureDetailCapacity)
 	if f.StartSample >= 0 && f.EndSample >= 0 {
 		parts = append(parts, fmt.Sprintf("samples=%d..%d", f.StartSample, f.EndSample))
@@ -292,7 +292,7 @@ func (f PropertyFailure) locationDetails() []string {
 	return parts
 }
 
-func (f PropertyFailure) measurementDetails() []string {
+func (f PropertyError) measurementDetails() []string {
 	parts := []string{
 		fmt.Sprintf("timestamp=%s", f.Timestamp),
 		fmt.Sprintf("measured=%s %s", formatAnalysisNumber(f.Measured), f.Unit),
@@ -330,7 +330,7 @@ type PCM16Analysis struct {
 	BoundaryClicks    []BoundaryCheck
 	ImpulseCandidates []BoundaryCheck
 	Edges             EdgeMeasurement
-	Failures          []PropertyFailure
+	Failures          []PropertyError
 }
 
 // Passed reports whether the valid stream satisfied every configured
@@ -338,14 +338,14 @@ type PCM16Analysis struct {
 func (a PCM16Analysis) Passed() bool { return len(a.Failures) == 0 }
 
 // FailuresCopy returns caller-owned failure storage.
-func (a PCM16Analysis) FailuresCopy() []PropertyFailure {
-	return append([]PropertyFailure(nil), a.Failures...)
+func (a PCM16Analysis) FailuresCopy() []PropertyError {
+	return append([]PropertyError(nil), a.Failures...)
 }
 
 // PCM16AssertionError wraps all property failures from one valid stream.
 type PCM16AssertionError struct {
 	StreamID string
-	Failures []PropertyFailure
+	Failures []PropertyError
 }
 
 func (e *PCM16AssertionError) Error() string {
@@ -365,11 +365,11 @@ func (e *PCM16AssertionError) Error() string {
 func (e *PCM16AssertionError) Unwrap() error { return ErrPCM16AnalysisFailed }
 
 // FailuresCopy returns caller-owned failure storage.
-func (e *PCM16AssertionError) FailuresCopy() []PropertyFailure {
+func (e *PCM16AssertionError) FailuresCopy() []PropertyError {
 	if e == nil {
 		return nil
 	}
-	return append([]PropertyFailure(nil), e.Failures...)
+	return append([]PropertyError(nil), e.Failures...)
 }
 
 // InvalidPCM16AnalysisInputError identifies one invalid input or profile

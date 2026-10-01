@@ -1,11 +1,11 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"errors"
 	"strings"
 	"testing"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestDeviceFormatValidationAndErrorDetails(t *testing.T) {
@@ -48,7 +48,7 @@ func TestDeviceFormatValidationAndErrorDetails(t *testing.T) {
 		t.Fatalf("format error = %v, want unsupported and backend causes", formatErr)
 	}
 	withoutCause := &DeviceFormatError{ID: "virtual:output", Direction: DirectionOutput, Requested: valid}
-	if !errors.Is(withoutCause, audio.ErrUnsupportedDeviceFormat) || withoutCause.Unwrap() != audio.ErrUnsupportedDeviceFormat {
+	if !errors.Is(withoutCause, audio.ErrUnsupportedDeviceFormat) || !errors.Is(withoutCause.Unwrap(), audio.ErrUnsupportedDeviceFormat) {
 		t.Fatalf("cause-free format error unwrap = %v, want ErrUnsupportedDeviceFormat", withoutCause.Unwrap())
 	}
 	var nilFormatErr *DeviceFormatError

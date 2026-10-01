@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -9,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -40,7 +39,7 @@ func (e *DeviceAdapterError) Error() string {
 	if e.Err != nil {
 		return fmt.Sprintf("open %s device %q: %v", e.Direction, e.ID, e.Err)
 	}
-	if e.Kind == ErrDeviceDirectionMismatch {
+	if errors.Is(e.Kind, ErrDeviceDirectionMismatch) {
 		return fmt.Sprintf("device %q is %s; want %s", e.ID, e.Got, e.Want)
 	}
 	return fmt.Sprintf("device %q has no %s capability for %s", e.ID, e.Direction, e.Operation)
@@ -96,7 +95,7 @@ func (a *deviceAdapter) finish(operation string, err error) error {
 		if errors.As(err, &lost) && lost.ID == a.id && lost.Direction == a.direction {
 			return err
 		}
-		return fmt.Errorf("%w: %v", &DeviceLostError{ID: a.id, Direction: a.direction}, err)
+		return fmt.Errorf("%w: %w", &DeviceLostError{ID: a.id, Direction: a.direction}, err)
 	}
 	select {
 	case <-a.closed:
