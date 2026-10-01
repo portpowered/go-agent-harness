@@ -27,16 +27,6 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
       "file": "internal/probe/customer_simulation_evidence.go",
-      "symbol": "CustomerEvidenceBundle.Validate",
-      "value": 21,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cognitive-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
-      "file": "internal/probe/customer_simulation_evidence.go",
       "symbol": "VerifyCustomerEvidenceManifest",
       "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
@@ -49,16 +39,6 @@
       "file": "internal/probe/customer_simulation_evidence.go",
       "symbol": "*CustomerEvidenceBundle.Finalize",
       "value": 17,
-      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0"
-    },
-    {
-      "rule": "cyclomatic-complexity",
-      "module": "github.com/portpowered/go-agent-harness/agent-cli",
-      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/probe",
-      "file": "internal/probe/customer_simulation_evidence.go",
-      "symbol": "CustomerEvidenceBundle.Validate",
-      "value": 25,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
