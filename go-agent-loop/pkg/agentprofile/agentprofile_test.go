@@ -87,6 +87,7 @@ func TestCatalogRejectsOrphanDeclaration(t *testing.T) {
 const validOutcome = `{"kind":"no-tools","call_count":0}`
 
 func assertMalformed(t *testing.T, profile agentprofile.Profile, err error) {
+	t.Helper()
 	var malformed *agentprofile.MalformedProfileError
 	if err == nil || !errors.As(err, &malformed) || !errors.Is(err, agentprofile.ErrMalformedProfile) || malformed.Profile != "profile" || strings.TrimSpace(malformed.Reason) == "" || !reflect.DeepEqual(profile, agentprofile.Profile{}) {
 		t.Fatalf("error = %T %v, want typed profile diagnostic", err, err)

@@ -23,6 +23,7 @@ type TestLogger struct {
 // NewTestLogger returns a logger that writes to tb's log. It is safe for use
 // from multiple goroutines while the test runs.
 func NewTestLogger(tb testing.TB) *TestLogger {
+	tb.Helper()
 	return &TestLogger{tb: tb}
 }
 

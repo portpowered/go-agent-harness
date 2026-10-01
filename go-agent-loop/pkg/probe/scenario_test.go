@@ -324,6 +324,7 @@ func TestTypedPayloadAliasesMustAgree(t *testing.T) {
 }
 
 func assertTypedPayloadError(t *testing.T, err error, location string) {
+	t.Helper()
 	assertTypedError(t, err, location, "unexpected payload")
 }
 

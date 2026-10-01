@@ -23,6 +23,7 @@ func NewMockToolExecutor() *MockToolExecutor { return media.NewMockToolExecutor(
 
 // NewScenario forwards to media.NewScenario.
 func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts ...agentloop.Option) *Scenario {
+	t.Helper()
 	return media.NewScenario(t, inf, tool, opts...)
 }
 

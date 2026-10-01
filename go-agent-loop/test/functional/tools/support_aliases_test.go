@@ -19,6 +19,7 @@ func NewMockToolExecutor() *MockToolExecutor { return support.NewMockToolExecuto
 
 // NewScenario forwards to support.NewScenario.
 func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts ...agentloop.Option) *Scenario {
+	t.Helper()
 	return support.NewScenario(t, inf, tool, opts...)
 }
 

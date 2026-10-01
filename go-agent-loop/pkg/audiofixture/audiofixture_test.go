@@ -81,6 +81,7 @@ func TestMalformedManifestRequiredFields(t *testing.T) {
 	}
 }
 func mutateS4(t *testing.T, name, root string) {
+	t.Helper()
 	switch name {
 	case "missing file":
 		mustOK(t, os.Remove(filepath.Join(root, "fixture.wav")))
@@ -102,6 +103,7 @@ func mutateS4(t *testing.T, name, root string) {
 	}
 }
 func checkS4Error(t *testing.T, name string, err error) {
+	t.Helper()
 	check := func(ok bool) {
 		if !ok {
 			t.Fatalf("error = %v", err)
@@ -134,6 +136,7 @@ func checkS4Error(t *testing.T, name string, err error) {
 	check(err.Error() != "")
 }
 func assertFrames(t *testing.T, source *Source, samples []int16) {
+	t.Helper()
 	for _, size := range []int{FrameSize - 1, FrameSize + 1} {
 		if err := source.ReadFrame(context.Background(), make([]int16, size)); err == nil {
 			t.Fatalf("ReadFrame() with %d samples succeeded; want exact frame-size error", size)
@@ -156,6 +159,7 @@ func assertFrames(t *testing.T, source *Source, samples []int16) {
 	}
 }
 func writeCorpus(t *testing.T, id string, rate int, samples []int16) (string, []int16) {
+	t.Helper()
 	root := t.TempDir()
 	encoded := writeWAV(t, filepath.Join(root, "fixture.wav"), rate, samples)
 	digest := sha256.Sum256(encoded)
@@ -163,26 +167,31 @@ func writeCorpus(t *testing.T, id string, rate int, samples []int16) (string, []
 	return root, append([]int16(nil), samples...)
 }
 func writeManifest(t *testing.T, root string, value manifest) {
+	t.Helper()
 	data := mustJSON(t, value)
 	mustOK(t, os.WriteFile(filepath.Join(root, manifestFile), data, 0o600))
 }
 func writeWAV(t *testing.T, path string, rate int, samples []int16) []byte {
+	t.Helper()
 	var data bytes.Buffer
 	mustOK(t, wavio.Write(&data, rate, samples))
 	mustOK(t, os.WriteFile(path, data.Bytes(), 0o600))
 	return data.Bytes()
 }
 func load(t *testing.T, root, id string) *Source {
+	t.Helper()
 	source, err := NewLoader(root).Load(id)
 	mustOK(t, err)
 	return source
 }
 func mustOK(t *testing.T, err error) {
+	t.Helper()
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
 	data, err := json.Marshal(value)
 	mustOK(t, err)
 	return data

@@ -108,17 +108,13 @@ type SessionScenario struct {
 // needed alongside those loop options.
 func NewSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, opts ...agentloop.Option) *SessionScenario {
 	t.Helper()
-	return newSessionScenario(t, inf, tool, SessionScenarioOptions{}, opts...)
+	return NewSessionScenarioWithConfig(t, inf, tool, SessionScenarioOptions{}, opts...)
 }
 
 // NewSessionScenarioWithConfig is the typed constructor for callers that keep
 // agentloop options in a typed slice.
 func NewSessionScenarioWithConfig(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
 	t.Helper()
-	return newSessionScenario(t, inf, tool, options, opts...)
-}
-
-func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
 	allOpts := []agentloop.Option{
 		agentloop.WithSessionInferencer(inf),
 		agentloop.WithToolExecutor(tool),

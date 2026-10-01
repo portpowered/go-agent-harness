@@ -11,6 +11,7 @@ import (
 // stopOnCleanup closes the provider and cancels the loop when a test that
 // does not use Stop finishes, so no scenario outlives its test.
 func stopOnCleanup(t *testing.T, scenario *SessionScenario) {
+	t.Helper()
 	t.Cleanup(func() {
 		scenario.Inf.Close()
 		scenario.cancel()

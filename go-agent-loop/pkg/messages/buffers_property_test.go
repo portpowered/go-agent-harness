@@ -87,6 +87,7 @@ type fuzzBufferHarness struct {
 }
 
 func newFuzzBufferHarness(t *testing.T, capacity, inputLen int) *fuzzBufferHarness {
+	t.Helper()
 	h := &fuzzBufferHarness{
 		t:                      t,
 		buffer:                 NewTypedBuffer[fuzzBufferValue](capacity),
