@@ -206,6 +206,7 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 // registered when built with the stress tag (remoteToolAudioStress).
 
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
+	t.Parallel()
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	for _, testCase := range remoteToolAudioContinuationCases() {
 		for _, delivery := range remoteToolAudioDeliveries() {
