@@ -486,19 +486,8 @@ func (f *familyCProviderFixture) handleContinuation(connection *websocket.Conn) 
 }
 
 func (f *familyCProviderFixture) sendToolCall(connection *websocket.Conn, responseID string, call familyCFunctionCall) error {
-	if err := f.send(connection, map[string]any{"type": rtEventResponseCreated, "response": map[string]string{"id": responseID}}); err != nil {
-		return err
-	}
-	if err := f.send(connection, map[string]any{
-		"type": rtEventOutputItemAdded,
-		"item": map[string]string{"type": rtItemFunctionCall, "id": call.ID, "call_id": call.ID, "name": call.Name, "arguments": ""},
-	}); err != nil {
-		return err
-	}
-	if err := f.send(connection, map[string]any{"type": rtEventFunctionCallArgumentsDone, "call_id": call.ID, "name": call.Name, "arguments": call.Args}); err != nil {
-		return err
-	}
-	return f.send(connection, map[string]any{"type": rtEventResponseDone, "response": map[string]string{"id": responseID, "status": rtStatusCompleted}})
+	return sendRealtimeToolCallResponse(func(event any) error { return f.send(connection, event) },
+		responseID, call.ID, call.Name, call.Args)
 }
 
 func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, turnID, text string, marker byte) error {
