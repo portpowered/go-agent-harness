@@ -35,8 +35,7 @@ func TestDecodeOpenAIRealtimeAudioDeltaPreservesOddPCMContext(t *testing.T) {
 
 func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 	owner, ok := any(session).(sharedaudio.MediaSession)
 	if !ok {
 		t.Fatal("OpenAI Realtime session does not expose rtc.MediaSession")
@@ -89,8 +88,7 @@ func TestRealtimeSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 
 func TestRealtimeSession_ServerVADTruncatesAtDevicePlaybackCursor(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 	endpoints := session.RTCMedia()
 	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
 	if !ok {
@@ -145,8 +143,7 @@ func TestRealtimeSession_ServerVADTruncatesAtDevicePlaybackCursor(t *testing.T) 
 // be capped to the audio that exists or OpenAI terminates the whole session.
 func TestRealtimeSession_ServerVADNeverTruncatesBeyondReceivedAudio(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 	endpoints := session.RTCMedia()
 	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
 	if !ok {
@@ -217,8 +214,7 @@ func (c *openAIPlaybackController) snapshot() (sharedaudio.PlaybackResponse, sha
 // the conversation item at the audio actually heard, exactly like server VAD.
 func TestRealtimeSession_HostResponseCancelFlushesQueuedPlayback(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 	endpoints := session.RTCMedia()
 	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
 	if !ok {
@@ -287,8 +283,7 @@ func TestRealtimeSession_HostResponseCancelFlushesQueuedPlayback(t *testing.T) {
 // it and truncates the item at the heard position.
 func TestRealtimeSession_InterruptLocalPlaybackAfterResponseDone(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 	endpoints := session.RTCMedia()
 	controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
 	if !ok {
@@ -367,7 +362,19 @@ func (d *virtualPlaybackDevice) pump(ctx context.Context, inbound sharedaudio.In
 		d.lastHeard[item] = time.Now().Add(duration)
 		d.playedMS[item] += int(duration / time.Millisecond)
 		d.mu.Unlock()
-		time.Sleep(duration)
+		advanceVirtualClock(ctx, duration)
+	}
+}
+
+// advanceVirtualClock waits d on the synctest bubble's fake clock: the timer
+// fires as soon as every goroutine in the bubble is durably blocked, so the
+// wait costs no wall time. It returns early when ctx ends.
+func advanceVirtualClock(ctx context.Context, d time.Duration) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
 	}
 }
 
@@ -388,8 +395,7 @@ func TestRealtimeSession_BargeInLatencyStaysFlatAcrossLongSession(t *testing.T) 
 	synctest.Test(t, func(t *testing.T) {
 		const turns, frame = 32, 30 * time.Millisecond
 		conn := newMockWebSocketConn()
-		session := newRealtimeSession(conn, logging.DummyLogger())
-		session.mediaSampleRate = 24000
+		session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 		endpoints := session.RTCMedia()
 		device := newVirtualPlaybackDevice()
 		controlled, ok := endpoints.Inbound.(sharedaudio.PlaybackControlledInbound)
@@ -409,14 +415,14 @@ func TestRealtimeSession_BargeInLatencyStaysFlatAcrossLongSession(t *testing.T) 
 				"response_id": "resp-" + item, "item_id": item, "content_index": 0,
 				"delta": codec.EncodePCM16Base64(make([]int16, 24000*3)), "format": "pcm16",
 			})
-			time.Sleep(time.Second) // the user listens, then interrupts
+			advanceVirtualClock(ctx, time.Second) // the user listens, then interrupts
 			interrupted[turn] = time.Now()
 			if outcome := session.SendWithOutcome(ctx, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}); !outcome.OK() {
 				t.Errorf("turn %d: send RESPONSE.CANCEL: %+v", turn, outcome)
 			}
-			time.Sleep(500 * time.Millisecond)
+			advanceVirtualClock(ctx, 500*time.Millisecond)
 		}
-		time.Sleep(turns * 3 * time.Second) // let any backlog drain on the device clock
+		advanceVirtualClock(ctx, turns*3*time.Second) // let any backlog drain on the device clock
 		stop()
 		<-pumped
 		closeForTest(t, session)
@@ -459,8 +465,7 @@ func TestConnectSession_ClientOwnedTurnsDisableProviderTurnDetection(t *testing.
 // response's deltas that arrive afterwards.
 func TestRealtimeSession_CancelBeforeFirstAudioDiscardsLateDeltas(t *testing.T) {
 	conn := newMockWebSocketConn()
-	session := newRealtimeSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredRealtimeSession(conn, logging.DummyLogger(), realtimeSessionSettings{outputSampleRate: 24000})
 	endpoints := session.RTCMedia()
 	ctx := newRealtimeTestContext(t)
 	session.start(ctx)

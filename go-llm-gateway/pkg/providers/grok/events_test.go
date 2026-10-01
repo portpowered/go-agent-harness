@@ -137,11 +137,13 @@ func TestTranslateOutbound_ToolAcknowledgementCarriesInstructions(t *testing.T) 
 func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 	for name, interrupt := range map[string]func(*testing.T, *mockWebSocketConn, *grokSession){
 		"host response cancel": func(t *testing.T, _ *mockWebSocketConn, session *grokSession) {
+			t.Helper()
 			if !session.Send(newGrokTestContext(t), messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}) {
 				t.Fatal("send RESPONSE.CANCEL rejected")
 			}
 		},
 		"server vad speech started": func(t *testing.T, conn *mockWebSocketConn, session *grokSession) {
+			t.Helper()
 			conn.addServerEvent("input_audio_buffer.speech_started", map[string]any{"audio_start_ms": 100})
 			// Media is interrupted before the event is published to Receive.
 			for readFromSession(t, newGrokTestContext(t), session, "speech started").Type != messages.StreamTypeVADSpeechStarted {
@@ -150,8 +152,7 @@ func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			conn := newMockConn()
-			session := newGrokSession(conn, logging.DummyLogger())
-			session.mediaSampleRate = 24000
+			session := newConfiguredGrokSession(conn, logging.DummyLogger(), grokSessionSettings{outputSampleRate: 24000})
 			endpoints := session.RTCMedia()
 			ctx := newGrokTestContext(t)
 			session.start(ctx)
@@ -182,8 +183,7 @@ func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 // delta must still discard that response's late audio.
 func TestSession_CancelBeforeFirstAudioDiscardsLateDeltas(t *testing.T) {
 	conn := newMockConn()
-	session := newGrokSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredGrokSession(conn, logging.DummyLogger(), grokSessionSettings{outputSampleRate: 24000})
 	endpoints := session.RTCMedia()
 	ctx := newGrokTestContext(t)
 	session.start(ctx)

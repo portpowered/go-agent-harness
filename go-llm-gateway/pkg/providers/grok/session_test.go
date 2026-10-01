@@ -270,8 +270,7 @@ func TestSession_ReceiveAudioDelta(t *testing.T) {
 
 func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 	conn := newMockConn()
-	session := newGrokSession(conn, logging.DummyLogger())
-	session.mediaSampleRate = 24000
+	session := newConfiguredGrokSession(conn, logging.DummyLogger(), grokSessionSettings{outputSampleRate: 24000})
 	owner, ok := any(session).(sharedaudio.MediaSession)
 	if !ok {
 		t.Fatal("grok session does not expose rtc.MediaSession")
@@ -330,7 +329,7 @@ func TestConnectSession_PreparesRTCMediaBeforeReadLoopForConsumer(t *testing.T) 
 		t.Fatalf("ConnectSession: %v", err)
 	}
 	defer closeForTest(t, session)
-	if grokSessionForTest(t, session).currentRTCMedia() == nil {
+	if grokSessionForTest(t, session).CurrentRTCMedia() == nil {
 		t.Fatal("RTC media was not prepared before ConnectSession returned")
 	}
 }

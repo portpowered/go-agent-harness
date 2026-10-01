@@ -17,13 +17,8 @@ import (
 )
 
 func TestRTCMediaBackpressureUnblocksWhenSessionCloses(t *testing.T) {
-	session := &realtimeSession{
-		sendQueue: messages.NewTypedBuffer[models.SessionEvent](1),
-		done:      make(chan struct{}),
-	}
-	if outcome := session.sendQueue.WriteContext(context.Background(), models.NewAudioBufferAppendEvent("seed")); !outcome.OK() {
-		t.Fatalf("seed send queue: %+v", outcome)
-	}
+	session := newRealtimeSession(newMockWebSocketConn(), nil)
+	fillSendQueue(t, session)
 	result := make(chan error, 1)
 	go func() {
 		result <- session.writeRTCMediaFrame(context.Background(), sharedaudio.PCMFrame{Samples: []int16{1, 2, 3}})
@@ -33,7 +28,7 @@ func TestRTCMediaBackpressureUnblocksWhenSessionCloses(t *testing.T) {
 		t.Fatalf("media write returned before session shutdown: %v", err)
 	case <-time.After(20 * time.Millisecond):
 	}
-	close(session.done)
+	closeForTest(t, session)
 	select {
 	case err := <-result:
 		if err == nil || !strings.Contains(err.Error(), "session closed") {
@@ -47,31 +42,34 @@ func TestRTCMediaBackpressureUnblocksWhenSessionCloses(t *testing.T) {
 func TestControlBackpressurePreservesCommitAfterQueuedAudio(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	session := &realtimeSession{sendQueue: messages.NewTypedBuffer[models.SessionEvent](1), done: make(chan struct{}), writeBackpressure: true}
-	if outcome := session.sendQueue.WriteContext(ctx, models.NewAudioBufferAppendEvent("seed")); !outcome.OK() {
-		t.Fatal(outcome)
-	}
+	session := newConfiguredRealtimeSession(newMockWebSocketConn(), nil, realtimeSessionSettings{writeBackpressure: true})
+	fillSendQueue(t, session)
 	result := make(chan messages.SessionSendOutcome, 1)
 	go func() {
-		result <- session.enqueueWireEvents(ctx, []models.SessionEvent{models.NewAudioBufferCommitEvent()})
+		result <- session.EnqueueEvents(ctx, []models.SessionEvent{models.NewAudioBufferCommitEvent()})
 	}()
 	select {
 	case outcome := <-result:
 		t.Fatalf("commit bypassed full audio queue: %+v", outcome)
 	case <-time.After(20 * time.Millisecond):
 	}
-	audio, ok := session.sendQueue.ReadBlockingContext(ctx)
+	audio, ok := session.SendQueue().ReadBlockingContext(ctx)
 	if !ok || audio.Type != models.SessionEventInputAudioBufferAppend {
 		t.Fatalf("first event = %+v", audio)
+	}
+	for session.SendQueue().Len() > 1 {
+		if _, ok := session.SendQueue().Read(); !ok {
+			t.Fatal("drain seeded audio")
+		}
 	}
 	if outcome := <-result; !outcome.OK() {
 		t.Fatalf("commit rejected after capacity released: %+v", outcome)
 	}
-	commit, ok := session.sendQueue.ReadBlockingContext(ctx)
+	commit, ok := session.SendQueue().ReadBlockingContext(ctx)
 	if !ok || commit.Type != models.SessionEventInputAudioBufferCommit {
 		t.Fatalf("second event = %+v", commit)
 	}
-	if drops := session.sendQueue.Drops(); drops != 0 {
+	if drops := session.SendQueue().Drops(); drops != 0 {
 		t.Fatalf("backpressure dropped %d events", drops)
 	}
 }
@@ -85,17 +83,15 @@ func verifyControlBackpressureStop(t *testing.T, closeSession bool) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	session := &realtimeSession{sendQueue: messages.NewTypedBuffer[models.SessionEvent](1), done: make(chan struct{}), writeBackpressure: true}
-	if outcome := session.sendQueue.WriteContext(ctx, models.NewAudioBufferAppendEvent("seed")); !outcome.OK() {
-		t.Fatal(outcome)
-	}
+	session := newConfiguredRealtimeSession(newMockWebSocketConn(), nil, realtimeSessionSettings{writeBackpressure: true})
+	fillSendQueue(t, session)
 	result := make(chan messages.SessionSendOutcome, 1)
 	go func() {
-		result <- session.enqueueWireEvents(ctx, []models.SessionEvent{models.NewAudioBufferCommitEvent()})
+		result <- session.EnqueueEvents(ctx, []models.SessionEvent{models.NewAudioBufferCommitEvent()})
 	}()
 	want := messages.SessionSendCancelled
 	if closeSession {
-		close(session.done)
+		closeForTest(t, session)
 		want = messages.SessionSendClosed
 	} else {
 		cancel()
@@ -132,7 +128,7 @@ func TestFlushOutboundWaitsForWebSocketWrite(t *testing.T) {
 		}
 	})
 
-	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+	if outcome := session.EnqueueEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
 		t.Fatalf("enqueue outbound event: %+v", outcome)
 	}
 	select {
@@ -167,7 +163,7 @@ func TestFlushOutboundWaitsForWebSocketWrite(t *testing.T) {
 func TestProviderCloseDoesNotTurnInterruptedWriteIntoTerminalFailure(t *testing.T) {
 	conn := newProviderCloseRaceConn(fmt.Errorf("write tcp: %w", net.ErrClosed))
 	session := newRealtimeSession(conn, nopLogger())
-	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+	if outcome := session.EnqueueEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
 		t.Fatalf("enqueue outbound event: %+v", outcome)
 	}
 	go session.readLoop(context.Background())
@@ -201,7 +197,7 @@ func TestProviderCloseDoesNotHideRealConcurrentWriteFailure(t *testing.T) {
 	want := errors.New("provider write failed after close metadata")
 	conn := newProviderCloseRaceConn(want)
 	session := newRealtimeSession(conn, nopLogger())
-	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+	if outcome := session.EnqueueEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
 		t.Fatalf("enqueue outbound event: %+v", outcome)
 	}
 	go session.readLoop(context.Background())
@@ -217,7 +213,7 @@ func TestProviderCloseDoesNotHideRealConcurrentWriteFailure(t *testing.T) {
 func TestCallerCloseDoesNotRetainInterruptedWriteError(t *testing.T) {
 	conn := newProviderCloseRaceConn(net.ErrClosed)
 	session := newRealtimeSession(conn, nopLogger())
-	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+	if outcome := session.EnqueueEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
 		t.Fatal(outcome)
 	}
 	writerDone := runRealtimeWriteLoop(session)
@@ -235,7 +231,7 @@ func TestWriteFailureBeforeProviderCloseRemainsTerminal(t *testing.T) {
 	want := errors.New("provider write failed")
 	conn := &failedOutboundConn{err: want, closed: make(chan struct{})}
 	session := newRealtimeSession(conn, nopLogger())
-	if outcome := session.enqueueWireEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
+	if outcome := session.EnqueueEvent(context.Background(), models.NewAudioBufferAppendEvent("pending")); !outcome.OK() {
 		t.Fatalf("enqueue outbound event: %+v", outcome)
 	}
 	writerDone := runRealtimeWriteLoop(session)
@@ -367,4 +363,15 @@ func (c *blockingOutboundConn) Close() error {
 		close(c.closed)
 	}
 	return nil
+}
+
+// fillSendQueue fills the outbound wire queue with audio so the next
+// admission meets a full queue.
+func fillSendQueue(t *testing.T, session *realtimeSession) {
+	t.Helper()
+	for session.SendQueue().Len() < session.SendQueue().Cap() {
+		if outcome := session.SendQueue().WriteContext(context.Background(), models.NewAudioBufferAppendEvent("seed")); !outcome.OK() {
+			t.Fatalf("seed send queue: %+v", outcome)
+		}
+	}
 }

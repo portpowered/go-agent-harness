@@ -265,7 +265,7 @@ func TestRealtimeSessionSendMessage_RejectsInconsistentToolImageBeforeWriting(t 
 			envelope["data_url"] = "data:image/png;base64,not-inline-pixels"
 			return parts, "data URL"
 		},
-		"duplicate typed images": func(envelope map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
+		"duplicate typed images": func(_ map[string]any, parts []messages.ContentPart) ([]messages.ContentPart, string) {
 			return append(parts, messages.ImagePart{Bytes: imageBytes, MediaType: "image/png"}), "duplicate image"
 		},
 	}

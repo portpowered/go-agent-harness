@@ -89,7 +89,7 @@ func TestSession_ContextCancellation(t *testing.T) {
 	// Cancel context — should trigger session close.
 	cancel()
 
-	waitForGrokSignal(t, session.done, "session close after context cancellation")
+	waitForGrokSignal(t, session.Done(), "session close after context cancellation")
 	if err := session.TerminalError(); err != nil {
 		t.Fatalf("TerminalError after context cancellation = %v, want nil", err)
 	}

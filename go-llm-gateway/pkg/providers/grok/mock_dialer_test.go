@@ -31,7 +31,9 @@ type mockWebSocketConn struct {
 
 func newMockConn() *mockWebSocketConn {
 	return &mockWebSocketConn{
-		readBlock:     make(chan struct{}),
+		// Buffered so a wakeup sent between the reader's unlock and its wait
+		// is not lost.
+		readBlock:     make(chan struct{}, 1),
 		clientWriteCh: make(chan struct{}, 1),
 	}
 }

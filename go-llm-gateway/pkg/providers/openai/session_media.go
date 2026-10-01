@@ -14,89 +14,18 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
-var _ sharedaudio.MediaSession = (*realtimeSession)(nil)
-
-// InitialSessionConfigSent reports that ConnectSession already sent the
-// provider-owned session.update before the read loop started.
-func (*realtimeSession) InitialSessionConfigSent() bool { return true }
-
-// RTCMedia exposes provider-owned PCM media endpoints for an OpenAI Realtime
-// session. Inbound audio remains available through Receive while also being
-// framed for the local RTC device sink.
-func (s *realtimeSession) RTCMedia() sharedaudio.MediaEndpoints {
-	return s.rtcMedia(sharedaudio.MediaSessionOptions{})
-}
-
-func (s *realtimeSession) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
-	return s.rtcMedia(options)
-}
-
-func (s *realtimeSession) rtcMedia(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
-	s.mediaMu.Lock()
-	var previous *sharedaudio.SessionMedia
-	if s.media != nil && !s.mediaClaimed && s.mediaContinuous != options.InboundContinuous {
-		previous = s.media
-		s.media = nil
-	}
-	s.mediaClaimed = true
-	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRateWithOptions(s.writeRTCMediaFrame, s.mediaSampleRate, options)
-		s.mediaContinuous = options.InboundContinuous
-	}
-	endpoints := s.media.Endpoints()
-	s.mediaMu.Unlock()
-	if previous != nil {
-		if err := previous.Close(); err != nil {
-			s.setTerminalError(fmt.Errorf("close replaced OpenAI RTC media: %w", err))
-		}
-	}
-	return endpoints
-}
-
-func (s *realtimeSession) prepareRTCMedia() {
-	s.mediaMu.Lock()
-	if s.media == nil {
-		s.media = sharedaudio.NewSessionMediaAtRate(s.writeRTCMediaFrame, s.mediaSampleRate)
-		s.mediaContinuous = false
-	}
-	s.mediaMu.Unlock()
-}
-
-func (s *realtimeSession) releaseUnclaimedRTCMedia() {
-	s.mediaMu.Lock()
-	if s.mediaClaimed || s.media == nil {
-		s.mediaMu.Unlock()
-		return
-	}
-	media := s.media
-	s.media = nil
-	s.mediaContinuous = false
-	s.mediaMu.Unlock()
-	if err := media.Close(); err != nil {
-		s.logger.Warn("openai realtime: release unclaimed RTC media", logging.Field{Key: "error", Value: err})
-	}
-}
-
-func (s *realtimeSession) currentRTCMedia() *sharedaudio.SessionMedia {
-	s.mediaMu.Lock()
-	defer s.mediaMu.Unlock()
-	return s.media
-}
-
 func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
 	encoded, err := codec.EncodePCM16Base64WithLimit(frame.Samples, codec.MaxPCM16Bytes)
 	if err != nil {
 		return fmt.Errorf("encode OpenAI Realtime RTC audio: %w", err)
 	}
-	select {
-	case <-s.done:
-		return fmt.Errorf("OpenAI Realtime RTC media write: session closed")
-	default:
+	if s.Closed() {
+		return errors.New("OpenAI Realtime RTC media write: session closed")
 	}
 	// Hardware capture is a continuous, clocked source. Backpressure it when
 	// the WebSocket writer is briefly behind instead of treating a transient
 	// full control queue as terminal audio loss.
-	outcome := s.enqueueWireEventWait(ctx, models.NewAudioBufferAppendEvent(encoded))
+	outcome := s.EnqueueEventWait(ctx, models.NewAudioBufferAppendEvent(encoded))
 	if outcome.OK() {
 		return nil
 	}
@@ -110,13 +39,13 @@ func (s *realtimeSession) writeRTCMediaFrame(ctx context.Context, frame sharedau
 }
 
 func (s *realtimeSession) publishRTCMedia(ctx context.Context, event models.SessionEvent) error {
-	media := s.currentRTCMedia()
+	media := s.CurrentRTCMedia()
 	if media == nil {
 		return nil
 	}
 
 	var err error
-	switch event.Type {
+	switch event.Type { //nolint:exhaustive // Only audio and response-boundary events touch RTC media.
 	case models.SessionEventInputAudioBufferSpeechStarted:
 		err = s.interruptPlayback(ctx, media)
 	case models.SessionEventResponseCreated:
@@ -161,7 +90,7 @@ func (s *realtimeSession) interruptPlayback(ctx context.Context, media *sharedau
 		return nil
 	}
 	truncate := models.NewConversationItemTruncateEvent(interruption.ItemID, interruption.ContentIndex, interruption.AudioEndMS)
-	outcome := s.enqueueWireEventWait(ctx, truncate)
+	outcome := s.EnqueueEventWait(ctx, truncate)
 	if outcome.OK() {
 		return nil
 	}
@@ -178,41 +107,12 @@ func (s *realtimeSession) sendResponseCancel(ctx context.Context, events []model
 	s.responseWireMu.Lock()
 	defer s.responseWireMu.Unlock()
 	s.invalidatePendingResponseIntents()
-	return s.enqueueWireEvents(ctx, events)
+	return s.EnqueueEvents(ctx, events)
 }
 
 // ProviderTurnDetection reports whether OpenAI detects user speech itself. It
 // does unless the session owns its audio turn boundaries (turn_detection null).
 func (s *realtimeSession) ProviderTurnDetection() bool { return !s.clientTurnBoundaries }
-
-// InputAudioSampleRate reports the rate of the PCM16 audio the client sends;
-// OpenAI Realtime defaults to 24 kHz.
-func (s *realtimeSession) InputAudioSampleRate() int {
-	if s.inputSampleRate > 0 {
-		return s.inputSampleRate
-	}
-	return defaultRealtimeInputSampleRate
-}
-
-// defaultRealtimeInputSampleRate is the OpenAI Realtime pcm16 input rate.
-const defaultRealtimeInputSampleRate = 24000
-
-// LocalPlayback reports provider audio still queued for or audible on the
-// local device, which outlives response.done.
-func (s *realtimeSession) LocalPlayback() messages.LocalPlaybackState {
-	activity := s.currentRTCMedia().PlaybackActivity()
-	return messages.LocalPlaybackState{Active: activity.Active, Level: activity.Level}
-}
-
-// InterruptLocalPlayback stops local playback and truncates the heard item.
-// It is valid after response.done, when there is no response left to cancel.
-func (s *realtimeSession) InterruptLocalPlayback(ctx context.Context) bool {
-	if !s.LocalPlayback().Active {
-		return false
-	}
-	s.interruptPlaybackForCancel(ctx)
-	return true
-}
 
 // interruptPlaybackForCancel applies a RESPONSE.CANCEL to local
 // playback. Audio arrives faster than real time, so the cancelled response may
@@ -220,12 +120,12 @@ func (s *realtimeSession) InterruptLocalPlayback(ctx context.Context) bool {
 // at what was heard. A following server-VAD speech_started finds nothing
 // audible and sends no second truncation.
 func (s *realtimeSession) interruptPlaybackForCancel(ctx context.Context) {
-	media := s.currentRTCMedia()
+	media := s.CurrentRTCMedia()
 	if media == nil {
 		return
 	}
 	if err := s.interruptPlayback(ctx, media); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
-		s.logger.Warn("openai: playback interruption after response cancel failed", logging.Field{Key: "error", Value: err})
+		s.Logger().Warn("openai: playback interruption after response cancel failed", logging.Field{Key: "error", Value: err})
 	}
 }
 
@@ -261,56 +161,6 @@ func decodeOpenAIRealtimeAudioDelta(data []byte) ([]byte, error) {
 	return decoded, nil
 }
 
-func (s *realtimeSession) enqueueWireEvents(ctx context.Context, events []models.SessionEvent) messages.SessionSendOutcome {
-	for _, event := range events {
-		// A terminated session reports closed regardless of remaining
-		// outbound buffer capacity.
-		select {
-		case <-s.done:
-			return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
-		default:
-		}
-		outcome := s.enqueueWireEvent(ctx, event)
-		switch outcome.Status {
-		case messages.BufferWriteSucceeded:
-		case messages.BufferWriteBufferFull:
-			return messages.SessionSendOutcome{Status: messages.SessionSendBufferFull}
-		case messages.BufferWriteStopped:
-			return messages.SessionSendOutcome{Status: messages.SessionSendClosed, Err: outcome.Err}
-		case messages.BufferWriteCancelled:
-			return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: outcome.Err}
-		case messages.BufferWriteTimedOut:
-			return messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: outcome.Err}
-		default:
-			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-		}
-	}
-	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-}
-
-func (s *realtimeSession) enqueueWireEvent(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
-	return s.enqueueWireEventWithMode(ctx, event, s.writeBackpressure)
-
-}
-
-func (s *realtimeSession) enqueueWireEventWait(ctx context.Context, event models.SessionEvent) messages.BufferWriteOutcome {
-	return s.enqueueWireEventWithMode(ctx, event, true)
-}
-
-func (s *realtimeSession) enqueueWireEventWithMode(ctx context.Context, event models.SessionEvent, backpressure bool) messages.BufferWriteOutcome {
-	s.outbound.Begin()
-	var outcome messages.BufferWriteOutcome
-	if backpressure {
-		outcome = s.sendQueue.WriteWaitContextOrDone(ctx, s.done, event)
-	} else {
-		outcome = s.sendQueue.WriteContext(ctx, event)
-	}
-	if !outcome.OK() {
-		s.outbound.Complete()
-	}
-	return outcome
-}
-
 func realtimeAudioBytes(data json.RawMessage) []byte {
 	encoded := firstStringField(data, "delta")
 	if encoded == "" {
@@ -339,58 +189,3 @@ func realtimeAudioMediaType(data json.RawMessage) string {
 
 // realtimePCMAudioFormat is the realtime wire name for raw PCM16 audio.
 const realtimePCMAudioFormat = "audio/pcm"
-
-// closeWithLog closes the session from a background loop that has no caller
-// to return the close result to; a failure is reported through the logger.
-func (s *realtimeSession) closeWithLog() {
-	if err := s.Close(); err != nil {
-		s.logger.Warn("openai realtime: session close error", logging.Field{Key: "error", Value: err})
-	}
-}
-
-// keepToolWorkLocked drops the queued response intents a RESPONSE.CANCEL
-// invalidates and keeps tool work: a tool result or a tool continuation
-// request queued behind the cancelled response is not work of that response.
-// Dropping it would leave the tool obligation unresolved and the runner
-// waiting for a continuation that never opens. Kept intents join the new
-// generation and dispatch once the cancelled response ends. Caller holds
-// responseMu.
-func (s *realtimeSession) keepToolWorkLocked(pending []responseIntent) []responseIntent {
-	kept := pending[:0]
-	for _, intent := range pending {
-		if !responseIntentIsToolWork(intent) {
-			settleResponseIntent(intent, messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled})
-			continue
-		}
-		intent.generation = s.responseGeneration
-		kept = append(kept, intent)
-	}
-	return kept
-}
-
-func responseIntentIsToolWork(intent responseIntent) bool {
-	for _, event := range intent.events {
-		if responseEventIsFunctionCallOutput(event) || responseEventIsToolContinuation(event) {
-			return true
-		}
-	}
-	return false
-}
-
-func responseEventIsToolContinuation(event models.SessionEvent) bool {
-	return firstStringField(event.Data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation)
-}
-
-// keepContinuationRetryLocked keeps a tool continuation's retry state across
-// a cancel. A continuation rejected because another response was active
-// (or sent and not yet answered) is retried when that response ends; the
-// cancel ends that response, it does not answer the continuation. Any other
-// remembered request belongs to the cancelled generation and is forgotten.
-func (s *realtimeSession) keepContinuationRetryLocked() {
-	if s.responseRetry != nil && responseEventIsToolContinuation(*s.responseRetry) {
-		return
-	}
-	s.responseRetry = nil
-	s.responseSent = false
-	s.responseRetryPending = false
-}

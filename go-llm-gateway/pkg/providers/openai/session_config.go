@@ -160,7 +160,10 @@ func realtimeAudioFormat(format models.AudioFormat, rate models.SampleRate) map[
 		return map[string]any{"type": "audio/pcmu"}
 	case models.AudioFormatG711Alaw:
 		return map[string]any{"type": "audio/pcma"}
+	case models.AudioFormatPCM16:
+		fallthrough
 	default:
+		// PCM16 is also the realtime default for an unset format.
 		audioFormat := map[string]any{"type": "audio/pcm"}
 		if rate != 0 {
 			audioFormat["rate"] = rate

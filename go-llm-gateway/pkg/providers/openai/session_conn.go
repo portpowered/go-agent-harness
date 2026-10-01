@@ -1,18 +1,23 @@
 package openai
 
-// This file owns OpenAI Realtime provider connection setup and WebSocket I/O, including endpoint validation, session startup, read/write loops, and wire writes.
+// This file owns OpenAI Realtime provider connection setup, the realtime
+// loop hooks, outbound flush and the classification of response events.
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/url"
 	"strings"
 
+	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
-	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/internal/realtime"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
 const (
@@ -50,18 +55,21 @@ func (p *OpenAIProvider) ConnectSession(ctx context.Context, config models.Sessi
 
 	p.logger.Info("openai realtime: websocket connected", logging.Field{Key: "endpoint", Value: safeEndpointForError(endpoint)})
 
-	session := newRealtimeSession(conn, p.logger)
-	session.writeBackpressure, session.clientTurnBoundaries = p.sessionWriteBackpressure, p.clientOwnsAudioTurnBoundaries
-	session.mediaSampleRate, session.inputSampleRate = int(config.OutputAudioSampleRate), int(config.InputAudioSampleRate)
+	session := newConfiguredRealtimeSession(conn, p.logger, realtimeSessionSettings{
+		writeBackpressure:    p.sessionWriteBackpressure,
+		clientTurnBoundaries: p.clientOwnsAudioTurnBoundaries,
+		outputSampleRate:     int(config.OutputAudioSampleRate),
+		inputSampleRate:      int(config.InputAudioSampleRate),
+	})
 	// Queue any immediate server audio before the read loop starts. A caller
 	// that only consumes the normalized stream releases this speculative queue
 	// on its first Receive call; an RTC caller claims it through RTCMedia.
-	session.prepareRTCMedia()
+	session.PrepareRTCMedia()
 	sessionUpdate, err := p.buildRealtimeSessionUpdate(config, model)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("openai realtime: build session update for %s: %w", safeEndpointForError(endpoint), err), conn.Close())
 	}
-	if err := session.writeEvent(sessionUpdate); err != nil {
+	if err := session.WriteEvent(sessionUpdate); err != nil {
 		return nil, errors.Join(fmt.Errorf("openai realtime: send session update to %s: %w", safeEndpointForError(endpoint), err), conn.Close())
 	}
 
@@ -113,131 +121,42 @@ func safeEndpointForError(endpoint string) string {
 }
 
 func (s *realtimeSession) start(ctx context.Context) {
-	go s.readLoop(ctx)
-	go s.writeLoop(ctx)
-	go s.responseIntentLoop()
+	s.Start(ctx, s)
+	go s.responseIntentLoop(ctx)
 }
 
-func (s *realtimeSession) readLoop(ctx context.Context) {
-	for {
-		_, data, err := s.conn.ReadMessage()
-		if err != nil {
-			if s.readStopped(ctx, err) {
-				s.closeWithLog()
-				return
-			}
-			s.setTerminalError(err)
-			s.logger.Error("openai realtime: websocket read error", logging.Field{Key: "error", Value: err})
-			// Preserve unexpected read failures so callers can distinguish abrupt
-			// provider closure from intentional shutdown.
-			s.recvBuf.WriteTerminal(messages.StreamMessage{
-				Type:  messages.StreamTypeError,
-				Value: providers.NewStreamTransportErrorValue(err),
-			})
-			s.closeWithLog()
-			return
-		}
+func (s *realtimeSession) readLoop(ctx context.Context) { s.ReadLoop(ctx, s) }
 
-		event, err := parseRealtimeServerEvent(data)
-		if err != nil {
-			s.setTerminalError(err)
-			s.logger.Warn("openai realtime: failed to parse server event", logging.Field{Key: "error", Value: err})
-			// An unparseable provider frame is a protocol violation, not a
-			// skippable event: surface a classified terminal ERROR so consumers
-			// can diagnose the failure instead of silently losing the stream.
-			s.recvBuf.WriteTerminal(messages.StreamMessage{
-				Type: messages.StreamTypeError,
-				Value: messages.NewErrorValueWithTerminal(
-					fmt.Sprintf("malformed provider event: %v", err),
-					providers.ErrorClassInvalidRequest,
-					messages.TerminalReasonTerminalFailure,
-					messages.TerminalProvenanceGateway,
-					messages.TerminalOutputNone,
-				),
-			})
-			s.closeWithLog()
-			return
-		}
-		if event.Type == models.SessionEventSessionClosed {
-			s.providerClosed.Store(true)
-		}
-		s.observeResponseLifecycle(event)
-		if err := s.publishRTCMedia(ctx, event); err != nil {
-			s.logger.Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
-		}
-		for _, msg := range realtimeInboundMessages(event) {
-			// Provider frames are lossless. Apply backpressure when their bounded
-			// normalized buffer fills, retaining both shutdown paths.
-			if outcome := s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg); !outcome.OK() {
-				if ctx.Err() != nil {
-					s.closeWithLog()
-				}
-				return
-			}
-		}
+func (s *realtimeSession) writeLoop(ctx context.Context) { s.WriteLoop(ctx, s) }
+
+// HandleEvent tracks the provider response lifecycle, forwards audio to the
+// RTC media path and translates the event for the normalized stream.
+func (s *realtimeSession) HandleEvent(ctx context.Context, event models.SessionEvent) []messages.StreamMessage {
+	if event.Type == models.SessionEventSessionClosed {
+		s.providerClosed.Store(true)
 	}
+	s.observeResponseLifecycle(event)
+	if err := s.publishRTCMedia(ctx, event); err != nil {
+		s.Logger().Error("openai realtime: RTC media event failed", logging.Field{Key: "error", Value: err})
+	}
+	return realtimeInboundMessages(event)
 }
 
-func (s *realtimeSession) readStopped(ctx context.Context, err error) bool {
-	select {
-	case <-s.done:
-		return true
-	default:
-		return ctx.Err() != nil || s.providerClosed.Load() && isProviderCloseTransportError(err)
-	}
+// ExpectedReadClose treats a connection close after the provider announced
+// session.closed as orderly.
+func (s *realtimeSession) ExpectedReadClose(err error) bool {
+	return s.providerClosed.Load() && isProviderCloseTransportError(err)
 }
 
-func (s *realtimeSession) observeResponseLifecycle(event models.SessionEvent) {
-	switch event.Type {
-	case models.SessionEventResponseCreated:
-		s.observeResponseCreated(event)
-	case models.SessionEventResponseDone:
-		s.observeResponseDone(event)
-	case models.SessionEventResponseOutputItemAdded:
-		// A function-call response supersedes any standalone response request
-		// that was queued for the same audio turn. Keep combined tool-result
-		// intents, which are the continuation needed to complete this call.
-		if firstStringField(event.Data, "item.type") == "function_call" {
-			s.responseMu.Lock()
-			s.responseHasFunctionCall = true
-			s.suppressStandaloneResponseCreate = true
-			s.toolResultAdmitted = false
-			s.responseRetry = nil
-			s.responseSent = false
-			s.responseRetryPending = false
-			s.dropStandaloneResponseIntentsLocked()
-			s.responseMu.Unlock()
-		}
-	case models.SessionEventError:
-		s.observeResponseCancelRejection(event)
-		s.observeResponseCreateActiveError(event)
-	}
+// ExpectedWriteClose treats a connection close after session.closed or Close
+// as orderly; the read loop still drains the provider's final frames.
+func (s *realtimeSession) ExpectedWriteClose(_ context.Context, err error) bool {
+	return isProviderCloseTransportError(err) && (s.providerClosed.Load() || s.Closed())
 }
 
-func (s *realtimeSession) writeLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			s.closeWithLog()
-			return
-		case <-s.done:
-			return
-		case event := <-s.sendQueue.Chan():
-			if err := s.writeEvent(event); err != nil {
-				if isProviderCloseTransportError(err) && (s.providerClosed.Load() || sessionDone(s.done)) {
-					s.outbound.Complete()
-					return
-				}
-				s.setTerminalError(err)
-				s.outbound.Complete()
-				s.logger.Error("openai realtime: websocket write error", logging.Field{Key: "error", Value: err})
-				s.closeWithLog()
-				return
-			}
-			s.markResponseRequestSent(event)
-			s.outbound.Complete()
-		}
-	}
+// EventWritten arms the single retry of a written response.create.
+func (s *realtimeSession) EventWritten(event models.SessionEvent) {
+	s.markResponseRequestSent(event)
 }
 
 // FlushOutbound waits until events already admitted to the provider queue have
@@ -249,7 +168,7 @@ func (s *realtimeSession) FlushOutbound(ctx context.Context) error {
 		return nil
 	}
 	for {
-		if err := s.outbound.Flush(ctx, s.done, s.TerminalError); err != nil {
+		if err := s.Session.FlushOutbound(ctx); err != nil {
 			return err
 		}
 		settlements := s.pendingAudioIntentSettlements()
@@ -269,7 +188,7 @@ func (s *realtimeSession) waitForAudioIntentSettlements(ctx context.Context, set
 			if err := deferredAudioIntentError(outcome); err != nil {
 				return err
 			}
-		case <-s.done:
+		case <-s.Done():
 			if err := s.TerminalError(); err != nil {
 				return err
 			}
@@ -296,35 +215,17 @@ func (s *realtimeSession) pendingAudioIntentSettlements() []<-chan messages.Sess
 	defer s.responseWireMu.Unlock()
 	s.responseMu.Lock()
 	defer s.responseMu.Unlock()
-	settlements := make([]<-chan messages.SessionSendOutcome, 0, len(s.pendingResponseIntents)+1)
-	for _, intent := range s.pendingResponseIntents {
+	st := &s.response
+	settlements := make([]<-chan messages.SessionSendOutcome, 0, len(st.pending)+1)
+	for _, intent := range st.pending {
 		if intent.settled != nil {
 			settlements = append(settlements, intent.settled)
 		}
 	}
-	if s.activeResponseIntent != nil && s.activeResponseIntent.settled != nil {
-		settlements = append(settlements, s.activeResponseIntent.settled)
+	if st.inflight != nil && st.inflight.settled != nil {
+		settlements = append(settlements, st.inflight.settled)
 	}
 	return settlements
-}
-
-func (s *realtimeSession) writeEvent(event models.SessionEvent) error {
-	payload := map[string]json.RawMessage{}
-	if len(event.Data) > 0 {
-		if err := json.Unmarshal(event.Data, &payload); err != nil {
-			return fmt.Errorf("unmarshal event payload: %w", err)
-		}
-	}
-	typeBytes, err := json.Marshal(event.Type)
-	if err != nil {
-		return err
-	}
-	payload["type"] = typeBytes
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	return s.conn.WriteMessage(1, data)
 }
 
 func realtimeEventNeedsResponseAdmission(event models.SessionEvent) bool {
@@ -397,4 +298,48 @@ func realtimeResponseDoneIsOutOfBand(event models.SessionEvent) bool {
 		} `json:"response"`
 	}
 	return json.Unmarshal(event.Data, &payload) == nil && payload.Response.Conversation == realtimeConversationNone
+}
+
+func isProviderCloseTransportError(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) ||
+		websocket.IsCloseError(err, websocket.CloseNormalClosure)
+}
+
+// NewDefaultWebSocketDialer returns the live OpenAI realtime WebSocket dialer.
+func NewDefaultWebSocketDialer() transport.Dialer {
+	return realtime.NewDialer()
+}
+
+func standaloneDefaultResponseIntent(intent responseIntent) bool {
+	hasResponseCreate := false
+	for _, event := range intent.events {
+		switch event.Type { //nolint:exhaustive // Only response.create and conversation items classify an intent; other events are neutral.
+		case models.SessionEventResponseCreate:
+			if realtimeResponseCreateIsOutOfBand(event) {
+				return false
+			}
+			hasResponseCreate = true
+		case conversationItemCreateEvent:
+			// A user message or tool result plus response.create is a fresh
+			// turn or a tool continuation. It may legitimately be queued while
+			// a function-call response is active, so it must never be
+			// classified as a stale standalone request.
+			return false
+		default:
+		}
+	}
+	return hasResponseCreate
+}
+
+func responseIntentIsToolWork(intent responseIntent) bool {
+	for _, event := range intent.events {
+		if responseEventIsFunctionCallOutput(event) || responseEventIsToolContinuation(event) {
+			return true
+		}
+	}
+	return false
+}
+
+func responseEventIsToolContinuation(event models.SessionEvent) bool {
+	return firstStringField(event.Data, "response.metadata."+realtimeResponsePurposeKey) == string(messages.ResponsePurposeToolContinuation)
 }
