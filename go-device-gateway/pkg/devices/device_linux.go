@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gen2brain/malgo"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"slices"
 	"sort"
 	"strings"
@@ -24,8 +25,20 @@ const (
 	linuxAlsaBackend  = "alsa"
 )
 
-var linuxBackends = [...]malgo.Backend{malgo.BackendPulseaudio, malgo.BackendAlsa}
-var linuxBackendNames = [...]string{linuxPulseBackend, linuxAlsaBackend}
+// linuxBackend pairs a malgo backend with its device-ID prefix.
+type linuxBackend struct {
+	backend malgo.Backend
+	name    string
+}
+
+// linuxBackends lists the Linux backends in preference order: PulseAudio,
+// then ALSA for directions PulseAudio does not provide.
+func linuxBackends() [2]linuxBackend {
+	return [...]linuxBackend{
+		{backend: malgo.BackendPulseaudio, name: linuxPulseBackend},
+		{backend: malgo.BackendAlsa, name: linuxAlsaBackend},
+	}
+}
 
 type linuxDeviceRecord struct {
 	Device
@@ -152,11 +165,11 @@ func canonicalLinuxRecords(records []linuxDeviceRecord) []linuxDeviceRecord {
 func enumerateLinuxDevices() ([]linuxDeviceRecord, error) {
 	var byBackend [2][]linuxDeviceRecord
 	var errs []error
-	for i, backend := range linuxBackends {
+	for i, candidate := range linuxBackends() {
 		var err error
-		byBackend[i], err = enumerateLinuxBackend(backend, linuxBackendNames[i])
+		byBackend[i], err = enumerateLinuxBackend(candidate.backend, candidate.name)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("linux %s: %w", linuxBackendNames[i], err))
+			errs = append(errs, fmt.Errorf("linux %s: %w", candidate.name, err))
 		}
 	}
 	selected := append([]linuxDeviceRecord(nil), byBackend[0]...)
@@ -263,7 +276,7 @@ func (r *LinuxDeviceRegistry) openNative(record linuxDeviceRecord, formats ...au
 	handle := &linuxOpenedDevice{id: record.ID, direction: record.Direction, context: ctx, format: format, playback: playback, playbackWake: make(chan struct{})}
 	callbacks := malgo.DeviceCallbacks{Data: handle.onData}
 	if record.Direction == DirectionInput {
-		handle.microphone = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
+		handle.microphone = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, microphoneFrameBuffer)}
 		callbacks.Data = func(_, input []byte, frames uint32) { handle.microphone.onCapture(input, int(frames)) }
 	}
 	device, err := malgo.InitDevice(ctx.Context, config, callbacks)
@@ -351,9 +364,7 @@ func (d *linuxOpenedDevice) ReadFrame(ctx context.Context, frame []int16) error 
 	if d.microphone == nil {
 		return fmt.Errorf("audio device %q has no capture source", d.id)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	return d.microphone.ReadFrame(ctx, frame)
 }
 func (d *linuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error {
@@ -449,9 +460,7 @@ func (d *linuxOpenedDevice) WaitForPlaybackCapacity(ctx context.Context, samples
 	if d == nil || samples <= 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	low, high, err := audio.PlaybackQueueWatermarks(d.format)
 	if err != nil {
 		return err
@@ -493,9 +502,7 @@ func (d *linuxOpenedDevice) WaitForPlayback(ctx context.Context) error {
 	if d == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		d.mu.Lock()
 		if d.closed {

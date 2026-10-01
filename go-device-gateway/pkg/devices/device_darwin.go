@@ -293,7 +293,7 @@ func openCoreAudioEndpoint(ctx *malgo.AllocatedContext, endpoint coreAudioEndpoi
 	}
 	handle := &coreAudioHandle{id: endpoint.device.ID, context: ctx, direction: direction, format: format, playback: playback, playbackWake: make(chan struct{})}
 	if direction == DirectionInput {
-		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, 64)}
+		handle.capture = &MicrophoneSource{malgoCtx: ctx, frameCh: make(chan []int16, microphoneFrameBuffer)}
 	}
 	device, err := malgo.InitDevice(ctx.Context, config, malgo.DeviceCallbacks{Data: handle.onData})
 	if err != nil {

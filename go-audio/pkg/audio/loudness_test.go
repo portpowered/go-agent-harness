@@ -88,7 +88,6 @@ func processAll(n *audio.LoudnessNormalizer, chunks [][]int16) []int16 {
 // its own voice's fixed gain -- 0 dB for the "alloy" stand-in, +7.3 dB
 // (the measured deficit) for the "verse" stand-in.
 func TestLoudnessNormalizerConvergesDifferentVoicesToSharedTarget(t *testing.T) {
-	const sampleRate = 24000
 	loudChunks := syntheticVoiceChunks(-19.0, 1.0)  // "alloy"
 	quietChunks := syntheticVoiceChunks(-26.3, 1.0) // "verse"
 

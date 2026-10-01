@@ -565,6 +565,9 @@ func (r *RemoteDeviceRegistry) OpenWithFormat(id DeviceID, format audio.DeviceFo
 // remoteMetadataTimeout bounds one loopback metadata or close request.
 const remoteMetadataTimeout = 5 * time.Second
 
+// maxRemoteResponseBytes bounds a decoded audio-device server response.
+const maxRemoteResponseBytes = 16 << 20
+
 func (r *RemoteDeviceRegistry) doMetadata(method, path string, request, response any) error {
 	// DeviceRegistry and stats methods carry no caller context; the
 	// metadata timeout is the only bound on these loopback requests.
@@ -608,7 +611,7 @@ func (r *RemoteDeviceRegistry) do(req *http.Request, response any) (err error) {
 		_, _ = io.Copy(io.Discard, result.Body) //nolint:errcheck // draining a successful response only enables connection reuse; it cannot change the result.
 		return nil
 	}
-	if err := json.NewDecoder(io.LimitReader(result.Body, 16<<20)).Decode(response); err != nil {
+	if err := json.NewDecoder(io.LimitReader(result.Body, maxRemoteResponseBytes)).Decode(response); err != nil {
 		return fmt.Errorf("decode audio-device server response: %w", err)
 	}
 	return nil

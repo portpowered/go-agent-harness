@@ -25,6 +25,13 @@ const (
 	chunkHeaderBytes = 8
 	// pcmFormatChunkBytes is the mandatory PCM portion of a fmt chunk.
 	pcmFormatChunkBytes = 16
+	// waveFormIDBytes is the "WAVE" form type the RIFF size counts.
+	waveFormIDBytes = 4
+	// riffHeaderOverheadBytes is the canonical PCM WAV RIFF size beyond the
+	// data bytes: form type, fmt chunk and data chunk header.
+	riffHeaderOverheadBytes = 36
+	// canonicalHeaderBytes is the full canonical PCM WAV header length.
+	canonicalHeaderBytes = 44
 	// fmtChunkID and dataChunkID are the RIFF IDs of the chunks WAV requires.
 	fmtChunkID  = "fmt "
 	dataChunkID = "data"
@@ -56,11 +63,11 @@ func Read(r io.Reader) (sampleRate int, samples []int16, err error) {
 	}
 
 	riffSize := uint64(binary.LittleEndian.Uint32(header[4:8]))
-	if riffSize < 4 {
+	if riffSize < waveFormIDBytes {
 		return 0, nil, &MalformedError{Property: "RIFF size", Observed: riffSize, Reason: "must include the WAVE form"}
 	}
 
-	format, data, err := readChunks(r, riffSize-4)
+	format, data, err := readChunks(r, riffSize-waveFormIDBytes)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -92,8 +99,8 @@ func Write(w io.Writer, sampleRate int, samples []int16) error {
 	}
 
 	dataSize := uint64(len(samples)) * pcm16BlockAlign
-	maximumDataSize := uint64(maxUint32) - 36
-	maximumIntSize := uint64(^uint(0)>>1) - 44
+	maximumDataSize := uint64(maxUint32) - riffHeaderOverheadBytes
+	maximumIntSize := uint64(^uint(0)>>1) - canonicalHeaderBytes
 	if maximumIntSize < maximumDataSize {
 		maximumDataSize = maximumIntSize
 	}

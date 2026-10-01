@@ -123,7 +123,7 @@ func resolve(ctx context.Context, cfg config, diagnostics io.Writer) (string, er
 
 func resolveWithLog(ctx context.Context, cfg config, log *diagnosticLog) (string, error) {
 	cachePath := installedPath(cfg)
-	observed := make([]string, 0, 3)
+	observed := make([]string, 0, observedPathCapacity)
 	if resolved, ok := resolveCandidate(ctx, cfg, log, &observed); ok {
 		return resolved, nil
 	}
@@ -177,7 +177,7 @@ func installPinned(ctx context.Context, cfg config, cachePath string, log *diagn
 	installPackage := cfg.installPackage + "@" + cfg.pinnedVersion
 	installDirectory := filepath.Dir(cachePath)
 	attempted := fmt.Sprintf("install %s into %s", installPackage, installDirectory)
-	if err := os.MkdirAll(installDirectory, 0o755); err != nil {
+	if err := os.MkdirAll(installDirectory, installDirMode); err != nil {
 		return "", &resolutionError{
 			Tool:      cfg.tool,
 			Expected:  cfg.expectedVersion,
@@ -348,10 +348,19 @@ func absolutePath(path string) (string, error) {
 	return filepath.Clean(absolute), nil
 }
 
+const (
+	// installDirMode is the permission of the analyzer install directory.
+	installDirMode = 0o755
+	// maxDiagnosticOutputBytes bounds command output quoted in diagnostics.
+	maxDiagnosticOutputBytes = 400
+	// observedPathCapacity covers the candidate, cached and installed paths.
+	observedPathCapacity = 3
+)
+
 func compactOutput(output string) string {
 	output = strings.Join(strings.Fields(output), " ")
-	if len(output) > 400 {
-		return output[:400] + "..."
+	if len(output) > maxDiagnosticOutputBytes {
+		return output[:maxDiagnosticOutputBytes] + "..."
 	}
 	return output
 }

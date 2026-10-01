@@ -42,14 +42,29 @@ type HoldToneConfig struct {
 // repeats every 2s while the gap continues.
 func DefaultHoldToneConfig() HoldToneConfig {
 	return HoldToneConfig{
-		GapThreshold:  2500 * time.Millisecond,
-		PulseInterval: 2000 * time.Millisecond,
-		PulseDuration: 220 * time.Millisecond,
-		Amplitude:     2200,
-		ToneHz1:       440,
-		ToneHz2:       660,
+		GapThreshold:  defaultHoldToneGap,
+		PulseInterval: defaultHoldTonePulseInterval,
+		PulseDuration: defaultHoldTonePulseDuration,
+		Amplitude:     defaultHoldToneAmplitude,
+		ToneHz1:       defaultHoldToneHz1,
+		ToneHz2:       defaultHoldToneHz2,
 	}
 }
+
+// Production hold-tone cue: a soft A4/E5 two-tone chime.
+const (
+	defaultHoldToneGap           = 2500 * time.Millisecond
+	defaultHoldTonePulseInterval = 2000 * time.Millisecond
+	defaultHoldTonePulseDuration = 220 * time.Millisecond
+	defaultHoldToneAmplitude     = 2200
+	defaultHoldToneHz1           = 440
+	defaultHoldToneHz2           = 660
+	// holdToneSecondPartial weights the second tone; the peak of the sum is
+	// 1+holdToneSecondPartial, which the synthesis divides back out.
+	holdToneSecondPartial = 0.6
+	// hannHalf is the coefficient of the Hann window 0.5 - 0.5*cos(2*pi*n/N).
+	hannHalf = 0.5
+)
 
 func (c HoldToneConfig) withDefaults() HoldToneConfig {
 	d := DefaultHoldToneConfig()
@@ -91,9 +106,9 @@ func holdTonePulse(cfg HoldToneConfig, sampleRate int) []int16 {
 	out := make([]int16, n)
 	for i := range n {
 		t := float64(i) / float64(sampleRate)
-		window := 0.5 - 0.5*math.Cos(2*math.Pi*float64(i)/float64(n-1))
-		signal := math.Sin(2*math.Pi*cfg.ToneHz1*t) + 0.6*math.Sin(2*math.Pi*cfg.ToneHz2*t)
-		signal /= 1.6 // normalize the combined two-tone peak back to [-1, 1]
+		window := hannHalf - hannHalf*math.Cos(2*math.Pi*float64(i)/float64(n-1))
+		signal := math.Sin(2*math.Pi*cfg.ToneHz1*t) + holdToneSecondPartial*math.Sin(2*math.Pi*cfg.ToneHz2*t)
+		signal /= 1 + holdToneSecondPartial // normalize the combined two-tone peak back to [-1, 1]
 		out[i] = int16(math.Round(window * signal * float64(cfg.Amplitude)))
 	}
 	return out

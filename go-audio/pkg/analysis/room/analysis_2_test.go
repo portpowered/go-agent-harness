@@ -188,7 +188,6 @@ func TestPCM16RoomExplicitLoudnessIntervalValidatesAndMeasures(t *testing.T) {
 }
 
 func roomAnalysisFixture() roomanalysis.PCM16RoomInput {
-	const sampleRate = 1000
 	const streamSamples = 3000
 	const routeLag = 40
 

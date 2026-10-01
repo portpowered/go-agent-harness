@@ -407,7 +407,7 @@ func parseEntry(raw json.RawMessage) (PackageEntry, error) {
 		}
 	}
 	minimumCents := whole*100 + fraction
-	if minimumCents > 10000 {
+	if minimumCents > maxPercentCents {
 		return PackageEntry{}, &ManifestError{
 			Kind:       ErrManifestMinimumPrecision,
 			ImportPath: importPath,
@@ -609,13 +609,20 @@ func validateManifest(manifest Manifest) error {
 	return nil
 }
 
+const (
+	// maxPercentCents is 100.00% in hundredths of a percent.
+	maxPercentCents = 100 * 100
+	// permille scales a coverage ratio to tenths of a percent.
+	permille = 1000
+)
+
 func (c Coverage) actualCents() int {
 	if c.Total <= 0 {
 		return 0
 	}
 	// Go's package coverage report records one decimal place. Preserve that
 	// measurement before comparing it to the manifest's lexical two decimals.
-	tenths := int(math.Floor((1000*float64(c.Covered))/float64(c.Total) + 0.5))
+	tenths := int(math.Round(permille * float64(c.Covered) / float64(c.Total)))
 	return tenths * 10
 }
 

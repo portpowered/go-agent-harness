@@ -31,11 +31,15 @@ type BufferedCapture struct {
 // NewBufferedCapture creates a provider-rate capture buffer for source. It
 // performs no device I/O; the returned capabilities are safe to bind to the
 // loop before PumpBufferedCaptureWithBuffer starts.
+// bufferedCaptureFrames bounds the capture frames held between the device
+// reader and the provider pump.
+const bufferedCaptureFrames = 64
+
 func NewBufferedCapture(source *RTCDeviceSource) (*BufferedCapture, error) {
 	if source == nil {
 		return nil, ErrRTCDeviceSourceClosed
 	}
-	producer, consumer, control, err := audio.NewFrameBuffer(64, max(source.providerRate*2, audio.FrameSize))
+	producer, consumer, control, err := audio.NewFrameBuffer(bufferedCaptureFrames, max(source.providerRate*2, audio.FrameSize))
 	if err != nil {
 		return nil, err
 	}

@@ -48,6 +48,16 @@ func sessionAudioTraceFiles() [audioTraceTapCount]string {
 // filesystem work is owned by the background writer and cannot pace audio.
 const MaxQueuedBytes int64 = 16 << 20
 
+const (
+	traceDirMode  = 0o755
+	traceFileMode = 0o600
+	// tracePooledSamples is the capacity of pooled sample buffers.
+	tracePooledSamples = 4096
+	// traceRecordOverheadBytes approximates the per-record bookkeeping charged
+	// against MaxQueuedBytes beside the payload.
+	traceRecordOverheadBytes = 128
+)
+
 type Trace struct {
 	queuedBytes atomic.Int64
 	admission   sync.RWMutex
@@ -118,7 +128,7 @@ func NewTrace(directory string, source clock.Source) (*Trace, error) {
 	if directory == "" {
 		return nil, errors.New("audio trace directory is empty")
 	}
-	if err := os.MkdirAll(directory, 0o755); err != nil {
+	if err := os.MkdirAll(directory, traceDirMode); err != nil {
 		return nil, fmt.Errorf("create audio trace directory %q: %w", directory, err)
 	}
 	// Refuse to reuse any artifact from a prior recording, including a WAV tap
@@ -131,7 +141,7 @@ func NewTrace(directory string, source clock.Source) (*Trace, error) {
 			return nil, fmt.Errorf("check audio trace output %q: %w", name, err)
 		}
 	}
-	timeline, err := os.OpenFile(filepath.Join(directory, "timeline.jsonl"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	timeline, err := os.OpenFile(filepath.Join(directory, "timeline.jsonl"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, traceFileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +155,7 @@ func NewTrace(directory string, source clock.Source) (*Trace, error) {
 		done:      make(chan struct{}),
 	}
 	t.samplePool.New = func() any {
-		samples := make([]int16, 4096)
+		samples := make([]int16, tracePooledSamples)
 		return &samples
 	}
 	go t.writeLoop()
@@ -175,7 +185,7 @@ func (t *Trace) captureBlock(tap int, sampleRate int, samples []int16) {
 	t.captureOrder[tap].Lock()
 	defer t.captureOrder[tap].Unlock()
 	start := t.position[tap].Add(uint64(len(samples))) - uint64(len(samples))
-	cost := int64(MaxBlockSamples*2 + 128)
+	cost := int64(MaxBlockSamples*2 + traceRecordOverheadBytes)
 	if !t.reserve(cost) {
 		t.droppedBlocks[tap].Add(1)
 		t.droppedSamples[tap].Add(uint64(len(samples)))
@@ -232,7 +242,7 @@ func (t *Trace) ObserveRuntime(observation RuntimeEvent) {
 	if t.closed {
 		return
 	}
-	cost := int64(len(observation.Payload) + len(observation.Kind) + len(observation.Error) + len(observation.ResponseID) + len(observation.ResponsePurpose) + len(observation.StreamID) + 128)
+	cost := int64(len(observation.Payload) + len(observation.Kind) + len(observation.Error) + len(observation.ResponseID) + len(observation.ResponsePurpose) + len(observation.StreamID) + traceRecordOverheadBytes)
 	if cost > MaxRuntimePayloadBytes || !t.reserve(cost) {
 		t.droppedRuntime.Add(1)
 		return
@@ -338,7 +348,7 @@ func (t *Trace) writeLoop() {
 }
 
 func (t *Trace) releaseSamples(samples []int16) {
-	if cap(samples) == 4096 {
+	if cap(samples) == tracePooledSamples {
 		samples = samples[:4096]
 		t.samplePool.Put(&samples)
 	}
@@ -400,7 +410,7 @@ type sessionAudioTraceWAV struct {
 }
 
 func newSessionAudioTraceWAV(path string, sampleRate int) (*sessionAudioTraceWAV, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, traceFileMode)
 	if err != nil {
 		return nil, err
 	}

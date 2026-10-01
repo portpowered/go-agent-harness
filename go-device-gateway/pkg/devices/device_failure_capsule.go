@@ -18,6 +18,11 @@ import (
 
 const DuplexCapsuleSchemaVersion = 2
 
+const (
+	capsuleDirMode  = 0o755
+	capsuleFileMode = 0o644
+)
+
 // duplexCapsuleArtifacts lists the files a capsule of schemaVersion must hold.
 // Version 1 predates the generated-capture stem.
 func duplexCapsuleArtifacts(schemaVersion int) []string {
@@ -66,7 +71,7 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 		return fmt.Errorf("nil simulated duplex registry")
 	}
 	parent := filepath.Dir(dir)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, capsuleDirMode); err != nil {
 		return err
 	}
 	tmp, err := os.MkdirTemp(parent, ".audio-capsule-")
@@ -93,10 +98,10 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	metadata := make(map[string]CapsuleArtifact, len(artifacts))
 	for name, data := range artifacts {
 		path := filepath.Join(tmp, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), capsuleDirMode); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, data, 0o644); err != nil {
+		if err := os.WriteFile(path, data, capsuleFileMode); err != nil {
 			return err
 		}
 		sum := sha256.Sum256(data)
@@ -113,7 +118,7 @@ func WriteDuplexFailureCapsule(dir string, scenario DuplexScenario, providerInpu
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "run-manifest.json"), append(manifestBytes, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "run-manifest.json"), append(manifestBytes, '\n'), capsuleFileMode); err != nil {
 		return err
 	}
 	if _, err := os.Stat(dir); err == nil {

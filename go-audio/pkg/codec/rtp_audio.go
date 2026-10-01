@@ -35,28 +35,43 @@ func DecodeRTPAudioPayload(codecName string, payload []byte) []int16 {
 		case index*2+1 < len(payload):
 			out[index] = int16(binary.BigEndian.Uint16(payload[index*2:]))
 		default:
-			out[index] = int16(value) << 8
+			out[index] = int16(value) << pcm8ToPCM16Shift
 		}
 	}
 	return out
 }
 
+// G.711 code-word fields (ITU-T G.711): sign bit, 3-bit segment (exponent)
+// and 4-bit mantissa, plus the mu-law bias and the A-law even-bit toggle.
+const (
+	g711MantissaMask  = 0x0f
+	g711SegmentMask   = 0x70
+	g711SegmentShift  = 4
+	g711SignBit       = 0x80
+	muLawBias         = 132
+	muLawMantissaLeft = 3
+	aLawToggleMask    = 0x55
+	aLawMantissaLeft  = 4
+	aLawSegmentBase   = 0x100
+	pcm8ToPCM16Shift  = 8
+)
+
 func decodeMuLaw(value byte) int16 {
 	value = ^value
-	sample := int16((value&0x0f)<<3 + 132)
-	sample <<= (value & 0x70) >> 4
-	if value&0x80 != 0 {
-		return 132 - sample
+	sample := int16((value&g711MantissaMask)<<muLawMantissaLeft + muLawBias)
+	sample <<= (value & g711SegmentMask) >> g711SegmentShift
+	if value&g711SignBit != 0 {
+		return muLawBias - sample
 	}
-	return sample - 132
+	return sample - muLawBias
 }
 
 func decodeALaw(value byte) int16 {
-	value ^= 0x55
-	sample := int16(value&0x0f) << 4
-	if value&0x70 != 0 {
-		sample += 0x100
-		sample <<= (value&0x70)>>4 - 1
+	value ^= aLawToggleMask
+	sample := int16(value&g711MantissaMask) << aLawMantissaLeft
+	if value&g711SegmentMask != 0 {
+		sample += aLawSegmentBase
+		sample <<= (value&g711SegmentMask)>>g711SegmentShift - 1
 	}
 	if value&0x80 != 0 {
 		return sample

@@ -89,7 +89,7 @@ func TestLinuxPositiveAudioEvidence(t *testing.T) {
 func TestLinuxPlaybackQueueUsesResolvedRateAndCountsOverflow(t *testing.T) {
 	const providerRate = 24000
 	writer := &linuxOpenedDevice{direction: DirectionOutput, format: audio.PCM16DeviceFormat(providerRate)}
-	for frameIndex := 0; frameIndex < 16; frameIndex++ {
+	for frameIndex := range 16 {
 		frame := make([]int16, audio.FrameSize)
 		for sampleIndex := range frame {
 			frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)

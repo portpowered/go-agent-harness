@@ -93,7 +93,7 @@ func runWASAPICapturePacketEnergyC42Coverage(t *testing.T) {
 		blockAlign:         8,
 		bitsPerSample:      16,
 		validBitsPerSample: 12,
-		subFormat:          wasapiSubtypePCM(),
+		subFormat:          wasapiSubtypePCM,
 	}
 	wantEnergy := 1744863233.0 / 1073741824.0
 	before := append([]byte(nil), raw...)
@@ -150,7 +150,7 @@ func runWASAPICapturePacketEnergyC42Coverage(t *testing.T) {
 		blockAlign:         8,
 		bitsPerSample:      64,
 		validBitsPerSample: 64,
-		subFormat:          wasapiSubtypeIEEEFloat(),
+		subFormat:          wasapiSubtypeIEEEFloat,
 	}
 	nonFiniteRaw := wasapiFloat64Packet(0.5, math.Inf(-1))
 	nonFiniteBefore := append([]byte(nil), nonFiniteRaw...)

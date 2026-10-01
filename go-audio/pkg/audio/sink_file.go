@@ -14,6 +14,9 @@ import (
 
 const rawSinkScratchBytes = 64 * 1024
 
+// sinkFileMode is the permission of audio files a FileSink creates.
+const sinkFileMode = 0o644
+
 // FileSink writes mono PCM16 to a WAV or raw PCM path. Raw PCM has no
 // container rate; WAV output keeps the rate selected at construction.
 type FileSink struct {
@@ -64,7 +67,7 @@ func NewFileSinkAtSampleRate(path string, stdout io.Writer, sampleRate int) (*Fi
 		return &FileSink{path: path, format: format, rate: sampleRate, writer: stdout}, nil
 	}
 
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, sinkFileMode)
 	if err != nil {
 		return nil, newStreamError("open", path, format, err)
 	}

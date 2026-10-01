@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
@@ -68,7 +69,7 @@ func NewSessionMediaAtRate(writer SessionMediaWriter, sampleRate int) *SessionMe
 	if sampleRate <= 0 {
 		sampleRate = DefaultSessionMediaSampleRate
 	}
-	frameSamples := sampleRate * sessionMediaFrameMillis / 1000
+	frameSamples := sampleRate * sessionMediaFrameMillis / int(time.Second/time.Millisecond)
 	if frameSamples <= 0 {
 		frameSamples = DefaultSessionMediaFrameSamples
 	}

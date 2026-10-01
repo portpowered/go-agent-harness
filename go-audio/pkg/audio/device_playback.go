@@ -323,9 +323,7 @@ func (q *PlaybackQueue) ReadPCM16(destination []byte) int {
 	queuedBefore := q.size
 	n := min(requested, q.size)
 	for index := range n {
-		value := uint16(q.samples[(q.head+index)%q.capacity])
-		destination[index*2] = byte(value)
-		destination[index*2+1] = byte(value >> 8)
+		binary.LittleEndian.PutUint16(destination[index*2:], uint16(q.samples[(q.head+index)%q.capacity]))
 	}
 	clear(destination[n*2 : requested*2])
 	q.consumeLocked(n)

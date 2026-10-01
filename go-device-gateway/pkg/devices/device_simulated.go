@@ -3,9 +3,11 @@ package devices
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -715,8 +717,10 @@ func jitter(c ClockSpec, index uint64) int64 {
 }
 func traceFor(tap string, sequence uint64, epoch uint32, rate int, start uint64, samples []int16, before, after int, jitter int64, flags []string, faultID string) DeviceTraceEvent {
 	h := sha256.New()
+	var encoded [2]byte
 	for _, sample := range samples {
-		h.Write([]byte{byte(sample), byte(uint16(sample) >> 8)})
+		binary.LittleEndian.PutUint16(encoded[:], uint16(sample))
+		h.Write(encoded[:])
 	}
 	return DeviceTraceEvent{Tap: tap, Sequence: sequence, ClockEpoch: epoch, SampleRate: rate, StartSample: start, SampleCount: len(samples), DeviceTick: sequence, HostMonoSamples: int64(start) + jitter, QueueBefore: before, QueueAfter: after, Flags: flags, FaultID: faultID, PayloadSHA256: hex.EncodeToString(h.Sum(nil))}
 }
@@ -749,20 +753,25 @@ func stemSample(stem []int16, position *int) int16 {
 }
 func scaleQ15(sample int16, gain int32) int16 {
 	product := int64(sample) * int64(gain)
+	// Round half away from zero before dropping the Q15 fraction.
 	if product >= 0 {
-		product += 16384
+		product += q15One / 2
 	} else {
-		product -= 16384
+		product -= q15One / 2
 	}
-	return saturatePCM16Int64(product / 32768)
+	return saturatePCM16Int64(product / q15One)
 }
+
+// q15One is 1.0 in Q15 fixed point.
+const q15One = 1 << 15
+
 func saturatingAdd(a, b int16) int16 { return saturatePCM16Int64(int64(a) + int64(b)) }
 func saturatePCM16Int64(v int64) int16 {
-	if v < -32768 {
-		return -32768
+	if v < math.MinInt16 {
+		return math.MinInt16
 	}
-	if v > 32767 {
-		return 32767
+	if v > math.MaxInt16 {
+		return math.MaxInt16
 	}
 	return int16(v)
 }

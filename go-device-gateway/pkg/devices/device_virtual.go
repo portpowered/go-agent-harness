@@ -123,7 +123,7 @@ func makeVirtualDevice(s VirtualDeviceConfig) (virtualDevice, error) {
 	}
 	caps := append([]VirtualCapability(nil), s.Capabilities...)
 	if len(caps) == 0 {
-		caps = []VirtualCapability{{SampleRate: audio.SampleRate, Channels: audio.Channels, BitDepth: 16, Format: "pcm16"}}
+		caps = []VirtualCapability{{SampleRate: audio.SampleRate, Channels: audio.Channels, BitDepth: audio.DeviceBitDepthPCM16, Format: audio.DeviceEncodingPCM16}}
 	}
 	var loopback DeviceID
 	if s.LoopbackID != "" {

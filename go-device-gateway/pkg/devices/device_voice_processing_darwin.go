@@ -115,6 +115,14 @@ type voiceProcessingAPI struct {
 	audioUnitRender               func(uintptr, uintptr, uintptr, uint32, uint32, *audioBufferList1) int32
 }
 
+// CoreAudio flag values (CoreAudioBaseTypes.h, AUComponent.h).
+const (
+	audioFormatFlagIsSignedInteger       = 0x4
+	audioFormatFlagIsPacked              = 0x8
+	audioUnitRenderActionOutputIsSilence = 1 << 4
+	bitsPerByte                          = 8
+)
+
 const (
 	auScopeGlobal = 0
 	auScopeInput  = 1
@@ -195,7 +203,7 @@ func newVoiceProcessingIO(inputID, outputID DeviceID, inputFormat, outputFormat 
 	engine := &voiceProcessingIO{
 		api: api, unit: unit, inputID: inputID, outputID: outputID,
 		inputFormat: inputFormat, outputFormat: outputFormat,
-		capture:      &MicrophoneSource{frameCh: make(chan []int16, 64)},
+		capture:      &MicrophoneSource{frameCh: make(chan []int16, microphoneFrameBuffer)},
 		playbackWake: make(chan struct{}),
 	}
 	engine.playback, err = audio.NewPlaybackQueue(outputFormat)
@@ -214,20 +222,21 @@ func newVoiceProcessingIO(inputID, outputID DeviceID, inputFormat, outputFormat 
 
 func (e *voiceProcessingIO) configureAndStart() error {
 	one, zero := uint32(1), uint32(0)
+	flagSize := uint32(unsafe.Sizeof(one))
 	set := func(operation string, property, scope, element uint32, value unsafe.Pointer, size uint32) error {
 		if status := e.api.audioUnitSetProperty(e.unit, property, scope, element, value, size); status != 0 {
 			return voiceProcessingStatusError(operation, status)
 		}
 		return nil
 	}
-	if err := set("enable AUVoiceIO microphone", auPropertyEnableIO, auScopeInput, 1, unsafe.Pointer(&one), 4); err != nil {
+	if err := set("enable AUVoiceIO microphone", auPropertyEnableIO, auScopeInput, 1, unsafe.Pointer(&one), flagSize); err != nil {
 		return err
 	}
-	if err := set("enable AUVoiceIO speaker", auPropertyEnableIO, auScopeOutput, 0, unsafe.Pointer(&one), 4); err != nil {
+	if err := set("enable AUVoiceIO speaker", auPropertyEnableIO, auScopeOutput, 0, unsafe.Pointer(&one), flagSize); err != nil {
 		return err
 	}
 	maxFrames := uint32(voiceProcessingMaxFrames)
-	if err := set("set AUVoiceIO maximum callback frames", auPropertyMaximumFrames, auScopeGlobal, 0, unsafe.Pointer(&maxFrames), 4); err != nil {
+	if err := set("set AUVoiceIO maximum callback frames", auPropertyMaximumFrames, auScopeGlobal, 0, unsafe.Pointer(&maxFrames), uint32(unsafe.Sizeof(maxFrames))); err != nil {
 		return err
 	}
 	inputASBD := voiceProcessingASBD(e.inputFormat)
@@ -249,10 +258,10 @@ func (e *voiceProcessingIO) configureAndStart() error {
 	if err := set("install AUVoiceIO microphone callback", auPropertySetInputCallback, auScopeGlobal, 1, unsafe.Pointer(&input), uint32(unsafe.Sizeof(input))); err != nil {
 		return err
 	}
-	if err := set("enable AUVoiceIO voice processing", auPropertyBypassVoice, auScopeGlobal, 0, unsafe.Pointer(&zero), 4); err != nil {
+	if err := set("enable AUVoiceIO voice processing", auPropertyBypassVoice, auScopeGlobal, 0, unsafe.Pointer(&zero), flagSize); err != nil {
 		return err
 	}
-	if err := set("enable AUVoiceIO automatic gain control", auPropertyEnableAGC, auScopeGlobal, 0, unsafe.Pointer(&one), 4); err != nil {
+	if err := set("enable AUVoiceIO automatic gain control", auPropertyEnableAGC, auScopeGlobal, 0, unsafe.Pointer(&one), flagSize); err != nil {
 		return err
 	}
 	if status := e.api.audioUnitInitialize(e.unit); status != 0 {
@@ -266,9 +275,9 @@ func (e *voiceProcessingIO) configureAndStart() error {
 }
 
 func voiceProcessingASBD(format audio.DeviceFormat) audioStreamBasicDescription {
-	bytesPerFrame := uint32(format.Channels * format.BitDepth / 8)
+	bytesPerFrame := uint32(format.Channels * format.BitDepth / bitsPerByte)
 	return audioStreamBasicDescription{
-		SampleRate: float64(format.SampleRate), FormatID: fourCC("lpcm"), FormatFlags: 0x4 | 0x8,
+		SampleRate: float64(format.SampleRate), FormatID: fourCC("lpcm"), FormatFlags: audioFormatFlagIsSignedInteger | audioFormatFlagIsPacked,
 		BytesPerPacket: bytesPerFrame, FramesPerPacket: 1, BytesPerFrame: bytesPerFrame,
 		ChannelsPerFrame: uint32(format.Channels), BitsPerChannel: uint32(format.BitDepth),
 	}
@@ -308,7 +317,7 @@ func (e *voiceProcessingIO) renderBuffers(actionFlags *uint32, frames uint32, li
 	}
 	e.mu.Unlock()
 	if actionFlags != nil && read == 0 {
-		*actionFlags |= 1 << 4
+		*actionFlags |= audioUnitRenderActionOutputIsSilence
 	}
 	return 0
 }
