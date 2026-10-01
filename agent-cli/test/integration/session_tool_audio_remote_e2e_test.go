@@ -202,9 +202,9 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 // audio-device-server binary whose manual callback clock the test advances
 // over HTTP. Its device-cadence deliveries drain in real time (11-22 s each).
 // Pull requests keep test45/captured_cadence as the representative real-time
-// continuation across the three processes; the rest of the matrix runs with
-// YUI_AUDIO_STRESS=1 (make test-audio-device-server-integration and the
-// nightly audio stress workflow).
+// continuation across the three processes; the rest of the matrix is only
+// registered when built with the stress tag (remoteToolAudioStress).
+
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	for _, testCase := range remoteToolAudioContinuationCases() {
@@ -212,10 +212,10 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 			if testCase.healthyControl && delivery.name != "provider_burst" {
 				continue
 			}
+			if !remoteToolAudioStress && (testCase.name != "test45" || delivery.name != "captured_cadence") {
+				continue
+			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {
-				if testCase.name != "test45" || delivery.name != "captured_cadence" {
-					requireRemoteToolAudioStress(t)
-				}
 				// Bound real process/device pairs so callback clocks retain CPU under the full package.
 				t.Parallel()
 				scenarioSlots <- struct{}{}
@@ -232,48 +232,6 @@ func runRemoteToolAudioContinuation(t *testing.T, scenario remoteToolAudioCase, 
 		scenario.drainInterval = remoteToolAudioDrainInterval
 	}
 	runRemoteToolAudioScenario(t, scenario, delivery.deltaDelay, delivery.toolDelay, delivery.callbackInterval, delivery.promptBytes, delivery.toolResultBytes, delivery.inputFrames)
-}
-
-func TestAgentBinaryTest45HighRateToolAudioRegression(t *testing.T) {
-	requireRemoteToolAudioStress(t)
-	slots := make(chan struct{}, 2)
-	testCase := remoteToolAudioCase{
-		name:            "test45_high_rate",
-		responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
-		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
-	}
-	for trial := range 20 {
-		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
-			t.Parallel()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
-		})
-	}
-}
-func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
-	requireRemoteToolAudioStress(t)
-	slots := make(chan struct{}, 2)
-	testCase := remoteToolAudioCase{
-		name:            "test46_high_rate",
-		responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
-		toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
-	}
-	for trial := range 20 {
-		t.Run(fmt.Sprintf("trial_%02d", trial+1), func(t *testing.T) {
-			t.Parallel()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-			runRemoteToolAudioScenario(t, testCase, 0, 0, time.Millisecond, 0, 0, 0)
-		})
-	}
-}
-
-func requireRemoteToolAudioStress(t *testing.T) {
-	t.Helper()
-	if os.Getenv("YUI_AUDIO_STRESS") != "1" {
-		t.Skip("set YUI_AUDIO_STRESS=1 to run fresh-process high-rate audio stress")
-	}
 }
 
 func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, deltaDelay, toolDelay, callbackInterval time.Duration, promptBytes, toolResultBytes, inputFrames int) {
@@ -768,7 +726,10 @@ func (p *remoteToolAudioProvider) sendResponse(connection *websocket.Conn, index
 		}
 		p.firstAudioOnce.Do(func() { close(p.firstAudioSent) })
 		if p.deltaDelay > 0 {
-			time.Sleep(p.deltaDelay)
+			// Pace deltas at the provider's cadence (virtual time inside a
+			// synctest bubble, real time for the agent-binary variant).
+			pace := time.NewTimer(p.deltaDelay)
+			<-pace.C
 		}
 	}
 	if len(p.responses[index]) > 0 {

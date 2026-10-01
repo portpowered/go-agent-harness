@@ -31,7 +31,6 @@ const (
 	liveVoiceToolGroundingTimeout     = 60 * time.Second
 	liveVoiceToolGroundingMissingPath = "/tmp/definitely_missing_file.txt"
 	liveVoiceToolGroundingProbeDelay  = 15 * time.Second
-	liveVoiceToolGroundingOptIn       = "AGENT_HARNESS_LIVE_VOICE_GROUNDING"
 	liveVoiceToolGroundingInputDir    = "AGENT_HARNESS_LIVE_VOICE_GROUNDING_AUDIO_DIR"
 	liveVoiceToolGroundingArtifactDir = "AGENT_HARNESS_LIVE_VOICE_GROUNDING_ARTIFACT_DIR"
 )
@@ -74,10 +73,7 @@ func liveVoiceToolGroundingCases() []liveVoiceToolGroundingCase {
 func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live voice grounding proof")
-	}
-	if os.Getenv(liveVoiceToolGroundingOptIn) != "1" {
-		t.Skipf("%s!=1; this proof makes five OpenAI Realtime calls and requires explicit opt-in", liveVoiceToolGroundingOptIn)
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live voice grounding proof")
 	}
 
 	artifactRoot := liveVoiceToolGroundingArtifactRoot(t)
@@ -97,7 +93,13 @@ func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 				// The live model is token-rate limited. Space independent probes
 				// so the required five-run matrix does not turn its final control
 				// into a provider rate-limit failure.
-				time.Sleep(liveVoiceToolGroundingProbeDelay)
+				spacing := time.NewTimer(liveVoiceToolGroundingProbeDelay)
+				select {
+				case <-t.Context().Done():
+					spacing.Stop()
+					t.Fatalf("live voice grounding cancelled while spacing probes: %v", t.Context().Err())
+				case <-spacing.C:
+				}
 			}
 			if testCase.Name == "missing-file" {
 				assertMissingVoiceToolGroundingPath(t)
@@ -465,11 +467,11 @@ func liveVoiceToolGroundingInput(t *testing.T, testCase liveVoiceToolGroundingCa
 		return path
 	}
 	if runtime.GOOS != "darwin" {
-		t.Skipf("live input %s requires macOS say/afconvert or %s", testCase.AudioName, liveVoiceToolGroundingInputDir)
+		t.Fatalf("live input %s requires macOS say/afconvert or %s", testCase.AudioName, liveVoiceToolGroundingInputDir)
 	}
 	for _, command := range []string{"say", "afconvert"} {
 		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("live input generation requires %s or %s", command, liveVoiceToolGroundingInputDir)
+			t.Fatalf("live input generation requires %s or %s", command, liveVoiceToolGroundingInputDir)
 		}
 	}
 

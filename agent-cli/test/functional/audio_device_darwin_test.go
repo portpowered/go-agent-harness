@@ -1,16 +1,15 @@
-//go:build darwin && cgo && !nomicrophone
+//go:build e2e && darwin && cgo && !nomicrophone
 
 package functional
-
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"testing"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -20,9 +19,6 @@ import (
 // so sample rate, callback sizing, render-reference timing, and AUVoiceIO EAC
 // are all part of the assertion boundary.
 func TestCoreAudioVoiceProcessingDeviceLoop(t *testing.T) {
-	if os.Getenv("AGENT_TEST_REAL_AUDIO") != "1" {
-		t.Skip("set AGENT_TEST_REAL_AUDIO=1 to exercise physical AUVoiceIO devices")
-	}
 	registry := devicegw.NewCoreAudioDeviceRegistry()
 	input, err := registry.Default(devicegw.DirectionInput)
 	if err != nil {

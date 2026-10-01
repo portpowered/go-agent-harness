@@ -564,9 +564,14 @@ func (f *startupAnnouncementFixture) sendFinalResponse(connection *websocket.Con
 	f.mu.Lock()
 	f.finalResponses++
 	f.mu.Unlock()
-	time.Sleep(20 * time.Millisecond)
+	// Let the client drain the final response before the provider closes.
+	drain := time.NewTimer(startupAnnouncementCloseDelay)
+	<-drain.C
 	return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "startup_routing_complete"})
 }
+
+// startupAnnouncementCloseDelay separates the final response from session close.
+const startupAnnouncementCloseDelay = 20 * time.Millisecond
 
 func (f *startupAnnouncementFixture) send(connection *websocket.Conn, event any) error {
 	return connection.WriteJSON(event)

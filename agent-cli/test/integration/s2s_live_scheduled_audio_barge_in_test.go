@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	scheduledAudioBargeInOptInEnv    = "AGENT_HARNESS_LIVE_SCHEDULED_AUDIO_BARGE_IN"
 	scheduledAudioBargeInMaxDuration = 45 * time.Second
 	scheduledAudioBargeInTestTimeout = 60 * time.Second
 )
@@ -32,12 +31,9 @@ const (
 // stdin proof because this is the customer-facing opt-in that restores a
 // scripted interruption without changing ordinary scheduled-turn behavior.
 func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
-	if os.Getenv(scheduledAudioBargeInOptInEnv) != "1" {
-		t.Skipf("%s!=1; scheduled audio barge-in confirmation is explicit opt-in", scheduledAudioBargeInOptInEnv)
-	}
 	apiKey := strings.TrimSpace(os.Getenv(liveBargeInAPIKeyEnv))
 	if apiKey == "" {
-		t.Skipf("%s is not set; scheduled audio barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)
+		t.Fatalf("%s is not set; scheduled audio barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)
 	}
 	t.Setenv("AGENT_MODEL__OPENAI__API_KEY", apiKey)
 
@@ -88,7 +84,7 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 	capture, loadErr := gwtesting.LoadSessionCapture(capturePath)
 	if loadErr != nil {
 		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Skipf("INCONCLUSIVE scheduled audio barge-in confirmation: provider/setup result did not produce a capture")
+			t.Fatalf("INCONCLUSIVE scheduled audio barge-in confirmation: provider/setup result did not produce a capture")
 		}
 		t.Fatalf("scheduled audio barge-in capture was not written: %v", runErr)
 	}
@@ -96,20 +92,20 @@ func TestLiveSessionScheduledAudioBargeIn(t *testing.T) {
 	ledger, facts, validationErr := normalizeLiveBargeInCapture(capture)
 	var inconclusive *liveBargeInInconclusiveError
 	if errors.As(validationErr, &inconclusive) {
-		t.Skipf("INCONCLUSIVE scheduled audio barge-in confirmation: %s", inconclusive.Reason)
+		t.Fatalf("INCONCLUSIVE scheduled audio barge-in confirmation: %s", inconclusive.Reason)
 	}
 	if validationErr != nil {
 		t.Fatalf("scheduled audio barge-in capture adapter failed: %v", validationErr)
 	}
 	if runErr != nil {
 		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Skipf("INCONCLUSIVE scheduled audio barge-in confirmation: provider result class=%s", liveBargeInRunErrorClass(runErr))
+			t.Fatalf("INCONCLUSIVE scheduled audio barge-in confirmation: provider result class=%s", liveBargeInRunErrorClass(runErr))
 		}
 		t.Fatalf("scheduled audio barge-in command returned a contract failure: %v", runErr)
 	}
 	if boundaryErr := validateScheduledAudioBargeInBoundaries(facts, streamTrace); boundaryErr != nil {
 		if errors.As(boundaryErr, &inconclusive) {
-			t.Skipf("INCONCLUSIVE scheduled audio barge-in confirmation: %s", inconclusive.Reason)
+			t.Fatalf("INCONCLUSIVE scheduled audio barge-in confirmation: %s", inconclusive.Reason)
 		}
 		t.Fatalf("scheduled audio barge-in boundary failed: %v", boundaryErr)
 	}

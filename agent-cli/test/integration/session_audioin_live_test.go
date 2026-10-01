@@ -29,10 +29,7 @@ const liveAudioInTimeout = 60 * time.Second
 func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime audio-in round trip")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_AUDIOIN") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_AUDIOIN!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime audio-in round trip")
 	}
 
 	workDir := t.TempDir()
@@ -92,10 +89,7 @@ func TestLiveSessionAudioInElicitsSpokenResponse(t *testing.T) {
 func TestLiveSessionRecordDirAudioInTurnFinalizesOrderedBundle(t *testing.T) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime record-dir audio-in-turn proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_AUDIOIN") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_AUDIOIN!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime record-dir audio-in-turn proof")
 	}
 
 	for _, testCase := range []struct {

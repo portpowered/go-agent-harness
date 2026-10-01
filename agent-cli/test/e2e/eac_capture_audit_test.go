@@ -21,7 +21,7 @@ import (
 func TestEAC24Through33CaptureIntegrity(t *testing.T) {
 	directory := os.Getenv("EAC_CAPTURE_DIR")
 	if directory == "" {
-		t.Skip("set EAC_CAPTURE_DIR to audit eac24.json through eac33.json")
+		t.Fatal("set EAC_CAPTURE_DIR to the directory holding eac24.json through eac33.json")
 	}
 	for number := 24; number <= 33; number++ {
 

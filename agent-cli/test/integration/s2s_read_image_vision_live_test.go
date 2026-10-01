@@ -37,10 +37,7 @@ const (
 // the post-tool continuation has produced its terminal response.
 func TestLiveReadImageCLI_DefaultReadableAndMissing(t *testing.T) {
 	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("OPENAI_API_KEY is not set; skipping the live OpenAI Realtime read_image proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_READ_IMAGE") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_READ_IMAGE!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("OPENAI_API_KEY is not set; it is required by the live OpenAI Realtime read_image proof")
 	}
 
 	imagePath := readImageFixturePath(t)
@@ -99,10 +96,7 @@ func TestLiveReadImageCLI_DefaultReadableAndMissing(t *testing.T) {
 func TestLiveReadImageCLI_SpokenReadableImage(t *testing.T) {
 	apiKey := strings.TrimSpace(os.Getenv("AGENT_MODEL__OPENAI__API_KEY"))
 	if apiKey == "" {
-		t.Skip("AGENT_MODEL__OPENAI__API_KEY is not set; skipping the live spoken read_image proof")
-	}
-	if os.Getenv("AGENT_HARNESS_LIVE_READ_IMAGE") != "1" {
-		t.Skip("AGENT_HARNESS_LIVE_READ_IMAGE!=1; this live test bills real API usage and must be opted into explicitly")
+		t.Fatal("AGENT_MODEL__OPENAI__API_KEY is not set; it is required by the live spoken read_image proof")
 	}
 
 	imageBytes := readImageFixtureBytes(t)

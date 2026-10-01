@@ -26,9 +26,6 @@ import (
 // WAV ingress, OpenAI Realtime websocket, tool execution/continuation, capture,
 // and WAV egress boundaries and compares the provider bytes with both files.
 func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
-	if os.Getenv("OPENAI_REALTIME_21_LIVE") != "1" {
-		t.Skip("set OPENAI_REALTIME_21_LIVE=1 to run the billed gpt-realtime-2.1 scenario")
-	}
 	if os.Getenv("AGENT_MODEL__OPENAI__API_KEY") == "" {
 		t.Fatal("AGENT_MODEL__OPENAI__API_KEY is required")
 	}

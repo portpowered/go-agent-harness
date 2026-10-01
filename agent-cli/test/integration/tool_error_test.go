@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -82,17 +83,21 @@ func requireTypedToolError(events []streamEventLine) error {
 func newToolErrorConfigDir(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	configPath := tmpDir + string(os.PathSeparator) + config.ConfigFileName
+	if err := writeToolErrorConfig(tmpDir); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return tmpDir
+}
+
+func writeToolErrorConfig(dir string) error {
+	configPath := dir + string(os.PathSeparator) + config.ConfigFileName
 	configYAML := `model:
   provider: openrouter
   openrouter:
     model: z-ai/glm-4.7
     api_key: replay-dummy
 `
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	return tmpDir
+	return os.WriteFile(configPath, []byte(configYAML), 0o600)
 }
 
 // TestFailingToolCallEmitsTypedDeltaErrorAndSessionSurvives replays a recorded
@@ -214,6 +219,12 @@ func (toolErrorDeviceService) ProbeAvailability(context.Context) (serviceDevices
 
 func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, string, error) {
 	t.Helper()
+	return runOverrideCLIInDir(executor, newToolErrorConfigDir(t))
+}
+
+// runOverrideCLIInDir drives the ask command with executor against the
+// tool-error config in configDir.
+func runOverrideCLIInDir(executor messages.ToolExecutor, configDir string) (string, string, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
 	service := newPublicTextSessionService(globalFlags, executor, &toolCallInferencer{}, services.DefaultToolDefs(nil))
@@ -249,7 +260,7 @@ func runOverrideCLI(t *testing.T, executor messages.ToolExecutor) (string, strin
 	rootCmd.SetErr(tw.Stderr())
 	rootCmd.SetArgs([]string{
 		"ask",
-		"--config-dir", newToolErrorConfigDir(t),
+		"--config-dir", configDir,
 		"--system-prompt", "none",
 		"--no-system-information",
 		"--stream",
@@ -279,17 +290,23 @@ func TestNegativeControlSuppressedToolErrorFailsScenario(t *testing.T) {
 	}
 }
 
-// TestNegativeControlUnhandledPanicFailsScenario re-runs this test binary as a
-// subprocess with an executor that panics inside the tool path and asserts the
-// scenario fails explicitly as detected panic (crash, not timeout).
-func TestNegativeControlUnhandledPanicFailsScenario(t *testing.T) {
-	if os.Getenv(toolErrorPanicHelperEnv) == "" {
-		t.Skip("negative-control helper; runs only as a subprocess of itself")
+// runToolErrorPanicHelper is the re-executed subprocess of the panic control:
+// TestMain runs it in place of the tests when toolErrorPanicHelperEnv is set.
+// An executor that panics inside the tool path must crash this process with an
+// explicit panic report (crash, not timeout); returning is a control failure.
+func runToolErrorPanicHelper() int {
+	dir, err := os.MkdirTemp("", "tool-error-panic-helper")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create panic helper config directory: %v\n", err)
+		return 1
 	}
-	stdout, stderr, execErr := runOverrideCLI(t, panickingToolExecutor{})
-	_ = stdout
-	_ = stderr
-	_ = execErr // unreachable when the panic propagates; kept for symmetry
+	if err := writeToolErrorConfig(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "write panic helper config: %v\n", err)
+		return 1
+	}
+	_, _, execErr := runOverrideCLIInDir(panickingToolExecutor{}, dir)
+	fmt.Fprintf(os.Stderr, "panic control returned without crashing: %v\n", execErr)
+	return 1
 }
 
 const toolErrorPanicHelperEnv = "S2S_V4C_TOOL_ERROR_PANIC_HELPER"
@@ -298,10 +315,7 @@ const toolErrorPanicHelperEnv = "S2S_V4C_TOOL_ERROR_PANIC_HELPER"
 // verifies the panic manifests as an explicit crash with a panic report rather
 // than a hang or clean exit.
 func TestNegativeControlUnhandledPanicDetectedByParent(t *testing.T) {
-	if os.Getenv(toolErrorPanicHelperEnv) != "" {
-		t.Skip("parent-side assertion for the panic control")
-	}
-	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=TestNegativeControlUnhandledPanicFailsScenario", "-test.count=1")
+	cmd := exec.Command(os.Args[0])
 	cmd.Env = append(os.Environ(), toolErrorPanicHelperEnv+"=1")
 	var out strings.Builder
 	cmd.Stdout = &out

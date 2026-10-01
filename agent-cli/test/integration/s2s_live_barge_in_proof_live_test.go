@@ -29,7 +29,6 @@ import (
 
 const (
 	liveBargeInAPIKeyEnv = "OPENAI_API_KEY"
-	liveBargeInOptInEnv  = "AGENT_HARNESS_LIVE_S2S_BARGE_IN_V3"
 	liveBargeInModel     = "gpt-realtime"
 	liveBargeInTurns     = 4
 
@@ -597,12 +596,9 @@ func liveBargeInSanitizedLedger(facts liveBargeInCaptureFacts, trace *liveBargeI
 // provider setup failure, unavailable service, timeout, or missed timing gate
 // is reported as inconclusive; it is never turned into a successful ledger.
 func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
-	if os.Getenv(liveBargeInOptInEnv) != "1" {
-		t.Skipf("%s!=1; live OpenAI Realtime barge-in confirmation is explicit opt-in", liveBargeInOptInEnv)
-	}
 	apiKey := os.Getenv(liveBargeInAPIKeyEnv)
 	if apiKey == "" {
-		t.Skipf("%s is not set; live OpenAI Realtime barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)
+		t.Fatalf("%s is not set; live OpenAI Realtime barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)
 	}
 
 	trace := newLiveBargeInTrace()
@@ -645,7 +641,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 	capture, loadErr := gwtesting.LoadSessionCapture(capturePath)
 	if loadErr != nil {
 		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Skipf("INCONCLUSIVE live barge-in proof: provider/setup result did not produce a capture")
+			t.Fatalf("INCONCLUSIVE live barge-in proof: provider/setup result did not produce a capture")
 		}
 		t.Fatalf("live barge-in capture was not written; result class=%s", liveBargeInRunErrorClass(runErr))
 	}
@@ -653,16 +649,16 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 	ledger, facts, validationErr := normalizeLiveBargeInCapture(capture)
 	var inconclusive *liveBargeInInconclusiveError
 	if errors.As(validationErr, &inconclusive) {
-		t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+		t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
 	if runErr != nil {
 		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Skipf("INCONCLUSIVE live barge-in proof: provider result class=%s; capture=%s; trace=%s", liveBargeInRunErrorClass(runErr), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+			t.Fatalf("INCONCLUSIVE live barge-in proof: provider result class=%s; capture=%s; trace=%s", liveBargeInRunErrorClass(runErr), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 		}
 		if validationErr == nil {
 			if boundaryErr := validateLiveBargeInBoundaries(facts, trace); boundaryErr != nil {
 				if errors.As(boundaryErr, &inconclusive) {
-					t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+					t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 				}
 			}
 		}
@@ -673,7 +669,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 	}
 	if boundaryErr := validateLiveBargeInBoundaries(facts, trace); boundaryErr != nil {
 		if errors.As(boundaryErr, &inconclusive) {
-			t.Skipf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+			t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 		}
 		t.Fatalf("live barge-in collision boundary failed: %v; capture=%s; trace=%s", boundaryErr, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}

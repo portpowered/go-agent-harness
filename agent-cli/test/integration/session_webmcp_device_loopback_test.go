@@ -294,9 +294,9 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 				// Provider events are asynchronous to the client send boundary.
 				// Preserve that ordering so the session observer registers the
 				// continuation request before its response begins.
-				time.Sleep(25 * time.Millisecond)
-				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
-				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
+				waitWebMCPDeviceProviderDelay(webMCPDeviceContinuationDelay)
+				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
+				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
 				s.inbound.frames <- audio.PCMFrame{Samples: webMCPDeviceSignal(720, 9300), EndOfResponse: true}
 				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextStartValue()})
 				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextDeltaValue("Cube moves queued.")})
@@ -307,13 +307,28 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 				case <-s.inbound.read:
 				case <-time.After(time.Second):
 				}
-				time.Sleep(100 * time.Millisecond)
-				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("webmcp-device", "fixture complete")})
+				waitWebMCPDeviceProviderDelay(webMCPDeviceCloseDelay)
+				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("webmcp-device", "fixture complete")})
 			}()
 		})
 	}
 	return true
 }
+
+const (
+	// webMCPDeviceContinuationDelay is the scripted provider latency before the
+	// continuation response begins.
+	webMCPDeviceContinuationDelay = 25 * time.Millisecond
+	// webMCPDeviceCloseDelay lets playback drain before the scripted close.
+	webMCPDeviceCloseDelay = 100 * time.Millisecond
+)
+
+// waitWebMCPDeviceProviderDelay waits one scripted provider delay.
+func waitWebMCPDeviceProviderDelay(delay time.Duration) {
+	timer := time.NewTimer(delay)
+	<-timer.C
+}
+
 func (s *webMCPDeviceSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
 func (s *webMCPDeviceSession) Done() <-chan struct{}                                  { return s.done }
 func (s *webMCPDeviceSession) Close() (err error) {
