@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -163,16 +164,16 @@ func TestRoomReplayServiceValidatesOutputBoundaryThroughSymlinks(t *testing.T) {
 
 	external := t.TempDir()
 	linkToBundle := filepath.Join(external, "bundle-link")
-	if err := os.Symlink(bundle, linkToBundle); err != nil {
-		t.Fatalf("create symlink: %v", err)
+	if !symlinkOrUnsupported(t, bundle, linkToBundle) {
+		return
 	}
 	if err := service.ValidateOutput(plan, filepath.Join(linkToBundle, "output")); err == nil {
 		t.Fatal("output through an external symlink into the source bundle was accepted")
 	}
 
 	linkFromBundle := filepath.Join(bundle, "external-link")
-	if err := os.Symlink(external, linkFromBundle); err != nil {
-		t.Fatalf("create symlink: %v", err)
+	if !symlinkOrUnsupported(t, external, linkFromBundle) {
+		return
 	}
 	if err := service.ValidateOutput(plan, filepath.Join(linkFromBundle, "output")); err != nil {
 		t.Fatalf("output through a source symlink to an external directory was rejected: %v", err)
@@ -385,4 +386,23 @@ func loadRoomReplayWithTimeline(t *testing.T, line string) error {
 	writeManifestValue(t, bundle, manifest)
 	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	return err
+}
+
+// symlinkOrUnsupported creates link pointing at target. Windows creates
+// symlinks only with Developer Mode or the create-symbolic-link privilege;
+// without it the capability is absent, so this reports false and the caller
+// ends its symlink assertions. Every other platform supports symlinks, so a
+// failure there is fatal.
+func symlinkOrUnsupported(t *testing.T, target, link string) bool {
+	t.Helper()
+	err := os.Symlink(target, link)
+	if err == nil {
+		return true
+	}
+	if runtime.GOOS == "windows" {
+		t.Logf("symlink capability unavailable: %v", err)
+		return false
+	}
+	t.Fatalf("create symlink %s -> %s: %v", link, target, err)
+	return false
 }

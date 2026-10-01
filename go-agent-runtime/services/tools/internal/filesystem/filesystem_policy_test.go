@@ -75,8 +75,8 @@ func TestFilesystemPolicy_ProtectsSystemReadsAndSymlinkAliases(t *testing.T) {
 	}
 
 	linkPath := filepath.Join(primary, "system-alias")
-	if err := os.Symlink(systemRoot, linkPath); err != nil {
-		t.Fatalf("create symlink: %v", err)
+	if !symlinkOrUnsupported(t, systemRoot, linkPath) {
+		return
 	}
 	aliasPath := filepath.Join(linkPath, filepath.Base(systemFile))
 	msgs, err = readTool.Execute(context.Background(), map[string]any{"path": aliasPath})
@@ -336,6 +336,9 @@ func TestFilesystemPolicyAppliesToReadsListsAndAllMutationTools(t *testing.T) {
 }
 
 func TestFilesystemPolicyResolvesSymlinksBeforeEveryFilesystemOperation(t *testing.T) {
+	if !symlinkOrUnsupported(t, t.TempDir(), filepath.Join(t.TempDir(), "probe")) {
+		return
+	}
 	fixture := newSymlinkFixture(t)
 	policy, err := NewFilesystemPolicy(fixture.primary)
 	if err != nil {

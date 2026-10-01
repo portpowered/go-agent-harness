@@ -572,9 +572,14 @@ func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {
 		logged = append(logged, record)
 		return nil
 	})
-	fallback := resolvePlaybackDiagnosticSink(t.Context(), nil, logger)
+	fallback := resolvePlaybackDiagnosticSink(t.Context(), sessiontrace.PlaybackDiagnosticsOptions{Logger: logger})
 	if fallback == nil {
 		t.Fatal("an unwired playback diagnostic sink was not replaced by the fallback")
+	}
+	var written strings.Builder
+	resolvePlaybackDiagnosticSink(t.Context(), sessiontrace.PlaybackDiagnosticsOptions{DiagnosticWriter: &written}).RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow})
+	if !strings.Contains(written.String(), "event="+SessionDiagnosticEventPlaybackOverflow) {
+		t.Fatalf("diagnostic without sink or logger = %q, want it written to the diagnostic writer", written.String())
 	}
 	fallback.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: map[string]string{"dropped": "3"}})
 	if len(logged) != 1 || logged[0].Fields["event"] != SessionDiagnosticEventPlaybackOverflow || logged[0].Fields["dropped"] != "3" {

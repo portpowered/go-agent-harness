@@ -215,6 +215,11 @@ func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 			wantText:    "final after empty",
 			wantContent: "",
 		},
+		// A failed tool batch ends the turn with the tool's error. The loop
+		// records no tool result for a failed batch, so content returned
+		// alongside the error is not retained: these rows assert the
+		// propagated error and that the turn kept the assistant's tool call
+		// without a tool result.
 		{
 			name:        "tool error is propagated",
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
@@ -223,7 +228,7 @@ func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 			wantErrText: `tool "lookup" failed: tool exploded`,
 		},
 		{
-			name:        "content plus error remains an error",
+			name:        "content plus error is an error and its content is not retained",
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID, Content: "partial content"},
 			toolErr:     partialFailure,
 			wantErr:     partialFailure,
@@ -370,5 +375,23 @@ func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.Tool
 	}
 	if tt.wantErr == nil {
 		assertToolResultMessage(t, runData, toolCall.ID, tt.wantContent)
+		return
 	}
+	assertFailedToolTurnRetained(t, runData, toolCall)
+}
+
+// assertFailedToolTurnRetained checks what a failed tool turn keeps: the
+// assistant message that requested the call, and no tool result.
+func assertFailedToolTurnRetained(t *testing.T, runData *RunData, toolCall messages.ToolCall) {
+	t.Helper()
+	history := runData.Loop.GetConversationHistory()
+	if results := toolMessages(history); len(results) != 0 {
+		t.Fatalf("tool results after a failed tool = %#v, want none", results)
+	}
+	for _, msg := range runData.producedMessages {
+		if msg.Role == messages.RoleAssistant && len(msg.ToolCalls) == 1 && msg.ToolCalls[0].ID == toolCall.ID {
+			return
+		}
+	}
+	t.Fatalf("produced messages = %#v, want the assistant tool call %q retained", runData.producedMessages, toolCall.ID)
 }

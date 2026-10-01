@@ -3,6 +3,7 @@ package sessiontrace
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -184,6 +185,10 @@ type PlaybackDiagnosticsOptions struct {
 	MetricSampler observability.MetricSampler
 	Logger        observability.Logger
 	Runtime       RuntimeRecorder
+	// DiagnosticWriter receives playback diagnostics when neither Sink nor
+	// Logger is configured, so an overflow is never silently dropped. Nil
+	// selects the process's standard error.
+	DiagnosticWriter io.Writer
 }
 
 type PlaybackDiagnostics interface {

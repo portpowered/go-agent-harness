@@ -6,16 +6,22 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"sync"
 	"syscall"
 	"unsafe"
 )
 
-// user32Proc and gdi32Proc resolve a screen-capture procedure lazily. The
-// DLLs are already loaded in every Windows process, so resolving per call
-// only takes a reference instead of keeping package-level handles.
-func user32Proc(name string) *syscall.LazyProc { return syscall.NewLazyDLL("user32.dll").NewProc(name) }
+// user32DLL and gdi32DLL load the screen-capture DLLs once per process; the
+// Windows loader owns the modules for the life of the process.
+var (
+	user32DLL = sync.OnceValue(func() *syscall.LazyDLL { return syscall.NewLazyDLL("user32.dll") }) //nolint:gochecknoglobals // Process-wide DLL handle, loaded once.
+	gdi32DLL  = sync.OnceValue(func() *syscall.LazyDLL { return syscall.NewLazyDLL("gdi32.dll") })  //nolint:gochecknoglobals // Process-wide DLL handle, loaded once.
+)
 
-func gdi32Proc(name string) *syscall.LazyProc { return syscall.NewLazyDLL("gdi32.dll").NewProc(name) }
+// user32Proc and gdi32Proc resolve a screen-capture procedure.
+func user32Proc(name string) *syscall.LazyProc { return user32DLL().NewProc(name) }
+
+func gdi32Proc(name string) *syscall.LazyProc { return gdi32DLL().NewProc(name) }
 
 const (
 	smCxScreen          = 0

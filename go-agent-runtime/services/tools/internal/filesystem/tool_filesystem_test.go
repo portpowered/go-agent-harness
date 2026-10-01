@@ -442,8 +442,8 @@ func executeOutsideTool(ctx context.Context, tool core.Tool, path string) ([]mes
 func assertRestrictedExternalSymlink(t *testing.T, ctx context.Context, f realFilesystemFixture, readTool core.Tool) {
 	t.Helper()
 	linkPath := filepath.Join(f.workspace, "external-link.txt")
-	if err := os.Symlink(f.outsidePath, linkPath); err != nil {
-		t.Fatalf("create external symlink: %v", err)
+	if !symlinkOrUnsupported(t, f.outsidePath, linkPath) {
+		return
 	}
 	if _, err := validatePath(linkPath, f.workspace, true); err == nil || !strings.Contains(err.Error(), "symlink resolves outside workspace") {
 		t.Fatalf("external symlink validation error = %v", err)

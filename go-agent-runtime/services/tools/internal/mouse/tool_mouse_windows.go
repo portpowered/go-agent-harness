@@ -5,14 +5,18 @@ package mouse
 import (
 	"context"
 	"fmt"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 )
 
-// user32Proc resolves a user32.dll input procedure lazily; user32.dll is
-// already loaded in every Windows process.
-func user32Proc(name string) *syscall.LazyProc { return syscall.NewLazyDLL("user32.dll").NewProc(name) }
+// user32DLL loads user32.dll once per process; the Windows loader owns the
+// module for the life of the process.
+var user32DLL = sync.OnceValue(func() *syscall.LazyDLL { return syscall.NewLazyDLL("user32.dll") }) //nolint:gochecknoglobals // Process-wide DLL handle, loaded once.
+
+// user32Proc resolves a user32.dll input procedure.
+func user32Proc(name string) *syscall.LazyProc { return user32DLL().NewProc(name) }
 
 const (
 	mouseClickPause       = 50 * time.Millisecond

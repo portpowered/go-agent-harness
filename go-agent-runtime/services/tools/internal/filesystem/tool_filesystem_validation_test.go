@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )

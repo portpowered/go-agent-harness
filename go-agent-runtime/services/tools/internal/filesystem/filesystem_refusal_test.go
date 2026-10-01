@@ -310,8 +310,8 @@ func assertTraversalWrite(t *testing.T, f writeRootsFixture, writeTool core.Tool
 func assertExternalSymlinkWrite(t *testing.T, f writeRootsFixture, writeTool core.Tool) {
 	t.Helper()
 	linkParent := filepath.Join(f.primary, "external")
-	if err := os.Symlink(f.outside, linkParent); err != nil {
-		t.Fatalf("create symlink: %v", err)
+	if !symlinkOrUnsupported(t, f.outside, linkParent) {
+		return
 	}
 	path := filepath.Join(linkParent, "created.txt")
 	msgs, err := writeTool.Execute(context.Background(), map[string]any{"path": path, "content": "must not write"})

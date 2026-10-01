@@ -295,3 +295,22 @@ func TestEditAndAppendTools_SuccessAndArgumentContracts(t *testing.T) {
 // except the superuser, while Windows chmod does not deny reads or directory
 // writes without ACL changes.
 func permissionBitsDenyAccess() bool { return runtime.GOOS != "windows" && os.Geteuid() != 0 }
+
+// symlinkOrUnsupported creates link pointing at target. Windows creates
+// symlinks only with Developer Mode or the create-symbolic-link privilege;
+// without it the capability is absent, so this reports false and the caller
+// ends its symlink assertions. Every other platform supports symlinks, so a
+// failure there is fatal.
+func symlinkOrUnsupported(t *testing.T, target, link string) bool {
+	t.Helper()
+	err := os.Symlink(target, link)
+	if err == nil {
+		return true
+	}
+	if runtime.GOOS == "windows" {
+		t.Logf("symlink capability unavailable: %v", err)
+		return false
+	}
+	t.Fatalf("create symlink %s -> %s: %v", link, target, err)
+	return false
+}
