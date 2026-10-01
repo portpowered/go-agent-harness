@@ -467,9 +467,8 @@ The delivered session runtime ownership model for this Phase 2 slice is:
 This slice resolves the scoped `HC-03` provider-constructor ownership issue
 and the remaining session-helper portion of `CTX-02`, while narrowing but not
 fully resolving `DI-04` in `docs/architecture/contract-gap-audit.md`.
-Reviewers validating checklist advancement should cite `P2-SRO-04`, `P2-GATE-01`, the broader
-constructor-ownership row `P2-COB-04`, and
-`docs/internal/phase-2-session-runtime-ownership-validator.md`.
+Reviewers validating checklist advancement should cite `P2-SRO-04`, `P2-GATE-01`, and the broader
+constructor-ownership row `P2-COB-04`.
 
 ## Related Documentation
 

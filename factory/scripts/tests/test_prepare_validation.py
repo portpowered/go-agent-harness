@@ -16,10 +16,7 @@ from unittest import mock
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPTS_DIR.parents[1]
-C62_FIXTURE_DIR = (
-    REPO_ROOT
-    / "docs/temp/projects/audio-runtime/audio-runtime-c62-validation-contract-anchor-repair/fixtures"
-)
+C62_FIXTURE_DIR = SCRIPTS_DIR / "tests" / "fixtures" / "scope-amendment"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 

@@ -3,7 +3,7 @@ SHELL := /bin/bash
 GO ?= go
 MODULES := agent-cli go-agent-loop go-llm-gateway go-audio go-device-gateway go-agent-runtime
 COVERAGE_LIBRARY_MODULES := $(filter-out agent-cli,$(MODULES))
-LINT_MODULES := $(MODULES) tests/embedding tools/architecturegate tools/analyzergate tools/coveragegate tools/rtc-race-gate tools/session-race-gate tools/timingate scripts/webmcp-o0 test/localai
+LINT_MODULES := $(MODULES) tests/embedding tools/architecturegate tools/analyzergate tools/coveragegate tools/racegate tools/timingate tests/localai
 # The single lint policy, enforced on all code.
 LINT_CONFIG ?= .golangci.yml
 # LINT_SHARD selects the modules `make lint` and `make lint-cross` check:
@@ -136,19 +136,18 @@ TEST_TOOLS_ARCHITECTURE_GATE ?= 1
 # prints each one's output as a block); the Python modules themselves run
 # test-by-test across processes (scripts/unittest-parallel.py).
 TOOLS_PYTHON_TEST_MODULES := scripts.test_go_test_input_guard scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_module
-TOOLS_GO_TEST_MODULES := tools/analyzergate tools/session-race-gate tools/rtc-race-gate scripts/webmcp-o0
+TOOLS_GO_TEST_MODULES := tools/analyzergate tools/racegate
 # Tool modules whose tests always run fresh (-count=1): coveragegate runs `go
 # list` over the workspace and reads the repository's coverage-manifest,
 # timingate runs `go run .` in its module, and localai probes a local LocalAI
 # server; Go's test cache sees none of them.
-TOOLS_GO_FRESH_TEST_MODULES := tools/coveragegate tools/timingate test/localai
+TOOLS_GO_FRESH_TEST_MODULES := tools/coveragegate tools/timingate tests/localai
 # `go list` fields that decide which files a package builds and tests; the
 # packages whose fields differ between the hermetic coverage build and the
 # native build are the ones test-cgo-delta runs natively.
 PACKAGE_FILES_FORMAT := {{.ImportPath}} {{.GoFiles}} {{.CgoFiles}} {{.TestGoFiles}} {{.XTestGoFiles}}
 CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
-STATICCHECK ?= staticcheck
 ANALYZER_TOOL_DIR ?= .cache/go-tools
 ARCHITECTURE_POLICY := docs/architecture/architecture-policy.json
 ARCHITECTURE_BASELINE := docs/architecture/baselines
@@ -159,12 +158,15 @@ RTC_RACE_TIMEOUT ?= 30s
 # across the race targets' ~20 binaries that was a third of their time.
 RACE_GORACE ?= atexit_sleep_ms=0
 SESSIONS_RACE_TIMEOUT ?= 600s
+# tools/racegate runs these tests under the race detector and fails unless
+# each one runs exactly once and passes (comma-separated).
+RTC_RACE_TESTS := TestPeerS8ConcurrentConnectCloseAndReads,TestOutboundTrackSerializesConcurrentWrites,TestOutboundTrackConcurrentWriteCancelClose,TestInboundTrackS8ConcurrentIngestReadCancelClose
+SESSIONS_RACE_TESTS := TestConcurrentSessionsCompleteScriptedTurns,TestConcurrentSessionsZeroCrossSessionLeakage,TestIsolationCheckerNamesLeakingSessionAndRecord,TestSharedCaptureBufferAliasingFailsIsolationCheck,TestConcurrentSessionsPerEventOrderingUnderInterleaving,TestCancellingOneMidRunSessionLeavesOthersUndisturbed
+# A session capacity test that fails only with this watchdog is retried once alone.
+SESSIONS_RACE_WATCHDOG := concurrent run did not finish within 2m0s (stuck sessions likely)
 GOLANGCI_LINT_VERSION ?= v2.9.0
-STATICCHECK_VERSION ?= 2026.1
 GOLANGCI_LINT_PACKAGE ?= github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-STATICCHECK_PACKAGE ?= honnef.co/go/tools/cmd/staticcheck
 GOLANGCI_LINT_INSTALL ?= go install $(GOLANGCI_LINT_PACKAGE)@$(GOLANGCI_LINT_VERSION)
-STATICCHECK_INSTALL ?= go install $(STATICCHECK_PACKAGE)@$(STATICCHECK_VERSION)
 GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@v2.17.0
 PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
@@ -194,14 +196,13 @@ define agent_cli_split_tests
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: architecture-check size-check architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck vet lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo staticcheck test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta validate ci release-check release-tags release-push release-dry-run release clean test-budget test-hermetic
+.PHONY: architecture-size-check test-architecture-gate verify-architecture embed-check
+.PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\nOptional skip env vars:\n"
 	@printf "  %-18s %s\n" "SKIP_LINT=1" "Skip golangci-lint with a visible message."
-	@printf "  %-18s %s\n" "SKIP_STATICCHECK=1" "Skip staticcheck with a visible message."
 	@printf "  %-18s %s\n" "ANALYZER_TOOL_DIR=..." "Cache automatically installed pinned analyzers in this directory."
 	@printf "  %-18s %s\n" "COVERAGE_BASE=..." "Git ref used as the changed-package coverage comparison base."
 	@printf "\nOpt-in test env vars:\n"
@@ -240,13 +241,6 @@ fmt-fix: ## Rewrite Go files in workspace modules with gofmt.
 	for module in $(LINT_MODULES); do \
 		echo "==> fmt-fix $$module"; \
 		(cd "$$module" && find . -name '*.go' -not -path './vendor/*' -exec gofmt -w {} +); \
-	done
-
-vet: ## Run go vet across all workspace modules.
-	@set -euo pipefail; \
-	for module in $(LINT_MODULES); do \
-		echo "==> vet $$module"; \
-		(cd "$$module" && GOWORK=off $(GO) vet ./...); \
 	done
 
 # golangci_resolve resolves the pinned golangci-lint into $$analyzer, or exits
@@ -343,31 +337,6 @@ lint-darwin-cgo: ## On macOS, run golangci-lint with cgo on packages holding cgo
 		GOOS=darwin CGO_ENABLED=1 $(golangci_run) -- $$packages; \
 	done
 
-staticcheck: ## Run staticcheck across all workspace modules.
-	@set -euo pipefail; \
-	if [ "$${SKIP_STATICCHECK:-0}" = "1" ]; then \
-		case "$${CI:-}" in true|1) echo "SKIP_STATICCHECK is not allowed in CI." >&2; exit 1 ;; esac; \
-		echo "==> staticcheck skipped via SKIP_STATICCHECK=1"; \
-		exit 0; \
-	fi; \
-	if ! analyzer="$$(cd tools/analyzergate && GOWORK=off $(GO) run . \
-		--tool staticcheck \
-		--expected-version "$(STATICCHECK_VERSION)" \
-		--candidate "$(STATICCHECK)" \
-		--go "$(GO)" \
-		--install-package "$(STATICCHECK_PACKAGE)" \
-		--tool-dir "$(abspath $(ANALYZER_TOOL_DIR))" \
-		--working-dir "$(CURDIR)")"; then \
-		echo "staticcheck resolution failed for pinned version $(STATICCHECK_VERSION)." >&2; \
-		echo "Install with: $(STATICCHECK_INSTALL)" >&2; \
-		exit 1; \
-	fi; \
-	echo "==> staticcheck using $$analyzer (pinned $(STATICCHECK_VERSION))"; \
-	for module in $(LINT_MODULES); do \
-		echo "==> staticcheck $$module"; \
-		(cd "$$module" && GOWORK=off "$$analyzer" ./...); \
-	done
-
 test: ## Run deterministic Go tests across all workspace modules.
 	@set -euo pipefail; \
 	echo "==> test $(MODULES) (at most $(TEST_MODULE_JOBS) modules at once)"; \
@@ -406,12 +375,6 @@ test-cgo-delta: ## Test natively (cgo, real microphone backend) only the package
 			(cd "$$module" && $(call go_test_split,$$module,$$packages,$(GO_TEST_COUNT_FLAG) -timeout "$(GO_TEST_TIMEOUT)")); \
 		fi; \
 	done
-
-architecture-check: ## Enforce service ownership, public contracts, and dependency direction.
-	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture
-
-size-check: ## Enforce package, file, and function budgets against exact legacy debt.
-	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check size
 
 architecture-size-check: ## Enforce architecture and size budgets in one shared inventory pass.
 	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture,size
@@ -453,7 +416,7 @@ LOOP_RACE_PACKAGES := ./test/functional/sessions ./test/functional/duplex ./pkg/
 test-loop-race: ## Run the go-agent-loop session, engine, participant, agent-loop and duplex tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-loop-race go-agent-loop $(LOOP_RACE_PACKAGES)"; \
-	skip="$$(cd tools/session-race-gate && GOWORK=off $(GO) run . -print-run-pattern)"; \
+	skip="$$(cd tools/racegate && GOWORK=off $(GO) run . -required "$(SESSIONS_RACE_TESTS)" -print-run-pattern)"; \
 	(cd go-agent-loop && CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) test -race -tags=nomicrophone $(LOOP_RACE_PACKAGES) -skip "$$skip" -count=1 -timeout "$(SESSIONS_RACE_TIMEOUT)")
 
 # The native (cgo, real malgo backend) Linux device tests: the hermetic
@@ -490,12 +453,12 @@ test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-rtc-race go-llm-gateway/pkg/transport/rtc"; \
-	(cd tools/rtc-race-gate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -go "$(GO)" -module-dir "../../go-llm-gateway" -timeout "$(RTC_RACE_TIMEOUT)")
+	(cd tools/racegate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -name "focused RTC race gate" -go "$(GO)" -module-dir "../../go-llm-gateway" -package ./pkg/transport/rtc -required "$(RTC_RACE_TESTS)" -timeout "$(RTC_RACE_TIMEOUT)")
 
 test-sessions-race: ## Run the concurrent session capacity acceptance tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-sessions-race go-agent-loop/test/functional/sessions"; \
-	(cd tools/session-race-gate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -go "$(GO)" -module-dir "../../go-agent-loop" -timeout "$(SESSIONS_RACE_TIMEOUT)")
+	(cd tools/racegate && GOWORK=off CGO_ENABLED=1 GORACE="$(RACE_GORACE)" $(GO) run . -name "concurrent session race gate" -go "$(GO)" -module-dir "../../go-agent-loop" -package ./test/functional/sessions -required "$(SESSIONS_RACE_TESTS)" -retry-on-output "$(SESSIONS_RACE_WATCHDOG)" -timeout "$(SESSIONS_RACE_TIMEOUT)")
 
 test-factory-scripts: ## Run deterministic factory script tests without writing Python bytecode into the repo checkout.
 	@set -euo pipefail; \
@@ -725,15 +688,7 @@ prepush: ## Run the fail-fast, timed local pre-push gate (PREPUSH_SCOPE=changed|
 prepush-full: ## Run the pre-push gate over every package (the CI test and coverage scope).
 	@$(MAKE) --no-print-directory prepush PREPUSH_SCOPE=full
 
-ci: ## Run the full deterministic validation pipeline used by contributors and CI.
-	@set -euo pipefail; \
-	steps="fmt verify-architecture vet lint staticcheck check-ci-test-partition test-tools test-factory-scripts build coverage"; \
-	for step in $$steps; do \
-		echo "==> ci $$step"; \
-		$(MAKE) "$$step" || { status=$$?; echo "==> ci failed at $$step"; exit $$status; }; \
-	done
-
-validate: ci ## Backward-compatible alias for the full deterministic root validation pipeline.
+ci: prepush-full ## Alias for prepush-full, the full local gate (the CI test and coverage scope).
 
 release-check: ## Validate release inputs and required release tooling.
 	@set -euo pipefail; \
@@ -782,15 +737,12 @@ release-dry-run: release-check ## Build release artifacts locally without publis
 release: release-check ## Run validation and publish the GitHub release for RELEASE_VERSION.
 	@set -euo pipefail; \
 	if [ "$${SKIP_RELEASE_CI:-$(SKIP_RELEASE_CI)}" != "1" ]; then \
-		$(MAKE) ci; \
+		$(MAKE) prepush-full; \
 	else \
 		echo "==> release skipping ci via SKIP_RELEASE_CI=1"; \
 	fi; \
 	$(MAKE) release-tags; \
 	$(GORELEASER) release --clean --config "$(GORELEASER_CONFIG)"
-
-clean: ## Remove root-generated build and coverage outputs.
-	rm -rf "$(COVERAGE_DIR)" "$(AGENT_CLI_OUTPUT)" dist
 
 test-budget: ## Run the PR-tier test scopes and enforce the package-time budget.
 	@set -euo pipefail; \

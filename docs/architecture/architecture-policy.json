@@ -11,11 +11,9 @@
     "tools/architecturegate",
     "tools/analyzergate",
     "tools/coveragegate",
-    "tools/rtc-race-gate",
-    "tools/session-race-gate",
+    "tools/racegate",
     "tools/timingate",
-    "scripts/webmcp-o0",
-    "test/localai"
+    "tests/localai"
   ],
   "patterns": [
     "./..."

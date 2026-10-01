@@ -213,8 +213,8 @@ Use `go/analysis` for package-local semantic rules and a graph/inventory driver 
 Implemented command entrypoints (their existence does not imply the complete repository currently passes):
 
 ```text
-make architecture-check       ownership, service shape, public API, DI boundaries
-make size-check               package/files/functions and exact legacy baseline
+make architecture-size-check  ownership, service shape, public API, DI boundaries,
+                              package/files/functions and exact legacy baseline
 make lint                     existing analyzer gate plus approved new checks
 make wire-check               every registered injector, generated diff clean
 make embed-check              independent external consumer and host parity

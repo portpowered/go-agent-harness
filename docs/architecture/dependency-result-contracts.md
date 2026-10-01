@@ -8,9 +8,9 @@ Use this note as the public migration guide for the Phase 4 dependency/result
 repair batch. The legacy helpers remain available, but new code should choose
 the explicit contracts below when ambiguity matters.
 
-Reviewer-facing closure evidence for the broader dependency, result, context,
-lifecycle, replay, prompt-resolution, and session-configuration map lives in
-`docs/internal/phase-4-dependency-result-context-lifecycle-contract.md`.
+The Phase 4 closure evidence for the broader dependency, result, context,
+lifecycle, replay, prompt-resolution, and session-configuration map is in git
+history (the removed `docs/internal` phase records).
 
 ## Caller-Owned Cancellation
 

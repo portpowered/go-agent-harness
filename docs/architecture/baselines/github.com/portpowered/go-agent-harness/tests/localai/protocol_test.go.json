@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source_commit": "ddebb8f44346cde4c7e989a1880b8ffac6179df0",
+  "entries": [
+    {
+      "rule": "cognitive-complexity",
+      "module": "github.com/portpowered/go-agent-harness/tests/localai",
+      "package": "github.com/portpowered/go-agent-harness/tests/localai",
+      "file": "protocol_test.go",
+      "symbol": "readResponse",
+      "value": 23,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    },
+    {
+      "rule": "file-lines",
+      "module": "github.com/portpowered/go-agent-harness/tests/localai",
+      "package": "github.com/portpowered/go-agent-harness/tests/localai",
+      "file": "protocol_test.go",
+      "symbol": "",
+      "value": 701,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; maintained tooling module remains in the inventory while its implementation is decomposed.",
+      "phase": "P0"
+    }
+  ],
+  "renames": [
+    {
+      "from": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/test/localai\u0000github.com/portpowered/go-agent-harness/test/localai\u0000protocol_test.go\u0000readResponse",
+      "to": "cognitive-complexity\u0000github.com/portpowered/go-agent-harness/tests/localai\u0000github.com/portpowered/go-agent-harness/tests/localai\u0000protocol_test.go\u0000readResponse"
+    },
+    {
+      "from": "file-lines\u0000github.com/portpowered/go-agent-harness/test/localai\u0000github.com/portpowered/go-agent-harness/test/localai\u0000protocol_test.go\u0000",
+      "to": "file-lines\u0000github.com/portpowered/go-agent-harness/tests/localai\u0000github.com/portpowered/go-agent-harness/tests/localai\u0000protocol_test.go\u0000"
+    }
+  ]
+}

@@ -126,9 +126,9 @@ keys under a linter's settings are therefore not rejected, as before.
 
 ## go vet and staticcheck
 
-CI does not run `go vet` or the standalone `staticcheck`. `make vet` and
-`make staticcheck` remain for local use. golangci-lint's `standard` set covers
-both on every lane, OS and build tag above:
+There is no separate `go vet` or standalone `staticcheck` step, in CI or in
+the Makefile. golangci-lint's `standard` set covers both on every lane, OS and
+build tag above:
 
 - `govet` runs the same analyzers as `go vet` in Go 1.26. It skips
   `loopclosure` for Go 1.22+ modules, where `go vet`'s `loopclosure` reports

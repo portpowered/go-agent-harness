@@ -115,5 +115,5 @@ repository root before or after the billed run:
 ```bash
 make -C agent-cli test
 make typecheck
-make vet
+make -C agent-cli vet
 ```

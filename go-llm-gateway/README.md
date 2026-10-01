@@ -571,8 +571,8 @@ error, cancellation, replay mismatch, replay incomplete, and partial-output
 paths. Remaining follow-up scope is provider-wide parity for every
 adapter/status/parser shape, every replay entrypoint, and a broader shared
 final-status design if callers need one final accessor across all stream APIs.
-Those limits are tracked in the Phase 4 repair scope record under
-`docs/internal`.
+Those limits were tracked in the Phase 4 repair scope record (removed from
+`docs/internal`; see git history).
 
 ## Using With go-agent-loop
 
@@ -639,15 +639,12 @@ Workspace validation from the repository root:
 make deps
 make fmt
 make typecheck
-make vet
 make lint
-make staticcheck
 make test
 make test-regressions
 make build
 make coverage
-make validate
-make ci
+make prepush-full
 ```
 
 Use the module-local targets when changing this package in isolation. Use the

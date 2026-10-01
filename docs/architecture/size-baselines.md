@@ -38,8 +38,7 @@ measured ceiling or diagnostic, rationale, and migration phase. The combined
 baseline is validated against the source at the merge base; it is not permission
 to accept the current checkout's violations.
 
-Run `make architecture-check` and `make size-check`. Both compare their baseline
-lane with `ARCHITECTURE_BASE` (default `origin/main`). New violations and growth
+Run `make architecture-size-check`. It compares the baseline with `ARCHITECTURE_BASE` (default `origin/main`). New violations and growth
 fail. Resolved entries must be removed, reduced measurements must lower their
 ceilings, and stale exemptions fail. Explicit one-to-one rename mappings cannot
 multiply debt or raise its ceiling. New runtime packages receive no copied-code

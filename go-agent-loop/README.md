@@ -195,16 +195,13 @@ Workspace validation from the repository root:
 make deps
 make fmt
 make typecheck
-make vet
 make lint
-make staticcheck
 make test
 make test-integration
 make test-regressions
 make build
 make coverage
-make validate
-make ci
+make prepush-full
 ```
 
 Use the module-local commands when changing this package in isolation. Use the
