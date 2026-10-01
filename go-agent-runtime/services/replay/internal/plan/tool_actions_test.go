@@ -1,8 +1,9 @@
 package plan
 
 import (
-	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"testing"
+
+	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 func TestPlannerLetsRuntimeReproduceToolOutputsAndImages(t *testing.T) {
@@ -61,4 +62,13 @@ func TestInitialToolsDescribeFirstAdvertisementOnly(t *testing.T) {
 	if _, known = initialToolNames(nil); known {
 		t.Fatal("missing advertisement was reported as known")
 	}
+}
+
+func closeReplayTestResource(t *testing.T, closer interface{ Close() error }, description string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := closer.Close(); err != nil {
+			t.Errorf("close %s: %v", description, err)
+		}
+	})
 }

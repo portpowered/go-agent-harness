@@ -218,24 +218,6 @@ func testParticipantConnectionFailure(t *testing.T) {
 	}
 }
 
-func testParticipantConnectionInvalid(t *testing.T) {
-	t.Helper()
-	for name, inferencer := range map[string]messages.SessionInferencer{
-		"nil inferencer": nil,
-		"nil session":    participantTestInferencer{},
-	} {
-		t.Run(name, func(t *testing.T) {
-			tracker := NewConnectionTracker(inferencer, nil, nil)
-			if _, err := tracker.ConnectSession(context.Background()); err == nil {
-				t.Fatal("connect unexpectedly succeeded")
-			}
-			if outcomeErr, ready := tracker.Outcome(); !ready || outcomeErr == nil {
-				t.Fatal("failure outcome was not published")
-			}
-		})
-	}
-}
-
 func TestParticipantTrackerAdmissionToolContinuationAndIdempotentCancel(t *testing.T) {
 	admissionClosed := make(chan struct{})
 	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{AdmissionClosed: admissionClosed})

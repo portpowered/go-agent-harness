@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -287,3 +289,9 @@ func TestEditAndAppendTools_SuccessAndArgumentContracts(t *testing.T) {
 	}
 
 }
+
+// permissionBitsDenyAccess reports whether chmod-based permission denial is
+// enforced for this test process: unix enforces mode bits for every account
+// except the superuser, while Windows chmod does not deny reads or directory
+// writes without ACL changes.
+func permissionBitsDenyAccess() bool { return runtime.GOOS != "windows" && os.Geteuid() != 0 }

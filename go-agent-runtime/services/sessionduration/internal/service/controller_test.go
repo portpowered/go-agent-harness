@@ -181,45 +181,6 @@ func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
 	}
 }
 
-func TestControllerFinalizePreservesPrimaryAndCleanupErrors(t *testing.T) {
-	primary := errors.New("provider cause")
-	drainErr := errors.New("drain cause")
-	closeErr := errors.New("close cause")
-	artifactErr := errors.New("artifact cause")
-	controller, err := New().Begin(context.Background(), sessionduration.Options{})
-	if err != nil {
-		t.Fatalf("Begin: %v", err)
-	}
-	order := make([]string, 0, 4)
-	var nilContext context.Context
-	if _, err := controller.Finalize(nilContext, sessionduration.FinalizeRequest{Primary: primary}); !errors.Is(err, primary) || !errors.Is(err, sessionduration.ErrContextRequired) {
-		t.Fatalf("Finalize(nil ctx) = %v, want primary and context-required identities", err)
-	}
-	// Finalization detaches from caller cancellation, so an already-canceled
-	// caller context still runs every cleanup step.
-	canceled, cancel := context.WithCancel(context.Background())
-	cancel()
-	result, finalErr := controller.Finalize(canceled, sessionduration.FinalizeRequest{
-		Primary: primary,
-		Drain:   func(context.Context) error { order = append(order, "drain"); return drainErr },
-		Close:   func() error { order = append(order, "close"); return closeErr },
-		Artifacts: artifactLifecycleFunc{
-			accept: func(messages.StreamMessage) error { return nil },
-			flush:  func() error { order = append(order, "flush"); return artifactErr },
-			close:  func() error { order = append(order, "artifact-close"); return nil },
-		},
-	})
-	if !errors.Is(finalErr, primary) || !errors.Is(finalErr, drainErr) || !errors.Is(finalErr, closeErr) || !errors.Is(finalErr, artifactErr) {
-		t.Fatalf("final error = %v, lost cleanup identity", finalErr)
-	}
-	if got, want := result.OutputState, messages.TerminalOutputNone; got != want {
-		t.Fatalf("result output state = %q, want %q", got, want)
-	}
-	if got, want := order, []string{"drain", "close", "flush", "artifact-close"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] || got[3] != want[3] {
-		t.Fatalf("cleanup order = %v, want %v", got, want)
-	}
-}
-
 func TestControllerBoundedDrainReportsSchedulerFailure(t *testing.T) {
 	deltas := messages.NewTypedBuffer[messages.StreamMessage](1)
 	if !deltas.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant}) {

@@ -590,12 +590,3 @@ func TestPlannerRejectsMalformedMetadataAndUnsupportedTextActions(t *testing.T) 
 		}
 	}
 }
-
-func closeReplayTestResource(t *testing.T, closer interface{ Close() error }, description string) {
-	t.Helper()
-	t.Cleanup(func() {
-		if err := closer.Close(); err != nil {
-			t.Errorf("close %s: %v", description, err)
-		}
-	})
-}

@@ -578,3 +578,21 @@ var _ session.LiveService = (*fakeLiveService)(nil)
 var _ session.LiveHandle = (*fakeLiveHandle)(nil)
 var _ rooms.MediaFactory = (*fakeMediaFactory)(nil)
 var _ rooms.EventSink = (*recordingRoomEventSink)(nil)
+
+func testParticipantConnectionInvalid(t *testing.T) {
+	t.Helper()
+	for name, inferencer := range map[string]messages.SessionInferencer{
+		"nil inferencer": nil,
+		"nil session":    participantTestInferencer{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tracker := NewConnectionTracker(inferencer, nil, nil)
+			if _, err := tracker.ConnectSession(context.Background()); err == nil {
+				t.Fatal("connect unexpectedly succeeded")
+			}
+			if outcomeErr, ready := tracker.Outcome(); !ready || outcomeErr == nil {
+				t.Fatal("failure outcome was not published")
+			}
+		})
+	}
+}

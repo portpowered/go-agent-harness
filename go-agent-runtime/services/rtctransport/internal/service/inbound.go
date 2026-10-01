@@ -140,8 +140,13 @@ type packetEvent struct {
 
 var _ rtctransport.InboundTrack = (*InboundTrack)(nil)
 
+// inboundContextRequiredError reports a call made without a caller context.
+type inboundContextRequiredError string
+
+func (e inboundContextRequiredError) Error() string { return string(e) }
+
 // errInboundNilContext reports a read without a caller context.
-var errInboundNilContext = errors.New("inbound track read context is required")
+const errInboundNilContext inboundContextRequiredError = "inbound track read context is required"
 
 func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundTrackConfig) (rtctransport.InboundTrack, error) {
 	cfg, err := normalizeInboundConfig(config)

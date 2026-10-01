@@ -300,26 +300,6 @@ func (h *handle) newDurationTimer() (platformclock.Timer, error) {
 	return timer, nil
 }
 
-func (h *handle) prepareReplayCompletion() {
-	// An explicit capture source owns the boundary and must send its bytes first.
-	if h.captureSourceIsActive() {
-		return
-	}
-	plan := h.request.ReplayPlan
-	if plan != nil && len(plan.AudioTurns) > 0 {
-		return
-	}
-	if plan != nil && plan.OpeningPromptPresent && h.request.FinishAfterResponse {
-		h.markCaptureComplete()
-	}
-	// Raw replays without an opening prompt may lack session.closed; let the
-	// response terminal boundary finish the invocation when it completes.
-	if h.request.FinishAfterResponse && h.request.Replay.InputCapturePath != "" &&
-		(plan == nil || plan.StopAfterResponse) {
-		h.markCaptureComplete()
-	}
-}
-
 type workerPlan struct {
 	durationTimer     platformclock.Timer
 	capabilityEvents  <-chan session.LiveCapabilityEvent

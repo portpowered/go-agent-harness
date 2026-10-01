@@ -525,11 +525,7 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 		release:      make(chan struct{}),
 		closeErr:     closeErr,
 	}
-	mesh := NewMesh(t.Context(), MeshConfig{
-		PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) {
-			return pair, nil
-		},
-	})
+	mesh := NewMesh(t.Context(), MeshConfig{PairFactory: func(context.Context, PairSpec) (PairResource, error) { return pair, nil }})
 	t.Cleanup(func() { releaseTestResource(mesh) })
 	t.Cleanup(pair.releaseClose)
 	if err := mesh.Join(context.Background(), "first"); err != nil {
@@ -549,8 +545,11 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	}
 	closeResult := make(chan error, 1)
 	go func() { closeResult <- mesh.Close() }()
-	// Shutdown clears membership when it captures the pairs to close.
-	awaitMembershipCleared(t, mesh)
+	for deadline := time.Now().Add(time.Second); len(mesh.Participants()) != 0; runtime.Gosched() {
+		if time.Now().After(deadline) {
+			t.Fatal("mesh shutdown did not clear membership before closing captured pairs")
+		}
+	}
 	select {
 	case <-mesh.Done():
 		t.Fatal("Done closed while Remove-owned PairResource.Close was gated")
@@ -793,19 +792,6 @@ func sortStrings(values []string) {
 
 func containsErrorText(err error, want string) bool {
 	return err != nil && strings.Contains(err.Error(), want)
-}
-
-// awaitMembershipCleared yields until the mesh reports no participants, the
-// observable start of shutdown.
-func awaitMembershipCleared(t *testing.T, mesh *Mesh) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for len(mesh.Participants()) != 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("mesh shutdown did not clear membership")
-		}
-		runtime.Gosched()
-	}
 }
 
 func awaitClosed(t *testing.T, channel <-chan struct{}) {

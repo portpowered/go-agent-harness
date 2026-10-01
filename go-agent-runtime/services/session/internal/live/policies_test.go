@@ -579,3 +579,18 @@ func (p *lateStartPlayback) WaitForPump(context.Context) error {
 	p.once.Do(func() { close(p.start) })
 	return nil
 }
+func TestLiveResponseCancelControlSyncsProviderLifecycleFirst(t *testing.T) {
+	s := newTestSession()
+	opened, err := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+		return &testInferencer{session: s}, nil
+	}}).OpenLive(context.Background(), session.LiveRequest{SessionID: "cancel-sync"})
+	require.NoError(t, err)
+	require.NoError(t, opened.Start(context.Background()))
+	t.Cleanup(func() { opened.Cancel(context.Canceled); require.ErrorIs(t, opened.Wait(), context.Canceled) })
+	h := requireLiveHandle(t, opened)
+	synced, relay := false, h.providerReceiveSync
+	cancel := func(msg messages.StreamMessage) bool { return msg.Type == messages.StreamTypeResponseCancel }
+	h.providerReceiveSync = func(ctx context.Context) { synced = !s.sentMatch(cancel); relay(ctx) }
+	require.NoError(t, opened.Send(context.Background(), session.LiveControl{Kind: session.LiveControlResponseCancel}))
+	require.True(t, synced && s.sentMatch(cancel), "interrupt reached the runner before the provider lifecycle barrier")
+}

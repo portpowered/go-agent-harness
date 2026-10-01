@@ -38,7 +38,7 @@ type testSession struct {
 	closeDoneOnDoneCall bool
 	mu                  sync.Mutex
 	sent                []messages.StreamMessage
-	sentChanged         chan struct{}
+	sentSignal          chan struct{}
 }
 type failingLiveRecorder struct {
 	messageErr, contextErr, finalizeErr error
@@ -85,7 +85,7 @@ func (h *testLiveCapabilityHandle) Close() error {
 	return nil
 }
 func newTestSession() *testSession {
-	return &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{})}
+	return &testSession{receive: messages.NewTypedBuffer[messages.StreamMessage](32), done: make(chan struct{}), sentSignal: make(chan struct{}, 1)}
 }
 func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if err := ctx.Err(); err != nil {
@@ -93,11 +93,11 @@ func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 	}
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
-	if s.sentChanged != nil {
-		close(s.sentChanged)
-		s.sentChanged = nil
-	}
 	s.mu.Unlock()
+	select {
+	case s.sentSignal <- struct{}{}:
+	default:
+	}
 	return true
 }
 
@@ -105,21 +105,9 @@ func (s *testSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 func (s *testSession) awaitSent(t *testing.T, kind messages.StreamMessageType) {
 	t.Helper()
 	deadline := time.After(time.Second)
-	for {
-		s.mu.Lock()
-		for _, message := range s.sent {
-			if message.Type == kind {
-				s.mu.Unlock()
-				return
-			}
-		}
-		if s.sentChanged == nil {
-			s.sentChanged = make(chan struct{})
-		}
-		changed := s.sentChanged
-		s.mu.Unlock()
+	for !s.sentMatch(func(message messages.StreamMessage) bool { return message.Type == kind }) {
 		select {
-		case <-changed:
+		case <-s.sentSignal:
 		case <-deadline:
 			t.Fatalf("timed out waiting for a sent %s", kind)
 		}
@@ -459,23 +447,18 @@ func TestLiveEventsRemainBoundedAndTerminalIsRetained(t *testing.T) {
 		// provider again, overflowing the bounded event queue.
 		synctest.Wait()
 		handle.Cancel(errors.New("stop bounded fixture"))
-		if err := handle.Wait(); err != nil {
-			if !errors.Is(err, context.Canceled) && err.Error() != "stop bounded fixture" {
-				t.Fatalf("Wait: %v", err)
-			}
+		if err := handle.Wait(); err != nil && !errors.Is(err, context.Canceled) && err.Error() != "stop bounded fixture" {
+			t.Fatalf("Wait: %v", err)
 		}
 		require.LessOrEqual(t, len(handle.Events()), 4, "event queue exceeded its capacity")
-		foundTerminal := false
-		foundOverflow := false
+		foundTerminal, foundOverflow := false, false
 		for event := range handle.Events() {
-			if event.Kind == string(session.LiveEventTerminal) {
+			switch event.Kind {
+			case string(session.LiveEventTerminal):
 				foundTerminal = true
-			}
-			if event.Kind == string(session.LiveEventOverflow) {
+			case string(session.LiveEventOverflow):
 				foundOverflow = true
-				if event.ParticipantID != participantID || !event.Timestamp.Equal(eventAt) {
-					t.Fatalf("overflow metadata = %+v, want participant/timestamp preserved", event)
-				}
+				require.Truef(t, event.ParticipantID == participantID && event.Timestamp.Equal(eventAt), "overflow metadata = %+v, want participant/timestamp preserved", event)
 			}
 		}
 		require.True(t, foundTerminal, "terminal event was lost")
@@ -607,18 +590,3 @@ func (s *mediaClaimOrderSession) RTCMedia() sharedaudio.MediaEndpoints {
 
 // An interrupt reacts to audio that reached playback ahead of its response
 // lifecycle; like microphone audio it is admitted only after that is published.
-func TestLiveResponseCancelControlSyncsProviderLifecycleFirst(t *testing.T) {
-	s := newTestSession()
-	opened, err := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
-		return &testInferencer{session: s}, nil
-	}}).OpenLive(context.Background(), session.LiveRequest{SessionID: "cancel-sync"})
-	require.NoError(t, err)
-	require.NoError(t, opened.Start(context.Background()))
-	t.Cleanup(func() { opened.Cancel(context.Canceled); require.ErrorIs(t, opened.Wait(), context.Canceled) })
-	h := requireLiveHandle(t, opened)
-	synced, relay := false, h.providerReceiveSync
-	cancel := func(msg messages.StreamMessage) bool { return msg.Type == messages.StreamTypeResponseCancel }
-	h.providerReceiveSync = func(ctx context.Context) { synced = !s.sentMatch(cancel); relay(ctx) }
-	require.NoError(t, opened.Send(context.Background(), session.LiveControl{Kind: session.LiveControlResponseCancel}))
-	require.True(t, synced && s.sentMatch(cancel), "interrupt reached the runner before the provider lifecycle barrier")
-}

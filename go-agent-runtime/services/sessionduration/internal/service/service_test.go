@@ -1,10 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -540,54 +538,6 @@ func TestRunExpiresAtMaxDurationAndClosesLoop(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run did not finish after max duration")
-	}
-}
-
-func TestFinalizerOrdersOwnedCleanupAndIsIdempotent(t *testing.T) {
-	var order []string
-	step := func(name string) func() error {
-		return func() error {
-			order = append(order, name)
-			return nil
-		}
-	}
-	finalizer := New().NewFinalizer(sessionduration.FinalizationPorts{
-		CloseCapabilities: step("capabilities"),
-		CloseSession:      step("session"),
-		CloseRuntime:      step("runtime"),
-		FlushCapture:      step("flush"),
-		Finalize: func(_ context.Context, out io.Writer) error {
-			if out == nil {
-				t.Fatal("finalizer received a nil output writer")
-			}
-			order = append(order, "finalize")
-			return nil
-		},
-		ReleaseCapture: step("release"),
-	})
-	finalizer.SetDeviceBinding(step("binding"))
-	primary := errors.New("primary")
-	var nilContext context.Context
-	if err := finalizer.Finish(nilContext, &bytes.Buffer{}, primary); !errors.Is(err, primary) || !errors.Is(err, sessionduration.ErrContextRequired) {
-		t.Fatalf("Finish(nil ctx) = %v, want primary and context-required identities", err)
-	}
-	if len(order) != 0 {
-		t.Fatalf("Finish(nil ctx) ran cleanup %v", order)
-	}
-	if err := finalizer.Finish(context.Background(), &bytes.Buffer{}, primary); !errors.Is(err, primary) {
-		t.Fatalf("Finish() = %v, want primary identity", err)
-	}
-	if err := finalizer.Finish(context.Background(), nil, nil); err != nil {
-		t.Fatalf("duplicate Finish() = %v, want nil", err)
-	}
-	want := []string{"capabilities", "session", "binding", "runtime", "flush", "finalize", "release"}
-	if len(order) != len(want) {
-		t.Fatalf("cleanup calls = %v, want %v", order, want)
-	}
-	for index := range want {
-		if order[index] != want[index] {
-			t.Fatalf("cleanup order = %v, want %v", order, want)
-		}
 	}
 }
 

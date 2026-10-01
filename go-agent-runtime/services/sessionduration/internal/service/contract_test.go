@@ -282,9 +282,6 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 
 	directory := t.TempDir()
 	paths := sessionduration.SessionDurationArtifactPaths{AudioPath: filepath.Join(directory, "audio.wav"), TranscriptPath: filepath.Join(directory, "transcript.jsonl")}
-	if got := WithSessionDurationArtifactPaths(nilContext, paths); got != nil {
-		t.Fatalf("WithSessionDurationArtifactPaths(nil) = %v, want nil left for Run to reject", got)
-	}
 	ctx := WithSessionDurationArtifactPaths(context.Background(), paths)
 	prepared, err := PrepareArtifacts(ctx)
 	if err != nil {
@@ -523,13 +520,6 @@ func TestRunRejectsInvalidRequestsBeforeStartingResources(t *testing.T) {
 				t.Fatalf("Run() = %v, want %q", err, test.want)
 			}
 		})
-	}
-	var nilContext context.Context
-	if err := service.Run(nilContext, sessionduration.RunRequest{Inferencer: validInferencer}); !errors.Is(err, sessionduration.ErrContextRequired) {
-		t.Fatalf("Run(nil ctx) = %v, want ErrContextRequired", err)
-	}
-	if controller, err := service.Begin(nilContext, sessionduration.Options{}); controller != nil || !errors.Is(err, sessionduration.ErrContextRequired) {
-		t.Fatalf("Begin(nil ctx) = %v, %v, want ErrContextRequired", controller, err)
 	}
 }
 

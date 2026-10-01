@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -81,9 +80,14 @@ func (s *Service) Build(ctx context.Context, request roomreplay.BuildRequest) (r
 	return assembleSchedule(contributions, targetIDs, expectedFrames, maxFrame)
 }
 
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
 // errScheduleContextRequired reports a schedule build or run without a
 // caller context.
-var errScheduleContextRequired = errors.New("room replay schedule context is required")
+const errScheduleContextRequired contextRequiredError = "room replay schedule context is required"
 
 func normalizeTargetFormat(format roomreplay.PCM16Format) (roomreplay.PCM16Format, int, error) {
 	if format == (roomreplay.PCM16Format{}) {

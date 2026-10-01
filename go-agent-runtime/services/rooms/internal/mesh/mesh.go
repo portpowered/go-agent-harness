@@ -44,9 +44,6 @@ type mesh struct {
 
 var _ rooms.Mesh = (*mesh)(nil)
 
-// errMeshContextRequired reports a nil lifetime or operation context.
-var errMeshContextRequired = errors.New("room mesh context is required")
-
 // NewMesh constructs a mesh whose lifetime ends at Close or when parent ends.
 func NewMesh(parent context.Context, config rooms.MeshConfig) (rooms.Mesh, error) {
 	if parent == nil {
@@ -293,28 +290,6 @@ func (m *mesh) Pairs() []rooms.PairSnapshot {
 }
 func (m *mesh) PairCount() int { m.mu.RLock(); defer m.mu.RUnlock(); return len(m.pairs) }
 func (m *mesh) Close() error   { m.closeOnce.Do(m.shutdown); return m.closeErr }
-func (m *mesh) shutdown() {
-	m.mu.Lock()
-	m.closed = true
-	all := m.capturePairsLocked()
-	m.participants = make(map[string]struct{})
-	m.pairs = make(map[rooms.PairSpec]*meshPair)
-	m.pending, m.closing = nil, nil
-	stopParent := m.stopParent
-	cancels := make([]context.CancelFunc, 0, len(m.operations))
-	for _, cancel := range m.operations {
-		cancels = append(cancels, cancel)
-	}
-	m.mu.Unlock()
-	if stopParent != nil {
-		stopParent()
-	}
-	for _, cancel := range cancels {
-		cancel()
-	}
-	m.closeErr = closeMeshPairs(all)
-	close(m.done)
-}
 func (m *mesh) capturePairsLocked() []*meshPair {
 	all := make([]*meshPair, 0, len(m.pairs)+len(m.pending)+len(m.closing))
 	for _, pair := range m.pairs {
@@ -324,39 +299,6 @@ func (m *mesh) capturePairsLocked() []*meshPair {
 	return append(all, m.closing...)
 }
 
-// operationContext derives a Join context from the caller's context that
-// shutdown also cancels; after shutdown it is returned already cancelled.
-func (m *mesh) operationContext(ctx context.Context) (context.Context, func()) {
-	op, cancel := context.WithCancel(ctx)
-	m.mu.Lock()
-	if m.closed {
-		m.mu.Unlock()
-		cancel()
-		return op, cancel
-	}
-	m.nextOperation++
-	id := m.nextOperation
-	m.operations[id] = cancel
-	m.mu.Unlock()
-	return op, func() {
-		m.mu.Lock()
-		delete(m.operations, id)
-		m.mu.Unlock()
-		cancel()
-	}
-}
-
-func (m *mesh) lifetimeEndedLocked() bool {
-	if m.closed {
-		return true
-	}
-	select {
-	case <-m.parentDone:
-		return true
-	default:
-		return false
-	}
-}
 func (m *mesh) addPending(pair *meshPair) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -378,42 +320,6 @@ func (m *mesh) discard(pairs []*meshPair, closing bool) {
 	}
 	*target = withoutPairs(*target, pairs)
 	m.mu.Unlock()
-}
-func withoutPairs(have, remove []*meshPair) []*meshPair {
-	wanted := make(map[*meshPair]struct{}, len(remove))
-	for _, pair := range remove {
-		if pair != nil {
-			wanted[pair] = struct{}{}
-		}
-	}
-	kept := have[:0]
-	for _, pair := range have {
-		if pair == nil {
-			continue
-		}
-		if _, exists := wanted[pair]; !exists {
-			kept = append(kept, pair)
-		}
-	}
-	for index := len(kept); index < len(have); index++ {
-		have[index] = nil
-	}
-	return kept
-}
-func closeMeshPairs(pairs []*meshPair) (closeErr error) {
-	seen := make(map[*meshPair]struct{}, len(pairs))
-	for index := len(pairs) - 1; index >= 0; index-- {
-		pair := pairs[index]
-		if pair == nil || nilPairResource(pair.resource) {
-			continue
-		}
-		if _, exists := seen[pair]; exists {
-			continue
-		}
-		seen[pair] = struct{}{}
-		closeErr = errors.Join(closeErr, pair.close())
-	}
-	return closeErr
 }
 func nilPairResource(resource rooms.PairResource) bool {
 	if resource == nil {

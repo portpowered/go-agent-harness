@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -22,8 +21,13 @@ const (
 
 var _ rtctransport.OutboundTrack = (*OutboundTrack)(nil)
 
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
 // errOutboundNilContext reports a write without a caller context.
-var errOutboundNilContext = errors.New("outbound track write context is required")
+const errOutboundNilContext contextRequiredError = "outbound track write context is required"
 
 type OutboundTrack struct {
 	encoder       rtctransport.OpusEncoder

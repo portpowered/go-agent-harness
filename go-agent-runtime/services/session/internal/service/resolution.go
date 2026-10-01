@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -37,9 +36,14 @@ func (s *Service) resolve(ctx context.Context, request session.Request) (session
 	return ensureResolutionDefaults(request, resolution), nil
 }
 
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
 // errContextRequired reports a nil caller context. The session service never
 // invents a root context: cancellation and deadlines belong to the caller.
-var errContextRequired = errors.New("session context is required")
+const errContextRequired contextRequiredError = "session context is required"
 
 func requireContext(ctx context.Context) error {
 	if ctx == nil {

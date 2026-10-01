@@ -87,9 +87,6 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	return r.finishRun(runCtx, state, graph, manifest, request, recorder)
 }
 
-// errRoomRunContextRequired reports a room run without a caller context.
-var errRoomRunContextRequired = errors.New("room run context is required")
-
 func requestManifest(request rooms.RoomRunOptions) rooms.Manifest {
 	manifest := request.Manifest
 	if isZeroManifest(manifest) && request.ReplayPlan != nil {

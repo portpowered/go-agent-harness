@@ -138,3 +138,11 @@ func (h *browserCapabilityHandle) Close() error {
 	})
 	return h.closeErr
 }
+
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
+// errRoomRunContextRequired reports a room run without a caller context.
+const errRoomRunContextRequired contextRequiredError = "room run context is required"
