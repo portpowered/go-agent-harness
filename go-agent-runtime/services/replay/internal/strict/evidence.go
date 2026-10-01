@@ -26,28 +26,28 @@ type evidenceBuilder struct {
 	terminalDone    bool
 }
 
-func deriveEvidence(events []recording.Event, request replay.Request) (gwtesting.SessionCapture, *recordedToolExecutor, []int, int, int, error) {
+func deriveEvidence(events []recording.Event, request replay.Request) (gwtesting.SessionCapture, *recordedToolExecutor, []int, error) {
 	builder := newEvidenceBuilder()
 	for _, event := range events {
 		if event.Kind != runtimeEventKind {
 			continue
 		}
 		if err := builder.consume(event); err != nil {
-			return gwtesting.SessionCapture{}, nil, nil, 0, 0, err
+			return gwtesting.SessionCapture{}, nil, nil, err
 		}
 	}
 	if err := builder.validate(request); err != nil {
-		return gwtesting.SessionCapture{}, nil, nil, 0, 0, err
+		return gwtesting.SessionCapture{}, nil, nil, err
 	}
 	if err := builder.tools.validateShape(); err != nil {
-		return gwtesting.SessionCapture{}, nil, nil, 0, 0, err
+		return gwtesting.SessionCapture{}, nil, nil, err
 	}
 	builder.finishCapture(request)
 	sealed, err := capture.SealReplayCapture(builder.capture)
 	if err != nil {
-		return gwtesting.SessionCapture{}, nil, nil, 0, 0, fmt.Errorf("%w: seal derived capture: %w", replay.ErrBundleMismatch, err)
+		return gwtesting.SessionCapture{}, nil, nil, fmt.Errorf("%w: seal derived capture: %w", replay.ErrBundleMismatch, err)
 	}
-	return sealed, builder.tools, builder.wireTypes, len(builder.wires), len(builder.tools.calls), nil
+	return sealed, builder.tools, builder.wireTypes, nil
 }
 
 func newEvidenceBuilder() *evidenceBuilder {

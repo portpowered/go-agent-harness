@@ -112,10 +112,10 @@ func (p *prepared) Finish(ctx context.Context, bundle string, published bool) er
 	}
 	closeErr := p.close(ctx)
 	if closeErr != nil {
-		return p.retain(bundle, closeErr)
+		return p.retain(closeErr)
 	}
 	if !published {
-		return p.retain(bundle, nil)
+		return p.retain(nil)
 	}
 	if bundle == "" {
 		return nil
@@ -125,13 +125,13 @@ func (p *prepared) Finish(ctx context.Context, bundle string, published bool) er
 	claim, err := os.OpenFile(claimPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, claimFileMode)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return p.retain(bundle, sessiontrace.ErrDestinationExists)
+			return p.retain(sessiontrace.ErrDestinationExists)
 		}
-		return p.retain(bundle, err)
+		return p.retain(err)
 	}
 	if err := claim.Close(); err != nil {
 		removeClaim(claimPath)
-		return p.retain(bundle, err)
+		return p.retain(err)
 	}
 	defer removeClaim(claimPath)
 	rename := p.rename
@@ -140,9 +140,9 @@ func (p *prepared) Finish(ctx context.Context, bundle string, published bool) er
 	}
 	if err := rename(p.path, destination); err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return p.retain(bundle, sessiontrace.ErrDestinationExists)
+			return p.retain(sessiontrace.ErrDestinationExists)
 		}
-		return p.retain(bundle, fmt.Errorf("attach audio trace to bundle: %w", err))
+		return p.retain(fmt.Errorf("attach audio trace to bundle: %w", err))
 	}
 	return nil
 }
@@ -185,7 +185,7 @@ func (p *prepared) close(ctx context.Context) error {
 	}
 }
 
-func (p *prepared) retain(bundle string, err error) error {
+func (p *prepared) retain(err error) error {
 	return errors.Join(err, fmt.Errorf("audio evidence retained at %s", p.path))
 }
 

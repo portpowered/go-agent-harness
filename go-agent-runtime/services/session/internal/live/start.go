@@ -18,25 +18,25 @@ func (h *handle) start(runCtx context.Context) error {
 	defer h.startFinish.Do(func() { close(h.startDone) })
 	toolExecutor, toolDefinitions, inferencer, err := h.prepareStart(runCtx)
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return h.failStart(err)
 	}
 	loop, err := h.buildLoop(inferencer, toolExecutor, toolDefinitions)
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return h.failStart(err)
 	}
 	capabilityWatch, err := h.installLoop(loop)
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return h.failStart(err)
 	}
 	durationTimer, err := h.newDurationTimer()
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return h.failStart(err)
 	}
 	h.prepareReplayCompletion()
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.request.SessionID, Critical: true}, false) //nolint:contextcheck // start publication uses the invocation evidence context.
 	watchEvents := capabilityEventStream(runCtx, capabilityWatch)
 	if h.captureInterruptionsEnabled() && watchEvents == nil {
-		return h.failStart(runCtx, errors.New("capture interruptions require browser invocation events"))
+		return h.failStart(errors.New("capture interruptions require browser invocation events"))
 	}
 	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
 	return nil

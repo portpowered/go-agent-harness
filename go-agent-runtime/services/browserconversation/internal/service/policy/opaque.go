@@ -150,7 +150,7 @@ func cloneBrowserConversationSlice(value reflect.Value) reflect.Value {
 		return reflect.Zero(value.Type())
 	}
 	cloned := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
-	for index := 0; index < value.Len(); index++ {
+	for index := range value.Len() {
 		cloned.Index(index).Set(cloneBrowserConversationReflect(value.Index(index)))
 	}
 	return cloned
@@ -158,7 +158,7 @@ func cloneBrowserConversationSlice(value reflect.Value) reflect.Value {
 
 func cloneBrowserConversationArray(value reflect.Value) reflect.Value {
 	cloned := reflect.New(value.Type()).Elem()
-	for index := 0; index < value.Len(); index++ {
+	for index := range value.Len() {
 		cloned.Index(index).Set(cloneBrowserConversationReflect(value.Index(index)))
 	}
 	return cloned
@@ -184,7 +184,7 @@ func sanitizeBrowserConversationOpaque(value any) any {
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		cloned := cloneBrowserConversationReflect(rv)
-		for index := 0; index < cloned.Len(); index++ {
+		for index := range cloned.Len() {
 			setBrowserConversationSanitizedValue(cloned.Index(index), sanitizeBrowserConversationOpaque(cloned.Index(index).Interface()))
 		}
 		return cloned.Interface()

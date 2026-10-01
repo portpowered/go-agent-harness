@@ -86,7 +86,7 @@ func parseRoomReplayParticipantArtifactArray(raw json.RawMessage, field string) 
 	return result, nil
 }
 
-func inferRoomReplayParticipantArtifacts(participant *roomReplayParticipantRef, inventory []roomReplayArtifactRef) error {
+func inferRoomReplayParticipantArtifacts(participant *roomReplayParticipantRef, inventory []roomReplayArtifactRef) {
 	for _, entry := range inventory {
 		role := normalizeRoomReplayArtifactRole(entry.Name)
 		if !isRoomReplayParticipantArtifactRole(role) {
@@ -105,7 +105,6 @@ func inferRoomReplayParticipantArtifacts(participant *roomReplayParticipantRef, 
 		candidate.Role, candidate.Field = role, "artifacts."+entry.Name
 		participant.Artifacts[role] = candidate
 	}
-	return nil
 }
 
 func roomReplayInventoryNameBelongsToParticipant(name, id, role string) bool {

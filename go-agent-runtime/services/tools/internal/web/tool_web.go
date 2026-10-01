@@ -206,10 +206,10 @@ func (p *DuckDuckGoSearchProvider) Search(ctx context.Context, query string, cou
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return p.extractResults(string(body), count, query)
+	return p.extractResults(string(body), count, query), nil
 }
 
-func (p *DuckDuckGoSearchProvider) extractResults(html string, count int, query string) (string, error) {
+func (p *DuckDuckGoSearchProvider) extractResults(html string, count int, query string) string {
 	// Simple regex based extraction for DDG HTML
 	// Strategy: Find all result containers or key anchors directly
 
@@ -220,7 +220,7 @@ func (p *DuckDuckGoSearchProvider) extractResults(html string, count int, query 
 	matches := reLink.FindAllStringSubmatch(html, count+searchMatchReserve)
 
 	if len(matches) == 0 {
-		return fmt.Sprintf("No results found or extraction failed. Query: %s", query), nil
+		return fmt.Sprintf("No results found or extraction failed. Query: %s", query)
 	}
 
 	var lines []string
@@ -238,7 +238,7 @@ func (p *DuckDuckGoSearchProvider) extractResults(html string, count int, query 
 	snippetMatches := reSnippet.FindAllStringSubmatch(html, count+searchMatchReserve)
 	lines = append(lines, formatDuckDuckGoResults(matches, snippetMatches, count)...)
 
-	return strings.Join(lines, "\n"), nil
+	return strings.Join(lines, "\n")
 }
 
 const searchMatchReserve = 5
@@ -260,7 +260,7 @@ func writeWebDiagnostic(writer io.Writer, format string, args ...any) {
 
 func formatDuckDuckGoResults(matches, snippetMatches [][]string, count int) []string {
 	lines := make([]string, 0, min(len(matches), count)*2)
-	for i := 0; i < min(len(matches), count); i++ {
+	for i := range min(len(matches), count) {
 		urlStr := decodeDuckDuckGoURL(matches[i][1])
 		title := strings.TrimSpace(stripTags(matches[i][2]))
 		lines = append(lines, fmt.Sprintf("%d. %s\n   %s", i+1, title, urlStr))

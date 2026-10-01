@@ -82,7 +82,10 @@ func (c *interruptionController) next(stepID, toolName string) (*browserconversa
 	if step, cancel, ok := c.findInterruptLocked(current, toolName); ok {
 		return step, cancel, true
 	}
-	return c.findCancelLocked(current)
+	if step, ok := c.findCancelLocked(current); ok {
+		return step, nil, true
+	}
+	return nil, nil, false
 }
 
 func (c *interruptionController) findInterruptLocked(current int, toolName string) (*browserconversation.BrowserConversationStep, *browserconversation.BrowserConversationStep, bool) {
@@ -106,18 +109,20 @@ func (c *interruptionController) findInterruptLocked(current int, toolName strin
 	return nil, nil, false
 }
 
-func (c *interruptionController) findCancelLocked(current int) (*browserconversation.BrowserConversationStep, *browserconversation.BrowserConversationStep, bool) {
+// findCancelLocked returns the cancellation step that follows current. A
+// cancellation step has no later cancellation of its own.
+func (c *interruptionController) findCancelLocked(current int) (*browserconversation.BrowserConversationStep, bool) {
 	for index := range c.scenario.Steps {
 		step := &c.scenario.Steps[index]
 		if step.Cancel == nil || c.triggered[step.ID] || (index > 0 && c.scenario.Steps[index-1].Interrupt != nil) || current < 0 || current+1 != index {
 			continue
 		}
 		if !c.hasAudioLocked(step.ID, "declared cancellation has no audio payload") {
-			return nil, nil, false
+			return nil, false
 		}
-		return step, nil, true
+		return step, true
 	}
-	return nil, nil, false
+	return nil, false
 }
 
 func (c *interruptionController) cancelAfterLocked(index int) *browserconversation.BrowserConversationStep {

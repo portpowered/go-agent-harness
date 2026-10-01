@@ -540,7 +540,7 @@ func assertFailedContinuationOrder(t *testing.T, order failedContinuationOrder) 
 	if order.outputBeforeAdmission {
 		assertContinuationPending(t, h, toolOutput)
 	}
-	h.observeToolResult(callID, "read_image", true)
+	_ = h.beginToolResultAdmission(callID, "read_image", true)
 	if !order.outputBeforeAdmission {
 		assertContinuationPending(t, h, toolOutput)
 	}

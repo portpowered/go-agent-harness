@@ -242,14 +242,14 @@ func (h *handle) retainCapability(binding *session.LiveCapabilities, executor me
 	h.request.Capabilities = binding
 	return nil
 }
-func (h *handle) failStart(ctx context.Context, err error) error {
+func (h *handle) failStart(err error) error {
 	err = errors.Join(err, h.media.Close())
 	h.mu.Lock()
 	h.startErr = err
 	h.terminalErr = err
 	h.mu.Unlock()
-	h.publish(session.LiveEvent{Kind: string(session.LiveEventError), SessionID: h.request.SessionID, Error: err, Critical: true}, false) //nolint:contextcheck // start failure publication uses the invocation evidence context.
-	h.finish(err)                                                                                                                         //nolint:contextcheck // finish owns the invocation evidence context.
+	h.publish(session.LiveEvent{Kind: string(session.LiveEventError), SessionID: h.request.SessionID, Error: err, Critical: true}, false)
+	h.finish(err)
 	return err
 }
 func (h *handle) runLoop(ctx context.Context, loop *agentloop.AgentLoop) {

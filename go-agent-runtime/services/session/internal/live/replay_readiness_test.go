@@ -286,7 +286,7 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	}
 	h.observeProviderToolCall(callEnd)
 	h.observeFiniteResponse(callEnd)
-	h.observeToolResult(callID, "lookup", true)
+	_ = h.beginToolResultAdmission(callID, "lookup", true)
 	h.observeToolResponseOutput(callID)
 	toolMessage := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
@@ -337,7 +337,7 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 	}
 	h.observeProviderToolCall(firstCall)
 	h.observeFiniteResponse(firstCall)
-	h.observeToolResult(firstCallID, "lookup", true)
+	_ = h.beginToolResultAdmission(firstCallID, "lookup", true)
 	h.observeToolResponseOutput(firstCallID)
 	toolResultEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
@@ -407,7 +407,7 @@ func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
 	finalIDs := []string{"final-zero", "final-one"}
 	for index, batch := range batches {
 		for _, callID := range batch.calls {
-			h.observeToolResult(callID, "lookup", true)
+			_ = h.beginToolResultAdmission(callID, "lookup", true)
 			h.observeToolResponseOutput(callID)
 		}
 		toolEnd := end("", messages.RoleTool)
@@ -469,7 +469,7 @@ func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T)
 	if err, complete := h.observeToolLifecycle(failure); err != nil || complete {
 		t.Fatalf("original tool response = error:%v complete:%t, want no continuation classification", err, complete)
 	}
-	h.observeToolResult(callID, "read_image", true)
+	_ = h.beginToolResultAdmission(callID, "read_image", true)
 	toolEnd := messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
@@ -546,7 +546,7 @@ func TestOpeningResponseGateHoldsFirstTurnUntilToolContinuationCompletes(t *test
 	responseErr, _ := end("response-tool-call", messages.RoleAssistant)
 	require.NoError(t, responseErr)
 	require.False(t, h.openingResponseSettled(1), "settled after the tool-call response terminal")
-	h.observeToolResult(callID, "lookup", true)
+	_ = h.beginToolResultAdmission(callID, "lookup", true)
 	h.observeToolResponseOutput(callID)
 	toolErr, _ := end("", messages.RoleTool)
 	require.NoError(t, toolErr)

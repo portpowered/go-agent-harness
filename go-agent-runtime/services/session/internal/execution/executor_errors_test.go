@@ -103,7 +103,7 @@ func TestValidateInputMimeTypesSkipsEmptyInput(t *testing.T) {
 // reintroduce the old config-tree lookup as a hidden fallback.
 func TestValidationModelDoesNotInferFromConfig(t *testing.T) {
 	exec := NewExecutor(nil, nil, stubInferencer{})
-	name, info := exec.validationModel(&Config{Model: "other"}, &RunData{modelCatalog: ModelCatalog{Models: []ModelInfo{{Name: "other"}}}})
+	name, info := exec.validationModel(&RunData{modelCatalog: ModelCatalog{Models: []ModelInfo{{Name: "other"}}}})
 	if name != "" || info != nil {
 		t.Fatalf("unresolved validation model = (%q, %+v), want no inferred model", name, info)
 	}

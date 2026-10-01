@@ -38,7 +38,7 @@ func (s *Service) runConversation(runCtx, callerCtx context.Context, cancel cont
 	completion := awaitTerminal(runCtx, callerCtx, roles, workers.results, stop)
 	terminal := stop.snapshot()
 	shutdownErr := joinWorkers(source, workers.wait, &pumpWait, workers.results, &completion)
-	recordSideTerminals(request.APIKey, roles, terminal, shutdownErr, completion, evidence)
+	recordSideTerminals(request.APIKey, terminal, shutdownErr, completion, evidence)
 	return makeConversationResult(terminal, roles, evidence), errors.Join(terminal.err, shutdownErr, sideShutdownError(completion))
 }
 
@@ -137,8 +137,8 @@ func joinWorkers(source platformclock.TimerSource, sides, pumps *sync.WaitGroup,
 	return nil
 }
 
-func recordSideTerminals(secret string, roles [2]selfplay.SideRole, terminal terminalSnapshot, shutdownErr error, completion sideCompletion, evidence *evidence) {
-	for side := range roles {
+func recordSideTerminals(secret string, terminal terminalSnapshot, shutdownErr error, completion sideCompletion, evidence *evidence) {
+	for side := range completion.started {
 		state := selfplay.SideNotStarted
 		if completion.started[side] {
 			state = selfplay.SideStopped
