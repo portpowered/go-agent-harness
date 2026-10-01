@@ -18,13 +18,11 @@ Requirements:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-export AGENT_HARNESS_LIVE_AUDIOIN=1   # explicit opt-in; billing happens
 go test -tags live -v ./agent-cli/test/integration/ -run TestLiveSessionAudioInElicitsSpokenResponse
 ```
 
-Both environment variables are required: without `OPENAI_API_KEY` or when
-`AGENT_HARNESS_LIVE_AUDIOIN != 1` the test skips, so default CI and hermetic
-targets never run it.
+The `live` build tag is the explicit opt-in (billing happens): default CI and
+hermetic targets never build it, and without `OPENAI_API_KEY` the test fails.
 
 ## Expected output
 

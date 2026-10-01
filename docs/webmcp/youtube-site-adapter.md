@@ -48,8 +48,7 @@ go test ./agent-cli/internal/webmcp/siteadapter \
   ./agent-cli/internal/config \
   ./agent-cli/internal/cli
 
-WEBMCP_YOUTUBE_ADAPTER_INTEGRATION=1 \
-  go test ./agent-cli/internal/webmcp/chrome \
+go test -tags e2e ./agent-cli/internal/webmcp/chrome \
   -run '^TestYouTubeAdapterStockChromeJourney$' -count=1 -v
 ```
 

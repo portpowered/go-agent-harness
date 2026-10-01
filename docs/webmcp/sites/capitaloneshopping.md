@@ -326,18 +326,16 @@ virtualization, deduplication, known and unknown costs, reward caps, qualifying
 spend, bounded paging, stale generations, reset, and invalid inputs:
 
 ```bash
-WEBMCP_SITE_ADAPTER_INTEGRATION=1 \
-  go test ./agent-cli/internal/webmcp/chrome \
+go test -tags e2e ./agent-cli/internal/webmcp/chrome \
   -run '^TestBundledSiteAdaptersStockChromeJourneys$/^capital_one_shopping$' -count=1 -v
 ```
 
-Run the opt-in read-only live-site gate against a temporary Chrome profile. It
-does not require model credentials and performs a bounded 20-page scan without
-activating an offer:
+Run the read-only live-site gate (selected by the `e2e` build tag) against a
+temporary Chrome profile. It does not require model credentials and performs a
+bounded 20-page scan without activating an offer:
 
 ```bash
-WEBMCP_CAPITAL_ONE_SHOPPING_LIVE=1 \
-  go test ./agent-cli/internal/webmcp/chrome \
+go test -tags e2e ./agent-cli/internal/webmcp/chrome \
   -run '^TestCapitalOneShoppingAdapterLive$' -count=1 -v
 ```
 

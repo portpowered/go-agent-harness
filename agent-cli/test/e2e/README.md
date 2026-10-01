@@ -14,7 +14,6 @@ go test -tags=e2e -count=1 ./agent-cli/test/e2e -v
 Run only the browser workflow:
 
 ```sh
-WEBMCP_PAPERIE_MARGIN_LIVE=1 \
 WEBMCP_PAPERIE_MARGIN_LIVE_CDP_URL=http://127.0.0.1:9222/json/version \
 go test -tags=e2e -count=1 ./agent-cli/test/e2e -run PaperieMargin -v
 ```
@@ -22,7 +21,6 @@ go test -tags=e2e -count=1 ./agent-cli/test/e2e -run PaperieMargin -v
 Run only the audio-device workflow:
 
 ```sh
-WEBMCP_CUBECADE_AUDIO_DEVICE_LIVE=1 \
 go test -tags=e2e -count=1 ./agent-cli/test/e2e -run CubecadeAudioDevice -v
 ```
 

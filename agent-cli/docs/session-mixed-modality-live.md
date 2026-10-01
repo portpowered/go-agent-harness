@@ -5,12 +5,11 @@ The opt-in live test exercises the repaired `--image` plus finite
 five-word response instruction, a fresh non-default config directory,
 `--record-dir` without `--record`, and `--max-duration 60s`.
 
-Provide a Realtime-enabled OpenAI key and explicitly acknowledge the one
-billed call:
+Provide a Realtime-enabled OpenAI key; the `live` build tag is the explicit
+opt-in to the one billed call:
 
 ```bash
 export OPENAI_API_KEY=...
-export AGENT_HARNESS_LIVE_MIXED_MODALITY=1
 export AGENT_HARNESS_LIVE_MIXED_MODALITY_ARTIFACT_DIR=/secure/local/artifacts
 go test -tags live -v ./test/integration \
   -run '^TestLiveMixedModalityRecordDirOnlyWithImage$' \
