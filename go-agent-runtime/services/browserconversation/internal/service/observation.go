@@ -21,7 +21,6 @@ type browserConversationExecution struct {
 	scenario    browserconversation.BrowserConversationScenario
 	normalAudio []browserconversation.ScheduledAudioInput
 	run         browserconversation.Run
-	runContext  context.Context
 	cancel      context.CancelFunc
 	tracker     *evidenceTracker
 	interrupter *interruptionController
@@ -30,14 +29,17 @@ type browserConversationExecution struct {
 	rootErr     error
 }
 
-func newBrowserConversationExecution(ctx context.Context, request browserconversation.RunRequest) (*browserConversationExecution, error) {
+// newBrowserConversationExecution admits the scenario and derives the run
+// context bounded by its RunTimeout. The caller owns the returned context and
+// passes it to start; the execution keeps only its cancel function.
+func newBrowserConversationExecution(ctx context.Context, request browserconversation.RunRequest) (*browserConversationExecution, context.Context, error) {
 	scenario, err := policy.AdmitScenario(request.Scenario)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	audio, err := policy.ScheduleAudioInputs(scenario, request.AudioByStep)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	normalAudio, heldAudio := partitionAudio(scenario, audio)
 	run := newBrowserConversationRun(scenario)
@@ -45,10 +47,10 @@ func newBrowserConversationExecution(ctx context.Context, request browserconvers
 	tracker := newEvidenceTracker(run, scenario)
 	return &browserConversationExecution{
 		scenario: scenario, normalAudio: normalAudio, run: run,
-		runContext: runContext, cancel: cancel, tracker: tracker,
+		cancel: cancel, tracker: tracker,
 		interrupter: newInterruptionController(run, tracker, scenario, heldAudio),
 		lifecycle:   browserconversation.BrowserConversationLifecycleEvidence{Outcome: browserconversation.BrowserConversationLifecycleNotStarted},
-	}, nil
+	}, runContext, nil
 }
 
 func (e *browserConversationExecution) add(err error) {
@@ -57,7 +59,7 @@ func (e *browserConversationExecution) add(err error) {
 	}
 }
 
-func (e *browserConversationExecution) start(request browserconversation.RunRequest) {
+func (e *browserConversationExecution) start(runContext context.Context, request browserconversation.RunRequest) {
 	if e == nil {
 		return
 	}
@@ -66,7 +68,7 @@ func (e *browserConversationExecution) start(request browserconversation.RunRequ
 	} else if request.FixtureFactory == nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationFixtureStartup, errors.New("fixture factory is required")))
 	} else {
-		fixture, err := request.FixtureFactory(e.runContext, e.scenario.Clone())
+		fixture, err := request.FixtureFactory(runContext, e.scenario.Clone())
 		e.fixture = fixture
 		if err != nil {
 			e.add(errors.Join(browserconversation.ErrBrowserConversationFixtureStartup, err))
@@ -76,21 +78,21 @@ func (e *browserConversationExecution) start(request browserconversation.RunRequ
 		e.add(errors.Join(browserconversation.ErrBrowserConversationFixtureStartup, errors.New("browser broker is required")))
 	}
 	if e.fixture != nil && request.Broker != nil && e.rootErr == nil {
-		e.startSession(request)
+		e.startSession(runContext, request)
 	}
 }
 
-func (e *browserConversationExecution) startSession(request browserconversation.RunRequest) {
+func (e *browserConversationExecution) startSession(runContext context.Context, request browserconversation.RunRequest) {
 	navigate := request.CustomerNavigate
 	if navigate == nil {
 		navigate = defaultCustomerNavigate
 	}
-	e.tracker.configure(e.runContext, e.cancel, e.fixture, navigate)
+	e.tracker.configure(e.cancel, e.fixture, navigate)
 	observed := newEvidenceBroker(request.Broker, e.run, e.tracker, e.scenario, request.Oracle, e.fixture, e.interrupter)
 	e.tracker.setCancelInvocation(func(ctx context.Context, invocationID, reason string) error {
 		return observed.Cancel(ctx, browserconversation.BrowserCancelRequest{InvocationID: invocationID, Reason: reason})
 	})
-	if err := prepareFixture(e.runContext, e.scenario, observed); err != nil {
+	if err := prepareFixture(runContext, e.scenario, observed); err != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationFixtureStartup, err))
 		return
 	}
@@ -99,11 +101,11 @@ func (e *browserConversationExecution) startSession(request browserconversation.
 		return
 	}
 	e.lifecycle.SessionStarted = true
-	sessionErr := request.SessionRunner(e.runContext, sessionOutput(request), browserconversation.SessionRequest{
+	sessionErr := request.SessionRunner(runContext, sessionOutput(request), browserconversation.SessionRequest{
 		Scenario: e.scenario.Clone(), Fixture: e.fixture, Broker: observed,
 		ToolExecutor: request.ToolExecutor, ToolDefinitions: append([]messages.ToolDefinition(nil), request.ToolDefinitions...),
 		AudioInputs: cloneAudioInputs(e.normalAudio), AudioInterruptions: interruptionInputs(e.interrupter),
-		StreamObserver: e.tracker.observe, CustomerNavigate: navigate,
+		StreamObserver: func(message messages.StreamMessage) { e.tracker.observe(runContext, message) }, CustomerNavigate: navigate,
 	})
 	e.lifecycle.SessionTerminated = true
 	if sessionErr != nil {
@@ -129,7 +131,9 @@ func defaultCustomerNavigate(ctx context.Context, fixture browserconversation.Fi
 	return fixture.Navigate(ctx, navigation)
 }
 
-func (e *browserConversationExecution) cleanup(ctx context.Context, request browserconversation.RunRequest) {
+// cleanup releases the fixture under the caller context and records the
+// lifecycle outcome; runErr is the run context's terminal error.
+func (e *browserConversationExecution) cleanup(ctx context.Context, runErr error, request browserconversation.RunRequest) {
 	if e == nil {
 		return
 	}
@@ -143,7 +147,7 @@ func (e *browserConversationExecution) cleanup(ctx context.Context, request brow
 		e.cleanupFixture(ctx, request)
 	}
 	e.add(e.tracker.err())
-	e.lifecycle.Outcome = lifecycleOutcome(e.rootErr, e.runContext.Err())
+	e.lifecycle.Outcome = lifecycleOutcome(e.rootErr, runErr)
 	e.add(e.run.RecordLifecycle(e.lifecycle))
 }
 

@@ -22,7 +22,6 @@ type evidenceTracker struct {
 	assistant             strings.Builder
 	firstErr              error
 	awaitingAssistant     bool
-	ctx                   context.Context
 	cancel                context.CancelFunc
 	fixture               browserconversation.Fixture
 	navigate              browserconversation.CustomerNavigateFunc
@@ -41,12 +40,12 @@ func newEvidenceTracker(run browserconversation.Run, scenario browserconversatio
 	return &evidenceTracker{run: run, scenario: scenario, stepChanged: make(chan struct{})}
 }
 
-func (t *evidenceTracker) configure(ctx context.Context, cancel context.CancelFunc, fixture browserconversation.Fixture, navigate browserconversation.CustomerNavigateFunc) {
+func (t *evidenceTracker) configure(cancel context.CancelFunc, fixture browserconversation.Fixture, navigate browserconversation.CustomerNavigateFunc) {
 	if t == nil {
 		return
 	}
 	t.mu.Lock()
-	t.ctx, t.cancel, t.fixture, t.navigate = ctx, cancel, fixture, navigate
+	t.cancel, t.fixture, t.navigate = cancel, fixture, navigate
 	t.mu.Unlock()
 }
 
@@ -128,7 +127,7 @@ func (t *evidenceTracker) suppress(message messages.StreamMessage) bool {
 	return false
 }
 
-func (t *evidenceTracker) observeCustomerTurn(message messages.StreamMessage) {
+func (t *evidenceTracker) observeCustomerTurn(ctx context.Context, message messages.StreamMessage) {
 	value, ok := message.Value.(*messages.TranscriptEndValue)
 	if !ok || value == nil || strings.TrimSpace(value.FullText) == "" {
 		t.setError(errors.New("transcript end has malformed or empty customer text"))
@@ -139,14 +138,14 @@ func (t *evidenceTracker) observeCustomerTurn(message messages.StreamMessage) {
 		t.setError(err)
 		return
 	}
-	if err := t.navigateCustomerTurn(step); err != nil {
+	if err := t.navigateCustomerTurn(ctx, step); err != nil {
 		t.setError(err)
 		return
 	}
 	t.mu.Lock()
 	t.startDeadlineLocked(step)
 	t.mu.Unlock()
-	t.executeCancellation(t.cancellationForStep(step))
+	t.executeCancellation(ctx, t.cancellationForStep(step))
 }
 
 func (t *evidenceTracker) acceptCustomerTurn(observed string) (browserconversation.BrowserConversationStep, error) {
@@ -171,12 +170,12 @@ func (t *evidenceTracker) acceptCustomerTurn(observed string) (browserconversati
 	return step, nil
 }
 
-func (t *evidenceTracker) navigateCustomerTurn(step browserconversation.BrowserConversationStep) error {
+func (t *evidenceTracker) navigateCustomerTurn(ctx context.Context, step browserconversation.BrowserConversationStep) error {
 	if step.Navigation == nil {
 		return nil
 	}
 	t.mu.Lock()
-	navigate, ctx, fixture := t.navigate, t.ctx, t.fixture
+	navigate, fixture := t.navigate, t.fixture
 	t.mu.Unlock()
 	if navigate == nil {
 		return errors.New("customer navigation callback is unavailable")
@@ -190,7 +189,6 @@ func (t *evidenceTracker) navigateCustomerTurn(step browserconversation.BrowserC
 
 type browserConversationCancelAction struct {
 	cancel func(context.Context, string, string) error
-	ctx    context.Context
 	id     string
 	reason string
 	step   string
@@ -202,7 +200,7 @@ func (t *evidenceTracker) cancellationForStep(step browserconversation.BrowserCo
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	action := browserConversationCancelAction{cancel: t.cancelInvocation, ctx: t.ctx, id: t.inFlightInvocation, reason: policy.SafeText(step.Cancel.Reason), step: step.ID}
+	action := browserConversationCancelAction{cancel: t.cancelInvocation, id: t.inFlightInvocation, reason: policy.SafeText(step.Cancel.Reason), step: step.ID}
 	if action.cancel == nil {
 		t.setErrorLocked(errors.New("explicit cancellation callback is unavailable"))
 	} else if action.id == "" {
@@ -213,14 +211,11 @@ func (t *evidenceTracker) cancellationForStep(step browserconversation.BrowserCo
 	return action
 }
 
-func (t *evidenceTracker) executeCancellation(action browserConversationCancelAction) {
+func (t *evidenceTracker) executeCancellation(ctx context.Context, action browserConversationCancelAction) {
 	if action.cancel == nil || action.id == "" {
 		return
 	}
-	if action.ctx == nil {
-		action.ctx = context.Background()
-	}
-	if err := action.cancel(action.ctx, action.id, action.reason); err != nil {
+	if err := action.cancel(ctx, action.id, action.reason); err != nil {
 		t.setError(err)
 		return
 	}

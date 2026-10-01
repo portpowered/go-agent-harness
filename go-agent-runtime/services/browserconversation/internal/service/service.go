@@ -198,13 +198,16 @@ func (*Service) NewCommandValidator(config browserconversation.BrowserConversati
 	return command, nil
 }
 
-func (t *evidenceTracker) observe(message messages.StreamMessage) {
+// observe records one session stream message. ctx is the run context the
+// session runner was started with; it bounds navigation and cancellation side
+// effects triggered by customer turns.
+func (t *evidenceTracker) observe(ctx context.Context, message messages.StreamMessage) {
 	if t == nil || t.suppress(message) {
 		return
 	}
 	switch message.Type {
 	case messages.StreamTypeTranscriptEnd:
-		t.observeCustomerTurn(message)
+		t.observeCustomerTurn(ctx, message)
 	case messages.StreamTypeMessageStart:
 		t.beginAssistantMessage()
 	case messages.StreamTypeTextDelta:
