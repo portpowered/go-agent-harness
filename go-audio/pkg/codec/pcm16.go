@@ -123,7 +123,7 @@ func DecodePCM16Into(destination []int16, encoded []byte) error {
 	if len(destination) < len(encoded)/2 {
 		return fmt.Errorf("%w: got %d samples, want %d", ErrPCM16BufferTooSmall, len(destination), len(encoded)/2)
 	}
-	for index := 0; index < len(encoded)/2; index++ {
+	for index := range len(encoded) / 2 {
 		destination[index] = int16(binary.LittleEndian.Uint16(encoded[index*2:]))
 	}
 	return nil

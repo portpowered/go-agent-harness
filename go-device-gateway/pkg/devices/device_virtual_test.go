@@ -140,7 +140,7 @@ func TestVirtualTypedPlaybackQueueIsBoundedAtResolvedRate(t *testing.T) {
 	})
 
 	const frameCount = 16
-	for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
+	for frameIndex := range frameCount {
 		frame := make([]int16, audio.FrameSize)
 		for sampleIndex := range frame {
 			frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)
@@ -183,7 +183,7 @@ func TestVirtualTypedPlaybackQueueMatchedRateDoesNotDrop(t *testing.T) {
 		require.NoError(t, sink.Close())
 	})
 
-	for frameIndex := 0; frameIndex < 100; frameIndex++ {
+	for frameIndex := range 100 {
 		frame := make([]int16, audio.FrameSize)
 		for sampleIndex := range frame {
 			frame[sampleIndex] = int16((frameIndex*audio.FrameSize + sampleIndex) % 30000)

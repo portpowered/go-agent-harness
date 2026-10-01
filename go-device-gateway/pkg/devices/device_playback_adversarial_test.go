@@ -296,7 +296,7 @@ func capacitySustainedPacedFIFOHasNoDrops(t *testing.T) {
 	const frames = 40
 	producerErr := make(chan error, 1)
 	go func() {
-		for frameIndex := 0; frameIndex < frames; frameIndex++ {
+		for frameIndex := range frames {
 			frame := make([]int16, audio.FrameSize)
 			for sampleIndex := range frame {
 				frame[sampleIndex] = int16(frameIndex*audio.FrameSize + sampleIndex)
@@ -312,7 +312,7 @@ func capacitySustainedPacedFIFOHasNoDrops(t *testing.T) {
 		}
 		producerErr <- nil
 	}()
-	for frameIndex := 0; frameIndex < frames; frameIndex++ {
+	for frameIndex := range frames {
 		got := make([]int16, audio.FrameSize)
 		if err := input.ReadFrame(context.Background(), got); err != nil {
 			t.Fatal(err)

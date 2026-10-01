@@ -299,7 +299,7 @@ func TestSizeMetricsAndDeletionOnlyBaseline(t *testing.T) {
 	dir := t.TempDir()
 	name := filepath.Join(dir, "large.go")
 	body := "package fixture\nfunc Large() {\n"
-	for index := 0; index < 55; index++ {
+	for index := range 55 {
 		body += "_ = " + string(rune('a'+index%26)) + "\n"
 	}
 	body += "}\n"

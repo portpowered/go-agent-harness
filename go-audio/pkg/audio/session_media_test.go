@@ -402,13 +402,13 @@ func TestSessionMediaInboundQueuePreservesFramesBeyondLegacyLimit(t *testing.T) 
 	media := audio.NewSessionMedia(func(context.Context, audio.PCMFrame) error { return nil })
 	const queuedFrames = 257
 	samples := make([]int16, queuedFrames*audio.DefaultSessionMediaFrameSamples)
-	for frameIndex := 0; frameIndex < queuedFrames; frameIndex++ {
+	for frameIndex := range queuedFrames {
 		samples[frameIndex*audio.DefaultSessionMediaFrameSamples] = int16(frameIndex + 1)
 	}
 	if err := media.PushInbound(samples); err != nil {
 		t.Fatalf("push queued inbound frames = %v", err)
 	}
-	for frameIndex := 0; frameIndex < queuedFrames; frameIndex++ {
+	for frameIndex := range queuedFrames {
 		frame, err := media.Endpoints().Inbound.ReadFrame(context.Background())
 		if err != nil {
 			t.Fatalf("read inbound frame %d: %v", frameIndex, err)

@@ -191,7 +191,7 @@ func TestWASAPIOpenHasLiveDataPath(t *testing.T) {
 		t.Skipf("Windows: missing WASAPI endpoint enumeration capability: %v", err)
 	}
 	for _, direction := range []Direction{DirectionInput, DirectionOutput} {
-		direction := direction
+
 		t.Run(direction.String(), func(t *testing.T) {
 			selected, err := registry.Default(direction)
 			if err != nil {

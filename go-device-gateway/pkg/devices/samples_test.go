@@ -33,7 +33,7 @@ func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest,
 	primed := make(chan struct{})
 	producerDone := make(chan error, 1)
 	go func() {
-		for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
+		for frameIndex := range frameCount {
 			frame := int16Samples(frameIndex*audio.FrameSize, audio.FrameSize)
 			if err := backend.WaitForPlaybackCapacity(context.Background(), len(frame)); err != nil {
 				producerDone <- err
@@ -58,7 +58,7 @@ func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest,
 		t.Fatal("producer did not prime the playback high watermark")
 	}
 
-	for frameIndex := 0; frameIndex < frameCount; frameIndex++ {
+	for frameIndex := range frameCount {
 		deadline := time.Now().Add(time.Second)
 		for backend.PlaybackStats().QueuedSamples < audio.FrameSize {
 			if time.Now().After(deadline) {

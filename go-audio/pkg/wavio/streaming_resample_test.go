@@ -50,7 +50,7 @@ func TestStreamingResamplerLongRunSampleCountAndReset(t *testing.T) {
 	// cycle hundreds of times, which is enough to expose position drift.
 	const chunks = 2000
 	var count int
-	for i := 0; i < chunks; i++ {
+	for range chunks {
 		out, err := r.Process(make([]int16, 479), false)
 		if err != nil {
 			t.Fatal(err)

@@ -322,7 +322,7 @@ func (q *PlaybackQueue) ReadPCM16(destination []byte) int {
 	requested := len(destination) / 2
 	queuedBefore := q.size
 	n := min(requested, q.size)
-	for index := 0; index < n; index++ {
+	for index := range n {
 		value := uint16(q.samples[(q.head+index)%q.capacity])
 		destination[index*2] = byte(value)
 		destination[index*2+1] = byte(value >> 8)

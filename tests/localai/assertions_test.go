@@ -127,8 +127,8 @@ func fixtureImageDataURI() (string, error) {
 	width := padding*2 + (glyphWidth*scale+spacing*scale)*(len(word)-1) + glyphWidth*scale
 	height := padding*2 + glyphHeight*scale
 	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			canvas.Set(x, y, color.RGBA{R: 245, G: 249, B: 255, A: 255})
 		}
 	}
@@ -142,8 +142,8 @@ func fixtureImageDataURI() (string, error) {
 				if bit != '1' {
 					continue
 				}
-				for y := 0; y < scale; y++ {
-					for x := 0; x < scale; x++ {
+				for y := range scale {
+					for x := range scale {
 						canvas.Set(padding+charIndex*(glyphWidth+spacing)*scale+column*scale+x, padding+row*scale+y, color.RGBA{R: 15, G: 55, B: 95, A: 255})
 					}
 				}

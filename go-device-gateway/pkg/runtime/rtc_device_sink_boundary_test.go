@@ -351,7 +351,7 @@ func TestC21ObservationBoundsStalledConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("subscribe bounded observations: %v", err)
 	}
-	for index := 0; index < 300; index++ {
+	for index := range 300 {
 		response := audio.PlaybackResponse{ResponseID: "c21-many-response", ItemID: "c21-item-" + fmt.Sprint(index)}
 		sink.StartPlayback(response)
 		c21WritePlayback(t, sink, fmt.Sprintf("write response %d", index), []int16{int16(index + 1)})
@@ -510,7 +510,7 @@ func TestRTCDeviceSinkBoundsStatsPollingWithoutRenderBoundary(t *testing.T) {
 	response := audio.PlaybackResponse{ResponseID: "stats-response", ItemID: "stats-item"}
 	sink.StartPlayback(response)
 	frame := make([]int16, audio.FrameSize)
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		if err := sink.WritePlayback(context.Background(), frame); err != nil {
 			t.Fatalf("write frame %d: %v", index, err)
 		}

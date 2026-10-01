@@ -151,7 +151,7 @@ func (r *wasapiDeviceRegistry) listFlow(enumerator wasapiCOM, flow wasapiFlow) (
 		return nil, fmt.Errorf("count WASAPI %s devices: %w", flow.direction, err)
 	}
 	devices := make([]Device, 0, count)
-	for index := uint32(0); index < count; index++ {
+	for index := range count {
 		endpoint, err := collection.item(index)
 		if err != nil {
 			return nil, fmt.Errorf("get WASAPI %s device %d: %w", flow.direction, index, err)
@@ -285,7 +285,7 @@ func (r *wasapiDeviceRegistry) findDirection(nativeID string) (Direction, error)
 			collection.release()
 			return "", fmt.Errorf("count WASAPI %s devices: %w", flow.direction, err)
 		}
-		for index := uint32(0); index < count; index++ {
+		for index := range count {
 			endpoint, err := collection.item(index)
 			if err != nil {
 				continue
@@ -386,7 +386,7 @@ func (d *wasapiOpenedDevice) verifyCaptureDataPath() error {
 	if d.formatErr != nil {
 		return fmt.Errorf("inspect WASAPI capture format: %w", d.formatErr)
 	}
-	for attempt := 0; attempt < 40; attempt++ {
+	for range 40 {
 		var packets uint32
 		if _, err := d.service.call(audioCaptureClientVTableGetNextPacketSize, uintptr(unsafe.Pointer(&packets))); err != nil {
 			return fmt.Errorf("read WASAPI capture packet size: %w", err)
@@ -433,7 +433,7 @@ func (d *wasapiOpenedDevice) verifyRenderDataPath() error {
 		return fmt.Errorf("WASAPI render buffer size is zero")
 	}
 	var lastBefore, lastAfter, lastSubmitted uint32
-	for attempt := 0; attempt < 40; attempt++ {
+	for range 40 {
 		padding, err := d.renderPadding("read WASAPI render padding")
 		if err != nil {
 			return err
@@ -481,7 +481,7 @@ func (d *wasapiOpenedDevice) submitSilentRenderPacket(frames uint32) (uint32, er
 }
 
 func (d *wasapiOpenedDevice) awaitRenderConsumption(padding, submittedPadding, frames uint32) error {
-	for consumeAttempt := 0; consumeAttempt < 40; consumeAttempt++ {
+	for range 40 {
 		time.Sleep(wasapiPollInterval)
 		consumedPadding, err := d.renderPadding("read WASAPI render padding during consumption")
 		if err != nil {

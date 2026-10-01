@@ -30,7 +30,7 @@ func TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite(t *tes
 	const producers = 24
 	start := make(chan struct{})
 	results := make(chan error, producers)
-	for index := 0; index < producers; index++ {
+	for index := range producers {
 		go func(seed int) {
 			<-start
 			frame := make([]int16, audio.FrameSize)
@@ -55,7 +55,7 @@ func TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite(t *tes
 	}
 	close(handle.release)
 
-	for index := 0; index < producers; index++ {
+	for index := range producers {
 		select {
 		case err := <-results:
 			if err != nil {

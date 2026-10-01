@@ -42,7 +42,7 @@ func TestFileSourceWAVUsesOneStreamingCursorForMixedReads(t *testing.T) {
 	if err != nil || count != len(tail) || !reflect.DeepEqual(tail, samples[FrameSize:]) {
 		t.Fatalf("ReadSamples() = %d, %v, %v; want exact tail %v", count, err, tail, samples[FrameSize:])
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := range 2 {
 		count, err = source.ReadSamples(context.Background(), tail)
 		if count != 0 || !errors.Is(err, io.EOF) {
 			t.Fatalf("ReadSamples() after tail attempt %d = %d, %v; want repeated EOF", attempt, count, err)

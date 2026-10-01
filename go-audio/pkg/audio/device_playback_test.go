@@ -60,7 +60,7 @@ func TestPlaybackQueueSustainedMatchedRatePreservesOrderWithoutDrops(t *testing.
 	}
 
 	const frameSamples = 480
-	for frameIndex := 0; frameIndex < 100; frameIndex++ {
+	for frameIndex := range 100 {
 		frame := make([]int16, frameSamples)
 		for sampleIndex := range frame {
 			frame[sampleIndex] = int16(frameIndex*frameSamples + sampleIndex)

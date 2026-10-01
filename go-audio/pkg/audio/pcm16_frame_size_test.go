@@ -156,7 +156,7 @@ func TestPCM16FramerPreservesSplitSignalAndExactTailAcrossTurns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for turn := 0; turn < 2; turn++ {
+	for turn := range 2 {
 		var got []byte
 		for offset := 0; offset < len(samples); offset += 137 {
 			end := min(offset+137, len(samples))

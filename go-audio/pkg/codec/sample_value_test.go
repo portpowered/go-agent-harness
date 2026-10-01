@@ -551,8 +551,8 @@ func assertC42PacketSamples(t *testing.T, data []byte, frames, channels, stride 
 		t.Fatal(err)
 	}
 	index := 0
-	for frame := 0; frame < frames; frame++ {
-		for channel := 0; channel < channels; channel++ {
+	for frame := range frames {
+		for channel := range channels {
 			value, err := codec.DecodeSampleValue(data[frame*stride+channel*width:], format)
 			if err != nil {
 				t.Fatalf("literal sample frame=%d channel=%d error = %v", frame, channel, err)

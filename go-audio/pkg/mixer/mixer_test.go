@@ -220,7 +220,7 @@ func TestMixerRejectsSourceLimitBeforeConsumingQueuedFrame(t *testing.T) {
 		t.Fatalf("mixer source limit = %d, want MaxPCM16MixSources", mixer.sourceLimit)
 	}
 	mixer.sourceLimit = sourceLimit
-	for index := 0; index < sourceLimit; index++ {
+	for index := range sourceLimit {
 		mixer.inputs["overflow-"+strconv.Itoa(index)] = nil
 	}
 	mixer.mu.Unlock()

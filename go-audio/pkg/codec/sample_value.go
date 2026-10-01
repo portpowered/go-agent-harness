@@ -213,7 +213,7 @@ func validatePacketLayout(data []byte, frames, channels, frameStride int, format
 
 func sumPacketEnergy(data []byte, frames, channels, frameStride, sampleBytes int, format SampleFormat) (float64, error) {
 	var energy float64
-	for frame := 0; frame < frames; frame++ {
+	for frame := range frames {
 		frameEnergy, err := packetFrameEnergy(data, frame, channels, frameStride, sampleBytes, format)
 		if err != nil {
 			return 0, err
@@ -229,7 +229,7 @@ func sumPacketEnergy(data []byte, frames, channels, frameStride, sampleBytes int
 func packetFrameEnergy(data []byte, frame, channels, frameStride, sampleBytes int, format SampleFormat) (float64, error) {
 	frameOffset := frame * frameStride
 	var energy float64
-	for channel := 0; channel < channels; channel++ {
+	for channel := range channels {
 		channelOffset := channel * sampleBytes
 		value, err := DecodeSampleValue(data[frameOffset+channelOffset:frameOffset+channelOffset+sampleBytes], format)
 		if err != nil {

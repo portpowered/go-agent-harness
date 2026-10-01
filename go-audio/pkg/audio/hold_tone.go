@@ -89,7 +89,7 @@ func holdTonePulse(cfg HoldToneConfig, sampleRate int) []int16 {
 		n = 2
 	}
 	out := make([]int16, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		t := float64(i) / float64(sampleRate)
 		window := 0.5 - 0.5*math.Cos(2*math.Pi*float64(i)/float64(n-1))
 		signal := math.Sin(2*math.Pi*cfg.ToneHz1*t) + 0.6*math.Sin(2*math.Pi*cfg.ToneHz2*t)

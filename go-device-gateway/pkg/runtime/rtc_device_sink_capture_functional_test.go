@@ -98,7 +98,7 @@ func TestRTCDeviceSinkCapturedFirstTurnPreservesPacedVirtualPlayback(t *testing.
 	observed := make([]int16, 0, len(expectedDeviceSamples))
 	readCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	for index := 0; index < completeFrames; index++ {
+	for index := range completeFrames {
 		frame := make([]int16, audio.FrameSize)
 		if err := observer.ReadFrame(readCtx, frame); err != nil {
 			t.Fatalf("read retained loopback frame %d: %v", index, err)

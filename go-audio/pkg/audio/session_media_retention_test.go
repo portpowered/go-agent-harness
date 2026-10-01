@@ -12,7 +12,7 @@ func TestSessionMediaRetiresCompletedResponseAccounting(t *testing.T) {
 			t.Errorf("SessionMedia.Close() = %v", err)
 		}
 	})
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		response := PlaybackResponse{ResponseID: string(rune(i + 1)), ItemID: string(rune(i + 1))}
 		media.StartInboundResponse(response)
 		if i%2 == 0 {

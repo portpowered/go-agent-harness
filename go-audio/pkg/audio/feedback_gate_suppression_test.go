@@ -37,9 +37,9 @@ func speechLikeStream(totalFrames int) [][]int16 {
 		full[i] = 9000.0 * envelope * v
 	}
 	frames := make([][]int16, totalFrames)
-	for f := 0; f < totalFrames; f++ {
+	for f := range totalFrames {
 		frame := make([]int16, FrameSize)
-		for i := 0; i < FrameSize; i++ {
+		for i := range FrameSize {
 			frame[i] = int16(full[f*FrameSize+i])
 		}
 		frames[f] = frame
@@ -141,7 +141,7 @@ func TestLocalFeedbackGateNeverForwardsRealisticSustainedFeedback(t *testing.T) 
 
 	confirmedAt := -1
 	var leakedAfterConfirm [][]int16
-	for i := 0; i < totalFrames; i++ {
+	for i := range totalFrames {
 		if err := gate.WritePlayback(context.Background(), playback[i], func() error { return nil }); err != nil {
 			t.Fatalf("write playback %d: %v", i, err)
 		}
@@ -198,7 +198,7 @@ func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
 	}
 	frameDuration := feedbackDeviceDurationAtRate(FrameSize, SampleRate)
 	quietFrames := int((config.PostPlaybackAcousticTail+config.CorrelationLagWindow.Max)/frameDuration) + 3
-	for frame := 0; frame < quietFrames; frame++ {
+	for frame := range quietFrames {
 		if _, filterErr := gate.FilterCapture(context.Background(), make([]int16, FrameSize)); filterErr != nil {
 			t.Fatalf("advance quiet capture frame %d: %v", frame, filterErr)
 		}
@@ -220,7 +220,7 @@ func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
 func collectInvertedEcho(t *testing.T, gate *PCM16FeedbackGate, frames [][]int16, count int) [][]int16 {
 	t.Helper()
 	var submitted [][]int16
-	for frame := 0; frame < count; frame++ {
+	for frame := range count {
 		inverted := make([]int16, len(frames[frame]))
 		for sample, value := range frames[frame] {
 			inverted[sample] = -value / 2
@@ -237,7 +237,7 @@ func collectInvertedEcho(t *testing.T, gate *PCM16FeedbackGate, frames [][]int16
 func collectSilence(t *testing.T, gate *PCM16FeedbackGate, count int) [][]int16 {
 	t.Helper()
 	var submitted [][]int16
-	for frame := 0; frame < count; frame++ {
+	for frame := range count {
 		released, err := gate.FilterCapture(context.Background(), make([]int16, FrameSize))
 		if err != nil {
 			t.Fatalf("filter post-transient silence %d: %v", frame, err)
@@ -275,7 +275,7 @@ func TestLocalFeedbackGateReleasesSustainedIndependentSpeechAfterPlaybackEnds(t 
 		}
 	}()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		loop := feedbackSignal(i, 47)
 		if err := gate.WritePlayback(context.Background(), loop, func() error { return nil }); err != nil {
 			t.Fatalf("write playback %d: %v", i, err)
@@ -293,7 +293,7 @@ func TestLocalFeedbackGateReleasesSustainedIndependentSpeechAfterPlaybackEnds(t 
 	const independentFrames = 10
 	want := make([][]int16, independentFrames)
 	var got [][]int16
-	for i := 0; i < independentFrames; i++ {
+	for i := range independentFrames {
 		want[i] = feedbackSignal(i, 97)
 		released, err := gate.FilterCapture(context.Background(), want[i])
 		if err != nil {
@@ -344,7 +344,7 @@ func TestLocalFeedbackGateForwardsBargeInDuringActivePlayback(t *testing.T) {
 
 	// Establish confirmed feedback first, exactly like a real session: the
 	// gate only starts suppressing once it has seen its own echo.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		loop := feedbackSignal(i, 47)
 		if err := gate.WritePlayback(context.Background(), loop, func() error { return nil }); err != nil {
 			t.Fatalf("write playback %d: %v", i, err)
@@ -439,7 +439,7 @@ func TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses(t *testing.T) 
 
 func advanceQuietCapture(t *testing.T, gate *PCM16FeedbackGate, frames int) {
 	t.Helper()
-	for frame := 0; frame < frames; frame++ {
+	for frame := range frames {
 		if _, err := gate.FilterCapture(context.Background(), make([]int16, FrameSize)); err != nil {
 			t.Fatalf("advance quiet capture frame %d: %v", frame, err)
 		}

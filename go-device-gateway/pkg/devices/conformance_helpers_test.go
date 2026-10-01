@@ -59,7 +59,7 @@ func withinHandleCountTolerance(got, want int) bool {
 func assertSourceFrames(t *testing.T, source audio.AudioSource, samples []int16) {
 	t.Helper()
 	wantFrames := (len(samples) + audio.FrameSize - 1) / audio.FrameSize
-	for frameIndex := 0; frameIndex < wantFrames; frameIndex++ {
+	for frameIndex := range wantFrames {
 		buf := make([]int16, audio.FrameSize)
 		for index := range buf {
 			buf[index] = 12345

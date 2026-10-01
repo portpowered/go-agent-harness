@@ -178,7 +178,7 @@ func TestPCM16SelfHearingDetectsFarFieldAfterSilentCaptureResets(t *testing.T) {
 	const rate, frameSamples, delayedFrames = 16000, coreaudio.FrameSize, 8
 	playback := testSignal(24*frameSamples, 313)
 	var observation selfhearing.PCM16SelfHearingObservation
-	for frameIndex := 0; frameIndex < 24; frameIndex++ {
+	for frameIndex := range 24 {
 		start := time.Duration(frameIndex*frameSamples) * time.Second / rate
 		frame := playback[frameIndex*frameSamples : (frameIndex+1)*frameSamples]
 		if err := detector.ObservePlayback(selfhearing.PCM16TimedFrame{Samples: frame, SampleRate: rate, Start: start}); err != nil {

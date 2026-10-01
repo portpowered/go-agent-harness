@@ -14,11 +14,11 @@ func TestConcurrentTapAdmissionHasReplayableSampleOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	var producers sync.WaitGroup
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		producers.Add(1)
 		go func(value int16) {
 			defer producers.Done()
-			for n := 0; n < 8; n++ {
+			for range 8 {
 				trace.CaptureMicrophonePreGate(16000, []int16{value})
 			}
 		}(int16(i))

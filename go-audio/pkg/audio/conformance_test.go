@@ -60,7 +60,7 @@ func TestSourceConformancePartialFinalFrame(t *testing.T) {
 func assertSourceFrames(t *testing.T, source AudioSource, samples []int16) {
 	t.Helper()
 	wantFrames := (len(samples) + FrameSize - 1) / FrameSize
-	for frameIndex := 0; frameIndex < wantFrames; frameIndex++ {
+	for frameIndex := range wantFrames {
 		buf := make([]int16, FrameSize)
 		for index := range buf {
 			buf[index] = 12345

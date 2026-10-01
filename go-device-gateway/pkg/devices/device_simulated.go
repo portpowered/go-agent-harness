@@ -391,7 +391,7 @@ func (r *SimulatedDuplexRegistry) Advance(count int) error {
 	}
 	r.mu.Lock()
 	traceStart := len(r.trace)
-	for i := 0; i < count; i++ {
+	for range count {
 		if err := r.advanceRenderLocked(); err != nil {
 			r.mu.Unlock()
 			return err

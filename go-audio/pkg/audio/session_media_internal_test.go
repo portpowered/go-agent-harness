@@ -11,7 +11,7 @@ func TestSessionMediaFailClassifiesPendingTailWhenFrameQueueIsFull(t *testing.T)
 	defer closeForTest(t, media)
 
 	frame := make([]int16, DefaultSessionMediaFrameSamples)
-	for index := 0; index < sessionMediaMaxQueuedFrames; index++ {
+	for index := range sessionMediaMaxQueuedFrames {
 		if err := media.PushInbound(frame); err != nil {
 			t.Fatalf("push queued frame %d: %v", index, err)
 		}
@@ -26,7 +26,7 @@ func TestSessionMediaFailClassifiesPendingTailWhenFrameQueueIsFull(t *testing.T)
 	media.FailInbound(providerErr)
 
 	inbound := media.Endpoints().Inbound
-	for index := 0; index < sessionMediaMaxQueuedFrames; index++ {
+	for index := range sessionMediaMaxQueuedFrames {
 		if _, err := inbound.ReadFrame(context.Background()); err != nil {
 			t.Fatalf("read retained frame %d: %v", index, err)
 		}

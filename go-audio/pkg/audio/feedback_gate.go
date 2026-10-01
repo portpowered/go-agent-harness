@@ -513,7 +513,7 @@ func (g *PCM16FeedbackGate) releaseExpiredLocked(currentEnd time.Duration) [][]i
 		return nil
 	}
 	released := make([][]int16, count)
-	for index := 0; index < count; index++ {
+	for index := range count {
 		released[index] = g.pending[index].samples
 		g.pending[index].samples = nil
 	}

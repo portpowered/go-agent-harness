@@ -31,7 +31,7 @@ func TestVAD_SilenceNeverTriggersInclusion(t *testing.T) {
 	vad := audio.NewVAD(audio.DefaultVADConfig)
 	silence := makeSilenceFrame()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		include, complete := vad.Process(silence)
 		if include {
 			t.Fatalf("frame %d: silence frame marked as include", i)
@@ -49,7 +49,7 @@ func TestVAD_SpeechBelow_MinSpeechFrames(t *testing.T) {
 	speech := makeSpeechFrame(1000)
 
 	below := audio.DefaultVADConfig.MinSpeechFrames - 1
-	for i := 0; i < below; i++ {
+	for i := range below {
 		include, complete := vad.Process(speech)
 		if include {
 			t.Errorf("frame %d: expected include=false before MinSpeechFrames reached, got true", i)
@@ -69,7 +69,7 @@ func TestVAD_SpeechDetectedAfterMinSpeechFrames(t *testing.T) {
 	min := audio.DefaultVADConfig.MinSpeechFrames
 
 	// Frames 0 … MinSpeechFrames-2 must NOT trigger inclusion.
-	for i := 0; i < min-1; i++ {
+	for i := range min - 1 {
 		include, _ := vad.Process(speech)
 		if include {
 			t.Fatalf("frame %d: premature include before threshold", i)
@@ -93,11 +93,11 @@ func TestVAD_SpeechContinuesWhileActive(t *testing.T) {
 	speech := makeSpeechFrame(1000)
 
 	// Prime the detector until inSpeech=true.
-	for i := 0; i < audio.DefaultVADConfig.MinSpeechFrames; i++ {
+	for range audio.DefaultVADConfig.MinSpeechFrames {
 		vad.Process(speech)
 	}
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		include, complete := vad.Process(speech)
 		if !include {
 			t.Errorf("frame %d: expected include=true for ongoing speech", i)
@@ -116,14 +116,14 @@ func TestVAD_UtteranceEndsAfterMaxSilenceFrames(t *testing.T) {
 	silence := makeSilenceFrame()
 
 	// Start an utterance.
-	for i := 0; i < audio.DefaultVADConfig.MinSpeechFrames; i++ {
+	for range audio.DefaultVADConfig.MinSpeechFrames {
 		vad.Process(speech)
 	}
 
 	max := audio.DefaultVADConfig.MaxSilenceFrames
 
 	// Feed max-1 silence frames – not yet done.
-	for i := 0; i < max-1; i++ {
+	for i := range max - 1 {
 		_, complete := vad.Process(silence)
 		if complete {
 			t.Fatalf("frame %d: unexpected complete=true before MaxSilenceFrames", i)
@@ -143,7 +143,7 @@ func TestVAD_Reset(t *testing.T) {
 	speech := makeSpeechFrame(1000)
 
 	// Advance into an active utterance.
-	for i := 0; i < audio.DefaultVADConfig.MinSpeechFrames; i++ {
+	for range audio.DefaultVADConfig.MinSpeechFrames {
 		vad.Process(speech)
 	}
 
