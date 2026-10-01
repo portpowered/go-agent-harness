@@ -152,6 +152,10 @@ func NewSynthesizedMessageEndValue(usage TokenUsage) *MessageEndValue {
 const ErrorClassificationResponseCreateActive = "response_create_active"
 
 // ErrorValue is the value for ERROR (inner type "error").
+// ToolExecutionErrorClassification classifies the nonterminal ERROR a tool
+// runner emits when a tool batch fails; its Err carries the tool error.
+const ToolExecutionErrorClassification = "tool_execution"
+
 type ErrorValue struct {
 	Type           string `json:"type"`                     // "error"
 	Message        string `json:"message"`                  // error description

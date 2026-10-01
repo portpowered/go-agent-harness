@@ -4,10 +4,12 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
 // ExecuteStreamingTurn starts a single agent turn in streaming mode and returns
@@ -26,12 +28,18 @@ func (e *Executor) ExecuteStreamingTurn(ctx context.Context, runData *RunData, e
 
 // ExecuteOneTurn runs one turn and retains its structured messages. The optional
 // writer is an internal text compatibility sink; hosts render typed results.
+// A failed tool batch ends the loop's turn with a nonterminal tool-execution
+// diagnostic instead of a final answer; ExecuteOneTurn returns that tool error
+// rather than reporting an empty successful turn.
 func (e *Executor) ExecuteOneTurn(ctx context.Context, runData *RunData, execInput agentloop.ExecuteInput, cfg *Config, out io.Writer) (string, error) {
 	execInput.OutputReasoningStream = cfg.OutputReasoningTokens
 	result, err := runData.Loop.Execute(ctx, execInput)
 	runData.producedMessages = append(runData.producedMessages, result.Messages...)
 	if err != nil {
 		return "", err
+	}
+	if toolErr := toolExecutionError(result.Deltas); toolErr != nil {
+		return "", toolErr
 	}
 	text := result.Text()
 	if out != nil {
@@ -40,6 +48,25 @@ func (e *Executor) ExecuteOneTurn(ctx context.Context, runData *RunData, execInp
 		}
 	}
 	return text, nil
+}
+
+// toolExecutionError returns the error of the turn's tool-execution
+// diagnostic, if the turn emitted one.
+func toolExecutionError(deltas []messages.StreamMessage) error {
+	for _, delta := range deltas {
+		if delta.Type != messages.StreamTypeError {
+			continue
+		}
+		value, ok := delta.Value.(*messages.ErrorValue)
+		if !ok || value.Classification != messages.ToolExecutionErrorClassification {
+			continue
+		}
+		if value.Err != nil {
+			return value.Err
+		}
+		return errors.New(value.Message)
+	}
+	return nil
 }
 
 // SaveSession saves the conversation history to the session storage.

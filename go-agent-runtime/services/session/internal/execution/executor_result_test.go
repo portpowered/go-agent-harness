@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,6 +135,7 @@ type executorRecordingTool struct {
 	mu       sync.Mutex
 	calls    []messages.ToolCall
 	response messages.ToolCallResponse
+	err      error
 }
 
 func (e *executorRecordingTool) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -147,7 +149,7 @@ func (e *executorRecordingTool) Execute(_ context.Context, call messages.ToolCal
 	if response.Name == "" {
 		response.Name = call.Name
 	}
-	return response, nil
+	return response, e.err
 }
 
 func newExecutorRunData(t *testing.T, inf messages.Inferencer, tool messages.ToolExecutor, toolDefs []messages.ToolDefinition, initialHistory ...messages.Message) *RunData {
@@ -198,6 +200,8 @@ func assertToolResultMessage(t *testing.T, runData *RunData, wantID, wantContent
 
 func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 	toolCall := messages.ToolCall{ID: "request-id-42", Name: "lookup", Arguments: `{"key":"value"}`}
+	toolFailure := errors.New("tool exploded")
+	partialFailure := errors.New("partial tool failure")
 	tests := []toolResultCase{
 		{
 			name:        "success preserves content and request ID",
@@ -210,6 +214,20 @@ func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
 			wantText:    "final after empty",
 			wantContent: "",
+		},
+		{
+			name:        "tool error is propagated",
+			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
+			toolErr:     toolFailure,
+			wantErr:     toolFailure,
+			wantErrText: `tool "lookup" failed: tool exploded`,
+		},
+		{
+			name:        "content plus error remains an error",
+			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID, Content: "partial content"},
+			toolErr:     partialFailure,
+			wantErr:     partialFailure,
+			wantErrText: `tool "lookup" failed: partial tool failure`,
 		},
 	}
 
@@ -309,13 +327,21 @@ func executorErrorStream(err error) (<-chan messages.StreamMessage, error) {
 type toolResultCase struct {
 	name        string
 	response    messages.ToolCallResponse
+	toolErr     error
 	wantText    string
+	wantErr     error
+	wantErrText string
 	wantContent string
 }
 
 func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.ToolCall) {
 	t.Helper()
 	finalText := tt.wantText
+	if tt.wantErr != nil {
+		// The model would answer after the tool, but a failed tool must end
+		// the turn with the tool's error instead of reaching this response.
+		finalText = "answer after failed tool"
+	}
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{
 		{result: messages.InferenceResult{
 			Message:   messages.Message{Role: messages.RoleAssistant, ToolCalls: []messages.ToolCall{toolCall}},
@@ -323,12 +349,16 @@ func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.Tool
 		}},
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, finalText)}},
 	}}
-	tool := &executorRecordingTool{response: tt.response}
+	tool := &executorRecordingTool{response: tt.response, err: tt.toolErr}
 	runData := newExecutorRunData(t, inf, tool, []messages.ToolDefinition{{Name: "lookup"}})
 	cfg := &Config{NoSystemInformation: true}
 	var out strings.Builder
 	got, err := (&Executor{}).ExecuteOneTurn(context.Background(), runData, agentloop.NewExecuteInput("question"), cfg, &out)
-	if err != nil || got != tt.wantText || out.String() != tt.wantText+"\n" {
+	if tt.wantErr != nil {
+		if !errors.Is(err, tt.wantErr) || err.Error() != tt.wantErrText || got != "" || out.Len() != 0 {
+			t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want error %q wrapping %v and no text", got, err, out.String(), tt.wantErrText, tt.wantErr)
+		}
+	} else if err != nil || got != tt.wantText || out.String() != tt.wantText+"\n" {
 		t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want text %q", got, err, out.String(), tt.wantText)
 	}
 
@@ -338,5 +368,7 @@ func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.Tool
 	if len(calls) != 1 || calls[0] != toolCall {
 		t.Fatalf("tool calls = %#v, want exactly %#v", calls, []messages.ToolCall{toolCall})
 	}
-	assertToolResultMessage(t, runData, toolCall.ID, tt.wantContent)
+	if tt.wantErr == nil {
+		assertToolResultMessage(t, runData, toolCall.ID, tt.wantContent)
+	}
 }
