@@ -56,9 +56,9 @@ type recordedSleeps []time.Duration
 
 func (s *recordedSleeps) sleep(duration time.Duration) { *s = append(*s, duration) }
 
-func (s recordedSleeps) total() time.Duration {
+func (s *recordedSleeps) total() time.Duration {
 	var total time.Duration
-	for _, duration := range s {
+	for _, duration := range *s {
 		total += duration
 	}
 	return total

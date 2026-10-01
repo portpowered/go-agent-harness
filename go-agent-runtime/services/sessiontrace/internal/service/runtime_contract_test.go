@@ -517,8 +517,8 @@ type traceContractLegacyPlayback struct {
 	renderedObserver func(int, []int16)
 }
 
-func (traceContractLegacyPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
-func (traceContractLegacyPlayback) Close() error                                   { return nil }
+func (*traceContractLegacyPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
+func (*traceContractLegacyPlayback) Close() error                                   { return nil }
 func (p *traceContractLegacyPlayback) SetPlaybackRenderObserver(observer audio.PlaybackRenderObserver) {
 	p.renderedObserver = func(rate int, samples []int16) { observer(rate, samples) }
 }

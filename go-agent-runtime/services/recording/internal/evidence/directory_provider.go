@@ -223,7 +223,7 @@ func (c *evidenceConversation) recordResponseAudio(id string, count, offset uint
 	c.responseAudio[id] = audio
 }
 
-func (c evidenceConversation) withResponseAudio(turn evidenceTurn) evidenceTurn {
+func (c *evidenceConversation) withResponseAudio(turn evidenceTurn) evidenceTurn {
 	for _, id := range turn.responseIDs {
 		audio := c.responseAudio[id]
 		if audio.bytes == 0 {
