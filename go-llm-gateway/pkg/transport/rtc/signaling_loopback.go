@@ -18,6 +18,9 @@ type loopbackExchange struct {
 	messages   [2][]any
 	read       [2]int
 }
+
+var _ Signaling = (*LoopbackEndpoint)(nil)
+
 type LoopbackEndpoint struct {
 	exchange *loopbackExchange
 	index    int

@@ -73,6 +73,21 @@ func UnknownProviderCapabilities(provider string) capabilities.ProviderCapabilit
 	return capabilities.UnknownProviderCapabilities(provider)
 }
 
+// ReportedCapabilities returns the capability contract provider reports
+// through CapabilityReporter, naming it after provider when the report omits
+// a name. Providers that do not implement CapabilityReporter report the
+// documented unknown fallback.
+func ReportedCapabilities(provider interface{ Name() string }) ProviderCapabilities {
+	if reporter, ok := provider.(CapabilityReporter); ok {
+		caps := reporter.Capabilities()
+		if caps.Provider == "" {
+			caps.Provider = provider.Name()
+		}
+		return caps
+	}
+	return UnknownProviderCapabilities(provider.Name())
+}
+
 // ThinkingMode configures extended thinking (Anthropic). Ignored by other providers.
 type ThinkingMode int
 

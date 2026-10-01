@@ -374,25 +374,25 @@ func TestSessionGatewayReturnsContextErrorBeforeUnsupportedFeatureValidation(t *
 
 	tests := []struct {
 		name string
-		ctx  context.Context
+		ctx  func(*testing.T) context.Context
 		want error
 	}{
 		{
 			name: "canceled",
-			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
+			ctx: func(t *testing.T) context.Context {
+				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
 				return ctx
-			}(),
+			},
 			want: context.Canceled,
 		},
 		{
 			name: "deadline exceeded",
-			ctx: func() context.Context {
-				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			ctx: func(t *testing.T) context.Context {
+				ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 				t.Cleanup(cancel)
 				return ctx
-			}(),
+			},
 			want: context.DeadlineExceeded,
 		},
 	}
@@ -416,7 +416,7 @@ func TestSessionGatewayReturnsContextErrorBeforeUnsupportedFeatureValidation(t *
 				t.Fatalf("NewSessionGateway: %v", err)
 			}
 
-			_, err = gw.ConnectSession(tt.ctx, models.SessionConfig{})
+			_, err = gw.ConnectSession(tt.ctx(t), models.SessionConfig{})
 
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("error = %v, want %v", err, tt.want)
