@@ -109,7 +109,7 @@ func TestServiceRejectsCredentialBearingScenarioBeforeFixtureCreation(t *testing
 	if !errors.Is(err, browserconversation.ErrInvalidBrowserConversationScenario) || created {
 		t.Fatalf("Run err=%v fixture-created=%t, want credential rejection before effects", err, created)
 	}
-	if bytes.Contains([]byte(err.Error()), []byte("credential-canary")) {
+	if strings.Contains(err.Error(), "credential-canary") {
 		t.Fatalf("scenario rejection exposed credential-shaped input: %v", err)
 	}
 }

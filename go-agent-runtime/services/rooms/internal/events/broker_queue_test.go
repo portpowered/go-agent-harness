@@ -50,18 +50,17 @@ func TestBrokerPreservesPerParticipantOrderDuringConcurrentPublish(t *testing.T)
 	all := subscribe(t, broker, "")
 	var publishers sync.WaitGroup
 	for _, participant := range []string{"a", "b"} {
-		participant := participant
 		publishers.Add(1)
 		go func() {
 			defer publishers.Done()
-			for sequence := 0; sequence < count; sequence++ {
+			for sequence := range count {
 				broker.Diagnostic(participant, "ordered", map[string]string{"sequence": strconv.Itoa(sequence)})
 			}
 		}()
 	}
 	publishers.Wait()
 	sequences := map[string][]int{"a": {}, "b": {}}
-	for index := 0; index < count*2; index++ {
+	for range count * 2 {
 		payload := nextFrame(t, all)
 		var fields map[string]string
 		if err := json.Unmarshal(payload["fields"], &fields); err != nil {

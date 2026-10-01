@@ -33,6 +33,7 @@ func serverRecord(kind, payload string) gatewaytesting.CapturedSessionEvent {
 }
 
 func writePlanCapture(t *testing.T, records ...gatewaytesting.CapturedSessionEvent) string {
+	t.Helper()
 	return writePlanCaptureWithDisconnect(t, false, records...)
 }
 

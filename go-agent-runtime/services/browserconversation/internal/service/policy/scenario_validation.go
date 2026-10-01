@@ -299,7 +299,7 @@ func validateCorrection(scenario BrowserConversationScenario, index int, path st
 }
 
 func earlierCorrectionTarget(scenario BrowserConversationScenario, index int, targetID string) *BrowserConversationStep {
-	for earlier := 0; earlier < index; earlier++ {
+	for earlier := range index {
 		if scenario.Steps[earlier].ID == targetID {
 			return &scenario.Steps[earlier]
 		}

@@ -194,6 +194,7 @@ func TestRunnerRoutesTypedLivenessFaultAndPreservesPeer(t *testing.T) {
 }
 
 func runTypedLivenessCase(t *testing.T, classification string) {
+	t.Helper()
 	silent := newFakeLiveHandle()
 	silent.startEvents = []session.LiveEvent{{
 		Kind: string(session.LiveEventLiveness),
@@ -492,7 +493,7 @@ func expectRunning(t *testing.T, done <-chan scriptedOutcome) {
 func waitProcessed(t *testing.T, processed <-chan string, want int) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
-	for seen := 0; seen < want; seen++ {
+	for seen := range want {
 		select {
 		case <-processed:
 		case <-deadline:

@@ -1,9 +1,9 @@
 package deviceprobe
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +41,7 @@ func TestProbeBridgeReportsTerminalAndMalformedEvents(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatalf("bridge did not stop: %v", ctx.Err())
 			}
-			if err := bridge.errorValue(nil); err == nil || !bytes.Contains([]byte(err.Error()), []byte(tc.want)) {
+			if err := bridge.errorValue(nil); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("bridge error = %v, want %q", err, tc.want)
 			}
 		})
@@ -67,7 +67,7 @@ func TestProbeBridgeIgnoresNonTerminalDiagnostics(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("bridge did not stop: %v", ctx.Err())
 	}
-	if err := bridge.errorValue(nil); err == nil || !bytes.Contains([]byte(err.Error()), []byte("session closed")) {
+	if err := bridge.errorValue(nil); err == nil || !strings.Contains(err.Error(), "session closed") {
 		t.Fatalf("bridge error = %v, want close after diagnostic", err)
 	}
 }
@@ -94,13 +94,13 @@ func TestProbeBridgeLifecycleAndAudioValidation(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("bridge did not stop after unsupported audio")
 	}
-	if err := bridge.errorValue(nil); err == nil || !bytes.Contains([]byte(err.Error()), []byte("not PCM16")) {
+	if err := bridge.errorValue(nil); err == nil || !strings.Contains(err.Error(), "not PCM16") {
 		t.Fatalf("bridge audio error = %v, want PCM format diagnostic", err)
 	}
 	if err := bridge.waitResponse(context.Background()); err == nil {
 		t.Fatal("waitResponse succeeded after bridge error")
 	}
-	if got := liveDeviceProbeSessionError(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue("boom")}); got == nil || !bytes.Contains([]byte(got.Error()), []byte("boom")) {
+	if got := liveDeviceProbeSessionError(messages.StreamMessage{Type: messages.StreamTypeError, Value: messages.NewErrorValue("boom")}); got == nil || !strings.Contains(got.Error(), "boom") {
 		t.Fatalf("session error = %v, want provider message", got)
 	}
 	if got := liveDeviceProbeSessionError(messages.StreamMessage{Type: messages.StreamTypeError}); got == nil {
@@ -126,13 +126,13 @@ func TestProbeHelperContracts(t *testing.T) {
 	if got := selectLiveDeviceProbeDevice(nil, []devicegw.Device{{ID: "fallback"}}, devicegw.DirectionInput); got.ID != "fallback" {
 		t.Fatalf("fallback device = %q, want fallback", got.ID)
 	}
-	if err := closeDeviceProbeResource("test", func() error { return errors.New("close failed") }); err == nil || !bytes.Contains([]byte(err.Error()), []byte("close test")) {
+	if err := closeDeviceProbeResource("test", func() error { return errors.New("close failed") }); err == nil || !strings.Contains(err.Error(), "close test") {
 		t.Fatalf("close resource error = %v, want resource context", err)
 	}
 	if got := scenarioDeviceProbeTranscript(probe.Scenario{Expectations: []probe.ExpectedBehavior{{Type: probe.ExpectTranscriptContains, Value: "from value"}}}); got != "from value" {
 		t.Fatalf("transcript expectation fallback = %q, want from value", got)
 	}
-	if _, err := runDeviceProbeScenario(context.Background(), validProbeScenario(), devicegw.DeviceProbeAvailability{}, nil, runtimeDevices.ProbeRequest{}, nil); err == nil || !bytes.Contains([]byte(err.Error()), []byte("status")) {
+	if _, err := runDeviceProbeScenario(context.Background(), validProbeScenario(), devicegw.DeviceProbeAvailability{}, nil, runtimeDevices.ProbeRequest{}, nil); err == nil || !strings.Contains(err.Error(), "status") {
 		t.Fatalf("invalid availability error = %v, want status diagnostic", err)
 	}
 }

@@ -101,6 +101,7 @@ func TestS12DarwinFakeScreenOperations(t *testing.T) {
 }
 
 func TestS12DarwinFakeMouseOperations(t *testing.T) {
+	t.Parallel()
 	dragSleeps := append([]time.Duration{mouseDragPause}, repeatDuration(mouseDragStepPause, 20)...)
 	for _, tt := range []struct {
 		name       string

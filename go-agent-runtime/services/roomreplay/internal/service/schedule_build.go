@@ -245,7 +245,7 @@ func segmentFrameLimit(index int, segments []speechSegment, remaining int, frame
 }
 
 func (state *participantFrameState) appendSegment(pcm []byte, participantID string, segment speechSegment, startFrame, limit, frameBytes int) {
-	for frameOffset := 0; frameOffset < limit; frameOffset++ {
+	for frameOffset := range limit {
 		state.appendFrame(startFrame+frameOffset, participantID, segment.sequence, pcmFrame(pcm, state.cursor, frameBytes))
 	}
 }

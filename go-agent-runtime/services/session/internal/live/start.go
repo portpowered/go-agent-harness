@@ -220,7 +220,7 @@ func restrictToolExecutor(executor messages.ToolExecutor, surface func() []messa
 		return executor
 	}
 	if executor == nil {
-		return executor
+		return nil
 	}
 	return allowlistedToolExecutor{inner: executor, surface: surface, enforceEmpty: enforceEmpty}
 }

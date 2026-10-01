@@ -386,6 +386,7 @@ func TestServiceFacadeClassifiesRetryAndTerminalMessages(t *testing.T) {
 }
 
 func TestRunHandlesWakeAndDoneBoundaryFailures(t *testing.T) {
+	t.Parallel()
 	wakeErr := errors.New("wake failed")
 	doneErr := errors.New("done failed")
 	wake := make(chan struct{}, 1)

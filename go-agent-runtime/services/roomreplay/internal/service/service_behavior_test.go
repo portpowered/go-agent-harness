@@ -101,23 +101,23 @@ func TestLoadRoomReplayPlanAcceptsInventoryBackedParticipantArtifacts(t *testing
 		participantArtifacts := roomReplayTestMap(t, participant["artifacts"], "participant artifacts "+participantID)
 		for _, role := range append(append([]string(nil), requiredRoles...), roomReplayArtifactRoleCapture) {
 			original := roomReplayTestMap(t, participantArtifacts[role], "participant artifact "+participantID+"/"+role)
-			copy := make(map[string]any, len(original)+1)
+			cloned := make(map[string]any, len(original)+1)
 			for key, value := range original {
-				copy[key] = value
+				cloned[key] = value
 			}
-			copy["name"] = copy["path"]
-			inventory = append(inventory, copy)
+			cloned["name"] = cloned["path"]
+			inventory = append(inventory, cloned)
 		}
 		delete(participant, "artifacts")
 	}
 	for _, role := range []string{"room_timeline", "room_mix"} {
 		original := roomReplayTestMap(t, legacyArtifacts[role], "room artifact "+role)
-		copy := make(map[string]any, len(original)+1)
+		cloned := make(map[string]any, len(original)+1)
 		for key, value := range original {
-			copy[key] = value
+			cloned[key] = value
 		}
-		copy["name"] = copy["path"]
-		inventory = append(inventory, copy)
+		cloned["name"] = cloned["path"]
+		inventory = append(inventory, cloned)
 	}
 	manifest["artifacts"] = inventory
 	writeManifestValue(t, bundle, manifest)
@@ -255,7 +255,7 @@ func TestLoadRoomReplayPlanRejectsUndeclaredTimelineArtifact(t *testing.T) {
 	if err := os.WriteFile(timelinePath, []byte(line), 0o600); err != nil {
 		t.Fatalf("write timeline: %v", err)
 	}
-	updateArtifactDigest(t, manifest, "room_timeline", []byte(line))
+	updateTimelineDigest(t, manifest, []byte(line))
 	writeManifestValue(t, bundle, manifest)
 
 	_, err := roomReplayServiceForTest().Load(bundle)
@@ -290,7 +290,7 @@ func TestLoadRoomReplayPlanRejectsOversizedTimelineLineWithTypedMismatch(t *test
 	if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), []byte(line), 0o600); err != nil {
 		t.Fatalf("write oversized timeline: %v", err)
 	}
-	updateArtifactDigest(t, manifest, "room_timeline", []byte(line))
+	updateTimelineDigest(t, manifest, []byte(line))
 	writeManifestValue(t, bundle, manifest)
 
 	_, err := roomReplayServiceForTest().Load(bundle)
@@ -498,10 +498,11 @@ func writeManifestValue(t *testing.T, bundle string, value map[string]any) {
 	}
 }
 
-func updateArtifactDigest(t *testing.T, manifest map[string]any, role string, data []byte) {
+// updateTimelineDigest records data as the room timeline artifact content.
+func updateTimelineDigest(t *testing.T, manifest map[string]any, data []byte) {
 	t.Helper()
 	artifacts := roomReplayTestMap(t, manifest["artifacts"], "artifacts")
-	artifact := roomReplayTestMap(t, artifacts[role], "artifact "+role)
+	artifact := roomReplayTestMap(t, artifacts["room_timeline"], "artifact room_timeline")
 	artifact["size"] = len(data)
 	digest := sha256.Sum256(data)
 	artifact["sha256"] = hex.EncodeToString(digest[:])

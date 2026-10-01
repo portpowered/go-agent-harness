@@ -208,7 +208,7 @@ func firstJSONSliceDifference(expected []any, actual any, pointer string) *jsonD
 		return &jsonDifference{pointer: pointer, expected: expected, actual: actual}
 	}
 	common := min(len(expected), len(actualSlice))
-	for index := 0; index < common; index++ {
+	for index := range common {
 		child := appendJSONPointer(pointer, strconv.Itoa(index))
 		if difference := firstJSONDifference(expected[index], actualSlice[index], child); difference != nil {
 			return difference
@@ -248,7 +248,7 @@ func firstByteDifference(expected, actual []byte) int {
 	if len(actual) < commonLength {
 		commonLength = len(actual)
 	}
-	for index := 0; index < commonLength; index++ {
+	for index := range commonLength {
 		if expected[index] != actual[index] {
 			return index
 		}

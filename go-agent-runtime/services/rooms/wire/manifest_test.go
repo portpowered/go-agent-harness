@@ -51,18 +51,18 @@ func registryForWireTest(t *testing.T) rooms.ValidationRegistry {
 	registry := NewValidationRegistry(providers, models, tools, voices)
 
 	requireRegistryEntry(t, registry.Providers, "openai", "provider")
-	requireNestedRegistryEntry(t, registry.Models, "openai", "gpt-realtime", "model")
+	requireOpenAIRegistryEntry(t, registry.Models, "gpt-realtime", "model")
 	requireRegistryEntry(t, registry.Tools, "sleep", "tool")
-	requireNestedRegistryEntry(t, registry.Voices, "openai", "alloy", "voice")
+	requireOpenAIRegistryEntry(t, registry.Voices, "alloy", "voice")
 
 	providers[0] = "mutated-provider"
 	models[" OPENAI "][0] = "mutated-model"
 	tools[0] = "mutated-tool"
 	voices[" OPENAI "][0] = "mutated-voice"
 	requireRegistryEntry(t, registry.Providers, "openai", "copied provider")
-	requireNestedRegistryEntry(t, registry.Models, "openai", "gpt-realtime", "copied model")
+	requireOpenAIRegistryEntry(t, registry.Models, "gpt-realtime", "copied model")
 	requireRegistryEntry(t, registry.Tools, "sleep", "copied tool")
-	requireNestedRegistryEntry(t, registry.Voices, "openai", "alloy", "copied voice")
+	requireOpenAIRegistryEntry(t, registry.Voices, "alloy", "copied voice")
 
 	emptyRegistry := NewValidationRegistry(nil, nil, nil, nil)
 	if emptyRegistry.Providers != nil || emptyRegistry.Models != nil || emptyRegistry.Tools != nil || emptyRegistry.Voices != nil {
@@ -146,10 +146,11 @@ func requireRegistryEntry(t *testing.T, values map[string]struct{}, key, label s
 	}
 }
 
-func requireNestedRegistryEntry(t *testing.T, values map[string]map[string]struct{}, provider, key, label string) {
+// requireOpenAIRegistryEntry requires key under the openai provider.
+func requireOpenAIRegistryEntry(t *testing.T, values map[string]map[string]struct{}, key, label string) {
 	t.Helper()
-	if _, ok := values[provider][key]; !ok {
-		t.Fatalf("%s registry = %#v, want %s/%s", label, values, provider, key)
+	if _, ok := values["openai"][key]; !ok {
+		t.Fatalf("%s registry = %#v, want openai/%s", label, values, key)
 	}
 }
 

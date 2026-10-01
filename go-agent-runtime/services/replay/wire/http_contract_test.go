@@ -42,7 +42,7 @@ func TestHTTPReplayPublicContractMatchesRequestsAndReturnsRecordedResponses(t *t
 	path := filepath.Join(t.TempDir(), "http-capture.json")
 	transport := newHTTPReplayTransport(t, path, captures)
 	requestBody := `{"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`
-	request, err := http.NewRequest(http.MethodPost, "https://provider.example.test/chat/completions", strings.NewReader(requestBody))
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://provider.example.test/chat/completions", strings.NewReader(requestBody))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestHTTPReplayPublicContractMatchesRequestsAndReturnsRecordedResponses(t *t
 		t.Fatalf("replay consumed the caller request body: body=%q error=%v", got, err)
 	}
 
-	request, err = http.NewRequest(http.MethodGet, "https://provider.example.test/status", nil)
+	request, err = http.NewRequestWithContext(t.Context(), http.MethodGet, "https://provider.example.test/status", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestHTTPReplayPublicContractMatchesRequestsAndReturnsRecordedResponses(t *t
 		t.Fatalf("close bodyless replay response: %v", err)
 	}
 
-	request, err = http.NewRequest(http.MethodPost, "https://provider.example.test/chat/completions", strings.NewReader(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.test/image"}}]}]}`))
+	request, err = http.NewRequestWithContext(t.Context(), http.MethodPost, "https://provider.example.test/chat/completions", strings.NewReader(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.test/image"}}]}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}

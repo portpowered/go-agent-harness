@@ -371,7 +371,7 @@ func (i *liveInvocation) finish(ctx context.Context, waitErr, sinkErr error) err
 		deviceErr = i.device.Close()
 	}
 	var pumpErr error
-	for count := 0; count < i.count; count++ {
+	for range i.count {
 		candidate := <-i.pumps
 		if !isExpectedMediaPumpError(candidate) {
 			pumpErr = errors.Join(pumpErr, candidate)

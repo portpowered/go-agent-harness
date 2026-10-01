@@ -185,7 +185,7 @@ func (t *ScreenTool) captureRecordingFrames(ctx context.Context, display int, bo
 	delays := make([]int, 0, options.maxFrames)
 	clock := t.recordingClock()
 	startedAt := clock.Now()
-	for i := 0; i < options.maxFrames; i++ {
+	for i := range options.maxFrames {
 		if i > 0 {
 			target := startedAt.Add(time.Duration(i) * options.frameInterval)
 			if err := waitForScreenRecordingFrame(ctx, clock, target); err != nil {

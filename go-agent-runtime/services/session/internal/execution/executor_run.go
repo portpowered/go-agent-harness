@@ -55,7 +55,7 @@ func (e *Executor) executeWithContinuation(
 	}
 
 	// Drain the TODO queue, re-invoking inference for each dequeued message.
-	for depth := 0; depth < maxDepth; depth++ {
+	for range maxDepth {
 		msg, ok := runData.Loop.DequeueTodo()
 		if !ok {
 			break

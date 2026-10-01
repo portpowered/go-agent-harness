@@ -207,7 +207,7 @@ func TestOutputTapReportsBoundedOverflowWithoutWaiting(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("slow output sink was not reached")
 	}
-	for index := 0; index < outputTapQueueCapacity; index++ {
+	for index := range outputTapQueueCapacity {
 		if err := tap.Observe(context.Background(), 16_000, []int16{int16(index + 2)}); err != nil {
 			t.Fatalf("queued Observe %d: %v", index, err)
 		}
@@ -281,7 +281,6 @@ func TestOutputTapDrainsAdmittedSamplesAfterCallerCancellation(t *testing.T) {
 		t.Fatalf("drained samples = %v, want %v", got, want)
 	}
 }
-
 
 func TestFactoryClosesPhysicalRoleWhenFiniteAdmissionFails(t *testing.T) {
 	closeErr := errors.New("physical close")

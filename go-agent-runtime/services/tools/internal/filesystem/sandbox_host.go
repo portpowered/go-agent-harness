@@ -86,7 +86,7 @@ func newWriteFileTempName() (string, error) {
 }
 
 func createHostWriteTempFile(dir string) (*os.File, string, error) {
-	for attempt := 0; attempt < writeFileTempCreateTries; attempt++ {
+	for range writeFileTempCreateTries {
 		name, err := newWriteFileTempName()
 		if err != nil {
 			return nil, "", err
@@ -125,7 +125,7 @@ func validateSandboxWriteTarget(root *os.Root, path string) error {
 }
 
 func createSandboxWriteTempFile(root *os.Root, dir string) (*os.File, string, error) {
-	for attempt := 0; attempt < writeFileTempCreateTries; attempt++ {
+	for range writeFileTempCreateTries {
 		name, err := newWriteFileTempName()
 		if err != nil {
 			return nil, "", err

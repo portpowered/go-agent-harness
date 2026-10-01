@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -560,7 +562,8 @@ func TestNilRuntimeRecorderIsInert(t *testing.T) {
 }
 
 func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {
-	if combineRTCDevicePlaybackObservers(nil, nil) != nil || combineRTCDeviceCaptureObservers(nil) != nil || combineRTCDevicePlaybackReceiptObservers(nil) != nil {
+	absent := []devicert.RTCDevicePlaybackObserver{nil, nil}
+	if combineRTCDevicePlaybackObservers(absent...) != nil || combineRTCDeviceCaptureObservers(nil) != nil || combineRTCDevicePlaybackReceiptObservers(nil) != nil {
 		t.Fatal("combining only absent observers produced an observer")
 	}
 	if resolvePlaybackDiagnosticSink(nil) == nil {

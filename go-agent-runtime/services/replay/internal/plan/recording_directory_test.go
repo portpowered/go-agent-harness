@@ -83,7 +83,7 @@ func TestResolveRecordingDirectoryRejectsMutatedDeclaredPCMWithArtifactDiagnosti
 		{path: "provider.json", data: []byte(`{"records":[]}`)},
 		{path: "audio/out-000.pcm", data: []byte{1, 2, 3, 4}},
 	})
-	pcmPath := filepath.Join(root, "audio/out-000.pcm")
+	pcmPath := filepath.Join(root, "audio", "out-000.pcm")
 	pcm, err := os.ReadFile(pcmPath)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func TestResolveRecordingDirectoryRejectsSymlinkedOrNonRegularManifest(t *testin
 
 func mutateRecordingArtifact(t *testing.T, root, name string) error {
 	t.Helper()
-	path := filepath.Join(root, "audio/out-000.pcm")
+	path := filepath.Join(root, "audio", "out-000.pcm")
 	switch name {
 	case "missing":
 		return os.Remove(path)

@@ -21,10 +21,11 @@ func cliLabels() devices.FileMediaLabels {
 	return devices.FileMediaLabels{Input: "--audio-in", InputTurn: "--audio-in-turn", Interruption: "--audio-interrupt", Output: "--audio-out"}
 }
 
-func writePCM(t *testing.T, name string, samples int) string {
+// writePCM writes one silent PCM16 frame.
+func writePCM(t *testing.T, name string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
-	if err := os.WriteFile(path, make([]byte, samples*2), 0o600); err != nil {
+	if err := os.WriteFile(path, make([]byte, audio.FrameSize*2), 0o600); err != nil {
 		t.Fatalf("write pcm: %v", err)
 	}
 	return path
@@ -38,9 +39,9 @@ func TestOpenFileMediaWithoutMediaReturnsNilHandle(t *testing.T) {
 }
 
 func TestOpenFileMediaAdmitsRolesWithPacingSchedulerAndObservation(t *testing.T) {
-	input := writePCM(t, "in.pcm", audio.FrameSize)
-	turn := writePCM(t, "turn.pcm", audio.FrameSize)
-	interrupt := writePCM(t, "interrupt.pcm", audio.FrameSize)
+	input := writePCM(t, "in.pcm")
+	turn := writePCM(t, "turn.pcm")
+	interrupt := writePCM(t, "interrupt.pcm")
 	output := filepath.Join(t.TempDir(), "out.pcm")
 	scheduler := clock.NewDeterministic(time.Unix(0, 0), time.Millisecond)
 	observed := map[int]int{}
@@ -90,7 +91,7 @@ func assertAdmittedRoles(t *testing.T, media devices.FileMedia, scheduler clock.
 }
 
 func TestOpenFileMediaLabelsFailuresAndClosesEarlierPorts(t *testing.T) {
-	input := writePCM(t, "in.pcm", audio.FrameSize)
+	input := writePCM(t, "in.pcm")
 	missing := filepath.Join(t.TempDir(), "missing.wav")
 	for _, test := range []struct {
 		name    string

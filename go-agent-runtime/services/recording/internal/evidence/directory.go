@@ -252,9 +252,9 @@ func (r *directoryRecorder) RecordBrowserArtifact(ctx context.Context, artifact 
 	if r.browserArtifact != nil {
 		return errors.New("recording already has a browser artifact")
 	}
-	copy := *artifact
-	copy.Data = append([]byte(nil), artifact.Data...)
-	r.browserArtifact = &copy
+	cloned := *artifact
+	cloned.Data = append([]byte(nil), artifact.Data...)
+	r.browserArtifact = &cloned
 	return nil
 }
 
@@ -300,15 +300,15 @@ func boundedTerminalValue(value *messages.SessionCloseValue) *messages.SessionCl
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	copy.Type = boundedEventText(copy.Type)
-	copy.SessionID = boundedEventText(copy.SessionID)
-	copy.Reason = boundedEventText(copy.Reason)
-	copy.Classification = boundedEventText(copy.Classification)
-	copy.TerminalReason = messages.TerminalReason(boundedEventText(string(copy.TerminalReason)))
-	copy.TerminalProvenance = messages.TerminalProvenance(boundedEventText(string(copy.TerminalProvenance)))
-	copy.OutputState = messages.TerminalOutputState(boundedEventText(string(copy.OutputState)))
-	return &copy
+	cloned := *value
+	cloned.Type = boundedEventText(cloned.Type)
+	cloned.SessionID = boundedEventText(cloned.SessionID)
+	cloned.Reason = boundedEventText(cloned.Reason)
+	cloned.Classification = boundedEventText(cloned.Classification)
+	cloned.TerminalReason = messages.TerminalReason(boundedEventText(string(cloned.TerminalReason)))
+	cloned.TerminalProvenance = messages.TerminalProvenance(boundedEventText(string(cloned.TerminalProvenance)))
+	cloned.OutputState = messages.TerminalOutputState(boundedEventText(string(cloned.OutputState)))
+	return &cloned
 }
 
 func (r *directoryRecorder) retainTerminal(summary *transcript.RecordingTerminalSummary) {

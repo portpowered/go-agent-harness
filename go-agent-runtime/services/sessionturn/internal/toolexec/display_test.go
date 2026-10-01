@@ -147,6 +147,7 @@ func recheckExecutor(t *testing.T, tc recheckCase) *screenExecutor {
 }
 
 func runRecheckCase(t *testing.T, tc recheckCase) {
+	t.Helper()
 	executor := recheckExecutor(t, tc)
 	name := tc.callName
 	if name == "" {

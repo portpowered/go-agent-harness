@@ -216,11 +216,11 @@ func TestSnapshotConcurrentReads(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 16; i++ {
+	for range 16 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				if resolved.ClassForTool("read_file") != public.InteractiveToolClassFastRead {
 					t.Errorf("read_file was not fast/read")
 				}

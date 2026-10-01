@@ -529,7 +529,7 @@ func TestServiceRejectsMissingTimeline(t *testing.T) {
 	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
 		t.Fatalf("err=%v, want incomplete", err)
 	}
-	if !bytes.Contains([]byte(err.Error()), []byte("missing timeline.jsonl")) {
+	if !strings.Contains(err.Error(), "missing timeline.jsonl") {
 		t.Fatalf("err=%v, want missing timeline diagnostic", err)
 	}
 }

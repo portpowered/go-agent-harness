@@ -136,6 +136,7 @@ func assertParticipantIntegrity(t *testing.T, destination, participantID string,
 }
 
 func observeConcurrent(t *testing.T, recorder roomevidence.Recorder, participantID string, pcm []byte) {
+	t.Helper()
 	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationParticipantAudio, ParticipantID: participantID, PCM: pcm}); err != nil && !errors.Is(err, roomevidence.ErrFinalized) {
 		t.Errorf("concurrent participant audio: %v", err)
 	}
@@ -301,7 +302,7 @@ func TestServiceMixSumsOverlapAndPadsToFinalSpan(t *testing.T) {
 	t.Parallel()
 	recorder, destination, source := openRecorder(t)
 	chunk := make([]byte, 10)
-	for index := 0; index < 5; index++ {
+	for index := range 5 {
 		binary.LittleEndian.PutUint16(chunk[index*2:], uint16(int16(10000)))
 	}
 	if err := recorder.Observe(roomevidence.Observation{Kind: roomevidence.ObservationSentStream, ParticipantID: "speaker", PCM: chunk}); err != nil {
@@ -340,11 +341,11 @@ func TestServiceConcurrentObservationAndFinalize(t *testing.T) {
 	recorder, _, source := openRecorder(t)
 	pcm := []byte{0x01, 0x00, 0x02, 0x00}
 	var group sync.WaitGroup
-	for worker := 0; worker < 6; worker++ {
+	for range 6 {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			for index := 0; index < 20; index++ {
+			for range 20 {
 				observeConcurrent(t, recorder, "speaker", pcm)
 			}
 		}()

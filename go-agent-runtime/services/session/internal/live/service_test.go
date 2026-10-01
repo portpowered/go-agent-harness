@@ -23,6 +23,7 @@ func (i *testInferencer) ConnectSession(context.Context) (messages.Session, erro
 	return i.session, nil
 }
 func requireLiveHandle(t *testing.T, opened session.LiveHandle) *handle {
+	t.Helper()
 	h, ok := opened.(*handle)
 	if !ok {
 		t.Fatalf("handle type = %T, want *handle", opened)
@@ -425,12 +426,12 @@ func TestProviderLivenessTimeoutUsesInjectedScheduler(t *testing.T) {
 	}
 	var fault, terminal *session.LiveEvent
 	for event := range handle.Events() {
-		copy := event
+		cloned := event
 		if event.Kind == string(session.LiveEventLiveness) {
-			fault = &copy
+			fault = &cloned
 		}
 		if event.Kind == string(session.LiveEventTerminal) {
-			terminal = &copy
+			terminal = &cloned
 		}
 	}
 	if fault == nil || fault.Liveness == nil || fault.Liveness.Classification != "silent_provider_timeout" {

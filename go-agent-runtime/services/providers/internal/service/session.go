@@ -232,24 +232,24 @@ func cloneTurnDetection(policy *models.TurnDetectionConfig) *models.TurnDetectio
 	if policy == nil {
 		return nil
 	}
-	copy := *policy
+	cloned := *policy
 	if policy.CreateResponse != nil {
 		createResponse := *policy.CreateResponse
-		copy.CreateResponse = &createResponse
+		cloned.CreateResponse = &createResponse
 	}
 	if policy.InterruptResponse != nil {
 		interruptResponse := *policy.InterruptResponse
-		copy.InterruptResponse = &interruptResponse
+		cloned.InterruptResponse = &interruptResponse
 	}
-	return &copy
+	return &cloned
 }
 
 func cloneInputTranscription(policy *models.InputAudioTranscriptionConfig) *models.InputAudioTranscriptionConfig {
 	if policy == nil {
 		return nil
 	}
-	copy := *policy
-	return &copy
+	cloned := *policy
+	return &cloned
 }
 
 func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider string, preparedValue ...runtimeReplay.LivePrepared) (transport.Dialer, error) {

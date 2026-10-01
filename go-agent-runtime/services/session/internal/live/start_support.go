@@ -53,8 +53,8 @@ func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.Session
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
 	if value == nil {
@@ -67,15 +67,15 @@ func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, li
 			liveness.OutputState,
 		)
 	}
-	copy := *value
-	copy.Classification = liveness.Classification
-	copy.TerminalReason = liveness.TerminalReason
-	copy.TerminalProvenance = liveness.TerminalProvenance
-	copy.OutputState = liveness.OutputState
-	if copy.Reason == "" {
-		copy.Reason = liveness.Classification
+	cloned := *value
+	cloned.Classification = liveness.Classification
+	cloned.TerminalReason = liveness.TerminalReason
+	cloned.TerminalProvenance = liveness.TerminalProvenance
+	cloned.OutputState = liveness.OutputState
+	if cloned.Reason == "" {
+		cloned.Reason = liveness.Classification
 	}
-	return &copy
+	return &cloned
 }
 func successfulLiveTerminal(request session.LiveRequest, value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value != nil && value.TerminalReason != "" && value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {

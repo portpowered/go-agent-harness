@@ -95,11 +95,11 @@ func writeEditFixtureFile(t *testing.T, path, content string) {
 }
 
 type editAtomicityCase struct {
-	name          string
-	run           func() (string, error)
-	wantMessage   string
-	assertError   func(*testing.T, error)
-	hashPath      string
+	name        string
+	run         func() (string, error)
+	wantMessage string
+	assertError func(*testing.T, error)
+	hashPath    string
 }
 
 func editAtomicityCases(f editAtomicityFixture) []editAtomicityCase {

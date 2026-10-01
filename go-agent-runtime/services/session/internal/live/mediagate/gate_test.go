@@ -277,44 +277,31 @@ func TestSealInboundAllowsLosslessDrainBeforeGateClose(t *testing.T) {
 	}
 }
 
-func TestGateCloseWaitsForConcurrentInboundSeal(t *testing.T) {
-	want := errors.New("inbound seal failed")
-	provider := sharedaudio.NewSessionMedia(nil)
-	inbound := &blockingCloseInbound{
-		InboundMedia: provider.Endpoints().Inbound,
-		closeStarted: make(chan struct{}),
-		releaseClose: make(chan struct{}),
-		err:          want,
-	}
-	gate := New(nil)
-	gate.Attach(context.Background(), sharedaudio.MediaEndpoints{Inbound: inbound})
+// inboundCloseOperation is one of the two gate operations that close the
+// provider inbound endpoint.
+type inboundCloseOperation struct {
+	name string
+	run  func(*Gate) error
+}
 
-	sealErrs := make(chan error, 1)
-	go func() { sealErrs <- gate.SealInbound() }()
-	select {
-	case <-inbound.closeStarted:
-	case <-time.After(time.Second):
-		t.Fatal("SealInbound did not start provider close")
-	}
-
-	closeErrs := make(chan error, 1)
-	go func() { closeErrs <- gate.Close() }()
-	select {
-	case err := <-closeErrs:
-		t.Fatalf("Gate.Close returned before concurrent seal completed: %v", err)
-	case <-time.After(25 * time.Millisecond):
-	}
-	close(inbound.releaseClose)
-
-	if err := <-sealErrs; !errors.Is(err, want) {
-		t.Fatalf("SealInbound() = %v, want %v", err, want)
-	}
-	if err := <-closeErrs; !errors.Is(err, want) {
-		t.Fatalf("Gate.Close() = %v, want %v", err, want)
+func TestInboundCloseOperationsJoinTheOneInFlight(t *testing.T) {
+	seal := inboundCloseOperation{name: "SealInbound", run: (*Gate).SealInbound}
+	closeGate := inboundCloseOperation{name: "Gate.Close", run: (*Gate).Close}
+	for name, order := range map[string][2]inboundCloseOperation{
+		"close waits for a concurrent inbound seal": {seal, closeGate},
+		"seal waits for a close started first":      {closeGate, seal},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assertSecondInboundCloseJoinsFirst(t, order[0], order[1])
+		})
 	}
 }
 
-func TestSealInboundWaitsForCloseStartedFirst(t *testing.T) {
+// assertSecondInboundCloseJoinsFirst starts first, which blocks in the
+// provider inbound close, then requires second to wait for it and both to
+// report the provider close failure.
+func assertSecondInboundCloseJoinsFirst(t *testing.T, first, second inboundCloseOperation) {
+	t.Helper()
 	want := errors.New("inbound close failed")
 	provider := sharedaudio.NewSessionMedia(nil)
 	inbound := &blockingCloseInbound{
@@ -326,28 +313,28 @@ func TestSealInboundWaitsForCloseStartedFirst(t *testing.T) {
 	gate := New(nil)
 	gate.Attach(context.Background(), sharedaudio.MediaEndpoints{Inbound: inbound})
 
-	closeErrs := make(chan error, 1)
-	go func() { closeErrs <- gate.Close() }()
+	firstErrs := make(chan error, 1)
+	go func() { firstErrs <- first.run(gate) }()
 	select {
 	case <-inbound.closeStarted:
 	case <-time.After(time.Second):
-		t.Fatal("Gate.Close did not start provider close")
+		t.Fatalf("%s did not start provider close", first.name)
 	}
 
-	sealErrs := make(chan error, 1)
-	go func() { sealErrs <- gate.SealInbound() }()
+	secondErrs := make(chan error, 1)
+	go func() { secondErrs <- second.run(gate) }()
 	select {
-	case err := <-sealErrs:
-		t.Fatalf("SealInbound returned before Gate.Close completed: %v", err)
+	case err := <-secondErrs:
+		t.Fatalf("%s returned before %s completed: %v", second.name, first.name, err)
 	case <-time.After(25 * time.Millisecond):
 	}
 	close(inbound.releaseClose)
 
-	if err := <-closeErrs; !errors.Is(err, want) {
-		t.Fatalf("Gate.Close() = %v, want %v", err, want)
+	if err := <-firstErrs; !errors.Is(err, want) {
+		t.Fatalf("%s() = %v, want %v", first.name, err, want)
 	}
-	if err := <-sealErrs; !errors.Is(err, want) {
-		t.Fatalf("SealInbound() = %v, want %v", err, want)
+	if err := <-secondErrs; !errors.Is(err, want) {
+		t.Fatalf("%s() = %v, want %v", second.name, err, want)
 	}
 }
 

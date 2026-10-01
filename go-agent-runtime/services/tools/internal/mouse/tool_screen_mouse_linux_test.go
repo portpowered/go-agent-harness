@@ -137,6 +137,7 @@ func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
 }
 
 func TestS12LinuxMouseFakeOperations(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		action  string
 		args    map[string]any

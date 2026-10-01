@@ -28,7 +28,7 @@ func deltaJSONL(id string, turns []turn, samples []int16) []byte {
 
 func deltaJSONLWithBoundaries(id string, turns []turn, samples []int16, boundaries []int) []byte {
 	var result bytes.Buffer
-	for index := 0; index < len(boundaries)-1; index++ {
+	for index := range len(boundaries) - 1 {
 		start, end := boundaries[index], boundaries[index+1]
 		record := deltaRecord{
 			Type:          "AUDIO.DELTA",

@@ -103,8 +103,8 @@ func applySessionClose(event *session.LiveEvent, msg messages.StreamMessage) {
 		return
 	}
 	event.Reason = value.Reason
-	copy := *value
-	event.Terminal = &copy
+	cloned := *value
+	event.Terminal = &cloned
 }
 func applyError(event *session.LiveEvent, msg messages.StreamMessage) {
 	value, ok := msg.Value.(*messages.ErrorValue)
@@ -164,8 +164,8 @@ func TerminalValue(msg messages.StreamMessage) *messages.SessionCloseValue {
 		if !ok || candidate == nil {
 			return nil
 		}
-		copy := *candidate
-		return &copy
+		cloned := *candidate
+		return &cloned
 	}
 	if msg.Type != messages.StreamTypeMessageEnd || msg.Role == messages.RoleTool {
 		return nil
@@ -242,7 +242,7 @@ func InterruptedBeforeToolContinuation(msg messages.StreamMessage) bool {
 
 // CapabilityEvent converts a browser capability event into a live event.
 func CapabilityEvent(sessionID, participantID string, value session.LiveCapabilityEvent) session.LiveEvent {
-	copy := value
+	cloned := value
 	return session.LiveEvent{
 		Kind:          "browser." + strings.TrimSpace(value.Type),
 		SessionID:     sessionID,
@@ -254,7 +254,7 @@ func CapabilityEvent(sessionID, participantID string, value session.LiveCapabili
 		InvocationID:  value.InvocationID,
 		State:         value.State,
 		Reason:        value.Reason,
-		Capability:    &copy,
+		Capability:    &cloned,
 		Critical:      capabilityEventCritical(value),
 	}
 }

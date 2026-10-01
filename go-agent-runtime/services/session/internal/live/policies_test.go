@@ -118,7 +118,7 @@ rateLimitObserved:
 }
 func TestResponseTerminalLedgerIsFiniteScheduleOnly(t *testing.T) {
 	unscheduled := &handle{}
-	for index := 0; index < 128; index++ {
+	for index := range 128 {
 		unscheduled.observeResponseTerminal(messages.StreamMessage{
 			Type:       messages.StreamTypeMessageEnd,
 			Role:       messages.RoleAssistant,
@@ -258,7 +258,7 @@ func TestLiveEvidenceAndPresentationShareSequenceIncludingOverflow(t *testing.T)
 	recorder := &eventSequenceRecorder{}
 	h := &handle{events: make(chan session.LiveEvent, 4), parentCtx: t.Context(), clock: func() time.Time { return time.Unix(700, 0) }}
 	h.setRecorder(recorder)
-	for index := 0; index < 6; index++ {
+	for range 6 {
 		h.publish(session.LiveEvent{Kind: string(session.LiveEventText)}, false)
 	}
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal)}, true)

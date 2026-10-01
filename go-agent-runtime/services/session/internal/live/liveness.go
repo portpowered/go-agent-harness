@@ -338,8 +338,8 @@ func (h *handle) latchProviderLiveness(failure session.LiveLivenessFailure) {
 		h.livenessMu.Unlock()
 		return
 	}
-	copy := failure
-	h.livenessFailure = &copy
+	cloned := failure
+	h.livenessFailure = &cloned
 	h.livenessErr = err
 	h.livenessArmed = false
 	h.livenessGeneration++
@@ -353,7 +353,7 @@ func (h *handle) latchProviderLiveness(failure session.LiveLivenessFailure) {
 		Kind:      string(session.LiveEventLiveness),
 		SessionID: h.request.SessionID,
 		Error:     err,
-		Liveness:  &copy,
+		Liveness:  &cloned,
 		Critical:  true,
 	}, false)
 	h.Cancel(err)
@@ -368,8 +368,8 @@ func (h *handle) livenessFailureSnapshot() *session.LiveLivenessFailure {
 	if h.livenessFailure == nil {
 		return nil
 	}
-	copy := *h.livenessFailure
-	return &copy
+	cloned := *h.livenessFailure
+	return &cloned
 }
 
 func livenessFailureFromError(err error) *session.LiveLivenessFailure {
@@ -380,8 +380,8 @@ func livenessFailureFromError(err error) *session.LiveLivenessFailure {
 	if !errors.As(err, &typed) || typed == nil {
 		return nil
 	}
-	copy := typed.failure
-	return &copy
+	cloned := typed.failure
+	return &cloned
 }
 
 // livenessToolExecutor marks local tool work as outside the provider progress

@@ -154,7 +154,7 @@ func TestServiceAppliesVoicePCM16OnceThroughPublicContract(t *testing.T) {
 
 func makePCM16Bytes(sample int16, count int) []byte {
 	pcm := make([]byte, count*2)
-	for index := 0; index < count; index++ {
+	for index := range count {
 		pcm[index*2] = byte(uint16(sample))
 		pcm[index*2+1] = byte(uint16(sample) >> 8)
 	}

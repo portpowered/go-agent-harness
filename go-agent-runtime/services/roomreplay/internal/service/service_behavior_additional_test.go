@@ -203,7 +203,7 @@ func TestLoadRoomReplayPlanPreservesFractionalTimelineAndRejectsUnsafeReference(
 		if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
 			t.Fatalf("write fractional timeline: %v", err)
 		}
-		updateArtifactDigest(t, manifest, "room_timeline", timeline)
+		updateTimelineDigest(t, manifest, timeline)
 		writeManifestValue(t, bundle, manifest)
 
 		plan, err := roomReplayServiceForTest().Load(bundle)
@@ -222,7 +222,7 @@ func TestLoadRoomReplayPlanPreservesFractionalTimelineAndRejectsUnsafeReference(
 		if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
 			t.Fatalf("write unsafe timeline: %v", err)
 		}
-		updateArtifactDigest(t, manifest, "room_timeline", timeline)
+		updateTimelineDigest(t, manifest, timeline)
 		writeManifestValue(t, bundle, manifest)
 
 		_, err := roomReplayServiceForTest().Load(bundle)
@@ -381,7 +381,7 @@ func loadRoomReplayWithTimeline(t *testing.T, line string) error {
 	if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
 		t.Fatalf("write malformed timeline: %v", err)
 	}
-	updateArtifactDigest(t, manifest, "room_timeline", timeline)
+	updateTimelineDigest(t, manifest, timeline)
 	writeManifestValue(t, bundle, manifest)
 	_, err := roomReplayServiceForTest().Load(bundle)
 	return err

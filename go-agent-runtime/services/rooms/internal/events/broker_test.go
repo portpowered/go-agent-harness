@@ -185,7 +185,7 @@ func TestBrokerRedactsSecretsFromEveryProjectedField(t *testing.T) {
 	broker.TranscriptEnd("alice", "full "+secret)
 	broker.PublishRoomEvent(rooms.RoomStreamEventParticipantFailed, "alice", "dial "+secret)
 
-	for index := 0; index < 4; index++ {
+	for index := range 4 {
 		select {
 		case frame := <-all.Frames():
 			if strings.Contains(string(frame), secret) || !strings.Contains(string(frame), RedactedMarker) {
