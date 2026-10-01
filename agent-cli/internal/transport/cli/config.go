@@ -101,7 +101,7 @@ func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := storage.Commit(expectedRevision, data); err != nil {
+	if err := storage.Commit(cmd.Context(), expectedRevision, data); err != nil {
 		return fmt.Errorf("commit config: %w", err)
 	}
 	configPath := storage.Path()

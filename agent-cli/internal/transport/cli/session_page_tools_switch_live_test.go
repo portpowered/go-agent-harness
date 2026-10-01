@@ -47,7 +47,7 @@ const (
 func TestSessionPageToolsSwitchAgainstLiveChrome(t *testing.T) {
 	cdpURL := strings.TrimSpace(os.Getenv("WEBMCP_PAGETOOLS_SWITCH_LIVE_CDP_URL"))
 	if cdpURL == "" {
-		t.Skip("set WEBMCP_PAGETOOLS_SWITCH_LIVE_CDP_URL to an externally launched pinned Chrome /json/version endpoint")
+		t.Fatal("set WEBMCP_PAGETOOLS_SWITCH_LIVE_CDP_URL to an externally launched pinned Chrome /json/version endpoint")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

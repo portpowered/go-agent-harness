@@ -126,7 +126,7 @@ func TestProcessControlWithoutStartedChild(t *testing.T) {
 	if err := Terminate(unstarted); err != nil {
 		t.Fatalf("Terminate(unstarted) = %v", err)
 	}
-	if DescendantsAlive(nil, false) || DescendantsAlive(unstarted, false) {
+	if DescendantsAlive(t.Context(), nil, false) || DescendantsAlive(t.Context(), unstarted, false) {
 		t.Fatal("an unstarted child reported live descendants")
 	}
 }
@@ -139,7 +139,10 @@ func TestHelperProcess(t *testing.T) {
 	if os.Getenv(helperEnv) != "1" {
 		return
 	}
-	time.Sleep(time.Minute)
+	// Live until the test closes stdin or kills the process group.
+	if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+		os.Exit(1)
+	}
 	os.Exit(0)
 }
 
@@ -147,17 +150,26 @@ func TestProcessControlReapsStartedChild(t *testing.T) {
 	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestHelperProcess$")
 	child.Env = append(os.Environ(), helperEnv+"=1")
 	Prepare(child)
+	holdOpen, err := child.StdinPipe()
+	if err != nil {
+		t.Fatalf("child stdin: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := holdOpen.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("close child stdin: %v", err)
+		}
+	})
 	if err := child.Start(); err != nil {
 		t.Fatalf("start child: %v", err)
 	}
-	if !DescendantsAlive(child, false) {
+	if !DescendantsAlive(t.Context(), child, false) {
 		t.Fatal("an unreaped child did not report live descendants")
 	}
 	if err := Terminate(child); err != nil {
 		t.Fatalf("Terminate: %v", err)
 	}
 	waitErr := child.Wait()
-	if DescendantsAlive(child, true) {
+	if DescendantsAlive(t.Context(), child, true) {
 		t.Fatal("a reaped and terminated child reported live descendants")
 	}
 	if got := ExitCode(child, waitErr); got == 0 {

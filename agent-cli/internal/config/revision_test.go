@@ -26,7 +26,7 @@ func TestConfigStorageCommitRejectsStaleRevision(t *testing.T) {
 		t.Fatalf("write newer config: %v", err)
 	}
 
-	err = storage.Commit(expected, []byte("candidate"))
+	err = storage.Commit(t.Context(), expected, []byte("candidate"))
 	if err == nil {
 		t.Fatal("expected stale revision conflict")
 	}
@@ -71,7 +71,7 @@ func TestConfigStorageCommitPreservesPermissionsAndPublishesAtomically(t *testin
 		t.Fatalf("read expected revision: %v", err)
 	}
 	want := []byte("after\n")
-	if err := storage.Commit(expected, want); err != nil {
+	if err := storage.Commit(t.Context(), expected, want); err != nil {
 		t.Fatalf("commit config: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func assertAtomicConfigReplacement(t *testing.T, mode fs.FileMode) {
 		t.Fatalf("read expected revision: %v", err)
 	}
 	want := []byte("after\n")
-	if err := storage.Commit(expected, want); err != nil {
+	if err := storage.Commit(t.Context(), expected, want); err != nil {
 		t.Fatalf("commit config: %v", err)
 	}
 
@@ -174,7 +174,7 @@ func TestConfigStorageCommitCreatesPrivateDefaultFile(t *testing.T) {
 		t.Fatalf("read missing revision: %v", err)
 	}
 	want := []byte("new\n")
-	if err := storage.Commit(expected, want); err != nil {
+	if err := storage.Commit(t.Context(), expected, want); err != nil {
 		t.Fatalf("commit missing config: %v", err)
 	}
 
@@ -208,7 +208,7 @@ func TestConfigStorageCommitFailureCleansLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read expected revision: %v", err)
 	}
-	if err := storage.Commit(expected, []byte("candidate\n")); err == nil || !strings.Contains(err.Error(), "injected atomic write failure") {
+	if err := storage.Commit(t.Context(), expected, []byte("candidate\n")); err == nil || !strings.Contains(err.Error(), "injected atomic write failure") {
 		t.Fatalf("commit error = %v, want injected write failure", err)
 	}
 
@@ -233,7 +233,7 @@ func TestConfigStorageCommitFailureCleansLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read revision after failed commit: %v", err)
 	}
-	if err := storage.Commit(expected, []byte("after\n")); err != nil {
+	if err := storage.Commit(t.Context(), expected, []byte("after\n")); err != nil {
 		t.Fatalf("commit after injected failure: %v", err)
 	}
 	got, err = os.ReadFile(path)

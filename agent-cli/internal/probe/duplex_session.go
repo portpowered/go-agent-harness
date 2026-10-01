@@ -236,7 +236,7 @@ func (s *duplexSession) fillResult(ctx context.Context, result *DuplexRunResult,
 	result.InputFinished = s.inputFinished.Load()
 	result.StdoutClosed = s.stdoutClosed.Load()
 	result.StderrClosed = s.stderrClosed.Load()
-	result.DescendantsAlive = childproc.DescendantsAlive(s.child, processWaitOK)
+	result.DescendantsAlive = childproc.DescendantsAlive(context.WithoutCancel(ctx), s.child, processWaitOK)
 	result.ExitClassification = duplexExitClassification(*result, s.config.Termination, waitErr)
 	result.Output = s.progress.outputEvents()
 	if !s.inputFinished.Load() && result.ExitClassification == duplexExitNormal && result.StdoutClosed && len(result.Output) > 0 {

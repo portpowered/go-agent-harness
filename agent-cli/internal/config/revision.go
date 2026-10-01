@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,8 @@ import (
 const (
 	configCommitLockSuffix = ".lock"
 	configCommitLockWait   = 10 * time.Second
+	// configCommitLockPoll is how often a contended commit retries the lock.
+	configCommitLockPoll = 2 * time.Millisecond
 )
 
 var (
@@ -78,8 +81,9 @@ func (s *ConfigStorage) Revision() (ConfigRevision, error) {
 // Commit compares expected with the current source while holding exclusive
 // commit ownership, then publishes data using a private same-directory
 // temporary file and an atomic rename. The lock is intentionally acquired by
-// this method, after callers have finished any network probes.
-func (s *ConfigStorage) Commit(expected ConfigRevision, data []byte) (err error) {
+// this method, after callers have finished any network probes. Waiting for a
+// contended lock stops when ctx ends.
+func (s *ConfigStorage) Commit(ctx context.Context, expected ConfigRevision, data []byte) (err error) {
 	if s == nil {
 		return errors.New("config storage is nil")
 	}
@@ -91,7 +95,7 @@ func (s *ConfigStorage) Commit(expected ConfigRevision, data []byte) (err error)
 		return fmt.Errorf("create config directory: %w", err)
 	}
 
-	lock, err := acquireConfigCommitLock(path)
+	lock, err := acquireConfigCommitLock(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -262,7 +266,7 @@ type configCommitLock struct {
 	file *os.File
 }
 
-func acquireConfigCommitLock(path string) (*configCommitLock, error) {
+func acquireConfigCommitLock(ctx context.Context, path string) (*configCommitLock, error) {
 	lockPath := path + configCommitLockSuffix
 	deadline := time.Now().Add(configCommitLockWait)
 	for {
@@ -276,7 +280,13 @@ func acquireConfigCommitLock(path string) (*configCommitLock, error) {
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("%w: %s", ErrConfigCommitLockUnavailable, lockPath)
 		}
-		time.Sleep(2 * time.Millisecond)
+		retry := time.NewTimer(configCommitLockPoll)
+		select {
+		case <-ctx.Done():
+			retry.Stop()
+			return nil, fmt.Errorf("acquire config commit lock %s: %w", lockPath, ctx.Err())
+		case <-retry.C:
+		}
 	}
 }
 

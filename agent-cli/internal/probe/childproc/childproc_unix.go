@@ -3,13 +3,18 @@
 package childproc
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"syscall"
 	"time"
 )
 
-const descendantCheckGrace = 100 * time.Millisecond
+const (
+	descendantCheckGrace = 100 * time.Millisecond
+	// descendantRecheckInterval paces process-group probes during the grace.
+	descendantRecheckInterval = time.Millisecond
+)
 
 // Prepare places the child in its own process group so Terminate can reach
 // its descendants.
@@ -33,8 +38,10 @@ func Terminate(command *exec.Cmd) error {
 }
 
 // DescendantsAlive reports whether any member of the child's process group
-// remains after the child was reaped.
-func DescendantsAlive(command *exec.Cmd, childWaited bool) bool {
+// remains after the child was reaped. If ctx ends during the teardown grace
+// period the group is conservatively reported alive; callers that must finish
+// the check after cancellation pass context.WithoutCancel.
+func DescendantsAlive(ctx context.Context, command *exec.Cmd, childWaited bool) bool {
 	if command == nil || command.Process == nil {
 		return false
 	}
@@ -44,15 +51,21 @@ func DescendantsAlive(command *exec.Cmd, childWaited bool) bool {
 	// A SIGINT can reap the group leader before the kernel tears down its
 	// process group. Give that teardown a short bounded grace period so a
 	// transient group membership is not recorded as an orphan.
-	deadline := time.Now().Add(descendantCheckGrace)
+	grace := time.NewTimer(descendantCheckGrace)
+	defer grace.Stop()
+	recheck := time.NewTicker(descendantRecheckInterval)
+	defer recheck.Stop()
 	for {
 		err := syscall.Kill(-command.Process.Pid, 0)
 		if err != nil && !errors.Is(err, syscall.EPERM) {
 			return false
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-ctx.Done():
 			return true
+		case <-grace.C:
+			return true
+		case <-recheck.C:
 		}
-		time.Sleep(time.Millisecond)
 	}
 }

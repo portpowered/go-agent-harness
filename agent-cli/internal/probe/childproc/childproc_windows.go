@@ -3,6 +3,7 @@
 package childproc
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -24,7 +25,7 @@ func Terminate(command *exec.Cmd) error {
 }
 
 // DescendantsAlive reports whether the child itself was left unreaped.
-func DescendantsAlive(command *exec.Cmd, childWaited bool) bool {
+func DescendantsAlive(_ context.Context, command *exec.Cmd, childWaited bool) bool {
 	if command == nil || command.Process == nil {
 		return false
 	}

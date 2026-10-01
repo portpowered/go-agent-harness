@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	sessionPaperieMarginLiveEnv      = "WEBMCP_PAPERIE_MARGIN_LIVE"
 	sessionPaperieMarginCDPEnv       = "WEBMCP_PAPERIE_MARGIN_LIVE_CDP_URL"
 	sessionPaperieMarginArtifactEnv  = "WEBMCP_PAPERIE_MARGIN_ARTIFACT_DIR"
 	sessionPaperieMarginModel        = "gpt-realtime-2.1-mini"
@@ -59,13 +58,10 @@ func sessionMarginTools() []string {
 // WebMCP-enabled Chrome with Paperie as its only page and pass /json/version in
 // WEBMCP_PAPERIE_MARGIN_LIVE_CDP_URL; the test opens Margin itself.
 func TestSessionPaperieMarginFromBaselineAgentsMD(t *testing.T) {
-	if os.Getenv(sessionPaperieMarginLiveEnv) != "1" {
-		t.Skipf("set %s=1 to run the credentialed Paperie/Margin acceptance proof", sessionPaperieMarginLiveEnv)
-	}
 	apiKey, keySource := sessionPageToolsSwitchVoiceAPIKey(t)
 	cdpURL := strings.TrimSpace(os.Getenv(sessionPaperieMarginCDPEnv))
 	if cdpURL == "" {
-		t.Skipf("set %s to a fresh WebMCP-enabled Chrome /json/version endpoint", sessionPaperieMarginCDPEnv)
+		t.Fatalf("set %s to a fresh WebMCP-enabled Chrome /json/version endpoint", sessionPaperieMarginCDPEnv)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
