@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -103,16 +104,54 @@ func NewExecuteInput(message string) ExecuteInput {
 	return ExecuteInput{Message: message}
 }
 
+// SendAudioInput injects raw PCM audio into the running session loop for barge-in
+// and user audio forwarding. Its unspecified origin preserves the legacy
+// interrupting-by-default behavior. Only meaningful in DuplexSession mode.
+func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
+	return al.sendSessionInput(ctx, "SendAudioInput", participants.SessionAudio(pcm, messages.SessionAudioInputPolicyDefault), participants.SessionAdmitWaiting)
+}
+
+// SendAudioInputWithPolicy injects raw PCM audio together with the admission
+// policy that was established by the caller. The policy is evaluated only for
+// contentful audio while an eligible response is active; silence is always
+// forwarded without cancellation. Unknown policies use the interrupting
+// default defined by messages.SessionAudioInputPolicy.
+func (al *AgentLoop) SendAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
+	return al.sendSessionInput(ctx, "SendAudioInputWithPolicy", participants.SessionAudio(pcm, policy), participants.SessionAdmitWaiting)
+}
+
+// SendSessionEvent delivers a pre-built outbound StreamMessage to the running
+// session (DuplexSession mode). The message is forwarded to the provider
+// session unchanged and in order relative to audio sent via SendAudioInput.
+// It carries control-plane turns such as MESSAGE.END, which realtime
+// providers translate into input_audio_buffer.commit plus response.create.
+func (al *AgentLoop) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
+	return al.sendSessionInput(ctx, "SendSessionEvent", participants.SessionEvent(msg), participants.SessionAdmitOrFail)
+}
+
+// sendSessionInput admits one input to the session runner's ordered ingress.
+func (al *AgentLoop) sendSessionInput(ctx context.Context, operation string, input participants.SessionInput, admission participants.SessionAdmission) error {
+	mr := al.engine.GetModelRunner()
+	if !mr.SessionMode() {
+		return fmt.Errorf("%s: not in session mode", operation)
+	}
+	return mr.EnqueueSessionInput(ctx, input, admission)
+}
+
+// enqueueSessionEvent adapts the runner's ingress to the non-waiting event
+// enqueuer used by the tool-result forwarder and acknowledgements.
+func enqueueSessionEvent(mr *participants.ModelRunner) func(context.Context, messages.StreamMessage) error {
+	return func(ctx context.Context, msg messages.StreamMessage) error {
+		return mr.EnqueueSessionInput(ctx, participants.SessionEvent(msg), participants.SessionAdmitOrFail)
+	}
+}
+
 // SendSessionMessage delivers one complete message through the same bounded,
 // ordered session ingress as PCM and control events. Rich providers use this
 // for multimodal opening turns; requestResponse selects whether the provider
 // starts a response immediately or waits for a later audio boundary.
 func (al *AgentLoop) SendSessionMessage(ctx context.Context, msg messages.Message, requestResponse bool) error {
-	mr := al.engine.GetModelRunner()
-	if mr == nil || mr.UserEventInbox == nil {
-		return fmt.Errorf("SendSessionMessage: not in session mode")
-	}
-	return mr.EnqueueSessionMessage(ctx, msg, requestResponse)
+	return al.sendSessionInput(ctx, "SendSessionMessage", participants.SessionMessage(msg, requestResponse), participants.SessionAdmitOrFail)
 }
 
 // SendSessionEventWaiting is SendSessionEvent with backpressure: when the
@@ -121,9 +160,5 @@ func (al *AgentLoop) SendSessionMessage(ctx context.Context, msg messages.Messag
 // cancellation instead of failing with ErrSessionInputQueueFull. Callers that
 // sequence turn boundaries after audio use it.
 func (al *AgentLoop) SendSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error {
-	mr := al.engine.GetModelRunner()
-	if mr == nil || mr.UserEventInbox == nil {
-		return fmt.Errorf("SendSessionEventWaiting: not in session mode")
-	}
-	return mr.EnqueueSessionEventWaiting(ctx, msg)
+	return al.sendSessionInput(ctx, "SendSessionEventWaiting", participants.SessionEvent(msg), participants.SessionAdmitWaiting)
 }

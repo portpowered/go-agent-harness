@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants/internal/sessionstate"
 )
 
 func TestModelRunnerPublishSessionAudioFailurePreservesCauseAndMetadata(t *testing.T) {
@@ -180,7 +182,7 @@ func TestSessionModelRunner_BargeInSendFailurePropagatesFromRun(t *testing.T) {
 				Value: messages.NewMessageStartValue(),
 			})
 			waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
-			runner.UserAudioInbox <- loudPCM()
+			enqueueTestAudio(t, runner, loudPCM())
 
 			select {
 			case err := <-errCh:
@@ -221,48 +223,44 @@ func TestSessionModelRunner_InferenceRequestAfterSessionCloseSendsNothing(t *tes
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			session := newRecordingSession()
-			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			synctest.Test(t, func(t *testing.T) {
+				session := newRecordingSession()
+				runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
+				ctx := t.Context()
 
-			// The provider close is queued before the runner starts, so the
-			// runner's provider preflight observes it before it reads the
-			// inference request.
-			session.recv.Write(ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeSessionClose,
-				Value: messages.NewSessionCloseValue("", "session_closed"),
-			})
-			runner.Inbox.Write(ctx, messages.InferenceRequest{Messages: tc.history})
+				// The provider close is queued before the runner starts, so the
+				// runner's provider preflight observes it before it reads the
+				// inference request.
+				session.recv.Write(ctx, messages.StreamMessage{
+					Type:  messages.StreamTypeSessionClose,
+					Value: messages.NewSessionCloseValue("", "session_closed"),
+				})
+				runner.Inbox.Write(ctx, messages.InferenceRequest{Messages: tc.history})
 
-			errCh := make(chan error, 1)
-			go func() { errCh <- runner.Run(ctx) }()
-			waitForDelta(t, ctx, runner, messages.StreamTypeSessionClose)
+				errCh := make(chan error, 1)
+				go func() { errCh <- runner.Run(ctx) }()
+				waitForDelta(t, ctx, runner, messages.StreamTypeSessionClose)
 
-			// The runner handles one select branch at a time. Once the request
-			// has left the inbox, a later provider message is forwarded only
-			// after the request has been fully handled.
-			for runner.Inbox.Len() != 0 {
-				select {
-				case <-ctx.Done():
+				// Once the runner is idle it has fully handled the request; a later
+				// provider message is a barrier behind it.
+				synctest.Wait()
+				if runner.Inbox.Len() != 0 {
 					t.Fatal("runner did not read the inference request")
-				default:
-					time.Sleep(time.Millisecond)
 				}
-			}
-			session.recv.Write(ctx, messages.StreamMessage{
-				Type:  messages.StreamTypeTextDelta,
-				Value: messages.NewTextDeltaValue("barrier"),
-			})
-			waitForDelta(t, ctx, runner, messages.StreamTypeTextDelta)
+				session.recv.Write(ctx, messages.StreamMessage{
+					Type:  messages.StreamTypeTextDelta,
+					Value: messages.NewTextDeltaValue("barrier"),
+				})
+				waitForDelta(t, ctx, runner, messages.StreamTypeTextDelta)
 
-			if sent := session.sentMessages(); len(sent) != 0 {
-				t.Fatalf("sent %d messages after SESSION.CLOSE, want none: %#v", len(sent), sent)
-			}
-			closeRecordingSession(t, session)
-			if err := <-errCh; err != nil {
-				t.Fatalf("Run = %v, want nil", err)
-			}
+				if sent := session.sentMessages(); len(sent) != 0 {
+					t.Fatalf("sent %d messages after SESSION.CLOSE, want none: %#v", len(sent), sent)
+				}
+				closeRecordingSession(t, session)
+				if err := <-errCh; err != nil {
+					t.Fatalf("Run = %v, want nil", err)
+				}
+			})
 		})
 	}
 }
@@ -313,14 +311,17 @@ func TestSessionModelRunnerCleanStopIgnoresSessionCloseError(t *testing.T) {
 	defer cancel()
 	errCh := make(chan error, 1)
 	go func() { errCh <- runner.Run(ctx) }()
-	close(runner.UserAudioInbox)
+	// The provider ends the session cleanly; only its transport close fails.
+	if err := session.recordingSession.Close(); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case err := <-errCh:
 		if err != nil {
 			t.Fatalf("Run after clean stop with close error = %v, want nil", err)
 		}
 	case <-ctx.Done():
-		t.Fatal("Run did not return after UserAudioInbox closed")
+		t.Fatal("Run did not return after the provider session ended")
 	}
 }
 
@@ -345,12 +346,12 @@ func TestSessionModelRunner_ResponseIdentityBookkeepingStaysBounded(t *testing.T
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 16, nil)
-	state := newSessionResponseState()
+	state := &sessionRunState{}
 	for turn := range 1000 {
 		id := fmt.Sprintf("resp-%04d", turn)
 		runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, id))
 		if turn%2 == 0 {
-			if err := runner.forwardSessionAudioWithPolicyWithState(ctx, session, loudPCM(), messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+			if err := runner.forwardSessionAudio(ctx, session, state, messages.SessionAudioInput{PCM: loudPCM(), InterruptionPolicy: messages.SessionAudioInputPolicyInterrupt}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -362,17 +363,13 @@ func TestSessionModelRunner_ResponseIdentityBookkeepingStaysBounded(t *testing.T
 		for _, ok := runner.DeltaOutbox.Read(); ok; _, ok = runner.DeltaOutbox.Read() {
 		}
 	}
-	if got := retainedResponseIDs(state); got > 3*responseIDRetention {
-		t.Fatalf("retained %d response identities after 1000 responses, want at most %d", got, 3*responseIDRetention)
+	if got := state.ResponseIDs.Len(); got > sessionstate.ResponseIDRetention {
+		t.Fatalf("retained %d response identities after 1000 responses, want at most %d", got, sessionstate.ResponseIDRetention)
 	}
 	// A late event of a recent response is still recognised.
-	if !state.terminalResponseIDs.has("resp-0998") {
+	if state.ResponseIDs.Get("resp-0998") != sessionstate.ResponseIDTerminal {
 		t.Fatal("recent terminal response identity was not retained")
 	}
-}
-
-func retainedResponseIDs(state *sessionRunState) int {
-	return state.cancelledResponseIDs.len() + state.retiredResponseIDs.len() + state.terminalResponseIDs.len()
 }
 
 // loudPCM returns 50 ms of 24 kHz PCM16 at speech level (about -12 dBFS):
@@ -424,7 +421,7 @@ func pcmAtLevel(level int16) []byte {
 
 func sendUserAudio(t *testing.T, runner *ModelRunner, session messages.Session, state *sessionRunState, pcm []byte) {
 	t.Helper()
-	if err := runner.forwardSessionAudioWithPolicyWithState(context.Background(), session, pcm, messages.SessionAudioInputPolicyInterrupt, state); err != nil {
+	if err := runner.forwardSessionAudio(context.Background(), session, state, messages.SessionAudioInput{PCM: pcm, InterruptionPolicy: messages.SessionAudioInputPolicyInterrupt}); err != nil {
 		t.Fatalf("forward user audio: %v", err)
 	}
 }
@@ -501,7 +498,7 @@ func TestSessionModelRunner_ContinuationBindsToItsOwnRequestNotAnEarlierUserTurn
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 16, nil)
-	state := newSessionResponseState()
+	state := &sessionRunState{}
 
 	// The provider has already echoed a continuation purpose in this session.
 	setup := newRecordingSession()
@@ -512,7 +509,7 @@ func TestSessionModelRunner_ContinuationBindsToItsOwnRequestNotAnEarlierUserTurn
 	runner.forwardQueuedSessionEvent(ctx, session, state, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
 	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
 	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-user"))
-	if state.continuationInFlight {
+	if state.Continuation.Bound() {
 		t.Fatalf("user-turn response was bound as the tool continuation: %+v", state)
 	}
 	sendUserAudio(t, runner, session, state, loudPCM())
@@ -521,8 +518,8 @@ func TestSessionModelRunner_ContinuationBindsToItsOwnRequestNotAnEarlierUserTurn
 	}
 	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-user"))
 	runner.forwardSessionMessageState(ctx, session, state, continuationStart("resp-continuation"))
-	if !state.continuationInFlight || state.continuationResponseID != "resp-continuation" {
-		t.Fatalf("continuation bound to %q, want resp-continuation", state.continuationResponseID)
+	if !state.Continuation.Bound() || state.Continuation.ResponseID != "resp-continuation" {
+		t.Fatalf("continuation bound to %q, want resp-continuation", state.Continuation.ResponseID)
 	}
 	sendUserAudio(t, runner, session, state, loudPCM())
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 1 {
@@ -585,5 +582,14 @@ func TestSessionModelRunner_BargeInConfigurable(t *testing.T) {
 	sendUserAudio(t, runner, session, state, pcmAtLevel(8000))
 	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCancel); got != 0 {
 		t.Fatalf("speech below the configured level sent %d cancels, want 0", got)
+	}
+}
+
+func TestSessionSendErrorIsMatchable(t *testing.T) {
+	cause := errors.New("socket closed")
+	err := fmt.Errorf("run: %w", sessionAudioSendError("audio", messages.SessionSendOutcome{Status: messages.SessionSendClosed, Err: cause}))
+	var sendErr *SessionSendError
+	if !errors.As(err, &sendErr) || sendErr.Operation != "audio" || sendErr.Status != messages.SessionSendClosed || !errors.Is(err, cause) {
+		t.Fatalf("send error = %v, want a matchable *SessionSendError wrapping the cause", err)
 	}
 }

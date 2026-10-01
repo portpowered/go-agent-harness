@@ -2,63 +2,40 @@ package participants
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"strings"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants/internal/sessionstate"
 )
 
+// ModelRunner is the model participant. In turn-based mode it reads
+// InferenceRequests from Inbox and streams each response to DeltaOutbox. In
+// session mode it owns a persistent provider session and its own event loop:
+// provider events flow to DeltaOutbox, user input flows in through
+// EnqueueSessionInput, and Inbox carries the coordinator's result-driven
+// requests (tool results and user text).
 type ModelRunner struct {
 	inferencer        messages.Inferencer
 	sessionInferencer messages.SessionInferencer
 	sessionConfig     *messages.SessionUpdateConfig // sent as SESSION.UPDATE on the first SESSION.OPEN or SESSION.CREATED
 	Inbox             *messages.TypedBuffer[messages.InferenceRequest]
 	DeltaOutbox       *messages.TypedBuffer[messages.StreamMessage]
-	// UserAudioInbox receives raw PCM. Contentful frames cancel an active
-	// response before forwarding; silence passes through. Direct writes use the
-	// interrupting-by-default policy, and admitted slices are retained by the runner.
-	UserAudioInbox chan []byte
-	// UserEventInbox receives pre-built outbound StreamMessages from the user
-	// side in session mode. Each message is forwarded to the provider session
-	// unchanged, preserving caller ordering. It carries control-plane turns
-	// such as MESSAGE.END (input_audio_buffer.commit + response.create on the
-	// OpenAI Realtime wire).
-	UserEventInbox chan messages.StreamMessage
 
-	// sessionInputInbox is the single ordered ingress for the explicit session
-	// helper API. Keeping audio and control events in one bounded queue prevents
-	// a later audio frame from overtaking the MESSAGE.END that delimits the
-	// preceding turn. UserAudioInbox and UserEventInbox remain available as
-	// legacy direct-input paths and are intentionally independent.
-	sessionInputInbox chan sessionInput
-
-	// sessionInputMu establishes a FIFO boundary for the public session input
-	// helpers. Audio and control events are admitted to one bounded ingress in
-	// caller order and then forwarded by the session runner in that order.
-	sessionInputMu sync.Mutex
-	ingressStop    sessionIngressStop // closed when runSession returns; releases parked waiting admissions
-	cancelLane     sessionCancelLane  // lets RESPONSE.CANCEL overtake queued bulk audio
+	// ingress is the ordered user-input queue; nil outside session mode.
+	ingress *sessionIngress
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox
 	currentPassID int    // LoopPassID from the current InferenceRequest
 
-	// sessionToolContinuation records the result of the session-loop's explicit
-	// tool-result boundary. It lets the request-driven compatibility helper
-	// distinguish a continuation already queued by ToolResultForwarder from an
-	// isolated caller that still needs to request one.
+	// sessionToolContinuation records the result of the session loop's
+	// explicit tool-result boundary. It lets the request-driven compatibility
+	// helper distinguish a continuation already queued by ToolResultForwarder
+	// from an isolated caller that still needs to request one. It is owned by
+	// the session goroutine.
 	sessionToolContinuation sessionToolContinuationState
-
-	// sessionToolEventMu protects the count of tool-result boundary events that
-	// have been accepted into the ordered session ingress but not yet consumed by the
-	// session runner. The coordinator can enqueue the follow-up inference
-	// request immediately after the forwarder returns, so the count closes the
-	// race where that request would otherwise send a bare RESPONSE.CREATE
-	// before the queued TOOLCALL.END and continuation.
-	sessionToolEventMu       sync.Mutex
-	pendingSessionToolEvents int
 
 	bargeInConfig *BargeInConfig    // nil selects DefaultBargeInConfig
 	clock         clock.TimerSource // times held onset audio; nil selects the real clock
@@ -67,11 +44,6 @@ type ModelRunner struct {
 	execCancel context.CancelFunc // cancel for the current per-execution context; nil when idle
 }
 
-// ErrSessionInputQueueFull reports that the explicit session ingress is at
-// capacity. Returning this bounded admission result keeps callers such as tool
-// result forwarding from waiting on a provider or an unbounded queue.
-var ErrSessionInputQueueFull = errors.New("session input queue is full")
-
 type sessionToolContinuationState uint8
 
 const (
@@ -79,65 +51,6 @@ const (
 	sessionToolContinuationAccepted
 	sessionToolContinuationSuppressed
 )
-
-// sessionRunState is the mutable lifecycle state owned by one persistent
-// session runner. Keeping the provider response state together with the
-// pending tool-result bookkeeping lets the pending-input preflight observe an
-// already-queued provider boundary before it admits user audio.
-type sessionRunState struct {
-	responseInFlight     bool
-	responseCancelSent   bool
-	sessionClosed        bool
-	hasOutput            bool
-	responseCompleted    bool
-	pendingSendErrors    []messages.StreamMessage
-	suppressContinuation bool
-	// continuationRequested records an accepted tool-continuation request
-	// whose response has not opened yet.
-	continuationRequested bool
-	// purposeEchoObserved records that the provider echoes the request purpose
-	// on the responses it opens (OpenAI response metadata). Until then a
-	// continuation binds to the first response opened after its request.
-	purposeEchoObserved bool
-	// continuationGuessed marks a continuation bound by that fallback.
-	continuationGuessed bool
-	// continuationInFlight marks the current response as the tool
-	// continuation. Only this response is exempt from barge-in; every other
-	// response, including one that was already playing when the continuation
-	// was queued, stays interruptible.
-	continuationInFlight       bool
-	continuationResponseID     string
-	continuationEnded          bool
-	currentResponseID          string
-	cancelledResponseIDs       responseIDSet
-	retiredResponseIDs         responseIDSet
-	terminalResponseIDs        responseIDSet
-	acknowledgementOutstanding bool
-	acknowledgementStart       *messages.StreamMessage
-	acknowledgementCancelled   bool
-	acknowledgementEnded       bool
-	deferredSessionEvents      []messages.StreamMessage
-	initialSessionConfigSent   bool
-	bargeIn                    bargeInDetector
-	heldAudio                  [][]byte    // onset frames held until barge-in is decided
-	heldAudioTimer             clock.Timer // releases heldAudio once onset can no longer be reached
-}
-
-// sessionResponseState is retained as an alias for the identity-aware helper
-// methods; all session lifecycle fields remain owned by one persistent state.
-type sessionResponseState = sessionRunState
-
-func newSessionResponseState() *sessionResponseState {
-	return &sessionResponseState{}
-}
-
-func responseID(value string) string {
-	return strings.TrimSpace(value)
-}
-
-// ensureMaps is retained for callers; the bounded identity sets need no
-// initialization.
-func (s *sessionRunState) ensureMaps() {}
 
 func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRunner {
 	return &ModelRunner{
@@ -151,41 +64,21 @@ func NewModelRunner(inferencer messages.Inferencer, bufferCapacity int) *ModelRu
 // Instead of processing InferenceRequest from Inbox, it establishes a
 // persistent session via the given SessionInferencer and forwards all
 // inbound session events (from session.Receive()) to DeltaOutbox.
-// The Inbox is allocated but not read in session mode.
 // When config is non-nil, a SESSION.UPDATE message is sent once to an unmarked
 // session immediately after its first SESSION.OPEN or SESSION.CREATED event
 // is received from the provider.
 // Provider sessions that already sent their initial configuration during
 // ConnectSession opt out through the optional InitialSessionConfigSent marker.
-// UserAudioInbox is a buffered channel for accepting raw PCM audio input;
-// contentful audio arriving while the model is streaming triggers barge-in
-// (RESPONSE.CANCEL). Silence frames continue to reach the provider unchanged.
+// User input is admitted through EnqueueSessionInput; contentful audio
+// arriving while the model is streaming triggers barge-in (RESPONSE.CANCEL).
 func NewSessionModelRunner(si messages.SessionInferencer, bufferCapacity int, config *messages.SessionUpdateConfig) *ModelRunner {
 	return &ModelRunner{
 		sessionInferencer: si,
 		sessionConfig:     config,
 		Inbox:             messages.NewTypedBuffer[messages.InferenceRequest](bufferCapacity),
 		DeltaOutbox:       messages.NewTypedBuffer[messages.StreamMessage](bufferCapacity),
-		UserAudioInbox:    make(chan []byte, 64),
-		UserEventInbox:    make(chan messages.StreamMessage, 8),
-		sessionInputInbox: make(chan sessionInput, 72),
-		cancelLane:        sessionCancelLane{inbox: make(chan messages.StreamMessage, sessionCancelLaneCapacity)},
+		ingress:           newSessionIngress(),
 	}
-}
-
-func (r *ModelRunner) enqueueSessionAudioInput(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy, operation string) error {
-	if r == nil || r.sessionInputInbox == nil {
-		return fmt.Errorf("%s: not in session mode", operation)
-	}
-	r.sessionInputMu.Lock()
-	defer r.sessionInputMu.Unlock()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return r.enqueueSessionAudioInputLocked(ctx, pcm, policy, false)
 }
 
 // CancelCurrentExecution cancels the per-execution context for the inference
@@ -207,188 +100,169 @@ func (r *ModelRunner) Run(ctx context.Context) error {
 	return r.runInference(ctx)
 }
 
-// runSession connects a persistent session and forwards all inbound events from
-// session.Receive() to DeltaOutbox. It runs until the context is cancelled or
-// the session terminates. This is the session-mode counterpart to runInference.
+// SetClock sets the clock that times held onset audio. Call it before Run.
+func (r *ModelRunner) SetClock(source clock.TimerSource) { r.clock = source }
+
+func (r *ModelRunner) timerSource() clock.TimerSource {
+	if r.clock != nil {
+		return r.clock
+	}
+	return clock.Real{}
+}
+
+// Local barge-in.
 //
-// When sessionConfig is set, a SESSION.UPDATE message is sent once to an
-// unmarked session immediately after its first SESSION.OPEN or SESSION.CREATED
-// event is received (before forwarding it to DeltaOutbox). Provider-owned
-// initial configuration is not echoed.
+// So that one loud transient (a cough, a door) does not cancel the response,
+// frames that could be a barge-in are held until onset is decided: speech
+// sends the cancel and then releases them, so the cancel still precedes the
+// interrupting audio at the provider (the live barge-in contract) at a cost
+// of at most MinSpeech of input latency; a transient is released unchanged
+// once a quiet frame follows it.
 //
-// When UserAudioInbox is set, this method also selects on it. If audio arrives
-// while the model has a non-terminal response (from MESSAGE.START through
-// MESSAGE.END), RESPONSE.CANCEL is sent to the session first (barge-in), then
-// the audio is forwarded.
-func (r *ModelRunner) forwardPendingSessionMessages(ctx context.Context, session messages.Session, state *sessionRunState) (handled bool) {
-	for {
-		msg, ok := session.Receive().Read()
-		if !ok {
-			return handled
-		}
-		r.forwardSessionMessageState(ctx, session, state, msg)
-		handled = true
+// When the provider runs turn detection (server VAD) its speech_started stops
+// local playback and truncates the heard item, so the runner's cancel only
+// stops generation (KeepPlayback). Otherwise the runner owns playback: its
+// cancel stops local playback, and when no response is active but its audio
+// is still playing (the provider delivers faster than real time, so
+// response.done arrives while seconds remain audible) speech interrupts local
+// playback directly.
+
+// BargeInConfig tunes local barge-in detection.
+type BargeInConfig = sessionstate.BargeInConfig
+
+// DefaultBargeInConfig returns the default detector tuning.
+func DefaultBargeInConfig() BargeInConfig { return sessionstate.DefaultBargeInConfig() }
+
+// SetBargeInConfig replaces the local barge-in tuning. Call it before Run.
+func (r *ModelRunner) SetBargeInConfig(config BargeInConfig) { r.bargeInConfig = &config }
+
+func (r *ModelRunner) bargeInTuning() BargeInConfig {
+	if r.bargeInConfig != nil {
+		return *r.bargeInConfig
 	}
+	return DefaultBargeInConfig()
 }
 
-func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session messages.Session, state *sessionRunState, msg messages.StreamMessage) {
-	if msg.Type == messages.StreamTypeSessionClose {
-		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-		state.pendingSendErrors = nil
-		clearSessionContinuation(state)
-		r.sessionToolContinuation = sessionToolContinuationNone
-	}
-	messageEnded := r.forwardSessionMessageWithState(ctx, session, msg, state)
-	acknowledgementEnded := state.acknowledgementEnded
-	if acknowledgementEnded {
-		state.acknowledgementEnded = false
-	}
-	if messageEnded {
-		// Held onset audio has nothing left to interrupt.
-		r.flushHeldAudio(ctx, session, state)
-	}
-	if acknowledgementEnded || messageEnded {
-		// Either this response's own terminal boundary was just observed, or
-		// an outstanding acknowledgement was just finalized (possibly by a
-		// replacement response retiring it before its own MESSAGE.END could
-		// be owned). Either way, the response that deferred events were
-		// waiting on is no longer active, so it is now safe to replay them.
-		r.flushDeferredSessionEvents(ctx, session, state)
-	}
-	if state.continuationEnded {
-		state.continuationEnded = false
-		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-		state.pendingSendErrors = nil
-	}
-}
-
-func (r *ModelRunner) drainSessionAudioWithState(ctx context.Context, session messages.Session, state *sessionResponseState) error {
-	state.ensureMaps()
-	for {
-		select {
-		case pcm, ok := <-r.UserAudioInbox:
-			if !ok {
-				return nil
-			}
-			if err := r.forwardSessionAudioWithState(ctx, session, pcm, state); err != nil {
-				return err
-			}
-		default:
-			return nil
-		}
-	}
-}
-
-func (r *ModelRunner) forwardSessionAudioWithState(ctx context.Context, session messages.Session, pcm []byte, state *sessionResponseState) error {
-	return r.forwardSessionAudioWithPolicyWithState(ctx, session, pcm, messages.SessionAudioInputPolicyDefault, state)
-}
-
-func (r *ModelRunner) forwardSessionAudioWithPolicyWithState(ctx context.Context, session messages.Session, pcm []byte, policy messages.SessionAudioInputPolicy, state *sessionResponseState) error {
-	state.ensureMaps()
+// forwardSessionAudio admits one user audio frame: interrupting audio first
+// goes through local barge-in, then any held onset frames and the frame
+// itself reach the provider in order.
+//
+// A response that is still non-terminal is a barge-in target, including the
+// interval between response creation and its first output delta. The bound
+// tool continuation is deliberately excluded: nothing re-requests a
+// cancelled tool continuation, so its obligation would be left permanently
+// unresolved (a room participant died exactly so, 557 ms into its
+// continuation, having produced no audio). A response that was already playing
+// when the continuation was queued is not the continuation -- the request is
+// deferred until that response ends -- so it stays interruptible.
+func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, state *sessionRunState, input messages.SessionAudioInput) error {
 	if sessionAdmissionClosed(session) {
 		// Room-bound shutdown closes input admission before it cancels the
 		// session. A frame that was already queued behind that boundary is
 		// intentionally discarded without manufacturing a provider failure.
 		return nil
 	}
-	return r.admitUserAudio(ctx, session, pcm, policy, state)
+	if input.InterruptionPolicy.InterruptsResponse() {
+		held, err := r.bargeIn(ctx, session, input.PCM, state)
+		if held || err != nil {
+			return err
+		}
+	}
+	if err := r.releaseHeldAudio(ctx, session, state); err != nil {
+		return err
+	}
+	return forwardUserAudio(ctx, session, input.PCM)
 }
 
-func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionResponseState) bool {
-	state.ensureMaps()
-	if rejectsActiveResponseCreate(msg) && !state.acknowledgementOutstanding {
-		continuationRequestRejected(state)
+// bargeIn applies local barge-in to one interrupting frame and reports
+// whether it holds the frame while onset is undecided.
+func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm []byte, state *sessionRunState) (bool, error) {
+	providerVAD := providerOwnsTurnDetection(session)
+	playback, playing := localPlayback(session)
+	tuning := r.bargeInTuning()
+	onset, loud := state.Onset.Detector.Observe(pcm, playing, inputSampleRate(session), tuning)
+	cancelTarget := state.CancelTarget()
+	switch {
+	case onset && cancelTarget:
+		return false, r.sendBargeInCancel(ctx, session, state, providerVAD)
+	case onset && !providerVAD && !state.ResponseActive() && playing.Active:
+		playback.InterruptLocalPlayback(ctx)
+	case loud && !onset && cancelTarget:
+		state.Onset.Hold(pcm, r.timerSource(), tuning.MinSpeech)
+		return true, nil
 	}
-	acknowledgementResponse := r.tagSessionAcknowledgement(ctx, state, &msg)
-	msgID := responseID(msg.ResponseID)
-	messageEndOwned := false
-
-	// Track the provider response lifecycle for barge-in detection. A response
-	// is live from MESSAGE.START through MESSAGE.END; audio start/end alone do
-	// not define its terminal boundary. When a provider starts a replacement
-	// response before the older one has drained, the older response is retired
-	// and can no longer mutate the current lifecycle.
-	switch msg.Type {
-	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
-		startSessionResponse(state, msgID, acknowledgementResponse, msg.ResponsePurpose == messages.ResponsePurposeToolContinuation)
-		tagSessionContinuation(state, &msg, msgID)
-	case messages.StreamTypeMessageEnd:
-		tagSessionContinuation(state, &msg, msgID)
-		messageEndOwned = endSessionResponse(state, &msg, msgID, acknowledgementResponse)
-	case messages.StreamTypeSessionClose:
-		state.sessionClosed = true
-		msg = normalizeSessionCloseMessage(msg)
-	default:
-		tagSessionContinuation(state, &msg, msgID)
-	}
-	// A provider may have already queued output when RESPONSE.CANCEL reaches
-	// it. The wire adapter cannot retract those frames, but they must not cross
-	// the customer-facing session boundary after the local cancellation. Keep
-	// MESSAGE.END so the cancelled response can still close and the next turn
-	// can be admitted. An identified event is admitted only for its current
-	// response owner; an old terminal event cannot clear a replacement.
-	if staleSessionCustomerOutput(state, msg) {
-		return messageEndOwned
-	}
-	if isOutputDelta(msg) {
-		state.hasOutput = true
-	}
-	r.forwardInitialSessionConfig(ctx, session, state, msg)
-	r.DeltaOutbox.Write(ctx, msg)
-	return messageEndOwned
+	return false, nil
 }
 
-func isSessionResponseStreamType(typ messages.StreamMessageType) bool {
-	switch typ {
-	case messages.StreamTypeMessageStart,
-		messages.StreamTypeMessageEnd,
-		messages.StreamTypeTextStart,
-		messages.StreamTypeTextDelta,
-		messages.StreamTypeTextEnd,
-		messages.StreamTypeToolCallStart,
-		messages.StreamTypeToolCallDelta,
-		messages.StreamTypeToolCallEnd,
-		messages.StreamTypeAudioStart,
-		messages.StreamTypeAudioDelta,
-		messages.StreamTypeAudioEnd,
-		messages.StreamTypeImageStart,
-		messages.StreamTypeImageDelta,
-		messages.StreamTypeImageEnd,
-		messages.StreamTypeVideoStart,
-		messages.StreamTypeVideoDelta,
-		messages.StreamTypeVideoEnd,
-		messages.StreamTypeFileStart,
-		messages.StreamTypeFileDelta,
-		messages.StreamTypeFileEnd,
-		messages.StreamTypeReasoningStart,
-		messages.StreamTypeReasoningDelta,
-		messages.StreamTypeReasoningEnd,
-		messages.StreamTypeTranscriptStart,
-		messages.StreamTypeTranscriptDelta,
-		messages.StreamTypeTranscriptEnd,
-		messages.StreamTypeRefusal,
-		messages.StreamTypeUsageInfo:
-		return true
-	default:
-		return false
+// releaseHeldAudio forwards onset frames held while barge-in was undecided.
+// Once admission has closed (room shutdown) they are discarded, like any
+// frame that reaches that boundary.
+func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Session, state *sessionRunState) error {
+	held := state.Onset.Take()
+	if sessionAdmissionClosed(session) {
+		return nil
+	}
+	for _, pcm := range held {
+		if err := forwardUserAudio(ctx, session, pcm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// flushHeldAudio releases held onset audio ahead of a control input or a
+// response boundary. A send failure is published as the runner's terminal
+// audio failure.
+func (r *ModelRunner) flushHeldAudio(ctx context.Context, session messages.Session, state *sessionRunState) {
+	if err := r.releaseHeldAudio(ctx, session, state); err != nil {
+		r.publishSessionAudioFailure(err, state.Response.HasOutput)
 	}
 }
 
-const (
-	sessionToolResultsNotFound sessionToolResultDelivery = iota
-	sessionToolResultsComplete
-	sessionToolResultsFlatFallback
-	sessionToolResultsAlreadyForwarded
-	sessionToolResultsFailed
-)
+func forwardUserAudio(ctx context.Context, session messages.Session, pcm []byte) error {
+	outcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeAudioDelta,
+		Value: messages.NewAudioDeltaValue(pcm),
+	})
+	if !outcome.OK() {
+		return sessionAudioSendError("audio", outcome)
+	}
+	return nil
+}
 
-// sendLatestSessionToolResults sends the contiguous tool-result suffix from
-// one inference request. Tool results are emitted as one batch, so preserving
-// their order is important for providers that associate each result with its
-// originating call. The final result requests the next model response; any
-// preceding results use the provider's no-response variant when available.
-//
-// A batch containing an image is either delivered wholly through the complete
-// message path or wholly through the flat TOOLCALL.END fallback. Keeping that
-// decision at batch scope prevents a text sibling from being delivered twice,
-// and ensures stream-only sessions do not silently lose rich results.
+func (r *ModelRunner) sendBargeInCancel(ctx context.Context, session messages.Session, state *sessionRunState, keepPlayback bool) error {
+	value := messages.NewResponseCancelValue()
+	value.KeepPlayback = keepPlayback
+	cancelOutcome := messages.SendSessionWithOutcome(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeResponseCancel,
+		Value: value,
+	})
+	if !cancelOutcome.OK() {
+		return sessionAudioSendError("response cancel", cancelOutcome)
+	}
+	// Keep the response in flight until its terminal MESSAGE.END arrives,
+	// but never send a second cancel for more audio belonging to the same
+	// response.
+	state.NoteCancelSent()
+	return nil
+}
+
+func providerOwnsTurnDetection(session messages.Session) bool {
+	detector, ok := session.(messages.SessionTurnDetection)
+	return ok && detector.ProviderTurnDetection()
+}
+
+func inputSampleRate(session messages.Session) int {
+	if format, ok := session.(messages.SessionInputFormat); ok {
+		return format.InputAudioSampleRate()
+	}
+	return 0
+}
+
+func localPlayback(session messages.Session) (messages.SessionLocalPlayback, messages.LocalPlaybackState) {
+	playback, ok := session.(messages.SessionLocalPlayback)
+	if !ok {
+		return nil, messages.LocalPlaybackState{}
+	}
+	return playback, playback.LocalPlayback()
+}

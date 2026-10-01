@@ -124,12 +124,9 @@ func drainModelDeltas(t *testing.T, ctx context.Context, runner *ModelRunner) (t
 			}
 			toolCalls = append(toolCalls, messages.ToolCall{ID: id, Name: name, Arguments: v.Arguments})
 		case *messages.MessageEndValue:
-			_ = v
-			return
+			return text, toolCalls, false
 		case *messages.ErrorValue:
-			_ = v
-			gotErr = true
-			return
+			return text, toolCalls, true
 		}
 	}
 }
@@ -883,7 +880,7 @@ func TestSessionModelRunner_DrainsPendingMessagesWhenSessionDone(t *testing.T) {
 		if !ok {
 			break
 		}
-		switch delta.Type {
+		switch delta.Type { //nolint:exhaustive // The test inspects only the delta types it asserts on.
 		case messages.StreamTypeTextDelta:
 			textDeltas++
 		case messages.StreamTypeSessionClose:

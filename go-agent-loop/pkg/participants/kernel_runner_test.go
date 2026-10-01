@@ -491,7 +491,7 @@ func TestSessionModelRunner_HeldOnsetAudioReleasedAfterOnsetWindow(t *testing.T)
 		}()
 		session.recv.Write(ctx, sessionMessage(messages.StreamTypeMessageStart, "resp-sparse"))
 		synctest.Wait()
-		if err := runner.EnqueueSessionAudioInput(ctx, pcmFrameAtLevel(9000, 480)); err != nil {
+		if err := runner.EnqueueSessionInput(ctx, SessionAudio(pcmFrameAtLevel(9000, 480), messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 			t.Fatal(err)
 		}
 		synctest.Wait()
@@ -533,15 +533,15 @@ func TestSessionModelRunner_ContinuationRequestSyncsProviderMessagesFirst(t *tes
 	ctx := context.Background()
 	session := &relayedSession{recordingSession: newRecordingSession(), queued: []messages.StreamMessage{sessionMessage(messages.StreamTypeMessageStart, "resp-vad")}}
 	runner := NewSessionModelRunner(nil, 16, nil)
-	state := newSessionResponseState()
+	state := &sessionRunState{}
 	runner.forwardQueuedSessionEvent(ctx, session, state, continuationCreate())
-	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 0 || state.continuationInFlight {
+	if got := countSent(session.sentMessages(), messages.StreamTypeResponseCreate); got != 0 || state.Continuation.Bound() {
 		t.Fatalf("continuation requested over the relayed server-VAD response: creates=%d state=%+v", got, state)
 	}
 	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-vad"))
 	runner.forwardSessionMessageState(ctx, session, state, sessionMessage(messages.StreamTypeMessageStart, "resp-continuation"))
-	if countSent(session.sentMessages(), messages.StreamTypeResponseCreate) != 1 || state.continuationResponseID != "resp-continuation" {
-		t.Fatalf("continuation bound to %q after the server-VAD response, want resp-continuation", state.continuationResponseID)
+	if countSent(session.sentMessages(), messages.StreamTypeResponseCreate) != 1 || state.Continuation.ResponseID != "resp-continuation" {
+		t.Fatalf("continuation bound to %q after the server-VAD response, want resp-continuation", state.Continuation.ResponseID)
 	}
 }
 
@@ -552,9 +552,9 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-ordered")
 	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
-	runner.cancelLane.queuedControls.Add(1)
+	runner.ingress.queuedControls.Add(1)
 	cancel := messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}
-	if err := runner.forwardSessionInput(context.Background(), session, state, sessionInput{kind: sessionInputEvent, event: cancel}); err != nil {
+	if err := runner.forwardSessionInput(context.Background(), session, state, SessionEvent(cancel)); err != nil {
 		t.Fatal(err)
 	}
 	sent := session.sentMessages()
@@ -594,7 +594,7 @@ func TestSessionModelRunner_HeldOnsetAudioDiscardedAfterAdmissionCloses(t *testi
 			t.Fatalf("published %#v after admission closed, want the held frame discarded", msg.Value)
 		}
 	}
-	if len(state.heldAudio) != 0 || len(session.sentMessages()) != 0 {
-		t.Fatalf("held=%d sent=%#v, want the held frame discarded", len(state.heldAudio), session.sentMessages())
+	if len(state.Onset.Frames) != 0 || len(session.sentMessages()) != 0 {
+		t.Fatalf("held=%d sent=%#v, want the held frame discarded", len(state.Onset.Frames), session.sentMessages())
 	}
 }

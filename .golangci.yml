@@ -233,12 +233,6 @@ linters:
       - path: '^go-llm-gateway/pkg/providers/openai/session[^/]*\.go$'
         linters: [nolintlint]
         text: 'is unused for linter "(contextcheck|exhaustive|forbidigo|intrange|mnd|nestif|thelper|unparam)"'
-      # owned by runner-state
-      - path: '^go-agent-loop/pkg/participants/model_runner[^/]*\.go$'
-        linters: [contextcheck, exhaustive, forbidigo, intrange, mnd, nakedret, unparam]
-      - path: '^go-agent-loop/pkg/participants/model_runner[^/]*\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(contextcheck|exhaustive|forbidigo|intrange|mnd|nakedret|unparam)"'
       # owned by session-wrappers
       - path: '^go-agent-loop/pkg/messages/session\.go$'
         linters: [iface]

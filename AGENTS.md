@@ -28,6 +28,33 @@ the agent may generate ticks.
 the user may generate ticks. 
 the system may generat ticks. 
 
+#### participants and the tick loop
+
+Participants (model, tool, user, kernel runners in `pkg/participants`) run on
+their own goroutines. The tick loop never calls into them directly: it reads
+their outboxes (for the model, `DeltaOutbox`) and writes their inboxes (for the
+model, `Inbox` of `InferenceRequest`). Subsystems only see what crosses those
+buffers.
+
+- Turn-based mode: the model runner reads one `InferenceRequest` from `Inbox`,
+  streams that response to `DeltaOutbox`, and waits for the next request.
+- Session mode (`engine.DuplexSession`): the model runner owns a persistent
+  provider session and runs its own event loop. That loop selects over provider
+  messages, the ordered user-input ingress (`EnqueueSessionInput`: audio,
+  control events, and complete messages in one FIFO, with a priority lane for
+  RESPONSE.CANCEL), the coordinator's `Inbox`, and the held-onset timer. Ticks
+  only see the `DeltaOutbox` stream it produces, and they feed it tool results
+  through `ToolResultForwarder` and the ingress.
+
+Barge-in (local speech detection, cancel-before-audio, tool-continuation
+exemption, held onset frames) is decided inside the session runner loop, not
+in a subsystem. Each decision is made per 20 ms audio frame, between observing
+the provider and sending to it, so the RESPONSE.CANCEL reaches the wire before
+the interrupting audio. Moving it into a tick would add a goroutine hop
+between observing and sending and would lose that ordering. The runner's
+lifecycle state is the set of explicit phases in
+`participants/model_runner_session_state.go`.
+
 
 ## validation
 

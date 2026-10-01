@@ -280,7 +280,7 @@ func isOutputDelta(msg messages.StreamMessage) bool {
 	if msg.Role == messages.RoleUser && (msg.Type == messages.StreamTypeTranscriptDelta || msg.Type == messages.StreamTypeTranscriptEnd) {
 		return false
 	}
-	switch msg.Type {
+	switch msg.Type { //nolint:exhaustive // Classifies output deltas; every other type carries no assistant output.
 	case messages.StreamTypeTextDelta,
 		messages.StreamTypeReasoningDelta,
 		messages.StreamTypeAudioDelta,
@@ -296,41 +296,4 @@ func isOutputDelta(msg messages.StreamMessage) bool {
 	default:
 		return false
 	}
-}
-
-func isCustomerOutputDelta(msg messages.StreamMessage) bool {
-	// A user transcript is session input, not stale assistant output. In
-	// particular, preserving it after a barge-in keeps the recognized words in
-	// the recording even while late assistant output is filtered.
-	if msg.Role == messages.RoleUser && (msg.Type == messages.StreamTypeTranscriptDelta || msg.Type == messages.StreamTypeTranscriptEnd) {
-		return false
-	}
-	switch msg.Type {
-	case messages.StreamTypeTextDelta,
-		messages.StreamTypeReasoningDelta,
-		messages.StreamTypeAudioDelta,
-		messages.StreamTypeImageDelta,
-		messages.StreamTypeVideoDelta,
-		messages.StreamTypeFileDelta,
-		messages.StreamTypeEmbeddingDelta,
-		messages.StreamTypeTranscriptDelta,
-		messages.StreamTypeRefusal:
-		return true
-	default:
-		// Tool-call deltas remain visible after a speech cancellation so the
-		// tool lifecycle can resolve or reject the outstanding call explicitly.
-		return false
-	}
-}
-
-func interruptedMessageEndValue(value messages.StreamMessageValue, hasOutput bool) messages.StreamMessageValue {
-	end, ok := value.(*messages.MessageEndValue)
-	if !ok || end == nil {
-		return value
-	}
-	outputState := messages.TerminalOutputNone
-	if hasOutput {
-		outputState = messages.TerminalOutputPartial
-	}
-	return messages.NewMessageEndValueWithTerminal(end.Usage, messages.TerminalReasonPartialOutput, messages.TerminalProvenanceLoop, outputState)
 }

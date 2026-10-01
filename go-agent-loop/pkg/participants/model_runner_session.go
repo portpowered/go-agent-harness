@@ -5,11 +5,23 @@ import (
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants/internal/sessionstate"
 )
 
+// sessionRunState is the lifecycle state owned by the session goroutine.
+type sessionRunState = sessionstate.State
+
+// Session event loop.
+//
+// In session mode the runner owns its loop: one goroutine observes provider
+// messages, user input from the ingress, the coordinator's Inbox, and the
+// held-onset timer. Every barge-in decision is made on this goroutine between
+// observing the provider and sending to it, which is what lets a cancel
+// precede the interrupting audio on the wire.
+
 func (r *ModelRunner) runSession(ctx context.Context) (err error) {
-	r.ingressStop.start()
-	defer r.ingressStop.stop()
+	r.ingress.stop.start()
+	defer r.ingress.stop.stop()
 	session, err := r.sessionInferencer.ConnectSession(ctx)
 	if err != nil {
 		return fmt.Errorf("session connect: %w", err)
@@ -17,8 +29,6 @@ func (r *ModelRunner) runSession(ctx context.Context) (err error) {
 	defer func() { err = joinOnFailure(err, session.Close()) }()
 
 	state := sessionRunState{}
-	state.ensureMaps()
-
 	for {
 		// Observe already-queued provider lifecycle messages before admitting
 		// pending user input. In particular, MESSAGE.END is authoritative for
@@ -27,9 +37,9 @@ func (r *ModelRunner) runSession(ctx context.Context) (err error) {
 		// provider queue is empty, preserve the deterministic user-input turn so
 		// a scheduled audio frame remains ordered before its own commit and
 		// response.create boundary.
-		handled, closed, audioErr := r.forwardPendingSessionInputs(ctx, session, &state)
-		if audioErr != nil || closed {
-			return r.endSession(ctx, &state, audioErr)
+		handled, inputErr := r.forwardPendingSessionInputs(ctx, session, &state)
+		if inputErr != nil {
+			return r.endSession(ctx, &state, inputErr)
 		}
 		if handled {
 			continue
@@ -49,31 +59,23 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 	case <-session.Done():
 		r.finishClosedSession(ctx, session, state)
 		return true, nil
-	case input, ok := <-r.sessionInputInbox:
-		if !ok {
-			return true, r.endSession(ctx, state, nil)
+	case input := <-r.ingress.ordered:
+		if err := r.forwardSessionInput(ctx, session, state, input); err != nil {
+			return true, r.endSession(ctx, state, err)
 		}
-		return r.awaitedSessionInput(ctx, session, state, input)
-	case pcm, ok := <-r.UserAudioInbox:
-		if !ok {
-			return true, r.endSession(ctx, state, nil)
-		}
-		// The provider may have queued its terminal boundary after the
-		// preflight but before this select chose the audio branch. Observe
-		// those messages once more before evaluating barge-in state.
-		r.forwardPendingSessionMessages(ctx, session, state)
-		return r.sessionStepResult(ctx, state, r.forwardSessionAudioWithState(ctx, session, pcm, state))
-	case evt, ok := <-r.UserEventInbox:
-		if !ok {
-			return true, r.endSession(ctx, state, nil)
-		}
-		return r.awaitedSessionEvent(ctx, session, state, evt)
-	case evt := <-r.cancelLane.inbox:
+	case evt := <-r.ingress.priority:
 		r.forwardPendingSessionMessages(ctx, session, state)
 		r.forwardQueuedSessionEvent(ctx, session, state, evt)
 	case req, ok := <-r.Inbox.Chan():
-		return r.awaitedInferenceRequest(ctx, session, state, req, ok)
-	case <-state.heldAudioExpiry():
+		if !ok {
+			return true, r.endSession(ctx, state, nil)
+		}
+		// After the provider's SESSION.CLOSE no response can follow, so a late
+		// request must not reach the closed wire.
+		if state.Session != sessionstate.SessionClosed {
+			r.sendLatestUserText(ctx, session, req)
+		}
+	case <-state.Onset.Expiry():
 		// Onset can no longer be reached: release the held frames.
 		r.flushHeldAudio(ctx, session, state)
 	case msg, ok := <-session.Receive().Chan():
@@ -85,289 +87,283 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 	return false, nil
 }
 
-func (r *ModelRunner) awaitedInferenceRequest(ctx context.Context, session messages.Session, state *sessionRunState, req messages.InferenceRequest, ok bool) (bool, error) {
-	if !ok {
-		return true, r.endSession(ctx, state, nil)
-	}
-	// After the provider's SESSION.CLOSE no response can follow, so a late
-	// request must not reach the closed wire.
-	if !state.sessionClosed {
-		r.sendLatestUserText(ctx, session, req)
-	}
-	return false, nil
-}
-
-func (r *ModelRunner) awaitedSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) (bool, error) {
-	if input.kind == sessionInputAudio {
-		// Observe provider completion queued after the preflight, before barge-in.
-		r.forwardPendingSessionMessages(ctx, session, state)
-	}
-	return r.sessionStepResult(ctx, state, r.forwardSessionInput(ctx, session, state, input))
-}
-
-func (r *ModelRunner) awaitedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) (bool, error) {
-	r.forwardPendingSessionMessages(ctx, session, state)
-	if err := r.drainSessionAudioWithState(ctx, session, state); err != nil {
-		return true, r.endSession(ctx, state, err)
-	}
-	r.forwardQueuedSessionEvent(ctx, session, state, evt)
-	return false, nil
-}
-
 // forwardPendingSessionInputs first drains provider messages that are already
 // queued, so an observed response terminal boundary wins over queued peer
-// audio. It then gives queued user audio/control messages a deterministic
-// transport turn. It returns whether it forwarded anything and whether either
-// user inbox was closed.
-func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, state *sessionRunState) (handled, closed bool, audioErr error) {
-	state.ensureMaps()
+// audio, and forwards any priority cancel. It then gives queued user input a
+// deterministic transport turn. It reports whether it forwarded anything.
+func (r *ModelRunner) forwardPendingSessionInputs(ctx context.Context, session messages.Session, state *sessionRunState) (bool, error) {
+	handled := false
 	for {
 		if r.forwardPendingSessionMessagesAndCancels(ctx, session, state) {
 			handled = true
 			continue
 		}
 		select {
-		case input, ok := <-r.sessionInputInbox:
-			if !ok {
-				return true, true, nil
-			}
+		case input := <-r.ingress.ordered:
 			if err := r.forwardSessionInput(ctx, session, state, input); err != nil {
-				return true, false, err
+				return true, err
 			}
-			handled = true
-		case pcm, ok := <-r.UserAudioInbox:
-			if !ok {
-				return true, true, nil
-			}
-			if err := r.forwardSessionAudioWithState(ctx, session, pcm, state); err != nil {
-				return true, false, err
-			}
-			handled = true
-		case evt, ok := <-r.UserEventInbox:
-			if !ok {
-				return true, true, nil
-			}
-			if err := r.drainSessionAudioWithState(ctx, session, state); err != nil {
-				return true, false, err
-			}
-			r.forwardQueuedSessionEvent(ctx, session, state, evt)
 			handled = true
 		default:
-			return handled, false, nil
+			return handled, nil
 		}
 	}
 }
 
-func (r *ModelRunner) drainSessionAudio(ctx context.Context, session messages.Session, responseInFlight, responseCancelSent *bool) error {
-	state := newSessionResponseState()
-	state.responseInFlight = responseInFlight != nil && *responseInFlight
-	state.responseCancelSent = responseCancelSent != nil && *responseCancelSent
-	err := r.drainSessionAudioWithState(ctx, session, state)
-	if responseInFlight != nil {
-		*responseInFlight = state.responseInFlight
-	}
-	if responseCancelSent != nil {
-		*responseCancelSent = state.responseCancelSent
-	}
-	return err
-}
-
-func (r *ModelRunner) forwardSessionAudioInputWithState(ctx context.Context, session messages.Session, input messages.SessionAudioInput, state *sessionResponseState) error {
-	return r.forwardSessionAudioWithPolicyWithState(ctx, session, input.PCM, input.InterruptionPolicy, state)
-}
-
-func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, pcm []byte, responseInFlight, responseCancelSent *bool) error {
-	state := newSessionResponseState()
-	state.responseInFlight = responseInFlight != nil && *responseInFlight
-	state.responseCancelSent = responseCancelSent != nil && *responseCancelSent
-	err := r.forwardSessionAudioWithState(ctx, session, pcm, state)
-	if responseInFlight != nil {
-		*responseInFlight = state.responseInFlight
-	}
-	if responseCancelSent != nil {
-		*responseCancelSent = state.responseCancelSent
-	}
-	return err
-}
-
-func sessionAudioSendError(operation string, outcome messages.SessionSendOutcome) error {
-	if outcome.Err != nil {
-		return fmt.Errorf("session %s send failed with status %q: %w", operation, outcome.Status, outcome.Err)
-	}
-	return fmt.Errorf("session %s send failed with status %q", operation, outcome.Status)
-}
-
-// forwardSessionEvent preserves the legacy best-effort behavior for ordinary
-// user events, but turns a rejected tool-result or continuation send into an
-// observable stream error. The session lifecycle can then report the still-
-// unresolved obligation instead of allowing a false clean close.
-func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.Session, msg messages.StreamMessage) (messages.StreamMessage, bool, bool) {
-	failure, deferred, responseAccepted, _ := r.forwardSessionEventOutcome(ctx, session, msg)
-	return failure, deferred, responseAccepted
-}
-
-// forwardSessionEventOutcome is the control-plane variant used by the session
-// state machine. The historical three-value helper deliberately preserves its
-// response-create-only meaning for callers and tests; this additional admitted
-// result lets callers distinguish a successful RESPONSE.CANCEL from an
-// ordinary rejected/best-effort event. A zero failure is not sufficient for
-// that distinction because ordinary rejected events intentionally remain
-// silent.
-func (r *ModelRunner) forwardSessionEventOutcome(ctx context.Context, session messages.Session, msg messages.StreamMessage) (messages.StreamMessage, bool, bool, bool) {
-	if sessionAdmissionClosed(session) && sessionEventBlockedByAdmissionForSession(session, msg) {
-		// The room has already recorded its bound and is draining an existing
-		// response. Tool results, continuations, and configuration updates that
-		// cross this boundary are not admitted and are not session failures.
-		return messages.StreamMessage{}, false, false, false
-	}
-	outcome := messages.SendSessionWithOutcome(ctx, session, msg)
-	if outcome.OK() {
-		return messages.StreamMessage{}, false, msg.Type == messages.StreamTypeResponseCreate, true
-	}
-	callID := ""
-	classification := unresolvedToolResultClassification
-	if value, ok := msg.Value.(*messages.ToolCallEndValue); ok && value != nil {
-		callID = value.ToolCallID
-	}
-	message := fmt.Sprintf("tool result %q was not delivered: session send status %q", callID, outcome.Status)
-	if msg.Type == messages.StreamTypeSessionUpdate {
-		classification = unresolvedSessionUpdateClassification
-		message = fmt.Sprintf("session tool definition update was not delivered: session send status %q", outcome.Status)
-	}
-	if msg.Type == messages.StreamTypeResponseCreate {
-		classification = unresolvedToolContinuationClassification
-		message = fmt.Sprintf("tool continuation was not requested: session send status %q", outcome.Status)
-	}
-	if msg.Type != messages.StreamTypeSessionUpdate && msg.Type != messages.StreamTypeToolCallEnd && msg.Type != messages.StreamTypeResponseCreate {
-		return messages.StreamMessage{}, false, false, false
-	}
-	value := messages.NewErrorValueWithTerminal(
-		message,
-		classification,
-		messages.TerminalReasonTerminalFailure,
-		messages.TerminalProvenanceLoop,
-		messages.TerminalOutputNone,
-	)
-	value.Err = outcome.Err
-	failure := messages.StreamMessage{
-		Type:  messages.StreamTypeError,
-		Value: value,
-	}
-	if msg.Type == messages.StreamTypeToolCallEnd {
-		// A batch may contain another result that was accepted. Keep this
-		// failure until the batch's continuation boundary so the caller can
-		// suppress that invalid continuation and then report every remaining
-		// per-call obligation together.
-		return failure, true, false, false
-	}
-	r.DeltaOutbox.Write(ctx, failure)
-	return messages.StreamMessage{}, false, false, false
-}
-
-type sessionAdmissionController interface {
-	SessionAdmissionClosed() bool
-}
-
-type sessionAdmissionPolicy interface {
-	SessionAdmissionAllows(messages.StreamMessage) bool
-}
-
-func sessionAdmissionClosed(session messages.Session) bool {
-	controller, ok := session.(sessionAdmissionController)
-	return ok && controller.SessionAdmissionClosed()
-}
-
-func sessionEventBlockedByAdmission(msg messages.StreamMessage) bool {
-	switch msg.Type {
-	case messages.StreamTypeResponseCancel, messages.StreamTypeSessionClose:
-		return false
-	default:
+// forwardPendingSessionMessagesAndCancels observes queued provider messages,
+// then forwards any priority cancel before queued user input is admitted.
+func (r *ModelRunner) forwardPendingSessionMessagesAndCancels(ctx context.Context, session messages.Session, state *sessionRunState) bool {
+	if r.forwardPendingSessionMessages(ctx, session, state) {
 		return true
 	}
-}
-
-func sessionEventBlockedByAdmissionForSession(session messages.Session, msg messages.StreamMessage) bool {
-	if policy, ok := session.(sessionAdmissionPolicy); ok {
-		return !policy.SessionAdmissionAllows(msg)
+	select {
+	case evt := <-r.ingress.priority:
+		r.forwardQueuedSessionEvent(ctx, session, state, evt)
+		return true
+	default:
+		return false
 	}
-	return sessionEventBlockedByAdmission(msg)
 }
 
-// forwardQueuedSessionEvent applies the session's control-plane ordering
-// rules. A normal continuation is held while an acknowledgement response is
-// active; tool results themselves remain deliverable so the provider can use
-// them as soon as the acknowledgement has ended.
-func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session messages.Session, state *sessionRunState, evt messages.StreamMessage) {
-	// Held onset audio precedes any later control, except an explicit cancel:
-	// that is the interrupt the held audio was waiting to decide.
-	if evt.Type == messages.StreamTypeResponseCancel {
-		defer r.flushHeldAudio(ctx, session, state)
-	} else {
+// forwardSessionInput dispatches one ordered ingress input.
+func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input SessionInput) error {
+	r.ingress.consumed(input)
+	switch input.kind {
+	case sessionInputAudio:
+		// The provider may have queued its terminal boundary after the last
+		// observation; see it before evaluating barge-in state.
+		r.forwardPendingSessionMessages(ctx, session, state)
+		return r.forwardSessionAudio(ctx, session, state, input.audio)
+	case sessionInputEvent:
+		r.forwardQueuedSessionEvent(ctx, session, state, input.event) // orders held audio around the event
+	case sessionInputMessage:
+		r.flushHeldAudio(ctx, session, state)
+		return forwardSessionCompleteMessage(ctx, session, input.message, input.requestResponse)
+	}
+	return nil
+}
+
+func (r *ModelRunner) forwardPendingSessionMessages(ctx context.Context, session messages.Session, state *sessionRunState) (handled bool) {
+	for {
+		msg, ok := session.Receive().Read()
+		if !ok {
+			return handled
+		}
+		r.forwardSessionMessageState(ctx, session, state, msg)
+		handled = true
+	}
+}
+
+// forwardSessionMessageState forwards one provider message and then applies
+// the work its lifecycle effects released: held onset audio, deferred control
+// events, and deferred tool-batch failures.
+func (r *ModelRunner) forwardSessionMessageState(ctx context.Context, session messages.Session, state *sessionRunState, msg messages.StreamMessage) {
+	if msg.Type == messages.StreamTypeSessionClose {
+		r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
+		state.Continuation.Reset()
+		r.sessionToolContinuation = sessionToolContinuationNone
+	}
+	messageEnded := r.forwardSessionMessageWithState(ctx, session, msg, state)
+	ackEnded := state.Ack.TakeEnded()
+	continuationDone := state.Continuation.TakeEnded()
+	if messageEnded {
+		// Held onset audio has nothing left to interrupt.
 		r.flushHeldAudio(ctx, session, state)
 	}
-	if evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) && state.suppressContinuation {
-		r.markSessionToolEventConsumed(evt)
-		// A result in this batch was rejected at the provider boundary. Do not
-		// ask the provider to continue from a partially delivered batch; the
-		// accepted sibling remains pending and the deferred result error names
-		// the rejected call when the session reaches a terminal path.
-		state.suppressContinuation = false
-		r.sessionToolContinuation = sessionToolContinuationSuppressed
-		r.flushPendingSessionSendErrors(ctx, state.pendingSendErrors)
-		state.pendingSendErrors = nil
-		return
+	if ackEnded || messageEnded {
+		// Either this response's own terminal boundary was just observed, or
+		// an outstanding acknowledgement was just finalized (possibly by a
+		// replacement response retiring it before its own MESSAGE.END could
+		// be owned). Either way, the response that deferred events were
+		// waiting on is no longer active, so it is now safe to replay them.
+		r.flushDeferredSessionEvents(ctx, session, state)
 	}
-	if holdForAcknowledgement(state, evt) {
-		return
-	}
-	// A control-plane event that asks the provider to open a new response
-	// (an ordinary continuation, or MESSAGE.END's commit-then-create
-	// end-of-turn boundary) must never be sent while a RESPONSE.CANCEL for
-	// the currently active response is still unacknowledged: the provider
-	// can then see a request for a second response before it has finished
-	// (or even acknowledged cancelling) the first, which is the
-	// state/timing mismatch behind the provider's response_cancel_not_active
-	// rejection. This is deliberately narrower than "any in-flight
-	// response" -- a response can legitimately still be in flight with no
-	// cancel ever sent (the customer's own end-of-turn boundary for the very
-	// utterance that response is answering, e.g. under server-side VAD
-	// auto-response), and that boundary must still reach the wire
-	// immediately or the session hangs waiting for a terminal event that
-	// will never arrive. Hold the event only when a cancel is actually
-	// outstanding, then replay it from flushDeferredSessionEvents once that
-	// boundary is observed.
-	if isSessionContinuationCreate(evt) {
-		r.syncProviderMessages(ctx, session, state)
-	}
-	if deferSessionResponseRequest(state, evt) {
-		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
-		return
-	}
-	defer r.markSessionToolEventConsumed(evt)
-
-	failure, deferred, responseAccepted, admitted := r.forwardSessionEventOutcome(ctx, session, evt)
-	if deferred {
-		r.noteDeferredSessionFailure(state, evt, failure)
-	}
-	if responseAccepted {
-		r.noteAcceptedSessionResponse(state, evt)
-	} else if evt.Type == messages.StreamTypeResponseCancel && admitted {
-		r.noteAcceptedSessionCancel(state)
-	} else if failure.Type != "" && evt.Type == messages.StreamTypeResponseCreate && !isToolAcknowledgementResponseCreate(evt) {
-		r.sessionToolContinuation = sessionToolContinuationSuppressed
+	if continuationDone {
+		r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
 	}
 }
 
-func (r *ModelRunner) flushDeferredSessionEvents(ctx context.Context, session messages.Session, state *sessionRunState) {
-	deferred := state.deferredSessionEvents
-	state.deferredSessionEvents = nil
-	for _, evt := range deferred {
-		r.forwardQueuedSessionEvent(ctx, session, state, evt)
+// forwardSessionMessageWithState applies one provider message to the
+// response lifecycle and forwards it to DeltaOutbox unless it is stale. It
+// reports whether the message ended the current response.
+func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, session messages.Session, msg messages.StreamMessage, state *sessionRunState) bool {
+	if rejectsActiveResponseCreate(msg) && !state.Ack.Outstanding() {
+		state.Continuation.Rejected()
 	}
+	acknowledgementResponse := r.tagSessionAcknowledgement(ctx, state, &msg)
+	msgID := sessionstate.ResponseID(msg.ResponseID)
+	messageEndOwned := false
+
+	// Track the provider response lifecycle for barge-in detection. A response
+	// is live from MESSAGE.START through MESSAGE.END; audio start/end alone do
+	// not define its terminal boundary. When a provider starts a replacement
+	// response before the older one has drained, the older response is retired
+	// and can no longer mutate the current lifecycle.
+	switch msg.Type { //nolint:exhaustive // Only lifecycle boundaries change state; every other type is tagged in default.
+	case messages.StreamTypeMessageStart, messages.StreamTypeAudioStart:
+		state.StartResponse(msgID, acknowledgementResponse, msg.ResponsePurpose == messages.ResponsePurposeToolContinuation)
+		state.TagContinuation(&msg, msgID)
+	case messages.StreamTypeMessageEnd:
+		state.TagContinuation(&msg, msgID)
+		messageEndOwned = state.EndResponse(&msg, msgID, acknowledgementResponse)
+	case messages.StreamTypeSessionClose:
+		state.Session = sessionstate.SessionClosed
+		msg = normalizeSessionCloseMessage(msg)
+	default:
+		state.TagContinuation(&msg, msgID)
+	}
+	// A provider may have already queued output when RESPONSE.CANCEL reaches
+	// it. The wire adapter cannot retract those frames, but they must not cross
+	// the customer-facing session boundary after the local cancellation. Keep
+	// MESSAGE.END so the cancelled response can still close and the next turn
+	// can be admitted. An identified event is admitted only for its current
+	// response owner; an old terminal event cannot clear a replacement.
+	if state.StaleCustomerOutput(msg) {
+		return messageEndOwned
+	}
+	if isOutputDelta(msg) {
+		state.Response.HasOutput = true
+	}
+	r.forwardInitialSessionConfig(ctx, session, state, msg)
+	r.DeltaOutbox.Write(ctx, msg)
+	return messageEndOwned
 }
 
-func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failures []messages.StreamMessage) {
-	for _, failure := range failures {
-		r.DeltaOutbox.Write(ctx, failure)
+type initialSessionConfigSentMarker interface {
+	InitialSessionConfigSent() bool
+}
+
+func providerSentInitialSessionConfig(session messages.Session) bool {
+	marker, ok := session.(initialSessionConfigSentMarker)
+	return ok && marker.InitialSessionConfigSent()
+}
+
+// forwardInitialSessionConfig sends the configured SESSION.UPDATE once.
+// Providers may emit both SESSION.OPEN and SESSION.CREATED for one
+// connection; the first lifecycle event owns the initial configuration.
+func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session messages.Session, state *sessionRunState, msg messages.StreamMessage) {
+	if msg.Type != messages.StreamTypeSessionOpen && msg.Type != messages.StreamTypeSessionCreated {
+		return
 	}
+	if !state.Session.ObserveOpen() || r.sessionConfig == nil || providerSentInitialSessionConfig(session) {
+		return
+	}
+	r.forwardSessionEvent(ctx, session, messages.StreamMessage{
+		Type:  messages.StreamTypeSessionUpdate,
+		Value: messages.NewSessionUpdateValue(r.sessionConfig),
+	})
+}
+
+// endSession finishes runSession: a live-context failure is published before
+// deferred send failures are flushed, and err is returned unchanged.
+func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, err error) error {
+	if err != nil && ctx.Err() == nil {
+		r.publishSessionAudioFailure(err, state.Response.HasOutput)
+	}
+	r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
+	return err
+}
+
+// finishClosedSession drains the provider's final queued messages and, unless
+// the provider already reported its own close, emits the terminal SESSION.CLOSE.
+func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.Session, state *sessionRunState) {
+	r.forwardPendingSessionMessages(ctx, session, state)
+	r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
+	if state.Session == sessionstate.SessionClosed {
+		return
+	}
+	terminalProvenance := messages.TerminalProvenanceProvider
+	terminalOutputState := outputState(state.Response.HasOutput)
+	if state.Response.Completed() {
+		// Preserve the existing session teardown contract after a
+		// completed response. A transport close before any response
+		// boundary remains provider-authored and uses observed output.
+		terminalProvenance = messages.TerminalProvenanceSession
+		terminalOutputState = messages.TerminalOutputNotApplicable
+	}
+	r.DeltaOutbox.Write(ctx, messages.StreamMessage{
+		Type: messages.StreamTypeSessionClose,
+		Value: messages.NewSessionCloseValueWithTerminal(
+			"",
+			"provider_closed",
+			"transport",
+			messages.TerminalReasonProviderClose,
+			terminalProvenance,
+			terminalOutputState,
+		),
+	})
+}
+
+// tagSessionAcknowledgement marks the provider output that belongs to an
+// outstanding acknowledgement request and reports whether msg belongs to it.
+// Ordinary response requests are held while an acknowledgement is
+// outstanding, so an active-response rejection in that window rejects the
+// acknowledgement. The provider may already have started its own response,
+// which was attributed to the acknowledgement; the rejection reclassifies it
+// by re-announcing its start without the acknowledgement purpose, so its
+// later output keeps ordinary accounting.
+func (r *ModelRunner) tagSessionAcknowledgement(ctx context.Context, state *sessionRunState, msg *messages.StreamMessage) bool {
+	ack := &state.Ack
+	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
+		ack.ObserveTagged()
+	} else if ack.Outstanding() && ack.Start == nil && isSessionResponseStart(msg.Type) {
+		start := *msg
+		ack.Start = &start
+	}
+	if rejectsActiveResponseCreate(*msg) && ack.Outstanding() {
+		ack.Reject()
+		if start := ack.Start; start != nil && start.ResponseID == state.Response.ID {
+			r.DeltaOutbox.Write(ctx, *start)
+		}
+	}
+	if !ack.Outstanding() {
+		ack.Start = nil
+		return false
+	}
+	if sessionstate.IsResponseStreamType(msg.Type) {
+		msg.ResponsePurpose = messages.ResponsePurposeToolAcknowledgement
+	}
+	return true
+}
+
+func isSessionResponseStart(kind messages.StreamMessageType) bool {
+	return kind == messages.StreamTypeMessageStart || kind == messages.StreamTypeAudioStart
+}
+
+func rejectsActiveResponseCreate(msg messages.StreamMessage) bool {
+	value, ok := msg.Value.(*messages.ErrorValue)
+	return ok && value.IsNonTerminal() && value.Classification == messages.ErrorClassificationResponseCreateActive
+}
+
+// normalizeSessionCloseMessage fills the terminal fields of a provider
+// SESSION.CLOSE that omitted them.
+func normalizeSessionCloseMessage(msg messages.StreamMessage) messages.StreamMessage {
+	value, ok := msg.Value.(*messages.SessionCloseValue)
+	if !ok {
+		return msg
+	}
+	if value.TerminalReason == "" {
+		if value.Reason == "provider_closed" {
+			value.TerminalReason = messages.TerminalReasonProviderClose
+		} else {
+			value.TerminalReason = messages.TerminalReasonSessionClose
+		}
+	}
+	if value.Classification == "" {
+		// The gateway public taxonomy classifies a provider transport close
+		// without completion as transport; clean session closes keep their
+		// descriptive reason.
+		if value.TerminalReason == messages.TerminalReasonProviderClose {
+			value.Classification = "transport"
+		} else {
+			value.Classification = string(value.TerminalReason)
+		}
+	}
+	if value.TerminalProvenance == "" {
+		value.TerminalProvenance = messages.TerminalProvenanceSession
+	}
+	if value.OutputState == "" {
+		value.OutputState = messages.TerminalOutputNotApplicable
+	}
+	return msg
 }

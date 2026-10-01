@@ -2,10 +2,12 @@ package participants
 
 import (
 	"context"
-	"errors"
-	"fmt"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
+
+// Session tool-result delivery: how a result-driven inference request from
+// the coordinator reaches the provider session.
 
 func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.Session, req messages.InferenceRequest) {
 	// A rich tool result is the newest conversation entry after the coordinator
@@ -27,7 +29,7 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		// that boundary when the session loop recorded it; an isolated caller
 		// still needs the explicit request below.
 		if r.hasPendingSessionToolEvents() {
-			// A parked EnqueueSessionEventWaiting boundary also counts here.
+			// A parked waiting admission of that boundary also counts here.
 			// ToolResultForwarder has accepted the result boundary into the
 			// session input queue, but the session loop has not forwarded it to
 			// the provider yet. Waiting here preserves TOOLCALL.END before the
@@ -48,10 +50,10 @@ func (r *ModelRunner) sendLatestUserText(ctx context.Context, session messages.S
 		// not send an unrelated user-text fallback that could request another
 		// response or duplicate the batch.
 		return
-	}
-
-	if !r.sendLatestUserTextOnly(ctx, session, req.Messages) && sessionHasToolResultSuffix(req.Messages) {
-		r.requestSessionResponse(ctx, session)
+	case sessionToolResultsNotFound:
+		if !r.sendLatestUserTextOnly(ctx, session, req.Messages) && sessionHasToolResultSuffix(req.Messages) {
+			r.requestSessionResponse(ctx, session)
+		}
 	}
 }
 
@@ -113,6 +115,24 @@ type sessionMessageCapabilities interface {
 
 type sessionToolResultDelivery uint8
 
+const (
+	sessionToolResultsNotFound sessionToolResultDelivery = iota
+	sessionToolResultsComplete
+	sessionToolResultsFlatFallback
+	sessionToolResultsAlreadyForwarded
+	sessionToolResultsFailed
+)
+
+// sendLatestSessionToolResults sends the contiguous tool-result suffix from
+// one inference request. Tool results are emitted as one batch, so preserving
+// their order is important for providers that associate each result with its
+// originating call. The final result requests the next model response; any
+// preceding results use the provider's no-response variant when available.
+//
+// A batch containing an image is either delivered wholly through the complete
+// message path or wholly through the flat TOOLCALL.END fallback. Keeping that
+// decision at batch scope prevents a text sibling from being delivered twice,
+// and ensures stream-only sessions do not silently lose rich results.
 func (r *ModelRunner) sendLatestSessionToolResults(ctx context.Context, session messages.Session, history []messages.Message) sessionToolResultDelivery {
 	first := len(history)
 	for first > 0 && history[first-1].Role == messages.RoleTool {
@@ -212,189 +232,4 @@ func sessionToolResultsContainImage(results []messages.Message) bool {
 		}
 	}
 	return false
-}
-
-type sessionInputKind uint8
-
-const (
-	sessionInputAudio sessionInputKind = iota + 1
-	sessionInputEvent
-	sessionInputMessage
-)
-
-type sessionInput struct {
-	kind            sessionInputKind
-	audio           messages.SessionAudioInput
-	event           messages.StreamMessage
-	message         messages.Message
-	requestResponse bool
-}
-
-// EnqueueSessionMessage queues one complete user message in the same bounded
-// ingress as PCM and control events. Complete-message providers use this path
-// for rich opening turns such as image content; requestResponse controls
-// whether the provider starts a response immediately or waits for a later
-// audio commit.
-func (r *ModelRunner) EnqueueSessionMessage(ctx context.Context, msg messages.Message, requestResponse bool) error {
-	if r == nil || r.sessionInputInbox == nil {
-		return fmt.Errorf("EnqueueSessionMessage: not in session mode")
-	}
-	r.sessionInputMu.Lock()
-	defer r.sessionInputMu.Unlock()
-	if ctx == nil {
-		return fmt.Errorf("EnqueueSessionMessage: context is required")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	r.cancelLane.queuedControls.Add(1)
-	select {
-	case r.sessionInputInbox <- sessionInput{kind: sessionInputMessage, message: msg, requestResponse: requestResponse}:
-		return nil
-	case <-ctx.Done():
-		r.cancelLane.queuedControls.Add(-1)
-		return ctx.Err()
-	default:
-		r.cancelLane.queuedControls.Add(-1)
-		return ErrSessionInputQueueFull
-	}
-}
-
-func (r *ModelRunner) forwardSessionCompleteMessage(ctx context.Context, session messages.Session, msg messages.Message, requestResponse bool) error {
-	if requestResponse {
-		sender, ok := session.(sessionMessageSender)
-		if !ok {
-			return errors.New("session does not support complete messages")
-		}
-		if !sender.SendMessage(ctx, msg) {
-			return errors.New("session rejected complete message")
-		}
-		return nil
-	}
-	sender, ok := session.(sessionMessageWithoutResponseSender)
-	if !ok {
-		return errors.New("session does not support complete messages without response")
-	}
-	if !sender.SendMessageWithoutResponse(ctx, msg) {
-		return errors.New("session rejected complete message without response")
-	}
-	return nil
-}
-
-// forwardSessionInput dispatches the ordered ingress without reading a second
-// input or changing the provider lifecycle observation order.
-func (r *ModelRunner) forwardSessionInput(ctx context.Context, session messages.Session, state *sessionRunState, input sessionInput) error {
-	if input.kind != sessionInputAudio {
-		r.cancelLane.queuedControls.Add(-1)
-	}
-	switch input.kind {
-	case sessionInputAudio:
-		return r.forwardSessionAudioInputWithState(ctx, session, input.audio, state)
-	case sessionInputEvent:
-		r.forwardQueuedSessionEvent(ctx, session, state, input.event) // orders held audio around the event
-	case sessionInputMessage:
-		r.flushHeldAudio(ctx, session, state)
-		return r.forwardSessionCompleteMessage(ctx, session, input.message, input.requestResponse)
-	}
-	return nil
-}
-
-func (r *ModelRunner) noteAcceptedSessionResponse(state *sessionRunState, evt messages.StreamMessage) {
-	if isToolAcknowledgementResponseCreate(evt) {
-		state.acknowledgementOutstanding = true
-		state.acknowledgementCancelled = false
-		state.responseCancelSent = false
-		return
-	}
-	state.continuationRequested = state.continuationRequested || isSessionContinuationCreate(evt)
-	r.sessionToolContinuation = sessionToolContinuationAccepted
-}
-
-func (r *ModelRunner) noteAcceptedSessionCancel(state *sessionRunState) {
-	// Live hosts send explicit cancellation through the same ordered control
-	// path as audio admission. Match the automatic barge-in state so late
-	// untagged provider deltas cannot escape from the cancelled response.
-	state.responseCancelSent = true
-	if state.acknowledgementOutstanding {
-		state.acknowledgementCancelled = true
-	}
-	if state.currentResponseID != "" {
-		state.cancelledResponseIDs.add(state.currentResponseID)
-	}
-}
-
-func (r *ModelRunner) noteDeferredSessionFailure(state *sessionRunState, evt, failure messages.StreamMessage) {
-	if failure.Type != "" {
-		state.pendingSendErrors = append(state.pendingSendErrors, failure)
-	}
-	if evt.Type == messages.StreamTypeToolCallEnd {
-		state.suppressContinuation = true
-		r.sessionToolContinuation = sessionToolContinuationSuppressed
-	}
-}
-
-// holdForAcknowledgement applies acknowledgement ordering and reports whether
-// it consumed evt. A progress acknowledgement is dropped while a response is
-// active or requested (the provider rejects a second response request, and
-// the acknowledgement is only useful while nothing is speaking); an ordinary
-// continuation waits until an outstanding acknowledgement has ended.
-func holdForAcknowledgement(state *sessionRunState, evt messages.StreamMessage) bool {
-	if evt.Type != messages.StreamTypeResponseCreate {
-		return false
-	}
-	if isToolAcknowledgementResponseCreate(evt) {
-		return state.responseInFlight || state.continuationRequested || state.continuationInFlight || state.acknowledgementOutstanding
-	}
-	if state.acknowledgementOutstanding {
-		state.deferredSessionEvents = append(state.deferredSessionEvents, evt)
-		return true
-	}
-	return false
-}
-
-// tagSessionAcknowledgement marks the provider output that belongs to an
-// outstanding acknowledgement request. Ordinary response requests are held
-// while an acknowledgement is outstanding, so an active-response rejection in
-// that window rejects the acknowledgement. The provider may already have
-// started its own response, which was attributed to the acknowledgement; the
-// rejection reclassifies it by re-announcing its start without the
-// acknowledgement purpose, so its later output keeps ordinary accounting.
-func (r *ModelRunner) tagSessionAcknowledgement(ctx context.Context, state *sessionRunState, msg *messages.StreamMessage) bool {
-	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
-		state.acknowledgementOutstanding = true
-	} else if state.acknowledgementOutstanding && state.acknowledgementStart == nil && isSessionResponseStart(msg.Type) {
-		start := *msg
-		state.acknowledgementStart = &start
-	}
-	if rejectsActiveResponseCreate(*msg) && state.acknowledgementOutstanding {
-		state.acknowledgementOutstanding = false
-		state.acknowledgementCancelled = false
-		if start := state.acknowledgementStart; start != nil && start.ResponseID == state.currentResponseID {
-			r.DeltaOutbox.Write(ctx, *start)
-		}
-	}
-	if !state.acknowledgementOutstanding {
-		state.acknowledgementStart = nil
-	}
-	if state.acknowledgementOutstanding && isSessionResponseStreamType(msg.Type) {
-		msg.ResponsePurpose = messages.ResponsePurposeToolAcknowledgement
-	}
-	return state.acknowledgementOutstanding
-}
-
-func isSessionResponseStart(kind messages.StreamMessageType) bool {
-	return kind == messages.StreamTypeMessageStart || kind == messages.StreamTypeAudioStart
-}
-
-func rejectsActiveResponseCreate(msg messages.StreamMessage) bool {
-	value, ok := msg.Value.(*messages.ErrorValue)
-	return ok && value.IsNonTerminal() && value.Classification == messages.ErrorClassificationResponseCreateActive
-}
-
-func isToolAcknowledgementResponseCreate(msg messages.StreamMessage) bool {
-	if msg.Type != messages.StreamTypeResponseCreate {
-		return false
-	}
-	value, ok := msg.Value.(*messages.ResponseCreateValue)
-	return ok && value.IsToolAcknowledgement()
 }
