@@ -8,6 +8,7 @@ package devices
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 	"unsafe"
@@ -42,31 +43,28 @@ func TestWASAPIOpenHasLiveDataPath(t *testing.T) {
 	}
 }
 
-func TestWASAPIDeviceRegistryConformance(t *testing.T) {
-	probe := newWASAPIDeviceRegistry()
+// requireWASAPIEndpoints fails unless the host lists an active capture and
+// render endpoint, and returns the first render endpoint.
+func requireWASAPIEndpoints(t *testing.T, probe *wasapiDeviceRegistry) Device {
+	t.Helper()
 	devices, err := probe.List()
 	if err != nil {
 		t.Fatalf("Windows: WASAPI enumeration unavailable: %v", err)
 	}
-	var inputDefault, outputDefault Device
-	for _, device := range devices {
-		switch device.Direction {
-		case DirectionInput:
-			if inputDefault.ID == "" {
-				inputDefault = device
-			}
-		case DirectionOutput:
-			if outputDefault.ID == "" {
-				outputDefault = device
-			}
-		}
-	}
-	if inputDefault.ID == "" {
+	inputIndex := slices.IndexFunc(devices, func(device Device) bool { return device.Direction == DirectionInput })
+	outputIndex := slices.IndexFunc(devices, func(device Device) bool { return device.Direction == DirectionOutput })
+	if inputIndex < 0 {
 		t.Fatal("Windows: missing active capture endpoint")
 	}
-	if outputDefault.ID == "" {
+	if outputIndex < 0 {
 		t.Fatal("Windows: missing active render endpoint")
 	}
+	return devices[outputIndex]
+}
+
+func TestWASAPIDeviceRegistryConformance(t *testing.T) {
+	probe := newWASAPIDeviceRegistry()
+	outputDefault := requireWASAPIEndpoints(t, probe)
 	if _, err := probe.Default(DirectionInput); err != nil {
 		t.Fatalf("Windows: missing input default endpoint: %v", err)
 	}

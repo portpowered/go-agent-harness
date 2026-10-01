@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -750,34 +749,4 @@ func stemSample(stem []int16, position *int) int16 {
 	value := stem[*position]
 	*position++
 	return value
-}
-func scaleQ15(sample int16, gain int32) int16 {
-	product := int64(sample) * int64(gain)
-	// Round half away from zero before dropping the Q15 fraction.
-	if product >= 0 {
-		product += q15One / 2
-	} else {
-		product -= q15One / 2
-	}
-	return saturatePCM16Int64(product / q15One)
-}
-
-// q15One is 1.0 in Q15 fixed point.
-const q15One = 1 << 15
-
-func saturatingAdd(a, b int16) int16 { return saturatePCM16Int64(int64(a) + int64(b)) }
-func saturatePCM16Int64(v int64) int16 {
-	if v < math.MinInt16 {
-		return math.MinInt16
-	}
-	if v > math.MaxInt16 {
-		return math.MaxInt16
-	}
-	return int16(v)
-}
-func max64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }

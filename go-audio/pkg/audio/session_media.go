@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
@@ -69,7 +68,7 @@ func NewSessionMediaAtRate(writer SessionMediaWriter, sampleRate int) *SessionMe
 	if sampleRate <= 0 {
 		sampleRate = DefaultSessionMediaSampleRate
 	}
-	frameSamples := sampleRate * sessionMediaFrameMillis / int(time.Second/time.Millisecond)
+	frameSamples := sampleRate * sessionMediaFrameMillis / millisecondsPerSecond
 	if frameSamples <= 0 {
 		frameSamples = DefaultSessionMediaFrameSamples
 	}
@@ -241,8 +240,6 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 		}
 	}
 }
-
-var _ PlaybackControlledInbound = (*sessionInboundMedia)(nil)
 
 func (m *sessionInboundMedia) SetPlaybackController(controller PlaybackController) {
 	m.mu.Lock()

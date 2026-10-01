@@ -115,14 +115,6 @@ type voiceProcessingAPI struct {
 	audioUnitRender               func(uintptr, uintptr, uintptr, uint32, uint32, *audioBufferList1) int32
 }
 
-// CoreAudio flag values (CoreAudioBaseTypes.h, AUComponent.h).
-const (
-	audioFormatFlagIsSignedInteger       = 0x4
-	audioFormatFlagIsPacked              = 0x8
-	audioUnitRenderActionOutputIsSilence = 1 << 4
-	bitsPerByte                          = 8
-)
-
 const (
 	auScopeGlobal = 0
 	auScopeInput  = 1
@@ -387,14 +379,6 @@ func voiceProcessingIgnoreStopped(status int32) error {
 
 func (h *voiceProcessingEndpoint) DeviceDirection() Direction       { return h.direction }
 func (h *voiceProcessingEndpoint) DeviceFormat() audio.DeviceFormat { return h.format }
-
-// VoiceProcessingProvider reports whether a device endpoint is backed by a
-// native duplex voice-processing graph rather than the portable fallback.
-type VoiceProcessingProvider interface {
-	VoiceProcessingActive() bool
-}
-
-var _ VoiceProcessingProvider = (*voiceProcessingEndpoint)(nil)
 
 func (h *voiceProcessingEndpoint) VoiceProcessingActive() bool { return true }
 

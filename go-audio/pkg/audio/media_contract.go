@@ -73,6 +73,11 @@ type PlaybackControlledInbound interface {
 	SetPlaybackController(PlaybackController)
 }
 
+var _ PlaybackControlledInbound = (*sessionInboundMedia)(nil)
+
+// millisecondsPerSecond converts millisecond media durations to rates.
+const millisecondsPerSecond = 1000
+
 // MediaEndpoint is the lifecycle seam shared by inbound and outbound media.
 //
 // Each endpoint returned with a nil error is caller-owned. The caller closes

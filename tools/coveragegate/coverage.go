@@ -609,13 +609,6 @@ func validateManifest(manifest Manifest) error {
 	return nil
 }
 
-const (
-	// maxPercentCents is 100.00% in hundredths of a percent.
-	maxPercentCents = 100 * 100
-	// permille scales a coverage ratio to tenths of a percent.
-	permille = 1000
-)
-
 func (c Coverage) actualCents() int {
 	if c.Total <= 0 {
 		return 0

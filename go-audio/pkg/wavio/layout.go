@@ -127,3 +127,14 @@ func (s *layoutScan) inspectData(n, padded uint64) error {
 	_, err = s.r.Seek(int64(padded), io.SeekCurrent)
 	return err
 }
+
+// Canonical RIFF/WAVE container sizes.
+const (
+	// waveFormIDBytes is the "WAVE" form type the RIFF size counts.
+	waveFormIDBytes = 4
+	// riffHeaderOverheadBytes is the canonical PCM WAV RIFF size beyond the
+	// data bytes: form type, fmt chunk and data chunk header.
+	riffHeaderOverheadBytes = 36
+	// canonicalHeaderBytes is the full canonical PCM WAV header length.
+	canonicalHeaderBytes = 44
+)

@@ -300,36 +300,8 @@ func TestRemoteDeviceServerHTTPContractRejectsInvalidHandleOperations(t *testing
 	defer httpServer.Close()
 	base := httpServer.URL + "/v1/audio-device"
 
-	openHandle := func(t *testing.T, deviceID string) string {
-		t.Helper()
-		body, err := json.Marshal(map[string]any{"device_id": deviceID, "format": audio.PCM16DeviceFormat(16000)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/open", bytes.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
-		}
-		request.Header.Set("Content-Type", "application/json")
-		response, err := http.DefaultClient.Do(request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer closeResponseBodyForTest(t, response.Body)
-		if response.StatusCode != http.StatusOK {
-			data, readErr := io.ReadAll(response.Body)
-			t.Fatalf("open %s status=%d body=%q read=%v", deviceID, response.StatusCode, data, readErr)
-		}
-		var result struct {
-			HandleID string `json:"handle_id"`
-		}
-		if err := json.NewDecoder(response.Body).Decode(&result); err != nil || result.HandleID == "" {
-			t.Fatalf("decode open handle: id=%q err=%v", result.HandleID, err)
-		}
-		return result.HandleID
-	}
-	inputHandle := openHandle(t, "simulated-duplex:input")
-	outputHandle := openHandle(t, "simulated-duplex:output")
+	inputHandle := openRemoteHandleForTest(t, base, "simulated-duplex:input")
+	outputHandle := openRemoteHandleForTest(t, base, "simulated-duplex:output")
 
 	format := marshalJSONForTest(t, audio.PCM16DeviceFormat(16000))
 	tests := []struct {
@@ -429,4 +401,35 @@ func marshalJSONForTest(t *testing.T, value any) []byte {
 		t.Fatalf("encode %T: %v", value, err)
 	}
 	return encoded
+}
+
+// openRemoteHandleForTest opens deviceID through the remote server API at
+// base and returns its handle ID.
+func openRemoteHandleForTest(t *testing.T, base, deviceID string) string {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"device_id": deviceID, "format": audio.PCM16DeviceFormat(16000)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/open", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeResponseBodyForTest(t, response.Body)
+	if response.StatusCode != http.StatusOK {
+		data, readErr := io.ReadAll(response.Body)
+		t.Fatalf("open %s status=%d body=%q read=%v", deviceID, response.StatusCode, data, readErr)
+	}
+	var result struct {
+		HandleID string `json:"handle_id"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil || result.HandleID == "" {
+		t.Fatalf("decode open handle: id=%q err=%v", result.HandleID, err)
+	}
+	return result.HandleID
 }

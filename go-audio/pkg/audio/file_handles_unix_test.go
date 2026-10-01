@@ -13,7 +13,8 @@ import (
 
 // processDescriptorDir lists the calling process's open descriptors: procfs
 // on Linux and devfs on Darwin. Other platforms have no descriptor listing,
-// so the S9 handle-release tests are built only where one exists.
+// so the S9 handle-release tests (and the Unix mode-bit test) are built only
+// on Linux and Darwin.
 func processDescriptorDir() string {
 	if runtime.GOOS == "linux" {
 		return "/proc/self/fd"
@@ -128,4 +129,27 @@ func TestFileSinkOwnedHandleRelease(t *testing.T) {
 	if err := sink.WriteFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, ErrClosed) {
 		t.Fatalf("WriteFrame after Close() = %v, want ErrClosed", err)
 	}
+}
+
+// Mode bits gate opens only on Unix; Windows ignores them, so this test is
+// built with the Unix descriptor tests above. The superuser bypasses mode bits, and the source must
+// then honour the operating system's decision and open the file.
+func TestFileSourceModeZeroFileOpen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "permission-denied.raw")
+	if err := os.WriteFile(path, pcmBytes([]int16{1}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := NewFileSource(path, nil)
+	if os.Geteuid() == 0 {
+		if err != nil {
+			t.Fatalf("NewFileSource() as superuser = %v, want the OS to allow the open", err)
+		}
+		closeForTest(t, source)
+		return
+	}
+	assertSourceStreamError(t, err, "open", path)
 }

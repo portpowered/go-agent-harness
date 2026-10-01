@@ -25,13 +25,6 @@ const (
 	chunkHeaderBytes = 8
 	// pcmFormatChunkBytes is the mandatory PCM portion of a fmt chunk.
 	pcmFormatChunkBytes = 16
-	// waveFormIDBytes is the "WAVE" form type the RIFF size counts.
-	waveFormIDBytes = 4
-	// riffHeaderOverheadBytes is the canonical PCM WAV RIFF size beyond the
-	// data bytes: form type, fmt chunk and data chunk header.
-	riffHeaderOverheadBytes = 36
-	// canonicalHeaderBytes is the full canonical PCM WAV header length.
-	canonicalHeaderBytes = 44
 	// fmtChunkID and dataChunkID are the RIFF IDs of the chunks WAV requires.
 	fmtChunkID  = "fmt "
 	dataChunkID = "data"

@@ -27,7 +27,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_windows.go",
-      "value": 961,
+      "value": 825,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -87,16 +87,6 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_windows.go",
       "symbol": "wasapiCoUninitialize",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
-      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
-      "file": "pkg/devices/device_windows.go",
-      "symbol": "wasapiFlows",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
       "message": "mutable package state must be owned by an injected service"

@@ -569,8 +569,6 @@ const remoteMetadataTimeout = 5 * time.Second
 const maxRemoteResponseBytes = 16 << 20
 
 func (r *RemoteDeviceRegistry) doMetadata(method, path string, request, response any) error {
-	// DeviceRegistry and stats methods carry no caller context; the
-	// metadata timeout is the only bound on these loopback requests.
 	ctx, cancel := context.WithTimeout(context.Background(), remoteMetadataTimeout) //nolint:forbidigo // context-free DeviceRegistry interface methods are the root of this request
 	defer cancel()
 	var body io.Reader

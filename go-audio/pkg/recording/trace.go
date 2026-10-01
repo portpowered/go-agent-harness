@@ -33,30 +33,10 @@ const (
 	audioTraceTapCount
 )
 
-// sessionAudioTraceFiles names the WAV file of each trace tap, by tap index.
-func sessionAudioTraceFiles() [audioTraceTapCount]string {
-	return [audioTraceTapCount]string{
-		"microphone-pre-gate.wav",
-		"microphone-uploaded.wav",
-		"speaker-enqueued.wav",
-		"speaker-rendered.wav",
-	}
-}
-
 // Trace records the four externally meaningful local audio edges
 // on one monotonic timeline. Producers only copy into a bounded channel;
 // filesystem work is owned by the background writer and cannot pace audio.
 const MaxQueuedBytes int64 = 16 << 20
-
-const (
-	traceDirMode  = 0o755
-	traceFileMode = 0o600
-	// tracePooledSamples is the capacity of pooled sample buffers.
-	tracePooledSamples = 4096
-	// traceRecordOverheadBytes approximates the per-record bookkeeping charged
-	// against MaxQueuedBytes beside the payload.
-	traceRecordOverheadBytes = 128
-)
 
 type Trace struct {
 	queuedBytes atomic.Int64

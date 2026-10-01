@@ -270,3 +270,23 @@ func pooledSamples(pool *sync.Pool) *[]int16 {
 	}
 	return new([]int16)
 }
+
+const (
+	traceDirMode  = 0o755
+	traceFileMode = 0o600
+	// tracePooledSamples is the capacity of pooled sample buffers.
+	tracePooledSamples = 4096
+	// traceRecordOverheadBytes approximates the per-record bookkeeping charged
+	// against MaxQueuedBytes beside the payload.
+	traceRecordOverheadBytes = 128
+)
+
+// sessionAudioTraceFiles names the WAV file of each trace tap, by tap index.
+func sessionAudioTraceFiles() [audioTraceTapCount]string {
+	return [audioTraceTapCount]string{
+		"microphone-pre-gate.wav",
+		"microphone-uploaded.wav",
+		"speaker-enqueued.wav",
+		"speaker-rendered.wav",
+	}
+}

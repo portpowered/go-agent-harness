@@ -607,23 +607,7 @@ func (s *RTCDeviceSink) Close() error {
 			s.commands.Close()
 			<-s.commandDone
 		}
-		var playbackSnapshot audio.PlaybackQueueStats
-		if s.playbackObserver != nil {
-			s.pacingMu.Lock()
-			s.playbackMu.Lock()
-			playbackSnapshot = s.PlaybackStats()
-			if s.renderBoundarySupported.Load() {
-				s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
-			}
-			s.playbackMu.Unlock()
-			s.pacingMu.Unlock()
-		} else {
-			s.playbackMu.Lock()
-			if s.renderBoundarySupported.Load() {
-				s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
-			}
-			s.playbackMu.Unlock()
-		}
+		playbackSnapshot := s.closePlaybackState()
 		s.closeErr = s.sink.Close()
 		s.renderStopOnce.Do(func() { close(s.renderStop) })
 		<-s.renderDone
@@ -636,6 +620,26 @@ func (s *RTCDeviceSink) Close() error {
 		s.closePlaybackObservations()
 	})
 	return s.closeErr
+}
+
+// closePlaybackState discards pending render observations at close and,
+// when a playback observer is installed, returns the final queue snapshot
+// taken under the pacing lock.
+func (s *RTCDeviceSink) closePlaybackState() audio.PlaybackQueueStats {
+	var snapshot audio.PlaybackQueueStats
+	if s.playbackObserver != nil {
+		s.pacingMu.Lock()
+		defer s.pacingMu.Unlock()
+	}
+	s.playbackMu.Lock()
+	defer s.playbackMu.Unlock()
+	if s.playbackObserver != nil {
+		snapshot = s.PlaybackStats()
+	}
+	if s.renderBoundarySupported.Load() {
+		s.discardPlaybackObservations("sink close", s.snapshotEpoch.Load())
+	}
+	return snapshot
 }
 
 func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
