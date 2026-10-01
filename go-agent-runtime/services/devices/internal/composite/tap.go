@@ -25,7 +25,6 @@ type outputTapFrame struct {
 // while the sink itself is written by one ordered worker.
 type outputTap struct {
 	sink       audio.AudioSink
-	workerCtx  context.Context
 	workerStop context.CancelFunc
 	frames     chan outputTapFrame
 	stop       chan struct{}
@@ -47,21 +46,20 @@ func newOutputTap(ctx context.Context, sink audio.AudioSink) (*outputTap, error)
 	workerCtx, workerStop := context.WithCancel(context.WithoutCancel(ctx))
 	tap := &outputTap{
 		sink:       sink,
-		workerCtx:  workerCtx,
 		workerStop: workerStop,
 		frames:     make(chan outputTapFrame, outputTapQueueCapacity),
 		stop:       make(chan struct{}),
 		done:       make(chan struct{}),
 		noSend:     make(chan struct{}),
 	}
-	go tap.run()
+	go tap.run(workerCtx)
 	return tap, nil
 }
 
-func (t *outputTap) run() {
+func (t *outputTap) run(ctx context.Context) {
 	defer close(t.done)
 	for frame := range t.frames {
-		if err := writeOutputSamples(t.workerCtx, t.sink, frame.rate, frame.samples); err != nil {
+		if err := writeOutputSamples(ctx, t.sink, frame.rate, frame.samples); err != nil {
 			t.mu.Lock()
 			t.workerErr = err
 			t.mu.Unlock()

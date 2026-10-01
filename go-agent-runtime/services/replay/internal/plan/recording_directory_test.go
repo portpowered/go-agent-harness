@@ -283,7 +283,7 @@ func TestRecordingDirectoryHashReaderPreservesCancellation(t *testing.T) {
 	cause := errors.New("stop while hashing")
 	ctx, cancel := context.WithCancelCause(t.Context())
 	reader := &cancelingRecordingReader{cancel: func() { cancel(cause) }}
-	wrapped := contextReader{ctx: ctx, reader: reader}
+	wrapped := newContextReader(ctx, reader)
 	buffer := make([]byte, 16)
 	n, err := wrapped.Read(buffer)
 	if n != len("capture") || !errors.Is(err, cause) {

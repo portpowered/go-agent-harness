@@ -42,7 +42,6 @@ type MessageSession struct {
 	closed           bool
 	cond             *sync.Cond
 	mu               sync.Mutex
-	ctx              context.Context
 	cancel           context.CancelFunc
 }
 
@@ -52,13 +51,8 @@ var _ messages.SessionSendOutcomeSender = (*MessageSession)(nil)
 // NewMessageSession takes an owned copy of the capture sequence and starts a
 // bounded replay. validateOutbound must remain true for provider sessions; the
 // read-only CaptureReplay contract disables it because it only drains inbound
-// messages.
-//
-//nolint:contextcheck // The internal replay API accepts nil and has no parent context to inherit.
+// messages. ctx bounds the replay goroutines and must be non-nil.
 func NewMessageSession(events []gatewaytesting.CapturedSessionEvent, ctx context.Context, validateOutbound bool) *MessageSession {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	owned := cloneCaptureEvents(events)
 	r := &MessageSession{
 		events:           owned,
@@ -67,9 +61,10 @@ func NewMessageSession(events []gatewaytesting.CapturedSessionEvent, ctx context
 		done:             make(chan struct{}),
 	}
 	r.cond = sync.NewCond(&r.mu)
-	r.ctx, r.cancel = context.WithCancel(ctx)
-	go r.watchContext()
-	go r.replayLoop()
+	replayCtx, cancel := context.WithCancel(ctx)
+	r.cancel = cancel
+	go r.watchContext(replayCtx)
+	go r.replayLoop(replayCtx)
 	return r
 }
 
@@ -158,10 +153,10 @@ func (r *MessageSession) Close() error {
 	return nil
 }
 
-func (r *MessageSession) replayLoop() {
+func (r *MessageSession) replayLoop(ctx context.Context) {
 	defer r.close()
 	for {
-		event, eventIndex, ok := r.nextReplayEvent()
+		event, eventIndex, ok := r.nextReplayEvent(ctx)
 		if !ok {
 			return
 		}
@@ -169,22 +164,22 @@ func (r *MessageSession) replayLoop() {
 			r.advanceOutboundEvent()
 			continue
 		}
-		if !r.deliverReplayEvent(event, eventIndex) {
+		if !r.deliverReplayEvent(ctx, event, eventIndex) {
 			return
 		}
 	}
 }
 
-func (r *MessageSession) nextReplayEvent() (gatewaytesting.CapturedSessionEvent, int, bool) {
+func (r *MessageSession) nextReplayEvent(ctx context.Context) (gatewaytesting.CapturedSessionEvent, int, bool) {
 	for {
 		r.mu.Lock()
-		if r.awaitingOutboundLocked() {
+		if r.awaitingOutboundLocked(ctx) {
 			r.cond.Wait()
 			r.mu.Unlock()
 			continue
 		}
-		if !r.closed && r.err == nil && r.ctx.Err() != nil {
-			r.setOutcomeLocked(messageReplayCancelled, r.ctx.Err())
+		if !r.closed && r.err == nil && ctx.Err() != nil {
+			r.setOutcomeLocked(messageReplayCancelled, ctx.Err())
 		}
 		if r.closed || r.err != nil || r.index >= len(r.events) {
 			r.finishMessageReplayLocked()
@@ -197,8 +192,8 @@ func (r *MessageSession) nextReplayEvent() (gatewaytesting.CapturedSessionEvent,
 	}
 }
 
-func (r *MessageSession) awaitingOutboundLocked() bool {
-	return r.validateOutbound && !r.closed && r.err == nil && r.ctx.Err() == nil && r.index < len(r.events) && r.events[r.index].Direction == gatewaytesting.DirectionClientToServer && r.validatedPending == 0
+func (r *MessageSession) awaitingOutboundLocked(ctx context.Context) bool {
+	return r.validateOutbound && !r.closed && r.err == nil && ctx.Err() == nil && r.index < len(r.events) && r.events[r.index].Direction == gatewaytesting.DirectionClientToServer && r.validatedPending == 0
 }
 
 func (r *MessageSession) finishMessageReplayLocked() {
@@ -219,7 +214,7 @@ func (r *MessageSession) advanceOutboundEvent() {
 	r.mu.Unlock()
 }
 
-func (r *MessageSession) deliverReplayEvent(event gatewaytesting.CapturedSessionEvent, eventIndex int) bool {
+func (r *MessageSession) deliverReplayEvent(ctx context.Context, event gatewaytesting.CapturedSessionEvent, eventIndex int) bool {
 	message, err := decodeStreamEvent(event)
 	if err != nil {
 		r.mu.Lock()
@@ -229,10 +224,10 @@ func (r *MessageSession) deliverReplayEvent(event gatewaytesting.CapturedSession
 		r.mu.Unlock()
 		return false
 	}
-	if write := r.outbound.WriteWaitContextOrDone(r.ctx, r.done, message); !write.OK() {
+	if write := r.outbound.WriteWaitContextOrDone(ctx, r.done, message); !write.OK() {
 		r.mu.Lock()
-		if r.ctx.Err() != nil {
-			r.setOutcomeLocked(messageReplayCancelled, r.ctx.Err())
+		if ctx.Err() != nil {
+			r.setOutcomeLocked(messageReplayCancelled, ctx.Err())
 		}
 		r.mu.Unlock()
 		return false
@@ -263,8 +258,8 @@ func (r *MessageSession) nextExpectedOutboundLocked() (gatewaytesting.CapturedSe
 	return r.events[index], true
 }
 
-func (r *MessageSession) watchContext() {
-	<-r.ctx.Done()
+func (r *MessageSession) watchContext(ctx context.Context) {
+	<-ctx.Done()
 	r.mu.Lock()
 	r.cond.Broadcast()
 	r.mu.Unlock()

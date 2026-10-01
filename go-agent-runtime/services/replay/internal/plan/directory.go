@@ -290,7 +290,7 @@ func fileDigest(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	digest := sha256.New()
-	_, copyErr := io.CopyBuffer(digest, contextReader{ctx: ctx, reader: file}, make([]byte, recordingDigestBufferSize))
+	_, copyErr := io.CopyBuffer(digest, newContextReader(ctx, file), make([]byte, recordingDigestBufferSize))
 	closeErr := file.Close()
 	if err := errors.Join(copyErr, closeErr); err != nil {
 		return "", err
@@ -298,17 +298,23 @@ func fileDigest(ctx context.Context, path string) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
+// contextReader stops a copy once its context ends. It keeps only the
+// context's cause accessor rather than the context itself.
 type contextReader struct {
-	ctx    context.Context
+	cause  func() error
 	reader io.Reader
 }
 
+func newContextReader(ctx context.Context, reader io.Reader) contextReader {
+	return contextReader{cause: func() error { return context.Cause(ctx) }, reader: reader}
+}
+
 func (r contextReader) Read(buffer []byte) (int, error) {
-	if err := context.Cause(r.ctx); err != nil {
+	if err := r.cause(); err != nil {
 		return 0, err
 	}
 	n, err := r.reader.Read(buffer)
-	if cause := context.Cause(r.ctx); cause != nil {
+	if cause := r.cause(); cause != nil {
 		return n, cause
 	}
 	return n, err

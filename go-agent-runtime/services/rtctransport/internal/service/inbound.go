@@ -140,6 +140,9 @@ type packetEvent struct {
 
 var _ rtctransport.InboundTrack = (*InboundTrack)(nil)
 
+// errInboundNilContext reports a read without a caller context.
+var errInboundNilContext = errors.New("inbound track read context is required")
+
 func (s *Service) NewInboundTrack(source, opus any, config rtctransport.InboundTrackConfig) (rtctransport.InboundTrack, error) {
 	cfg, err := normalizeInboundConfig(config)
 	if err != nil {
@@ -267,10 +270,9 @@ func (t *InboundTrack) finish(err error) {
 	close(t.frames)
 }
 
-//nolint:contextcheck // nil context is normalized to the media API's documented background behavior.
 func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return sharedaudio.PCMFrame{}, errInboundNilContext
 	}
 	if t.closed.Load() {
 		return sharedaudio.PCMFrame{}, rtctransport.ErrInboundTrackClosed
