@@ -103,6 +103,10 @@ type SessionReplayer struct {
 
 const maxPendingReplayOutbound = 64
 
+// replayOutboundBuffer bounds the replayed server messages queued for the
+// session reader.
+const replayOutboundBuffer = 64
+
 var _ messages.Session = (*SessionReplayer)(nil)
 var _ messages.SessionSendOutcomeSender = (*SessionReplayer)(nil)
 
@@ -144,7 +148,7 @@ func NewSessionReplayerFromLegacyBytes(ctx context.Context, data []byte, opts ..
 func newSessionReplayer(parent context.Context, events []CapturedSessionEvent, opts ...SessionReplayerOption) *SessionReplayer {
 	r := &SessionReplayer{
 		events:   events,
-		outbound: messages.NewTypedBuffer[messages.StreamMessage](64),
+		outbound: messages.NewTypedBuffer[messages.StreamMessage](replayOutboundBuffer),
 		done:     make(chan struct{}),
 	}
 	r.validateOutbound = true

@@ -34,6 +34,8 @@ func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 			inbound.attach(track)
 		case webrtc.RTPCodecTypeVideo:
 			inbound.attachVideo(track)
+		case webrtc.RTPCodecTypeUnknown:
+			// A track of unknown kind carries no media this source reads.
 		}
 	})
 	answer, err := s.negotiateGo2RTC(ctx, ws, pc)

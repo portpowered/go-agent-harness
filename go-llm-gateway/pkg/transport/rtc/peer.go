@@ -111,6 +111,7 @@ func (p *Peer) Connect(ctx context.Context) error {
 	}
 	return p.finish(op, p.run(op.ctx))
 }
+
 // PeerLost reports that the connected transport was lost and starts a
 // background reconnect bounded by ctx.
 func (p *Peer) PeerLost(ctx context.Context, cause error) error {
@@ -168,6 +169,8 @@ func (p *Peer) Wait(ctx context.Context) error {
 		return err
 	case StateClosed:
 		return ErrPeerClosed
+	case StateIdle, StateConnecting, StateConnected, StateReconnecting:
+		return nil
 	default:
 		return nil
 	}

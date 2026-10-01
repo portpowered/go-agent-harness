@@ -135,14 +135,21 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 		v = new(messages.RefusalValue)
 	case messages.StreamTypeLoopEnd:
 		v = new(messages.LoopEndValue)
-	default:
+	case messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded:
 		v = unmarshalAudioValue(t)
-		if v == nil {
-			v = unmarshalMediaValue(t)
-		}
-		if v == nil {
-			return nil, fmt.Errorf("unknown stream message type: %s", t)
-		}
+	case messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd:
+		v = unmarshalMediaValue(t)
+	case messages.StreamTypeSystemFullMessage:
+		// System messages are loop-internal and never captured on a session.
+	}
+	if v == nil {
+		return nil, fmt.Errorf("unknown stream message type: %s", t)
 	}
 
 	if err := json.Unmarshal(data, v); err != nil {
