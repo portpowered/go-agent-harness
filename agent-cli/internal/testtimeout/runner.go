@@ -139,14 +139,16 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 
 	if timedOut || contextCanceled {
 		termination = descendantsTerminated
-		cleanupErr := terminateCommand(cmd)
+		// Termination must run after the caller is canceled.
+		cleanupContext := context.WithoutCancel(ctx)
+		cleanupErr := terminateCommand(cleanupContext, cmd)
 		if cleanupErr != nil {
 			termination = "descendant termination reported: " + cleanupErr.Error()
 		}
 		select {
 		case commandErr = <-done:
 		case <-time.After(waitAfterTermination):
-			if retryErr := terminateCommand(cmd); retryErr != nil {
+			if retryErr := terminateCommand(cleanupContext, cmd); retryErr != nil {
 				termination += "; retry termination reported: " + retryErr.Error()
 			}
 			select {
