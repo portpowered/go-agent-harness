@@ -26,7 +26,10 @@ func TestWatchdogFailsBubbleBlockedOnRealIO(t *testing.T) {
 				t.Fatalf("listen: %v", err)
 			}
 			go func() { _, _ = listener.Accept() }() //nolint:errcheck // blocks forever by design.
-			time.Sleep(time.Hour)
+			// A virtual hour: it can only end if the bubble goes idle, which
+			// the goroutine blocked in Accept prevents.
+			virtualHour := time.NewTimer(time.Hour)
+			<-virtualHour.C
 		})
 		return
 	}

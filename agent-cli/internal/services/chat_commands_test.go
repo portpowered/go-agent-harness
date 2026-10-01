@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/skills"
@@ -65,11 +64,13 @@ func TestChatCommands_DispatchesRegisteredCommands(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			harness := newChatTestHarness(t)
 			harness.askFlags.SystemPrompt = "configured system prompt"
-			beforeSession := harness.model.SessionID()
 			if test.name == "clear" {
-				time.Sleep(time.Millisecond)
+				// A fixed prior ID proves /clear issues a fresh one without
+				// depending on the generator's clock resolution.
+				harness.model.sessionID = "session-before-clear"
 				harness.model.lines = []chatLine{{kind: chatLineUser, content: "old conversation"}}
 			}
+			beforeSession := harness.model.SessionID()
 			harness.model = submitChatInput(harness.model, test.input)
 			test.check(t, harness, beforeSession)
 		})
