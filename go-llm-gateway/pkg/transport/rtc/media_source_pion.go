@@ -12,6 +12,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
+// pionInboundQueueDepth bounds the decoded audio frames and visual frames
+// a pion inbound source buffers ahead of its reader.
+const pionInboundQueueDepth = 8
+
 type pionInbound struct {
 	frames          chan sharedaudio.PCMFrame
 	visuals         chan pionVisualFrame
@@ -42,8 +46,8 @@ func newPionInbound(closeFn func() error, source ...string) *pionInbound {
 		identity = source[0]
 	}
 	return &pionInbound{
-		frames:     make(chan sharedaudio.PCMFrame, 8),
-		visuals:    make(chan pionVisualFrame, 8),
+		frames:     make(chan sharedaudio.PCMFrame, pionInboundQueueDepth),
+		visuals:    make(chan pionVisualFrame, pionInboundQueueDepth),
 		done:       make(chan struct{}),
 		close:      closeFn,
 		videoReady: make(chan struct{}),

@@ -42,6 +42,10 @@ type Feature = capabilities.Feature
 // UnsupportedFeatureError re-exports deterministic local validation failures.
 type UnsupportedFeatureError = capabilities.UnsupportedFeatureError
 
+// StreamMessageBuffer bounds the stream messages a stateless provider queues
+// ahead of the caller reading its InferStream channel.
+const StreamMessageBuffer = 64
+
 const (
 	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
 	CapabilityStateSupported   = capabilities.CapabilityStateSupported

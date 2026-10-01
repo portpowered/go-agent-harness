@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -282,14 +283,14 @@ func NewStreamTransportErrorValue(err error) *messages.ErrorValue {
 
 func classifyHTTPStatus(statusCode int) error {
 	switch statusCode {
-	case 400, 422:
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return ErrInvalidRequest
-	case 401, 403:
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return ErrAuthentication
-	case 408, 409, 425, 429:
+	case http.StatusRequestTimeout, http.StatusConflict, http.StatusTooEarly, http.StatusTooManyRequests:
 		return ErrRateLimited
 	default:
-		if statusCode >= 500 {
+		if statusCode >= http.StatusInternalServerError {
 			return ErrTransport
 		}
 		return ErrProviderRejected

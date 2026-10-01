@@ -214,7 +214,7 @@ func (p *OpenAIProvider) InferStream(ctx context.Context, req providers.Inferenc
 		)
 	}
 
-	ch := make(chan messages.StreamMessage, 64)
+	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go func() {
 		defer close(ch)
 		streamSSEToGateway(resp.Body, ch, resp.Body.Close)

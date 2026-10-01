@@ -139,7 +139,7 @@ func (p *AnthropicProvider) InferStream(ctx context.Context, req providers.Infer
 	}
 
 	s := p.client.Messages.NewStreaming(ctx, params)
-	ch := make(chan messages.StreamMessage, 64)
+	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go func() {
 		streamAnthropicToGateway(s, ch)
 	}()

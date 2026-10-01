@@ -1,7 +1,5 @@
 package rtc
 
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"bufio"
 	"context"
@@ -11,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -18,7 +17,17 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
+	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+)
+
+const (
+	// rtspStatusLineFields splits "RTSP/1.0 <code> <reason>" into its version,
+	// status code, and reason phrase.
+	rtspStatusLineFields = 3
+	// rtspInterleavedHeaderLen is the channel byte plus the 16-bit length that
+	// follow the '$' marker of an RTSP interleaved frame (RFC 2326 10.12).
+	rtspInterleavedHeaderLen = 3
 )
 
 type rtspTrack struct {
@@ -74,7 +83,7 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	if err != nil {
 		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err)))
 	}
-	if response.code == 401 {
+	if response.code == http.StatusUnauthorized {
 		if c.user == "" {
 			return nil, closeAfterFailure(conn, sourceError(SourceErrorAuthentication, s.identity, nil))
 		}
@@ -84,10 +93,10 @@ func (s MediaSource) openRTSP(ctx context.Context) (*MediaStream, error) {
 	if err != nil {
 		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnreachable, s.identity, operationCause(ctx, err)))
 	}
-	if response.code == 401 {
+	if response.code == http.StatusUnauthorized {
 		return nil, closeAfterFailure(conn, sourceError(SourceErrorAuthentication, s.identity, nil))
 	}
-	if response.code == 404 {
+	if response.code == http.StatusNotFound {
 		return nil, closeAfterFailure(conn, sourceError(SourceErrorUnknown, s.identity, nil))
 	}
 	if response.code < 200 || response.code >= 300 {
@@ -162,7 +171,7 @@ func (c *rtspClient) readResponse() (rtspResponse, error) {
 	if err != nil {
 		return rtspResponse{}, err
 	}
-	parts := strings.SplitN(strings.TrimSpace(line), " ", 3)
+	parts := strings.SplitN(strings.TrimSpace(line), " ", rtspStatusLineFields)
 	if len(parts) < 2 {
 		return rtspResponse{}, errors.New("invalid RTSP response")
 	}
@@ -361,7 +370,7 @@ func (r *rtspInbound) readPacket() (int, []byte, error) {
 	if marker != '$' {
 		return 0, nil, errors.New("invalid RTSP interleaved packet")
 	}
-	header := make([]byte, 3)
+	header := make([]byte, rtspInterleavedHeaderLen)
 	if _, err = io.ReadFull(r.client.reader, header); err != nil {
 		return 0, nil, err
 	}
