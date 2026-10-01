@@ -216,12 +216,12 @@ func (g *Gate) Attach(ctx context.Context, target sharedaudio.MediaEndpoints) {
 				controlled.SetPlaybackController(controller)
 			}
 		}
-		go g.bridgeInbound(bridgeCtx, target.Inbound) //nolint:contextcheck // bridgeCtx deliberately outlives runner cancellation until Gate.Close.
+		go g.bridgeInbound(bridgeCtx, target.Inbound)
 	}
 	if target.Outbound == nil {
 		g.outbound.fail(ErrMediaUnavailable)
 	} else if outbound {
-		go g.bridgeOutbound(bridgeCtx, target.Outbound) //nolint:contextcheck // bridgeCtx deliberately outlives runner cancellation until Gate.Close.
+		go g.bridgeOutbound(bridgeCtx, target.Outbound)
 	}
 }
 
