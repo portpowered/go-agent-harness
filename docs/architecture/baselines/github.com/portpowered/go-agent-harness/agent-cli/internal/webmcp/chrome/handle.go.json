@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/handle.go",
       "symbol": "*handle.Attach",
-      "value": 20,
+      "value": 26,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -38,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/handle.go",
       "symbol": "*handle.Attach",
-      "value": 16,
+      "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -67,7 +67,17 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/handle.go",
-      "value": 668,
+      "value": 701,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-lines",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
+      "file": "internal/webmcp/chrome/handle.go",
+      "symbol": "*handle.Attach",
+      "value": 97,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -78,6 +88,16 @@
       "file": "internal/webmcp/chrome/handle.go",
       "symbol": "*handle.ListTargets",
       "value": 81,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
+      "rule": "function-statements",
+      "module": "github.com/portpowered/go-agent-harness/agent-cli",
+      "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
+      "file": "internal/webmcp/chrome/handle.go",
+      "symbol": "*handle.Attach",
+      "value": 64,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

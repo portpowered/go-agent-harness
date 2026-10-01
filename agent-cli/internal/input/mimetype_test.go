@@ -20,15 +20,18 @@ const (
 	// GIF: GIF89a header.
 	gifHeader = "GIF89a"
 
-	// WebP: RIFF....WEBP (12 bytes; bytes 4-7 are file size, can be zero for test).
-	webpHeader = "RIFF\x00\x00\x00\x00WEBP"
-
 	// TIFF little-endian: II + magic 42.
 	tiffHeader = "II\x2a\x00"
 
 	// PDF: %PDF-1.4 header.
 	pdfHeader = "%PDF-1.4"
 )
+
+// webpHeader is a WebP header: RIFF....WEBP (12 bytes; bytes 4-7 are the file
+// size, which can be zero for the test).
+func webpHeader() []byte {
+	return []byte{'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P'}
+}
 
 func TestDetectMimeType_MagicBytes(t *testing.T) {
 	tests := []struct {
@@ -40,7 +43,7 @@ func TestDetectMimeType_MagicBytes(t *testing.T) {
 		{name: "PNG by magic bytes", header: []byte(pngHeader), ext: ".png", expected: "image/png"},
 		{name: "JPEG by magic bytes", header: []byte(jpegHeader), ext: ".jpg", expected: "image/jpeg"},
 		{name: "GIF by magic bytes", header: []byte(gifHeader), ext: ".gif", expected: "image/gif"},
-		{name: "WebP by magic bytes", header: []byte(webpHeader), ext: ".webp", expected: "image/webp"},
+		{name: "WebP by magic bytes", header: webpHeader(), ext: ".webp", expected: "image/webp"},
 		{name: "PDF by magic bytes", header: []byte(pdfHeader), ext: ".pdf", expected: "application/pdf"},
 	}
 
@@ -84,7 +87,7 @@ func TestDetectMimeType_WebPDetection(t *testing.T) {
 	// Verify WebP is detected even without the .webp extension.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "image.bin")
-	require.NoError(t, os.WriteFile(path, []byte(webpHeader), 0o644))
+	require.NoError(t, os.WriteFile(path, webpHeader(), 0o644))
 
 	result, err := DetectMimeType(path)
 	require.NoError(t, err)
@@ -133,8 +136,8 @@ func TestDetectMimeTypeFromBytes(t *testing.T) {
 	}{
 		{name: "empty data no ext", data: nil, ext: "", expected: "application/octet-stream"},
 		{name: "empty data with ext", data: nil, ext: ".png", expected: "image/png"},
-		{name: "webp magic no ext", data: []byte(webpHeader), ext: "", expected: "image/webp"},
-		{name: "webp magic wrong ext", data: []byte(webpHeader), ext: ".jpg", expected: "image/webp"},
+		{name: "webp magic no ext", data: webpHeader(), ext: "", expected: "image/webp"},
+		{name: "webp magic wrong ext", data: webpHeader(), ext: ".jpg", expected: "image/webp"},
 		{name: "png magic correct ext", data: []byte(pngHeader), ext: ".png", expected: "image/png"},
 	}
 	for _, tt := range tests {
