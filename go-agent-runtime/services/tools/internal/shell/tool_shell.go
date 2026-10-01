@@ -128,30 +128,7 @@ func newExecToolWithDiagnosticWriter(workingDir string, restrict bool, policy pu
 	if diagnosticWriter == nil {
 		diagnosticWriter = io.Discard
 	}
-	denyPatterns := make([]*regexp.Regexp, 0)
-	if !policy.Configured {
-		denyPatterns = append(denyPatterns, defaultDenyPatterns()...)
-	} else {
-		if policy.EnableDenyPatterns {
-			if len(policy.CustomDenyPatterns) > 0 {
-				writeDiagnostic(diagnosticWriter, "Using custom deny patterns: %v\n", policy.CustomDenyPatterns)
-				for _, pattern := range policy.CustomDenyPatterns {
-					re, err := regexp.Compile(pattern)
-					if err != nil {
-						writeDiagnostic(diagnosticWriter, "Invalid custom deny pattern %q: %v\n", pattern, err)
-						continue
-					}
-					denyPatterns = append(denyPatterns, re)
-				}
-			} else {
-				denyPatterns = append(denyPatterns, defaultDenyPatterns()...)
-			}
-		} else {
-			// If deny patterns are disabled, shell commands are not filtered by
-			// this pattern policy. Filesystem tools retain their own boundary.
-			writeDiagnostic(diagnosticWriter, "Warning: shell-command deny patterns are disabled. This affects shell-command policy only; filesystem tools remain confined to the effective filesystem scope, and the process is not running inside an operating-system sandbox.\n")
-		}
-	}
+	denyPatterns := policyDenyPatterns(policy, diagnosticWriter)
 	return &ExecTool{
 		workingDir:          workingDir,
 		timeout:             defaultShellTimeoutSeconds * time.Second,
@@ -160,6 +137,35 @@ func newExecToolWithDiagnosticWriter(workingDir string, restrict bool, policy pu
 		restrictToWorkspace: restrict,
 		processFactory:      newExecShellProcess,
 	}
+}
+
+// policyDenyPatterns selects the shell deny patterns for policy: the defaults
+// when unconfigured, the compiled custom patterns when given, and none when
+// the policy disables pattern filtering.
+func policyDenyPatterns(policy public.ExecPolicy, diagnosticWriter io.Writer) []*regexp.Regexp {
+	if !policy.Configured {
+		return defaultDenyPatterns()
+	}
+	if !policy.EnableDenyPatterns {
+		// If deny patterns are disabled, shell commands are not filtered by
+		// this pattern policy. Filesystem tools retain their own boundary.
+		writeDiagnostic(diagnosticWriter, "Warning: shell-command deny patterns are disabled. This affects shell-command policy only; filesystem tools remain confined to the effective filesystem scope, and the process is not running inside an operating-system sandbox.\n")
+		return make([]*regexp.Regexp, 0)
+	}
+	if len(policy.CustomDenyPatterns) == 0 {
+		return defaultDenyPatterns()
+	}
+	writeDiagnostic(diagnosticWriter, "Using custom deny patterns: %v\n", policy.CustomDenyPatterns)
+	denyPatterns := make([]*regexp.Regexp, 0, len(policy.CustomDenyPatterns))
+	for _, pattern := range policy.CustomDenyPatterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			writeDiagnostic(diagnosticWriter, "Invalid custom deny pattern %q: %v\n", pattern, err)
+			continue
+		}
+		denyPatterns = append(denyPatterns, re)
+	}
+	return denyPatterns
 }
 
 func (t *ExecTool) Name() string {

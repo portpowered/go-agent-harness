@@ -211,22 +211,32 @@ func (r *recorder) addParticipantArtifacts(manifest *roomManifest, id string, pa
 		manifest.Artifacts[key] = path
 		r.hashArtifactInto(manifest.ArtifactIntegrity, path)
 	}
-	if paths.Capture != "" {
-		manifest.Artifacts[id+".capture"] = paths.Capture
-		r.hashArtifactInto(manifest.ArtifactIntegrity, paths.Capture)
-		capturePath := filepath.Join(r.destination, filepath.FromSlash(paths.Capture))
-		r.mu.Lock()
-		captureExpected := r.captureSeen[id]
-		r.mu.Unlock()
-		if captureExpected {
-			if info, err := os.Lstat(capturePath); err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-				if err == nil {
-					err = fmt.Errorf("capture artifact is not a regular file")
-				}
-				r.recordError(id, paths.Capture, fmt.Errorf("capture artifact unavailable: %w", err))
-			}
-		}
+	if paths.Capture == "" {
+		return
 	}
+	manifest.Artifacts[id+".capture"] = paths.Capture
+	r.hashArtifactInto(manifest.ArtifactIntegrity, paths.Capture)
+	r.mu.Lock()
+	captureExpected := r.captureSeen[id]
+	r.mu.Unlock()
+	if !captureExpected {
+		return
+	}
+	if err := regularArtifactFile(filepath.Join(r.destination, filepath.FromSlash(paths.Capture))); err != nil {
+		r.recordError(id, paths.Capture, fmt.Errorf("capture artifact unavailable: %w", err))
+	}
+}
+
+// regularArtifactFile reports why path is not an existing regular file.
+func regularArtifactFile(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("capture artifact is not a regular file")
+	}
+	return nil
 }
 
 func cloneMap(values map[string]string) map[string]string {

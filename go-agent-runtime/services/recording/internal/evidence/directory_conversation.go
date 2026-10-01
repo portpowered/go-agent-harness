@@ -171,25 +171,31 @@ func (c *evidenceConversation) observeToolCallEnd(msg messages.StreamMessage) {
 	if c.toolNames == nil {
 		c.toolNames = make(map[string]string)
 	}
-	if oldName, exists := c.toolNames[callID]; exists {
-		if oldName != value.Name {
-			oldCost := summaryMapEntryBytes + summaryCost(callID, oldName)
-			newCost := summaryMapEntryBytes + summaryCost(callID, value.Name)
-			if !c.replaceRetained(oldCost, newCost) {
-				return
-			}
-			c.toolNames[callID] = value.Name
-		}
-	} else {
-		entryCost := summaryMapEntryBytes + summaryCost(callID, value.Name)
-		if !c.reserve(entryCost, 1) {
-			return
-		}
-		c.toolNames[callID] = value.Name
+	if !c.retainToolName(callID, value.Name) {
+		return
 	}
 	c.nextToolSequence++
 	event := evidenceToolEvent{Sequence: c.nextToolSequence, Type: "tool_call", ToolCallID: callID, ToolName: value.Name, Arguments: value.Arguments}
 	c.appendToolEvent(event)
+}
+
+// retainToolName records name for callID within the summary budget and
+// reports whether it is retained.
+func (c *evidenceConversation) retainToolName(callID, name string) bool {
+	oldName, exists := c.toolNames[callID]
+	if exists && oldName == name {
+		return true
+	}
+	newCost := summaryMapEntryBytes + summaryCost(callID, name)
+	if exists {
+		if !c.replaceRetained(summaryMapEntryBytes+summaryCost(callID, oldName), newCost) {
+			return false
+		}
+	} else if !c.reserve(newCost, 1) {
+		return false
+	}
+	c.toolNames[callID] = name
+	return true
 }
 
 func (c *evidenceConversation) observeToolResult(msg messages.StreamMessage, _ uint64) {

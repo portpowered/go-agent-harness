@@ -196,17 +196,24 @@ func (h *handle) reserveCriticalEventLocked() {
 }
 func (h *handle) finishMedia(err error, userCancelled bool) error {
 	if err == nil && !userCancelled {
-		drainCtx, cancel := context.WithTimeout(h.evidenceContext(), defaultPlaybackDrainTimeout)
-		if sealErr := h.media.SealInbound(); sealErr != nil {
-			err = errors.Join(err, fmt.Errorf("seal live inbound media: %w", sealErr))
-		}
-		drainErr := h.media.DrainInbound(drainCtx)
-		cancel()
-		if drainErr != nil {
-			err = errors.Join(err, fmt.Errorf("drain live inbound media: %w", drainErr))
-		}
+		err = h.drainInboundMedia()
 	}
 	return errors.Join(err, h.media.Close())
+}
+
+// drainInboundMedia seals provider media admission and waits, bounded, for
+// the admitted inbound tail to drain.
+func (h *handle) drainInboundMedia() error {
+	drainCtx, cancel := context.WithTimeout(h.evidenceContext(), defaultPlaybackDrainTimeout)
+	defer cancel()
+	var sealErr, drainErr error
+	if err := h.media.SealInbound(); err != nil {
+		sealErr = fmt.Errorf("seal live inbound media: %w", err)
+	}
+	if err := h.media.DrainInbound(drainCtx); err != nil {
+		drainErr = fmt.Errorf("drain live inbound media: %w", err)
+	}
+	return errors.Join(sealErr, drainErr)
 }
 func (h *handle) ensureCaptureTurnAdmissible() error {
 	if h == nil {

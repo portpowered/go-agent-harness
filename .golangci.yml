@@ -149,6 +149,30 @@ linters:
       includes: [G110, G112, G114, G201, G202, G203, G402, G403, G501, G502, G503, G504, G505, G601]
     iface:
       enable: [identical, unused]
+      settings:
+        unused:
+          # go-agent-runtime/services/<name> are the runtime's public contract
+          # packages: they declare the role interfaces that wire packages,
+          # agent-cli and external embedders implement and consume, so use
+          # inside the declaring package is not expected. Implementation
+          # packages (internal/**) stay under the unused check.
+          exclude:
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/rtctransport
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/selfplay
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/session
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionduration
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn
+            - github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools
     recvcheck:
       # encoding/json and encoding.TextUnmarshaler require pointer-receiver
       # decoders while encoders stay on value receivers (so values marshal);

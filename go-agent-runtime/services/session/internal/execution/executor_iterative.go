@@ -325,26 +325,18 @@ func (e *Executor) runIteration(ctx context.Context, cfg *Config, iteration, max
 	// adapters translate signals into context cancellation before invoking
 	// the runtime; the reusable service must not install process-global
 	// signal handlers of its own.
-	runData, buildErr := e.BuildLoop(ctx, &iterCfg)
-	var text string
-	var execErr error
-	var sessionID string
-
-	if buildErr != nil {
-		execErr = buildErr
-	} else if mimeErr := e.validateInputMimeTypes(runData, input); mimeErr != nil {
-		execErr = mimeErr
-	} else {
-		sessionID = runData.SessionID
-		text, execErr = e.executeWithContinuation(ctx, runData, input, &iterCfg, out, stopWord)
-		if execErr == nil {
-			if saveErr := e.SaveSession(ctx, runData); saveErr != nil {
-				execErr = saveErr
-			}
-		}
+	runData, err := e.BuildLoop(ctx, &iterCfg)
+	if err != nil {
+		return IterationRunResult{Iteration: iteration, Err: err}
 	}
-
-	return IterationRunResult{Iteration: iteration, SessionID: sessionID, Text: text, Err: execErr}
+	if err := e.validateInputMimeTypes(runData, input); err != nil {
+		return IterationRunResult{Iteration: iteration, Err: err}
+	}
+	text, execErr := e.executeWithContinuation(ctx, runData, input, &iterCfg, out, stopWord)
+	if execErr == nil {
+		execErr = e.SaveSession(ctx, runData)
+	}
+	return IterationRunResult{Iteration: iteration, SessionID: runData.SessionID, Text: text, Err: execErr}
 }
 
 func iterationStatus(interrupted bool, err error) session.IterationStatus {
