@@ -101,38 +101,42 @@ func (s *Service) openLive(ctx context.Context, request session.LiveRequest, rec
 }
 
 type handle struct {
-	request                                          session.LiveRequest
-	factory                                          session.LiveInferencerFactory
-	capabilityFactory                                session.LiveCapabilityFactory
-	toolExecutor                                     messages.ToolExecutor
-	toolDefinitions                                  []messages.ToolDefinition
-	pendingToolDefinitions                           []messages.ToolDefinition
-	capabilityClose                                  func() error
-	capabilityRefresh                                func(context.Context) ([]messages.ToolDefinition, error)
-	capabilityWatch                                  func(context.Context) <-chan session.LiveCapabilityEvent
-	captureInterruptionTool                          string
-	captureInterruptionEvent                         chan session.LiveCapabilityEvent
-	captureInterruptionOnce                          sync.Once
-	captureFlush                                     func() error
-	observer                                         *observations.Observer
-	runtimeTrace                                     *observations.RuntimeTrace
-	capabilityMu                                     sync.Mutex
-	eventCapacity                                    int
-	clock                                            session.LiveClock
-	scheduler                                        platformclock.Scheduler
-	media                                            *mediagate.Gate
-	events                                           chan session.LiveEvent
-	done                                             chan struct{}
-	startDone                                        chan struct{}
-	mu                                               sync.Mutex
-	started, closed                                  bool
-	startErr, terminalErr                            error
-	runErr, providerErr                              error
-	providerTerminalError                            func() error
-	providerReceiveSync                              func(context.Context)
-	pumpErr                                          error
-	cancel                                           context.CancelCauseFunc
-	parentCtx                                        context.Context
+	request                  session.LiveRequest
+	factory                  session.LiveInferencerFactory
+	capabilityFactory        session.LiveCapabilityFactory
+	toolExecutor             messages.ToolExecutor
+	toolDefinitions          []messages.ToolDefinition
+	pendingToolDefinitions   []messages.ToolDefinition
+	capabilityClose          func() error
+	capabilityRefresh        func(context.Context) ([]messages.ToolDefinition, error)
+	capabilityWatch          func(context.Context) <-chan session.LiveCapabilityEvent
+	captureInterruptionTool  string
+	captureInterruptionEvent chan session.LiveCapabilityEvent
+	captureInterruptionOnce  sync.Once
+	captureFlush             func() error
+	observer                 *observations.Observer
+	runtimeTrace             *observations.RuntimeTrace
+	capabilityMu             sync.Mutex
+	eventCapacity            int
+	clock                    session.LiveClock
+	scheduler                platformclock.Scheduler
+	media                    *mediagate.Gate
+	events                   chan session.LiveEvent
+	done                     chan struct{}
+	startDone                chan struct{}
+	mu                       sync.Mutex
+	started, closed          bool
+	startErr, terminalErr    error
+	runErr, providerErr      error
+	providerTerminalError    func() error
+	providerReceiveSync      func(context.Context)
+	pumpErr                  error
+	cancel                   context.CancelCauseFunc
+	// parentCtx is the Start context. Evidence and terminal publication run
+	// from provider and device callbacks that carry no context, after the run
+	// context is cancelled, and must keep its values (artifact lifecycles), so
+	// the handle retains it for the invocation.
+	parentCtx                                        context.Context //nolint:containedctx // Invocation value context for callback-driven evidence publication.
 	cancelRequested, gracefulStop                    bool
 	cancelCause                                      error
 	loop                                             *agentloop.AgentLoop

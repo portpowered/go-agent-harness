@@ -10,24 +10,12 @@ import (
 	"unsafe"
 )
 
-var (
-	user32dll = syscall.NewLazyDLL("user32.dll")
-	gdi32dll  = syscall.NewLazyDLL("gdi32.dll")
+// user32Proc and gdi32Proc resolve a screen-capture procedure lazily. The
+// DLLs are already loaded in every Windows process, so resolving per call
+// only takes a reference instead of keeping package-level handles.
+func user32Proc(name string) *syscall.LazyProc { return syscall.NewLazyDLL("user32.dll").NewProc(name) }
 
-	// user32.dll procs for screen capture. user32dll is declared in
-	// tool_mouse_windows.go; both files share the windows build tag.
-	procGetDC         = user32dll.NewProc("GetDC")
-	procReleaseDC     = user32dll.NewProc("ReleaseDC")
-	procGetSysMetrics = user32dll.NewProc("GetSystemMetrics")
-
-	procCreateCompatibleDC     = gdi32dll.NewProc("CreateCompatibleDC")
-	procCreateCompatibleBitmap = gdi32dll.NewProc("CreateCompatibleBitmap")
-	procSelectObject           = gdi32dll.NewProc("SelectObject")
-	procBitBlt                 = gdi32dll.NewProc("BitBlt")
-	procGetDIBits              = gdi32dll.NewProc("GetDIBits")
-	procDeleteObject           = gdi32dll.NewProc("DeleteObject")
-	procDeleteDC               = gdi32dll.NewProc("DeleteDC")
-)
+func gdi32Proc(name string) *syscall.LazyProc { return syscall.NewLazyDLL("gdi32.dll").NewProc(name) }
 
 const (
 	smCxScreen          = 0
@@ -35,6 +23,8 @@ const (
 	srccopy      uint32 = 0x00CC0020
 	dibRGBColors uint32 = 0
 	biRGB        uint32 = 0
+	// bgraBytesPerPixel is the size of one 32-bit BGRA pixel.
+	bgraBytesPerPixel = 4
 )
 
 func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
@@ -76,8 +66,8 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProce
 			return 0, err
 		}
 	}
-	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	w, _, _ := user32Proc("GetSystemMetrics").Call(uintptr(smCxScreen))
+	h, _, _ := user32Proc("GetSystemMetrics").Call(uintptr(smCyScreen))
 	if w == 0 || h == 0 {
 		return 0, fmt.Errorf("GetSystemMetrics returned an empty display")
 	}
@@ -93,8 +83,8 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ Di
 	if idx != 0 {
 		return image.Rectangle{}, fmt.Errorf("display %d not available (only 1 display(s) found)", idx)
 	}
-	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	w, _, _ := user32Proc("GetSystemMetrics").Call(uintptr(smCxScreen))
+	h, _, _ := user32Proc("GetSystemMetrics").Call(uintptr(smCyScreen))
 	if w == 0 || h == 0 {
 		return image.Rectangle{}, fmt.Errorf("GetSystemMetrics returned an empty display")
 	}
@@ -123,31 +113,31 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	}
 
 	// Obtain the device context for the entire screen.
-	hScreen, _, _ := procGetDC.Call(0)
+	hScreen, _, _ := user32Proc("GetDC").Call(0)
 	if hScreen == 0 {
 		return nil, fmt.Errorf("GetDC failed")
 	}
-	defer procReleaseDC.Call(0, hScreen)
+	defer user32Proc("ReleaseDC").Call(0, hScreen)
 
 	// Create a compatible (in-memory) device context.
-	hMemDC, _, _ := procCreateCompatibleDC.Call(hScreen)
+	hMemDC, _, _ := gdi32Proc("CreateCompatibleDC").Call(hScreen)
 	if hMemDC == 0 {
 		return nil, fmt.Errorf("CreateCompatibleDC failed")
 	}
-	defer procDeleteDC.Call(hMemDC)
+	defer gdi32Proc("DeleteDC").Call(hMemDC)
 
 	// Create a compatible bitmap to receive the screen content.
-	hBitmap, _, _ := procCreateCompatibleBitmap.Call(hScreen, uintptr(width), uintptr(height))
+	hBitmap, _, _ := gdi32Proc("CreateCompatibleBitmap").Call(hScreen, uintptr(width), uintptr(height))
 	if hBitmap == 0 {
 		return nil, fmt.Errorf("CreateCompatibleBitmap failed")
 	}
-	defer procDeleteObject.Call(hBitmap)
+	defer gdi32Proc("DeleteObject").Call(hBitmap)
 
 	// Select the bitmap into the memory DC.
-	procSelectObject.Call(hMemDC, hBitmap)
+	gdi32Proc("SelectObject").Call(hMemDC, hBitmap)
 
 	// BitBlt copies the screen region into the memory bitmap.
-	ret, _, _ := procBitBlt.Call(
+	ret, _, _ := gdi32Proc("BitBlt").Call(
 		hMemDC, 0, 0, uintptr(width), uintptr(height),
 		hScreen, uintptr(bounds.Min.X), uintptr(bounds.Min.Y),
 		uintptr(srccopy),
@@ -176,8 +166,8 @@ func readWindowsBitmapPixels(hScreen, hBitmap uintptr, width, height int) ([]byt
 	bi.Header.Planes = 1
 	bi.Header.BitCount = 32 // 32-bit BGRA
 	bi.Header.Compression = biRGB
-	pix := make([]byte, width*height*4)
-	ret, _, _ := procGetDIBits.Call(
+	pix := make([]byte, width*height*bgraBytesPerPixel)
+	ret, _, _ := gdi32Proc("GetDIBits").Call(
 		hScreen, hBitmap,
 		0, uintptr(height),
 		uintptr(unsafe.Pointer(&pix[0])),

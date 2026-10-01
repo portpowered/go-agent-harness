@@ -71,7 +71,7 @@ func (p *fakeShellProcess) Wait() error {
 	return p.waitErr
 }
 
-func (p *fakeShellProcess) Terminate() error {
+func (p *fakeShellProcess) Terminate(context.Context) error {
 	p.killCount.Add(1)
 	p.releaseOnce.Do(func() { close(p.release) })
 	return nil
@@ -391,7 +391,7 @@ func TestExecTool_DefaultProcessFactoryDoesNotStart(t *testing.T) {
 	if err := process.Wait(); err == nil {
 		t.Fatal("Wait on an unstarted process should fail")
 	}
-	if err := process.Terminate(); err != nil {
+	if err := process.Terminate(t.Context()); err != nil {
 		t.Fatalf("Terminate: %v", err)
 	}
 	if err := process.Kill(); err != nil {

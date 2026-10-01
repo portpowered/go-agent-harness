@@ -30,7 +30,7 @@ type ExecTool struct {
 type shellProcess interface {
 	Start() error
 	Wait() error
-	Terminate() error
+	Terminate(ctx context.Context) error
 	Kill() error
 }
 
@@ -64,8 +64,8 @@ func (p *execShellProcess) Wait() error {
 	return p.cmd.Wait()
 }
 
-func (p *execShellProcess) Terminate() error {
-	return terminateProcessTree(p.cmd)
+func (p *execShellProcess) Terminate(ctx context.Context) error {
+	return terminateProcessTree(ctx, p.cmd)
 }
 
 func (p *execShellProcess) Kill() error {
@@ -266,7 +266,7 @@ func waitForShellProcess(ctx context.Context, cmd shellProcess) (error, bool) {
 	case err := <-done:
 		return err, false
 	case <-ctx.Done():
-		terminateErr := cmd.Terminate()
+		terminateErr := cmd.Terminate(ctx)
 		select {
 		case err := <-done:
 			return errors.Join(terminateErr, err), errors.Is(ctx.Err(), context.DeadlineExceeded)

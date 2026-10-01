@@ -3,16 +3,24 @@
 package shell
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 func prepareCommandForTermination(cmd *exec.Cmd) {
 	// no-op on Windows
 }
 
-func terminateProcessTree(cmd *exec.Cmd) error {
+// taskkillTimeout bounds the process-tree kill once the command's own
+// context has ended.
+const taskkillTimeout = 5 * time.Second
+
+// terminateProcessTree runs during cancellation, so taskkill gets a bounded
+// context detached from the already-ended operation context.
+func terminateProcessTree(ctx context.Context, cmd *exec.Cmd) error {
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
@@ -22,6 +30,8 @@ func terminateProcessTree(cmd *exec.Cmd) error {
 		return nil
 	}
 
-	taskkillErr := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(pid)).Run()
+	killCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), taskkillTimeout)
+	defer cancel()
+	taskkillErr := exec.CommandContext(killCtx, "taskkill", "/T", "/F", "/PID", strconv.Itoa(pid)).Run()
 	return errors.Join(taskkillErr, cmd.Process.Kill())
 }

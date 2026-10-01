@@ -10,15 +10,9 @@ import (
 	"unsafe"
 )
 
-// Windows user32.dll handle and procedures shared by both the mouse tool and
-// the screen capture tool (which needs GetSystemMetrics).
-var (
-	user32dll = syscall.NewLazyDLL("user32.dll")
-
-	procSendInput     = user32dll.NewProc("SendInput")
-	procSetCursorPos  = user32dll.NewProc("SetCursorPos")
-	procGetSysMetrics = user32dll.NewProc("GetSystemMetrics")
-)
+// user32Proc resolves a user32.dll input procedure lazily; user32.dll is
+// already loaded in every Windows process.
+func user32Proc(name string) *syscall.LazyProc { return syscall.NewLazyDLL("user32.dll").NewProc(name) }
 
 const (
 	mouseClickPause       = 50 * time.Millisecond
@@ -71,8 +65,8 @@ type winInput struct {
 // primaryScreenSize returns the width and height of the primary display in
 // screen pixels.
 func primaryScreenSize() (w, h int) {
-	cw, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	ch, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	cw, _, _ := user32Proc("GetSystemMetrics").Call(uintptr(smCxScreen))
+	ch, _, _ := user32Proc("GetSystemMetrics").Call(uintptr(smCyScreen))
 	return int(cw), int(ch)
 }
 
@@ -96,7 +90,7 @@ func sendMouseEvent(x, y int, flags uint32) error {
 		},
 	}
 
-	ret, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
+	ret, _, err := user32Proc("SendInput").Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
 	if ret == 0 {
 		return fmt.Errorf("SendInput failed: %w", err)
 	}
@@ -118,7 +112,7 @@ func buttonFlags(button string) (downFlag, upFlag uint32) {
 // move moves the cursor to the given screen coordinates using SetCursorPos
 // for pixel-accurate positioning.
 func (mouseDriver) move(_ context.Context, x, y int) error {
-	ret, _, err := procSetCursorPos.Call(uintptr(x), uintptr(y))
+	ret, _, err := user32Proc("SetCursorPos").Call(uintptr(x), uintptr(y))
 	if ret == 0 {
 		return fmt.Errorf("SetCursorPos failed: %w", err)
 	}
