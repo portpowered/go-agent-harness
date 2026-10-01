@@ -4,8 +4,9 @@ package mouse
 
 import (
 	"context"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 	"testing"
+
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )

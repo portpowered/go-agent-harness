@@ -97,7 +97,7 @@ type ParticipantLifecycle interface {
 	RecordToolResultSend(string, bool, bool)
 	RecordToolContinuationRequest(bool)
 	RecordResponseCancellation()
-	CancelActiveResponse()
+	CancelActiveResponse(ctx context.Context)
 	AdmitResponseTerminal() bool
 	AdmitSessionMessageAfterBound(messages.StreamMessage) bool
 	AdmitCompleteToolResultAfterBound(messages.Message) bool

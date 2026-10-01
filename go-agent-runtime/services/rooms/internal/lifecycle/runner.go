@@ -59,7 +59,9 @@ func (r Runner) currentTime() time.Time {
 }
 
 func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptions) (rooms.RoomResult, error) {
-	ctx = nonNilContext(ctx)
+	if ctx == nil {
+		return rooms.RoomResult{}, errRoomRunContextRequired
+	}
 	manifest := requestManifest(request)
 	if err := r.validateRun(manifest); err != nil {
 		return rooms.RoomResult{}, err
@@ -85,12 +87,8 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	return r.finishRun(runCtx, state, graph, manifest, request, recorder)
 }
 
-func nonNilContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
+// errRoomRunContextRequired reports a room run without a caller context.
+var errRoomRunContextRequired = errors.New("room run context is required")
 
 func requestManifest(request rooms.RoomRunOptions) rooms.Manifest {
 	manifest := request.Manifest

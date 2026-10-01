@@ -266,7 +266,7 @@ func assertLinuxMissingExecutables(t *testing.T) {
 	if _, err := display.NewHostDisplaySurface().Capture(context.Background(), image.Rect(0, 0, 2, 2)); err == nil || !strings.Contains(err.Error(), "scrot not found") {
 		t.Fatalf("missing scrot error = %v", err)
 	}
-	if err := newMouseDriver(MouseToolOptions{}).runXdotool("move"); err == nil || !strings.Contains(err.Error(), "xdotool not found") {
+	if err := newMouseDriver(MouseToolOptions{}).runXdotool(t.Context(), "move"); err == nil || !strings.Contains(err.Error(), "xdotool not found") {
 		t.Fatalf("missing xdotool error = %v", err)
 	}
 }
@@ -276,15 +276,15 @@ func assertLinuxMouseFailures(t *testing.T) {
 	var sleeps recordedSleeps
 	moveFails := &fakeMouseProcess{run: func([]string) ([]byte, error) { return nil, errors.New("exit status 7") }}
 	driver := newFakeMouseDriver(moveFails, &sleeps)
-	if err := driver.buttonDown(1, 2, "left"); err == nil {
+	if err := driver.buttonDown(t.Context(), 1, 2, "left"); err == nil {
 		t.Fatal("mousedown failure was not returned")
 	}
-	if err := driver.buttonUp(1, 2, "left"); err == nil {
+	if err := driver.buttonUp(t.Context(), 1, 2, "left"); err == nil {
 		t.Fatal("mouseup failure was not returned")
 	}
 	assertMouseCalls(t, moveFails, "xdotool", []string{"mousemove 1 2", "mousemove 1 2"})
 	missing := &fakeMouseProcess{run: func([]string) ([]byte, error) { return nil, helperNotFound("xdotool") }}
-	if err := newFakeMouseDriver(missing, &sleeps).move(1, 2); err == nil || !strings.Contains(err.Error(), "xdotool not found") {
+	if err := newFakeMouseDriver(missing, &sleeps).move(t.Context(), 1, 2); err == nil || !strings.Contains(err.Error(), "xdotool not found") {
 		t.Fatalf("missing xdotool error = %v", err)
 	}
 	stepFailure := &fakeMouseProcess{run: func(args []string) ([]byte, error) {
@@ -293,7 +293,7 @@ func assertLinuxMouseFailures(t *testing.T) {
 		}
 		return nil, nil
 	}}
-	if err := newFakeMouseDriver(stepFailure, &sleeps).drag(1, 1, 21, 21, "left"); err == nil || !strings.Contains(err.Error(), "drag step 1") {
+	if err := newFakeMouseDriver(stepFailure, &sleeps).drag(t.Context(), 1, 1, 21, 21, "left"); err == nil || !strings.Contains(err.Error(), "drag step 1") {
 		t.Fatalf("drag step error = %v", err)
 	}
 	assertMouseCalls(t, stepFailure, "xdotool", []string{"mousemove 1 1", "mousedown 1", "mousemove 2 2", "mouseup 1"})
@@ -307,7 +307,7 @@ func TestS4LinuxProcessErrorIdentity(t *testing.T) {
 		return []byte("command failed\n"), errors.New("exit status 9")
 	}}
 	var sleeps recordedSleeps
-	err := newFakeMouseDriver(process, &sleeps).runXdotool("mousemove", "1", "2")
+	err := newFakeMouseDriver(process, &sleeps).runXdotool(t.Context(), "mousemove", "1", "2")
 	if err == nil || !strings.Contains(err.Error(), "xdotool [mousemove 1 2]") || !strings.Contains(err.Error(), "command failed") {
 		t.Fatalf("process error = %v", err)
 	}

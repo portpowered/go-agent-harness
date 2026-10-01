@@ -4,6 +4,7 @@ package mouse
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"os"
@@ -42,7 +43,7 @@ type fakeMouseProcess struct {
 	run   func(args []string) ([]byte, error)
 }
 
-func (p *fakeMouseProcess) Run(name string, args ...string) ([]byte, error) {
+func (p *fakeMouseProcess) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	p.names = append(p.names, name)
 	p.calls = append(p.calls, strings.Join(args, " "))
 	if p.run != nil {
@@ -54,7 +55,10 @@ func (p *fakeMouseProcess) Run(name string, args ...string) ([]byte, error) {
 // recordedSleeps records the pacing sleeps requested by a driver.
 type recordedSleeps []time.Duration
 
-func (s *recordedSleeps) sleep(duration time.Duration) { *s = append(*s, duration) }
+func (s *recordedSleeps) sleep(_ context.Context, duration time.Duration) error {
+	*s = append(*s, duration)
+	return nil
+}
 
 func (s *recordedSleeps) total() time.Duration {
 	var total time.Duration

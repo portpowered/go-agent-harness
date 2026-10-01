@@ -131,7 +131,7 @@ func (h *handle) observeRateLimit(loop *agentloop.AgentLoop, msg messages.Stream
 	request := retryRequest{loop: loop, deadline: h.scheduler.Now().Add(delay)}
 	select {
 	case h.retryRequests <- request:
-	case <-h.parentContext().Done():
+	case <-h.parentDone():
 	}
 }
 
@@ -151,17 +151,20 @@ func (h *handle) claimRateLimitRetry() bool {
 	h.retriesUsed++
 	return true
 }
-func (h *handle) parentContext() context.Context {
+
+// parentDone returns the Start context's done channel, or nil (never ready)
+// before Start.
+func (h *handle) parentDone() <-chan struct{} {
 	if h == nil {
-		return context.Background()
+		return nil
 	}
 	h.mu.Lock()
 	ctx := h.parentCtx
 	h.mu.Unlock()
 	if ctx == nil {
-		return context.Background()
+		return nil
 	}
-	return ctx
+	return ctx.Done()
 }
 func (h *handle) runRateLimitRetry(ctx context.Context, defaultLoop *agentloop.AgentLoop) {
 	defer h.runWG.Done()

@@ -55,10 +55,10 @@ func assertDarwinLiveMouse(t *testing.T) {
 	}
 	driver := newMouseDriver(MouseToolOptions{})
 	t.Cleanup(func() {
-		if err := driver.buttonUp(originalX, originalY, "left"); err != nil {
+		if err := driver.buttonUp(t.Context(), originalX, originalY, "left"); err != nil {
 			t.Logf("%s: cursor cleanup release failed: %v", runtime.GOOS, err)
 		}
-		if err := driver.move(originalX, originalY); err != nil {
+		if err := driver.move(t.Context(), originalX, originalY); err != nil {
 			t.Logf("%s: cursor cleanup restore failed: %v", runtime.GOOS, err)
 		}
 	})
@@ -70,12 +70,12 @@ func assertDarwinLiveMouse(t *testing.T) {
 		wantX, wantY int
 		call         func() error
 	}{
-		{"move", baseX, baseY, func() error { return driver.move(baseX, baseY) }},
-		{"click", baseX + 1, baseY + 1, func() error { return driver.click(baseX+1, baseY+1, "left") }},
-		{"double-click", baseX + 2, baseY + 2, func() error { return driver.doubleClick(baseX+2, baseY+2, "left") }},
-		{"button-down", baseX + 3, baseY + 3, func() error { return driver.buttonDown(baseX+3, baseY+3, "left") }},
-		{"button-up", baseX + 4, baseY + 4, func() error { return driver.buttonUp(baseX+4, baseY+4, "left") }},
-		{"drag", baseX + 7, baseY + 7, func() error { return driver.drag(baseX+5, baseY+5, baseX+7, baseY+7, "left") }},
+		{"move", baseX, baseY, func() error { return driver.move(t.Context(), baseX, baseY) }},
+		{"click", baseX + 1, baseY + 1, func() error { return driver.click(t.Context(), baseX+1, baseY+1, "left") }},
+		{"double-click", baseX + 2, baseY + 2, func() error { return driver.doubleClick(t.Context(), baseX+2, baseY+2, "left") }},
+		{"button-down", baseX + 3, baseY + 3, func() error { return driver.buttonDown(t.Context(), baseX+3, baseY+3, "left") }},
+		{"button-up", baseX + 4, baseY + 4, func() error { return driver.buttonUp(t.Context(), baseX+4, baseY+4, "left") }},
+		{"drag", baseX + 7, baseY + 7, func() error { return driver.drag(t.Context(), baseX+5, baseY+5, baseX+7, baseY+7, "left") }},
 	}
 	for _, operation := range operations {
 		t.Run(operation.name, func(t *testing.T) {

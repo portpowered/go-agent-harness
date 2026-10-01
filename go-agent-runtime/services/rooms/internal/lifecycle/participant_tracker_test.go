@@ -284,8 +284,8 @@ func TestParticipantTrackerAdmissionToolContinuationAndIdempotentCancel(t *testi
 	close(cancelAdmission)
 	cancelLifecycle.MarkCoordinatorStopping(true, rooms.RoomTerminationMaxDurationReached)
 	cancelLifecycle.MarkBoundCancellation()
-	cancelLifecycle.CancelActiveResponse()
-	cancelLifecycle.CancelActiveResponse()
+	cancelLifecycle.CancelActiveResponse(t.Context())
+	cancelLifecycle.CancelActiveResponse(t.Context())
 	cancelUnderlying.mu.Lock()
 	var cancelCount int
 	for _, message := range cancelUnderlying.sends {

@@ -95,16 +95,14 @@ func TestNilExecutorAndContext(t *testing.T) {
 	if err != nil || !strings.Contains(response.Content, string(errNotConfigured)) {
 		t.Fatalf("nil executor = %#v, %v", response, err)
 	}
-	inner := executorFunc(func(ctx context.Context, _ messages.ToolCall) (messages.ToolCallResponse, error) {
-		if ctx == nil {
-			return messages.ToolCallResponse{}, errors.New("nil context")
-		}
-		return messages.ToolCallResponse{Content: "ok"}, nil
+	inner := executorFunc(func(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
+		t.Fatal("inner executor ran without a caller context")
+		return messages.ToolCallResponse{}, nil
 	})
 	var missing context.Context
 	response, err = New(sessionturn.ToolExecutorRequest{Inner: inner}).Execute(missing, messages.ToolCall{ID: "id"})
-	if err != nil || response.Content != "ok" {
-		t.Fatalf("nil context = %#v, %v", response, err)
+	if err != nil || response.ToolCallID != "id" || !strings.Contains(response.Content, string(errNoContext)) {
+		t.Fatalf("nil context = %#v, %v; want correlated missing-context failure", response, err)
 	}
 }
 

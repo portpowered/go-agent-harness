@@ -3,6 +3,7 @@
 package mouse
 
 import (
+	"context"
 	"fmt"
 	"syscall"
 	"time"
@@ -116,7 +117,7 @@ func buttonFlags(button string) (downFlag, upFlag uint32) {
 
 // move moves the cursor to the given screen coordinates using SetCursorPos
 // for pixel-accurate positioning.
-func (mouseDriver) move(x, y int) error {
+func (mouseDriver) move(_ context.Context, x, y int) error {
 	ret, _, err := procSetCursorPos.Call(uintptr(x), uintptr(y))
 	if ret == 0 {
 		return fmt.Errorf("SetCursorPos failed: %w", err)
@@ -125,48 +126,54 @@ func (mouseDriver) move(x, y int) error {
 }
 
 // click moves to (x, y), presses, then releases the specified button.
-func (d mouseDriver) click(x, y int, button string) error {
+func (d mouseDriver) click(ctx context.Context, x, y int, button string) error {
 	down, up := buttonFlags(button)
 	// Combine MOVE + button-down into a single event so applications see the
 	// correct cursor position when they receive the WM_BUTTONDOWN message.
 	if err := sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|down); err != nil {
 		return err
 	}
-	d.sleep(mouseClickPause)
+	if err := d.sleep(ctx, mouseClickPause); err != nil {
+		return err
+	}
 	return sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|up)
 }
 
 // doubleClick sends two click events in quick succession.
-func (d mouseDriver) doubleClick(x, y int, button string) error {
-	if err := d.click(x, y, button); err != nil {
+func (d mouseDriver) doubleClick(ctx context.Context, x, y int, button string) error {
+	if err := d.click(ctx, x, y, button); err != nil {
 		return err
 	}
-	d.sleep(mouseDoubleClickPause)
-	return d.click(x, y, button)
+	if err := d.sleep(ctx, mouseDoubleClickPause); err != nil {
+		return err
+	}
+	return d.click(ctx, x, y, button)
 }
 
 // buttonDown moves to (x, y) and holds the specified button.
-func (mouseDriver) buttonDown(x, y int, button string) error {
+func (mouseDriver) buttonDown(_ context.Context, x, y int, button string) error {
 	down, _ := buttonFlags(button)
 	return sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|down)
 }
 
 // buttonUp moves to (x, y) and releases the specified button.
-func (mouseDriver) buttonUp(x, y int, button string) error {
+func (mouseDriver) buttonUp(_ context.Context, x, y int, button string) error {
 	_, up := buttonFlags(button)
 	return sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|up)
 }
 
 // drag presses the button at (fromX, fromY), glides the cursor in small
 // incremental steps to (toX, toY), then releases.
-func (d mouseDriver) drag(fromX, fromY, toX, toY int, button string) error {
+func (d mouseDriver) drag(ctx context.Context, fromX, fromY, toX, toY int, button string) error {
 	down, up := buttonFlags(button)
 
 	// Press at the start position.
 	if err := sendMouseEvent(fromX, fromY, mouseeventfMove|mouseeventfAbsolute|down); err != nil {
 		return fmt.Errorf("drag start: %w", err)
 	}
-	d.sleep(mouseDragPause)
+	if err := d.sleep(ctx, mouseDragPause); err != nil {
+		return err
+	}
 
 	// Move in 20 equal steps so the operating system sees smooth cursor motion,
 	// which is required for drag-sensitive widgets (e.g. sliders, scrollbars).
@@ -177,7 +184,9 @@ func (d mouseDriver) drag(fromX, fromY, toX, toY int, button string) error {
 		if err := sendMouseEvent(ix, iy, mouseeventfMove|mouseeventfAbsolute); err != nil {
 			return fmt.Errorf("drag step %d: %w", i, err)
 		}
-		d.sleep(mouseDragStepPause)
+		if err := d.sleep(ctx, mouseDragStepPause); err != nil {
+			return err
+		}
 	}
 
 	// Release at the destination.

@@ -2,9 +2,10 @@ package mouse
 
 import (
 	"context"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 	"strings"
 	"testing"
+
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
 
 func TestS4ScreenAndMouseErrorPaths(t *testing.T) {

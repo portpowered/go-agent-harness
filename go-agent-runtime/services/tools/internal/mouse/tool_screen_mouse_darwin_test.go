@@ -163,7 +163,7 @@ func TestS12DarwinMouseToolRunsCliclickSubprocess(t *testing.T) {
 	}
 
 	t.Setenv("PATH", t.TempDir())
-	if err := newMouseDriver(MouseToolOptions{}).move(1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
+	if err := newMouseDriver(MouseToolOptions{}).move(t.Context(), 1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
 		t.Fatalf("missing cliclick error = %v", err)
 	}
 }
@@ -208,9 +208,9 @@ func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
 	var sleeps recordedSleeps
 	driver := newFakeMouseDriver(process, &sleeps)
 	for _, call := range []func() error{
-		func() error { return driver.buttonDown(1, 2, "right") },
-		func() error { return driver.buttonUp(1, 2, "middle") },
-		func() error { return driver.drag(1, 2, 3, 4, "right") },
+		func() error { return driver.buttonDown(t.Context(), 1, 2, "right") },
+		func() error { return driver.buttonUp(t.Context(), 1, 2, "middle") },
+		func() error { return driver.drag(t.Context(), 1, 2, 3, 4, "right") },
 	} {
 		err := call()
 		if err == nil || !strings.Contains(err.Error(), "only supports") {
@@ -231,10 +231,10 @@ func TestS4DarwinCliclickErrors(t *testing.T) {
 		return []byte("command failed\n"), errors.New("exit status 7")
 	}}
 	driver := newFakeMouseDriver(failing, &sleeps)
-	if err := driver.click(1, 2, "left"); err == nil || !strings.Contains(err.Error(), "cliclick [c:1,2]") || !strings.Contains(err.Error(), "command failed") {
+	if err := driver.click(t.Context(), 1, 2, "left"); err == nil || !strings.Contains(err.Error(), "cliclick [c:1,2]") || !strings.Contains(err.Error(), "command failed") {
 		t.Fatalf("cliclick command error = %v", err)
 	}
-	if err := driver.drag(1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag start") {
+	if err := driver.drag(t.Context(), 1, 2, 3, 4, "left"); err == nil || !strings.Contains(err.Error(), "drag start") {
 		t.Fatalf("drag start error = %v", err)
 	}
 
@@ -244,14 +244,14 @@ func TestS4DarwinCliclickErrors(t *testing.T) {
 		}
 		return nil, errors.New("exit status 7")
 	}}
-	err := newFakeMouseDriver(stepFailure, &sleeps).drag(1, 2, 3, 4, "left")
+	err := newFakeMouseDriver(stepFailure, &sleeps).drag(t.Context(), 1, 2, 3, 4, "left")
 	if err == nil || !strings.Contains(err.Error(), "drag step 1") {
 		t.Fatalf("drag step error = %v", err)
 	}
 	assertMouseCalls(t, stepFailure, "cliclick", []string{"p:1,2", "m:1,2", "r:1,2"})
 
 	missing := &fakeMouseProcess{run: func([]string) ([]byte, error) { return nil, helperNotFound("cliclick") }}
-	if err := newFakeMouseDriver(missing, &sleeps).move(1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
+	if err := newFakeMouseDriver(missing, &sleeps).move(t.Context(), 1, 2); err == nil || !strings.Contains(err.Error(), "cliclick not found") {
 		t.Fatalf("missing cliclick error = %v", err)
 	}
 	if sleeps.total() != mouseDragPause {

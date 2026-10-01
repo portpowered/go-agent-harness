@@ -252,8 +252,11 @@ func registerUtilityTools(registry *ToolRegistry, enabled func(string) bool, ski
 	}
 }
 
+// registerTool registers one built-in default tool. The default set is fixed
+// and its names are distinct, so registration into a fresh registry cannot
+// fail.
 func registerTool(registry *ToolRegistry, tool core.Tool) {
 	if err := registry.Register(tool); err != nil {
-		panic(fmt.Errorf("register default tool %q: %w", tool.Name(), err))
+		panic(fmt.Errorf("register default tool %q: %w", tool.Name(), err)) //nolint:forbidigo // Must-style: the fixed default tool set has distinct names.
 	}
 }

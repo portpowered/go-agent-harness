@@ -5,14 +5,15 @@ package mouse
 import (
 	"bytes"
 	"context"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 	"image"
 	"image/gif"
 	"runtime"
 	"strconv"
 	"testing"
 	"unsafe"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -90,10 +91,10 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 	}
 	driver := newMouseDriver(MouseToolOptions{})
 	t.Cleanup(func() {
-		if err := driver.buttonUp(originalX, originalY, "left"); err != nil {
+		if err := driver.buttonUp(t.Context(), originalX, originalY, "left"); err != nil {
 			t.Logf("%s: cursor cleanup release failed: %v", runtime.GOOS, err)
 		}
-		if err := driver.move(originalX, originalY); err != nil {
+		if err := driver.move(t.Context(), originalX, originalY); err != nil {
 			t.Logf("%s: cursor cleanup restore failed: %v", runtime.GOOS, err)
 		}
 	})
@@ -105,7 +106,7 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 
 func assertWindowsCursorMove(t *testing.T, driver mouseDriver, targetX, targetY int) {
 	t.Helper()
-	if err := driver.move(targetX, targetY); err != nil {
+	if err := driver.move(t.Context(), targetX, targetY); err != nil {
 		t.Fatalf("%s: required live capability unavailable: cursor input (%v)", runtime.GOOS, err)
 	}
 	if x, y, err := windowsCursorPosition(); err != nil || x != targetX || y != targetY {
