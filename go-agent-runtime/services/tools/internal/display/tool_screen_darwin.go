@@ -164,7 +164,7 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, er
 	}
 	defer closeScreenCaptureFile(f)
 
-	img, err := png.Decode(contextReader{ctx: ctx, r: f})
+	img, err := png.Decode(newContextReader(ctx, f))
 	if err != nil {
 		return nil, fmt.Errorf("decode screenshot: %w", err)
 	}

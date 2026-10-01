@@ -64,14 +64,14 @@ func playbackMetricSamples() []playbackMetricDefinition {
 	}
 }
 
-func recordPlaybackSample(sampler observability.MetricSampler, sample observability.MetricSample) {
-	if err := observability.TrySample(context.Background(), sampler, sample); err != nil {
+func recordPlaybackSample(ctx context.Context, sampler observability.MetricSampler, sample observability.MetricSample) {
+	if err := observability.TrySample(ctx, sampler, sample); err != nil {
 		return
 	}
 }
 
-func recordPlaybackLog(logger observability.Logger, record observability.LogRecord) {
-	if err := observability.TryLog(context.Background(), logger, record); err != nil {
+func recordPlaybackLog(ctx context.Context, logger observability.Logger, record observability.LogRecord) {
+	if err := observability.TryLog(ctx, logger, record); err != nil {
 		return
 	}
 }
@@ -203,7 +203,9 @@ func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) devicert.RTCD
 // sessionPlaybackObservabilityObserver exports the complete synchronized
 // queue snapshot at device teardown. RTCDeviceSink invokes this observer only
 // after the native handle is closed, never from its real-time callback.
-func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDevicePlaybackObserver {
+// ctx scopes the teardown samples and logs; the device invokes the observer
+// after the handle closes, so ctx should outlive the device open call.
+func sessionPlaybackObservabilityObserver(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDevicePlaybackObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id devicegw.DeviceID, stats audio.PlaybackQueueStats) {
@@ -213,7 +215,7 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 			"channels":    strconv.Itoa(stats.Format.Channels),
 		}
 		for _, definition := range playbackMetricSamples() {
-			recordPlaybackSample(sampler, observability.MetricSample{
+			recordPlaybackSample(ctx, sampler, observability.MetricSample{
 				Name: definition.name, Kind: definition.kind, Unit: definition.unit,
 				Value: definition.value(stats), Fields: fields,
 			})
@@ -227,13 +229,13 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 		logFields["underflow_samples"] = strconv.FormatUint(stats.UnderflowSamples, 10)
 		logFields["zero_filled_samples"] = strconv.FormatUint(stats.ZeroFilledSamples, 10)
 		logFields["rendered_samples"] = strconv.FormatUint(stats.RenderedSamples, 10)
-		recordPlaybackLog(logger, observability.LogRecord{
+		recordPlaybackLog(ctx, logger, observability.LogRecord{
 			Level: level, Message: SessionLogMessagePlaybackSnapshot, Fields: logFields,
 		})
 	}
 }
 
-func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDeviceCaptureObserver {
+func sessionCaptureObservabilityObserver(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDeviceCaptureObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id devicegw.DeviceID, stats audio.CaptureQueueStats) {
@@ -251,7 +253,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 			{Name: "audio.capture.sequence_gaps", Kind: "counter", Value: float64(stats.SequenceGaps), Unit: "gaps", Fields: fields},
 		}
 		for _, sample := range metrics {
-			recordPlaybackSample(sampler, sample)
+			recordPlaybackSample(ctx, sampler, sample)
 		}
 		level := "info"
 		if stats.DroppedSamples > 0 || stats.SequenceGaps > 0 {
@@ -260,7 +262,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 		fields["dropped_frames"] = strconv.FormatUint(stats.DroppedFrames, 10)
 		fields["dropped_samples"] = strconv.FormatUint(stats.DroppedSamples, 10)
 		fields["sequence_gaps"] = strconv.FormatUint(stats.SequenceGaps, 10)
-		recordPlaybackLog(logger, observability.LogRecord{
+		recordPlaybackLog(ctx, logger, observability.LogRecord{
 			Level: level, Message: "audio capture queue finalized", Fields: fields,
 		})
 	}
@@ -299,11 +301,11 @@ func NewPlaybackDiagnostics(options sessiontrace.PlaybackDiagnosticsOptions) ses
 	return playbackDiagnostics{options: options}
 }
 
-func (p playbackDiagnostics) PlaybackObserver(existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver {
+func (p playbackDiagnostics) PlaybackObserver(ctx context.Context, existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver {
 	return combineRTCDevicePlaybackObservers(
 		existing,
 		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(p.options.Sink)),
-		sessionPlaybackObservabilityObserver(p.options.MetricSampler, p.options.Logger),
+		sessionPlaybackObservabilityObserver(ctx, p.options.MetricSampler, p.options.Logger),
 	)
 }
 
@@ -314,8 +316,8 @@ func (p playbackDiagnostics) PlaybackReceiptObserver(existing devicert.RTCDevice
 	return combineRTCDevicePlaybackReceiptObservers(existing, p.options.Runtime.AudioPlaybackReceipt)
 }
 
-func (p playbackDiagnostics) CaptureObserver(existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver {
-	return combineRTCDeviceCaptureObservers(existing, sessionCaptureObservabilityObserver(p.options.MetricSampler, p.options.Logger))
+func (p playbackDiagnostics) CaptureObserver(ctx context.Context, existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver {
+	return combineRTCDeviceCaptureObservers(existing, sessionCaptureObservabilityObserver(ctx, p.options.MetricSampler, p.options.Logger))
 }
 
 func (p playbackDiagnostics) RecordParticipantPlaybackOverflow(participant string, output *devicegw.DeviceSink) {

@@ -69,22 +69,33 @@ func (f DisplayCapturerFunc) Capture(ctx context.Context, display int, bounds im
 	return f(ctx, display, bounds)
 }
 
+// contextErrFunc returns the cancellation check an I/O adapter consults
+// between calls; a nil context never cancels.
+func contextErrFunc(ctx context.Context) func() error {
+	if ctx == nil {
+		return func() error { return nil }
+	}
+	return ctx.Err
+}
+
+// contextReader stops a read once its context ends. It keeps only the
+// context's error accessor rather than the context itself.
 type contextReader struct {
-	ctx context.Context
+	err func() error
 	r   io.Reader
 }
 
+func newContextReader(ctx context.Context, r io.Reader) contextReader {
+	return contextReader{err: contextErrFunc(ctx), r: r}
+}
+
 func (r contextReader) Read(p []byte) (int, error) {
-	if r.ctx != nil {
-		if err := r.ctx.Err(); err != nil {
-			return 0, err
-		}
+	if err := r.err(); err != nil {
+		return 0, err
 	}
 	n, err := r.r.Read(p)
-	if r.ctx != nil {
-		if ctxErr := r.ctx.Err(); ctxErr != nil {
-			return n, ctxErr
-		}
+	if ctxErr := r.err(); ctxErr != nil {
+		return n, ctxErr
 	}
 	return n, err
 }
@@ -333,9 +344,6 @@ func screenRecordingPermissionText(text string) bool {
 const screenScreenshotBound = 5 * time.Second
 
 func boundedScreenContext(ctx context.Context, limit time.Duration) (context.Context, func()) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if limit <= 0 {
 		return ctx, func() {}
 	}

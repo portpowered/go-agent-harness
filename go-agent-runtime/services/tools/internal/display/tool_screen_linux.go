@@ -142,7 +142,7 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (result *image.R
 	}
 	defer func() { result, resultErr = finishScreenshotFile(result, resultErr, f) }()
 
-	img, err := png.Decode(contextReader{ctx: ctx, r: f})
+	img, err := png.Decode(newContextReader(ctx, f))
 	if err != nil {
 		return nil, fmt.Errorf("decode screenshot: %w", err)
 	}

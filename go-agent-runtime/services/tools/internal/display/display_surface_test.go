@@ -176,17 +176,17 @@ func TestScreenToolUnavailableAndCommandFailureNeverReturnPixels(t *testing.T) {
 
 func TestScreenToolCanceledAndTimedOutContextsAreClassified(t *testing.T) {
 	for _, tt := range []struct {
-		name  string
-		ctx   context.Context
-		state ScreenCaptureState
-		want  error
+		name    string
+		context func() context.Context
+		state   ScreenCaptureState
+		want    error
 	}{
-		{name: "canceled", ctx: canceledContext(), state: ScreenCaptureCanceled, want: context.Canceled},
-		{name: "timed out", ctx: expiredContext(), state: ScreenCaptureTimedOut, want: context.DeadlineExceeded},
+		{name: "canceled", context: canceledContext, state: ScreenCaptureCanceled, want: context.Canceled},
+		{name: "timed out", context: expiredContext, state: ScreenCaptureTimedOut, want: context.DeadlineExceeded},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			surface := &scriptedDisplaySurface{capability: UsableDisplayCapability(1)}
-			msgs, err := NewScreenToolWithDisplaySurface(surface).Execute(tt.ctx, map[string]any{"action": "screenshot"})
+			msgs, err := NewScreenToolWithDisplaySurface(surface).Execute(tt.context(), map[string]any{"action": "screenshot"})
 			var captureErr *ScreenCaptureError
 			if err == nil || !errors.As(err, &captureErr) || captureErr.State != tt.state || msgs != nil {
 				t.Fatalf("context failure result = %#v, err = %v", msgs, err)

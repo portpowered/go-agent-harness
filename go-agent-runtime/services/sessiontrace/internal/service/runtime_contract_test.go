@@ -157,7 +157,7 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 		Runtime: NewRuntimeRecorder(runtimeObserver, clock.Real{}),
 	})
 	playbackCalls := 0
-	playbackObserver := diagnostics.PlaybackObserver(func(devicegw.DeviceID, audio.PlaybackQueueStats) { playbackCalls++ })
+	playbackObserver := diagnostics.PlaybackObserver(t.Context(), func(devicegw.DeviceID, audio.PlaybackQueueStats) { playbackCalls++ })
 	playbackObserver(devicegw.DeviceID("virtual:output"), audio.PlaybackQueueStats{
 		Format: audio.DeviceFormat{SampleRate: 16000, Channels: 1}, DroppedSamples: 2, OverflowEvents: 1,
 	})
@@ -166,7 +166,7 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 	}
 	receiptObserver := diagnostics.PlaybackReceiptObserver(nil)
 	receiptObserver(audio.PlaybackReceipt{CommandID: 7, Epoch: 2, Applied: true})
-	captureObserver := diagnostics.CaptureObserver(nil)
+	captureObserver := diagnostics.CaptureObserver(t.Context(), nil)
 	captureObserver(devicegw.DeviceID("virtual:input"), audio.CaptureQueueStats{CapturedSamples: 4, DroppedSamples: 1, DropPolicy: "drop_oldest"})
 	diagnostics.RecordParticipantPlaybackOverflow("participant-1", nil)
 	if len(runtimeObserver.snapshot()) != 1 {
@@ -366,7 +366,7 @@ func TestTraceDeviceServiceCoversOptionalCapabilitiesAndHandleLifecycle(t *testi
 
 	monitor := &remoteRenderMonitor{endpoint: "not-an-endpoint", observer: func(int, []int16) {}, done: make(chan struct{})}
 	monitorHandle := &traceDeviceHandle{inner: &traceContractHandle{}, monitor: monitor}
-	monitor.Start()
+	monitor.Start(t.Context())
 	if err := monitorHandle.Close(); err != nil {
 		t.Fatal(err)
 	}

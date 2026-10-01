@@ -196,9 +196,11 @@ type PlaybackDiagnosticsOptions struct {
 }
 
 type PlaybackDiagnostics interface {
-	PlaybackObserver(devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver
+	// PlaybackObserver and CaptureObserver report teardown statistics under
+	// ctx, which must outlive the device they observe.
+	PlaybackObserver(ctx context.Context, existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver
 	PlaybackReceiptObserver(devicert.RTCDevicePlaybackReceiptObserver) devicert.RTCDevicePlaybackReceiptObserver
-	CaptureObserver(devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver
+	CaptureObserver(ctx context.Context, existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver
 	RecordParticipantPlaybackOverflow(string, *devicegw.DeviceSink)
 }
 

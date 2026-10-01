@@ -106,8 +106,8 @@ func TestTraceDeviceAdapterEdgePolicies(t *testing.T) {
 		t.Fatalf("empty sample source close = %v", err)
 	}
 	var nilContext context.Context
-	if remoteRenderProbeContext(nilContext) == nil {
-		t.Fatal("nil remote probe context returned nil")
+	if _, err := newRemoteRenderMonitor(nilContext, runtimeDevices.Request{RemoteEndpoint: "unused"}, nil, func(int, []int16) {}); err == nil {
+		t.Fatal("nil context unexpectedly created a remote render monitor")
 	}
 	if _, err := newRemoteRenderMonitor(context.Background(), runtimeDevices.Request{}, nil, func(int, []int16) {}); err == nil {
 		t.Fatal("empty remote render request unexpectedly created a monitor")
