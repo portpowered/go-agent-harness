@@ -200,6 +200,14 @@ func NewErrorValueWithClassification(message, classification string) *ErrorValue
 	return &ErrorValue{Type: "error", Message: message, Classification: classification}
 }
 
+// NewToolExecutionErrorValue returns the nonterminal tool-execution
+// diagnostic for err, keeping err for in-process errors.Is/errors.As.
+func NewToolExecutionErrorValue(err error) *ErrorValue {
+	value := NewNonTerminalErrorValue(err.Error(), ToolExecutionErrorClassification)
+	value.Err = err
+	return value
+}
+
 // NewNonTerminalErrorValue returns an informational ERROR diagnostic. It is
 // intentionally opt-in; ordinary ERROR values continue to terminate streams.
 func NewNonTerminalErrorValue(message, classification string) *ErrorValue {

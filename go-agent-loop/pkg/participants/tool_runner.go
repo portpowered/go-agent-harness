@@ -116,13 +116,9 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 		// this nonterminal ERROR instead of converting the diagnostic into a
 		// provider/engine failure.
 		errStreamID := mustStreamID("tool-error")
-		value := messages.NewNonTerminalErrorValue(err.Error(), messages.ToolExecutionErrorClassification)
-		// Keep the typed error so in-process consumers can match the tool's
-		// own error with errors.Is/errors.As.
-		value.Err = err
 		r.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type:               messages.StreamTypeError,
-			Value:              value,
+			Value:              messages.NewToolExecutionErrorValue(err),
 			ActorID:            messages.Tool,
 			ActorStreamID:      errStreamID,
 			ActorProvidedIndex: 0,
