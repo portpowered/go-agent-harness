@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
@@ -122,12 +123,16 @@ func closeIfOpen(conn *websocket.Conn) error {
 	return conn.Close()
 }
 
+// serveReadHeaderTimeout bounds how long a test server waits for a client's
+// request headers, so a stalled client cannot pin a server goroutine.
+const serveReadHeaderTimeout = 10 * time.Second
+
 // Serve runs handler on listener until the test ends. t's cleanup closes the
 // server and then every connection the listener accepted: http.Server.Close
 // does not close hijacked connections (WebSocket upgrades), so the listener
 // closes them, and no handler stays blocked reading one.
 func Serve(t interface{ Cleanup(func()) }, listener *PipeListener, handler http.Handler) {
-	server := &http.Server{Handler: handler}
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: serveReadHeaderTimeout}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

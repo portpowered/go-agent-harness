@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"syscall"
 	"testing"
@@ -105,4 +106,27 @@ func TestPipeListenerStopsAcceptingAndDialingWhenClosed(t *testing.T) {
 	if _, err := NewPipeListener().DialContext(ctx, "tcp", "provider:443"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("dial with cancelled context = %v, want context.Canceled", err)
 	}
+}
+
+// A client that never finishes its request headers is disconnected once the
+// server's header deadline passes instead of holding the connection open.
+func TestServeDisconnectsStalledRequestHeaders(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		listener := NewPipeListener()
+		Serve(t, listener, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		client, err := listener.DialContext(t.Context(), pipeNetwork, "")
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		defer func() { _ = client.Close() }()
+		if _, err := client.Write([]byte("GET / HTTP/1.1\r\nHost: pipe\r\n")); err != nil {
+			t.Fatalf("write partial headers: %v", err)
+		}
+		if err := client.SetReadDeadline(time.Now().Add(serveReadHeaderTimeout + time.Second)); err != nil {
+			t.Fatalf("set deadline: %v", err)
+		}
+		if _, err := io.ReadAll(client); err != nil {
+			t.Fatalf("stalled client read = %v, want server disconnect before the client deadline", err)
+		}
+	})
 }

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -132,7 +131,7 @@ func TestRTCDeviceSinkCapturedFirstTurnPreservesPacedVirtualPlayback(t *testing.
 
 func loadCrackleCaptureFirstTurn(t *testing.T) []int16 {
 	t.Helper()
-	encoded, err := os.ReadFile(filepath.Join(crackleCapturePCMFixture))
+	encoded, err := os.ReadFile(crackleCapturePCMFixture)
 	if err != nil {
 		t.Fatalf("read captured first-turn fixture: %v", err)
 	}

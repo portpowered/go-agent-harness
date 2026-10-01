@@ -494,6 +494,13 @@ func verifyManagedChromeArchive(archivePath, expectedSHA string) bool {
 }
 
 func extractManagedChromeArchive(archivePath, destination string) error {
+	return extractManagedChromeArchiveWithin(archivePath, destination, chromeArchiveExtractLimit)
+}
+
+// extractManagedChromeArchiveWithin extracts at most limit decompressed bytes
+// across every regular entry, so a hostile or corrupted archive cannot expand
+// without bound on disk.
+func extractManagedChromeArchiveWithin(archivePath, destination string, limit int64) error {
 	archive, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return err
@@ -509,7 +516,7 @@ func extractManagedChromeArchive(archivePath, destination string) error {
 			symlinks = append(symlinks, entry)
 			continue
 		}
-		if err := extractManagedChromeEntry(entry, filepath.Join(destination, filepath.FromSlash(name))); err != nil {
+		if err := extractManagedChromeEntry(entry, filepath.Join(destination, filepath.FromSlash(name)), &limit); err != nil {
 			return err
 		}
 	}
@@ -521,7 +528,7 @@ func extractManagedChromeArchive(archivePath, destination string) error {
 	return nil
 }
 
-func extractManagedChromeEntry(entry *zip.File, target string) error {
+func extractManagedChromeEntry(entry *zip.File, target string, remaining *int64) error {
 	if entry.FileInfo().IsDir() {
 		return os.MkdirAll(target, chromeArchiveDirMode)
 	}
@@ -534,7 +541,12 @@ func extractManagedChromeEntry(entry *zip.File, target string) error {
 	}
 	file, createErr := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, chromeArchiveDefaultFileMode)
 	if createErr == nil {
-		_, createErr = io.Copy(file, reader)
+		var written int64
+		written, createErr = io.Copy(file, io.LimitReader(reader, *remaining+1))
+		*remaining -= written
+		if createErr == nil && *remaining < 0 {
+			createErr = errChromeArchiveTooLarge
+		}
 		closeErr := file.Close()
 		if createErr == nil {
 			createErr = closeErr
@@ -589,6 +601,12 @@ const chromeArchiveDefaultFileMode os.FileMode = 0o600
 const chromeArchiveDirMode os.FileMode = 0o700
 
 const chromeArchiveSymlinkTargetLimit = 4096
+
+// chromeArchiveExtractLimit bounds the total decompressed size of a managed
+// Chrome archive; real Chrome for Testing builds expand to well under 2 GiB.
+const chromeArchiveExtractLimit int64 = 4 << 30
+
+var errChromeArchiveTooLarge = errors.New("chrome for testing archive expands beyond the extraction safety bound")
 
 func validateChromeArchivePath(raw string) error {
 	_, err := validateChromeArchivePathValue(raw)

@@ -451,7 +451,7 @@ func assertInvalidToolInputIssue(t *testing.T, content, wantPath, wantCode strin
 
 func assertInvokeOutputPreserved(t *testing.T, executor *Executor, broker *recordingBroker, output string) {
 	t.Helper()
-	broker.invokeResult.InvocationID = webmcp.InvocationID("inv-" + strings.ReplaceAll(output, "", ""))
+	broker.invokeResult.InvocationID = webmcp.InvocationID("inv-" + output)
 	broker.invokeResult.Output = json.RawMessage(output)
 	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-output", Name: webmcp.InvokeToolName, Arguments: `{"tool_ref":"webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw","input_json":"{}","reason":"read it"}`})
 	if err != nil {
