@@ -1,8 +1,7 @@
 package main
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -27,7 +28,8 @@ func main() {
 	manualClock := flag.Bool("manual-clock", false, "advance device callbacks only through the test control API")
 	flag.Parse()
 
-	listener, err := net.Listen("tcp", *listenAddress)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(context.Background(), "tcp", *listenAddress)
 	if err != nil {
 		fatal(err)
 	}

@@ -451,7 +451,7 @@ func runSIGINTAgent(t *testing.T, fixture *sigintRealtimeFixture, workDir, recor
 		"--max-duration", "30s",
 		"sigint " + toolName,
 	}
-	command := exec.Command(buildAgentBinary(t), args...)
+	command := exec.CommandContext(t.Context(), buildAgentBinary(t), args...)
 	command.Dir = workDir
 	command.Env = append(os.Environ(),
 		"HTTP_PROXY=http://127.0.0.1:1",

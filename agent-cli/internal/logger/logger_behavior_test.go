@@ -532,7 +532,7 @@ func TestAdaptersTerminalMethodsInSubprocess(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := exec.Command(os.Args[0], "-test.run=^TestAdaptersTerminalMethodsInSubprocess$", "-test.count=1")
+			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAdaptersTerminalMethodsInSubprocess$", "-test.count=1")
 			cmd.Env = append(os.Environ(), helperEnv+"="+test.mode)
 			output, err := cmd.CombinedOutput()
 			if err == nil {

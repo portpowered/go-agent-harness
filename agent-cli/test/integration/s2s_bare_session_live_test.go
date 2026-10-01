@@ -50,7 +50,7 @@ func TestLiveBareSessionDefaultDevicesStartsAndStops(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	cmd := exec.Command(buildAgentBinary(t), "session")
+	cmd := exec.CommandContext(t.Context(), buildAgentBinary(t), "session")
 	cmd.Dir = agentCLIRoot(t)
 	cmd.Env = bareSessionLiveEnvironment(home, apiKey)
 	if len(cmd.Args) != 2 || cmd.Args[1] != "session" {

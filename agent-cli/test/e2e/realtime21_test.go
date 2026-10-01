@@ -36,7 +36,7 @@ func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
 	root := repositoryRoot(t)
 	tmp := t.TempDir()
 	binaryPath := filepath.Join(tmp, "yui")
-	build := exec.Command("go", "build", "-o", binaryPath, "./agent-cli/cmd/yui")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binaryPath, "./agent-cli/cmd/yui")
 	build.Dir = root
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build binary: %v\n%s", err, output)

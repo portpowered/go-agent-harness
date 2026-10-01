@@ -69,7 +69,7 @@ func runIntegrationTests(m *testing.M) int {
 			}
 		}()
 	}
-	if err := buildIntegrationBinaries(dir); err != nil {
+	if err := buildIntegrationBinaries(context.Background(), dir); err != nil {
 		panic(err.Error())
 	}
 	// Tests resolve the binaries from this directory (integrationBinaryPath).
@@ -83,7 +83,7 @@ func runIntegrationTests(m *testing.M) int {
 // for this package. Missing binaries are built into it and kept for reuse.
 const sharedBinaryDirEnv = "AGENT_CLI_INTEGRATION_SHARED_DIR"
 
-func buildIntegrationBinaries(dir string) error {
+func buildIntegrationBinaries(ctx context.Context, dir string) error {
 	// The binaries are independent link targets over a shared build cache;
 	// building them concurrently removes two serial links from package setup.
 	builds := []struct{ name, output, source string }{
@@ -103,7 +103,7 @@ func buildIntegrationBinaries(dir string) error {
 			// Link to a temporary name and rename, so a concurrent reader of
 			// the shared directory never executes a partially written binary.
 			partial := fmt.Sprintf("%s.partial-%d", build.output, os.Getpid())
-			cmd := exec.Command("go", "build", "-o", partial, build.source)
+			cmd := exec.CommandContext(ctx, "go", "build", "-o", partial, build.source)
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
 				errs[index] = fmt.Errorf("build %s binary: %w", build.name, err)
@@ -165,7 +165,7 @@ func runAgentInProcess(t *testing.T, args ...string) s2sV2DCLIResult {
 
 func runAgentBinary(t *testing.T, args ...string) s2sV2DCLIResult {
 	t.Helper()
-	cmd := exec.Command(agentBinaryPath(), args...)
+	cmd := exec.CommandContext(t.Context(), agentBinaryPath(), args...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

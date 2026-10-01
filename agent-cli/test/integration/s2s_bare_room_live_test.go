@@ -138,7 +138,7 @@ type bareRoomLiveProcess struct {
 
 func startBareRoomLiveProbe(t *testing.T, configDir, apiKey string) (*bareRoomLiveProcess, error) {
 	t.Helper()
-	command := exec.Command(buildAgentBinary(t), bareRoomLiveProbeArgs(configDir)...)
+	command := exec.CommandContext(t.Context(), buildAgentBinary(t), bareRoomLiveProbeArgs(configDir)...)
 	command.Dir = agentCLIRoot(t)
 	command.Env = bareRoomLiveProbeEnvironment(apiKey)
 

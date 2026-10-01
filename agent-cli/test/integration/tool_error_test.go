@@ -301,7 +301,7 @@ func TestNegativeControlUnhandledPanicDetectedByParent(t *testing.T) {
 	if os.Getenv(toolErrorPanicHelperEnv) != "" {
 		t.Skip("parent-side assertion for the panic control")
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=TestNegativeControlUnhandledPanicFailsScenario", "-test.count=1")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=TestNegativeControlUnhandledPanicFailsScenario", "-test.count=1")
 	cmd.Env = append(os.Environ(), toolErrorPanicHelperEnv+"=1")
 	var out strings.Builder
 	cmd.Stdout = &out

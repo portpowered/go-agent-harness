@@ -58,7 +58,7 @@ func TestTimeoutFixtureSuccess(t *testing.T) {
 func startFixtureProcess(t *testing.T, mode, testName string) *os.Process {
 	t.Helper()
 	args := []string{"-test.v", "-test.count=1", "-test.run", "^(" + testName + ")$"}
-	cmd := exec.Command(os.Args[0], args...)
+	cmd := exec.CommandContext(t.Context(), os.Args[0], args...)
 	cmd.Env = fixtureEnvironment(mode)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

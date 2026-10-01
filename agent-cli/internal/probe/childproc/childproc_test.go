@@ -122,7 +122,7 @@ func TestProcessControlWithoutStartedChild(t *testing.T) {
 	if err := Terminate(nil); err != nil {
 		t.Fatalf("Terminate(nil) = %v", err)
 	}
-	unstarted := exec.Command(os.Args[0])
+	unstarted := exec.CommandContext(t.Context(), os.Args[0])
 	if err := Terminate(unstarted); err != nil {
 		t.Fatalf("Terminate(unstarted) = %v", err)
 	}
@@ -144,7 +144,7 @@ func TestHelperProcess(t *testing.T) {
 }
 
 func TestProcessControlReapsStartedChild(t *testing.T) {
-	child := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
+	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestHelperProcess$")
 	child.Env = append(os.Environ(), helperEnv+"=1")
 	Prepare(child)
 	if err := child.Start(); err != nil {
