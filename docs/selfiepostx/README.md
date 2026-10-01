@@ -305,8 +305,13 @@ Passed:
 ```powershell
 go build -o <output>/yui-selfiepostx.exe ./agent-cli/cmd/yui
 go test ./agent-cli/internal/transport/cli -run 'Test(ReadXVideo|DecodeXVideoReply|WebMCPDirectCommandTreeIsFrozen|WebMCPDirectFlagsUseOneUnprefixedSpelling)$' -count=1
-go test -tags e2e ./agent-cli/internal/webmcp/chrome -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v
+$env:WEBMCP_SITE_ADAPTER_INTEGRATION='1'
+go test ./agent-cli/internal/webmcp/chrome -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v
 ```
+
+(Historical record. The stock-Chrome journey is now selected by the `e2e`
+build tag instead of `WEBMCP_SITE_ADAPTER_INTEGRATION=1`:
+`go test -tags e2e ./agent-cli/internal/webmcp/chrome -run '^TestBundledSiteAdaptersStockChromeJourneys$/^x$' -count=1 -v`.)
 
 The fixture covers text publishing, missing confirmation, mismatched text,
 duplicate tokens, video transfer, incomplete upload, wrong account, reordered
