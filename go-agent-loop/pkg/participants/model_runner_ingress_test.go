@@ -180,7 +180,7 @@ func TestSessionIngress_CancelPriorityRespectsQueuedControls(t *testing.T) {
 // later interrupt would lose its priority lane.
 func TestSessionIngress_RejectedControlReleasesCancelPriority(t *testing.T) {
 	runner := NewSessionModelRunner(nil, 8, nil)
-	for i := 0; i < cap(runner.ingress.ordered); i++ {
+	for i := range cap(runner.ingress.ordered) {
 		admit(t, runner, audioInput(byte(i)))
 	}
 	err := runner.EnqueueSessionInput(context.Background(), SessionMessage(messages.NewTextMessage(messages.RoleUser, "x"), true), SessionAdmitOrFail)
