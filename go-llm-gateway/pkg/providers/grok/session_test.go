@@ -283,7 +283,7 @@ func TestSession_RTCMediaBridgesProviderAudioPath(t *testing.T) {
 
 	want := make([]int16, 720)
 	for index := range want {
-		want[index] = int16((index*73)%24000 - 12000) //nolint:gosec // bounded test tone
+		want[index] = int16((index*73)%24000 - 12000)
 	}
 	if err := endpoints.Outbound.WriteFrame(ctx, sharedaudio.PCMFrame{Samples: want}); err != nil {
 		t.Fatalf("write RTC outbound frame: %v", err)
