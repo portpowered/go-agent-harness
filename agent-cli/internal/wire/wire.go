@@ -38,6 +38,7 @@ import (
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
+	gatewaylogging "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"net/http"
 )
@@ -199,6 +200,48 @@ func (l sessionLoopLogger) Panic(message string, fields ...looplogging.Field) {
 	l.emit("panic", message, fields)
 }
 
+// provideProviderLogger adapts the application's explicit logging port to the
+// gateway provider logger contract so realtime provider diagnostics (send-queue
+// overflow, dropped messages, unclaimed RTC media) reach the host log instead
+// of the providers' no-op default.
+func provideProviderLogger(logger Logger) gatewaylogging.Logger {
+	return providerGatewayLogger{loop: sessionLoopLogger{sink: logger}}
+}
+
+type providerGatewayLogger struct{ loop sessionLoopLogger }
+
+func (l providerGatewayLogger) emit(level, message string, fields []gatewaylogging.Field) {
+	converted := make([]looplogging.Field, len(fields))
+	for i, field := range fields {
+		converted[i] = looplogging.Field{Key: field.Key, Value: field.Value}
+	}
+	l.loop.emit(level, message, converted)
+}
+
+func (l providerGatewayLogger) Debug(message string, fields ...gatewaylogging.Field) {
+	l.emit("debug", message, fields)
+}
+
+func (l providerGatewayLogger) Info(message string, fields ...gatewaylogging.Field) {
+	l.emit("info", message, fields)
+}
+
+func (l providerGatewayLogger) Warn(message string, fields ...gatewaylogging.Field) {
+	l.emit("warn", message, fields)
+}
+
+func (l providerGatewayLogger) Error(message string, fields ...gatewaylogging.Field) {
+	l.emit("error", message, fields)
+}
+
+func (l providerGatewayLogger) Fatal(message string, fields ...gatewaylogging.Field) {
+	l.emit("fatal", message, fields)
+}
+
+func (l providerGatewayLogger) Panic(message string, fields ...gatewaylogging.Field) {
+	l.emit("panic", message, fields)
+}
+
 // provideProviderService keeps the concrete provider graph at the host
 // composition edge. The runtime receives only providers.Service and never
 // discovers an HTTP client or credential source on its own.
@@ -210,7 +253,7 @@ func provideProviderCaptureService(source Clock) runtimeRecording.ProviderCaptur
 	return recordingwire.NewProviderCaptureService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service) (runtimeproviders.FullService, error) {
+func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service, providerLogger gatewaylogging.Logger) (runtimeproviders.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
@@ -221,6 +264,7 @@ func provideProviderService(clockSource Clock, recordingService runtimeRecording
 		ProviderCapture: providerCaptureService,
 		Replay:          replayService,
 		Clock:           timerSource,
+		Logger:          providerLogger,
 	}), nil
 }
 
@@ -314,6 +358,7 @@ var CliSet = wire.NewSet(
 	provideSessionDisplaySurface,
 	provideTextSessionService,
 	provideSessionLogger,
+	provideProviderLogger,
 	provideProviderService,
 	provideProviderServiceRole,
 	provideProviderSessionServiceRole,

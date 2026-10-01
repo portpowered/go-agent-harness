@@ -13,6 +13,7 @@ import (
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	grokprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
@@ -148,13 +149,14 @@ func closeProviderReplay(prepared runtimeReplay.LivePrepared, err error) error {
 	return errors.Join(err, prepared.Close())
 }
 
-func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, model string, dialer transport.Dialer) (llmproviders.SessionProvider, error) {
+func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, model string, dialer transport.Dialer, logger logging.Logger) (llmproviders.SessionProvider, error) {
 	switch providerName {
 	case providerOpenAI, "openrouter", "local", "":
 		options := []openaiprovider.Option{
 			openaiprovider.WithAPIKey(cfg.APIKey),
 			openaiprovider.WithModel(model),
 			openaiprovider.WithWebSocketDialer(dialer),
+			openaiprovider.WithLogger(logger),
 		}
 		if cfg.ReplayPath != "" {
 			options = append(options, openaiprovider.WithSessionWriteBackpressure())
@@ -175,6 +177,7 @@ func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, mode
 		options := []grokprovider.Option{
 			grokprovider.WithAPIKey(cfg.APIKey),
 			grokprovider.WithWebSocketDialer(dialer),
+			grokprovider.WithLogger(logger),
 		}
 		baseURL := strings.TrimSpace(cfg.RealtimeURL)
 		if baseURL == "" {
@@ -278,7 +281,7 @@ func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider str
 }
 
 func (s *Service) buildSessionInferencer(cfg runtimeproviders.SessionConfig, provider, model string, dialer transport.Dialer, prepared runtimeReplay.LivePrepared) (messages.SessionInferencer, error) {
-	providerClient, err := buildSessionProvider(cfg, provider, model, dialer)
+	providerClient, err := buildSessionProvider(cfg, provider, model, dialer, s.logger)
 	if err != nil {
 		return nil, err
 	}
