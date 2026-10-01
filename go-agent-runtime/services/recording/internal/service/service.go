@@ -80,8 +80,13 @@ func (s *Service) OpenLiveEvidence(options recording.LiveEvidenceOptions) (sessi
 	return evidence.New(options, s.clock)
 }
 
-//nolint:contextcheck // Finalization must finish after cancellation and supports nil request contexts.
+// RunLiveEvidence runs the callback with live evidence and finalizes the
+// evidence afterwards under a context detached from ctx's cancellation, so a
+// cancelled run is still recorded.
 func (s *Service) RunLiveEvidence(ctx context.Context, options recording.LiveEvidenceOptions, run func(context.Context, recording.LiveEvidence) error) (runErr error) {
+	if ctx == nil {
+		return errors.New("recording runtime context is required")
+	}
 	if run == nil {
 		return errors.New("recording runtime callback is required")
 	}
@@ -91,6 +96,7 @@ func (s *Service) RunLiveEvidence(ctx context.Context, options recording.LiveEvi
 		return err
 	}
 	evidence := &liveEvidence{recorder: recorder, options: options, clock: s.clock}
+	finalizeCtx := context.WithoutCancel(ctx)
 	defer func() {
 		panicValue := recover()
 		terminalErr := runErr
@@ -99,20 +105,16 @@ func (s *Service) RunLiveEvidence(ctx context.Context, options recording.LiveEvi
 		}
 		if !evidence.hasCompletion() {
 			completion := recording.LiveCompletion{RunError: terminalErr}
-			if err := evidence.SetCompletion(context.Background(), completion); err != nil {
+			if err := evidence.SetCompletion(finalizeCtx, completion); err != nil {
 				runErr = errors.Join(runErr, err)
 			}
 		}
 		failure := evidence.failure()
 		terminalErr = errors.Join(terminalErr, failure)
 		runErr = errors.Join(runErr, failure)
-		finalizeCtx := context.Background()
-		if ctx != nil {
-			finalizeCtx = context.WithoutCancel(ctx)
-		}
 		runErr = errors.Join(runErr, recorder.Finalize(finalizeCtx, terminalErr))
 		if panicValue != nil {
-			panic(panicValue)
+			panic(panicValue) //nolint:forbidigo // Re-raises the callback's own panic once its evidence is finalized.
 		}
 	}()
 	return run(ctx, evidence)

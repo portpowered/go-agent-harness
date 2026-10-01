@@ -18,22 +18,18 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-func TestRunLiveEvidenceFinalizesWithNilRequestContext(t *testing.T) {
+func TestRunLiveEvidenceRejectsNilRequestContextBeforeOpeningEvidence(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "nil-context-recording")
 	service := New(clock.Real{})
-	// A typed nil exercises public normalization of a nil request context.
 	var nilContext context.Context
 	if err := service.RunLiveEvidence(nilContext, recording.LiveEvidenceOptions{Destination: destination}, func(context.Context, recording.LiveEvidence) error {
+		t.Fatal("callback ran without a request context")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
+	}); err == nil {
+		t.Fatal("nil request context was accepted")
 	}
-	manifest, err := os.ReadFile(filepath.Join(destination, "manifest.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(manifest), string(messages.TerminalReasonLoopSynthesizedCompletion)) {
-		t.Fatalf("nil-context run was not finalized: %s", manifest)
+	if _, err := os.Stat(destination); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("nil-context run opened evidence at %s: %v", destination, err)
 	}
 }
 

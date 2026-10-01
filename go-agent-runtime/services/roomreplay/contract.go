@@ -343,8 +343,8 @@ type Contribution struct {
 // return fresh projections, so concurrent hosts cannot share mutable parser or
 // filesystem state through the service graph.
 type Service interface {
-	Load(string) (RoomReplayPlan, error)
-	LoadAudioBundle(string) (RoomReplayAudioBundle, error)
+	Load(ctx context.Context, bundle string) (RoomReplayPlan, error)
+	LoadAudioBundle(ctx context.Context, bundle string) (RoomReplayAudioBundle, error)
 	ValidateOutput(RoomReplayPlan, string) error
 	Build(context.Context, BuildRequest) (Schedule, error)
 }

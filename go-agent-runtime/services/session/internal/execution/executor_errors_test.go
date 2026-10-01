@@ -80,7 +80,7 @@ func TestValidateInputMimeTypesUsesResolvedCatalog(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			exec := validationExecutor(t, test.catalog, test.relaxed)
-			err := exec.validateInputMimeTypes(&Config{}, validationRunData(test.catalog), input)
+			err := exec.validateInputMimeTypes(validationRunData(test.catalog), input)
 			if test.wantError == "" {
 				if err != nil {
 					t.Fatalf("validateInputMimeTypes() error = %v, want nil", err)
@@ -94,7 +94,7 @@ func TestValidateInputMimeTypesUsesResolvedCatalog(t *testing.T) {
 
 func TestValidateInputMimeTypesSkipsEmptyInput(t *testing.T) {
 	exec := validationExecutor(t, ModelCatalog{Models: []ModelInfo{{Name: "test-model", SupportedInputMimeTypes: []string{"image/png"}}}}, false)
-	if err := exec.validateInputMimeTypes(&Config{}, validationRunData(exec.resolvedCatalog), agentloop.ExecuteInput{}); err != nil {
+	if err := exec.validateInputMimeTypes(validationRunData(exec.resolvedCatalog), agentloop.ExecuteInput{}); err != nil {
 		t.Fatalf("empty input validation error = %v, want nil", err)
 	}
 }

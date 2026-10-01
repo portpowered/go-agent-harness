@@ -332,7 +332,7 @@ func (e *Executor) runIteration(ctx context.Context, cfg *Config, iteration, max
 
 	if buildErr != nil {
 		execErr = buildErr
-	} else if mimeErr := e.validateInputMimeTypes(&iterCfg, runData, input); mimeErr != nil {
+	} else if mimeErr := e.validateInputMimeTypes(runData, input); mimeErr != nil {
 		execErr = mimeErr
 	} else {
 		sessionID = runData.SessionID

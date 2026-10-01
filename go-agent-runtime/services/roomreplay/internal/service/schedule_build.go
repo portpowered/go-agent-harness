@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -51,7 +52,9 @@ type participantFrameState struct {
 // Build admits capture barriers and file-backed sent PCM before producing an
 // immutable schedule. Text-only captures intentionally return a nil schedule.
 func (s *Service) Build(ctx context.Context, request roomreplay.BuildRequest) (roomreplay.Schedule, error) {
-	ctx = nonNilContext(ctx)
+	if ctx == nil {
+		return nil, errScheduleContextRequired
+	}
 	request, err := prepareReplayBuildRequest(request)
 	if err != nil {
 		return nil, err
@@ -78,12 +81,9 @@ func (s *Service) Build(ctx context.Context, request roomreplay.BuildRequest) (r
 	return assembleSchedule(contributions, targetIDs, expectedFrames, maxFrame)
 }
 
-func nonNilContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
+// errScheduleContextRequired reports a schedule build or run without a
+// caller context.
+var errScheduleContextRequired = errors.New("room replay schedule context is required")
 
 func normalizeTargetFormat(format roomreplay.PCM16Format) (roomreplay.PCM16Format, int, error) {
 	if format == (roomreplay.PCM16Format{}) {

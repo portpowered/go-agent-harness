@@ -7,10 +7,7 @@ import (
 )
 
 func captureJSONForModel(id, model string) []byte {
-	payload, err := json.Marshal(map[string]any{"type": "session.created", "session": map[string]any{"id": id + "-offline-session"}})
-	if err != nil {
-		panic(err)
-	}
+	payload := mustJSON(json.Marshal(map[string]any{"type": "session.created", "session": map[string]any{"id": id + "-offline-session"}}))
 	type providerMetadata struct {
 		Name  string `json:"name,omitempty"`
 		Model string `json:"model,omitempty"`
@@ -58,19 +55,22 @@ func captureJSONForModel(id, model string) []byte {
 			Payload:     json.RawMessage(payload),
 		}},
 	}
-	coverage, err := json.Marshal(base)
-	if err != nil {
-		panic(err)
-	}
+	coverage := mustJSON(json.Marshal(base))
 	digest := sha256.Sum256(coverage)
 	base.Integrity = &integrity{
 		Algorithm: "sha256",
 		Coverage:  "session_capture.v2:json(version,provider,session,records,ends_with_disconnect)",
 		Digest:    hex.EncodeToString(digest[:]),
 	}
-	data, err := json.MarshalIndent(base, "", "  ")
-	if err != nil {
-		panic(err)
-	}
+	data := mustJSON(json.MarshalIndent(base, "", "  "))
 	return append(data, '\n')
+}
+
+// mustJSON unwraps the encoding of fixture values built from strings,
+// numbers, maps and structs of those, which cannot fail to encode.
+func mustJSON(data []byte, err error) []byte {
+	if err != nil {
+		panic(err) //nolint:forbidigo // Must-style: fixed fixture values always encode.
+	}
+	return data
 }

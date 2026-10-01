@@ -262,12 +262,6 @@ linters:
       - path: '^agent-cli/'
         linters: [nolintlint]
         text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|dupl|errname|errorlint|exhaustive|fatcontext|forbidigo|gochecknoglobals|gocritic|godox|gosec|iface|intrange|mirror|mnd|nestif|nilnesserr|noctx|predeclared|recvcheck|thelper|tparallel|unparam|usestdlibvars|usetesting|wastedassign)"'
-      # round-3 cleanup: lint-go-agent-runtime track
-      - path: '^go-agent-runtime/'
-        linters: [containedctx, copyloopvar, depguard, dupl, errname, forbidigo, gochecknoglobals, gocritic, iface, intrange, mirror, mnd, nestif, nilnesserr, noctx, predeclared, recvcheck, thelper, tparallel, unparam, usestdlibvars]
-      - path: '^go-agent-runtime/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|copyloopvar|depguard|dupl|errname|forbidigo|gochecknoglobals|gocritic|iface|intrange|mirror|mnd|nestif|nilnesserr|noctx|predeclared|recvcheck|thelper|tparallel|unparam|usestdlibvars)"'
       # round-3 cleanup: lint-media-tools track
       - path: '^go-audio/'
         linters: [containedctx, contextcheck, errname, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nestif, predeclared, recvcheck, thelper, unparam]

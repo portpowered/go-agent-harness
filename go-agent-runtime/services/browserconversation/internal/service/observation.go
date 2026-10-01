@@ -183,10 +183,12 @@ func (e *browserConversationExecution) cleanupFixture(ctx context.Context, reque
 	e.lifecycle.Detached, e.lifecycle.DetachRequired, e.lifecycle.DetachCount = true, true, 1
 }
 
-func (e *browserConversationExecution) finish(request browserconversation.RunRequest) (browserconversation.BrowserConversationResult, error) {
+// finish records derived evidence and runs the validator under the caller
+// context ctx.
+func (e *browserConversationExecution) finish(ctx context.Context, request browserconversation.RunRequest) (browserconversation.BrowserConversationResult, error) {
 	e.recordDerivedEvidence()
 	e.recordEvaluation()
-	e.recordValidator(request.Validator)
+	e.recordValidator(ctx, request.Validator)
 	result, err := e.run.Finalize()
 	e.add(err)
 	e.close()
@@ -208,11 +210,11 @@ func (e *browserConversationExecution) recordEvaluation() {
 	e.add(e.run.RecordMechanicalEvaluation(evaluation))
 }
 
-func (e *browserConversationExecution) recordValidator(validator browserconversation.BrowserConversationValidator) {
+func (e *browserConversationExecution) recordValidator(ctx context.Context, validator browserconversation.BrowserConversationValidator) {
 	if validator == nil {
 		return
 	}
-	verdict, err := validator.ValidateBrowserConversation(e.run.Snapshot())
+	verdict, err := validator.ValidateBrowserConversation(ctx, e.run.Snapshot())
 	if err != nil {
 		e.add(errors.Join(browserconversation.ErrBrowserConversationValidator, err))
 		return

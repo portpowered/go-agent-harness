@@ -1,6 +1,7 @@
 package browserconversation
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -171,20 +172,21 @@ type BrowserConversationTabStateRequired struct {
 	MustAllowMutation bool   `json:"must_allow_mutation"`
 }
 
-// BrowserConversationValidator is the validator-agent seam.
+// BrowserConversationValidator is the validator-agent seam. ctx bounds the
+// validation, including any validator process it starts.
 type BrowserConversationValidator interface {
-	ValidateBrowserConversation(BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
+	ValidateBrowserConversation(ctx context.Context, result BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
 }
 
 // BrowserConversationValidatorFunc adapts a function to the validator seam.
-type BrowserConversationValidatorFunc func(BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
+type BrowserConversationValidatorFunc func(context.Context, BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
 
 // ValidateBrowserConversation implements BrowserConversationValidator.
-func (f BrowserConversationValidatorFunc) ValidateBrowserConversation(result BrowserConversationResult) (BrowserConversationValidatorVerdict, error) {
+func (f BrowserConversationValidatorFunc) ValidateBrowserConversation(ctx context.Context, result BrowserConversationResult) (BrowserConversationValidatorVerdict, error) {
 	if f == nil {
 		return BrowserConversationValidatorVerdict{}, errors.New("browser conversation validator function is nil")
 	}
-	return f(result)
+	return f(ctx, result)
 }
 
 // BrowserConversationScenarioForSession is the narrow extension seam consumed by a shared session runner.

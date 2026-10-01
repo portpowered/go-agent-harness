@@ -200,7 +200,7 @@ func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, r
 		return errors.New("room service is required")
 	}
 	configDir := roomConfigDir(roomRunGlobalFlags(c))
-	plan, outputDir, err := c.admitRoomRun(roomhost.Paths{
+	plan, outputDir, err := c.admitRoomRun(parent, roomhost.Paths{
 		Config: configPath, Manifest: manifestPath, Replay: replayPath, ConfigDir: configDir,
 	}, outputDir, cmd.Flags().Changed("out"))
 	if err != nil {
@@ -312,8 +312,8 @@ func (s *roomStream) shutdown(ctx context.Context) error {
 
 // admitRoomRun resolves the service's run plan and evidence destination for
 // one invocation. Output validation errors name the --out flag.
-func (c *RoomRunCommand) admitRoomRun(paths roomhost.Paths, requested string, explicit bool) (runtimeRooms.RoomRunPlan, string, error) {
-	plan, err := c.service.ResolveRunPlan(roomhost.RunPlanOptions(paths, c.registry))
+func (c *RoomRunCommand) admitRoomRun(ctx context.Context, paths roomhost.Paths, requested string, explicit bool) (runtimeRooms.RoomRunPlan, string, error) {
+	plan, err := c.service.ResolveRunPlan(ctx, roomhost.RunPlanOptions(paths, c.registry))
 	if err != nil {
 		return runtimeRooms.RoomRunPlan{}, "", err
 	}

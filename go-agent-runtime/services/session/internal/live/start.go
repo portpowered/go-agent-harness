@@ -14,7 +14,9 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-func (h *handle) start(runCtx context.Context) error {
+// start publishes start failures under the invocation evidence context, which
+// outlives runCtx, rather than under runCtx itself.
+func (h *handle) start(runCtx context.Context) error { //nolint:contextcheck // failStart publishes under the invocation evidence context.
 	defer h.startFinish.Do(func() { close(h.startDone) })
 	toolExecutor, toolDefinitions, inferencer, err := h.prepareStart(runCtx)
 	if err != nil {

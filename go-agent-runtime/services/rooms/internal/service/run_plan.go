@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,7 +12,7 @@ import (
 // ResolveRunPlan admits either one offline replay bundle or one live launch.
 // The two sources are mutually exclusive so a replay can never silently
 // inherit live credentials, devices, or config.
-func (s *Service) ResolveRunPlan(options rooms.RoomRunPlanOptions) (rooms.RoomRunPlan, error) {
+func (s *Service) ResolveRunPlan(ctx context.Context, options rooms.RoomRunPlanOptions) (rooms.RoomRunPlan, error) {
 	if s == nil {
 		return rooms.RoomRunPlan{}, rooms.ErrRoomServiceUnavailable
 	}
@@ -26,7 +27,7 @@ func (s *Service) ResolveRunPlan(options rooms.RoomRunPlanOptions) (rooms.RoomRu
 	if strings.TrimSpace(options.Launch.ConfigPath) != "" || strings.TrimSpace(options.Launch.ManifestPath) != "" {
 		return rooms.RoomRunPlan{}, fmt.Errorf("%w: --replay cannot be combined with --config or --manifest", rooms.ErrReplaySourceConflict)
 	}
-	replay, err := s.LoadReplayPlan(replayPath)
+	replay, err := s.LoadReplayPlan(ctx, replayPath)
 	if err != nil {
 		return rooms.RoomRunPlan{}, err
 	}

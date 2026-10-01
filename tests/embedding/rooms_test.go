@@ -72,7 +72,7 @@ func TestExternalRoomRecordsNoCapturedSamplesTruthfully(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("room did not join after duration bound")
 	}
-	plan, err := host.LoadReplayPlan(output)
+	plan, err := host.LoadReplayPlan(t.Context(), output)
 	if err != nil {
 		t.Fatalf("load finalized empty recording: %v", err)
 	}

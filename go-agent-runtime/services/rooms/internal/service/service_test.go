@@ -34,11 +34,11 @@ func (evidenceServiceStub) CreateFreshRunDirectory(configDir string) (string, er
 	return os.MkdirTemp(configDir, "room-")
 }
 
-func (s replayServiceStub) Load(string) (roomreplay.RoomReplayPlan, error) {
+func (s replayServiceStub) Load(context.Context, string) (roomreplay.RoomReplayPlan, error) {
 	return s.plan, s.loadErr
 }
 
-func (replayServiceStub) LoadAudioBundle(string) (roomreplay.RoomReplayAudioBundle, error) {
+func (replayServiceStub) LoadAudioBundle(context.Context, string) (roomreplay.RoomReplayAudioBundle, error) {
 	return roomreplay.RoomReplayAudioBundle{}, nil
 }
 
@@ -68,7 +68,7 @@ func TestServiceExposesReplayAndEvidenceBoundaries(t *testing.T) {
 		t.Fatal("New() returned nil")
 	}
 
-	plan, err := svc.LoadReplayPlan("bundle")
+	plan, err := svc.LoadReplayPlan(t.Context(), "bundle")
 	if !errors.Is(err, loadErr) || len(plan.Participants) != 1 {
 		t.Fatalf("LoadReplayPlan() = %#v, %v; want delegated plan and stub error", plan, err)
 	}
@@ -107,7 +107,7 @@ func TestServiceReportsUnavailableForMissingReplayOwner(t *testing.T) {
 	if _, err := nilService.Run(context.Background(), nil, rooms.RoomRunOptions{}); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
 		t.Fatalf("nil Run() error = %v, want unavailable", err)
 	}
-	if _, err := nilService.LoadReplayPlan("bundle"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
+	if _, err := nilService.LoadReplayPlan(t.Context(), "bundle"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
 		t.Fatalf("nil LoadReplayPlan() error = %v, want unavailable", err)
 	}
 	if err := nilService.ValidateReplayOutput(rooms.RoomReplayPlan{}, "output"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
@@ -115,7 +115,7 @@ func TestServiceReportsUnavailableForMissingReplayOwner(t *testing.T) {
 	}
 
 	svc := New(Dependencies{Planner: planning.New(), Runner: lifecycle.New(lifecycle.Dependencies{})})
-	if _, err := svc.LoadReplayPlan("bundle"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
+	if _, err := svc.LoadReplayPlan(t.Context(), "bundle"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {
 		t.Fatalf("missing replay owner error = %v, want unavailable", err)
 	}
 	if err := svc.ValidateReplayOutput(rooms.RoomReplayPlan{}, "output"); !errors.Is(err, rooms.ErrRoomServiceUnavailable) {

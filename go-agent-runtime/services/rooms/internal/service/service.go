@@ -39,7 +39,7 @@ func (s *Service) Run(ctx context.Context, out io.Writer, request rooms.RoomRunO
 		return rooms.RoomResult{}, rooms.ErrRoomServiceUnavailable
 	}
 	if request.ReplayPlan == nil && strings.TrimSpace(request.ReplayPath) != "" {
-		plan, err := s.LoadReplayPlan(request.ReplayPath)
+		plan, err := s.LoadReplayPlan(ctx, request.ReplayPath)
 		if err != nil {
 			return rooms.RoomResult{}, err
 		}
@@ -77,11 +77,11 @@ func (s *Service) ResolveLaunchPlan(options rooms.RoomLaunchOptions) (rooms.Room
 	return s.planner.Resolve(options)
 }
 
-func (s *Service) LoadReplayPlan(bundle string) (rooms.RoomReplayPlan, error) {
+func (s *Service) LoadReplayPlan(ctx context.Context, bundle string) (rooms.RoomReplayPlan, error) {
 	if s == nil || s.replay == nil {
 		return rooms.RoomReplayPlan{}, rooms.ErrRoomServiceUnavailable
 	}
-	return s.replay.Load(bundle)
+	return s.replay.Load(ctx, bundle)
 }
 
 func (s *Service) ReplayManifest(plan rooms.RoomReplayPlan) rooms.Manifest {

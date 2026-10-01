@@ -30,7 +30,10 @@ func NewCommandValidator(command []string, timeout time.Duration) (browserconver
 	return &commandValidator{Command: append([]string(nil), command...), Timeout: timeout}, nil
 }
 
-func (validator *commandValidator) ValidateBrowserConversation(result browserconversation.BrowserConversationResult) (browserconversation.BrowserConversationValidatorVerdict, error) {
+func (validator *commandValidator) ValidateBrowserConversation(ctx context.Context, result browserconversation.BrowserConversationResult) (browserconversation.BrowserConversationValidatorVerdict, error) {
+	if ctx == nil {
+		return browserconversation.BrowserConversationValidatorVerdict{}, errors.New("browser conversation validator context is required")
+	}
 	if validator == nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, errors.New("browser conversation command validator is nil")
 	}
@@ -45,7 +48,7 @@ func (validator *commandValidator) ValidateBrowserConversation(result browsercon
 	if err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, errors.New("encode validator input")
 	}
-	process := runBrowserConversationValidator(context.Background(), validator.Command, validator.Dir, browserConversationValidatorEnvironment(validator.Env), payload, validator.Timeout)
+	process := runBrowserConversationValidator(ctx, validator.Command, validator.Dir, browserConversationValidatorEnvironment(validator.Env), payload, validator.Timeout)
 	if process.err != nil {
 		return browserconversation.BrowserConversationValidatorVerdict{}, process.err
 	}

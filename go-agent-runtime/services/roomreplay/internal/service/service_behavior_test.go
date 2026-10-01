@@ -57,7 +57,7 @@ func (roomReplayTestInspector) InspectCapture(ctx context.Context, path string) 
 func TestLoadRoomReplayPlanValidatesCompleteBundleBeforeRuntime(t *testing.T) {
 	bundle, manifest := writeRoomReplayBundle(t)
 
-	plan, err := roomReplayServiceForTest().Load(bundle)
+	plan, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestLoadRoomReplayPlanAcceptsInventoryBackedParticipantArtifacts(t *testing
 	manifest["artifacts"] = inventory
 	writeManifestValue(t, bundle, manifest)
 
-	plan, err := roomReplayServiceForTest().Load(bundle)
+	plan, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan with inventory-backed artifacts: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestLoadRoomReplayPlanRejectsTruncatedArtifactAsIncomplete(t *testing.T) {
 		t.Fatalf("truncate artifact: %v", err)
 	}
 
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, gateway.ErrReplayIncomplete) || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("truncated artifact error = %v, want replay-incomplete classification", err)
 	}
@@ -167,7 +167,7 @@ func TestLoadRoomReplayPlanRejectsSameLengthMutationAsMismatch(t *testing.T) {
 		t.Fatalf("mutate artifact: %v", err)
 	}
 
-	_, err = roomReplayServiceForTest().Load(bundle)
+	_, err = roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, gateway.ErrReplayMismatch) || errors.Is(err, gateway.ErrReplayIncomplete) {
 		t.Fatalf("same-length mutation error = %v, want replay-mismatch only", err)
 	}
@@ -190,7 +190,7 @@ func TestRoomReplayServiceAcceptsPathKeyedIntegrityMetadata(t *testing.T) {
 	}
 	writeManifestValue(t, bundle, manifest)
 
-	if _, err := roomReplayServiceForTest().Load(bundle); err != nil {
+	if _, err := roomReplayServiceForTest().Load(t.Context(), bundle); err != nil {
 		t.Fatalf("Service.Load with path-keyed integrity metadata: %v", err)
 	}
 }
@@ -204,7 +204,7 @@ func TestLoadRoomReplayPlanRejectsUnsafeAndAliasedArtifacts(t *testing.T) {
 		roomReplayTestMap(t, artifacts[roomReplayArtifactRoleSentPCM], "participant alpha sent_pcm")["path"] = "../outside.pcm"
 		writeManifestValue(t, bundle, manifest)
 
-		_, err := roomReplayServiceForTest().Load(bundle)
+		_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err == nil || !errors.Is(err, gateway.ErrReplayMismatch) || !strings.Contains(err.Error(), "traversal") {
 			t.Fatalf("traversal error = %v, want path mismatch", err)
 		}
@@ -224,7 +224,7 @@ func TestLoadRoomReplayPlanRejectsUnsafeAndAliasedArtifacts(t *testing.T) {
 			t.Fatalf("symlink artifact: %v", err)
 		}
 
-		_, err := roomReplayServiceForTest().Load(bundle)
+		_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err == nil || !errors.Is(err, gateway.ErrReplayMismatch) || !strings.Contains(err.Error(), "symlink") {
 			t.Fatalf("symlink error = %v, want path mismatch", err)
 		}
@@ -240,7 +240,7 @@ func TestLoadRoomReplayPlanRejectsUnsafeAndAliasedArtifacts(t *testing.T) {
 		betaArtifacts[roomReplayArtifactRoleSentPCM] = alphaArtifacts[roomReplayArtifactRoleSentPCM]
 		writeManifestValue(t, bundle, manifest)
 
-		_, err := roomReplayServiceForTest().Load(bundle)
+		_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err == nil || !errors.Is(err, gateway.ErrReplayMismatch) || !strings.Contains(err.Error(), "artifact ownership") {
 			t.Fatalf("duplicate ownership error = %v, want ownership mismatch", err)
 		}
@@ -258,7 +258,7 @@ func TestLoadRoomReplayPlanRejectsUndeclaredTimelineArtifact(t *testing.T) {
 	updateTimelineDigest(t, manifest, []byte(line))
 	writeManifestValue(t, bundle, manifest)
 
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, gateway.ErrReplayMismatch) || !strings.Contains(err.Error(), "undeclared") {
 		t.Fatalf("undeclared timeline reference error = %v, want diff-bearing mismatch", err)
 	}
@@ -274,7 +274,7 @@ func TestLoadRoomReplayPlanRejectsOversizedManifestWithTypedMismatch(t *testing.
 		t.Fatalf("write oversized manifest: %v", err)
 	}
 
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("oversized manifest error = %v, want typed mismatch", err)
 	}
@@ -293,7 +293,7 @@ func TestLoadRoomReplayPlanRejectsOversizedTimelineLineWithTypedMismatch(t *test
 	updateTimelineDigest(t, manifest, []byte(line))
 	writeManifestValue(t, bundle, manifest)
 
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("oversized timeline error = %v, want typed mismatch", err)
 	}
@@ -305,11 +305,11 @@ func TestLoadRoomReplayPlanRejectsOversizedTimelineLineWithTypedMismatch(t *test
 
 func TestLoadRoomReplayPlanReturnsDeterministicProjectionCopies(t *testing.T) {
 	bundle, _ := writeRoomReplayBundle(t)
-	first, err := roomReplayServiceForTest().Load(bundle)
+	first, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("first LoadRoomReplayPlan: %v", err)
 	}
-	second, err := roomReplayServiceForTest().Load(bundle)
+	second, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("second LoadRoomReplayPlan: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestLoadRoomReplayPlanAcceptsSchemaV1AndRejectsMalformedManifest(t *testing
 		bundle, manifest := writeRoomReplayBundle(t)
 		manifest["schema_version"] = 1
 		writeManifestValue(t, bundle, manifest)
-		plan, err := roomReplayServiceForTest().Load(bundle)
+		plan, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err != nil || plan.SchemaVersion != 1 {
 			t.Fatalf("schema v1 LoadRoomReplayPlan = plan:%+v err:%v", plan, err)
 		}
@@ -341,7 +341,7 @@ func TestLoadRoomReplayPlanAcceptsSchemaV1AndRejectsMalformedManifest(t *testing
 		if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), []byte("{"), 0o600); err != nil {
 			t.Fatalf("write malformed manifest: %v", err)
 		}
-		_, err := roomReplayServiceForTest().Load(bundle)
+		_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
 			t.Fatalf("malformed manifest error = %v, want typed mismatch", err)
 		}
@@ -350,7 +350,7 @@ func TestLoadRoomReplayPlanAcceptsSchemaV1AndRejectsMalformedManifest(t *testing
 		bundle, manifest := writeRoomReplayBundle(t)
 		manifest["clock_base"] = "not-a-timestamp"
 		writeManifestValue(t, bundle, manifest)
-		_, err := roomReplayServiceForTest().Load(bundle)
+		_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) || !strings.Contains(err.Error(), "clock_base") {
 			t.Fatalf("malformed timestamp error = %v, want incomplete clock_base", err)
 		}
@@ -381,7 +381,7 @@ func TestLoadRoomReplayPlanRejectsCaptureProviderMismatch(t *testing.T) {
 	captureRef["sha256"] = hex.EncodeToString(digest[:])
 	writeManifestValue(t, bundle, manifest)
 
-	_, err = roomReplayServiceForTest().Load(bundle)
+	_, err = roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !strings.Contains(err.Error(), "participants[alpha].model") {
 		t.Fatalf("capture provider mismatch error = %v, want typed participant model mismatch", err)
 	}

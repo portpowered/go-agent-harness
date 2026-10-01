@@ -24,7 +24,7 @@ func runBrowserConversation(ctx context.Context, request browserconversation.Run
 	defer execution.close()
 	execution.start(runContext, request)
 	execution.cleanup(ctx, runContext.Err(), request)
-	return execution.finish(request)
+	return execution.finish(ctx, request)
 }
 
 type evidenceBroker struct {

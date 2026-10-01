@@ -33,11 +33,11 @@ const (
 // private to the service graph.
 type Service interface {
 	Run(context.Context, io.Writer, RoomRunOptions) (RoomResult, error)
-	ResolveRunPlan(RoomRunPlanOptions) (RoomRunPlan, error)
+	ResolveRunPlan(ctx context.Context, options RoomRunPlanOptions) (RoomRunPlan, error)
 	ResolveRunOutput(plan RoomRunPlan, requested string, explicit bool) (string, error)
 	ValidateRunOutput(RoomRunPlan, string) error
 	ResolveLaunchPlan(RoomLaunchOptions) (RoomLaunchPlan, error)
-	LoadReplayPlan(string) (RoomReplayPlan, error)
+	LoadReplayPlan(ctx context.Context, bundle string) (RoomReplayPlan, error)
 	ReplayManifest(RoomReplayPlan) Manifest
 	ValidateReplayOutput(RoomReplayPlan, string) error
 	ValidateEvidenceOutput(string) error

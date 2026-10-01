@@ -182,7 +182,7 @@ func TestCleanTurnTakingRoomReplaySelfCopyControlFails(t *testing.T) {
 
 func loadCleanTurnTakingBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
 	t.Helper()
-	bundle, err := roomReplayAudioTestService().LoadAudioBundle(cleanTurnTakingFixturePath())
+	bundle, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), cleanTurnTakingFixturePath())
 	if err != nil {
 		t.Fatalf("load clean turn-taking bundle: %v", err)
 	}

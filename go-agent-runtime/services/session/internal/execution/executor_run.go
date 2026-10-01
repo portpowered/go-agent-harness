@@ -152,7 +152,7 @@ func (e *Executor) RunAskDetailed(ctx context.Context, cfg *Config, input agentl
 	if err := e.validateOutputModality(cfg, runData); err != nil {
 		return "", nil, err
 	}
-	if err := e.validateInputMimeTypes(cfg, runData, input); err != nil {
+	if err := e.validateInputMimeTypes(runData, input); err != nil {
 		return "", nil, err
 	}
 
@@ -205,7 +205,7 @@ func (e *Executor) RunAskWithSession(ctx context.Context, sessionID string, cfg 
 	if err != nil {
 		return "", err
 	}
-	if err := e.validateInputMimeTypes(&cfgWithHistory, runData, input); err != nil {
+	if err := e.validateInputMimeTypes(runData, input); err != nil {
 		return "", err
 	}
 
