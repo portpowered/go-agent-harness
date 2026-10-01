@@ -25,8 +25,10 @@ credential-free audio/tool replay. The replay proves deterministic fixture
 effects; it does not claim physical-device or acoustic validation, and this
 task does not use Realtime or credentials.
 
-The candidate is pinned to the admitted `origin/main` revision recorded in
-`provenance.json`. A later fetched `origin/main` descendant is recorded for
-freshness only; it is not merged into or rebased onto this isolated candidate.
+The tested source revision remains explicit in `provenance.json`. When the
+required baseline integration advances `origin/main`, the fetched revision is
+recorded there and must be an ancestor of final HEAD. Final scope is then
+evaluated against that integrated `origin/main` tree, while the admitted source
+revision remains pinned for ancestry and baseline checks.
 `verification-summary.json` and `provenance.json` are the committed handoff
 artifacts; generated binaries, logs, and replay runs remain ignored.
