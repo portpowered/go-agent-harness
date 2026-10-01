@@ -522,21 +522,8 @@ func semanticValueEqual(left, right any) bool {
 }
 
 func (r *BrowserScriptRuntime) invocationIDForResult(result json.RawMessage) (string, error) {
-	if len(result) > 0 {
-		fields, err := decodeJSONObject(result)
-		if err != nil {
-			return "", err
-		}
-		if raw, ok := fields[jsonFieldInvocationID]; ok {
-			id, err := parseScriptString(raw)
-			if err != nil {
-				return "", err
-			}
-			if err := validateScriptID(id); err != nil {
-				return "", err
-			}
-			return id, nil
-		}
+	if id, found, err := scriptedResultInvocationID(result); found || err != nil {
+		return id, err
 	}
 	id := r.ids.NextID("invocation")
 	if err := validateScriptID(id); err != nil {

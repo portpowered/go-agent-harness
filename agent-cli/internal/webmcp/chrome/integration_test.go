@@ -772,20 +772,13 @@ func waitForFixtureTarget(ctx context.Context, baseURL string, targetID webmcp.T
 	var lastErr error
 	for {
 		targets, err := readDevToolsTargets(ctx, baseURL)
+		lastErr = err
 		if err == nil {
-			for _, target := range targets {
-				if target.ID == string(targetID) && target.URL == fixtureURL {
-					if wantPresent {
-						return target, nil
-					}
-					lastErr = errors.New("target remains present")
-				}
+			target, present := findDevToolsFixtureTarget(targets, targetID, fixtureURL)
+			if present == wantPresent {
+				return target, nil
 			}
-			if !wantPresent {
-				return devToolsTarget{}, nil
-			}
-		} else {
-			lastErr = err
+			lastErr = fmt.Errorf("target present=%t", present)
 		}
 		select {
 		case <-ctx.Done():
@@ -793,6 +786,16 @@ func waitForFixtureTarget(ctx context.Context, baseURL string, targetID webmcp.T
 		case <-ticker.C:
 		}
 	}
+}
+
+// findDevToolsFixtureTarget returns the DevTools target with targetID at fixtureURL.
+func findDevToolsFixtureTarget(targets []devToolsTarget, targetID webmcp.TargetID, fixtureURL string) (devToolsTarget, bool) {
+	for _, target := range targets {
+		if target.ID == string(targetID) && target.URL == fixtureURL {
+			return target, true
+		}
+	}
+	return devToolsTarget{}, false
 }
 
 type inspectedPageState struct {

@@ -492,36 +492,10 @@ func waitForManagedLaunchTarget(ctx context.Context, cdpURL, wantURL string) err
 	var lastObservation string
 	for {
 		baseURL := strings.TrimSuffix(strings.TrimRight(cdpURL, "/"), "/json/version")
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+jsonListPath, nil)
-		if err == nil {
-			response, requestErr := client.Do(request)
-			if requestErr == nil {
-				var targets []struct {
-					Type string `json:"type"`
-					URL  string `json:"url"`
-				}
-				decodeErr := json.NewDecoder(response.Body).Decode(&targets)
-				decodeErr = errors.Join(decodeErr, response.Body.Close())
-				lastObservation = fmt.Sprintf("status=%s targets=%v decode=%v want=%q", response.Status, targets, decodeErr, wantURL)
-				pageTargets := 0
-				matchingPages := 0
-				for _, target := range targets {
-					if target.Type != pageTargetType {
-						continue
-					}
-					pageTargets++
-					if target.URL == wantURL {
-						matchingPages++
-					}
-				}
-				if response.StatusCode == http.StatusOK && decodeErr == nil && pageTargets == 1 && matchingPages == 1 {
-					return nil
-				}
-			} else {
-				lastObservation = fmt.Sprintf("request=%v", requestErr)
-			}
-		} else {
-			lastObservation = fmt.Sprintf("request-build=%v", err)
+		var ready bool
+		ready, lastObservation = observeManagedLaunchTarget(ctx, client, baseURL, wantURL)
+		if ready {
+			return nil
 		}
 		select {
 		case <-ctx.Done():
@@ -529,4 +503,35 @@ func waitForManagedLaunchTarget(ctx context.Context, cdpURL, wantURL string) err
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// observeManagedLaunchTarget reports whether the browser lists exactly one page
+// target, at wantURL, with a description of what it observed.
+func observeManagedLaunchTarget(ctx context.Context, client *http.Client, baseURL, wantURL string) (bool, string) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+jsonListPath, nil)
+	if err != nil {
+		return false, fmt.Sprintf("request-build=%v", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return false, fmt.Sprintf("request=%v", err)
+	}
+	var targets []struct {
+		Type string `json:"type"`
+		URL  string `json:"url"`
+	}
+	decodeErr := json.NewDecoder(response.Body).Decode(&targets)
+	decodeErr = errors.Join(decodeErr, response.Body.Close())
+	observation := fmt.Sprintf("status=%s targets=%v decode=%v want=%q", response.Status, targets, decodeErr, wantURL)
+	pageTargets, matchingPages := 0, 0
+	for _, target := range targets {
+		if target.Type != pageTargetType {
+			continue
+		}
+		pageTargets++
+		if target.URL == wantURL {
+			matchingPages++
+		}
+	}
+	return response.StatusCode == http.StatusOK && decodeErr == nil && pageTargets == 1 && matchingPages == 1, observation
 }

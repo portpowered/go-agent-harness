@@ -789,40 +789,26 @@ func (s *targetSession) cleanupTarget(ctx context.Context) error {
 	}
 	var joined error
 	if sessionID != "" {
-		if executor == nil {
-			if handle.isDisconnected() {
-				s.cancelClientTarget(targetValue)
-				return nil
-			}
-			joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", errors.New("browser connection is unavailable")))
-		} else {
-			detachContext, release := handle.operationContext(ctx)
-			err := cdpTarget.DetachFromTarget().WithSessionID(sessionID).Do(cdp.WithExecutor(detachContext, executor))
-			release()
-			if err != nil {
-				joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", err))
-			}
+		disconnected, err := s.runTargetCleanupStep(ctx, handle, executor, targetValue, "detach", func(stepContext context.Context) error {
+			return cdpTarget.DetachFromTarget().WithSessionID(sessionID).Do(stepContext)
+		})
+		if disconnected {
+			return nil
 		}
+		joined = errors.Join(joined, err)
 	}
 	if ownership == webmcp.TargetOwnershipHarnessOwned && targetID != "" {
 		if handle.isDisconnected() {
 			s.cancelClientTarget(targetValue)
 			return joined
 		}
-		if executor == nil {
-			if handle.isDisconnected() {
-				s.cancelClientTarget(targetValue)
-				return joined
-			}
-			joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", errors.New("browser connection is unavailable")))
-		} else {
-			closeContext, release := handle.operationContext(ctx)
-			err := cdpTarget.CloseTarget(targetID).Do(cdp.WithExecutor(closeContext, executor))
-			release()
-			if err != nil {
-				joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", err))
-			}
+		disconnected, err := s.runTargetCleanupStep(ctx, handle, executor, targetValue, "close_target", func(stepContext context.Context) error {
+			return cdpTarget.CloseTarget(targetID).Do(stepContext)
+		})
+		if disconnected {
+			return joined
 		}
+		joined = errors.Join(joined, err)
 	}
 
 	// Clear the protocol IDs before cancellation so chromedp's cleanup

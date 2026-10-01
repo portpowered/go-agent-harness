@@ -591,27 +591,30 @@ func (r *Redactor) redactString(value string) (string, bool, bool, bool) {
 	queryChanged := false
 	fragmentChanged := false
 	if parsed, ok := parseRedactableURL(value); ok {
-		if r.policy.URLQuery && (parsed.RawQuery != "" || parsed.ForceQuery) {
-			parsed.RawQuery = ""
-			parsed.ForceQuery = false
-			queryChanged = true
-		}
-		if r.policy.URLFragment && (parsed.Fragment != "" || parsed.RawFragment != "") {
-			parsed.Fragment = ""
-			parsed.RawFragment = ""
-			fragmentChanged = true
-		}
-		if parsed.User != nil {
-			if _, hasPassword := parsed.User.Password(); hasPassword {
-				parsed.User = url.UserPassword(parsed.User.Username(), RedactionMarker)
-			}
-		}
+		queryChanged, fragmentChanged = r.redactURL(parsed)
 		redacted = parsed.String()
 	}
 	redactedWithCredentials, credentialChanged := redactPlainString(redacted, r.credentials)
 	redacted = redactedWithCredentials
 	changed := redacted != value || queryChanged || fragmentChanged || credentialChanged
 	return redacted, changed, queryChanged, fragmentChanged
+}
+
+// redactURL strips the policy-selected query and fragment and masks a URL
+// password in place, reporting which of query and fragment changed.
+func (r *Redactor) redactURL(parsed *url.URL) (queryChanged, fragmentChanged bool) {
+	if r.policy.URLQuery && (parsed.RawQuery != "" || parsed.ForceQuery) {
+		parsed.RawQuery, parsed.ForceQuery, queryChanged = "", false, true
+	}
+	if r.policy.URLFragment && (parsed.Fragment != "" || parsed.RawFragment != "") {
+		parsed.Fragment, parsed.RawFragment, fragmentChanged = "", "", true
+	}
+	if parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			parsed.User = url.UserPassword(parsed.User.Username(), RedactionMarker)
+		}
+	}
+	return queryChanged, fragmentChanged
 }
 
 func redactPlainString(value string, credentials [][]byte) (string, bool) {

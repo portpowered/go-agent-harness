@@ -170,16 +170,16 @@ func assertSessionConfigSleepResults(t *testing.T, tc sessionConfigToolFilterCas
 		if len(results) != 1 || results[0].Content != "Slept for 0s (no-op)." {
 			t.Fatalf("default sleep result = %#v, want one successful no-op result", results)
 		}
-	} else {
-		if strings.Contains(resultText, "Slept for 0s (no-op).") {
-			t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText)
-		}
-		if len(results) == 0 || !isRejectedSleepResult(results[0]) {
-			t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
-		}
-		if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
-			t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
-		}
+		return
+	}
+	if strings.Contains(resultText, "Slept for 0s (no-op).") {
+		t.Fatalf("disabled sleep unexpectedly produced a successful result: %q", resultText)
+	}
+	if len(results) == 0 || !isRejectedSleepResult(results[0]) {
+		t.Fatalf("disabled sleep result = %#v, want a correlated non-success result", results)
+	}
+	if len(tc.calls) > 1 && (len(results) != 2 || results[1].Content != toolInputContents) {
+		t.Fatalf("disabled-row read_file result = %#v, want isolated file contents", results)
 	}
 }
 

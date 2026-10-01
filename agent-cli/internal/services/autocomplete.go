@@ -106,21 +106,9 @@ func (a *Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
 	// so an if-chain states that directly). Tab completes the selected
 	// suggestion: the parent reads Selected() and decides whether to dismiss.
 	if keyType := keyMsg.Type; keyType == tea.KeyUp {
-		if next.selected > 0 {
-			next.selected--
-			// Scroll up if needed.
-			if next.selected < next.offset {
-				next.offset = next.selected
-			}
-		}
+		next.moveUp()
 	} else if keyType == tea.KeyDown {
-		if next.selected < len(next.filtered)-1 {
-			next.selected++
-			// Scroll down if needed.
-			if next.selected >= next.offset+maxSuggestions {
-				next.offset = next.selected - maxSuggestions + 1
-			}
-		}
+		next.moveDown()
 	} else if keyType == tea.KeyEsc {
 		next.active = false
 		next.selected = 0
@@ -128,6 +116,26 @@ func (a *Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
 	}
 
 	return next, nil
+}
+
+// moveUp selects the previous suggestion, scrolling up when needed.
+func (a *Autocomplete) moveUp() {
+	if a.selected == 0 {
+		return
+	}
+	a.selected--
+	a.offset = min(a.offset, a.selected)
+}
+
+// moveDown selects the next suggestion, scrolling down when needed.
+func (a *Autocomplete) moveDown() {
+	if a.selected >= len(a.filtered)-1 {
+		return
+	}
+	a.selected++
+	if a.selected >= a.offset+maxSuggestions {
+		a.offset = a.selected - maxSuggestions + 1
+	}
 }
 
 // View renders the autocomplete popup as a string. Returns empty string when

@@ -239,22 +239,27 @@ func assertFamilyDProcessRun(t *testing.T, run familyDProcessRun) {
 func assertFamilyDTerminationFacts(t *testing.T, run familyDProcessRun) {
 	t.Helper()
 	if run.scenario.Termination == probe.TerminationSIGINT {
-		if run.result.ExitClassification != "sigint" || !run.process.SignalSent || run.process.Signal != probe.DuplexSIGINTName || run.process.SignalAt <= run.process.StartedAt {
-			t.Fatalf("SIGINT result/process = %+v / %+v, want sent signal and sigint classification", run.result, run.process)
-		}
-		if run.process.InputFinished {
-			t.Fatalf("SIGINT process facts = %+v, want input interrupted before script completion", run.process)
-		}
-		if run.observation.ResponseTerminals != 0 {
-			t.Fatalf("SIGINT provider terminal count = %d, want active response interrupted before provider terminal", run.observation.ResponseTerminals)
-		}
-	} else {
-		if run.result.ExitClassification != "normal" || run.process.SignalSent || run.process.Signal != "" || !run.process.InputFinished {
-			t.Fatalf("natural result/process = %+v / %+v, want normal no-signal completed input", run.result, run.process)
-		}
-		if run.observation.ResponseTerminals != 1 || run.observation.SessionClosed != 1 {
-			t.Fatalf("natural provider terminals = responses:%d sessions:%d, want one response and session close", run.observation.ResponseTerminals, run.observation.SessionClosed)
-		}
+		assertFamilyDSIGINTFacts(t, run)
+		return
+	}
+	if run.result.ExitClassification != "normal" || run.process.SignalSent || run.process.Signal != "" || !run.process.InputFinished {
+		t.Fatalf("natural result/process = %+v / %+v, want normal no-signal completed input", run.result, run.process)
+	}
+	if run.observation.ResponseTerminals != 1 || run.observation.SessionClosed != 1 {
+		t.Fatalf("natural provider terminals = responses:%d sessions:%d, want one response and session close", run.observation.ResponseTerminals, run.observation.SessionClosed)
+	}
+}
+
+func assertFamilyDSIGINTFacts(t *testing.T, run familyDProcessRun) {
+	t.Helper()
+	if run.result.ExitClassification != "sigint" || !run.process.SignalSent || run.process.Signal != probe.DuplexSIGINTName || run.process.SignalAt <= run.process.StartedAt {
+		t.Fatalf("SIGINT result/process = %+v / %+v, want sent signal and sigint classification", run.result, run.process)
+	}
+	if run.process.InputFinished {
+		t.Fatalf("SIGINT process facts = %+v, want input interrupted before script completion", run.process)
+	}
+	if run.observation.ResponseTerminals != 0 {
+		t.Fatalf("SIGINT provider terminal count = %d, want active response interrupted before provider terminal", run.observation.ResponseTerminals)
 	}
 }
 

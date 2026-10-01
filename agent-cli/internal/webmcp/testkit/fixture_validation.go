@@ -439,23 +439,14 @@ func isOperationType(value OperationType) bool {
 }
 
 func validateOperationResult(operationType OperationType, raw json.RawMessage) error {
-	if operationType == OperationInvokeTool && !isJSONObject(raw) {
+	if operationType != OperationInvokeTool {
+		return nil
+	}
+	if !isJSONObject(raw) {
 		return newScriptError("", "invoke_tool result must be a JSON object")
 	}
-	if operationType == OperationInvokeTool {
-		fields, err := decodeJSONObject(raw)
-		if err != nil {
-			return err
-		}
-		if invocationRaw, ok := fields[jsonFieldInvocationID]; ok {
-			value, err := parseScriptString(invocationRaw)
-			if err != nil {
-				return fmt.Errorf("invocation_id: %w", err)
-			}
-			if err := validateScriptID(value); err != nil {
-				return fmt.Errorf("invocation_id: %w", err)
-			}
-		}
+	if _, _, err := scriptedResultInvocationID(raw); err != nil {
+		return fmt.Errorf("invocation_id: %w", err)
 	}
 	return nil
 }

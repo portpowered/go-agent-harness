@@ -3,6 +3,7 @@ package testkit
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -86,3 +87,27 @@ func (s *DeterministicIDSource) NewInvocationID() (webmcp.InvocationID, error) {
 
 var _ IDSource = (*DeterministicIDSource)(nil)
 var _ webmcp.IDSource = (*DeterministicIDSource)(nil)
+
+// scriptedResultInvocationID returns the invocation ID a scripted result names,
+// with found=false when the result carries none.
+func scriptedResultInvocationID(result json.RawMessage) (string, bool, error) {
+	if len(result) == 0 {
+		return "", false, nil
+	}
+	fields, err := decodeJSONObject(result)
+	if err != nil {
+		return "", false, err
+	}
+	raw, ok := fields[jsonFieldInvocationID]
+	if !ok {
+		return "", false, nil
+	}
+	id, err := parseScriptString(raw)
+	if err != nil {
+		return "", true, err
+	}
+	if err := validateScriptID(id); err != nil {
+		return "", true, err
+	}
+	return id, true, nil
+}

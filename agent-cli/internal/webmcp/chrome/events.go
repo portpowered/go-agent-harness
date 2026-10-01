@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	cdpTarget "github.com/chromedp/cdproto/target"
@@ -317,4 +318,25 @@ func (h *handle) openTargetSession(targetID webmcp.TargetID, selected webmcp.Tar
 	protocolTarget := ops.target(targetContext)
 	session.setProtocolTarget(protocolTarget)
 	return session, protocolTarget, err
+}
+
+// runTargetCleanupStep runs one detach or close_target cleanup step on the
+// browser executor. Without an executor it reports disconnected (after
+// canceling the client target) when the browser is gone, or an unavailable
+// connection error otherwise.
+func (s *targetSession) runTargetCleanupStep(ctx context.Context, handle *handle, executor cdp.Executor, targetValue *chromedp.Target, phase string, step func(context.Context) error) (bool, error) {
+	if executor == nil {
+		if handle.isDisconnected() {
+			s.cancelClientTarget(targetValue)
+			return true, nil
+		}
+		return false, classifyTargetCleanupError(s, phase, errors.New("browser connection is unavailable"))
+	}
+	stepContext, release := handle.operationContext(ctx)
+	err := step(cdp.WithExecutor(stepContext, executor))
+	release()
+	if err != nil {
+		return false, classifyTargetCleanupError(s, phase, err)
+	}
+	return false, nil
 }

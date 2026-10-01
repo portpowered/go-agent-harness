@@ -465,21 +465,8 @@ func (r *BrowserReplay) fixtureEventLocked(emitted EmittedEvent, now uint64) Fix
 }
 
 func (r *BrowserReplay) invocationIDForResult(result json.RawMessage) (string, error) {
-	if len(result) > 0 {
-		fields, err := decodeJSONObject(result)
-		if err != nil {
-			return "", err
-		}
-		if raw, ok := fields[jsonFieldInvocationID]; ok {
-			id, err := parseScriptString(raw)
-			if err != nil {
-				return "", err
-			}
-			if err := validateScriptID(id); err != nil {
-				return "", err
-			}
-			return id, nil
-		}
+	if id, found, err := scriptedResultInvocationID(result); found || err != nil {
+		return id, err
 	}
 	if r.ids == nil {
 		return "", errors.New("invocation ID source is unavailable")

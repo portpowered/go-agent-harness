@@ -514,17 +514,16 @@ func validateEvent(event Event) error {
 }
 
 func validateEventContext(event Event, definition eventDefinition) error {
-	if definition.requiresBrowser || definition.optionalBrowser {
-		if definition.requiresBrowser && strings.TrimSpace(event.BrowserID) == "" {
-			return newEventValidationError(0, "browser_id", "is required for %s", event.Type)
-		}
-		if event.BrowserID != "" {
-			if err := validateOpaqueID(event.BrowserID); err != nil {
-				return newEventValidationError(0, "browser_id", "%v", err)
-			}
-		}
-	} else if event.BrowserID != "" {
+	switch {
+	case definition.requiresBrowser && strings.TrimSpace(event.BrowserID) == "":
+		return newEventValidationError(0, "browser_id", "is required for %s", event.Type)
+	case event.BrowserID == "":
+	case !definition.requiresBrowser && !definition.optionalBrowser:
 		return newEventValidationError(0, "browser_id", "is not valid for %s", event.Type)
+	default:
+		if err := validateOpaqueID(event.BrowserID); err != nil {
+			return newEventValidationError(0, "browser_id", "%v", err)
+		}
 	}
 	if definition.requiresTarget {
 		if strings.TrimSpace(event.TargetID) == "" {
