@@ -1,7 +1,5 @@
 package deviceprobe
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"errors"
@@ -12,7 +10,10 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )

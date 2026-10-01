@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/endpoint"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices/internal/rtc"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
@@ -77,18 +76,6 @@ func (f *Factory) Open(ctx context.Context, request devices.Request) (devices.Ha
 		return nil, errors.Join(err, closeInput(input))
 	}
 	return newHandle(input, output), nil
-}
-
-func (f *Factory) BindRTC(ctx context.Context, request devices.RTCBindingRequest) (devices.RTCBinding, error) {
-	if f == nil {
-		return nil, devices.ErrUnavailable
-	}
-	inputSelected := request.InputPresent || strings.TrimSpace(request.InputDevice) != ""
-	outputSelected := request.OutputPresent || strings.TrimSpace(request.OutputDevice) != ""
-	if !inputSelected && !outputSelected {
-		return nil, nil
-	}
-	return rtc.NewFactory(f.registry).BindRTC(ctx, request)
 }
 
 func (f *Factory) validateRequest(ctx context.Context, request devices.Request) error {
