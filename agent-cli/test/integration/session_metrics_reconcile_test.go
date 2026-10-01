@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -36,21 +35,6 @@ const (
 	metricsReconcileText     = "Reconciled text."
 	metricsReconcileDeadline = 30 * time.Second
 )
-
-// corpusAudioWAVPath locates a committed corpus WAV. The fixture is assembled
-// in a temporary directory so raw audio never enters a committed JSON capture.
-func corpusAudioWAVPath(t *testing.T, name string) string {
-	t.Helper()
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve corpus audio path: runtime.Caller failed")
-	}
-	path := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "go-agent-loop", "testdata", "audio", name)
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("committed corpus WAV %s not found: %v", name, err)
-	}
-	return path
-}
 
 func buildMetricsReconcileFixture(t *testing.T) (path string, audioPCM []byte) {
 	t.Helper()
@@ -523,15 +507,6 @@ func readCommandObservation(t *testing.T) (fixturePath string, expectedPCM []byt
 		t.Fatalf("runtime terminal observations = %d, final accounting nil = %t (run error: %v)", terminalCount, finalAccounting == nil, runErr)
 	}
 	return fixturePath, expectedPCM, stdout, fixtureLedger, finalAccounting, audioOut, runErr
-}
-
-func wavPCM(t *testing.T, name string, data []byte) []byte {
-	t.Helper()
-	_, samples, err := wavio.Read(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
-	return codec.EncodePCM16(samples)
 }
 
 // TestSessionCommandMetricsReconcileMatchesIndependentFoldOverFullSession is

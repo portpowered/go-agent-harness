@@ -231,3 +231,38 @@ func addressClassFromEndpointKind(kind EndpointKind) string {
 	}
 	return "non_loopback"
 }
+
+func (s *Service) browserIDForEndpoint(endpoint Endpoint) string {
+	if s == nil {
+		return ""
+	}
+	if raw := strings.TrimSpace(endpoint.BrowserWSEndpoint); raw != "" {
+		if normalized, failure := parseBrowserWebSocketURL(raw); failure == nil {
+			identity := BrowserIdentity{
+				Scheme: normalized.url.Scheme,
+				Host:   normalized.url.Hostname(),
+				Port:   normalized.url.Port(),
+				Path:   normalized.url.EscapedPath(),
+			}
+			return normalizePublicID(s.idMapper.BrowserID(identity), identity)
+		}
+	}
+	if raw := strings.TrimSpace(endpoint.CDPURL); raw != "" {
+		if parsed, failure := parseHTTPURL(raw); failure == nil {
+			base := targetListBaseURL(parsed)
+			for browserID, known := range s.endpoints {
+				if known.httpURL == base {
+					return browserID
+				}
+			}
+			identity := BrowserIdentity{
+				Scheme: parsed.Scheme,
+				Host:   parsed.Hostname(),
+				Port:   parsed.Port(),
+				Path:   parsed.EscapedPath(),
+			}
+			return normalizePublicID(s.idMapper.BrowserID(identity), identity)
+		}
+	}
+	return ""
+}

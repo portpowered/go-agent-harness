@@ -553,37 +553,3 @@ func boundedOutputLabel(value string, maxLen int) string {
 	}
 	return value
 }
-
-func nonNegativeInt(value any) int {
-	switch typed := value.(type) {
-	case int:
-		if typed >= 0 {
-			return typed
-		}
-	case int64:
-		if typed >= 0 && typed <= int64(^uint(0)>>1) {
-			return int(typed)
-		}
-	case float64:
-		if typed >= 0 && typed <= float64(^uint(0)>>1) {
-			return int(typed)
-		}
-	}
-	return 0
-}
-
-func nonNegativeUint(value any) uint64 {
-	switch typed := value.(type) {
-	case uint64:
-		return typed
-	case int:
-		if typed >= 0 {
-			return uint64(typed)
-		}
-	case float64:
-		if typed >= 0 {
-			return uint64(typed)
-		}
-	}
-	return 0
-}

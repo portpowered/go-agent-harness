@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -832,27 +831,6 @@ func RedactRawDiagnostics(data []byte, credentials []string) ([]byte, error) {
 	return redacted, nil
 }
 
-// WriteRedactedEvents serializes redacted events to a writer only after the
-// complete artifact has been transformed and credential-checked. A failed
-// transformation never writes a partial event stream.
-func WriteRedactedEvents(writer io.Writer, events []Event, policy RedactionPolicy, credentials ...[]string) error {
-	if writer == nil {
-		return newRedactionError(ErrRecorderWrite, "write events", "writer", errors.New("writer is nil"), nil)
-	}
-	data, err := MarshalRedactedEvents(events, policy, credentials...)
-	if err != nil {
-		return err
-	}
-	n, err := writer.Write(data)
-	if err == nil && n != len(data) {
-		err = io.ErrShortWrite
-	}
-	if err != nil {
-		return newRedactionError(ErrRecorderWrite, "write events", "writer", err, nil)
-	}
-	return nil
-}
-
 // sameJSONStructure is intentionally used only to avoid marking a page-owned
 // object as redacted merely because canonical map encoding sorted its keys.
 // It compares JSON tokens without decoding numbers through float64.
@@ -866,4 +844,37 @@ func sameJSONStructure(first, second []byte) bool {
 		return false
 	}
 	return jsonEquivalent(left, right)
+}
+
+func jsonEquivalent(left, right any) bool {
+	switch leftValue := left.(type) {
+	case map[string]any:
+		rightValue, ok := right.(map[string]any)
+		if !ok || len(leftValue) != len(rightValue) {
+			return false
+		}
+		for key, value := range leftValue {
+			other, ok := rightValue[key]
+			if !ok || !jsonEquivalent(value, other) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		rightValue, ok := right.([]any)
+		if !ok || len(leftValue) != len(rightValue) {
+			return false
+		}
+		for index := range leftValue {
+			if !jsonEquivalent(leftValue[index], rightValue[index]) {
+				return false
+			}
+		}
+		return true
+	case json.Number:
+		rightValue, ok := right.(json.Number)
+		return ok && leftValue == rightValue
+	default:
+		return fmt.Sprint(left) == fmt.Sprint(right)
+	}
 }

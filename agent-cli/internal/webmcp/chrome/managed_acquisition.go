@@ -469,23 +469,6 @@ func ChromeForTestingPlatform(goos, goarch string) (string, error) {
 	}
 }
 
-func uniquePaths(paths []string) []string {
-	seen := make(map[string]struct{}, len(paths))
-	result := make([]string, 0, len(paths))
-	for _, path := range paths {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			continue
-		}
-		if _, ok := seen[path]; ok {
-			continue
-		}
-		seen[path] = struct{}{}
-		result = append(result, path)
-	}
-	return result
-}
-
 func fallbackFailureCategory(err error) string {
 	var fallbackErr *ChromeForTestingError
 	if errors.As(err, &fallbackErr) && fallbackErr != nil && fallbackErr.Category != "" {

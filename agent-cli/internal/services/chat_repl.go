@@ -246,14 +246,8 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 		if v, ok := evt.Value.(*messages.ToolCallStartValue); ok {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineTool, content: v.Name})
 		}
-	case messages.StreamTypeImageStart:
-		m.appendToolMediaLine(evt, "[Image returned]")
-	case messages.StreamTypeAudioStart:
-		m.appendToolMediaLine(evt, "[Audio returned]")
-	case messages.StreamTypeVideoStart:
-		m.appendToolMediaLine(evt, "[Video returned]")
-	case messages.StreamTypeFileStart:
-		m.appendToolMediaLine(evt, toolFileLabel(evt))
+	case messages.StreamTypeImageStart, messages.StreamTypeAudioStart, messages.StreamTypeVideoStart, messages.StreamTypeFileStart:
+		m.appendToolMediaLine(evt, toolMediaLabel(evt))
 	case messages.StreamTypeTextStart:
 		if isFromTool(evt) {
 			m.toolTextPartial = ""
@@ -381,48 +375,4 @@ func (m *ChatModel) runAgentWithInput(execInput agentloop.ExecuteInput) tea.Cmd 
 		}
 		return streamReadyMsg{stream: stream, handle: handle}
 	}
-}
-
-// ChatService runs interactive text chat sessions backed by a bubbletea TUI.
-type ChatService struct {
-	service     session.Service
-	globalFlags *flags.GlobalFlags
-	askFlags    *flags.AskFlags
-}
-
-// NewChatService creates a ChatService backed by the given agent executor and flags.
-func NewChatService(service session.Service, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags) *ChatService {
-	return &ChatService{service: service, globalFlags: globalFlags, askFlags: askFlags}
-}
-
-// Run starts the interactive chat loop.
-//
-// It prints the session banner, then hands control to a bubbletea program
-// that reads keystrokes from in and writes the rendered UI and agent responses
-// to out. The program exits when the user types "exit", "quit", or presses
-// Ctrl+C, or when in reaches EOF.
-func (s *ChatService) Run(ctx context.Context, in io.Reader, out, errOut io.Writer) error {
-	cfg := BuildAgentConfigFromFlags(s.globalFlags, s.askFlags, nil, "")
-	if s.service == nil {
-		return fmt.Errorf("session service is not configured")
-	}
-	sessionID, err := s.service.NewSessionID(ctx, *cfg)
-	if err != nil {
-		return fmt.Errorf("create chat session: %w", err)
-	}
-
-	if _, err := fmt.Fprintln(out, "Port OS Agent Chat (type 'exit' or 'quit' to end)"); err != nil {
-		return fmt.Errorf("write chat banner: %w", err)
-	}
-	if _, err := fmt.Fprintln(out, "---"); err != nil {
-		return fmt.Errorf("write chat banner separator: %w", err)
-	}
-
-	model := NewChatModel(s.service, sessionID, s.globalFlags, s.askFlags, ctx, out, errOut)
-	p := tea.NewProgram(model,
-		tea.WithInput(in),
-		tea.WithOutput(out),
-	)
-	_, err = p.Run()
-	return err
 }

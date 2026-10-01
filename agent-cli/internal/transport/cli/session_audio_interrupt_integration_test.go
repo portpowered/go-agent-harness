@@ -921,22 +921,3 @@ func sessionAudioInterruptWriteSummary(writes []sessionAudioInterruptWireWrite) 
 	}
 	return fmt.Sprintf("%v", types)
 }
-
-// A scripted browser announces Invoke entry before Invoke returns its ID. Releasing
-// then can manufacture a terminal without broker provenance. This scenario tests
-// interruption after admission, so wait for that actual protocol boundary.
-func waitSessionAudioBrowserDispatch(ctx context.Context, events <-chan webmcp.BrokerEvent, tool string) error {
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return fmt.Errorf("browser watch closed before dispatch of %s", tool)
-			}
-			if event.Type == webmcp.BrokerEventInvocationCreated && event.State == webmcp.InvocationDispatched && event.ToolName == tool {
-				return nil
-			}
-		case <-ctx.Done():
-			return fmt.Errorf("wait for browser dispatch of %s: %w", tool, ctx.Err())
-		}
-	}
-}

@@ -508,24 +508,6 @@ func waitForSIGINTFixture(t *testing.T, command *exec.Cmd, ready <-chan struct{}
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
-func waitForSIGINTFile(path string, timeout time.Duration) bool {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if _, err := os.Stat(path); err == nil {
-			return true
-		} else if !os.IsNotExist(err) {
-			return false
-		}
-		select {
-		case <-ticker.C:
-		case <-timer.C:
-			return false
-		}
-	}
-}
 func sigintExitCode(err error) int {
 	if err == nil {
 		return 0

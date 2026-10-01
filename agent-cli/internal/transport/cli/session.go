@@ -552,22 +552,6 @@ func validateSessionSignaling(transport, signaling string, provided bool) error 
 	return nil
 }
 
-func validateSessionMediaSource(transport, source string, provided, audioInProvided bool) error {
-	if !provided {
-		return nil
-	}
-	if audioInProvided {
-		return &SessionMediaSourceError{Transport: transport, Source: source, AudioIn: true}
-	}
-	if transport != SessionTransportWebRTC {
-		return &SessionMediaSourceError{Transport: transport, Source: source}
-	}
-	if strings.TrimSpace(source) == "" {
-		return &SessionMediaSourceError{Transport: transport, Source: source, Empty: true}
-	}
-	return nil
-}
-
 // getSessionStorage opens the runtime-owned store for a CLI command. Paths
 // are resolved by the host, while persistence and its codecs remain owned by
 // services/session. A nil factory is retained only for help-only compatibility

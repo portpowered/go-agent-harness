@@ -301,6 +301,18 @@ func (m *ChatModel) appendToolMediaLine(evt messages.StreamMessage, label string
 	}
 }
 
+// toolMediaLabel is the placeholder line for media a tool returned.
+func toolMediaLabel(evt messages.StreamMessage) string {
+	if evt.Type == messages.StreamTypeFileStart {
+		return toolFileLabel(evt)
+	}
+	return map[messages.StreamMessageType]string{
+		messages.StreamTypeImageStart: "[Image returned]",
+		messages.StreamTypeAudioStart: "[Audio returned]",
+		messages.StreamTypeVideoStart: "[Video returned]",
+	}[evt.Type]
+}
+
 func toolFileLabel(evt messages.StreamMessage) string {
 	if v, ok := evt.Value.(*messages.FileStartValue); ok && v.Name != "" {
 		return "[File returned: " + v.Name + "]"

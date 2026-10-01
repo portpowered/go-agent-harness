@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -198,5 +199,26 @@ func (r *Recorder) writeLocked(event Event) error {
 	r.nextSequence = event.Sequence + 1
 	r.lastMonotonic = event.MonotonicMS
 	r.hasEvents = true
+	return nil
+}
+
+// WriteRedactedEvents serializes redacted events to a writer only after the
+// complete artifact has been transformed and credential-checked. A failed
+// transformation never writes a partial event stream.
+func WriteRedactedEvents(writer io.Writer, events []Event, policy RedactionPolicy, credentials ...[]string) error {
+	if writer == nil {
+		return newRedactionError(ErrRecorderWrite, "write events", "writer", errors.New("writer is nil"), nil)
+	}
+	data, err := MarshalRedactedEvents(events, policy, credentials...)
+	if err != nil {
+		return err
+	}
+	n, err := writer.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		return newRedactionError(ErrRecorderWrite, "write events", "writer", err, nil)
+	}
 	return nil
 }

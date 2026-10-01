@@ -1,12 +1,8 @@
 package testkit
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"strings"
 )
 
 // OperationDiscover and the list constants are diagnostic-only caller
@@ -89,53 +85,4 @@ func cloneBrowserScript(script BrowserScript) BrowserScript {
 // LoadReplayScriptReader is the reader form of LoadReplayScriptFile.
 func LoadReplayScriptReader(reader io.Reader) (BrowserScript, error) {
 	return LoadBrowserScriptReader(reader)
-}
-
-func validateStableFixtureError(raw json.RawMessage) error {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
-		return errors.New("must be a non-null stable error")
-	}
-	if trimmed[0] == '"' {
-		value, err := parseScriptString(trimmed)
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(value) == "" {
-			return errors.New("must not be empty")
-		}
-		return nil
-	}
-	if trimmed[0] != '{' {
-		return errors.New("must be a string or object")
-	}
-	fields, err := decodeJSONObject(trimmed)
-	if err != nil {
-		return err
-	}
-	codeRaw, ok := fields["code"]
-	if !ok {
-		return errors.New("object error requires code")
-	}
-	code, err := parseScriptString(codeRaw)
-	if err != nil {
-		return fmt.Errorf("code: %w", err)
-	}
-	if strings.TrimSpace(code) == "" {
-		return errors.New("code must not be empty")
-	}
-	if messageRaw, ok := fields["message"]; ok {
-		if _, err := parseScriptString(messageRaw); err != nil {
-			return fmt.Errorf("message: %w", err)
-		}
-	}
-	if detailsRaw, ok := fields["details"]; ok && !isJSONObject(detailsRaw) {
-		return errors.New("details must be a JSON object")
-	}
-	for name := range fields {
-		if name != "code" && name != "message" && name != "details" {
-			return fmt.Errorf("unknown field %q", name)
-		}
-	}
-	return nil
 }

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"sort"
 	"strings"
 
@@ -202,4 +203,36 @@ func (s *LaneBToolSet) browser(browserID string) (discovery.BrowserCandidate, bo
 		return lookup.Browser(browserID)
 	}
 	return discovery.BrowserCandidate{}, false
+}
+
+func filterTargets(targets []webmcp.Target, originContains string, eligibleOnly bool) []webmcp.Target {
+	filtered := make([]webmcp.Target, 0, len(targets))
+	for _, target := range targets {
+		if eligibleOnly && !target.Eligible {
+			continue
+		}
+		if originContains != "" && !strings.Contains(target.Origin, originContains) {
+			continue
+		}
+		filtered = append(filtered, target)
+	}
+	return filtered
+}
+
+func targetDataList(targets []webmcp.Target) []targetData {
+	result := make([]targetData, 0, len(targets))
+	for _, target := range targets {
+		result = append(result, targetData{
+			BrowserID:         target.BrowserID,
+			TargetID:          target.ID,
+			Type:              target.Type,
+			Title:             target.Title,
+			URL:               target.URL,
+			Origin:            target.Origin,
+			Attached:          target.Attached,
+			Eligible:          target.Eligible,
+			EligibilityReason: target.EligibilityReason,
+		})
+	}
+	return result
 }

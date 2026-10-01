@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -572,39 +571,6 @@ func extractManagedChromeEntry(entry *zip.File, target string, remaining *int64)
 	return os.Chmod(target, mode)
 }
 
-func extractManagedChromeSymlink(entry *zip.File, destination string) error {
-	name, err := validateChromeArchivePathValue(entry.Name)
-	if err != nil {
-		return err
-	}
-	linkPath := filepath.Join(destination, filepath.FromSlash(name))
-	reader, err := entry.Open()
-	if err != nil {
-		return err
-	}
-	linkTargetBytes, readErr := io.ReadAll(io.LimitReader(reader, chromeArchiveSymlinkTargetLimit))
-	closeErr := reader.Close()
-	if readErr != nil {
-		return readErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	linkTarget := strings.TrimSpace(string(linkTargetBytes))
-	if linkTarget == "" || filepath.IsAbs(filepath.FromSlash(linkTarget)) {
-		return errors.New("chrome archive symlink target is unsafe")
-	}
-	resolvedTarget := filepath.Clean(filepath.Join(filepath.Dir(linkPath), filepath.FromSlash(linkTarget)))
-	relativeTarget, err := filepath.Rel(destination, resolvedTarget)
-	if err != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(os.PathSeparator)) {
-		return errors.New("chrome archive symlink escapes extraction directory")
-	}
-	if err := os.MkdirAll(filepath.Dir(linkPath), chromeArchiveDirMode); err != nil {
-		return err
-	}
-	return os.Symlink(linkTarget, linkPath)
-}
-
 const chromeArchiveDefaultFileMode os.FileMode = 0o600
 
 const chromeArchiveDirMode os.FileMode = 0o700
@@ -624,19 +590,6 @@ func (e chromeArchiveError) Error() string { return string(e) }
 func validateChromeArchivePath(raw string) error {
 	_, err := validateChromeArchivePathValue(raw)
 	return err
-}
-
-func validateChromeArchivePathValue(raw string) (string, error) {
-	if strings.ContainsRune(raw, '\x00') {
-		return "", errors.New("chrome archive path contains NUL")
-	}
-	normalized := strings.ReplaceAll(raw, "\\", "/")
-	cleaned := path.Clean(normalized)
-	converted := filepath.FromSlash(cleaned)
-	if normalized == "" || normalized == "." || strings.HasPrefix(normalized, "/") || cleaned == ".." || strings.HasPrefix(cleaned, "../") || filepath.IsAbs(converted) || filepath.VolumeName(converted) != "" {
-		return "", errors.New("chrome archive contains an unsafe path")
-	}
-	return cleaned, nil
 }
 
 func validateOfficialChromeURL(raw, prefix string) error {

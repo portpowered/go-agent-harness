@@ -239,3 +239,16 @@ func (randomIDs) NewInvocationID() (InvocationID, error) {
 	}
 	return InvocationID("inv-" + base64.RawURLEncoding.EncodeToString(token[:])), nil
 }
+
+// toolRefUnusedLocked reports whether ref is valid and neither active nor
+// retired.
+func (b *StatefulBroker) toolRefUnusedLocked(ref ToolRef) bool {
+	if validateToolRefSyntax(ref) != nil {
+		return false
+	}
+	if _, active := b.refs[ref]; active {
+		return false
+	}
+	_, wasRetired := b.retired[ref]
+	return !wasRetired
+}

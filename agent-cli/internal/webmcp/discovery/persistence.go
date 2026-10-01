@@ -913,23 +913,3 @@ func (s *Service) commitReconnectSelectionLocked(ctx context.Context, browser Br
 	}
 	return selected, previousHandle, nil
 }
-
-// activateSelectionLocked brings the selected tab to the foreground when asked.
-// Foreground activation is ancillary: only a browser disconnect fails the
-// selection; otherwise the exact reconnect selection is kept while the browser
-// remains reachable and attachable.
-func (s *Service) activateSelectionLocked(ctx context.Context, options ReconnectOptions, browser BrowserCandidate, target Target) *DiscoveryError {
-	if !options.Activate || s.activator == nil {
-		return nil
-	}
-	activateErr := s.activator.Activate(ctx, browser, target)
-	if activateErr == nil {
-		return nil
-	}
-	failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
-	if failure.Code != CodeBrowserDisconnected {
-		return nil
-	}
-	s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
-	return failure
-}

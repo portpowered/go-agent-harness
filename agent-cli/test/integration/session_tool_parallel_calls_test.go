@@ -119,18 +119,6 @@ func parallelUserItemCreatePayload(text string) json.RawMessage {
 	return mustMarshalFixture(payload)
 }
 
-func parallelToolResultPayload(callID, output string) json.RawMessage {
-	payload := map[string]any{
-		"type": rtEventConversationItemCreate,
-		"item": map[string]any{
-			"type":    rtItemFunctionCallOutput,
-			"call_id": callID,
-			"output":  output,
-		},
-	}
-	return mustMarshalFixture(payload)
-}
-
 // buildParallelToolCallsFixture writes a synthetic record/replay capture in
 // two provider turns. Turn one issues the two named function tool calls and
 // terminates; turn two can only be reached after the client emits the

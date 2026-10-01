@@ -1,6 +1,7 @@
 package testkit
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,30 +132,6 @@ func (e *BrowserEndpoint) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*e = result
-	return nil
-}
-
-// Validate checks an endpoint and all target records.
-func (e *BrowserEndpoint) Validate() error {
-	if strings.TrimSpace(e.Version.Browser) == "" {
-		return newScriptError("version.Browser", "is required")
-	}
-	if strings.TrimSpace(e.Version.ProtocolVersion) == "" {
-		return newScriptError("version.Protocol-Version", "is required")
-	}
-	if strings.TrimSpace(e.Version.WebSocketDebuggerURL) == "" {
-		return newScriptError("version.webSocketDebuggerUrl", "is required")
-	}
-	seen := make(map[string]struct{}, len(e.Targets))
-	for index, target := range e.Targets {
-		if err := target.Validate(); err != nil {
-			return wrapScriptError(fmt.Sprintf("targets[%d]", index), err)
-		}
-		if _, exists := seen[target.ID]; exists {
-			return newScriptError(fmt.Sprintf("targets[%d].id", index), "duplicate target ID %q", target.ID)
-		}
-		seen[target.ID] = struct{}{}
-	}
 	return nil
 }
 
@@ -645,6 +622,55 @@ func (t *ToolDescriptor) Validate() error {
 	}
 	if len(t.Annotations) > 0 && !isJSONObject(t.Annotations) {
 		return newScriptError("annotations", "must be a JSON object")
+	}
+	return nil
+}
+
+func validateStableFixtureError(raw json.RawMessage) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return errors.New("must be a non-null stable error")
+	}
+	if trimmed[0] == '"' {
+		value, err := parseScriptString(trimmed)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(value) == "" {
+			return errors.New("must not be empty")
+		}
+		return nil
+	}
+	if trimmed[0] != '{' {
+		return errors.New("must be a string or object")
+	}
+	fields, err := decodeJSONObject(trimmed)
+	if err != nil {
+		return err
+	}
+	codeRaw, ok := fields["code"]
+	if !ok {
+		return errors.New("object error requires code")
+	}
+	code, err := parseScriptString(codeRaw)
+	if err != nil {
+		return fmt.Errorf("code: %w", err)
+	}
+	if strings.TrimSpace(code) == "" {
+		return errors.New("code must not be empty")
+	}
+	if messageRaw, ok := fields["message"]; ok {
+		if _, err := parseScriptString(messageRaw); err != nil {
+			return fmt.Errorf("message: %w", err)
+		}
+	}
+	if detailsRaw, ok := fields["details"]; ok && !isJSONObject(detailsRaw) {
+		return errors.New("details must be a JSON object")
+	}
+	for name := range fields {
+		if name != "code" && name != "message" && name != "details" {
+			return fmt.Errorf("unknown field %q", name)
+		}
 	}
 	return nil
 }

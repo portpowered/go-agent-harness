@@ -338,16 +338,6 @@ func sortFilesystemCheckpoints(checkpoints []FilesystemCheckpoint) {
 	}
 }
 
-func customerSimulationTurnID(scenario CustomerScenario, index int) string {
-	if scenario.Family == ScenarioFamilyD {
-		return FamilyDActiveTurnID
-	}
-	if scenario.Family == ScenarioFamilyE {
-		return FamilyETurnID
-	}
-	return fmt.Sprintf("turn-%d", index+1)
-}
-
 func customerSimulationAudioEvents(scenario CustomerScenario, result DuplexRunResult, frameDuration time.Duration, facts customerSimulationRecordingFacts) []AudioTurnEvent {
 	if frameDuration <= 0 {
 		frameDuration = DefaultDuplexFrameDuration

@@ -577,20 +577,7 @@ func noPageSelectedDetails(details map[string]any) bool {
 func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]byte, error) {
 	code := webmcp.ErrorCode(result.ErrorCode)
 	if !webmcp.IsKnownErrorCode(code) {
-		switch result.State {
-		case webmcp.InvocationCanceled:
-			code = webmcp.ErrorInvocationCanceled
-		case webmcp.InvocationTimedOut:
-			code = webmcp.ErrorInvocationTimedOut
-		case webmcp.InvocationOrphaned:
-			code = webmcp.ErrorInvocationOrphaned
-		case webmcp.InvocationCreated, webmcp.InvocationAwaitingApproval, webmcp.InvocationQueued,
-			webmcp.InvocationDispatching, webmcp.InvocationDispatched, webmcp.InvocationCompleted,
-			webmcp.InvocationError, webmcp.InvocationPolicyDenied:
-			code = webmcp.ErrorInvocationFailed
-		default:
-			code = webmcp.ErrorInvocationFailed
-		}
+		code = invocationStateErrorCode(result.State)
 	}
 	details := map[string]any{
 		"invocation_id": string(result.InvocationID),
@@ -733,38 +720,6 @@ type targetData struct {
 	Attached          bool             `json:"attached"`
 	Eligible          bool             `json:"eligible"`
 	EligibilityReason string           `json:"eligibility_reason,omitempty"`
-}
-
-func targetDataList(targets []webmcp.Target) []targetData {
-	result := make([]targetData, 0, len(targets))
-	for _, target := range targets {
-		result = append(result, targetData{
-			BrowserID:         target.BrowserID,
-			TargetID:          target.ID,
-			Type:              target.Type,
-			Title:             target.Title,
-			URL:               target.URL,
-			Origin:            target.Origin,
-			Attached:          target.Attached,
-			Eligible:          target.Eligible,
-			EligibilityReason: target.EligibilityReason,
-		})
-	}
-	return result
-}
-
-func filterTargets(targets []webmcp.Target, originContains string, eligibleOnly bool) []webmcp.Target {
-	filtered := make([]webmcp.Target, 0, len(targets))
-	for _, target := range targets {
-		if eligibleOnly && !target.Eligible {
-			continue
-		}
-		if originContains != "" && !strings.Contains(target.Origin, originContains) {
-			continue
-		}
-		filtered = append(filtered, target)
-	}
-	return filtered
 }
 
 type catalogData struct {

@@ -339,20 +339,6 @@ func ambiguityRecovery(code Code) map[string]any {
 	}
 }
 
-func newStaleSelection(browserID, targetID string, selectedGeneration uint64, reason string) *DiscoveryError {
-	return &DiscoveryError{
-		Code:      CodeStaleSelection,
-		Message:   "the selected browser target is no longer current",
-		Retryable: true,
-		Details: map[string]any{
-			"browser_id":          boundedLabel(browserID, maxDetailLabelBytes),
-			"target_id":           boundedLabel(targetID, maxDetailLabelBytes),
-			"selected_generation": selectedGeneration,
-			"reason":              boundedLabel(reason, maxDetailLabelBytes),
-		},
-	}
-}
-
 func newTargetAttachFailed(browserID, targetID, phase, reason string, cause error) *DiscoveryError {
 	return &DiscoveryError{
 		Code:      CodeTargetAttachFailed,

@@ -790,22 +790,6 @@ func negotiateRTCDataChannel(ctx context.Context, offerer, answerer *rtc.Loopbac
 	return nil
 }
 
-func setLocalAndGather(ctx context.Context, peer *webrtc.PeerConnection, description webrtc.SessionDescription) (webrtc.SessionDescription, error) {
-	if err := peer.SetLocalDescription(description); err != nil {
-		return webrtc.SessionDescription{}, err
-	}
-	select {
-	case <-webrtc.GatheringCompletePromise(peer):
-	case <-ctx.Done():
-		return webrtc.SessionDescription{}, ctx.Err()
-	}
-	local := peer.LocalDescription()
-	if local == nil {
-		return webrtc.SessionDescription{}, errors.New("RTC peer has no local description after gathering")
-	}
-	return *local, nil
-}
-
 func waitRTCReady(ctx context.Context, state *rtcReplayState, ready <-chan struct{}, name string) error {
 	select {
 	case <-ready:

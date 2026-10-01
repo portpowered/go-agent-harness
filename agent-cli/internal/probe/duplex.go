@@ -753,10 +753,6 @@ func isDuplexSilence(data []byte) bool {
 	return true
 }
 
-func duplexProcessError(kind error, operation string, cause error) error {
-	return fmt.Errorf("%w: %s: %w", kind, operation, cause)
-}
-
 // exec.Cmd.Wait may report the runtime closing one of the runner-owned pipe
 // descriptors after a child has already exited successfully. The close error
 // is not a product failure when the child was reaped with exit code zero; the

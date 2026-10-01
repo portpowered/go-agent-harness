@@ -20,7 +20,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -775,62 +774,6 @@ func normalizedBrowserInstanceID(browser BrowserCandidate) string {
 func browserReplacementID(publicID, instanceID string) string {
 	digest := sha256.Sum256([]byte("browser-replacement\x00" + publicID + "\x00" + instanceID))
 	return "browser-" + hex.EncodeToString(digest[:12])
-}
-
-func (s *Service) replacedBrowserIDLocked(identity BrowserIdentity, publicID string) string {
-	address := browserAddressKey(identity.Host, identity.Port)
-	identityKey := browserIdentityKey(identity)
-	if endpoint, ok := s.endpoints[publicID]; ok && endpoint.identityKey != "" && endpoint.identityKey != identityKey {
-		return publicID
-	}
-	ids := make([]string, 0, len(s.endpoints))
-	for browserID, endpoint := range s.endpoints {
-		if browserID == publicID || endpointAddressKey(endpoint) == address {
-			if endpoint.identityKey != "" && endpoint.identityKey != identityKey {
-				ids = append(ids, browserID)
-			}
-		}
-	}
-	if len(ids) == 0 {
-		return ""
-	}
-	sort.Strings(ids)
-	return ids[0]
-}
-
-func (s *Service) retireReplacedBrowserLocked(browserID string) {
-	if browserID == "" {
-		return
-	}
-	if s.retiredBrowsers == nil {
-		s.retiredBrowsers = make(map[string]struct{})
-	}
-	s.retiredBrowsers[browserID] = struct{}{}
-	delete(s.endpoints, browserID)
-	delete(s.browsers, browserID)
-	if targetStates := s.targets[browserID]; targetStates != nil {
-		for targetID, state := range targetStates {
-			state.closed = true
-			state.target.Eligible = false
-			state.target.EligibilityReason = staleReasonBrowserReplaced
-			targetStates[targetID] = state
-		}
-	}
-	if s.selection == nil || s.selection.BrowserID != browserID {
-		return
-	}
-	selection := *s.selection
-	ownership := string(TargetOwnershipExternal)
-	if selection.Handle != nil {
-		ownership = string(selection.Handle.Ownership())
-		s.pendingReleases = append(s.pendingReleases, selection.Handle)
-	}
-	s.selection = nil
-	s.emitTarget(EventTargetDetached, selection.BrowserID, selection.TargetID, selection.Generation, map[string]any{
-		"generation":     selection.Generation,
-		"reason":         staleReasonBrowserReplaced,
-		"ownership_mode": ownership,
-	})
 }
 
 func safeProduct(value string) string {

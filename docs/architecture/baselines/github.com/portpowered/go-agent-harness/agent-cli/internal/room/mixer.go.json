@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
       "file": "internal/room/mixer.go",
       "symbol": "*PCM16Mixer.writeContextWithDisposition",
-      "value": 28,
+      "value": 29,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -38,7 +38,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
       "file": "internal/room/mixer.go",
       "symbol": "*PCM16Mixer.writeContextWithDisposition",
-      "value": 19,
+      "value": 20,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -47,7 +47,7 @@
       "module": "github.com/portpowered/go-agent-harness/agent-cli",
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
       "file": "internal/room/mixer.go",
-      "value": 783,
+      "value": 803,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -57,7 +57,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/room",
       "file": "internal/room/mixer.go",
       "symbol": "*PCM16Mixer.writeContextWithDisposition",
-      "value": 55,
+      "value": 57,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },

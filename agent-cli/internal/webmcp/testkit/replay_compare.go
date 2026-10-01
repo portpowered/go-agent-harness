@@ -216,39 +216,6 @@ func replayJSONIdentifierRune(index int, char rune) bool {
 	return char == '_' || char == '-' || char == '.' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || index > 0 && char >= '0' && char <= '9'
 }
 
-func jsonEquivalent(left, right any) bool {
-	switch leftValue := left.(type) {
-	case map[string]any:
-		rightValue, ok := right.(map[string]any)
-		if !ok || len(leftValue) != len(rightValue) {
-			return false
-		}
-		for key, value := range leftValue {
-			other, ok := rightValue[key]
-			if !ok || !jsonEquivalent(value, other) {
-				return false
-			}
-		}
-		return true
-	case []any:
-		rightValue, ok := right.([]any)
-		if !ok || len(leftValue) != len(rightValue) {
-			return false
-		}
-		for index := range leftValue {
-			if !jsonEquivalent(leftValue[index], rightValue[index]) {
-				return false
-			}
-		}
-		return true
-	case json.Number:
-		rightValue, ok := right.(json.Number)
-		return ok && leftValue == rightValue
-	default:
-		return fmt.Sprint(left) == fmt.Sprint(right)
-	}
-}
-
 // validateInvokeToolRequest requires a frame, a tool name, and an object input
 // (an absent input is the empty object).
 func validateInvokeToolRequest(request OperationRequest) error {
@@ -260,6 +227,30 @@ func validateInvokeToolRequest(request OperationRequest) error {
 	}
 	if len(request.Input) > 0 && !isJSONObject(request.Input) {
 		return errors.New("input must be a JSON object")
+	}
+	return nil
+}
+
+// Validate checks an endpoint and all target records.
+func (e *BrowserEndpoint) Validate() error {
+	if strings.TrimSpace(e.Version.Browser) == "" {
+		return newScriptError("version.Browser", "is required")
+	}
+	if strings.TrimSpace(e.Version.ProtocolVersion) == "" {
+		return newScriptError("version.Protocol-Version", "is required")
+	}
+	if strings.TrimSpace(e.Version.WebSocketDebuggerURL) == "" {
+		return newScriptError("version.webSocketDebuggerUrl", "is required")
+	}
+	seen := make(map[string]struct{}, len(e.Targets))
+	for index, target := range e.Targets {
+		if err := target.Validate(); err != nil {
+			return wrapScriptError(fmt.Sprintf("targets[%d]", index), err)
+		}
+		if _, exists := seen[target.ID]; exists {
+			return newScriptError(fmt.Sprintf("targets[%d].id", index), "duplicate target ID %q", target.ID)
+		}
+		seen[target.ID] = struct{}{}
 	}
 	return nil
 }

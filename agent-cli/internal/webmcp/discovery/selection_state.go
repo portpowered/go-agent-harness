@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"sort"
 	"sync"
 )
 
@@ -297,3 +298,93 @@ func (s Selection) Close(ctx context.Context) error {
 
 // Release is an alias for Selection.Close.
 func (s Selection) Release(ctx context.Context) error { return s.Close(ctx) }
+
+func (s *Service) replacedBrowserIDLocked(identity BrowserIdentity, publicID string) string {
+	address := browserAddressKey(identity.Host, identity.Port)
+	identityKey := browserIdentityKey(identity)
+	if endpoint, ok := s.endpoints[publicID]; ok && endpoint.identityKey != "" && endpoint.identityKey != identityKey {
+		return publicID
+	}
+	ids := make([]string, 0, len(s.endpoints))
+	for browserID, endpoint := range s.endpoints {
+		if browserID == publicID || endpointAddressKey(endpoint) == address {
+			if endpoint.identityKey != "" && endpoint.identityKey != identityKey {
+				ids = append(ids, browserID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	sort.Strings(ids)
+	return ids[0]
+}
+
+func (s *Service) retireReplacedBrowserLocked(browserID string) {
+	if browserID == "" {
+		return
+	}
+	if s.retiredBrowsers == nil {
+		s.retiredBrowsers = make(map[string]struct{})
+	}
+	s.retiredBrowsers[browserID] = struct{}{}
+	delete(s.endpoints, browserID)
+	delete(s.browsers, browserID)
+	if targetStates := s.targets[browserID]; targetStates != nil {
+		for targetID, state := range targetStates {
+			state.closed = true
+			state.target.Eligible = false
+			state.target.EligibilityReason = staleReasonBrowserReplaced
+			targetStates[targetID] = state
+		}
+	}
+	if s.selection == nil || s.selection.BrowserID != browserID {
+		return
+	}
+	selection := *s.selection
+	ownership := string(TargetOwnershipExternal)
+	if selection.Handle != nil {
+		ownership = string(selection.Handle.Ownership())
+		s.pendingReleases = append(s.pendingReleases, selection.Handle)
+	}
+	s.selection = nil
+	s.emitTarget(EventTargetDetached, selection.BrowserID, selection.TargetID, selection.Generation, map[string]any{
+		"generation":     selection.Generation,
+		"reason":         staleReasonBrowserReplaced,
+		"ownership_mode": ownership,
+	})
+}
+
+func newStaleSelection(browserID, targetID string, selectedGeneration uint64, reason string) *DiscoveryError {
+	return &DiscoveryError{
+		Code:      CodeStaleSelection,
+		Message:   "the selected browser target is no longer current",
+		Retryable: true,
+		Details: map[string]any{
+			"browser_id":          boundedLabel(browserID, maxDetailLabelBytes),
+			"target_id":           boundedLabel(targetID, maxDetailLabelBytes),
+			"selected_generation": selectedGeneration,
+			"reason":              boundedLabel(reason, maxDetailLabelBytes),
+		},
+	}
+}
+
+// activateSelectionLocked brings the selected tab to the foreground when asked.
+// Foreground activation is ancillary: only a browser disconnect fails the
+// selection; otherwise the exact reconnect selection is kept while the browser
+// remains reachable and attachable.
+func (s *Service) activateSelectionLocked(ctx context.Context, options ReconnectOptions, browser BrowserCandidate, target Target) *DiscoveryError {
+	if !options.Activate || s.activator == nil {
+		return nil
+	}
+	activateErr := s.activator.Activate(ctx, browser, target)
+	if activateErr == nil {
+		return nil
+	}
+	failure := classifySelectionOperationError(activateErr, browser.ID, target.ID, "activate", "activation_failed")
+	if failure.Code != CodeBrowserDisconnected {
+		return nil
+	}
+	s.noteBrowserDisconnectedFailureLocked(failure, browser.ID, target.ID, "activate")
+	return failure
+}

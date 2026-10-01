@@ -70,3 +70,19 @@ func replayRequestsAudio(request serviceSession.Request) bool {
 		request.AudioOutputPath != "" || request.AudioOutputRequested ||
 		request.AudioInputDevicePresent || request.AudioOutputDevicePresent
 }
+
+func validateSessionMediaSource(transport, source string, provided, audioInProvided bool) error {
+	if !provided {
+		return nil
+	}
+	if audioInProvided {
+		return &SessionMediaSourceError{Transport: transport, Source: source, AudioIn: true}
+	}
+	if transport != SessionTransportWebRTC {
+		return &SessionMediaSourceError{Transport: transport, Source: source}
+	}
+	if strings.TrimSpace(source) == "" {
+		return &SessionMediaSourceError{Transport: transport, Source: source, Empty: true}
+	}
+	return nil
+}

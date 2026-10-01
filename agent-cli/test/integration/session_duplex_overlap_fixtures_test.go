@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -465,4 +466,23 @@ func (p *postDoneBargeInProvider) fail(message string) {
 		p.observed.protocolError = message
 	}
 	p.mu.Unlock()
+}
+
+func waitForSIGINTFile(path string, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		} else if !os.IsNotExist(err) {
+			return false
+		}
+		select {
+		case <-ticker.C:
+		case <-timer.C:
+			return false
+		}
+	}
 }

@@ -976,16 +976,3 @@ func (b *StatefulBroker) mintToolRefLocked(descriptor ToolDescriptor) (ToolRef, 
 	}
 	return "", errors.New("webmcp: tool ref source did not produce a unique valid ref")
 }
-
-// toolRefUnusedLocked reports whether ref is valid and neither active nor
-// retired.
-func (b *StatefulBroker) toolRefUnusedLocked(ref ToolRef) bool {
-	if validateToolRefSyntax(ref) != nil {
-		return false
-	}
-	if _, active := b.refs[ref]; active {
-		return false
-	}
-	_, wasRetired := b.retired[ref]
-	return !wasRetired
-}

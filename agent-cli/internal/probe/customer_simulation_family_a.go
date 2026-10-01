@@ -2,6 +2,7 @@ package probe
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -373,4 +374,14 @@ func (p *customerSimulationStreamParser) applyMediaBoundaries() {
 			response.Cancelled = true
 		}
 	}
+}
+
+func customerSimulationTurnID(scenario CustomerScenario, index int) string {
+	if scenario.Family == ScenarioFamilyD {
+		return FamilyDActiveTurnID
+	}
+	if scenario.Family == ScenarioFamilyE {
+		return FamilyETurnID
+	}
+	return fmt.Sprintf("turn-%d", index+1)
 }
