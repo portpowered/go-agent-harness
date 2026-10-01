@@ -206,35 +206,22 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 	}
 	msg := record.message
 	isAssistant := customerSimulationMessageIsAssistant(record)
-	switch msg.Type {
-	case messages.StreamTypeMessageStart:
+	// Other stream types carry no customer-simulation response evidence.
+	switch kind := msg.Type; {
+	case kind == messages.StreamTypeMessageStart:
 		p.consumeMessageStart(record, isAssistant)
-	case messages.StreamTypeTextDelta:
+	case kind == messages.StreamTypeTextDelta:
 		p.consumeTextDelta(record, isAssistant)
-	case messages.StreamTypeTranscriptEnd:
+	case kind == messages.StreamTypeTranscriptEnd:
 		p.consumeTranscriptEnd(record, isAssistant)
-	case messages.StreamTypeAudioDelta:
+	case kind == messages.StreamTypeAudioDelta:
 		p.consumeAudioDelta(record, isAssistant)
-	case messages.StreamTypeToolCallEnd:
+	case kind == messages.StreamTypeToolCallEnd:
 		p.consumeToolCallEnd(record, isAssistant)
-	case messages.StreamTypeResponseCancel:
+	case kind == messages.StreamTypeResponseCancel:
 		p.consumeResponseCancel(record)
-	case messages.StreamTypeMessageEnd:
+	case kind == messages.StreamTypeMessageEnd:
 		p.consumeMessageEnd(record, isAssistant)
-	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
-		messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd,
-		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
-		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
-		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
-		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
-		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
-		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
-		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeInputItemAdded,
-		messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
-		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
-		messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
-		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
-		// Other stream types carry no customer-simulation response evidence.
 	}
 	return p.responseIndex > len(p.scenario.Actions)+p.knownResponses+1
 }

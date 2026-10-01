@@ -76,8 +76,9 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 	s.sent = append(s.sent, msg)
 	s.mu.Unlock()
 
-	switch msg.Type {
-	case messages.StreamTypeAudioDelta:
+	// Other client messages need no scripted response.
+	switch kind := msg.Type; {
+	case kind == messages.StreamTypeAudioDelta:
 		s.mu.Lock()
 		secondTurn := s.responseCount >= 1
 		s.mu.Unlock()
@@ -87,7 +88,7 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 				close(s.secondAudioSent)
 			})
 		}
-	case messages.StreamTypeMessageEnd:
+	case kind == messages.StreamTypeMessageEnd:
 		s.mu.Lock()
 		s.responseCount++
 		response := s.responseCount
@@ -105,7 +106,7 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 				s.emitThirdResponse()
 			}
 		}
-	case messages.StreamTypeResponseCreate:
+	case kind == messages.StreamTypeResponseCreate:
 		// A requested continuation completes the first scheduled turn. The
 		// second scheduled input is not committed until this response reaches
 		// its terminal MESSAGE.END.
@@ -127,7 +128,7 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 			break
 		}
 		s.queueActiveContinuationReady()
-	case messages.StreamTypeResponseCancel:
+	case kind == messages.StreamTypeResponseCancel:
 		s.mu.Lock()
 		bargeIn := s.bargeIn
 		s.mu.Unlock()
@@ -136,7 +137,7 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 			// observed, then terminate that response without emitting stale audio.
 			s.firstResponseEndOnce.Do(s.emitFirstResponseEnd)
 		}
-	case messages.StreamTypeToolCallEnd:
+	case kind == messages.StreamTypeToolCallEnd:
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
 		if ok && value != nil && value.ToolCallID == sessionToolBargeInCallID {
 			s.resultAcceptedOnce.Do(func() {
@@ -148,21 +149,6 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 				s.queueActiveContinuationReady()
 			})
 		}
-	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
-		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
-		messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
-		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
-		messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
-		messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
-		messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
-		messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
-		messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
-		messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
-		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
-		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeRefusal,
-		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
-		messages.StreamTypeSystemFullMessage:
-		// Other client messages need no scripted response.
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }

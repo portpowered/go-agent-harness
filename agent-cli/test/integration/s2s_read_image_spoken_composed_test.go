@@ -294,39 +294,25 @@ type readImageSpokenCounts struct {
 }
 
 func (c *readImageSpokenCounts) observe(index int, event messages.StreamMessage) {
-	switch event.Type {
-	case messages.StreamTypeToolCallEnd:
+	// Other stream types are not part of the read-image tool evidence.
+	switch kind := event.Type; {
+	case kind == messages.StreamTypeToolCallEnd:
 		if value, ok := event.Value.(*messages.ToolCallEndValue); ok && value != nil && value.Name == rtToolReadImage {
 			c.toolCalls++
 		}
-	case messages.StreamTypeImageStart:
+	case kind == messages.StreamTypeImageStart:
 		if event.Role == messages.RoleTool {
 			c.imageStarts++
 		}
-	case messages.StreamTypeImageDelta:
+	case kind == messages.StreamTypeImageDelta:
 		if event.Role == messages.RoleTool {
 			c.imageDeltas++
 		}
-	case messages.StreamTypeImageEnd:
+	case kind == messages.StreamTypeImageEnd:
 		if event.Role == messages.RoleTool {
 			c.imageEnds++
 			c.imageEndIndex = index
 		}
-	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeTextStart,
-		messages.StreamTypeTextDelta, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
-		messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta,
-		messages.StreamTypeAudioEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
-		messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
-		messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
-		messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
-		messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
-		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
-		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
-		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
-		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
-		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
-		// Other stream types are not part of the read-image tool evidence.
 	}
 }
 

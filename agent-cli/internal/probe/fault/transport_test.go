@@ -507,16 +507,17 @@ func runFaultScenarioWithConn(t *testing.T, rawConn transport.Conn, options ...O
 			return result
 		}
 		result.messages = append(result.messages, msg)
-		switch msg.Type {
-		case messages.StreamTypeTextDelta:
+		// Other stream types do not affect the fault-transport observation.
+		switch kind := msg.Type; {
+		case kind == messages.StreamTypeTextDelta:
 			result.sawTextDelta = true
-		case messages.StreamTypeAudioDelta:
+		case kind == messages.StreamTypeAudioDelta:
 			result.sawAudioDelta = true
 			result.audioDeltaCount++
-		case messages.StreamTypeMessageEnd:
+		case kind == messages.StreamTypeMessageEnd:
 			result.sawMessageEnd = true
 			return result
-		case messages.StreamTypeError:
+		case kind == messages.StreamTypeError:
 			result.sawError = true
 			value, ok := msg.Value.(*messages.ErrorValue)
 			if !ok || value == nil {
@@ -525,21 +526,6 @@ func runFaultScenarioWithConn(t *testing.T, rawConn transport.Conn, options ...O
 			}
 			result.errorValue = value
 			return result
-		case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
-			messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
-			messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
-			messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
-			messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
-			messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
-			messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
-			messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
-			messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart,
-			messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded,
-			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
-			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
-			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
-			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeSystemFullMessage:
-			// Other stream types do not affect the fault-transport observation.
 		}
 	}
 }

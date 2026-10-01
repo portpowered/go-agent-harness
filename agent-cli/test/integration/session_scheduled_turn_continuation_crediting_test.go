@@ -71,8 +71,9 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 	s.sent = append(s.sent, msg)
 	s.mu.Unlock()
 
-	switch msg.Type {
-	case messages.StreamTypeMessageEnd:
+	// Other client messages need no scripted response.
+	switch kind := msg.Type; {
+	case kind == messages.StreamTypeMessageEnd:
 		s.mu.Lock()
 		s.inputTurns++
 		inputTurn := s.inputTurns
@@ -81,7 +82,7 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 		}
 		s.mu.Unlock()
 		s.emitInputResponse(inputTurn)
-	case messages.StreamTypeToolCallEnd:
+	case kind == messages.StreamTypeToolCallEnd:
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
 		if !ok || value == nil {
 			return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: errors.New("scheduled continuation result has no typed value")}
@@ -90,7 +91,7 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 		s.toolResults[value.ToolCallID]++
 		s.pendingContinuations = append(s.pendingContinuations, value.ToolCallID)
 		s.mu.Unlock()
-	case messages.StreamTypeResponseCreate:
+	case kind == messages.StreamTypeResponseCreate:
 		s.mu.Lock()
 		s.responseCreates++
 		var callID string
@@ -102,23 +103,8 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 		if callID != "" {
 			s.emitContinuation(callID)
 		}
-	case messages.StreamTypeSessionClose:
+	case kind == messages.StreamTypeSessionClose:
 		s.closeOnce.Do(func() { close(s.done) })
-	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
-		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
-		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
-		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
-		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
-		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
-		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
-		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
-		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
-		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
-		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
-		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
-		messages.StreamTypeResponseCancel, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
-		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
-		// Other client messages need no scripted response.
 	}
 
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}

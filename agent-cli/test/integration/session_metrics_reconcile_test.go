@@ -318,24 +318,25 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 	inTurn := false
 	turnHasOutput := false
 	for index, entry := range ledger {
-		switch entry.typeName {
-		case messages.StreamTypeMessageStart:
+		// Other stream types do not contribute to accounting.
+		switch kind := entry.typeName; {
+		case kind == messages.StreamTypeMessageStart:
 			if inTurn {
 				return accountingFold{}, fmt.Errorf("ledger entry %d starts a turn before the prior turn ended", index+1)
 			}
 			inTurn = true
 			turnHasOutput = false
-		case messages.StreamTypeTextDelta, messages.StreamTypeTranscriptDelta:
+		case kind == messages.StreamTypeTextDelta, kind == messages.StreamTypeTranscriptDelta:
 			if entry.text != "" {
 				fold.record(metrics.DirectionOutput, metrics.ModalityText, len(entry.text))
 				turnHasOutput = true
 			}
-		case messages.StreamTypeAudioDelta:
+		case kind == messages.StreamTypeAudioDelta:
 			if entry.audioLen > 0 {
 				fold.record(metrics.DirectionOutput, metrics.ModalityAudio, entry.audioLen)
 				turnHasOutput = true
 			}
-		case messages.StreamTypeMessageEnd:
+		case kind == messages.StreamTypeMessageEnd:
 			if !inTurn || entry.usage == nil {
 				return accountingFold{}, fmt.Errorf("ledger entry %d is not a usage-bearing message close", index+1)
 			}
@@ -351,21 +352,6 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 			}
 			inTurn = false
 			turnHasOutput = false
-		case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
-			messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart,
-			messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta,
-			messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
-			messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
-			messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
-			messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
-			messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
-			messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded,
-			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
-			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
-			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
-			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
-			messages.StreamTypeSystemFullMessage:
-			// Other stream types do not contribute to accounting.
 		}
 	}
 	if inTurn {
