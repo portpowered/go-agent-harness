@@ -102,7 +102,7 @@ type ChatModel struct {
 func NewChatModel(service session.Service, sessionID string, globalFlags *flags.GlobalFlags, askFlags *flags.AskFlags, ctx context.Context, out, errOut io.Writer) ChatModel {
 	ti := textinput.New()
 	ti.Prompt = "> "
-	ti.PromptStyle = stylePrompt
+	ti.PromptStyle = stylePrompt()
 	ti.Placeholder = "Type a message..."
 	ti.Width = 78
 	return ChatModel{
@@ -332,8 +332,11 @@ func (m ChatModel) effectiveWidth() int {
 	if m.width > 0 {
 		return m.width
 	}
-	return 80
+	return defaultTerminalWidth
 }
+
+// defaultTerminalWidth is the wrap width used before the terminal reports one.
+const defaultTerminalWidth = 80
 
 // runAgentWithInput starts a streaming turn: builds the loop, runs ExecuteStreamingTurn,
 // and returns a tea.Cmd that emits streamReadyMsg with the event stream. The

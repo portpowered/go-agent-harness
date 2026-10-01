@@ -3,6 +3,7 @@ package agentsession
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -10,19 +11,6 @@ var (
 	// ErrInvalidOpenAIRealtimeVoice identifies a voice that is not one of the
 	// built-in voices supported by the OpenAI Realtime session surface.
 	ErrInvalidOpenAIRealtimeVoice = errors.New("invalid OpenAI Realtime voice")
-
-	openAIRealtimeVoiceRegistry = [...]string{
-		"alloy",
-		"ash",
-		"ballad",
-		"cedar",
-		"coral",
-		"echo",
-		"marin",
-		"sage",
-		"shimmer",
-		"verse",
-	}
 )
 
 // InvalidOpenAIRealtimeVoiceError reports a value outside the documented
@@ -56,9 +44,18 @@ func (e *InvalidOpenAIRealtimeVoiceError) Unwrap() error {
 // SupportedOpenAIRealtimeVoices returns the documented built-in voices in a
 // deterministic order. The returned slice is independent from the registry.
 func SupportedOpenAIRealtimeVoices() []string {
-	voices := make([]string, len(openAIRealtimeVoiceRegistry))
-	copy(voices, openAIRealtimeVoiceRegistry[:])
-	return voices
+	return []string{
+		"alloy",
+		"ash",
+		"ballad",
+		"cedar",
+		"coral",
+		"echo",
+		"marin",
+		"sage",
+		"shimmer",
+		"verse",
+	}
 }
 
 // ValidateOpenAIRealtimeVoice accepts the empty value to preserve the
@@ -67,10 +64,8 @@ func ValidateOpenAIRealtimeVoice(voice string) error {
 	if voice == "" {
 		return nil
 	}
-	for _, supported := range openAIRealtimeVoiceRegistry {
-		if voice == supported {
-			return nil
-		}
+	if slices.Contains(SupportedOpenAIRealtimeVoices(), voice) {
+		return nil
 	}
 	return &InvalidOpenAIRealtimeVoiceError{
 		Voice:           voice,

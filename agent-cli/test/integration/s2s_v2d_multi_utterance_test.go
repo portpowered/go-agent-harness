@@ -72,6 +72,10 @@ func runIntegrationTests(m *testing.M) int {
 	if err := buildIntegrationBinaries(dir); err != nil {
 		panic(err.Error())
 	}
+	// Tests resolve the binaries from this directory (integrationBinaryPath).
+	if err := os.Setenv(sharedBinaryDirEnv, dir); err != nil {
+		panic(err.Error())
+	}
 	return m.Run()
 }
 
@@ -80,15 +84,12 @@ func runIntegrationTests(m *testing.M) int {
 const sharedBinaryDirEnv = "AGENT_CLI_INTEGRATION_SHARED_DIR"
 
 func buildIntegrationBinaries(dir string) error {
-	agentBinaryPath = filepath.Join(dir, "agent")
-	audioDeviceServerBinaryPath = filepath.Join(dir, "audio-device-server")
-	mockToolAgentBinaryPath = filepath.Join(dir, "mock-tool-agent")
 	// The binaries are independent link targets over a shared build cache;
 	// building them concurrently removes two serial links from package setup.
 	builds := []struct{ name, output, source string }{
-		{name: "agent", output: agentBinaryPath, source: "../../cmd/agent"},
-		{name: "audio-device-server", output: audioDeviceServerBinaryPath, source: "../../cmd/audio-device-server"},
-		{name: "mock-tool-agent", output: mockToolAgentBinaryPath, source: "./testcmd/mock-tool-agent"},
+		{name: "agent", output: filepath.Join(dir, "agent"), source: "../../cmd/agent"},
+		{name: "audio-device-server", output: filepath.Join(dir, "audio-device-server"), source: "../../cmd/audio-device-server"},
+		{name: "mock-tool-agent", output: filepath.Join(dir, "mock-tool-agent"), source: "./testcmd/mock-tool-agent"},
 	}
 	errs := make([]error, len(builds))
 	var wg sync.WaitGroup
@@ -132,11 +133,20 @@ func warmBinary(path string) {
 	}
 }
 
-var (
-	agentBinaryPath             string
-	audioDeviceServerBinaryPath string
-	mockToolAgentBinaryPath     string
-)
+// integrationBinaryPath returns the process-boundary binary built by TestMain
+// into the shared binary directory, or "" when TestMain built none (a test
+// listing or a re-executed helper).
+func integrationBinaryPath(name string) string {
+	dir := os.Getenv(sharedBinaryDirEnv)
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, name)
+}
+
+func agentBinaryPath() string             { return integrationBinaryPath("agent") }
+func audioDeviceServerBinaryPath() string { return integrationBinaryPath("audio-device-server") }
+func mockToolAgentBinaryPath() string     { return integrationBinaryPath("mock-tool-agent") }
 
 type s2sV2DCLIResult struct {
 	exitCode int
@@ -155,7 +165,7 @@ func runAgentInProcess(t *testing.T, args ...string) s2sV2DCLIResult {
 
 func runAgentBinary(t *testing.T, args ...string) s2sV2DCLIResult {
 	t.Helper()
-	cmd := exec.Command(agentBinaryPath, args...)
+	cmd := exec.Command(agentBinaryPath(), args...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

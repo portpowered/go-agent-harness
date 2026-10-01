@@ -50,10 +50,12 @@ const (
 // deterministic synthetic image: a magenta top-left pixel, a cyan
 // bottom-right pixel, and a navy fill on a four by four grid. A reply that
 // does not come from the actual image content cannot contain them.
-var visionDescribeContentMarkers = []string{
-	"four by four grid",
-	"magenta pixel in the top left corner",
-	"cyan pixel in the bottom right corner",
+func visionDescribeContentMarkers() []string {
+	return []string{
+		"four by four grid",
+		"magenta pixel in the top left corner",
+		"cyan pixel in the bottom right corner",
+	}
 }
 
 // visionDescribeQuestionWAVPath returns a short voiced slice of the committed
@@ -241,7 +243,7 @@ func assertVisionDescribeGrounded(output string) error {
 	if !strings.Contains(output, "[session closed: fixture_complete]") {
 		return fmt.Errorf("vision session did not complete cleanly, got:\n%s", output)
 	}
-	for _, marker := range visionDescribeContentMarkers {
+	for _, marker := range visionDescribeContentMarkers() {
 		if !strings.Contains(output, marker) {
 			return fmt.Errorf("transcript missing image-grounded content %q, got:\n%s", marker, output)
 		}
@@ -366,7 +368,7 @@ func TestSessionCommandVisionDescribeWithoutImageFailsTypedReplay(t *testing.T) 
 	if !errors.Is(runErr, providers.ErrReplayMismatch) {
 		t.Fatalf("run without --image failed with %v, want typed replay mismatch", runErr)
 	}
-	for _, marker := range visionDescribeContentMarkers {
+	for _, marker := range visionDescribeContentMarkers() {
 		if strings.Contains(stdout.String(), marker) {
 			t.Fatalf("run without --image produced image-grounded content %q; grounding is not discriminative\nstdout:\n%s", marker, stdout.String())
 		}

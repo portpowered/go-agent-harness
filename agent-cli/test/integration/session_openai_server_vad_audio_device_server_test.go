@@ -48,7 +48,7 @@ func TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, agentBinaryPath,
+	command := exec.CommandContext(ctx, agentBinaryPath(),
 		"session",
 		"--replay", capturePath,
 		"--prompt", "replay server VAD barge in",
@@ -103,7 +103,7 @@ func startAudioDeviceServerBinary(t *testing.T, manualClock bool) (string, func(
 	if manualClock {
 		arguments = append(arguments, "--manual-clock")
 	}
-	command := exec.CommandContext(ctx, audioDeviceServerBinaryPath, arguments...)
+	command := exec.CommandContext(ctx, audioDeviceServerBinaryPath(), arguments...)
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		cancel()
@@ -353,9 +353,9 @@ func startRemoteToolAudioTopology(t *testing.T, testCase remoteToolAudioCase, pr
 
 func startRemoteToolAudioProcess(t *testing.T, ctx context.Context, testCase remoteToolAudioCase, arguments []string, paths remoteToolAudioPaths) remoteToolAudioAgent {
 	t.Helper()
-	binaryPath := agentBinaryPath
+	binaryPath := agentBinaryPath()
 	if paths.fixture != "" {
-		binaryPath = mockToolAgentBinaryPath
+		binaryPath = mockToolAgentBinaryPath()
 	}
 	command := exec.CommandContext(ctx, binaryPath, remoteToolAudioSessionArgs(paths.configDir, arguments)...)
 	command.Env = remoteToolAudioEnvironment(os.Environ(), paths.fixture, testCase.holdToneControl)

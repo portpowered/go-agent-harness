@@ -8,6 +8,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
+// Image media types the input boundary detects and suggests conversions to.
+const (
+	mimeJPEG = "image/jpeg"
+	mimePNG  = "image/png"
+	mimeGIF  = "image/gif"
+	mimeWebP = "image/webp"
+	mimeTIFF = "image/tiff"
+)
+
 // conversionHint describes a possible format conversion for a rejected MIME type.
 type conversionHint struct {
 	targetMime     string
@@ -18,17 +27,17 @@ type conversionHint struct {
 // A hint is shown only when the target MIME type is in the model's supported list.
 func conversionHints(rejectedMime string) []conversionHint {
 	switch rejectedMime {
-	case "image/webp":
+	case mimeWebP:
 		return []conversionHint{
-			{targetMime: "image/png", convertCommand: "convert input.webp output.png"},
-			{targetMime: "image/jpeg", convertCommand: "convert input.webp output.jpg"},
+			{targetMime: mimePNG, convertCommand: "convert input.webp output.png"},
+			{targetMime: mimeJPEG, convertCommand: "convert input.webp output.jpg"},
 		}
-	case "image/png":
-		return []conversionHint{{targetMime: "image/webp", convertCommand: "convert input.png output.webp"}}
-	case "image/jpeg":
-		return []conversionHint{{targetMime: "image/webp", convertCommand: "convert input.jpg output.webp"}}
-	case "image/tiff":
-		return []conversionHint{{targetMime: "image/png", convertCommand: "convert input.tiff output.png"}}
+	case mimePNG:
+		return []conversionHint{{targetMime: mimeWebP, convertCommand: "convert input.png output.webp"}}
+	case mimeJPEG:
+		return []conversionHint{{targetMime: mimeWebP, convertCommand: "convert input.jpg output.webp"}}
+	case mimeTIFF:
+		return []conversionHint{{targetMime: mimePNG, convertCommand: "convert input.tiff output.png"}}
 	default:
 		return nil
 	}

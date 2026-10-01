@@ -31,14 +31,16 @@ const (
 	remoteToolAudioResult       = `{"ok":true,"source":"mock-tool-edge"}`
 )
 
-var remoteToolAudioNames = []string{
-	"webmcp_list_tabs",
-	"webmcp_select_tab",
-	"webmcp_list_tools",
-	"list_decks",
-	"select_deck",
-	"webmcp_list_tools",
-	"get_state",
+func remoteToolAudioNames() []string {
+	return []string{
+		"webmcp_list_tabs",
+		"webmcp_select_tab",
+		"webmcp_list_tools",
+		"list_decks",
+		"select_deck",
+		"webmcp_list_tools",
+		"get_state",
+	}
 }
 
 type remoteToolAudioCase struct {
@@ -435,7 +437,7 @@ type remoteToolCallFixture struct {
 }
 
 func remoteToolAudioCalls(testCase remoteToolAudioCase, resultBytes int) []remoteToolCallFixture {
-	calls := make([]remoteToolCallFixture, 0, len(remoteToolAudioNames))
+	calls := make([]remoteToolCallFixture, 0, len(remoteToolAudioNames()))
 	toolNumber := 0
 	for response := range testCase.responseSamples {
 		if !testCase.toolResponses[response] {
@@ -447,7 +449,7 @@ func remoteToolAudioCalls(testCase remoteToolAudioCase, resultBytes int) []remot
 		}
 		calls = append(calls, remoteToolCallFixture{
 			ID:        fmt.Sprintf("call-%s-%d", testCase.name, toolNumber),
-			Name:      remoteToolAudioNames[toolNumber],
+			Name:      remoteToolAudioNames()[toolNumber],
 			Arguments: fmt.Sprintf(`{"step":%d,"trace":%q}`, toolNumber, testCase.name),
 			Output:    output,
 		})

@@ -17,10 +17,14 @@ type Suggestion struct {
 }
 
 // styleSelected is the highlight style for the currently selected suggestion.
-var styleSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("12"))
+func styleSelected() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("12"))
+}
 
 // styleDescription renders the description text in a dimmer color.
-var styleDescription = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+func styleDescription() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+}
 
 // Autocomplete is a reusable Bubble Tea sub-model that renders a list of
 // suggestions below the input line and supports keyboard navigation.
@@ -151,15 +155,15 @@ func (a Autocomplete) View() string {
 		s := a.filtered[i]
 		line := s.Label
 		if s.Description != "" {
-			line += "  " + styleDescription.Render(s.Description)
+			line += "  " + styleDescription().Render(s.Description)
 		}
 
 		if i == a.selected {
 			// Re-render the whole line with selection style (label part only for highlight).
 			if s.Description != "" {
-				line = styleSelected.Render(s.Label) + "  " + styleDescription.Render(s.Description)
+				line = styleSelected().Render(s.Label) + "  " + styleDescription().Render(s.Description)
 			} else {
-				line = styleSelected.Render(s.Label)
+				line = styleSelected().Render(s.Label)
 			}
 		}
 

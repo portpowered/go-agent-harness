@@ -84,10 +84,10 @@ func diagnosticDeadline(t *testing.T, timeout time.Duration) (context.Context, c
 
 func buildAgentBinary(t *testing.T) string {
 	t.Helper()
-	if agentBinaryPath == "" {
+	if agentBinaryPath() == "" {
 		t.Fatal("package TestMain did not build the agent CLI")
 	}
-	return agentBinaryPath
+	return agentBinaryPath()
 }
 
 // runAgentCLI runs one invocation of the production-composed CLI (strict

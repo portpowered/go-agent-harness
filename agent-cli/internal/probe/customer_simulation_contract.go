@@ -437,10 +437,10 @@ func WriteCustomerScenario(path string, scenario CustomerScenario) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	return os.WriteFile(path, append(data, '\n'), privateFileMode)
 }
 
 func validateRelativePath(field, raw string, allowDot bool) error {

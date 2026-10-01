@@ -26,14 +26,18 @@ const (
 	parallelLifecycleBravoArgs = `{"zone":"UTC"}`
 )
 
-var parallelLifecycleResultContent = map[string]string{
-	parallelLifecycleAlphaID: `{"temperature_c":24,"origin":"alpha"}`,
-	parallelLifecycleBravoID: `{"utc":"12:34","origin":"bravo"}`,
+func parallelLifecycleResultContent() map[string]string {
+	return map[string]string{
+		parallelLifecycleAlphaID: `{"temperature_c":24,"origin":"alpha"}`,
+		parallelLifecycleBravoID: `{"utc":"12:34","origin":"bravo"}`,
+	}
 }
 
-var parallelLifecycleRequestOrder = []string{
-	parallelLifecycleAlphaID,
-	parallelLifecycleBravoID,
+func parallelLifecycleRequestOrder() []string {
+	return []string{
+		parallelLifecycleAlphaID,
+		parallelLifecycleBravoID,
+	}
 }
 
 // parallelLifecycleSession is a provider-shaped session double used through the
@@ -63,12 +67,12 @@ type parallelLifecycleSession struct {
 }
 
 func newParallelLifecycleSession(blockedResultID, rejectedResultID string) *parallelLifecycleSession {
-	accepted := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	acceptedOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder))
-	blockedResultStart := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	blockedResultOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder))
-	resultRelease := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	for _, id := range parallelLifecycleRequestOrder {
+	accepted := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	acceptedOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder()))
+	blockedResultStart := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	blockedResultOnce := make(map[string]*sync.Once, len(parallelLifecycleRequestOrder()))
+	resultRelease := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	for _, id := range parallelLifecycleRequestOrder() {
 		accepted[id] = make(chan struct{})
 		acceptedOnce[id] = &sync.Once{}
 		blockedResultStart[id] = make(chan struct{})
@@ -283,12 +287,12 @@ type parallelLifecycleExecutor struct {
 }
 
 func newParallelLifecycleExecutor() *parallelLifecycleExecutor {
-	release := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder))
-	for _, id := range parallelLifecycleRequestOrder {
+	release := make(map[string]chan struct{}, len(parallelLifecycleRequestOrder()))
+	for _, id := range parallelLifecycleRequestOrder() {
 		release[id] = make(chan struct{})
 	}
 	return &parallelLifecycleExecutor{
-		started:        make(map[string]struct{}, len(parallelLifecycleRequestOrder)),
+		started:        make(map[string]struct{}, len(parallelLifecycleRequestOrder())),
 		allStarted:     make(chan struct{}),
 		release:        release,
 		bravoCompleted: make(chan struct{}),
@@ -299,7 +303,7 @@ func (e *parallelLifecycleExecutor) Execute(ctx context.Context, call messages.T
 	e.mu.Lock()
 	e.calls = append(e.calls, call)
 	e.started[call.ID] = struct{}{}
-	allStarted := len(e.started) == len(parallelLifecycleRequestOrder)
+	allStarted := len(e.started) == len(parallelLifecycleRequestOrder())
 	release, known := e.release[call.ID]
 	e.mu.Unlock()
 	if allStarted {
@@ -338,7 +342,7 @@ func (e *parallelLifecycleExecutor) Execute(ctx context.Context, call messages.T
 	return messages.ToolCallResponse{
 		ToolCallID: call.ID,
 		Name:       call.Name,
-		Content:    parallelLifecycleResultContent[call.ID],
+		Content:    parallelLifecycleResultContent()[call.ID],
 	}, nil
 }
 
@@ -351,7 +355,7 @@ func (e *parallelLifecycleExecutor) releaseCall(callID string) {
 }
 
 func (e *parallelLifecycleExecutor) releaseAll() {
-	for _, id := range parallelLifecycleRequestOrder {
+	for _, id := range parallelLifecycleRequestOrder() {
 		e.releaseCall(id)
 	}
 }
@@ -399,8 +403,8 @@ func (o *parallelLifecycleObservation) closeCount() int {
 
 func assertParallelLifecycleCalls(t *testing.T, calls []messages.ToolCall) {
 	t.Helper()
-	if len(calls) != len(parallelLifecycleRequestOrder) {
-		t.Fatalf("executor observed %d calls, want exactly %d: %#v", len(calls), len(parallelLifecycleRequestOrder), calls)
+	if len(calls) != len(parallelLifecycleRequestOrder()) {
+		t.Fatalf("executor observed %d calls, want exactly %d: %#v", len(calls), len(parallelLifecycleRequestOrder()), calls)
 	}
 	seen := map[string]int{}
 	for _, call := range calls {
@@ -410,7 +414,7 @@ func assertParallelLifecycleCalls(t *testing.T, calls []messages.ToolCall) {
 			t.Fatalf("executor call %#v has wrong identity, want ID %q name %q args %q", call, call.ID, wantName, wantArgs)
 		}
 	}
-	for _, id := range parallelLifecycleRequestOrder {
+	for _, id := range parallelLifecycleRequestOrder() {
 		if seen[id] != 1 {
 			t.Fatalf("executor observed call %q %d times, want exactly once; calls=%#v", id, seen[id], calls)
 		}
@@ -443,8 +447,8 @@ func assertParallelLifecycleResults(t *testing.T, sent []messages.StreamMessage,
 			t.Fatalf("provider received result for unexpected call ID %q", value.ToolCallID)
 		}
 		counts[value.ToolCallID]++
-		if value.Arguments != parallelLifecycleResultContent[value.ToolCallID] {
-			t.Fatalf("provider result for %q carries %q, want %q", value.ToolCallID, value.Arguments, parallelLifecycleResultContent[value.ToolCallID])
+		if value.Arguments != parallelLifecycleResultContent()[value.ToolCallID] {
+			t.Fatalf("provider result for %q carries %q, want %q", value.ToolCallID, value.Arguments, parallelLifecycleResultContent()[value.ToolCallID])
 		}
 	}
 	for _, id := range wantIDs {

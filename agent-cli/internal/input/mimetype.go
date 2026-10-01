@@ -56,7 +56,7 @@ func detectMimeTypeFromBytes(data []byte, ext string) string {
 // recognise it (WebP is RIFF-based: bytes 0-3 = "RIFF", bytes 8-11 = "WEBP").
 func detectByMagicBytes(data []byte) string {
 	if isWebP(data) {
-		return "image/webp"
+		return mimeWebP
 	}
 
 	if len(data) == 0 {

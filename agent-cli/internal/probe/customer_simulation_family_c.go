@@ -238,12 +238,9 @@ func NewFamilyCScenario() CustomerScenario {
 		},
 		Sandbox:      SandboxSpec{Name: "fresh-family-c-sandbox", Root: ".", Fresh: true},
 		Interruption: InterruptionTrigger{Kind: InterruptionNone},
-		Patience: PatienceThresholds{
-			ListenBeforeFollowUp: 250 * time.Millisecond, ResponseStart: time.Second, InProgressWork: 2 * time.Second,
-			Reprompt: 3 * time.Second, AbsoluteDeadAir: 10 * time.Second, MaxReprompts: 1,
-		},
-		Termination: TerminationNatural,
-		Deadline:    30 * time.Second,
+		Patience:     customerPatience(customerFollowUpListen, customerAbsoluteDeadAir, customerSingleReprompt),
+		Termination:  TerminationNatural,
+		Deadline:     customerScenarioDeadline,
 	}
 }
 

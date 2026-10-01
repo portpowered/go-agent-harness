@@ -273,7 +273,7 @@ func assertReadImageContinuationFailure(t *testing.T, run readImageSpokenRun) {
 	if !strings.Contains(continuationErr.ProviderDetails[readImageCallID], "token_limit") && !strings.Contains(continuationErr.ProviderDetails[readImageCallID], "max_output_tokens") {
 		t.Fatalf("failed continuation detail = %q, want token-limit provider context", continuationErr.ProviderDetails[readImageCallID])
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(strings.ToLower(run.stdout+"\n"+run.stderr), marker) {
 			t.Fatalf("failed empty continuation fabricated grounded marker %q", marker)
 		}
@@ -485,7 +485,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 			if !errors.Is(run.err, providers.ErrReplayMismatch) {
 				t.Fatalf("strict replay control error = %v, want replay mismatch at provider result gate", run.err)
 			}
-			for _, marker := range readImageGroundedMarkers {
+			for _, marker := range readImageGroundedMarkers() {
 				if strings.Contains(strings.ToLower(run.stdout+"\n"+run.stderr), marker) {
 					t.Fatalf("strict replay control released grounded marker %q after malformed result", marker)
 				}

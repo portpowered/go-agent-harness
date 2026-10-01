@@ -510,14 +510,14 @@ func checkParallelToolDeltaIDs(toolDeltas []messages.StreamMessage) error {
 			if delta.ToolCallId == "" {
 				return fmt.Errorf("observed %s tool-result delta has no ToolCallID", delta.Type)
 			}
-			if _, expected := parallelResultContent[delta.ToolCallId]; !expected {
+			if _, expected := parallelResultContent()[delta.ToolCallId]; !expected {
 				return fmt.Errorf("observed %s tool-result delta has unknown ToolCallID %q", delta.Type, delta.ToolCallId)
 			}
 			seenDeltaIDs[delta.ToolCallId]++
 		}
 	}
-	if len(seenDeltaIDs) != len(parallelRequestOrder) {
-		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder)
+	if len(seenDeltaIDs) != len(parallelRequestOrder()) {
+		return fmt.Errorf("observed tool-result deltas carry IDs %v, want exactly %v", seenDeltaIDs, parallelRequestOrder())
 	}
 	return nil
 }
@@ -529,14 +529,14 @@ func checkParallelResultMessage(observed messages.Message, contentByCall map[str
 		return fmt.Errorf("reconstructed message has role %q, want %q", observed.Role, messages.RoleTool)
 	}
 	id := observed.ToolCallID
-	if _, expected := parallelResultContent[id]; !expected {
+	if _, expected := parallelResultContent()[id]; !expected {
 		return fmt.Errorf("reconstructed result has unknown ToolCallID %q", id)
 	}
 	if _, duplicate := contentByCall[id]; duplicate {
 		return fmt.Errorf("reconstructed duplicate result for call %q", id)
 	}
 	content := observed.TextContent()
-	want := parallelResultContent[id]
+	want := parallelResultContent()[id]
 	if content == want {
 		return nil
 	}

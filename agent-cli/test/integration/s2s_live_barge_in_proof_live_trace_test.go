@@ -204,7 +204,7 @@ type liveBargeInAudioSegment struct {
 func newLiveBargeInAudioReader(t *testing.T, trace *liveBargeInTrace) *liveBargeInAudioReader {
 	t.Helper()
 	frameSets := make([][][]byte, 0, liveBargeInTurns)
-	for _, name := range multiturnTurnWAVs {
+	for _, name := range multiturnTurnWAVs() {
 		frameSets = append(frameSets, multiturnAudioFrames(t, locateCLIFixture(t, name)))
 	}
 	return &liveBargeInAudioReader{

@@ -59,10 +59,10 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 	return runResult, processErr
 }
 
-// Private permissions for the isolated run directories and seeded config.
+// Private permissions for probe run directories, evidence, and seeded config.
 const (
-	customerSimulationDirMode  = 0o700
-	customerSimulationFileMode = 0o600
+	privateDirMode  = 0o700
+	privateFileMode = 0o600
 )
 
 // customerSimulationRun is the per-run state shared by the duplex gates,
@@ -125,7 +125,7 @@ func (r *customerSimulationRun) prepare() (CustomerSimulationRunResult, error) {
 		return r.fail(err, "inspect run directory: %v", err)
 	}
 	for _, path := range []string{r.workspaceRoot, r.recordRoot, r.configRoot, r.bundleRoot} {
-		if err := os.MkdirAll(path, customerSimulationDirMode); err != nil {
+		if err := os.MkdirAll(path, privateDirMode); err != nil {
 			return r.fail(fmt.Errorf("create run directory: %w", err), "%v", err)
 		}
 	}
@@ -134,7 +134,7 @@ func (r *customerSimulationRun) prepare() (CustomerSimulationRunResult, error) {
 	// isolated config with the same explicit deny-pattern setting used by the
 	// hermetic shipped-process fixtures instead of allowing a warning to look
 	// like product audio progress.
-	if err := os.WriteFile(filepath.Join(r.configRoot, "config.yaml"), []byte("tools:\n  exec:\n    enable_deny_patterns: true\n"), customerSimulationFileMode); err != nil {
+	if err := os.WriteFile(filepath.Join(r.configRoot, "config.yaml"), []byte("tools:\n  exec:\n    enable_deny_patterns: true\n"), privateFileMode); err != nil {
 		failure := fmt.Errorf("write isolated session config: %w", err)
 		return r.fail(failure, "%v", failure)
 	}

@@ -19,6 +19,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
+// Product transcript lines are JSON events; tool results can be large.
+const (
+	transcriptScanInitialBytes = 4 << 10
+	transcriptScanMaxLineBytes = 4 << 20
+)
+
 // Facts come only from copied product records and exclude tool arguments and raw payloads.
 type customerSimulationRecordingFacts struct {
 	responses         []customerSimulationResponse
@@ -142,7 +148,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 	var base time.Time
 	completedToolIDs := make(map[string]time.Duration)
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 4096), 4<<20)
+	scanner.Buffer(make([]byte, transcriptScanInitialBytes), transcriptScanMaxLineBytes)
 	for scanner.Scan() {
 		record, decodeErr := transcript.Decode(scanner.Bytes())
 		if decodeErr != nil {

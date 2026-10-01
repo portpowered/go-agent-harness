@@ -15,13 +15,13 @@ import (
 func mimeTypeForExtension(ext string) string {
 	switch ext {
 	case ".jpg", ".jpeg":
-		return "image/jpeg"
+		return mimeJPEG
 	case ".png":
-		return "image/png"
+		return mimePNG
 	case ".gif":
-		return "image/gif"
+		return mimeGIF
 	case ".webp":
-		return "image/webp"
+		return mimeWebP
 	case ".mp3":
 		return "audio/mpeg"
 	case ".wav":

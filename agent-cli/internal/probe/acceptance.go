@@ -482,7 +482,7 @@ func prepareRunDirectories(workdir, artifactRoot string) (string, string, func()
 	cleanup := func() {}
 	if workdir == "" {
 		workdir = filepath.Join(root, "workdir")
-		if err := os.Mkdir(workdir, 0o700); err != nil {
+		if err := os.Mkdir(workdir, privateDirMode); err != nil {
 			return "", "", func() {}, errors.Join(fmt.Errorf("create acceptance probe working directory: %w", err), os.RemoveAll(root))
 		}
 	}
@@ -531,7 +531,7 @@ func writeRunArtifacts(artifacts ArtifactSet, input loopprobe.AcceptanceInput, r
 		if pathErr != nil {
 			return &ExecutionError{Kind: ErrArtifactWrite, Cause: pathErr}
 		}
-		if writeErr := os.WriteFile(path, file.data, 0o600); writeErr != nil {
+		if writeErr := os.WriteFile(path, file.data, privateFileMode); writeErr != nil {
 			return &ExecutionError{Kind: ErrArtifactWrite, Cause: fmt.Errorf("write %s: %w", file.path, writeErr)}
 		}
 	}
@@ -569,7 +569,7 @@ func snapshotWorkingDirectory(artifacts ArtifactSet) error {
 			return err
 		}
 		if entry.IsDir() {
-			if err := os.MkdirAll(destination, 0o700); err != nil {
+			if err := os.MkdirAll(destination, privateDirMode); err != nil {
 				return fmt.Errorf("create artifact directory %q: %w", relative, err)
 			}
 			return nil
@@ -585,7 +585,7 @@ func snapshotWorkingDirectory(artifacts ArtifactSet) error {
 		if err != nil {
 			return fmt.Errorf("read working-directory artifact %q: %w", relative, err)
 		}
-		if err := os.WriteFile(destination, data, 0o600); err != nil {
+		if err := os.WriteFile(destination, data, privateFileMode); err != nil {
 			return fmt.Errorf("write working-directory artifact %q: %w", relative, err)
 		}
 		return nil
@@ -736,10 +736,10 @@ func materializeReplayWorkspaceFiles(artifacts ArtifactSet, files map[string]str
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("inspect workspace file %q: %w", relative, err)
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
 			return fmt.Errorf("create workspace file directory for %q: %w", relative, err)
 		}
-		if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(data), privateFileMode); err != nil {
 			return fmt.Errorf("write workspace file %q: %w", relative, err)
 		}
 	}

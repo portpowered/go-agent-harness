@@ -20,7 +20,19 @@ import (
 	sessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
 )
 
-var updateChatGolden = flag.Bool("update", false, "update chat golden files")
+// updateGoldensFlag is the "go test -update" flag that rewrites chat golden files.
+const updateGoldensFlag = "update"
+
+func TestMain(m *testing.M) {
+	flag.Bool(updateGoldensFlag, false, "update chat golden files")
+	os.Exit(m.Run())
+}
+
+// updateGoldensRequested reports whether the test binary ran with -update.
+func updateGoldensRequested() bool {
+	f := flag.Lookup(updateGoldensFlag)
+	return f != nil && f.Value.String() == "true"
+}
 
 var chatTimestampPattern = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\b`)
 
@@ -186,7 +198,7 @@ func TestChatREPL_S1ScriptedInput_S3Golden(t *testing.T) {
 
 	goldenPath := filepath.Join("testdata", "chat", "s1_transcript.golden")
 	got := normalizeChatTranscript(transcript)
-	if *updateChatGolden {
+	if updateGoldensRequested() {
 		if err := os.WriteFile(goldenPath, []byte(got+"\n"), 0600); err != nil {
 			t.Fatalf("write golden: %v", err)
 		}

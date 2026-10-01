@@ -622,14 +622,7 @@ func FamilyEPatienceEvidenceRefs() []string {
 }
 
 func FamilyEPatienceThresholds() PatienceThresholds {
-	return PatienceThresholds{
-		ListenBeforeFollowUp: 250 * time.Millisecond,
-		ResponseStart:        time.Second,
-		InProgressWork:       2 * time.Second,
-		Reprompt:             3 * time.Second,
-		AbsoluteDeadAir:      8 * time.Second,
-		MaxReprompts:         1,
-	}
+	return customerPatience(customerFollowUpListen, familyEAbsoluteDeadAir, customerSingleReprompt)
 }
 
 func NewFamilyEScenario() CustomerScenario {
@@ -661,7 +654,7 @@ func NewFamilyEScenario() CustomerScenario {
 		Interruption: InterruptionTrigger{Kind: InterruptionNone},
 		Patience:     FamilyEPatienceThresholds(),
 		Termination:  TerminationNatural,
-		Deadline:     20 * time.Second,
+		Deadline:     familyEScenarioDeadline,
 	}
 }
 

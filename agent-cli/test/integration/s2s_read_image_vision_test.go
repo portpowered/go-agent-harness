@@ -42,9 +42,11 @@ func readImageToolImageItemID(callID string) string {
 	return "item_tool_result_" + base64.RawURLEncoding.EncodeToString(digest[:11])
 }
 
-var readImageGroundedMarkers = []string{
-	"one-by-one image",
-	"indigo pixel",
+func readImageGroundedMarkers() []string {
+	return []string{
+		"one-by-one image",
+		"indigo pixel",
+	}
 }
 
 func readImageFixturePath(t *testing.T) string {
@@ -628,7 +630,7 @@ func assertReadImageGroundedWithProviderClose(output string, events []messages.S
 	if requireProviderClose && !strings.Contains(output, "[session closed: fixture_complete]") {
 		return fmt.Errorf("session did not complete cleanly, got:\n%s", output)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if !strings.Contains(output, marker) {
 			return fmt.Errorf("response missing grounded visual fact %q, got:\n%s", marker, output)
 		}
@@ -802,7 +804,7 @@ func TestReadImageCLI_DefaultLifecycleRejectsEmptyFunctionOutput(t *testing.T) {
 	if !errors.Is(runErr, providers.ErrReplayMismatch) {
 		t.Fatalf("empty function_call_output error = %v, want typed replay mismatch", runErr)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(output, marker) {
 			t.Fatalf("empty function_call_output released fabricated grounded reply %q: %s", marker, output)
 		}
@@ -835,7 +837,7 @@ func TestReadImageCLI_DefaultLifecycleMissingFileContinues(t *testing.T) {
 	if !strings.Contains(strings.ToLower(output), "could not read the image") || !strings.Contains(strings.ToLower(output), "missing") {
 		t.Fatalf("missing read_image response did not explain the missing file: %s", output)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(output, marker) {
 			t.Fatalf("missing read_image response fabricated grounded marker %q: %s", marker, output)
 		}
@@ -855,7 +857,7 @@ func assertReadImageNoToolGrounding(output string, events []messages.StreamMessa
 	if !strings.Contains(output, "cannot inspect") || !strings.Contains(output, "determine") {
 		return fmt.Errorf("no-tool response did not state that image content is unavailable, got:\n%s", output)
 	}
-	for _, marker := range readImageGroundedMarkers {
+	for _, marker := range readImageGroundedMarkers() {
 		if strings.Contains(output, marker) {
 			return fmt.Errorf("no-tool response leaked grounded marker %q: %s", marker, output)
 		}

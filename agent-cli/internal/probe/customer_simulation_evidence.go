@@ -261,7 +261,7 @@ func NewCustomerEvidenceBundle(root string, scenario CustomerScenario, runID str
 			return nil, contractFieldError(ErrInvalidCustomerEvidence, "root", "must be a non-symlink directory")
 		}
 	} else if errors.Is(statErr, os.ErrNotExist) {
-		if err := os.MkdirAll(absRoot, 0o700); err != nil {
+		if err := os.MkdirAll(absRoot, privateDirMode); err != nil {
 			return nil, err
 		}
 	} else {
@@ -871,7 +871,7 @@ func removeTemporaryEvidenceFile(name string) {
 }
 
 func writePrivateFile(path, temporaryPattern string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
 		return err
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(path), temporaryPattern)
@@ -883,7 +883,7 @@ func writePrivateFile(path, temporaryPattern string, data []byte) error {
 	if _, err := temporary.Write(data); err != nil {
 		return errors.Join(err, temporary.Close())
 	}
-	if err := temporary.Chmod(0o600); err != nil {
+	if err := temporary.Chmod(privateFileMode); err != nil {
 		return errors.Join(err, temporary.Close())
 	}
 	if err := temporary.Close(); err != nil {

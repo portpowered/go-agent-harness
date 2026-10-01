@@ -15,7 +15,19 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-var updateGolden = flag.Bool("update", false, "update workspace package golden files")
+// updateGoldensFlag is the "go test -update" flag that rewrites workspace package golden files.
+const updateGoldensFlag = "update"
+
+func TestMain(m *testing.M) {
+	flag.Bool(updateGoldensFlag, false, "update workspace package golden files")
+	os.Exit(m.Run())
+}
+
+// updateGoldensRequested reports whether the test binary ran with -update.
+func updateGoldensRequested() bool {
+	f := flag.Lookup(updateGoldensFlag)
+	return f != nil && f.Value.String() == "true"
+}
 
 // TestAgentsMDWorkspace_FilesystemSandbox is the S6 filesystem suite. The
 // skipped subtests document contracts that are not exposed by this package on
@@ -309,7 +321,7 @@ func normalizeAgentsMD(content, workspaceDir string) string {
 func assertGolden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
-	if *updateGolden {
+	if updateGoldensRequested() {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("create golden directory %s: %v", filepath.Dir(path), err)
 		}

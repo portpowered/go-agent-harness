@@ -44,25 +44,27 @@ type liveVoiceToolGroundingCase struct {
 	ExpectedTool string
 }
 
-var liveVoiceToolGroundingCases = []liveVoiceToolGroundingCase{
-	{
-		Name:         "missing-file",
-		Request:      "read me the file at /tmp/definitely-missing-file.txt",
-		AudioName:    "missing-file.wav",
-		ExpectedTool: "read_file",
-	},
-	{
-		Name:         "exit-42",
-		Request:      "run the command exit 42 and tell me what happened",
-		AudioName:    "exit-42.wav",
-		ExpectedTool: "exec",
-	},
-	{
-		Name:         "date-control",
-		Request:      "run the command date -u +%Y-%m-%d and tell me the returned date",
-		AudioName:    "date-control.wav",
-		ExpectedTool: "exec",
-	},
+func liveVoiceToolGroundingCases() []liveVoiceToolGroundingCase {
+	return []liveVoiceToolGroundingCase{
+		{
+			Name:         "missing-file",
+			Request:      "read me the file at /tmp/definitely-missing-file.txt",
+			AudioName:    "missing-file.wav",
+			ExpectedTool: "read_file",
+		},
+		{
+			Name:         "exit-42",
+			Request:      "run the command exit 42 and tell me what happened",
+			AudioName:    "exit-42.wav",
+			ExpectedTool: "exec",
+		},
+		{
+			Name:         "date-control",
+			Request:      "run the command date -u +%Y-%m-%d and tell me the returned date",
+			AudioName:    "date-control.wav",
+			ExpectedTool: "exec",
+		},
+	}
 }
 
 // TestLiveVoiceToolGroundingFailuresTwiceAndDateControl runs the two required
@@ -78,13 +80,13 @@ func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 	}
 
 	artifactRoot := liveVoiceToolGroundingArtifactRoot(t)
-	inputs := make(map[string]string, len(liveVoiceToolGroundingCases))
-	for _, testCase := range liveVoiceToolGroundingCases {
+	inputs := make(map[string]string, len(liveVoiceToolGroundingCases()))
+	for _, testCase := range liveVoiceToolGroundingCases() {
 		inputs[testCase.Name] = liveVoiceToolGroundingInput(t, testCase)
 	}
 
 	evidence := make([]liveVoiceToolGroundingEvidence, 0, 5)
-	for _, testCase := range liveVoiceToolGroundingCases {
+	for _, testCase := range liveVoiceToolGroundingCases() {
 		runs := 1
 		if testCase.Name != "date-control" {
 			runs = 2

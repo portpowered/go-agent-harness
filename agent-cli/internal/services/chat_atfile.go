@@ -12,11 +12,15 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-// excludedDirs contains directory names to exclude from file autocomplete suggestions.
-var excludedDirs = map[string]bool{
-	".git":         true,
-	"node_modules": true,
-	"__pycache__":  true,
+// isExcludedDir reports whether a directory name is excluded from file
+// autocomplete suggestions.
+func isExcludedDir(name string) bool {
+	switch name {
+	case ".git", "node_modules", "__pycache__":
+		return true
+	default:
+		return false
+	}
 }
 
 // updateFileAutocomplete checks the current input for an @ prefix and activates
@@ -157,27 +161,36 @@ func loadAtDirectoryReference(absPath, refPath string) (messages.ContentPart, st
 	return messages.TextPart{Text: content}, ""
 }
 
-// imageExtensions maps file extensions to MIME media types for image files.
-var imageExtensions = map[string]string{
-	".png":  "image/png",
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".gif":  "image/gif",
-	".webp": "image/webp",
-	".svg":  "image/svg+xml",
+// imageExtensionMediaType maps a lower-case file extension to its image MIME
+// media type.
+func imageExtensionMediaType(ext string) (string, bool) {
+	switch ext {
+	case ".png":
+		return "image/png", true
+	case ".jpg", ".jpeg":
+		return "image/jpeg", true
+	case ".gif":
+		return "image/gif", true
+	case ".webp":
+		return "image/webp", true
+	case ".svg":
+		return "image/svg+xml", true
+	default:
+		return "", false
+	}
 }
 
 // isImageExtension returns true if the file path has a recognized image extension.
 func isImageExtension(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
-	_, ok := imageExtensions[ext]
+	_, ok := imageExtensionMediaType(ext)
 	return ok
 }
 
 // imageMediaType returns the MIME type for a recognized image extension.
 func imageMediaType(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
-	if mt, ok := imageExtensions[ext]; ok {
+	if mt, ok := imageExtensionMediaType(ext); ok {
 		return mt
 	}
 	return "application/octet-stream"
@@ -221,7 +234,7 @@ func fileSuggestionLabel(workDir, path string, d os.DirEntry, entryErr error) (l
 	if !d.IsDir() {
 		return rel, false
 	}
-	if excludedDirs[d.Name()] {
+	if isExcludedDir(d.Name()) {
 		return "", true
 	}
 	return rel + "/", false

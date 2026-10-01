@@ -23,7 +23,7 @@ func stdinWAV(t *testing.T) []byte {
 }
 
 // pngHeaderBytes is the 8-byte PNG file signature recognized by http.DetectContentType as "image/png".
-var pngHeaderBytes = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+func pngHeaderBytes() []byte { return []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'} }
 
 // TestAskNoArgsNoStdin validates that running ask with neither args nor piped
 // stdin returns an error instead of hanging or panicking.
@@ -137,7 +137,7 @@ func TestAskWithStdinImageBytes(t *testing.T) {
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(testWriter.Stdout())
 	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetIn(bytes.NewReader(pngHeaderBytes))
+	rootCmd.SetIn(bytes.NewReader(pngHeaderBytes()))
 	rootCmd.SetArgs([]string{"ask", "describe this image"})
 
 	if err := rootCmd.ExecuteContext(context.Background()); err != nil {

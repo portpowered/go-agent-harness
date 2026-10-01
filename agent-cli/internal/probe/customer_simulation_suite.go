@@ -301,7 +301,7 @@ func customerSimulationRunRoot(raw string) (string, func(), error) {
 			return "", func() {}, fmt.Errorf("%w: run root must be a non-symlink directory", ErrCustomerSimulationRun)
 		}
 	} else if errors.Is(statErr, os.ErrNotExist) {
-		if err := os.MkdirAll(root, 0o700); err != nil {
+		if err := os.MkdirAll(root, privateDirMode); err != nil {
 			return "", func() {}, fmt.Errorf("%w: create run root: %v", ErrCustomerSimulationRun, err)
 		}
 	} else {

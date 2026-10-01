@@ -447,7 +447,7 @@ func prepareDuplexDirectory(raw, label string) (string, error) {
 		}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return "", fmt.Errorf("%w: inspect %s %q: %v", ErrDuplexConfigInvalid, label, path, statErr)
-	} else if err := os.MkdirAll(path, 0o700); err != nil {
+	} else if err := os.MkdirAll(path, privateDirMode); err != nil {
 		return "", fmt.Errorf("%w: create %s %q: %v", ErrDuplexConfigInvalid, label, path, err)
 	}
 	return path, nil
@@ -563,8 +563,11 @@ func duplexChildEnvironment(config normalizedDuplexConfig) []string {
 	return environment
 }
 
+// duplexOutputChunkBytes is the child-output read size for the duplex pump.
+const duplexOutputChunkBytes = 32 << 10
+
 func pumpDuplexOutput(ctx context.Context, source io.Reader, destination io.Writer, capture *childproc.Capture, progress *duplexProgressState, startedAt time.Time, observe bool) error {
-	buffer := make([]byte, 32*1024)
+	buffer := make([]byte, duplexOutputChunkBytes)
 	for {
 		count, readErr := source.Read(buffer)
 		if count > 0 {
