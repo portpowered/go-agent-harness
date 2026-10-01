@@ -121,13 +121,13 @@ func (f *conversationalCustomerFixtureServer) handleOracle(writer http.ResponseW
 }
 
 func newConversationalCustomerScenario(homeURL, settingsURL string) browserconversation.BrowserConversationScenario {
-	homeBefore := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, "unset", "default", "normal", false, "unset/default")
-	labelAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, "default", "normal", false, conversationalCustomerLabel+"/default")
-	themeAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, conversationalCustomerTheme, "normal", false, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
-	settingsBefore := conversationalCustomerState(settingsURL, conversationalCustomerSettingsPage, true, conversationalCustomerLabel, conversationalCustomerTheme, "normal", false, "normal")
-	settingsAfter := conversationalCustomerState(settingsURL, conversationalCustomerSettingsPage, true, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerPriority)
-	correctionBefore := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
-	correctionAfter := conversationalCustomerState(homeURL, conversationalCustomerHomePage, true, conversationalCustomerCorrected, conversationalCustomerTheme, conversationalCustomerPriority, false, conversationalCustomerCorrected+"/"+conversationalCustomerTheme)
+	homeBefore := conversationalCustomerState(conversationalCustomerHomePage, "unset", "default", "normal", "unset/default")
+	labelAfter := conversationalCustomerState(conversationalCustomerHomePage, conversationalCustomerLabel, "default", "normal", conversationalCustomerLabel+"/default")
+	themeAfter := conversationalCustomerState(conversationalCustomerHomePage, conversationalCustomerLabel, conversationalCustomerTheme, "normal", conversationalCustomerLabel+"/"+conversationalCustomerTheme)
+	settingsBefore := conversationalCustomerState(conversationalCustomerSettingsPage, conversationalCustomerLabel, conversationalCustomerTheme, "normal", "normal")
+	settingsAfter := conversationalCustomerState(conversationalCustomerSettingsPage, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, conversationalCustomerPriority)
+	correctionBefore := conversationalCustomerState(conversationalCustomerHomePage, conversationalCustomerLabel, conversationalCustomerTheme, conversationalCustomerPriority, conversationalCustomerLabel+"/"+conversationalCustomerTheme)
+	correctionAfter := conversationalCustomerState(conversationalCustomerHomePage, conversationalCustomerCorrected, conversationalCustomerTheme, conversationalCustomerPriority, conversationalCustomerCorrected+"/"+conversationalCustomerTheme)
 	return browserconversation.BrowserConversationScenario{
 		Version: browserconversation.BrowserConversationScenarioVersion,
 		ID:      "canonical-webmcp-conversational-customer",
@@ -150,8 +150,9 @@ func newConversationalCustomerScenario(homeURL, settingsURL string) browserconve
 	}
 }
 
-func conversationalCustomerState(_ string, page string, ready bool, label, theme, priority string, pending bool, visible string) json.RawMessage {
-	state, err := json.Marshal(conversationalCustomerPageState{Page: page, Ready: ready, Label: label, Theme: theme, Priority: priority, Pending: pending, VisibleText: visible})
+// conversationalCustomerState is the settled (ready, nothing pending) page state.
+func conversationalCustomerState(page, label, theme, priority, visible string) json.RawMessage {
+	state, err := json.Marshal(conversationalCustomerPageState{Page: page, Ready: true, Label: label, Theme: theme, Priority: priority, Pending: false, VisibleText: visible})
 	if err != nil {
 		return nil
 	}

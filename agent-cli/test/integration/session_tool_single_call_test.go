@@ -29,7 +29,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
@@ -223,7 +222,7 @@ func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, ex
 		"--wait-for-close",
 		"--max-duration", "3s",
 	})
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return outputPath, err
@@ -298,7 +297,7 @@ func TestSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
 }
 
 func testSessionToolSingleCallRejectsOmittedCustomDefinition(t *testing.T) {
-	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t), shortVoicedSlice)
+	wavPath := writeVoicedWAVSlice(t, toolSingleCallWAVPath(t))
 	wirePath := buildToolSingleCallFixture(t, wavPath, []int16{1200, 1201}, true)
 	executor := &toolCallRecordingExecutor{}
 	_, runErr := runToolSingleCallWithDefinitions(t, wavPath, wirePath, executor, nil)

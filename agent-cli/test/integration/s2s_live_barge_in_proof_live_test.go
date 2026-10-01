@@ -387,13 +387,15 @@ func (e *liveBargeInInconclusiveError) Error() string {
 	return "live barge-in observation was inconclusive: " + e.Reason
 }
 
-func liveBargeInTraceBoundary(trace *liveBargeInTrace, response, turn int, output bool) (before, after int, ok bool) {
+// liveBargeInEventsBeforeTurn counts the response's matching events (message
+// starts, or output when output is set) traced before the turn started.
+func liveBargeInEventsBeforeTurn(trace *liveBargeInTrace, response, turn int, output bool) (before int, ok bool) {
 	events, starts := trace.snapshot()
 	start, ok := starts[turn]
 	if !ok {
-		return 0, 0, false
+		return 0, false
 	}
-	for index, event := range events {
+	for _, event := range events[:min(start, len(events))] {
 		if event.ResponseOrdinal != response {
 			continue
 		}
@@ -401,16 +403,11 @@ func liveBargeInTraceBoundary(trace *liveBargeInTrace, response, turn int, outpu
 		if output {
 			matched = event.AudioBytes > 0 || event.TextBytes > 0
 		}
-		if !matched {
-			continue
-		}
-		if index < start {
+		if matched {
 			before++
-		} else {
-			after++
 		}
 	}
-	return before, after, true
+	return before, true
 }
 
 // validateLiveBargeInBoundaries separates an unavailable provider or missed
@@ -431,7 +428,7 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 	if first.FirstAudio == 0 {
 		return &liveBargeInInconclusiveError{Reason: "active assistant audio was not observed"}
 	}
-	activeBefore, _, activeOK := liveBargeInTraceBoundary(trace, 1, 2, true)
+	activeBefore, activeOK := liveBargeInEventsBeforeTurn(trace, 1, 2, true)
 	if !activeOK || activeBefore == 0 {
 		return &liveBargeInInconclusiveError{Reason: "active assistant audio did not precede input 2 before response 1 terminality"}
 	}
@@ -439,7 +436,7 @@ func validateLiveBargeInBoundaries(facts liveBargeInCaptureFacts, trace *liveBar
 		return &liveBargeInInconclusiveError{Reason: "active-speech input was not observed while response 1 was non-terminal"}
 	}
 
-	createdBefore, _, createdOK := liveBargeInTraceBoundary(trace, 2, 3, false)
+	createdBefore, createdOK := liveBargeInEventsBeforeTurn(trace, 2, 3, false)
 	if !createdOK || createdBefore == 0 || facts.InputStarts[2] <= second.Created || second.Created == 0 {
 		return &liveBargeInInconclusiveError{Reason: "response 2 creation did not precede input 3"}
 	}

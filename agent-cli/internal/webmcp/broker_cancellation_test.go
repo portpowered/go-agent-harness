@@ -910,7 +910,7 @@ func newInvocationBroker(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, 
 		closeFailedSetupBroker(t, broker)
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	session := scriptedPrimaryTargetSession(t, handleValue)
 	if session == nil {
 		closeFailedSetupBroker(t, broker)
 		t.Fatal("fixture session is nil")

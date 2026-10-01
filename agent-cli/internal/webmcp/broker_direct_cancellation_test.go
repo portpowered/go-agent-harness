@@ -39,7 +39,7 @@ func TestStatefulBrokerDirectCancelClassifiesTerminalAfterDispatch(t *testing.T)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			original, fresh, runtime, session, ref := newDirectCancellationFixture(t, false)
+			original, fresh, runtime, session, ref := newDirectCancellationFixture(t)
 			session.BlockInvocations()
 			dispatched, err := original.Invoke(context.Background(), webmcp.InvokeRequest{
 				ToolRef: ref,
@@ -100,7 +100,7 @@ func TestStatefulBrokerDirectCancelClassifiesExplicitProtocolRejectionAsUnconfir
 		"side_effect_unknown": true,
 	})
 	rejection.Cause = cause
-	original, fresh, _, session, ref := newDirectCancellationFixture(t, false, rejection)
+	original, fresh, _, session, ref := newDirectCancellationFixture(t, rejection)
 	session.BlockInvocations()
 	dispatched, err := original.Invoke(context.Background(), webmcp.InvokeRequest{
 		ToolRef: ref,
@@ -128,7 +128,7 @@ func TestStatefulBrokerDirectCancelClassifiesExplicitProtocolRejectionAsUnconfir
 }
 
 func TestStatefulBrokerDirectCancelRequiresExactTerminalAndBoundsLateEvent(t *testing.T) {
-	original, fresh, runtime, session, ref := newDirectCancellationFixture(t, false)
+	original, fresh, runtime, session, ref := newDirectCancellationFixture(t)
 	session.BlockInvocations()
 	dispatched, err := original.Invoke(context.Background(), webmcp.InvokeRequest{
 		ToolRef: ref,
@@ -207,7 +207,7 @@ func TestStatefulBrokerDirectCancelSeparatesNavigationAndDisconnect(t *testing.T
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			original, fresh, runtime, session, ref := newDirectCancellationFixture(t, false)
+			original, fresh, runtime, session, ref := newDirectCancellationFixture(t)
 			session.BlockInvocations()
 			dispatched, err := original.Invoke(context.Background(), webmcp.InvokeRequest{
 				ToolRef: ref,
@@ -234,7 +234,7 @@ func TestStatefulBrokerDirectCancelSeparatesNavigationAndDisconnect(t *testing.T
 	}
 }
 
-func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, cancelErrors ...error) (*webmcp.StatefulBroker, *webmcp.StatefulBroker, *testkit.ScriptedBrowserRuntime, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
+func newDirectCancellationFixture(t *testing.T, cancelErrors ...error) (*webmcp.StatefulBroker, *webmcp.StatefulBroker, *testkit.ScriptedBrowserRuntime, *testkit.ScriptedTargetSession, webmcp.ToolRef) {
 	t.Helper()
 	clock := testkit.NewFakeClock(time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC))
 	ids := testkit.NewDeterministicIDs()
@@ -242,7 +242,7 @@ func newDirectCancellationFixture(t *testing.T, emitCancellationResponse bool, c
 	targetOptions := []testkit.ScriptedTargetSessionOption{
 		testkit.WithContext(webmcp.PageContext{CatalogReady: true, CatalogEvidence: `test_fixture`}),
 		testkit.WithInitialCatalog(pageTool(`write_state`, `frame-1`, `{}`)),
-		testkit.WithCancellationResponse(emitCancellationResponse),
+		testkit.WithCancellationResponse(false),
 	}
 	if len(cancelErrors) > 0 && cancelErrors[0] != nil {
 		targetOptions = append(targetOptions, testkit.WithCancelError(cancelErrors[0]))

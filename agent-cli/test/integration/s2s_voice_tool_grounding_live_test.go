@@ -262,7 +262,7 @@ func validateLiveVoiceToolGroundingCase(observation liveVoiceToolGroundingObserv
 	case "exit-42":
 		return validateLiveVoiceExit42Case(observation, arguments, result, reply)
 	case "date-control":
-		return validateLiveVoiceDateControlCase(observation, arguments, result, reply)
+		return validateLiveVoiceDateControlCase(observation, arguments)
 	}
 	return nil
 }
@@ -296,7 +296,7 @@ func validateLiveVoiceExit42Case(observation liveVoiceToolGroundingObservation, 
 	return nil
 }
 
-func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments, result, reply string) error {
+func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservation, arguments liveVoiceToolGroundingArguments) error {
 	if !strings.Contains(strings.ToLower(arguments.Command), "date") {
 		return fmt.Errorf("date control command=%q does not run date", arguments.Command)
 	}

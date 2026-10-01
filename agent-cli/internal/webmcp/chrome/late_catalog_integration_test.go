@@ -93,7 +93,7 @@ func launchLateCatalog(t *testing.T, ctx context.Context) *lateCatalogRun {
 	})
 
 	run.baseURL = browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}

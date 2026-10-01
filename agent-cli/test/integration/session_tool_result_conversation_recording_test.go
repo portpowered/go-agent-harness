@@ -96,7 +96,7 @@ func TestSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 
 func testSessionToolCallConversationBrowserRecordingParity(t *testing.T) {
 	wavPath, reply := conversationFixtureInputs(t)
-	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+	wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 
 	runs := make([]browserRecordingParityRun, 0, 2)
 	for _, enabled := range []bool{false, true} {

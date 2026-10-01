@@ -114,7 +114,7 @@ func TestStatefulBrokerRejectsPageInputWithSelectedSchemaAndStableIssues(t *test
 			if testCase.noEcho != "" {
 				assertDetailsDoNotEcho(t, classified, testCase.noEcho)
 			}
-			assertNoOperation(t, runtime, testkit.OperationInvoke)
+			assertNoInvokeOperation(t, runtime)
 		})
 	}
 }
@@ -194,7 +194,7 @@ func TestStatefulBrokerBoundsInvalidUTF8AndOversizedPageInputBeforeDispatch(t *t
 			if !ok || len(issues) != 1 || issues[0].Path != "/" || issues[0].Code != testCase.code {
 				t.Fatalf("issues = %#v, want /%s", classified.Details["issues"], testCase.code)
 			}
-			assertNoOperation(t, runtime, testkit.OperationInvoke)
+			assertNoInvokeOperation(t, runtime)
 		})
 	}
 }

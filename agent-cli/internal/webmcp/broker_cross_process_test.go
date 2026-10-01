@@ -335,11 +335,11 @@ func waitForTestkitEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp
 // scriptedTargetSession returns the scripted session for targetID behind a
 // handle opened from a testkit runtime, failing the test when the handle is
 // not a scripted one.
-func scriptedTargetSession(t *testing.T, handle webmcp.BrowserHandle, targetID webmcp.TargetID) *testkit.ScriptedTargetSession {
+func scriptedPrimaryTargetSession(t *testing.T, handle webmcp.BrowserHandle) *testkit.ScriptedTargetSession {
 	t.Helper()
 	scripted, ok := handle.(*testkit.ScriptedBrowserHandle)
 	if !ok {
 		t.Fatalf("fixture handle is %T, want *testkit.ScriptedBrowserHandle", handle)
 	}
-	return scripted.TargetSession(targetID)
+	return scripted.TargetSession(primaryTargetID)
 }

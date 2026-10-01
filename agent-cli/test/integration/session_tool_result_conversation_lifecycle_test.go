@@ -362,7 +362,7 @@ func TestSessionToolResultConversationCloseBoundaryRequiresAcceptedResult(t *tes
 		wavPath, reply := shortConversationFixtureInputs(t)
 		executor := newGatedConversationExecutor(toolResultPositive)
 		defer executor.releaseResult()
-		wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+		wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 
 		runResult := make(chan conversationRunResult, 1)
 		go func() {

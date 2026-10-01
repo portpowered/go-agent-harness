@@ -65,7 +65,7 @@ func visionDescribeContentMarkers() []string {
 // real-time-paced input stays short.
 func visionDescribeQuestionWAVPath(t *testing.T) string {
 	t.Helper()
-	return writeVoicedWAVSlice(t, locateCLIFixture(t, visionDescribeQuestionWAV), shortVoicedSlice)
+	return writeVoicedWAVSlice(t, locateCLIFixture(t, visionDescribeQuestionWAV))
 }
 
 // visionDescribeFixturePath locates the committed lane fixture.

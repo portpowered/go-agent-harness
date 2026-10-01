@@ -284,7 +284,7 @@ func launchAdapterIntegration(t *testing.T, ctx context.Context) *adapterIntegra
 	})
 
 	run.baseURL = browserHTTPURL(run.browser.endpoint())
-	run.version, err = waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	run.version, err = waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}

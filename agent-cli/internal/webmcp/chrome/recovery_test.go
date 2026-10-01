@@ -174,7 +174,7 @@ func TestPinnedChromeConnectionSurvivesOpenerContextCancel(t *testing.T) {
 			t.Logf("Chrome cleanup: %v", closeErr)
 		}
 	})
-	version, err := waitForDevToolsVersion(ctx, browserHTTPURL(browser.endpoint()), lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, browserHTTPURL(browser.endpoint()))
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}

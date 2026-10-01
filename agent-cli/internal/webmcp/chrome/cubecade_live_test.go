@@ -371,7 +371,7 @@ func startCubecadeScreenshotChrome(t *testing.T, ctx context.Context) *cubecadeS
 	}
 	sight.browser = ownLiveBrowser(t, browser, "Cubecade screenshot Chrome cleanup")
 	sight.baseURL = browserHTTPURL(browser.endpoint())
-	if sight.version, err = waitForDevToolsVersion(ctx, sight.baseURL, lockedChromeVersion); err != nil {
+	if sight.version, err = waitForDevToolsVersion(ctx, sight.baseURL); err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}
 	if sight.rawTarget, err = waitForFixturePageTarget(ctx, sight.baseURL, sight.fixtureURL); err != nil {

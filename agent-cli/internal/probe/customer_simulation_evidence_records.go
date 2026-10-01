@@ -172,7 +172,7 @@ func (entry FilesystemCheckpointEntry) validateFact(item string) error {
 	if entry.Size < 0 {
 		return contractFieldError(ErrInvalidCustomerEvidence, item+".size", "must not be negative")
 	}
-	return validateSHA256(item+".sha256", entry.SHA256, true)
+	return validateSHA256(item+".sha256", entry.SHA256)
 }
 
 type ProcessFacts struct {

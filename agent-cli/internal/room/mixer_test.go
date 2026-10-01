@@ -495,8 +495,9 @@ func TestPCM16MixerRejectsChunkLargerThanBoundedQueue(t *testing.T) {
 	}
 }
 
-func providerPCM16Delta(delta, byteCount int) []byte {
-	samples := make([]int16, byteCount/2)
+// providerPCM16Delta returns one pressure-trace provider delta of PCM16 audio.
+func providerPCM16Delta(delta int) []byte {
+	samples := make([]int16, pressureTraceDeltaBytes/2)
 	for sample := range samples {
 		samples[sample] = int16(1000 + delta*300 + sample%200)
 	}

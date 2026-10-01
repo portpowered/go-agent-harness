@@ -132,7 +132,7 @@ func startCubecadeLiveVoiceChrome(t *testing.T, ctx context.Context, workDir str
 	}
 	sight.browser = ownLiveBrowser(t, browser, "spoken sight Chrome cleanup")
 	sight.baseURL = browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, sight.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, sight.baseURL)
 	if err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}

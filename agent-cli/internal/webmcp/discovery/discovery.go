@@ -572,7 +572,7 @@ func (s *Service) tryHTTP(ctx context.Context, rawURL string, source Source, kin
 		identity := rememberedBrowserIdentity(version, nil)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
 			httpURL:     targetListBaseURL(parsed),
-			addressKey:  browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port()),
+			addressKey:  browserAddressKey(parsed.Hostname(), parsed.Port()),
 			identityKey: browserIdentityKey(identity),
 		})
 	}
@@ -604,7 +604,7 @@ func (s *Service) tryWebSocket(ctx context.Context, rawURL string, source Source
 		identity := rememberedBrowserIdentity(version, normalized.url)
 		s.rememberEndpoint(candidate.ID, targetEndpoint{
 			browserWS:   normalized.url.String(),
-			addressKey:  browserAddressKey(normalized.url.Scheme, normalized.url.Hostname(), normalized.url.Port()),
+			addressKey:  browserAddressKey(normalized.url.Hostname(), normalized.url.Port()),
 			identityKey: browserIdentityKey(identity),
 		})
 	}
@@ -781,7 +781,7 @@ func browserReplacementID(publicID, instanceID string) string {
 }
 
 func (s *Service) replacedBrowserIDLocked(identity BrowserIdentity, publicID string) string {
-	address := browserAddressKey(identity.Scheme, identity.Host, identity.Port)
+	address := browserAddressKey(identity.Host, identity.Port)
 	identityKey := browserIdentityKey(identity)
 	if endpoint, ok := s.endpoints[publicID]; ok && endpoint.identityKey != "" && endpoint.identityKey != identityKey {
 		return publicID

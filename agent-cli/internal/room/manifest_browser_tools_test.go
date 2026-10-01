@@ -308,8 +308,9 @@ func withParticipantField(index int, key string, value any) func(map[string]any)
 
 // withoutParticipantField returns a manifest mutation that deletes one field
 // from the indexed participant.
-func withoutParticipantField(index int, key string) func(map[string]any) {
+// withoutSecondParticipantField removes key from the second fixture participant.
+func withoutSecondParticipantField(key string) func(map[string]any) {
 	return func(document map[string]any) {
-		delete(fixtureParticipant(document, index), key)
+		delete(fixtureParticipant(document, 1), key)
 	}
 }

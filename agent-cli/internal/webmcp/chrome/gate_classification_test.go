@@ -75,13 +75,13 @@ func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinn
 	defer discardSecondaryError(browser.Close)
 
 	baseURL := browserHTTPURL(browser.endpoint())
-	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
+	if _, err := waitForDevToolsVersion(ctx, baseURL); err != nil {
 		t.Fatalf("probe 04 wait for Chrome: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
 	cdpURL := baseURL + "/json/version?probe04=" + probe03RandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
-	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, iteration, "04")
+	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "04")
 	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "select", "--browser", browserID, "--json")
 	envelope := requireClassificationFailure(t, result, webmcp.ErrorNoEligibleTab)
 	if envelope.Error.Details["browser_id"] != browserID {
@@ -113,7 +113,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 08 initial Chrome: %v", err)
 	}
 	baseURL := browserHTTPURL(initial.endpoint())
-	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
+	if _, err := waitForDevToolsVersion(ctx, baseURL); err != nil {
 		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 wait for initial Chrome: %v", err)
 	}
@@ -125,8 +125,8 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	configDir := filepath.Join(runDir, "config")
 	cdpURL := baseURL + "/json/version?probe08=" + probe03RandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, true)
-	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, iteration, "08-initial")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, iteration, "08-initial")
+	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "08-initial")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "08-initial")
 	if len(tabs) != 1 {
 		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 initial eligible tabs = %+v, want one", tabs)
@@ -157,7 +157,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 08 replacement Chrome: %v", err)
 	}
 	defer discardSecondaryError(replacement.Close)
-	if _, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint()), lockedChromeVersion); err != nil {
+	if _, err := waitForDevToolsVersion(ctx, browserHTTPURL(replacement.endpoint())); err != nil {
 		t.Fatalf("probe 08 wait for replacement Chrome: %v", err)
 	}
 	stale := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "context", "--json")
@@ -188,7 +188,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	}
 	defer discardSecondaryError(browser.Close)
 	baseURL := browserHTTPURL(browser.endpoint())
-	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
+	if _, err := waitForDevToolsVersion(ctx, baseURL); err != nil {
 		t.Fatalf("probe 09 wait for Chrome: %v", err)
 	}
 	if _, err := openClassificationTarget(ctx, baseURL, secondURL); err != nil {
@@ -203,8 +203,8 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	configDir := filepath.Join(runDir, "config")
 	cdpURL := baseURL + "/json/version?probe09=" + probe03RandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
-	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, iteration, "09")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, iteration, "09")
+	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "09")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "09")
 	if len(tabs) != 2 {
 		t.Fatalf("probe 09 eligible tabs = %+v, want two", tabs)
 	}
@@ -244,7 +244,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	}
 	defer discardSecondaryError(browser.Close)
 	baseURL := browserHTTPURL(browser.endpoint())
-	if _, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion); err != nil {
+	if _, err := waitForDevToolsVersion(ctx, baseURL); err != nil {
 		t.Fatalf("probe 10 wait for Chrome: %v", err)
 	}
 	if _, err := openClassificationTarget(ctx, baseURL, noToolsURL); err != nil {
@@ -259,8 +259,8 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	configDir := filepath.Join(runDir, "config")
 	cdpURL := baseURL + "/json/version?probe10=" + probe03RandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
-	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, iteration, "10")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, iteration, "10")
+	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "10")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "10")
 	readyTab, unverifiedTab := classificationTabsByOrigin(t, tabs, readyFixture.server.URL, noTools.URL)
 
 	unselected := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--json")
@@ -285,7 +285,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	recordClassificationResult(t, ready, configDir, "probe-10-exact-ready", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":true,"target_id":%q}`, readyReport.Status, readyReport.PageTools, readyTab.TargetID))
 }
 
-func liveClassificationBrowserID(t *testing.T, ctx context.Context, binaryPath, configDir string, iteration int, probe string) string {
+func liveClassificationBrowserID(t *testing.T, ctx context.Context, binaryPath, configDir, probe string) string {
 	t.Helper()
 	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "browsers", "--json")
 	data := requireGateSuccessData[gateBrowsersData](t, result)
@@ -299,7 +299,7 @@ func liveClassificationBrowserID(t *testing.T, ctx context.Context, binaryPath, 
 	return data.Browsers[0].ID
 }
 
-func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, configDir, browserID string, iteration int, probe string) []gateTab {
+func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, configDir, browserID, probe string) []gateTab {
 	t.Helper()
 	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
 	data := requireGateSuccessData[gateTabsData](t, result)

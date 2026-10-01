@@ -860,7 +860,7 @@ func customerSimulationMechanicalVerdict(scenario CustomerScenario, actions []Ac
 		correction := customerSimulationCorrectionEvidence(scenario, product, process, facts)
 		verdict, err = EvaluateCustomerSimulationCorrection(scenario, actions, checkpoints, tools, product, correction)
 	case ScenarioFamilyC:
-		mixed := customerSimulationMixedModalEvidence(scenario, PairedTranscripts{Product: product}, DuplexRunResult{})
+		mixed := customerSimulationMixedModalEvidence(scenario, PairedTranscripts{Product: product})
 		verdict, err = EvaluateCustomerSimulationMixedModal(scenario, actions, checkpoints, tools, product, mixed)
 	case ScenarioFamilyD:
 		termination := customerSimulationTerminationEvidence(scenario, product, process, DuplexRunResult{}, facts)

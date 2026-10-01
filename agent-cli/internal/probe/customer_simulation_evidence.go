@@ -162,7 +162,7 @@ func (a ArtifactEntry) validate(field string) error {
 		if a.Size < 0 {
 			return contractFieldError(ErrInvalidCustomerEvidence, field+".size", "must not be negative")
 		}
-		if err := validateSHA256(field+".sha256", a.SHA256, true); err != nil {
+		if err := validateSHA256(field+".sha256", a.SHA256); err != nil {
 			return errors.Join(err, ErrUnhashedEvidenceArtifact)
 		}
 		if a.Reason != "" {
@@ -522,54 +522,54 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 			writeErrors = append(writeErrors, err)
 		}
 	}
-	add(b.writeJSONArtifact("scenario.json", ArtifactKindScenario, b.Scenario, true))
-	add(b.writeJSONLinesArtifact("transcripts/customer.jsonl", ArtifactKindCustomerTranscript, b.Transcripts.Customer, true))
-	add(b.writeJSONLinesArtifact("transcripts/product.jsonl", ArtifactKindProductTranscript, b.Transcripts.Product, true))
-	add(b.writeJSONLinesArtifact("events/audio-turn-events.jsonl", ArtifactKindAudioTurnEvents, b.AudioTurnEvents, true))
-	add(b.writeJSONLinesArtifact("tool-observations.jsonl", ArtifactKindToolObservations, b.ToolObservations, true))
-	add(b.writeJSONLinesArtifact("filesystem-checkpoints.jsonl", ArtifactKindFilesystemCheckpoints, b.FilesystemCheckpoints, true))
-	add(b.writeJSONArtifact("process.json", ArtifactKindProcessFacts, b.Process, true))
+	add(b.writeJSONArtifact("scenario.json", ArtifactKindScenario, b.Scenario))
+	add(b.writeJSONLinesArtifact("transcripts/customer.jsonl", ArtifactKindCustomerTranscript, b.Transcripts.Customer))
+	add(b.writeJSONLinesArtifact("transcripts/product.jsonl", ArtifactKindProductTranscript, b.Transcripts.Product))
+	add(b.writeJSONLinesArtifact("events/audio-turn-events.jsonl", ArtifactKindAudioTurnEvents, b.AudioTurnEvents))
+	add(b.writeJSONLinesArtifact("tool-observations.jsonl", ArtifactKindToolObservations, b.ToolObservations))
+	add(b.writeJSONLinesArtifact("filesystem-checkpoints.jsonl", ArtifactKindFilesystemCheckpoints, b.FilesystemCheckpoints))
+	add(b.writeJSONArtifact("process.json", ArtifactKindProcessFacts, b.Process))
 	if b.Scenario.Family == ScenarioFamilyC {
 		if b.MixedModal == nil {
 			add(b.RecordMissingArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, true, "mixed-modal boundary evidence was not produced"))
 		} else {
-			add(b.writeJSONArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, b.MixedModal, true))
+			add(b.writeJSONArtifact("events/mixed-modal.json", ArtifactKindMixedModalEvidence, b.MixedModal))
 		}
 	}
 	if b.Scenario.Family == ScenarioFamilyD {
 		if b.Termination == nil {
 			add(b.RecordMissingArtifact("events/termination.json", ArtifactKindTerminationEvidence, true, "termination evidence was not produced"))
 		} else {
-			add(b.writeJSONArtifact("events/termination.json", ArtifactKindTerminationEvidence, b.Termination, true))
+			add(b.writeJSONArtifact("events/termination.json", ArtifactKindTerminationEvidence, b.Termination))
 		}
 	}
 	if b.Scenario.Family == ScenarioFamilyE {
 		if b.Patience == nil {
 			add(b.RecordMissingArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, true, "patience timing evidence was not produced"))
 		} else {
-			add(b.writeJSONArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, b.Patience, true))
+			add(b.writeJSONArtifact(FamilyEPatienceEventPath, ArtifactKindPatienceEvidence, b.Patience))
 		}
 	}
 	if b.MechanicalVerdict == nil {
 		add(b.RecordMissingArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, true, "mechanical verdict was not produced"))
 	} else {
-		add(b.writeJSONArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, b.MechanicalVerdict, true))
+		add(b.writeJSONArtifact("mechanical-verdict.json", ArtifactKindMechanicalVerdict, b.MechanicalVerdict))
 	}
 	if b.ValidatorInput == nil {
 		add(b.RecordMissingArtifact("validator-input.json", ArtifactKindValidatorInput, true, "validator input was not produced"))
 	} else {
-		add(b.writeJSONArtifact("validator-input.json", ArtifactKindValidatorInput, b.ValidatorInput, true))
+		add(b.writeJSONArtifact("validator-input.json", ArtifactKindValidatorInput, b.ValidatorInput))
 	}
 	if b.ValidatorVerdict == nil {
 		add(b.RecordMissingArtifact("validator-verdict.json", ArtifactKindValidatorVerdict, true, "validator verdict was not produced"))
 	} else {
-		add(b.writeJSONArtifact("validator-verdict.json", ArtifactKindValidatorVerdict, b.ValidatorVerdict, true))
+		add(b.writeJSONArtifact("validator-verdict.json", ArtifactKindValidatorVerdict, b.ValidatorVerdict))
 	}
 	if !hasArtifactKind(b.Artifacts, ArtifactKindProductRecordDir) {
 		add(b.writeJSONArtifact("product-record-dir/index.json", ArtifactKindProductRecordDir, struct {
 			SourceRegistered bool     `json:"source_registered"`
 			Files            []string `json:"files"`
-		}{b.productRecordAdded, productRecordPaths(b.Artifacts)}, true))
+		}{b.productRecordAdded, productRecordPaths(b.Artifacts)}))
 	}
 	b.Finalized = true
 	b.FinalizedAt = time.Now().UTC()
@@ -589,19 +589,23 @@ func (b *CustomerEvidenceBundle) Finalize() error {
 	}
 	return errors.Join(writeErrors...)
 }
-func (b *CustomerEvidenceBundle) writeJSONArtifact(path string, kind ArtifactKind, value any, required bool) error {
+
+// writeJSONArtifact adds a required indented-JSON artifact to the bundle.
+func (b *CustomerEvidenceBundle) writeJSONArtifact(path string, kind ArtifactKind, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	return b.AddArtifactBytes(path, kind, append(data, '\n'), required)
+	return b.AddArtifactBytes(path, kind, append(data, '\n'), true)
 }
-func (b *CustomerEvidenceBundle) writeJSONLinesArtifact(path string, kind ArtifactKind, value any, required bool) error {
+
+// writeJSONLinesArtifact adds a required JSON-lines artifact to the bundle.
+func (b *CustomerEvidenceBundle) writeJSONLinesArtifact(path string, kind ArtifactKind, value any) error {
 	data, err := jsonLines(value)
 	if err != nil {
 		return err
 	}
-	return b.AddArtifactBytes(path, kind, data, required)
+	return b.AddArtifactBytes(path, kind, data, true)
 }
 func jsonLines(value any) ([]byte, error) {
 	encoded, err := json.Marshal(value)

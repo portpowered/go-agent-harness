@@ -299,7 +299,7 @@ func (r *customerSimulationRun) populateEvidence(duplexResult DuplexRunResult, c
 	mechanical := customerSimulationMechanicalVerdict(scenario, actionResults, checkpoints, toolObservations, transcripts.Product, facts, process, duplexResult, patience)
 	bundle.MechanicalVerdict = &mechanical
 	if scenario.Family == ScenarioFamilyC {
-		mixed := customerSimulationMixedModalEvidence(scenario, transcripts, duplexResult)
+		mixed := customerSimulationMixedModalEvidence(scenario, transcripts)
 		bundle.MixedModal = &mixed
 	}
 	if scenario.Family == ScenarioFamilyD {

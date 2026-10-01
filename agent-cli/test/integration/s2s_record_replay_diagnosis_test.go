@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -493,7 +492,7 @@ func executeProductionSessionCommand(t *testing.T, args []string) (string, strin
 	root.SetOut(writer.Stdout())
 	root.SetErr(writer.Stderr())
 	root.SetArgs(args)
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = root.ExecuteContext(ctx)
 	return writer.StdoutString(), writer.StderrString(), err

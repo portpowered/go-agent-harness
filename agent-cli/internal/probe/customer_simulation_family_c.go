@@ -109,11 +109,11 @@ func (e MixedModalEvidence) Validate(scenario CustomerScenario) error {
 	if !e.Delivery.valid() {
 		return contractFieldError(ErrInvalidCustomerEvidence, "mixed_modal.delivery", fmt.Sprintf("%q is invalid", e.Delivery))
 	}
-	if err := validateSHA256("mixed_modal.expected_sha256", e.ExpectedSHA256, true); err != nil {
+	if err := validateSHA256("mixed_modal.expected_sha256", e.ExpectedSHA256); err != nil {
 		return err
 	}
 	if e.ImageObserved {
-		if err := validateSHA256("mixed_modal.observed_sha256", e.ObservedSHA256, true); err != nil {
+		if err := validateSHA256("mixed_modal.observed_sha256", e.ObservedSHA256); err != nil {
 			return err
 		}
 	} else if e.ObservedSHA256 != "" {
@@ -363,7 +363,7 @@ func (e MixedModalEvidence) ImageActionID() string {
 	return FamilyCImageActionID
 }
 
-func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts, result DuplexRunResult) MixedModalEvidence {
+func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts PairedTranscripts) MixedModalEvidence {
 	priorAt := time.Duration(0)
 	if len(transcripts.Product) > 1 {
 		priorAt = transcripts.Product[1].At

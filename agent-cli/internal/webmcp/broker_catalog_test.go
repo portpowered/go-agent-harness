@@ -153,7 +153,7 @@ func TestStatefulBrokerBindsCatalogRefsToTheCurrentDescriptor(t *testing.T) {
 
 	handleValue, err := runtime.Open(context.Background(), candidate)
 	requireBrokerStep(t, err, "open fixture handle")
-	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	session := scriptedPrimaryTargetSession(t, handleValue)
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -240,7 +240,7 @@ func assertStaleInvokeWithoutOperation(t *testing.T, broker *webmcp.StatefulBrok
 		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: ref, Input: json.RawMessage(`{}`)})
 		return err
 	}, want, label)
-	assertNoOperation(t, runtime, testkit.OperationInvoke)
+	assertNoInvokeOperation(t, runtime)
 }
 
 func TestStatefulBrokerIgnoresDuplicateAndOutOfOrderNavigation(t *testing.T) {
@@ -480,7 +480,7 @@ func TestStatefulBrokerRetiresRefsWhenSelectionSwitches(t *testing.T) {
 		_, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: first.Tools[0].Ref, Input: json.RawMessage(`{}`)})
 		return err
 	}, webmcp.ErrorStaleToolRef, "ref from switched target")
-	assertNoOperation(t, runtime, testkit.OperationInvoke)
+	assertNoInvokeOperation(t, runtime)
 }
 
 func pageTool(name string, frame webmcp.FrameID, schema string) webmcp.ToolDescriptor {
@@ -511,11 +511,11 @@ func assertBrokerError(t *testing.T, operation func() error, want webmcp.ErrorCo
 	}
 }
 
-func assertNoOperation(t *testing.T, runtime *testkit.ScriptedBrowserRuntime, kind testkit.OperationKind) {
+func assertNoInvokeOperation(t *testing.T, runtime *testkit.ScriptedBrowserRuntime) {
 	t.Helper()
 	for _, operation := range runtime.Operations() {
-		if operation.Kind == kind {
-			t.Fatalf("found unexpected %s operation: %#v", kind, operation)
+		if operation.Kind == testkit.OperationInvoke {
+			t.Fatalf("found unexpected %s operation: %#v", testkit.OperationInvoke, operation)
 		}
 	}
 }

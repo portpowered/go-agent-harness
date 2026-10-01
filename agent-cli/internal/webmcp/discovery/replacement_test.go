@@ -3,7 +3,6 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"testing"
 )
@@ -39,8 +38,8 @@ func TestSameAddressFreshBrowserIdentityRetiresLiveAndPersistedSelection(t *test
 	descriptors := []TargetDescriptor{descriptor}
 	store := NewMemorySelectionStore()
 	client := &targetHTTPClient{responses: []*cannedResponse{
-		targetJSONResponse(versionJSONWithBrowserInstance(browserWS, oldInstance), http.StatusOK),
-		targetJSONResponse(versionJSONWithBrowserInstance(browserWS, newInstance), http.StatusOK),
+		targetJSONResponse(versionJSONWithBrowserInstance(browserWS, oldInstance)),
+		targetJSONResponse(versionJSONWithBrowserInstance(browserWS, newInstance)),
 	}}
 	var attached []replacementAttachment
 	var listCalls []string
@@ -140,7 +139,7 @@ type replacementFixture struct {
 // browser incarnation at the reused address.
 func newReplacementVersionClient(t *testing.T, browserWS, newInstance string) *targetHTTPClient {
 	t.Helper()
-	response := targetJSONResponse(versionJSONWithBrowserInstance(browserWS, newInstance), http.StatusOK)
+	response := targetJSONResponse(versionJSONWithBrowserInstance(browserWS, newInstance))
 	return &targetHTTPClient{responses: []*cannedResponse{response}}
 }
 

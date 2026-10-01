@@ -60,7 +60,7 @@ func TestFamilyEPatiencePolicyUsesControllableClockForNormalSlowRecoveryAndDeadA
 		t.Run(test.name, func(t *testing.T) {
 			scenario := NewFamilyEScenario()
 			evidence := test.build(t, scenario)
-			results, checkpoints, product := familyEActionEvidence(scenario, evidence)
+			results, checkpoints, product := familyEActionEvidence(evidence)
 			verdict, err := EvaluateCustomerSimulationPatience(scenario, results, checkpoints, nil, product, evidence)
 			if err != nil {
 				t.Fatalf("EvaluateCustomerSimulationPatience: %v", err)
@@ -135,7 +135,7 @@ func TestFamilyERejectsTimeoutRelabeledAsNaturalCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("controller evidence: %v", err)
 	}
-	results, checkpoints, product := familyEActionEvidence(scenario, evidence)
+	results, checkpoints, product := familyEActionEvidence(evidence)
 	verdict, err := EvaluateCustomerSimulationPatience(scenario, results, checkpoints, nil, product, evidence)
 	if err != nil {
 		t.Fatalf("EvaluateCustomerSimulationPatience: %v", err)
@@ -148,7 +148,7 @@ func TestFamilyERejectsTimeoutRelabeledAsNaturalCompletion(t *testing.T) {
 func TestFamilyEEvidenceBundleWritesPatienceTimeline(t *testing.T) {
 	scenario := NewFamilyEScenario()
 	evidence := familyENormalEvidence(t, scenario)
-	results, checkpoints, product := familyEActionEvidence(scenario, evidence)
+	results, checkpoints, product := familyEActionEvidence(evidence)
 	mechanical, err := EvaluateCustomerSimulationPatience(scenario, results, checkpoints, nil, product, evidence)
 	if err != nil {
 		t.Fatalf("patience mechanical evaluation: %v", err)
@@ -337,7 +337,7 @@ func familyEProcess(endedAt time.Duration, classification string) ProcessFacts {
 	}
 }
 
-func familyEActionEvidence(scenario CustomerScenario, patience PatienceEvidence) ([]ActionResult, []FilesystemCheckpoint, []TranscriptEvent) {
+func familyEActionEvidence(patience PatienceEvidence) ([]ActionResult, []FilesystemCheckpoint, []TranscriptEvent) {
 	checkpoint := FilesystemCheckpoint{
 		ID: "checkpoint-family-e", ActionID: FamilyEActionID, At: patience.TerminalAt,
 		Entries: []FilesystemCheckpointEntry{{Path: "patience/marker.txt", Type: FileTypeAbsent}},

@@ -161,7 +161,7 @@ func prepareLiveRun(ctx context.Context, request serviceSession.Request, deps De
 	if err != nil {
 		return liveRunAdmission{}, err
 	}
-	traceRun, err := prepareLiveTrace(request, liveRequest, deps, credentials)
+	traceRun, err := prepareLiveTrace(request, deps, credentials)
 	if err != nil {
 		return liveRunAdmission{}, err
 	}

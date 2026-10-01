@@ -350,7 +350,7 @@ const shortVoicedSlice = 300 * time.Millisecond
 // its path. Picking the loudest window keeps the slice genuinely voiced rather
 // than leading silence; the same source and duration always yield the same
 // slice.
-func writeVoicedWAVSlice(t *testing.T, sourcePath string, duration time.Duration) string {
+func writeVoicedWAVSlice(t *testing.T, sourcePath string) string {
 	t.Helper()
 	encoded, err := os.ReadFile(sourcePath)
 	if err != nil {
@@ -360,7 +360,7 @@ func writeVoicedWAVSlice(t *testing.T, sourcePath string, duration time.Duration
 	if err != nil {
 		t.Fatalf("parse WAV %s: %v", sourcePath, err)
 	}
-	window := loudestWindowSamplesIntegration(t, all, int(int64(rate)*int64(duration)/int64(time.Second)))
+	window := loudestWindowSamplesIntegration(t, all, int(int64(rate)*int64(shortVoicedSlice)/int64(time.Second)))
 	var out bytes.Buffer
 	if err := wavio.Write(&out, rate, window); err != nil {
 		t.Fatalf("encode WAV slice of %s: %v", sourcePath, err)
@@ -378,7 +378,7 @@ func writeVoicedWAVSlice(t *testing.T, sourcePath string, duration time.Duration
 // streamed turns against whatever WAVs were scheduled.
 func multiturnTurnSliceWAV(t *testing.T, name string) string {
 	t.Helper()
-	return writeVoicedWAVSlice(t, locateCLIFixture(t, name), shortVoicedSlice)
+	return writeVoicedWAVSlice(t, locateCLIFixture(t, name))
 }
 
 // scheduledSpeechSliceWAV returns a 0.3s voiced slice of the committed 24 kHz
@@ -387,5 +387,5 @@ func multiturnTurnSliceWAV(t *testing.T, name string) string {
 // so the real-time-paced speech and its equal-duration silence stay short.
 func scheduledSpeechSliceWAV(t *testing.T) string {
 	t.Helper()
-	return writeVoicedWAVSlice(t, locateCorpusWAV(t, "truncated_24k"), shortVoicedSlice)
+	return writeVoicedWAVSlice(t, locateCorpusWAV(t, "truncated_24k"))
 }

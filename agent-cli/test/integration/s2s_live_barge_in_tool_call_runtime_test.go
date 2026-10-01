@@ -510,7 +510,7 @@ func runToolBargeInCLI(t *testing.T) toolBargeInRun {
 		"--max-duration", plainSpeechRunTimeout.String(),
 	})
 
-	ctx, cancel := diagnosticDeadline(t, plainSpeechRunTimeout)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()

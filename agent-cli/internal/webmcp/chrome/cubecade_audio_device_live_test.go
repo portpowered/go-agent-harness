@@ -149,7 +149,7 @@ func (p *cubecadeAudioDeviceProof) startChrome(t *testing.T, ctx context.Context
 	}
 	p.browser = ownLiveBrowser(t, browser, "Cubecade Chrome cleanup")
 	baseURL := browserHTTPURL(browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, baseURL)
 	if err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}

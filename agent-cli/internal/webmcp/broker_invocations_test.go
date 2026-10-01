@@ -56,7 +56,7 @@ func TestStatefulBrokerSerializesTargetAdmissionsUntilTerminalResponse(t *testin
 	if err != nil {
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	session := scriptedPrimaryTargetSession(t, handleValue)
 	if session == nil {
 		t.Fatal("fixture session is nil")
 	}
@@ -234,7 +234,7 @@ func TestStatefulBrokerBoundsSerializedInvocationResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open fixture handle: %v", err)
 	}
-	session := scriptedTargetSession(t, handleValue, primaryTargetID)
+	session := scriptedPrimaryTargetSession(t, handleValue)
 	session.BlockInvocations()
 	dispatched, err := broker.Invoke(context.Background(), webmcp.InvokeRequest{ToolRef: snapshot.Tools[0].Ref, Input: []byte(`{}`)})
 	if err != nil {

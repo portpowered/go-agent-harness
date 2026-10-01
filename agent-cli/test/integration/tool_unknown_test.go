@@ -60,18 +60,21 @@ func agentCLIRoot(t *testing.T) string {
 	return filepath.Join(filepath.Dir(currentFile), "..", "..")
 }
 
+// diagnosticRunTimeout bounds one in-process CLI command run.
+const diagnosticRunTimeout = 5 * time.Second
+
 // diagnosticDeadline bounds an in-process CLI command. These commands do no
 // build or exec, so the deadline only fires on a real hang; when it does, the
 // goroutine dump is logged so the stuck wait is visible in CI output.
-func diagnosticDeadline(t *testing.T, timeout time.Duration) (context.Context, context.CancelFunc) {
+func diagnosticDeadline(t *testing.T) (context.Context, context.CancelFunc) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), diagnosticRunTimeout)
 	dumped := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer close(dumped)
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			stack := make([]byte, 1<<20)
-			t.Logf("in-process command exceeded %s; goroutines:\n%s", timeout, stack[:runtime.Stack(stack, true)])
+			t.Logf("in-process command exceeded %s; goroutines:\n%s", diagnosticRunTimeout, stack[:runtime.Stack(stack, true)])
 		}
 	})
 	return ctx, func() {

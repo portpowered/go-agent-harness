@@ -46,7 +46,7 @@ func (s *Service) HandleLifecycle(ctx context.Context, event LifecycleEvent) (Se
 	case LifecycleNavigation, LifecycleDocumentReplaced:
 		selection, lifecycleFailure = s.applyNavigationLocked(ctx, event)
 	case LifecycleTargetClosed, LifecycleTargetDetached:
-		selection, release, lifecycleFailure = s.applyTargetClosedLocked(event)
+		selection, release = s.applyTargetClosedLocked(event)
 	default:
 		lifecycleFailure = newProtocolInvalidAt("lifecycle", "unknown", "unsupported_lifecycle_event", nil)
 	}
@@ -329,10 +329,10 @@ func (s *Service) applyNavigationLocked(ctx context.Context, event LifecycleEven
 	return refreshed, nil
 }
 
-func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *TargetHandle, *DiscoveryError) {
+func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *TargetHandle) {
 	state, _, current, applied := s.advanceTargetGenerationLocked(event)
 	if !applied {
-		return s.currentSelectionLocked(), nil, nil
+		return s.currentSelectionLocked(), nil
 	}
 	state.closed = true
 	state.target.Generation = current
@@ -360,7 +360,7 @@ func (s *Service) applyTargetClosedLocked(event LifecycleEvent) (Selection, *Tar
 		"reason":         reason,
 		"ownership_mode": ownership,
 	})
-	return Selection{}, release, nil
+	return Selection{}, release
 }
 
 func (s *Service) advanceTargetGenerationLocked(event LifecycleEvent) (targetState, uint64, uint64, bool) {

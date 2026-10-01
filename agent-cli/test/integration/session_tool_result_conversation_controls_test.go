@@ -37,7 +37,7 @@ const (
 func conversationFixtureInputs(t *testing.T) (wavPath string, reply []int16) {
 	t.Helper()
 	fullPath := toolSingleCallWAVPath(t)
-	return writeVoicedWAVSlice(t, fullPath, shortVoicedSlice), toolSingleCallReplyWindow(t, fullPath)
+	return writeVoicedWAVSlice(t, fullPath), toolSingleCallReplyWindow(t, fullPath)
 }
 
 // buildConversationControlFixture starts from the passing depth-5 capture and
@@ -51,7 +51,7 @@ func buildConversationControlFixture(t *testing.T, mutate func(*gwtesting.Sessio
 
 func buildConversationControlFixtureFromInputs(t *testing.T, wavPath string, reply []int16, mutate func(*gwtesting.SessionCapture)) (string, string) {
 	t.Helper()
-	basePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+	basePath := buildToolResultConversationFixture(t, wavPath, reply)
 	capture, err := gwtesting.LoadSessionCapture(basePath)
 	if err != nil {
 		t.Fatalf("load base conversation capture: %v", err)

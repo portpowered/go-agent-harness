@@ -87,7 +87,7 @@ func toolDuringAudioWAVPath(t *testing.T) string {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("committed corpus WAV %s not found: %v", toolDuringAudioCorpusWAV, err)
 	}
-	return writeVoicedWAVSlice(t, path, shortVoicedSlice)
+	return writeVoicedWAVSlice(t, path)
 }
 
 // toolDuringAudioCorpusSamples reads and validates the committed corpus WAV.

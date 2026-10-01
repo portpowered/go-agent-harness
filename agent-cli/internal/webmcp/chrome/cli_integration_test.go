@@ -85,7 +85,7 @@ func launchCLIChromeIntegration(t *testing.T, ctx context.Context, assertHeaders
 	})
 
 	run.baseURL = browserHTTPURL(run.browser.endpoint())
-	version, err := waitForDevToolsVersion(ctx, run.baseURL, lockedChromeVersion)
+	version, err := waitForDevToolsVersion(ctx, run.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}

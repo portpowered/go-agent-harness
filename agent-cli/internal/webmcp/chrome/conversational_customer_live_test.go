@@ -183,7 +183,7 @@ func launchConversationalCustomerLive(t *testing.T, ctx context.Context) *conver
 	})
 
 	live.baseURL = browserHTTPURL(live.browser.endpoint())
-	live.version, err = waitForDevToolsVersion(ctx, live.baseURL, lockedChromeVersion)
+	live.version, err = waitForDevToolsVersion(ctx, live.baseURL)
 	if err != nil {
 		t.Fatalf("read pinned Chrome DevTools version: %v", err)
 	}

@@ -272,7 +272,7 @@ func startAudioInterruptChrome(t *testing.T, parent context.Context, scenarioRoo
 	}
 	run.browser = ownLiveBrowser(t, browser, "audio interrupt Chrome cleanup")
 	run.baseURL = browserHTTPURL(browser.endpoint())
-	if run.version, err = waitForDevToolsVersion(parent, run.baseURL, lockedChromeVersion); err != nil {
+	if run.version, err = waitForDevToolsVersion(parent, run.baseURL); err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}
 	rawTarget, err := waitForFixturePageTarget(parent, run.baseURL, run.fixtureURL)

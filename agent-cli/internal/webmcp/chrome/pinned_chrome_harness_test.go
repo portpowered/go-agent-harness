@@ -255,17 +255,19 @@ func (p *runningChrome) Kill() error {
 	return p.closeErr
 }
 
-func waitForDevToolsVersion(ctx context.Context, baseURL, expectedVersion string) (devToolsVersion, error) {
+// waitForDevToolsVersion waits until the browser at baseURL reports the locked
+// Chrome version.
+func waitForDevToolsVersion(ctx context.Context, baseURL string) (devToolsVersion, error) {
 	var lastErr error
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		version, err := readDevToolsVersion(ctx, baseURL)
 		if err == nil {
-			if strings.Contains(version.Browser, expectedVersion) {
+			if strings.Contains(version.Browser, lockedChromeVersion) {
 				return version, nil
 			}
-			lastErr = fmt.Errorf("browser identity = %q, want %s", version.Browser, expectedVersion)
+			lastErr = fmt.Errorf("browser identity = %q, want %s", version.Browser, lockedChromeVersion)
 		} else {
 			lastErr = err
 		}

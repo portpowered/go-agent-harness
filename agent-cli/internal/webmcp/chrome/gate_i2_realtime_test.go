@@ -176,7 +176,7 @@ func (r *gateI2Run) startChrome(t *testing.T, ctx context.Context) {
 	}
 	r.browser = ownLiveBrowser(t, browser, "Gate I2 Chrome cleanup")
 	r.baseURL = browserHTTPURL(browser.endpoint())
-	if r.version, err = waitForDevToolsVersion(ctx, r.baseURL, lockedChromeVersion); err != nil {
+	if r.version, err = waitForDevToolsVersion(ctx, r.baseURL); err != nil {
 		t.Fatalf("read qualified Chrome DevTools version: %v", err)
 	}
 	rawTarget, err := waitForFixturePageTarget(ctx, r.baseURL, r.fixtureURL)

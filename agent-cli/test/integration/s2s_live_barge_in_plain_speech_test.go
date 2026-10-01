@@ -24,7 +24,7 @@ const (
 	plainSpeechInputCount      = 3
 	plainSpeechResponseCount   = 3
 	plainSpeechFrameBytes      = audio.FrameSize * 2
-	plainSpeechRunTimeout      = 5 * time.Second
+	plainSpeechRunTimeout      = diagnosticRunTimeout // the CLI --max-duration matches the diagnostic deadline
 	plainSpeechCommandJoinWait = 500 * time.Millisecond
 )
 
@@ -431,7 +431,7 @@ func runPlainSpeechCLI(t *testing.T) plainSpeechRun {
 		"--max-duration", plainSpeechRunTimeout.String(),
 	})
 
-	ctx, cancel := diagnosticDeadline(t, plainSpeechRunTimeout)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()

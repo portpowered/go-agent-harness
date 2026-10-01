@@ -17,7 +17,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
@@ -291,7 +290,7 @@ func runReadImageSession(t *testing.T, fixturePath, configDir, imagePath string,
 		"--model", "gpt-realtime",
 		prompt,
 	})
-	ctx, cancel := diagnosticDeadline(t, 5*time.Second)
+	ctx, cancel := diagnosticDeadline(t)
 	defer cancel()
 	err = rootCmd.ExecuteContext(ctx)
 	return stdout.String(), err

@@ -130,10 +130,7 @@ func resolveRequestInputs(ctx context.Context, request serviceSession.Request, r
 	if err != nil {
 		return requestInputs{}, err
 	}
-	replayPlan, requestPrompt, promptPresent, err := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
-	if err != nil {
-		return requestInputs{}, err
-	}
+	replayPlan, requestPrompt, promptPresent := buildReplayPlan(request, inspection, requestPrompt, promptPresent)
 	inputRate, outputRate := replayRates(replayPlan, request, inspection)
 	turnCapture := inspection != nil && inspection.Kind == runtimeReplay.CaptureKindTurn
 	inputs.instructions = instructions
@@ -349,9 +346,9 @@ func hasAudioInput(request serviceSession.Request) bool {
 	return request.AudioInput.Present || len(request.AudioTurns) > 0 || len(request.AudioInterrupts) > 0
 }
 
-func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection, requestPrompt string, promptPresent bool) (*runtimeSession.LiveReplayPlan, string, bool, error) {
+func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.CaptureInspection, requestPrompt string, promptPresent bool) (*runtimeSession.LiveReplayPlan, string, bool) {
 	if inspection == nil {
-		return nil, requestPrompt, promptPresent, nil
+		return nil, requestPrompt, promptPresent
 	}
 	if inspection.LivePlan == nil {
 		// InspectCapture classifies caller-driven realtime captures even when
@@ -359,7 +356,7 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 		// self-driving plan. The strict provider replay still consumes the
 		// captured transport; the host must not invent client actions or reject
 		// a provider-only capture merely because it has no replay plan.
-		return nil, requestPrompt, promptPresent, nil
+		return nil, requestPrompt, promptPresent
 	}
 	plan := *inspection.LivePlan
 	// Explicit caller input is checked by the strict replay transport, which
@@ -368,13 +365,13 @@ func buildReplayPlan(request serviceSession.Request, inspection *runtimeReplay.C
 		plan.AudioTurns = nil
 	}
 	if !replayPlanHasActions(plan) {
-		return nil, requestPrompt, promptPresent, nil
+		return nil, requestPrompt, promptPresent
 	}
 	if !promptPresent && plan.OpeningPromptPresent {
 		requestPrompt = plan.OpeningPrompt
 		promptPresent = true
 	}
-	return &plan, requestPrompt, promptPresent, nil
+	return &plan, requestPrompt, promptPresent
 }
 
 func replayPlanHasActions(plan runtimeSession.LiveReplayPlan) bool {

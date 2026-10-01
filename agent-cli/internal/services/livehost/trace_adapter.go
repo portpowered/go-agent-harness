@@ -19,7 +19,7 @@ func liveTraceSource(scheduler clock.Scheduler) clock.Source {
 	return clock.Real{}
 }
 
-func prepareLiveTrace(request serviceSession.Request, liveRequest session.LiveRequest, deps Dependencies, credentials []string) (sessiontrace.Prepared, error) {
+func prepareLiveTrace(request serviceSession.Request, deps Dependencies, credentials []string) (sessiontrace.Prepared, error) {
 	if !request.TraceAudio && strings.TrimSpace(request.RecordDirectory) == "" {
 		return nil, nil
 	}

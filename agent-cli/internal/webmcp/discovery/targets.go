@@ -839,12 +839,14 @@ func endpointAddressKey(endpoint targetEndpoint) string {
 		if err != nil || parsed == nil || parsed.Hostname() == "" {
 			continue
 		}
-		return browserAddressKey(parsed.Scheme, parsed.Hostname(), parsed.Port())
+		return browserAddressKey(parsed.Hostname(), parsed.Port())
 	}
 	return ""
 }
 
-func browserAddressKey(scheme, host, port string) string {
+// browserAddressKey identifies a browser endpoint by host and port; the
+// scheme (http or ws) addresses the same endpoint.
+func browserAddressKey(host, port string) string {
 	return strings.ToLower(strings.TrimSpace(host)) + "\x00" + strings.TrimSpace(port)
 }
 

@@ -112,7 +112,7 @@ func (e *conversationResultExecutor) snapshot() (calls []messages.ToolCall, retu
 // (authored from that same output) and voiced audio strictly AFTER that gated
 // frame. The fixture is synthetic-provenance tagged and validated by the
 // replay dialer before use.
-func buildToolResultConversationFixture(t *testing.T, wavPath string, replySamples []int16, toolResultOutput string, includeToolCall bool) string {
+func buildToolResultConversationFixture(t *testing.T, wavPath string, replySamples []int16) string {
 	t.Helper()
 	baseCapture, records := realtimeToolFixturePrelude(t, wavPath)
 
@@ -138,40 +138,38 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 		})
 	}
 
-	spokenReply := spokenReplyFor(parseToolResult(t, toolResultOutput))
+	spokenReply := spokenReplyFor(parseToolResult(t, toolResultPositive))
 
 	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_result_conversation"}}`)
-	if includeToolCall {
-		serverEvent(rtEventOutputItemAdded,
-			`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+toolConversationCallID+`","name":"`+toolCallScenarioName+`"}}`)
-		serverEvent(rtEventFunctionCallArgumentsDone,
-			`{"type":"response.function_call_arguments.done","call_id":"`+toolConversationCallID+`","name":"`+toolCallScenarioName+`","arguments":`+strconvQuote(toolCallScenarioArguments)+`}`)
-		// The tool-call response terminates with the call pending; the
-		// spoken follow-up response exists only after the executed result is
-		// delivered back to the provider.
-		serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_result_conversation","status":"completed"}}`)
+	serverEvent(rtEventOutputItemAdded,
+		`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"`+toolConversationCallID+`","name":"`+toolCallScenarioName+`"}}`)
+	serverEvent(rtEventFunctionCallArgumentsDone,
+		`{"type":"response.function_call_arguments.done","call_id":"`+toolConversationCallID+`","name":"`+toolCallScenarioName+`","arguments":`+strconvQuote(toolCallScenarioArguments)+`}`)
+	// The tool-call response terminates with the call pending; the
+	// spoken follow-up response exists only after the executed result is
+	// delivered back to the provider.
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_result_conversation","status":"completed"}}`)
 
-		// The gating frame: replay validation blocks every later inbound
-		// record until the live session sends this exact function_call_output
-		// carrying the executor's runtime return value. A differing executor
-		// result diverges the replay here, deterministically withholding the
-		// spoken reply.
-		outputPayload := mustJSON(t, map[string]any{
-			"type": rtEventConversationItemCreate,
-			"item": map[string]string{
-				"type":    rtItemFunctionCallOutput,
-				"call_id": toolConversationCallID,
-				"output":  toolResultOutput,
-			},
-		})
-		clientEvent(rtEventConversationItemCreate, outputPayload)
-		// The function_call_output item is not itself a response boundary.
-		// Realtime must receive one explicit response.create after the complete
-		// result batch before the grounded spoken continuation can begin.
-		clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
+	// The gating frame: replay validation blocks every later inbound
+	// record until the live session sends this exact function_call_output
+	// carrying the executor's runtime return value. A differing executor
+	// result diverges the replay here, deterministically withholding the
+	// spoken reply.
+	outputPayload := mustJSON(t, map[string]any{
+		"type": rtEventConversationItemCreate,
+		"item": map[string]string{
+			"type":    rtItemFunctionCallOutput,
+			"call_id": toolConversationCallID,
+			"output":  toolResultPositive,
+		},
+	})
+	clientEvent(rtEventConversationItemCreate, outputPayload)
+	// The function_call_output item is not itself a response boundary.
+	// Realtime must receive one explicit response.create after the complete
+	// result batch before the grounded spoken continuation can begin.
+	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
 
-		serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_result_conversation_reply"}}`)
-	}
+	serverEvent(rtEventResponseCreated, `{"type":"response.created","response":{"id":"resp_tool_result_conversation_reply"}}`)
 
 	// Server-side transcript deltas authored from the executor's runtime
 	// return value, split across two deltas so the full text only exists
@@ -191,11 +189,7 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 	})
 	serverEvent(rtEventOutputAudioDelta, string(audioDelta))
 	serverEvent("response.output_audio.done", `{"type":"response.output_audio.done"}`)
-	finalResponseID := "resp_tool_result_conversation"
-	if includeToolCall {
-		finalResponseID = "resp_tool_result_conversation_reply"
-	}
-	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"`+finalResponseID+`","status":"completed"}}`)
+	serverEvent(rtEventResponseDone, `{"type":"response.done","response":{"id":"resp_tool_result_conversation_reply","status":"completed"}}`)
 
 	baseCapture.Session.ID = "sess_tool_result_conversation"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
@@ -381,7 +375,7 @@ func testSessionToolCallConversationSpokenReplyReflectsRealToolResult(t *testing
 	reply := toolSingleCallReplyWindow(t, wavPath)
 
 	executor := &conversationResultExecutor{result: toolResultPositive}
-	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+	wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 	started := time.Now()
 	stdout, outputPath, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
 	if runErr != nil {
@@ -432,7 +426,7 @@ func testSessionToolCallConversationDifferentResultFailsReflection(t *testing.T)
 	wavPath, reply := conversationFixtureInputs(t)
 
 	executor := &conversationResultExecutor{result: toolResultControl}
-	wirePath := buildToolResultConversationFixture(t, wavPath, reply, toolResultPositive, true)
+	wirePath := buildToolResultConversationFixture(t, wavPath, reply)
 
 	started := time.Now()
 	stdout, _, runErr := runToolResultConversation(t, wavPath, wirePath, executor)
