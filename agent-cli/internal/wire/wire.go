@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 
+	"net/http"
+
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -38,8 +40,8 @@ import (
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
+	gatewaylogging "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"net/http"
 )
 
 type modelValidation struct {
@@ -210,7 +212,7 @@ func provideProviderCaptureService(source Clock) runtimeRecording.ProviderCaptur
 	return recordingwire.NewProviderCaptureService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service) (runtimeproviders.FullService, error) {
+func provideProviderService(clockSource Clock, recordingService runtimeRecording.Service, providerCaptureService runtimeRecording.ProviderCaptureService, replayService runtimeReplay.Service, providerLogger gatewaylogging.Logger) (runtimeproviders.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
@@ -221,6 +223,7 @@ func provideProviderService(clockSource Clock, recordingService runtimeRecording
 		ProviderCapture: providerCaptureService,
 		Replay:          replayService,
 		Clock:           timerSource,
+		Logger:          providerLogger,
 	}), nil
 }
 
@@ -314,6 +317,7 @@ var CliSet = wire.NewSet(
 	provideSessionDisplaySurface,
 	provideTextSessionService,
 	provideSessionLogger,
+	provideProviderLogger,
 	provideProviderService,
 	provideProviderServiceRole,
 	provideProviderSessionServiceRole,

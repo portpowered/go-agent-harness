@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -11,6 +12,12 @@ import (
 // ErrRTCSessionCaptureBufferUnavailable indicates that a source was handed to
 // a session runtime without its owner-created capture handoff.
 var ErrRTCSessionCaptureBufferUnavailable = errors.New("RTC session capture buffer is unavailable")
+
+// captureWorkerJoinBound bounds how long a failing capture pump waits for its
+// device worker to observe cancellation. A native read that ignores the
+// context cannot hold the session terminal path longer than this; the
+// source's Close remains the final join for such a worker.
+const captureWorkerJoinBound = time.Second
 
 // BufferedCapture owns the bounded capture handoff between the device worker
 // and provider writer. The owner creates it before starting either worker so
@@ -95,22 +102,32 @@ func PumpBufferedCaptureWithBuffer(ctx context.Context, source *RTCDeviceSource,
 		}
 		if err != nil {
 			cancel()
-			// The owning binding performs the source Close/join on teardown.
-			// Returning here keeps cancellation responsive even when a native
-			// read has not yet observed the derived context.
+			joinCaptureWorker(done)
 			return err
 		}
 		if err := outbound.WriteFrame(runCtx, frame); err != nil {
 			cancel()
-			// Surface the provider boundary failure immediately. Waiting for a
-			// native device read to observe cancellation can otherwise hold the
-			// session terminal path open indefinitely. Binding.Close owns the
-			// source worker and will join it during normal teardown.
+			joinCaptureWorker(done)
 			return &RTCDeviceSourceError{DeviceID: source.id, Operation: "write", Err: err}
 		}
 		if uploaded != nil {
 			uploaded(source.providerRate, frame.Samples)
 		}
+	}
+}
+
+// joinCaptureWorker waits, after cancellation, for the capture worker to exit
+// so a failed pump does not leave it running behind the caller. The wait is
+// bounded: a native read that has not yet observed cancellation must not hold
+// the session terminal path open indefinitely, and the source's Close joins
+// any worker still running at teardown. The worker's own error is the
+// cancellation consequence of the failure being returned and is dropped.
+func joinCaptureWorker(done <-chan error) {
+	timer := time.NewTimer(captureWorkerJoinBound)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
 	}
 }
 

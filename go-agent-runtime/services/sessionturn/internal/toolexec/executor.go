@@ -150,9 +150,9 @@ func cancelledResult(call messages.ToolCall, err error) (messages.ToolCallRespon
 // invoke runs exactly one inner invocation and confines panic recovery to it.
 func invoke(ctx context.Context, executor messages.ToolExecutor, call messages.ToolCall) (response messages.ToolCallResponse, err error) {
 	defer func() {
-		if recover() != nil {
+		if value := recover(); value != nil {
 			response = messages.ToolCallResponse{}
-			err = errPanicked
+			err = newPanicError(errPanicked, value)
 		}
 	}()
 	return executor.Execute(ctx, call)

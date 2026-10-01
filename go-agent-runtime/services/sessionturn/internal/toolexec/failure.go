@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
@@ -37,6 +38,7 @@ func (e *Executor) pageSightTool(call messages.ToolCall) bool {
 // customer-safe provider result.
 func (e *Executor) failure(call messages.ToolCall, err error) messages.ToolCallResponse {
 	e.recordDiagnostic(call, err)
+	err = providerSafe(err)
 	if e.pageSightTool(call) {
 		return e.pageSightFailure(call)
 	}
@@ -90,4 +92,33 @@ func genericFailure(call messages.ToolCall, err error) messages.ToolCallResponse
 		Name:       call.Name,
 		Content:    fmt.Sprintf("%s: %s", message, err),
 	}
+}
+
+// panicError preserves a recovered panic's value and goroutine stack for the
+// operator diagnostic path. Unwrap exposes only the classification so callers
+// keep matching the stable sentinel.
+type panicError struct {
+	kind  sessionturn.Error
+	value any
+	stack []byte
+}
+
+func newPanicError(kind sessionturn.Error, value any) *panicError {
+	return &panicError{kind: kind, value: value, stack: debug.Stack()}
+}
+
+func (p *panicError) Error() string {
+	return fmt.Sprintf("%s: %v\n%s", p.kind, p.value, p.stack)
+}
+
+func (p *panicError) Unwrap() error { return p.kind }
+
+// providerSafe keeps panic values and stacks on the operator diagnostic path;
+// the provider-visible result carries only the panic classification.
+func providerSafe(err error) error {
+	var panicked *panicError
+	if errors.As(err, &panicked) {
+		return panicked.kind
+	}
+	return err
 }

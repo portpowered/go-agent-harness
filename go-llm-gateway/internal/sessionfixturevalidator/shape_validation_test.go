@@ -255,7 +255,7 @@ func TestRun_MultiViolationReportMatchesGolden(t *testing.T) {
 	}
 
 	got := strings.ReplaceAll(stderr.String(), path, "multi-violation.session.json")
-	goldenPath := filepath.Join(repoPathFromHere("testdata/golden/multi-violation.stderr"))
+	goldenPath := repoPathFromHere("testdata/golden/multi-violation.stderr")
 	if *updateShapeGolden {
 		if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
 			t.Fatalf("update golden file: %v", err)

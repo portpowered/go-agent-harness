@@ -2,13 +2,17 @@ package toolexec
 
 import (
 	"context"
+	"errors"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessionturn"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
-const errRecheckPanicked sessionturn.Error = "screen recording permission re-check panicked"
+const (
+	errRecheckPanicked        sessionturn.Error = "screen recording permission re-check panicked"
+	errRecheckSupportPanicked sessionturn.Error = "screen recording permission re-check support probe panicked"
+)
 
 type recheckResult struct {
 	permission tools.DisplayPermission
@@ -24,7 +28,14 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 		return tools.DisplayPermission{}, false
 	}
 	rechecker, ok := e.inner.(tools.ScreenRecordingPermissionRechecker)
-	if !ok || !recheckSupported(rechecker) {
+	if !ok {
+		return tools.DisplayPermission{}, false
+	}
+	supported, err := recheckSupported(rechecker)
+	if err != nil {
+		e.recordDiagnostic(call, err)
+	}
+	if !supported {
 		return tools.DisplayPermission{}, false
 	}
 	recheckCtx, cancel := context.WithTimeout(ctx, e.recheckLimit)
@@ -36,6 +47,10 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 	}()
 	select {
 	case result := <-resultCh:
+		var panicked *panicError
+		if errors.As(result.err, &panicked) {
+			e.recordDiagnostic(call, result.err)
+		}
 		if ctx.Err() != nil || result.err != nil || result.permission.State != tools.DisplayPermissionDenied {
 			return tools.DisplayPermission{}, false
 		}
@@ -45,20 +60,21 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 	}
 }
 
-func recheckSupported(rechecker tools.ScreenRecordingPermissionRechecker) (supported bool) {
+func recheckSupported(rechecker tools.ScreenRecordingPermissionRechecker) (supported bool, err error) {
 	defer func() {
-		if recover() != nil {
+		if value := recover(); value != nil {
 			supported = false
+			err = newPanicError(errRecheckSupportPanicked, value)
 		}
 	}()
-	return rechecker.ScreenRecordingPermissionRecheckSupported()
+	return rechecker.ScreenRecordingPermissionRecheckSupported(), nil
 }
 
 func recheck(ctx context.Context, rechecker tools.ScreenRecordingPermissionRechecker) (permission tools.DisplayPermission, err error) {
 	defer func() {
-		if recover() != nil {
+		if value := recover(); value != nil {
 			permission = tools.DisplayPermission{}
-			err = errRecheckPanicked
+			err = newPanicError(errRecheckPanicked, value)
 		}
 	}()
 	return rechecker.RecheckScreenRecordingPermission(ctx)

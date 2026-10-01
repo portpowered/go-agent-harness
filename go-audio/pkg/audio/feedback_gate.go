@@ -3,7 +3,6 @@ package audio
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -66,8 +65,11 @@ type PCM16FeedbackGate struct {
 	suppressUntil    time.Duration
 	playbackSeen     bool
 	warningSent      bool
-	closed           bool
-	pending          []heldPCM16CaptureFrame
+	// warningDone is closed when the one-time warning write returns; Close
+	// waits on it (bounded) so the write is owned by the gate's lifecycle.
+	warningDone chan struct{}
+	closed      bool
+	pending     []heldPCM16CaptureFrame
 
 	// probeIndependentEvidence accumulates the duration of consecutive
 	// PCM16SelfHearingNonFeedback probe classifications while suppressing or
@@ -467,14 +469,17 @@ func (g *PCM16FeedbackGate) Close() error {
 		return nil
 	}
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	if g.closed {
+		g.mu.Unlock()
 		return nil
 	}
 	g.closed = true
 	g.pending = nil
 	g.startupAmbiguousEvidence = false
-	return errors.Join(g.detector.Close(), g.probe.Close())
+	err := errors.Join(g.detector.Close(), g.probe.Close())
+	warningDone := g.warningDone
+	g.mu.Unlock()
+	return errors.Join(err, awaitFeedbackWarning(warningDone))
 }
 
 func (g *PCM16FeedbackGate) resetCaptureEvidenceLocked() {
@@ -574,21 +579,4 @@ func (g *PCM16FeedbackGate) ConfirmedLag() time.Duration {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.confirmedLag
-}
-
-func (g *PCM16FeedbackGate) warnOnceLocked() {
-	if g.warningSent {
-		return
-	}
-	g.warningSent = true
-	if g.warning == nil {
-		return
-	}
-	writer := g.warning
-	// Warning I/O is deliberately detached from both media pumps. A terminal
-	// writer supplied by an embedding may block or fail; neither condition can
-	// hold the gate or affect provider delivery.
-	go func() {
-		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning) //nolint:errcheck // detached best-effort warning; its failure must not hold the gate or affect delivery.
-	}()
 }

@@ -39,6 +39,7 @@ import (
 	wire10 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
+	logging2 "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"net/http"
 )
@@ -58,13 +59,14 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	recordingService := provideRecordingService(clockSource)
 	providerCaptureService := provideProviderCaptureService(clockSource)
 	replayService := provideLiveReplayService()
-	fullService, err := provideProviderService(clockSource, recordingService, providerCaptureService, replayService)
+	loggingLogger := provideProviderLogger(logger)
+	fullService, err := provideProviderService(clockSource, recordingService, providerCaptureService, replayService, loggingLogger)
 	if err != nil {
 		return nil, err
 	}
 	providersService := provideProviderServiceRole(fullService)
-	loggingLogger := provideSessionLogger(logger)
-	sessionService := provideTextSessionService(globalFlags, fileStoreFactory, toolExecutor, toolDefs, service, inferencer, wireModelValidation, providersService, replayService, loggingLogger)
+	logger2 := provideSessionLogger(logger)
+	sessionService := provideTextSessionService(globalFlags, fileStoreFactory, toolExecutor, toolDefs, service, inferencer, wireModelValidation, providersService, replayService, logger2)
 	askFlags := flags.NewAskFlags()
 	loopFlags := flags.NewLoopFlags()
 	askCommand := cli.NewAskCommand(sessionService, askFlags, loopFlags, globalFlags)
@@ -285,7 +287,7 @@ func provideProviderCaptureService(source Clock) recording.ProviderCaptureServic
 	return wire7.NewProviderCaptureService(source)
 }
 
-func provideProviderService(clockSource Clock, recordingService recording.Service, providerCaptureService recording.ProviderCaptureService, replayService replay.Service) (providers.FullService, error) {
+func provideProviderService(clockSource Clock, recordingService recording.Service, providerCaptureService recording.ProviderCaptureService, replayService replay.Service, providerLogger logging2.Logger) (providers.FullService, error) {
 	timerSource, err := clock.RequireTimerSource(clockSource)
 	if err != nil {
 		return nil, fmt.Errorf("provider clock: %w", err)
@@ -296,6 +298,7 @@ func provideProviderService(clockSource Clock, recordingService recording.Servic
 		ProviderCapture: providerCaptureService,
 		Replay:          replayService,
 		Clock:           timerSource,
+		Logger:          providerLogger,
 	}), nil
 }
 
@@ -375,6 +378,7 @@ var CliSet = wire6.NewSet(
 	provideSessionDisplaySurface,
 	provideTextSessionService,
 	provideSessionLogger,
+	provideProviderLogger,
 	provideProviderService,
 	provideProviderServiceRole,
 	provideProviderSessionServiceRole,

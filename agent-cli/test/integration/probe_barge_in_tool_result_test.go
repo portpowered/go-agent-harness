@@ -24,7 +24,7 @@ import (
 // v3bFixtureDir holds the recorded barge-in-during-tool-call session fixtures
 // for the s2s v3b vertical. All evidence flows through the real CLI probe run
 // command in replay mode; no internal loop functions are called directly.
-var v3bFixtureDir = filepath.Join("testdata")
+var v3bFixtureDir = "testdata"
 
 func TestV3BBargeInDuringToolCallDeliversToolResult(t *testing.T) {
 	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-delivered.session.json")

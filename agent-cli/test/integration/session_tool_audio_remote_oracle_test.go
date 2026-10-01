@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -191,7 +192,7 @@ func (b *remoteToolAudioBuffer) String() string {
 }
 
 func remoteToolAudioEnvironment(base []string, fixturePath string, holdToneControl bool) []string {
-	environment := append(base,
+	environment := append(slices.Clip(base),
 		"HTTP_PROXY=http://127.0.0.1:1",
 		"HTTPS_PROXY=http://127.0.0.1:1",
 		"ALL_PROXY=http://127.0.0.1:1",

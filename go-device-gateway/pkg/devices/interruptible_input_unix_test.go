@@ -47,22 +47,8 @@ func TestOpenInterruptibleInputDuplicatesPipeAndHonorsDeadline(t *testing.T) {
 // its deadline and let the session cancellation path make progress.
 func TestOpenInterruptibleInputInheritedPipeSubprocess(t *testing.T) {
 	if os.Getenv("GO_AGENT_INTERRUPTIBLE_INPUT_CHILD") == "1" {
-		inherited := os.NewFile(uintptr(3), "inherited-pipe")
-		if inherited == nil {
-			os.Exit(2)
-		}
-		defer closeForTest(t, "inherited", inherited)
-		dup, err := OpenInterruptibleInput(inherited)
-		if err != nil {
-			os.Exit(3)
-		}
-		defer closeForTest(t, "dup", dup)
-		if err := dup.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
-			os.Exit(4)
-		}
-		var one [1]byte
-		if _, err := dup.Read(one[:]); !errors.Is(err, os.ErrDeadlineExceeded) {
-			os.Exit(5)
+		if code := runInheritedPipeChild(t); code != 0 {
+			os.Exit(code)
 		}
 		return
 	}
@@ -79,4 +65,27 @@ func TestOpenInterruptibleInputInheritedPipeSubprocess(t *testing.T) {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("inherited-pipe child = %v, output %s", err, output)
 	}
+}
+
+// runInheritedPipeChild runs the child half and returns its exit code, so the
+// deferred closes run before the caller exits the process.
+func runInheritedPipeChild(t *testing.T) int {
+	inherited := os.NewFile(uintptr(3), "inherited-pipe")
+	if inherited == nil {
+		return 2
+	}
+	defer closeForTest(t, "inherited", inherited)
+	dup, err := OpenInterruptibleInput(inherited)
+	if err != nil {
+		return 3
+	}
+	defer closeForTest(t, "dup", dup)
+	if err := dup.SetReadDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		return 4
+	}
+	var one [1]byte
+	if _, err := dup.Read(one[:]); !errors.Is(err, os.ErrDeadlineExceeded) {
+		return 5
+	}
+	return 0
 }
