@@ -311,8 +311,8 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 			if call == 3 {
 				close(retried)
 			}
-			return ManagedBrowserProcessInfo{PID: 55511, Identity: "still-running"}, nil
-		}),
+			return nil
+		},
 	}
 	done := make(chan struct{})
 	go func() {

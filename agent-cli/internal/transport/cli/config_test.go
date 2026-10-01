@@ -25,7 +25,13 @@ import (
 // updateGoldensFlag is the "go test -update" flag that rewrites CLI golden files.
 const updateGoldensFlag = "update"
 
+// TestMain runs the hanging acceptance agent when re-executed under
+// hangingAgentName, and the tests otherwise.
 func TestMain(m *testing.M) {
+	if runAsHangingAgent() {
+		blockHangingAgent()
+		os.Exit(0)
+	}
 	flag.Bool(updateGoldensFlag, false, "update CLI golden files")
 	os.Exit(m.Run())
 }

@@ -159,7 +159,7 @@ func TestAskOutputModalityEmbedding(t *testing.T) {
 	inf := &embeddingBinaryInferencer{embBytes: fakeEmbBytes}
 	exec := &mockToolExecutor{}
 
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, inf)
+	agentCLI, err := wire.InitializeMockAgentCLI(t.Context(), exec, inf)
 	if err != nil {
 		t.Fatalf("failed to initialize mock CLI: %v", err)
 	}

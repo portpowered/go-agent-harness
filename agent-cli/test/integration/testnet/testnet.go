@@ -36,7 +36,7 @@ func NewWANSegmentServer(tb testing.TB, handler http.Handler) *httptest.Server {
 		}
 		return optionErr
 	}}
-	listener, err := config.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	listener, err := config.Listen(tb.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		tb.Fatalf("listen for WAN-segment fixture: %v", err)
 	}

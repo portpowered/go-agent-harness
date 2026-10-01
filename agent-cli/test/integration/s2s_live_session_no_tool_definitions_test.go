@@ -179,7 +179,7 @@ func strictOpenAIWebSocketRecord(sequence int, direction gwtesting.SessionEventD
 
 func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(
+	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(), 
 		wire.NewPortSwap(wire.PortTransportDialer, server),
 	)
 	if err != nil {

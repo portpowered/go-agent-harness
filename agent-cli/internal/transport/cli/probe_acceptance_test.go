@@ -312,14 +312,10 @@ func TestProbeAcceptanceLiveTimeoutStopsHangingBinary(t *testing.T) {
 // as an acceptance agent that never answers until it is killed.
 const hangingAgentName = "hanging-acceptance-agent"
 
-// TestMain runs the hanging acceptance agent when re-executed under
-// hangingAgentName, and the tests otherwise.
-func TestMain(m *testing.M) {
-	if strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == hangingAgentName {
-		blockHangingAgent()
-		os.Exit(0)
-	}
-	os.Exit(m.Run())
+// runAsHangingAgent reports whether this test binary was re-executed under
+// hangingAgentName; TestMain then runs the hanging acceptance agent.
+func runAsHangingAgent() bool {
+	return strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == hangingAgentName
 }
 
 // blockHangingAgent parks the agent on a private pipe whose write end stays
