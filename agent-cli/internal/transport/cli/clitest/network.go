@@ -84,10 +84,6 @@ func (l *PipeListener) DialContext(ctx context.Context, _, _ string) (net.Conn, 
 // pipeNetwork names the in-memory network in every stream address.
 const pipeNetwork = "pipe"
 
-// serveReadHeaderTimeout bounds how long a served test connection may take to
-// send request headers, so a stalled client cannot pin a handler goroutine.
-const serveReadHeaderTimeout = time.Minute
-
 type pipeAddr struct{}
 
 func (pipeAddr) Network() string { return pipeNetwork }
