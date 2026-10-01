@@ -29,10 +29,10 @@ func updateGoldensRequested() bool {
 	return f != nil && f.Value.String() == "true"
 }
 
-// TestAgentsMDWorkspace_FilesystemSandbox is the S6 filesystem suite. The
-// skipped subtests document contracts that are not exposed by this package on
-// the current production head; they must not be replaced with test-only
-// discovery or parsing logic.
+// TestAgentsMDWorkspace_FilesystemSandbox is the S6 filesystem suite. AGENTS.md
+// discovery and parsing are not exposed by this package, so only the
+// EnsureAgentsMD filesystem contract is covered; it must not be replaced with
+// test-only discovery or parsing logic.
 func TestAgentsMDWorkspace_FilesystemSandbox(t *testing.T) {
 	t.Run("missing workspace creates no file and returns a typed filesystem error", func(t *testing.T) {
 		workspaceDir := filepath.Join(t.TempDir(), "does-not-exist")
@@ -106,38 +106,9 @@ func TestAgentsMDWorkspace_FilesystemSandbox(t *testing.T) {
 			t.Fatalf("large AGENTS.md lost bytes or terminal marker: length=%d, want=%d", len(got), len(want))
 		}
 	})
-
-	t.Run("multiple depths and declared boundary", func(t *testing.T) {
-		root := t.TempDir()
-		boundary := filepath.Join(root, "declared-workspace")
-		nested := filepath.Join(boundary, "src", "component", "child")
-		if err := os.MkdirAll(nested, 0o755); err != nil {
-			t.Fatalf("create nested fixture: %v", err)
-		}
-		writeFile(t, filepath.Join(root, AgentsMDFileName), "above-boundary sentinel\n")
-		writeFile(t, filepath.Join(boundary, AgentsMDFileName), "boundary instructions\n")
-		writeFile(t, filepath.Join(boundary, "src", AgentsMDFileName), "src instructions\n")
-		writeFile(t, filepath.Join(boundary, "src", "component", AgentsMDFileName), "component instructions\n")
-
-		t.Skip("AGENTS.md upward discovery and parsed/resolved precedence are not exposed by agent-cli/internal/workspace on this head")
-	})
-
-	t.Run("filesystem-root termination", func(t *testing.T) {
-		t.Skip("AGENTS.md upward-walk boundary is not exposed by agent-cli/internal/workspace on this head")
-	})
-
-	t.Run("unreadable file", func(t *testing.T) {
-		t.Skip("the package has no AGENTS.md reader or typed unreadable-file contract to exercise; no coverage is claimed")
-	})
-
-	t.Run("large file is complete or typed-rejected", func(t *testing.T) {
-		t.Skip("the package has no AGENTS.md loader or typed oversized-file contract to exercise; no coverage is claimed")
-	})
 }
 
-// TestAgentsMDWorkspace_Golden is the S3 rendered-form suite. The parsed or
-// resolved representation portion remains a documented skip because no such
-// production representation exists on the current head.
+// TestAgentsMDWorkspace_Golden is the S3 rendered-form suite.
 func TestAgentsMDWorkspace_Golden(t *testing.T) {
 	t.Run("rendered zero-tool form", func(t *testing.T) {
 		workspaceDir := filepath.Join("<workspace>", "zero-tools")
@@ -149,10 +120,6 @@ func TestAgentsMDWorkspace_Golden(t *testing.T) {
 		workspaceDir := filepath.Join("<workspace>", "representative-tools")
 		got := normalizeAgentsMD(generateAgentsMD(workspaceDir, representativeToolDefinitions()), workspaceDir)
 		assertGolden(t, "agents_md_tools.golden", got)
-	})
-
-	t.Run("parsed and resolved representation", func(t *testing.T) {
-		t.Skip("the package has no parsed/resolved AGENTS.md representation to compare against a golden")
 	})
 }
 
