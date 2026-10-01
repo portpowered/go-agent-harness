@@ -269,3 +269,43 @@ func validateBrowserRawStringItems(values []interface{}, source string) error {
 	}
 	return nil
 }
+
+// browserConfigFieldSpecs returns the browser field specs, deliberately ordered
+// to keep configuration errors deterministic when more than one browser value
+// is invalid.
+func browserConfigFieldSpecs() []browserConfigFieldSpec {
+	return []browserConfigFieldSpec{
+		{path: "browser.tools.enabled", kind: browserConfigBool},
+		{path: "browser.tools.backend", kind: browserConfigEnum, allowed: []string{BrowserToolsBackendWebMCP}},
+		{path: "browser.tools.web_cast", kind: browserConfigBool},
+		{path: "browser.connection.cdp_url", kind: browserConfigString},
+		{path: "browser.connection.ws_endpoint", kind: browserConfigString},
+		{path: "browser.connection.user_data_dir", kind: browserConfigString},
+		{path: "browser.connection.allow_process_scan", kind: browserConfigBool},
+		{path: "browser.connection.allow_remote_cdp", kind: browserConfigBool},
+		{path: "browser.managed.headless", kind: browserConfigBool},
+		{path: "browser.managed.open", kind: browserConfigString},
+		{path: "browser.managed.close_on_exit", kind: browserConfigBool},
+		{path: "browser.selection.browser", kind: browserConfigString},
+		{path: "browser.selection.tab", kind: browserConfigString},
+		{path: "browser.selection.origin", kind: browserConfigString},
+		{path: "browser.selection.auto_select", kind: browserConfigEnum, allowed: []string{BrowserAutoSelectOff, BrowserAutoSelectSingle, BrowserAutoSelectPersisted}},
+		{path: "browser.selection.activate_tab", kind: browserConfigBool},
+		{path: "browser.selection.persist", kind: browserConfigBool},
+		{path: "browser.policy.allowed_origins", kind: browserConfigStringList},
+		{path: "browser.policy.denied_origins", kind: browserConfigStringList},
+		{path: "browser.policy.approval", kind: browserConfigEnum, allowed: []string{BrowserApprovalAlways, BrowserApprovalWrites, BrowserApprovalNever}},
+		{path: "browser.policy.cancel_on_interrupt", kind: browserConfigEnum, allowed: []string{BrowserCancelOnInterruptNever, BrowserCancelOnInterruptReadOnly, BrowserCancelOnInterruptAlways}},
+		{path: "browser.limits.invocation_timeout", kind: browserConfigDuration},
+		{path: "browser.limits.max_input_bytes", kind: browserConfigSize},
+		{path: "browser.limits.max_result_bytes", kind: browserConfigSize},
+		{path: "browser.limits.serialize_per_target", kind: browserConfigBool},
+		{path: "browser.recording.enabled", kind: browserConfigBool},
+		{path: "browser.recording.include_arguments", kind: browserConfigBool},
+		{path: "browser.recording.include_results", kind: browserConfigBool},
+		{path: "browser.recording.redact_url_query", kind: browserConfigBool},
+		{path: "browser.recording.redact_url_fragment", kind: browserConfigBool},
+		{path: "browser.replay.path", kind: browserConfigString},
+		{path: "browser.replay.strict", kind: browserConfigBool},
+	}
+}

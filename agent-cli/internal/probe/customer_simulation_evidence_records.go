@@ -1,7 +1,10 @@
 package probe
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -370,4 +373,26 @@ func validateUniqueNonEmptyStrings(field string, values []string) error {
 		seen[value] = struct{}{}
 	}
 	return nil
+}
+
+func writePrivateFile(path, temporaryPattern string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), temporaryPattern)
+	if err != nil {
+		return err
+	}
+	name := temporary.Name()
+	defer removeTemporaryEvidenceFile(name)
+	if _, err := temporary.Write(data); err != nil {
+		return errors.Join(err, temporary.Close())
+	}
+	if err := temporary.Chmod(privateFileMode); err != nil {
+		return errors.Join(err, temporary.Close())
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }

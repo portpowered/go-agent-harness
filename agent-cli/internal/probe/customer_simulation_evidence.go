@@ -889,28 +889,6 @@ func removeTemporaryEvidenceFile(name string) {
 	}
 }
 
-func writePrivateFile(path, temporaryPattern string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), privateDirMode); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), temporaryPattern)
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	defer removeTemporaryEvidenceFile(name)
-	if _, err := temporary.Write(data); err != nil {
-		return errors.Join(err, temporary.Close())
-	}
-	if err := temporary.Chmod(privateFileMode); err != nil {
-		return errors.Join(err, temporary.Close())
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
-}
-
 func addCustomerSimulationProductRecord(bundle *CustomerEvidenceBundle, recordRoot string) error {
 	if bundle == nil {
 		return ErrMissingEvidence
