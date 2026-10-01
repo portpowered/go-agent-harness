@@ -568,9 +568,7 @@ jobs:
 
       - name: Run production-binary cross-process cancellation acceptance
         working-directory: agent-cli
-        env:
-          WEBMCP_CLI_CHROME_INTEGRATION: "1"
-        run: go test ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v
+        run: go test -tags e2e ./internal/webmcp/chrome -run '^TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel$' -count=1 -v
 
       - name: Lint cgo-constrained darwin packages
         if: always()

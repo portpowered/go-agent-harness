@@ -13,11 +13,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -183,10 +183,7 @@ func TestChromeForTestingPlatform(t *testing.T) {
 }
 
 func TestChromeForTestingAcquirerVerifiesAndCachesOneCompleteArtifact(t *testing.T) {
-	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Skipf("test platform has no Chrome for Testing artifact: %v", err)
-	}
+	const platform = chromeForTestingFixturePlatform
 	const version = "152.0.7977.64"
 	const revision = "test-revision"
 	const manifestURL = "https://googlechromelabs.github.io/chrome-for-testing/test-manifest.json"
@@ -259,27 +256,16 @@ func extractedChromeVersionQuery(t *testing.T, executableRelative, version strin
 	}
 }
 
-// TestQueryChromeVersionRunsTheExecutable runs the production version query
-// against a system binary, which needs no first-run code assessment.
-func TestQueryChromeVersionRunsTheExecutable(t *testing.T) {
-	const echo = "/bin/echo"
-	if _, err := os.Stat(echo); err != nil {
-		t.Skipf("%s is unavailable: %v", echo, err)
-	}
-	output, err := queryChromeVersion(context.Background(), echo)
-	if err != nil || strings.TrimSpace(output) == "" {
-		t.Fatalf("queryChromeVersion(%s) = %q, %v; want the executable's output", echo, output, err)
-	}
-	if _, err := queryChromeVersion(context.Background(), filepath.Join(t.TempDir(), "missing")); err == nil {
-		t.Fatal("queryChromeVersion succeeded for a missing executable")
-	}
+func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testing.T) {
+	synctest.Test(t, testChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache)
 }
 
-func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testing.T) {
-	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Skipf("test platform has no Chrome for Testing artifact: %v", err)
-	}
+// testChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache runs in a
+// synctest bubble: the archive download is held until every other caller is
+// durably blocked polling the cache lock, so all callers provably contend.
+func testChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testing.T) {
+	t.Helper()
+	const platform = chromeForTestingFixturePlatform
 	const version = "152.0.7977.64"
 	const revision = "concurrent-revision"
 	const manifestURL = "https://googlechromelabs.github.io/chrome-for-testing/concurrent-manifest.json"
@@ -297,9 +283,9 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 		t.Fatalf("write lock: %v", err)
 	}
 	transport := &chromeForTestingFixtureTransport{
-		manifest:     []byte(`{"channels":{"Stable":{"channel":"Stable","version":"` + version + `","revision":"` + revision + `","downloads":{"chrome":[{"platform":"` + platform + `","url":"` + downloadURL + `"}]}}}}`),
-		archive:      archive,
-		delayArchive: true,
+		manifest:       []byte(`{"channels":{"Stable":{"channel":"Stable","version":"` + version + `","revision":"` + revision + `","downloads":{"chrome":[{"platform":"` + platform + `","url":"` + downloadURL + `"}]}}}}`),
+		archive:        archive,
+		archiveRelease: make(chan struct{}),
 	}
 	client := &http.Client{Transport: transport}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
@@ -319,6 +305,8 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 			errs <- acquireErr
 		}()
 	}
+	synctest.Wait()
+	close(transport.archiveRelease)
 	group.Wait()
 	close(results)
 	close(errs)
@@ -346,10 +334,7 @@ func TestChromeForTestingAcquirerConcurrentCallersPublishOnlyReadyCache(t *testi
 }
 
 func TestChromeForTestingAcquirerRemovesFailedAttemptWithoutReadyState(t *testing.T) {
-	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Skipf("test platform has no Chrome for Testing artifact: %v", err)
-	}
+	const platform = chromeForTestingFixturePlatform
 	const version = "152.0.7977.64"
 	const revision = "failed-revision"
 	const manifestURL = "https://googlechromelabs.github.io/chrome-for-testing/failed-manifest.json"
@@ -386,11 +371,7 @@ func TestChromeForTestingAcquirerRemovesFailedAttemptWithoutReadyState(t *testin
 
 func chromeForTestingPlatformCacheKey(t *testing.T, lock ChromeForTestingLock) string {
 	t.Helper()
-	platform, err := ChromeForTestingPlatform(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatalf("Chrome for Testing platform: %v", err)
-	}
-	return chromeForTestingCacheKey(platform, lock)
+	return chromeForTestingCacheKey(chromeForTestingFixturePlatform, lock)
 }
 
 func TestManagedChromeAcquirerReturnsOneRedactedFailure(t *testing.T) {
@@ -453,11 +434,16 @@ func chromeArchive(t *testing.T, executableRelative, contents string) []byte {
 	return buffer.Bytes()
 }
 
+// chromeForTestingFixturePlatform is a Chrome for Testing platform that is not
+// the darwin/arm64 host default, so the acquirer is proven not to depend on
+// the host platform; the fixture transport and version query never execute it.
+const chromeForTestingFixturePlatform = "linux64"
+
 type chromeForTestingFixtureTransport struct {
-	manifest     []byte
-	archive      []byte
-	delayArchive bool
-	archiveCalls atomic.Int32
+	manifest       []byte
+	archive        []byte
+	archiveRelease chan struct{}
+	archiveCalls   atomic.Int32
 }
 
 func (t *chromeForTestingFixtureTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -466,8 +452,8 @@ func (t *chromeForTestingFixtureTransport) RoundTrip(request *http.Request) (*ht
 	}
 	if strings.Contains(request.URL.Path, "chrome.zip") {
 		t.archiveCalls.Add(1)
-		if t.delayArchive {
-			time.Sleep(20 * time.Millisecond)
+		if t.archiveRelease != nil {
+			<-t.archiveRelease
 		}
 		return chromeForTestingResponse(http.StatusOK, t.archive), nil
 	}

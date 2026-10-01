@@ -1,3 +1,5 @@
+//go:build e2e
+
 package chrome
 
 import (
@@ -15,13 +17,12 @@ import (
 	"testing"
 	"time"
 
+	cdpRuntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
-
-const youtubeAdapterIntegrationEnv = "WEBMCP_YOUTUBE_ADAPTER_INTEGRATION"
 
 // TestYouTubeAdapterStockChromeJourney is the credential-free, real-browser
 // activation gate. It injects the production adapter through the same target
@@ -29,10 +30,6 @@ const youtubeAdapterIntegrationEnv = "WEBMCP_YOUTUBE_ADAPTER_INTEGRATION"
 // loopback fixture, then proves search, selection, audible play, and advancing
 // media time through the generated WebMCP domain.
 func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
-	if os.Getenv(youtubeAdapterIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the real-Chrome YouTube adapter journey", youtubeAdapterIntegrationEnv)
-	}
-
 	chromeExecutable, chromeVersion := findQualifiedStockChromeForIntegration(t)
 	tone := youtubeAdapterToneWAV(4*time.Second, 24000, 440)
 	fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -119,7 +116,7 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	assertYouTubeAdapterMediaTools(t, ctx, session, tools)
 
 	first := waitForYouTubeAdapterPlayer(t, ctx, targetSession, "tone1234567")
-	time.Sleep(1200 * time.Millisecond)
+	waitForYouTubeAdapterPlaybackAdvance(t, ctx, targetSession, first.CurrentTime+youtubeAdapterPlaybackAdvanceSeconds)
 	second := inspectYouTubeAdapterPlayer(t, ctx, targetSession)
 	if first.Path != "/watch" || first.VideoID != "tone1234567" || first.Paused || first.ReadyState < 2 || second.CurrentTime <= first.CurrentTime || second.Muted || second.Volume <= 0 {
 		t.Fatalf("independent player oracle first=%+v second=%+v", first, second)
@@ -206,6 +203,28 @@ func inspectYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *tar
 		t.Fatalf("inspect player: %v", err)
 	}
 	return oracle
+}
+
+// youtubeAdapterPlaybackAdvanceSeconds is how much media time must elapse
+// between the two independent player observations.
+const youtubeAdapterPlaybackAdvanceSeconds = 1.0
+
+// waitForYouTubeAdapterPlaybackAdvance resolves inside the page once the
+// video's own timeupdate events report a current time of at least target
+// seconds, so the oracle waits on the media clock instead of a fixed delay.
+func waitForYouTubeAdapterPlaybackAdvance(t *testing.T, ctx context.Context, session *targetSession, target float64) {
+	t.Helper()
+	expression := fmt.Sprintf(`new Promise((resolve) => { const video = document.querySelector("video"); if (!video) { resolve(false); return; } const check = () => { if (video.currentTime >= %f) { video.removeEventListener("timeupdate", check); resolve(true); } }; video.addEventListener("timeupdate", check); check(); })`, target)
+	var advanced bool
+	await := func(params *cdpRuntime.EvaluateParams) *cdpRuntime.EvaluateParams {
+		return params.WithAwaitPromise(true)
+	}
+	if err := session.run(ctx, chromedp.Evaluate(expression, &advanced, await)); err != nil {
+		t.Fatalf("wait for playback to reach %.3fs: %v", target, err)
+	}
+	if !advanced {
+		t.Fatal("player video disappeared while waiting for playback to advance")
+	}
 }
 
 func waitForYouTubeAdapterPlayer(t *testing.T, ctx context.Context, session *targetSession, videoID string) youtubeAdapterPlayerOracle {
@@ -412,8 +431,8 @@ func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
 // Chrome to decode a caller-supplied MP4 before preparation can finish.
 func TestXAdapterRealMP4Decode(t *testing.T) {
 	path := os.Getenv("WEBMCP_X_VIDEO_FILE")
-	if os.Getenv(xAdapterIntegrationEnv) != "1" || path == "" {
-		t.Skip("set WEBMCP_X_ADAPTER_INTEGRATION=1 and WEBMCP_X_VIDEO_FILE to an MP4")
+	if path == "" {
+		t.Fatal("set WEBMCP_X_VIDEO_FILE to an MP4 for the real media decode proof")
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 64*1024*1024 {

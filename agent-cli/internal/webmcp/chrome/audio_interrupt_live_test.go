@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -17,7 +17,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,7 +28,6 @@ import (
 )
 
 const (
-	audioInterruptLiveEnv     = "WEBMCP_AUDIO_INTERRUPT_LIVE"
 	audioInterruptArtifactEnv = "WEBMCP_AUDIO_INTERRUPT_ARTIFACT_DIR"
 	audioInterruptModel       = "gpt-realtime-2.1-mini"
 	audioInterruptTool        = "queue_cube_moves"
@@ -110,15 +108,7 @@ type audioInterruptEvidence struct {
 // production command shape, with the named case proving the canonical tool
 // filter does not fire for the preceding read-only tool.
 func TestPinnedChromeAudioInterruptDuringWebMCP(t *testing.T) {
-	// This must remain the first observable operation. Normal test runs do not
-	// inspect credentials, acquire Chrome, create a fixture, or use the network.
-	if os.Getenv(audioInterruptLiveEnv) != "1" {
-		t.Skipf("set %s=1 to run the credentialed stock-Chrome audio interrupt proof", audioInterruptLiveEnv)
-	}
-	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
-		t.Skipf("the qualified %s Chrome lock is required; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	apiKey, _ := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed audio interrupt proof")
+	apiKey, _ := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed audio interrupt proof")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()

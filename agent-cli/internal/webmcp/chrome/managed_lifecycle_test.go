@@ -9,10 +9,16 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
 func TestManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose(t *testing.T) {
+	synctest.Test(t, testManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose)
+}
+
+func testManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose(t *testing.T) {
+	t.Helper()
 	configDir := t.TempDir()
 	control := &managedLifecycleTestControl{}
 	var starts atomic.Int32
@@ -73,6 +79,11 @@ func TestManagedBrowserManagerReusesStateAndClosesOnlyOnExplicitClose(t *testing
 }
 
 func TestManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPID(t *testing.T) {
+	synctest.Test(t, testManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPID)
+}
+
+func testManagedBrowserManagerRecoversMalformedOrStaleStateWithoutSignalingOldPID(t *testing.T) {
+	t.Helper()
 	configDir := t.TempDir()
 	control := &managedLifecycleTestControl{}
 	var starts atomic.Int32
@@ -288,6 +299,7 @@ func TestManagedBrowserSingletonPIDRequiresChromeSymlinkShape(t *testing.T) {
 func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing.T) {
 	var calls atomic.Int32
 	var persistentFailure atomic.Bool
+	retried := make(chan struct{})
 	process := &reattachedManagedBrowserProcess{
 		state:        ManagedBrowserState{PID: 55511},
 		pollInterval: time.Millisecond,
@@ -296,8 +308,11 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 			if persistentFailure.Load() || call <= 2 {
 				return errors.New("transient inspection failure")
 			}
-			return nil
-		},
+			if call == 3 {
+				close(retried)
+			}
+			return ManagedBrowserProcessInfo{PID: 55511, Identity: "still-running"}, nil
+		}),
 	}
 	done := make(chan struct{})
 	go func() {
@@ -305,16 +320,11 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 		discardSecondaryError(process.Wait)
 		close(done)
 	}()
-	deadline := time.Now().Add(time.Second)
-	for calls.Load() < 3 && time.Now().Before(deadline) {
-		select {
-		case <-done:
-			t.Fatal("reattached process exited after transient inspection failures")
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-	if calls.Load() < 3 {
+	select {
+	case <-retried:
+	case <-done:
+		t.Fatal("reattached process exited after transient inspection failures")
+	case <-time.After(time.Second):
 		t.Fatal("reattached process did not retry inspection")
 	}
 	persistentFailure.Store(true)
@@ -326,6 +336,11 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 }
 
 func TestManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
+	synctest.Test(t, testManagedBrowserManagerSerializesConcurrentAcquisition)
+}
+
+func testManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
+	t.Helper()
 	configDir := t.TempDir()
 	control := &managedLifecycleTestControl{}
 	var starts atomic.Int32
@@ -370,21 +385,17 @@ func TestManagedBrowserManagerSerializesConcurrentAcquisition(t *testing.T) {
 	}
 }
 
+// waitForManagedLifecycleCleanup must run inside a synctest bubble: it waits
+// until the exit watcher has settled, then requires its cleanup to be done.
 func waitForManagedLifecycleCleanup(t *testing.T, configDir string) {
 	t.Helper()
+	synctest.Wait()
 	statePath := ManagedBrowserStatePath(configDir)
 	lockPath := filepath.Join(filepath.Dir(statePath), managedBrowserLockName)
-	deadline := time.Now().Add(time.Second)
-	for {
-		_, stateErr := os.Stat(statePath)
-		_, lockErr := os.Stat(lockPath)
-		if errors.Is(stateErr, os.ErrNotExist) && errors.Is(lockErr, os.ErrNotExist) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("managed lifecycle cleanup still active: state=%v lock=%v", stateErr, lockErr)
-		}
-		time.Sleep(time.Millisecond)
+	_, stateErr := os.Stat(statePath)
+	_, lockErr := os.Stat(lockPath)
+	if !errors.Is(stateErr, os.ErrNotExist) || !errors.Is(lockErr, os.ErrNotExist) {
+		t.Fatalf("managed lifecycle cleanup still active: state=%v lock=%v", stateErr, lockErr)
 	}
 }
 
@@ -479,7 +490,6 @@ type managedLifecycleRecoveryTransport struct{ starts *atomic.Int32 }
 
 func (t managedLifecycleRecoveryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if t.starts != nil && t.starts.Load() == 1 {
-		time.Sleep(5 * time.Millisecond)
 		return nil, errors.New("first launch endpoint unavailable")
 	}
 	return managedLaunchVersionTransport{}.RoundTrip(request)

@@ -6,7 +6,9 @@ package chrome
 import (
 	"bufio"
 	"context"
+	_ "embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +22,20 @@ import (
 	looptranscript "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	browserconversation "github.com/portpowered/go-agent-harness/go-agent-runtime/services/browserconversation"
 )
+
+const (
+	conversationalCustomerHomePage     = "home"
+	conversationalCustomerSettingsPage = "settings"
+	conversationalCustomerLabel        = "live alpha"
+	conversationalCustomerTheme        = "live dark"
+	conversationalCustomerPriority     = "high"
+	conversationalCustomerCorrected    = "live corrected"
+)
+
+const conversationalCustomerModelEnv = "WEBMCP_CONVERSATIONAL_MODEL"
+
+//go:embed testdata/webmcp_conversational_customer.html
+var conversationalCustomerFixtureHTML []byte
 
 type conversationalCustomerOracle struct {
 	Page        string   `json:"page"`
@@ -505,4 +521,70 @@ func conversationalCustomerCurrentToolRefs(
 	}
 	sort.Slice(refs, func(left, right int) bool { return refs[left] < refs[right] })
 	return refs, generation
+}
+
+func openConversationalCustomerObserver(ctx context.Context, browserID string, targetID webmcp.TargetID, version devToolsVersion) (webmcp.TargetSession, func() error, error) {
+	candidate := webmcp.BrowserCandidate{
+		ID:           webmcp.BrowserID(browserID),
+		Source:       webmcp.DiscoverySourceExplicit,
+		Product:      version.Browser,
+		Protocol:     version.ProtocolVersion,
+		HTTPURL:      browserHTTPURL(version.WebSocketDebuggerURL),
+		BrowserWSURL: version.WebSocketDebuggerURL,
+		Loopback:     true,
+		Explicit:     true,
+	}
+	runtime := NewRuntime(WithEventBuffer(512), WithCommandTimeout(20*time.Second))
+	handle, err := runtime.Open(ctx, candidate)
+	if err != nil {
+		return nil, nil, err
+	}
+	session, err := handle.Attach(ctx, targetID, webmcp.TargetOwnershipExternal)
+	if err != nil {
+		discardSecondaryError(handle.Close)
+		return nil, nil, err
+	}
+	if err := session.EnableWebMCP(ctx); err != nil {
+		discardSecondaryError(session.Close)
+		discardSecondaryError(handle.Close)
+		return nil, nil, err
+	}
+	closeObserver := func() error {
+		sessionErr := session.Close()
+		handleErr := handle.Close()
+		return errors.Join(sessionErr, handleErr)
+	}
+	return session, closeObserver, nil
+}
+
+type conversationalCustomerNavigationObservation struct {
+	StepID string
+	Event  webmcp.BrowserEvent
+}
+
+type conversationalCustomerOracleObservation struct {
+	StepID string
+	Phase  browserconversation.BrowserConversationOraclePhase
+	Oracle conversationalCustomerOracle
+}
+
+type conversationalCustomerProbe struct {
+	PageID            string
+	BrowserID         webmcp.BrowserID
+	TargetID          webmcp.TargetID
+	Alive             bool
+	Responsive        bool
+	AllowsMutation    bool
+	ReadSucceeded     bool
+	MutationSucceeded bool
+}
+
+type conversationalCustomerCancelResult struct {
+	InvocationID string
+	Status       string
+}
+
+func conversationalCustomerOracleState(oracle conversationalCustomerOracle) json.RawMessage {
+	state := mustFixtureJSON(conversationalCustomerPageState{Page: oracle.Page, Ready: oracle.Ready, Label: oracle.Label, Theme: oracle.Theme, Priority: oracle.Priority, Pending: oracle.Pending, VisibleText: oracle.VisibleText})
+	return state
 }

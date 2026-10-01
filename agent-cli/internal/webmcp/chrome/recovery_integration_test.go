@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -20,14 +19,9 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
-const chromeRecoveryEnv = "WEBMCP_CHROME_RECOVERY"
-
 // TestPinnedChromeTopologyRecoverySuite is the browser-real Lane H proof. It
 // builds only with the live tag, and its env check runs before acquisition.
 func TestPinnedChromeTopologyRecoverySuite(t *testing.T) {
-	if os.Getenv(chromeRecoveryEnv) != "1" {
-		t.Skipf("set %s=1 to run the pinned Chrome topology recovery suite", chromeRecoveryEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}

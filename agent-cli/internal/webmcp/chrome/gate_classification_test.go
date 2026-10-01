@@ -19,17 +19,12 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-const classificationIntegrationEnv = "WEBMCP_CLASSIFICATION_INTEGRATION"
-
 // TestPinnedChromeWebMCPClassificationContractTwice is the live companion to
 // the hermetic C0 regressions. Each iteration gets fresh browser profiles,
 // config state, fixture values, and public browser/target IDs. The test is
 // opt-in because it downloads the locked Chrome for Testing artifact and
 // starts real browser processes.
 func TestPinnedChromeWebMCPClassificationContractTwice(t *testing.T) {
-	if os.Getenv(classificationIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the live classification probes", classificationIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}

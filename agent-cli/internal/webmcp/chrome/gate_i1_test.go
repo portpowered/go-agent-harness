@@ -1,12 +1,12 @@
+//go:build e2e
+
 package chrome
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,12 +17,8 @@ import (
 )
 
 const (
-	gateFixtureQuerySecret    = "gate-fixture-query-secret"
-	gateFixtureFragmentSecret = "gate-fixture-fragment-secret"
-	gateEndpointQuerySecret   = "gate-endpoint-query-secret"
-	gateEndpointFragment      = "gate-endpoint-fragment"
-	gateCompleteMessage       = "gate-complete"
-	gateWatchMessage          = "gate-watch"
+	gateCompleteMessage = "gate-complete"
+	gateWatchMessage    = "gate-watch"
 )
 
 // TestPinnedChromeWebMCPGateI1ThroughActualBinary is the release-facing
@@ -30,13 +26,6 @@ const (
 // harness so it reuses the qualified Chrome lock, flags, local fixture, and
 // detach-only browser oracle without duplicating those security boundaries.
 func TestPinnedChromeWebMCPGateI1ThroughActualBinary(t *testing.T) {
-	// Keep this as the first observable operation. In ordinary CI this test
-	// must not read the lock, make network requests, create a server, or start
-	// a browser.
-	if os.Getenv(chromeIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the actual-binary Gate I1 proof", chromeIntegrationEnv)
-	}
-
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -381,71 +370,6 @@ func (r *gateI1Run) closeBrowser(t *testing.T) int {
 	return chromePID
 }
 
-func startGateCommand(parent context.Context, binaryPath, configDir string, args ...string) (*gateCLIProcess, error) {
-	return startGateCommandWithEnvironment(parent, binaryPath, configDir, nil, args...)
-}
-
-func startGateCommandWithEnvironment(parent context.Context, binaryPath, configDir string, extraEnvironment []string, args ...string) (*gateCLIProcess, error) {
-	commandContext, cancel := context.WithCancel(parent)
-	fullArgs := append([]string{"--config-dir", configDir}, args...)
-	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
-	command.Dir = mustRepositoryRoot()
-	command.Env = gateChildEnvironment()
-	for _, extra := range extraEnvironment {
-		key, _, ok := strings.Cut(extra, "=")
-		if !ok || key == "" {
-			continue
-		}
-		filtered := command.Env[:0]
-		for _, value := range command.Env {
-			if strings.HasPrefix(value, key+"=") {
-				continue
-			}
-			filtered = append(filtered, value)
-		}
-		filtered = append(filtered, extra)
-		command.Env = filtered
-	}
-	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
-	command.Stdout = &process.stdout
-	command.Stderr = &process.stderr
-	if err := command.Start(); err != nil {
-		cancel()
-		return nil, err
-	}
-	go func() {
-		err := command.Wait()
-		exitCode := 0
-		if command.ProcessState != nil {
-			exitCode = command.ProcessState.ExitCode()
-		}
-		process.done <- gateCLIResult{Args: append([]string(nil), process.args...), Stdout: process.stdout.String(), Stderr: process.stderr.String(), ExitCode: exitCode, Err: err}
-	}()
-	return process, nil
-}
-
-func (p *gateCLIProcess) wait(ctx context.Context) (gateCLIResult, error) {
-	if p == nil {
-		return gateCLIResult{}, errors.New("nil Gate I1 child process")
-	}
-	select {
-	case result := <-p.done:
-		p.cancel()
-		return result, nil
-	case <-ctx.Done():
-		p.cancel()
-		return gateCLIResult{}, ctx.Err()
-	}
-}
-
-// abandon reaps a child process on a failure path; its exit status cannot
-// change the failure already being reported.
-func (p *gateCLIProcess) abandon(ctx context.Context) {
-	if _, err := p.wait(context.WithoutCancel(ctx)); err != nil {
-		return
-	}
-}
-
 func assertGateWatchSequence(t *testing.T, data gateWatchData, browserID, targetID, toolRef string) {
 	t.Helper()
 	if len(data.Events) < 4 {
@@ -482,15 +406,6 @@ func assertGateWatchSequence(t *testing.T, data gateWatchData, browserID, target
 	if selectedIndex < 0 || catalogIndex < 0 || createdIndex < 0 || terminalIndex < 0 || selectedIndex >= catalogIndex || catalogIndex >= createdIndex || createdIndex >= terminalIndex {
 		t.Fatalf("watch semantic sequence = %+v, want selected < catalog_changed < invocation_created < invocation_terminal", data.Events)
 	}
-}
-
-func hasFixtureInvocation(oracle fixtureOracle, want string) bool {
-	for _, invocation := range oracle.Invocations {
-		if invocation == want {
-			return true
-		}
-	}
-	return false
 }
 
 func waitForGateFixtureOracle(ctx context.Context, endpoint string, match func(fixtureOracle) bool) (fixtureOracle, error) {

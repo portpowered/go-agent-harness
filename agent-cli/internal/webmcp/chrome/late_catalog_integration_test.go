@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -21,20 +20,16 @@ import (
 )
 
 const (
-	lateCatalogIntegrationEnv = "WEBMCP_CHROME_LATE_CATALOG"
-	lateCatalogToolName       = "webmcp_late_registration"
-	lateCatalogPath           = "/late"
-	producerlessPath          = "/producerless"
-	emptyCatalogPath          = "/empty"
+	lateCatalogToolName = "webmcp_late_registration"
+	lateCatalogPath     = "/late"
+	producerlessPath    = "/producerless"
+	emptyCatalogPath    = "/empty"
 )
 
 // TestPinnedChromeLateCatalogReevaluation is the real-browser companion to
 // the broker and adapter regressions. It downloads the locked Chrome for
 // Testing artifact, so its env gate precedes any lock, network, or browser use.
 func TestPinnedChromeLateCatalogReevaluation(t *testing.T) {
-	if os.Getenv(lateCatalogIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the pinned late-catalog integration proof", lateCatalogIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}

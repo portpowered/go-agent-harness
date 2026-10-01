@@ -1,3 +1,5 @@
+//go:build e2e
+
 package chrome
 
 import (
@@ -6,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,13 +16,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 )
 
-const siteAdaptersIntegrationEnv = "WEBMCP_SITE_ADAPTER_INTEGRATION"
-const xAdapterIntegrationEnv = "WEBMCP_X_ADAPTER_INTEGRATION"
-
 func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
-	if os.Getenv(siteAdaptersIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the stock-Chrome site-adapter journeys", siteAdaptersIntegrationEnv)
-	}
 	t.Run("spotify", testSpotifyAdapterJourney)
 	t.Run("wikipedia", testWikipediaAdapterJourney)
 	t.Run("reddit", testRedditAdapterJourney)

@@ -1,8 +1,9 @@
+//go:build live
+
 package chrome
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,7 +26,6 @@ import (
 )
 
 const (
-	conversationalCustomerLiveEnv       = "WEBMCP_CONVERSATIONAL_CUSTOMER_LIVE"
 	conversationalCustomerAPIKeyEnv     = "WEBMCP_CONVERSATIONAL_OPENAI_API_KEY"
 	conversationalCustomerAudioDirEnv   = "WEBMCP_CONVERSATIONAL_AUDIO_DIR"
 	conversationalCustomerValidatorEnv  = "WEBMCP_CONVERSATIONAL_VALIDATOR_COMMAND"
@@ -34,19 +34,8 @@ const (
 	conversationalCustomerLaneRootEnv   = "WEBMCP_CONVERSATIONAL_LANE_I_SOURCE_ROOT"
 	conversationalCustomerPostLaneEnv   = "WEBMCP_CONVERSATIONAL_POST_LANE_I_FINDING"
 	conversationalCustomerLaneNumber    = "269"
-	conversationalCustomerModelEnv      = "WEBMCP_CONVERSATIONAL_MODEL"
 	conversationalCustomerLaneMerged    = "MERGED"
-
-	conversationalCustomerHomePage     = "home"
-	conversationalCustomerSettingsPage = "settings"
-	conversationalCustomerLabel        = "live alpha"
-	conversationalCustomerTheme        = "live dark"
-	conversationalCustomerPriority     = "high"
-	conversationalCustomerCorrected    = "live corrected"
 )
-
-//go:embed testdata/webmcp_conversational_customer.html
-var conversationalCustomerFixtureHTML []byte
 
 // TestPinnedChromeWebMCPConversationalCustomerLive is the single credentialed
 // acceptance runner for Story 006. It is skipped before any browser, network,
@@ -54,9 +43,6 @@ var conversationalCustomerFixtureHTML []byte
 // work remains in the production agent binary; this test only supplies the
 // independent fixture/oracle and report boundaries.
 func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
-	if os.Getenv(conversationalCustomerLiveEnv) != "1" {
-		t.Skipf("set %s=1 to run the credentialed canonical conversation", conversationalCustomerLiveEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -536,7 +522,7 @@ func requiredNewlineFreeEnv(t *testing.T, name string) string {
 	t.Helper()
 	value := strings.TrimSpace(os.Getenv(name))
 	if value == "" {
-		t.Fatalf("%s is required when %s=1", name, conversationalCustomerLiveEnv)
+		t.Fatalf("%s is required by the live conversational customer proof", name)
 	}
 	if strings.ContainsAny(value, "\r\n") {
 		t.Fatalf("%s must not contain newline characters", name)
@@ -702,40 +688,6 @@ func runConversationalCustomerJSONCommand(ctx context.Context, binaryPath, confi
 	return append(json.RawMessage(nil), envelope.Data...), nil
 }
 
-func openConversationalCustomerObserver(ctx context.Context, browserID string, targetID webmcp.TargetID, version devToolsVersion) (webmcp.TargetSession, func() error, error) {
-	candidate := webmcp.BrowserCandidate{
-		ID:           webmcp.BrowserID(browserID),
-		Source:       webmcp.DiscoverySourceExplicit,
-		Product:      version.Browser,
-		Protocol:     version.ProtocolVersion,
-		HTTPURL:      browserHTTPURL(version.WebSocketDebuggerURL),
-		BrowserWSURL: version.WebSocketDebuggerURL,
-		Loopback:     true,
-		Explicit:     true,
-	}
-	runtime := NewRuntime(WithEventBuffer(512), WithCommandTimeout(20*time.Second))
-	handle, err := runtime.Open(ctx, candidate)
-	if err != nil {
-		return nil, nil, err
-	}
-	session, err := handle.Attach(ctx, targetID, webmcp.TargetOwnershipExternal)
-	if err != nil {
-		discardSecondaryError(handle.Close)
-		return nil, nil, err
-	}
-	if err := session.EnableWebMCP(ctx); err != nil {
-		discardSecondaryError(session.Close)
-		discardSecondaryError(handle.Close)
-		return nil, nil, err
-	}
-	closeObserver := func() error {
-		sessionErr := session.Close()
-		handleErr := handle.Close()
-		return errors.Join(sessionErr, handleErr)
-	}
-	return session, closeObserver, nil
-}
-
 func navigateConversationalCustomerTarget(ctx context.Context, endpoint string, targetID webmcp.TargetID, pageURL string) error {
 	rootContext, cancelRoot := context.WithTimeout(ctx, 20*time.Second)
 	defer cancelRoot()
@@ -746,33 +698,6 @@ func navigateConversationalCustomerTarget(ctx context.Context, endpoint string, 
 		cancelAllocator()
 	}()
 	return chromedp.Run(targetContext, chromedp.Navigate(pageURL))
-}
-
-type conversationalCustomerNavigationObservation struct {
-	StepID string
-	Event  webmcp.BrowserEvent
-}
-
-type conversationalCustomerOracleObservation struct {
-	StepID string
-	Phase  browserconversation.BrowserConversationOraclePhase
-	Oracle conversationalCustomerOracle
-}
-
-type conversationalCustomerProbe struct {
-	PageID            string
-	BrowserID         webmcp.BrowserID
-	TargetID          webmcp.TargetID
-	Alive             bool
-	Responsive        bool
-	AllowsMutation    bool
-	ReadSucceeded     bool
-	MutationSucceeded bool
-}
-
-type conversationalCustomerCancelResult struct {
-	InvocationID string
-	Status       string
 }
 
 func cancelConversationalCustomerInvocation(ctx context.Context, binaryPath, configDir string, invocationID webmcp.InvocationID) (conversationalCustomerCancelResult, error) {
@@ -855,11 +780,6 @@ func waitForConversationalCustomerOracle(ctx context.Context, endpoint string, m
 			return last, fmt.Errorf("wait for conversational customer oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		}
 	}
-}
-
-func conversationalCustomerOracleState(oracle conversationalCustomerOracle) json.RawMessage {
-	state := mustFixtureJSON(conversationalCustomerPageState{Page: oracle.Page, Ready: oracle.Ready, Label: oracle.Label, Theme: oracle.Theme, Priority: oracle.Priority, Pending: oracle.Pending, VisibleText: oracle.VisibleText})
-	return state
 }
 
 func conversationalCustomerOracleHasInvocation(oracle conversationalCustomerOracle, value string) bool {

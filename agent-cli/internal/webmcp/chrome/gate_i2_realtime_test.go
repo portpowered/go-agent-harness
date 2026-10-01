@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -34,7 +33,6 @@ import (
 )
 
 const (
-	gateI2OptIn       = "WEBMCP_GATE_I2"
 	gateI2ArtifactEnv = "WEBMCP_GATE_I2_ARTIFACT_DIR"
 	gateI2KeyFileEnv  = "OPENAI_API_KEY_FILE"
 	gateI2Model       = "gpt-realtime-2.1-mini"
@@ -50,15 +48,7 @@ var errGateI2MissingAPIKey = errors.New("OpenAI API key is not configured")
 // audio input; browser IDs, tool refs, and encoded page arguments are not
 // passed through a prompt, flag, or fixture-side shortcut.
 func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
-	// Keep this guard first. Normal tests must not inspect credentials, read the
-	// Chrome lock, make network requests, create a fixture, or start Chrome.
-	if os.Getenv(gateI2OptIn) != "1" {
-		t.Skipf("set %s=1 to run the credentialed OpenAI Realtime Gate I2 measurement", gateI2OptIn)
-	}
-	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
-		t.Skipf("Gate I2 uses the qualified %s Chrome lock; observed %s/%s", lockedChromePlatform, runtime.GOOS, runtime.GOARCH)
-	}
-	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; skipping the credentialed Gate I2 measurement")
+	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed Gate I2 measurement")
 
 	run := prepareGateI2Run(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
@@ -787,7 +777,7 @@ func gateI2SpokenInput(parent context.Context, t *testing.T, artifactRoot, reque
 	t.Helper()
 	for _, command := range []string{"say", "afconvert"} {
 		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("Gate I2 spoken input requires %s", command)
+			t.Fatalf("Gate I2 spoken input requires %s: %v", command, err)
 		}
 	}
 	aiffPath := filepath.Join(artifactRoot, "request.aiff")
@@ -902,13 +892,13 @@ func gateI2ErrorString(err error) string {
 	return err.Error()
 }
 
-// requireLiveOpenAIKey loads the operator's OpenAI key, skipping the proof
-// with skipMessage when none is configured.
-func requireLiveOpenAIKey(t *testing.T, skipMessage string) (string, string) {
+// requireLiveOpenAIKey loads the operator's OpenAI key, failing the proof
+// with missingMessage when none is configured.
+func requireLiveOpenAIKey(t *testing.T, missingMessage string) (string, string) {
 	t.Helper()
 	apiKey, keySource, err := loadGateI2APIKey(t.Context())
 	if errors.Is(err, errGateI2MissingAPIKey) {
-		t.Skip(skipMessage)
+		t.Fatal(missingMessage)
 	}
 	if err != nil {
 		t.Fatalf("load OpenAI API key: %v", err)

@@ -1,4 +1,4 @@
-//go:build live
+//go:build live && darwin && arm64
 
 package chrome
 

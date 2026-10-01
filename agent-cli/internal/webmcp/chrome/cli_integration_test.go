@@ -1,3 +1,5 @@
+//go:build e2e
+
 package chrome
 
 import (
@@ -16,17 +18,11 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-const cliChromeIntegrationEnv = "WEBMCP_CLI_CHROME_INTEGRATION"
-const cliSelectDeathIntegrationEnv = "WEBMCP_CLI_SELECT_DEATH_INTEGRATION"
-
 // TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel exercises the shipped
 // CLI binary against the actual pinned Chrome/WebMCP fixture. The invoke and
 // cancel commands are separate OS processes and share only persisted
 // selection metadata plus the browser-owned invocation state.
 func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
-	if os.Getenv(cliChromeIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the pinned Chrome CLI integration proof", cliChromeIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -442,9 +438,6 @@ func assertCLIChromeRecovery(t *testing.T, ctx context.Context, binary, configDi
 // The test never gives the CLI a browser-owned launch path; its only browser
 // cleanup is the explicit kill below.
 func TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome(t *testing.T) {
-	if os.Getenv(cliSelectDeathIntegrationEnv) != "1" {
-		t.Skipf("set %s=1 to run the live kill-during-select proof", cliSelectDeathIntegrationEnv)
-	}
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}

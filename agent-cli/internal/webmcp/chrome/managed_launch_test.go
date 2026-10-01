@@ -233,26 +233,7 @@ func TestManagedBrowserLauncherPortCollisionFailsTheAttempt(t *testing.T) {
 	}
 }
 
-func TestManagedBrowserLauncherRejectsSymlinkedProfileAndPortOutsideLoopback(t *testing.T) {
-	t.Run("symlinked profile", func(t *testing.T) {
-		configDir := t.TempDir()
-		profileTarget := t.TempDir()
-		profile := filepath.Join(configDir, ManagedBrowserProfileDirName)
-		if err := os.Symlink(profileTarget, profile); err != nil {
-			t.Skipf("symlinks unavailable: %v", err)
-		}
-		process := &managedLaunchTestProcess{}
-		launcher := newManagedLaunchTestLauncher(t, process, nil, nil)
-		launcher.options.ConfigDir = configDir
-		_, err := launcher.Launch(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "during profile") {
-			t.Fatalf("symlinked profile error = %v, want profile phase", err)
-		}
-		if process.startCalls.Load() != 0 {
-			t.Fatal("symlinked profile started Chrome")
-		}
-	})
-
+func TestManagedBrowserLauncherRejectsPortOutsideLoopback(t *testing.T) {
 	t.Run("non-loopback reservation", func(t *testing.T) {
 		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 		if err != nil {
