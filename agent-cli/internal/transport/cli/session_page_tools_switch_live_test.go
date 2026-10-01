@@ -371,32 +371,6 @@ func decodeLivePageTargets(content string) (sessionPageToolsLiveTabs, bool) {
 	return tabs, ready
 }
 
-func requireLivePageTargets(t *testing.T, tabs sessionPageToolsLiveTabs) (sessionPageToolsLiveTarget, sessionPageToolsLiveTarget) {
-	t.Helper()
-	var cube, margin sessionPageToolsLiveTarget
-	for _, target := range tabs.Targets {
-		if target.Type != livePageTargetType || !target.Eligible {
-			continue
-		}
-		switch target.Origin {
-		case sessionPageToolsLiveCubecadeOrigin:
-			if cube.TargetID != "" {
-				t.Fatalf("multiple eligible Cubecade targets: %#v", tabs.Targets)
-			}
-			cube = target
-		case sessionPageToolsLiveMarginOrigin:
-			if margin.TargetID != "" {
-				t.Fatalf("multiple eligible Margin targets: %#v", tabs.Targets)
-			}
-			margin = target
-		}
-	}
-	if cube.TargetID == "" || margin.TargetID == "" {
-		t.Fatalf("eligible page targets = %#v, want one Cubecade and one Margin", tabs.Targets)
-	}
-	return cube, margin
-}
-
 func hasLiveOrigin(targets []sessionPageToolsLiveTarget, origin string) bool {
 	for _, target := range targets {
 		if target.Type == livePageTargetType && target.Eligible && target.Origin == origin {

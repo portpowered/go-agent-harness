@@ -586,21 +586,3 @@ func waitForCapitalOneShoppingDocument(t *testing.T, ctx context.Context, sessio
 		}
 	}
 }
-
-func waitForCapitalOneShoppingCatalog(ctx context.Context, session webmcp.TargetSession) (map[string]webmcp.ToolDescriptor, error) {
-	tools := make(map[string]webmcp.ToolDescriptor, 4)
-	for len(tools) < 4 {
-		added, err := waitForIntegrationEvent(ctx, session.Events(), "Capital One Shopping live adapter catalog", func(event webmcp.BrowserEvent) bool {
-			return event.Type == webmcp.EventToolsAdded && len(event.Tools) > 0
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, tool := range added.Tools {
-			if len(tool.Name) >= len("capital_one_shopping_") && tool.Name[:len("capital_one_shopping_")] == "capital_one_shopping_" {
-				tools[tool.Name] = tool
-			}
-		}
-	}
-	return tools, nil
-}

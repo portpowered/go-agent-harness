@@ -607,31 +607,6 @@ func newScheduledFaultTestConn(frames []faultTestFrame, clock *platformclock.Det
 	}
 }
 
-func (c *scheduledFaultTestConn) ReadMessage() (int, []byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return 0, nil, io.EOF
-	}
-
-	currentTick := c.clock.Tick()
-	for c.readIdx < len(c.frames) && c.nextTick < currentTick {
-		c.readIdx++
-		c.nextTick++
-		c.sourceDrops++
-	}
-	if c.readIdx >= len(c.frames) {
-		return 0, nil, io.EOF
-	}
-	if currentTick < c.nextTick {
-		c.clock.AdvanceTo(c.nextTick)
-	}
-	frame := c.frames[c.readIdx]
-	c.readIdx++
-	c.nextTick++
-	return frame.Type, append([]byte(nil), frame.Payload...), nil
-}
-
 func (c *scheduledFaultTestConn) SourceDrops() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

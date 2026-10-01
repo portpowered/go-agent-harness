@@ -21,7 +21,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 	runtimecontract "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -384,29 +383,6 @@ func (e *liveBargeInInconclusiveError) Error() string {
 		return "live barge-in observation was inconclusive"
 	}
 	return "live barge-in observation was inconclusive: " + e.Reason
-}
-
-// liveBargeInEventsBeforeTurn counts the response's matching events (message
-// starts, or output when output is set) traced before the turn started.
-func liveBargeInEventsBeforeTurn(trace *liveBargeInTrace, response, turn int, output bool) (before int, ok bool) {
-	events, starts := trace.snapshot()
-	start, ok := starts[turn]
-	if !ok {
-		return 0, false
-	}
-	for _, event := range events[:min(start, len(events))] {
-		if event.ResponseOrdinal != response {
-			continue
-		}
-		matched := event.Type == messages.StreamTypeMessageStart
-		if output {
-			matched = event.AudioBytes > 0 || event.TextBytes > 0
-		}
-		if matched {
-			before++
-		}
-	}
-	return before, true
 }
 
 // validateLiveBargeInBoundaries separates an unavailable provider or missed
