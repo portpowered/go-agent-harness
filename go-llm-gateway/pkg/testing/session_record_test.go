@@ -18,7 +18,7 @@ import (
 const testProviderGrok = "grok"
 
 func TestCaptureSnapshotsCannotMutateRetainedEvidence(t *testing.T) {
-	stream := NewSessionRecorder(newFakeSession(), WithSessionRelayContext(t.Context()))
+	stream := newTestSessionRecorder(t, t.Context(), newFakeSession())
 	t.Cleanup(func() {
 		if err := stream.Close(); err != nil {
 			t.Error(err)
@@ -56,7 +56,7 @@ func TestCaptureClocksUseInjectedDomain(t *testing.T) {
 	base := time.Date(2026, time.January, 1, 2, 0, 0, 0, time.FixedZone("test", 3600))
 	source := clock.NewDeterministic(base, time.Millisecond)
 	websocket := NewRecordingWebSocketDialer(nil, "fixture", "fixture", source)
-	stream := NewSessionRecorder(newFakeSession(), WithSessionCaptureClock(source), WithSessionRelayContext(t.Context()))
+	stream := newTestSessionRecorder(t, t.Context(), newFakeSession(), WithSessionCaptureClock(source))
 	t.Cleanup(func() {
 		if err := stream.Close(); err != nil {
 			t.Error(err)
@@ -111,7 +111,7 @@ func (s *fakeSession) Close() error {
 
 func TestSessionRecorder_CapturesEventsInOrder(t *testing.T) {
 	fake := newFakeSession()
-	rec := NewSessionRecorder(fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"))
+	rec := newTestSessionRecorder(t, t.Context(), fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"))
 	ctx := context.Background()
 
 	// Simulate a server-to-client event arriving on the inbound buffer.
@@ -223,7 +223,7 @@ func TestMarshalStreamMessage_RoundTripsResponseID(t *testing.T) {
 
 func TestSessionRecorder_FlushToFile(t *testing.T) {
 	fake := newFakeSession()
-	rec := NewSessionRecorder(fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"), WithSessionCaptureID("session-123"))
+	rec := newTestSessionRecorder(t, t.Context(), fake, WithSessionCaptureProvider(testProviderGrok, "grok-realtime"), WithSessionCaptureID("session-123"))
 	ctx := context.Background()
 
 	// Record a client-to-server event.
@@ -286,7 +286,7 @@ func TestSessionRecorder_FlushToFile(t *testing.T) {
 func TestSessionRecorder_RelayStopsWhenOwnedContextCanceled(t *testing.T) {
 	fake := newFakeSession()
 	ctx, cancel := context.WithCancel(context.Background())
-	rec := NewSessionRecorder(fake, WithSessionRelayContext(ctx))
+	rec := newTestSessionRecorder(t, ctx, fake)
 
 	fake.inbound.Write(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,
@@ -394,4 +394,23 @@ func mustMarshalStreamMessage(msg messages.StreamMessage) json.RawMessage {
 		panic(fmt.Sprintf("marshal fixture stream message: %v", err))
 	}
 	return data
+}
+
+func newTestSessionRecorder(t *testing.T, ctx context.Context, inner messages.Session, opts ...SessionRecorderOption) *SessionRecorder {
+	t.Helper()
+	recorder, err := NewSessionRecorder(ctx, inner, opts...)
+	if err != nil {
+		t.Fatalf("NewSessionRecorder: %v", err)
+	}
+	return recorder
+}
+
+func TestNewSessionRecorderRequiresContextAndSession(t *testing.T) {
+	//nolint:staticcheck // SA1012: the nil context is the rejected input.
+	if _, err := NewSessionRecorder(nil, newFakeSession()); err == nil {
+		t.Fatal("NewSessionRecorder accepted a nil context")
+	}
+	if _, err := NewSessionRecorder(t.Context(), nil); err == nil {
+		t.Fatal("NewSessionRecorder accepted a nil session")
+	}
 }

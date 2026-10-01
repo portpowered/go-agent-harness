@@ -43,7 +43,7 @@ func (i *inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 	if err != nil {
 		return nil, err
 	}
-	media, ok := rtcMedia(s)
+	media, ok := messages.SessionMedia(s)
 	if !ok {
 		return nil, errors.Join(&mediaError{err: ErrSessionMediaUnavailable}, s.Close())
 	}
@@ -53,14 +53,6 @@ func (i *inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 	pumpCtx, stopPumps := context.WithCancel(ctx)
 	startMediaPumps(i, pumpCtx, media)
 	return newBoundSession(s, i.binding, ctx, stopPumps), nil
-}
-
-func rtcMedia(session messages.Session) (audio.MediaEndpoints, bool) {
-	owner, ok := session.(audio.MediaSession)
-	if !ok {
-		return audio.MediaEndpoints{}, false
-	}
-	return owner.RTCMedia(), true
 }
 
 func validateMedia(b *binding, media audio.MediaEndpoints) error {

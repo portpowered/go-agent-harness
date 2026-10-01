@@ -46,7 +46,7 @@ type DropLogSink interface {
 // per-direction drop counts recorded over the session's lifetime. Probe and
 // scenario runners read these figures so forced or observed overflow can be
 // asserted directly instead of inferred from silence.
-type SessionDropCounters interface { //nolint:iface // Exported contract implemented and consumed outside this package; nothing here asserts against it.
+type SessionDropCounters interface {
 	// InputDrops returns cumulative client-to-provider send-path drops.
 	InputDrops() int64
 	// OutputDrops returns cumulative provider-to-client receive-path drops.

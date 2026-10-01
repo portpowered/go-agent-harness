@@ -113,9 +113,6 @@ func TestBindingContractsPreserveTypedFailures(t *testing.T) {
 	if !errors.Is((&mediaError{err: ErrSessionMediaUnavailable}), ErrSessionMediaUnavailable) {
 		t.Fatal("media error lost wrapped identity")
 	}
-	if _, ok := rtcMedia(nil); ok {
-		t.Fatal("nil session unexpectedly exposed media")
-	}
 	if _, err := (&inferencer{}).ConnectSession(context.Background()); !errors.Is(err, devices.ErrUnavailable) {
 		t.Fatalf("nil inferencer error = %v, want ErrUnavailable", err)
 	}

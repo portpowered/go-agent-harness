@@ -6,26 +6,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-type completeMessageSender interface {
-	SendMessage(context.Context, messages.Message) bool
-}
-
-type completeMessageSenderWithoutResponse interface {
-	SendMessageWithoutResponse(context.Context, messages.Message) bool
-}
-
-func completeMessageCapabilities(session messages.Session) (complete, withoutResponse bool) {
-	if capabilities, ok := session.(interface {
-		SupportsCompleteMessages() bool
-		SupportsCompleteMessagesWithoutResponse() bool
-	}); ok {
-		return capabilities.SupportsCompleteMessages(), capabilities.SupportsCompleteMessagesWithoutResponse()
-	}
-	_, complete = session.(completeMessageSender)
-	_, withoutResponse = session.(completeMessageSenderWithoutResponse)
-	return complete, withoutResponse
-}
-
 func isTerminalErrorMessage(msg messages.StreamMessage) bool {
 	if msg.Type != messages.StreamTypeError {
 		return false
@@ -39,6 +19,16 @@ func writeAdmittedMessage(receive *messages.TypedBuffer[messages.StreamMessage],
 		return receive.WriteTerminal(msg)
 	}
 	return receive.Write(ctx, msg)
+}
+
+// writeDrainedMessage retains a message drained from the provider after the
+// admission or the session closed. No caller context bounds that drain, so a
+// nonterminal message is written only when the buffer has room.
+func writeDrainedMessage(receive *messages.TypedBuffer[messages.StreamMessage], msg messages.StreamMessage) bool {
+	if IsDurationShutdownMessage(msg) {
+		return receive.WriteTerminal(msg)
+	}
+	return receive.TryWrite(msg).OK()
 }
 
 var _ messages.SessionInferencer = (*AdmissionInferencer)(nil)
@@ -93,7 +83,7 @@ func (s *AdmissionSession) drainSourceAfterClose() {
 		}
 		s.observeProviderMessage(msg)
 		if IsDurationForwardMessage(msg) {
-			writeAdmittedMessage(s.receive, context.Background(), msg)
+			writeDrainedMessage(s.receive, msg)
 		}
 	}
 }

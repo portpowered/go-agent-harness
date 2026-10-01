@@ -84,15 +84,31 @@ func (b *TypedBuffer[T]) WriteContext(ctx context.Context, data T) BufferWriteOu
 	case <-ctx.Done():
 		return bufferWriteContextOutcome(ctx)
 	default:
-		// Count the drop before invoking the observer so the callback
-		// reports the cumulative count including this drop: the counter is
-		// the durable evidence, the callback is optional.
-		b.drops.Add(1)
-		if b.onDrop != nil {
-			b.onDrop(data)
-		}
-		return BufferWriteOutcome{Status: BufferWriteBufferFull}
+		return b.drop(data)
 	}
+}
+
+// TryWrite sends data into the buffer without waiting. A full buffer drops
+// data and reports BufferWriteBufferFull. Owners draining a source after its
+// lifetime ended use it, as no caller context bounds that drain.
+func (b *TypedBuffer[T]) TryWrite(data T) BufferWriteOutcome {
+	select {
+	case b.ch <- data:
+		return BufferWriteOutcome{Status: BufferWriteSucceeded}
+	default:
+		return b.drop(data)
+	}
+}
+
+// drop records data dropped by a full buffer. The drop is counted before the
+// observer runs so the callback reports the cumulative count including this
+// drop: the counter is the durable evidence, the callback is optional.
+func (b *TypedBuffer[T]) drop(data T) BufferWriteOutcome {
+	b.drops.Add(1)
+	if b.onDrop != nil {
+		b.onDrop(data)
+	}
+	return BufferWriteOutcome{Status: BufferWriteBufferFull}
 }
 
 // WriteWaitContext applies bounded backpressure instead of dropping when the

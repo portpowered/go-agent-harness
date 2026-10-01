@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -33,8 +34,11 @@ type SessionRecorder struct {
 	clock    clock.Source
 	capture  SessionCapture
 	sequence int
-	relayCtx context.Context
-	cancel   context.CancelFunc
+	// stop ends the inbound relay when the recorder closes; relayDone closes
+	// when the relay has stopped.
+	stop      chan struct{}
+	stopOnce  sync.Once
+	relayDone chan struct{}
 
 	// inbound is a wrapped TypedBuffer that intercepts reads from the inner
 	// session's Receive buffer and records each message.
@@ -134,23 +138,23 @@ func WithSessionCaptureID(id string) SessionRecorderOption {
 	}
 }
 
-// WithSessionRelayContext makes inbound relay writes stop when ctx is cancelled.
-func WithSessionRelayContext(ctx context.Context) SessionRecorderOption {
-	return func(r *SessionRecorder) {
-		if ctx != nil {
-			r.relayCtx = ctx
-		}
-	}
-}
-
 // NewSessionRecorder creates a SessionRecorder that wraps inner and records
-// every event that passes through Send and Receive.
-func NewSessionRecorder(inner messages.Session, opts ...SessionRecorderOption) *SessionRecorder {
+// every event that passes through Send and Receive. The inbound relay stops
+// when ctx ends, inner is done or the recorder closes.
+func NewSessionRecorder(ctx context.Context, inner messages.Session, opts ...SessionRecorderOption) (*SessionRecorder, error) {
+	if ctx == nil {
+		return nil, errors.New("session recorder context is required")
+	}
+	if inner == nil {
+		return nil, errors.New("session recorder requires a session")
+	}
 	r := &SessionRecorder{
 		SessionCapabilities: messages.SessionCapabilities{Wrapped: inner},
 		inner:               inner,
 		events:              make([]CapturedSessionEvent, 0),
 		clock:               clock.Real{},
+		stop:                make(chan struct{}),
+		relayDone:           make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -159,12 +163,8 @@ func NewSessionRecorder(inner messages.Session, opts ...SessionRecorderOption) *
 	r.capture.Version = SessionCaptureVersion
 	r.capture.Session.StartedAtUTC = r.startAt.UTC().Format(time.RFC3339Nano)
 	r.capture.Records = make([]CapturedSessionEvent, 0)
-	if r.relayCtx == nil {
-		r.relayCtx = context.Background()
-	}
-	r.relayCtx, r.cancel = context.WithCancel(r.relayCtx)
-	r.inbound = newRecordingBuffer(inner.Receive(), r)
-	return r
+	r.inbound = newRecordingBuffer(ctx, inner.Receive(), r)
+	return r, nil
 }
 
 // Send forwards the message to the inner session and records it as a
@@ -184,31 +184,13 @@ func (r *SessionRecorder) SendWithOutcome(ctx context.Context, msg messages.Stre
 // recording its stream-level control event. A replay-backed inner session does
 // not expose the capability, so it remains compatible with older captures.
 func (r *SessionRecorder) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	if !messages.SupportsSessionResponseRequests(r.inner) {
+	if !r.SupportsResponseRequests() {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
 	return r.SendWithOutcome(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
 		Value: messages.NewResponseCreateValue(),
 	})
-}
-
-func (r *SessionRecorder) SupportsResponseRequests() bool {
-	return messages.SupportsSessionResponseRequests(r.inner)
-}
-
-// FlushOutbound forwards the optional transport-settlement capability through
-// the recorder so a live capture boundary still waits for provider wire
-// writes before the session is finalized.
-func (r *SessionRecorder) FlushOutbound(ctx context.Context) error {
-	if r == nil {
-		return nil
-	}
-	flusher, ok := r.inner.(messages.SessionOutboundFlusher)
-	if !ok {
-		return nil
-	}
-	return flusher.FlushOutbound(ctx)
 }
 
 // Receive returns a TypedBuffer whose reads are intercepted so that every
@@ -222,25 +204,13 @@ func (r *SessionRecorder) Done() <-chan struct{} {
 	return r.inner.Done()
 }
 
-// TerminalError preserves the wrapped provider's optional terminal error.
-func (r *SessionRecorder) TerminalError() error {
-	if r == nil || r.inner == nil {
-		return nil
-	}
-	provider, ok := r.inner.(interface{ TerminalError() error })
-	if !ok {
-		return nil
-	}
-	return provider.TerminalError()
-}
-
 // Close delegates to the inner session.
 func (r *SessionRecorder) Close() error {
 	closeErr := r.inner.Close()
 	// Let the wrapped session publish its terminal state before stopping the
 	// inbound relay. A duration-bounded caller relies on that final event to
 	// distinguish an intentional cutoff from cancellation.
-	r.cancel()
+	r.stopOnce.Do(func() { close(r.stop) })
 	return closeErr
 }
 
@@ -252,7 +222,7 @@ func (r *SessionRecorder) FlushToFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("encode session captures: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, legacyCaptureFileMode); err != nil {
 		return fmt.Errorf("write session capture file: %w", err)
 	}
 	return nil
@@ -362,7 +332,5 @@ func (r *SessionRecorder) recordMessage(dir SessionEventDirection, msg messages.
 // been recorded and relayed into Receive.
 func (r *SessionRecorder) SyncReceive(ctx context.Context) {
 	r.SessionCapabilities.SyncReceive(ctx)
-	if r.relayCtx != nil {
-		r.barrier.Await(ctx, r.relayCtx.Done())
-	}
+	r.barrier.Await(ctx, r.relayDone)
 }

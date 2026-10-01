@@ -91,28 +91,6 @@ func (r *ModelRunner) requestSessionResponse(ctx context.Context, session messag
 	messages.RequestSessionResponse(ctx, session)
 }
 
-// sessionMessageSender is an optional extension to the stream-only Session
-// contract. Keeping the assertion local preserves compatibility with existing
-// session implementations while allowing providers with a complete-message
-// path to deliver rich tool results.
-type sessionMessageSender interface {
-	SendMessage(context.Context, messages.Message) bool
-}
-
-type sessionMessageWithoutResponseSender interface {
-	SendMessageWithoutResponse(context.Context, messages.Message) bool
-}
-
-// sessionMessageCapabilities lets adapters that preserve the optional method
-// set report whether the wrapped provider actually supports complete messages.
-// Without this capability bit, a stream-only session wrapper can look like a
-// complete-message session because its forwarding methods necessarily return
-// false when the underlying session has no such path.
-type sessionMessageCapabilities interface {
-	SupportsCompleteMessages() bool
-	SupportsCompleteMessagesWithoutResponse() bool
-}
-
 type sessionToolResultDelivery uint8
 
 const (
@@ -150,32 +128,27 @@ func (r *ModelRunner) sendLatestSessionToolResults(ctx context.Context, session 
 		return sessionToolResultsAlreadyForwarded
 	}
 
-	sender, hasCompleteMessagePath := session.(sessionMessageSender)
-	withoutResponse, canDeferResponse := session.(sessionMessageWithoutResponseSender)
-	if capabilities, ok := session.(sessionMessageCapabilities); ok {
-		hasCompleteMessagePath = hasCompleteMessagePath && capabilities.SupportsCompleteMessages()
-		canDeferResponse = canDeferResponse && capabilities.SupportsCompleteMessagesWithoutResponse()
-	}
-	if !hasCompleteMessagePath || (len(toolResults) > 1 && !canDeferResponse) {
+	canDeferResponse := messages.SupportsSessionMessagesWithoutResponse(session)
+	if !messages.SupportsSessionMessages(session) || (len(toolResults) > 1 && !canDeferResponse) {
 		if !sendSessionToolResultsAsStream(ctx, session, history, toolResults) {
 			return sessionToolResultsFailed
 		}
 		return sessionToolResultsFlatFallback
 	}
 
-	return sendCompleteSessionToolResults(ctx, sender, withoutResponse, canDeferResponse, toolResults)
+	return sendCompleteSessionToolResults(ctx, session, canDeferResponse, toolResults)
 }
 
-func sendCompleteSessionToolResults(ctx context.Context, sender sessionMessageSender, withoutResponse sessionMessageWithoutResponseSender, canDeferResponse bool, toolResults []messages.Message) sessionToolResultDelivery {
+func sendCompleteSessionToolResults(ctx context.Context, session messages.Session, canDeferResponse bool, toolResults []messages.Message) sessionToolResultDelivery {
 	for index, result := range toolResults {
 		last := index == len(toolResults)-1
 		if !last && canDeferResponse {
-			if !withoutResponse.SendMessageWithoutResponse(ctx, result) {
+			if !messages.SendSessionMessageWithoutResponse(ctx, session, result) {
 				return sessionToolResultsFailed
 			}
 			continue
 		}
-		if !sender.SendMessage(ctx, result) {
+		if !messages.SendSessionMessage(ctx, session, result) {
 			return sessionToolResultsFailed
 		}
 	}

@@ -238,33 +238,3 @@ linters:
       # nolintlint companion rule keeps existing //nolint directives for an
       # excluded linter from being reported as unused while the exclusion
       # exists; remove it together with the linter.
-      # owned by session-wrappers
-      - path: '^go-agent-loop/pkg/messages/session\.go$'
-        linters: [iface]
-      - path: '^go-agent-loop/pkg/messages/session\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(iface)"'
-      # owned by session-wrappers
-      - path: '^go-agent-runtime/services/devices/internal/rtc/binding_transport\.go$'
-        linters: [containedctx, forbidigo]
-      - path: '^go-agent-runtime/services/devices/internal/rtc/binding_transport\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|forbidigo)"'
-      # owned by session-wrappers
-      - path: '^go-agent-runtime/services/session/internal/live/sessionwrap/'
-        linters: [nestif]
-      - path: '^go-agent-runtime/services/session/internal/live/sessionwrap/'
-        linters: [nolintlint]
-        text: 'is unused for linter "(nestif)"'
-      # owned by session-wrappers
-      - path: '^go-agent-runtime/services/sessionduration/internal/service/admission(_forward)?\.go$'
-        linters: [forbidigo]
-      - path: '^go-agent-runtime/services/sessionduration/internal/service/admission(_forward)?\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(forbidigo)"'
-      # owned by session-wrappers
-      - path: '^go-llm-gateway/pkg/testing/session_record\.go$'
-        linters: [containedctx, forbidigo, mnd]
-      - path: '^go-llm-gateway/pkg/testing/session_record\.go$'
-        linters: [nolintlint]
-        text: 'is unused for linter "(containedctx|forbidigo|mnd)"'

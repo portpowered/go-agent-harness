@@ -16,9 +16,11 @@ var _ messages.BargeInCapableSession = (*boundSession)(nil)
 
 const playbackDrainTimeout = 5 * time.Second
 
+// boundSession relays every capability of the provider session except its
+// media, which the binding pumps to the selected devices.
 type boundSession struct {
 	messages.Session
-	capabilities                             messages.SessionCapabilities
+	messages.SessionCapabilities
 	binding                                  *binding
 	lifecycleCtx                             context.Context
 	stopPumps                                context.CancelFunc
@@ -30,7 +32,7 @@ type boundSession struct {
 }
 
 func newBoundSession(session messages.Session, binding *binding, lifecycleCtx context.Context, stopPumps ...context.CancelFunc) *boundSession {
-	bound := &boundSession{Session: session, capabilities: messages.SessionCapabilities{Wrapped: session}, binding: binding, lifecycleCtx: lifecycleCtx}
+	bound := &boundSession{Session: session, SessionCapabilities: messages.SessionCapabilities{Wrapped: session}, binding: binding, lifecycleCtx: lifecycleCtx}
 	if len(stopPumps) > 0 {
 		bound.stopPumps = stopPumps[0]
 	}
@@ -38,17 +40,11 @@ func newBoundSession(session messages.Session, binding *binding, lifecycleCtx co
 	return bound
 }
 
-func (s *boundSession) ProviderTurnDetection() bool { return s.capabilities.ProviderTurnDetection() }
-func (s *boundSession) InputAudioSampleRate() int   { return s.capabilities.InputAudioSampleRate() }
-func (s *boundSession) InterruptLocalPlayback(ctx context.Context) bool {
-	return s.capabilities.InterruptLocalPlayback(ctx)
-}
-
 // LocalPlayback forwards the provider's playback state. A binding with a
 // feedback gate removes this playback from the captured audio, so the
 // playback level is not an echo reference for local barge-in.
 func (s *boundSession) LocalPlayback() messages.LocalPlaybackState {
-	state := s.capabilities.LocalPlayback()
+	state := s.SessionCapabilities.LocalPlayback()
 	state.EchoCancelled = s.binding != nil && s.binding.feedback != nil
 	return state
 }
@@ -103,7 +99,7 @@ func (s *boundSession) forwardMessages(ctx context.Context, source *messages.Typ
 // SyncReceive returns once every provider message queued before the call has
 // crossed this session's own relay into Receive.
 func (s *boundSession) SyncReceive(ctx context.Context) {
-	s.capabilities.SyncReceive(ctx)
+	s.SessionCapabilities.SyncReceive(ctx)
 	if s.forwardDone != nil {
 		s.barrier.Await(ctx, s.forwardDone)
 	}
@@ -134,8 +130,8 @@ func (s *boundSession) stopReceiveForwarder() {
 }
 
 func (s *boundSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
-	if outcome, blocked := s.admissionOutcome(msg); blocked {
-		return outcome
+	if s == nil || s.Session == nil {
+		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
 	outcome := messages.SendSessionWithOutcome(ctx, s.Session, msg)
 	if !outcome.OK() {
@@ -148,23 +144,6 @@ func (s *boundSession) SendWithOutcome(ctx context.Context, msg messages.StreamM
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure, Err: err}
 	}
 	return outcome
-}
-
-func (s *boundSession) admissionOutcome(msg messages.StreamMessage) (messages.SessionSendOutcome, bool) {
-	if s == nil || s.Session == nil {
-		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}, true
-	}
-	closed, ok := s.Session.(interface{ SessionAdmissionClosed() bool })
-	if !ok || !closed.SessionAdmissionClosed() {
-		return messages.SessionSendOutcome{}, false
-	}
-	allowed, ok := s.Session.(interface {
-		SessionAdmissionAllows(messages.StreamMessage) bool
-	})
-	if ok && !allowed.SessionAdmissionAllows(msg) {
-		return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: context.Canceled}, true
-	}
-	return messages.SessionSendOutcome{}, false
 }
 
 func playbackCommand(kind messages.StreamMessageType) audio.PlaybackOperation {
@@ -186,10 +165,6 @@ func (s *boundSession) applyPlaybackCommand(ctx context.Context, command audio.P
 }
 
 func (s *boundSession) RequestResponse(ctx context.Context) messages.SessionSendOutcome {
-	create := messages.StreamMessage{Type: messages.StreamTypeResponseCreate}
-	if outcome, blocked := s.admissionOutcome(create); blocked {
-		return outcome
-	}
 	outcome := messages.RequestSessionResponse(ctx, s.Session)
 	if !outcome.OK() {
 		return outcome
@@ -200,91 +175,9 @@ func (s *boundSession) RequestResponse(ctx context.Context) messages.SessionSend
 	return outcome
 }
 
-func (s *boundSession) SupportsResponseRequests() bool {
-	return messages.SupportsSessionResponseRequests(s.Session)
-}
-
-func (s *boundSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	if s == nil || s.Session == nil {
-		return false
-	}
-	sender, ok := s.Session.(interface {
-		SendMessage(context.Context, messages.Message) bool
-	})
-	return ok && sender.SendMessage(ctx, msg)
-}
-
-func (s *boundSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	if s == nil || s.Session == nil {
-		return false
-	}
-	sender, ok := s.Session.(interface {
-		SendMessageWithoutResponse(context.Context, messages.Message) bool
-	})
-	return ok && sender.SendMessageWithoutResponse(ctx, msg)
-}
-
-func (s *boundSession) SupportsCompleteMessages() bool {
-	return s.supportsMessageCapability(true)
-}
-
-func (s *boundSession) SupportsCompleteMessagesWithoutResponse() bool {
-	return s.supportsMessageCapability(false)
-}
-
-func (s *boundSession) supportsMessageCapability(withResponse bool) bool {
-	if s == nil || s.Session == nil {
-		return false
-	}
-	if capabilities, ok := s.Session.(interface {
-		SupportsCompleteMessages() bool
-		SupportsCompleteMessagesWithoutResponse() bool
-	}); ok {
-		if withResponse {
-			return capabilities.SupportsCompleteMessages()
-		}
-		return capabilities.SupportsCompleteMessagesWithoutResponse()
-	}
-	if withResponse {
-		_, ok := s.Session.(interface {
-			SendMessage(context.Context, messages.Message) bool
-		})
-		return ok
-	}
-	_, ok := s.Session.(interface {
-		SendMessageWithoutResponse(context.Context, messages.Message) bool
-	})
-	return ok
-}
-
-func (s *boundSession) FlushOutbound(ctx context.Context) error {
-	if s == nil || s.Session == nil {
-		return nil
-	}
-	flusher, ok := s.Session.(messages.SessionOutboundFlusher)
-	if !ok {
-		return nil
-	}
-	return flusher.FlushOutbound(ctx)
-}
-
-func (s *boundSession) InputDrops() int64 { return s.dropCount(true) }
-
-func (s *boundSession) OutputDrops() int64 { return s.dropCount(false) }
-
-func (s *boundSession) dropCount(input bool) int64 {
-	if s == nil || s.Session == nil {
-		return 0
-	}
-	counters, ok := s.Session.(messages.SessionDropCounters)
-	if !ok {
-		return 0
-	}
-	if input {
-		return counters.InputDrops()
-	}
-	return counters.OutputDrops()
-}
+// SupportsRTCMedia reports false: the binding pumps the provider media to
+// the selected devices, so no caller may consume it as well.
+func (s *boundSession) SupportsRTCMedia() bool { return false }
 
 func (s *boundSession) Close() error {
 	if s == nil {
@@ -320,9 +213,7 @@ func (s *boundSession) DrainPlayback(ctx context.Context) error {
 	if s == nil || s.binding == nil || s.binding.sink == nil {
 		return nil
 	}
-	mediaOwner, ok := s.Session.(audio.MediaSession)
-	if ok {
-		media := mediaOwner.RTCMedia()
+	if media, ok := messages.SessionMedia(s.Session); ok {
 		if err := closeInboundMedia(media.Inbound); err != nil {
 			return err
 		}

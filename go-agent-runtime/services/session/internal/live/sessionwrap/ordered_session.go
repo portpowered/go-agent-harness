@@ -87,10 +87,8 @@ func (s *orderedSession) sendMarkedControl(ctx context.Context, msg messages.Str
 	msg.ActorProvidedID = ""
 	outcome := s.sendInner(ctx, msg)
 	if outcome.OK() && s.flushOutbound && msg.Type == messages.StreamTypeMessageEnd {
-		if flusher, ok := s.inner.(messages.SessionOutboundFlusher); ok {
-			if err := flusher.FlushOutbound(ctx); err != nil {
-				outcome = sessionSendOutcomeForError(ctx, err)
-			}
+		if err := s.FlushOutbound(ctx); err != nil {
+			outcome = sessionSendOutcomeForError(ctx, err)
 		}
 	}
 	release()
@@ -158,20 +156,7 @@ func (s *orderedSession) runAdmissionBool(ctx context.Context, operation func() 
 
 func (s *orderedSession) sendInner(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
 	rollback := s.beginAdmission(msg, false)
-	var outcome messages.SessionSendOutcome
-	if sender, ok := s.inner.(messages.SessionSendOutcomeSender); ok {
-		outcome = sender.SendWithOutcome(ctx, msg)
-	} else if s.inner.Send(ctx, msg) {
-		outcome = messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
-	} else if err := ctx.Err(); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			outcome = messages.SessionSendOutcome{Status: messages.SessionSendTimedOut, Err: err}
-		} else {
-			outcome = messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
-		}
-	} else {
-		outcome = messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
-	}
+	outcome := messages.SendSessionWithOutcome(ctx, s.inner, msg)
 	if !outcome.OK() {
 		rollback()
 	}
@@ -231,13 +216,12 @@ func (s *orderedSession) RequestResponse(ctx context.Context) messages.SessionSe
 	if s == nil || s.inner == nil {
 		return messages.SessionSendOutcome{Status: messages.SessionSendClosed}
 	}
-	requester, ok := s.inner.(messages.SessionResponseRequester)
-	if !ok {
+	if !messages.SupportsSessionResponseRequests(s.inner) {
 		return messages.SessionSendOutcome{Status: messages.SessionSendTerminalFailure}
 	}
 	return s.runAdmission(ctx, func() messages.SessionSendOutcome {
 		rollback := s.beginAdmission(messages.StreamMessage{Type: messages.StreamTypeResponseCreate}, false)
-		outcome := requester.RequestResponse(ctx)
+		outcome := messages.RequestSessionResponse(ctx, s.inner)
 		if !outcome.OK() {
 			rollback()
 		}
@@ -248,95 +232,45 @@ func (s *orderedSession) RequestResponse(ctx context.Context) messages.SessionSe
 	})
 }
 
-func (s *orderedSession) SupportsResponseRequests() bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	capability, ok := s.inner.(messages.SessionResponseCapability)
-	if ok {
-		return capability.SupportsResponseRequests()
-	}
-	_, ok = s.inner.(messages.SessionResponseRequester)
-	return ok
-}
-
-type completeMessageSender interface {
-	SendMessage(context.Context, messages.Message) bool
-}
-
-type completeMessageWithoutResponseSender interface {
-	SendMessageWithoutResponse(context.Context, messages.Message) bool
-}
-
 func (s *orderedSession) SendMessage(ctx context.Context, msg messages.Message) bool {
-	if s == nil || s.inner == nil {
+	if s == nil || s.inner == nil || !messages.SupportsSessionMessages(s.inner) {
 		return false
 	}
-	sender, ok := s.inner.(completeMessageSender)
-	return ok && s.runAdmissionBool(ctx, func() bool {
+	return s.sendMessage(ctx, msg, true)
+}
+
+func (s *orderedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
+	if s == nil || s.inner == nil || !messages.SupportsSessionMessagesWithoutResponse(s.inner) {
+		return false
+	}
+	return s.sendMessage(ctx, msg, false)
+}
+
+// sendMessage admits one complete tool result message, requesting the next
+// response when requestResponse is set.
+func (s *orderedSession) sendMessage(ctx context.Context, msg messages.Message, requestResponse bool) bool {
+	return s.runAdmissionBool(ctx, func() bool {
 		admission := messages.StreamMessage{
 			Type:       messages.StreamTypeToolCallEnd,
 			ToolCallId: msg.ToolCallID,
 			Value:      messages.NewToolCallEndValue(msg.ToolCallID, msg.Name, ""),
 		}
-		rollback := s.beginAdmission(admission, true)
-		accepted := sender.SendMessage(ctx, msg)
+		rollback := s.beginAdmission(admission, requestResponse)
+		var accepted bool
+		if requestResponse {
+			accepted = messages.SendSessionMessage(ctx, s.inner, msg)
+		} else {
+			accepted = messages.SendSessionMessageWithoutResponse(ctx, s.inner, msg)
+		}
 		if !accepted {
 			rollback()
 		}
 		if accepted && s.onOpeningAdmitted != nil {
 			s.onOpeningAdmitted()
 		}
-		if accepted && s.onDispatch != nil {
+		if accepted && requestResponse && s.onDispatch != nil {
 			s.onDispatch(messages.StreamMessage{Type: messages.StreamTypeResponseCreate})
 		}
 		return accepted
 	})
-}
-
-func (s *orderedSession) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	sender, ok := s.inner.(completeMessageWithoutResponseSender)
-	return ok && s.runAdmissionBool(ctx, func() bool {
-		admission := messages.StreamMessage{
-			Type:       messages.StreamTypeToolCallEnd,
-			ToolCallId: msg.ToolCallID,
-			Value:      messages.NewToolCallEndValue(msg.ToolCallID, msg.Name, ""),
-		}
-		rollback := s.beginAdmission(admission, false)
-		accepted := sender.SendMessageWithoutResponse(ctx, msg)
-		if !accepted {
-			rollback()
-		}
-		if accepted && s.onOpeningAdmitted != nil {
-			s.onOpeningAdmitted()
-		}
-		return accepted
-	})
-}
-
-func (s *orderedSession) SupportsCompleteMessages() bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	capability, ok := s.inner.(interface{ SupportsCompleteMessages() bool })
-	return ok && capability.SupportsCompleteMessages()
-}
-
-func (s *orderedSession) SupportsCompleteMessagesWithoutResponse() bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	capability, ok := s.inner.(interface{ SupportsCompleteMessagesWithoutResponse() bool })
-	return ok && capability.SupportsCompleteMessagesWithoutResponse()
-}
-
-func (s *orderedSession) InitialSessionConfigSent() bool {
-	if s == nil || s.inner == nil {
-		return false
-	}
-	marker, ok := s.inner.(interface{ InitialSessionConfigSent() bool })
-	return ok && marker.InitialSessionConfigSent()
 }

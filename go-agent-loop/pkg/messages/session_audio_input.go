@@ -81,10 +81,9 @@ type SessionInputFormat interface {
 }
 
 // BargeInCapableSession is a session that answers every question the session
-// runner's local barge-in asks. Every session wrapper returned to a runner
-// implements it (usually by embedding SessionCapabilities), so a wrapper cannot
-// silently hide the provider's answers.
-type BargeInCapableSession interface { //nolint:iface // Exported contract implemented and consumed outside this package; nothing here asserts against it.
+// runner's local barge-in asks. Every session wrapper embeds
+// SessionCapabilities and therefore implements it.
+type BargeInCapableSession interface {
 	Session
 	SessionTurnDetection
 	SessionLocalPlayback
@@ -98,51 +97,6 @@ type BargeInCapableSession interface { //nolint:iface // Exported contract imple
 // so the reader must keep draining Receive while it waits.
 type SessionReceiveSyncer interface {
 	SyncReceive(ctx context.Context)
-}
-
-// SessionCapabilities forwards the optional capabilities the session runner's
-// local barge-in reads -- turn detection, local playback and input format --
-// from a wrapped session. Every session wrapper embeds it, so a wrapper cannot
-// silently hide them from the runner.
-type SessionCapabilities struct {
-	Wrapped Session
-}
-
-var (
-	_ SessionTurnDetection = SessionCapabilities{}
-	_ SessionLocalPlayback = SessionCapabilities{}
-	_ SessionInputFormat   = SessionCapabilities{}
-	_ SessionReceiveSyncer = SessionCapabilities{}
-)
-
-func (c SessionCapabilities) ProviderTurnDetection() bool {
-	detector, ok := c.Wrapped.(SessionTurnDetection)
-	return ok && detector.ProviderTurnDetection()
-}
-
-func (c SessionCapabilities) LocalPlayback() LocalPlaybackState {
-	if playback, ok := c.Wrapped.(SessionLocalPlayback); ok {
-		return playback.LocalPlayback()
-	}
-	return LocalPlaybackState{}
-}
-
-func (c SessionCapabilities) InterruptLocalPlayback(ctx context.Context) bool {
-	playback, ok := c.Wrapped.(SessionLocalPlayback)
-	return ok && playback.InterruptLocalPlayback(ctx)
-}
-
-func (c SessionCapabilities) InputAudioSampleRate() int {
-	if format, ok := c.Wrapped.(SessionInputFormat); ok {
-		return format.InputAudioSampleRate()
-	}
-	return 0
-}
-
-func (c SessionCapabilities) SyncReceive(ctx context.Context) {
-	if syncer, ok := c.Wrapped.(SessionReceiveSyncer); ok {
-		syncer.SyncReceive(ctx)
-	}
 }
 
 // RelayBarrier lets a session wrapper that relays provider messages through

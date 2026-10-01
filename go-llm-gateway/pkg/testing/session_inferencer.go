@@ -2,10 +2,10 @@ package testing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 var _ messages.SessionInferencer = (*RecordingSessionInferencer)(nil)
@@ -26,9 +26,8 @@ func NewRecordingSessionInferencer(inner messages.SessionInferencer) *RecordingS
 	return &RecordingSessionInferencer{inner: inner}
 }
 
-// NewRecordingSessionInferencerWithOptions keeps the session relay lifecycle
-// explicit for hosts whose parent context represents a bounded run rather than
-// provider-session cancellation.
+// NewRecordingSessionInferencerWithOptions applies options to the recorder of
+// each session it connects.
 func NewRecordingSessionInferencerWithOptions(inner messages.SessionInferencer, options ...SessionRecorderOption) *RecordingSessionInferencer {
 	return &RecordingSessionInferencer{inner: inner, options: append([]SessionRecorderOption(nil), options...)}
 }
@@ -44,86 +43,18 @@ func (r *RecordingSessionInferencer) ConnectSession(ctx context.Context) (messag
 	if err != nil {
 		return nil, err
 	}
-	options := append([]SessionRecorderOption(nil), r.options...)
-	if len(options) == 0 {
-		options = append(options, WithSessionRelayContext(ctx))
+	recorder, err := NewSessionRecorder(ctx, sess, r.options...)
+	if err != nil {
+		return nil, errors.Join(err, sess.Close())
 	}
-	r.recorder = NewSessionRecorder(sess, options...)
-	return r.recorder, nil
+	r.recorder = recorder
+	return recorder, nil
 }
 
 // Recorder returns the SessionRecorder for the most recently connected session.
 // Returns nil if ConnectSession has not been called.
 func (r *RecordingSessionInferencer) Recorder() *SessionRecorder {
 	return r.recorder
-}
-
-// SendMessage forwards complete rich messages to the wrapped provider session.
-// Recording must preserve optional multimodal capabilities so a recorded
-// image session behaves like its unwrapped session while the provider capture
-// remains owned by this wrapper.
-func (r *SessionRecorder) SendMessage(ctx context.Context, msg messages.Message) bool {
-	sender, ok := r.inner.(interface {
-		SendMessage(context.Context, messages.Message) bool
-	})
-	return ok && sender.SendMessage(ctx, msg)
-}
-
-// SendMessageWithoutResponse forwards a complete message without requesting a
-// response. This is required for image turns whose following scheduled audio
-// owns the response boundary.
-func (r *SessionRecorder) SendMessageWithoutResponse(ctx context.Context, msg messages.Message) bool {
-	sender, ok := r.inner.(interface {
-		SendMessageWithoutResponse(context.Context, messages.Message) bool
-	})
-	return ok && sender.SendMessageWithoutResponse(ctx, msg)
-}
-
-// SupportsCompleteMessages preserves the wrapped session's optional
-// multimodal capability declaration through the recording decorator.
-func (r *SessionRecorder) SupportsCompleteMessages() bool {
-	if capabilities, ok := r.inner.(interface{ SupportsCompleteMessages() bool }); ok {
-		return capabilities.SupportsCompleteMessages()
-	}
-	_, ok := r.inner.(interface {
-		SendMessage(context.Context, messages.Message) bool
-	})
-	return ok
-}
-
-// SupportsCompleteMessagesWithoutResponse preserves the wrapped session's
-// deferred multimodal capability declaration through the recording decorator.
-func (r *SessionRecorder) SupportsCompleteMessagesWithoutResponse() bool {
-	if capabilities, ok := r.inner.(interface {
-		SupportsCompleteMessagesWithoutResponse() bool
-	}); ok {
-		return capabilities.SupportsCompleteMessagesWithoutResponse()
-	}
-	_, ok := r.inner.(interface {
-		SendMessageWithoutResponse(context.Context, messages.Message) bool
-	})
-	return ok
-}
-
-// RTCMedia preserves the wrapped provider session's optional media capability
-// through the recording decorator. Device binding must still see the provider
-// endpoints when a host records a live RTC session.
-func (r *SessionRecorder) RTCMedia() sharedaudio.MediaEndpoints {
-	provider, ok := r.inner.(sharedaudio.MediaSession)
-	if !ok {
-		return sharedaudio.MediaEndpoints{}
-	}
-	return provider.RTCMedia()
-}
-
-// RTCMediaWithOptions preserves providers that expose continuous inbound
-// media configuration while recording is enabled.
-func (r *SessionRecorder) RTCMediaWithOptions(options sharedaudio.MediaSessionOptions) sharedaudio.MediaEndpoints {
-	provider, ok := r.inner.(sharedaudio.ConfigurableMediaSession)
-	if !ok {
-		return r.RTCMedia()
-	}
-	return provider.RTCMediaWithOptions(options)
 }
 
 // ReplaySessionInferencer implements messages.SessionInferencer by returning a

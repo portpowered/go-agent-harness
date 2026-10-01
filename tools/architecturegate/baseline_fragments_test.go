@@ -256,8 +256,8 @@ func TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio(t *testing.T) {
 	}
 }
 
-// Every type that wraps a messages.Session and is itself a session must keep
-// forwarding the runner's barge-in capabilities.
+// Every type that holds one or more messages.Session values and is itself a
+// session must embed the shared capability forwarder.
 func TestSessionWrapperAnalyzerFixture(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), SessionWrapperAnalyzer, "architecturesessionwrapper", "architecturesessionwrapperindirect")
 }

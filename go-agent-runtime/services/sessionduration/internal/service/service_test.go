@@ -344,7 +344,7 @@ func TestAdmissionContractHandlesUnavailableSession(t *testing.T) {
 	if session.SupportsResponseRequests() || session.SupportsCompleteMessages() || session.SupportsCompleteMessagesWithoutResponse() {
 		t.Fatal("unavailable session reported unsupported capabilities")
 	}
-	if _, ok := session.RTCMedia(); ok || session.TerminalError() != nil {
+	if _, ok := messages.SessionMedia(session); ok || session.TerminalError() != nil {
 		t.Fatal("unavailable session reported transport capabilities")
 	}
 	if err := session.Close(); err != nil {

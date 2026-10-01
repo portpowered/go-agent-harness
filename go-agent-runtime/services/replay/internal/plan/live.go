@@ -11,7 +11,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/engine"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
-	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -233,8 +232,8 @@ func (i replayInferencer) ConnectSession(ctx context.Context) (messages.Session,
 	return &replaySession{Session: s, SessionCapabilities: messages.SessionCapabilities{Wrapped: s}}, nil
 }
 
-// replaySession forwards the replayed provider session's barge-in
-// capabilities so a runner replaying a capture keeps its live behavior.
+// replaySession relays every capability of the replayed provider session so a
+// runner replaying a capture keeps its live behavior.
 type replaySession struct {
 	messages.Session
 	messages.SessionCapabilities
@@ -244,78 +243,4 @@ var _ messages.SessionSendOutcomeSender = (*replaySession)(nil)
 
 func (s *replaySession) SendWithOutcome(ctx context.Context, message messages.StreamMessage) messages.SessionSendOutcome {
 	return messages.SendSessionWithOutcome(ctx, s.Session, message)
-}
-
-type replayCompleteMessageSender interface {
-	SendMessage(context.Context, messages.Message) bool
-}
-
-type replayCompleteMessageSenderWithoutResponse interface {
-	SendMessageWithoutResponse(context.Context, messages.Message) bool
-}
-
-func (s *replaySession) SendMessage(ctx context.Context, message messages.Message) bool {
-	sender, ok := s.Session.(replayCompleteMessageSender)
-	return ok && sender.SendMessage(ctx, message)
-}
-
-func (s *replaySession) SendMessageWithoutResponse(ctx context.Context, message messages.Message) bool {
-	sender, ok := s.Session.(replayCompleteMessageSenderWithoutResponse)
-	return ok && sender.SendMessageWithoutResponse(ctx, message)
-}
-
-func (s *replaySession) SupportsCompleteMessages() bool {
-	capabilities, ok := s.Session.(interface {
-		SupportsCompleteMessages() bool
-		SupportsCompleteMessagesWithoutResponse() bool
-	})
-	if ok {
-		return capabilities.SupportsCompleteMessages()
-	}
-	_, ok = s.Session.(replayCompleteMessageSender)
-	return ok
-}
-
-func (s *replaySession) SupportsCompleteMessagesWithoutResponse() bool {
-	capabilities, ok := s.Session.(interface {
-		SupportsCompleteMessages() bool
-		SupportsCompleteMessagesWithoutResponse() bool
-	})
-	if ok {
-		return capabilities.SupportsCompleteMessagesWithoutResponse()
-	}
-	_, ok = s.Session.(replayCompleteMessageSenderWithoutResponse)
-	return ok
-}
-
-func (s *replaySession) RTCMedia() sharedaudio.MediaEndpoints {
-	media, ok := s.Session.(sharedaudio.MediaSession)
-	if !ok {
-		return sharedaudio.MediaEndpoints{}
-	}
-	return media.RTCMedia()
-}
-
-func (s *replaySession) InputDrops() int64 {
-	counters, ok := s.Session.(messages.SessionDropCounters)
-	if !ok {
-		return 0
-	}
-	return counters.InputDrops()
-}
-
-func (s *replaySession) OutputDrops() int64 {
-	counters, ok := s.Session.(messages.SessionDropCounters)
-	if !ok {
-		return 0
-	}
-	return counters.OutputDrops()
-}
-
-func (s *replaySession) TerminalError() error {
-	terminal, ok := s.Session.(interface{ TerminalError() error })
-	if !ok {
-		return nil
-	}
-	return terminal.TerminalError()
 }

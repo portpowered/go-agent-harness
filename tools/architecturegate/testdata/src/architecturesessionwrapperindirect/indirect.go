@@ -4,7 +4,7 @@ package architecturesessionwrapperindirect
 
 import "sessionwrapstub"
 
-type indirect struct { // want "session wrapper indirect does not implement messages.BargeInCapableSession"
+type indirect struct { // want "session wrapper indirect does not embed messages.SessionCapabilities"
 	sessionwrapstub.OrderedSession
 }
 

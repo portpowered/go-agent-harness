@@ -63,23 +63,30 @@ func reportGlobalVariables(pass *analysis.Pass, declaration *ast.GenDecl) {
 }
 
 // sessionWrapperRule names the architecture issue for a session wrapper that
-// hides the session runner's barge-in capabilities.
+// does not relay the wrapped session's optional capabilities through the
+// shared forwarder.
 const sessionWrapperRule = "session-wrapper-capabilities"
 
-// messagesPackagePath owns messages.Session and messages.BargeInCapableSession.
+// messagesPackagePath owns messages.Session and messages.SessionCapabilities.
 const messagesPackagePath = "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 
-// SessionWrapperAnalyzer reports types that wrap a messages.Session, are
-// sessions themselves and do not implement messages.BargeInCapableSession: a
-// runner handed such a wrapper cannot see turn detection, local playback, the
-// input format or the receive barrier of the provider session beneath it.
+// sessionForwarderName is the shared capability forwarder every session
+// wrapper embeds.
+const sessionForwarderName = "SessionCapabilities"
+
+// SessionWrapperAnalyzer reports types that hold one or more messages.Session
+// values, are sessions themselves and do not embed messages.SessionCapabilities.
+// Go cannot type-check that a wrapper forwards every optional capability, and a
+// wrapper that copies forwarding methods by hand silently hides each capability
+// added after it was written. Embedding the shared forwarder relays every
+// capability, present and future, so this is the one property to enforce.
 //
 //nolint:gochecknoglobals // the exported descriptor is immutable after package initialization
 var SessionWrapperAnalyzer = &analysis.Analyzer{
 	Name: "architecturesessionwrapper",
-	Doc:  "reports session wrappers that do not forward the barge-in capabilities",
+	Doc:  "reports session wrappers that do not embed messages.SessionCapabilities",
 	Run: func(pass *analysis.Pass) (interface{}, error) {
-		for _, wrapper := range sessionWrappersHidingCapabilities(pass.Pkg) {
+		for _, wrapper := range sessionWrappersWithoutForwarder(pass.Pkg) {
 			pass.Reportf(wrapper.Pos(), "%s", sessionWrapperMessage(wrapper))
 		}
 		return nil, nil
@@ -87,39 +94,51 @@ var SessionWrapperAnalyzer = &analysis.Analyzer{
 }
 
 func sessionWrapperMessage(wrapper *types.TypeName) string {
-	return fmt.Sprintf("session wrapper %s does not implement messages.BargeInCapableSession; embed messages.SessionCapabilities", wrapper.Name())
+	return fmt.Sprintf("session wrapper %s does not embed messages.SessionCapabilities", wrapper.Name())
 }
 
-// sessionWrappersHidingCapabilities returns the struct types of pkg that hold
-// a messages.Session, implement messages.Session and do not implement
-// messages.BargeInCapableSession.
-func sessionWrappersHidingCapabilities(pkg *types.Package) []*types.TypeName {
-	session, capable := sessionContracts(pkg)
-	if session == nil || capable == nil {
+// sessionWrappersWithoutForwarder returns the struct types of pkg that hold a
+// messages.Session (directly, through a function or in a collection),
+// implement messages.Session and do not embed messages.SessionCapabilities.
+func sessionWrappersWithoutForwarder(pkg *types.Package) []*types.TypeName {
+	messages := messagesPackage(pkg)
+	if messages == nil {
+		return nil
+	}
+	session := contractInterface(messages, "Session")
+	forwarder, ok := messages.Scope().Lookup(sessionForwarderName).(*types.TypeName)
+	if session == nil || !ok {
 		return nil
 	}
 	var wrappers []*types.TypeName
 	scope := pkg.Scope()
 	for _, name := range scope.Names() {
 		object, ok := scope.Lookup(name).(*types.TypeName)
-		if !ok || object.IsAlias() {
+		if !ok || object.IsAlias() || object == forwarder {
 			continue
 		}
 		structure, ok := object.Type().Underlying().(*types.Struct)
-		pointer := types.NewPointer(object.Type())
-		if ok && types.Implements(pointer, session) && holdsSession(structure, session) && !types.Implements(pointer, capable) {
+		if ok && types.Implements(types.NewPointer(object.Type()), session) && holdsSession(structure, session) && !embedsForwarder(object, forwarder) {
 			wrappers = append(wrappers, object)
 		}
 	}
 	return wrappers
 }
 
-func sessionContracts(pkg *types.Package) (session, capable *types.Interface) {
-	messages := messagesPackage(pkg)
-	if messages == nil {
-		return nil, nil
+// embedsForwarder reports whether the forwarder is an embedded field of
+// wrapper, at any depth, so its methods are promoted.
+func embedsForwarder(wrapper, forwarder *types.TypeName) bool {
+	field, _, _ := types.LookupFieldOrMethod(wrapper.Type(), true, wrapper.Pkg(), sessionForwarderName)
+	variable, ok := field.(*types.Var)
+	if !ok || !variable.Embedded() {
+		return false
 	}
-	return contractInterface(messages, "Session"), contractInterface(messages, "BargeInCapableSession")
+	embedded := types.Unalias(variable.Type())
+	if pointer, isPointer := embedded.(*types.Pointer); isPointer {
+		embedded = types.Unalias(pointer.Elem())
+	}
+	named, ok := embedded.(*types.Named)
+	return ok && named.Obj() == forwarder
 }
 
 // messagesPackage finds the messages package pkg depends on, directly or
@@ -172,19 +191,35 @@ func contractInterface(pkg *types.Package, name string) *types.Interface {
 }
 
 // holdsSession reports whether a field reaches a session: a session
-// interface, a concrete session (by value or pointer) or a function returning
-// one.
+// interface, a concrete session (by value or pointer), a function returning
+// one, or a slice, array, map or channel of them (a fan-out wrapper).
 func holdsSession(structure *types.Struct, session *types.Interface) bool {
 	for index := range structure.NumFields() {
-		field := types.Unalias(structure.Field(index).Type())
-		if signature, ok := field.Underlying().(*types.Signature); ok && signature.Results().Len() == 1 {
-			field = types.Unalias(signature.Results().At(0).Type())
-		}
-		if isSession(field, session) {
+		if isSession(heldElement(structure.Field(index).Type()), session) {
 			return true
 		}
 	}
 	return false
+}
+
+// heldElement returns the type a field holds sessions as: the result of a
+// function and the element of a collection.
+func heldElement(field types.Type) types.Type {
+	field = types.Unalias(field)
+	if signature, ok := field.Underlying().(*types.Signature); ok && signature.Results().Len() == 1 {
+		field = types.Unalias(signature.Results().At(0).Type())
+	}
+	switch collection := field.Underlying().(type) {
+	case *types.Slice:
+		return types.Unalias(collection.Elem())
+	case *types.Array:
+		return types.Unalias(collection.Elem())
+	case *types.Map:
+		return types.Unalias(collection.Elem())
+	case *types.Chan:
+		return types.Unalias(collection.Elem())
+	}
+	return field
 }
 
 func isSession(candidate types.Type, session *types.Interface) bool {
@@ -195,13 +230,13 @@ func isSession(candidate types.Type, session *types.Interface) bool {
 	return !pointer && !types.IsInterface(candidate) && types.Implements(types.NewPointer(candidate), session)
 }
 
-// sessionWrapperIssues reports the session wrappers of pkg that hide the
-// runner's barge-in capabilities.
+// sessionWrapperIssues reports the session wrappers of pkg that do not embed
+// the shared capability forwarder.
 func sessionWrapperIssues(pkg *Package, module *Module) []Issue {
 	if pkg.SourceTypes == nil {
 		return nil
 	}
-	wrappers := sessionWrappersHidingCapabilities(pkg.SourceTypes)
+	wrappers := sessionWrappersWithoutForwarder(pkg.SourceTypes)
 	issues := make([]Issue, 0, len(wrappers))
 	for _, wrapper := range wrappers {
 		issues = append(issues, Issue{Rule: sessionWrapperRule, Module: module.Path, Package: pkg.ImportPath, Symbol: wrapper.Name(), Message: sessionWrapperMessage(wrapper)})
