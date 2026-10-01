@@ -95,8 +95,8 @@ func (b *StatefulBroker) admissionRecordLocked(selected *brokerSession, ref Tool
 func (b *StatefulBroker) newBrokerInvocationLocked(ctx context.Context, selected *brokerSession, id InvocationID, request InvokeRequest, descriptor ToolDescriptor, input json.RawMessage, invocationTimeout time.Duration) *brokerInvocation {
 	now := b.clock.Now()
 	return &brokerInvocation{
-		selected:   selected,
-		caller:     newCallerBinding(ctx),
+		selected: selected,
+		caller:   newCallerBinding(ctx),
 		invocation: Invocation{
 			ID:          id,
 			Tool:        cloneToolDescriptor(descriptor),
