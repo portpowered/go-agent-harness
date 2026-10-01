@@ -534,7 +534,7 @@ func expectedReadImageMissingError(t *testing.T, imagePath string) string {
 	return fmt.Sprintf("session image %q is missing: %v", imagePath, err)
 }
 
-func readImageSpokenRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
+func readImageSpokenRecordPayload(record gwtesting.CapturedSessionEvent) []byte {
 	if len(record.Payload) > 0 {
 		return record.Payload
 	}

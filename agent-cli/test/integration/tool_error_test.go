@@ -293,20 +293,18 @@ func TestNegativeControlSuppressedToolErrorFailsScenario(t *testing.T) {
 // runToolErrorPanicHelper is the re-executed subprocess of the panic control:
 // TestMain runs it in place of the tests when toolErrorPanicHelperEnv is set.
 // An executor that panics inside the tool path must crash this process with an
-// explicit panic report (crash, not timeout); returning is a control failure.
-func runToolErrorPanicHelper() int {
+// explicit panic report (crash, not timeout); any return is a control failure,
+// described by the returned error.
+func runToolErrorPanicHelper() error {
 	dir, err := os.MkdirTemp("", "tool-error-panic-helper")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "create panic helper config directory: %v\n", err)
-		return 1
+		return fmt.Errorf("create panic helper config directory: %w", err)
 	}
 	if err := writeToolErrorConfig(dir); err != nil {
-		fmt.Fprintf(os.Stderr, "write panic helper config: %v\n", err)
-		return 1
+		return fmt.Errorf("write panic helper config: %w", err)
 	}
 	_, _, execErr := runOverrideCLIInDir(panickingToolExecutor{}, dir)
-	fmt.Fprintf(os.Stderr, "panic control returned without crashing: %v\n", execErr)
-	return 1
+	return errors.Join(errors.New("panic control returned without crashing"), execErr)
 }
 
 const toolErrorPanicHelperEnv = "S2S_V4C_TOOL_ERROR_PANIC_HELPER"
