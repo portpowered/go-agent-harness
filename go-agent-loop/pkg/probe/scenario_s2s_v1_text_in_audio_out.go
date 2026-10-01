@@ -10,7 +10,7 @@ func registerS2SV1TextInAudioOutScenario(register func(Scenario, ...DeadSessionC
 			{Type: StepClose},
 		},
 		Expectations: []ExpectedBehavior{
-			{Type: ExpectFrameCount, Kind: ExpectFrameCount, Count: 9},
+			{Type: ExpectFrameCount, Kind: ExpectFrameCount, Count: s2sV1ExpectedFrameCount},
 			{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "synthetic"},
 		},
 	}); err != nil {
@@ -18,3 +18,7 @@ func registerS2SV1TextInAudioOutScenario(register func(Scenario, ...DeadSessionC
 	}
 	return nil
 }
+
+// s2sV1ExpectedFrameCount is the frame count the v1 text-in/audio-out
+// fixture produces.
+const s2sV1ExpectedFrameCount = 9

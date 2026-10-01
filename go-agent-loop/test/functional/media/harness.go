@@ -212,7 +212,7 @@ func (m *MockInferencer) Infer(ctx context.Context, req messages.InferenceReques
 // When the entry was created with AddChunkedTextResponse, each chunk is emitted
 // as its own TEXT.DELTA event.
 func (m *MockInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
-	ch := make(chan messages.StreamMessage, 64)
+	ch := make(chan messages.StreamMessage, mockStreamCapacity)
 
 	// Record the call and advance the counter via Infer.
 	result, err := m.Infer(ctx, req)
@@ -511,7 +511,7 @@ func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts
 		Loop:    loop,
 		Inf:     inf,
 		Tool:    tool,
-		Timeout: 1000 * time.Second,
+		Timeout: scenarioTimeout,
 	}
 }
 
@@ -658,3 +658,10 @@ func deltaTextContent(d messages.StreamMessage) string {
 	}
 	return ""
 }
+
+const (
+	// mockStreamCapacity bounds one mock inference stream.
+	mockStreamCapacity = 64
+	// scenarioTimeout bounds one scenario turn.
+	scenarioTimeout = 1000 * time.Second
+)

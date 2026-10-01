@@ -51,7 +51,7 @@ func run(ctx context.Context, stdout io.Writer, modelsRoot, endpoint, output str
 	}
 	for i, text := range ttscorpus.Utterances() {
 		for _, rate := range ttscorpus.SampleRates() {
-			name := fmt.Sprintf("qwen_utt%02d_%dk.wav", i+1, rate/1000)
+			name := ttscorpus.ClipName(i, rate)
 			path := filepath.Join(output, name)
 			if _, err := fmt.Fprintf(stdout, "SYNTHESIZE file=%s rate=%d\n", name, rate); err != nil {
 				return fmt.Errorf("ttscorpus: write progress: %w", err)

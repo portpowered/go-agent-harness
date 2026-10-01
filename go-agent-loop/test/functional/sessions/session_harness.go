@@ -364,8 +364,8 @@ func AssertSessionDeltaContains(t *testing.T, deltas []messages.StreamMessage, r
 // SESSION.CLOSE + LOOP.END are the final events in correct order.
 func AssertSessionLifecycle(t *testing.T, deltas []messages.StreamMessage) {
 	t.Helper()
-	if len(deltas) < 3 {
-		t.Fatalf("expected at least 3 delta events (SESSION.OPEN, SESSION.CLOSE, LOOP.END), got %d", len(deltas))
+	if lifecycle := []messages.StreamMessageType{messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeLoopEnd}; len(deltas) < len(lifecycle) {
+		t.Fatalf("expected at least %d delta events %v, got %d", len(lifecycle), lifecycle, len(deltas))
 	}
 
 	if deltas[0].Type != messages.StreamTypeSessionOpen {

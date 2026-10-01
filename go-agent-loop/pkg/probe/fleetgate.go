@@ -178,7 +178,7 @@ func parseFleetArtifact(artifact FleetArtifact) ([]ScenarioResult, error) {
 	}
 	var results []ScenarioResult
 	scanner := bufio.NewScanner(artifact.Reader)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, 0, reportScanBufferBytes), reportMaxLineBytes)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++

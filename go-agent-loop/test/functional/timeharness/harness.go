@@ -270,7 +270,7 @@ func (p *Participant) bind() {
 	p.gid.CompareAndSwap(0, id)
 }
 func sleepingGoroutines() map[uint64]bool {
-	buffer := make([]byte, 128*1024)
+	buffer := make([]byte, stackDumpBytes)
 	n := runtime.Stack(buffer, true)
 	result := map[uint64]bool{}
 	for _, block := range strings.Split(string(buffer[:n]), "\n\n") {
@@ -291,3 +291,6 @@ func names(values []string) string {
 	}
 	return strings.Join(values, ", ")
 }
+
+// stackDumpBytes bounds the all-goroutine stack dump used to find sleepers.
+const stackDumpBytes = 128 * 1024

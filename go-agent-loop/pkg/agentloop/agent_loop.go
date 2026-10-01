@@ -43,7 +43,7 @@ func (al *AgentLoop) Deltas() *messages.TypedBuffer[messages.StreamMessage] {
 func New(opts ...Option) (*AgentLoop, error) {
 	cfg := AgentLoopConfig{
 		Mode:           engine.ModeAskOnce,
-		BufferCapacity: 64,
+		BufferCapacity: defaultBufferCapacity,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -256,7 +256,7 @@ func (al *AgentLoop) Execute(ctx context.Context, input ExecuteInput) (ExecuteRe
 	al.engine.AddMessages([]messages.Message{msg})
 
 	kernel := al.engine.GetKernelRunner()
-	kernelEventCh := kernel.NewDeltaEventReader(256)
+	kernelEventCh := kernel.NewDeltaEventReader(deltaEventReaderCapacity)
 
 	loopCtx, cancel := context.WithCancel(ctx)
 	hotLoopErrCh := make(chan error, 1)
@@ -313,7 +313,7 @@ func (al *AgentLoop) ExecuteStreaming(ctx context.Context, input ExecuteInput) (
 	al.engine.AddMessages([]messages.Message{msg})
 
 	kernel := al.engine.GetKernelRunner()
-	kernelEventCh := kernel.NewDeltaEventReader(256)
+	kernelEventCh := kernel.NewDeltaEventReader(deltaEventReaderCapacity)
 
 	loopCtx, cancel := context.WithCancel(ctx)
 
@@ -336,7 +336,7 @@ func (al *AgentLoop) ExecuteStreaming(ctx context.Context, input ExecuteInput) (
 	// closes its channel (LOOP.END processed), so all deltas are delivered first.
 	// If the hot loop failed, send an ERROR stream message before closing so the
 	// error is delivered as part of the execution response stream.
-	resultCh := make(chan streamEvent, 256)
+	resultCh := make(chan streamEvent, deltaEventReaderCapacity)
 	go func() {
 		for evt := range kernelEventCh {
 			resultCh <- streamEvent{event: evt}
@@ -393,7 +393,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 	// Forward kernel delta events to the consumer-facing Deltas() buffer.
 	// Must be set up before RunHotLoopContinuous starts (KernelRunner reads it on startup).
-	kernelDeltaCh := al.engine.GetKernelRunner().NewDeltaEventReader(256)
+	kernelDeltaCh := al.engine.GetKernelRunner().NewDeltaEventReader(deltaEventReaderCapacity)
 	// Derive from ctx, not loopCtx: Run cancels the engine during shutdown
 	// while the worker still drains deltas published before that. If the
 	// caller cancels after an engine error, Run may already wait for the worker
@@ -572,3 +572,12 @@ func (al *AgentLoop) SendInterrupt(ctx context.Context, followUp *messages.Messa
 	}
 	return nil
 }
+
+const (
+	// defaultBufferCapacity is the participant buffer capacity used when no
+	// WithBufferCapacity option is given.
+	defaultBufferCapacity = 64
+	// deltaEventReaderCapacity bounds the consumer-facing kernel delta
+	// readers and stream event channels.
+	deltaEventReaderCapacity = 256
+)

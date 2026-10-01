@@ -77,8 +77,8 @@ func NewGenerator(endpoint string) *Generator {
 	return &Generator{
 		Endpoint:        strings.TrimRight(endpoint, "/"),
 		Client:          &http.Client{},
-		ReadyTimeout:    30 * time.Second,
-		GenerateTimeout: 150 * time.Second,
+		ReadyTimeout:    defaultReadyTimeout,
+		GenerateTimeout: defaultGenerateTimeout,
 	}
 }
 
@@ -153,12 +153,12 @@ func (g *Generator) Synthesize(ctx context.Context, text, outputPath string) err
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ttscorpus: synthesis failed with status %d: %s", resp.StatusCode, truncate(string(data), 512))
+		return fmt.Errorf("ttscorpus: synthesis failed with status %d: %s", resp.StatusCode, truncate(string(data), errorBodyPreviewBytes))
 	}
 	if err := validateWAVBytes(data); err != nil {
 		return err
 	}
-	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
+	if err := os.WriteFile(outputPath, data, corpusFileMode); err != nil {
 		return fmt.Errorf("ttscorpus: write %s: %w", outputPath, err)
 	}
 	return nil
@@ -229,7 +229,7 @@ func EmitManifest(outputDir string) error {
 	files := make([]corpusFile, 0, len(Utterances())*len(SampleRates()))
 	for i, text := range Utterances() {
 		for _, rate := range SampleRates() {
-			name := fmt.Sprintf("qwen_utt%02d_%dk.wav", i+1, rate/1000)
+			name := ClipName(i, rate)
 			path := filepath.Join(outputDir, name)
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -249,10 +249,10 @@ func EmitManifest(outputDir string) error {
 				Path:            name,
 				Class:           "utterance",
 				Source:          text,
-				Format:          corpusFormat{Container: "wav", Encoding: "PCM", SampleFormat: "s16le", Channels: 1, BitsPerSample: 16},
+				Format:          corpusFormat{Container: "wav", Encoding: "PCM", SampleFormat: "s16le", Channels: 1, BitsPerSample: pcm16Bits},
 				SampleRateHz:    sampleFileRate,
 				Channels:        1,
-				BitsPerSample:   16,
+				BitsPerSample:   pcm16Bits,
 				SampleCount:     len(samples),
 				DurationSeconds: float64(len(samples)) / float64(sampleFileRate),
 				RMSEnergy:       RMS(samples),
@@ -293,7 +293,7 @@ func EmitManifest(outputDir string) error {
 		return fmt.Errorf("ttscorpus: encode manifest: %w", err)
 	}
 	manifestBytes = append(manifestBytes, '\n')
-	if err := os.WriteFile(filepath.Join(outputDir, "manifest.json"), manifestBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "manifest.json"), manifestBytes, corpusFileMode); err != nil {
 		return fmt.Errorf("ttscorpus: write manifest.json: %w", err)
 	}
 	return nil
@@ -304,4 +304,19 @@ func truncate(value string, limit int) string {
 		return value
 	}
 	return value[:limit] + "..."
+}
+
+const (
+	defaultReadyTimeout    = 30 * time.Second
+	defaultGenerateTimeout = 150 * time.Second
+	// errorBodyPreviewBytes bounds the backend error body quoted in errors.
+	errorBodyPreviewBytes = 512
+	corpusFileMode        = 0o644
+	pcm16Bits             = 16
+	hzPerKHz              = 1000
+)
+
+// ClipName is the corpus file name of utterance index (zero-based) at rate.
+func ClipName(index, rate int) string {
+	return fmt.Sprintf("qwen_utt%02d_%dk.wav", index+1, rate/hzPerKHz)
 }

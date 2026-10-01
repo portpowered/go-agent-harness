@@ -305,7 +305,7 @@ func readFrictionReportInput(input FrictionReportInput, index int) ([]ScenarioRe
 
 	results := make([]ScenarioResult, 0)
 	scanner := bufio.NewScanner(input.Reader)
-	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, reportScanBufferBytes), reportMaxLineBytes)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
@@ -494,3 +494,10 @@ func classifyProbeError(message string) string {
 		return unknownLabel
 	}
 }
+
+const (
+	// reportScanBufferBytes is the initial line buffer for report scanners.
+	reportScanBufferBytes = 64 * 1024
+	// reportMaxLineBytes bounds one report line.
+	reportMaxLineBytes = 8 * 1024 * 1024
+)

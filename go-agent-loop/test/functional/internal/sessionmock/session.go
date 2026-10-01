@@ -34,23 +34,28 @@ func (s *Session) closeDone() { s.once.Do(func() { close(s.done) }) }
 type Inferencer struct {
 	mu      sync.Mutex
 	session *Session
+	// connected is closed by the first ConnectSession.
+	connected chan struct{}
 }
 
 // NewInferencer creates an Inferencer ready for testing.
-func NewInferencer() *Inferencer { return &Inferencer{} }
+func NewInferencer() *Inferencer { return &Inferencer{connected: make(chan struct{})} }
 
 func (m *Inferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s := &Session{
-		recvBuf: messages.NewTypedBuffer[messages.StreamMessage](256),
-		sendBuf: messages.NewTypedBuffer[messages.StreamMessage](256),
+		recvBuf: messages.NewTypedBuffer[messages.StreamMessage](sessionBufferCapacity),
+		sendBuf: messages.NewTypedBuffer[messages.StreamMessage](sessionBufferCapacity),
 		done:    make(chan struct{}),
 	}
 	s.recvBuf.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("mock-session", "session"),
 	})
+	if m.session == nil && m.connected != nil {
+		close(m.connected)
+	}
 	m.session = s
 	return s, nil
 }
@@ -92,20 +97,14 @@ func (m *Inferencer) WaitForSentMessage(ctx context.Context, msgType messages.St
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var sess *Session
-	for {
-		m.mu.Lock()
-		sess = m.session
-		m.mu.Unlock()
-		if sess != nil {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return messages.StreamMessage{}, false
-		case <-time.After(5 * time.Millisecond):
-		}
+	select {
+	case <-m.connected:
+	case <-ctx.Done():
+		return messages.StreamMessage{}, false
 	}
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
 
 	for range 32 {
 		msg, ok := sess.sendBuf.ReadBlockingContext(ctx)
@@ -118,3 +117,6 @@ func (m *Inferencer) WaitForSentMessage(ctx context.Context, msgType messages.St
 	}
 	return messages.StreamMessage{}, false
 }
+
+// sessionBufferCapacity bounds each mock session direction.
+const sessionBufferCapacity = 256

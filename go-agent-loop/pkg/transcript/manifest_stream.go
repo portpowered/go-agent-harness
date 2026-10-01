@@ -58,7 +58,7 @@ func (r *redactingReader) Read(p []byte) (int, error) {
 		return 0, nil
 	}
 	for len(r.output) == 0 && !r.done {
-		buffer := make([]byte, 64*1024)
+		buffer := make([]byte, redactionReadBufferBytes)
 		n, err := r.source.Read(buffer)
 		if n > 0 {
 			combined := slices.Concat(r.pending, buffer[:n])
@@ -175,7 +175,7 @@ func recordingFileContainsCredential(path string, secrets [][]byte) (found bool,
 // readerContainsCredential scans source in chunks, keeping the last
 // maxSecret-1 bytes so a credential split across reads is still found.
 func readerContainsCredential(source io.Reader, secrets [][]byte, maxSecret int) (bool, error) {
-	buffer := make([]byte, 64*1024)
+	buffer := make([]byte, redactionReadBufferBytes)
 	var pending []byte
 	for {
 		n, readErr := source.Read(buffer)
@@ -315,3 +315,6 @@ func copySegments(segments [][]byte) [][]byte {
 	}
 	return copyOf
 }
+
+// redactionReadBufferBytes is the read chunk size of credential scanning.
+const redactionReadBufferBytes = 64 * 1024

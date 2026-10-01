@@ -243,7 +243,7 @@ func (w *toolStreamWriter) emitBinary(ctx context.Context, payload []byte, bound
 }
 
 func mustStreamID(prefix string) string {
-	b := make([]byte, 8)
+	b := make([]byte, streamIDRandomBytes)
 	if _, err := rand.Read(b); err != nil {
 		return prefix + "-fallback"
 	}
@@ -397,3 +397,6 @@ func (r *ToolRunner) admitCalls(calls []messages.ToolCall) []messages.ToolCall {
 	}
 	return admitted
 }
+
+// streamIDRandomBytes is the random suffix length of generated stream IDs.
+const streamIDRandomBytes = 8

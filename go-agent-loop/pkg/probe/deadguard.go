@@ -785,16 +785,11 @@ func evaluateGuardLogicalTime(expectation ExpectedBehavior, observation Observat
 }
 
 func controlRank(control DeadSessionControl) int {
-	switch control {
-	case ControlNull:
-		return 0
-	case ControlEcho:
-		return 1
-	case ControlSilence:
-		return 2
-	default:
-		return 3
+	order := []DeadSessionControl{ControlNull, ControlEcho, ControlSilence}
+	if rank := slices.Index(order, control); rank >= 0 {
+		return rank
 	}
+	return len(order)
 }
 
 func stableScenarioID(scenario Scenario) string {

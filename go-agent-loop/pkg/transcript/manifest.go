@@ -430,7 +430,7 @@ func WriteRecordingBundle(config RecordingConfig) error {
 
 	destination := filepath.Clean(normalized.destination)
 	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, recordingDirectoryMode); err != nil {
 		return recordingError(ErrRecordingDestination, "prepare destination", destination, err, redactor)
 	}
 	existingEmpty, err := inspectDestination(destination)
@@ -449,7 +449,7 @@ func WriteRecordingBundle(config RecordingConfig) error {
 		}
 	}()
 
-	if err := os.Mkdir(filepath.Join(staging, "audio"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(staging, "audio"), recordingDirectoryMode); err != nil {
 		return recordingError(ErrRecordingDestination, "create audio directory", destination, err, redactor)
 	}
 	stage := &recordingStage{normalized: &normalized, redactor: redactor, staging: staging, destination: destination}
