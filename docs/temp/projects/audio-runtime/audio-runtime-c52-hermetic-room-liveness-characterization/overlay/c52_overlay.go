@@ -39,6 +39,7 @@ func c52Trace(kind, participant string, fields map[string]string) {
 		"participant":   participant,
 		"revision":      os.Getenv("C52_REVISION"),
 		"matrix_cell":   os.Getenv("C52_MATRIX_CELL"),
+		"run_id":        os.Getenv("C52_RUN_ID"),
 		"goroutine_id":  c52GoroutineID(),
 		"goroutine_count": runtime.NumGoroutine(),
 	}

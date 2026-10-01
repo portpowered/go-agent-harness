@@ -1,0 +1,240 @@
+{
+  "attempt": 1,
+  "cell": {
+    "args": [
+      "test",
+      "-json",
+      "-count=10",
+      "-run",
+      "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+      "./services/rooms/internal/lifecycle"
+    ],
+    "id": "provider-timeout-count10",
+    "kind": "focused-count"
+  },
+  "command": [
+    "go",
+    "test",
+    "-tags=nomicrophone",
+    "-json",
+    "-count=10",
+    "-run",
+    "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+    "./services/rooms/internal/lifecycle"
+  ],
+  "environment": {
+    "C52_MATRIX_CELL": "provider-timeout-count10",
+    "C52_OVERLAY_HASH": "434704414ff5a3c1dd65fac12a5dbf6657fe1fa07f9f6a70b63fda4dcfb7c6b1",
+    "C52_REVISION": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+    "C52_RUN_ID": "c60-final-20260911T145200Z",
+    "C52_TRACE_PATH": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cells/pr438/provider-timeout-count10/trace.jsonl",
+    "CGO_ENABLED": "0",
+    "GOCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gocache",
+    "GOENV": "off",
+    "GOFLAGS": "",
+    "GOMODCACHE": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gomodcache",
+    "GONOPROXY": "",
+    "GONOSUMDB": "",
+    "GOPRIVATE": "",
+    "GOPROXY": "https://proxy.golang.org,direct",
+    "GOSUMDB": "sum.golang.org",
+    "GOTMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gotmp",
+    "GOTOOLCHAIN": "auto",
+    "GOTRACEBACK": "all",
+    "GOWORK": "",
+    "HOME": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/home",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PATH": "/usr/local/go/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin:/usr/sbin:/sbin",
+    "TMPDIR": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/cache/gotmp",
+    "TZ": "UTC"
+  },
+  "process": {
+    "cleanup": {
+      "group_survivor": false,
+      "kill_error": null,
+      "kill_sent": false,
+      "parent_exit_code": 0,
+      "reason": "parent_exit",
+      "term_error": null,
+      "term_sent": false
+    },
+    "command": [
+      "go",
+      "test",
+      "-tags=nomicrophone",
+      "-json",
+      "-count=10",
+      "-run",
+      "^TestRunnerRoutesTypedLivenessFaultAndPreservesPeer$/provider_timeout$",
+      "./services/rooms/internal/lifecycle"
+    ],
+    "cwd": "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/audio-runtime-c52-hermetic-room-liveness-characterization/runs/c60-final-20260911T145200Z/scratch/pr438/go-agent-runtime",
+    "duration_seconds": 14.712202500086278,
+    "ended_at": "2026-09-11T14:51:49.247180+00:00",
+    "exit_code": 0,
+    "first_failure": {
+      "line": 1,
+      "stream": "stderr",
+      "text": "go: downloading go1.26.7 (darwin/arm64)"
+    },
+    "output_overflow": false,
+    "reader_survivor": false,
+    "started_at": "2026-09-11T14:51:34.534904+00:00",
+    "stderr_bytes": 154,
+    "stderr_sha256": "09f42649424cbd6e8d93d51dc177a52cdb25a87d935d7a8a22355762476334cd",
+    "stdout_bytes": 22661,
+    "stdout_sha256": "b6e61e8f60678e04d498e75918a67cea373c6199e3789884e5e46566d0762c10",
+    "timed_out": false
+  },
+  "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+  "revision_label": "pr438",
+  "selection": {
+    "action_package_mismatches": [],
+    "behavior_passed": true,
+    "cached_marker": false,
+    "first_assertion": "",
+    "invalid_json_lines": 0,
+    "invalid_json_samples": [],
+    "json_line_count": 84,
+    "no_tests_marker": false,
+    "package": "./services/rooms/internal/lifecycle",
+    "package_events": [
+      {
+        "Action": "start",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:51:48.972959Z"
+      },
+      {
+        "Action": "output",
+        "Output": "PASS\n",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:51:49.156254Z"
+      },
+      {
+        "Action": "output",
+        "Output": "ok  \tgithub.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle\t0.183s\n",
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:51:49.156641Z"
+      },
+      {
+        "Action": "pass",
+        "Elapsed": 0.184,
+        "Package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+        "Time": "2026-09-11T14:51:49.156655Z"
+      }
+    ],
+    "raw_action_binding": {
+      "matrix_cell": "provider-timeout-count10",
+      "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+      "parent_test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+      "revision": "823bd350fe5d11782c38bda87d7b7bfd7d89d7cd",
+      "run_id": "c60-final-20260911T145200Z",
+      "subtests": [
+        "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+      ]
+    },
+    "relevant_test_names": [
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer",
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+    ],
+    "requested_count": 10,
+    "required_test_fail_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+    },
+    "required_test_pass_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+    },
+    "required_test_run_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+    },
+    "required_test_skip_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 0
+    },
+    "required_test_terminal_actions": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": [
+        {
+          "action": "pass",
+          "ordinal": 0,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 1,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 2,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 3,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 4,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 5,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 6,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 7,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 8,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        },
+        {
+          "action": "pass",
+          "ordinal": 9,
+          "package": "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms/internal/lifecycle",
+          "test": "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout"
+        }
+      ]
+    },
+    "required_test_terminal_counts": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": 10
+    },
+    "selection_valid": true,
+    "test_events": {
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer": {
+        "fail": 0,
+        "pass": 10,
+        "run": 10,
+        "skip": 0
+      },
+      "TestRunnerRoutesTypedLivenessFaultAndPreservesPeer/provider_timeout": {
+        "fail": 0,
+        "pass": 10,
+        "run": 10,
+        "skip": 0
+      }
+    }
+  },
+  "status": "PASS",
+  "trace_path": "runs/c60-final-20260911T145200Z/cells/pr438/provider-timeout-count10/trace.jsonl",
+  "trace_sha256": "bb0d0510de4ee2badef17a5a131ab40dd0ab3e40f1920fc2501266ba6464b882"
+}

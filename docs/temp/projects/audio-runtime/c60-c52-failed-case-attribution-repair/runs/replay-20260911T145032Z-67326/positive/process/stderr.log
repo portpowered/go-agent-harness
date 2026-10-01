@@ -1,0 +1,12 @@
+Error: session error: replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\n", actual ...(truncated)PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/...(truncated)
+replay mismatch
+replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\n", actual ...(truncated)PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/...(truncated)
+replay mismatch
+audio write "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/audio.wav" (wav): empty WAV samples
+session error: replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\n", actual ...(truncated)PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/...(truncated)
+replay mismatch
+replay mismatch: expected event type "conversation.item.create" at sequence 9, actual event type "conversation.item.create" at sequence 9: JSON pointer /item/output: expected ...(truncated)PROBE_TOOL_MARKER_9182\n", actual ...(truncated)PROBE_TOOL_MARKER_9182\n\nSTDERR:\nsh: evidence/...(truncated)
+replay mismatch
+audio write "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/audio.wav" (wav): empty WAV samples
+live session audio trace retained at /Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/.session-audio-trace-1378409387
+audio write "/Users/abdifamily/.codex/worktrees/af44/go-agent-harness/.claude/worktrees/audio-runtime-c60-c52-failed-case-attribution-repair/docs/temp/projects/audio-runtime/c60-c52-failed-case-attribution-repair/runs/replay-20260911T145032Z-67326/positive/audio.wav" (wav): empty WAV samples

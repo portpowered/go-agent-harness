@@ -1,0 +1,100 @@
+model:
+    provider: openrouter
+    openai: null
+    claude: null
+    openrouter:
+        model: z-ai/glm-4.7
+        api_key: ""
+        base_url: https://openrouter.ai/api/v1
+    local: null
+    fal: null
+    grok: null
+    continuation_nudge_enabled: false
+    continuation_nudge_message: ""
+    repetition_penalty: 0
+tools:
+    web:
+        brave:
+            enabled: false
+            api_key: ""
+            max_results: 0
+        duckduckgo:
+            enabled: false
+            max_results: 0
+    cron:
+        exec_timeout_minutes: 0
+    exec:
+        enable_deny_patterns: false
+        custom_deny_patterns: []
+    interactive:
+        fast_read_timeout: 5s
+        long_running_timeout: 20s
+        acknowledgement_threshold: 2s
+    list:
+        - id: exec
+          enabled: true
+        - id: read_file
+          enabled: true
+        - id: read_image
+          enabled: true
+        - id: write_file
+          enabled: true
+        - id: edit_file
+          enabled: true
+        - id: append_file
+          enabled: true
+        - id: list_dir
+          enabled: true
+        - id: web_fetch
+          enabled: true
+        - id: web_search
+          enabled: true
+        - id: show
+          enabled: true
+        - id: mouse
+          enabled: true
+        - id: load_skill
+          enabled: true
+        - id: sleep
+          enabled: true
+browser:
+    tools:
+        enabled: false
+        backend: webmcp
+        web_cast: false
+    connection:
+        cdp_url: ""
+        ws_endpoint: ""
+        user_data_dir: ""
+        allow_process_scan: false
+        allow_remote_cdp: false
+    managed:
+        headless: false
+        open: about:blank
+        close_on_exit: false
+    selection:
+        browser: ""
+        tab: ""
+        origin: ""
+        auto_select: "off"
+        activate_tab: false
+        persist: true
+    policy:
+        allowed_origins: []
+        denied_origins: []
+        approval: writes
+        cancel_on_interrupt: read-only
+    limits:
+        invocation_timeout: 30s
+        max_input_bytes: 262144
+        max_result_bytes: 262144
+        serialize_per_target: true
+    recording:
+        enabled: false
+        include_arguments: true
+        include_results: true
+        redact_url_query: true
+        redact_url_fragment: true
+    replay:
+        path: ""
+        strict: true
