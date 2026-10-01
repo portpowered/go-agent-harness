@@ -21,8 +21,7 @@ func newMemoryStore() *memoryStore {
 	return &memoryStore{sessions: make(map[string][]messages.Message), traces: make(map[string]session.TraceRecord)}
 }
 func (s *memoryStore) Load(ctx context.Context, id string) ([]messages.Message, error) {
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -30,8 +29,7 @@ func (s *memoryStore) Load(ctx context.Context, id string) ([]messages.Message, 
 	return append([]messages.Message(nil), s.sessions[id]...), nil
 }
 func (s *memoryStore) Latest(ctx context.Context) (string, error) {
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return "", err
 	}
 	s.mu.Lock()
@@ -45,8 +43,7 @@ func (s *memoryStore) Latest(ctx context.Context) (string, error) {
 	return id, nil
 }
 func (s *memoryStore) NewSessionID(ctx context.Context) (string, error) {
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return "", err
 	}
 	s.mu.Lock()
@@ -55,8 +52,7 @@ func (s *memoryStore) NewSessionID(ctx context.Context) (string, error) {
 	return fmt.Sprintf("embedded-%d-%d", time.Now().UnixNano(), s.next), nil
 }
 func (s *memoryStore) Save(ctx context.Context, id string, msgs []messages.Message) error {
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -65,8 +61,7 @@ func (s *memoryStore) Save(ctx context.Context, id string, msgs []messages.Messa
 	return nil
 }
 func (s *memoryStore) LoadTrace(ctx context.Context, id string) (*session.TraceRecord, error) {
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -78,8 +73,7 @@ func (s *memoryStore) LoadTrace(ctx context.Context, id string) (*session.TraceR
 	return &trace, nil
 }
 func (s *memoryStore) SaveTrace(ctx context.Context, trace session.TraceRecord) error {
-	ctx = normalizeContext(ctx)
-	if err := ctx.Err(); err != nil {
+	if err := requireContext(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()

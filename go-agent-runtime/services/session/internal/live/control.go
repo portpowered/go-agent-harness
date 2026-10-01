@@ -274,9 +274,6 @@ func (h *handle) noteCaptureDispatched() {
 		close(wake)
 	}
 }
-func (h *handle) observeToolResult(callID, name string, requestsContinuation bool) {
-	_ = h.beginToolResultAdmission(callID, name, requestsContinuation)
-}
 func providerContinuationFailed(value *messages.MessageEndValue) bool {
 	if value == nil {
 		return false

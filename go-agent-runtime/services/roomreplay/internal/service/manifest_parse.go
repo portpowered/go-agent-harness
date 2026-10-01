@@ -37,9 +37,7 @@ func parseRoomReplayManifest(data []byte) (roomReplayManifestDocument, error) {
 		return roomReplayManifestDocument{}, err
 	}
 	for index := range participants {
-		if err := inferRoomReplayParticipantArtifacts(&participants[index], inventory); err != nil {
-			return roomReplayManifestDocument{}, err
-		}
+		inferRoomReplayParticipantArtifacts(&participants[index], inventory)
 	}
 	roomArtifacts, err := parseRoomReplayArtifacts(object, inventory)
 	if err != nil {

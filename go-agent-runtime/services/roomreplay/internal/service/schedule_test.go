@@ -31,8 +31,8 @@ func TestBuildOrdersTiedSegmentsAndRetainsPartialTail(t *testing.T) {
 	writeBytes(t, betaPath, betaPCM)
 
 	schedule := buildSchedule(t, roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(100, 1),
-		TargetFormat: targetTestFormat(100, 1),
+		SourceFormat: sourceFormat(100),
+		TargetFormat: targetTestFormat(),
 		Participants: []roomreplay.Participant{
 			{ID: roomReplayScheduleAlphaID, CapturePath: alphaCapture, SentPCMPath: alphaPath},
 			{ID: roomReplayAdditionalParticipantID, CapturePath: betaCapture, SentPCMPath: betaPath},
@@ -90,7 +90,7 @@ func TestBuildConvertsPCM16AndPreservesTextOnlyNoSchedule(t *testing.T) {
 	writeBytes(t, peerPCMPath, []byte{1, 0, 2, 0})
 	result, err := roomReplayServiceForTest().Build(context.Background(), roomreplay.BuildRequest{
 		SourceFormat: roomreplay.SourcePCM16Format{SampleRate: 50, Channels: 2, SampleWidthBits: 16},
-		TargetFormat: targetTestFormat(100, 1),
+		TargetFormat: targetTestFormat(),
 		Participants: []roomreplay.Participant{
 			{ID: "target", CapturePath: capturePath, SentPCMPath: pcmPath},
 			{ID: "peer", CapturePath: peerCapturePath, SentPCMPath: peerPCMPath},
@@ -144,8 +144,8 @@ func TestBuildRejectsMalformedAdmissionInputs(t *testing.T) {
 	pcmPath := filepath.Join(root, "target.pcm")
 	writeBytes(t, pcmPath, []byte{1, 0, 2, 0})
 	base := roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(100, 1),
-		TargetFormat: targetTestFormat(100, 1),
+		SourceFormat: sourceFormat(100),
+		TargetFormat: targetTestFormat(),
 		Participants: []roomreplay.Participant{{ID: "target", CapturePath: capturePath, SentPCMPath: pcmPath}},
 		TargetIDs:    []string{"target"},
 	}
@@ -187,7 +187,7 @@ func TestBuildRejectsScheduleBeyondFrameLimit(t *testing.T) {
 	writeBytes(t, pcmPath, []byte{1, 0})
 
 	_, err := roomReplayServiceForTest().Build(context.Background(), roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(24000, 1),
+		SourceFormat: sourceFormat(24000),
 		TargetFormat: roomreplay.PCM16Format{SampleRate: 24000, Channels: 1, FrameDuration: 20 * time.Millisecond},
 		Participants: []roomreplay.Participant{{ID: "target", CapturePath: capturePath, SentPCMPath: pcmPath}},
 		Timeline: []roomreplay.TimelineEvent{{
@@ -214,7 +214,7 @@ func buildAlphaBetaBarrierSchedule(t *testing.T) roomreplay.Schedule {
 	writeBytes(t, alphaPath, []byte{1, 0, 2, 0, 3, 0, 4, 0})
 	writeBytes(t, betaPath, []byte{9, 0, 8, 0, 7, 0, 6, 0})
 	return buildSchedule(t, roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(100, 1), TargetFormat: targetTestFormat(100, 1),
+		SourceFormat: sourceFormat(100), TargetFormat: targetTestFormat(),
 		Participants: []roomreplay.Participant{
 			{ID: roomReplayScheduleAlphaID, CapturePath: alphaCapture, SentPCMPath: alphaPath},
 			{ID: roomReplayAdditionalParticipantID, CapturePath: betaCapture, SentPCMPath: betaPath},
@@ -321,7 +321,7 @@ func TestRunRejectsMissingUncontrolledAndInactiveTargets(t *testing.T) {
 	pcmPath := filepath.Join(root, "target.pcm")
 	writeBytes(t, pcmPath, []byte{1, 0, 2, 0})
 	schedule := buildSchedule(t, roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(100, 1), TargetFormat: targetTestFormat(100, 1),
+		SourceFormat: sourceFormat(100), TargetFormat: targetTestFormat(),
 		Participants: []roomreplay.Participant{{ID: "target", CapturePath: capturePath, SentPCMPath: pcmPath}},
 		TargetIDs:    []string{"target"},
 	})
@@ -360,7 +360,7 @@ func TestRunRechecksTargetActivityBeforeEachContribution(t *testing.T) {
 		participants = append(participants, roomreplay.Participant{ID: id, CapturePath: capturePath, SentPCMPath: pcmPath})
 	}
 	schedule := buildSchedule(t, roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(100, 1), TargetFormat: targetTestFormat(100, 1),
+		SourceFormat: sourceFormat(100), TargetFormat: targetTestFormat(),
 		Participants: participants,
 		TargetIDs:    []string{roomReplayScheduleAlphaID, roomReplayAdditionalParticipantID, "gamma"},
 	})
@@ -441,7 +441,7 @@ func TestRunPreservesDeadlineIdentity(t *testing.T) {
 	pcmPath := filepath.Join(root, "target.pcm")
 	writeBytes(t, pcmPath, []byte{1, 0, 2, 0})
 	schedule := buildSchedule(t, roomreplay.BuildRequest{
-		SourceFormat: sourceFormat(100, 1), TargetFormat: targetTestFormat(100, 1),
+		SourceFormat: sourceFormat(100), TargetFormat: targetTestFormat(),
 		Participants: []roomreplay.Participant{{ID: "target", CapturePath: capturePath, SentPCMPath: pcmPath}},
 		TargetIDs:    []string{"target"},
 	})
@@ -473,12 +473,14 @@ func buildSchedule(t *testing.T, request roomreplay.BuildRequest) roomreplay.Sch
 	return result
 }
 
-func sourceFormat(rate, channels int) roomreplay.SourcePCM16Format {
-	return roomreplay.SourcePCM16Format{SampleRate: rate, Channels: channels, SampleWidthBits: 16}
+// sourceFormat is a mono PCM16 source at rate.
+func sourceFormat(rate int) roomreplay.SourcePCM16Format {
+	return roomreplay.SourcePCM16Format{SampleRate: rate, Channels: 1, SampleWidthBits: 16}
 }
 
-func targetTestFormat(rate, channels int) roomreplay.PCM16Format {
-	return roomreplay.PCM16Format{SampleRate: rate, Channels: channels, FrameDuration: 20 * time.Millisecond}
+// targetTestFormat is the mono 100 Hz replay target the schedule tests use.
+func targetTestFormat() roomreplay.PCM16Format {
+	return roomreplay.PCM16Format{SampleRate: 100, Channels: 1, FrameDuration: 20 * time.Millisecond}
 }
 
 func writeCapture(t *testing.T, path string, appendCount int) {

@@ -97,7 +97,12 @@ type ParticipantLifecycle interface {
 	RecordToolResultSend(string, bool, bool)
 	RecordToolContinuationRequest(bool)
 	RecordResponseCancellation()
-	CancelActiveResponse()
+	// CancelActiveResponse sends a bounded response.cancel for the active
+	// response. It typically runs while the room is stopping, so callers
+	// should pass a context detached from run cancellation (for example
+	// context.WithoutCancel(runCtx)); an already-cancelled ctx would drop the
+	// cancel before it reaches the provider.
+	CancelActiveResponse(ctx context.Context)
 	AdmitResponseTerminal() bool
 	AdmitSessionMessageAfterBound(messages.StreamMessage) bool
 	AdmitCompleteToolResultAfterBound(messages.Message) bool

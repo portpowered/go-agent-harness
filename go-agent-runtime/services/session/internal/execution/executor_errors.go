@@ -19,7 +19,7 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 	if modality == "" || modality == "text" {
 		return nil
 	}
-	modelName, modelInfo := e.validationModel(cfg, runData)
+	modelName, modelInfo := e.validationModel(runData)
 	if modelInfo == nil {
 		return nil // unknown model — allow the request and let the provider decide
 	}
@@ -32,11 +32,11 @@ func (e *Executor) validateOutputModality(cfg *Config, runData *RunData) error {
 // validateInputMimeTypes checks that every file content part in the input is accepted by the
 // configured model's supportedInputMimeTypes list. Follows the same resolution flow as
 // validateOutputModality: silently allows if config or model info is unavailable.
-func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInput agentloop.ExecuteInput) error {
+func (e *Executor) validateInputMimeTypes(runData *RunData, execInput agentloop.ExecuteInput) error {
 	if e.relaxModelValidation || len(execInput.ContentParts) == 0 {
 		return nil
 	}
-	modelName, modelInfo := e.validationModel(cfg, runData)
+	modelName, modelInfo := e.validationModel(runData)
 	if modelInfo == nil {
 		return nil // unknown model — allow and let the provider decide
 	}
@@ -46,7 +46,7 @@ func (e *Executor) validateInputMimeTypes(cfg *Config, runData *RunData, execInp
 // validationModel selects the model metadata captured at host admission. A
 // missing catalog entry is intentionally permissive: provider-side validation
 // remains authoritative for hosts that do not maintain a runtime catalog.
-func (e *Executor) validationModel(cfg *Config, runData *RunData) (string, *ModelInfo) {
+func (e *Executor) validationModel(runData *RunData) (string, *ModelInfo) {
 	if e == nil || !e.resolved {
 		return "", nil
 	}

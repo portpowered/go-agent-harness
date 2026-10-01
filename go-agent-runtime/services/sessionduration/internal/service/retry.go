@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -95,7 +96,7 @@ func retryDelay(message string, defaultDelay, maxDelay time.Duration) time.Durat
 	return delay
 }
 
-func (r *runLoop) retry(msg messages.StreamMessage) error {
+func (r *runLoop) retry(ctx context.Context, msg messages.StreamMessage) error {
 	if msg.Type != messages.StreamTypeMessageEnd {
 		return nil
 	}
@@ -111,15 +112,15 @@ func (r *runLoop) retry(msg messages.StreamMessage) error {
 	if !ok {
 		return errors.New("session duration loop does not support provider session events")
 	}
-	waited, err := r.waitForRetry(decision.Delay)
+	waited, err := r.waitForRetry(ctx, decision.Delay)
 	if err != nil {
 		return err
 	}
 	if !waited {
-		return r.finish(false, nil)
+		return r.finish(ctx, false, nil)
 	}
 	control := messages.StreamMessage{Type: messages.StreamTypeResponseCreate, Value: messages.NewResponseCreateValue()}
-	if err := sender.SendSessionEvent(r.runCtx, control); err != nil {
+	if err := sender.SendSessionEvent(ctx, control); err != nil {
 		return fmt.Errorf("send rate-limit retry response: %w", err)
 	}
 	if r.request.RetryDispatched != nil {
@@ -128,7 +129,9 @@ func (r *runLoop) retry(msg messages.StreamMessage) error {
 	return nil
 }
 
-func (r *runLoop) waitForRetry(delay time.Duration) (bool, error) {
+// waitForRetry waits under the run context, which also ends when the caller's
+// context ends.
+func (r *runLoop) waitForRetry(ctx context.Context, delay time.Duration) (bool, error) {
 	if delay <= 0 {
 		return true, nil
 	}
@@ -147,10 +150,8 @@ func (r *runLoop) waitForRetry(delay time.Duration) (bool, error) {
 		return false, err
 	case <-r.done:
 		return false, runLoopDoneError(r.request)
-	case <-r.ctx.Done():
-		return false, r.ctx.Err()
-	case <-r.runCtx.Done():
-		return false, r.runCtx.Err()
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
 }
 

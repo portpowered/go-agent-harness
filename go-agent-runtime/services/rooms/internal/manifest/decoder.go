@@ -270,8 +270,8 @@ func cloneBool(value *bool) *bool {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 func validationOption(options []rooms.ValidationOptions) rooms.ValidationOptions {
 	if len(options) == 1 {

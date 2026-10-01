@@ -119,29 +119,38 @@ type browserParityService struct {
 
 func (s *browserParityService) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
 	if request.Capabilities != nil {
-		if err := request.Capabilities.Handle.Initialize(ctx); err != nil {
+		if err := checkBrowserParityCapabilities(ctx, request.Capabilities.Handle); err != nil {
 			return nil, err
-		}
-		if _, err := request.Capabilities.Handle.RefreshDefinitions(ctx); err != nil {
-			return nil, err
-		}
-		watcher, ok := request.Capabilities.Handle.(session.LiveCapabilityWatcher)
-		if !ok {
-			return nil, errors.New("browser capability watcher is missing")
-		}
-		watch := watcher.BrowserWatch(ctx)
-		if watch == nil {
-			return nil, errors.New("browser capability watch is missing")
-		}
-		event, ok := <-watch
-		if !ok || event.Type != "invocation_completed" || event.Sequence != 17 || event.Generation != 3 || event.PreviousGeneration != 2 || event.InvocationID != "inv-1" || event.ToolName != "read_page" {
-			return nil, errors.New("browser capability event mapping changed")
 		}
 	}
 	s.mu.Lock()
 	s.requests = append(s.requests, request)
 	s.mu.Unlock()
 	return &browserParityHandle{capabilities: request.Capabilities, events: make(chan session.LiveEvent, 1), done: make(chan struct{})}, nil
+}
+
+// checkBrowserParityCapabilities drives the capability handle the way a live
+// session does and checks the first mapped browser event.
+func checkBrowserParityCapabilities(ctx context.Context, handle session.LiveCapabilityHandle) error {
+	if err := handle.Initialize(ctx); err != nil {
+		return err
+	}
+	if _, err := handle.RefreshDefinitions(ctx); err != nil {
+		return err
+	}
+	watcher, ok := handle.(session.LiveCapabilityWatcher)
+	if !ok {
+		return errors.New("browser capability watcher is missing")
+	}
+	watch := watcher.BrowserWatch(ctx)
+	if watch == nil {
+		return errors.New("browser capability watch is missing")
+	}
+	event, ok := <-watch
+	if !ok || event.Type != "invocation_completed" || event.Sequence != 17 || event.Generation != 3 || event.PreviousGeneration != 2 || event.InvocationID != "inv-1" || event.ToolName != "read_page" {
+		return errors.New("browser capability event mapping changed")
+	}
+	return nil
 }
 
 type browserParityHandle struct {
@@ -194,6 +203,7 @@ func TestRunnerRoutesTypedLivenessFaultAndPreservesPeer(t *testing.T) {
 }
 
 func runTypedLivenessCase(t *testing.T, classification string) {
+	t.Helper()
 	silent := newFakeLiveHandle()
 	silent.startEvents = []session.LiveEvent{{
 		Kind: string(session.LiveEventLiveness),
@@ -492,7 +502,7 @@ func expectRunning(t *testing.T, done <-chan scriptedOutcome) {
 func waitProcessed(t *testing.T, processed <-chan string, want int) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
-	for seen := 0; seen < want; seen++ {
+	for seen := range want {
 		select {
 		case <-processed:
 		case <-deadline:

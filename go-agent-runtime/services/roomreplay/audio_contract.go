@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	ErrRoomReplayDeltaReconstruction roomReplaySentinel = "room replay delta reconstruction failed"
-	ErrRoomReplayAudioTimeline       roomReplaySentinel = "room replay audio timeline is inconsistent"
-	ErrRoomReplayToleranceProfile    roomReplaySentinel = "invalid room replay tolerance profile"
+	ErrRoomReplayDeltaReconstruction roomReplaySentinelError = "room replay delta reconstruction failed"
+	ErrRoomReplayAudioTimeline       roomReplaySentinelError = "room replay audio timeline is inconsistent"
+	ErrRoomReplayToleranceProfile    roomReplaySentinelError = "invalid room replay tolerance profile"
 )
 
 // RoomReplayToleranceProfile contains the fully expanded immutable analysis

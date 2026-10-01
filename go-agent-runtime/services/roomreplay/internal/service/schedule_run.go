@@ -63,7 +63,9 @@ func (s *schedule) Run(ctx context.Context, request roomreplay.RunRequest) error
 	if s == nil {
 		return nil
 	}
-	ctx = nonNilContext(ctx)
+	if ctx == nil {
+		return errScheduleContextRequired
+	}
 	targets, err := targetIndex(request.Targets)
 	if err != nil {
 		return err

@@ -16,27 +16,34 @@ import (
 
 func (h *handle) start(runCtx context.Context) error {
 	defer h.startFinish.Do(func() { close(h.startDone) })
+	if err := h.startLoop(runCtx); err != nil {
+		return h.failStart(err) //nolint:contextcheck // Start failures publish under the invocation evidence context, which outlives runCtx.
+	}
+	return nil
+}
+
+func (h *handle) startLoop(runCtx context.Context) error {
 	toolExecutor, toolDefinitions, inferencer, err := h.prepareStart(runCtx)
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return err
 	}
 	loop, err := h.buildLoop(inferencer, toolExecutor, toolDefinitions)
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return err
 	}
 	capabilityWatch, err := h.installLoop(loop)
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return err
 	}
 	durationTimer, err := h.newDurationTimer()
 	if err != nil {
-		return h.failStart(runCtx, err)
+		return err
 	}
 	h.prepareReplayCompletion()
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.request.SessionID, Critical: true}, false) //nolint:contextcheck // start publication uses the invocation evidence context.
 	watchEvents := capabilityEventStream(runCtx, capabilityWatch)
 	if h.captureInterruptionsEnabled() && watchEvents == nil {
-		return h.failStart(runCtx, errors.New("capture interruptions require browser invocation events"))
+		return errors.New("capture interruptions require browser invocation events")
 	}
 	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
 	return nil
@@ -220,7 +227,7 @@ func restrictToolExecutor(executor messages.ToolExecutor, surface func() []messa
 		return executor
 	}
 	if executor == nil {
-		return executor
+		return nil
 	}
 	return allowlistedToolExecutor{inner: executor, surface: surface, enforceEmpty: enforceEmpty}
 }
@@ -291,26 +298,6 @@ func (h *handle) newDurationTimer() (platformclock.Timer, error) {
 		return nil, fmt.Errorf("create live duration timer: %w", session.ErrLiveSchedulerUnavailable)
 	}
 	return timer, nil
-}
-
-func (h *handle) prepareReplayCompletion() {
-	// An explicit capture source owns the boundary and must send its bytes first.
-	if h.captureSourceIsActive() {
-		return
-	}
-	plan := h.request.ReplayPlan
-	if plan != nil && len(plan.AudioTurns) > 0 {
-		return
-	}
-	if plan != nil && plan.OpeningPromptPresent && h.request.FinishAfterResponse {
-		h.markCaptureComplete()
-	}
-	// Raw replays without an opening prompt may lack session.closed; let the
-	// response terminal boundary finish the invocation when it completes.
-	if h.request.FinishAfterResponse && h.request.Replay.InputCapturePath != "" &&
-		(plan == nil || plan.StopAfterResponse) {
-		h.markCaptureComplete()
-	}
 }
 
 type workerPlan struct {

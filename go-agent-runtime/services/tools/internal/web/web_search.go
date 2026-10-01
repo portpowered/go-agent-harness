@@ -48,7 +48,7 @@ func (p *PerplexitySearchProvider) Search(ctx context.Context, query string, cou
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", searchURL, strings.NewReader(string(payloadBytes)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, searchURL, strings.NewReader(string(payloadBytes)))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}

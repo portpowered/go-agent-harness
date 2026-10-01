@@ -9,7 +9,7 @@ import (
 	"image"
 )
 
-func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) (int, image.Rectangle, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return 0, image.Rectangle{}, err
@@ -18,7 +18,7 @@ func screenDisplayInfoWithContextAndProcess(ctx context.Context, process Display
 	return 0, image.Rectangle{}, errors.New("display discovery is not supported on this platform")
 }
 
-func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
+func screenDisplayCountWithContextAndProcess(ctx context.Context, _ screenPlatform, _ DisplayProcess) (int, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return 0, err
@@ -27,7 +27,7 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProce
 	return 0, errors.New("display discovery is not supported on this platform")
 }
 
-func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, _ DisplayProcess) (image.Rectangle, error) {
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ screenPlatform, _ int, _ DisplayProcess) (image.Rectangle, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return image.Rectangle{}, err
@@ -36,7 +36,7 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, _ Disp
 	return image.Rectangle{}, errors.New("display geometry is not supported on this platform")
 }
 
-func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ DisplayProcess) error {
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ screenPlatform, _ DisplayProcess) error {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -45,9 +45,14 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ Disp
 	return errors.New("screen capture is not yet supported on this platform")
 }
 
-func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, _ image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
-	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, nil); err != nil {
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ screenPlatform, _ int, _ image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, screenPlatform{}, nil); err != nil {
 		return nil, err
 	}
 	return nil, fmt.Errorf("screen capture is not yet supported on this platform")
 }
+
+// screenPlatform holds platform capture handles; this platform needs none.
+type screenPlatform struct{}
+
+func newScreenPlatform() screenPlatform { return screenPlatform{} }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -45,7 +46,8 @@ func New(replayService replay.CaptureInspector) *Service {
 	return &Service{replayService: replayService}
 }
 
-func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
+// Load admits one bundle; ctx bounds the capture inspection.
+func (s *Service) Load(ctx context.Context, bundle string) (RoomReplayPlan, error) {
 	root, manifestPath, manifestRelative, err := resolveRoomReplayBundle(bundle)
 	if err != nil {
 		return RoomReplayPlan{}, err
@@ -58,11 +60,11 @@ func (s *Service) Load(bundle string) (RoomReplayPlan, error) {
 		}
 		return RoomReplayPlan{}, newRoomReplayBundleError(kind, "run-manifest.json", manifestRelative, "readable JSON manifest", err.Error(), err)
 	}
-	return validateRoomReplayManifest(root, manifestPath, data, s.replayService)
+	return validateRoomReplayManifest(ctx, root, manifestPath, data, s.replayService)
 }
 
-func (s *Service) LoadAudioBundle(bundle string) (roomreplay.RoomReplayAudioBundle, error) {
-	plan, err := s.Load(bundle)
+func (s *Service) LoadAudioBundle(ctx context.Context, bundle string) (roomreplay.RoomReplayAudioBundle, error) {
+	plan, err := s.Load(ctx, bundle)
 	if err != nil {
 		return roomreplay.RoomReplayAudioBundle{}, err
 	}

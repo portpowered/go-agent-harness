@@ -22,7 +22,7 @@ type streamAccounting struct {
 func newStreamAccounting() *streamAccounting {
 	sink, err := metrics.NewInMemorySink()
 	if err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // Must-style: the default histogram bounds always validate.
 	}
 	return &streamAccounting{sink: sink, toolDeltas: make(map[string]struct{})}
 }

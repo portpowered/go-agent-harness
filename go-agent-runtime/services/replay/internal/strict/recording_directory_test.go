@@ -27,7 +27,7 @@ func TestServicePrepareRejectsTamperedRootDeclaredPCMBeforeTraceReplay(t *testin
 		t.Fatalf("untouched root bundle rejected: %v", err)
 	}
 
-	pcmPath := filepath.Join(root, "audio/out-000.pcm")
+	pcmPath := filepath.Join(root, "audio", "out-000.pcm")
 	pcm, err := os.ReadFile(pcmPath)
 	if err != nil {
 		t.Fatal(err)

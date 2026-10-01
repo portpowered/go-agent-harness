@@ -53,8 +53,8 @@ func cloneLiveTerminalValue(value *messages.SessionCloseValue) *messages.Session
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, liveness *session.LiveLivenessFailure) *messages.SessionCloseValue {
 	if value == nil {
@@ -67,15 +67,15 @@ func terminalForLiveness(sessionID string, value *messages.SessionCloseValue, li
 			liveness.OutputState,
 		)
 	}
-	copy := *value
-	copy.Classification = liveness.Classification
-	copy.TerminalReason = liveness.TerminalReason
-	copy.TerminalProvenance = liveness.TerminalProvenance
-	copy.OutputState = liveness.OutputState
-	if copy.Reason == "" {
-		copy.Reason = liveness.Classification
+	cloned := *value
+	cloned.Classification = liveness.Classification
+	cloned.TerminalReason = liveness.TerminalReason
+	cloned.TerminalProvenance = liveness.TerminalProvenance
+	cloned.OutputState = liveness.OutputState
+	if cloned.Reason == "" {
+		cloned.Reason = liveness.Classification
 	}
-	return &copy
+	return &cloned
 }
 func successfulLiveTerminal(request session.LiveRequest, value *messages.SessionCloseValue) *messages.SessionCloseValue {
 	if value != nil && value.TerminalReason != "" && value.TerminalReason != messages.TerminalReasonProviderAuthoredCompletion {
@@ -242,14 +242,14 @@ func (h *handle) retainCapability(binding *session.LiveCapabilities, executor me
 	h.request.Capabilities = binding
 	return nil
 }
-func (h *handle) failStart(ctx context.Context, err error) error {
+func (h *handle) failStart(err error) error {
 	err = errors.Join(err, h.media.Close())
 	h.mu.Lock()
 	h.startErr = err
 	h.terminalErr = err
 	h.mu.Unlock()
-	h.publish(session.LiveEvent{Kind: string(session.LiveEventError), SessionID: h.request.SessionID, Error: err, Critical: true}, false) //nolint:contextcheck // start failure publication uses the invocation evidence context.
-	h.finish(err)                                                                                                                         //nolint:contextcheck // finish owns the invocation evidence context.
+	h.publish(session.LiveEvent{Kind: string(session.LiveEventError), SessionID: h.request.SessionID, Error: err, Critical: true}, false)
+	h.finish(err)
 	return err
 }
 func (h *handle) runLoop(ctx context.Context, loop *agentloop.AgentLoop) {

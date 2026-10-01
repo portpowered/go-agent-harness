@@ -23,7 +23,10 @@ func runBrowserConversationValidator(ctx context.Context, command []string, dir 
 	boundedContext, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	process := exec.Command(command[0], command[1:]...)
+	process := exec.CommandContext(ctx, command[0], command[1:]...)
+	// Caller cancellation terminates the whole validator process group, the
+	// same teardown the bounded wait below performs on timeout.
+	process.Cancel = func() error { return terminateBrowserConversationProcessGroup(process) }
 	process.Dir = dir
 	if env != nil {
 		process.Env = append([]string(nil), env...)

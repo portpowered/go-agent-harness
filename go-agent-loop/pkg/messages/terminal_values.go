@@ -151,6 +151,10 @@ func NewSynthesizedMessageEndValue(usage TokenUsage) *MessageEndValue {
 // rejection of a response request while another response is still active.
 const ErrorClassificationResponseCreateActive = "response_create_active"
 
+// ToolExecutionErrorClassification classifies the nonterminal ERROR a tool
+// runner emits when a tool batch fails; its Err carries the tool error.
+const ToolExecutionErrorClassification = "tool_execution"
+
 // ErrorValue is the value for ERROR (inner type "error").
 type ErrorValue struct {
 	Type           string `json:"type"`                     // "error"
@@ -194,6 +198,14 @@ func NewErrorValue(message string) *ErrorValue {
 // taxonomy classification for stream/event consumers.
 func NewErrorValueWithClassification(message, classification string) *ErrorValue {
 	return &ErrorValue{Type: "error", Message: message, Classification: classification}
+}
+
+// NewToolExecutionErrorValue returns the nonterminal tool-execution
+// diagnostic for err, keeping err for in-process errors.Is/errors.As.
+func NewToolExecutionErrorValue(err error) *ErrorValue {
+	value := NewNonTerminalErrorValue(err.Error(), ToolExecutionErrorClassification)
+	value.Err = err
+	return value
 }
 
 // NewNonTerminalErrorValue returns an informational ERROR diagnostic. It is

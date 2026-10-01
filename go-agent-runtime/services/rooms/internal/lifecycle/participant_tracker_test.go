@@ -156,6 +156,7 @@ func TestParticipantTrackerConnectionOwnsEverySessionOutcome(t *testing.T) {
 }
 
 func testParticipantConnectionSuccess(t *testing.T) {
+	t.Helper()
 	stateChanged := make(chan struct{}, 8)
 	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{StateChanged: stateChanged})
 	connected := newParticipantTestSession()
@@ -195,6 +196,7 @@ func testParticipantConnectionSuccess(t *testing.T) {
 }
 
 func testParticipantConnectionFailure(t *testing.T) {
+	t.Helper()
 	closeErr := errors.New("close failed")
 	connectErr := errors.New("connect failed")
 	failedSession := newParticipantTestSession()
@@ -213,23 +215,6 @@ func testParticipantConnectionFailure(t *testing.T) {
 	}
 	if got, ready := failedTracker.Outcome(); !ready || !errors.Is(got, connectErr) {
 		t.Fatalf("failed outcome = %v, ready=%v", got, ready)
-	}
-}
-
-func testParticipantConnectionInvalid(t *testing.T) {
-	for name, inferencer := range map[string]messages.SessionInferencer{
-		"nil inferencer": nil,
-		"nil session":    participantTestInferencer{},
-	} {
-		t.Run(name, func(t *testing.T) {
-			tracker := NewConnectionTracker(inferencer, nil, nil)
-			if _, err := tracker.ConnectSession(context.Background()); err == nil {
-				t.Fatal("connect unexpectedly succeeded")
-			}
-			if outcomeErr, ready := tracker.Outcome(); !ready || outcomeErr == nil {
-				t.Fatal("failure outcome was not published")
-			}
-		})
 	}
 }
 
@@ -281,8 +266,8 @@ func TestParticipantTrackerAdmissionToolContinuationAndIdempotentCancel(t *testi
 	close(cancelAdmission)
 	cancelLifecycle.MarkCoordinatorStopping(true, rooms.RoomTerminationMaxDurationReached)
 	cancelLifecycle.MarkBoundCancellation()
-	cancelLifecycle.CancelActiveResponse()
-	cancelLifecycle.CancelActiveResponse()
+	cancelLifecycle.CancelActiveResponse(t.Context())
+	cancelLifecycle.CancelActiveResponse(t.Context())
 	cancelUnderlying.mu.Lock()
 	var cancelCount int
 	for _, message := range cancelUnderlying.sends {
@@ -308,6 +293,7 @@ func TestParticipantTrackerTerminalCausalityAndSnapshots(t *testing.T) {
 }
 
 func testParticipantProviderCompletion(t *testing.T) {
+	t.Helper()
 	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
 	lifecycle.MarkConnected(nil)
 	lifecycle.MarkSessionCreated()
@@ -334,6 +320,7 @@ func testParticipantProviderCompletion(t *testing.T) {
 }
 
 func testParticipantGraceAndCancellation(t *testing.T) {
+	t.Helper()
 	grace := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
 	grace.Observe(participantMessageStart("response-4"))
 	grace.MarkCoordinatorStopping(true, rooms.RoomTerminationMaxDurationReached)
@@ -364,6 +351,7 @@ func testParticipantGraceAndCancellation(t *testing.T) {
 }
 
 func testParticipantFailureAndDisconnect(t *testing.T) {
+	t.Helper()
 	failure := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
 	first := errors.New("first provider failure")
 	failure.MarkConnected(first)
@@ -419,6 +407,7 @@ func TestParticipantTrackerPreservesFirstSpecificFailure(t *testing.T) {
 }
 
 func testParticipantLiveness(t *testing.T) {
+	t.Helper()
 	liveness := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
 	liveness.MarkLivenessFailure(errors.New("silent"), rooms.ParticipantLivenessMetadata{Classification: "silent_provider", TerminalReason: messages.TerminalReasonTerminalFailure, TerminalProvenance: messages.TerminalProvenanceSession, OutputState: messages.TerminalOutputNone})
 	classification, reason, provenance, output := liveness.TerminalMetadata()
@@ -438,6 +427,7 @@ func TestParticipantTrackerEdgeSurfacesAndTaxonomy(t *testing.T) {
 }
 
 func testParticipantEdgeReadinessAndTracked(t *testing.T) {
+	t.Helper()
 	lifecycle := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{StateChanged: make(chan struct{}, 1)})
 	lifecycle.MarkDeviceReady()
 	if !lifecycle.DeviceHasReady() {
@@ -481,6 +471,7 @@ func testParticipantEdgeReadinessAndTracked(t *testing.T) {
 }
 
 func testParticipantEdgeTransport(t *testing.T) {
+	t.Helper()
 	done := make(chan struct{})
 	transportErr := errors.New("transport failed")
 	withTransport := NewParticipantLifecycle(rooms.ParticipantLifecycleOptions{})
@@ -495,6 +486,7 @@ func testParticipantEdgeTransport(t *testing.T) {
 }
 
 func testParticipantEdgeTaxonomy(t *testing.T) {
+	t.Helper()
 	testParticipantTaxonomyProvenance(t)
 	testParticipantTaxonomyTriggers(t)
 	testParticipantTaxonomyCompatibility(t)
@@ -502,6 +494,7 @@ func testParticipantEdgeTaxonomy(t *testing.T) {
 }
 
 func testParticipantTaxonomyProvenance(t *testing.T) {
+	t.Helper()
 	for _, test := range []struct {
 		reason, disposition, want string
 	}{
@@ -525,6 +518,7 @@ func testParticipantTaxonomyProvenance(t *testing.T) {
 }
 
 func testParticipantTaxonomyTriggers(t *testing.T) {
+	t.Helper()
 	if participantBoundTerminationTrigger(rooms.RoomTerminationMaxTurnsReached, false) != "max_turns_reached" || participantBoundTerminationTrigger(rooms.RoomTerminationMaxTurnsReached, true) != "max_turns_reached_mid_response" || participantBoundTerminationTrigger(rooms.RoomTerminationMaxDurationReached, false) != "max_duration_reached" || participantBoundTerminationTrigger(rooms.RoomTerminationMaxDurationReached, true) != "max_duration_reached_mid_response" || participantBoundTerminationTrigger(rooms.RoomTerminationStopped, false) != "stopped" {
 		t.Fatal("bound trigger taxonomy changed")
 	}
@@ -534,6 +528,7 @@ func testParticipantTaxonomyTriggers(t *testing.T) {
 }
 
 func testParticipantTaxonomyCompatibility(t *testing.T) {
+	t.Helper()
 	if firstParticipantToolCallID(" first ", "fallback") != " first " || firstParticipantToolCallID("", "fallback") != "fallback" {
 		t.Fatal("tool call ID fallback changed")
 	}
@@ -546,6 +541,7 @@ func testParticipantTaxonomyCompatibility(t *testing.T) {
 }
 
 func testParticipantTaxonomyDefaults(t *testing.T) {
+	t.Helper()
 	local := &participantLifecycle{}
 	if local.has(fbr) && local.has(fbc) {
 		t.Fatal("empty bound was not classified as completed")

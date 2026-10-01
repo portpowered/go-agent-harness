@@ -19,6 +19,7 @@ const (
 	errNotConfigured sessionturn.Error = "session tool executor is not configured"
 	errPanicked      sessionturn.Error = "tool executor panicked"
 	errCanceled      sessionturn.Error = "tool execution canceled"
+	errNoContext     sessionturn.Error = "tool execution context is required"
 )
 
 // Executor wraps a composed executor without owning lookup or validation.
@@ -61,12 +62,11 @@ type executionResult struct {
 
 // Execute implements messages.ToolExecutor. Errors, panics, and tool-local
 // deadline expiry are returned as correlated tool-result content with a nil
-// Go error so the loop's tool runner keeps the session alive.
-//
-//nolint:contextcheck // a nil caller context selects the background context.
+// Go error so the loop's tool runner keeps the session alive. A nil caller
+// context is reported the same way.
 func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return genericFailure(call, errNoContext), nil
 	}
 	if e == nil {
 		return genericFailure(call, errNotConfigured), nil

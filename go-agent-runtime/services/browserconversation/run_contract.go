@@ -118,10 +118,6 @@ type InvocationWaiter interface {
 	WaitInvocation(context.Context, string) (BrowserInvokeResult, error)
 }
 
-type BrowserEventWatcher interface {
-	WatchBrowserEvents(context.Context) <-chan BrowserEvent
-}
-
 // Fixture owns one run-scoped declarative browser fixture. Its implementation
 // is supplied by a host; the service owns lifecycle and never opens a browser
 // while its constructor runs.

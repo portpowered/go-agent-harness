@@ -52,7 +52,7 @@ func TestRoomEventStreamRedactsEveryResolvedCredential(t *testing.T) {
 	}
 	stream.PublishRoomEvent(rooms.RoomStreamEventParticipantFailed, "alice", "dial "+envSecret)
 
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		select {
 		case frame := <-subscription.Frames():
 			if strings.Contains(string(frame), envSecret) || strings.Contains(string(frame), configSecret) {

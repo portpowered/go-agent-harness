@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
@@ -94,49 +94,15 @@ func TestProviderCaptureSpoolResourceUsageReportsQueueAndCommittedPeaks(t *testi
 
 func TestProviderCaptureSpoolDiscardsFailedReservationWithoutRetainingTombstone(t *testing.T) {
 	t.Parallel()
-	destination := filepath.Join(t.TempDir(), "provider.json")
-	sink, err := newTestProviderCapture(destination)
-	if err != nil {
-		t.Fatal(err)
-	}
-	events := providerSpoolEvents()
-	if err := sink.Append(events[0]); err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.Discard(events[0].Sequence); err != nil {
-		t.Fatal(err)
-	}
-	spool, ok := sink.(*providerCaptureSpool)
-	if !ok {
-		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
-	}
-	deadline := time.Now().Add(time.Second)
-	for {
-		spool.mu.Lock()
-		pending := spool.queuedItems
-		spool.mu.Unlock()
-		if pending == 0 || time.Now().After(deadline) {
-			break
+	synctest.Test(t, func(t *testing.T) {
+		destination := filepath.Join(t.TempDir(), "provider.json")
+		sink, err := newTestProviderCapture(destination)
+		if err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(time.Millisecond)
-	}
-	if err := sink.Append(events[1]); err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.Commit(events[1].Sequence); err != nil {
-		t.Fatal(err)
-	}
-	capture := gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}
-	if err := sink.FlushToFile(destination, capture); err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := gatewaytesting.LoadSessionCapture(destination)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(loaded.Records) != 1 || loaded.Records[0].Sequence != events[1].Sequence {
-		t.Fatalf("records = %#v, want only sequence %d", loaded.Records, events[1].Sequence)
-	}
+		events := providerSpoolEvents()
+		discardFirstThenCommitSecond(t, sink, destination, events)
+	})
 }
 
 func TestProviderCaptureSpoolRejectsUnsettledOrOversizeEvents(t *testing.T) {
@@ -365,65 +331,32 @@ func TestProviderCaptureSpoolRetainsCommittedPrefixDiagnosticAfterBudgetOverflow
 
 func TestProviderCaptureSpoolDiscardRefundsPendingCumulativeReservation(t *testing.T) {
 	t.Parallel()
-	destination := filepath.Join(t.TempDir(), "provider.json")
-	events := providerSpoolEvents()
-	first, err := encodeProviderCaptureEvent(events[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := encodeProviderCaptureEvent(events[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	limit := int64(len(first) + 1)
-	if secondLimit := int64(len(second) + 1); secondLimit > limit {
-		limit = secondLimit
-	}
-	overhead, err := providerCaptureEnvelopeOverhead(gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion})
-	if err != nil {
-		t.Fatal(err)
-	}
-	limit += overhead
-	sink, err := newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: limit, ProviderItems: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.Append(events[0]); err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.Discard(events[0].Sequence); err != nil {
-		t.Fatal(err)
-	}
-	spool, ok := sink.(*providerCaptureSpool)
-	if !ok {
-		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
-	}
-	deadline := time.Now().Add(time.Second)
-	for {
-		spool.mu.Lock()
-		pending := spool.queuedItems
-		spool.mu.Unlock()
-		if pending == 0 || time.Now().After(deadline) {
-			break
+	synctest.Test(t, func(t *testing.T) {
+		destination := filepath.Join(t.TempDir(), "provider.json")
+		events := providerSpoolEvents()
+		first, err := encodeProviderCaptureEvent(events[0])
+		if err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(time.Millisecond)
-	}
-	if err := sink.Append(events[1]); err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.Commit(events[1].Sequence); err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}); err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := gatewaytesting.LoadSessionCapture(destination)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(loaded.Records) != 1 || loaded.Records[0].Sequence != events[1].Sequence {
-		t.Fatalf("records after discard = %#v, want only %d", loaded.Records, events[1].Sequence)
-	}
+		second, err := encodeProviderCaptureEvent(events[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		limit := int64(len(first) + 1)
+		if secondLimit := int64(len(second) + 1); secondLimit > limit {
+			limit = secondLimit
+		}
+		overhead, err := providerCaptureEnvelopeOverhead(gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion})
+		if err != nil {
+			t.Fatal(err)
+		}
+		limit += overhead
+		sink, err := newTestProviderCaptureWithLimits(destination, recording.ResourceLimits{ProviderBytes: limit, ProviderItems: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		discardFirstThenCommitSecond(t, sink, destination, events)
+	})
 }
 
 // TestProviderCaptureSpoolAdmitsBurstWithinBudgetWhileWriterIsDescheduled is
@@ -543,6 +476,47 @@ func TestProviderCaptureSpoolBoundsActiveReservationsWhenEarliestWriteBlocks(t *
 	}
 	if err := sink.Abort(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// discardFirstThenCommitSecond discards events[0], waits for the spool worker
+// to apply it, commits events[1], and checks that only events[1] is flushed.
+// It runs inside a synctest bubble.
+func discardFirstThenCommitSecond(t *testing.T, sink recording.ProviderCaptureSink, destination string, events []gatewaytesting.CapturedSessionEvent) {
+	t.Helper()
+	if err := sink.Append(events[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Discard(events[0].Sequence); err != nil {
+		t.Fatal(err)
+	}
+	spool, ok := sink.(*providerCaptureSpool)
+	if !ok {
+		t.Fatalf("sink type = %T, want providerCaptureSpool", sink)
+	}
+	// The spool worker blocks on its queue once it has applied the discard.
+	synctest.Wait()
+	spool.mu.Lock()
+	pending := spool.queuedItems
+	spool.mu.Unlock()
+	if pending != 0 {
+		t.Fatalf("queued items after the worker drained = %d, want 0", pending)
+	}
+	if err := sink.Append(events[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.Commit(events[1].Sequence); err != nil {
+		t.Fatal(err)
+	}
+	if err := sink.FlushToFile(destination, gatewaytesting.SessionCapture{Version: gatewaytesting.SessionCaptureVersion}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := gatewaytesting.LoadSessionCapture(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Records) != 1 || loaded.Records[0].Sequence != events[1].Sequence {
+		t.Fatalf("records after discard = %#v, want only sequence %d", loaded.Records, events[1].Sequence)
 	}
 }
 

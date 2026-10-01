@@ -39,7 +39,7 @@ func TestHTTPRecordingPublicContractCapturesConsumedTrafficWithoutSecrets(t *tes
 		t.Fatal(err)
 	}
 	transport := mustHTTPRoundTripper(t, recorder)
-	request, err := http.NewRequest(http.MethodPost, "https://provider.example.test/capture", strings.NewReader("request payload"))
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://provider.example.test/capture", strings.NewReader("request payload"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestHTTPRecordingDoesNotPublishAfterTransportFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	transport := mustHTTPRoundTripper(t, recorder)
-	request, err := http.NewRequest(http.MethodGet, "https://provider.example.test/failure", nil)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://provider.example.test/failure", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestHTTPRecordingDoesNotPublishResponseClosedBeforeEOF(t *testing.T) {
 		t.Fatal(err)
 	}
 	transport := mustHTTPRoundTripper(t, recorder)
-	request, err := http.NewRequest(http.MethodGet, "https://provider.example.test/partial", nil)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://provider.example.test/partial", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestHTTPRecordingDoesNotPublishResponseShorterThanContentLength(t *testing.
 		t.Fatal(err)
 	}
 	transport := mustHTTPRoundTripper(t, recorder)
-	request, err := http.NewRequest(http.MethodGet, "https://provider.example.test/truncated", nil)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://provider.example.test/truncated", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -69,22 +69,33 @@ func (f DisplayCapturerFunc) Capture(ctx context.Context, display int, bounds im
 	return f(ctx, display, bounds)
 }
 
+// contextErrFunc returns the cancellation check an I/O adapter consults
+// between calls; a nil context never cancels.
+func contextErrFunc(ctx context.Context) func() error {
+	if ctx == nil {
+		return func() error { return nil }
+	}
+	return ctx.Err
+}
+
+// contextReader stops a read once its context ends. It keeps only the
+// context's error accessor rather than the context itself.
 type contextReader struct {
-	ctx context.Context
+	err func() error
 	r   io.Reader
 }
 
+func newContextReader(ctx context.Context, r io.Reader) contextReader {
+	return contextReader{err: contextErrFunc(ctx), r: r}
+}
+
 func (r contextReader) Read(p []byte) (int, error) {
-	if r.ctx != nil {
-		if err := r.ctx.Err(); err != nil {
-			return 0, err
-		}
+	if err := r.err(); err != nil {
+		return 0, err
 	}
 	n, err := r.r.Read(p)
-	if r.ctx != nil {
-		if ctxErr := r.ctx.Err(); ctxErr != nil {
-			return n, ctxErr
-		}
+	if ctxErr := r.err(); ctxErr != nil {
+		return n, ctxErr
 	}
 	return n, err
 }
@@ -112,6 +123,7 @@ type hostDisplaySurface struct {
 	process    DisplayProcess
 	permission DisplayPermissionChecker
 	capturer   DisplayCapturer
+	platform   screenPlatform
 }
 
 // NewHostDisplaySurface returns the platform display boundary. The optional
@@ -137,6 +149,7 @@ func NewHostDisplaySurfaceWithOptions(options HostDisplaySurfaceOptions) Display
 		process:    process,
 		permission: permission,
 		capturer:   options.Capturer,
+		platform:   newScreenPlatform(),
 	}
 }
 
@@ -153,7 +166,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 	if capability, err := s.probePermission(ctx); err != nil {
 		return capability, err
 	}
-	count, bounds, err := screenDisplayInfoWithContextAndProcess(ctx, s.process)
+	count, bounds, err := screenDisplayInfoWithContextAndProcess(ctx, s.platform, s.process)
 	if err != nil {
 		return unavailableDisplayProbe("display discovery", "display discovery is unavailable", err)
 	}
@@ -161,7 +174,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		capability := UnavailableDisplayCapability("no usable display was discovered")
 		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display discovery", Reason: capability.Reason}
 	}
-	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.process); err != nil {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.platform, s.process); err != nil {
 		return unavailableDisplayProbe("screen capture admission", "the screen capture command is unavailable", err)
 	}
 	if bounds.Empty() {
@@ -223,11 +236,11 @@ func (s *hostDisplaySurface) checkScreenRecordingPermission(ctx context.Context)
 }
 
 func (s *hostDisplaySurface) DisplayCount(ctx context.Context) (int, error) {
-	return screenDisplayCountWithContextAndProcess(ctx, s.process)
+	return screenDisplayCountWithContextAndProcess(ctx, s.platform, s.process)
 }
 
 func (s *hostDisplaySurface) Bounds(ctx context.Context, display int) (image.Rectangle, error) {
-	return screenDisplayBoundsWithContextAndProcess(ctx, display, s.process)
+	return screenDisplayBoundsWithContextAndProcess(ctx, s.platform, display, s.process)
 }
 
 func (s *hostDisplaySurface) Capture(ctx context.Context, bounds image.Rectangle) (*image.RGBA, error) {
@@ -238,7 +251,7 @@ func (s *hostDisplaySurface) CaptureDisplay(ctx context.Context, display int, bo
 	if s.capturer != nil {
 		return s.capturer.Capture(ctx, display, bounds)
 	}
-	return screenCaptureDisplayWithContextAndProcess(ctx, display, bounds, s.process)
+	return screenCaptureDisplayWithContextAndProcess(ctx, s.platform, display, bounds, s.process)
 }
 
 func screenCaptureStateForPermission(state DisplayPermissionState) ScreenCaptureState {
@@ -333,9 +346,6 @@ func screenRecordingPermissionText(text string) bool {
 const screenScreenshotBound = 5 * time.Second
 
 func boundedScreenContext(ctx context.Context, limit time.Duration) (context.Context, func()) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if limit <= 0 {
 		return ctx, func() {}
 	}

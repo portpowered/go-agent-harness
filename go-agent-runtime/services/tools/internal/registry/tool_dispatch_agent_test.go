@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 )
 
 // dispatchMockInferencer is a test double that returns canned responses.
@@ -191,22 +190,6 @@ func TestDispatchAgentTool_MissingTask(t *testing.T) {
 	if msgs[0].TextContent() == "" {
 		t.Error("expected non-empty error message for missing task")
 	}
-}
-
-func TestDispatchAgentTool_ImplementsAsyncTool(t *testing.T) {
-	inf := &dispatchMockInferencer{response: "done"}
-	registry := NewToolRegistry()
-	tool := NewDispatchAgentTool(inf, registry)
-
-	// Verify SetCallback is accepted without panic.
-	var called bool
-	tool.SetCallback(func(_ context.Context, _ []messages.Message, _ error) {
-		called = true
-	})
-	_ = called
-
-	// Compile-time check is already enforced by var _ core.AsyncTool = (*DispatchAgentTool)(nil).
-	var _ core.AsyncTool = tool
 }
 
 func TestDispatchAgentTool_RegistrableInRegistry(t *testing.T) {

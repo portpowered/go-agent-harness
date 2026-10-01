@@ -81,14 +81,17 @@ func (s *Service) Resolve(ctx context.Context, request public.Request) (public.C
 	}
 	if request.Executor != nil || request.Browser != nil {
 		if request.Executor == nil && request.UseDefaultTool {
-			defaultSurface := defaultCapability(request, policy)
+			defaultSurface, err := defaultCapability(request, policy)
+			if err != nil {
+				return public.Capability{}, err
+			}
 			request.Executor = defaultSurface.Executor
 			request.Definitions = defaultSurface.Definitions
 			request.FilesystemPolicyApplied = true
 		}
 		return resolvedExternalCapability(request, policy)
 	}
-	return defaultCapability(request, policy), nil
+	return defaultCapability(request, policy)
 }
 
 func validateRequest(request public.Request) error {
@@ -158,7 +161,7 @@ func resolvedExternalCapability(request public.Request, policy *filesystem.Files
 	return capability, nil
 }
 
-func defaultCapability(request public.Request, policy *filesystem.FilesystemPolicy) public.Capability {
+func defaultCapability(request public.Request, policy *filesystem.FilesystemPolicy) (public.Capability, error) {
 	var toolRegistry *registry.ToolRegistry
 	if request.DisplayCapabilitySet {
 		toolRegistry = registry.NewToolRegistryWithDisplayCapabilityAndPolicyAndSkillRoots(
@@ -179,7 +182,7 @@ func defaultCapability(request public.Request, policy *filesystem.FilesystemPoli
 	}
 	if registry.SelectionEnabled(request.Selections, "dispatch_agent") && request.Inferencer != nil {
 		if err := toolRegistry.Register(registry.NewDispatchAgentTool(request.Inferencer, toolRegistry)); err != nil {
-			panic(fmt.Errorf("register dispatch_agent tool: %w", err))
+			return public.Capability{}, fmt.Errorf("register dispatch_agent tool: %w", err)
 		}
 	}
 	capability := public.Capability{
@@ -190,7 +193,7 @@ func defaultCapability(request public.Request, policy *filesystem.FilesystemPoli
 	}
 	capability.Invoker = invoker{executor: capability.Executor}
 	capability.Handle = newCapabilityHandle(capability.Definitions)
-	return capability
+	return capability, nil
 }
 
 func skillRootDirectories(roots []public.SkillRoot) []string {

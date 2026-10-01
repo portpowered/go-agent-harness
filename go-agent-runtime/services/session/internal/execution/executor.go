@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
@@ -16,52 +17,38 @@ import (
 // concrete file-backed implementation is one possible adapter; embedders can
 // supply their own store through the public session resolver.
 type Storage interface {
-	Load(string) ([]messages.Message, error)
-	Latest() (string, error)
-	NewSessionID() string
-	Save(string, []messages.Message) error
+	Load(ctx context.Context, id string) ([]messages.Message, error)
+	Latest(ctx context.Context) (string, error)
+	NewSessionID(ctx context.Context) (string, error)
+	Save(ctx context.Context, id string, msgs []messages.Message) error
 	WorkspaceDir() string
-	LoadTrace(string) (*session.TraceRecord, error)
-	SaveTrace(session.TraceRecord) error
-	NewTraceID() string
+	LoadTrace(ctx context.Context, id string) (*session.TraceRecord, error)
+	SaveTrace(ctx context.Context, trace session.TraceRecord) error
+	NewTraceID(ctx context.Context) (string, error)
 }
 
-func newSessionID(storage Storage) (string, error) {
+func newSessionID(ctx context.Context, storage Storage) (string, error) {
 	if storage == nil {
 		return "", fmt.Errorf("session storage is required")
 	}
-	if aware, ok := storage.(interface{ NewSessionIDWithError() (string, error) }); ok {
-		id, err := aware.NewSessionIDWithError()
-		if err != nil {
-			return "", err
-		}
-		if id == "" {
-			return "", fmt.Errorf("session storage returned an empty session ID")
-		}
-		return id, nil
+	id, err := storage.NewSessionID(ctx)
+	if err != nil {
+		return "", fmt.Errorf("allocate session ID: %w", err)
 	}
-	id := storage.NewSessionID()
 	if id == "" {
 		return "", fmt.Errorf("session storage returned an empty session ID")
 	}
 	return id, nil
 }
 
-func newTraceID(storage Storage) (string, error) {
+func newTraceID(ctx context.Context, storage Storage) (string, error) {
 	if storage == nil {
 		return "", fmt.Errorf("session storage is required")
 	}
-	if aware, ok := storage.(interface{ NewTraceIDWithError() (string, error) }); ok {
-		id, err := aware.NewTraceIDWithError()
-		if err != nil {
-			return "", err
-		}
-		if id == "" {
-			return "", fmt.Errorf("session storage returned an empty trace ID")
-		}
-		return id, nil
+	id, err := storage.NewTraceID(ctx)
+	if err != nil {
+		return "", fmt.Errorf("allocate trace ID: %w", err)
 	}
-	id := storage.NewTraceID()
 	if id == "" {
 		return "", fmt.Errorf("session storage returned an empty trace ID")
 	}

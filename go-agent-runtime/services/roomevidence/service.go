@@ -48,16 +48,16 @@ const (
 	ParticipantTerminationError        = rooms.ParticipantTerminationError
 )
 
-type errorCode string
+type sentinelError string
 
-func (e errorCode) Error() string { return string(e) }
+func (e sentinelError) Error() string { return string(e) }
 
 const (
-	ErrInvalidOutput      errorCode = "invalid room evidence output"
-	ErrOutputNotEmpty     errorCode = "room evidence output directory is not empty"
-	ErrFinalized          errorCode = "room evidence recorder is finalized"
-	ErrParticipantUnknown errorCode = "room evidence participant is unknown"
-	ErrRecorderClosed     errorCode = "room evidence recorder is closed"
+	ErrInvalidOutput      sentinelError = "invalid room evidence output"
+	ErrOutputNotEmpty     sentinelError = "room evidence output directory is not empty"
+	ErrFinalized          sentinelError = "room evidence recorder is finalized"
+	ErrParticipantUnknown sentinelError = "room evidence participant is unknown"
+	ErrRecorderClosed     sentinelError = "room evidence recorder is closed"
 )
 
 type RecordingRequest = rooms.EvidenceRecordingRequest

@@ -3,21 +3,26 @@
 package mouse
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 )
 
-// Windows user32.dll handle and procedures shared by both the mouse tool and
-// the screen capture tool (which needs GetSystemMetrics).
-var (
-	user32dll = syscall.NewLazyDLL("user32.dll")
+// mousePlatform owns the user32.dll handle, loaded once per driver on first
+// use instead of on every input call.
+type mousePlatform struct {
+	user32 func() *syscall.LazyDLL
+}
 
-	procSendInput     = user32dll.NewProc("SendInput")
-	procSetCursorPos  = user32dll.NewProc("SetCursorPos")
-	procGetSysMetrics = user32dll.NewProc("GetSystemMetrics")
-)
+func newMousePlatform() mousePlatform {
+	return mousePlatform{user32: sync.OnceValue(func() *syscall.LazyDLL { return syscall.NewLazyDLL("user32.dll") })}
+}
+
+// user32Proc resolves a user32.dll input procedure.
+func (p mousePlatform) user32Proc(name string) *syscall.LazyProc { return p.user32().NewProc(name) }
 
 const (
 	mouseClickPause       = 50 * time.Millisecond
@@ -69,17 +74,17 @@ type winInput struct {
 
 // primaryScreenSize returns the width and height of the primary display in
 // screen pixels.
-func primaryScreenSize() (w, h int) {
-	cw, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	ch, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+func (p mousePlatform) primaryScreenSize() (w, h int) {
+	cw, _, _ := p.user32Proc("GetSystemMetrics").Call(uintptr(smCxScreen))
+	ch, _, _ := p.user32Proc("GetSystemMetrics").Call(uintptr(smCyScreen))
 	return int(cw), int(ch)
 }
 
 // sendMouseEvent fires a single synthetic mouse event via SendInput.  The dx/dy
 // values are in screen pixels; they are normalised to the [0, 65535] range
 // required by MOUSEEVENTF_ABSOLUTE before being sent.
-func sendMouseEvent(x, y int, flags uint32) error {
-	sw, sh := primaryScreenSize()
+func (p mousePlatform) sendMouseEvent(x, y int, flags uint32) error {
+	sw, sh := p.primaryScreenSize()
 	normX, normY := int32(0), int32(0)
 	if sw > 0 && sh > 0 {
 		normX = int32(x * 65535 / sw)
@@ -95,7 +100,7 @@ func sendMouseEvent(x, y int, flags uint32) error {
 		},
 	}
 
-	ret, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
+	ret, _, err := p.user32Proc("SendInput").Call(1, uintptr(unsafe.Pointer(&inp)), unsafe.Sizeof(inp))
 	if ret == 0 {
 		return fmt.Errorf("SendInput failed: %w", err)
 	}
@@ -116,8 +121,8 @@ func buttonFlags(button string) (downFlag, upFlag uint32) {
 
 // move moves the cursor to the given screen coordinates using SetCursorPos
 // for pixel-accurate positioning.
-func (mouseDriver) move(x, y int) error {
-	ret, _, err := procSetCursorPos.Call(uintptr(x), uintptr(y))
+func (d mouseDriver) move(_ context.Context, x, y int) error {
+	ret, _, err := d.platform.user32Proc("SetCursorPos").Call(uintptr(x), uintptr(y))
 	if ret == 0 {
 		return fmt.Errorf("SetCursorPos failed: %w", err)
 	}
@@ -125,48 +130,54 @@ func (mouseDriver) move(x, y int) error {
 }
 
 // click moves to (x, y), presses, then releases the specified button.
-func (d mouseDriver) click(x, y int, button string) error {
+func (d mouseDriver) click(ctx context.Context, x, y int, button string) error {
 	down, up := buttonFlags(button)
 	// Combine MOVE + button-down into a single event so applications see the
 	// correct cursor position when they receive the WM_BUTTONDOWN message.
-	if err := sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|down); err != nil {
+	if err := d.platform.sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|down); err != nil {
 		return err
 	}
-	d.sleep(mouseClickPause)
-	return sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|up)
+	if err := d.sleep(ctx, mouseClickPause); err != nil {
+		return err
+	}
+	return d.platform.sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|up)
 }
 
 // doubleClick sends two click events in quick succession.
-func (d mouseDriver) doubleClick(x, y int, button string) error {
-	if err := d.click(x, y, button); err != nil {
+func (d mouseDriver) doubleClick(ctx context.Context, x, y int, button string) error {
+	if err := d.click(ctx, x, y, button); err != nil {
 		return err
 	}
-	d.sleep(mouseDoubleClickPause)
-	return d.click(x, y, button)
+	if err := d.sleep(ctx, mouseDoubleClickPause); err != nil {
+		return err
+	}
+	return d.click(ctx, x, y, button)
 }
 
 // buttonDown moves to (x, y) and holds the specified button.
-func (mouseDriver) buttonDown(x, y int, button string) error {
+func (d mouseDriver) buttonDown(_ context.Context, x, y int, button string) error {
 	down, _ := buttonFlags(button)
-	return sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|down)
+	return d.platform.sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|down)
 }
 
 // buttonUp moves to (x, y) and releases the specified button.
-func (mouseDriver) buttonUp(x, y int, button string) error {
+func (d mouseDriver) buttonUp(_ context.Context, x, y int, button string) error {
 	_, up := buttonFlags(button)
-	return sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|up)
+	return d.platform.sendMouseEvent(x, y, mouseeventfMove|mouseeventfAbsolute|up)
 }
 
 // drag presses the button at (fromX, fromY), glides the cursor in small
 // incremental steps to (toX, toY), then releases.
-func (d mouseDriver) drag(fromX, fromY, toX, toY int, button string) error {
+func (d mouseDriver) drag(ctx context.Context, fromX, fromY, toX, toY int, button string) error {
 	down, up := buttonFlags(button)
 
 	// Press at the start position.
-	if err := sendMouseEvent(fromX, fromY, mouseeventfMove|mouseeventfAbsolute|down); err != nil {
+	if err := d.platform.sendMouseEvent(fromX, fromY, mouseeventfMove|mouseeventfAbsolute|down); err != nil {
 		return fmt.Errorf("drag start: %w", err)
 	}
-	d.sleep(mouseDragPause)
+	if err := d.sleep(ctx, mouseDragPause); err != nil {
+		return err
+	}
 
 	// Move in 20 equal steps so the operating system sees smooth cursor motion,
 	// which is required for drag-sensitive widgets (e.g. sliders, scrollbars).
@@ -174,12 +185,14 @@ func (d mouseDriver) drag(fromX, fromY, toX, toY int, button string) error {
 	for i := 1; i <= steps; i++ {
 		ix := fromX + (toX-fromX)*i/steps
 		iy := fromY + (toY-fromY)*i/steps
-		if err := sendMouseEvent(ix, iy, mouseeventfMove|mouseeventfAbsolute); err != nil {
+		if err := d.platform.sendMouseEvent(ix, iy, mouseeventfMove|mouseeventfAbsolute); err != nil {
 			return fmt.Errorf("drag step %d: %w", i, err)
 		}
-		d.sleep(mouseDragStepPause)
+		if err := d.sleep(ctx, mouseDragStepPause); err != nil {
+			return err
+		}
 	}
 
 	// Release at the destination.
-	return sendMouseEvent(toX, toY, mouseeventfMove|mouseeventfAbsolute|up)
+	return d.platform.sendMouseEvent(toX, toY, mouseeventfMove|mouseeventfAbsolute|up)
 }

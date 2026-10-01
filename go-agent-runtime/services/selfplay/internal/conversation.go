@@ -27,7 +27,7 @@ type sideResult struct {
 func (s *Service) runSide(ctx, callerCtx context.Context, index int, role selfplay.SideRole, inferencer messages.SessionInferencer, ready chan<- *agentloop.AgentLoop, output *pcmBridge, stop *stopState, evidence *evidence, source platformclock.TimerSource) sideResult {
 	loop, err := newSideLoop(inferencer)
 	if err != nil {
-		return failSide(stop, index, role, fmt.Errorf("create %s agent loop: %w", role, err), false)
+		return failSide(stop, index, fmt.Errorf("create %s agent loop: %w", role, err), false)
 	}
 	select {
 	case ready <- loop:
@@ -56,7 +56,7 @@ func newSideLoop(inferencer messages.SessionInferencer) (*agentloop.AgentLoop, e
 	)
 }
 
-func failSide(stop *stopState, index int, role selfplay.SideRole, err error, started bool) sideResult {
+func failSide(stop *stopState, index int, err error, started bool) sideResult {
 	if stop.fail(err) {
 		return sideResult{index: index, err: err, started: started}
 	}
@@ -93,7 +93,7 @@ func (s *Service) readSideDeltas(ctx context.Context, loop *agentloop.AgentLoop,
 			return started, nil, nil
 		}
 		if err := s.handleSideMessage(ctx, loop, index, role, message, &openingSent, output, stop, evidence); err != nil {
-			failure := failSide(stop, index, role, err, started).err
+			failure := failSide(stop, index, err, started).err
 			return started, err, failure
 		}
 	}

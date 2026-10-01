@@ -14,18 +14,18 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
-type errorCode string
+type sentinelError string
 
-func (e errorCode) Error() string { return string(e) }
+func (e sentinelError) Error() string { return string(e) }
 
 const (
-	ErrCaptureUnavailable         errorCode = "replay capture is unavailable"
-	ErrBundleIncomplete           errorCode = "replay bundle is incomplete"
-	ErrBundleMismatch             errorCode = "replay bundle evidence mismatch"
-	ErrToolMismatch               errorCode = "replay tool invocation mismatch"
-	ErrToolFailure                errorCode = "recorded tool execution failed"
-	ErrDeterministicClockRequired errorCode = "offline replay requires an injected deterministic clock"
-	ErrRuntimeFactoryRequired     errorCode = "offline replay runtime factory is required"
+	ErrCaptureUnavailable         sentinelError = "replay capture is unavailable"
+	ErrBundleIncomplete           sentinelError = "replay bundle is incomplete"
+	ErrBundleMismatch             sentinelError = "replay bundle evidence mismatch"
+	ErrToolMismatch               sentinelError = "replay tool invocation mismatch"
+	ErrToolFailure                sentinelError = "recorded tool execution failed"
+	ErrDeterministicClockRequired sentinelError = "offline replay requires an injected deterministic clock"
+	ErrRuntimeFactoryRequired     sentinelError = "offline replay runtime factory is required"
 )
 
 const CaptureTimingReportSchemaVersion = 1

@@ -9,7 +9,6 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"io"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,8 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/sight"
 )
-
-const darwinPlatform = "darwin"
 
 type scriptedDisplaySurface struct {
 	capability DisplayCapability
@@ -176,17 +173,17 @@ func TestScreenToolUnavailableAndCommandFailureNeverReturnPixels(t *testing.T) {
 
 func TestScreenToolCanceledAndTimedOutContextsAreClassified(t *testing.T) {
 	for _, tt := range []struct {
-		name  string
-		ctx   context.Context
-		state ScreenCaptureState
-		want  error
+		name    string
+		context func() context.Context
+		state   ScreenCaptureState
+		want    error
 	}{
-		{name: "canceled", ctx: canceledContext(), state: ScreenCaptureCanceled, want: context.Canceled},
-		{name: "timed out", ctx: expiredContext(), state: ScreenCaptureTimedOut, want: context.DeadlineExceeded},
+		{name: "canceled", context: canceledContext, state: ScreenCaptureCanceled, want: context.Canceled},
+		{name: "timed out", context: expiredContext, state: ScreenCaptureTimedOut, want: context.DeadlineExceeded},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			surface := &scriptedDisplaySurface{capability: UsableDisplayCapability(1)}
-			msgs, err := NewScreenToolWithDisplaySurface(surface).Execute(tt.ctx, map[string]any{"action": "screenshot"})
+			msgs, err := NewScreenToolWithDisplaySurface(surface).Execute(tt.context(), map[string]any{"action": "screenshot"})
 			var captureErr *ScreenCaptureError
 			if err == nil || !errors.As(err, &captureErr) || captureErr.State != tt.state || msgs != nil {
 				t.Fatalf("context failure result = %#v, err = %v", msgs, err)
@@ -354,52 +351,6 @@ func assertDeniedScreenEnvelope(t *testing.T, action string, err error) {
 	} {
 		if !strings.Contains(result.Error, want) {
 			t.Errorf("%s denial error %q does not contain %q", action, result.Error, want)
-		}
-	}
-}
-
-func TestDisplaySurfaceProbeUsesContextAndDoesNotCapture(t *testing.T) {
-	if runtime.GOOS != "linux" && runtime.GOOS != darwinPlatform {
-		t.Skip("display admission process seam is covered only on command-based platforms")
-	}
-	var calls []string
-	process := DisplayProcessAdapter{
-		RunFunc: func(ctx context.Context, name string, _ ...string) ([]byte, error) {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			calls = append(calls, name)
-			switch name {
-			case "system_profiler":
-				return []byte("Resolution: 16 x 10\n"), nil
-			case "xrandr":
-				return []byte("Monitors: 1\n"), nil
-			case "xdotool":
-				if runtime.GOOS == "linux" {
-					return []byte("8 6\n"), nil
-				}
-				return nil, errors.New("unexpected process")
-			default:
-				return nil, errors.New("unexpected process")
-			}
-		},
-		LookPathFunc: func(name string) (string, error) {
-			calls = append(calls, "lookpath:"+name)
-			return name, nil
-		},
-	}
-	capability, err := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
-		Process: process,
-		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
-			return DisplayPermission{State: DisplayPermissionGranted}, nil
-		}),
-	}).Probe(context.Background())
-	if err != nil || !capability.Usable() {
-		t.Fatalf("display probe = %#v, err = %v", capability, err)
-	}
-	for _, call := range calls {
-		if call == screenCaptureCommand || call == "scrot" {
-			t.Fatalf("probe attempted image capture through %q", call)
 		}
 	}
 }

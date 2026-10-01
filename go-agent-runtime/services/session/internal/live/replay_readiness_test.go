@@ -52,7 +52,8 @@ type replayReadinessInferencer struct{ session messages.Session }
 func (i *replayReadinessInferencer) ConnectSession(context.Context) (messages.Session, error) {
 	return i.session, nil
 }
-func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.LiveEvent {
+func awaitSessionOpen(tb testing.TB, events <-chan session.LiveEvent) []session.LiveEvent {
+	tb.Helper()
 	var got []session.LiveEvent
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
@@ -60,7 +61,7 @@ func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.L
 		select {
 		case event, ok := <-events:
 			if !ok {
-				t.Fatal("event stream closed before SESSION.OPEN")
+				tb.Fatal("event stream closed before SESSION.OPEN")
 			}
 			got = append(got, event)
 			if event.Kind == string(session.LiveEventStarted) {
@@ -70,12 +71,13 @@ func awaitSessionOpen(t testing.TB, events <-chan session.LiveEvent) []session.L
 				return got
 			}
 		case <-deadline.C:
-			t.Fatal("timed out waiting for SESSION.OPEN")
+			tb.Fatal("timed out waiting for SESSION.OPEN")
 		}
 	}
 }
-func waitForSentText(t testing.TB, provider *testSession, text string) {
-	require.Eventually(t, func() bool { return provider.hasText(text) }, 2*time.Second, time.Millisecond, "text %q was not delivered", text)
+func waitForSentText(tb testing.TB, provider *testSession, text string) {
+	tb.Helper()
+	require.Eventually(tb, func() bool { return provider.hasText(text) }, 2*time.Second, time.Millisecond, "text %q was not delivered", text)
 }
 func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveEvent) {
 	for event := range events {
@@ -83,29 +85,31 @@ func collectTestLiveEvents(events <-chan session.LiveEvent) (got []session.LiveE
 	}
 	return
 }
-func queueProviderMessages(t testing.TB, provider *testSession, messagesToQueue []messages.StreamMessage) {
+func queueProviderMessages(tb testing.TB, provider *testSession, messagesToQueue []messages.StreamMessage) {
+	tb.Helper()
 	for _, message := range messagesToQueue {
-		require.True(t, provider.receive.Write(context.Background(), message), "queue provider message %s", message.Type)
+		require.True(tb, provider.receive.Write(context.Background(), message), "queue provider message %s", message.Type)
 	}
 }
-func assertEmptyResponseEvents(t testing.TB, events []session.LiveEvent) {
+func assertEmptyResponseEvents(tb testing.TB, events []session.LiveEvent) {
+	tb.Helper()
 	faultIndex, terminalIndex := -1, -1
 	for index, event := range events {
 		switch event.Kind {
 		case string(session.LiveEventLiveness):
 			faultIndex = index
-			require.NotNil(t, event.Liveness)
-			require.Equal(t, "silent_provider_empty_response", event.Liveness.Classification)
-			require.Equal(t, "response-empty", event.Liveness.ResponseID)
+			require.NotNil(tb, event.Liveness)
+			require.Equal(tb, "silent_provider_empty_response", event.Liveness.Classification)
+			require.Equal(tb, "response-empty", event.Liveness.ResponseID)
 		case string(session.LiveEventTerminal):
 			terminalIndex = index
-			require.NotNil(t, event.Terminal)
-			require.Equal(t, "silent_provider_empty_response", event.Terminal.Classification)
-			require.Equal(t, messages.TerminalReasonTerminalFailure, event.Terminal.TerminalReason)
+			require.NotNil(tb, event.Terminal)
+			require.Equal(tb, "silent_provider_empty_response", event.Terminal.Classification)
+			require.Equal(tb, messages.TerminalReasonTerminalFailure, event.Terminal.TerminalReason)
 		}
 	}
 	if faultIndex < 0 || terminalIndex < 0 || faultIndex >= terminalIndex {
-		t.Fatalf("event order = fault %d, terminal %d, events %+v", faultIndex, terminalIndex, events)
+		tb.Fatalf("event order = fault %d, terminal %d, events %+v", faultIndex, terminalIndex, events)
 	}
 }
 func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
@@ -149,21 +153,23 @@ func TestReplayWaitsForSessionUpdatedBeforeFirstPCM(t *testing.T) {
 	handle.Cancel(cause)
 	require.ErrorIs(t, handle.Wait(), cause)
 }
-func assertFiniteResponseReplacement(t testing.TB, h *handle, interrupted messages.StreamMessage, replacementID string) {
+func assertFiniteResponseReplacement(tb testing.TB, h *handle, interrupted messages.StreamMessage, replacementID string) {
+	tb.Helper()
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: interrupted.ResponseID})
-	require.True(t, h.observeFiniteResponse(interrupted))
-	require.False(t, h.gracefulStop)
-	require.Zero(t, h.replayResponses)
+	require.True(tb, h.observeFiniteResponse(interrupted))
+	require.False(tb, h.gracefulStop)
+	require.Zero(tb, h.replayResponses)
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: replacementID})
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: replacementID, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-	require.True(t, h.gracefulStop)
-	require.Equal(t, 1, h.replayResponses)
+	require.True(tb, h.gracefulStop)
+	require.Equal(tb, 1, h.replayResponses)
 }
-func assertFiniteResponseCompletes(t testing.TB, h *handle, responseID string, value *messages.MessageEndValue) {
+func assertFiniteResponseCompletes(tb testing.TB, h *handle, responseID string, value *messages.MessageEndValue) {
+	tb.Helper()
 	h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID})
-	require.True(t, h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: value}))
-	require.True(t, h.gracefulStop)
-	require.Equal(t, 1, h.replayResponses)
+	require.True(tb, h.observeFiniteResponse(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: value}))
+	require.True(tb, h.gracefulStop)
+	require.Equal(tb, 1, h.replayResponses)
 }
 func TestInterruptedFiniteResponseDoesNotFinishBeforeReplacement(t *testing.T) {
 	h := &handle{request: session.LiveRequest{FinishAfterResponse: true}, captureComplete: true, responseStartWake: make(chan struct{})}
@@ -280,7 +286,7 @@ func TestSuccessfulToolContinuationClearsFinitePendingCount(t *testing.T) {
 	}
 	h.observeProviderToolCall(callEnd)
 	h.observeFiniteResponse(callEnd)
-	h.observeToolResult(callID, "lookup", true)
+	_ = h.beginToolResultAdmission(callID, "lookup", true)
 	h.observeToolResponseOutput(callID)
 	toolMessage := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
@@ -331,7 +337,7 @@ func TestToolContinuationWithNextProviderCallKeepsFinitePendingCount(t *testing.
 	}
 	h.observeProviderToolCall(firstCall)
 	h.observeFiniteResponse(firstCall)
-	h.observeToolResult(firstCallID, "lookup", true)
+	_ = h.beginToolResultAdmission(firstCallID, "lookup", true)
 	h.observeToolResponseOutput(firstCallID)
 	toolResultEnd := messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
@@ -401,7 +407,7 @@ func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
 	finalIDs := []string{"final-zero", "final-one"}
 	for index, batch := range batches {
 		for _, callID := range batch.calls {
-			h.observeToolResult(callID, "lookup", true)
+			_ = h.beginToolResultAdmission(callID, "lookup", true)
 			h.observeToolResponseOutput(callID)
 		}
 		toolEnd := end("", messages.RoleTool)
@@ -415,7 +421,7 @@ func TestOverlappingFiniteResponsesCountOnlyTheirOwnPendingTools(t *testing.T) {
 		}
 	}
 	clear(h.pendingToolCallResponses)
-	for index := 0; index < maxPendingToolCallResponses; index++ {
+	for index := range maxPendingToolCallResponses {
 		h.pendingToolCallResponses[fmt.Sprintf("bounded-%d", index)] = ""
 	}
 	h.pendingToolCalls = len(h.pendingToolCallResponses)
@@ -463,7 +469,7 @@ func TestToolResponseFailureBeforeAcceptedResultIsNotAContinuation(t *testing.T)
 	if err, complete := h.observeToolLifecycle(failure); err != nil || complete {
 		t.Fatalf("original tool response = error:%v complete:%t, want no continuation classification", err, complete)
 	}
-	h.observeToolResult(callID, "read_image", true)
+	_ = h.beginToolResultAdmission(callID, "read_image", true)
 	toolEnd := messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
@@ -540,7 +546,7 @@ func TestOpeningResponseGateHoldsFirstTurnUntilToolContinuationCompletes(t *test
 	responseErr, _ := end("response-tool-call", messages.RoleAssistant)
 	require.NoError(t, responseErr)
 	require.False(t, h.openingResponseSettled(1), "settled after the tool-call response terminal")
-	h.observeToolResult(callID, "lookup", true)
+	_ = h.beginToolResultAdmission(callID, "lookup", true)
 	h.observeToolResponseOutput(callID)
 	toolErr, _ := end("", messages.RoleTool)
 	require.NoError(t, toolErr)

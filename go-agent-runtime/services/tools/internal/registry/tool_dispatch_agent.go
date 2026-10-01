@@ -13,15 +13,11 @@ import (
 // runs it to completion (ModeAskOnce), and returns the final text response as the tool result.
 // Child agents are fully isolated: own conversation, own system prompt, no shared history.
 type DispatchAgentTool struct {
-	callback   core.AsyncCallback
 	inferencer messages.Inferencer
 	registry   *ToolRegistry
 }
 
 const dispatchAgentToolID = "dispatch_agent"
-
-// Compile-time check that DispatchAgentTool implements core.AsyncTool.
-var _ core.AsyncTool = (*DispatchAgentTool)(nil)
 
 // NewDispatchAgentTool creates a new DispatchAgentTool.
 // inferencer is the LLM provider used by child agents (configured from the parent's config).
@@ -63,11 +59,6 @@ func (t *DispatchAgentTool) Parameters() map[string]any {
 		},
 		"required": []string{"system_prompt", "task"},
 	}
-}
-
-// SetCallback registers a callback for async completion notification.
-func (t *DispatchAgentTool) SetCallback(cb core.AsyncCallback) {
-	t.callback = cb
 }
 
 // Execute spawns and runs the child agent synchronously, returning its final text response.

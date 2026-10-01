@@ -11,12 +11,15 @@ import (
 	"testing"
 	"time"
 
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
+
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -157,7 +160,7 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 		Runtime: NewRuntimeRecorder(runtimeObserver, clock.Real{}),
 	})
 	playbackCalls := 0
-	playbackObserver := diagnostics.PlaybackObserver(func(devicegw.DeviceID, audio.PlaybackQueueStats) { playbackCalls++ })
+	playbackObserver := diagnostics.PlaybackObserver(t.Context(), func(devicegw.DeviceID, audio.PlaybackQueueStats) { playbackCalls++ })
 	playbackObserver(devicegw.DeviceID("virtual:output"), audio.PlaybackQueueStats{
 		Format: audio.DeviceFormat{SampleRate: 16000, Channels: 1}, DroppedSamples: 2, OverflowEvents: 1,
 	})
@@ -166,9 +169,9 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 	}
 	receiptObserver := diagnostics.PlaybackReceiptObserver(nil)
 	receiptObserver(audio.PlaybackReceipt{CommandID: 7, Epoch: 2, Applied: true})
-	captureObserver := diagnostics.CaptureObserver(nil)
+	captureObserver := diagnostics.CaptureObserver(t.Context(), nil)
 	captureObserver(devicegw.DeviceID("virtual:input"), audio.CaptureQueueStats{CapturedSamples: 4, DroppedSamples: 1, DropPolicy: "drop_oldest"})
-	diagnostics.RecordParticipantPlaybackOverflow("participant-1", nil)
+	diagnostics.RecordParticipantPlaybackOverflow(t.Context(), "participant-1", nil)
 	if len(runtimeObserver.snapshot()) != 1 {
 		t.Fatalf("receipt observations = %d, want one", len(runtimeObserver.snapshot()))
 	}
@@ -366,7 +369,7 @@ func TestTraceDeviceServiceCoversOptionalCapabilitiesAndHandleLifecycle(t *testi
 
 	monitor := &remoteRenderMonitor{endpoint: "not-an-endpoint", observer: func(int, []int16) {}, done: make(chan struct{})}
 	monitorHandle := &traceDeviceHandle{inner: &traceContractHandle{}, monitor: monitor}
-	monitor.Start()
+	monitor.Start(t.Context())
 	if err := monitorHandle.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -517,8 +520,8 @@ type traceContractLegacyPlayback struct {
 	renderedObserver func(int, []int16)
 }
 
-func (traceContractLegacyPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
-func (traceContractLegacyPlayback) Close() error                                   { return nil }
+func (*traceContractLegacyPlayback) Pump(context.Context, audio.InboundMedia) error { return nil }
+func (*traceContractLegacyPlayback) Close() error                                   { return nil }
 func (p *traceContractLegacyPlayback) SetPlaybackRenderObserver(observer audio.PlaybackRenderObserver) {
 	p.renderedObserver = func(rate int, samples []int16) { observer(rate, samples) }
 }
@@ -560,10 +563,26 @@ func TestNilRuntimeRecorderIsInert(t *testing.T) {
 }
 
 func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {
-	if combineRTCDevicePlaybackObservers(nil, nil) != nil || combineRTCDeviceCaptureObservers(nil) != nil || combineRTCDevicePlaybackReceiptObservers(nil) != nil {
+	absent := []devicert.RTCDevicePlaybackObserver{nil, nil}
+	if combineRTCDevicePlaybackObservers(absent...) != nil || combineRTCDeviceCaptureObservers(nil) != nil || combineRTCDevicePlaybackReceiptObservers(nil) != nil {
 		t.Fatal("combining only absent observers produced an observer")
 	}
-	if resolvePlaybackDiagnosticSink(nil) == nil {
+	var logged []observability.LogRecord
+	logger := observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) error {
+		logged = append(logged, record)
+		return nil
+	})
+	fallback := resolvePlaybackDiagnosticSink(t.Context(), sessiontrace.PlaybackDiagnosticsOptions{Logger: logger})
+	if fallback == nil {
 		t.Fatal("an unwired playback diagnostic sink was not replaced by the fallback")
+	}
+	var written strings.Builder
+	resolvePlaybackDiagnosticSink(t.Context(), sessiontrace.PlaybackDiagnosticsOptions{DiagnosticWriter: &written}).RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow})
+	if !strings.Contains(written.String(), "event="+SessionDiagnosticEventPlaybackOverflow) {
+		t.Fatalf("diagnostic without sink or logger = %q, want it written to the diagnostic writer", written.String())
+	}
+	fallback.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: map[string]string{"dropped": "3"}})
+	if len(logged) != 1 || logged[0].Fields["event"] != SessionDiagnosticEventPlaybackOverflow || logged[0].Fields["dropped"] != "3" {
+		t.Fatalf("fallback diagnostic log = %#v, want one overflow record", logged)
 	}
 }

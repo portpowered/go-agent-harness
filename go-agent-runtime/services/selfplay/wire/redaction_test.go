@@ -16,11 +16,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-type providerFailureCategory string
+type providerFailureError string
 
-func (e providerFailureCategory) Error() string { return string(e) }
+func (e providerFailureError) Error() string { return string(e) }
 
-const errSensitiveProviderFailure providerFailureCategory = "sensitive provider failure"
+const errSensitiveProviderFailure providerFailureError = "sensitive provider failure"
 
 func TestSelfPlayServiceRedactsReturnedProviderErrorWithoutExposingCause(t *testing.T) {
 	const secret = "provider-credential-that-must-not-escape"

@@ -59,7 +59,9 @@ func (r Runner) currentTime() time.Time {
 }
 
 func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptions) (rooms.RoomResult, error) {
-	ctx = nonNilContext(ctx)
+	if ctx == nil {
+		return rooms.RoomResult{}, errRoomRunContextRequired
+	}
 	manifest := requestManifest(request)
 	if err := r.validateRun(manifest); err != nil {
 		return rooms.RoomResult{}, err
@@ -75,7 +77,7 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	runCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	state := newRunState(manifest, cancel)
-	state.delivery, state.deliveryCtx = delivery, runCtx
+	state.delivery, state.deliveryStopped = delivery, runCtx.Done()
 	stopTimer := r.startDurationBound(runCtx, manifest.Room.MaxDuration, state)
 	defer stopTimer()
 	r.openParticipants(ctx, runCtx, state, manifest, request, recorder)
@@ -83,13 +85,6 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	delivery.attach(graph)
 	state.waitAll(runCtx, request, r.currentTime)
 	return r.finishRun(runCtx, state, graph, manifest, request, recorder)
-}
-
-func nonNilContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
 }
 
 func requestManifest(request rooms.RoomRunOptions) rooms.Manifest {

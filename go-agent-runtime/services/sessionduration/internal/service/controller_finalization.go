@@ -15,6 +15,9 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 	if c == nil {
 		return sessionduration.Result{}, request.Primary
 	}
+	if ctx == nil {
+		return sessionduration.Result{}, errors.Join(request.Primary, sessionduration.ErrContextRequired)
+	}
 	c.finalizeOnce.Do(func() {
 		c.mu.Lock()
 		c.livenessStopped = true
@@ -41,14 +44,9 @@ func (c *controller) Finalize(ctx context.Context, request sessionduration.Final
 	return c.finalizeResult, c.finalizeErr
 }
 
-//nolint:contextcheck // Finalization must outlive caller cancellation and accepts nil contexts.
+// cleanup detaches from the caller's cancellation: finalization must finish
+// after the run is canceled. Each blocking step carries its own bound.
 func (c *controller) cleanup(ctx context.Context, request sessionduration.FinalizeRequest) []error {
-	if ctx == nil {
-		ctx = c.ctx
-		if ctx == nil {
-			ctx = context.Background()
-		}
-	}
 	ctx = context.WithoutCancel(ctx)
 	var failures []error
 	appendFailure := func(label string, cleanup func() error) {
@@ -143,6 +141,9 @@ func (f *finalizer) Finish(ctx context.Context, out io.Writer, primary error) er
 	if f == nil {
 		return primary
 	}
+	if ctx == nil {
+		return errors.Join(primary, sessionduration.ErrContextRequired)
+	}
 	f.once.Do(func() {
 		cleanupErr := f.cleanup(ctx, out)
 		f.mu.Lock()
@@ -158,9 +159,6 @@ func (f *finalizer) Finish(ctx context.Context, out io.Writer, primary error) er
 func (f *finalizer) cleanup(ctx context.Context, out io.Writer) error {
 	if out == nil {
 		out = io.Discard
-	}
-	if ctx == nil {
-		ctx = context.Background() //nolint:contextcheck // standalone finalization has no caller context to inherit.
 	}
 	var failures []error
 	appendFailure := func(label string, cleanup func() error) {

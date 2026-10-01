@@ -50,7 +50,7 @@ func (e *Executor) BuildLoop(ctx context.Context, cfg *Config) (*RunData, error)
 		sessionID = cfg.SessionID
 		initialHistory = cfg.InitialHistory
 	} else {
-		initialHistory, sessionID, err = e.getInitialHistory(cfg, sessionStorage)
+		initialHistory, sessionID, err = e.getInitialHistory(ctx, cfg, sessionStorage)
 		if err != nil {
 			return nil, err
 		}
@@ -176,19 +176,33 @@ func (e *Executor) loopOptions(ctx context.Context, cfg *Config, inf messages.In
 
 	// Wire session replay into the agent loop if a session capture file exists.
 	// Replay takes priority over record (same as HTTP capture).
-	if cfg.ReplayCapturePath != "" {
-		sessionCapturePath := cfg.ReplayCapturePath + ".session.json"
-		if _, statErr := os.Stat(sessionCapturePath); statErr == nil {
-			if e.replayService == nil {
-				return nil, fmt.Errorf("replay service is required for session capture %q", sessionCapturePath)
-			}
-			replayInf, err := e.replayService.NewSessionInferencer(ctx, sessionCapturePath)
-			if err != nil {
-				return nil, fmt.Errorf("prepare session replay %q: %w", sessionCapturePath, err)
-			}
-			loopOpts = append(loopOpts, agentloop.WithSessionInferencer(replayInf))
-		}
+	replayOption, err := e.sessionReplayOption(ctx, cfg.ReplayCapturePath)
+	if err != nil {
+		return nil, err
+	}
+	if replayOption != nil {
+		loopOpts = append(loopOpts, replayOption)
 	}
 
 	return loopOpts, nil
+}
+
+// sessionReplayOption returns the session inferencer option for a replay
+// capture's sibling session capture file, or nil when there is none.
+func (e *Executor) sessionReplayOption(ctx context.Context, replayCapturePath string) (agentloop.Option, error) {
+	if replayCapturePath == "" {
+		return nil, nil
+	}
+	sessionCapturePath := replayCapturePath + ".session.json"
+	if _, statErr := os.Stat(sessionCapturePath); statErr != nil {
+		return nil, nil //nolint:nilerr // A missing session capture means plain HTTP replay.
+	}
+	if e.replayService == nil {
+		return nil, fmt.Errorf("replay service is required for session capture %q", sessionCapturePath)
+	}
+	replayInf, err := e.replayService.NewSessionInferencer(ctx, sessionCapturePath)
+	if err != nil {
+		return nil, fmt.Errorf("prepare session replay %q: %w", sessionCapturePath, err)
+	}
+	return agentloop.WithSessionInferencer(replayInf), nil
 }

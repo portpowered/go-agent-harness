@@ -15,12 +15,9 @@ const (
 	defaultDrainWallSafety  = 250 * time.Millisecond
 )
 
-func (c *controller) drainLoop(ctx context.Context, loop sessionduration.Loop, policy sessionduration.DrainPolicy) error { //nolint:contextcheck // drain uses a detached fallback after runner cancellation.
+func (c *controller) drainLoop(ctx context.Context, loop sessionduration.Loop, policy sessionduration.DrainPolicy) error {
 	if c == nil || loop == nil || loop.Deltas() == nil {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	more, err := c.drainAvailable(loop)
 	if err != nil {
@@ -134,12 +131,8 @@ func loopJoinTimeout(policy sessionduration.DrainPolicy) time.Duration {
 	return policy.LoopJoinTimeout
 }
 
-//nolint:contextcheck // Internal callers may omit a context while joining an owned loop.
 func (r *runLoop) waitForLoop(ctx context.Context) error {
 	if !r.loopDone {
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		select {
 		case r.loopErr = <-r.runErrs:
 			r.loopDone = true

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,7 +45,7 @@ type roomReplayArtifactRef struct {
 	Field  string
 }
 
-func validateRoomReplayManifest(root, manifestPath string, data []byte, replayService replay.CaptureInspector) (RoomReplayPlan, error) {
+func validateRoomReplayManifest(ctx context.Context, root, manifestPath string, data []byte, replayService replay.CaptureInspector) (RoomReplayPlan, error) {
 	document, err := parseRoomReplayManifest(data)
 	if err != nil {
 		return RoomReplayPlan{}, err
@@ -78,7 +79,7 @@ func validateRoomReplayManifest(root, manifestPath string, data []byte, replaySe
 	if err != nil {
 		return RoomReplayPlan{}, err
 	}
-	if err := validateRoomReplayCaptures(replayService, &plan); err != nil {
+	if err := validateRoomReplayCaptures(ctx, replayService, &plan); err != nil {
 		return RoomReplayPlan{}, err
 	}
 	timelineArtifact, ok := findRoomReplayArtifact(validated, "room:timeline")

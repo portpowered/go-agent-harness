@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -32,7 +33,7 @@ func TestFilesystemValidationAndMediaErrorContracts(t *testing.T) {
 	}
 	assertValidationPaths(t, workspace, insidePath, outsideDir, outsidePath)
 	assertValidationSymlinks(t, workspace, insidePath, outsideDir)
-	assertValidationSandbox(t, workspace)
+	assertValidationSandbox(t)
 	assertValidationMediaAndReadTools(t, workspace)
 }
 
@@ -107,7 +108,7 @@ func assertExternalLinkValidation(t *testing.T, workspace, link string) {
 	}
 }
 
-func assertValidationSandbox(t *testing.T, workspace string) {
+func assertValidationSandbox(t *testing.T) {
 	t.Helper()
 	if _, err := (&sandboxFs{}).ReadFile("inside.txt"); err == nil || err.Error() != workspaceUndefinedMessage {
 		t.Fatalf("empty sandbox error = %v", err)
@@ -133,7 +134,7 @@ func assertValidationMediaAndReadTools(t *testing.T, workspace string) {
 	}
 	readTool := NewReadFileTool("", false)
 	assertReadToolContracts(t, ctx, readTool, textPath, workspace)
-	t.Run("audio read when ffmpeg is available", func(t *testing.T) { assertAudioReadContract(t, ctx, readTool, workspace) })
+	t.Run("audio read", func(t *testing.T) { assertAudioReadContract(t, ctx, readTool, workspace) })
 	assertWriteAndListContracts(t, ctx, workspace, textPath)
 }
 
@@ -153,14 +154,16 @@ func assertReadToolContracts(t *testing.T, ctx context.Context, readTool core.To
 
 func assertAudioReadContract(t *testing.T, ctx context.Context, readTool core.Tool, workspace string) {
 	t.Helper()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skipf("ffmpeg is required for WAV conversion assertion: %v", err)
-	}
 	wavPath := filepath.Join(workspace, "tone.wav")
 	if err := os.WriteFile(wavPath, minimalWAV(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	msgs, err := readTool.Execute(ctx, map[string]any{"path": wavPath})
+	if _, lookErr := exec.LookPath("ffmpeg"); lookErr != nil {
+		// Without ffmpeg the conversion failure is reported to the model.
+		requireToolTextContains(t, msgs, err, "read audio: ffmpeg convert to PCM 16kHz")
+		return
+	}
 	if err != nil || len(msgs) != 1 || len(msgs[0].ContentParts) != 1 {
 		t.Fatalf("audio read result = %#v, %v", msgs, err)
 	}
@@ -194,10 +197,12 @@ func assertWriteAndListContracts(t *testing.T, ctx context.Context, workspace, t
 
 func assertInvalidHostWrites(t *testing.T, workspace string) {
 	t.Helper()
-	if err := (&hostFs{}).WriteFile(filepath.Join(workspace, "bad\x00", "file"), []byte("invalid")); err == nil || !strings.Contains(err.Error(), "failed to create parent directories") {
+	// A NUL byte is invalid in a path component on every supported platform.
+	nulComponent := "bad" + string(rune(0))
+	if err := (&hostFs{}).WriteFile(filepath.Join(workspace, nulComponent, "file"), []byte("invalid")); err == nil || !strings.Contains(err.Error(), "failed to create parent directories") {
 		t.Fatalf("host invalid-parent write error = %v", err)
 	}
-	if err := (&hostFs{}).WriteFile(filepath.Join(workspace, "bad\x00"), []byte("invalid")); err == nil || !strings.Contains(err.Error(), "failed to write temp file") {
+	if err := (&hostFs{}).WriteFile(filepath.Join(workspace, nulComponent), []byte("invalid")); err == nil || !strings.Contains(err.Error(), "failed to write temp file") {
 		t.Fatalf("host invalid-file write error = %v", err)
 	}
 }
@@ -277,7 +282,7 @@ func discoverMaximumFilenameComponent(t *testing.T, dir string) string {
 		low = high
 		high *= 2
 		if high > 1<<16 {
-			t.Skip("filesystem did not expose a filename-component limit during probing")
+			t.Fatalf("filesystem accepted a %d-byte filename component without a limit", high)
 		}
 	}
 	for high-low > 1 {

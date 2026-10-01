@@ -51,7 +51,9 @@ type participantFrameState struct {
 // Build admits capture barriers and file-backed sent PCM before producing an
 // immutable schedule. Text-only captures intentionally return a nil schedule.
 func (s *Service) Build(ctx context.Context, request roomreplay.BuildRequest) (roomreplay.Schedule, error) {
-	ctx = nonNilContext(ctx)
+	if ctx == nil {
+		return nil, errScheduleContextRequired
+	}
 	request, err := prepareReplayBuildRequest(request)
 	if err != nil {
 		return nil, err
@@ -78,12 +80,14 @@ func (s *Service) Build(ctx context.Context, request roomreplay.BuildRequest) (r
 	return assembleSchedule(contributions, targetIDs, expectedFrames, maxFrame)
 }
 
-func nonNilContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
+// errScheduleContextRequired reports a schedule build or run without a
+// caller context.
+const errScheduleContextRequired contextRequiredError = "room replay schedule context is required"
 
 func normalizeTargetFormat(format roomreplay.PCM16Format) (roomreplay.PCM16Format, int, error) {
 	if format == (roomreplay.PCM16Format{}) {
@@ -245,7 +249,7 @@ func segmentFrameLimit(index int, segments []speechSegment, remaining int, frame
 }
 
 func (state *participantFrameState) appendSegment(pcm []byte, participantID string, segment speechSegment, startFrame, limit, frameBytes int) {
-	for frameOffset := 0; frameOffset < limit; frameOffset++ {
+	for frameOffset := range limit {
 		state.appendFrame(startFrame+frameOffset, participantID, segment.sequence, pcmFrame(pcm, state.cursor, frameBytes))
 	}
 }

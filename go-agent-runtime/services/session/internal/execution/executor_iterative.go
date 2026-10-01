@@ -165,7 +165,7 @@ func (e *Executor) runNonInteractiveIterations(ctx context.Context, cfg *Config,
 			return result, err
 		}
 		if interrupted {
-			return finishInterruptedIteration(storage, *trace, result, iteration, out)
+			return finishInterruptedIteration(ctx, storage, *trace, result, iteration, out)
 		}
 		result.Iterations = append(result.Iterations, iteration)
 		if iteration.StopWordMatched {
@@ -173,7 +173,7 @@ func (e *Executor) runNonInteractiveIterations(ctx context.Context, cfg *Config,
 			break
 		}
 	}
-	return finishIterativeTrace(storage, *trace, result)
+	return finishIterativeTrace(ctx, storage, *trace, result)
 }
 
 func (e *Executor) runNonInteractiveIteration(ctx context.Context, cfg *Config, stopWord string, input agentloop.ExecuteInput, trace *session.TraceRecord, storage Storage, iteration, maxIter int, out io.Writer) (IterationRunResult, bool, error) {
@@ -192,7 +192,7 @@ func (e *Executor) runNonInteractiveIteration(ctx context.Context, cfg *Config, 
 	if interrupted {
 		return result, true, nil
 	}
-	if err := storage.SaveTrace(*trace); err != nil {
+	if err := storage.SaveTrace(ctx, *trace); err != nil {
 		return result, false, fmt.Errorf("save trace after iteration %d: %w", iteration, err)
 	}
 	result.StopWordMatched = hasIterationStopWord(result, stopWord)
@@ -218,7 +218,7 @@ func (e *Executor) runInteractiveIterations(ctx context.Context, cfg *Config, lo
 			break
 		}
 	}
-	return finishIterativeTrace(storage, trace, result)
+	return finishIterativeTrace(ctx, storage, trace, result)
 }
 
 func (e *Executor) runInteractiveIteration(ctx context.Context, cfg *Config, stopWord string, input agentloop.ExecuteInput, trace *session.TraceRecord, storage Storage, iteration, maxIter int, interaction *IterativeInteraction) (IterationRunResult, error) {
@@ -232,7 +232,7 @@ func (e *Executor) runInteractiveIteration(ctx context.Context, cfg *Config, sto
 	}
 	appendIterationTrace(trace, result)
 	trace.Status = session.TraceStatusRunning
-	if err := storage.SaveTrace(*trace); err != nil {
+	if err := storage.SaveTrace(ctx, *trace); err != nil {
 		return result, fmt.Errorf("save trace after iteration %d: %w", iteration, err)
 	}
 	result.StopWordMatched = hasIterationStopWord(result, stopWord)
@@ -255,7 +255,7 @@ func (e *Executor) applyInteractiveDecision(ctx context.Context, interaction *It
 	if iteration.Interrupted {
 		if ctx.Err() != nil || decision.Action != IterativeContinue {
 			trace.Status = session.TraceStatusInterrupted
-			if err := storage.SaveTrace(*trace); err != nil {
+			if err := storage.SaveTrace(ctx, *trace); err != nil {
 				return iterativeLoopContinue, fmt.Errorf("save interrupted trace: %w", err)
 			}
 			return iterativeLoopInterrupted, nil
@@ -267,7 +267,7 @@ func (e *Executor) applyInteractiveDecision(ctx context.Context, interaction *It
 	if decision.Prompt != "" {
 		input.Message = decision.Prompt
 		trace.Config.Prompt = decision.Prompt
-		if err := storage.SaveTrace(*trace); err != nil {
+		if err := storage.SaveTrace(ctx, *trace); err != nil {
 			return iterativeLoopContinue, fmt.Errorf("save steering prompt after iteration %d: %w", iteration.Iteration, err)
 		}
 	}
@@ -291,9 +291,9 @@ func iterationContextInterrupted(ctx context.Context) bool {
 	return ctx != nil && ctx.Err() != nil
 }
 
-func finishIterativeTrace(storage Storage, trace session.TraceRecord, result IterativeRunResult) (IterativeRunResult, error) {
+func finishIterativeTrace(ctx context.Context, storage Storage, trace session.TraceRecord, result IterativeRunResult) (IterativeRunResult, error) {
 	trace.Status = session.TraceStatusCompleted
-	if err := storage.SaveTrace(trace); err != nil {
+	if err := storage.SaveTrace(ctx, trace); err != nil {
 		return result, fmt.Errorf("save completed trace: %w", err)
 	}
 	return result, nil
@@ -325,26 +325,18 @@ func (e *Executor) runIteration(ctx context.Context, cfg *Config, iteration, max
 	// adapters translate signals into context cancellation before invoking
 	// the runtime; the reusable service must not install process-global
 	// signal handlers of its own.
-	runData, buildErr := e.BuildLoop(ctx, &iterCfg)
-	var text string
-	var execErr error
-	var sessionID string
-
-	if buildErr != nil {
-		execErr = buildErr
-	} else if mimeErr := e.validateInputMimeTypes(&iterCfg, runData, input); mimeErr != nil {
-		execErr = mimeErr
-	} else {
-		sessionID = runData.SessionID
-		text, execErr = e.executeWithContinuation(ctx, runData, input, &iterCfg, out, stopWord)
-		if execErr == nil {
-			if saveErr := e.SaveSession(runData); saveErr != nil {
-				execErr = saveErr
-			}
-		}
+	runData, err := e.BuildLoop(ctx, &iterCfg)
+	if err != nil {
+		return IterationRunResult{Iteration: iteration, Err: err}
 	}
-
-	return IterationRunResult{Iteration: iteration, SessionID: sessionID, Text: text, Err: execErr}
+	if err := e.validateInputMimeTypes(runData, input); err != nil {
+		return IterationRunResult{Iteration: iteration, Err: err}
+	}
+	text, execErr := e.executeWithContinuation(ctx, runData, input, &iterCfg, out, stopWord)
+	if execErr == nil {
+		execErr = e.SaveSession(ctx, runData)
+	}
+	return IterationRunResult{Iteration: iteration, SessionID: runData.SessionID, Text: text, Err: execErr}
 }
 
 func iterationStatus(interrupted bool, err error) session.IterationStatus {
@@ -357,9 +349,9 @@ func iterationStatus(interrupted bool, err error) session.IterationStatus {
 	return session.IterationStatusCompleted
 }
 
-func finishInterruptedIteration(storage Storage, trace session.TraceRecord, result IterativeRunResult, iteration IterationRunResult, out io.Writer) (IterativeRunResult, error) {
+func finishInterruptedIteration(ctx context.Context, storage Storage, trace session.TraceRecord, result IterativeRunResult, iteration IterationRunResult, out io.Writer) (IterativeRunResult, error) {
 	trace.Status = session.TraceStatusInterrupted
-	if saveErr := storage.SaveTrace(trace); saveErr != nil {
+	if saveErr := storage.SaveTrace(ctx, trace); saveErr != nil {
 		return result, fmt.Errorf("save interrupted trace: %w", saveErr)
 	}
 	if _, err := fmt.Fprintf(out, "\n[Interrupted. Resume with: --loop --trace-id %s]\n", trace.TraceID); err != nil {

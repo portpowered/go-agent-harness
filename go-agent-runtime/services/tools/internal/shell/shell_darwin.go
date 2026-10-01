@@ -3,6 +3,7 @@
 package shell
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"syscall"
@@ -15,7 +16,7 @@ func prepareCommandForTermination(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-func terminateProcessTree(cmd *exec.Cmd) error {
+func terminateProcessTree(_ context.Context, cmd *exec.Cmd) error {
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}

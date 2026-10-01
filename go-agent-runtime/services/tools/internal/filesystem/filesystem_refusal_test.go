@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -310,8 +310,8 @@ func assertTraversalWrite(t *testing.T, f writeRootsFixture, writeTool core.Tool
 func assertExternalSymlinkWrite(t *testing.T, f writeRootsFixture, writeTool core.Tool) {
 	t.Helper()
 	linkParent := filepath.Join(f.primary, "external")
-	if err := os.Symlink(f.outside, linkParent); err != nil {
-		t.Skipf("symlinks unavailable on %s: %v", runtime.GOOS, err)
+	if !symlinkOrUnsupported(t, f.outside, linkParent) {
+		return
 	}
 	path := filepath.Join(linkParent, "created.txt")
 	msgs, err := writeTool.Execute(context.Background(), map[string]any{"path": path, "content": "must not write"})
@@ -390,14 +390,14 @@ func TestFilesystemRefusalRoundTripsThroughContent(t *testing.T) {
 
 func TestFilesystemRefusalErrorsCarryOperationAndSentinel(t *testing.T) {
 	refusal := validTestRefusal()
-	if got := refusal.Error(); got != `filesystem operation "read_file" refused: outside_permitted_roots` {
-		t.Fatalf("refusal Error() = %q", got)
+	if got := refusal.Summary(); got != `filesystem operation "read_file" refused: outside_permitted_roots` {
+		t.Fatalf("refusal Summary() = %q", got)
 	}
-	if got := (FilesystemRefusal{}).Error(); got != ErrFilesystemRefused.Error() {
-		t.Fatalf("empty refusal Error() = %q", got)
+	if got := (FilesystemRefusal{}).Summary(); got != ErrFilesystemRefused.Error() {
+		t.Fatalf("empty refusal Summary() = %q", got)
 	}
 	wrapped := &FilesystemRefusalError{Refusal: refusal}
-	if !errors.Is(wrapped, ErrFilesystemRefused) || wrapped.Error() != refusal.Error() {
+	if !errors.Is(wrapped, ErrFilesystemRefused) || wrapped.Error() != refusal.Summary() {
 		t.Fatalf("refusal error = %q, want the refusal text and sentinel", wrapped.Error())
 	}
 	var nilErr *FilesystemRefusalError

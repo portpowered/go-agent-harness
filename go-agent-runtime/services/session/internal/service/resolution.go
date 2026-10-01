@@ -10,7 +10,6 @@ import (
 )
 
 func (s *Service) resolve(ctx context.Context, request session.Request) (session.Resolution, error) {
-	ctx = normalizeContext(ctx)
 	if s != nil && s.resolver != nil {
 		resolution, err := s.resolver.Resolve(ctx, request)
 		if err != nil {
@@ -37,11 +36,20 @@ func (s *Service) resolve(ctx context.Context, request session.Request) (session
 	return ensureResolutionDefaults(request, resolution), nil
 }
 
-func normalizeContext(ctx context.Context) context.Context {
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
+// errContextRequired reports a nil caller context. The session service never
+// invents a root context: cancellation and deadlines belong to the caller.
+const errContextRequired contextRequiredError = "session context is required"
+
+func requireContext(ctx context.Context) error {
 	if ctx == nil {
-		return context.Background()
+		return errContextRequired
 	}
-	return ctx
+	return ctx.Err()
 }
 
 func ensureResolutionDefaults(request session.Request, resolution session.Resolution) session.Resolution {
@@ -87,7 +95,7 @@ func toExecutionConfig(request session.Request, resolution session.Resolution) a
 	}
 }
 
-func toRuntimeResolution(ctx context.Context, resolution session.Resolution) agent.RuntimeResolution {
+func toRuntimeResolution(resolution session.Resolution) agent.RuntimeResolution {
 	provider := resolution.Provider
 	executionProvider := agent.ProviderConfig{
 		Provider: provider.Provider,
@@ -114,7 +122,7 @@ func toRuntimeResolution(ctx context.Context, resolution session.Resolution) age
 		ModelCatalog:    agent.ModelCatalog{Models: models},
 		ModelPolicy:     agent.ModelPolicy{ContinuationNudgeEnabled: resolution.ContinuationNudgeEnabled, ContinuationNudgeMessage: resolution.ContinuationNudgeMessage, RepetitionPenalty: resolution.RepetitionPenalty},
 		ProviderService: resolution.ProviderService,
-		Storage:         newStorageAdapter(ctx, resolution.Store, resolution.TraceStore, resolution.WorkspaceDir),
+		Storage:         newStorageAdapter(resolution.Store, resolution.TraceStore, resolution.WorkspaceDir),
 		WorkspaceDir:    resolution.WorkspaceDir,
 		AllowPaths:      append([]string(nil), resolution.AllowPaths...),
 		SkillRoots:      append([]tools.SkillRoot(nil), resolution.SkillRoots...),

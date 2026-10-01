@@ -11,12 +11,18 @@ import (
 )
 
 type handle struct {
-	mu        sync.Mutex
-	executor  *agent.Executor
-	runData   *agent.RunData
-	config    agent.Config
-	ctx       context.Context
-	cancel    context.CancelFunc
+	mu       sync.Mutex
+	executor *agent.Executor
+	runData  *agent.RunData
+	config   agent.Config
+	// lifetimeErr latches why the handle's Open context ended (or
+	// context.Canceled after Close); no turn may start once it is set.
+	lifetimeErr  error
+	stopLifetime func() bool
+	// turns holds the cancel function of every turn context that has not
+	// finished, so lifetime expiry cancels turns still under construction.
+	turns     map[uint64]context.CancelFunc
+	nextTurn  uint64
 	closed    bool
 	closeOnce sync.Once
 	closeDone chan struct{}
@@ -64,7 +70,7 @@ func (h *handle) Stream(ctx context.Context, input agentloop.ExecuteInput) (agen
 		h.mu.Unlock()
 		return nil, fmt.Errorf("session handle is closed")
 	}
-	if err := h.ctx.Err(); err != nil {
+	if err := h.lifetimeErr; err != nil {
 		h.mu.Unlock()
 		return nil, err
 	}
@@ -75,16 +81,14 @@ func (h *handle) Stream(ctx context.Context, input agentloop.ExecuteInput) (agen
 	executor := h.executor
 	runData := h.runData
 	config := h.config
-	lifetimeCtx := h.ctx
+	// A turn may have a shorter context than the handle, but it must never
+	// outlive the handle's Open context: expiry cancels every registered turn.
+	turnCtx, cancel := context.WithCancel(ctx)
+	stop := h.registerTurnLocked(cancel)
 	h.starts.Add(1)
 	h.mu.Unlock()
 	defer h.starts.Done()
 
-	// A turn may have a shorter context than the handle, but it must never
-	// outlive the handle's Open context. AfterFunc avoids a permanent watcher
-	// goroutine for contexts that are never cancelled.
-	turnCtx, cancel := context.WithCancel(ctx)
-	stop := context.AfterFunc(lifetimeCtx, cancel) //nolint:contextcheck // The separately owned handle lifetime must also cancel this caller-derived turn.
 	if err := turnCtx.Err(); err != nil {
 		stop()
 		cancel()
@@ -113,7 +117,39 @@ func (h *handle) Stream(ctx context.Context, input agentloop.ExecuteInput) (agen
 	return owned, nil
 }
 
-func (h *handle) Save() error {
+// registerTurnLocked records a turn's cancel function until the returned
+// stop function removes it. The caller holds h.mu.
+func (h *handle) registerTurnLocked(cancel context.CancelFunc) func() bool {
+	h.nextTurn++
+	id := h.nextTurn
+	h.turns[id] = cancel
+	return func() bool {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		_, registered := h.turns[id]
+		delete(h.turns, id)
+		return registered
+	}
+}
+
+// expire latches the handle's lifetime error and cancels every registered
+// turn. It runs when the Open context ends and when the handle closes.
+func (h *handle) expire(cause error) {
+	h.mu.Lock()
+	if h.lifetimeErr == nil {
+		h.lifetimeErr = cause
+	}
+	cancels := make([]context.CancelFunc, 0, len(h.turns))
+	for _, cancel := range h.turns {
+		cancels = append(cancels, cancel)
+	}
+	h.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+}
+
+func (h *handle) Save(ctx context.Context) error {
 	if h == nil {
 		return fmt.Errorf("session handle is closed")
 	}
@@ -122,7 +158,7 @@ func (h *handle) Save() error {
 	if h.closed || h.runData == nil {
 		return fmt.Errorf("session handle is closed")
 	}
-	return h.executor.SaveSession(h.runData)
+	return h.executor.SaveSession(ctx, h.runData)
 }
 
 func (h *handle) Flush(recordPath string) error {
@@ -142,11 +178,12 @@ func (h *handle) Close() error {
 		return nil
 	}
 	h.closeOnce.Do(func() {
+		if h.stopLifetime != nil {
+			h.stopLifetime()
+		}
+		h.expire(context.Canceled)
 		h.mu.Lock()
 		h.closed = true
-		if h.cancel != nil {
-			h.cancel()
-		}
 		streams := make([]*ownedStream, 0, len(h.active))
 		for stream := range h.active {
 			streams = append(streams, stream)

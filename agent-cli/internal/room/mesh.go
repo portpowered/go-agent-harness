@@ -43,25 +43,21 @@ func NewPairSpec(firstID, secondID string) (PairSpec, error) {
 // the pair-neutral runtime lifecycle service.
 type Mesh struct{ delegate runtimeRooms.Mesh }
 
-func NewMesh(config ...MeshConfig) *Mesh {
+// NewMesh constructs a mesh that closes when ctx ends. A nil ctx yields an
+// already-closed mesh.
+func NewMesh(ctx context.Context, config ...MeshConfig) *Mesh {
 	cfg := MeshConfig{}
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	if cfg.Context == nil {
-		cfg.Context = context.Background()
-	}
 	if cfg.PairFactory == nil {
 		cfg.PairFactory = NewLoopbackPairFactory()
 	}
-	return &Mesh{delegate: runtimeRoomsWire.NewMesh(cfg)}
-}
-
-func (m *Mesh) Context() context.Context {
-	if m == nil || m.delegate == nil {
-		return context.Background()
+	delegate, err := runtimeRoomsWire.NewMesh(ctx, cfg)
+	if err != nil {
+		return &Mesh{}
 	}
-	return m.delegate.Context()
+	return &Mesh{delegate: delegate}
 }
 
 func (m *Mesh) Done() <-chan struct{} {

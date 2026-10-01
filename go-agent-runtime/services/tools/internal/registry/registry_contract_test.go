@@ -52,26 +52,25 @@ func RunToolConformance(t *testing.T, tool core.Tool) {
 	if err := registry.Register(tool); err != nil {
 		t.Fatalf("initial registration: %v", err)
 	}
-	t.Run("invalid argument invocation", func(t *testing.T) {
-		if reason := unsafeInvocationReason(tool); reason != "" {
-			t.Skip(reason)
-		}
-		for _, probe := range []struct {
-			name string
-			args map[string]any
-		}{
-			{name: "nil arguments", args: nil},
-			{name: "empty arguments", args: map[string]any{}},
-		} {
-			t.Run(probe.name, func(t *testing.T) {
-				if err := validateInvocationOutcome(func() ([]messages.Message, error) {
-					return registry.Execute(context.Background(), tool.Name(), probe.args)
-				}); err != nil {
-					t.Fatal(err)
-				}
-			})
-		}
-	})
+	if !invalidArgumentsInvokeHost(tool) {
+		t.Run("invalid argument invocation", func(t *testing.T) {
+			for _, probe := range []struct {
+				name string
+				args map[string]any
+			}{
+				{name: "nil arguments", args: nil},
+				{name: "empty arguments", args: map[string]any{}},
+			} {
+				t.Run(probe.name, func(t *testing.T) {
+					if err := validateInvocationOutcome(func() ([]messages.Message, error) {
+						return registry.Execute(context.Background(), tool.Name(), probe.args)
+					}); err != nil {
+						t.Fatal(err)
+					}
+				})
+			}
+		})
+	}
 
 	wantCount := registry.Count()
 	err = registry.Register(tool)
@@ -82,11 +81,13 @@ func RunToolConformance(t *testing.T, tool core.Tool) {
 	}
 }
 
-func unsafeInvocationReason(tool core.Tool) string {
-	if _, ok := tool.(*display.ScreenTool); ok {
-		return "existing display.ScreenTool defaults nil/empty action to host screen capture; no in-lease dry-run seam exists, so S11 skips this probe (see PR #57 review)"
-	}
-	return ""
+// invalidArgumentsInvokeHost reports tools whose nil/empty arguments select a
+// real host effect: display.ScreenTool defaults an empty action to host screen
+// capture and has no dry-run seam, so the invalid-argument probe does not
+// apply to it.
+func invalidArgumentsInvokeHost(tool core.Tool) bool {
+	_, ok := tool.(*display.ScreenTool)
+	return ok
 }
 
 func validateInvocationOutcome(invoke func() ([]messages.Message, error)) error {

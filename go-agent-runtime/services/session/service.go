@@ -123,7 +123,7 @@ type IterativeResult struct {
 type SessionHandle interface {
 	SessionID() string
 	Stream(context.Context, agentloop.ExecuteInput) (agentloop.Stream, error)
-	Save() error
+	Save(ctx context.Context) error
 	Flush(recordPath string) error
 	Close() error
 }

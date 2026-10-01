@@ -291,7 +291,7 @@ func TestInboundTerminalErrorDoesNotBlockWhenFrameQueueIsFull(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		if _, readErr := track.ReadFrame(ctx); readErr != nil {
 			t.Fatalf("ReadFrame(%d) error = %v", index, readErr)
 		}

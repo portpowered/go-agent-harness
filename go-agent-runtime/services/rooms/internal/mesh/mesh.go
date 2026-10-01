@@ -30,20 +30,24 @@ type mesh struct {
 	closing      []*meshPair
 	closed       bool
 	done         chan struct{}
-	ctx          context.Context
-	cancel       context.CancelFunc
-	stopParent   func() bool
-	factory      rooms.PairFactory
-	closeOnce    sync.Once
-	closeErr     error
+	// parentDone closes when the lifetime context passed to NewMesh ends.
+	parentDone <-chan struct{}
+	// operations holds the cancel function of every in-flight Join so
+	// shutdown cancels them.
+	operations    map[uint64]context.CancelFunc
+	nextOperation uint64
+	stopParent    func() bool
+	factory       rooms.PairFactory
+	closeOnce     sync.Once
+	closeErr      error
 }
 
 var _ rooms.Mesh = (*mesh)(nil)
 
-func NewMesh(config rooms.MeshConfig) rooms.Mesh {
-	parent := config.Context
+// NewMesh constructs a mesh whose lifetime ends at Close or when parent ends.
+func NewMesh(parent context.Context, config rooms.MeshConfig) (rooms.Mesh, error) {
 	if parent == nil {
-		parent = context.Background()
+		return nil, errMeshContextRequired
 	}
 	factory := config.PairFactory
 	if factory == nil {
@@ -51,10 +55,12 @@ func NewMesh(config rooms.MeshConfig) rooms.Mesh {
 			return nil, rooms.ErrMeshPairFactoryUnavailable
 		}
 	}
-	ctx, cancel := context.WithCancel(parent)
-	m := &mesh{participants: make(map[string]struct{}), pairs: make(map[rooms.PairSpec]*meshPair), done: make(chan struct{}), ctx: ctx, cancel: cancel, factory: factory}
+	m := &mesh{
+		participants: make(map[string]struct{}), pairs: make(map[rooms.PairSpec]*meshPair), done: make(chan struct{}),
+		parentDone: parent.Done(), operations: make(map[uint64]context.CancelFunc), factory: factory,
+	}
 	m.stopParent = context.AfterFunc(parent, func() { _ = m.Close() }) //nolint:errcheck // Parent cancellation invokes the same idempotent Close path; its error is stored for explicit callers.
-	return m
+	return m, nil
 }
 func NewPairSpec(firstID, secondID string) (rooms.PairSpec, error) {
 	firstID, err := normalizeID(firstID)
@@ -73,8 +79,7 @@ func NewPairSpec(firstID, secondID string) (rooms.PairSpec, error) {
 	}
 	return rooms.PairSpec{FirstID: firstID, SecondID: secondID}, nil
 }
-func (m *mesh) Context() context.Context { return m.ctx }
-func (m *mesh) Done() <-chan struct{}    { return m.done }
+func (m *mesh) Done() <-chan struct{} { return m.done }
 func (m *mesh) Join(ctx context.Context, participantID string) error {
 	id, err := normalizeID(participantID)
 	if err != nil {
@@ -97,6 +102,9 @@ func (m *mesh) Join(ctx context.Context, participantID string) error {
 		return meshError("join", id, "", rooms.ErrMeshDuplicateParticipant)
 	}
 	sort.Strings(existing)
+	if ctx == nil {
+		return meshError("join", id, "", errMeshContextRequired)
+	}
 	joinCtx, stop := m.operationContext(ctx)
 	defer stop()
 	created := make([]*meshPair, 0, len(existing))
@@ -282,24 +290,6 @@ func (m *mesh) Pairs() []rooms.PairSnapshot {
 }
 func (m *mesh) PairCount() int { m.mu.RLock(); defer m.mu.RUnlock(); return len(m.pairs) }
 func (m *mesh) Close() error   { m.closeOnce.Do(m.shutdown); return m.closeErr }
-func (m *mesh) shutdown() {
-	m.mu.Lock()
-	m.closed = true
-	all := m.capturePairsLocked()
-	m.participants = make(map[string]struct{})
-	m.pairs = make(map[rooms.PairSpec]*meshPair)
-	m.pending, m.closing = nil, nil
-	stopParent, cancel := m.stopParent, m.cancel
-	m.mu.Unlock()
-	if stopParent != nil {
-		stopParent()
-	}
-	if cancel != nil {
-		cancel()
-	}
-	m.closeErr = closeMeshPairs(all)
-	close(m.done)
-}
 func (m *mesh) capturePairsLocked() []*meshPair {
 	all := make([]*meshPair, 0, len(m.pairs)+len(m.pending)+len(m.closing))
 	for _, pair := range m.pairs {
@@ -308,14 +298,7 @@ func (m *mesh) capturePairsLocked() []*meshPair {
 	all = append(all, m.pending...)
 	return append(all, m.closing...)
 }
-func (m *mesh) operationContext(ctx context.Context) (context.Context, func()) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	op, cancel := context.WithCancel(m.ctx)
-	stop := context.AfterFunc(ctx, cancel)
-	return op, func() { stop(); cancel() }
-}
+
 func (m *mesh) addPending(pair *meshPair) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -327,7 +310,7 @@ func (m *mesh) addPending(pair *meshPair) error {
 }
 func (m *mesh) discard(pairs []*meshPair, closing bool) {
 	m.mu.Lock()
-	if m.closed || m.ctx.Err() != nil {
+	if m.lifetimeEndedLocked() {
 		m.mu.Unlock()
 		return
 	}
@@ -337,42 +320,6 @@ func (m *mesh) discard(pairs []*meshPair, closing bool) {
 	}
 	*target = withoutPairs(*target, pairs)
 	m.mu.Unlock()
-}
-func withoutPairs(have, remove []*meshPair) []*meshPair {
-	wanted := make(map[*meshPair]struct{}, len(remove))
-	for _, pair := range remove {
-		if pair != nil {
-			wanted[pair] = struct{}{}
-		}
-	}
-	kept := have[:0]
-	for _, pair := range have {
-		if pair == nil {
-			continue
-		}
-		if _, exists := wanted[pair]; !exists {
-			kept = append(kept, pair)
-		}
-	}
-	for index := len(kept); index < len(have); index++ {
-		have[index] = nil
-	}
-	return kept
-}
-func closeMeshPairs(pairs []*meshPair) (closeErr error) {
-	seen := make(map[*meshPair]struct{}, len(pairs))
-	for index := len(pairs) - 1; index >= 0; index-- {
-		pair := pairs[index]
-		if pair == nil || nilPairResource(pair.resource) {
-			continue
-		}
-		if _, exists := seen[pair]; exists {
-			continue
-		}
-		seen[pair] = struct{}{}
-		closeErr = errors.Join(closeErr, pair.close())
-	}
-	return closeErr
 }
 func nilPairResource(resource rooms.PairResource) bool {
 	if resource == nil {

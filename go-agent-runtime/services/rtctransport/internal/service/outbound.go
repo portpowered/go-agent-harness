@@ -21,6 +21,14 @@ const (
 
 var _ rtctransport.OutboundTrack = (*OutboundTrack)(nil)
 
+// contextRequiredError reports a call made without a caller context.
+type contextRequiredError string
+
+func (e contextRequiredError) Error() string { return string(e) }
+
+// errOutboundNilContext reports a write without a caller context.
+const errOutboundNilContext contextRequiredError = "outbound track write context is required"
+
 type OutboundTrack struct {
 	encoder       rtctransport.OpusEncoder
 	writer        rtctransport.RTPWriter
@@ -38,11 +46,13 @@ type OutboundTrack struct {
 	queueSlots   chan struct{}
 
 	lifecycleMu sync.Mutex
-	lifeCtx     context.Context
-	lifeCancel  context.CancelCauseFunc
-	closed      bool
-	active      int
-	activeDone  chan struct{}
+	// operations holds the cancel function of every in-flight write so Close
+	// can cancel them with ErrOutboundClosed.
+	operations    map[uint64]context.CancelCauseFunc
+	nextOperation uint64
+	closed        bool
+	active        int
+	activeDone    chan struct{}
 
 	closeOnce sync.Once
 	closeErr  error
@@ -77,14 +87,14 @@ func (s *Service) NewOutboundTrack(config rtctransport.OutboundTrackConfig) (rtc
 	} else if nilValue(config.Pacer) {
 		return nil, rtctransport.ErrOutboundNilPacer
 	}
-	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
 	track := &OutboundTrack{
 		encoder: config.Encoder, writer: config.Writer, pacer: config.Pacer,
 		sourceRate: config.SourceRate, sourceSamples: sourceSamples,
 		payloadType: config.PayloadType,
 		ssrc:        config.SSRC, sequence: config.InitialSequenceNumber,
-		timestamp: config.InitialTimestamp, lifeCtx: lifeCtx, lifeCancel: lifeCancel,
-		writeGate: make(chan struct{}, 1), queueSlots: make(chan struct{}, queueDepth),
+		timestamp:  config.InitialTimestamp,
+		operations: make(map[uint64]context.CancelCauseFunc),
+		writeGate:  make(chan struct{}, 1), queueSlots: make(chan struct{}, queueDepth),
 	}
 	track.writeGate <- struct{}{}
 	return track, nil
@@ -210,7 +220,9 @@ func (t *OutboundTrack) Close() error {
 	t.closeOnce.Do(func() {
 		t.lifecycleMu.Lock()
 		t.closed = true
-		t.lifeCancel(rtctransport.ErrOutboundClosed)
+		for _, cancel := range t.operations {
+			cancel(rtctransport.ErrOutboundClosed)
+		}
 		done := t.activeDone
 		t.lifecycleMu.Unlock()
 		if done != nil {
@@ -227,7 +239,7 @@ func (t *OutboundTrack) Close() error {
 
 func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func(), error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, nil, errOutboundNilContext
 	}
 	t.lifecycleMu.Lock()
 	if t.closed {
@@ -238,25 +250,31 @@ func (t *OutboundTrack) beginWrite(ctx context.Context) (context.Context, func()
 		t.activeDone = make(chan struct{})
 	}
 	t.active++
-	lifeCtx := t.lifeCtx
+	operationCtx, cancel := context.WithCancelCause(ctx)
+	t.nextOperation++
+	operation := t.nextOperation
+	t.operations[operation] = cancel
 	t.lifecycleMu.Unlock()
-	if err := ctx.Err(); err != nil {
+	release := func() {
+		t.lifecycleMu.Lock()
+		delete(t.operations, operation)
+		t.lifecycleMu.Unlock()
+		cancel(nil)
 		t.endWrite()
+	}
+	if err := ctx.Err(); err != nil {
+		release()
 		return nil, nil, err
 	}
 	select {
 	case t.queueSlots <- struct{}{}:
 	default:
-		t.endWrite()
+		release()
 		return nil, nil, rtctransport.ErrOutboundQueueOverflow
 	}
-	operationCtx, cancel := context.WithCancelCause(ctx)
-	stopLifeHook := context.AfterFunc(lifeCtx, func() { cancel(context.Cause(lifeCtx)) })
 	finish := func() {
-		stopLifeHook()
-		cancel(nil)
 		<-t.queueSlots
-		t.endWrite()
+		release()
 	}
 	return operationCtx, finish, nil
 }

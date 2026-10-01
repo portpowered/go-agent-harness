@@ -88,10 +88,11 @@ type contractHandle struct {
 	cancelCount int
 	closeCount  int
 	closeEvents sync.Once
+	closed      chan struct{}
 }
 
 func newContractHandle(media bool) *contractHandle {
-	handle := &contractHandle{events: make(chan session.LiveEvent, 8), done: make(chan struct{})}
+	handle := &contractHandle{events: make(chan session.LiveEvent, 8), done: make(chan struct{}), closed: make(chan struct{})}
 	if media {
 		handle.inbound, handle.outbound = newContractFrames(64), newContractFrames(256)
 	}
@@ -138,7 +139,10 @@ func (h *contractHandle) Close() error {
 	h.mu.Lock()
 	h.closeCount++
 	h.mu.Unlock()
-	h.closeEvents.Do(func() { close(h.events) })
+	h.closeEvents.Do(func() {
+		close(h.events)
+		close(h.closed)
+	})
 	if h.inbound == nil {
 		return nil
 	}

@@ -247,7 +247,7 @@ func assertOverlapDefectFails(t *testing.T, test overlapDefect) {
 
 func loadDeliberateOverlapBundle(t *testing.T) roomreplay.RoomReplayAudioBundle {
 	t.Helper()
-	bundle, err := roomReplayAudioTestService().LoadAudioBundle(deliberateOverlapFixturePath())
+	bundle, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), deliberateOverlapFixturePath())
 	if err != nil {
 		t.Fatalf("load deliberate-overlap bundle: %v", err)
 	}

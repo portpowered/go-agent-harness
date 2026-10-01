@@ -34,7 +34,7 @@ func resolvedExecutorForTest(t *testing.T, inf messages.Inferencer, storage Stor
 		inf = stubInferencer{}
 	}
 	if storage == nil {
-		storage = session.NewStorage(t.TempDir())
+		storage = newFileStorage(t.TempDir())
 	}
 	return NewExecutor(tool, defs, inf, true).WithResolution(RuntimeResolution{
 		Resolved:       true,
@@ -50,13 +50,13 @@ func TestExecutorRequiresHostResolvedDependencies(t *testing.T) {
 	if _, err := exec.BuildLoop(context.Background(), &Config{}); err == nil || !strings.Contains(err.Error(), "host-resolved dependencies") {
 		t.Fatalf("BuildLoop() error = %v, want host admission error", err)
 	}
-	if _, err := exec.NewChatSessionID(&Config{}); err == nil || !strings.Contains(err.Error(), "host-resolved dependencies") {
+	if _, err := exec.NewChatSessionID(t.Context()); err == nil || !strings.Contains(err.Error(), "host-resolved dependencies") {
 		t.Fatalf("NewChatSessionID() error = %v, want host admission error", err)
 	}
 }
 
 func TestExecutorResolutionCopiesInvocationValues(t *testing.T) {
-	storage := session.NewStorage(t.TempDir())
+	storage := newFileStorage(t.TempDir())
 	allowPaths := []string{"/one", "/two"}
 	skillRoots := []runtimeTools.SkillRoot{{Directory: "/skills"}}
 	exec := NewExecutor(nil, nil, stubInferencer{}, true).WithResolution(RuntimeResolution{
@@ -119,4 +119,61 @@ func TestConfigValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fileStorage adapts the file codec to the context-aware execution port the
+// way the session service's storage adapter does in production.
+type fileStorage struct{ files *session.Storage }
+
+func newFileStorage(dir string) fileStorage { return fileStorage{files: session.NewStorage(dir)} }
+
+func (s fileStorage) Load(ctx context.Context, id string) ([]messages.Message, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.files.Load(id)
+}
+
+func (s fileStorage) Latest(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return s.files.Latest()
+}
+
+func (s fileStorage) NewSessionID(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return s.files.NewSessionID(), nil
+}
+
+func (s fileStorage) Save(ctx context.Context, id string, msgs []messages.Message) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.files.Save(id, msgs)
+}
+
+func (s fileStorage) WorkspaceDir() string { return s.files.WorkspaceDir() }
+
+func (s fileStorage) LoadTrace(ctx context.Context, id string) (*session.TraceRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.files.LoadTrace(id)
+}
+
+func (s fileStorage) SaveTrace(ctx context.Context, trace session.TraceRecord) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.files.SaveTrace(trace)
+}
+
+func (s fileStorage) NewTraceID(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return s.files.NewTraceID(), nil
 }

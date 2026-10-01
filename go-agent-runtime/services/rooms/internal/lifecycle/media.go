@@ -189,7 +189,7 @@ type finalTurnDelivery struct {
 }
 
 type finalTurnWait struct {
-	ctx     context.Context
+	stopped <-chan struct{}
 	release func()
 }
 
@@ -223,7 +223,7 @@ func (d *finalTurnDelivery) attach(graph *roomGraph) {
 	d.pending = nil
 	d.mu.Unlock()
 	if pending != nil {
-		d.startWait(pending.ctx, pending.release)
+		d.startWait(pending.stopped, pending.release)
 	}
 }
 
@@ -279,10 +279,10 @@ func (d *finalTurnDelivery) handedOff(targetID string, sources []string, boundar
 
 // begin freezes the audio responses produced so far and calls release once
 // they have reached every peer, the pending speakers go quiet, or the grace
-// expires. Responses started after the bound are not awaited. ctx ends the
-// wait when the room stops for another reason. A bound reached before the
+// expires. Responses started after the bound are not awaited. stopped ends
+// the wait when the room stops for another reason. A bound reached before the
 // media plane is attached waits for attach instead of stopping unheld.
-func (d *finalTurnDelivery) begin(ctx context.Context, release func()) {
+func (d *finalTurnDelivery) begin(stopped <-chan struct{}, release func()) {
 	if d == nil || d.clock == nil {
 		release()
 		return
@@ -303,15 +303,15 @@ func (d *finalTurnDelivery) begin(ctx context.Context, release func()) {
 	d.start = d.clock.Now()
 	d.lastAudio = d.start
 	if !d.attached {
-		d.pending = &finalTurnWait{ctx: ctx, release: release}
+		d.pending = &finalTurnWait{stopped: stopped, release: release}
 		d.mu.Unlock()
 		return
 	}
 	d.mu.Unlock()
-	d.startWait(ctx, release)
+	d.startWait(stopped, release)
 }
 
-func (d *finalTurnDelivery) startWait(ctx context.Context, release func()) {
+func (d *finalTurnDelivery) startWait(stopped <-chan struct{}, release func()) {
 	d.mu.Lock()
 	if d.graph == nil {
 		d.mu.Unlock()
@@ -325,10 +325,10 @@ func (d *finalTurnDelivery) startWait(ctx context.Context, release func()) {
 		release()
 		return
 	}
-	go d.wait(ctx, deadline, release)
+	go d.wait(stopped, deadline, release)
 }
 
-func (d *finalTurnDelivery) wait(ctx context.Context, deadline time.Time, release func()) {
+func (d *finalTurnDelivery) wait(stopped <-chan struct{}, deadline time.Time, release func()) {
 	for {
 		d.mu.Lock()
 		satisfied := d.satisfiedLocked()
@@ -348,7 +348,7 @@ func (d *finalTurnDelivery) wait(ctx context.Context, deadline time.Time, releas
 			return
 		}
 		select {
-		case <-ctx.Done():
+		case <-stopped:
 			timer.Stop()
 			return
 		case <-d.changed:

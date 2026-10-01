@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -68,7 +69,7 @@ func TestLoadRoomReplayPlanAcceptsArrayAndAliasSchemas(t *testing.T) {
 	}
 	writeManifestValue(t, bundle, manifest)
 
-	plan, err := roomReplayServiceForTest().Load(bundle)
+	plan, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan with array/alias schema: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestLoadRoomReplayPlanAcceptsLegacyAliasesAndHumanParticipant(t *testing.T)
 	delete(betaArtifacts, roomReplayArtifactRoleCapture)
 	writeManifestValue(t, bundle, manifest)
 
-	plan, err := roomReplayServiceForTest().Load(bundle)
+	plan, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan with legacy aliases: %v", err)
 	}
@@ -122,7 +123,7 @@ func TestLoadRoomReplayPlanAcceptsLegacyAliasesAndHumanParticipant(t *testing.T)
 func TestRoomReplayServiceValidatesBundleAndOutputBoundaries(t *testing.T) {
 	bundle, _ := writeRoomReplayBundle(t)
 	service := roomReplayServiceForTest()
-	plan, err := service.Load(bundle)
+	plan, err := service.Load(t.Context(), bundle)
 	if err != nil {
 		t.Fatalf("Service.Load: %v", err)
 	}
@@ -144,10 +145,10 @@ func TestRoomReplayServiceValidatesBundleAndOutputBoundaries(t *testing.T) {
 		})
 	}
 	manifestPath := filepath.Join(bundle, RoomReplayBundleManifestPath)
-	if _, err := service.Load(manifestPath); err != nil {
+	if _, err := service.Load(t.Context(), manifestPath); err != nil {
 		t.Fatalf("Service.Load(manifest path): %v", err)
 	}
-	_, err = service.Load(filepath.Join(t.TempDir(), "missing-bundle"))
+	_, err = service.Load(t.Context(), filepath.Join(t.TempDir(), "missing-bundle"))
 	if err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("missing bundle error = %v, want incomplete classification", err)
 	}
@@ -163,16 +164,16 @@ func TestRoomReplayServiceValidatesOutputBoundaryThroughSymlinks(t *testing.T) {
 
 	external := t.TempDir()
 	linkToBundle := filepath.Join(external, "bundle-link")
-	if err := os.Symlink(bundle, linkToBundle); err != nil {
-		t.Skipf("create symlink: %v", err)
+	if !symlinkOrUnsupported(t, bundle, linkToBundle) {
+		return
 	}
 	if err := service.ValidateOutput(plan, filepath.Join(linkToBundle, "output")); err == nil {
 		t.Fatal("output through an external symlink into the source bundle was accepted")
 	}
 
 	linkFromBundle := filepath.Join(bundle, "external-link")
-	if err := os.Symlink(external, linkFromBundle); err != nil {
-		t.Skipf("create symlink: %v", err)
+	if !symlinkOrUnsupported(t, external, linkFromBundle) {
+		return
 	}
 	if err := service.ValidateOutput(plan, filepath.Join(linkFromBundle, "output")); err != nil {
 		t.Fatalf("output through a source symlink to an external directory was rejected: %v", err)
@@ -189,7 +190,7 @@ func TestLoadRoomReplayPlanRejectsConflictingInventoryMetadata(t *testing.T) {
 	}
 	writeManifestValue(t, bundle, manifest)
 
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !strings.Contains(err.Error(), "participants/alpha/sent.pcm") {
 		t.Fatalf("conflicting inventory metadata error = %v, want typed path conflict", err)
 	}
@@ -203,10 +204,10 @@ func TestLoadRoomReplayPlanPreservesFractionalTimelineAndRejectsUnsafeReference(
 		if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
 			t.Fatalf("write fractional timeline: %v", err)
 		}
-		updateArtifactDigest(t, manifest, "room_timeline", timeline)
+		updateTimelineDigest(t, manifest, timeline)
 		writeManifestValue(t, bundle, manifest)
 
-		plan, err := roomReplayServiceForTest().Load(bundle)
+		plan, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err != nil {
 			t.Fatalf("LoadRoomReplayPlan fractional timeline: %v", err)
 		}
@@ -222,10 +223,10 @@ func TestLoadRoomReplayPlanPreservesFractionalTimelineAndRejectsUnsafeReference(
 		if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
 			t.Fatalf("write unsafe timeline: %v", err)
 		}
-		updateArtifactDigest(t, manifest, "room_timeline", timeline)
+		updateTimelineDigest(t, manifest, timeline)
 		writeManifestValue(t, bundle, manifest)
 
-		_, err := roomReplayServiceForTest().Load(bundle)
+		_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 		if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !strings.Contains(err.Error(), "unsafe") {
 			t.Fatalf("unsafe timeline reference error = %v, want typed path rejection", err)
 		}
@@ -256,7 +257,7 @@ func TestLoadRoomReplayPlanRejectsHeaderAndArtifactShapeFailures(t *testing.T) {
 			bundle, manifest := writeRoomReplayBundle(t)
 			test.mutate(manifest)
 			writeManifestValue(t, bundle, manifest)
-			_, err := roomReplayServiceForTest().Load(bundle)
+			_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 			if err == nil || !errors.Is(err, test.want) {
 				t.Fatalf("LoadRoomReplayPlan error = %v, want errors.Is(..., %v)", err, test.want)
 			}
@@ -273,7 +274,7 @@ func TestRoomReplayPathNormalizationRejectsUnsafeInputs(t *testing.T) {
 			artifacts := roomReplayTestMap(t, participant["artifacts"], "participant alpha artifacts")
 			roomReplayTestMap(t, artifacts[roomReplayArtifactRoleSentPCM], "participant alpha sent PCM")["path"] = value
 			writeManifestValue(t, bundle, manifest)
-			_, err := roomReplayServiceForTest().Load(bundle)
+			_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 			want := ErrInvalidRoomReplayBundle
 			if value == "" {
 				want = ErrRoomReplayBundleIncomplete
@@ -293,7 +294,7 @@ func TestRoomReplayInventoryObjectAcceptsSinglePathEntry(t *testing.T) {
 		"path": roomMix["path"], "size": roomMix["size"], "sha256": roomMix["sha256"],
 	}
 	writeManifestValue(t, bundle, manifest)
-	if _, err := roomReplayServiceForTest().Load(bundle); err != nil {
+	if _, err := roomReplayServiceForTest().Load(t.Context(), bundle); err != nil {
 		t.Fatalf("Service.Load with single-entry integrity metadata: %v", err)
 	}
 }
@@ -303,7 +304,7 @@ func TestRoomReplayInventoryRejectsInvalidPathAndDuplicateRole(t *testing.T) {
 		bundle, manifest := writeRoomReplayBundle(t)
 		manifest["integrity"] = map[string]any{"path": 12}
 		writeManifestValue(t, bundle, manifest)
-		if _, err := roomReplayServiceForTest().Load(bundle); !errors.Is(err, ErrInvalidRoomReplayBundle) {
+		if _, err := roomReplayServiceForTest().Load(t.Context(), bundle); !errors.Is(err, ErrInvalidRoomReplayBundle) {
 			t.Fatalf("Service.Load with non-string integrity path = %v, want invalid-bundle error", err)
 		}
 	})
@@ -322,7 +323,7 @@ func TestRoomReplayInventoryRejectsInvalidPathAndDuplicateRole(t *testing.T) {
 		duplicate["path"] = "participants/alpha/duplicate.pcm"
 		participant["artifacts"] = []any{sent, duplicate}
 		writeManifestValue(t, bundle, manifest)
-		if _, err := roomReplayServiceForTest().Load(bundle); !errors.Is(err, ErrInvalidRoomReplayBundle) {
+		if _, err := roomReplayServiceForTest().Load(t.Context(), bundle); !errors.Is(err, ErrInvalidRoomReplayBundle) {
 			t.Fatalf("Service.Load with duplicate participant role = %v, want invalid-bundle error", err)
 		}
 	})
@@ -348,7 +349,7 @@ func TestRoomReplayRejectsEmptyManifest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), []byte(" \n"), 0o600); err != nil {
 		t.Fatalf("write empty manifest: %v", err)
 	}
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) {
 		t.Fatalf("empty manifest error = %v, want typed mismatch", err)
 	}
@@ -381,8 +382,27 @@ func loadRoomReplayWithTimeline(t *testing.T, line string) error {
 	if err := os.WriteFile(filepath.Join(bundle, "room-timeline.jsonl"), timeline, 0o600); err != nil {
 		t.Fatalf("write malformed timeline: %v", err)
 	}
-	updateArtifactDigest(t, manifest, "room_timeline", timeline)
+	updateTimelineDigest(t, manifest, timeline)
 	writeManifestValue(t, bundle, manifest)
-	_, err := roomReplayServiceForTest().Load(bundle)
+	_, err := roomReplayServiceForTest().Load(t.Context(), bundle)
 	return err
+}
+
+// symlinkOrUnsupported creates link pointing at target. Windows creates
+// symlinks only with Developer Mode or the create-symbolic-link privilege;
+// without it the capability is absent, so this reports false and the caller
+// ends its symlink assertions. Every other platform supports symlinks, so a
+// failure there is fatal.
+func symlinkOrUnsupported(t *testing.T, target, link string) bool {
+	t.Helper()
+	err := os.Symlink(target, link)
+	if err == nil {
+		return true
+	}
+	if runtime.GOOS == "windows" {
+		t.Logf("symlink capability unavailable: %v", err)
+		return false
+	}
+	t.Fatalf("create symlink %s -> %s: %v", link, target, err)
+	return false
 }

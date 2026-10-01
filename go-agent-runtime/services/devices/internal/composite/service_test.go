@@ -207,7 +207,7 @@ func TestOutputTapReportsBoundedOverflowWithoutWaiting(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("slow output sink was not reached")
 	}
-	for index := 0; index < outputTapQueueCapacity; index++ {
+	for index := range outputTapQueueCapacity {
 		if err := tap.Observe(context.Background(), 16_000, []int16{int16(index + 2)}); err != nil {
 			t.Fatalf("queued Observe %d: %v", index, err)
 		}
@@ -247,7 +247,11 @@ func TestOutputTapCloseJoinsConcurrentObserver(t *testing.T) {
 	}
 	closeDone := make(chan error, 1)
 	go func() { closeDone <- tap.Close() }()
-	if !waitForTapClosed(tap, time.Second) {
+	// Close closes stop while marking the tap closed, before it waits for
+	// the in-flight sender.
+	select {
+	case <-tap.stop:
+	case <-time.After(time.Second):
 		t.Fatal("Close did not mark the tap closed")
 	}
 	tap.endSend()
@@ -276,20 +280,6 @@ func TestOutputTapDrainsAdmittedSamplesAfterCallerCancellation(t *testing.T) {
 	if got := sink.snapshot(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("drained samples = %v, want %v", got, want)
 	}
-}
-
-func waitForTapClosed(tap *outputTap, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		tap.mu.Lock()
-		closed := tap.closed
-		tap.mu.Unlock()
-		if closed {
-			return true
-		}
-		time.Sleep(time.Millisecond)
-	}
-	return false
 }
 
 func TestFactoryClosesPhysicalRoleWhenFiniteAdmissionFails(t *testing.T) {

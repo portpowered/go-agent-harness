@@ -135,18 +135,18 @@ func (l *pl) RecordResponseCancellation() {
 	l.mutate(func() { doIf(l.has(fri), func() { l.set(frc, true) }) })
 }
 
-func sendCancel(s PS) {
-	ctx, cancel := context.WithTimeout(context.Background(), participantResponseCancelTimeout)
+func sendCancel(ctx context.Context, s PS) {
+	ctx, cancel := context.WithTimeout(ctx, participantResponseCancelTimeout)
 	defer cancel()
 	_ = m.SendSessionWithOutcome(ctx, s, M{Type: sCancel, Value: m.NewResponseCancelValue()})
 }
-func (l *pl) CancelActiveResponse() {
+func (l *pl) CancelActiveResponse(ctx context.Context) {
 	st := update(l, func() state {
 		ok := l.has(fbc) && l.has(fbr) && l.has(fri) && !l.has(frc) && l.s != nil
 		doIf(ok, func() { l.set(frc, true) })
 		return state{s: l.s, ok: ok}
 	})
-	doIf(st.ok, func() { sendCancel(st.s) })
+	doIf(st.ok, func() { sendCancel(ctx, st.s) })
 }
 func (l *pl) AdmitResponseTerminal() bool {
 	return read(l, func() bool { return !l.has(frs) || l.has(fbs) && !l.has(fbc) && l.has(fbr) })

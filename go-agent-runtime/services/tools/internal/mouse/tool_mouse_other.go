@@ -2,13 +2,31 @@
 
 package mouse
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 const platformMouseErr = "mouse control is not yet supported on this platform"
 
-func (mouseDriver) move(_, _ int) error                  { return fmt.Errorf(platformMouseErr) }
-func (mouseDriver) click(_, _ int, _ string) error       { return fmt.Errorf(platformMouseErr) }
-func (mouseDriver) doubleClick(_, _ int, _ string) error { return fmt.Errorf(platformMouseErr) }
-func (mouseDriver) buttonDown(_, _ int, _ string) error  { return fmt.Errorf(platformMouseErr) }
-func (mouseDriver) buttonUp(_, _ int, _ string) error    { return fmt.Errorf(platformMouseErr) }
-func (mouseDriver) drag(_, _, _, _ int, _ string) error  { return fmt.Errorf(platformMouseErr) }
+func (mouseDriver) move(_ context.Context, _, _ int) error { return fmt.Errorf(platformMouseErr) }
+func (mouseDriver) click(_ context.Context, _, _ int, _ string) error {
+	return fmt.Errorf(platformMouseErr)
+}
+func (mouseDriver) doubleClick(_ context.Context, _, _ int, _ string) error {
+	return fmt.Errorf(platformMouseErr)
+}
+func (mouseDriver) buttonDown(_ context.Context, _, _ int, _ string) error {
+	return fmt.Errorf(platformMouseErr)
+}
+func (mouseDriver) buttonUp(_ context.Context, _, _ int, _ string) error {
+	return fmt.Errorf(platformMouseErr)
+}
+func (mouseDriver) drag(_ context.Context, _, _, _, _ int, _ string) error {
+	return fmt.Errorf(platformMouseErr)
+}
+
+// mousePlatform holds platform input handles; this platform needs none.
+type mousePlatform struct{}
+
+func newMousePlatform() mousePlatform { return mousePlatform{} }

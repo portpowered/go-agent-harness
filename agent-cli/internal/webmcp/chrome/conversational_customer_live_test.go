@@ -461,7 +461,7 @@ func (l *conversationalCustomerLive) evaluate(t *testing.T, observed conversatio
 	if err != nil {
 		t.Fatalf("construct validator command: %v", err)
 	}
-	verdict, validatorErr := validator.ValidateBrowserConversation(result)
+	verdict, validatorErr := validator.ValidateBrowserConversation(t.Context(), result)
 	if validatorErr != nil {
 		result.Validator = browserconversation.BrowserConversationValidatorVerdict{
 			Version: browserconversation.BrowserConversationValidatorVersion,

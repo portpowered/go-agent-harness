@@ -4,9 +4,9 @@ package mouse
 
 import (
 	"context"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
-	"runtime"
 	"testing"
+
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -76,7 +76,6 @@ func TestS4UnsupportedPlatformIdentities(t *testing.T) {
 			if err == nil || err.Error() != tt.want || msgs != nil {
 				t.Fatalf("unsupported result = %#v, err = %v; want nil messages and %q", msgs, err, tt.want)
 			}
-			t.Skipf("%s: production defect — unsupported %s exposes only an untyped error; see S4 review comment %s", runtime.GOOS, tt.name, s4DefectCommentURL)
 		})
 	}
 }

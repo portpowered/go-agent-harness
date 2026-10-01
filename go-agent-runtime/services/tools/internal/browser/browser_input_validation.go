@@ -196,7 +196,7 @@ func (v pageSchemaValidator) validateArrayBounds(value, schema *pageJSONValue, p
 }
 
 func (v pageSchemaValidator) validateArrayUniqueness(value *pageJSONValue, path string, collector *pageIssueCollector) {
-	for i := 0; i < len(value.array); i++ {
+	for i := range len(value.array) {
 		for j := i + 1; j < len(value.array); j++ {
 			if pageJSONEqual(value.array[i], value.array[j]) {
 				collector.add(path, "unique_items")

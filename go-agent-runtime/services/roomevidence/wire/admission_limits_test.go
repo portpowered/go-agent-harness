@@ -92,7 +92,7 @@ func TestServiceBoundsReplayTimelineBytesAndEventCount(t *testing.T) {
 // whitespace-only lines (which admission skips) to exactly size bytes.
 func writeTestTimeline(dst io.Writer, events, size int) error {
 	var data bytes.Buffer
-	for sequence := 0; sequence < events; sequence++ {
+	for sequence := range events {
 		fmt.Fprintf(&data, `{"sequence":%d,"monotonic_offset_ms":0,"participant_id":"speaker","event":"test"}`+"\n", sequence)
 	}
 	for data.Len() < size {

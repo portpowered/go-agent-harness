@@ -30,7 +30,7 @@ type evidenceLogEntry struct {
 	ToolEvents []evidenceToolEvent `json:"tool_events,omitempty"`
 }
 
-func (c evidenceConversation) json() ([]byte, error) {
+func (c *evidenceConversation) json() ([]byte, error) {
 	if !c.turn.observed() && len(c.closed) == 0 {
 		return nil, nil
 	}
@@ -52,7 +52,7 @@ func (c evidenceConversation) json() ([]byte, error) {
 	return data, nil
 }
 
-func (c evidenceConversation) appendJSONTurn(data []byte, index int, turn evidenceTurn) ([]byte, error) {
+func (c *evidenceConversation) appendJSONTurn(data []byte, index int, turn evidenceTurn) ([]byte, error) {
 	entry := c.logEntry(index, c.withResponseAudio(turn))
 	line, err := json.Marshal(entry)
 	if err != nil {
@@ -67,7 +67,7 @@ func (c evidenceConversation) appendJSONTurn(data []byte, index int, turn eviden
 	return append(data, '\n'), nil
 }
 
-func (c evidenceConversation) logEntry(index int, turn evidenceTurn) evidenceLogEntry {
+func (c *evidenceConversation) logEntry(index int, turn evidenceTurn) evidenceLogEntry {
 	entry := evidenceLogEntry{TurnIndex: index + 1, ToolEvents: turn.toolEvents}
 	entry.Input.Text = turn.inputText.String()
 	entry.Input.AudioBytes = turn.inputAudio
@@ -149,7 +149,7 @@ type evidenceTranscript struct {
 	retainedBytes int64
 }
 
-func (t evidenceText) observed() bool {
+func (t *evidenceText) observed() bool {
 	return t.Len() > 0
 }
 
@@ -236,7 +236,7 @@ func (t *evidenceText) replace(text string) (int64, int, bool) {
 	return 0, 0, true
 }
 
-func (t evidenceText) String() string {
+func (t *evidenceText) String() string {
 	if !t.observed() {
 		return ""
 	}
@@ -251,7 +251,7 @@ func (t evidenceText) String() string {
 	return value.String()
 }
 
-func (t evidenceText) Len() int {
+func (t *evidenceText) Len() int {
 	size := int(t.bytes)
 	for _, item := range t.transcripts {
 		size += item.text.Len()
@@ -299,14 +299,14 @@ const (
 	summaryJSONTurnFixedBytes int64 = 512
 )
 
-type summaryBudgetErrorKind uint8
+type summaryBudgetKindError uint8
 
 const (
-	errConversationSummaryBudget summaryBudgetErrorKind = iota + 1
+	errConversationSummaryBudget summaryBudgetKindError = iota + 1
 	errConversationSummaryItems
 )
 
-func (kind summaryBudgetErrorKind) Error() string {
+func (kind summaryBudgetKindError) Error() string {
 	switch kind {
 	case errConversationSummaryBudget:
 		return "recording conversation summary budget exceeded"
@@ -317,8 +317,8 @@ func (kind summaryBudgetErrorKind) Error() string {
 	}
 }
 
-func (kind summaryBudgetErrorKind) Is(target error) bool {
-	other, ok := target.(summaryBudgetErrorKind)
+func (kind summaryBudgetKindError) Is(target error) bool {
+	other, ok := target.(summaryBudgetKindError)
 	return ok && kind == other
 }
 

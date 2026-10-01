@@ -84,7 +84,10 @@ func DrainBuffered(deltas *messages.TypedBuffer[messages.StreamMessage], handle 
 
 // DrainStragglers publishes provider output until the quiet period elapses
 // without another message, the optional wall bound expires, or ctx ends.
-func DrainStragglers(ctx context.Context, drain sessionduration.StragglerDrain) error { //nolint:contextcheck // nil contexts use the session API's documented background behavior.
+func DrainStragglers(ctx context.Context, drain sessionduration.StragglerDrain) error {
+	if ctx == nil {
+		return sessionduration.ErrContextRequired
+	}
 	if drain.QuietPeriod <= 0 {
 		return ErrInvalidStragglerDrain
 	}
@@ -93,9 +96,6 @@ func DrainStragglers(ctx context.Context, drain sessionduration.StragglerDrain) 
 	}
 	if drain.Deltas == nil {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	idle, err := newQuietTimer(drain.Clock, drain.QuietPeriod, nil)
 	if err != nil {

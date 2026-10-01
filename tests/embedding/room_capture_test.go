@@ -70,7 +70,7 @@ func TestExternalRoomRejectsMissingProviderTrace(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("room did not finalize")
 	}
-	if _, err := host.LoadReplayPlan(output); !errors.Is(err, rooms.ErrReplayBundleIncomplete) {
+	if _, err := host.LoadReplayPlan(t.Context(), output); !errors.Is(err, rooms.ErrReplayBundleIncomplete) {
 		t.Fatalf("replay admission=%v, want incomplete evidence", err)
 	}
 	for _, participant := range manifest.Participants {

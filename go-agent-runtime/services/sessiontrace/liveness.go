@@ -10,13 +10,13 @@ const (
 	SilentProviderTimeoutClassification       = "silent_provider_timeout"
 )
 
-type livenessErrorCode string
+type livenessError string
 
-func (e livenessErrorCode) Error() string { return string(e) }
+func (e livenessError) Error() string { return string(e) }
 
 const (
-	ErrSilentProviderEmptyResponse livenessErrorCode = "silent provider returned an empty response"
-	ErrSilentProviderTimeout       livenessErrorCode = "silent provider response timed out"
+	ErrSilentProviderEmptyResponse livenessError = "silent provider returned an empty response"
+	ErrSilentProviderTimeout       livenessError = "silent provider response timed out"
 )
 
 func (e *LivenessError) Error() string {

@@ -273,7 +273,7 @@ func TestDirectoryRecorderPairsAudioBudgetWithTranscriptBoundary(t *testing.T) {
 		}
 	})
 	frame := sharedaudio.PCMFrame{Samples: []int16{7}, Format: sharedaudio.PCM16DeviceFormat(24000)}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := r.RecordAudio(t.Context(), session.LiveAudioRecord{Direction: session.LiveRecordAgent, Timestamp: evidenceTime(), Frame: frame}); err != nil {
 			t.Fatal(err)
 		}

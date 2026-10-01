@@ -1,6 +1,8 @@
 package session
 
 import (
+	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -175,7 +177,8 @@ func TestListTraces(t *testing.T) {
 
 	// Save three traces.
 	ids := []string{"trace-a", "trace-b", "trace-c"}
-	for _, id := range ids {
+	base := time.Unix(1_700_000_000, 0)
+	for index, id := range ids {
 		trace := TraceRecord{
 			TraceID: id,
 			Status:  TraceStatusCompleted,
@@ -184,8 +187,11 @@ func TestListTraces(t *testing.T) {
 		if err := st.SaveTrace(trace); err != nil {
 			t.Fatalf("SaveTrace %s: %v", id, err)
 		}
-		// Small sleep to ensure distinct mod times.
-		time.Sleep(2 * time.Millisecond)
+		// Give each trace a distinct modification time in save order.
+		modified := base.Add(time.Duration(index) * time.Second)
+		if err := os.Chtimes(st.tracePath(id), modified, modified); err != nil {
+			t.Fatalf("set trace %s modification time: %v", id, err)
+		}
 	}
 
 	infos, err := st.ListTraces()
@@ -239,13 +245,17 @@ func TestListTraces_DoesNotIncludeSessions(t *testing.T) {
 	}
 }
 
-func TestNewTraceID_Unique(t *testing.T) {
+func TestNewTraceID_IsCreationTimeInNanoseconds(t *testing.T) {
 	st := newTestStorage(t)
 
-	id1 := st.NewTraceID()
-	time.Sleep(2 * time.Millisecond)
-	id2 := st.NewTraceID()
-	if id1 == id2 {
-		t.Errorf("expected unique IDs, got same: %q", id1)
+	before := time.Now().UnixNano()
+	id := st.NewTraceID()
+	after := time.Now().UnixNano()
+	got, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		t.Fatalf("NewTraceID() = %q, want decimal nanoseconds: %v", id, err)
+	}
+	if got < before || got > after {
+		t.Fatalf("NewTraceID() = %d, want within [%d, %d]", got, before, after)
 	}
 }

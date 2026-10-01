@@ -94,11 +94,10 @@ type sessionDurationArtifactPathsContextKey struct{}
 // WithSessionDurationArtifacts attaches production-owned output resources to a
 // duration run. The duration controller flushes and closes them after the
 // accepted loop output has drained, including the synthesized terminal record.
+// A nil ctx is returned unchanged; Run and Begin reject it with
+// ErrContextRequired rather than inventing a root context.
 func WithSessionDurationArtifacts(ctx context.Context, artifacts sessionduration.ArtifactLifecycle) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if artifacts == nil {
+	if ctx == nil || artifacts == nil {
 		return ctx
 	}
 	return context.WithValue(ctx, sessionDurationArtifactsContextKey{}, artifacts)
@@ -129,9 +128,10 @@ func WithTerminalRecorder(ctx context.Context, recorder sessionduration.Terminal
 // the production-owned WAV and JSONL resources after validation and runtime
 // planning. Existing lifecycle values take precedence, which keeps injected
 // sinks useful for tests and other callers that already own their resources.
+// A nil ctx is returned unchanged, as for WithSessionDurationArtifacts.
 func WithSessionDurationArtifactPaths(ctx context.Context, paths sessionduration.SessionDurationArtifactPaths) context.Context {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil
 	}
 	return context.WithValue(ctx, sessionDurationArtifactPathsContextKey{}, paths)
 }

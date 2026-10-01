@@ -9,15 +9,14 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestOpenFileMediaAppliesPacingToEveryFileInput(t *testing.T) {
 	t.Parallel()
-	input := writePCM(t, "in.pcm", audio.FrameSize)
-	turn := writePCM(t, "turn.pcm", audio.FrameSize)
-	interrupt := writePCM(t, "interrupt.pcm", audio.FrameSize)
+	input := writePCM(t, "in.pcm")
+	turn := writePCM(t, "turn.pcm")
+	interrupt := writePCM(t, "interrupt.pcm")
 	scheduler := clock.NewDeterministic(time.Unix(0, 0), time.Millisecond)
 	for _, test := range []struct {
 		name        string
@@ -31,6 +30,7 @@ func TestOpenFileMediaAppliesPacingToEveryFileInput(t *testing.T) {
 		{name: "unpaced ignores speed", pacing: devices.FilePacing{Unpaced: true, Speed: 8}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			handle, err := New().OpenFileMedia(devices.FileMediaRequest{
 				Input: &devices.FileMediaSource{Path: input}, InputTurns: []string{turn}, Interruptions: []string{interrupt},
 				Scheduler: scheduler, Pacing: test.pacing,

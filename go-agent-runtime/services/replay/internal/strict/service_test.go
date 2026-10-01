@@ -136,7 +136,7 @@ func TestServiceVerifiesRequestedModelFromSessionCreated(t *testing.T) {
 		{Kind: "runtime", RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"session.created","session":{"model":"gpt-test"}}`), Clean: true},
 		{Kind: "runtime", RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"response.done"}`), Clean: true},
 	}
-	capture, _, _, _, _, err := deriveEvidence(events, publicreplay.Request{Model: "gpt-test"})
+	capture, _, _, err := deriveEvidence(events, publicreplay.Request{Model: "gpt-test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestServiceRejectsRequestedModelWithoutCapturedModel(t *testing.T) {
 		{Kind: "runtime", RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"session.created","session":{}}`), Clean: true},
 		{Kind: "runtime", RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"response.done"}`), Clean: true},
 	}
-	_, _, _, _, _, err := deriveEvidence(events, publicreplay.Request{Model: "gpt-test"})
+	_, _, _, err := deriveEvidence(events, publicreplay.Request{Model: "gpt-test"})
 	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
 		t.Fatalf("err=%v, want incomplete", err)
 	}
@@ -163,7 +163,7 @@ func TestServiceRejectsMissingTerminalResponseDone(t *testing.T) {
 		{Kind: runtimeEventKind, RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"session.created","session":{"model":"gpt-test"}}`), Clean: true},
 		{Kind: runtimeEventKind, RuntimeKind: providerWireReceive, Payload: wireEnvelope(t, `{"type":"response.output_text.done"}`), Clean: true},
 	}
-	_, _, _, _, _, err := deriveEvidence(events, publicreplay.Request{})
+	_, _, _, err := deriveEvidence(events, publicreplay.Request{})
 	if !errors.Is(err, publicreplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "terminal response.done") {
 		t.Fatalf("err=%v, want terminal response.done incomplete error", err)
 	}
@@ -529,7 +529,7 @@ func TestServiceRejectsMissingTimeline(t *testing.T) {
 	if !errors.Is(err, publicreplay.ErrBundleIncomplete) {
 		t.Fatalf("err=%v, want incomplete", err)
 	}
-	if !bytes.Contains([]byte(err.Error()), []byte("missing timeline.jsonl")) {
+	if !strings.Contains(err.Error(), "missing timeline.jsonl") {
 		t.Fatalf("err=%v, want missing timeline diagnostic", err)
 	}
 }

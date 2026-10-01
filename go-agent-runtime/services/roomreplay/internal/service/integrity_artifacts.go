@@ -100,7 +100,7 @@ func statRoomReplayArtifact(ref roomReplayArtifactRef, normalized, absolute stri
 	return nil, newRoomReplayBundleError(kind, ref.Field, normalized, fmt.Sprintf("size %d", declaredSize), fmt.Sprintf("size %d", info.Size()), cause)
 }
 
-func validateRoomReplayCaptures(replayService replay.CaptureInspector, plan *RoomReplayPlan) error {
+func validateRoomReplayCaptures(ctx context.Context, replayService replay.CaptureInspector, plan *RoomReplayPlan) error {
 	if replayService == nil {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants.capture", "", "replay service", "unavailable", ErrInvalidRoomReplayBundle)
 	}
@@ -109,21 +109,21 @@ func validateRoomReplayCaptures(replayService replay.CaptureInspector, plan *Roo
 		if participant.Kind == "human" {
 			continue
 		}
-		if err := validateRoomReplayCapture(replayService, *participant); err != nil {
+		if err := validateRoomReplayCapture(ctx, replayService, *participant); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateRoomReplayCapture(replayService replay.CaptureInspector, participant RoomReplayParticipant) error {
+func validateRoomReplayCapture(ctx context.Context, replayService replay.CaptureInspector, participant RoomReplayParticipant) error {
 	if participant.Capture.AbsolutePath == "" {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture", "", "provider capture", "missing", ErrRoomReplayBundleIncomplete)
 	}
 	if participant.Capture.Size > roomReplayMaxCaptureBytes {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, fmt.Sprintf("capture size at most %d", roomReplayMaxCaptureBytes), fmt.Sprintf("size %d", participant.Capture.Size), ErrInvalidRoomReplayBundle)
 	}
-	inspection, err := replayService.InspectCapture(context.Background(), participant.Capture.AbsolutePath)
+	inspection, err := replayService.InspectCapture(ctx, participant.Capture.AbsolutePath)
 	if err != nil {
 		return newRoomReplayBundleError(RoomReplayBundleMismatch, "participants["+participant.ID+"].capture", participant.Capture.Path, "valid session capture", err.Error(), err)
 	}

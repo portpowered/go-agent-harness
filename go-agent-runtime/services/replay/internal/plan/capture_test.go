@@ -33,6 +33,7 @@ func serverRecord(kind, payload string) gatewaytesting.CapturedSessionEvent {
 }
 
 func writePlanCapture(t *testing.T, records ...gatewaytesting.CapturedSessionEvent) string {
+	t.Helper()
 	return writePlanCaptureWithDisconnect(t, false, records...)
 }
 
@@ -588,13 +589,4 @@ func TestPlannerRejectsMalformedMetadataAndUnsupportedTextActions(t *testing.T) 
 			t.Fatalf("invalid plan accepted: %+v", records)
 		}
 	}
-}
-
-func closeReplayTestResource(t *testing.T, closer interface{ Close() error }, description string) {
-	t.Helper()
-	t.Cleanup(func() {
-		if err := closer.Close(); err != nil {
-			t.Errorf("close %s: %v", description, err)
-		}
-	})
 }

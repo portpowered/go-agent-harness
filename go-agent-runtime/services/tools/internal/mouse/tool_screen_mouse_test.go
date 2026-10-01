@@ -2,18 +2,11 @@ package mouse
 
 import (
 	"context"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
-	"runtime"
 	"strings"
 	"testing"
+
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
-
-const s4DefectCommentURL = "https://github.com/portpowered/go-agent-harness/pull/52#issuecomment-5306715323"
-
-func skipS4MissingTypedIdentity(t *testing.T, behavior string) {
-	t.Helper()
-	t.Skipf("%s: production defect — %s exposes only an untyped error; see S4 review comment %s", runtime.GOOS, behavior, s4DefectCommentURL)
-}
 
 func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
 	// Keep the display-index error path independent from the host desktop. The
@@ -29,7 +22,6 @@ func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
 		run     func() error
 		wantAny []string
 		want    string
-		defect  string
 	}{
 		{
 			name: "unavailable display",
@@ -40,7 +32,6 @@ func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
 			// Displayless CI environments fail at discovery before the index
 			// check; both shapes are honest capability denials.
 			wantAny: []string{"display 1048576 not available", "display unavailable for show"},
-			defect:  "unavailable display",
 		},
 		{
 			name: "unknown screen action",
@@ -98,9 +89,6 @@ func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
 			}
 			if !matched {
 				t.Fatalf("error = %q, want substring %q or one of %q", err, tt.want, tt.wantAny)
-			}
-			if tt.defect != "" {
-				skipS4MissingTypedIdentity(t, tt.defect)
 			}
 		})
 	}

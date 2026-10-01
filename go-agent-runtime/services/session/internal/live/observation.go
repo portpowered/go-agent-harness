@@ -64,10 +64,10 @@ func (h *handle) consumeCapabilityEvents(ctx context.Context, loop *agentloop.Ag
 		}
 	}
 }
-func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) bool {
+func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, msg messages.StreamMessage, allowOpening bool) {
 	if msg.ResponsePurpose == messages.ResponsePurposeToolAcknowledgement {
 		h.consumeToolAcknowledgement(ctx, msg)
-		return false
+		return
 	}
 	if eventcodec.OutputMessage(msg) {
 		h.mu.Lock()
@@ -100,7 +100,6 @@ func (h *handle) consumeMessage(ctx context.Context, loop *agentloop.AgentLoop, 
 	if responseComplete || toolContinuationComplete || (msg.Type == messages.StreamTypeMessageEnd && msg.Role != messages.RoleTool) {
 		h.wakeResponseWaiters()
 	}
-	return responseComplete
 }
 
 func (h *handle) observeResponseTerminal(msg messages.StreamMessage) {

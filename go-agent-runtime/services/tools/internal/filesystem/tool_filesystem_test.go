@@ -13,7 +13,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -319,9 +318,11 @@ func TestS6_FilesystemSandboxRealFilesystem(t *testing.T) {
 	t.Run("external symlink", func(t *testing.T) {
 		assertRestrictedExternalSymlink(t, ctx, fixture, readTool)
 	})
-	t.Run("permission denied", func(t *testing.T) {
-		assertRestrictedPermissionDenied(t, fixture.workspace)
-	})
+	if permissionBitsDenyAccess() {
+		t.Run("permission denied", func(t *testing.T) {
+			assertRestrictedPermissionDenied(t, fixture.workspace)
+		})
+	}
 }
 
 type realFilesystemFixture struct {
@@ -441,8 +442,8 @@ func executeOutsideTool(ctx context.Context, tool core.Tool, path string) ([]mes
 func assertRestrictedExternalSymlink(t *testing.T, ctx context.Context, f realFilesystemFixture, readTool core.Tool) {
 	t.Helper()
 	linkPath := filepath.Join(f.workspace, "external-link.txt")
-	if err := os.Symlink(f.outsidePath, linkPath); err != nil {
-		t.Skipf("external symlink capability unavailable on %s: %v", runtime.GOOS, err)
+	if !symlinkOrUnsupported(t, f.outsidePath, linkPath) {
+		return
 	}
 	if _, err := validatePath(linkPath, f.workspace, true); err == nil || !strings.Contains(err.Error(), "symlink resolves outside workspace") {
 		t.Fatalf("external symlink validation error = %v", err)
@@ -456,9 +457,6 @@ func assertRestrictedExternalSymlink(t *testing.T, ctx context.Context, f realFi
 
 func assertRestrictedPermissionDenied(t *testing.T, workspace string) {
 	t.Helper()
-	if runtime.GOOS == windowsPlatform {
-		t.Skip("Windows chmod does not reliably deny reads without ACL changes")
-	}
 	path := filepath.Join(workspace, "permission.txt")
 	if err := os.WriteFile(path, []byte("protected"), 0o644); err != nil {
 		t.Fatal(err)
@@ -472,11 +470,8 @@ func assertRestrictedPermissionDenied(t *testing.T, workspace string) {
 		}
 	})
 	_, err := (&hostFs{}).ReadFile(path)
-	if err == nil {
-		t.Skipf("chmod did not produce a permission error on %s", runtime.GOOS)
-	}
 	if !errors.Is(err, fs.ErrPermission) {
-		t.Skipf("chmod produced a different filesystem error on %s: %v", runtime.GOOS, err)
+		t.Fatalf("read of mode-000 file error = %T %v, want fs.ErrPermission", err, err)
 	}
 	if !strings.Contains(err.Error(), "failed to read file: access denied") {
 		t.Fatalf("permission error = %q, want access-denied contract", err)

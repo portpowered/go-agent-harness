@@ -7,11 +7,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-type toolErrorCode string
+type toolSentinelError string
 
-func (e toolErrorCode) Error() string { return string(e) }
+func (e toolSentinelError) Error() string { return string(e) }
 
-const ErrUnresolvedToolResults toolErrorCode = "session ended with unresolved tool results"
+const ErrUnresolvedToolResults toolSentinelError = "session ended with unresolved tool results"
 
 type UnresolvedToolResultsError struct {
 	CallIDs      []string

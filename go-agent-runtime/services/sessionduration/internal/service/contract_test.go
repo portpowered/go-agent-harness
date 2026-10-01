@@ -129,7 +129,7 @@ func TestAdmissionInferencerRecordsConnectionFailureAndClosesEmptyBoundary(t *te
 }
 
 func TestControllerSnapshotAndToolObligationAccessors(t *testing.T) {
-	controller, err := New().Begin(sessionduration.Options{Clock: testNoopScheduler{}})
+	controller, err := New().Begin(context.Background(), sessionduration.Options{Clock: testNoopScheduler{}})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -189,22 +189,22 @@ func (s *artifactTranscriptSink) Flush() error { return s.flushErr }
 func (s *artifactTranscriptSink) Close() error { return s.closeErr }
 
 func TestBeginRejectsUnavailableSchedulersAndNegativePolicyValues(t *testing.T) {
-	if controller, err := New().Begin(sessionduration.Options{MaxDuration: time.Second}); controller != nil || !errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
+	if controller, err := New().Begin(context.Background(), sessionduration.Options{MaxDuration: time.Second}); controller != nil || !errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
 		t.Fatalf("Begin without scheduler = controller:%v err:%v", controller, err)
 	}
-	if controller, err := New().Begin(sessionduration.Options{Clock: nilTimerScheduler{}, MaxDuration: time.Second}); controller != nil || !errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
+	if controller, err := New().Begin(context.Background(), sessionduration.Options{Clock: nilTimerScheduler{}, MaxDuration: time.Second}); controller != nil || !errors.Is(err, sessionduration.ErrSchedulerUnavailable) {
 		t.Fatalf("Begin with nil timer = controller:%v err:%v", controller, err)
 	}
-	if controller, err := New().Begin(sessionduration.Options{Liveness: sessionduration.LivenessOptions{Timeout: -time.Second}}); controller != nil || err == nil {
+	if controller, err := New().Begin(context.Background(), sessionduration.Options{Liveness: sessionduration.LivenessOptions{Timeout: -time.Second}}); controller != nil || err == nil {
 		t.Fatalf("Begin with negative liveness timeout = controller:%v err:%v", controller, err)
 	}
-	if controller, err := New().Begin(sessionduration.Options{Retry: sessionduration.RetryPolicy{MaxRetries: -1}}); controller != nil || err == nil {
+	if controller, err := New().Begin(context.Background(), sessionduration.Options{Retry: sessionduration.RetryPolicy{MaxRetries: -1}}); controller != nil || err == nil {
 		t.Fatalf("Begin with negative retry budget = controller:%v err:%v", controller, err)
 	}
 }
 
 func TestControllerReportsUnavailableLivenessScheduler(t *testing.T) {
-	controller, err := New().Begin(sessionduration.Options{
+	controller, err := New().Begin(context.Background(), sessionduration.Options{
 		Clock:         testNoopScheduler{},
 		LivenessClock: nilTimerScheduler{},
 		Liveness:      sessionduration.LivenessOptions{Enabled: true, Timeout: time.Second},
@@ -282,7 +282,7 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 
 	directory := t.TempDir()
 	paths := sessionduration.SessionDurationArtifactPaths{AudioPath: filepath.Join(directory, "audio.wav"), TranscriptPath: filepath.Join(directory, "transcript.jsonl")}
-	ctx := WithSessionDurationArtifactPaths(nilContext, paths)
+	ctx := WithSessionDurationArtifactPaths(context.Background(), paths)
 	prepared, err := PrepareArtifacts(ctx)
 	if err != nil {
 		t.Fatalf("PrepareArtifacts: %v", err)
@@ -337,8 +337,7 @@ func TestArtifactContextPreparationAndTerminalRecording(t *testing.T) {
 func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) {
 	loop := &gatedRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
 	var published []messages.StreamMessage
-	err := New().Run(sessionduration.RunRequest{
-		Context:    context.Background(),
+	err := New().Run(context.Background(), sessionduration.RunRequest{
 		Inferencer: contractInferencer{session: newContractSession()},
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 			return loop, nil
@@ -366,8 +365,7 @@ func TestRunPublishesAdmittedMessageAndPerformsPlannedBoundedStop(t *testing.T) 
 func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 	loop := newRunLoopProbe()
 	var drained, closed bool
-	err := New().Run(sessionduration.RunRequest{
-		Context:    context.Background(),
+	err := New().Run(context.Background(), sessionduration.RunRequest{
 		Inferencer: contractInferencer{session: newContractSession()},
 		Clock:      testNoopScheduler{},
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
@@ -393,7 +391,6 @@ func TestRunOwnsLoopExecutionAndBoundedCleanup(t *testing.T) {
 	}
 }
 
-//nolint:contextcheck // The test passes its request context into a goroutine to observe shutdown.
 func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -404,8 +401,7 @@ func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 	done := make(chan struct{})
 	result := make(chan error, 1)
 	go func(ctx context.Context) {
-		result <- New().Run(sessionduration.RunRequest{
-			Context:    ctx,
+		result <- New().Run(ctx, sessionduration.RunRequest{
 			Inferencer: contractInferencer{session: newContractSession()},
 			LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 				return loop, nil
@@ -435,7 +431,7 @@ func TestRunCancelsLoopBeforeWaitingWhenDrainCallbackIsMissing(t *testing.T) {
 }
 
 func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing.T) {
-	controller, err := New().Begin(sessionduration.Options{Clock: testNoopScheduler{}})
+	controller, err := New().Begin(context.Background(), sessionduration.Options{Clock: testNoopScheduler{}})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -469,7 +465,7 @@ func TestControllerDrainsExpiredOutputAndReportsEmptyProviderResponse(t *testing
 		}
 	}
 
-	liveness, err := New().Begin(sessionduration.Options{
+	liveness, err := New().Begin(context.Background(), sessionduration.Options{
 		Clock:    testNoopScheduler{},
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: time.Second},
 	})
@@ -519,7 +515,7 @@ func TestRunRejectsInvalidRequestsBeforeStartingResources(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			err := service.Run(test.request)
+			err := service.Run(context.Background(), test.request)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Run() = %v, want %q", err, test.want)
 			}

@@ -453,7 +453,7 @@ func newFinalTurnFixture(t *testing.T, peerKind rooms.ParticipantKind, attachBef
 		stopped:  make(chan error, 1),
 	}
 	f.state = newRunState(manifest, func(cause error) { f.stopped <- cause })
-	f.state.delivery, f.state.deliveryCtx = f.delivery, context.Background()
+	f.state.delivery, f.state.deliveryStopped = f.delivery, make(chan struct{})
 	participants := []*activeParticipant{
 		{participant: manifest.Participants[0], endpoints: audio.MediaEndpoints{Inbound: f.inbound}, finished: make(chan struct{})},
 		{participant: manifest.Participants[1], endpoints: audio.MediaEndpoints{Outbound: f.peer}, finished: make(chan struct{})},
@@ -535,7 +535,7 @@ func TestFinalTurnDeliveryHoldsBoundReachedBeforeGraphAttach(t *testing.T) {
 func TestFinalTurnDeliveryWithoutGraphReleasesOnAttach(t *testing.T) {
 	released := make(chan struct{})
 	delivery := newFinalTurnDelivery(platformclock.NewDeterministic(time.Time{}, time.Millisecond), testManifest())
-	delivery.begin(context.Background(), func() { close(released) })
+	delivery.begin(make(chan struct{}), func() { close(released) })
 	select {
 	case <-released:
 		t.Fatal("stop released before the media plane was known")

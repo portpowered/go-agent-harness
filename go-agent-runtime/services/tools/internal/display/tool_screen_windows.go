@@ -6,28 +6,28 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"sync"
 	"syscall"
 	"unsafe"
 )
 
-var (
-	user32dll = syscall.NewLazyDLL("user32.dll")
-	gdi32dll  = syscall.NewLazyDLL("gdi32.dll")
+// screenPlatform owns the screen-capture DLL handles, each loaded once per
+// display surface on first use instead of on every capture call.
+type screenPlatform struct {
+	user32, gdi32 func() *syscall.LazyDLL
+}
 
-	// user32.dll procs for screen capture. user32dll is declared in
-	// tool_mouse_windows.go; both files share the windows build tag.
-	procGetDC         = user32dll.NewProc("GetDC")
-	procReleaseDC     = user32dll.NewProc("ReleaseDC")
-	procGetSysMetrics = user32dll.NewProc("GetSystemMetrics")
+func newScreenPlatform() screenPlatform {
+	return screenPlatform{
+		user32: sync.OnceValue(func() *syscall.LazyDLL { return syscall.NewLazyDLL("user32.dll") }),
+		gdi32:  sync.OnceValue(func() *syscall.LazyDLL { return syscall.NewLazyDLL("gdi32.dll") }),
+	}
+}
 
-	procCreateCompatibleDC     = gdi32dll.NewProc("CreateCompatibleDC")
-	procCreateCompatibleBitmap = gdi32dll.NewProc("CreateCompatibleBitmap")
-	procSelectObject           = gdi32dll.NewProc("SelectObject")
-	procBitBlt                 = gdi32dll.NewProc("BitBlt")
-	procGetDIBits              = gdi32dll.NewProc("GetDIBits")
-	procDeleteObject           = gdi32dll.NewProc("DeleteObject")
-	procDeleteDC               = gdi32dll.NewProc("DeleteDC")
-)
+// user32Proc and gdi32Proc resolve a screen-capture procedure.
+func (p screenPlatform) user32Proc(name string) *syscall.LazyProc { return p.user32().NewProc(name) }
+
+func (p screenPlatform) gdi32Proc(name string) *syscall.LazyProc { return p.gdi32().NewProc(name) }
 
 const (
 	smCxScreen          = 0
@@ -35,14 +35,16 @@ const (
 	srccopy      uint32 = 0x00CC0020
 	dibRGBColors uint32 = 0
 	biRGB        uint32 = 0
+	// bgraBytesPerPixel is the size of one 32-bit BGRA pixel.
+	bgraBytesPerPixel = 4
 )
 
-func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
-	count, err := screenDisplayCountWithContextAndProcess(ctx, process)
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, platform screenPlatform, process DisplayProcess) (int, image.Rectangle, error) {
+	count, err := screenDisplayCountWithContextAndProcess(ctx, platform, process)
 	if err != nil {
 		return 0, image.Rectangle{}, err
 	}
-	bounds, err := screenDisplayBoundsWithContextAndProcess(ctx, 0, process)
+	bounds, err := screenDisplayBoundsWithContextAndProcess(ctx, platform, 0, process)
 	if err != nil {
 		return 0, image.Rectangle{}, err
 	}
@@ -70,21 +72,21 @@ type bitmapInfo struct {
 	Colors [1]uint32
 }
 
-func screenDisplayCountWithContextAndProcess(ctx context.Context, _ DisplayProcess) (int, error) {
+func screenDisplayCountWithContextAndProcess(ctx context.Context, platform screenPlatform, _ DisplayProcess) (int, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return 0, err
 		}
 	}
-	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	w, _, _ := platform.user32Proc("GetSystemMetrics").Call(uintptr(smCxScreen))
+	h, _, _ := platform.user32Proc("GetSystemMetrics").Call(uintptr(smCyScreen))
 	if w == 0 || h == 0 {
 		return 0, fmt.Errorf("GetSystemMetrics returned an empty display")
 	}
 	return 1, nil
 }
 
-func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ DisplayProcess) (image.Rectangle, error) {
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, platform screenPlatform, idx int, _ DisplayProcess) (image.Rectangle, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return image.Rectangle{}, err
@@ -93,15 +95,15 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, _ Di
 	if idx != 0 {
 		return image.Rectangle{}, fmt.Errorf("display %d not available (only 1 display(s) found)", idx)
 	}
-	w, _, _ := procGetSysMetrics.Call(uintptr(smCxScreen))
-	h, _, _ := procGetSysMetrics.Call(uintptr(smCyScreen))
+	w, _, _ := platform.user32Proc("GetSystemMetrics").Call(uintptr(smCxScreen))
+	h, _, _ := platform.user32Proc("GetSystemMetrics").Call(uintptr(smCyScreen))
 	if w == 0 || h == 0 {
 		return image.Rectangle{}, fmt.Errorf("GetSystemMetrics returned an empty display")
 	}
 	return image.Rect(0, 0, int(w), int(h)), nil
 }
 
-func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ DisplayProcess) error {
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ screenPlatform, _ DisplayProcess) error {
 	if ctx != nil {
 		return ctx.Err()
 	}
@@ -110,7 +112,7 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ Disp
 
 // screenCaptureDisplayWithContextAndProcess uses the Windows GDI API to copy
 // the requested screen region into an image.RGBA.
-func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, platform screenPlatform, _ int, bounds image.Rectangle, _ DisplayProcess) (*image.RGBA, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -123,31 +125,31 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	}
 
 	// Obtain the device context for the entire screen.
-	hScreen, _, _ := procGetDC.Call(0)
+	hScreen, _, _ := platform.user32Proc("GetDC").Call(0)
 	if hScreen == 0 {
 		return nil, fmt.Errorf("GetDC failed")
 	}
-	defer procReleaseDC.Call(0, hScreen)
+	defer platform.user32Proc("ReleaseDC").Call(0, hScreen)
 
 	// Create a compatible (in-memory) device context.
-	hMemDC, _, _ := procCreateCompatibleDC.Call(hScreen)
+	hMemDC, _, _ := platform.gdi32Proc("CreateCompatibleDC").Call(hScreen)
 	if hMemDC == 0 {
 		return nil, fmt.Errorf("CreateCompatibleDC failed")
 	}
-	defer procDeleteDC.Call(hMemDC)
+	defer platform.gdi32Proc("DeleteDC").Call(hMemDC)
 
 	// Create a compatible bitmap to receive the screen content.
-	hBitmap, _, _ := procCreateCompatibleBitmap.Call(hScreen, uintptr(width), uintptr(height))
+	hBitmap, _, _ := platform.gdi32Proc("CreateCompatibleBitmap").Call(hScreen, uintptr(width), uintptr(height))
 	if hBitmap == 0 {
 		return nil, fmt.Errorf("CreateCompatibleBitmap failed")
 	}
-	defer procDeleteObject.Call(hBitmap)
+	defer platform.gdi32Proc("DeleteObject").Call(hBitmap)
 
 	// Select the bitmap into the memory DC.
-	procSelectObject.Call(hMemDC, hBitmap)
+	platform.gdi32Proc("SelectObject").Call(hMemDC, hBitmap)
 
 	// BitBlt copies the screen region into the memory bitmap.
-	ret, _, _ := procBitBlt.Call(
+	ret, _, _ := platform.gdi32Proc("BitBlt").Call(
 		hMemDC, 0, 0, uintptr(width), uintptr(height),
 		hScreen, uintptr(bounds.Min.X), uintptr(bounds.Min.Y),
 		uintptr(srccopy),
@@ -155,7 +157,7 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	if ret == 0 {
 		return nil, fmt.Errorf("BitBlt failed")
 	}
-	pix, err := readWindowsBitmapPixels(hScreen, hBitmap, width, height)
+	pix, err := readWindowsBitmapPixels(platform, hScreen, hBitmap, width, height)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +169,7 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bound
 	return windowsPixelsToRGBA(pix, width, height), nil
 }
 
-func readWindowsBitmapPixels(hScreen, hBitmap uintptr, width, height int) ([]byte, error) {
+func readWindowsBitmapPixels(platform screenPlatform, hScreen, hBitmap uintptr, width, height int) ([]byte, error) {
 	// Negative height requests top-down row order so (0,0) is the top-left.
 	bi := bitmapInfo{}
 	bi.Header.Size = uint32(unsafe.Sizeof(bi.Header))
@@ -176,8 +178,8 @@ func readWindowsBitmapPixels(hScreen, hBitmap uintptr, width, height int) ([]byt
 	bi.Header.Planes = 1
 	bi.Header.BitCount = 32 // 32-bit BGRA
 	bi.Header.Compression = biRGB
-	pix := make([]byte, width*height*4)
-	ret, _, _ := procGetDIBits.Call(
+	pix := make([]byte, width*height*bgraBytesPerPixel)
+	ret, _, _ := platform.gdi32Proc("GetDIBits").Call(
 		hScreen, hBitmap,
 		0, uintptr(height),
 		uintptr(unsafe.Pointer(&pix[0])),

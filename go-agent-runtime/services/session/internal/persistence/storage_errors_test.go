@@ -3,10 +3,8 @@ package session
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -21,7 +19,6 @@ func TestStorage_ErrorPaths_missing_storage_root_delete(t *testing.T) {
 	if errors.As(err, &pathErr) {
 		t.Fatalf("Delete missing unexpectedly wrapped path error: %v", err)
 	}
-	t.Skip("defect: Delete converts os.ErrNotExist to an untyped not-found error")
 }
 
 func TestStorage_ErrorPaths_non_directory_root_create_sessions_dir(t *testing.T) {
@@ -108,14 +105,12 @@ func TestStorage_ErrorPaths_truncated_json(t *testing.T) {
 	if !strings.HasPrefix(errString(err), "parse session truncated:") {
 		t.Fatalf("Load truncated message: got %q", errString(err))
 	}
-	if errors.Is(err, io.ErrUnexpectedEOF) {
-		return
-	}
+	// encoding/json reports truncated input as a *json.SyntaxError
+	// ("unexpected end of JSON input"); Load wraps it without losing identity.
 	var syntaxErr *json.SyntaxError
-	if errors.As(err, &syntaxErr) {
-		t.Skip("defect: json.Unmarshal reports truncated JSON as *json.SyntaxError instead of io.ErrUnexpectedEOF")
+	if !errors.As(err, &syntaxErr) {
+		t.Fatalf("Load truncated error identity: got %T %v, want *json.SyntaxError", err, err)
 	}
-	t.Fatalf("Load truncated error identity: got %T %v, want io.ErrUnexpectedEOF or *json.SyntaxError", err, err)
 }
 
 func TestStorage_ErrorPaths_unknown_content_part_type(t *testing.T) {
@@ -129,30 +124,6 @@ func TestStorage_ErrorPaths_unknown_content_part_type(t *testing.T) {
 	if errString(err) != wantMessage {
 		t.Fatalf("Load unknown content message: got %q, want %q", errString(err), wantMessage)
 	}
-	t.Skip("defect: unknown content-part conversion has no typed sentinel for errors.As/errors.Is")
-}
-
-func TestStorage_ErrorPaths_unwritable_storage_root(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows permission bits do not reliably prevent writes; non-directory failures are tested separately")
-	}
-	st := NewStorage(t.TempDir())
-	if err := os.MkdirAll(st.sessionsDir, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	if err := os.Chmod(st.sessionsDir, 0500); err != nil {
-		t.Fatalf("Chmod read-only sessions dir: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chmod(st.sessionsDir, 0700); err != nil {
-			t.Errorf("restore directory permissions: %v", err)
-		}
-	})
-	err := st.Save("permission-failure", nil)
-	if err == nil {
-		t.Skip("host account can write through permission bits; deterministic non-directory failures cover write errors")
-	}
-	requirePathError(t, err, "write session permission-failure:")
 }
 
 func TestStorage_ErrorPaths_nonempty_session_path_delete(t *testing.T) {

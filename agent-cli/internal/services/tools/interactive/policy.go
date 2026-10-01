@@ -77,7 +77,7 @@ func allowsUnadvertisedTools(executor messages.ToolExecutor) bool {
 
 // ResolvePolicy classifies the capability's advertised definitions with the
 // configured interactive settings.
-func ResolvePolicy(service sessionturn.ToolService, binding Binding, capabilities *runtimeSession.LiveCapabilities) (runtimeTools.InteractiveToolPolicy, error) {
+func ResolvePolicy(service sessionturn.Service, binding Binding, capabilities *runtimeSession.LiveCapabilities) (runtimeTools.InteractiveToolPolicy, error) {
 	settings := config.DefaultInteractiveToolConfig()
 	if binding.Config != nil {
 		resolved, err := binding.Config.ResolveInteractiveToolConfig()

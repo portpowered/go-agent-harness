@@ -21,9 +21,10 @@ type controller struct {
 	armMu             sync.Mutex
 	livenessWatchOnce sync.Once
 	options           sessionduration.Options
-	ctx               context.Context
-	cancel            context.CancelFunc
-	errors            chan error
+	// done closes when the Begin context ends or the controller finalizes.
+	done   <-chan struct{}
+	cancel context.CancelFunc
+	errors chan error
 
 	maxTimer sessionTimer
 
@@ -65,7 +66,10 @@ type sessionTimer interface {
 
 var _ sessionduration.Controller = (*controller)(nil)
 
-func (s *Service) Begin(options sessionduration.Options) (sessionduration.Controller, error) {
+func (s *Service) Begin(ctx context.Context, options sessionduration.Options) (sessionduration.Controller, error) {
+	if ctx == nil {
+		return nil, sessionduration.ErrContextRequired
+	}
 	options, needsClock, err := normalizeOptions(options)
 	if err != nil {
 		return nil, err
@@ -73,10 +77,10 @@ func (s *Service) Begin(options sessionduration.Options) (sessionduration.Contro
 	if needsClock && options.Clock == nil {
 		return nil, sessionduration.ErrSchedulerUnavailable
 	}
-	ctx, cancel := context.WithCancel(options.Context)
+	lifetime, cancel := context.WithCancel(ctx)
 	c := &controller{
 		options:      options,
-		ctx:          ctx,
+		done:         lifetime.Done(),
 		cancel:       cancel,
 		errors:       make(chan error, controllerErrorCapacity),
 		livenessWake: make(chan struct{}, 1),
@@ -128,7 +132,17 @@ func (c *controller) watchMaxDuration(timer sessionTimer) {
 		if err := c.Expire(); err != nil && !errors.Is(err, sessionduration.ErrMaxDurationExceeded) {
 			c.report(err)
 		}
-	case <-c.ctx.Done():
+	case <-c.done:
+	}
+}
+
+// lifetimeEnded reports whether the Begin context ended or Finalize ran.
+func (c *controller) lifetimeEnded() bool {
+	select {
+	case <-c.done:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -340,4 +354,27 @@ func (c *controller) EndLocalToolExecution() {
 	if rearm {
 		c.armLiveness(false)
 	}
+}
+
+func normalizeOptions(options sessionduration.Options) (sessionduration.Options, bool, error) {
+	if options.MaxDuration < 0 {
+		return options, false, &sessionduration.InvalidDurationError{Duration: options.MaxDuration}
+	}
+	if options.Liveness.Timeout < 0 || options.Retry.MaxRetries < 0 || options.Retry.DefaultDelay < 0 || options.Retry.MaxDelay < 0 {
+		return options, false, fmt.Errorf("session duration policy values must be non-negative")
+	}
+	if options.Liveness.Timeout > 0 {
+		options.Liveness.Enabled = true
+	}
+	if options.Retry.MaxRetries != 0 || options.Retry.DefaultDelay != 0 || options.Retry.MaxDelay != 0 {
+		options.Retry.Enabled = true
+	}
+	if options.LivenessClock == nil {
+		options.LivenessClock = options.Clock
+	}
+	if options.Liveness.Enabled && options.LivenessClock == nil {
+		return options, false, sessionduration.ErrSchedulerUnavailable
+	}
+	needsClock := options.MaxDuration > 0
+	return options, needsClock, nil
 }

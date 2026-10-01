@@ -69,14 +69,14 @@ const (
 
 func TestLongConversationTerminationGoldenReplaysCleanly(t *testing.T) {
 	fixture := longConversationTerminationFixturePath()
-	bundle, err := roomReplayAudioTestService().LoadAudioBundle(fixture)
+	bundle, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), fixture)
 	if err != nil {
 		t.Fatalf("load post-fix long-conversation termination bundle: %v", err)
 	}
 	// Loading the same committed capture a second time is the replay control:
 	// admission rechecks every artifact digest and provider capture before any
 	// runtime is built, so terminal evidence cannot depend on a mutable read.
-	replayed, err := roomReplayAudioTestService().LoadAudioBundle(fixture)
+	replayed, err := roomReplayAudioTestService().LoadAudioBundle(t.Context(), fixture)
 	if err != nil {
 		t.Fatalf("replay post-fix long-conversation termination bundle: %v", err)
 	}

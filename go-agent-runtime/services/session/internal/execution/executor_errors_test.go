@@ -6,7 +6,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	session "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 )
 
 func validationRunData(catalog ModelCatalog) *RunData {
@@ -15,7 +14,7 @@ func validationRunData(catalog ModelCatalog) *RunData {
 
 func validationExecutor(t *testing.T, catalog ModelCatalog, relaxed bool) *Executor {
 	t.Helper()
-	storage := session.NewStorage(t.TempDir())
+	storage := newFileStorage(t.TempDir())
 	return NewExecutor(nil, nil, stubInferencer{}, relaxed).WithResolution(RuntimeResolution{
 		Resolved:       true,
 		Provider:       ProviderConfig{Provider: "test", Model: "test-model"},
@@ -81,7 +80,7 @@ func TestValidateInputMimeTypesUsesResolvedCatalog(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			exec := validationExecutor(t, test.catalog, test.relaxed)
-			err := exec.validateInputMimeTypes(&Config{}, validationRunData(test.catalog), input)
+			err := exec.validateInputMimeTypes(validationRunData(test.catalog), input)
 			if test.wantError == "" {
 				if err != nil {
 					t.Fatalf("validateInputMimeTypes() error = %v, want nil", err)
@@ -95,7 +94,7 @@ func TestValidateInputMimeTypesUsesResolvedCatalog(t *testing.T) {
 
 func TestValidateInputMimeTypesSkipsEmptyInput(t *testing.T) {
 	exec := validationExecutor(t, ModelCatalog{Models: []ModelInfo{{Name: "test-model", SupportedInputMimeTypes: []string{"image/png"}}}}, false)
-	if err := exec.validateInputMimeTypes(&Config{}, validationRunData(exec.resolvedCatalog), agentloop.ExecuteInput{}); err != nil {
+	if err := exec.validateInputMimeTypes(validationRunData(exec.resolvedCatalog), agentloop.ExecuteInput{}); err != nil {
 		t.Fatalf("empty input validation error = %v, want nil", err)
 	}
 }
@@ -104,7 +103,7 @@ func TestValidateInputMimeTypesSkipsEmptyInput(t *testing.T) {
 // reintroduce the old config-tree lookup as a hidden fallback.
 func TestValidationModelDoesNotInferFromConfig(t *testing.T) {
 	exec := NewExecutor(nil, nil, stubInferencer{})
-	name, info := exec.validationModel(&Config{Model: "other"}, &RunData{modelCatalog: ModelCatalog{Models: []ModelInfo{{Name: "other"}}}})
+	name, info := exec.validationModel(&RunData{modelCatalog: ModelCatalog{Models: []ModelInfo{{Name: "other"}}}})
 	if name != "" || info != nil {
 		t.Fatalf("unresolved validation model = (%q, %+v), want no inferred model", name, info)
 	}

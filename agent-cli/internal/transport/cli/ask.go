@@ -290,7 +290,7 @@ func (c *AskCommand) renderStreamingAsk(ctx context.Context, cmd *cobra.Command,
 	if err := stream.Close(); err != nil {
 		return err
 	}
-	if err := handle.Save(); err != nil {
+	if err := handle.Save(ctx); err != nil {
 		return err
 	}
 	return handle.Flush(request.RecordCapturePath)

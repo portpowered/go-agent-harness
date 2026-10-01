@@ -53,9 +53,9 @@ type runState struct {
 	stop        context.CancelCauseFunc
 	// delivery holds a reached turn bound until the final responses' audio
 	// reaches their peers; turnStopPending marks that held stop, and
-	// deliveryCtx ends the wait when the room stops for another reason.
+	// deliveryStopped ends the wait when the room stops for another reason.
 	delivery        *finalTurnDelivery
-	deliveryCtx     context.Context
+	deliveryStopped <-chan struct{}
 	turnStopPending bool
 }
 
@@ -155,13 +155,13 @@ func (s *runState) noteTurn(id string) {
 	// the stop is held until that audio is delivered (bounded by the room
 	// clock) instead of truncating it.
 	s.turnStopPending = true
-	delivery, ctx := s.delivery, s.deliveryCtx
+	delivery, stopped := s.delivery, s.deliveryStopped
 	s.mu.Unlock()
-	if delivery == nil || ctx == nil {
+	if delivery == nil || stopped == nil {
 		s.releaseTurnStop()
 		return
 	}
-	delivery.begin(ctx, s.releaseTurnStop)
+	delivery.begin(stopped, s.releaseTurnStop)
 }
 
 func (s *runState) turnsBoundReachedLocked() bool {

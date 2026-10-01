@@ -5,30 +5,29 @@ import (
 	"fmt"
 )
 
-// meshSentinel keeps public errors immutable while preserving errors.Is
+// meshSentinelError keeps public errors immutable while preserving errors.Is
 // identity across the room contract boundary.
-type meshSentinel string
+type meshSentinelError string
 
-func (e meshSentinel) Error() string { return string(e) }
+func (e meshSentinelError) Error() string { return string(e) }
 
 const meshNilErrorText = "<nil>"
 
 const (
-	ErrMeshClosed                 meshSentinel = "room participant mesh is closed"
-	ErrMeshEmptyParticipantID     meshSentinel = "room participant ID must not be empty"
-	ErrMeshInvalidParticipantID   meshSentinel = "room participant ID contains a control character"
-	ErrMeshDuplicateParticipant   meshSentinel = "room participant is already joined"
-	ErrMeshUnknownParticipant     meshSentinel = "room participant is not joined"
-	ErrMeshPairNotFound           meshSentinel = "room participant pair is not present"
-	ErrMeshInvalidPair            meshSentinel = "room participant pair must contain two distinct IDs"
-	ErrMeshNilPairResource        meshSentinel = "room pair factory returned a nil resource"
-	ErrMeshPairFactoryUnavailable meshSentinel = "room pair factory is unavailable"
+	ErrMeshClosed                 meshSentinelError = "room participant mesh is closed"
+	ErrMeshEmptyParticipantID     meshSentinelError = "room participant ID must not be empty"
+	ErrMeshInvalidParticipantID   meshSentinelError = "room participant ID contains a control character"
+	ErrMeshDuplicateParticipant   meshSentinelError = "room participant is already joined"
+	ErrMeshUnknownParticipant     meshSentinelError = "room participant is not joined"
+	ErrMeshPairNotFound           meshSentinelError = "room participant pair is not present"
+	ErrMeshInvalidPair            meshSentinelError = "room participant pair must contain two distinct IDs"
+	ErrMeshNilPairResource        meshSentinelError = "room pair factory returned a nil resource"
+	ErrMeshPairFactoryUnavailable meshSentinelError = "room pair factory is unavailable"
 )
 
 // Mesh is the pair-neutral participant lifecycle contract. Implementations
 // are provided by rooms/wire; mutable membership and cleanup stay private.
 type Mesh interface {
-	Context() context.Context
 	Done() <-chan struct{}
 	Join(context.Context, string) error
 	AddParticipant(context.Context, string) error
@@ -102,11 +101,11 @@ type PairResource interface {
 // PairFactory creates an inert resource for one canonical PairSpec.
 type PairFactory func(context.Context, PairSpec) (PairResource, error)
 
-// MeshConfig supplies explicit lifecycle context and pair construction.
+// MeshConfig supplies pair construction. The mesh lifetime context is an
+// explicit NewMesh argument.
 // A nil PairFactory is unavailable; host compatibility defaults belong in
 // the CLI adapter, not in the reusable runtime package.
 type MeshConfig struct {
-	Context     context.Context
 	PairFactory PairFactory
 }
 

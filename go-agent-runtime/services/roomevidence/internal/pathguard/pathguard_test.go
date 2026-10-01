@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -33,16 +34,16 @@ func TestValidateNoSymlinkChecksComponentsAndContainment(t *testing.T) {
 	}
 
 	direct := filepath.Join(nested, "direct.pcm")
-	if err := os.Symlink(external, direct); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
+	if !symlinkOrUnsupported(t, external, direct) {
+		return
 	}
 	if err := ValidateNoSymlink(root, direct); !errors.Is(err, errSymlink) {
 		t.Fatalf("direct symlink error = %v, want symlink failure", err)
 	}
 
 	parent := filepath.Join(root, "linked")
-	if err := os.Symlink(filepath.Dir(external), parent); err != nil {
-		t.Skipf("parent symlink unavailable: %v", err)
+	if !symlinkOrUnsupported(t, filepath.Dir(external), parent) {
+		return
 	}
 	if err := ValidateNoSymlink(root, filepath.Join(parent, filepath.Base(external))); !errors.Is(err, errSymlink) {
 		t.Fatalf("parent symlink error = %v, want symlink failure", err)
@@ -52,10 +53,29 @@ func TestValidateNoSymlinkChecksComponentsAndContainment(t *testing.T) {
 func TestValidateNoSymlinkRejectsSymlinkedRoot(t *testing.T) {
 	target := t.TempDir()
 	root := filepath.Join(t.TempDir(), "root-link")
-	if err := os.Symlink(target, root); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
+	if !symlinkOrUnsupported(t, target, root) {
+		return
 	}
 	if err := ValidateNoSymlink(root, root); !errors.Is(err, errSymlink) {
 		t.Fatalf("symlinked root error = %v, want symlink failure", err)
 	}
+}
+
+// symlinkOrUnsupported creates link pointing at target. Windows creates
+// symlinks only with Developer Mode or the create-symbolic-link privilege;
+// without it the capability is absent, so this reports false and the caller
+// ends its symlink assertions. Every other platform supports symlinks, so a
+// failure there is fatal.
+func symlinkOrUnsupported(t *testing.T, target, link string) bool {
+	t.Helper()
+	err := os.Symlink(target, link)
+	if err == nil {
+		return true
+	}
+	if runtime.GOOS == "windows" {
+		t.Logf("symlink capability unavailable: %v", err)
+		return false
+	}
+	t.Fatalf("create symlink %s -> %s: %v", link, target, err)
+	return false
 }

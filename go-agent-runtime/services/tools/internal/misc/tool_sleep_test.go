@@ -4,68 +4,76 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
 func TestSleepTool_Execute_DurationString(t *testing.T) {
-	ctx := context.Background()
-	tool := NewSleepTool()
+	synctest.Test(t, func(t *testing.T) {
+		tool := NewSleepTool()
 
-	start := time.Now()
-	msgs, err := tool.Execute(ctx, map[string]any{"duration": "50ms"})
-	elapsed := time.Since(start)
+		start := time.Now()
+		msgs, err := tool.Execute(t.Context(), map[string]any{"duration": "50ms"})
+		elapsed := time.Since(start)
 
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if len(msgs) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(msgs))
-	}
-	if elapsed < 45*time.Millisecond {
-		t.Errorf("expected to sleep at least 45ms, elapsed %v", elapsed)
-	}
-	text := msgs[0].TextContent()
-	if text == "" || text[:5] != "Slept" {
-		t.Errorf("unexpected message: %q", text)
-	}
+		if err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
+		if len(msgs) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(msgs))
+		}
+		if elapsed != 50*time.Millisecond {
+			t.Errorf("slept %v, want exactly 50ms", elapsed)
+		}
+		if text := msgs[0].TextContent(); text != "Slept for 50ms." {
+			t.Errorf("unexpected message: %q", text)
+		}
+	})
 }
 
 func TestSleepTool_Execute_SecondsNumber(t *testing.T) {
-	ctx := context.Background()
-	tool := NewSleepTool()
+	synctest.Test(t, func(t *testing.T) {
+		tool := NewSleepTool()
 
-	msgs, err := tool.Execute(ctx, map[string]any{"duration": 0.05}) // 50ms as seconds
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if len(msgs) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(msgs))
-	}
+		start := time.Now()
+		msgs, err := tool.Execute(t.Context(), map[string]any{"duration": 0.05}) // 50ms as seconds
+		if err != nil {
+			t.Fatalf("Execute: %v", err)
+		}
+		if len(msgs) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(msgs))
+		}
+		if elapsed := time.Since(start); elapsed != 50*time.Millisecond {
+			t.Errorf("slept %v, want exactly 50ms", elapsed)
+		}
+	})
 }
 
 func TestSleepTool_Execute_ContextCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	tool := NewSleepTool()
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		tool := NewSleepTool()
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
+		result := make(chan error, 1)
+		go func() {
+			_, err := tool.Execute(ctx, map[string]any{"duration": "30s"})
+			result <- err
+		}()
+		// The tool is now waiting on its timer.
+		synctest.Wait()
 		cancel()
-	}()
 
-	_, err := tool.Execute(ctx, map[string]any{"duration": "30s"})
-	if err == nil {
-		t.Error("expected context cancellation error")
-	}
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("expected context.Canceled, got %v", err)
-	}
+		err := <-result
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	})
 }
 
 func TestSleepTool_Execute_InvalidDuration(t *testing.T) {
-	ctx := context.Background()
 	tool := NewSleepTool()
 
-	_, err := tool.Execute(ctx, map[string]any{"duration": "not-a-duration"})
+	_, err := tool.Execute(t.Context(), map[string]any{"duration": "not-a-duration"})
 	if err == nil {
 		t.Error("expected error for invalid duration")
 	}

@@ -13,15 +13,15 @@ import (
 func TestServiceRunPlanKeepsReplayAndLiveSourcesExclusive(t *testing.T) {
 	service := planService()
 	bundle := filepath.Join(t.TempDir(), "bundle")
-	_, err := service.ResolveRunPlan(rooms.RoomRunPlanOptions{ReplayPath: bundle, Launch: rooms.RoomLaunchOptions{ConfigPath: "room.json"}})
+	_, err := service.ResolveRunPlan(t.Context(), rooms.RoomRunPlanOptions{ReplayPath: bundle, Launch: rooms.RoomLaunchOptions{ConfigPath: "room.json"}})
 	if !errors.Is(err, rooms.ErrReplaySourceConflict) {
 		t.Fatalf("replay with config = %v, want source conflict", err)
 	}
-	if _, err := service.ResolveRunPlan(rooms.RoomRunPlanOptions{ReplayPath: bundle}); err == nil {
+	if _, err := service.ResolveRunPlan(t.Context(), rooms.RoomRunPlanOptions{ReplayPath: bundle}); err == nil {
 		t.Fatal("missing replay bundle was admitted")
 	}
 	path := writeHumanRoom(t, micID, speakerID, "")
-	plan, err := service.ResolveRunPlan(rooms.RoomRunPlanOptions{Launch: rooms.RoomLaunchOptions{ConfigPath: path, Devices: newLaunchDevices(), CredentialLookup: presentCredentials}})
+	plan, err := service.ResolveRunPlan(t.Context(), rooms.RoomRunPlanOptions{Launch: rooms.RoomLaunchOptions{ConfigPath: path, Devices: newLaunchDevices(), CredentialLookup: presentCredentials}})
 	if err != nil || plan.Replay() || plan.LaunchPlan == nil || plan.ReplayPath != "" || len(plan.Manifest.Participants) != 2 {
 		t.Fatalf("live run plan = %+v / %v, want only the launch decision", plan, err)
 	}
@@ -30,7 +30,7 @@ func TestServiceRunPlanKeepsReplayAndLiveSourcesExclusive(t *testing.T) {
 func TestServiceRunOutputPolicyFollowsRecordingAndLaunchMode(t *testing.T) {
 	service := planService()
 	configured := func(recording string) rooms.RoomRunPlan {
-		plan, err := service.ResolveRunPlan(rooms.RoomRunPlanOptions{Launch: rooms.RoomLaunchOptions{
+		plan, err := service.ResolveRunPlan(t.Context(), rooms.RoomRunPlanOptions{Launch: rooms.RoomLaunchOptions{
 			ConfigPath: writeHumanRoom(t, micID, speakerID, recording), Devices: newLaunchDevices(), CredentialLookup: presentCredentials,
 		}})
 		if err != nil {
@@ -62,7 +62,7 @@ func TestServiceRunOutputPolicyFollowsRecordingAndLaunchMode(t *testing.T) {
 func TestServiceBareRunOutputIsAFreshConfigChildEveryRun(t *testing.T) {
 	service := planService()
 	configDir := t.TempDir()
-	plan, err := service.ResolveRunPlan(rooms.RoomRunPlanOptions{Launch: rooms.RoomLaunchOptions{
+	plan, err := service.ResolveRunPlan(t.Context(), rooms.RoomRunPlanOptions{Launch: rooms.RoomLaunchOptions{
 		ConfigDir: configDir, Devices: newLaunchDevices(), CredentialLookup: func(string) (string, bool) { return "key", true },
 	}})
 	if err != nil {

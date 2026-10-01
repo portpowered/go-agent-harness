@@ -102,7 +102,7 @@ func (s traceDeviceService) bindTracePlayback(port runtimeDevices.Playback, requ
 	}
 	monitor := s.openRemoteRenderMonitor(ctx, request, port)
 	if monitor != nil {
-		monitor.Start()
+		monitor.Start(ctx)
 		return monitor
 	}
 	if s.binding.RenderedSamplesUnavailable != nil {
@@ -239,12 +239,14 @@ type remoteRenderMonitor struct {
 	// remoteRenderStopTimeout.
 	stopTimeout time.Duration
 
-	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
 
 	mu   sync.Mutex
 	seen int
+	// abandoned is set when Stop stops waiting for the poll goroutine; a
+	// late final poll then no longer reports samples.
+	abandoned bool
 }
 
 const (
@@ -257,7 +259,10 @@ func newRemoteRenderMonitor(ctx context.Context, request runtimeDevices.Request,
 	if strings.TrimSpace(request.RemoteEndpoint) == "" || observer == nil {
 		return nil, errors.New("remote render observer is unavailable")
 	}
-	probeContext, cancel := context.WithTimeout(remoteRenderProbeContext(ctx), time.Second)
+	if ctx == nil {
+		return nil, errors.New("remote render monitor context is required")
+	}
+	probeContext, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	snapshot, err := devicegw.ReadRemoteDeviceServerSnapshot(probeContext, request.RemoteEndpoint)
 	if err != nil {
@@ -275,29 +280,23 @@ func newRemoteRenderMonitor(ctx context.Context, request runtimeDevices.Request,
 		rate:        rate,
 		observer:    observer,
 		stopTimeout: remoteRenderStopTimeout,
-		ctx:         context.Background(),
-		cancel:      func() {},
 		done:        make(chan struct{}),
 		seen:        len(snapshot.RenderedSamples),
 	}, nil
 }
 
-func remoteRenderProbeContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
-
-func (m *remoteRenderMonitor) Start() {
+// Start runs the poll goroutine under a context detached from ctx's
+// cancellation: the monitor lives until Stop, not until the open call ends.
+func (m *remoteRenderMonitor) Start(ctx context.Context) {
 	if m == nil {
 		return
 	}
-	m.ctx, m.cancel = context.WithCancel(context.Background())
-	go m.run()
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	m.cancel = cancel
+	go m.run(runCtx)
 }
 
-func (m *remoteRenderMonitor) run() {
+func (m *remoteRenderMonitor) run(ctx context.Context) {
 	if m == nil {
 		return
 	}
@@ -306,12 +305,25 @@ func (m *remoteRenderMonitor) run() {
 	defer ticker.Stop()
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
+			// Capture the final callback before the owning device handle
+			// closes, bounded by the stop timeout so teardown stays bounded
+			// even if the remote endpoint is unavailable.
+			finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.effectiveStopTimeout())
+			m.poll(finalCtx)
+			cancel()
 			return
 		case <-ticker.C:
-			m.poll(m.ctx)
+			m.poll(ctx)
 		}
 	}
+}
+
+func (m *remoteRenderMonitor) effectiveStopTimeout() time.Duration {
+	if m.stopTimeout <= 0 {
+		return remoteRenderStopTimeout
+	}
+	return m.stopTimeout
 }
 
 func (m *remoteRenderMonitor) poll(ctx context.Context) {
@@ -325,7 +337,7 @@ func (m *remoteRenderMonitor) poll(ctx context.Context) {
 		return
 	}
 	m.mu.Lock()
-	if len(snapshot.RenderedSamples) <= m.seen {
+	if m.abandoned || len(snapshot.RenderedSamples) <= m.seen {
 		m.mu.Unlock()
 		return
 	}
@@ -338,6 +350,8 @@ func (m *remoteRenderMonitor) poll(ctx context.Context) {
 	}
 }
 
+// Stop cancels polling and joins the goroutine's final poll for at most the
+// stop timeout; past it, any late poll result is discarded.
 func (m *remoteRenderMonitor) Stop() {
 	if m == nil {
 		return
@@ -345,19 +359,13 @@ func (m *remoteRenderMonitor) Stop() {
 	if m.cancel != nil {
 		m.cancel()
 	}
-	stopTimeout := m.stopTimeout
-	if stopTimeout <= 0 {
-		stopTimeout = remoteRenderStopTimeout
-	}
-	stopContext, stopCancel := context.WithTimeout(context.Background(), stopTimeout)
-	defer stopCancel()
+	timer := time.NewTimer(m.effectiveStopTimeout())
+	defer timer.Stop()
 	select {
 	case <-m.done:
-	case <-stopContext.Done():
-		return
+	case <-timer.C:
+		m.mu.Lock()
+		m.abandoned = true
+		m.mu.Unlock()
 	}
-	// Capture the final callback before the owning device handle closes. The
-	// poll inherits the same stop deadline, so teardown remains bounded even if
-	// the remote endpoint is unavailable.
-	m.poll(stopContext)
 }

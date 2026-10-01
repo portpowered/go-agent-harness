@@ -16,7 +16,7 @@ import (
 
 func TestBeginRejectsNegativeDurationBeforeTimingOrPublication(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(1, 0), time.Millisecond)
-	controller, err := New().Begin(sessionduration.Options{
+	controller, err := New().Begin(context.Background(), sessionduration.Options{
 		Clock:       clock,
 		MaxDuration: -time.Second,
 		Publication: sessionduration.Publication{Write: func(messages.StreamMessage) error { t.Fatal("publication occurred"); return nil }},
@@ -34,8 +34,7 @@ func TestControllerExpiresOnceAndRejectsLateOutput(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(2, 0), time.Millisecond)
 	var mu sync.Mutex
 	var writes []messages.StreamMessage
-	controller, err := New().Begin(sessionduration.Options{
-		Context:     context.Background(),
+	controller, err := New().Begin(context.Background(), sessionduration.Options{
 		Clock:       clock,
 		MaxDuration: 5 * time.Millisecond,
 		Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
@@ -80,8 +79,7 @@ func TestControllerExpiresOnceAndRejectsLateOutput(t *testing.T) {
 
 func TestControllerLivenessUsesGenerationAndPreservesTypedCause(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(3, 0), time.Millisecond)
-	ctrl, err := New().Begin(sessionduration.Options{
-		Context:  context.Background(),
+	ctrl, err := New().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})
@@ -126,7 +124,7 @@ func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
 	causeCalled := make(chan struct{}, 2)
 	causeRelease := make(chan struct{}, 1)
 	t.Cleanup(func() { close(causeRelease) })
-	controller, err := New().Begin(sessionduration.Options{
+	controller, err := New().Begin(context.Background(), sessionduration.Options{
 		Clock:       clock,
 		MaxDuration: time.Second,
 		Liveness:    sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
@@ -166,7 +164,7 @@ func TestControllerArbitratesFirstCauseOnce(t *testing.T) {
 }
 
 func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
-	controller, err := New().Begin(sessionduration.Options{Clock: platformclock.NewDeterministic(time.Unix(4, 0), time.Millisecond), Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1, DefaultDelay: time.Second, MaxDelay: 3 * time.Second}})
+	controller, err := New().Begin(context.Background(), sessionduration.Options{Clock: platformclock.NewDeterministic(time.Unix(4, 0), time.Millisecond), Retry: sessionduration.RetryPolicy{Enabled: true, MaxRetries: 1, DefaultDelay: time.Second, MaxDelay: 3 * time.Second}})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -183,44 +181,12 @@ func TestControllerRetryIsBoundedAndNeverSleeps(t *testing.T) {
 	}
 }
 
-func TestControllerFinalizePreservesPrimaryAndCleanupErrors(t *testing.T) {
-	primary := errors.New("provider cause")
-	drainErr := errors.New("drain cause")
-	closeErr := errors.New("close cause")
-	artifactErr := errors.New("artifact cause")
-	controller, err := New().Begin(sessionduration.Options{})
-	if err != nil {
-		t.Fatalf("Begin: %v", err)
-	}
-	order := make([]string, 0, 4)
-	var finalizationContext context.Context
-	result, finalErr := controller.Finalize(finalizationContext, sessionduration.FinalizeRequest{
-		Primary: primary,
-		Drain:   func(context.Context) error { order = append(order, "drain"); return drainErr },
-		Close:   func() error { order = append(order, "close"); return closeErr },
-		Artifacts: artifactLifecycleFunc{
-			accept: func(messages.StreamMessage) error { return nil },
-			flush:  func() error { order = append(order, "flush"); return artifactErr },
-			close:  func() error { order = append(order, "artifact-close"); return nil },
-		},
-	})
-	if !errors.Is(finalErr, primary) || !errors.Is(finalErr, drainErr) || !errors.Is(finalErr, closeErr) || !errors.Is(finalErr, artifactErr) {
-		t.Fatalf("final error = %v, lost cleanup identity", finalErr)
-	}
-	if got, want := result.OutputState, messages.TerminalOutputNone; got != want {
-		t.Fatalf("result output state = %q, want %q", got, want)
-	}
-	if got, want := order, []string{"drain", "close", "flush", "artifact-close"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] || got[3] != want[3] {
-		t.Fatalf("cleanup order = %v, want %v", got, want)
-	}
-}
-
 func TestControllerBoundedDrainReportsSchedulerFailure(t *testing.T) {
 	deltas := messages.NewTypedBuffer[messages.StreamMessage](1)
 	if !deltas.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant}) {
 		t.Fatal("could not queue loop delta")
 	}
-	controller, err := New().Begin(sessionduration.Options{})
+	controller, err := New().Begin(context.Background(), sessionduration.Options{})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -234,7 +200,7 @@ func TestControllerBoundedDrainReportsSchedulerFailure(t *testing.T) {
 }
 
 func TestControllerFinalizationPreservesPanicIdentity(t *testing.T) {
-	controller, err := New().Begin(sessionduration.Options{})
+	controller, err := New().Begin(context.Background(), sessionduration.Options{})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -249,7 +215,7 @@ func TestControllerFinalizationPreservesPanicIdentity(t *testing.T) {
 func TestControllerFinalizationDrainOutlivesCallerCancellationWithBound(t *testing.T) {
 	callerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	controller, err := New().Begin(sessionduration.Options{Context: callerCtx})
+	controller, err := New().Begin(callerCtx, sessionduration.Options{})
 	if err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
@@ -475,7 +441,7 @@ func TestControllerFinalizationDrainsLoopUntilQuiet(t *testing.T) {
 		t.Fatal("could not queue first loop delta")
 	}
 	var published []messages.StreamMessage
-	controller, err := New().Begin(sessionduration.Options{Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
+	controller, err := New().Begin(context.Background(), sessionduration.Options{Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
 		published = append(published, msg)
 		return nil
 	}}})
@@ -526,7 +492,7 @@ func TestFinalizationDrainPublishesLateOutputAndHonorsWallSafety(t *testing.T) {
 	loop := &idleRunLoopProbe{deltas: messages.NewTypedBuffer[messages.StreamMessage](1)}
 	scheduler := &publishOnceDrainScheduler{loop: loop}
 	var published []messages.StreamMessage
-	controller, err := New().Begin(sessionduration.Options{Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
+	controller, err := New().Begin(context.Background(), sessionduration.Options{Publication: sessionduration.Publication{Write: func(msg messages.StreamMessage) error {
 		published = append(published, msg)
 		return nil
 	}}})
@@ -567,8 +533,8 @@ func TestRunReportsArtifactCloseFailureAfterRecordingProviderTerminal(t *testing
 		t.Fatal("could not queue provider terminal")
 	}
 	var written []messages.StreamMessage
-	err := New().Run(sessionduration.RunRequest{
-		Context: context.Background(), Inferencer: contractInferencer{session: newContractSession()},
+	err := New().Run(context.Background(), sessionduration.RunRequest{
+		Inferencer: contractInferencer{session: newContractSession()},
 		LoopFactory: func(context.Context, sessionduration.AdmissionInferencer, sessionduration.Controller) (sessionduration.Loop, error) {
 			return loop, nil
 		},

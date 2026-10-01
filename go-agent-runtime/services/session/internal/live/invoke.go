@@ -28,14 +28,15 @@ func (s *Service) RunLive(ctx context.Context, options session.LiveRunOptions) e
 	if err != nil {
 		return err
 	}
-	if err := invocation.start(); err != nil {
-		return invocation.closeAfterStartError(err)
+	if err := invocation.start(ctx); err != nil {
+		return invocation.closeAfterStartError(ctx, err)
 	}
-	return invocation.wait()
+	return invocation.wait(ctx)
 }
 
+// liveInvocation is one Run call's state. Its methods receive the Run
+// context explicitly; media pumps receive a derived pump context.
 type liveInvocation struct {
-	ctx                       context.Context
 	options                   session.LiveRunOptions
 	handle                    session.LiveHandle
 	device                    devices.Handle
@@ -43,7 +44,6 @@ type liveInvocation struct {
 	endpoints                 sharedaudio.MediaEndpoints
 	ports                     devices.MediaPorts
 	captureInterruptionEvents <-chan session.LiveCapabilityEvent
-	pumpCtx                   context.Context
 	stopPumps                 context.CancelFunc
 	pumps                     chan error
 	count                     int
@@ -62,7 +62,6 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 	}
 	captureBoundaryOwned := installCaptureBoundary(&options, liveHandle)
 	invocation := &liveInvocation{
-		ctx:                  ctx,
 		options:              options,
 		handle:               liveHandle,
 		captureBoundaryOwned: captureBoundaryOwned,
@@ -71,7 +70,7 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 	if len(options.CaptureInterruptions) > 0 {
 		runtimeHandle, ok := liveHandle.(*handle)
 		if !ok {
-			return invocation.closeWithError(errors.New("capture interruptions require the built-in live session owner"))
+			return invocation.closeWithError(ctx, errors.New("capture interruptions require the built-in live session owner"))
 		}
 		invocation.captureInterruptionEvents = runtimeHandle.configureCaptureInterruption(options.CaptureInterruptionTool)
 	}
@@ -89,17 +88,17 @@ func newLiveInvocation(s *Service, ctx context.Context, options session.LiveRunO
 	}
 	invocation.attachRecorder()
 	if err := invocation.validateDeviceAdmission(); err != nil {
-		return invocation.closeWithError(err)
+		return invocation.closeWithError(ctx, err)
 	}
 	if options.Devices == nil || !deviceRequestHasDirection(options.DeviceRequest) {
 		return invocation, nil
 	}
 	device, err := options.Devices.Open(ctx, options.DeviceRequest)
 	if err != nil {
-		return invocation.closeWithError(fmt.Errorf("open live devices: %w", err))
+		return invocation.closeWithError(ctx, fmt.Errorf("open live devices: %w", err))
 	}
 	if device == nil {
-		return invocation.closeWithError(errors.New("open live devices: device service returned a nil handle"))
+		return invocation.closeWithError(ctx, errors.New("open live devices: device service returned a nil handle"))
 	}
 	invocation.device = device
 	invocation.ports = device.Media()
@@ -178,7 +177,7 @@ func (i *liveInvocation) validateDeviceAdmission() error {
 	return nil
 }
 
-func (i *liveInvocation) closeWithError(runErr error) (*liveInvocation, error) {
+func (i *liveInvocation) closeWithError(ctx context.Context, runErr error) (*liveInvocation, error) {
 	if i == nil {
 		return nil, runErr
 	}
@@ -188,29 +187,30 @@ func (i *liveInvocation) closeWithError(runErr error) (*liveInvocation, error) {
 	}
 	handleErr := i.handle.Close()
 	result := errors.Join(runErr, deviceErr, handleErr)
-	return nil, errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
+	return nil, errors.Join(result, finalizeRecorder(i.options.Recorder, ctx, result))
 }
 
-func (i *liveInvocation) start() error {
+func (i *liveInvocation) start(ctx context.Context) error {
 	if i == nil || i.handle == nil {
 		return errors.New("live invocation handle is unavailable")
 	}
-	if err := i.handle.Start(i.ctx); err != nil {
+	if err := i.handle.Start(ctx); err != nil {
 		return err
 	}
 	if ready, ok := i.handle.(interface{ waitReplayReady(context.Context) error }); ok {
-		if err := ready.waitReplayReady(i.ctx); err != nil {
+		if err := ready.waitReplayReady(ctx); err != nil {
 			return err
 		}
 	}
-	if err := waitForOpeningContent(i.handle, i.ctx); err != nil {
+	if err := waitForOpeningContent(i.handle, ctx); err != nil {
 		return err
 	}
-	i.pumpCtx, i.stopPumps = context.WithCancel(i.ctx)
-	return i.startPumps()
+	pumpCtx, stopPumps := context.WithCancel(ctx)
+	i.stopPumps = stopPumps
+	return i.startPumps(pumpCtx)
 }
 
-func (i *liveInvocation) startPumps() error {
+func (i *liveInvocation) startPumps(ctx context.Context) error {
 	if i == nil {
 		return nil
 	}
@@ -222,19 +222,19 @@ func (i *liveInvocation) startPumps() error {
 			return errors.New("capture interruptions require browser invocation events")
 		}
 	}
-	i.startCapturePump()
-	i.startCaptureInterruptionPump()
-	i.startPlaybackPump()
+	i.startCapturePump(ctx)
+	i.startCaptureInterruptionPump(ctx)
+	i.startPlaybackPump(ctx)
 	return nil
 }
 
-func (i *liveInvocation) startCapturePump() {
+func (i *liveInvocation) startCapturePump(ctx context.Context) {
 	if len(i.options.CaptureTurns) > 0 {
 		if !i.captureOutboundAvailable() {
 			i.handle.Cancel(errors.New("live provider has no audio input path"))
 			return
 		}
-		i.startPump("capture", i.runCaptureTurns)
+		i.startPump(ctx, "capture", i.runCaptureTurns)
 		return
 	}
 	if i.ports.Capture == nil {
@@ -245,7 +245,7 @@ func (i *liveInvocation) startCapturePump() {
 		return
 	}
 	target := i.captureOutbound()
-	i.startPump("capture", func(ctx context.Context) error {
+	i.startPump(ctx, "capture", func(ctx context.Context) error {
 		return i.ports.Capture.Pump(ctx, target)
 	})
 }
@@ -260,14 +260,14 @@ func (i *liveInvocation) captureOutboundAvailable() bool {
 	return i.endpoints.Outbound != nil
 }
 
-func (i *liveInvocation) startCaptureInterruptionPump() {
+func (i *liveInvocation) startCaptureInterruptionPump(ctx context.Context) {
 	if i == nil || len(i.options.CaptureInterruptions) == 0 {
 		return
 	}
-	i.startPump("capture interruption", i.runCaptureInterruptions)
+	i.startPump(ctx, "capture interruption", i.runCaptureInterruptions)
 }
 
-func (i *liveInvocation) startPump(name string, run func(context.Context) error) {
+func (i *liveInvocation) startPump(ctx context.Context, name string, run func(context.Context) error) {
 	if i == nil || run == nil {
 		return
 	}
@@ -275,21 +275,21 @@ func (i *liveInvocation) startPump(name string, run func(context.Context) error)
 		i.pumps = make(chan error, liveMediaPumpCapacity)
 	}
 	i.count++
-	go i.runPump(name, run)
+	go i.runPump(ctx, name, run)
 }
 
-func (i *liveInvocation) runPump(name string, run func(context.Context) error) {
-	pumpErr := run(i.pumpCtx)
+func (i *liveInvocation) runPump(ctx context.Context, name string, run func(context.Context) error) {
+	pumpErr := run(ctx)
 	if name == "capture" {
-		pumpErr = i.completeCapturePump(pumpErr)
+		pumpErr = i.completeCapturePump(ctx, pumpErr)
 	}
-	if shouldCancelMediaPumpFor(name, pumpErr, i.pumpCtx) {
+	if shouldCancelMediaPumpFor(name, pumpErr, ctx) {
 		i.handle.Cancel(fmt.Errorf("%s media pump: %w", name, pumpErr))
 	}
 	i.pumps <- pumpErr
 }
 
-func (i *liveInvocation) completeCapturePump(pumpErr error) error {
+func (i *liveInvocation) completeCapturePump(ctx context.Context, pumpErr error) error {
 	if pumpErr != nil || len(i.options.CaptureTurns) > 0 {
 		return pumpErr
 	}
@@ -301,7 +301,7 @@ func (i *liveInvocation) completeCapturePump(pumpErr error) error {
 	}
 	noteCaptureBoundary(i.handle)
 	for _, control := range i.options.CaptureCompleteControls {
-		if err := i.handle.Send(i.pumpCtx, control); err != nil {
+		if err := i.handle.Send(ctx, control); err != nil {
 			return fmt.Errorf("capture completion control %q: %w", control.Kind, err)
 		}
 	}
@@ -325,7 +325,7 @@ func isExpectedMediaPumpError(err error) bool {
 		errors.Is(err, sharedaudio.ErrClosed) || errors.Is(err, sharedaudio.ErrSessionMediaClosed)
 }
 
-func (i *liveInvocation) wait() error {
+func (i *liveInvocation) wait(ctx context.Context) error {
 	waitResult := make(chan error, 1)
 	go func() { waitResult <- i.handle.Wait() }()
 	events := i.handle.Events()
@@ -338,25 +338,25 @@ func (i *liveInvocation) wait() error {
 				continue
 			}
 			if i.options.Events != nil && sinkErr == nil {
-				if err := i.options.Events.Publish(i.ctx, event); err != nil {
+				if err := i.options.Events.Publish(ctx, event); err != nil {
 					sinkErr = fmt.Errorf("publish live event: %w", err)
 					i.handle.Cancel(sinkErr)
 				}
 			}
 		case waitErr := <-waitResult:
-			drainLiveEvents(events, i.options.Events, i.ctx, &sinkErr, i.handle)
-			return i.finish(waitErr, sinkErr)
+			drainLiveEvents(events, i.options.Events, ctx, &sinkErr, i.handle)
+			return i.finish(ctx, waitErr, sinkErr)
 		}
 	}
 }
 
-func (i *liveInvocation) finish(waitErr, sinkErr error) error {
+func (i *liveInvocation) finish(ctx context.Context, waitErr, sinkErr error) error {
 	if i == nil {
 		return errors.New("live invocation is unavailable")
 	}
 	var playbackErr error
-	if shouldDrainPlayback(i.ctx, waitErr) {
-		playbackErr = i.drainInvocationPlayback()
+	if shouldDrainPlayback(ctx, waitErr) {
+		playbackErr = i.drainInvocationPlayback(ctx)
 	}
 	if i.stopPumps != nil {
 		i.stopPumps()
@@ -371,7 +371,7 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 		deviceErr = i.device.Close()
 	}
 	var pumpErr error
-	for count := 0; count < i.count; count++ {
+	for range i.count {
 		candidate := <-i.pumps
 		if !isExpectedMediaPumpError(candidate) {
 			pumpErr = errors.Join(pumpErr, candidate)
@@ -379,7 +379,7 @@ func (i *liveInvocation) finish(waitErr, sinkErr error) error {
 	}
 	handleErr := i.handle.Close()
 	result := errors.Join(waitErr, sinkErr, pumpErr, playbackErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
+	return errors.Join(result, finalizeRecorder(i.options.Recorder, ctx, result))
 }
 
 func requestedTerminalError(s finishState) error {

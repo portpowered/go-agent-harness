@@ -118,7 +118,7 @@ func assertPairedTranscriptPrefix(t *testing.T, r *directoryRecorder) {
 // every interleaving of two media frames with four normalized response events.
 func TestRecordedResponseAudioIsIndependentOfQueueScheduling(t *testing.T) {
 	t.Parallel()
-	for first := 0; first <= 4; first++ {
+	for first := range 5 {
 		for second := first; second <= 4; second++ {
 			t.Run(fmt.Sprintf("audio-at-%d-%d", first, second), func(t *testing.T) {
 				t.Parallel()
@@ -131,7 +131,7 @@ func TestRecordedResponseAudioIsIndependentOfQueueScheduling(t *testing.T) {
 func assertRecordedAudioInterleaving(t *testing.T, first, second int) {
 	t.Helper()
 	r := newEvidenceRecorder(t)
-	for position := 0; position <= 4; position++ {
+	for position := range 5 {
 		for index, at := range []int{first, second} {
 			if at == position {
 				recordResponsePCM(t, r, index)
@@ -319,7 +319,7 @@ func TestConversationSummarySnapshotReplacementReaccountsRetainedBytes(t *testin
 func TestConversationSummaryItemLimitStopsOnlyProjection(t *testing.T) {
 	t.Parallel()
 	conversation := newEvidenceConversation(0)
-	for index := 0; index < directorySummaryMaxItems+100; index++ {
+	for range directorySummaryMaxItems + 100 {
 		conversation.appendText(true, "x")
 		if conversation.summaryFull {
 			break

@@ -28,7 +28,7 @@ func deltaJSONL(id string, turns []turn, samples []int16) []byte {
 
 func deltaJSONLWithBoundaries(id string, turns []turn, samples []int16, boundaries []int) []byte {
 	var result bytes.Buffer
-	for index := 0; index < len(boundaries)-1; index++ {
+	for index := range len(boundaries) - 1 {
 		start, end := boundaries[index], boundaries[index+1]
 		record := deltaRecord{
 			Type:          "AUDIO.DELTA",
@@ -40,10 +40,7 @@ func deltaJSONLWithBoundaries(id string, turns []turn, samples []int16, boundari
 			TurnID:        turnAt(turns, start),
 			Delta:         base64.StdEncoding.EncodeToString(pcmBytes(samples[start:end])),
 		}
-		data, err := json.Marshal(record)
-		if err != nil {
-			panic(err)
-		}
+		data := mustJSON(json.Marshal(record))
 		result.Write(data)
 		result.WriteByte('\n')
 	}
@@ -153,10 +150,7 @@ func artifactRefFor(path string, data []byte) artifactRef {
 func jsonLines(values []map[string]any) []byte {
 	var result bytes.Buffer
 	for _, value := range values {
-		data, err := json.Marshal(value)
-		if err != nil {
-			panic(err)
-		}
+		data := mustJSON(json.Marshal(value))
 		result.Write(data)
 		result.WriteByte('\n')
 	}

@@ -18,7 +18,7 @@ const darwinDisplayResolutionCaptureGroups = 3
 
 var darwinDisplayResolutionPattern = regexp.MustCompile(`(?i)resolution:\s*([0-9]+)\s*x\s*([0-9]+)`)
 
-func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) (int, image.Rectangle, error) {
 	resolutions, err := darwinDisplayResolutionsWithContextAndProcess(ctx, process)
 	if err != nil {
 		return 0, image.Rectangle{}, err
@@ -44,7 +44,7 @@ func darwinDisplayResolutionsWithContextAndProcess(ctx context.Context, process 
 	return resolutions, nil
 }
 
-func screenDisplayCountWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, error) {
+func screenDisplayCountWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) (int, error) {
 	resolutions, err := darwinDisplayResolutionsWithContextAndProcess(ctx, process)
 	if err != nil {
 		return 0, err
@@ -54,7 +54,7 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, process Displa
 
 // screenDisplayBoundsWithContextAndProcess reads the display's reported
 // resolution. It deliberately does not capture a frame to discover bounds.
-func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, process DisplayProcess) (image.Rectangle, error) {
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ screenPlatform, idx int, process DisplayProcess) (image.Rectangle, error) {
 	resolutions, err := darwinDisplayResolutionsWithContextAndProcess(ctx, process)
 	if err != nil {
 		return image.Rectangle{}, err
@@ -87,7 +87,7 @@ func darwinDisplayResolutions(output string) []image.Rectangle {
 	return resolutions
 }
 
-func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, process DisplayProcess) error {
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) error {
 	if ctx == nil {
 		return errors.New("screen capture context is required")
 	}
@@ -112,11 +112,11 @@ func isScreenRecordingPermissionDenied(output []byte, err error) bool {
 	return screenRecordingPermissionText(text)
 }
 
-func screenCaptureDisplayWithContextAndProcess(ctx context.Context, display int, _ image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ screenPlatform, display int, _ image.Rectangle, process DisplayProcess) (*image.RGBA, error) {
 	if ctx == nil {
 		return nil, errors.New("screen capture context is required")
 	}
-	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, process); err != nil {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, screenPlatform{}, process); err != nil {
 		return nil, err
 	}
 	process = normalizeDisplayProcess(process)
@@ -164,7 +164,7 @@ func loadPNGasRGBAWithContext(ctx context.Context, path string) (*image.RGBA, er
 	}
 	defer closeScreenCaptureFile(f)
 
-	img, err := png.Decode(contextReader{ctx: ctx, r: f})
+	img, err := png.Decode(newContextReader(ctx, f))
 	if err != nil {
 		return nil, fmt.Errorf("decode screenshot: %w", err)
 	}
@@ -191,3 +191,8 @@ func closeScreenCaptureFile(file *os.File) {
 		return
 	}
 }
+
+// screenPlatform holds platform capture handles; this platform needs none.
+type screenPlatform struct{}
+
+func newScreenPlatform() screenPlatform { return screenPlatform{} }

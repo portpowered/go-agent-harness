@@ -101,10 +101,10 @@ func closeFeedback(f *audio.PCM16FeedbackGate) error {
 	return f.Close()
 }
 
-type mediaErrorCode string
+type mediaUnavailableError string
 
-func (e mediaErrorCode) Error() string { return string(e) }
+func (e mediaUnavailableError) Error() string { return string(e) }
 
-const ErrSessionMediaUnavailable mediaErrorCode = "RTC session media endpoints are unavailable"
+const ErrSessionMediaUnavailable mediaUnavailableError = "RTC session media endpoints are unavailable"
 
 var _ devices.RTCBinding = (*binding)(nil)

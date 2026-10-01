@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +65,9 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("admit intact replay bundle: %v", err)
 		}
-		replaceWithSymlink(t, filepath.Join(destination, filepath.FromSlash(artifact)), outside)
+		if !replaceWithSymlink(t, filepath.Join(destination, filepath.FromSlash(artifact)), outside) {
+			return
+		}
 
 		assertReplaySymlinkRejected(t, service, destination, outside)
 		if _, err := service.Load(plan); err == nil {
@@ -87,8 +90,8 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 		if err := os.Rename(participantDirectory, outside); err != nil {
 			t.Fatalf("move participant directory outside bundle: %v", err)
 		}
-		if err := os.Symlink(outside, participantDirectory); err != nil {
-			t.Skipf("symlink unavailable: %v", err)
+		if !symlinkOrUnsupported(t, outside, participantDirectory) {
+			return
 		}
 		assertReplaySymlinkRejected(t, service, destination, outside)
 		if _, err := service.Load(plan); err == nil {
@@ -212,14 +215,12 @@ func finalizedReplayBundle(t *testing.T) (string, roomevidence.Recorder) {
 	return destination, recorder
 }
 
-func replaceWithSymlink(t *testing.T, path, outside string) {
+func replaceWithSymlink(t *testing.T, path, outside string) bool {
 	t.Helper()
 	if err := os.Rename(path, outside); err != nil {
 		t.Fatalf("move artifact outside bundle: %v", err)
 	}
-	if err := os.Symlink(outside, path); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
+	return symlinkOrUnsupported(t, outside, path)
 }
 
 func assertReplaySymlinkRejected(t *testing.T, service roomevidence.Service, destination, outside string) {
@@ -249,4 +250,23 @@ func assertReplaySymlinkError(t *testing.T, err error, outside string) {
 	if strings.Contains(err.Error(), outside) {
 		t.Fatalf("symlink error leaked external path %q: %v", outside, err)
 	}
+}
+
+// symlinkOrUnsupported creates link pointing at target. Windows creates
+// symlinks only with Developer Mode or the create-symbolic-link privilege;
+// without it the capability is absent, so this reports false and the caller
+// ends its symlink assertions. Every other platform supports symlinks, so a
+// failure there is fatal.
+func symlinkOrUnsupported(t *testing.T, target, link string) bool {
+	t.Helper()
+	err := os.Symlink(target, link)
+	if err == nil {
+		return true
+	}
+	if runtime.GOOS == "windows" {
+		t.Logf("symlink capability unavailable: %v", err)
+		return false
+	}
+	t.Fatalf("create symlink %s -> %s: %v", link, target, err)
+	return false
 }

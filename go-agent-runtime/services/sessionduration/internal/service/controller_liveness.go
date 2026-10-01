@@ -158,7 +158,7 @@ func (c *controller) armLiveness(onlyIfArmed bool) {
 }
 
 func (c *controller) canArmLivenessLocked(onlyIfArmed bool) bool {
-	return c.ctx.Err() == nil && !c.closed && !c.livenessStopped && !c.localToolActive && !c.livenessCancelled && c.livenessFailure == nil &&
+	return !c.lifetimeEnded() && !c.closed && !c.livenessStopped && !c.localToolActive && !c.livenessCancelled && c.livenessFailure == nil &&
 		(onlyIfArmed && c.livenessArmed || !onlyIfArmed && !c.livenessArmed)
 }
 
@@ -180,14 +180,14 @@ func (c *controller) watchLiveness() {
 		generation := c.livenessGeneration
 		timer := c.livenessTimer
 		wake := c.livenessWake
-		ctx := c.ctx
+		done := c.done
 		armed := c.livenessArmed && timer != nil
 		c.mu.Unlock()
 		if !armed {
 			select {
 			case <-wake:
 				continue
-			case <-ctx.Done():
+			case <-done:
 				c.stopLiveness()
 				return
 			}
@@ -196,7 +196,7 @@ func (c *controller) watchLiveness() {
 		case <-timer.C():
 			c.expireLiveness(generation)
 		case <-wake:
-		case <-ctx.Done():
+		case <-done:
 			c.stopLiveness()
 			return
 		}
@@ -205,7 +205,7 @@ func (c *controller) watchLiveness() {
 
 func (c *controller) expireLiveness(generation uint64) {
 	c.mu.Lock()
-	if c.ctx.Err() != nil || c.closed || c.livenessStopped || c.localToolActive || !c.livenessArmed || c.livenessGeneration != generation {
+	if c.lifetimeEnded() || c.closed || c.livenessStopped || c.localToolActive || !c.livenessArmed || c.livenessGeneration != generation {
 		c.mu.Unlock()
 		return
 	}

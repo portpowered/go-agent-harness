@@ -1,14 +1,18 @@
 package service
 
-import sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
-
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
+	"fmt"
+	"os"
+
+	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+
 	"context"
-	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
-	"log"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	"strconv"
+
+	devicert "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/runtime"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -64,52 +68,57 @@ func playbackMetricSamples() []playbackMetricDefinition {
 	}
 }
 
-func recordPlaybackSample(sampler observability.MetricSampler, sample observability.MetricSample) {
-	if err := observability.TrySample(context.Background(), sampler, sample); err != nil {
+func recordPlaybackSample(ctx context.Context, sampler observability.MetricSampler, sample observability.MetricSample) {
+	if err := observability.TrySample(ctx, sampler, sample); err != nil {
 		return
 	}
 }
 
-func recordPlaybackLog(logger observability.Logger, record observability.LogRecord) {
-	if err := observability.TryLog(context.Background(), logger, record); err != nil {
+func recordPlaybackLog(ctx context.Context, logger observability.Logger, record observability.LogRecord) {
+	if err := observability.TryLog(ctx, logger, record); err != nil {
 		return
 	}
-}
-
-// fallbackPlaybackDiagnosticSink is the sink resolvePlaybackDiagnosticSink
-// installs whenever a caller did not wire one. This is the second time this
-// exact instrumentation has been found unwired end to end: #360 fixed the
-// CLI's SessionRunOptions.Diagnostics after #350's counters were found never
-// reaching it, and the room/self-play half was still missed. Patching each
-// forgetful call site clearly does not close this class of bug, so instead
-// every place in this codebase that observes a playback queue overflow
-// (sessionPlaybackDiagnosticObserver below, and
-// emitRoomParticipantPlaybackOverflowDiagnostic for a room's human
-// participant device) resolves its sink through resolvePlaybackDiagnosticSink
-// rather than trusting the caller-supplied sink directly. A dropped sample
-// can now, at worst, degrade from "written to the caller's sink" to "logged
-// here" -- it can never again silently vanish because nobody remembered to
-// populate SessionRunOptions.Diagnostics.
-// logPlaybackDiagnosticSink is a named (comparable) type rather than a
-// SessionDiagnosticFunc closure so tests can assert identity against
-// fallbackPlaybackDiagnosticSink without tripping Go's "comparing
-// uncomparable type" panic on function values.
-type logPlaybackDiagnosticSink struct{}
-
-// RecordSessionDiagnostic implements SessionDiagnosticSink.
-func (logPlaybackDiagnosticSink) RecordSessionDiagnostic(record SessionDiagnosticRecord) {
-	log.Printf("session diagnostic (no SessionRunOptions.Diagnostics sink configured): event=%s fields=%v", record.Event, record.Fields)
 }
 
 // resolvePlaybackDiagnosticSink returns sink unchanged when the caller
-// supplied one, otherwise the package fallback. See fallbackPlaybackDiagnosticSink
-// for why every playback-overflow observation point in this package routes
-// through this function instead of checking sink == nil itself.
-func resolvePlaybackDiagnosticSink(sink SessionDiagnosticSink) SessionDiagnosticSink {
-	if sink != nil {
-		return sink
+// supplied one, otherwise a fallback that reports the record through the
+// injected observability logger under ctx. This instrumentation has twice
+// been found unwired end to end: #360 fixed the CLI's
+// SessionRunOptions.Diagnostics after #350's counters never reached it, and
+// the room/self-play half was still missed. Patching each forgetful call site
+// does not close this class of bug, so every place in this package that
+// observes a playback queue overflow (sessionPlaybackDiagnosticObserver and
+// emitRoomParticipantPlaybackOverflowDiagnostic) resolves its sink here rather
+// than trusting the caller-supplied sink directly. A dropped sample degrades
+// at worst from "written to the caller's sink" to "logged by the host logger",
+// and without a logger to a line on the diagnostic writer (standard error by
+// default) -- it never silently vanishes.
+func resolvePlaybackDiagnosticSink(ctx context.Context, options sessiontrace.PlaybackDiagnosticsOptions) SessionDiagnosticSink {
+	if options.Sink != nil {
+		return options.Sink
 	}
-	return logPlaybackDiagnosticSink{}
+	logger := options.Logger
+	if logger == nil {
+		writer := options.DiagnosticWriter
+		if writer == nil {
+			writer = os.Stderr
+		}
+		return sessiontrace.DiagnosticFunc(func(record SessionDiagnosticRecord) {
+			if _, err := fmt.Fprintf(writer, "session diagnostic (no diagnostics sink configured): event=%s fields=%v\n", record.Event, record.Fields); err != nil {
+				return
+			}
+		})
+	}
+	return sessiontrace.DiagnosticFunc(func(record SessionDiagnosticRecord) {
+		fields := make(observability.Fields, len(record.Fields)+1)
+		for key, value := range record.Fields {
+			fields[key] = value
+		}
+		fields["event"] = record.Event
+		recordPlaybackLog(ctx, logger, observability.LogRecord{
+			Level: "warn", Message: "session diagnostic (no diagnostics sink configured)", Fields: fields,
+		})
+	})
 }
 
 func combineRTCDevicePlaybackObservers(observers ...devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver {
@@ -203,7 +212,9 @@ func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) devicert.RTCD
 // sessionPlaybackObservabilityObserver exports the complete synchronized
 // queue snapshot at device teardown. RTCDeviceSink invokes this observer only
 // after the native handle is closed, never from its real-time callback.
-func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDevicePlaybackObserver {
+// ctx scopes the teardown samples and logs; the device invokes the observer
+// after the handle closes, so ctx should outlive the device open call.
+func sessionPlaybackObservabilityObserver(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDevicePlaybackObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id devicegw.DeviceID, stats audio.PlaybackQueueStats) {
@@ -213,7 +224,7 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 			"channels":    strconv.Itoa(stats.Format.Channels),
 		}
 		for _, definition := range playbackMetricSamples() {
-			recordPlaybackSample(sampler, observability.MetricSample{
+			recordPlaybackSample(ctx, sampler, observability.MetricSample{
 				Name: definition.name, Kind: definition.kind, Unit: definition.unit,
 				Value: definition.value(stats), Fields: fields,
 			})
@@ -227,13 +238,13 @@ func sessionPlaybackObservabilityObserver(sampler observability.MetricSampler, l
 		logFields["underflow_samples"] = strconv.FormatUint(stats.UnderflowSamples, 10)
 		logFields["zero_filled_samples"] = strconv.FormatUint(stats.ZeroFilledSamples, 10)
 		logFields["rendered_samples"] = strconv.FormatUint(stats.RenderedSamples, 10)
-		recordPlaybackLog(logger, observability.LogRecord{
+		recordPlaybackLog(ctx, logger, observability.LogRecord{
 			Level: level, Message: SessionLogMessagePlaybackSnapshot, Fields: logFields,
 		})
 	}
 }
 
-func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDeviceCaptureObserver {
+func sessionCaptureObservabilityObserver(ctx context.Context, sampler observability.MetricSampler, logger observability.Logger) devicert.RTCDeviceCaptureObserver {
 	sampler = observability.EnsureMetricSampler(sampler)
 	logger = observability.EnsureLogger(logger)
 	return func(id devicegw.DeviceID, stats audio.CaptureQueueStats) {
@@ -251,7 +262,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 			{Name: "audio.capture.sequence_gaps", Kind: "counter", Value: float64(stats.SequenceGaps), Unit: "gaps", Fields: fields},
 		}
 		for _, sample := range metrics {
-			recordPlaybackSample(sampler, sample)
+			recordPlaybackSample(ctx, sampler, sample)
 		}
 		level := "info"
 		if stats.DroppedSamples > 0 || stats.SequenceGaps > 0 {
@@ -260,7 +271,7 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 		fields["dropped_frames"] = strconv.FormatUint(stats.DroppedFrames, 10)
 		fields["dropped_samples"] = strconv.FormatUint(stats.DroppedSamples, 10)
 		fields["sequence_gaps"] = strconv.FormatUint(stats.SequenceGaps, 10)
-		recordPlaybackLog(logger, observability.LogRecord{
+		recordPlaybackLog(ctx, logger, observability.LogRecord{
 			Level: level, Message: "audio capture queue finalized", Fields: fields,
 		})
 	}
@@ -273,9 +284,9 @@ func sessionCaptureObservabilityObserver(sampler observability.MetricSampler, lo
 // openRoomHumanDevices in session_room_orchestration.go), so
 // sessionPlaybackDiagnosticObserver above never applies to them at all. This
 // is the room's independent choke point for the identical class of bug --
-// see fallbackPlaybackDiagnosticSink -- and it names the dropping participant
+// see resolvePlaybackDiagnosticSink -- and it names the dropping participant
 // so an operator can tell who lost audio.
-func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, output *devicegw.DeviceSink, sink SessionDiagnosticSink) {
+func emitRoomParticipantPlaybackOverflowDiagnostic(ctx context.Context, participantID string, output *devicegw.DeviceSink, options sessiontrace.PlaybackDiagnosticsOptions) {
 	if output == nil {
 		return
 	}
@@ -285,7 +296,7 @@ func emitRoomParticipantPlaybackOverflowDiagnostic(participantID string, output 
 	}
 	fields := playbackOverflowDiagnosticFields(output.DeviceID(), stats)
 	fields[SessionDiagnosticFieldPlaybackParticipantID] = participantID
-	resolvePlaybackDiagnosticSink(sink).RecordSessionDiagnostic(SessionDiagnosticRecord{
+	resolvePlaybackDiagnosticSink(ctx, options).RecordSessionDiagnostic(SessionDiagnosticRecord{
 		Event:  SessionDiagnosticEventPlaybackOverflow,
 		Fields: fields,
 	})
@@ -299,11 +310,11 @@ func NewPlaybackDiagnostics(options sessiontrace.PlaybackDiagnosticsOptions) ses
 	return playbackDiagnostics{options: options}
 }
 
-func (p playbackDiagnostics) PlaybackObserver(existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver {
+func (p playbackDiagnostics) PlaybackObserver(ctx context.Context, existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver {
 	return combineRTCDevicePlaybackObservers(
 		existing,
-		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(p.options.Sink)),
-		sessionPlaybackObservabilityObserver(p.options.MetricSampler, p.options.Logger),
+		sessionPlaybackDiagnosticObserver(resolvePlaybackDiagnosticSink(ctx, p.options)),
+		sessionPlaybackObservabilityObserver(ctx, p.options.MetricSampler, p.options.Logger),
 	)
 }
 
@@ -314,12 +325,12 @@ func (p playbackDiagnostics) PlaybackReceiptObserver(existing devicert.RTCDevice
 	return combineRTCDevicePlaybackReceiptObservers(existing, p.options.Runtime.AudioPlaybackReceipt)
 }
 
-func (p playbackDiagnostics) CaptureObserver(existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver {
-	return combineRTCDeviceCaptureObservers(existing, sessionCaptureObservabilityObserver(p.options.MetricSampler, p.options.Logger))
+func (p playbackDiagnostics) CaptureObserver(ctx context.Context, existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver {
+	return combineRTCDeviceCaptureObservers(existing, sessionCaptureObservabilityObserver(ctx, p.options.MetricSampler, p.options.Logger))
 }
 
-func (p playbackDiagnostics) RecordParticipantPlaybackOverflow(participant string, output *devicegw.DeviceSink) {
-	emitRoomParticipantPlaybackOverflowDiagnostic(participant, output, p.options.Sink)
+func (p playbackDiagnostics) RecordParticipantPlaybackOverflow(ctx context.Context, participant string, output *devicegw.DeviceSink) {
+	emitRoomParticipantPlaybackOverflowDiagnostic(ctx, participant, output, p.options)
 }
 
 var _ sessiontrace.PlaybackDiagnostics = playbackDiagnostics{}

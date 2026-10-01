@@ -15,7 +15,7 @@ import (
 
 func TestPublicLivenessIgnoresStaleResponseCancellation(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(180, 0), time.Millisecond)
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})
@@ -44,7 +44,7 @@ func TestPublicLivenessIgnoresStaleResponseCancellation(t *testing.T) {
 
 func TestPublicLivenessDoesNotClassifyProviderCancellationAsEmpty(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(240, 0), time.Millisecond)
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})
@@ -78,7 +78,7 @@ func TestPublicLivenessDoesNotClassifyProviderCancellationAsEmpty(t *testing.T) 
 
 func TestPublicLivenessDoesNotClassifyReportedUsageAsEmpty(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(300, 0), time.Millisecond)
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})
@@ -113,7 +113,7 @@ func TestPublicLivenessDoesNotClassifyReportedUsageAsEmpty(t *testing.T) {
 
 func TestPublicLivenessUsesCurrentResponseForCancellationWithoutID(t *testing.T) {
 	clock := platformclock.NewDeterministic(time.Unix(360, 0), time.Millisecond)
-	controller, err := NewService().Begin(sessionduration.Options{
+	controller, err := NewService().Begin(context.Background(), sessionduration.Options{
 		Clock:    clock,
 		Liveness: sessionduration.LivenessOptions{Enabled: true, Timeout: 5 * time.Millisecond},
 	})

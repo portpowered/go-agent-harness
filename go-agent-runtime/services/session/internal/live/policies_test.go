@@ -109,15 +109,7 @@ rateLimitObserved:
 		t.Fatal("rate-limit retry timer was not scheduled")
 	}
 	clock.AdvanceBy(5 * time.Millisecond)
-	deadline = time.After(time.Second)
-	for !provider.hasType(messages.StreamTypeResponseCreate) {
-		select {
-		case <-deadline:
-			t.Fatal("timed out waiting for retry response.create")
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
+	provider.awaitSent(t, messages.StreamTypeResponseCreate)
 	stop := errors.New("stop retry fixture")
 	handle.Cancel(stop)
 	if err := handle.Wait(); !errors.Is(err, stop) {
@@ -126,7 +118,7 @@ rateLimitObserved:
 }
 func TestResponseTerminalLedgerIsFiniteScheduleOnly(t *testing.T) {
 	unscheduled := &handle{}
-	for index := 0; index < 128; index++ {
+	for index := range 128 {
 		unscheduled.observeResponseTerminal(messages.StreamMessage{
 			Type:       messages.StreamTypeMessageEnd,
 			Role:       messages.RoleAssistant,
@@ -227,16 +219,6 @@ func (scheduler *observingScheduler) NewTimer(duration time.Duration) platformcl
 	scheduler.once.Do(func() { close(scheduler.timerCreated) })
 	return timer
 }
-func (s *testSession) hasType(kind messages.StreamMessageType) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, message := range s.sent {
-		if message.Type == kind {
-			return true
-		}
-	}
-	return false
-}
 func TestCapabilityAdmissionPreservesCleanupFailures(t *testing.T) {
 	for _, phase := range []string{"initialize", "refresh", "closed"} {
 		t.Run(phase, func(t *testing.T) {
@@ -276,7 +258,7 @@ func TestLiveEvidenceAndPresentationShareSequenceIncludingOverflow(t *testing.T)
 	recorder := &eventSequenceRecorder{}
 	h := &handle{events: make(chan session.LiveEvent, 4), parentCtx: t.Context(), clock: func() time.Time { return time.Unix(700, 0) }}
 	h.setRecorder(recorder)
-	for index := 0; index < 6; index++ {
+	for range 6 {
 		h.publish(session.LiveEvent{Kind: string(session.LiveEventText)}, false)
 	}
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventTerminal)}, true)
@@ -572,10 +554,9 @@ func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 // so the graceful drain must also join a pump that is scheduled but not begun.
 func TestGracefulDrainJoinsPlaybackPumpBeforeItBegins(t *testing.T) {
 	playback := &lateStartPlayback{start: make(chan struct{})}
-	invocation := &liveInvocation{ctx: t.Context(), ports: devices.MediaPorts{Playback: playback}, endpoints: sharedaudio.MediaEndpoints{Inbound: playback}}
-	invocation.pumpCtx = t.Context()
-	invocation.startPlaybackPump()
-	require.NoError(t, invocation.drainInvocationPlayback())
+	invocation := &liveInvocation{ports: devices.MediaPorts{Playback: playback}, endpoints: sharedaudio.MediaEndpoints{Inbound: playback}}
+	invocation.startPlaybackPump(t.Context())
+	require.NoError(t, invocation.drainInvocationPlayback(t.Context()))
 	require.True(t, playback.ran, "graceful drain returned before the scheduled playback pump ran")
 	require.NoError(t, <-invocation.pumps)
 }
@@ -597,4 +578,19 @@ func (p *lateStartPlayback) Pump(context.Context, sharedaudio.InboundMedia) erro
 func (p *lateStartPlayback) WaitForPump(context.Context) error {
 	p.once.Do(func() { close(p.start) })
 	return nil
+}
+func TestLiveResponseCancelControlSyncsProviderLifecycleFirst(t *testing.T) {
+	s := newTestSession()
+	opened, err := New(Dependencies{InferencerFactory: func(context.Context, session.LiveRequest) (messages.SessionInferencer, error) {
+		return &testInferencer{session: s}, nil
+	}}).OpenLive(context.Background(), session.LiveRequest{SessionID: "cancel-sync"})
+	require.NoError(t, err)
+	require.NoError(t, opened.Start(context.Background()))
+	t.Cleanup(func() { opened.Cancel(context.Canceled); require.ErrorIs(t, opened.Wait(), context.Canceled) })
+	h := requireLiveHandle(t, opened)
+	synced, relay := false, h.providerReceiveSync
+	cancel := func(msg messages.StreamMessage) bool { return msg.Type == messages.StreamTypeResponseCancel }
+	h.providerReceiveSync = func(ctx context.Context) { synced = !s.sentMatch(cancel); relay(ctx) }
+	require.NoError(t, opened.Send(context.Background(), session.LiveControl{Kind: session.LiveControlResponseCancel}))
+	require.True(t, synced && s.sentMatch(cancel), "interrupt reached the runner before the provider lifecycle barrier")
 }

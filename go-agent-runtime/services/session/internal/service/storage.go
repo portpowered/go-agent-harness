@@ -11,7 +11,6 @@ import (
 )
 
 type storageAdapter struct {
-	ctx          context.Context
 	store        session.SessionStore
 	traces       session.TraceStore
 	workspaceDir string
@@ -25,73 +24,57 @@ type storageAdapter struct {
 // caller's context.
 const persistenceCleanupTimeout = 2 * time.Second
 
-func newStorageAdapter(ctx context.Context, store session.SessionStore, traces session.TraceStore, workspaceDir string) agent.Storage {
+func newStorageAdapter(store session.SessionStore, traces session.TraceStore, workspaceDir string) agent.Storage {
 	if store == nil || traces == nil {
 		return nil
 	}
-	if ctx == nil {
-		return nil
-	}
-	return &storageAdapter{ctx: ctx, store: store, traces: traces, workspaceDir: workspaceDir}
+	return &storageAdapter{store: store, traces: traces, workspaceDir: workspaceDir}
 }
 
-func (s *storageAdapter) Load(id string) ([]messages.Message, error) {
-	return s.store.Load(s.ctx, id)
+func (s *storageAdapter) Load(ctx context.Context, id string) ([]messages.Message, error) {
+	return s.store.Load(ctx, id)
 }
-func (s *storageAdapter) Latest() (string, error) { return s.store.Latest(s.ctx) }
-func (s *storageAdapter) NewSessionID() string {
-	id, err := s.NewSessionIDWithError()
-	if err != nil {
-		return ""
-	}
-	return id
+
+func (s *storageAdapter) Latest(ctx context.Context) (string, error) { return s.store.Latest(ctx) }
+
+func (s *storageAdapter) NewSessionID(ctx context.Context) (string, error) {
+	return s.store.NewSessionID(ctx)
 }
-func (s *storageAdapter) NewSessionIDWithError() (string, error) {
-	id, err := s.store.NewSessionID(s.ctx)
-	if err != nil {
-		return "", err
-	}
-	return id, nil
-}
-func (s *storageAdapter) Save(id string, msgs []messages.Message) error {
-	ctx, cancel := s.finalizationContext()
+
+func (s *storageAdapter) Save(ctx context.Context, id string, msgs []messages.Message) error {
+	ctx, cancel := finalizationContext(ctx)
 	defer cancel()
 	return s.store.Save(ctx, id, msgs)
 }
+
 func (s *storageAdapter) WorkspaceDir() string { return s.workspaceDir }
-func (s *storageAdapter) NewTraceID() string {
-	id, err := s.NewTraceIDWithError()
-	if err != nil {
-		return ""
-	}
-	return id
+
+func (s *storageAdapter) NewTraceID(ctx context.Context) (string, error) {
+	return s.traces.NewTraceID(ctx)
 }
-func (s *storageAdapter) NewTraceIDWithError() (string, error) {
-	id, err := s.traces.NewTraceID(s.ctx)
-	if err != nil {
-		return "", err
-	}
-	return id, nil
-}
-func (s *storageAdapter) LoadTrace(id string) (*internalSession.TraceRecord, error) {
-	trace, err := s.traces.LoadTrace(s.ctx, id)
+
+func (s *storageAdapter) LoadTrace(ctx context.Context, id string) (*internalSession.TraceRecord, error) {
+	trace, err := s.traces.LoadTrace(ctx, id)
 	if err != nil || trace == nil {
 		return nil, err
 	}
 	converted := toInternalTrace(*trace)
 	return &converted, nil
 }
-func (s *storageAdapter) SaveTrace(trace internalSession.TraceRecord) error {
-	ctx, cancel := s.finalizationContext()
+
+func (s *storageAdapter) SaveTrace(ctx context.Context, trace internalSession.TraceRecord) error {
+	ctx, cancel := finalizationContext(ctx)
 	defer cancel()
 	return s.traces.SaveTrace(ctx, toPublicTrace(trace))
 }
 
-func (s *storageAdapter) finalizationContext() (context.Context, context.CancelFunc) {
-	if s == nil || s.ctx == nil || s.ctx.Err() == nil {
-		return s.ctx, func() {}
+// finalizationContext keeps a live caller context as is and detaches a
+// cancelled one for a bounded terminal write.
+func finalizationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx.Err() == nil {
+		return ctx, func() {}
 	}
-	return context.WithTimeout(context.WithoutCancel(s.ctx), persistenceCleanupTimeout)
+	return context.WithTimeout(context.WithoutCancel(ctx), persistenceCleanupTimeout)
 }
 
 func toInternalTrace(trace session.TraceRecord) internalSession.TraceRecord {

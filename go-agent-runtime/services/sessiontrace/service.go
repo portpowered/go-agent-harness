@@ -3,6 +3,7 @@ package sessiontrace
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -114,18 +115,9 @@ const (
 	ScheduledAudioDispatchActiveResponse  ScheduledAudioDispatchPolicy = "active-response"
 )
 
-type ScheduledInputSender interface {
-	SendAudioInput(context.Context, []byte) error
-	SendSessionEvent(context.Context, messages.StreamMessage) error
-}
-
 type LivenessTimer interface {
 	C() <-chan time.Time
 	Stop() bool
-}
-
-type LivenessClock interface {
-	NewTimer(time.Duration) LivenessTimer
 }
 
 type LivenessError struct {
@@ -150,15 +142,15 @@ type TerminalObservation struct {
 	RoomBound          bool
 }
 
-type errorCode string
+type sentinelError string
 
-func (e errorCode) Error() string { return string(e) }
+func (e sentinelError) Error() string { return string(e) }
 
 const (
-	ErrClockRequired     errorCode = "session trace clock is required"
-	ErrCloseTimeout      errorCode = "session trace close timed out"
-	ErrDestinationExists errorCode = "audio trace destination exists"
-	DefaultCloseTimeout            = time.Second
+	ErrClockRequired     sentinelError = "session trace clock is required"
+	ErrCloseTimeout      sentinelError = "session trace close timed out"
+	ErrDestinationExists sentinelError = "audio trace destination exists"
+	DefaultCloseTimeout                = time.Second
 )
 
 // CaptureSamplesObserver receives a copy-safe PCM tap notification.
@@ -193,13 +185,19 @@ type PlaybackDiagnosticsOptions struct {
 	MetricSampler observability.MetricSampler
 	Logger        observability.Logger
 	Runtime       RuntimeRecorder
+	// DiagnosticWriter receives playback diagnostics when neither Sink nor
+	// Logger is configured, so an overflow is never silently dropped. Nil
+	// selects the process's standard error.
+	DiagnosticWriter io.Writer
 }
 
 type PlaybackDiagnostics interface {
-	PlaybackObserver(devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver
+	// PlaybackObserver and CaptureObserver report teardown statistics under
+	// ctx, which must outlive the device they observe.
+	PlaybackObserver(ctx context.Context, existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver
 	PlaybackReceiptObserver(devicert.RTCDevicePlaybackReceiptObserver) devicert.RTCDevicePlaybackReceiptObserver
-	CaptureObserver(devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver
-	RecordParticipantPlaybackOverflow(string, *devicegw.DeviceSink)
+	CaptureObserver(ctx context.Context, existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver
+	RecordParticipantPlaybackOverflow(ctx context.Context, participantID string, output *devicegw.DeviceSink)
 }
 
 // SessionRuntimeObservationKind identifies an observable runtime boundary.

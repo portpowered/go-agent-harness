@@ -46,9 +46,9 @@ func evidenceDestinationError(path, operation string, cause error) error {
 
 const evidenceBudgetMessage = "recording evidence budget exceeded"
 
-type evidenceBudgetMarker struct{}
+type evidenceBudgetExceededError struct{}
 
-func (evidenceBudgetMarker) Error() string { return evidenceBudgetMessage }
+func (evidenceBudgetExceededError) Error() string { return evidenceBudgetMessage }
 
 type evidenceBudgetError struct {
 	resource string
@@ -66,7 +66,7 @@ func (e *evidenceBudgetError) Error() string {
 }
 
 func (e *evidenceBudgetError) Is(target error) bool {
-	_, marker := target.(evidenceBudgetMarker)
+	_, marker := target.(evidenceBudgetExceededError)
 	return marker || target == io.ErrShortBuffer
 }
 
@@ -210,7 +210,7 @@ func checkResource(resource string, bytes, items, usedBytes, usedItems, maxBytes
 }
 
 func isEvidenceBudgetError(err error) bool {
-	return errors.Is(err, evidenceBudgetMarker{})
+	return errors.Is(err, evidenceBudgetExceededError{})
 }
 
 const claimFileMode = 0o600

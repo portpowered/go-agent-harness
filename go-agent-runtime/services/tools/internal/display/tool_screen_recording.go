@@ -185,7 +185,7 @@ func (t *ScreenTool) captureRecordingFrames(ctx context.Context, display int, bo
 	delays := make([]int, 0, options.maxFrames)
 	clock := t.recordingClock()
 	startedAt := clock.Now()
-	for i := 0; i < options.maxFrames; i++ {
+	for i := range options.maxFrames {
 		if i > 0 {
 			target := startedAt.Add(time.Duration(i) * options.frameInterval)
 			if err := waitForScreenRecordingFrame(ctx, clock, target); err != nil {
@@ -226,7 +226,7 @@ func (t *ScreenTool) encodeRecording(ctx context.Context, frames []*image.Palett
 	}
 	var buf bytes.Buffer
 	recording := &gif.GIF{Image: frames, Delay: delays}
-	if err := t.recordingEncoder().Encode(ctx, contextAwareScreenWriter{ctx: ctx, writer: &buf}, recording); err != nil {
+	if err := t.recordingEncoder().Encode(ctx, contextAwareScreenWriter{err: contextErrFunc(ctx), writer: &buf}, recording); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, screenRecordingContextError("show recording encode", "screen recording encoding did not finish before the operation ended", ctxErr)
 		}
@@ -243,7 +243,7 @@ func (t *ScreenTool) encodeRecording(ctx context.Context, frames []*image.Palett
 }
 
 func decodeRecording(ctx context.Context, encoded []byte) (*gif.GIF, error) {
-	decoded, err := gif.DecodeAll(contextReader{ctx: ctx, r: bytes.NewReader(encoded)})
+	decoded, err := gif.DecodeAll(newContextReader(ctx, bytes.NewReader(encoded)))
 	if err == nil {
 		return decoded, nil
 	}
@@ -315,24 +315,20 @@ func palettizeScreenFrame(ctx context.Context, img image.Image) (*image.Paletted
 }
 
 type contextAwareScreenWriter struct {
-	ctx    context.Context
+	err    func() error
 	writer io.Writer
 }
 
 func (w contextAwareScreenWriter) Write(p []byte) (int, error) {
-	if w.ctx != nil {
-		if err := w.ctx.Err(); err != nil {
-			return 0, err
-		}
+	if err := w.err(); err != nil {
+		return 0, err
 	}
 	n, err := w.writer.Write(p)
 	if err != nil {
 		return n, err
 	}
-	if w.ctx != nil {
-		if ctxErr := w.ctx.Err(); ctxErr != nil {
-			return n, ctxErr
-		}
+	if ctxErr := w.err(); ctxErr != nil {
+		return n, ctxErr
 	}
 	return n, nil
 }

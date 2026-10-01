@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -74,8 +75,8 @@ func TestFilesystemPolicy_ProtectsSystemReadsAndSymlinkAliases(t *testing.T) {
 	}
 
 	linkPath := filepath.Join(primary, "system-alias")
-	if err := os.Symlink(systemRoot, linkPath); err != nil {
-		t.Skipf("symlinks unavailable on %s: %v", runtime.GOOS, err)
+	if !symlinkOrUnsupported(t, systemRoot, linkPath) {
+		return
 	}
 	aliasPath := filepath.Join(linkPath, filepath.Base(systemFile))
 	msgs, err = readTool.Execute(context.Background(), map[string]any{"path": aliasPath})
@@ -88,11 +89,14 @@ func TestFilesystemPolicy_ProtectsSystemReadsAndSymlinkAliases(t *testing.T) {
 func TestFilesystemPolicy_ProtectsCredentialReadsAndDoesNotOverrideOrdinaryReads(t *testing.T) {
 	primary := t.TempDir()
 	systemRoot := protectedSystemRoot(t)
-	home := os.Getenv("HOME")
-	if strings.TrimSpace(home) == "" {
-		t.Skip("HOME is unavailable")
-	}
+	home := t.TempDir()
 	credentialRoot := filepath.Join(home, ".ssh")
+	if err := os.Mkdir(credentialRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(credentialRoot, "id_ed25519"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	policy, err := NewFilesystemPolicy(primary, systemRoot, home)
 	if err != nil {
 		t.Fatalf("NewFilesystemPolicy: %v", err)
@@ -332,6 +336,9 @@ func TestFilesystemPolicyAppliesToReadsListsAndAllMutationTools(t *testing.T) {
 }
 
 func TestFilesystemPolicyResolvesSymlinksBeforeEveryFilesystemOperation(t *testing.T) {
+	if !symlinkOrUnsupported(t, t.TempDir(), filepath.Join(t.TempDir(), "probe")) {
+		return
+	}
 	fixture := newSymlinkFixture(t)
 	policy, err := NewFilesystemPolicy(fixture.primary)
 	if err != nil {
@@ -376,7 +383,7 @@ func newSymlinkFixture(t *testing.T) symlinkFixture {
 		{fixture.insideDirLink, fixture.insideDir},
 	} {
 		if err := os.Symlink(link[1], link[0]); err != nil {
-			t.Skipf("symlinks unavailable on %s: %v", runtime.GOOS, err)
+			t.Fatalf("create symlink: %v", err)
 		}
 	}
 	return fixture
@@ -472,7 +479,7 @@ func protectedSystemFixture(t *testing.T) (root, file string) {
 	if runtime.GOOS == windowsPlatform {
 		root = os.Getenv("WINDIR")
 		if root == "" {
-			t.Skip("WINDIR is not set")
+			t.Fatal("WINDIR is not set")
 		}
 		file = filepath.Join(root, "win.ini")
 		if _, err := os.Stat(file); err != nil {
@@ -483,10 +490,10 @@ func protectedSystemFixture(t *testing.T) (root, file string) {
 		file = filepath.Join(root, "hosts")
 	}
 	if _, err := os.Stat(root); err != nil {
-		t.Skipf("platform system root %q is unavailable: %v", root, err)
+		t.Fatalf("platform system root %q is unavailable: %v", root, err)
 	}
 	if _, err := os.Stat(file); err != nil {
-		t.Skipf("platform system fixture %q is unavailable: %v", file, err)
+		t.Fatalf("platform system fixture %q is unavailable: %v", file, err)
 	}
 	return filepath.Clean(root), filepath.Clean(file)
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
@@ -170,7 +169,7 @@ func newExecutorRunData(t *testing.T, inf messages.Inferencer, tool messages.Too
 		t.Fatalf("agentloop.New: %v", err)
 	}
 	return &RunData{
-		sessionManager: session.NewStorage(t.TempDir()),
+		sessionManager: newFileStorage(t.TempDir()),
 		Loop:           loop,
 	}
 }
@@ -215,25 +214,25 @@ func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
 			wantText:    "final after empty",
 			wantContent: "",
-			skip:        "DEFECT: go-agent-loop emits no reconstructable tool message for an empty response; the full exact ID/content assertions remain below this skip",
 		},
+		// A failed tool batch ends the turn with the tool's error. The loop
+		// records no tool result for a failed batch, so content returned
+		// alongside the error is not retained: these rows assert the
+		// propagated error and that the turn kept the assistant's tool call
+		// without a tool result.
 		{
 			name:        "tool error is propagated",
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
 			toolErr:     toolFailure,
 			wantErr:     toolFailure,
 			wantErrText: `tool "lookup" failed: tool exploded`,
-			wantContent: "",
-			skip:        "DEFECT: go-agent-loop serializes tool errors at the delta boundary, losing sentinel identity and the tool response message; the full errors.Is/ID/content assertions remain below this skip",
 		},
 		{
-			name:        "content plus error remains an error",
+			name:        "content plus error is an error and its content is not retained",
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID, Content: "partial content"},
 			toolErr:     partialFailure,
 			wantErr:     partialFailure,
 			wantErrText: `tool "lookup" failed: partial tool failure`,
-			wantContent: "partial content",
-			skip:        "DEFECT: go-agent-loop drops the response when the tool returns content with an error; the full errors.Is/ID/partial-content assertions remain below this skip",
 		},
 	}
 
@@ -274,22 +273,22 @@ func TestSaveSession_AndFlushRecorderBranches(t *testing.T) {
 	exec := &Executor{}
 
 	noSession := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil)
-	if err := exec.SaveSession(noSession); err != nil {
+	if err := exec.SaveSession(t.Context(), noSession); err != nil {
 		t.Fatalf("SaveSession() without ID error = %v", err)
 	}
 
 	noHistory := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil)
 	noHistory.SessionID = "empty"
-	if err := exec.SaveSession(noHistory); err != nil {
+	if err := exec.SaveSession(t.Context(), noHistory); err != nil {
 		t.Fatalf("SaveSession() without history error = %v", err)
 	}
 
 	withHistory := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil, messages.NewTextMessage(messages.RoleUser, "saved"))
 	withHistory.SessionID = "saved"
-	if err := exec.SaveSession(withHistory); err != nil {
+	if err := exec.SaveSession(t.Context(), withHistory); err != nil {
 		t.Fatalf("SaveSession() error = %v", err)
 	}
-	saved, err := withHistory.sessionManager.Load("saved")
+	saved, err := withHistory.sessionManager.Load(t.Context(), "saved")
 	if err != nil || len(saved) != 1 || saved[0].TextContent() != "saved" {
 		t.Fatalf("saved history = %#v, %v; want user message", saved, err)
 	}
@@ -300,8 +299,8 @@ func TestSaveSession_AndFlushRecorderBranches(t *testing.T) {
 	}
 	broken := newExecutorRunData(t, &executorScriptedInferencer{}, nil, nil, messages.NewTextMessage(messages.RoleUser, "saved"))
 	broken.SessionID = "broken"
-	broken.sessionManager = session.NewStorage(badSessionRoot)
-	if err := exec.SaveSession(broken); err == nil || !strings.Contains(err.Error(), "save session") {
+	broken.sessionManager = newFileStorage(badSessionRoot)
+	if err := exec.SaveSession(t.Context(), broken); err == nil || !strings.Contains(err.Error(), "save session") {
 		t.Fatalf("broken SaveSession() error = %v, want save context", err)
 	}
 
@@ -338,14 +337,15 @@ type toolResultCase struct {
 	wantErr     error
 	wantErrText string
 	wantContent string
-	skip        string
 }
 
 func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.ToolCall) {
 	t.Helper()
 	finalText := tt.wantText
-	if finalText == "" {
-		finalText = "unused"
+	if tt.wantErr != nil {
+		// The model would answer after the tool, but a failed tool must end
+		// the turn with the tool's error instead of reaching this response.
+		finalText = "answer after failed tool"
 	}
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{
 		{result: messages.InferenceResult{
@@ -358,28 +358,13 @@ func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.Tool
 	runData := newExecutorRunData(t, inf, tool, []messages.ToolDefinition{{Name: "lookup"}})
 	cfg := &Config{NoSystemInformation: true}
 	var out strings.Builder
-	// Keep the affected rows as explicit regression contracts. The assertions
-	// below are intentionally executable when the loop preserves tool
-	// response IDs, content, and sentinel errors; the current loop cannot
-	// satisfy them without an out-of-lease production change.
-	if tt.skip != "" {
-		t.Skip(tt.skip)
-	}
 	got, err := (&Executor{}).ExecuteOneTurn(context.Background(), runData, agentloop.NewExecuteInput("question"), cfg, &out)
 	if tt.wantErr != nil {
-		if err == nil {
-			t.Fatalf("ExecuteOneTurn() error = nil, want %v", tt.wantErr)
+		if !errors.Is(err, tt.wantErr) || err.Error() != tt.wantErrText || got != "" || out.Len() != 0 {
+			t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want error %q wrapping %v and no text", got, err, out.String(), tt.wantErrText, tt.wantErr)
 		}
-		if !errors.Is(err, tt.wantErr) {
-			t.Fatalf("ExecuteOneTurn() error = %v, want sentinel %v", err, tt.wantErr)
-		}
-		if err.Error() != tt.wantErrText {
-			t.Fatalf("ExecuteOneTurn() error = %q, want exact message %q", err.Error(), tt.wantErrText)
-		}
-	} else {
-		if err != nil || got != tt.wantText || out.String() != tt.wantText+"\n" {
-			t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want text %q", got, err, out.String(), tt.wantText)
-		}
+	} else if err != nil || got != tt.wantText || out.String() != tt.wantText+"\n" {
+		t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want text %q", got, err, out.String(), tt.wantText)
 	}
 
 	tool.mu.Lock()
@@ -388,5 +373,25 @@ func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.Tool
 	if len(calls) != 1 || calls[0] != toolCall {
 		t.Fatalf("tool calls = %#v, want exactly %#v", calls, []messages.ToolCall{toolCall})
 	}
-	assertToolResultMessage(t, runData, toolCall.ID, tt.wantContent)
+	if tt.wantErr == nil {
+		assertToolResultMessage(t, runData, toolCall.ID, tt.wantContent)
+		return
+	}
+	assertFailedToolTurnRetained(t, runData, toolCall)
+}
+
+// assertFailedToolTurnRetained checks what a failed tool turn keeps: the
+// assistant message that requested the call, and no tool result.
+func assertFailedToolTurnRetained(t *testing.T, runData *RunData, toolCall messages.ToolCall) {
+	t.Helper()
+	history := runData.Loop.GetConversationHistory()
+	if results := toolMessages(history); len(results) != 0 {
+		t.Fatalf("tool results after a failed tool = %#v, want none", results)
+	}
+	for _, msg := range runData.producedMessages {
+		if msg.Role == messages.RoleAssistant && len(msg.ToolCalls) == 1 && msg.ToolCalls[0].ID == toolCall.ID {
+			return
+		}
+	}
+	t.Fatalf("produced messages = %#v, want the assistant tool call %q retained", runData.producedMessages, toolCall.ID)
 }

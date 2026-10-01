@@ -59,9 +59,13 @@ func TestBuildProviderHTTPRuntime_LiveModeUsesInjectedBaseTransport(t *testing.T
 		t.Fatal("expected no recorder in live mode")
 	}
 
-	resp, err := runtime.Client.Get("https://example.test/v1/chat/completions")
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://example.test/v1/chat/completions", nil)
 	if err != nil {
-		t.Fatalf("runtime.Client.Get() error = %v", err)
+		t.Fatalf("http.NewRequestWithContext() error = %v", err)
+	}
+	resp, err := runtime.Client.Do(req)
+	if err != nil {
+		t.Fatalf("runtime.Client.Do() error = %v", err)
 	}
 	defer closeHTTPResponseForTest(t, resp)
 	body, err := io.ReadAll(resp.Body)
@@ -102,9 +106,9 @@ func TestBuildProviderHTTPRuntime_RecordModeWrapsInjectedBaseTransport(t *testin
 		t.Fatal("expected recorder transport to back the client")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://example.test/v1/chat/completions", strings.NewReader(`{"message":"hello"}`))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://example.test/v1/chat/completions", strings.NewReader(`{"message":"hello"}`))
 	if err != nil {
-		t.Fatalf("http.NewRequest() error = %v", err)
+		t.Fatalf("http.NewRequestWithContext() error = %v", err)
 	}
 	resp, err := runtime.Client.Do(req)
 	if err != nil {
@@ -148,9 +152,9 @@ func TestBuildProviderHTTPRuntime_RecordModeCapturesRoundTripAndFlushes(t *testi
 		t.Fatalf("buildProviderHTTPRuntime() error = %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/chat/completions", strings.NewReader(`{"message":"hello"}`))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+"/v1/chat/completions", strings.NewReader(`{"message":"hello"}`))
 	if err != nil {
-		t.Fatalf("http.NewRequest() error = %v", err)
+		t.Fatalf("http.NewRequestWithContext() error = %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -207,9 +211,9 @@ func TestBuildProviderHTTPRuntime_ReplayModeServesCapturedResponse(t *testing.T)
 	}
 
 	reqBody := `{"messages":[{"content":[{"text":"what is 2 + 2?","type":"text"}],"role":"user"}],"model":"z-ai/glm-4.7","tools":[{"function":{"name":"edit_file","description":"Edit a file","parameters":{"properties":{"path":{"type":"string"}},"required":["path"],"type":"object"}},"type":"function"}],"stream":true}`
-	req, err := http.NewRequest(http.MethodPost, "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(reqBody))
 	if err != nil {
-		t.Fatalf("http.NewRequest() error = %v", err)
+		t.Fatalf("http.NewRequestWithContext() error = %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 

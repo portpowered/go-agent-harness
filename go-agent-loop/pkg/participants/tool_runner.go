@@ -118,7 +118,7 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 		errStreamID := mustStreamID("tool-error")
 		r.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type:               messages.StreamTypeError,
-			Value:              messages.NewNonTerminalErrorValue(err.Error(), "tool_execution"),
+			Value:              messages.NewToolExecutionErrorValue(err),
 			ActorID:            messages.Tool,
 			ActorStreamID:      errStreamID,
 			ActorProvidedIndex: 0,

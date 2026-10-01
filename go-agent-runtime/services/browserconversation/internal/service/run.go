@@ -17,14 +17,14 @@ import (
 // phases live beside this entrypoint so each boundary remains independently
 // auditable and within the repository's complexity budgets.
 func runBrowserConversation(ctx context.Context, request browserconversation.RunRequest) (browserconversation.BrowserConversationResult, error) {
-	execution, err := newBrowserConversationExecution(ctx, request)
+	execution, runContext, err := newBrowserConversationExecution(ctx, request)
 	if err != nil {
 		return browserconversation.BrowserConversationResult{}, err
 	}
 	defer execution.close()
-	execution.start(request)
-	execution.cleanup(ctx, request)
-	return execution.finish(request)
+	execution.start(runContext, request)
+	execution.cleanup(ctx, runContext.Err(), request)
+	return execution.finish(ctx, request)
 }
 
 type evidenceBroker struct {

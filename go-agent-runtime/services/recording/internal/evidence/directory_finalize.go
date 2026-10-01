@@ -113,8 +113,8 @@ func cloneTerminal(value *transcript.RecordingTerminalSummary) *transcript.Recor
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 
 func (r *directoryRecorder) reserveFallbackTerminal(terminal *transcript.RecordingTerminalSummary) error {
@@ -196,22 +196,22 @@ func boundedRecordingStatus(status *transcript.RecordingStatus, credentials []st
 	if status == nil {
 		return nil
 	}
-	copy := *status
-	copy.Reason = redactAndBoundRecordingString(copy.Reason, credentials)
-	return &copy
+	cloned := *status
+	cloned.Reason = redactAndBoundRecordingString(cloned.Reason, credentials)
+	return &cloned
 }
 
 func boundedRecordingTerminal(terminal *transcript.RecordingTerminalSummary, credentials []string, limit int) *transcript.RecordingTerminalSummary {
 	if terminal == nil {
 		return nil
 	}
-	copy := *terminal
-	copy.Reason = redactAndBoundRecordingStringLimit(copy.Reason, credentials, limit)
-	copy.Classification = redactAndBoundRecordingStringLimit(copy.Classification, credentials, limit)
-	copy.TerminalReason = messages.TerminalReason(redactAndBoundRecordingStringLimit(string(copy.TerminalReason), credentials, limit))
-	copy.TerminalProvenance = messages.TerminalProvenance(redactAndBoundRecordingStringLimit(string(copy.TerminalProvenance), credentials, limit))
-	copy.OutputState = messages.TerminalOutputState(redactAndBoundRecordingStringLimit(string(copy.OutputState), credentials, limit))
-	return &copy
+	cloned := *terminal
+	cloned.Reason = redactAndBoundRecordingStringLimit(cloned.Reason, credentials, limit)
+	cloned.Classification = redactAndBoundRecordingStringLimit(cloned.Classification, credentials, limit)
+	cloned.TerminalReason = messages.TerminalReason(redactAndBoundRecordingStringLimit(string(cloned.TerminalReason), credentials, limit))
+	cloned.TerminalProvenance = messages.TerminalProvenance(redactAndBoundRecordingStringLimit(string(cloned.TerminalProvenance), credentials, limit))
+	cloned.OutputState = messages.TerminalOutputState(redactAndBoundRecordingStringLimit(string(cloned.OutputState), credentials, limit))
+	return &cloned
 }
 
 func redactAndBoundRecordingString(value string, credentials []string) string {

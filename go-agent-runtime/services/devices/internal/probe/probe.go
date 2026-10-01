@@ -157,8 +157,8 @@ func selectLiveDeviceProbeDevice(registry devicegw.DeviceRegistry, candidates []
 	return candidates[0]
 }
 
-func closeDeviceProbeResource(name string, close func() error) error {
-	if err := close(); err != nil {
+func closeDeviceProbeResource(name string, closeResource func() error) error {
+	if err := closeResource(); err != nil {
 		return fmt.Errorf("close %s: %w", name, err)
 	}
 	return nil
