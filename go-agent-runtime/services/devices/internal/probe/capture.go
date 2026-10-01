@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -58,12 +59,7 @@ func forwardProbeFrames(ctx context.Context, pending []int16, link *liveDevicePr
 }
 
 func sendProbeAudio(ctx context.Context, runner *participants.ModelRunner, pcm []byte) error {
-	select {
-	case runner.UserAudioInbox <- pcm:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return runner.EnqueueSessionInput(ctx, participants.SessionAudio(pcm, messages.SessionAudioInputPolicyDefault), participants.SessionAdmitWaiting)
 }
 
 func liveDeviceProbeRMS(samples []int16) float64 {

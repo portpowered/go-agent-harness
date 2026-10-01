@@ -243,10 +243,8 @@ func openReadyDeviceProbePair(t *testing.T, registry devicegw.DeviceRegistry) (*
 // the session runner and requires both to reach the provider session in order.
 func sendDeviceProbeUserTurn(t *testing.T, ctx context.Context, runner *participants.ModelRunner, session *deviceProbeSession, pcm []byte) {
 	t.Helper()
-	select {
-	case runner.UserAudioInbox <- pcm:
-	case <-ctx.Done():
-		t.Fatalf("send captured audio to session: %v", ctx.Err())
+	if err := runner.EnqueueSessionInput(ctx, participants.SessionAudio(pcm, messages.SessionAudioInputPolicyDefault), participants.SessionAdmitWaiting); err != nil {
+		t.Fatalf("send captured audio to session: %v", err)
 	}
 	audioMessage := readDeviceProbeSessionMessage(t, ctx, session.sent)
 	if audioMessage.Type != messages.StreamTypeAudioDelta {
@@ -259,10 +257,9 @@ func sendDeviceProbeUserTurn(t *testing.T, ctx context.Context, runner *particip
 	if !bytes.Equal(audioValue.Content, pcm) {
 		t.Fatalf("session audio bytes differ from active input track: got %d bytes, want %d", len(audioValue.Content), len(pcm))
 	}
-	select {
-	case runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd}:
-	case <-ctx.Done():
-		t.Fatalf("send captured turn boundary to session: %v", ctx.Err())
+	turnEnd := participants.SessionEvent(messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	if err := runner.EnqueueSessionInput(ctx, turnEnd, participants.SessionAdmitWaiting); err != nil {
+		t.Fatalf("send captured turn boundary to session: %v", err)
 	}
 	turnMessage := readDeviceProbeSessionMessage(t, ctx, session.sent)
 	if turnMessage.Type != messages.StreamTypeMessageEnd {

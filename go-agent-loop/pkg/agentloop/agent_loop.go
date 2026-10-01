@@ -122,7 +122,7 @@ func newToolRunner(cfg AgentLoopConfig, modelRunner *participants.ModelRunner) *
 	if cfg.SessionInferencer != nil && cfg.ToolAcknowledgement != nil {
 		policy := *cfg.ToolAcknowledgement
 		toolRunner.ConfigureAcknowledgement(policy.Threshold, policy.IsLongRunning, cfg.Clock, func(ctx context.Context, _ []messages.ToolCall) {
-			if err := modelRunner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+			if err := enqueueSessionEvent(modelRunner)(ctx, messages.StreamMessage{
 				Type:  messages.StreamTypeResponseCreate,
 				Value: messages.NewToolAcknowledgementResponseCreateValue(),
 			}); err != nil && cfg.Logger != nil {
@@ -176,7 +176,7 @@ func buildSubsystems(cfg AgentLoopConfig, modelRunner *participants.ModelRunner,
 		// result-driven model request. This preserves provider-wire
 		// queue/sequence ordering when both are ready in the same tick.
 		hlps = append(hlps,
-			subsystems.NewToolResultForwarderWithEnqueuer(modelRunner.EnqueueSessionEvent, cfg.Logger),
+			subsystems.NewToolResultForwarderWithEnqueuer(enqueueSessionEvent(modelRunner), cfg.Logger),
 			subsystems.NewPingPongWithClock(kernelRunner.DeltaInbox, cfg.Logger, cfg.Clock),
 		)
 	}
@@ -530,43 +530,6 @@ func (al *AgentLoop) Send(ctx context.Context, msg []messages.Message) error {
 		}
 	}
 	return nil
-}
-
-// SendAudioInput injects raw PCM audio into the running session loop for barge-in
-// and user audio forwarding. Its unspecified origin preserves the legacy
-// interrupting-by-default behavior. Only meaningful in DuplexSession mode.
-func (al *AgentLoop) SendAudioInput(ctx context.Context, pcm []byte) error {
-	mr := al.engine.GetModelRunner()
-	if mr == nil || mr.UserAudioInbox == nil {
-		return fmt.Errorf("SendAudioInput: not in session mode")
-	}
-	return mr.EnqueueSessionAudioInputWithPolicyWaiting(ctx, pcm, messages.SessionAudioInputPolicyDefault)
-}
-
-// SendAudioInputWithPolicy injects raw PCM audio together with the admission
-// policy that was established by the caller. The policy is evaluated only for
-// contentful audio while an eligible response is active; silence is always
-// forwarded without cancellation. Unknown policies use the interrupting
-// default defined by messages.SessionAudioInputPolicy.
-func (al *AgentLoop) SendAudioInputWithPolicy(ctx context.Context, pcm []byte, policy messages.SessionAudioInputPolicy) error {
-	mr := al.engine.GetModelRunner()
-	if mr == nil || mr.UserAudioInbox == nil {
-		return fmt.Errorf("SendAudioInputWithPolicy: not in session mode")
-	}
-	return mr.EnqueueSessionAudioInputWithPolicyWaiting(ctx, pcm, policy)
-}
-
-// SendSessionEvent delivers a pre-built outbound StreamMessage to the running
-// session (DuplexSession mode). The message is forwarded to the provider
-// session unchanged and in order relative to audio sent via SendAudioInput.
-// It carries control-plane turns such as MESSAGE.END, which realtime
-// providers translate into input_audio_buffer.commit plus response.create.
-func (al *AgentLoop) SendSessionEvent(ctx context.Context, msg messages.StreamMessage) error {
-	mr := al.engine.GetModelRunner()
-	if mr == nil || mr.UserEventInbox == nil {
-		return fmt.Errorf("SendSessionEvent: not in session mode")
-	}
-	return mr.EnqueueSessionEvent(ctx, msg)
 }
 
 // EnqueueTodo appends a message to the TODO queue for deferred processing.

@@ -68,10 +68,9 @@ func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availa
 	if err := captureAndValidateProbeInput(ctx, opts.CaptureTime, resources, runner); err != nil {
 		return observation, err
 	}
-	select {
-	case runner.UserEventInbox <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd}:
-	case <-ctx.Done():
-		return observation, ctx.Err()
+	turnEnd := participants.SessionEvent(messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
+	if err := runner.EnqueueSessionInput(ctx, turnEnd, participants.SessionAdmitWaiting); err != nil {
+		return observation, err
 	}
 	if err := bridge.waitResponse(ctx); err != nil {
 		return observation, err

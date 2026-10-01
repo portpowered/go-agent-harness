@@ -2,9 +2,11 @@ package participants
 
 import (
 	"context"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants/internal/sessionstate"
 )
 
 func TestModelRunner_ForwardSessionEventReportsProviderBoundaryOutcomes(t *testing.T) {
@@ -133,18 +135,14 @@ func TestModelRunner_ResponseCancelStateTracksAdmissionOutcome(t *testing.T) {
 				},
 			}
 			runner := NewSessionModelRunner(nil, 8, nil)
-			state := &sessionRunState{
-				responseInFlight:  true,
-				currentResponseID: "response-1",
-			}
-			state.ensureMaps()
+			state := &sessionRunState{Response: sessionstate.Response{Phase: sessionstate.ResponseInFlight, ID: "response-1"}}
 
 			runner.forwardQueuedSessionEvent(context.Background(), session, state, messages.StreamMessage{
 				Type: messages.StreamTypeResponseCancel,
 			})
 
-			if state.responseCancelSent != test.wantSent {
-				t.Fatalf("responseCancelSent = %t, want %t", state.responseCancelSent, test.wantSent)
+			if state.Response.CancelSent() != test.wantSent {
+				t.Fatalf("responseCancelSent = %t, want %t", state.Response.CancelSent(), test.wantSent)
 			}
 			if got := len(session.sentMessages()); got != test.wantForwarded {
 				t.Fatalf("provider cancel messages = %d, want %d", got, test.wantForwarded)
@@ -472,16 +470,16 @@ func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) 
 		},
 	}
 
-	if err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+	if err := runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,
 		Value: messages.NewToolCallEndValue("call-queued", "queued_tool", "tool output"),
-	}); err != nil {
+	}), SessionAdmitOrFail); err != nil {
 		t.Fatalf("queue tool result: %v", err)
 	}
-	if err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+	if err := runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
 		Value: messages.NewResponseCreateValue(),
-	}); err != nil {
+	}), SessionAdmitOrFail); err != nil {
 		t.Fatalf("queue continuation: %v", err)
 	}
 
@@ -493,10 +491,10 @@ func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) 
 		t.Fatalf("queued tool boundary was overtaken by %d direct sends: %#v", len(sent), sent)
 	}
 
-	state := newSessionResponseState()
+	state := &sessionRunState{}
 	for i := 0; i < 2; i++ {
 		select {
-		case input := <-runner.sessionInputInbox:
+		case input := <-runner.ingress.ordered:
 			if input.kind != sessionInputEvent {
 				t.Fatalf("queued session input kind = %d, want event", input.kind)
 			}
@@ -525,14 +523,14 @@ func TestSessionModelRunner_SuppressesContinuationAfterRejectedToolResult(t *tes
 	errCh := make(chan error, 1)
 	go func() { errCh <- runner.Run(ctx) }()
 
-	runner.UserEventInbox <- messages.StreamMessage{
+	enqueueTestEvent(t, runner, messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,
 		Value: messages.NewToolCallEndValue("call-rejected", "date", "result"),
-	}
-	runner.UserEventInbox <- messages.StreamMessage{
+	})
+	enqueueTestEvent(t, runner, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
 		Value: messages.NewResponseCreateValue(),
-	}
+	})
 
 	failure := waitForDelta(t, ctx, runner, messages.StreamTypeError)
 	value, ok := failure.Value.(*messages.ErrorValue)

@@ -3,10 +3,12 @@ package participants
 import (
 	"context"
 	"errors"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/participants/internal/sessionstate"
 )
 
 type recordingSession struct {
@@ -284,15 +286,15 @@ func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 	ap.Start(ctx)
 	defer ap.Stop()
 
-	if err := runner.EnqueueSessionAudioInput(ctx, []byte{1, 2, 3}); err != nil {
+	if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{1, 2, 3}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 		t.Fatalf("EnqueueSessionAudioInput: %v", err)
 	}
 	eventErrCh := make(chan error, 1)
 	go func() {
-		eventErrCh <- runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+		eventErrCh <- runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{
 			Type:  messages.StreamTypeMessageEnd,
 			Value: messages.NewMessageEndValue(messages.TokenUsage{}),
-		})
+		}), SessionAdmitOrFail)
 	}()
 
 	first := waitForSentMessage(t, ctx, session)
@@ -311,16 +313,16 @@ func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 func TestSessionModelRunnerOrderedIngressReportsFullWithoutBlocking(t *testing.T) {
 	runner := NewSessionModelRunner(nil, 8, nil)
 	ctx := context.Background()
-	for i := 0; i < cap(runner.sessionInputInbox); i++ {
-		if err := runner.EnqueueSessionAudioInput(ctx, []byte{byte(i)}); err != nil {
+	for i := 0; i < cap(runner.ingress.ordered); i++ {
+		if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{byte(i)}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
 		}
 	}
 
-	err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{
+	err := runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{
 		Type:  messages.StreamTypeToolCallEnd,
 		Value: messages.NewToolCallEndValue("call-full", "tool", "result"),
-	})
+	}), SessionAdmitOrFail)
 	if !errors.Is(err, ErrSessionInputQueueFull) {
 		t.Fatalf("full ordered session ingress error = %v, want ErrSessionInputQueueFull", err)
 	}
@@ -346,13 +348,13 @@ func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) 
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeAudioStart)
 
-	runner.UserAudioInbox <- loudPCM()
+	enqueueTestAudio(t, runner, loudPCM())
 
 	var sawCancel bool
 	for i := 0; i < 2; i++ {
 		select {
 		case sent := <-session.sendCh:
-			switch sent.Type {
+			switch sent.Type { //nolint:exhaustive // The test fails on any type it does not expect.
 			case messages.StreamTypeResponseCancel:
 				if sawCancel {
 					t.Fatal("duplicate RESPONSE.CANCEL")
@@ -398,7 +400,7 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
 
-	runner.UserAudioInbox <- loudPCM()
+	enqueueTestAudio(t, runner, loudPCM())
 	first := waitForSentMessage(t, ctx, session)
 	second := waitForSentMessage(t, ctx, session)
 	if first.Type != messages.StreamTypeResponseCancel {
@@ -410,7 +412,7 @@ func TestSessionModelRunner_BargeInAfterMessageStartSendsResponseCancelBeforeFir
 
 	// More speech in the same response overlap is still forwarded, but must not
 	// dispatch another cancellation for the response already cancelled above.
-	runner.UserAudioInbox <- loudPCM()
+	enqueueTestAudio(t, runner, loudPCM())
 	third := waitForSentMessage(t, ctx, session)
 	if third.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("third outbound type = %s, want %s without a duplicate cancel", third.Type, messages.StreamTypeAudioDelta)
@@ -440,7 +442,7 @@ func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.
 	// Room mixers emit zero-filled frames on every cadence before a peer has
 	// spoken. They must reach the provider, but cannot be treated as barge-in.
 	silence := make([]byte, 4)
-	runner.UserAudioInbox <- silence
+	enqueueTestAudio(t, runner, silence)
 	sent := waitForSentMessage(t, ctx, session)
 	if sent.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("silence outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
@@ -454,7 +456,7 @@ func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.
 
 	// A later contentful frame still cancels the same in-flight response and
 	// remains ordered ahead of that frame.
-	runner.UserAudioInbox <- loudPCM()
+	enqueueTestAudio(t, runner, loudPCM())
 	first := waitForSentMessage(t, ctx, session)
 	second := waitForSentMessage(t, ctx, session)
 	if first.Type != messages.StreamTypeResponseCancel {
@@ -468,7 +470,7 @@ func TestSessionModelRunner_SilenceFrameDoesNotCancelOpeningResponse(t *testing.
 func TestSessionModelRunner_ResponseIdentityRejectsLateTerminalAndOutput(t *testing.T) {
 	runner := NewSessionModelRunner(nil, 16, nil)
 	session := newRecordingSession()
-	state := newSessionResponseState()
+	state := &sessionRunState{}
 	ctx := context.Background()
 
 	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
@@ -482,8 +484,8 @@ func TestSessionModelRunner_ResponseIdentityRejectsLateTerminalAndOutput(t *test
 		Value:      messages.NewMessageStartValue(),
 	}, state)
 
-	if !state.responseInFlight || state.currentResponseID != "resp-current" {
-		t.Fatalf("replacement response state = in_flight:%t id:%q, want current response active", state.responseInFlight, state.currentResponseID)
+	if !state.Response.InFlight() || state.Response.ID != "resp-current" {
+		t.Fatalf("replacement response state = in_flight:%t id:%q, want current response active", state.Response.InFlight(), state.Response.ID)
 	}
 	if ended := runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
 		Type:       messages.StreamTypeMessageEnd,
@@ -492,8 +494,8 @@ func TestSessionModelRunner_ResponseIdentityRejectsLateTerminalAndOutput(t *test
 	}, state); ended {
 		t.Fatal("late old response terminal was accepted as the current response")
 	}
-	if !state.responseInFlight || state.currentResponseID != "resp-current" {
-		t.Fatalf("late terminal changed response state = in_flight:%t id:%q", state.responseInFlight, state.currentResponseID)
+	if !state.Response.InFlight() || state.Response.ID != "resp-current" {
+		t.Fatalf("late terminal changed response state = in_flight:%t id:%q", state.Response.InFlight(), state.Response.ID)
 	}
 
 	runner.forwardSessionMessageWithState(ctx, session, messages.StreamMessage{
@@ -531,24 +533,24 @@ func TestSessionModelRunner_ResponseIdentityRejectsLateTerminalAndOutput(t *test
 
 func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T) {
 	tests := []struct {
-		name             string
-		responseInFlight bool
-		outcomes         map[messages.StreamMessageType]messages.SessionSendOutcome
-		wantSent         int
-		wantCancelSent   bool
-		wantError        string
+		name           string
+		response       sessionstate.ResponsePhase
+		outcomes       map[messages.StreamMessageType]messages.SessionSendOutcome
+		wantSent       int
+		wantCancelSent bool
+		wantError      string
 	}{
 		{
-			name:             "cancel buffer full",
-			responseInFlight: true,
+			name:     "cancel buffer full",
+			response: sessionstate.ResponseInFlight,
 			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
 				messages.StreamTypeResponseCancel: {Status: messages.SessionSendBufferFull},
 			},
 			wantError: "response cancel",
 		},
 		{
-			name:             "cancel closed",
-			responseInFlight: true,
+			name:     "cancel closed",
+			response: sessionstate.ResponseInFlight,
 			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
 				messages.StreamTypeResponseCancel: {Status: messages.SessionSendClosed},
 			},
@@ -569,8 +571,8 @@ func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T
 			wantError: "audio",
 		},
 		{
-			name:             "audio rejected after accepted cancel",
-			responseInFlight: true,
+			name:     "audio rejected after accepted cancel",
+			response: sessionstate.ResponseInFlight,
 			outcomes: map[messages.StreamMessageType]messages.SessionSendOutcome{
 				messages.StreamTypeResponseCancel: {Status: messages.SessionSendSucceeded},
 				messages.StreamTypeAudioDelta:     {Status: messages.SessionSendClosed},
@@ -588,10 +590,10 @@ func TestSessionModelRunner_BargeInChecksCancelAndAudioSendOutcomes(t *testing.T
 				outcomes:         test.outcomes,
 			}
 			runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
-			responseInFlight := test.responseInFlight
-			responseCancelSent := false
+			state := &sessionRunState{Response: sessionstate.Response{Phase: test.response}}
 
-			err := runner.forwardSessionAudio(context.Background(), session, loudPCM(), &responseInFlight, &responseCancelSent)
+			err := runner.forwardSessionAudio(context.Background(), session, state, messages.SessionAudioInput{PCM: loudPCM(), InterruptionPolicy: messages.SessionAudioInputPolicyDefault})
+			responseCancelSent := state.Response.CancelSent()
 			if err == nil || !contains(err.Error(), test.wantError) {
 				t.Fatalf("forwardSessionAudio error = %v, want %q failure", err, test.wantError)
 			}
@@ -627,7 +629,7 @@ func TestSessionModelRunner_DropsProviderOutputAfterBargeInCancel(t *testing.T) 
 		Value: messages.NewMessageStartValue(),
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeMessageStart)
-	runner.UserAudioInbox <- loudPCM()
+	enqueueTestAudio(t, runner, loudPCM())
 	if sent := waitForSentMessage(t, ctx, session); sent.Type != messages.StreamTypeResponseCancel {
 		t.Fatalf("first outbound type = %s, want %s", sent.Type, messages.StreamTypeResponseCancel)
 	}
@@ -692,7 +694,7 @@ func TestSessionModelRunner_CompletedResponseDoesNotCancelNextAudio(t *testing.T
 	})
 	waitForDelta(t, ctx, runner, messages.StreamTypeMessageEnd)
 
-	runner.UserAudioInbox <- []byte{7, 8, 9}
+	enqueueTestAudio(t, runner, []byte{7, 8, 9})
 	sent := waitForSentMessage(t, ctx, session)
 	if sent.Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("outbound type = %s, want %s", sent.Type, messages.StreamTypeAudioDelta)
@@ -706,7 +708,7 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 8, nil)
-	state := sessionRunState{responseInFlight: true}
+	state := sessionRunState{Response: sessionstate.Response{Phase: sessionstate.ResponseInFlight}}
 
 	// Both events are pending in the same logical transport turn. The provider
 	// boundary is already observable, so it must update the runner before the
@@ -715,16 +717,16 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 		Type:  messages.StreamTypeMessageEnd,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
-	runner.UserAudioInbox <- []byte{1, 2, 3}
+	enqueueTestAudio(t, runner, []byte{1, 2, 3})
 
-	handled, closed, err := runner.forwardPendingSessionInputs(ctx, session, &state)
+	handled, err := runner.forwardPendingSessionInputs(ctx, session, &state)
 	if err != nil {
 		t.Fatalf("forwardPendingSessionInputs error = %v", err)
 	}
-	if !handled || closed {
-		t.Fatalf("forwardPendingSessionInputs result = (handled=%t, closed=%t), want handled open", handled, closed)
+	if !handled {
+		t.Fatal("forwardPendingSessionInputs handled nothing, want the queued boundary and audio")
 	}
-	if state.responseInFlight || state.responseCancelSent || !state.responseCompleted {
+	if state.Response.InFlight() || state.Response.CancelSent() || !state.Response.Completed() {
 		t.Fatalf("response state after queued MESSAGE.END = %+v, want completed and uncancelled", state)
 	}
 
@@ -754,7 +756,7 @@ func TestSessionModelRunner_QueuedMessageEndWinsBeforePeerAudio(t *testing.T) {
 		Type:  messages.StreamTypeMessageEnd,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
-	if state.responseInFlight || state.responseCancelSent || !state.responseCompleted {
+	if state.Response.InFlight() || state.Response.CancelSent() || !state.Response.Completed() {
 		t.Fatalf("response state after normal next turn = %+v, want completed and uncancelled", state)
 	}
 
@@ -768,29 +770,29 @@ func TestSessionModelRunner_QueuedAudioAndMessageEndRemainFIFO(t *testing.T) {
 	ctx := context.Background()
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(nil, 8, nil)
-	state := newSessionResponseState()
+	state := &sessionRunState{}
 
 	// Forward the first frame through the normal session-input path before
 	// queueing the next turn. This leaves MESSAGE.END and the next frame
 	// pending together, which is the boundary where separate inbox selects can
 	// reorder a commit ahead of (or behind) its following audio turn.
-	if err := runner.EnqueueSessionAudioInput(ctx, []byte{1, 2, 3}); err != nil {
+	if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{1, 2, 3}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 		t.Fatalf("enqueue first audio: %v", err)
 	}
-	if err := runner.drainSessionAudioWithState(ctx, session, state); err != nil {
+	if err := drainTestInputs(ctx, runner, session, state); err != nil {
 		t.Fatalf("drain first audio: %v", err)
 	}
-	if err := runner.EnqueueSessionEvent(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd}); err != nil {
+	if err := runner.EnqueueSessionInput(ctx, SessionEvent(messages.StreamMessage{Type: messages.StreamTypeMessageEnd}), SessionAdmitOrFail); err != nil {
 		t.Fatalf("enqueue message end: %v", err)
 	}
-	if err := runner.EnqueueSessionAudioInput(ctx, []byte{4, 5, 6}); err != nil {
+	if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{4, 5, 6}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 		t.Fatalf("enqueue second audio: %v", err)
 	}
 
-	if handled, closed, err := runner.forwardPendingSessionInputs(ctx, session, state); err != nil {
+	if handled, err := runner.forwardPendingSessionInputs(ctx, session, state); err != nil {
 		t.Fatalf("forward queued session inputs: %v", err)
-	} else if !handled || closed {
-		t.Fatalf("forward queued session inputs = handled:%t closed:%t, want handled open", handled, closed)
+	} else if !handled {
+		t.Fatal("forward queued session inputs handled nothing")
 	}
 
 	sent := session.sentMessages()
@@ -822,7 +824,7 @@ func TestSessionModelRunner_AudioWithoutActiveResponseForwardsDirectly(t *testin
 	ap.Start(ctx)
 	defer ap.Stop()
 
-	runner.UserAudioInbox <- []byte{9}
+	enqueueTestAudio(t, runner, []byte{9})
 
 	select {
 	case sent := <-session.sendCh:
@@ -837,28 +839,6 @@ func TestSessionModelRunner_AudioWithoutActiveResponseForwardsDirectly(t *testin
 	}
 }
 
-func TestSessionModelRunner_AudioInboxCloseEndsRun(t *testing.T) {
-	session := newRecordingSession()
-	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- runner.Run(ctx) }()
-
-	close(runner.UserAudioInbox)
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("Run after audio inbox close = %v, want nil", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Run did not return after UserAudioInbox closed")
-	}
-}
-
 func TestSessionModelRunner_ContinuesAfterAcceptedResponseRequest(t *testing.T) {
 	session := newRecordingSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 8, nil)
@@ -869,10 +849,10 @@ func TestSessionModelRunner_ContinuesAfterAcceptedResponseRequest(t *testing.T) 
 	errCh := make(chan error, 1)
 	go func() { errCh <- runner.Run(ctx) }()
 
-	runner.UserEventInbox <- messages.StreamMessage{
+	enqueueTestEvent(t, runner, messages.StreamMessage{
 		Type:  messages.StreamTypeResponseCreate,
 		Value: messages.NewResponseCreateValue(),
-	}
+	})
 	select {
 	case sent := <-session.sendCh:
 		if sent.Type != messages.StreamTypeResponseCreate {
