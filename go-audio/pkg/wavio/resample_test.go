@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -227,10 +228,11 @@ func FuzzResampleRoundTrip(f *testing.F) {
 
 const resampleFrameAllocationBudget = 1
 
-var resampleAllocationSink int16
-
 func BenchmarkResampleFrameAllocationBudget(b *testing.B) {
 	frame := resamplePattern(Rate16kHz / 100)
+	// sink keeps each conversion observable so the compiler cannot drop it.
+	var sink int16
+	defer runtime.KeepAlive(&sink)
 	b.ReportAllocs()
 
 	measured := testing.AllocsPerRun(100, func() {
@@ -238,7 +240,7 @@ func BenchmarkResampleFrameAllocationBudget(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Resample() error = %v", err)
 		}
-		resampleAllocationSink ^= converted[len(converted)-1]
+		sink ^= converted[len(converted)-1]
 	})
 	if !resampleWithinAllocationBudget(measured, resampleFrameAllocationBudget) {
 		b.Fatalf("Resample() allocations/op = %v, want <= committed budget %d", measured, resampleFrameAllocationBudget)
@@ -250,18 +252,21 @@ func BenchmarkResampleFrameAllocationBudget(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Resample() error = %v", err)
 		}
-		resampleAllocationSink ^= converted[len(converted)-1]
+		sink ^= converted[len(converted)-1]
 	}
 }
 
 func TestResampleAllocationBudget(t *testing.T) {
 	frame := resamplePattern(Rate16kHz / 100)
+	// sink keeps each conversion observable so the compiler cannot drop it.
+	var sink int16
+	defer runtime.KeepAlive(&sink)
 	measured := testing.AllocsPerRun(100, func() {
 		converted, err := Resample(frame, Rate16kHz, Rate48kHz)
 		if err != nil {
 			t.Fatalf("Resample() error = %v", err)
 		}
-		resampleAllocationSink ^= converted[len(converted)-1]
+		sink ^= converted[len(converted)-1]
 	})
 	if !resampleWithinAllocationBudget(measured, resampleFrameAllocationBudget) {
 		t.Fatalf("Resample() allocations/op = %v, want <= committed budget %d", measured, resampleFrameAllocationBudget)

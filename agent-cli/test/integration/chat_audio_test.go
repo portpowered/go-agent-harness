@@ -58,7 +58,7 @@ func msgsContainUserAudio(msgs []messages.Message) bool {
 // RunChatWithAudio and verifies the agent is called once with an Audio payload.
 func TestChatAudio_SingleUtterance(t *testing.T) {
 	speechFrames := 20
-	silenceFrames := audio.DefaultVADConfig.MaxSilenceFrames
+	silenceFrames := audio.DefaultVADConfig().MaxSilenceFrames
 
 	samples := append(makePCMSpeech(speechFrames), makePCMSilence(silenceFrames)...)
 	src := audio.NewSliceSource(samples)
@@ -100,7 +100,7 @@ func TestChatAudio_SingleUtterance(t *testing.T) {
 // by silence becomes its own agent invocation.
 func TestChatAudio_MultipleUtterances(t *testing.T) {
 	speechFrames := 15
-	silence := audio.DefaultVADConfig.MaxSilenceFrames
+	silence := audio.DefaultVADConfig().MaxSilenceFrames
 
 	samples := makePCMSpeech(speechFrames)
 	samples = append(samples, makePCMSilence(silence)...)

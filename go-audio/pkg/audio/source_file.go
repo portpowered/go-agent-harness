@@ -1,7 +1,5 @@
 package audio
 
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-
 import (
 	"context"
 	"errors"
@@ -11,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const rawFrameBytes = FrameSize * 2

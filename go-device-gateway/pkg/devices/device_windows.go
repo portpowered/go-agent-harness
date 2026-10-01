@@ -53,22 +53,51 @@ const (
 	waveFormatExtensible                      = 0xfffe
 )
 
+// The ole32 bindings are lazily resolved, concurrency-safe handles to
+// system DLL procedures, the standard Windows binding pattern; they hold no
+// program state.
+//
+//nolint:gochecknoglobals // immutable lazy DLL procedure bindings (see above)
 var (
-	wasapiOle32                   = syscall.NewLazyDLL("ole32.dll")
-	wasapiCoInitializeEx          = wasapiOle32.NewProc("CoInitializeEx")
-	wasapiCoUninitialize          = wasapiOle32.NewProc("CoUninitialize")
-	wasapiCoCreateInstance        = wasapiOle32.NewProc("CoCreateInstance")
-	wasapiCoTaskMemFree           = wasapiOle32.NewProc("CoTaskMemFree")
-	wasapiPropVariantClear        = wasapiOle32.NewProc("PropVariantClear")
-	wasapiCLSIDMMDeviceEnumerator = syscall.GUID{Data1: 0xbcde0395, Data2: 0xe52f, Data3: 0x467c, Data4: [8]byte{0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e}}
-	wasapiIIDMMDeviceEnumerator   = syscall.GUID{Data1: 0xa95664d2, Data2: 0x9614, Data3: 0x4f35, Data4: [8]byte{0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6}}
-	wasapiIIDAudioClient          = syscall.GUID{Data1: 0x1cb9ad4c, Data2: 0xdbfa, Data3: 0x4c32, Data4: [8]byte{0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2}}
-	wasapiIIDAudioCaptureClient   = syscall.GUID{Data1: 0xc8adbd64, Data2: 0xe71e, Data3: 0x48a0, Data4: [8]byte{0xa4, 0xde, 0x18, 0x5c, 0x39, 0x5c, 0xd3, 0x17}}
-	wasapiIIDAudioRenderClient    = syscall.GUID{Data1: 0xf294acfc, Data2: 0x3146, Data3: 0x4483, Data4: [8]byte{0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2}}
-	wasapiSubtypePCM              = syscall.GUID{Data1: 0x00000001, Data2: 0x0000, Data3: 0x0010, Data4: [8]byte{0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}}
-	wasapiSubtypeIEEEFloat        = syscall.GUID{Data1: 0x00000003, Data2: 0x0000, Data3: 0x0010, Data4: [8]byte{0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}}
-	wasapiPKeyDeviceFriendlyName  = wasapiPropertyKey{fmtid: syscall.GUID{Data1: 0xa45c254e, Data2: 0xdf1c, Data3: 0x4efd, Data4: [8]byte{0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}}, pid: 14}
+	wasapiOle32            = syscall.NewLazyDLL("ole32.dll")
+	wasapiCoInitializeEx   = wasapiOle32.NewProc("CoInitializeEx")
+	wasapiCoUninitialize   = wasapiOle32.NewProc("CoUninitialize")
+	wasapiCoCreateInstance = wasapiOle32.NewProc("CoCreateInstance")
+	wasapiCoTaskMemFree    = wasapiOle32.NewProc("CoTaskMemFree")
+	wasapiPropVariantClear = wasapiOle32.NewProc("PropVariantClear")
 )
+
+func wasapiCLSIDMMDeviceEnumerator() syscall.GUID {
+	return syscall.GUID{Data1: 0xbcde0395, Data2: 0xe52f, Data3: 0x467c, Data4: [8]byte{0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e}}
+}
+
+func wasapiIIDMMDeviceEnumerator() syscall.GUID {
+	return syscall.GUID{Data1: 0xa95664d2, Data2: 0x9614, Data3: 0x4f35, Data4: [8]byte{0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6}}
+}
+
+func wasapiIIDAudioClient() syscall.GUID {
+	return syscall.GUID{Data1: 0x1cb9ad4c, Data2: 0xdbfa, Data3: 0x4c32, Data4: [8]byte{0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2}}
+}
+
+func wasapiIIDAudioCaptureClient() syscall.GUID {
+	return syscall.GUID{Data1: 0xc8adbd64, Data2: 0xe71e, Data3: 0x48a0, Data4: [8]byte{0xa4, 0xde, 0x18, 0x5c, 0x39, 0x5c, 0xd3, 0x17}}
+}
+
+func wasapiIIDAudioRenderClient() syscall.GUID {
+	return syscall.GUID{Data1: 0xf294acfc, Data2: 0x3146, Data3: 0x4483, Data4: [8]byte{0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2}}
+}
+
+func wasapiSubtypePCM() syscall.GUID {
+	return syscall.GUID{Data1: 0x00000001, Data2: 0x0000, Data3: 0x0010, Data4: [8]byte{0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}}
+}
+
+func wasapiSubtypeIEEEFloat() syscall.GUID {
+	return syscall.GUID{Data1: 0x00000003, Data2: 0x0000, Data3: 0x0010, Data4: [8]byte{0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}}
+}
+
+func wasapiPKeyDeviceFriendlyName() wasapiPropertyKey {
+	return wasapiPropertyKey{fmtid: syscall.GUID{Data1: 0xa45c254e, Data2: 0xdf1c, Data3: 0x4efd, Data4: [8]byte{0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}}, pid: 14}
+}
 
 // NewWASAPIDeviceRegistry returns the Windows endpoint registry. All COM and
 // WASAPI work is delayed until a registry operation is invoked.
@@ -96,9 +125,12 @@ type wasapiFlow struct {
 	direction Direction
 }
 
-var wasapiFlows = [...]wasapiFlow{
-	{value: mmdeviceDataFlowCapture, direction: DirectionInput},
-	{value: mmdeviceDataFlowRender, direction: DirectionOutput},
+// wasapiFlows lists the endpoint data flows the registry enumerates.
+func wasapiFlows() [2]wasapiFlow {
+	return [...]wasapiFlow{
+		{value: mmdeviceDataFlowCapture, direction: DirectionInput},
+		{value: mmdeviceDataFlowRender, direction: DirectionOutput},
+	}
 }
 
 // List returns a fresh active-endpoint snapshot. Endpoint IDs come directly
@@ -117,7 +149,7 @@ func (r *wasapiDeviceRegistry) List() ([]Device, error) {
 	}()
 
 	devices := make([]Device, 0)
-	for _, flow := range wasapiFlows {
+	for _, flow := range wasapiFlows() {
 		listed, err := r.listFlow(enumerator, flow)
 		if err != nil {
 			return nil, err
@@ -269,7 +301,7 @@ func (r *wasapiDeviceRegistry) findDirection(nativeID string) (Direction, error)
 		enumerator.release()
 		cleanup()
 	}()
-	for _, flow := range wasapiFlows {
+	for _, flow := range wasapiFlows() {
 		collection, err := enumerateEndpoints(enumerator, flow.value)
 		if err != nil {
 			hr := wasapiErrorCode(err)
@@ -404,7 +436,7 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 	endpoint := wasapiCOM{ptr: endpointPtr}
 	defer endpoint.release()
 
-	iid := wasapiIIDAudioClient
+	iid := wasapiIIDAudioClient()
 	var clientPtr unsafe.Pointer
 	hresult, callErr = endpoint.call(immDeviceVTableActivate, uintptr(unsafe.Pointer(&iid)), clsctxAll, 0, uintptr(unsafe.Pointer(&clientPtr)))
 	if callErr != nil {
@@ -433,9 +465,9 @@ func openWASAPIEndpoint(nativeID string, direction Direction) (openedWASAPIEndpo
 		return openedWASAPIEndpoint{}, wasapiCodedError{hr: hresult, err: callErr, operation: "initialize audio client"}
 	}
 
-	serviceIID := wasapiIIDAudioRenderClient
+	serviceIID := wasapiIIDAudioRenderClient()
 	if direction == DirectionInput {
-		serviceIID = wasapiIIDAudioCaptureClient
+		serviceIID = wasapiIIDAudioCaptureClient()
 	}
 	var servicePtr unsafe.Pointer
 	hresult, callErr = client.call(audioClientVTableGetService, uintptr(unsafe.Pointer(&serviceIID)), uintptr(unsafe.Pointer(&servicePtr)))
@@ -572,7 +604,8 @@ func endpointFriendlyName(endpoint wasapiCOM) (string, error) {
 
 	var value wasapiPropVariant
 	defer func() { _, _, _ = wasapiPropVariantClear.Call(uintptr(unsafe.Pointer(&value))) }()
-	_, err = store.call(propertyStoreVTableGetValue, uintptr(unsafe.Pointer(&wasapiPKeyDeviceFriendlyName)), uintptr(unsafe.Pointer(&value)))
+	friendlyName := wasapiPKeyDeviceFriendlyName()
+	_, err = store.call(propertyStoreVTableGetValue, uintptr(unsafe.Pointer(&friendlyName)), uintptr(unsafe.Pointer(&value)))
 	if err != nil {
 		return "", err
 	}
@@ -633,9 +666,9 @@ func parseWASAPIAudioFormat(raw unsafe.Pointer) (wasapiAudioFormat, error) {
 
 	switch base.formatTag {
 	case waveFormatPCM:
-		format.subFormat = wasapiSubtypePCM
+		format.subFormat = wasapiSubtypePCM()
 	case waveFormatIEEEFloat:
-		format.subFormat = wasapiSubtypeIEEEFloat
+		format.subFormat = wasapiSubtypeIEEEFloat()
 	case waveFormatExtensible:
 		if base.cbSize < 22 {
 			return wasapiAudioFormat{}, fmt.Errorf("WASAPI extensible format has %d extra bytes, want at least 22", base.cbSize)
@@ -652,7 +685,7 @@ func parseWASAPIAudioFormat(raw unsafe.Pointer) (wasapiAudioFormat, error) {
 	if format.validBitsPerSample == 0 || format.validBitsPerSample > format.bitsPerSample {
 		return wasapiAudioFormat{}, fmt.Errorf("invalid WASAPI valid bits %d for container bits %d", format.validBitsPerSample, format.bitsPerSample)
 	}
-	if format.subFormat != wasapiSubtypePCM && format.subFormat != wasapiSubtypeIEEEFloat {
+	if format.subFormat != wasapiSubtypePCM() && format.subFormat != wasapiSubtypeIEEEFloat() {
 		return wasapiAudioFormat{}, fmt.Errorf("unsupported WASAPI audio subformat %v", format.subFormat)
 	}
 	if uint32(format.channels)*uint32(format.bitsPerSample/8) > uint32(format.blockAlign) {
@@ -690,9 +723,9 @@ func wasapiCapturePacketEnergy(data unsafe.Pointer, frames, flags uint32, format
 func (f wasapiAudioFormat) sampleFormat() (codec.SampleFormat, error) {
 	var encoding codec.SampleEncoding
 	switch f.subFormat {
-	case wasapiSubtypePCM:
+	case wasapiSubtypePCM():
 		encoding = codec.SampleEncodingPCM
-	case wasapiSubtypeIEEEFloat:
+	case wasapiSubtypeIEEEFloat():
 		encoding = codec.SampleEncodingIEEEFloat
 	default:
 		return codec.SampleFormat{}, fmt.Errorf("unsupported WASAPI audio subformat %v", f.subFormat)
@@ -788,11 +821,12 @@ func newWASAPIEnumerator() (wasapiCOM, func(), error) {
 		return wasapiCOM{}, nil, err
 	}
 	var enumeratorPtr unsafe.Pointer
+	clsid, iid := wasapiCLSIDMMDeviceEnumerator(), wasapiIIDMMDeviceEnumerator()
 	hresult, _, _ := wasapiCoCreateInstance.Call(
-		uintptr(unsafe.Pointer(&wasapiCLSIDMMDeviceEnumerator)),
+		uintptr(unsafe.Pointer(&clsid)),
 		0,
 		clsctxAll,
-		uintptr(unsafe.Pointer(&wasapiIIDMMDeviceEnumerator)),
+		uintptr(unsafe.Pointer(&iid)),
 		uintptr(unsafe.Pointer(&enumeratorPtr)),
 	)
 	if int32(uint32(hresult)) < 0 || enumeratorPtr == nil {

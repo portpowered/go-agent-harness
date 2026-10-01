@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"io"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 // WAVSource streams PCM16 frames from a RIFF WAVE file incrementally.

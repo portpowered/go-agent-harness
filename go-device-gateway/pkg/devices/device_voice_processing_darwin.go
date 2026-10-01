@@ -115,12 +115,6 @@ type voiceProcessingAPI struct {
 	audioUnitRender               func(uintptr, uintptr, uintptr, uint32, uint32, *audioBufferList1) int32
 }
 
-var (
-	voiceProcessingAPIOnce sync.Once
-	voiceProcessingAPIOne  *voiceProcessingAPI
-	voiceProcessingAPIErr  error
-)
-
 const (
 	auScopeGlobal = 0
 	auScopeInput  = 1
@@ -141,39 +135,37 @@ func fourCC(value string) uint32 {
 	return uint32(value[0])<<24 | uint32(value[1])<<16 | uint32(value[2])<<8 | uint32(value[3])
 }
 
+// loadVoiceProcessingAPI resolves the AudioToolbox entry points. It runs once
+// per duplex open; dlopen reference-counts the framework, so resolving per
+// open needs no process-wide cache.
 func loadVoiceProcessingAPI() (*voiceProcessingAPI, error) {
-	voiceProcessingAPIOnce.Do(func() {
-		handle, err := purego.Dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", purego.RTLD_LAZY|purego.RTLD_LOCAL)
-		if err != nil {
-			voiceProcessingAPIErr = fmt.Errorf("load AudioToolbox: %w", err)
-			return
+	handle, err := purego.Dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", purego.RTLD_LAZY|purego.RTLD_LOCAL)
+	if err != nil {
+		return nil, fmt.Errorf("load AudioToolbox: %w", err)
+	}
+	api := &voiceProcessingAPI{}
+	registrations := []struct {
+		name string
+		dst  any
+	}{
+		{"AudioComponentFindNext", &api.audioComponentFindNext},
+		{"AudioComponentInstanceNew", &api.audioComponentInstanceNew},
+		{"AudioComponentInstanceDispose", &api.audioComponentInstanceDispose},
+		{"AudioUnitSetProperty", &api.audioUnitSetProperty},
+		{"AudioUnitInitialize", &api.audioUnitInitialize},
+		{"AudioUnitUninitialize", &api.audioUnitUninitialize},
+		{"AudioOutputUnitStart", &api.audioOutputUnitStart},
+		{"AudioOutputUnitStop", &api.audioOutputUnitStop},
+		{"AudioUnitRender", &api.audioUnitRender},
+	}
+	for _, registration := range registrations {
+		symbol, symbolErr := purego.Dlsym(handle, registration.name)
+		if symbolErr != nil {
+			return nil, fmt.Errorf("resolve AudioToolbox %s: %w", registration.name, symbolErr)
 		}
-		api := &voiceProcessingAPI{}
-		registrations := []struct {
-			name string
-			dst  any
-		}{
-			{"AudioComponentFindNext", &api.audioComponentFindNext},
-			{"AudioComponentInstanceNew", &api.audioComponentInstanceNew},
-			{"AudioComponentInstanceDispose", &api.audioComponentInstanceDispose},
-			{"AudioUnitSetProperty", &api.audioUnitSetProperty},
-			{"AudioUnitInitialize", &api.audioUnitInitialize},
-			{"AudioUnitUninitialize", &api.audioUnitUninitialize},
-			{"AudioOutputUnitStart", &api.audioOutputUnitStart},
-			{"AudioOutputUnitStop", &api.audioOutputUnitStop},
-			{"AudioUnitRender", &api.audioUnitRender},
-		}
-		for _, registration := range registrations {
-			symbol, symbolErr := purego.Dlsym(handle, registration.name)
-			if symbolErr != nil {
-				voiceProcessingAPIErr = fmt.Errorf("resolve AudioToolbox %s: %w", registration.name, symbolErr)
-				return
-			}
-			purego.RegisterFunc(registration.dst, symbol)
-		}
-		voiceProcessingAPIOne = api
-	})
-	return voiceProcessingAPIOne, voiceProcessingAPIErr
+		purego.RegisterFunc(registration.dst, symbol)
+	}
+	return api, nil
 }
 
 func newVoiceProcessingIO(inputID, outputID DeviceID, inputFormat, outputFormat audio.DeviceFormat) (*voiceProcessingEndpoint, *voiceProcessingEndpoint, error) {

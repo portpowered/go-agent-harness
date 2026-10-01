@@ -7,14 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 const sessionAudioTraceQueueSize = 4096
@@ -32,11 +33,14 @@ const (
 	audioTraceTapCount
 )
 
-var sessionAudioTraceFiles = [audioTraceTapCount]string{
-	"microphone-pre-gate.wav",
-	"microphone-uploaded.wav",
-	"speaker-enqueued.wav",
-	"speaker-rendered.wav",
+// sessionAudioTraceFiles names the WAV file of each trace tap, by tap index.
+func sessionAudioTraceFiles() [audioTraceTapCount]string {
+	return [audioTraceTapCount]string{
+		"microphone-pre-gate.wav",
+		"microphone-uploaded.wav",
+		"speaker-enqueued.wav",
+		"speaker-rendered.wav",
+	}
 }
 
 // Trace records the four externally meaningful local audio edges
@@ -120,7 +124,7 @@ func NewTrace(directory string, source clock.Source) (*Trace, error) {
 	// Refuse to reuse any artifact from a prior recording, including a WAV tap
 	// that this trace might never receive a block for. Lazy WAV creation still
 	// uses O_EXCL as the race-safe final guard once a tap's sample rate is known.
-	for _, name := range sessionAudioTraceFiles {
+	for _, name := range sessionAudioTraceFiles() {
 		if _, err := os.Stat(filepath.Join(directory, name)); err == nil {
 			return nil, fmt.Errorf("audio trace output %q already exists", name)
 		} else if !errors.Is(err, os.ErrNotExist) {
@@ -280,7 +284,7 @@ func (t *Trace) writeLoop() {
 			continue
 		}
 		if wavs[block.tap] == nil {
-			wavs[block.tap], err = newSessionAudioTraceWAV(filepath.Join(t.directory, sessionAudioTraceFiles[block.tap]), block.sampleRate)
+			wavs[block.tap], err = newSessionAudioTraceWAV(filepath.Join(t.directory, sessionAudioTraceFiles()[block.tap]), block.sampleRate)
 			if err != nil {
 				t.recordError(err)
 				t.releaseSamples(block.samples)
@@ -288,7 +292,7 @@ func (t *Trace) writeLoop() {
 			}
 		}
 		if wavs[block.tap].sampleRate != block.sampleRate {
-			t.recordError(fmt.Errorf("audio trace %s changed sample rate from %d to %d", sessionAudioTraceFiles[block.tap], wavs[block.tap].sampleRate, block.sampleRate))
+			t.recordError(fmt.Errorf("audio trace %s changed sample rate from %d to %d", sessionAudioTraceFiles()[block.tap], wavs[block.tap].sampleRate, block.sampleRate))
 			t.releaseSamples(block.samples)
 			continue
 		}

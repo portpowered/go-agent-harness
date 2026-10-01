@@ -22,8 +22,8 @@ type PipelineConfig struct {
 }
 
 // DefaultPipelineConfig returns a PipelineConfig with sensible defaults.
-var DefaultPipelineConfig = PipelineConfig{
-	MaxUtteranceFrames: DefaultMaxUtteranceFrames,
+func DefaultPipelineConfig() PipelineConfig {
+	return PipelineConfig{MaxUtteranceFrames: DefaultMaxUtteranceFrames}
 }
 
 // Pipeline reads audio frames from an AudioSource, feeds them through a

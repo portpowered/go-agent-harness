@@ -25,7 +25,8 @@ import "C"
 
 const coreAudioBackend = "coreaudio"
 
-var coreAudioBackends = []malgo.Backend{malgo.BackendCoreaudio}
+// coreAudioBackends restricts malgo to the CoreAudio backend.
+func coreAudioBackends() []malgo.Backend { return []malgo.Backend{malgo.BackendCoreaudio} }
 
 // CoreAudioDeviceRegistry exposes macOS's current CoreAudio endpoints.
 type CoreAudioDeviceRegistry struct {
@@ -182,7 +183,7 @@ func releaseCoreAudioContext(ctx *malgo.AllocatedContext) error {
 	return ctx.Uninit()
 }
 func enumerateCoreAudioDevices() (endpoints []coreAudioEndpoint, err error) {
-	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
+	ctx, err := malgo.InitContext(coreAudioBackends(), malgo.ContextConfig{}, nil)
 	if err != nil {
 		if isCoreAudioUnavailable(err) {
 			return []coreAudioEndpoint{}, nil
@@ -197,7 +198,7 @@ func openCoreAudioDevice(endpoint coreAudioEndpoint) (OpenedDevice, error) {
 }
 
 func openCoreAudioDeviceWithFormat(endpoint coreAudioEndpoint, format audio.DeviceFormat) (OpenedDevice, error) {
-	ctx, err := malgo.InitContext(coreAudioBackends, malgo.ContextConfig{}, nil)
+	ctx, err := malgo.InitContext(coreAudioBackends(), malgo.ContextConfig{}, nil)
 	if err != nil {
 		return nil, err
 	}

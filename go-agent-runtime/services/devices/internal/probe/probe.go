@@ -128,8 +128,8 @@ func captureAndValidateProbeInput(ctx context.Context, captureDuration time.Dura
 	if inputFrames == 0 {
 		return fmt.Errorf("selected microphone produced no complete 20 ms frames")
 	}
-	if inputRMS <= audio.DefaultVADConfig.EnergyThreshold {
-		return fmt.Errorf("selected microphone RMS = %.2f, want > %.2f (silence threshold)", inputRMS, audio.DefaultVADConfig.EnergyThreshold)
+	if inputRMS <= audio.DefaultVADConfig().EnergyThreshold {
+		return fmt.Errorf("selected microphone RMS = %.2f, want > %.2f (silence threshold)", inputRMS, audio.DefaultVADConfig().EnergyThreshold)
 	}
 	return nil
 }

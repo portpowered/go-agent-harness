@@ -28,24 +28,18 @@ const (
 )
 
 var (
-	ErrDeviceNotFound           = devicegw.ErrDeviceNotFound
-	ErrAmbiguousDeviceName      = devicegw.ErrAmbiguousDeviceName
-	ErrNoDefaultDevice          = devicegw.ErrNoDefaultDevice
-	ErrDeviceInUse              = devicegw.ErrDeviceInUse
-	NewDevice                   = devicegw.NewDevice
-	NewDeviceNotFoundError      = devicegw.NewDeviceNotFoundError
-	NewAmbiguousDeviceNameError = devicegw.NewAmbiguousDeviceNameError
-	NewNoDefaultDeviceError     = devicegw.NewNoDefaultDeviceError
-	NewDeviceInUseError         = devicegw.NewDeviceInUseError
-	ValidateDirection           = devicegw.ValidateDirection
+	ErrDeviceNotFound      = devicegw.ErrDeviceNotFound
+	ErrAmbiguousDeviceName = devicegw.ErrAmbiguousDeviceName
+	ErrNoDefaultDevice     = devicegw.ErrNoDefaultDevice
+	ErrDeviceInUse         = devicegw.ErrDeviceInUse
 )
 
 func TestDeviceRegistryErrorContracts(t *testing.T) {
-	input, err := NewDevice("virtual", "input", "Input", DirectionInput)
+	input, err := devicegw.NewDevice("virtual", "input", "Input", DirectionInput)
 	if err != nil {
 		t.Fatal(err)
 	}
-	output, err := NewDevice("virtual", "output", "Output", DirectionOutput)
+	output, err := devicegw.NewDevice("virtual", "output", "Output", DirectionOutput)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,22 +51,22 @@ func TestDeviceRegistryErrorContracts(t *testing.T) {
 		as     func(error) bool
 	}{
 		{
-			name: "not found", err: NewDeviceNotFoundError("virtual:gone"),
+			name: "not found", err: devicegw.NewDeviceNotFoundError("virtual:gone"),
 			want: `device "virtual:gone" not found; run agent devices list`, target: ErrDeviceNotFound,
 			as: func(err error) bool { var typed *DeviceNotFoundError; return errors.As(err, &typed) },
 		},
 		{
-			name: "ambiguous", err: NewAmbiguousDeviceNameError("in", []Device{output, input}),
+			name: "ambiguous", err: devicegw.NewAmbiguousDeviceNameError("in", []Device{output, input}),
 			want: `device name "in" is ambiguous; candidates: virtual:input ("Input", input); virtual:output ("Output", output)`, target: ErrAmbiguousDeviceName,
 			as: func(err error) bool { var typed *AmbiguousDeviceNameError; return errors.As(err, &typed) },
 		},
 		{
-			name: "no default", err: NewNoDefaultDeviceError(DirectionOutput),
+			name: "no default", err: devicegw.NewNoDefaultDeviceError(DirectionOutput),
 			want: "no default output device; run agent devices list", target: ErrNoDefaultDevice,
 			as: func(err error) bool { var typed *NoDefaultDeviceError; return errors.As(err, &typed) },
 		},
 		{
-			name: "in use", err: NewDeviceInUseError("virtual:input"),
+			name: "in use", err: devicegw.NewDeviceInUseError("virtual:input"),
 			want: `device "virtual:input" is in use`, target: ErrDeviceInUse,
 			as: func(err error) bool { var typed *DeviceInUseError; return errors.As(err, &typed) },
 		},
@@ -89,7 +83,7 @@ func TestDeviceRegistryErrorContracts(t *testing.T) {
 	}
 
 	var ambiguous *AmbiguousDeviceNameError
-	err = NewAmbiguousDeviceNameError("in", []Device{output, input})
+	err = devicegw.NewAmbiguousDeviceNameError("in", []Device{output, input})
 	if !errors.As(err, &ambiguous) || !errors.Is(err, ErrAmbiguousDeviceName) {
 		t.Fatalf("ambiguous error=%v, want typed identity", err)
 	}
@@ -115,11 +109,11 @@ func TestDeviceRegistryErrorContracts(t *testing.T) {
 		t.Fatal("fixture must provide a listed device for disappearance case")
 	}
 
-	firstName, err := NewDevice("virtual", "stable", "First Name", DirectionInput)
+	firstName, err := devicegw.NewDevice("virtual", "stable", "First Name", DirectionInput)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondName, err := NewDevice("virtual", "stable", "Renamed Device", DirectionInput)
+	secondName, err := devicegw.NewDevice("virtual", "stable", "Renamed Device", DirectionInput)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,16 +356,16 @@ func (r *fixtureRegistry) Default(direction Direction) (Device, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.defaultCalls++
-	if err := ValidateDirection(direction); err != nil {
+	if err := devicegw.ValidateDirection(direction); err != nil {
 		return Device{}, err
 	}
 	id, ok := r.defaults[direction]
 	if !ok {
-		return Device{}, NewNoDefaultDeviceError(direction)
+		return Device{}, devicegw.NewNoDefaultDeviceError(direction)
 	}
 	device, ok := r.devices[id]
 	if !ok {
-		return Device{}, NewNoDefaultDeviceError(direction)
+		return Device{}, devicegw.NewNoDefaultDeviceError(direction)
 	}
 	return device, nil
 }
@@ -380,10 +374,10 @@ func (r *fixtureRegistry) Open(id DeviceID) (OpenedDevice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.devices[id]; !ok {
-		return nil, NewDeviceNotFoundError(id)
+		return nil, devicegw.NewDeviceNotFoundError(id)
 	}
 	if r.inUse[id] {
-		return nil, NewDeviceInUseError(id)
+		return nil, devicegw.NewDeviceInUseError(id)
 	}
 	r.inUse[id] = true
 	r.openCount++
@@ -451,7 +445,7 @@ func newFixture() DeviceRegistryConformanceFixture {
 }
 
 func mustFixtureDevice(nativeID, displayName string, direction Direction) Device {
-	device, err := NewDevice("virtual", nativeID, displayName, direction)
+	device, err := devicegw.NewDevice("virtual", nativeID, displayName, direction)
 	if err != nil {
 		panic(err)
 	}

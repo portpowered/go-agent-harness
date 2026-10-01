@@ -10,6 +10,10 @@ import (
 	"unsafe"
 )
 
+// Lazily resolved, concurrency-safe kernel32 procedure bindings, the standard
+// Windows binding pattern; they hold no program state.
+//
+//nolint:gochecknoglobals // immutable lazy DLL procedure bindings (see above)
 var (
 	interruptibleKernel32       = syscall.NewLazyDLL("kernel32.dll")
 	interruptibleGetCurrentProc = interruptibleKernel32.NewProc("GetCurrentProcess")

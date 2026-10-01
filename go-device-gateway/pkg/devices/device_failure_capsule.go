@@ -18,21 +18,26 @@ import (
 
 const DuplexCapsuleSchemaVersion = 2
 
-var duplexCapsuleArtifacts = []string{
-	"audio/provider-in.pcm",
-	"audio/playback-rendered.pcm",
-	"audio/capture-generated.pcm",
-	"audio/source-near-end.pcm",
-	"audio/source-background.pcm",
-	"events.jsonl",
-}
-
-var duplexCapsuleV1Artifacts = []string{
-	"audio/provider-in.pcm",
-	"audio/playback-rendered.pcm",
-	"audio/source-near-end.pcm",
-	"audio/source-background.pcm",
-	"events.jsonl",
+// duplexCapsuleArtifacts lists the files a capsule of schemaVersion must hold.
+// Version 1 predates the generated-capture stem.
+func duplexCapsuleArtifacts(schemaVersion int) []string {
+	if schemaVersion == 1 {
+		return []string{
+			"audio/provider-in.pcm",
+			"audio/playback-rendered.pcm",
+			"audio/source-near-end.pcm",
+			"audio/source-background.pcm",
+			"events.jsonl",
+		}
+	}
+	return []string{
+		"audio/provider-in.pcm",
+		"audio/playback-rendered.pcm",
+		"audio/capture-generated.pcm",
+		"audio/source-near-end.pcm",
+		"audio/source-background.pcm",
+		"events.jsonl",
+	}
 }
 
 type CapsuleArtifact struct {
@@ -134,10 +139,7 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	if !manifest.Finalized {
 		return nil, fmt.Errorf("audio capsule is not finalized")
 	}
-	requiredArtifacts := duplexCapsuleArtifacts
-	if manifest.SchemaVersion == 1 {
-		requiredArtifacts = duplexCapsuleV1Artifacts
-	}
+	requiredArtifacts := duplexCapsuleArtifacts(manifest.SchemaVersion)
 	if len(manifest.Artifacts) != len(requiredArtifacts) {
 		return nil, fmt.Errorf("audio capsule artifact inventory has %d entries; want %d", len(manifest.Artifacts), len(requiredArtifacts))
 	}

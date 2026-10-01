@@ -20,12 +20,16 @@ type analyzerSpec struct {
 	installPackage string
 }
 
-var analyzerSpecs = map[string]analyzerSpec{
-	"golangci-lint": {
+// lookupAnalyzerSpec returns how to version-check and install tool.
+func lookupAnalyzerSpec(tool string) (analyzerSpec, bool) {
+	if tool != "golangci-lint" {
+		return analyzerSpec{}, false
+	}
+	return analyzerSpec{
 		binaryName:     "golangci-lint",
 		versionArgs:    []string{"version"},
 		installPackage: "github.com/golangci/golangci-lint/v2/cmd/golangci-lint",
-	},
+	}, true
 }
 
 type config struct {

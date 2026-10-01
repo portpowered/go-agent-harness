@@ -1,7 +1,5 @@
 package audio
 
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-
 import (
 	"context"
 	"errors"
@@ -10,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 

@@ -216,7 +216,7 @@ func (b *replayBuilder) loadStream(tap string) error {
 func replayTraceFileName(tap string) string {
 	for i := range audioTraceTapCount {
 		if traceTapName(i) == tap {
-			return sessionAudioTraceFiles[i]
+			return sessionAudioTraceFiles()[i]
 		}
 	}
 	return ""

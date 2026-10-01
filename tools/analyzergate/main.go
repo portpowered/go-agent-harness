@@ -83,7 +83,7 @@ type configInput struct {
 }
 
 func newConfig(input configInput) (config, error) {
-	spec, ok := analyzerSpecs[input.tool]
+	spec, ok := lookupAnalyzerSpec(input.tool)
 	if !ok {
 		return config{}, fmt.Errorf("unsupported analyzer %q; expected golangci-lint", input.tool)
 	}

@@ -1,8 +1,9 @@
 package recording
 
 import (
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
 func TestRuntimeEvidenceByteBudgetPrecedesPacketLimit(t *testing.T) {

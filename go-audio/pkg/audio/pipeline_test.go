@@ -33,12 +33,12 @@ func makeSilence(frames int) []int16 {
 // exceeds MaxSilenceFrames.
 func TestPipeline_EmitsUtteranceAfterSpeechAndSilence(t *testing.T) {
 	speechFrames := 20
-	silenceFrames := audio.DefaultVADConfig.MaxSilenceFrames
+	silenceFrames := audio.DefaultVADConfig().MaxSilenceFrames
 
 	samples := append(makeSpeech(speechFrames), makeSilence(silenceFrames)...)
 	src := audio.NewSliceSource(samples)
-	vad := audio.NewVAD(audio.DefaultVADConfig)
-	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
+	vad := audio.NewVAD(audio.DefaultVADConfig())
+	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig())
 
 	utterance, err := pipeline.ReadUtterance(context.Background())
 	if err != nil {
@@ -50,9 +50,9 @@ func TestPipeline_EmitsUtteranceAfterSpeechAndSilence(t *testing.T) {
 
 	// Utterance must contain at least the confirmed speech frames
 	// (speechFrames - MinSpeechFrames + 1) × FrameSize samples.
-	minExpected := (speechFrames-audio.DefaultVADConfig.MinSpeechFrames+1)*audio.FrameSize +
+	minExpected := (speechFrames-audio.DefaultVADConfig().MinSpeechFrames+1)*audio.FrameSize +
 		// …plus the silence frames included while waiting for VAD end.
-		(audio.DefaultVADConfig.MaxSilenceFrames-1)*audio.FrameSize
+		(audio.DefaultVADConfig().MaxSilenceFrames-1)*audio.FrameSize
 	if len(utterance) < minExpected {
 		t.Errorf("utterance too short: got %d samples, want >= %d", len(utterance), minExpected)
 	}
@@ -66,7 +66,7 @@ func TestPipeline_ForceFlushAtMaxLength(t *testing.T) {
 
 	// Provide more speech than maxFrames so the force-flush triggers.
 	src := audio.NewSliceSource(makeSpeech(maxFrames + 5))
-	vad := audio.NewVAD(audio.DefaultVADConfig)
+	vad := audio.NewVAD(audio.DefaultVADConfig())
 	pipeline := audio.NewPipeline(src, vad, cfg)
 
 	utterance, err := pipeline.ReadUtterance(context.Background())
@@ -84,8 +84,8 @@ func TestPipeline_ForceFlushAtMaxLength(t *testing.T) {
 // the source is empty and no speech was detected.
 func TestPipeline_EOFWithNoSpeech(t *testing.T) {
 	src := audio.NewSliceSource(makeSilence(5)) // only silence
-	vad := audio.NewVAD(audio.DefaultVADConfig)
-	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
+	vad := audio.NewVAD(audio.DefaultVADConfig())
+	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig())
 
 	_, err := pipeline.ReadUtterance(context.Background())
 	if !errors.Is(err, io.EOF) {
@@ -97,10 +97,10 @@ func TestPipeline_EOFWithNoSpeech(t *testing.T) {
 // before an unexpected EOF is returned rather than discarded.
 func TestPipeline_PartialSpeechReturnedOnEOF(t *testing.T) {
 	// Enough speech to pass MinSpeechFrames but no trailing silence.
-	speechFrames := audio.DefaultVADConfig.MinSpeechFrames + 5
+	speechFrames := audio.DefaultVADConfig().MinSpeechFrames + 5
 	src := audio.NewSliceSource(makeSpeech(speechFrames))
-	vad := audio.NewVAD(audio.DefaultVADConfig)
-	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig)
+	vad := audio.NewVAD(audio.DefaultVADConfig())
+	pipeline := audio.NewPipeline(src, vad, audio.DefaultPipelineConfig())
 
 	utterance, err := pipeline.ReadUtterance(context.Background())
 	if err != nil {
@@ -126,8 +126,8 @@ func TestPipeline_ContextCancellation(t *testing.T) {
 	// Override ReadFrame to block and wait for ctx.
 	// SliceSource returns immediately, so we wrap it.
 	blockingSrc := &blockOnFirstRead{inner: src}
-	vad := audio.NewVAD(audio.DefaultVADConfig)
-	pipeline := audio.NewPipeline(blockingSrc, vad, audio.DefaultPipelineConfig)
+	vad := audio.NewVAD(audio.DefaultVADConfig())
+	pipeline := audio.NewPipeline(blockingSrc, vad, audio.DefaultPipelineConfig())
 
 	_, err := pipeline.ReadUtterance(ctx)
 	if err == nil {
