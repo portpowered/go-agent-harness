@@ -88,29 +88,29 @@ func TestRuntimeDisplayExecutorPreservesExecutionAndPermissionContract(t *testin
 func TestResolveDisplayCapabilityCoversConfigurationAndProbeOutcomes(t *testing.T) {
 	disabled := &config.Config{}
 	disabled.Tools.List = []config.ToolEntry{{ID: "show", Enabled: false}, {ID: "mouse", Enabled: false}}
-	if capability := resolveDisplayCapability(disabled, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
+	if capability := resolveDisplayCapability(t.Context(), disabled, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		t.Fatal("disabled display tools invoked the probe")
 		return cliTools.DisplayCapability{}, nil
 	}), DefaultDisplayProbeTimeout); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
 		t.Fatalf("disabled display capability = %+v", capability)
 	}
 
-	if capability := resolveDisplayCapability(&config.Config{}, nil, DefaultDisplayProbeTimeout); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
+	if capability := resolveDisplayCapability(t.Context(), &config.Config{}, nil, DefaultDisplayProbeTimeout); capability.Reason == "" || capability.State != cliTools.DisplayCapabilityUnavailable {
 		t.Fatalf("missing probe capability = %+v", capability)
 	}
-	usable := resolveDisplayCapability(&config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
+	usable := resolveDisplayCapability(t.Context(), &config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.DisplayCapability{Available: true, DisplayCount: 2}, nil
 	}), DefaultDisplayProbeTimeout)
 	if !usable.Usable() || usable.State != cliTools.DisplayCapabilityUsable {
 		t.Fatalf("usable display capability = %+v", usable)
 	}
-	failure := resolveDisplayCapability(&config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
+	failure := resolveDisplayCapability(t.Context(), &config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.DisplayCapability{}, errors.New("probe failed")
 	}), DefaultDisplayProbeTimeout)
 	if failure.State != cliTools.DisplayCapabilityUnavailable || failure.Reason == "" {
 		t.Fatalf("failed display capability = %+v", failure)
 	}
-	unknown := resolveDisplayCapability(&config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
+	unknown := resolveDisplayCapability(t.Context(), &config.Config{}, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.DisplayCapability{Reason: "not usable"}, nil
 	}), DefaultDisplayProbeTimeout)
 	if unknown.State != cliTools.DisplayCapabilityUnavailable || unknown.Available || unknown.Reason != "not usable" {
@@ -129,7 +129,7 @@ func TestDisplayProbeTimeoutOptionBoundsAdmission(t *testing.T) {
 		<-release
 		return cliTools.UsableDisplayCapability(1), nil
 	}), nil, WithDisplayProbeTimeout(timeout))
-	got := resolveDisplayCapability(&config.Config{}, service.displayProbe, service.displayProbeTimeout)
+	got := resolveDisplayCapability(t.Context(), &config.Config{}, service.displayProbe, service.displayProbeTimeout)
 	if got.Usable() || got.Reason != "display capability probe timed out" {
 		t.Fatalf("stalled probe capability = %+v, want timed-out fail-closed result", got)
 	}
@@ -142,7 +142,7 @@ func TestServiceResolvesEnabledDisplayCapability(t *testing.T) {
 	service := New(nil, nil, nil, cliTools.DisplayCapabilityProbeFunc(func(context.Context) (cliTools.DisplayCapability, error) {
 		return cliTools.UsableDisplayCapability(1), nil
 	}), runtimeToolsWire.NewService())
-	capabilities, err := service.Resolve(cfg)
+	capabilities, err := service.Resolve(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Resolve enabled display capability: %v", err)
 	}

@@ -250,9 +250,6 @@ func (HashIDMapper) BrowserID(identity BrowserIdentity) string {
 // a successful source stops discovery immediately. The returned error is a
 // safe classified DiscoveryError.
 func (s *Service) Discover(ctx context.Context, inputs ConnectionInputs) (BrowserCandidate, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	s.mu.Lock()
 	defer s.unlockDiscovery()
 

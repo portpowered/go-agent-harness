@@ -64,7 +64,7 @@ func TestSessionToolCapabilitiesFactoryOmitsDisplayToolsOnHeadlessProbe(t *testi
 	surface := &sessionDisplaySurfaceFake{capability: tools.UnavailableDisplayCapability("no desktop session")}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig(t))
+	capabilities, err := factory(t.Context(), displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestSessionToolCapabilitiesFactoryRetainsShowOnUsableProbe(t *testing.T) {
 	surface := &sessionDisplaySurfaceFake{capability: tools.UsableDisplayCapability(1)}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig(t))
+	capabilities, err := factory(t.Context(), displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestSessionToolCapabilitiesFactoryAdvertisesShowWhenPermissionDeniedWithDis
 	}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig(t))
+	capabilities, err := factory(t.Context(), displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestSessionToolCapabilitiesFactoryCapturesNormallyWhenPermissionGranted(t *
 	surface := &sessionDisplaySurfaceFake{capability: tools.UsableDisplayCapability(1)}
 	factory := NewSessionToolCapabilitiesFactoryWithDisplaySurface(nil, nil, surface)
 
-	capabilities, err := factory(displayAdmissionConfig(t))
+	capabilities, err := factory(t.Context(), displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestSessionDisplayAdmissionProbeIsBoundedAndFailsClosed(t *testing.T) {
 	const probeTimeout = 20 * time.Millisecond
 	factory := NewSessionToolCapabilitiesFactoryWithDisplayProbe(nil, nil, probe, servicewire.WithDisplayProbeTimeout(probeTimeout))
 	startedAt := time.Now()
-	capabilities, err := factory(displayAdmissionConfig(t))
+	capabilities, err := factory(t.Context(), displayAdmissionConfig(t))
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}

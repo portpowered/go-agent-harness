@@ -118,9 +118,6 @@ func (c *MediaProbeCommand) Generate() *cobra.Command {
 
 // Run executes a probe and renders a deterministic human-readable report.
 func (c *MediaProbeCommand) Run(ctx context.Context, out io.Writer, rawURL string) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if c.ReplayFixture != "" {
 		return c.runReplayProbe(ctx, out)
 	}
@@ -220,9 +217,6 @@ func (c *MediaLookCommand) Generate() *cobra.Command {
 // report. Unavailable visual data is a successful result and contains no
 // binary payload in the report.
 func (c *MediaLookCommand) Run(ctx context.Context, out io.Writer, rawURL string) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	source, err := rtc.ParseMediaSource(rawURL)
 	if err != nil {
 		return fmt.Errorf("media look: %w", err)

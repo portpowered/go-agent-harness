@@ -179,7 +179,7 @@ func (c *SessionCommand) runtimeLiveCapabilities(ctx context.Context, cfg *confi
 	if c.liveCapabilities == nil || cfg == nil {
 		return nil, nil
 	}
-	capabilities, err := c.liveCapabilities(cfg)
+	capabilities, err := c.liveCapabilities(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

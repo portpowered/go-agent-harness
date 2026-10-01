@@ -23,7 +23,7 @@ func TestManagedBrowserLauncherUsesPrivateProfileAndOneHeadfulStartupPage(t *tes
 	var args []string
 	launcher := newManagedLaunchTestLauncher(t, process, ManagedChromeExecutableAcquirerFunc(func(_ context.Context) (ChromeExecutable, error) {
 		return ChromeExecutable{Path: "/qualified/chrome", Version: "Google Chrome 152.0.1.2", Major: 152, Source: ExecutableSourceStock}, nil
-	}), ManagedBrowserProcessStarter(func(path string, received []string) (ManagedBrowserProcess, error) {
+	}), ManagedBrowserProcessStarter(func(_ context.Context, path string, received []string) (ManagedBrowserProcess, error) {
 		executable = path
 		args = append([]string(nil), received...)
 		return process, nil
@@ -122,7 +122,7 @@ func TestManagedBrowserLauncherCancellationCleansOnlyFailedProcess(t *testing.T)
 	launcher.options.ShutdownTimeout = 20 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	started := make(chan struct{})
-	launcher.options.ProcessStarter = func(path string, args []string) (ManagedBrowserProcess, error) {
+	launcher.options.ProcessStarter = func(_ context.Context, path string, args []string) (ManagedBrowserProcess, error) {
 		close(started)
 		process.setArgs(path, args)
 		return process, nil
@@ -204,11 +204,11 @@ func TestManagedBrowserLauncherPortCollisionFailsTheAttempt(t *testing.T) {
 	launcher.options.StartupTimeout = 200 * time.Millisecond
 	launcher.options.ShutdownTimeout = 20 * time.Millisecond
 	var collision net.Listener
-	launcher.options.ProcessStarter = func(path string, args []string) (ManagedBrowserProcess, error) {
+	launcher.options.ProcessStarter = func(ctx context.Context, path string, args []string) (ManagedBrowserProcess, error) {
 		process.setArgs(path, args)
 		port := managedLaunchPortFromArgs(t, args)
 		var err error
-		collision, err = net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
+		collision, err = (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:"+strconv.Itoa(port))
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +254,7 @@ func TestManagedBrowserLauncherRejectsSymlinkedProfileAndPortOutsideLoopback(t *
 	})
 
 	t.Run("non-loopback reservation", func(t *testing.T) {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("reserve test port: %v", err)
 		}
@@ -265,7 +265,7 @@ func TestManagedBrowserLauncherRejectsSymlinkedProfileAndPortOutsideLoopback(t *
 		}()
 		process := &managedLaunchTestProcess{}
 		launcher := newManagedLaunchTestLauncher(t, process, nil, nil)
-		launcher.options.PortAllocator = func() (net.Listener, error) {
+		launcher.options.PortAllocator = func(context.Context) (net.Listener, error) {
 			return &managedLaunchTestListener{Listener: listener, address: &net.TCPAddr{IP: net.ParseIP("192.0.2.1"), Port: mustType[*net.TCPAddr](t, listener.Addr()).Port}}, nil
 		}
 		_, err = launcher.Launch(context.Background())
@@ -291,7 +291,7 @@ func newManagedLaunchTestLauncherWithTransport(t *testing.T, process *managedLau
 		})
 	}
 	if starter == nil {
-		starter = func(path string, args []string) (ManagedBrowserProcess, error) {
+		starter = func(_ context.Context, path string, args []string) (ManagedBrowserProcess, error) {
 			process.setArgs(path, args)
 			return process, nil
 		}

@@ -273,7 +273,7 @@ func sessionPageToolsSwitchVoiceTargets(t *testing.T, ctx context.Context, cdpUR
 	cfg.Browser.Selection.Persist = false
 	cfg.Browser.Policy.AllowedOrigins = []string{sessionPageToolsLiveCubecadeOrigin, sessionPageToolsLiveMarginOrigin}
 
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("voice target capability factory: %v", err)
 	}

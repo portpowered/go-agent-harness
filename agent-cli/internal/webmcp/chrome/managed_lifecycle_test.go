@@ -148,7 +148,7 @@ func TestManagedBrowserManagerRestartsVerifiedProfileOwnerAndRetriesOnce(t *test
 				return ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: ExecutableSourceStock}, nil
 			}),
 			HTTPClient: &http.Client{Transport: managedLifecycleRecoveryTransport{starts: &starts}},
-			ProcessStarter: func(string, []string) (ManagedBrowserProcess, error) {
+			ProcessStarter: func(context.Context, string, []string) (ManagedBrowserProcess, error) {
 				if starts.Add(1) == 1 {
 					return managedLifecycleExitedProcess{pid: 7101}, nil
 				}
@@ -203,7 +203,7 @@ func TestManagedBrowserManagerDoesNotRetryWithoutVerifiedProfileOwner(t *testing
 				return ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: ExecutableSourceStock}, nil
 			}),
 			HTTPClient: &http.Client{Transport: managedLaunchVersionTransport{alwaysError: errors.New("endpoint unavailable")}},
-			ProcessStarter: func(string, []string) (ManagedBrowserProcess, error) {
+			ProcessStarter: func(context.Context, string, []string) (ManagedBrowserProcess, error) {
 				starts.Add(1)
 				return managedLifecycleExitedProcess{pid: 7201}, nil
 			},
@@ -291,13 +291,13 @@ func TestReattachedManagedBrowserToleratesTransientInspectionFailures(t *testing
 	process := &reattachedManagedBrowserProcess{
 		state:        ManagedBrowserState{PID: 55511},
 		pollInterval: time.Millisecond,
-		inspector: ManagedBrowserProcessInspectorFunc(func(context.Context, ManagedBrowserState) (ManagedBrowserProcessInfo, error) {
+		inspect: func() error {
 			call := calls.Add(1)
 			if persistentFailure.Load() || call <= 2 {
-				return ManagedBrowserProcessInfo{}, errors.New("transient inspection failure")
+				return errors.New("transient inspection failure")
 			}
-			return ManagedBrowserProcessInfo{PID: 55511, Identity: "still-running"}, nil
-		}),
+			return nil
+		},
 	}
 	done := make(chan struct{})
 	go func() {
@@ -400,7 +400,7 @@ func newManagedLifecycleTestManager(t *testing.T, configDir string, control *man
 				return ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: ExecutableSourceStock}, nil
 			}),
 			HTTPClient: &http.Client{Transport: managedLaunchVersionTransport{}},
-			ProcessStarter: func(string, []string) (ManagedBrowserProcess, error) {
+			ProcessStarter: func(context.Context, string, []string) (ManagedBrowserProcess, error) {
 				starts.Add(1)
 				return control.newProcess(7001), nil
 			},

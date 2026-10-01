@@ -93,7 +93,7 @@ func runPressureTraceCadenceDrained(t *testing.T, format PCM16Format, providerFr
 	}()
 
 	for delta := range pressureTraceDeltas {
-		if err := mixer.Write("alpha", providerPCM16Delta(delta)); err != nil {
+		if err := mixer.WriteContext(t.Context(), "alpha", providerPCM16Delta(delta)); err != nil {
 			t.Fatalf("provider delta %d: %v", delta, err)
 		}
 		stats := mixer.Stats()
@@ -170,7 +170,7 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 		}
 	}()
 
-	if err := mixer.Write("alpha", providerPCM16Delta(0)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", providerPCM16Delta(0)); err != nil {
 		t.Fatalf("first provider delta: %v", err)
 	}
 	// One frame reaches the stalled reader and the output queue fills behind
@@ -188,7 +188,7 @@ func runPressureTraceDownstreamStall(t *testing.T, format PCM16Format, frameByte
 	// Two more provider deltas arrive while the consumer is stalled. The
 	// first still fits in the bounded input queue; the next must wait rather
 	// than be rejected.
-	if err := mixer.Write("alpha", providerPCM16Delta(1)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", providerPCM16Delta(1)); err != nil {
 		t.Fatalf("provider delta 1: %v", err)
 	}
 	writeDone := make(chan error, 1)

@@ -827,9 +827,6 @@ func (s *ScriptedTargetSession) emitLocalPublishedLocked(event webmcp.BrowserEve
 }
 
 func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

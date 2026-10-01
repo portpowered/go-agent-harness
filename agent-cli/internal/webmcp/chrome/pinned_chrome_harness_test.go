@@ -133,7 +133,8 @@ func launchPinnedChromeAtPort(ctx context.Context, pinned pinnedChrome, fixtureU
 		return nil, fmt.Errorf("Chrome debugging port is invalid: %d", port)
 	}
 	args := pinnedChromeLaunchFlags(profileDir, fixtureURL, port)
-	cmd := exec.Command(pinned.Executable, args...)
+	// Chrome outlives the launch deadline in ctx; runningChrome owns shutdown.
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), pinned.Executable, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("capture Chrome stdout: %w", err)

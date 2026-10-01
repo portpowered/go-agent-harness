@@ -629,7 +629,7 @@ func conversationalCustomerSourceRoot(t *testing.T, lane conversationalCustomerL
 		name, wantBranch = conversationalCustomerLaneRootEnv, lane.HeadRefName
 	}
 	root := requiredNewlineFreeEnv(t, name)
-	command := exec.Command("git", "-C", root, "branch", "--show-current")
+	command := exec.CommandContext(t.Context(), "git", "-C", root, "branch", "--show-current")
 	output, err := command.Output()
 	if err != nil {
 		t.Fatalf("inspect %s source branch: %v", name, err)

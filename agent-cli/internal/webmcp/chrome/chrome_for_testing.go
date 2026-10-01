@@ -111,9 +111,6 @@ func (a *ChromeForTestingAcquirer) AcquirePinnedChrome(ctx context.Context, requ
 	if a == nil {
 		return ChromeExecutable{}, newChromeForTestingError("acquirer_unavailable", errors.New("chrome for testing acquirer is nil"))
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return ChromeExecutable{}, err
 	}

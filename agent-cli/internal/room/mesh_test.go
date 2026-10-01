@@ -716,14 +716,14 @@ func newConnectedAndPendingMesh(t *testing.T, parent context.Context, connectedE
 	t.Cleanup(func() { releaseTestResource(mesh) })
 	t.Cleanup(pending.releaseClose)
 	t.Cleanup(connected.releaseClose)
-	if err := mesh.Join(context.Background(), "a"); err != nil {
+	if err := mesh.Join(context.WithoutCancel(parent), "a"); err != nil {
 		t.Fatalf("first Join: %v", err)
 	}
-	if err := mesh.Join(context.Background(), "b"); err != nil {
+	if err := mesh.Join(context.WithoutCancel(parent), "b"); err != nil {
 		t.Fatalf("second Join: %v", err)
 	}
 	joinResult := make(chan error, 1)
-	go func() { joinResult <- mesh.Join(context.Background(), "c") }()
+	go func() { joinResult <- mesh.Join(context.WithoutCancel(parent), "c") }()
 	awaitClosed(t, pending.connectStarted)
 	return mesh, connected, pending, joinResult
 }

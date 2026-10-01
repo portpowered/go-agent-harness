@@ -437,12 +437,12 @@ func TestDisplaySurfaceCancellationAndDefaults(t *testing.T) {
 	}
 
 	readerCtx, cancelReader := context.WithCancel(ctx)
-	reader := contextReader{ctx: readerCtx, r: cancelingReader{cancel: cancelReader}}
+	reader := newContextReader(readerCtx, cancelingReader{cancel: cancelReader})
 	buffer := make([]byte, 8)
 	if n, err := reader.Read(buffer); n != 7 || !errors.Is(err, context.Canceled) {
 		t.Fatalf("context reader = (%d, %v), want read plus cancellation", n, err)
 	}
-	if _, err := (contextReader{ctx: canceled, r: strings.NewReader("ignored")}).Read(buffer); !errors.Is(err, context.Canceled) {
+	if _, err := newContextReader(canceled, strings.NewReader("ignored")).Read(buffer); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pre-canceled context reader = %v", err)
 	}
 	if _, err := io.Copy(io.Discard, strings.NewReader("ordinary")); err != nil {

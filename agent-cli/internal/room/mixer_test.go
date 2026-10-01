@@ -28,13 +28,13 @@ func TestPCM16MixerMixesEveryActiveInputAndClips(t *testing.T) {
 			t.Fatalf("add %s: %v", id, err)
 		}
 	}
-	if err := mixer.Write("alpha", pcm16(1000, -1000)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", pcm16(1000, -1000)); err != nil {
 		t.Fatalf("write alpha: %v", err)
 	}
-	if err := mixer.Write("beta", pcm16(2000, -2000)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "beta", pcm16(2000, -2000)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
-	if err := mixer.Write("gamma", pcm16(30000, -30000)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "gamma", pcm16(30000, -30000)); err != nil {
 		t.Fatalf("write gamma: %v", err)
 	}
 	want := pcm16(32767, -32768, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -58,10 +58,10 @@ func TestPCM16MixerPreservesPartialInputAcrossCadenceFrames(t *testing.T) {
 	if err := mixer.AddInput("speaker"); err != nil {
 		t.Fatalf("add input: %v", err)
 	}
-	if err := mixer.Write("speaker", pcm16(1)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "speaker", pcm16(1)); err != nil {
 		t.Fatalf("write first partial chunk: %v", err)
 	}
-	if err := mixer.Write("speaker", pcm16(2, 3, 4)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "speaker", pcm16(2, 3, 4)); err != nil {
 		t.Fatalf("write second partial chunk: %v", err)
 	}
 	readMixerFrame(t, mixer, pcm16(1, 2))
@@ -84,10 +84,10 @@ func TestPCM16MixerRemovalDiscardsOnlyRemovedInput(t *testing.T) {
 			t.Fatalf("add %s: %v", id, err)
 		}
 	}
-	if err := mixer.Write("keep", pcm16(5)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "keep", pcm16(5)); err != nil {
 		t.Fatalf("write keep: %v", err)
 	}
-	if err := mixer.Write("remove", pcm16(7)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "remove", pcm16(7)); err != nil {
 		t.Fatalf("write remove: %v", err)
 	}
 	if err := mixer.RemoveInput("remove"); err != nil {
@@ -138,10 +138,10 @@ func TestPCM16MixerUsesDeterministicCadenceAndEmitsSilence(t *testing.T) {
 			t.Fatalf("add %s: %v", id, err)
 		}
 	}
-	if err := mixer.Write("alpha", pcm16(100, 200, 300)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", pcm16(100, 200, 300)); err != nil {
 		t.Fatalf("write alpha: %v", err)
 	}
-	if err := mixer.Write("beta", pcm16(10, 20, 30)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "beta", pcm16(10, 20, 30)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
 	cadence.Advance()
@@ -193,10 +193,10 @@ func TestPCM16MixerManualAdvanceUsesProductionMixPath(t *testing.T) {
 			t.Fatalf("add %s: %v", id, err)
 		}
 	}
-	if err := mixer.Write("alpha", pcm16(100, 200)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", pcm16(100, 200)); err != nil {
 		t.Fatalf("write alpha: %v", err)
 	}
-	if err := mixer.Write("beta", pcm16(10, 20)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "beta", pcm16(10, 20)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
 	if err := mixer.Advance(context.Background()); err != nil {
@@ -243,10 +243,10 @@ func TestPCM16MixerReadFrameWithSourcesTracksContributors(t *testing.T) {
 			t.Fatalf("add input %s: %v", id, err)
 		}
 	}
-	if err := mixer.Write("alpha", pcm16(100, 200)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", pcm16(100, 200)); err != nil {
 		t.Fatalf("write alpha: %v", err)
 	}
-	if err := mixer.Write("beta", pcm16(0, 0, 0)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "beta", pcm16(0, 0, 0)); err != nil {
 		t.Fatalf("write beta: %v", err)
 	}
 	mixer.inputs["beta"].data = append(mixer.inputs["beta"].data, 0x7f)
@@ -321,7 +321,7 @@ func TestPCM16MixerCancellationStopsDeterministicCadence(t *testing.T) {
 func TestPCM16MixerWriteContextCancellationPreservesQueuedPCM(t *testing.T) {
 	mixer, frameBytes := newFullInputMixer(t)
 	defer closeMixerForTeardown(t, mixer)
-	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", make([]byte, frameBytes)); err != nil {
 		t.Fatalf("fill input: %v", err)
 	}
 
@@ -403,12 +403,12 @@ func TestPCM16MixerWriteContextWithDispositionReportsBoundedBackpressure(t *test
 
 func TestPCM16MixerBlockedWriteUnblocksOnClose(t *testing.T) {
 	mixer, frameBytes := newFullInputMixer(t)
-	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", make([]byte, frameBytes)); err != nil {
 		t.Fatalf("fill input: %v", err)
 	}
 	writeDone := make(chan error, 1)
 	go func() {
-		writeDone <- mixer.Write("alpha", pcm16(8))
+		writeDone <- mixer.WriteContext(t.Context(), "alpha", pcm16(8))
 	}()
 	select {
 	case err := <-writeDone:
@@ -431,12 +431,12 @@ func TestPCM16MixerBlockedWriteUnblocksOnClose(t *testing.T) {
 func TestPCM16MixerBlockedWriteUnblocksOnInputRemoval(t *testing.T) {
 	mixer, frameBytes := newFullInputMixer(t)
 	defer closeMixerForTeardown(t, mixer)
-	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", make([]byte, frameBytes)); err != nil {
 		t.Fatalf("fill input: %v", err)
 	}
 	writeDone := make(chan error, 1)
 	go func() {
-		writeDone <- mixer.Write("alpha", pcm16(9))
+		writeDone <- mixer.WriteContext(t.Context(), "alpha", pcm16(9))
 	}()
 	select {
 	case err := <-writeDone:
@@ -459,13 +459,13 @@ func TestPCM16MixerBlockedWriteUnblocksOnInputRemoval(t *testing.T) {
 func TestPCM16MixerBlockedWriteUnblocksOnInternalFailure(t *testing.T) {
 	mixer, frameBytes := newFullInputMixer(t)
 	defer closeMixerForTeardown(t, mixer)
-	if err := mixer.Write("alpha", make([]byte, frameBytes)); err != nil {
+	if err := mixer.WriteContext(t.Context(), "alpha", make([]byte, frameBytes)); err != nil {
 		t.Fatalf("fill input: %v", err)
 	}
 	failure := errors.New("test mixer failure")
 	writeDone := make(chan error, 1)
 	go func() {
-		writeDone <- mixer.Write("alpha", pcm16(10))
+		writeDone <- mixer.WriteContext(t.Context(), "alpha", pcm16(10))
 	}()
 	select {
 	case err := <-writeDone:

@@ -100,7 +100,7 @@ func TestWebMCPDirectInvokeSIGINTChildProcess(t *testing.T) {
 		return
 	}
 
-	command := exec.Command(os.Args[0], "-test.run=^TestWebMCPDirectInvokeSIGINTChildProcess$", "-test.v=false")
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestWebMCPDirectInvokeSIGINTChildProcess$", "-test.v=false")
 	command.Env = append(os.Environ(), "WEBMCP_DIRECT_SIGINT_CHILD=1")
 	stdout := &childProcessOutputBuffer{}
 	stderr := newChildProcessStderrBuffer()

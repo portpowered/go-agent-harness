@@ -342,7 +342,7 @@ func (s *targetSession) finishFromEventBufferOverflow() {
 	// signal, or immediately after publish returns on that same path. Closing
 	// stopRouter is therefore safe without waiting for routerDone here.
 	s.stopOnce.Do(func() { close(s.stopRouter) })
-	cleanupErr := s.cleanupTarget()
+	cleanupErr := s.cleanupTarget(s.detachedCleanupContext())
 	s.mu.Lock()
 	s.closeErr = cleanupErr
 	s.mu.Unlock()
@@ -689,7 +689,7 @@ func (s *targetSession) Close() error {
 	s.mu.Unlock()
 
 	s.stopProtocolRouter()
-	cleanupErr := s.cleanupTarget()
+	cleanupErr := s.cleanupTarget(s.detachedCleanupContext())
 	s.mu.Lock()
 	s.closeErr = cleanupErr
 	if cleanupErr != nil && s.err == nil {
@@ -707,7 +707,7 @@ func (s *targetSession) Close() error {
 	return s.closeErr
 }
 
-func (s *targetSession) abortOpen() error {
+func (s *targetSession) abortOpen(ctx context.Context) error {
 	if !s.beginFinish(true) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -718,7 +718,7 @@ func (s *targetSession) abortOpen() error {
 	s.closed = true
 	s.mu.Unlock()
 	s.stopProtocolRouter()
-	cleanupErr := s.cleanupTarget()
+	cleanupErr := s.cleanupTarget(ctx)
 	s.mu.Lock()
 	s.closeErr = cleanupErr
 	if cleanupErr != nil && s.err == nil {
@@ -758,8 +758,9 @@ func (s *targetSession) completeFinish() {
 // cleanupTarget is the ownership boundary for an attached target. The
 // explicit detach must complete (or fail) before the chromedp target
 // reference is cleared and the target context is canceled. chromedp v0.16.0
-// otherwise follows cancellation with Target.closeTarget.
-func (s *targetSession) cleanupTarget() error {
+// otherwise follows cancellation with Target.closeTarget. ctx bounds the
+// detach and close commands; each still gets the handle's command timeout.
+func (s *targetSession) cleanupTarget(ctx context.Context) error {
 	s.mu.Lock()
 	targetValue := s.protocolTarget
 	sessionID := s.protocolSession
@@ -797,7 +798,7 @@ func (s *targetSession) cleanupTarget() error {
 			}
 			joined = errors.Join(joined, classifyTargetCleanupError(s, "detach", errors.New("browser connection is unavailable")))
 		} else {
-			detachContext, release := handle.operationContext(context.Background())
+			detachContext, release := handle.operationContext(ctx)
 			err := cdpTarget.DetachFromTarget().WithSessionID(sessionID).Do(cdp.WithExecutor(detachContext, executor))
 			release()
 			if err != nil {
@@ -817,7 +818,7 @@ func (s *targetSession) cleanupTarget() error {
 			}
 			joined = errors.Join(joined, classifyTargetCleanupError(s, "close_target", errors.New("browser connection is unavailable")))
 		} else {
-			closeContext, release := handle.operationContext(context.Background())
+			closeContext, release := handle.operationContext(ctx)
 			err := cdpTarget.CloseTarget(targetID).Do(cdp.WithExecutor(closeContext, executor))
 			release()
 			if err != nil {
@@ -832,6 +833,14 @@ func (s *targetSession) cleanupTarget() error {
 	// from its cleanup goroutine without synchronization.
 	s.cancelClientTarget(targetValue)
 	return joined
+}
+
+// detachedCleanupContext is the root for cleanup paths that have no caller
+// context (Close and event-buffer overflow). It keeps the target context's
+// values but not its cancellation: cleanup runs precisely when the target is
+// going away, and the detach/close commands must still be sent.
+func (s *targetSession) detachedCleanupContext() context.Context {
+	return context.WithoutCancel(s.targetContext)
 }
 
 func (s *targetSession) clearClientTarget(targetValue *chromedp.Target) {

@@ -58,9 +58,6 @@ func (h *TargetHandle) Detach(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	h.once.Do(func() {
 		if h.detacher != nil {
 			h.err = h.detacher.Detach(ctx)
@@ -81,9 +78,6 @@ func (h *TargetHandle) Close() error { return h.Release() }
 // the fail-closed ambiguity/no-match paths observable; it never authorizes a
 // selection based on list order or a page's display metadata.
 func (s *Service) Select(ctx context.Context, request TargetSelectionRequest) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	s.mu.Lock()
 	browser, failure := s.resolveSelectionBrowserLocked(request)

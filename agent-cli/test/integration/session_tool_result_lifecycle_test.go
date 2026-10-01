@@ -58,7 +58,7 @@ func newLiveToolSessionRoot(t *testing.T, options liveToolSessionOptions) *cobra
 	for _, name := range options.toolNames {
 		definitions = append(definitions, messages.ToolDefinition{Name: name, Description: "Hermetic " + name + " fixture."})
 	}
-	capabilities := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	capabilities := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{Executor: options.executor, Definitions: definitions}, nil
 	})
 	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(

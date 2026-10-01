@@ -111,7 +111,7 @@ func (c *ChatCommand) Generate() *cobra.Command {
 				return err
 			}
 			if c.loopFlags.Loop {
-				return c.runLoopChat(cmd)
+				return c.runLoopChat(cmd.Context(), cmd)
 			}
 			if c.chatFlags.ActivateAudioIn {
 				src, err := c.openMicrophone()

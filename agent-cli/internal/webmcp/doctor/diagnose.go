@@ -31,9 +31,6 @@ type Request struct {
 // yields an *Error that carries the report and the classified cause; a
 // negative CommandTimeout returns the invalid-input cause directly.
 func Diagnose(ctx context.Context, request Request) (Report, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	report := NewReport()
 	commandTimeout := request.CommandTimeout
 	if commandTimeout == 0 {

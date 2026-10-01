@@ -40,7 +40,7 @@ func testSessionWebMCPDeviceLoopbackRecordsAndReplaysAudio(t *testing.T) {
 	broker, page := newWebMCPCubeBroker(t)
 	toolSet := webmcpTools.NewBrokerToolSet(broker)
 	provider := newWebMCPDeviceProvider()
-	capabilityFactory := func(*config.Config) (cli.SessionToolCapabilities, error) {
+	capabilityFactory := func(context.Context, *config.Config) (cli.SessionToolCapabilities, error) {
 		return cli.SessionToolCapabilities{
 			Executor: toolSet.Executor(), Definitions: append(toolSet.Definitions(), toolSet.PageToolDefinitions(context.Background())...),
 			BrowserWatch: broker.Watch, Close: broker.Close,

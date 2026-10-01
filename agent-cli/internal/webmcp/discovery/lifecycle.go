@@ -13,9 +13,6 @@ const maxLifecycleReason = 64
 // pair named by the event. Target close/detach invalidates that pair and
 // releases its external handle through the detach-only contract.
 func (s *Service) HandleLifecycle(ctx context.Context, event LifecycleEvent) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -144,9 +141,6 @@ func (s *Service) HandleTargetDetached(ctx context.Context, browserID, targetID 
 // A target that no longer proves WebMCP is left non-ready and returns
 // unsupported_webmcp.
 func (s *Service) RefreshSelection(ctx context.Context) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -186,9 +180,6 @@ func (s *Service) ValidateSelection(ctx context.Context, selection Selection) (S
 
 // ValidateSelectionGeneration validates an exact generation-bearing identity.
 func (s *Service) ValidateSelectionGeneration(ctx context.Context, request SelectionValidationRequest) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}

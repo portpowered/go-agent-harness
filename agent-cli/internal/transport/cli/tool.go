@@ -66,7 +66,7 @@ func NewToolCommand(globalFlags *flags.GlobalFlags) *ToolCommand {
 // getCapability loads config and resolves a request-scoped runtime tool
 // capability. The CLI owns the host path snapshot; registry construction and
 // tool execution stay inside the reusable tools service.
-func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
+func (c *ToolCommand) getCapability(ctx context.Context) (runtimeTools.Capability, error) {
 	policy, err := c.filesystemPolicy()
 	if err != nil {
 		return runtimeTools.Capability{}, newToolCommandError(errToolConfig, fmt.Sprintf("filesystem scope: %v", err), err)
@@ -98,7 +98,7 @@ func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
 	for _, entry := range cfg.Tools.List {
 		selections = append(selections, runtimeTools.ToolSelection{ID: entry.ID, Enabled: entry.Enabled})
 	}
-	capability, err := service.Resolve(context.Background(), runtimeTools.Request{
+	capability, err := service.Resolve(ctx, runtimeTools.Request{
 		WorkDir:    policy.PrimaryRoot(),
 		AllowPaths: policy.AdditionalRoots(),
 		Selections: selections,
@@ -211,7 +211,7 @@ func (c *ToolCommand) run(cmd *cobra.Command, args []string) error {
 	if err := validateToolCommandArgs(list, args); err != nil {
 		return err
 	}
-	capability, err := c.getCapability()
+	capability, err := c.getCapability(cmd.Context())
 	if err != nil {
 		return err
 	}

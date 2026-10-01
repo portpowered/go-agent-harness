@@ -228,11 +228,16 @@ func TestHandlerSlowClientNeverBlocksRoomPublishers(t *testing.T) {
 
 func TestServerServesEventsAndShutsDown(t *testing.T) {
 	stream := newTestStream(t, "alice")
-	server, err := Start("127.0.0.1:0", stream)
+	server, err := Start(t.Context(), "127.0.0.1:0", stream)
 	if err != nil {
 		t.Fatalf("start room event server: %v", err)
 	}
-	response, err := http.Get(server.URL() + "?participant=alice")
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL()+"?participant=alice", nil)
+	if err != nil {
+		closeResource(t, shutdownCloser{server})
+		t.Fatalf("build event stream request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		closeResource(t, shutdownCloser{server})
 		t.Fatalf("connect event stream: %v", err)
@@ -260,10 +265,10 @@ type shutdownCloser struct{ server *Server }
 func (c shutdownCloser) Close() error { return c.server.Shutdown(context.Background()) }
 
 func TestStartRejectsMissingAddressOrStream(t *testing.T) {
-	if _, err := Start(" ", newTestStream(t, "a")); err == nil {
+	if _, err := Start(t.Context(), " ", newTestStream(t, "a")); err == nil {
 		t.Fatal("empty address accepted")
 	}
-	if _, err := Start("127.0.0.1:0", nil); err == nil {
+	if _, err := Start(t.Context(), "127.0.0.1:0", nil); err == nil {
 		t.Fatal("nil stream accepted")
 	}
 }

@@ -1,12 +1,12 @@
 package cli
 
-import serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
-
 import (
 	"context"
 	"os"
 	"os/signal"
 	"sync"
+
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 )
@@ -15,9 +15,6 @@ import (
 // passing an explicit, run-scoped intent into services. Parent-context
 // cancellation follows the normal cancellation path and never marks SIGINT.
 func newSessionSignalContext(parent context.Context) (context.Context, func(), serviceSession.SessionCancellationIntent) {
-	if parent == nil {
-		parent = context.Background()
-	}
 	ctx, cancel := context.WithCancelCause(parent)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)

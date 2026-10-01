@@ -86,9 +86,6 @@ func (e *Error) Unwrap() error { return e.Cause }
 // finish. When the finite timeout or parent context expires, the process
 // group is terminated before the result is returned.
 func Run(ctx context.Context, cfg Config) (Result, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if strings.TrimSpace(cfg.Command) == "" {
 		return Result{}, errors.New("test timeout runner requires a command")
 	}
@@ -97,7 +94,9 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 	}
 
 	commandText := formatCommand(cfg.Command, cfg.Args)
-	cmd := exec.Command(cfg.Command, cfg.Args...)
+	// Cancellation is handled below by terminating the whole process group,
+	// so the command itself must not be killed early by ctx.
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), cfg.Command, cfg.Args...)
 	cmd.Dir = cfg.Dir
 	if cfg.Env != nil {
 		cmd.Env = append([]string(nil), cfg.Env...)

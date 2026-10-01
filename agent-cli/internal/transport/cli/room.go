@@ -193,9 +193,6 @@ func writeRoomExampleManifest(w io.Writer) error {
 
 func (c *RoomRunCommand) execute(cmd *cobra.Command, configPath, manifestPath, replayPath, outputDir, streamAddress string) error {
 	parent := cmd.Context()
-	if parent == nil {
-		parent = context.Background()
-	}
 	if c == nil || c.service == nil {
 		return errors.New("room service is required")
 	}
@@ -232,7 +229,7 @@ func (c *RoomRunCommand) runAdmitted(parent context.Context, plan runtimeRooms.R
 	}
 	defer stopSignals()
 
-	options := c.roomRunOptions(plan, outputDir, output, stream.sink())
+	options := c.roomRunOptions(runContext, plan, outputDir, output, stream.sink())
 	var result runtimeRooms.RoomResult
 	var runErr error
 	if c.run == nil {
@@ -280,7 +277,7 @@ func startRoomStream(ctx context.Context, output *roomCommandOutput, plan runtim
 	if err != nil {
 		return nil, fmt.Errorf("configure room stream: %w", err)
 	}
-	server, err := events.Start(address, stream)
+	server, err := events.Start(ctx, address, stream)
 	if err != nil {
 		return nil, errors.Join(err, stream.Close())
 	}
@@ -329,7 +326,7 @@ func (c *RoomRunCommand) admitRoomRun(ctx context.Context, paths roomhost.Paths,
 
 // roomRunOptions binds the command's progress output and host capabilities
 // to the admitted plan. Replays never receive host config or browsers.
-func (c *RoomRunCommand) roomRunOptions(plan runtimeRooms.RoomRunPlan, outputDir string, output *roomCommandOutput, sink runtimeRooms.EventSink) runtimeRooms.RoomRunOptions {
+func (c *RoomRunCommand) roomRunOptions(ctx context.Context, plan runtimeRooms.RoomRunPlan, outputDir string, output *roomCommandOutput, sink runtimeRooms.EventSink) runtimeRooms.RoomRunOptions {
 	participants := len(plan.Manifest.Participants)
 	readyParticipants := 0
 	options := roomhost.RunOptions(plan)
@@ -353,7 +350,7 @@ func (c *RoomRunCommand) roomRunOptions(plan runtimeRooms.RoomRunPlan, outputDir
 	if !plan.Replay() {
 		configDir := roomConfigDir(roomRunGlobalFlags(c))
 		options.ConfigDir, options.ConfigCredential = configDir, roomhost.ConfigCredential(configDir)
-		options.BrowserCapabilitiesFactory = newRoomParticipantBrowserCapabilitiesFactory(configDir)
+		options.BrowserCapabilitiesFactory = newRoomParticipantBrowserCapabilitiesFactory(ctx, configDir)
 	}
 	return options
 }
@@ -491,8 +488,9 @@ func redactRoomError(redactor runtimeRooms.RoomSecretRedactor, err error) error 
 // browser owner per room participant. The session browser composition stays
 // the single source for broker tools, initialization, and cleanup; each
 // participant gets a fresh in-memory selection store. Room admission and
-// scoping of the resulting capability belong to the rooms service.
-func newRoomParticipantBrowserCapabilitiesFactory(configDir string) runtimeRooms.BrowserCapabilitiesFactory {
+// scoping of the resulting capability belong to the rooms service. ctx is the
+// room run context that bounds each participant's capability resolution.
+func newRoomParticipantBrowserCapabilitiesFactory(ctx context.Context, configDir string) runtimeRooms.BrowserCapabilitiesFactory {
 	browserFactory := NewSessionToolCapabilitiesFactory(roomBrowserOnlyStaticExecutor{}, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		doctorFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionSelectionStore(discovery.NewMemorySelectionStore()))
 		return newSessionBrowserBrokerWithDoctorFactory(browser, doctorFactory)
@@ -501,7 +499,7 @@ func newRoomParticipantBrowserCapabilitiesFactory(configDir string) runtimeRooms
 		if participant.BrowserTools == nil {
 			return runtimeRooms.BrowserCapabilities{}, errors.New("room browser capability requested for a participant without browserTools")
 		}
-		capabilities, err := browserFactory(&config.Config{Browser: config.BrowserConfigForRoomTools(*participant.BrowserTools), ConfigDir: configDir})
+		capabilities, err := browserFactory(ctx, &config.Config{Browser: config.BrowserConfigForRoomTools(*participant.BrowserTools), ConfigDir: configDir})
 		if err != nil {
 			return runtimeRooms.BrowserCapabilities{}, err
 		}

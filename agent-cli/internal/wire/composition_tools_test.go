@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -12,7 +13,7 @@ type recordingToolService struct {
 	capabilities serviceTools.Capabilities
 }
 
-func (s *recordingToolService) Resolve(*config.Config) (serviceTools.Capabilities, error) {
+func (s *recordingToolService) Resolve(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 	s.resolves++
 	return s.capabilities, nil
 }

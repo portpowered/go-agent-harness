@@ -10,9 +10,6 @@ import "context"
 type darwinDisplayPermissionChecker struct{}
 
 func (darwinDisplayPermissionChecker) Check(ctx context.Context) (DisplayPermission, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return DisplayPermission{}, err
 	}

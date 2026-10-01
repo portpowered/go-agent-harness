@@ -242,9 +242,6 @@ func disconnectEventInput(input any, args []any) (DisconnectEvent, *DiscoveryErr
 // classified failure that callers should surface. The flexible input accepts a
 // DisconnectEvent or the convenient (browserID, targetID, phase) spelling.
 func (s *Service) HandleDisconnect(ctx context.Context, input any, args ...any) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}

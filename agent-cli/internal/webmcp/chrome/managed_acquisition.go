@@ -198,9 +198,6 @@ func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, 
 			FallbackCategory: "selector_unavailable",
 		}
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return ChromeExecutable{}, err
 	}

@@ -233,7 +233,7 @@ func (f queryParityFixture) liveExecutor(t *testing.T) messages.ToolExecutor {
 	capabilityFactory := NewSessionToolCapabilitiesFactory(nil, func(config.BrowserConfig) (webmcp.Broker, error) {
 		return f.broker, nil
 	})
-	capabilities, err := capabilityFactory(capabilityConfig)
+	capabilities, err := capabilityFactory(t.Context(), capabilityConfig)
 	if err != nil {
 		t.Fatalf("construct live session capabilities: %v", err)
 	}

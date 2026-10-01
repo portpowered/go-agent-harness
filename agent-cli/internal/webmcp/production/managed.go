@@ -40,9 +40,6 @@ func (p *composition) ensureManagedBrowser(ctx context.Context) (*chrome.Managed
 	if !p.managedEnabled() {
 		return nil, nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		claim := p.claimManagedBrowser()
 		if claim.wait != nil {

@@ -309,7 +309,7 @@ func startDirectCancellation(t *testing.T, runtime *testkit.ScriptedBrowserRunti
 			InvocationID: invocationID,
 		})
 	}()
-	waitContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	waitContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 	defer cancel()
 	if _, err := runtime.WaitForOperation(waitContext, testkit.OperationCancel); err != nil {
 		t.Fatalf(`wait for direct cancel dispatch: %v`, err)

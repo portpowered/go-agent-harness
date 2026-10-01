@@ -74,9 +74,6 @@ type DisplayProcess interface {
 type osDisplayProcess struct{}
 
 func (osDisplayProcess) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -125,22 +122,24 @@ func (f DisplayCapturerFunc) Capture(ctx context.Context, display int, bounds im
 	return f(ctx, display, bounds)
 }
 
+// contextReader fails reads once its context is done. It keeps only the
+// context's Err method so the reader never retains the context itself.
 type contextReader struct {
-	ctx context.Context
-	r   io.Reader
+	ctxErr func() error
+	r      io.Reader
+}
+
+func newContextReader(ctx context.Context, r io.Reader) contextReader {
+	return contextReader{ctxErr: ctx.Err, r: r}
 }
 
 func (r contextReader) Read(p []byte) (int, error) {
-	if r.ctx != nil {
-		if err := r.ctx.Err(); err != nil {
-			return 0, err
-		}
+	if err := r.ctxErr(); err != nil {
+		return 0, err
 	}
 	n, err := r.r.Read(p)
-	if r.ctx != nil {
-		if ctxErr := r.ctx.Err(); ctxErr != nil {
-			return n, ctxErr
-		}
+	if ctxErr := r.ctxErr(); ctxErr != nil {
+		return n, ctxErr
 	}
 	return n, err
 }
@@ -193,9 +192,6 @@ func NewHostDisplaySurfaceWithOptions(options HostDisplaySurfaceOptions) Display
 }
 
 func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return capabilityForScreenError(err, "display capability check was canceled"), &ScreenCaptureError{
 			State: ScreenCaptureCanceled, Operation: "display capability check", Reason: "display capability check was canceled", Cause: err,

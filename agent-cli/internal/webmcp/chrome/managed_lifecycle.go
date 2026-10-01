@@ -164,9 +164,6 @@ func (m *ManagedBrowserManager) Acquire(ctx context.Context, request ManagedBrow
 	if m == nil {
 		return nil, newManagedBrowserLifecycleError("acquire", errors.New("manager is nil"))
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, newManagedBrowserLifecycleError("acquire", err)
 	}
@@ -202,7 +199,7 @@ func (m *ManagedBrowserManager) Acquire(ctx context.Context, request ManagedBrow
 	if present {
 		browser, reusable := m.reuse(ctx, launchOptions, profileDir, state)
 		if reusable {
-			m.trackManagedBrowser(browser, statePath, state)
+			m.trackManagedBrowser(ctx, browser, statePath, state)
 			return browser, nil
 		}
 		// State can be stale because the process exited between inspection and
@@ -368,7 +365,7 @@ func (m *ManagedBrowserManager) launchFresh(ctx context.Context, options Managed
 		discardCleanupError(browser.Close)
 		return nil, newManagedBrowserLifecycleError("state", err)
 	}
-	m.trackManagedBrowser(browser, statePath, state) //nolint:contextcheck // Close outlives the launch request by design.
+	m.trackManagedBrowser(ctx, browser, statePath, state)
 	return browser, nil
 }
 
@@ -398,8 +395,7 @@ func (m *ManagedBrowserManager) restartVerifiedProfileOwner(ctx context.Context,
 	return true, nil
 }
 
-func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState) error {
-	ctx := context.Background()
+func (m *ManagedBrowserManager) closeManagedBrowser(ctx context.Context, browser *ManagedBrowser, statePath string, expected ManagedBrowserState) error {
 	profileDir := expected.ProfileDir
 	lease, err := acquireManagedBrowserLease(ctx, filepath.Join(profileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
@@ -434,21 +430,24 @@ func (m *ManagedBrowserManager) closeManagedBrowser(browser *ManagedBrowser, sta
 }
 
 // trackManagedBrowser installs Close and the exit watcher. Close joins the watcher, so a closed handle never touches the profile.
-func (m *ManagedBrowserManager) trackManagedBrowser(browser *ManagedBrowser, statePath string, state ManagedBrowserState) {
+// Both outlive the acquiring request, so they run on a context detached from
+// its cancellation.
+func (m *ManagedBrowserManager) trackManagedBrowser(ctx context.Context, browser *ManagedBrowser, statePath string, state ManagedBrowserState) {
 	closing, watcherDone := make(chan struct{}), make(chan struct{})
 	browser.exitWatcherDone = watcherDone
+	ctx = context.WithoutCancel(ctx)
 	browser.closeHook = func() error {
-		err := m.closeManagedBrowser(browser, statePath, state)
+		err := m.closeManagedBrowser(ctx, browser, statePath, state)
 		close(closing)
 		<-watcherDone
 		return err
 	}
-	go m.watchManagedBrowser(browser, statePath, state, closing, watcherDone)
+	go m.watchManagedBrowser(ctx, browser, statePath, state, closing, watcherDone)
 }
 
 // watchManagedBrowser removes the exact state record once the process exits
 // on its own; an explicit Close owns that cleanup instead.
-func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, statePath string, expected ManagedBrowserState, closing <-chan struct{}, done chan<- struct{}) {
+func (m *ManagedBrowserManager) watchManagedBrowser(ctx context.Context, browser *ManagedBrowser, statePath string, expected ManagedBrowserState, closing <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 	if browser == nil || browser.Done() == nil {
 		return
@@ -458,7 +457,7 @@ func (m *ManagedBrowserManager) watchManagedBrowser(browser *ManagedBrowser, sta
 	case <-closing:
 		return
 	}
-	lease, err := acquireManagedBrowserLease(context.Background(), filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
+	lease, err := acquireManagedBrowserLease(ctx, filepath.Join(expected.ProfileDir, managedBrowserLockName), m.options.LockTimeout, m.options.LockPoll, m.options.LockStaleAfter)
 	if err != nil {
 		return
 	}
@@ -519,9 +518,6 @@ func fetchManagedBrowserEndpoint(ctx context.Context, client *http.Client, rawCD
 	}
 	if client == nil {
 		client = &http.Client{Timeout: managedBrowserRequestTimeout}
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, managedBrowserStateResponseTimeout)
 	defer cancel()
@@ -630,9 +626,6 @@ func removeManagedBrowserState(path string) error {
 type managedBrowserLease struct{ path string }
 
 func acquireManagedBrowserLease(ctx context.Context, path string, timeout, poll, staleAfter time.Duration) (*managedBrowserLease, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if timeout <= 0 {
 		timeout = defaultManagedBrowserLockTimeout
 	}
@@ -693,9 +686,6 @@ func managedBrowserLockStale(path string, staleAfter time.Duration) bool {
 type defaultManagedBrowserProcessInspector struct{}
 
 func (defaultManagedBrowserProcessInspector) Inspect(ctx context.Context, state ManagedBrowserState) (ManagedBrowserProcessInfo, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return ManagedBrowserProcessInfo{}, err
 	}
@@ -808,6 +798,16 @@ func managedProcessAlive(pid int) bool {
 	return process.Signal(syscall.Signal(0)) == nil
 }
 
+// newReattachedManagedBrowserProcess wraps a reattached PID. Its exit polling
+// outlives ctx's cancellation but keeps ctx's values.
+func newReattachedManagedBrowserProcess(ctx context.Context, inspector ManagedBrowserProcessInspector, state ManagedBrowserState) *reattachedManagedBrowserProcess {
+	detached := context.WithoutCancel(ctx)
+	return &reattachedManagedBrowserProcess{state: state, inspect: func() error {
+		_, err := inspector.Inspect(detached, state)
+		return err
+	}}
+}
+
 func defaultManagedBrowserProcessReattacher(inspector ManagedBrowserProcessInspector) ManagedBrowserProcessReattacher {
 	if inspector == nil {
 		inspector = defaultManagedBrowserProcessInspector{}
@@ -816,7 +816,7 @@ func defaultManagedBrowserProcessReattacher(inspector ManagedBrowserProcessInspe
 		if _, err := inspector.Inspect(ctx, state); err != nil {
 			return nil, err
 		}
-		return &reattachedManagedBrowserProcess{state: state, inspector: inspector}, nil
+		return newReattachedManagedBrowserProcess(ctx, inspector, state), nil
 	}
 }
 
@@ -836,7 +836,7 @@ func defaultManagedBrowserProfileOwnerResolver(inspector ManagedBrowserProcessIn
 		if !proven {
 			return nil, nil
 		}
-		return &reattachedManagedBrowserProcess{state: state, inspector: inspector}, nil
+		return newReattachedManagedBrowserProcess(ctx, inspector, state), nil
 	}
 }
 

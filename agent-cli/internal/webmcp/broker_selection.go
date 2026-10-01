@@ -18,9 +18,6 @@ func (b *StatefulBroker) waitForCatalog(ctx context.Context, selected *brokerSes
 	if selected == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	wait := b.catalogWaitDuration(selected, initial)
 	timerFactory := TimerFactory(wallTimerFactory{})
 	if b != nil && b.timers != nil {

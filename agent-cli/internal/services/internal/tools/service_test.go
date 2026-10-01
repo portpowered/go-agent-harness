@@ -23,7 +23,7 @@ func TestServiceResolvesWithoutBrowserCapability(t *testing.T) {
 	service := New(nil, nil, nil, nil, runtimeToolsWire.NewService())
 	cfg := &config.Config{FilesystemWorkDir: t.TempDir()}
 	cfg.Browser = config.DefaultBrowserConfig()
-	capabilities, err := service.Resolve(cfg)
+	capabilities, err := service.Resolve(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("resolve static capabilities: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestServiceClosesPartiallyConstructedBrowserWhenFactoryFails(t *testing.T) 
 		}}, wantErr
 	}, nil, nil, runtimeToolsWire.NewService())
 
-	_, err := service.Resolve(browserEnabledConfig(t))
+	_, err := service.Resolve(t.Context(), browserEnabledConfig(t))
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("resolve error = %v, want wrapped factory error", err)
 	}
@@ -64,7 +64,7 @@ func TestServiceClosesBrowserWhenFactoryReturnsNilBroker(t *testing.T) {
 		}}, nil
 	}, nil, nil, runtimeToolsWire.NewService())
 
-	_, err := service.Resolve(browserEnabledConfig(t))
+	_, err := service.Resolve(t.Context(), browserEnabledConfig(t))
 	if err == nil {
 		t.Fatal("resolve error = nil, want nil broker error")
 	}

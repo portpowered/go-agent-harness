@@ -8,20 +8,16 @@ import (
 type targetCancellation struct {
 	session TargetSession
 	id      InvocationID
-	ctx     context.Context
 	done    chan struct{}
 }
 
-func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation, cancelCtx context.Context) *targetCancellation {
+func (b *StatefulBroker) claimTargetCancellationLocked(invocation *brokerInvocation) *targetCancellation {
 	if invocation == nil || invocation.cancelSent || !invocation.invocation.CancelRequested || invocation.browserID == "" {
 		return nil
 	}
-	if cancelCtx == nil {
-		cancelCtx = context.Background()
-	}
 	invocation.cancelSent = true
 	invocation.cancelDone = make(chan struct{})
-	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, ctx: cancelCtx, done: invocation.cancelDone}
+	return &targetCancellation{session: invocation.selected.session, id: invocation.browserID, done: invocation.cancelDone}
 }
 
 func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, action *targetCancellation) <-chan struct{} {
@@ -31,7 +27,10 @@ func (b *StatefulBroker) cancellationWaitLocked(invocation *brokerInvocation, ac
 	return invocation.cancelDone
 }
 
-func performTargetCancellation(action *targetCancellation) {
+// performTargetCancellation sends the claimed browser cancel with ctx. Callers
+// on detached paths (timeouts, lane workers) pass a context that is not tied
+// to the canceled caller so the cancel command itself is not aborted.
+func performTargetCancellation(ctx context.Context, action *targetCancellation) {
 	if action == nil {
 		return
 	}
@@ -42,7 +41,7 @@ func performTargetCancellation(action *targetCancellation) {
 	// Cancellation is best effort after the broker has claimed the request.
 	// A target that has already detached or replied is still
 	// reconciled by the broker's bounded browser-terminal cache.
-	if err := action.session.CancelWebMCP(action.ctx, action.id); err != nil {
+	if err := action.session.CancelWebMCP(ctx, action.id); err != nil {
 		return
 	}
 }

@@ -65,9 +65,6 @@ func (s *ScriptedTargetSession) EmitToolResponse(id webmcp.InvocationID, status 
 }
 
 func (s *ScriptedTargetSession) WaitForInvocation(ctx context.Context) (InvocationRecord, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		s.mu.Lock()
 		for _, id := range s.order {

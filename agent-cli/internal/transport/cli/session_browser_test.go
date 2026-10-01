@@ -186,7 +186,7 @@ browser:
 			globalFlags.ConfigDirPath = configDir
 			inferencer := &cliSideEffectSessionInferencer{}
 			toolCapabilityCalls := 0
-			capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
+			capabilityFactory := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 				toolCapabilityCalls++
 				return SessionToolCapabilities{}, nil
 			}
@@ -306,7 +306,7 @@ browser:
 	toolCapabilityCalls := 0
 	capabilityCloseCalls := 0
 	var resolvedBrowser config.BrowserConfig
-	capabilityFactory := func(cfg *config.Config) (SessionToolCapabilities, error) {
+	capabilityFactory := func(_ context.Context, cfg *config.Config) (SessionToolCapabilities, error) {
 		toolCapabilityCalls++
 		resolvedBrowser = cfg.Browser
 		return SessionToolCapabilities{Close: func() error { capabilityCloseCalls++; return nil }}, nil
@@ -340,7 +340,7 @@ func TestSessionBrowserToolsClosesTransferredCapabilityOnPlanningFailure(t *test
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = t.TempDir()
 	constructed, closeCalls := 0, 0
-	capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
+	capabilityFactory := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		constructed++
 		return SessionToolCapabilities{Close: func() error { closeCalls++; return nil }}, nil
 	}
@@ -372,7 +372,7 @@ func TestSessionManagedBrowserStartupFailureStopsBeforeProvider(t *testing.T) {
 	defer inferencer.Close()
 	startupErr := errors.New("managed Chrome did not become ready")
 	closeCalls := 0
-	capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
+	capabilityFactory := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{Initialize: func(context.Context) error { return startupErr }, Close: func() error { closeCalls++; return nil }}, nil
 	}
 	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())

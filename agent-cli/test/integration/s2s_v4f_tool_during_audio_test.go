@@ -255,7 +255,7 @@ func runToolDuringAudio(t *testing.T, wavPath, wirePath string) (string, string,
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
 	executor := &toolCallRecordingExecutor{}
-	toolService := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	toolService := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor: executor,
 			Definitions: []messages.ToolDefinition{{

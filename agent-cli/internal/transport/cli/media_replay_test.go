@@ -349,7 +349,7 @@ func TestLiveHostReportsUnadmittedWAVFinalizationFailure(t *testing.T) {
 // streams a few RTP packets once the peer connection is established.
 type cliGo2RTCFixtureHandler struct {
 	observed             *cliGo2RTCObservation
-	fixtureContext       context.Context
+	fixtureDone          <-chan struct{}
 	upgrader             websocket.Upgrader
 	sendAudio, sendVideo bool
 	handlerDone          chan struct{}
@@ -365,7 +365,7 @@ func (h *cliGo2RTCFixtureHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	defer cancelHandler()
 	go func() {
 		select {
-		case <-h.fixtureContext.Done():
+		case <-h.fixtureDone:
 			cancelHandler()
 		case <-handlerContext.Done():
 		}

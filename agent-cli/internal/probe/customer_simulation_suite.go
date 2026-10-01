@@ -203,9 +203,6 @@ func customerSimulationSelectorScenarioIDs(selector string) ([]string, bool) {
 // The returned error is aggregate-only; callers should inspect each run's
 // structured verdict for the reviewable diagnosis.
 func RunCustomerSimulationSuite(ctx context.Context, options CustomerSimulationSuiteOptions) (CustomerSimulationSuiteResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := validateCustomerSimulationOptions(options); err != nil {
 		return CustomerSimulationSuiteResult{}, err
 	}

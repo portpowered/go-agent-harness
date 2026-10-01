@@ -1,6 +1,8 @@
 package doctor
 
 import (
+	"context"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production/normalize"
 )
@@ -14,8 +16,8 @@ const (
 
 // selectPage attaches to the selected target and records the selection and
 // WebMCP domain checks.
-func (d *runtimeDiagnosis) selectPage(selected *webmcp.Target) error {
-	page, err := selectTarget(d.ctx, d.runtime.Broker, selected, d.browser.Selection.ActivateTab)
+func (d *runtimeDiagnosis) selectPage(ctx context.Context, selected *webmcp.Target) error {
+	page, err := selectTarget(ctx, d.runtime.Broker, selected, d.browser.Selection.ActivateTab)
 	if err != nil {
 		if isPageToolsUnverified(err) {
 			return d.report.recordSelectedWithoutPageTools(selected, err)
@@ -106,8 +108,8 @@ func selectedPage(target webmcp.Target, page webmcp.PageContext) Target {
 
 // checkCatalog synchronizes the selected page's catalog and records whether
 // it provides affirmative page-tool evidence.
-func (d *runtimeDiagnosis) checkCatalog(selected *webmcp.Target) error {
-	catalog, err := d.runtime.Broker.ListTools(d.ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
+func (d *runtimeDiagnosis) checkCatalog(ctx context.Context, selected *webmcp.Target) error {
+	catalog, err := d.runtime.Broker.ListTools(ctx, webmcp.ListToolsOptions{IncludeSchemas: true})
 	if err != nil {
 		if isPageToolsUnverified(err) {
 			return d.report.recordPageToolsUnverified(err, selected, catalog.Generation)

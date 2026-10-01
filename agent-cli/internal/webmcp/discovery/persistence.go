@@ -206,9 +206,6 @@ func newSelectionPersistenceError(phase, reason string, cause error) *DiscoveryE
 }
 
 func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	return ctx.Err()
 }
 
@@ -251,9 +248,6 @@ func (s *Service) LoadSelection(ctx context.Context) (PersistedSelection, error)
 }
 
 func (s *Service) loadPersistedSelection(ctx context.Context) (PersistedSelection, bool, *DiscoveryError) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return PersistedSelection{}, false, newSelectionPersistenceError("load", "context_canceled", err)
 	}
@@ -343,9 +337,6 @@ func (options ReconnectOptions) hasExplicitSelection() bool {
 // state without ever substituting a different target. Explicit IDs take
 // precedence over persisted state; automatic modes are deliberately opt-in.
 func (s *Service) Reconnect(ctx context.Context, inputs ConnectionInputs, options ...ReconnectOptions) (Selection, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	reconnectOptions := firstReconnectOptions(options)
 	if err := validateReconnectOptions(reconnectOptions); err != nil {
 		return Selection{}, err

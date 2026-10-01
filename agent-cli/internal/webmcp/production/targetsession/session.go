@@ -140,9 +140,6 @@ func (s *Session) flushEvents(ctx context.Context) error { //nolint:contextcheck
 	if s == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	ack := make(chan struct{})
 	select {
 	case s.flush <- ack:

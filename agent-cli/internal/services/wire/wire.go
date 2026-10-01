@@ -4,6 +4,7 @@
 package wire
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/wire"
@@ -116,8 +117,8 @@ type legacyToolCapabilitiesService struct {
 	executor messages.ToolExecutor
 }
 
-func (s legacyToolCapabilitiesService) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) {
-	capabilities, err := s.base.Resolve(cfg)
+func (s legacyToolCapabilitiesService) Resolve(ctx context.Context, cfg *config.Config) (serviceTools.Capabilities, error) {
+	capabilities, err := s.base.Resolve(ctx, cfg)
 	if err != nil {
 		return serviceTools.Capabilities{}, err
 	}

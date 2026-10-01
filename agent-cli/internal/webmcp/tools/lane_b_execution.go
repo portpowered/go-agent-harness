@@ -8,9 +8,6 @@ import (
 )
 
 func (s *LaneBToolSet) executeValidated(ctx context.Context, spec laneBToolSpec, args map[string]any) ([]byte, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if s == nil || s.service == nil || !s.enabled {
 		return laneBDisabledEnvelope()
 	}

@@ -198,9 +198,6 @@ func (e *Executor) Execute(ctx context.Context, call messages.ToolCall) (message
 }
 
 func (s *BrokerToolSet) executeValidated(ctx context.Context, spec toolSpec, args map[string]any) ([]byte, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if s == nil || s.broker == nil {
 		return disabledEnvelope()
 	}

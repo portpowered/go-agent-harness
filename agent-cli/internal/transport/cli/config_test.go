@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"flag"
 	"net/http"
@@ -88,7 +87,12 @@ func newGeneratedCLIRootWithPathResolver(configDir string, resolver *pathResolve
 	return NewAgentCLI(router).Generate()
 }
 
-func executeGeneratedCLI(ctx context.Context, configDir string, args ...string) cliResult {
+// executeGeneratedCLI builds and runs the generated root under the test's
+// context. It takes the test handle rather than a context so the root is
+// constructed outside any context-carrying helper.
+func executeGeneratedCLI(t testing.TB, configDir string, args ...string) cliResult {
+	t.Helper()
+	ctx := t.Context()
 	var stdout, stderr bytes.Buffer
 	root := newGeneratedCLIRoot(configDir)
 	root.SetOut(&stdout)
@@ -175,7 +179,7 @@ func TestConfigAddLocalUsesIsolatedDefaultHome(t *testing.T) {
 	server := newProbeServer(t, map[string]int{"/models": http.StatusOK})
 	defer server.Close()
 
-	got := executeGeneratedCLI(context.Background(), "", "config", "add-local", "--base-url", server.URL, "--model", "home-model")
+	got := executeGeneratedCLI(t, "", "config", "add-local", "--base-url", server.URL, "--model", "home-model")
 	if got.err != nil {
 		t.Fatalf("execute config with default home: %v", got.err)
 	}
@@ -223,7 +227,7 @@ func TestConfigAddLocalConcurrentUpdatesCommitExactlyOneRevision(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			results <- executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", model)
+			results <- executeGeneratedCLI(t, configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", model)
 		}()
 	}
 
@@ -307,7 +311,7 @@ func TestConfigAddLocalRejectsExternalRevisionDuringProbe(t *testing.T) {
 
 	result := make(chan cliResult, 1)
 	go func() {
-		result <- executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", "should-not-commit")
+		result <- executeGeneratedCLI(t, configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", "should-not-commit")
 	}()
 	select {
 	case <-probeStarted:
@@ -346,7 +350,7 @@ func TestConfigAddLocalInvalidConfigHasCommandContext(t *testing.T) {
 		t.Fatalf("write invalid config: %v", err)
 	}
 
-	got := executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", "http://127.0.0.1:1", "--model", "broken")
+	got := executeGeneratedCLI(t, configDir, "--config-dir", configDir, "config", "add-local", "--base-url", "http://127.0.0.1:1", "--model", "broken")
 	if got.err == nil {
 		t.Fatal("expected invalid config error")
 	}
@@ -378,7 +382,7 @@ func TestConfigRenderingS3Goldens(t *testing.T) {
 			if tc.seed != "" {
 				baseURL += "/v1"
 			}
-			got := executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", baseURL, "--model", tc.model)
+			got := executeGeneratedCLI(t, configDir, "--config-dir", configDir, "config", "add-local", "--base-url", baseURL, "--model", tc.model)
 			if got.err != nil {
 				t.Fatalf("execute golden command: %v", got.err)
 			}
@@ -407,7 +411,7 @@ func TestConfigRenderingRedactsEnvironmentAPIKey(t *testing.T) {
 	server := newProbeServer(t, map[string]int{"/models": http.StatusOK})
 	defer server.Close()
 
-	got := executeGeneratedCLI(context.Background(), configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", "redaction-model")
+	got := executeGeneratedCLI(t, configDir, "--config-dir", configDir, "config", "add-local", "--base-url", server.URL, "--model", "redaction-model")
 	if got.err != nil {
 		t.Fatalf("execute config redaction case: %v", got.err)
 	}

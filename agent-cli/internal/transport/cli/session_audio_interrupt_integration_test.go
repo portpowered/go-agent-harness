@@ -95,7 +95,7 @@ func runSessionCommandAudioInterruptScenario(t *testing.T, scenario sessionAudio
 
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = filepath.Join(tempDir, "config")
-	capabilityFactory := func(*config.Config) (SessionToolCapabilities, error) {
+	capabilityFactory := func(context.Context, *config.Config) (SessionToolCapabilities, error) {
 		return SessionToolCapabilities{
 			Executor:     executor,
 			Definitions:  toolSet.Definitions(),

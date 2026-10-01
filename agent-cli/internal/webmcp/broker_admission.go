@@ -12,9 +12,6 @@ import (
 // ready at the same time. A plain select would randomly discard the browser
 // invocation ID in that case, leaving the CLI unable to reconcile the call.
 func (b *StatefulBroker) waitForAdmissionDispatch(ctx context.Context, invocation *brokerInvocation) (InvokeResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	// Check the handoff before entering the blocking select. This is the
 	// deterministic fast path for a dispatch that was reported just before a
@@ -98,8 +95,8 @@ func (b *StatefulBroker) admissionRecordLocked(selected *brokerSession, ref Tool
 func (b *StatefulBroker) newBrokerInvocationLocked(ctx context.Context, selected *brokerSession, id InvocationID, request InvokeRequest, descriptor ToolDescriptor, input json.RawMessage, invocationTimeout time.Duration) *brokerInvocation {
 	now := b.clock.Now()
 	return &brokerInvocation{
-		selected: selected,
-		ctx:      ctx,
+		selected:   selected,
+		callerDone: ctx.Done(),
 		invocation: Invocation{
 			ID:          id,
 			Tool:        cloneToolDescriptor(descriptor),

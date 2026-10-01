@@ -44,7 +44,7 @@ func TestSessionCommandImageAndScheduledAudioUsesExactStagedImagePath(t *testing
 	if err != nil {
 		t.Fatalf("resolve runtime tools: %v", err)
 	}
-	toolService := serviceTools.Factory(func(_ *config.Config) (serviceTools.Capabilities, error) {
+	toolService := serviceTools.Factory(func(_ context.Context, _ *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor:    capability.Executor,
 			Definitions: append([]messages.ToolDefinition(nil), capability.Definitions...),

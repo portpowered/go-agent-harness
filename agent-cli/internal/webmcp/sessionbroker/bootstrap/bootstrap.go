@@ -70,9 +70,6 @@ func (s selectors) explicit() bool {
 }
 
 func (b *bootstrapper) run(ctx context.Context) error { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

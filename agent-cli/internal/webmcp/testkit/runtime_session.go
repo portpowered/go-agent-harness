@@ -117,9 +117,6 @@ func (s *ScriptedTargetSession) Err() error {
 }
 
 func (s *ScriptedTargetSession) EnableWebMCP(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := contextError(ctx); err != nil {
 		return err
 	}

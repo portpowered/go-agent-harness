@@ -66,7 +66,7 @@ func (f ManagedChromeExecutableAcquirerFunc) Acquire(ctx context.Context) (Chrom
 // The launcher closes the reservation immediately before starting Chrome;
 // the reservation keeps port choice and process startup in one injectable
 // boundary without requiring Chrome to inherit a file descriptor.
-type ManagedBrowserPortAllocator func() (net.Listener, error)
+type ManagedBrowserPortAllocator func(context.Context) (net.Listener, error)
 
 // ManagedBrowserProcess is the small ownership contract required by the
 // launcher. Wait is called exactly once by the launcher after Start returns.
@@ -77,9 +77,10 @@ type ManagedBrowserProcess interface {
 }
 
 // ManagedBrowserProcessStarter starts one executable with its already
-// validated argument vector. It must not attach a context to the process:
-// once launch succeeds, the browser intentionally outlives the session.
-type ManagedBrowserProcessStarter func(string, []string) (ManagedBrowserProcess, error)
+// validated argument vector. It must not let ctx cancellation stop the
+// process: once launch succeeds, the browser intentionally outlives the
+// session. ctx only carries the launch request's values.
+type ManagedBrowserProcessStarter func(context.Context, string, []string) (ManagedBrowserProcess, error)
 
 // ManagedBrowserLaunchOptions configures one managed browser acquisition and
 // launch. Zero-valued optional functions select production behavior.
@@ -166,9 +167,6 @@ func (l *ManagedBrowserLauncher) Launch(ctx context.Context) (*ManagedBrowser, e
 	if l == nil {
 		return nil, newManagedBrowserLaunchError("launcher", "unknown", nil, errors.New("launcher is nil"))
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, newManagedBrowserLaunchError(managedBrowserPhaseStartup, "unknown", nil, err)
 	}
@@ -199,7 +197,7 @@ func (l *ManagedBrowserLauncher) Launch(ctx context.Context) (*ManagedBrowser, e
 		return nil, newManagedBrowserLaunchError("acquisition", mode, nil, errors.New("qualified Chrome executable path is empty"))
 	}
 
-	listener, err := l.options.PortAllocator()
+	listener, err := l.options.PortAllocator(ctx)
 	if err != nil {
 		return nil, newManagedBrowserLaunchError("port", mode, nil, err)
 	}
@@ -216,7 +214,7 @@ func (l *ManagedBrowserLauncher) Launch(ctx context.Context) (*ManagedBrowser, e
 	}
 
 	args := managedBrowserArgs(profileDir, port, startupURL, headless)
-	process, err := l.options.ProcessStarter(executable.Path, args)
+	process, err := l.options.ProcessStarter(ctx, executable.Path, args)
 	if err != nil {
 		return nil, newManagedBrowserLaunchError("start", mode, nil, err)
 	}
@@ -492,9 +490,6 @@ func managedBrowserProcessDoneError(err error) bool {
 }
 
 func waitForManagedBrowser(ctx context.Context, client *http.Client, port int, processDone <-chan struct{}, timeout, poll time.Duration) (ManagedBrowserEndpoint, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -712,8 +707,9 @@ func managedBrowserArgs(profileDir string, port int, startupURL string, headless
 	return append(args, startupURL)
 }
 
-func reserveManagedLoopbackPort() (net.Listener, error) {
-	return net.Listen("tcp", "127.0.0.1:0")
+func reserveManagedLoopbackPort(ctx context.Context) (net.Listener, error) {
+	var listenConfig net.ListenConfig
+	return listenConfig.Listen(ctx, "tcp", "127.0.0.1:0")
 }
 
 func managedLoopbackPort(listener net.Listener) (int, error) {
@@ -757,8 +753,10 @@ type osManagedBrowserProcess struct {
 	command *exec.Cmd
 }
 
-func startManagedBrowserProcess(executable string, args []string) (ManagedBrowserProcess, error) {
-	command := exec.Command(executable, args...)
+func startManagedBrowserProcess(ctx context.Context, executable string, args []string) (ManagedBrowserProcess, error) {
+	// The managed browser outlives the launch request, so the process must not
+	// be killed when the request context is canceled.
+	command := exec.CommandContext(context.WithoutCancel(ctx), executable, args...)
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
 	if err := command.Start(); err != nil {
@@ -801,8 +799,11 @@ func (p *osManagedBrowserProcess) PID() int {
 const reattachedManagedBrowserPollInterval = 250 * time.Millisecond
 
 type reattachedManagedBrowserProcess struct {
-	state     ManagedBrowserState
-	inspector ManagedBrowserProcessInspector
+	state ManagedBrowserState
+	// inspect re-checks that the reattached PID is still the managed browser.
+	// It closes over a context detached from the reattaching request, because
+	// the process outlives that request.
+	inspect func() error
 	// pollInterval is the exit re-inspection period (default reattachedManagedBrowserPollInterval).
 	pollInterval time.Duration
 }
@@ -815,7 +816,7 @@ func (p *reattachedManagedBrowserProcess) Wait() error {
 	defer ticker.Stop()
 	failures := 0
 	for {
-		if _, err := p.inspector.Inspect(context.Background(), p.state); err != nil {
+		if err := p.inspect(); err != nil {
 			failures++
 			if failures >= managedBrowserReattachFailureLimit {
 				return nil

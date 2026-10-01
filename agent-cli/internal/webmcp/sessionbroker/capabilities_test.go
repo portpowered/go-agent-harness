@@ -41,31 +41,33 @@ func TestServiceCapabilityExposesSessionLifecycle(t *testing.T) {
 	}
 }
 
-type resolverFunc func(*config.Config) (serviceTools.Capabilities, error)
+type resolverFunc func(context.Context, *config.Config) (serviceTools.Capabilities, error)
 
-func (f resolverFunc) Resolve(cfg *config.Config) (serviceTools.Capabilities, error) { return f(cfg) }
+func (f resolverFunc) Resolve(ctx context.Context, cfg *config.Config) (serviceTools.Capabilities, error) {
+	return f(ctx, cfg)
+}
 
 func TestFactoryRoundTripsServiceCapabilities(t *testing.T) {
-	if _, err := FactoryFromService(nil)(&config.Config{}); err == nil {
+	if _, err := FactoryFromService(nil)(t.Context(), &config.Config{}); err == nil {
 		t.Fatal("missing service must fail")
 	}
 	resolveErr := errors.New("resolve failed")
-	if _, err := FactoryFromService(resolverFunc(func(*config.Config) (serviceTools.Capabilities, error) {
+	if _, err := FactoryFromService(resolverFunc(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{}, resolveErr
-	}))(&config.Config{}); !errors.Is(err, resolveErr) {
+	}))(t.Context(), &config.Config{}); !errors.Is(err, resolveErr) {
 		t.Fatalf("resolve error = %v", err)
 	}
 
 	source := make(chan runtime.BrowserEvent, 1)
 	source <- runtime.BrowserEvent{Type: "catalog_changed", Tools: []runtime.BrowserToolDescriptor{{Name: "read_state", InputSchema: json.RawMessage(`{}`)}}}
-	service := resolverFunc(func(*config.Config) (serviceTools.Capabilities, error) {
+	service := resolverFunc(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			BrowserCapabilityState: webmcp.BrowserCapabilitySelected,
 			Status:                 func() Status { return Status{State: StateReady} },
 			BrowserEventWatch:      func(context.Context) <-chan runtime.BrowserEvent { return source },
 		}, nil
 	})
-	capabilities, err := FactoryFromService(service)(&config.Config{})
+	capabilities, err := FactoryFromService(service)(t.Context(), &config.Config{})
 	if err != nil || capabilities.BrowserCapabilityState != webmcp.BrowserCapabilitySelected || capabilities.Status().State != StateReady {
 		t.Fatalf("session capabilities = %+v err=%v", capabilities, err)
 	}
@@ -75,7 +77,7 @@ func TestFactoryRoundTripsServiceCapabilities(t *testing.T) {
 		t.Fatalf("webmcp event = %+v", event)
 	}
 
-	resolved, err := ToolCapabilitiesFactory(FactoryFromService(service)).Resolve(&config.Config{})
+	resolved, err := ToolCapabilitiesFactory(FactoryFromService(service)).Resolve(t.Context(), &config.Config{})
 	if err != nil || resolved.Status().State != StateReady {
 		t.Fatalf("resolved = %+v err=%v", resolved, err)
 	}
@@ -83,14 +85,14 @@ func TestFactoryRoundTripsServiceCapabilities(t *testing.T) {
 
 func TestFactoryResolveHandlesMissingHooks(t *testing.T) {
 	var missing ToolCapabilitiesFactory
-	if _, err := missing.Resolve(&config.Config{}); err == nil {
+	if _, err := missing.Resolve(t.Context(), &config.Config{}); err == nil {
 		t.Fatal("nil factory must fail")
 	}
 	factoryErr := errors.New("factory failed")
-	if _, err := ToolCapabilitiesFactory(func(*config.Config) (ToolCapabilities, error) { return ToolCapabilities{}, factoryErr }).Resolve(&config.Config{}); !errors.Is(err, factoryErr) {
+	if _, err := ToolCapabilitiesFactory(func(context.Context, *config.Config) (ToolCapabilities, error) { return ToolCapabilities{}, factoryErr }).Resolve(t.Context(), &config.Config{}); !errors.Is(err, factoryErr) {
 		t.Fatalf("factory error = %v", err)
 	}
-	resolved, err := ToolCapabilitiesFactory(func(*config.Config) (ToolCapabilities, error) { return ToolCapabilities{}, nil }).Resolve(&config.Config{})
+	resolved, err := ToolCapabilitiesFactory(func(context.Context, *config.Config) (ToolCapabilities, error) { return ToolCapabilities{}, nil }).Resolve(t.Context(), &config.Config{})
 	if err != nil || resolved.Status() != (Status{}) || resolved.BrowserEventWatch(context.Background()) != nil {
 		t.Fatalf("resolved = %+v err=%v, want empty status and no event stream", resolved, err)
 	}

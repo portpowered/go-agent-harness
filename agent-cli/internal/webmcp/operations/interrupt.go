@@ -35,9 +35,6 @@ const (
 // whether SIGINT caused that; stop releases the signal handler. The
 // cancellation request itself uses a fresh bounded context.
 func NewInterruptContext(parent context.Context) (ctx context.Context, interrupted func() bool, stop func()) {
-	if parent == nil {
-		parent = context.Background()
-	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 	interruptReceived := make(chan struct{})

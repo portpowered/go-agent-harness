@@ -462,7 +462,7 @@ func (b *StatefulBroker) selectWithOptions(ctx context.Context, selector TargetS
 	}
 	b.wg.Add(2)
 	go b.runSession(newSession)
-	go b.runInvocationQueue(newSession)
+	go b.runInvocationQueue(context.WithoutCancel(ctx), newSession)
 	b.mu.Unlock()
 
 	if old != nil {

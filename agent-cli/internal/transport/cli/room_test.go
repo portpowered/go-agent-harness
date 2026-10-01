@@ -403,7 +403,7 @@ func TestRoomRunCommandRejectsMalformedAndOccupiedStreamBeforeRunner(t *testing.
 		})
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("reserve stream address: %v", err)
 	}
@@ -430,7 +430,11 @@ func TestRoomRunCommandRedactsCredentialsFromEventStreamOutputAndError(t *testin
 	output, stream := &bytes.Buffer{}, (*http.Response)(nil)
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
 	command.SetRunner(func(ctx context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
-		response, err := http.Get(strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0])
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0], nil)
+		if err != nil {
+			t.Fatalf("build event stream request: %v", err)
+		}
+		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			t.Fatalf("connect event stream: %v", err)
 		}

@@ -29,9 +29,6 @@ func Execute(ctx context.Context, execution Execution, run func(context.Context)
 	if execution.Timeout < 0 {
 		return nil, direct.InvalidInputError("--timeout must be positive", "/timeout")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	commandTimeout := execution.CommandTimeout
 	if commandTimeout == 0 {
 		commandTimeout = direct.DefaultCommandTimeout
@@ -80,9 +77,6 @@ func Watch(ctx context.Context, broker webmcp.Broker, request WatchRequest) (Wat
 // RunWatchStream collects events until the stream ends, ctx is done, the
 // first event arrives in once mode, or bounded delivery is lost.
 func RunWatchStream(ctx context.Context, stream <-chan webmcp.BrokerEvent, once bool) (WatchData, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	data := WatchData{Status: WatchStatusEnded, Events: []Event{}}
 	for {
 		if canceled(ctx) {

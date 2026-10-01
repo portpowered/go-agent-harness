@@ -323,7 +323,6 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	h.mu.Lock()
 	closed := h.closed
 	disconnected := h.disconnected
-	parent := h.browserContext
 	h.mu.Unlock()
 	if closed {
 		return nil, webmcp.ErrClosed
@@ -331,41 +330,14 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	if disconnected {
 		return nil, browserDisconnectedError(webmcp.PageContext{Key: webmcp.PageKey{BrowserID: h.candidate.ID, TargetID: targetID}}, "attach", nil)
 	}
-	ops := h.resolvedTargetContextOps()
-	if ops.newContext == nil || parent == nil && !hasCustomTargetContext(h) {
-		return nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("browser context is unavailable"))
+	session, protocolTarget, err := h.openTargetSession(targetID, selected, ownership)
+	if session == nil {
+		return nil, err
 	}
-	targetContext, cancelTarget := ops.newContext(parent, target.ID(targetID))
-	if targetContext == nil || cancelTarget == nil {
-		if cancelTarget != nil {
-			cancelTarget()
-		}
-		return nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("target context is unavailable"))
-	}
-	session := newTargetSession(h, targetContext, cancelTarget, selected, ownership)
-	session.runAction = ops.run
-	ops.listen(targetContext, session.enqueueProtocolEvent)
-	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
-	// Both target and browser lifecycle listeners must be installed before the
-	// first target command starts the chromedp event reader. Direct cancellation
-	// uses this readiness bit in its sanitized wire trace.
-	session.markListenerReady()
-
-	// chromedp starts the target event reader with the context supplied to its
-	// first Run call. Keep that reader alive for the target session, while still
-	// binding it to the handle's disconnect signal. Do not call the returned
-	// release function here: doing so would cancel the reader immediately after
-	// attach and make every later target command time out. The target context
-	// and handle lifecycle cancel the bound context after attach.
-	attachContext, _ := h.bindDisconnect(targetContext)
-	err = ops.run(attachContext,
-		chromedp.ActionFunc(func(context.Context) error { return nil }),
-		pageScriptAction(siteadapter.BootstrapSource()),
-	)
-	protocolTarget := ops.target(targetContext)
-	session.setProtocolTarget(protocolTarget)
+	// Attach cleanup must finish even when the attach request was canceled.
+	cleanupContext := context.WithoutCancel(ctx)
 	if err != nil {
-		cleanupErr := session.abortOpen()
+		cleanupErr := session.abortOpen(cleanupContext)
 		if cleanupErr != nil {
 			err = errors.Join(err, cleanupErr)
 		}
@@ -376,7 +348,7 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	}
 
 	if protocolTarget == nil {
-		cleanupErr := session.abortOpen()
+		cleanupErr := session.abortOpen(cleanupContext)
 		attachErr := errors.New("target context did not attach")
 		if cleanupErr != nil {
 			attachErr = errors.Join(attachErr, cleanupErr)
@@ -406,6 +378,54 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	h.sessions[session] = struct{}{}
 	h.mu.Unlock()
 	return session, nil
+}
+
+// openTargetSession creates the chromedp target context for targetID and runs
+// the attach bootstrap. The target context deliberately derives from the
+// handle's browser context rather than from the attach request: chromedp ties
+// a tab's lifetime to its context, so the target must live as long as the
+// browser connection, not as long as the request that selected it. A nil
+// session means the target context could not be created; otherwise the
+// session is returned together with any bootstrap error so the caller can
+// abort it.
+func (h *handle) openTargetSession(targetID webmcp.TargetID, selected webmcp.Target, ownership webmcp.TargetOwnership) (*targetSession, *chromedp.Target, error) {
+	h.mu.Lock()
+	parent := h.browserContext
+	h.mu.Unlock()
+	ops := h.resolvedTargetContextOps()
+	if ops.newContext == nil || parent == nil && !hasCustomTargetContext(h) {
+		return nil, nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("browser context is unavailable"))
+	}
+	targetContext, cancelTarget := ops.newContext(parent, target.ID(targetID))
+	if targetContext == nil || cancelTarget == nil {
+		if cancelTarget != nil {
+			cancelTarget()
+		}
+		return nil, nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("target context is unavailable"))
+	}
+	session := newTargetSession(h, targetContext, cancelTarget, selected, ownership)
+	session.runAction = ops.run
+	ops.listen(targetContext, session.enqueueProtocolEvent)
+	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
+	// Both target and browser lifecycle listeners must be installed before the
+	// first target command starts the chromedp event reader. Direct cancellation
+	// uses this readiness bit in its sanitized wire trace.
+	session.markListenerReady()
+
+	// chromedp starts the target event reader with the context supplied to its
+	// first Run call. Keep that reader alive for the target session, while still
+	// binding it to the handle's disconnect signal. Do not call the returned
+	// release function here: doing so would cancel the reader immediately after
+	// attach and make every later target command time out. The target context
+	// and handle lifecycle cancel the bound context after attach.
+	attachContext, _ := h.bindDisconnect(targetContext)
+	err := ops.run(attachContext,
+		chromedp.ActionFunc(func(context.Context) error { return nil }),
+		pageScriptAction(siteadapter.BootstrapSource()),
+	)
+	protocolTarget := ops.target(targetContext)
+	session.setProtocolTarget(protocolTarget)
+	return session, protocolTarget, err
 }
 
 func (h *handle) validateAttachRequest(ctx context.Context, targetID webmcp.TargetID, ownership webmcp.TargetOwnership) error {
@@ -511,9 +531,6 @@ func (h *handle) disconnectSignalLocked() chan struct{} {
 // bindDisconnect makes a long-lived target operation observe browser loss
 // without tying its lifetime to a short command timeout.
 func (h *handle) bindDisconnect(ctx context.Context) (context.Context, func()) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if h == nil {
 		return ctx, func() {}
 	}

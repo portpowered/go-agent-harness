@@ -72,9 +72,6 @@ func browserCandidatesReplaced(previous, current BrowserCandidate) bool {
 }
 
 func contextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

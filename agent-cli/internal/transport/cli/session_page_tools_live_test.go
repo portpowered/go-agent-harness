@@ -29,7 +29,7 @@ func TestSessionPageToolsFirstClassAgainstLiveChrome(t *testing.T) {
 	}
 
 	cfg := livePageToolsConfig(t, cdpURL)
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestSessionPageToolsConcurrentColdSessions(t *testing.T) {
 	for index, cdpURL := range urls {
 		go func(index int, cdpURL string) {
 			started := time.Now()
-			err := runColdPageToolSession(livePageToolsConfig(t, strings.TrimSpace(cdpURL)))
+			err := runColdPageToolSession(t.Context(), livePageToolsConfig(t, strings.TrimSpace(cdpURL)))
 			results <- outcome{index: index, duration: time.Since(started), err: err}
 		}(index, cdpURL)
 	}
@@ -130,8 +130,8 @@ func livePageToolsConfig(t *testing.T, cdpURL string) *config.Config {
 
 // runColdPageToolSession bootstraps one session's capabilities and serves its
 // first first-class page-tool call under the interactive long-running budget.
-func runColdPageToolSession(cfg *config.Config) (err error) {
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(cfg)
+func runColdPageToolSession(parent context.Context, cfg *config.Config) (err error) {
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(parent, cfg)
 	if err != nil {
 		return fmt.Errorf("factory: %w", err)
 	}
@@ -140,7 +140,7 @@ func runColdPageToolSession(cfg *config.Config) (err error) {
 			err = errors.Join(err, capabilities.Close())
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
 	defer cancel()
 	if capabilities.Initialize != nil {
 		if err := capabilities.Initialize(ctx); err != nil {

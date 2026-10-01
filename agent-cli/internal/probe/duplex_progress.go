@@ -133,9 +133,6 @@ func (s *duplexProgressState) waitForOutputSequence(ctx context.Context, sequenc
 }
 
 func (s *duplexProgressState) waitForOutput(ctx context.Context, minimum int64, reads bool) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	for {
 		s.mu.Lock()
 		met := s.outputBytes >= minimum
@@ -163,9 +160,6 @@ func (s *duplexProgressState) outputEvents() []DuplexOutputEvent {
 }
 
 func (s *duplexProgressState) waitForChange(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	s.mu.Lock()
 	if s.outputClosed {
 		s.mu.Unlock()

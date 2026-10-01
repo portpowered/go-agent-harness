@@ -22,9 +22,6 @@ func (b *Broker) ensureInitialized(ctx context.Context) error {
 	if b == nil || b.Broker == nil {
 		return webmcp.ErrClosed
 	}
-	if ctx == nil {
-		ctx = context.Background() //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	}
 	b.initMu.Lock()
 	done := b.doneLocked()
 	b.initMu.Unlock()

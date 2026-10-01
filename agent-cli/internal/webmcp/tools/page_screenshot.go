@@ -41,9 +41,6 @@ func (s *BrokerToolSet) capturePage(ctx context.Context) ([]byte, error) {
 // capturePageRich returns the existing classified WebMCP envelope plus the
 // exact validated bytes that belong in the one typed image projection.
 func (s *BrokerToolSet) capturePageRich(ctx context.Context) ([]byte, messages.ImagePart, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if s == nil || s.broker == nil {
 		encoded, err := disabledEnvelope()
 		return encoded, messages.ImagePart{}, err

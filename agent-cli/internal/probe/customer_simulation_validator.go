@@ -222,9 +222,6 @@ func (r CustomerSimulationValidatorRunner) run(ctx context.Context, input Valida
 	if timeout <= 0 {
 		timeout = DefaultCustomerSimulationValidatorTimeout
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	// The validator is a post-run actor. Strip product/simulator cancellation
 	// and impose a fresh finite budget so a cancelled child cannot cancel the
 	// independent evidence judgment or leave it unbounded.

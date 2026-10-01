@@ -62,7 +62,7 @@ func safePageErrorCode(code string) string {
 	return code
 }
 
-func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvocation) {
+func (b *StatefulBroker) dispatchQueuedInvocationWithLock(ctx context.Context, invocation *brokerInvocation) {
 	selected := invocation.selected
 	b.mu.Lock()
 	if b.dispatchPreconditionFailedLocked(invocation) {
@@ -72,7 +72,6 @@ func (b *StatefulBroker) dispatchQueuedInvocationWithLock(invocation *brokerInvo
 	handle := selected.handle
 	session := selected.session
 	descriptor := cloneToolDescriptor(invocation.invocation.Tool)
-	ctx := invocation.ctx
 	b.mu.Unlock()
 
 	// The target check is repeated for every dequeued call. This prevents a

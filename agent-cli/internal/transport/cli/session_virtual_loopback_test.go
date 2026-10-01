@@ -372,7 +372,6 @@ func (w *loopbackWarningSignal) Write(data []byte) (int, error) {
 // 16 kHz-only virtual device -- the exact rate mismatch PR #350/#359 guards.
 type loopbackHarness struct {
 	t          *testing.T
-	ctx        context.Context
 	cancel     context.CancelFunc
 	registry   *devicegw.VirtualRegistry
 	inbound    *loopbackInboundMedia
@@ -384,12 +383,14 @@ type loopbackHarness struct {
 	finishOnce sync.Once
 }
 
-func startLoopbackHarness(t *testing.T) *loopbackHarness {
+// startLoopbackHarness returns the harness and the run-scoped context that
+// bounds every harness interaction.
+func startLoopbackHarness(t *testing.T) (*loopbackHarness, context.Context) {
 	t.Helper()
 	return startLoopbackHarnessWithRegistry(t, newLoopbackDeviceRegistry(t))
 }
 
-func startLoopbackHarnessWithRegistry(t *testing.T, registry *devicegw.VirtualRegistry) *loopbackHarness {
+func startLoopbackHarnessWithRegistry(t *testing.T, registry *devicegw.VirtualRegistry) (*loopbackHarness, context.Context) {
 	t.Helper()
 	inbound := newLoopbackInboundMedia()
 	outbound := newLoopbackOutboundMedia()
@@ -430,24 +431,24 @@ model:
 	}
 
 	h := &loopbackHarness{
-		t: t, ctx: ctx, cancel: cancel,
+		t: t, cancel: cancel,
 		registry: registry, inbound: inbound, outbound: outbound,
 		inferencer: inferencer, warning: warning, runErr: runErr, recordPath: recordPath,
 	}
-	t.Cleanup(h.finish)
-	return h
+	t.Cleanup(func() { h.finish(ctx) })
+	return h, ctx
 }
 
-func (h *loopbackHarness) finish() {
+func (h *loopbackHarness) finish(ctx context.Context) {
 	h.finishOnce.Do(func() {
 		defer h.cancel()
-		h.inferencer.endFromProvider(h.ctx)
+		h.inferencer.endFromProvider(ctx)
 		select {
 		case err := <-h.runErr:
 			if err != nil {
 				h.t.Errorf("virtual loopback session command: %v", err)
 			}
-		case <-h.ctx.Done():
+		case <-ctx.Done():
 			h.t.Error("virtual loopback session did not return after the provider-driven close")
 		}
 	})
@@ -458,21 +459,21 @@ func (h *loopbackHarness) finish() {
 // (24 kHz provider -> 16 kHz device), with the exact expected sample count
 // and content for its duration -- no 1.5x stretch, no silent truncation.
 func TestSessionVirtualDeviceLoopbackFidelity(t *testing.T) {
-	h := startLoopbackHarness(t)
+	h, ctx := startLoopbackHarness(t)
 	tap := openLoopbackTap(t, h.registry, "speaker-tap")
 
 	const chunks = 6
 	pushed := make([][]int16, chunks)
 	for i := range pushed {
 		pushed[i] = loopbackTone(loopbackProviderChunkSamples, 4001+i)
-		h.inbound.push(t, h.ctx, audio.PCMFrame{Samples: pushed[i], EndOfResponse: i == chunks-1})
+		h.inbound.push(t, ctx, audio.PCMFrame{Samples: pushed[i], EndOfResponse: i == chunks-1})
 	}
 
 	want := mustResampleProviderToDevice(t, pushed)
 	got := make([]int16, 0, len(want))
 	for i := range pushed {
 		frame := make([]int16, audio.FrameSize)
-		if err := tap.ReadFrame(h.ctx, frame); err != nil {
+		if err := tap.ReadFrame(ctx, frame); err != nil {
 			t.Fatalf("read played frame %d: %v", i, err)
 		}
 		got = append(got, frame...)

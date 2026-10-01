@@ -740,7 +740,7 @@ func writeLiveBrowserConfig(configDir string, browser liveBrowserConfig) error {
 	return os.WriteFile(filepath.Join(configDir, liveConfigFileName), []byte(contents), 0o600)
 }
 
-func loadGateI2APIKey() (string, string, error) {
+func loadGateI2APIKey(ctx context.Context) (string, string, error) {
 	path := strings.TrimSpace(os.Getenv(gateI2KeyFileEnv))
 	if path != "" {
 		file, err := os.Open(path)
@@ -750,7 +750,7 @@ func loadGateI2APIKey() (string, string, error) {
 		defer discardSecondaryError(file.Close)
 		// This is the documented operator protocol:
 		// Run tr with CR/LF deletion, as in: OPENAI_API_KEY="$(tr -d '\r\n' < "$OPENAI_API_KEY_FILE")"
-		command := exec.Command("tr", "-d", "\\r\\n")
+		command := exec.CommandContext(ctx, "tr", "-d", "\\r\\n")
 		command.Stdin = file
 		var output bytes.Buffer
 		command.Stdout = &output
@@ -905,7 +905,7 @@ func gateI2ErrorString(err error) string {
 // with skipMessage when none is configured.
 func requireLiveOpenAIKey(t *testing.T, skipMessage string) (string, string) {
 	t.Helper()
-	apiKey, keySource, err := loadGateI2APIKey()
+	apiKey, keySource, err := loadGateI2APIKey(t.Context())
 	if errors.Is(err, errGateI2MissingAPIKey) {
 		t.Skip(skipMessage)
 	}

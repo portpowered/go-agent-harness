@@ -700,9 +700,6 @@ func fixtureEventTime(monotonicMS uint64) time.Time {
 }
 
 func adapterContextError(ctx context.Context) error {
-	if ctx == nil {
-		return nil
-	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

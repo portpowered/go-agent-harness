@@ -201,7 +201,7 @@ func (e *toolCallRecordingExecutor) Execute(ctx context.Context, call messages.T
 func runToolSingleCallWithDefinitions(t *testing.T, wavPath, wirePath string, executor *toolCallRecordingExecutor, definitions []messages.ToolDefinition) (string, error) {
 	t.Helper()
 	outputPath := filepath.Join(t.TempDir(), "response.wav")
-	toolService := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	toolService := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor:    executor,
 			Definitions: append([]messages.ToolDefinition(nil), definitions...),
@@ -352,7 +352,7 @@ func loudestWindowSamplesIntegration(t *testing.T, samples []int16, window int) 
 }
 
 func toolBargeInCapabilities(executor messages.ToolExecutor) serviceTools.Service {
-	return serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	return serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{
 			Executor: executor,
 			Definitions: []messages.ToolDefinition{{

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -45,7 +44,7 @@ func runConfigAddLocalCase(t *testing.T, tc configAddLocalCase) {
 	baseURL := configAddLocalBaseURL(tc, server.URL)
 	seedConfigAddLocalCase(t, configDir, tc.seed)
 	args := configAddLocalArgs(tc, configDir, baseURL)
-	got := executeGeneratedCLI(context.Background(), configDir, args...)
+	got := executeGeneratedCLI(t, configDir, args...)
 	if tc.wantError != "" {
 		assertConfigAddLocalError(t, got.err, tc.wantError)
 		return

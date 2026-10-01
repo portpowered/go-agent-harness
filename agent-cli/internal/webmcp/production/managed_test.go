@@ -166,7 +166,7 @@ func newManagedCompositionTestManager(configDir string, control *managedComposit
 				return chrome.ChromeExecutable{Path: "/qualified/test-chrome", Major: 152, Source: chrome.ExecutableSourceStock}, nil
 			}),
 			HTTPClient: &http.Client{Transport: managedCompositionVersionTransport{}},
-			ProcessStarter: func(string, []string) (chrome.ManagedBrowserProcess, error) {
+			ProcessStarter: func(context.Context, string, []string) (chrome.ManagedBrowserProcess, error) {
 				starts.Add(1)
 				return control.newProcess(7002), nil
 			},

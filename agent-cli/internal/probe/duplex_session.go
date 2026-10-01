@@ -16,7 +16,6 @@ import (
 // duplexSession is the shared state of one running child: its pipes, pumps,
 // termination request, and the facts later copied into DuplexRunResult.
 type duplexSession struct {
-	runCtx    context.Context
 	cancelRun context.CancelFunc
 	config    normalizedDuplexConfig
 	child     *exec.Cmd
@@ -93,9 +92,8 @@ func (s *duplexSession) armDeadline() (stop func()) {
 	return func() { close(done) }
 }
 
-func newDuplexSession(runCtx context.Context, cancelRun context.CancelFunc, config normalizedDuplexConfig, child *exec.Cmd, stdin io.WriteCloser, startedAt time.Time) *duplexSession {
+func newDuplexSession(cancelRun context.CancelFunc, config normalizedDuplexConfig, child *exec.Cmd, stdin io.WriteCloser, startedAt time.Time) *duplexSession {
 	session := &duplexSession{
-		runCtx:        runCtx,
 		cancelRun:     cancelRun,
 		config:        config,
 		child:         child,
@@ -124,7 +122,7 @@ func (s *duplexSession) terminate() error {
 	return s.terminateErr
 }
 
-func (s *duplexSession) recordFailure(failure error) {
+func (s *duplexSession) recordFailure(runCtx context.Context, failure error) {
 	if errors.Is(failure, errDuplexInputClosed) {
 		// A provider SESSION.CLOSE can make the shipped child exit while the
 		// runner is still writing the trailing PCM frame. Let child.Wait
@@ -132,7 +130,7 @@ func (s *duplexSession) recordFailure(failure error) {
 		// observable output still fails closed as ErrDuplexInputIncomplete.
 		return
 	}
-	if failure == nil || childproc.IsCancellation(s.runCtx, failure) || (s.terminationRequested.Load() && childproc.IsSignalShutdown(failure)) {
+	if failure == nil || childproc.IsCancellation(runCtx, failure) || (s.terminationRequested.Load() && childproc.IsSignalShutdown(failure)) {
 		return
 	}
 	s.failureOnce.Do(func() {
@@ -141,14 +139,14 @@ func (s *duplexSession) recordFailure(failure error) {
 	})
 }
 
-func (s *duplexSession) startPumps(stdout, stderr io.Reader) {
+func (s *duplexSession) startPumps(runCtx context.Context, stdout, stderr io.Reader) {
 	s.pumps.Add(duplexPumpCount)
 	s.outputPumps.Add(2)
 	go func() {
 		defer s.pumps.Done()
 		defer s.outputPumps.Done()
-		if err := pumpDuplexOutput(s.runCtx, startupReader{stdout, s.markStarted}, s.config.Output, s.stdoutCapture, s.progress, s.startedAt, true); err != nil {
-			s.recordFailure(err)
+		if err := pumpDuplexOutput(runCtx, startupReader{stdout, s.markStarted}, s.config.Output, s.stdoutCapture, s.progress, s.startedAt, true); err != nil {
+			s.recordFailure(runCtx, err)
 		}
 		s.progress.noteOutputClosed()
 		s.stdoutClosed.Store(true)
@@ -156,29 +154,29 @@ func (s *duplexSession) startPumps(stdout, stderr io.Reader) {
 	go func() {
 		defer s.pumps.Done()
 		defer s.outputPumps.Done()
-		if err := pumpDuplexOutput(s.runCtx, startupReader{stderr, s.markStarted}, s.config.ErrorOutput, s.stderrCapture, s.progress, s.startedAt, false); err != nil {
-			s.recordFailure(err)
+		if err := pumpDuplexOutput(runCtx, startupReader{stderr, s.markStarted}, s.config.ErrorOutput, s.stderrCapture, s.progress, s.startedAt, false); err != nil {
+			s.recordFailure(runCtx, err)
 		}
 		s.stderrClosed.Store(true)
 	}()
 	go func() {
 		defer s.pumps.Done()
-		if err := pumpDuplexInput(s.runCtx, s.stdin, s.config, s.progress, s.startedAt, &s.inputEventsMu, &s.inputEvents, &s.inputFinished, s.closeStdin); err != nil {
-			s.recordFailure(err)
+		if err := pumpDuplexInput(runCtx, s.stdin, s.config, s.progress, s.startedAt, &s.inputEventsMu, &s.inputEvents, &s.inputFinished, s.closeStdin); err != nil {
+			s.recordFailure(runCtx, err)
 		}
 	}()
 }
 
 // runSIGINTTermination waits for the configured output gate and then sends
 // SIGINT to the child. The caller has already added it to terminationWG.
-func (s *duplexSession) runSIGINTTermination() {
+func (s *duplexSession) runSIGINTTermination(runCtx context.Context) {
 	defer s.terminationWG.Done()
 	var waitErr error
 	switch {
 	case s.config.TerminationAfterOutputBytes > 0:
-		waitErr = s.progress.waitForOutput(s.runCtx, s.config.TerminationAfterOutputBytes, false)
+		waitErr = s.progress.waitForOutput(runCtx, s.config.TerminationAfterOutputBytes, false)
 	case s.config.TerminationAfterOutputReads > 0:
-		waitErr = s.progress.waitForOutput(s.runCtx, int64(s.config.TerminationAfterOutputReads), true)
+		waitErr = s.progress.waitForOutput(runCtx, int64(s.config.TerminationAfterOutputReads), true)
 	}
 	if waitErr != nil {
 		return
@@ -187,7 +185,7 @@ func (s *duplexSession) runSIGINTTermination() {
 	sent, err := sendDuplexSIGINT(s.child)
 	if err != nil {
 		s.terminationRequested.Store(false)
-		s.recordFailure(duplexPipeError("send SIGINT", err))
+		s.recordFailure(runCtx, duplexPipeError("send SIGINT", err))
 		return
 	}
 	if !sent {

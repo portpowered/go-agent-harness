@@ -228,9 +228,12 @@ type PCM16Mixer struct {
 	cadence      PCM16Cadence
 	manual       bool
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	out    chan []byte
+	// lifetimeDone and lifetimeErr observe the mixer lifetime context
+	// without retaining it; the run loop receives the context directly.
+	lifetimeDone <-chan struct{}
+	lifetimeErr  func() error
+	cancel       context.CancelFunc
+	out          chan []byte
 
 	mu        sync.Mutex
 	advanceMu sync.Mutex
@@ -254,9 +257,6 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 	if err != nil {
 		return nil, err
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	mixerCtx, cancel := context.WithCancel(ctx)
 	var cadence PCM16Cadence
 	if !config.Manual {
@@ -268,14 +268,15 @@ func NewPCM16MixerWithConfig(ctx context.Context, config PCM16MixerConfig) (*PCM
 		maxInputSize: inputCapacityBytes,
 		cadence:      cadence,
 		manual:       config.Manual,
-		ctx:          mixerCtx,
+		lifetimeDone: mixerCtx.Done(),
+		lifetimeErr:  mixerCtx.Err,
 		cancel:       cancel,
 		out:          make(chan []byte, config.OutputQueueFrames),
 		inputs:       make(map[string]*pcm16MixerInput),
 		writeWake:    make(chan struct{}),
 		done:         make(chan struct{}),
 	}
-	go mixer.run()
+	go mixer.run(mixerCtx)
 	return mixer, nil
 }
 
@@ -290,9 +291,6 @@ func (m *PCM16Mixer) Advance(ctx context.Context) error {
 	if !m.manual {
 		return ErrMixerManualAdvance
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -304,7 +302,7 @@ func (m *PCM16Mixer) Advance(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := m.ctx.Err(); err != nil {
+	if err := m.lifetimeErr(); err != nil {
 		return m.writeTerminationError()
 	}
 	frame, sources, err := m.mixFrameWithSources()
@@ -394,15 +392,6 @@ func (m *PCM16Mixer) RemoveInput(inputID string) error {
 	return nil
 }
 
-// Write appends an even-byte PCM16 chunk to one active input. It waits for
-// bounded capacity when necessary and never partially accepts a chunk, so
-// an error cannot create a dropped prefix. The mixer lifecycle is the
-// cancellation context for this compatibility method; use WriteContext
-// when the caller also owns a cancellation boundary.
-func (m *PCM16Mixer) Write(inputID string, pcm []byte) error {
-	return m.WriteContext(context.Background(), inputID, pcm)
-}
-
 // WriteContext appends a complete even-byte PCM16 chunk to one active input.
 // If the chunk fits in the bounded input queue but current capacity is
 // unavailable, it waits until the cadence drain frees space, ctx is canceled,
@@ -424,9 +413,6 @@ func (m *PCM16Mixer) WriteContextWithDisposition(ctx context.Context, inputID st
 func (m *PCM16Mixer) writeContextWithDisposition(ctx context.Context, inputID string, pcm []byte, observer func(PCM16WriteDisposition)) (PCM16WriteDisposition, error) {
 	if m == nil {
 		return "", ErrMixerClosed
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -454,7 +440,7 @@ func (m *PCM16Mixer) writeContextWithDisposition(ctx context.Context, inputID st
 			m.mu.Unlock()
 			return "", err
 		}
-		if err := m.ctx.Err(); err != nil {
+		if err := m.lifetimeErr(); err != nil {
 			m.mu.Unlock()
 			return "", err
 		}
@@ -490,7 +476,7 @@ func (m *PCM16Mixer) writeContextWithDisposition(ctx context.Context, inputID st
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case <-m.ctx.Done():
+		case <-m.lifetimeDone:
 			return "", m.writeTerminationError()
 		case <-wake:
 		}
@@ -534,9 +520,6 @@ func (m *PCM16Mixer) ReadFrameWithSources(ctx context.Context) (PCM16MixedFrame,
 func (m *PCM16Mixer) readFrame(ctx context.Context) ([]byte, []string, error) {
 	if m == nil {
 		return nil, nil, ErrMixerClosed
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	select {
 	case frame, ok := <-m.out:
@@ -588,10 +571,10 @@ func (m *PCM16Mixer) Close() error {
 	return m.Err()
 }
 
-func (m *PCM16Mixer) run() {
+func (m *PCM16Mixer) run(ctx context.Context) {
 	defer close(m.done)
 	if m.manual {
-		<-m.ctx.Done()
+		<-ctx.Done()
 		m.advanceMu.Lock()
 		close(m.out)
 		m.advanceMu.Unlock()
@@ -607,7 +590,7 @@ func (m *PCM16Mixer) run() {
 	ticks := cadence.C()
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticks:
 			frame, sources, err := m.mixFrameWithSources()
@@ -615,15 +598,15 @@ func (m *PCM16Mixer) run() {
 				// Close marks the mixer before cancelling its context. If the
 				// ticker wins that small race, the closed sentinel is an
 				// intentional shutdown rather than an internal mixer failure.
-				if errors.Is(err, ErrMixerClosed) && m.ctx.Err() != nil {
+				if errors.Is(err, ErrMixerClosed) && ctx.Err() != nil {
 					return
 				}
 				m.setError(err)
 				m.cancel()
 				return
 			}
-			if err := m.enqueueFrame(m.ctx, frame, sources); err != nil {
-				if errors.Is(err, ErrMixerClosed) && m.ctx.Err() != nil {
+			if err := m.enqueueFrame(ctx, frame, sources); err != nil {
+				if errors.Is(err, ErrMixerClosed) && ctx.Err() != nil {
 					return
 				}
 				return
@@ -691,9 +674,6 @@ func (m *PCM16Mixer) enqueueFrame(ctx context.Context, frame []byte, sources []s
 	if m == nil {
 		return ErrMixerClosed
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	m.outputSourcesMu.Lock()
 	m.outputSources = append(m.outputSources, append([]string(nil), sources...))
 	m.outputSourcesMu.Unlock()
@@ -710,7 +690,7 @@ func (m *PCM16Mixer) enqueueFrame(ctx context.Context, frame []byte, sources []s
 	case <-ctx.Done():
 		removeSources()
 		return ctx.Err()
-	case <-m.ctx.Done():
+	case <-m.lifetimeDone:
 		removeSources()
 		return m.writeTerminationError()
 	}
@@ -762,7 +742,7 @@ func (m *PCM16Mixer) writeTerminationError() error {
 	if m.closed {
 		return ErrMixerClosed
 	}
-	if err := m.ctx.Err(); err != nil {
+	if err := m.lifetimeErr(); err != nil {
 		return err
 	}
 	return ErrMixerClosed

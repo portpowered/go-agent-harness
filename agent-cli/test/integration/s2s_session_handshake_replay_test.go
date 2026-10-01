@@ -36,7 +36,7 @@ func TestSessionCommand_RecordThenReplayUsesCapturedHandshake(t *testing.T) {
 	recordPath := filepath.Join(t.TempDir(), "recorded.session.json")
 	recordDialer := newHandshakeReplayDialer()
 
-	recordTools := serviceTools.Factory(func(*config.Config) (serviceTools.Capabilities, error) {
+	recordTools := serviceTools.Factory(func(context.Context, *config.Config) (serviceTools.Capabilities, error) {
 		return serviceTools.Capabilities{Definitions: []messages.ToolDefinition{{
 			Name:        sessionHandshakeReplayTool,
 			Description: "recorded schema",

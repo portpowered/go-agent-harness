@@ -163,7 +163,11 @@ func (c *ConfigAddLocalCommand) probeServer(cmd *cobra.Command, baseURL string) 
 
 	client := &http.Client{Timeout: modelServerProbeTimeout}
 	for _, url := range urls {
-		resp, err := client.Get(url)
+		req, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, url, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := client.Do(req)
 		if err == nil {
 			discardCloseError(resp.Body.Close())
 			if resp.StatusCode == http.StatusOK {

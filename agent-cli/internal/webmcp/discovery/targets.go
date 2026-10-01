@@ -70,9 +70,6 @@ func (s *Service) ListTargets(ctx context.Context, browser BrowserCandidate, opt
 // supplied C0 filters, and emits browser.targets.snapshot. It never selects a
 // different browser when options.BrowserID is supplied.
 func (s *Service) ListTargetSnapshot(ctx context.Context, browser BrowserCandidate, options ...TargetListOptions) (TargetSnapshot, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	listOptions := resolvedTargetListOptions(firstTargetListOptions(options))
 	s.mu.Lock()
 	defer s.unlockDiscovery()
@@ -162,9 +159,6 @@ func (s *Service) List(ctx context.Context, inputs ConnectionInputs, options Tar
 // configured/process candidates remain visible so callers can fail closed with
 // ambiguous_browser instead of selecting an arbitrary endpoint.
 func (s *Service) DiscoverAll(ctx context.Context, inputs ConnectionInputs) ([]BrowserCandidate, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	s.mu.Lock()
 	defer s.unlockDiscovery()
 

@@ -20,7 +20,7 @@ const watchdogHelperEnv = "CLITEST_WATCHDOG_HELPER"
 func TestWatchdogFailsBubbleBlockedOnRealIO(t *testing.T) {
 	if os.Getenv(watchdogHelperEnv) != "" {
 		testWithin(t, 200*time.Millisecond, func(t *testing.T) {
-			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatalf("listen: %v", err)
 			}

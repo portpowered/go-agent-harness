@@ -784,9 +784,6 @@ func safeReplayCause(err error) error {
 }
 
 func replayContextDone(ctx context.Context) <-chan struct{} {
-	if ctx == nil {
-		return nil
-	}
 	return ctx.Done()
 }
 
