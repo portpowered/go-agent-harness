@@ -182,7 +182,7 @@ func newAmbiguousBrowserFixture(t *testing.T, ctx context.Context, cubeTools ...
 	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(f.runtime), WithWebMCPProductionDiscovery(discoveryService))
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
-	})(t.Context(), f.cfg)
+	})(ctx, f.cfg)
 	if err != nil {
 		t.Fatalf("construct session capabilities: %v", err)
 	}

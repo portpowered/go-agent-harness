@@ -159,7 +159,7 @@ func launchConversationalCustomerLive(t *testing.T, ctx context.Context) *conver
 	live.audioPaths = conversationalCustomerAudioPaths(t)
 	live.validatorCommand = conversationalCustomerValidatorCommand(t)
 	live.lane = readConversationalCustomerLaneStatus(t, ctx)
-	sourceRoot := conversationalCustomerSourceRoot(t, live.lane)
+	sourceRoot := conversationalCustomerSourceRoot(t, ctx, live.lane)
 
 	live.workDir = t.TempDir()
 	pinned, err := acquirePinnedChrome(ctx, live.workDir)
@@ -620,7 +620,7 @@ func readConversationalCustomerLaneStatus(t *testing.T, ctx context.Context) con
 	return status
 }
 
-func conversationalCustomerSourceRoot(t *testing.T, lane conversationalCustomerLaneStatus) string {
+func conversationalCustomerSourceRoot(t *testing.T, ctx context.Context, lane conversationalCustomerLaneStatus) string {
 	t.Helper()
 	var name, wantBranch string
 	if lane.State == conversationalCustomerLaneMerged {
@@ -629,7 +629,7 @@ func conversationalCustomerSourceRoot(t *testing.T, lane conversationalCustomerL
 		name, wantBranch = conversationalCustomerLaneRootEnv, lane.HeadRefName
 	}
 	root := requiredNewlineFreeEnv(t, name)
-	command := exec.CommandContext(t.Context(), "git", "-C", root, "branch", "--show-current")
+	command := exec.CommandContext(ctx, "git", "-C", root, "branch", "--show-current")
 	output, err := command.Output()
 	if err != nil {
 		t.Fatalf("inspect %s source branch: %v", name, err)

@@ -330,7 +330,7 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 	if disconnected {
 		return nil, browserDisconnectedError(webmcp.PageContext{Key: webmcp.PageKey{BrowserID: h.candidate.ID, TargetID: targetID}}, "attach", nil)
 	}
-	session, protocolTarget, err := h.openTargetSession(targetID, selected, ownership)
+	session, protocolTarget, err := h.openTargetSession(targetID, selected, ownership) //nolint:contextcheck // the target session lives as long as the browser (its chromedp context derives from the browser context), not the attach request; request cancellation is handled by the cleanup below
 	if session == nil {
 		return nil, err
 	}
@@ -358,7 +358,7 @@ func (h *handle) Attach(ctx context.Context, targetID webmcp.TargetID, ownership
 		}
 		return nil, classifiedTargetError(h.candidate, targetID, "attach", attachErr)
 	}
-	session.publishAttached()
+	session.publishAttached(ctx)
 
 	h.mu.Lock()
 	closed = h.closed

@@ -36,12 +36,12 @@ func TestWebMCPDirectCLIWithPinnedChromeCrossProcessCancel(t *testing.T) {
 	run := launchCLIChromeIntegration(t, ctx, false, "Chrome cleanup")
 	binary := buildCLIChromeIntegrationBinary(t, ctx, run.workDir)
 	configDir := writeCLIChromeIntegrationConfig(t, run.workDir, run.baseURL)
-	browserID, targetID := selectCLIChromeIntegrationTarget(t, binary, configDir, "pinned Chrome")
-	toolRefs := listCLIChromeIntegrationToolRefs(t, binary, configDir)
+	browserID, targetID := selectCLIChromeIntegrationTarget(t, ctx, binary, configDir, "pinned Chrome")
+	toolRefs := listCLIChromeIntegrationToolRefs(t, ctx, binary, configDir)
 
 	receipt, cancelOutcome := run.assertControlledCancel(t, ctx, binary, configDir, toolRefs[cancelToolName])
 	declarative := run.runDeclarativeCancel(t, ctx, binary, configDir, toolRefs[slowToolName])
-	recoveredStatus := assertCLIChromeRecovery(t, binary, configDir, toolRefs[completeToolName])
+	recoveredStatus := assertCLIChromeRecovery(t, ctx, binary, configDir, toolRefs[completeToolName])
 
 	t.Logf("WEBMCP_DIRECT_CLI_INTEGRATION_PASS chrome=%s revision=%s browser=%s target=%s controlled_receipt=%s controlled_cancel=%s controlled_oracle=canceled declarative_receipt=%s declarative_outcome=%s declarative_terminal_observed=%t declarative_oracle_pending=%t recovery=%s", lockedChromeVersion, lockedChromeRevision, browserID, targetID, receipt.InvocationID, cancelOutcome, declarative.receiptID, declarative.outcome, declarative.terminalObserved, declarative.oracle.Pending, recoveredStatus)
 }
@@ -135,9 +135,9 @@ func writeCLIChromeIntegrationConfig(t *testing.T, workDir, cdpBaseURL string) s
 
 // selectCLIChromeIntegrationTarget discovers the single browser and eligible
 // tab through the CLI and persists that selection.
-func selectCLIChromeIntegrationTarget(t *testing.T, binary, configDir, label string) (string, string) {
+func selectCLIChromeIntegrationTarget(t *testing.T, ctx context.Context, binary, configDir, label string) (string, string) {
 	t.Helper()
-	browsers := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "browsers", "--json")
+	browsers := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "browsers", "--json")
 	browsersEnvelope := requireCLIChromeIntegrationSuccess(t, browsers)
 	var browsersData struct {
 		Browsers []struct {
@@ -150,7 +150,7 @@ func selectCLIChromeIntegrationTarget(t *testing.T, binary, configDir, label str
 	}
 	browserID := browsersData.Browsers[0].ID
 
-	tabs := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
+	tabs := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
 	tabsEnvelope := requireCLIChromeIntegrationSuccess(t, tabs)
 	var tabsData struct {
 		Tabs []struct {
@@ -164,14 +164,14 @@ func selectCLIChromeIntegrationTarget(t *testing.T, binary, configDir, label str
 	}
 	targetID := tabsData.Tabs[0].TargetID
 
-	selected := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "select", "--browser", browserID, "--tab", targetID, "--json")
+	selected := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "select", "--browser", browserID, "--tab", targetID, "--json")
 	requireCLIChromeIntegrationSuccess(t, selected)
 	return browserID, targetID
 }
 
-func listCLIChromeIntegrationToolRefs(t *testing.T, binary, configDir string) map[string]string {
+func listCLIChromeIntegrationToolRefs(t *testing.T, ctx context.Context, binary, configDir string) map[string]string {
 	t.Helper()
-	tools := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "tools", "--json")
+	tools := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "tools", "--json")
 	toolsEnvelope := requireCLIChromeIntegrationSuccess(t, tools)
 	var toolsData struct {
 		Tools []struct {
@@ -220,7 +220,7 @@ type cliChromeCancelData struct {
 
 func (r *cliChromeIntegrationRun) assertControlledCancel(t *testing.T, ctx context.Context, binary, configDir, toolRef string) (cliChromeIntegrationReceipt, string) {
 	t.Helper()
-	invoke := startCLIChromeIntegrationProcess(t, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"live-hold"}`, "--timeout", "30s", "--json")
+	invoke := startCLIChromeIntegrationProcess(t, ctx, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"live-hold"}`, "--timeout", "30s", "--json")
 	receipt := awaitCLIChromeReceipt(t, ctx, invoke, toolRef, "pinned Chrome", 15*time.Second)
 	if _, err := waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Pending && oracle.Value == "pending:live-hold"
@@ -228,7 +228,7 @@ func (r *cliChromeIntegrationRun) assertControlledCancel(t *testing.T, ctx conte
 		t.Fatalf("wait for pinned Chrome pending page state: %v", err)
 	}
 
-	cancelProcess := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "cancel", "--invocation", receipt.InvocationID, "--json")
+	cancelProcess := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "cancel", "--invocation", receipt.InvocationID, "--json")
 	if cancelProcess.err != nil {
 		t.Fatalf("pinned Chrome cancel process: %v\nstdout=%s\nstderr=%s", cancelProcess.err, cancelProcess.stdout, cancelProcess.stderr)
 	}
@@ -285,7 +285,7 @@ const (
 func (r *cliChromeIntegrationRun) runDeclarativeCancel(t *testing.T, ctx context.Context, binary, configDir, toolRef string) *cliChromeDeclarativeCancel {
 	t.Helper()
 	declarative := &cliChromeDeclarativeCancel{}
-	declarative.slowInvoke = startCLIChromeIntegrationProcess(t, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"`+cliChromeSlowMessage+`"}`, "--timeout", "10s", "--json")
+	declarative.slowInvoke = startCLIChromeIntegrationProcess(t, ctx, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"`+cliChromeSlowMessage+`"}`, "--timeout", "10s", "--json")
 	defer func() {
 		if !declarative.finished {
 			declarative.slowInvoke.stop()
@@ -299,7 +299,7 @@ func (r *cliChromeIntegrationRun) runDeclarativeCancel(t *testing.T, ctx context
 		t.Fatalf("wait for pinned Chrome slow declarative pending page state: %v", err)
 	}
 
-	declarativeCancel := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "cancel", "--invocation", slowReceipt.InvocationID, "--timeout", "8s", "--json")
+	declarativeCancel := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "cancel", "--invocation", slowReceipt.InvocationID, "--timeout", "8s", "--json")
 	declarativeEnvelope := decodeCLIChromeIntegrationEnvelope(t, declarativeCancel.stdout)
 	switch {
 	case declarativeEnvelope.OK:
@@ -414,9 +414,9 @@ func assertCLIChromeDeclarativeCancelOutput(t *testing.T, declarativeCancel cliC
 	}
 }
 
-func assertCLIChromeRecovery(t *testing.T, binary, configDir, toolRef string) string {
+func assertCLIChromeRecovery(t *testing.T, ctx context.Context, binary, configDir, toolRef string) string {
 	t.Helper()
-	recovered := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"recovered"}`, "--timeout", "30s", "--json")
+	recovered := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"recovered"}`, "--timeout", "30s", "--json")
 	recoveredEnvelope := requireCLIChromeIntegrationSuccess(t, recovered)
 	var recoveredData struct {
 		Status string          `json:"status"`
@@ -456,7 +456,7 @@ func TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome(t *testing.T) {
 	t.Cleanup(proxy.Close)
 	binary := buildCLIChromeIntegrationBinary(t, ctx, run.workDir)
 	configDir := writeCLIChromeIntegrationConfig(t, run.workDir, proxy.URL())
-	browserID, targetID := selectCLIChromeIntegrationTarget(t, binary, configDir, "live select")
+	browserID, targetID := selectCLIChromeIntegrationTarget(t, ctx, binary, configDir, "live select")
 	selectionPath := filepath.Join(configDir, "webmcp-selection.json")
 	priorBytes, err := os.ReadFile(selectionPath)
 	if err != nil {
@@ -465,7 +465,7 @@ func TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome(t *testing.T) {
 	proxy.DelayNextList()
 
 	started := time.Now()
-	held := startCLIChromeHeldSelect(t, binary, configDir, browserID, targetID, proxy)
+	held := startCLIChromeHeldSelect(t, ctx, binary, configDir, browserID, targetID, proxy)
 	run.killDuringHeldSelect(t, ctx, proxy)
 	held.awaitExit(t)
 	elapsed := time.Since(started)
@@ -478,7 +478,7 @@ func TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome(t *testing.T) {
 	if string(afterBytes) != string(priorBytes) {
 		t.Fatalf("failed select changed persisted selection: before=%q after=%q", string(priorBytes), string(afterBytes))
 	}
-	followUp, followUpEnvelope := assertCLIChromeFollowUpDisconnected(t, binary, configDir, browserID, targetID)
+	followUp, followUpEnvelope := assertCLIChromeFollowUpDisconnected(t, ctx, binary, configDir, browserID, targetID)
 
 	t.Logf("WEBMCP_DIRECT_CLI_SELECT_DEATH_PASS chrome=%s revision=%s browser=%s target=%s synchronization=select_target_resolution_list_admitted kill=isolated_chrome_process command_bound=5s elapsed=%s exit_status=nonzero error_code=%s phase=%s reconnect_required=true externally_owned=true relaunch=false selection_preserved=true follow_up_code=%s output=%s stderr=%q follow_up_output=%s follow_up_stderr=%q", lockedChromeVersion, lockedChromeRevision, browserID, targetID, elapsed, envelope.Error.Code, phase, followUpEnvelope.Error.Code, held.process.stdout.String(), held.process.stderr.String(), followUp.stdout, followUp.stderr)
 }
@@ -491,10 +491,10 @@ type cliChromeHeldSelect struct {
 	err     error
 }
 
-func startCLIChromeHeldSelect(t *testing.T, binary, configDir, browserID, targetID string, proxy *liveCDPProxy) *cliChromeHeldSelect {
+func startCLIChromeHeldSelect(t *testing.T, ctx context.Context, binary, configDir, browserID, targetID string, proxy *liveCDPProxy) *cliChromeHeldSelect {
 	t.Helper()
 	held := &cliChromeHeldSelect{done: make(chan struct{})}
-	held.process = startCLIChromeIntegrationProcess(t, binary, configDir, "webmcp", "select", "--browser", browserID, "--tab", targetID, "--command-timeout", "5s", "--json")
+	held.process = startCLIChromeIntegrationProcess(t, ctx, binary, configDir, "webmcp", "select", "--browser", browserID, "--tab", targetID, "--command-timeout", "5s", "--json")
 	go func() {
 		held.err = held.process.Wait()
 		close(held.done)
@@ -576,9 +576,9 @@ func (h *cliChromeHeldSelect) assertBrowserDisconnected(t *testing.T, browserID 
 	return envelope, phase
 }
 
-func assertCLIChromeFollowUpDisconnected(t *testing.T, binary, configDir, browserID, targetID string) (cliChromeIntegrationResult, webmcp.ToolResultEnvelope) {
+func assertCLIChromeFollowUpDisconnected(t *testing.T, ctx context.Context, binary, configDir, browserID, targetID string) (cliChromeIntegrationResult, webmcp.ToolResultEnvelope) {
 	t.Helper()
-	followUp := runCLIChromeIntegrationCommand(t, binary, configDir, "webmcp", "context", "--command-timeout", "5s", "--json")
+	followUp := runCLIChromeIntegrationCommand(t, ctx, binary, configDir, "webmcp", "context", "--command-timeout", "5s", "--json")
 	if followUp.err == nil {
 		t.Fatalf("follow-up context unexpectedly succeeded after Chrome death: stdout=%q", followUp.stdout)
 	}
@@ -611,12 +611,12 @@ type cliChromeIntegrationResult struct {
 	err    error
 }
 
-func startCLIChromeIntegrationProcess(t *testing.T, binary, configDir string, args ...string) *cliChromeIntegrationProcess {
+func startCLIChromeIntegrationProcess(t *testing.T, ctx context.Context, binary, configDir string, args ...string) *cliChromeIntegrationProcess {
 	t.Helper()
 	commandArgs := append([]string{"--config-dir", configDir}, args...)
 	// The test stops the process explicitly; do not kill it when the test
 	// context is canceled ahead of that cleanup.
-	command := exec.CommandContext(context.WithoutCancel(t.Context()), binary, commandArgs...)
+	command := exec.CommandContext(context.WithoutCancel(ctx), binary, commandArgs...)
 	stdout := &cliChromeIntegrationBuffer{}
 	stderr := newCLIChromeIntegrationStderr()
 	command.Stdout = stdout
@@ -627,9 +627,9 @@ func startCLIChromeIntegrationProcess(t *testing.T, binary, configDir string, ar
 	return &cliChromeIntegrationProcess{command: command, stdout: stdout, stderr: stderr}
 }
 
-func runCLIChromeIntegrationCommand(t *testing.T, binary, configDir string, args ...string) cliChromeIntegrationResult {
+func runCLIChromeIntegrationCommand(t *testing.T, ctx context.Context, binary, configDir string, args ...string) cliChromeIntegrationResult {
 	t.Helper()
-	process := startCLIChromeIntegrationProcess(t, binary, configDir, args...)
+	process := startCLIChromeIntegrationProcess(t, ctx, binary, configDir, args...)
 	err := process.Wait()
 	return cliChromeIntegrationResult{stdout: process.stdout.String(), stderr: process.stderr.String(), err: err}
 }

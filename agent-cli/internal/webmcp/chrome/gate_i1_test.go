@@ -386,9 +386,6 @@ func startGateCommand(parent context.Context, binaryPath, configDir string, args
 }
 
 func startGateCommandWithEnvironment(parent context.Context, binaryPath, configDir string, extraEnvironment []string, args ...string) (*gateCLIProcess, error) {
-	if parent == nil {
-		parent = context.Background()
-	}
 	commandContext, cancel := context.WithCancel(parent)
 	fullArgs := append([]string{"--config-dir", configDir}, args...)
 	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)

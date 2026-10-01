@@ -560,8 +560,8 @@ func TestTargetSessionEventOverflowPublishesExplicitFailure(t *testing.T) {
 	// construction reserves the same terminal slot for the configured buffer.
 	session.eventBuffer = 1
 
-	session.publish(webmcp.BrowserEvent{Type: webmcp.EventToolsAdded})
-	session.publish(webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, InvocationID: "overflowed"})
+	session.publish(t.Context(), webmcp.BrowserEvent{Type: webmcp.EventToolsAdded})
+	session.publish(t.Context(), webmcp.BrowserEvent{Type: webmcp.EventToolInvoked, InvocationID: "overflowed"})
 
 	first := nextBrowserEvent(t, session.Events())
 	if first.Type != webmcp.EventToolsAdded {

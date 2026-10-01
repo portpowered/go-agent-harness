@@ -170,7 +170,7 @@ func discoverPaperieMarginTargets(t *testing.T, ctx context.Context, cdpURL stri
 	browser.Selection.Persist = false
 	browser.Policy.AllowedOrigins = []string{sessionPaperieMarginOrigin, sessionPageToolsLiveMarginOrigin}
 	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(t.Context(), cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(ctx, cfg)
 	if err != nil {
 		t.Fatalf("create target-discovery capabilities: %v", err)
 	}

@@ -851,7 +851,7 @@ func detachExternalIntegrationTarget(targetContext context.Context, cancelTarget
 	targetClient := client.Target
 	var detachErr error
 	if targetClient.SessionID != "" {
-		detachContext, cancelDetach := context.WithTimeout(context.Background(), 5*time.Second)
+		detachContext, cancelDetach := context.WithTimeout(context.WithoutCancel(targetContext), 5*time.Second)
 		detachErr = cdpTarget.DetachFromTarget().WithSessionID(targetClient.SessionID).Do(cdp.WithExecutor(detachContext, client.Browser))
 		cancelDetach()
 	}

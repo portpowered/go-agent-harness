@@ -163,7 +163,7 @@ func newSessionPageToolsSwitchLiveConfig(t *testing.T, cdpURL string) *config.Co
 
 func initSessionPageToolsSwitchLiveCapabilities(t *testing.T, ctx context.Context, cfg *config.Config) SessionToolCapabilities {
 	t.Helper()
-	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(t.Context(), cfg)
+	capabilities, err := NewSessionToolCapabilitiesFactory(nil, nil)(ctx, cfg)
 	if err != nil {
 		t.Fatalf("capability factory: %v", err)
 	}

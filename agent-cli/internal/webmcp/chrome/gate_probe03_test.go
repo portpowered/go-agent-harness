@@ -583,9 +583,6 @@ func probe03Input(message string) string {
 }
 
 func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir string, args ...string) (*gateCLIProcess, error) {
-	if parent == nil {
-		parent = context.Background()
-	}
 	commandContext, cancel := context.WithCancel(parent)
 	fullArgs := append([]string(nil), args...)
 	if configDir != "" {

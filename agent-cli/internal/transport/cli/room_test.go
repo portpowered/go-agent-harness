@@ -430,7 +430,7 @@ func TestRoomRunCommandRedactsCredentialsFromEventStreamOutputAndError(t *testin
 	output, stream := &bytes.Buffer{}, (*http.Response)(nil)
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
 	command.SetRunner(func(ctx context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
-		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0], nil)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0], nil)
 		if err != nil {
 			t.Fatalf("build event stream request: %v", err)
 		}
