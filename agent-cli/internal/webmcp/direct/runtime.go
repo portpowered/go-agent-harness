@@ -73,7 +73,7 @@ type operationResult struct {
 // ConstructRuntime calls factory under ctx. The Factory type predates the
 // context-aware command contract, so an implementation that ignores the
 // deadline is abandoned and its late runtime is closed exactly once.
-func ConstructRuntime(ctx context.Context, factory Factory, browser config.BrowserConfig) (Runtime, error) { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
+func ConstructRuntime(ctx context.Context, factory Factory, browser config.BrowserConfig) (Runtime, error) {
 	if factory == nil {
 		return Runtime{}, errors.New("WebMCP runtime factory is required")
 	}

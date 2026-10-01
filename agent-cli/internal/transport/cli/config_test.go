@@ -458,6 +458,7 @@ func TestConfigAddLocalSummaryWriteFailures(t *testing.T) {
 			globalFlags := flags.NewGlobalFlags()
 			globalFlags.ConfigDirPath = t.TempDir()
 			cmd := &cobra.Command{}
+			cmd.SetContext(t.Context())
 			cmd.SetOut(&failOnWrite{failAt: tc.failAt, err: errors.New("summary write failed")})
 			cmd.SetErr(&bytes.Buffer{})
 

@@ -330,7 +330,7 @@ func (r *BrowserReplay) Wait(ctx context.Context) error {
 			return err
 		}
 		done := r.done
-		replayContext := r.replayContext
+		replayDone, replayErr := r.replayDone, r.replayErr
 		r.mu.Unlock()
 
 		select {
@@ -338,8 +338,8 @@ func (r *BrowserReplay) Wait(ctx context.Context) error {
 			return r.Err()
 		case <-ctx.Done():
 			return r.cancelFromContext(ctx.Err())
-		case <-replayContextDone(replayContext):
-			return r.cancelFromContext(replayContext.Err())
+		case <-replayDone:
+			return r.cancelFromContext(replayErr())
 		}
 	}
 }
