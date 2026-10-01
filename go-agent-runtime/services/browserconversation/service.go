@@ -7,34 +7,34 @@ import (
 	"time"
 )
 
-// ErrorCode is a stable, immutable error identity for contract boundaries.
+// Error is a stable, immutable error identity for contract boundaries.
 // Constants avoid mutable package state while remaining compatible with
 // errors.Is and errors.Join.
-type ErrorCode string
+type Error string
 
-func (e ErrorCode) Error() string { return string(e) }
+func (e Error) Error() string { return string(e) }
 
 const (
-	ErrInvalidBrowserConversationScenario      ErrorCode = "invalid WebMCP browser conversation scenario"
-	ErrBrowserConversationRunFinalized         ErrorCode = "WebMCP browser conversation run is finalized"
-	ErrBrowserConversationDuplicateObservation ErrorCode = "duplicate WebMCP browser conversation observation"
-	ErrInvalidBrowserConversationResult        ErrorCode = "invalid WebMCP browser conversation result"
+	ErrInvalidBrowserConversationScenario      Error = "invalid WebMCP browser conversation scenario"
+	ErrBrowserConversationRunFinalized         Error = "WebMCP browser conversation run is finalized"
+	ErrBrowserConversationDuplicateObservation Error = "duplicate WebMCP browser conversation observation"
+	ErrInvalidBrowserConversationResult        Error = "invalid WebMCP browser conversation result"
 
-	ErrBrowserConversationFixtureStartup          ErrorCode = "WebMCP browser conversation fixture startup failed"
-	ErrBrowserConversationSessionStartup          ErrorCode = "WebMCP browser conversation session startup failed"
-	ErrBrowserConversationSession                 ErrorCode = "WebMCP browser conversation session failed"
-	ErrBrowserConversationEvidence                ErrorCode = "WebMCP browser conversation evidence failed"
-	ErrBrowserConversationTimeout                 ErrorCode = "WebMCP browser conversation timed out"
-	ErrBrowserConversationCleanup                 ErrorCode = "WebMCP browser conversation cleanup failed"
-	ErrBrowserConversationValidator               ErrorCode = "WebMCP browser conversation validator failed"
-	ErrBrowserConversationSessionBoundaryRequired ErrorCode = "WebMCP browser conversation requires an injected session boundary"
+	ErrBrowserConversationFixtureStartup          Error = "WebMCP browser conversation fixture startup failed"
+	ErrBrowserConversationSessionStartup          Error = "WebMCP browser conversation session startup failed"
+	ErrBrowserConversationSession                 Error = "WebMCP browser conversation session failed"
+	ErrBrowserConversationEvidence                Error = "WebMCP browser conversation evidence failed"
+	ErrBrowserConversationTimeout                 Error = "WebMCP browser conversation timed out"
+	ErrBrowserConversationCleanup                 Error = "WebMCP browser conversation cleanup failed"
+	ErrBrowserConversationValidator               Error = "WebMCP browser conversation validator failed"
+	ErrBrowserConversationSessionBoundaryRequired Error = "WebMCP browser conversation requires an injected session boundary"
 
-	ErrBrowserConversationValidatorCommand ErrorCode = "browser conversation validator command is invalid"
-	ErrBrowserConversationValidatorStart   ErrorCode = "browser conversation validator failed to start"
-	ErrBrowserConversationValidatorFailed  ErrorCode = "browser conversation validator command failed"
-	ErrBrowserConversationValidatorTimeout ErrorCode = "browser conversation validator command timed out"
-	ErrBrowserConversationValidatorOutput  ErrorCode = "browser conversation validator output exceeded bound"
-	ErrBrowserConversationValidatorVerdict ErrorCode = "browser conversation validator verdict is invalid"
+	ErrBrowserConversationValidatorCommand Error = "browser conversation validator command is invalid"
+	ErrBrowserConversationValidatorStart   Error = "browser conversation validator failed to start"
+	ErrBrowserConversationValidatorFailed  Error = "browser conversation validator command failed"
+	ErrBrowserConversationValidatorTimeout Error = "browser conversation validator command timed out"
+	ErrBrowserConversationValidatorOutput  Error = "browser conversation validator output exceeded bound"
+	ErrBrowserConversationValidatorVerdict Error = "browser conversation validator verdict is invalid"
 )
 
 // BrowserConversationValidatorCommand describes an external validator

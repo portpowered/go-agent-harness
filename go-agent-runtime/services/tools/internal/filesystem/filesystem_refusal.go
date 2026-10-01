@@ -50,7 +50,9 @@ type FilesystemRefusal struct {
 	Remediation string                  `json:"remediation"`
 }
 
-func (r FilesystemRefusal) Error() string {
+// Summary renders the refusal as one operator-readable line. The envelope is
+// data, not an error; Go error paths wrap it in FilesystemRefusalError.
+func (r FilesystemRefusal) Summary() string {
 	if r.Operation == "" {
 		return ErrFilesystemRefused.Error()
 	}
@@ -70,7 +72,7 @@ func (e *FilesystemRefusalError) Error() string {
 	if e.Refusal.Operation == "" {
 		return ErrFilesystemRefused.Error()
 	}
-	return e.Refusal.Error()
+	return e.Refusal.Summary()
 }
 
 func (e *FilesystemRefusalError) Unwrap() error { return ErrFilesystemRefused }

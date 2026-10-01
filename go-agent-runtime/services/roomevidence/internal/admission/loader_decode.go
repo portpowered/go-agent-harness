@@ -87,7 +87,7 @@ func timestamp(value object, name string) (time.Time, error) {
 
 func mismatch(field string, err error) error {
 	cause := fmt.Errorf("%w: %w", rooms.ErrInvalidReplayBundle, err)
-	return &roomevidence.BundleError{Kind: roomevidence.BundleMismatch, Field: field, Err: &classifiedAdmissionCause{
+	return &roomevidence.BundleError{Kind: roomevidence.BundleMismatch, Field: field, Err: &classifiedAdmissionError{
 		cause:           cause,
 		classifications: []error{roomevidence.ErrInvalidRoomReplayBundle, gateway.ErrReplayMismatch, providers.ErrReplayMismatch},
 	}}
@@ -95,25 +95,25 @@ func mismatch(field string, err error) error {
 
 func incomplete(field string, err error) error {
 	cause := fmt.Errorf("%w: %w", rooms.ErrReplayBundleIncomplete, err)
-	return &roomevidence.BundleError{Kind: roomevidence.BundleIncomplete, Field: field, Err: &classifiedAdmissionCause{
+	return &roomevidence.BundleError{Kind: roomevidence.BundleIncomplete, Field: field, Err: &classifiedAdmissionError{
 		cause:           cause,
 		classifications: []error{roomevidence.ErrRoomReplayBundleIncomplete, gateway.ErrReplayIncomplete, providers.ErrReplayIncomplete},
 	}}
 }
 
-type classifiedAdmissionCause struct {
+type classifiedAdmissionError struct {
 	cause           error
 	classifications []error
 }
 
-func (e *classifiedAdmissionCause) Error() string {
+func (e *classifiedAdmissionError) Error() string {
 	if e == nil || e.cause == nil {
 		return "<nil>"
 	}
 	return e.cause.Error()
 }
 
-func (e *classifiedAdmissionCause) Unwrap() []error {
+func (e *classifiedAdmissionError) Unwrap() []error {
 	if e == nil {
 		return nil
 	}

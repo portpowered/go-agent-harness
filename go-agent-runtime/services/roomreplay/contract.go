@@ -44,18 +44,18 @@ const (
 	ArtifactRoleCapture     = "capture"
 )
 
-type roomReplaySentinel string
+type roomReplaySentinelError string
 
-func (e roomReplaySentinel) Error() string { return string(e) }
+func (e roomReplaySentinelError) Error() string { return string(e) }
 
 const (
 	// ErrInvalidRoomReplayBundle identifies a bundle that cannot be used as a
 	// replay plan.
-	ErrInvalidRoomReplayBundle roomReplaySentinel = "invalid room replay bundle"
+	ErrInvalidRoomReplayBundle roomReplaySentinelError = "invalid room replay bundle"
 	// ErrRoomReplayBundleIncomplete identifies missing or truncated bundle data.
-	ErrRoomReplayBundleIncomplete roomReplaySentinel = "room replay bundle incomplete"
+	ErrRoomReplayBundleIncomplete roomReplaySentinelError = "room replay bundle incomplete"
 	// ErrRoomReplaySourceConflict identifies a mixed live/configured replay.
-	ErrRoomReplaySourceConflict roomReplaySentinel = "room replay bundle cannot be combined with room config or manifest"
+	ErrRoomReplaySourceConflict roomReplaySentinelError = "room replay bundle cannot be combined with room config or manifest"
 )
 
 // RoomReplayBundleErrorKind is the stable classification of an admission

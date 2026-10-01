@@ -390,14 +390,14 @@ func TestFilesystemRefusalRoundTripsThroughContent(t *testing.T) {
 
 func TestFilesystemRefusalErrorsCarryOperationAndSentinel(t *testing.T) {
 	refusal := validTestRefusal()
-	if got := refusal.Error(); got != `filesystem operation "read_file" refused: outside_permitted_roots` {
-		t.Fatalf("refusal Error() = %q", got)
+	if got := refusal.Summary(); got != `filesystem operation "read_file" refused: outside_permitted_roots` {
+		t.Fatalf("refusal Summary() = %q", got)
 	}
-	if got := (FilesystemRefusal{}).Error(); got != ErrFilesystemRefused.Error() {
-		t.Fatalf("empty refusal Error() = %q", got)
+	if got := (FilesystemRefusal{}).Summary(); got != ErrFilesystemRefused.Error() {
+		t.Fatalf("empty refusal Summary() = %q", got)
 	}
 	wrapped := &FilesystemRefusalError{Refusal: refusal}
-	if !errors.Is(wrapped, ErrFilesystemRefused) || wrapped.Error() != refusal.Error() {
+	if !errors.Is(wrapped, ErrFilesystemRefused) || wrapped.Error() != refusal.Summary() {
 		t.Fatalf("refusal error = %q, want the refusal text and sentinel", wrapped.Error())
 	}
 	var nilErr *FilesystemRefusalError

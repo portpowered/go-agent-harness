@@ -10,25 +10,25 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-type ErrorCode string
+type Error string
 
-func (e ErrorCode) Error() string { return string(e) }
+func (e Error) Error() string { return string(e) }
 
 const (
-	ErrPCM16Truncated         ErrorCode = "PCM16 payload has a truncated sample"
-	ErrSampleRateConflict     ErrorCode = "audio input and output sample rates conflict"
-	ErrUnsupportedRate        ErrorCode = "unsupported audio sample rate"
-	ProviderOpenAI                      = "openai"
-	ProviderGrok                        = "grok"
-	SampleRate16kHz                     = 16000
-	SampleRate24kHz                     = 24000
-	SampleRate48kHz                     = 48000
-	DefaultSampleRate                   = SampleRate16kHz
-	RealtimeSampleRate                  = SampleRate24kHz
-	DefaultTranscriptionModel           = "gpt-live-transcribe"
+	ErrPCM16Truncated         Error = "PCM16 payload has a truncated sample"
+	ErrSampleRateConflict     Error = "audio input and output sample rates conflict"
+	ErrUnsupportedRate        Error = "unsupported audio sample rate"
+	ProviderOpenAI                  = "openai"
+	ProviderGrok                    = "grok"
+	SampleRate16kHz                 = 16000
+	SampleRate24kHz                 = 24000
+	SampleRate48kHz                 = 48000
+	DefaultSampleRate               = SampleRate16kHz
+	RealtimeSampleRate              = SampleRate24kHz
+	DefaultTranscriptionModel       = "gpt-live-transcribe"
 )
 
-const ErrEmptyInput ErrorCode = "audio input contains no frames"
+const ErrEmptyInput Error = "audio input contains no frames"
 
 type RateRequest struct {
 	Provider            string

@@ -24,14 +24,14 @@ var (
 	ErrLiveEvidenceClaimed = errors.New("live recording destination is already claimed")
 )
 
-type claimErrorCode string
+type claimError string
 
-func (e claimErrorCode) Error() string { return string(e) }
+func (e claimError) Error() string { return string(e) }
 
 // ErrClaimLost identifies a destination claim whose inode no longer belongs
 // to the admitting invocation. It is immutable so errors.Is identity does not
 // depend on mutable package state.
-const ErrClaimLost claimErrorCode = "recording destination claim was lost"
+const ErrClaimLost claimError = "recording destination claim was lost"
 
 // ClaimKind identifies the artifact shape protected by a destination claim.
 type ClaimKind string

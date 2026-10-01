@@ -251,32 +251,32 @@ func browserConversationInvocationStateTerminal(state any) bool {
 	}
 }
 
-type browserConversationResultErr struct {
+type resultValidationError struct {
 	Path   string
 	Reason string
 }
 
-func (e *browserConversationResultErr) Error() string {
+func (e *resultValidationError) Error() string {
 	if e == nil {
 		return ErrInvalidBrowserConversationResult.Error()
 	}
 	return fmt.Sprintf("%s at %s: %s", ErrInvalidBrowserConversationResult, e.Path, e.Reason)
 }
 
-func (e *browserConversationResultErr) Unwrap() error {
+func (e *resultValidationError) Unwrap() error {
 	return ErrInvalidBrowserConversationResult
 }
 
 func browserConversationResultError(path, format string, args ...any) error {
-	return &browserConversationResultErr{Path: path, Reason: fmt.Sprintf(format, args...)}
+	return &resultValidationError{Path: path, Reason: fmt.Sprintf(format, args...)}
 }
 
-type browserConversationObservationErr struct {
+type observationValidationError struct {
 	Path   string
 	Reason string
 }
 
-func (e *browserConversationObservationErr) Error() string {
+func (e *observationValidationError) Error() string {
 	if e == nil {
 		return "invalid browser conversation observation"
 	}
@@ -284,7 +284,7 @@ func (e *browserConversationObservationErr) Error() string {
 }
 
 func browserConversationObservationErrorf(path, format string, args ...any) error {
-	return &browserConversationObservationErr{Path: path, Reason: fmt.Sprintf(format, args...)}
+	return &observationValidationError{Path: path, Reason: fmt.Sprintf(format, args...)}
 }
 
 func browserConversationObservationError(path, format string, args ...any) error {

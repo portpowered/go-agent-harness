@@ -141,15 +141,15 @@ type TerminalObservation struct {
 	RoomBound          bool
 }
 
-type errorCode string
+type sentinelError string
 
-func (e errorCode) Error() string { return string(e) }
+func (e sentinelError) Error() string { return string(e) }
 
 const (
-	ErrClockRequired     errorCode = "session trace clock is required"
-	ErrCloseTimeout      errorCode = "session trace close timed out"
-	ErrDestinationExists errorCode = "audio trace destination exists"
-	DefaultCloseTimeout            = time.Second
+	ErrClockRequired     sentinelError = "session trace clock is required"
+	ErrCloseTimeout      sentinelError = "session trace close timed out"
+	ErrDestinationExists sentinelError = "audio trace destination exists"
+	DefaultCloseTimeout                = time.Second
 )
 
 // CaptureSamplesObserver receives a copy-safe PCM tap notification.

@@ -36,25 +36,25 @@ const (
 	RoomReplayAudioRoleEvents      = "events"
 )
 
-type roomReplaySentinel string
+type roomReplaySentinelError string
 
-func (e roomReplaySentinel) Error() string { return string(e) }
+func (e roomReplaySentinelError) Error() string { return string(e) }
 
 const (
 	// ErrInvalidRoomReplayBundle identifies a malformed or integrity-inconsistent
 	// audio projection input.
-	ErrInvalidRoomReplayBundle roomReplaySentinel = "invalid room replay bundle"
+	ErrInvalidRoomReplayBundle roomReplaySentinelError = "invalid room replay bundle"
 	// ErrRoomReplayBundleIncomplete identifies missing or truncated audio data.
-	ErrRoomReplayBundleIncomplete roomReplaySentinel = "room replay bundle incomplete"
+	ErrRoomReplayBundleIncomplete roomReplaySentinelError = "room replay bundle incomplete"
 	// ErrRoomReplayDeltaReconstruction identifies deltas that do not reproduce
 	// the admitted WAV payload.
-	ErrRoomReplayDeltaReconstruction roomReplaySentinel = "room replay delta reconstruction failed"
+	ErrRoomReplayDeltaReconstruction roomReplaySentinelError = "room replay delta reconstruction failed"
 	// ErrRoomReplayAudioTimeline identifies an audio artifact or annotation
 	// outside the admitted room timeline.
-	ErrRoomReplayAudioTimeline roomReplaySentinel = "room replay audio timeline is inconsistent"
+	ErrRoomReplayAudioTimeline roomReplaySentinelError = "room replay audio timeline is inconsistent"
 	// ErrRoomReplayToleranceProfile identifies malformed or weakened analysis
 	// profile input.
-	ErrRoomReplayToleranceProfile roomReplaySentinel = "invalid room replay tolerance profile"
+	ErrRoomReplayToleranceProfile roomReplaySentinelError = "invalid room replay tolerance profile"
 )
 
 // BundleErrorKind is the stable classification of an audio
