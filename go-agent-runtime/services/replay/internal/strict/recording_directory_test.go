@@ -16,6 +16,7 @@ import (
 	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay/internal/plan"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"go.uber.org/goleak"
 )
 
 func TestServicePrepareRejectsTamperedRootDeclaredPCMBeforeTraceReplay(t *testing.T) {
@@ -138,3 +139,6 @@ func writeManifestedReplayRoot(t *testing.T) string {
 	}
 	return root
 }
+
+// TestMain fails the package when any test leaves a goroutine running.
+func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }

@@ -21,6 +21,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+	"go.uber.org/goleak"
 )
 
 type runtimeContractObserver struct {
@@ -566,3 +567,6 @@ func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {
 		t.Fatalf("fallback diagnostic log = %#v, want one overflow record", logged)
 	}
 }
+
+// TestMain fails the package when any test leaves a goroutine running.
+func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }

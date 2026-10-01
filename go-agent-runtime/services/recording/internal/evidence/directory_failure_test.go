@@ -540,3 +540,44 @@ func TestUnprojectableMessagePreservesOriginalAndSubsequentAudio(t *testing.T) {
 		t.Fatalf("later PCM lost: %v", got)
 	}
 }
+
+// A reserved provider mutation that loses to a latched failure, Abort or a
+// saturated queue refunds its reservation instead of leaking queue budget.
+func TestProviderSpoolRefundsReservationWhenAdmissionCloses(t *testing.T) {
+	latched := errors.New("disk failed")
+	for name, tc := range map[string]struct {
+		prepare func(*providerCaptureSpool) error
+		want    error
+	}{
+		"latched": {func(s *providerCaptureSpool) error { s.latch(latched); return nil }, latched},
+		"closed":  {func(s *providerCaptureSpool) error { return s.Abort() }, errProviderCaptureClosed},
+		"saturated": {func(s *providerCaptureSpool) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.queueItems = providerCaptureQueueCapacity
+			return nil
+		}, errProviderCaptureQueueFull},
+	} {
+		sink, err := newTestProviderCapture(filepath.Join(t.TempDir(), "provider.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		spool, ok := sink.(*providerCaptureSpool)
+		if !ok || spool.reserve(10) != nil || tc.prepare(spool) != nil {
+			t.Fatalf("%s: setup failed", name)
+		}
+		if err := spool.enqueueReserved(providerCaptureMutation{kind: providerCaptureAppend, bytes: 10}); !errors.Is(err, tc.want) {
+			t.Fatalf("%s: enqueueReserved = %v, want %v", name, err, tc.want)
+		}
+		spool.mu.Lock()
+		items, queued := spool.queuedItems, spool.queuedBytes
+		spool.queueItems = 0
+		spool.mu.Unlock()
+		if items != 0 || queued != 0 {
+			t.Fatalf("%s: reservation leaked: %d items / %d bytes", name, items, queued)
+		}
+		if err := spool.Abort(); err != nil {
+			t.Fatalf("%s: Abort = %v", name, err)
+		}
+	}
+}

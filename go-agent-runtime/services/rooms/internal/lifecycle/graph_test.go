@@ -12,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"go.uber.org/goleak"
 )
 
 // TestRoomGraphRoutesEachSourceToPeersOnly runs the mixers on a virtual clock
@@ -585,3 +586,6 @@ func (silentInbound) ReadFrame(ctx context.Context) (audio.PCMFrame, error) {
 }
 
 func (silentInbound) Close() error { return nil }
+
+// TestMain fails the package when any test leaves a goroutine running.
+func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }

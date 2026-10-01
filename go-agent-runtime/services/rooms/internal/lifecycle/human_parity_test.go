@@ -572,3 +572,19 @@ func TestFinalTurnDeliveryReleasesWhenNoPeerCanReceive(t *testing.T) {
 	}
 	f.waitStop(t, "room held its stop with no live peer left to receive audio")
 }
+
+// An unattributed media failure fails the whole graph once, with its first cause.
+func TestRoomGraphUnattributedMediaErrorFailsRoom(t *testing.T) {
+	graph, graphCtx := newGraph(t.Context(), nil)
+	reported := 0
+	first := errors.New("first")
+	graph.reportParticipantError("ghost", nil, func(error) { reported++ })
+	graph.reportParticipantError("ghost", first, func(error) { reported++ })
+	graph.reportParticipantError("ghost", errors.New("second"), nil)
+	if !errors.Is(graph.Err(), first) || graphCtx.Err() == nil || reported != 1 {
+		t.Fatalf("graph err=%v canceled=%v reported=%d", graph.Err(), graphCtx.Err() != nil, reported)
+	}
+	if err := graph.Close(); !errors.Is(err, first) {
+		t.Fatalf("Close = %v, want retained cause", err)
+	}
+}
