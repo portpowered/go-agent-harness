@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/managed_launch.go",
       "symbol": "*ManagedBrowserLauncher.Launch",
-      "value": 23,
+      "value": 22,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/managed_launch.go",
       "symbol": "waitForManagedBrowser",
-      "value": 19,
+      "value": 18,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/managed_launch.go",
       "symbol": "*ManagedBrowserLauncher.Launch",
-      "value": 22,
+      "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -47,7 +47,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/managed_launch.go",
       "symbol": "*ManagedBrowserLauncher.Launch",
-      "value": 90,
+      "value": 87,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -57,7 +57,7 @@
       "package": "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/chrome",
       "file": "internal/webmcp/chrome/managed_launch.go",
       "symbol": "*ManagedBrowserLauncher.Launch",
-      "value": 58,
+      "value": 56,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
