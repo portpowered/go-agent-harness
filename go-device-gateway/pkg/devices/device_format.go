@@ -1,10 +1,10 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"errors"
 	"fmt"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 // DeviceFormatOpener is the optional registry capability for opening a

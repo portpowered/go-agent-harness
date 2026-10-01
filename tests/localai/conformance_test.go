@@ -39,10 +39,8 @@ func behaviorCases() []behaviorCase {
 func TestLiveRealtimeTierConformance(t *testing.T) {
 	endpoints := configuredEndpoints(t)
 	for _, behavior := range behaviorCases() {
-
 		t.Run(behavior.name, func(t *testing.T) {
 			for _, endpoint := range endpoints {
-
 				t.Run(endpoint.name, func(t *testing.T) {
 					if !endpoint.available {
 						t.Fatal(endpoint.unavailableReason)

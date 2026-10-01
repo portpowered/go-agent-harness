@@ -73,13 +73,13 @@ func (Real) NewTimer(duration time.Duration) Timer {
 func (r Real) Wait(ctx context.Context, duration time.Duration) error { return wait(ctx, r, duration) }
 
 // WithDeadline creates a context canceled at deadline according to the host
-// clock, while retaining cancellation and values from parent.
+// clock, while retaining cancellation and values from parent (non-nil).
 func (r Real) WithDeadline(parent context.Context, deadline time.Time) (context.Context, context.CancelFunc) {
 	return withDeadline(parent, r, deadline)
 }
 
 // WithTimeout creates a context canceled after timeout according to the host
-// clock, while retaining cancellation and values from parent.
+// clock, while retaining cancellation and values from parent (non-nil).
 func (r Real) WithTimeout(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	return r.WithDeadline(parent, r.Now().Add(timeout))
 }
@@ -265,13 +265,13 @@ func (d *Deterministic) Wait(ctx context.Context, duration time.Duration) error 
 }
 
 // WithDeadline creates a context canceled at deadline in this virtual time
-// domain. Parent cancellation and values are preserved.
+// domain. Parent (non-nil) cancellation and values are preserved.
 func (d *Deterministic) WithDeadline(parent context.Context, deadline time.Time) (context.Context, context.CancelFunc) {
 	return withDeadline(parent, d, deadline)
 }
 
 // WithTimeout creates a context canceled after timeout in this virtual time
-// domain. Parent cancellation and values are preserved.
+// domain. Parent (non-nil) cancellation and values are preserved.
 func (d *Deterministic) WithTimeout(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if d == nil {
 		return withDeadline(parent, d, time.Time{})
@@ -364,7 +364,9 @@ func WithTimeout(parent context.Context, source Source, timeout time.Duration) (
 	return ctx, cancel, nil
 }
 func wait(ctx context.Context, source TimerSource, duration time.Duration) error {
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	timer := source.NewTimer(duration)
 	if timer == nil {
 		return ErrTimerSourceUnavailable
@@ -378,7 +380,6 @@ func wait(ctx context.Context, source TimerSource, duration time.Duration) error
 	}
 }
 func withDeadline(parent context.Context, source TimerSource, deadline time.Time) (context.Context, context.CancelFunc) {
-	parent = contract.ContextOrBackground(parent)
 	child := &deadlineContext{parent: parent, deadline: deadline, source: source, done: make(chan struct{})}
 	if err := parent.Err(); err != nil {
 		child.finish(contextCause(parent))

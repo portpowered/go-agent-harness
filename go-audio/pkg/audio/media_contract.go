@@ -188,3 +188,10 @@ func (r PlaybackResponse) sameResponse(other PlaybackResponse) bool {
 	}
 	return r == other
 }
+
+func (m *sessionInboundMedia) notify() {
+	select {
+	case m.wake <- struct{}{}:
+	default:
+	}
+}

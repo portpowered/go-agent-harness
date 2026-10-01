@@ -73,7 +73,7 @@ func decodeALaw(value byte) int16 {
 		sample += aLawSegmentBase
 		sample <<= (value&g711SegmentMask)>>g711SegmentShift - 1
 	}
-	if value&0x80 != 0 {
+	if value&g711SignBit != 0 {
 		return sample
 	}
 	return -sample

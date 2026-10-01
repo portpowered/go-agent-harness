@@ -17,7 +17,6 @@ import (
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const (
@@ -579,7 +578,7 @@ func (r *RemoteDeviceRegistry) doMetadata(method, path string, request, response
 		}
 		body = bytes.NewReader(data)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, r.baseURL+path, body)
+	req, err := newRemoteRequest(ctx, method, r.baseURL+path, body)
 	if err != nil {
 		return err
 	}
@@ -631,7 +630,7 @@ func (d *remoteOpenedDevice) ReadFrame(ctx context.Context, frame []int16) (err 
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(contract.ContextOrBackground(ctx), http.MethodPost, d.path("read")+"?samples="+strconv.Itoa(len(frame)), nil)
+	req, err := newRemoteRequest(ctx, http.MethodPost, d.path("read")+"?samples="+strconv.Itoa(len(frame)), nil)
 	if err != nil {
 		return err
 	}
@@ -672,7 +671,7 @@ func (d *remoteOpenedDevice) WriteSamples(ctx context.Context, samples []int16) 
 
 func (d *remoteOpenedDevice) writeSamples(ctx context.Context, samples []int16) error {
 	data := codec.EncodePCM16(samples)
-	req, err := http.NewRequestWithContext(contract.ContextOrBackground(ctx), http.MethodPost, d.path("write"), bytes.NewReader(data))
+	req, err := newRemoteRequest(ctx, http.MethodPost, d.path("write"), bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -716,7 +715,7 @@ func (d *remoteOpenedDevice) Close() error {
 	d.closeOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), remoteMetadataTimeout) //nolint:forbidigo // io.Closer carries no caller context; the timeout bounds the loopback close request
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, d.path("close"), nil)
+		req, err := newRemoteRequest(ctx, http.MethodDelete, d.path("close"), nil)
 		if err != nil {
 			d.closeErr = err
 			return
@@ -727,7 +726,7 @@ func (d *remoteOpenedDevice) Close() error {
 }
 
 func (d *remoteOpenedDevice) postContext(ctx context.Context, operation, query string) error {
-	req, err := http.NewRequestWithContext(contract.ContextOrBackground(ctx), http.MethodPost, d.path(operation)+query, nil)
+	req, err := newRemoteRequest(ctx, http.MethodPost, d.path(operation)+query, nil)
 	if err != nil {
 		return err
 	}
@@ -759,7 +758,7 @@ func AdvanceRemoteDeviceServer(ctx context.Context, endpoint string, callbacks i
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(contract.ContextOrBackground(ctx), http.MethodPost, registry.baseURL+"/control/advance", bytes.NewReader(data))
+	req, err := newRemoteRequest(ctx, http.MethodPost, registry.baseURL+"/control/advance", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -772,7 +771,7 @@ func ReadRemoteDeviceServerSnapshot(ctx context.Context, endpoint string) (Devic
 	if err != nil {
 		return DeviceServerSnapshot{}, err
 	}
-	req, err := http.NewRequestWithContext(contract.ContextOrBackground(ctx), http.MethodGet, registry.baseURL+"/control/snapshot", nil)
+	req, err := newRemoteRequest(ctx, http.MethodGet, registry.baseURL+"/control/snapshot", nil)
 	if err != nil {
 		return DeviceServerSnapshot{}, err
 	}
@@ -793,7 +792,7 @@ func InjectRemoteDeviceServerCapture(ctx context.Context, endpoint string, sampl
 		return err
 	}
 	data := codec.EncodePCM16(samples)
-	req, err := http.NewRequestWithContext(contract.ContextOrBackground(ctx), http.MethodPost, registry.baseURL+"/control/inject-capture", bytes.NewReader(data))
+	req, err := newRemoteRequest(ctx, http.MethodPost, registry.baseURL+"/control/inject-capture", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,13 @@
 package devices
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // NewDuplexDeviceSourceSinkWithFormat resolves both selectors and asks a
@@ -156,4 +160,13 @@ func acquireDeviceWithFormat(registry DeviceRegistry, id DeviceID, direction Dir
 		}
 	}
 	return handle, nil
+}
+
+// newRemoteRequest builds an audio-device server request bound to the
+// caller's context, which must be non-nil.
+func newRemoteRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	if ctx == nil {
+		return nil, contract.ErrNilContext
+	}
+	return http.NewRequestWithContext(ctx, method, url, body)
 }

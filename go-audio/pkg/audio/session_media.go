@@ -205,7 +205,9 @@ func newSessionInboundMedia(frameSamples, sampleRate int, padPartial bool) *sess
 }
 
 func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return PCMFrame{}, contract.ErrNilContext
+	}
 	for {
 		m.mu.Lock()
 		if len(m.frames) > 0 {
@@ -510,12 +512,5 @@ func (m *sessionInboundMedia) appendCompleteFramesLocked() {
 		copy(samples, m.pending[:m.frameSamples])
 		m.frames = append(m.frames, PCMFrame{Samples: samples, PlaybackResponse: m.response, Epoch: m.epoch})
 		m.pending = m.pending[m.frameSamples:]
-	}
-}
-
-func (m *sessionInboundMedia) notify() {
-	select {
-	case m.wake <- struct{}{}:
-	default:
 	}
 }

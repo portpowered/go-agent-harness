@@ -2,23 +2,24 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+import (
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+
+	"github.com/gen2brain/malgo"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+)
 
 /*
 #include <stdlib.h>
 */
 import "C"
-import (
-	"context"
-	"errors"
-	"fmt"
-	"github.com/gen2brain/malgo"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
-	"slices"
-	"sort"
-	"strings"
-	"sync"
-)
 
 const (
 	linuxPulseBackend = "pulse"
@@ -349,7 +350,9 @@ func (d *linuxOpenedDevice) ReadFrame(ctx context.Context, frame []int16) error 
 	if d.microphone == nil {
 		return fmt.Errorf("audio device %q has no capture source", d.id)
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	return d.microphone.ReadFrame(ctx, frame)
 }
 func (d *linuxOpenedDevice) WriteFrame(ctx context.Context, frame []int16) error {
@@ -445,7 +448,9 @@ func (d *linuxOpenedDevice) WaitForPlaybackCapacity(ctx context.Context, samples
 	if d == nil || samples <= 0 {
 		return nil
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	low, high, err := audio.PlaybackQueueWatermarks(d.format)
 	if err != nil {
 		return err
@@ -487,7 +492,9 @@ func (d *linuxOpenedDevice) WaitForPlayback(ctx context.Context) error {
 	if d == nil {
 		return nil
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	for {
 		d.mu.Lock()
 		if d.closed {

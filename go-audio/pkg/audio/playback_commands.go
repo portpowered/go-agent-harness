@@ -104,7 +104,9 @@ func newPlaybackCommands(capacity int) *PlaybackCommands {
 }
 
 func (q *PlaybackCommands) Exchange(ctx context.Context, operation PlaybackOperation, response PlaybackResponse) PlaybackReceipt {
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return PlaybackReceipt{Err: contract.ErrNilContext}
+	}
 	if err := ctx.Err(); err != nil {
 		return PlaybackReceipt{Err: err}
 	}

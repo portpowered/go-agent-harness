@@ -351,7 +351,9 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 	if nilRTCInboundMedia(inbound) {
 		return ErrNilRTCInboundMedia
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 
 	operationCtx, cancel := context.WithCancelCause(ctx)
 	finish, err := s.beginPump(cancel)
@@ -652,7 +654,9 @@ func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 	if done == nil {
 		return nil
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	select {
 	case <-done:
 		return nil

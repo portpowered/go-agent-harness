@@ -256,7 +256,7 @@ func TestDeviceErrorEdges(t *testing.T) {
 			if got := testCase.err.Error(); got != "<nil>" {
 				t.Fatalf("nil Error()=%q, want <nil>", got)
 			}
-			if !errors.Is(testCase.err.Unwrap(), testCase.want) {
+			if testCase.err.Unwrap() != testCase.want { //nolint:errorlint // asserts Unwrap returns the exact sentinel identity, not a match in its chain
 				t.Fatalf("nil Unwrap()=%v, want %v", testCase.err.Unwrap(), testCase.want)
 			}
 		})

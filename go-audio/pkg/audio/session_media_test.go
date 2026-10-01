@@ -299,8 +299,7 @@ func TestSessionMediaInvalidCallsAndWriterFailures(t *testing.T) {
 
 	media := audio.NewSessionMedia(nil)
 	endpoints := media.Endpoints()
-	var nilContext context.Context
-	if err := endpoints.Outbound.WriteFrame(nilContext, audio.PCMFrame{}); !errors.Is(err, audio.ErrSessionMediaEmptyFrame) {
+	if err := endpoints.Outbound.WriteFrame(t.Context(), audio.PCMFrame{}); !errors.Is(err, audio.ErrSessionMediaEmptyFrame) {
 		t.Fatalf("empty outbound frame = %v, want ErrSessionMediaEmptyFrame", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -308,7 +307,7 @@ func TestSessionMediaInvalidCallsAndWriterFailures(t *testing.T) {
 	if err := endpoints.Outbound.WriteFrame(ctx, audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled outbound frame = %v, want context.Canceled", err)
 	}
-	if err := endpoints.Outbound.WriteFrame(nilContext, audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, audio.ErrSessionMediaNoWriter) {
+	if err := endpoints.Outbound.WriteFrame(t.Context(), audio.PCMFrame{Samples: []int16{1}}); !errors.Is(err, audio.ErrSessionMediaNoWriter) {
 		t.Fatalf("outbound without writer = %v, want ErrSessionMediaNoWriter", err)
 	}
 	if err := endpoints.Outbound.Close(); err != nil {
@@ -343,13 +342,12 @@ func TestSessionMediaInboundFailuresAndEndpointLifecycle(t *testing.T) {
 	if err := media.PushInbound(frame); err != nil {
 		t.Fatalf("inbound push = %v", err)
 	}
-	var nilContext context.Context
-	got, err := endpoints.Inbound.ReadFrame(nilContext)
+	got, err := endpoints.Inbound.ReadFrame(t.Context())
 	if err != nil {
-		t.Fatalf("nil-context inbound read = %v", err)
+		t.Fatalf("inbound read = %v", err)
 	}
 	if len(got.Samples) == 0 || got.Samples[0] != 42 {
-		t.Fatalf("nil-context inbound frame = %v, want first sample 42", got.Samples)
+		t.Fatalf("inbound frame = %v, want first sample 42", got.Samples)
 	}
 
 	wantErr := errors.New("provider inbound failed")

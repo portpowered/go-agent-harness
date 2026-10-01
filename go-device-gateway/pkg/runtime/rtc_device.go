@@ -270,7 +270,9 @@ func (s *RTCDeviceSource) pumpWithUploadedObserver(ctx context.Context, outbound
 	if nilRTCOutboundMedia(outbound) {
 		return ErrNilRTCOutboundMedia
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 
 	operationCtx, cancel := context.WithCancelCause(ctx)
 	finish, err := s.beginPump(cancel)

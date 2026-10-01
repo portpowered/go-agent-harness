@@ -12,7 +12,9 @@ import (
 type BufferedOutbound struct{ Producer FrameProducer }
 
 func (b BufferedOutbound) WriteFrame(ctx context.Context, frame PCMFrame) error {
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	return b.Producer.Submit(ctx, frame)
 }
 func (b BufferedOutbound) Close() error { b.Producer.Close(); return nil }
@@ -31,7 +33,9 @@ func newSessionOutboundMedia(writer SessionMediaWriter) *sessionOutboundMedia {
 }
 
 func (m *sessionOutboundMedia) WriteFrame(ctx context.Context, frame PCMFrame) error {
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	if len(frame.Samples) == 0 {
 		return ErrSessionMediaEmptyFrame
 	}

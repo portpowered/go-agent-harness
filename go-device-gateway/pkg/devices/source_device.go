@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
-
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
@@ -200,7 +198,6 @@ func (s *DeviceSource) ReadFrame(ctx context.Context, frame []int16) error {
 	if err := audio.ContextError(ctx); err != nil {
 		return err
 	}
-	ctx = contract.ContextOrBackground(ctx)
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
 	}

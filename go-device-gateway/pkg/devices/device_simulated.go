@@ -278,7 +278,9 @@ func (s *SimulatedDuplexStream) ReadFrame(ctx context.Context, frame []int16) er
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	for {
 		s.registry.mu.Lock()
 		if s.registry.lost[side(s.direction)] {

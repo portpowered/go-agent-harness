@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const rawFrameBytes = FrameSize * 2
@@ -162,18 +163,12 @@ func newStreamError(operation string, path string, format audioFormat, err error
 	return &StreamError{Operation: operation, Path: path, Format: format.String(), Err: err}
 }
 
+// ContextError reports ctx's cancellation; a nil ctx is contract.ErrNilContext.
 func ContextError(ctx context.Context) error {
 	if ctx == nil {
-		return nil
+		return contract.ErrNilContext
 	}
 	return ctx.Err()
-}
-
-func ValidateFrame(operation string, frame []int16) error {
-	if len(frame) == FrameSize {
-		return nil
-	}
-	return &FrameSizeError{Operation: operation, Got: len(frame), Want: FrameSize}
 }
 
 // FileSource reads 16 kHz mono PCM16 from a WAV or raw PCM path.

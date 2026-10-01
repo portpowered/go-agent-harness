@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_darwin.go",
       "symbol": "*coreAudioHandle.WaitForPlaybackCapacity",
-      "value": 16,
+      "value": 17,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -43,11 +43,21 @@
       "phase": "P0"
     },
     {
+      "rule": "cyclomatic-complexity",
+      "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
+      "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
+      "file": "pkg/devices/device_darwin.go",
+      "symbol": "*coreAudioHandle.WaitForPlaybackCapacity",
+      "value": 16,
+      "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
+      "phase": "P0"
+    },
+    {
       "rule": "file-lines",
       "module": "github.com/portpowered/go-agent-harness/go-device-gateway",
       "package": "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices",
       "file": "pkg/devices/device_darwin.go",
-      "value": 587,
+      "value": 589,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

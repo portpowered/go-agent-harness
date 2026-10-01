@@ -91,8 +91,7 @@ func TestDeviceSourceEdgeContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var nilContext context.Context
-	if err := source.ReadFrame(nilContext, make([]int16, audio.FrameSize)); !errors.Is(err, audio.ErrInvalidFrameSize) {
+	if err := source.ReadFrame(t.Context(), make([]int16, audio.FrameSize)); !errors.Is(err, audio.ErrInvalidFrameSize) {
 		t.Fatalf("malformed raw frame error=%v", err)
 	}
 	if err := source.Close(); err != nil {

@@ -136,8 +136,7 @@ func TestDeviceSinkWriteSamplesQueuesExactPartialChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var nilContext context.Context
-	if err := byteSink.WriteSamples(nilContext, []int16{1, -2, 32767}); err != nil {
+	if err := byteSink.WriteSamples(t.Context(), []int16{1, -2, 32767}); err != nil {
 		t.Fatalf("partial byte-device WriteSamples: %v", err)
 	}
 	if want := []byte{1, 0, 254, 255, 255, 127}; !reflect.DeepEqual(byteOnly.data, want) {
@@ -247,8 +246,7 @@ func TestDeviceSinkContractsAndConcurrentClose(t *testing.T) {
 	if err := sink.Close(); err != nil || sink.Close() != nil {
 		t.Fatalf("idempotent sink close: %v", err)
 	}
-	var nilContext context.Context
-	if err := sink.WriteFrame(nilContext, make([]int16, audio.FrameSize)); !errors.Is(err, audio.ErrClosed) {
+	if err := sink.WriteFrame(t.Context(), make([]int16, audio.FrameSize)); !errors.Is(err, audio.ErrClosed) {
 		t.Fatalf("WriteFrame after Close = %v", err)
 	}
 	var nilSink *DeviceSink
@@ -391,8 +389,7 @@ func TestDeviceSinkSampleOnlyErrorsValidationAndCancellation(t *testing.T) {
 	if got, _ := handle.counts(); got != before {
 		t.Fatalf("rejected sample-only writes = %d, want %d", got, before)
 	}
-	var nilContext context.Context
-	if err := sink.WriteSamples(nilContext, nil); err != nil {
+	if err := sink.WriteSamples(t.Context(), nil); err != nil {
 		t.Fatalf("empty sample-only WriteSamples = %v", err)
 	}
 	blocked := &sampleOnlyHandle{block: true, started: make(chan struct{}), release: make(chan struct{})}

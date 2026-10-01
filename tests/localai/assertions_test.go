@@ -164,9 +164,7 @@ const contextFact = "cobalt-17"
 // its result. A close failure on a finished exchange cannot change the
 // observed behavior, so it must not turn a passing observation into a failure.
 func discardClose(closer io.Closer) {
-	if err := closer.Close(); err != nil {
-		return
-	}
+	_ = closer.Close() //nolint:errcheck // the exchange already produced its result; a close failure cannot change the observed behavior
 }
 
 const imageFact = "ORBIT"

@@ -454,7 +454,9 @@ func (h *voiceProcessingEndpoint) WaitForPlaybackCapacity(ctx context.Context, s
 	if h == nil || samples <= 0 {
 		return nil
 	}
-	ctx = contract.ContextOrBackground(ctx)
+	if ctx == nil {
+		return contract.ErrNilContext
+	}
 	low, high, err := audio.PlaybackQueueWatermarks(h.format)
 	if err != nil {
 		return err

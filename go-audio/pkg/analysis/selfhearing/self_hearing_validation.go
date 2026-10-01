@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 func normalizePCM16SelfHearingConfig(config PCM16SelfHearingConfig) (PCM16SelfHearingConfig, time.Duration, error) {
@@ -110,7 +112,7 @@ func validatePCM16SelfHearingFrame(frame PCM16TimedFrame, stream string) (time.D
 
 func selfHearingContextError(ctx context.Context) error {
 	if ctx == nil {
-		return nil
+		return contract.ErrNilContext
 	}
 	select {
 	case <-ctx.Done():
