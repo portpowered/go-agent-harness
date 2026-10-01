@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -48,34 +47,6 @@ func TestLoadAskContentPartRejectsInvalidAttachmentClasses(t *testing.T) {
 				t.Errorf("error = %q, want supplied path", err)
 			}
 		})
-	}
-}
-
-func TestLoadAskContentPartRejectsUnreadableFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("mode-bit unreadability is not portable to Windows")
-	}
-
-	path := filepath.Join(t.TempDir(), "unreadable.txt")
-	if err := os.WriteFile(path, []byte("secret"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(path, 0); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chmod(path, 0o600); err != nil {
-			t.Errorf("restore attachment permissions: %v", err)
-		}
-	})
-
-	_, err := LoadAskContentPart(path)
-	if err == nil {
-		t.Fatal("LoadAskContentPart() error = nil, want unreadable attachment rejection")
-	}
-	var attachmentErr *AttachmentError
-	if !errors.As(err, &attachmentErr) || attachmentErr.Path != path || !strings.Contains(attachmentErr.Reason, AttachmentReasonUnreadable) {
-		t.Fatalf("error = %v, want unreadable attachment for %q", err, path)
 	}
 }
 

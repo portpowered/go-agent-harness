@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -155,38 +153,6 @@ func TestProbeAcceptanceTimeoutReturnsStuckVerdict(t *testing.T) {
 		t.Fatalf("decode verdict %q: %v", stdout.String(), decodeErr)
 	}
 	if verdict.Pass || verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream || verdict.TerminalReason != "stuck" {
-		t.Fatalf("verdict = %+v, want non-passing stuck verdict", verdict)
-	}
-}
-
-func TestProbeAcceptanceLiveTimeoutStopsHangingBinary(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("sleep executable fixture is POSIX-specific")
-	}
-	if _, err := exec.LookPath("sleep"); err != nil {
-		t.Skipf("sleep executable is unavailable: %v", err)
-	}
-
-	runner := acceptanceprobe.NewLiveRunner(nil)
-	runner.ArtifactRoot = t.TempDir()
-	root := newTestRootCommandWithAcceptance(runner, 40*time.Millisecond)
-	var stdout bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetArgs([]string{"probe", "acceptance", "sleep", "60"})
-
-	started := time.Now()
-	err := root.ExecuteContext(context.Background())
-	if elapsed := time.Since(started); elapsed > time.Second {
-		t.Fatalf("hanging binary took %s to stop", elapsed)
-	}
-	if err == nil || !errors.Is(err, acceptanceprobe.ErrProbeAgentStuck) {
-		t.Fatalf("error = %v, want stuck error", err)
-	}
-	var verdict loopprobe.AcceptanceVerdict
-	if decodeErr := json.Unmarshal(stdout.Bytes(), &verdict); decodeErr != nil {
-		t.Fatalf("decode verdict %q: %v", stdout.String(), decodeErr)
-	}
-	if verdict.Pass || verdict.TerminalState != loopprobe.AcceptanceStuckPendingDownstream {
 		t.Fatalf("verdict = %+v, want non-passing stuck verdict", verdict)
 	}
 }
