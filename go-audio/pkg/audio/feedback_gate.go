@@ -16,6 +16,14 @@ const pcm16FeedbackWarning = "Acoustic feedback detected: speaker audio is enter
 
 var errNilPCM16FeedbackPlaybackWrite = errors.New("local feedback playback write is nil")
 
+// ErrFeedbackWarningWriterBlocked reports that Close gave up waiting for the
+// one-time feedback warning write because the embedder's writer is blocked.
+var ErrFeedbackWarningWriterBlocked = errors.New("local feedback warning writer is still blocked at close")
+
+// feedbackWarningCloseBound bounds how long Close waits for an in-flight
+// warning write before reporting ErrFeedbackWarningWriterBlocked.
+const feedbackWarningCloseBound = time.Second
+
 const pcm16FeedbackIndependentCorrelation = 0.15
 
 type pcm16FeedbackGateState string
@@ -66,8 +74,11 @@ type PCM16FeedbackGate struct {
 	suppressUntil    time.Duration
 	playbackSeen     bool
 	warningSent      bool
-	closed           bool
-	pending          []heldPCM16CaptureFrame
+	// warningDone is closed when the one-time warning write returns; Close
+	// waits on it (bounded) so the write is owned by the gate's lifecycle.
+	warningDone chan struct{}
+	closed      bool
+	pending     []heldPCM16CaptureFrame
 
 	// probeIndependentEvidence accumulates the duration of consecutive
 	// PCM16SelfHearingNonFeedback probe classifications while suppressing or
@@ -467,14 +478,34 @@ func (g *PCM16FeedbackGate) Close() error {
 		return nil
 	}
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	if g.closed {
+		g.mu.Unlock()
 		return nil
 	}
 	g.closed = true
 	g.pending = nil
 	g.startupAmbiguousEvidence = false
-	return errors.Join(g.detector.Close(), g.probe.Close())
+	err := errors.Join(g.detector.Close(), g.probe.Close())
+	warningDone := g.warningDone
+	g.mu.Unlock()
+	return errors.Join(err, awaitFeedbackWarning(warningDone))
+}
+
+// awaitFeedbackWarning waits, outside the gate lock, for an in-flight warning
+// write. A writer still blocked after feedbackWarningCloseBound is reported
+// rather than silently abandoned.
+func awaitFeedbackWarning(done <-chan struct{}) error {
+	if done == nil {
+		return nil
+	}
+	timer := time.NewTimer(feedbackWarningCloseBound)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return ErrFeedbackWarningWriterBlocked
+	}
 }
 
 func (g *PCM16FeedbackGate) resetCaptureEvidenceLocked() {
@@ -585,10 +616,13 @@ func (g *PCM16FeedbackGate) warnOnceLocked() {
 		return
 	}
 	writer := g.warning
-	// Warning I/O is deliberately detached from both media pumps. A terminal
-	// writer supplied by an embedding may block or fail; neither condition can
-	// hold the gate or affect provider delivery.
+	done := make(chan struct{})
+	g.warningDone = done
+	// Warning I/O runs off both media pumps. A terminal writer supplied by an
+	// embedding may block or fail; neither condition can hold the gate or
+	// affect provider delivery. Close joins the write within a bound.
 	go func() {
-		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning) //nolint:errcheck // detached best-effort warning; its failure must not hold the gate or affect delivery.
+		defer close(done)
+		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning) //nolint:errcheck // best-effort warning; its failure must not hold the gate or affect delivery.
 	}()
 }
