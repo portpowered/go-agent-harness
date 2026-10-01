@@ -26,6 +26,7 @@ func TestResolveEndpoint(t *testing.T) {
 }
 
 func TestEndpointHonorsWholeURLOverrideAndProbesSessionCreated(t *testing.T) {
+	prober := NewProber()
 	queries := make(chan string, 1)
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -44,7 +45,7 @@ func TestEndpointHonorsWholeURLOverrideAndProbesSessionCreated(t *testing.T) {
 	endpoint := strings.Replace(server.URL, "http://", "ws://", 1) + "/v1/realtime?model=stub&voice=amy"
 	t.Setenv(realtimeEndpointEnv, endpoint)
 
-	got, ok := Endpoint(t)
+	got, ok := prober.Endpoint(t)
 	if !ok {
 		t.Fatalf("Endpoint(%q) returned ok=false", endpoint)
 	}
@@ -62,6 +63,7 @@ func TestEndpointHonorsWholeURLOverrideAndProbesSessionCreated(t *testing.T) {
 }
 
 func TestEndpointCachesClosedEndpoint(t *testing.T) {
+	prober := NewProber()
 	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for ephemeral address: %v", err)
@@ -73,7 +75,7 @@ func TestEndpointCachesClosedEndpoint(t *testing.T) {
 	t.Setenv(realtimeEndpointEnv, endpoint)
 
 	started := time.Now()
-	firstURL, firstOK := Endpoint(t)
+	firstURL, firstOK := prober.Endpoint(t)
 	firstDuration := time.Since(started)
 	if firstOK || firstURL != endpoint {
 		t.Fatalf("first Endpoint result = (%q, %t), want (%q, false)", firstURL, firstOK, endpoint)
@@ -83,7 +85,7 @@ func TestEndpointCachesClosedEndpoint(t *testing.T) {
 	}
 
 	started = time.Now()
-	secondURL, secondOK := Endpoint(t)
+	secondURL, secondOK := prober.Endpoint(t)
 	secondDuration := time.Since(started)
 	if secondOK || secondURL != endpoint {
 		t.Fatalf("cached Endpoint result = (%q, %t), want (%q, false)", secondURL, secondOK, endpoint)
@@ -95,6 +97,7 @@ func TestEndpointCachesClosedEndpoint(t *testing.T) {
 }
 
 func TestEndpointDoesNotProbeAFailedEndpointAgain(t *testing.T) {
+	prober := NewProber()
 	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for ephemeral address: %v", err)
@@ -117,7 +120,7 @@ func TestEndpointDoesNotProbeAFailedEndpointAgain(t *testing.T) {
 	}()
 	t.Setenv(realtimeEndpointEnv, endpoint)
 
-	if _, ok := Endpoint(t); ok {
+	if _, ok := prober.Endpoint(t); ok {
 		t.Fatal("non-speaking endpoint unexpectedly reported ready")
 	}
 	select {
@@ -131,7 +134,7 @@ func TestEndpointDoesNotProbeAFailedEndpointAgain(t *testing.T) {
 	<-serverDone
 
 	started := time.Now()
-	if _, ok := Endpoint(t); ok {
+	if _, ok := prober.Endpoint(t); ok {
 		t.Fatal("cached failed endpoint unexpectedly reported ready")
 	}
 	if elapsed := time.Since(started); elapsed >= time.Second {

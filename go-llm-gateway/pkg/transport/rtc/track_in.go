@@ -191,9 +191,6 @@ func NewInboundTrack(source, opus any, config InboundTrackConfig) (*InboundTrack
 }
 
 func (t *InboundTrack) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return sharedaudio.PCMFrame{}, err
 	}

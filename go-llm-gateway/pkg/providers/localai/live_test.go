@@ -1,3 +1,5 @@
+//go:build live
+
 package localai
 
 import (
@@ -12,8 +14,8 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
-// TestLiveRealtimeAudio is optional: it skips quickly when LocalAI is absent,
-// but proves decoded non-silent audio when available.
+// TestLiveRealtimeAudio runs only with the live build tag and proves decoded
+// non-silent audio from a running LocalAI fixture.
 func TestLiveRealtimeAudio(t *testing.T) {
 	provider := New()
 	endpoint, err := provider.endpoint()
@@ -31,7 +33,7 @@ func TestLiveRealtimeAudio(t *testing.T) {
 	if err != nil {
 		var connectionErr *ConnectionError
 		if errors.As(err, &connectionErr) {
-			t.Skipf("endpoint-unreachable: %s: %v", endpoint, err)
+			t.Fatalf("endpoint-unreachable: %s: %v", endpoint, err)
 		}
 		t.Fatalf("connect to reachable LocalAI endpoint %s: %v", endpoint, err)
 	}
@@ -58,14 +60,15 @@ func TestLiveRealtimeAudio(t *testing.T) {
 		if !ok {
 			t.Fatal("timed out waiting for LocalAI audio response")
 		}
-		switch msg.Type {
-		case messages.StreamTypeAudioDelta:
+		if msg.Type == messages.StreamTypeAudioDelta {
 			if value, ok := msg.Value.(*messages.AudioDeltaValue); ok {
 				decoded = append(decoded, value.Content...)
 			}
-		case messages.StreamTypeError:
+		}
+		if msg.Type == messages.StreamTypeError {
 			t.Fatalf("LocalAI returned session error: %v", msg.Value)
-		case messages.StreamTypeMessageEnd:
+		}
+		if msg.Type == messages.StreamTypeMessageEnd {
 			if len(decoded) == 0 {
 				t.Fatal("LocalAI completed without decoded audio")
 			}

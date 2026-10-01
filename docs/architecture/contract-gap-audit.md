@@ -241,7 +241,7 @@ Validated deterministic test names and packages:
 
 - Outcome: `fail`
 - Affected public packages: `go-agent-loop/pkg/messages`, `go-agent-loop/pkg/participants`, `go-agent-loop/pkg/subsystems`, `go-llm-gateway/pkg/gateway`, `go-llm-gateway/pkg/testing`, `go-llm-gateway/pkg/providers/openai`, `go-llm-gateway/pkg/providers/anthropic`, `go-llm-gateway/pkg/providers/gemini`, `go-llm-gateway/pkg/providers/grok`, `agent-cli/internal/services`
-- Exported declarations: `messages.ErrorValue`, `messages.NewErrorValue`, `messages.NewErrorValueWithDetails`, `messages.StreamTypeError`, `messages.Session`, `messages.SessionInferencer`, `gateway.InteractionError`, `gateway.InteractionEventError`, `gateway.InteractionCancellation`, `testing.NewSessionReplayer`, `testing.WithReplayContext`
+- Exported declarations: `messages.ErrorValue`, `messages.NewErrorValue`, `messages.NewErrorValueWithDetails`, `messages.StreamTypeError`, `messages.Session`, `messages.SessionInferencer`, `gateway.InteractionError`, `gateway.InteractionEventError`, `gateway.InteractionCancellation`, `testing.NewSessionReplayer`
 - Observable contract issue: the shared stream contract has typed error fields and selected gateways preserve structured error data, but the row remains failed because loop participants, stream adapters, interaction-event bridging, and CLI session command paths still have caller-visible paths that collapse failures into `err.Error()` text or phase-prefixed Go errors without a stable taxonomy.
 - Implementation evidence:
   - `messages.ErrorValue` exposes `Message`, `ErrorType`, `Code`, `Param`, and `EventID`; `messages.NewErrorValueWithDetails` preserves provider-supplied OpenAI Realtime error metadata.
@@ -343,7 +343,7 @@ Validated deterministic test names and packages:
 - Observable contract issue: cancellation is accepted by the main public calls and selected replay/interaction paths preserve it, but timeout and retry ownership remains package-local: CLI session mode owns fixed command timeouts, PNIG maps caller cancellation into an event, provider stream adapters generally return Go errors or close channels, and no shared contract states whether retry belongs to callers, gateway adapters, provider implementations, or CLI orchestration.
 - Implementation evidence:
   - `messages.Inferencer`, `messages.SessionInferencer`, `gateway.Gateway`, and `agentloop.AgenticLoop` methods all accept `context.Context` for caller-owned cancellation/deadlines.
-  - `testing.WithReplayContext` binds replay delivery to an explicit lifecycle context, and session replay/record inferencer wrappers bind relay lifetime to `ConnectSession(ctx)`.
+  - `testing.NewSessionReplayer` binds replay delivery to its explicit lifecycle context argument, and session replay/record inferencer wrappers bind relay lifetime to `ConnectSession(ctx)`.
   - `gateway.Interact` emits `InteractionCancellation{Reason: "caller_cancelled"}` when the caller context is canceled and emits timeout/provider error events for selected PNIG failures.
   - `agent-cli/internal/services/session_runtime.go` and `session.go` preserve `context.Canceled` in record/replay command paths and use explicit per-mode `MaxDuration` values for command-level timeout behavior.
 - Planning-only evidence: CTX-01 remains open because session shape is still split between constructor options and caller context; CTX-02 is narrowed to the repaired replay/record relay lifecycle context; LIFECYCLE-01, LIFECYCLE-02, and COMPAT-02 remain open for stop-condition and fixture compatibility staging.

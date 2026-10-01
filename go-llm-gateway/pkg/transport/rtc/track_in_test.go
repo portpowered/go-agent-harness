@@ -222,8 +222,8 @@ func testInboundResampledOwnership(t *testing.T) {
 			return resampled, nil
 		},
 	})
-	var nilContext context.Context
-	frame, err := track.ReadFrame(nilContext)
+	callerContext := t.Context()
+	frame, err := track.ReadFrame(callerContext)
 	if err != nil {
 		t.Fatalf("ReadFrame(nil) error = %v", err)
 	}

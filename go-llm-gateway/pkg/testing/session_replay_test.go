@@ -459,7 +459,7 @@ func TestSessionReplayer_FailsWhenExpectedOutboundIsOmitted(t *testing.T) {
 	path := filepath.Join(dir, "test.session.json")
 	writeCapture(t, path, events)
 
-	replayer, err := NewSessionReplayer(path)
+	replayer, err := NewSessionReplayer(t.Context(), path)
 	if err != nil {
 		t.Fatalf("NewSessionReplayer: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestSessionReplayer_StopsDeliveryWhenOwnedContextCanceled(t *testing.T) {
 	writeCapture(t, path, events)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	replayer := mustNewSessionReplayer(t, path, WithReplayContext(ctx), WithReplayTiming())
+	replayer := mustNewSessionReplayerContext(t, ctx, path, WithReplayTiming())
 
 	first := readReplayMessage(t, replayer)
 	firstDelta, ok := first.Value.(*messages.TextDeltaValue)
@@ -673,7 +673,7 @@ func TestSessionReplayer_CancellationWakesExpectedOutboundWait(t *testing.T) {
 	writeCapture(t, path, events)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	replayer := mustNewSessionReplayer(t, path, WithReplayContext(ctx))
+	replayer := mustNewSessionReplayerContext(t, ctx, path)
 	cancel()
 
 	select {
@@ -764,8 +764,13 @@ func readReplayMessage(t *testing.T, replayer *SessionReplayer) messages.StreamM
 
 func mustNewSessionReplayer(t *testing.T, path string, opts ...SessionReplayerOption) *SessionReplayer {
 	t.Helper()
+	return mustNewSessionReplayerContext(t, t.Context(), path, opts...)
+}
 
-	replayer, err := NewSessionReplayer(path, opts...)
+func mustNewSessionReplayerContext(t *testing.T, ctx context.Context, path string, opts ...SessionReplayerOption) *SessionReplayer {
+	t.Helper()
+
+	replayer, err := NewSessionReplayer(ctx, path, opts...)
 	if err != nil {
 		t.Fatalf("NewSessionReplayer: %v", err)
 	}
@@ -780,7 +785,7 @@ func mustNewSessionReplayer(t *testing.T, path string, opts ...SessionReplayerOp
 func mustNewSessionReplayerFromLegacyBytes(t *testing.T, data []byte, opts ...SessionReplayerOption) *SessionReplayer {
 	t.Helper()
 
-	replayer, err := NewSessionReplayerFromLegacyBytes(data, opts...)
+	replayer, err := NewSessionReplayerFromLegacyBytes(t.Context(), data, opts...)
 	if err != nil {
 		t.Fatalf("NewSessionReplayerFromLegacyBytes: %v", err)
 	}

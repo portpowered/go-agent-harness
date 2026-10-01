@@ -130,9 +130,6 @@ func (e *LoopbackEndpoint) WaitCandidateGathering(ctx context.Context) error {
 func await[T any](e *LoopbackEndpoint, ctx context.Context, mode int, want string) (T, error) {
 	var zero T
 	x, waitCtx := e.exchange, ctx
-	if waitCtx == nil {
-		waitCtx = context.Background()
-	}
 	var cancel context.CancelFunc
 	if mode != descriptionMode {
 		waitCtx, cancel = context.WithTimeout(waitCtx, x.timeout)

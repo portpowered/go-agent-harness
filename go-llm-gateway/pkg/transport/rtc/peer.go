@@ -102,7 +102,6 @@ func (p *Peer) Transitions() []Transition {
 }
 
 func (p *Peer) Connect(ctx context.Context) error {
-	ctx = contextOrBackground(ctx)
 	op, owner, err := p.begin(false, nil, ctx)
 	if err != nil || op == nil {
 		return err
@@ -112,11 +111,13 @@ func (p *Peer) Connect(ctx context.Context) error {
 	}
 	return p.finish(op, p.run(op.ctx))
 }
-func (p *Peer) PeerLost(cause error) error {
+// PeerLost reports that the connected transport was lost and starts a
+// background reconnect bounded by ctx.
+func (p *Peer) PeerLost(ctx context.Context, cause error) error {
 	if cause == nil {
 		cause = ErrPeerLost
 	}
-	op, owner, err := p.begin(true, cause, context.Background())
+	op, owner, err := p.begin(true, cause, ctx)
 	if err != nil || !owner {
 		return err
 	}
@@ -151,7 +152,7 @@ func (p *Peer) begin(reconnect bool, cause error, parent context.Context) (*oper
 	}
 	p.transitionLocked(next, cause, 0)
 	p.attempts, p.terminalErr = 0, nil
-	ctx, cancel := context.WithCancel(contextOrBackground(parent))
+	ctx, cancel := context.WithCancel(parent)
 	p.op = &operation{done: make(chan struct{}), cancel: cancel, ctx: ctx, old: old}
 	return p.op, true, nil
 }
@@ -300,19 +301,12 @@ func (p *Peer) complete(op *operation, err error) {
 	close(op.done)
 }
 func waitOperation(ctx context.Context, op *operation) error {
-	ctx = contextOrBackground(ctx)
 	select {
 	case <-op.done:
 		return op.err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-func contextOrBackground(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
 }
 func (p *Peer) transitionLocked(to State, cause error, attempt int) {
 	if p.state == to {

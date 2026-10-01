@@ -257,9 +257,6 @@ type rtspInbound struct {
 }
 
 func (r *rtspInbound) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := callerContextError(ctx); err != nil {
 		return sharedaudio.PCMFrame{}, err
 	}
@@ -292,9 +289,6 @@ func (r *rtspInbound) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, erro
 }
 
 func (r *rtspInbound) Look(ctx context.Context) (VisualObservation, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if r.videoChannel < 0 {
 		return unavailableVisual(r.source), nil
 	}

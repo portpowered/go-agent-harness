@@ -141,7 +141,5 @@ func NewReplaySessionInferencer(path string, opts ...SessionReplayerOption) *Rep
 
 // ConnectSession returns a SessionReplayer loaded from the capture file.
 func (r *ReplaySessionInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
-	opts := append([]SessionReplayerOption{}, r.opts...)
-	opts = append(opts, WithReplayContext(ctx))
-	return NewSessionReplayer(r.path, opts...)
+	return NewSessionReplayer(ctx, r.path, r.opts...)
 }

@@ -26,31 +26,37 @@ const (
 	probeTimeout = 10 * time.Second
 )
 
-var failedEndpoints = struct {
-	sync.RWMutex
-	urls map[string]struct{}
-}{
-	urls: make(map[string]struct{}),
+// Prober resolves and probes the optional LocalAI realtime endpoint. It
+// remembers endpoints whose probe failed so an absent server delays only the
+// first live test that shares the prober.
+type Prober struct {
+	mu     sync.RWMutex
+	failed map[string]struct{}
+}
+
+// NewProber returns a prober with no remembered failures.
+func NewProber() *Prober {
+	return &Prober{failed: make(map[string]struct{})}
 }
 
 // Endpoint resolves and probes the optional LocalAI realtime endpoint.
 //
 // It returns the exact endpoint that was attempted, including an
 // LOCALAI_REALTIME_URL override, and whether a realtime WebSocket produced a
-// session.created event. Failed endpoint probes are cached for the lifetime of
-// the process so an absent server does not delay every live test.
-func Endpoint(tb testing.TB) (wsURL string, ok bool) {
+// session.created event. The probe is bounded by tb's context and
+// probeTimeout; a failed endpoint is not probed again by this prober.
+func (p *Prober) Endpoint(tb testing.TB) (wsURL string, ok bool) {
 	tb.Helper()
 
 	wsURL = resolveEndpoint()
-	if endpointFailed(wsURL) {
+	if p.endpointFailed(wsURL) {
 		return wsURL, false
 	}
-	if probe(wsURL) {
+	if probe(tb.Context(), wsURL) {
 		return wsURL, true
 	}
 
-	rememberFailedEndpoint(wsURL)
+	p.rememberFailedEndpoint(wsURL)
 	return wsURL, false
 }
 
@@ -61,22 +67,22 @@ func resolveEndpoint() string {
 	return DefaultEndpoint
 }
 
-func endpointFailed(endpoint string) bool {
-	failedEndpoints.RLock()
-	defer failedEndpoints.RUnlock()
-	_, failed := failedEndpoints.urls[endpoint]
+func (p *Prober) endpointFailed(endpoint string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	_, failed := p.failed[endpoint]
 	return failed
 }
 
-func rememberFailedEndpoint(endpoint string) {
-	failedEndpoints.Lock()
-	failedEndpoints.urls[endpoint] = struct{}{}
-	failedEndpoints.Unlock()
+func (p *Prober) rememberFailedEndpoint(endpoint string) {
+	p.mu.Lock()
+	p.failed[endpoint] = struct{}{}
+	p.mu.Unlock()
 }
 
-func probe(endpoint string) bool {
+func probe(parent context.Context, endpoint string) bool {
 	deadline := time.Now().Add(probeTimeout)
-	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
 
 	dialer := websocket.Dialer{HandshakeTimeout: probeTimeout}

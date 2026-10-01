@@ -27,7 +27,7 @@ func TestPeerS4Lifecycle(t *testing.T) {
 			return second, nil
 		}, 2)
 		must(t, p.Connect(context.Background()))
-		must(t, p.PeerLost(nil))
+		must(t, p.PeerLost(t.Context(), nil))
 		must(t, p.Wait(context.Background()))
 		path(t, p, StateIdle, StateConnecting, StateConnected, StateReconnecting, StateConnected)
 		d, ok := p.config.Dialer.(*fake)
@@ -67,7 +67,7 @@ func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
 	}}
 	p := NewPeer(PeerConfig{Dialer: d, Retry: RetryPolicy{MaxAttempts: 4, Backoff: time.Hour, MaxBackoff: time.Hour, Wait: func(ctx context.Context, _ time.Duration) error { close(started); <-ctx.Done(); return ctx.Err() }}})
 	must(t, p.Connect(context.Background()))
-	must(t, p.PeerLost(nil))
+	must(t, p.PeerLost(t.Context(), nil))
 	<-started
 	must(t, p.Close())
 	check(t, d.dials.Load() == 2 && p.Attempts() == 1 && p.State() == StateClosed, "dials/attempts/state = %d/%d/%s", d.dials.Load(), p.Attempts(), p.State())

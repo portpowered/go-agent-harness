@@ -305,16 +305,10 @@ func (s *MediaStream) Close() error {
 	return s.closeErr
 }
 func boundedSourceContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return context.WithTimeout(ctx, DefaultMediaSourceTimeout)
 }
 
 func boundedVisualContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return context.WithTimeout(ctx, DefaultVisualObservationTimeout)
 }
 

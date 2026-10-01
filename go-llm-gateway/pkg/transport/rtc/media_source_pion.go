@@ -127,9 +127,6 @@ func (m *pionInbound) attachVideo(track *webrtc.TrackRemote) {
 }
 
 func (m *pionInbound) Look(ctx context.Context) (VisualObservation, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	m.mu.Lock()
 	negotiated, attached, mediaType, ready := m.videoNegotiated, m.videoSeen, m.videoMediaType, m.videoReady
 	m.mu.Unlock()
@@ -186,9 +183,6 @@ func (m *pionInbound) Look(ctx context.Context) (VisualObservation, error) {
 }
 
 func (m *pionInbound) ReadFrame(ctx context.Context) (sharedaudio.PCMFrame, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	select {
 	case frame := <-m.frames:
 		return frame, nil
