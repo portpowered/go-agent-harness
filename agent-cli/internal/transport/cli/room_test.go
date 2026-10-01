@@ -430,18 +430,7 @@ func TestRoomRunCommandRedactsCredentialsFromEventStreamOutputAndError(t *testin
 	output, stream := &bytes.Buffer{}, (*http.Response)(nil)
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
 	command.SetRunner(func(ctx context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
-		// The test reads the stream after the run returns, so the request
-		// outlives the run context.
-		request, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodGet, strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0], nil)
-		if err != nil {
-			t.Fatalf("build event stream request: %v", err)
-		}
-		response, err := http.DefaultClient.Do(request)
-		if err != nil {
-			t.Fatalf("connect event stream: %v", err)
-		}
-		stream = response
-		t.Cleanup(func() { closeTestResource(t, response.Body) })
+		stream = openRoomEventStream(t, ctx, strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0])
 		publishErr := errors.Join(options.EventSink.Publish(ctx, "alice", session.LiveEvent{Kind: "browser.invocation", State: "key alice-secret"}),
 			options.EventSink.Publish(ctx, "bob", session.LiveEvent{Kind: "browser.failed", Reason: "auth bob-secret rejected"}))
 		options.OnParticipantTerminated(rooms.RoomParticipantResult{ParticipantID: "alice", TerminationReason: "error alice-secret"})

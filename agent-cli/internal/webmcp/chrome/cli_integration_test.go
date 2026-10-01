@@ -614,9 +614,7 @@ type cliChromeIntegrationResult struct {
 func startCLIChromeIntegrationProcess(t *testing.T, ctx context.Context, binary, configDir string, args ...string) *cliChromeIntegrationProcess {
 	t.Helper()
 	commandArgs := append([]string{"--config-dir", configDir}, args...)
-	// The test stops the process explicitly; do not kill it when the test
-	// context is canceled ahead of that cleanup.
-	command := exec.CommandContext(context.WithoutCancel(ctx), binary, commandArgs...)
+	command := exec.CommandContext(context.WithoutCancel(ctx), binary, commandArgs...) // stopped explicitly, not by ctx
 	stdout := &cliChromeIntegrationBuffer{}
 	stderr := newCLIChromeIntegrationStderr()
 	command.Stdout = stdout

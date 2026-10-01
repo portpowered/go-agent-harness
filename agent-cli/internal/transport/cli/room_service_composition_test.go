@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -146,4 +148,20 @@ func assertAskFlagError(t *testing.T, err error, wantMessage string, wantIs erro
 	if wantIs != nil && !errors.Is(err, wantIs) {
 		t.Fatalf("error = %v, want wrapped identity %v", err, wantIs)
 	}
+}
+
+// openRoomEventStream connects to a room's /events stream. The stream is read
+// after the run returns, so the request outlives the run context.
+func openRoomEventStream(t *testing.T, ctx context.Context, url string) *http.Response {
+	t.Helper()
+	request, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("build event stream request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("connect event stream: %v", err)
+	}
+	t.Cleanup(func() { closeTestResource(t, response.Body) })
+	return response
 }

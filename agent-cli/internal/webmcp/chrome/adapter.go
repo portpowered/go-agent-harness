@@ -355,3 +355,20 @@ func targetOrigin(rawURL string) string {
 	}
 	return parsed.Scheme + "://" + parsed.Host
 }
+
+// detachedCleanupContext is the root for cleanup paths that have no caller
+// context (Close). It keeps the target context's
+// values but not its cancellation: cleanup runs precisely when the target is
+// going away, and the detach/close commands must still be sent.
+func (s *targetSession) detachedCleanupContext() context.Context {
+	return context.WithoutCancel(s.targetContext)
+}
+
+// clientTarget returns the chromedp target bound to the session's target
+// context, if chromedp attached one.
+func (s *targetSession) clientTarget() *chromedp.Target {
+	if data := chromedp.FromContext(s.targetContext); data != nil {
+		return data.Target
+	}
+	return nil
+}

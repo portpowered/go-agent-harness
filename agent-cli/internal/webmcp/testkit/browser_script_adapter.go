@@ -353,11 +353,7 @@ type BrowserScriptSession struct {
 	target    webmcp.Target
 	ownership webmcp.TargetOwnership
 
-	// release consumes the scripted close/detach operation. It is bound to the
-	// attach context without its cancellation, so Close still runs it after
-	// the attaching caller has been cancelled.
-	release func(OperationType) error
-
+	release func(OperationType) error // see scriptReleaser
 	mu      sync.Mutex
 	context webmcp.PageContext
 	events  chan webmcp.BrowserEvent
@@ -387,21 +383,10 @@ func newBrowserScriptSession(ctx context.Context, handle *BrowserScriptHandle, t
 		Connected:  true,
 		Ready:      false,
 	}
-	runtime := handle.adapter.runtime
-	cleanupContext := context.WithoutCancel(ctx)
 	return &BrowserScriptSession{
-		handle:  handle,
-		runtime: runtime,
-		release: func(operation OperationType) error {
-			switch operation {
-			case OperationCloseTarget:
-				return runtime.CloseTarget(cleanupContext)
-			case OperationDetachTarget:
-				return runtime.DetachTarget(cleanupContext)
-			default:
-				return nil
-			}
-		},
+		handle:    handle,
+		runtime:   handle.adapter.runtime,
+		release:   scriptReleaser(ctx, handle.adapter.runtime),
 		target:    target,
 		ownership: ownership,
 		context:   page,

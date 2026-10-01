@@ -179,8 +179,7 @@ func (s *targetSession) enqueueBrowserEvent(event any) {
 	}
 }
 
-// routeProtocolEvents runs for the session's lifetime; ctx is the target
-// context it was started with and roots overflow cleanup.
+// routeProtocolEvents runs for the session; ctx (the target context) roots overflow cleanup.
 func (s *targetSession) routeProtocolEvents(ctx context.Context) {
 	defer close(s.routerDone)
 	for {
@@ -205,8 +204,6 @@ func (s *targetSession) routeProtocolEvents(ctx context.Context) {
 	}
 }
 
-// publish delivers one event. An overflow closes the session; ctx roots that
-// cleanup, which ignores ctx's cancellation so the target is still released.
 func (s *targetSession) publish(ctx context.Context, event webmcp.BrowserEvent) {
 	s.eventsMu.Lock()
 	overflowed := s.publishLocked(event, false)
@@ -642,9 +639,6 @@ func (s *targetSession) run(ctx context.Context, action chromedp.Action) error {
 		runner = chromedp.Run
 	}
 	boundContext, releaseDisconnect := s.handle.bindDisconnect(commandContext)
-	// chromedp actions must run in a context derived from the target context
-	// (it carries chromedp's connection state); ctx's cancellation reaches the
-	// command through the watcher above.
 	err := runner(boundContext, action) //nolint:contextcheck // chromedp requires the target-derived context; ctx cancellation is forwarded by the watcher above
 	close(watchDone)
 	releaseDisconnect()
@@ -765,8 +759,7 @@ func (s *targetSession) completeFinish() {
 // cleanupTarget is the ownership boundary for an attached target. The
 // explicit detach must complete (or fail) before the chromedp target
 // reference is cleared and the target context is canceled. chromedp v0.16.0
-// otherwise follows cancellation with Target.closeTarget. ctx bounds the
-// detach and close commands; each still gets the handle's command timeout.
+// otherwise follows cancellation with Target.closeTarget. ctx roots the commands.
 func (s *targetSession) cleanupTarget(ctx context.Context) error {
 	s.mu.Lock()
 	targetValue := s.protocolTarget
@@ -838,23 +831,6 @@ func (s *targetSession) cleanupTarget(ctx context.Context) error {
 	// from its cleanup goroutine without synchronization.
 	s.cancelClientTarget(targetValue)
 	return joined
-}
-
-// detachedCleanupContext is the root for cleanup paths that have no caller
-// context (Close). It keeps the target context's
-// values but not its cancellation: cleanup runs precisely when the target is
-// going away, and the detach/close commands must still be sent.
-func (s *targetSession) detachedCleanupContext() context.Context {
-	return context.WithoutCancel(s.targetContext)
-}
-
-// clientTarget returns the chromedp target bound to the session's target
-// context, if chromedp attached one.
-func (s *targetSession) clientTarget() *chromedp.Target {
-	if data := chromedp.FromContext(s.targetContext); data != nil {
-		return data.Target
-	}
-	return nil
 }
 
 func (s *targetSession) clearClientTarget(targetValue *chromedp.Target) {

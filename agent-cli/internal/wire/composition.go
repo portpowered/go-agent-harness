@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
+	"reflect"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
@@ -251,8 +250,7 @@ func WithStrictModelValidation() CompositionOption {
 // Optional inference capabilities are supplied through CompositionOption.
 // Validation runs before any graph constructor is called.
 func ComposeAgentCLI(
-	ctx context.Context,
-	toolExecutor messages.ToolExecutor,
+	ctx context.Context, toolExecutor messages.ToolExecutor,
 	transportDialer transport.Dialer,
 	deviceRegistry DeviceRegistry,
 	audioSource AudioSource,
@@ -288,8 +286,7 @@ func ComposeAgentCLI(
 	if err != nil {
 		return nil, err
 	}
-	return assembleAgentCLI(
-		ctx,
+	return assembleAgentCLI(ctx,
 		markToolExecutorReplacement(values.toolExecutor),
 		values.transportDialer,
 		values.deviceRegistry,
@@ -375,8 +372,7 @@ func initializeAgentCLIWithPorts(ctx context.Context, relaxModelValidation bool,
 	if err != nil {
 		return nil, err
 	}
-	return assembleAgentCLI(
-		ctx,
+	return assembleAgentCLI(ctx,
 		markToolExecutorReplacementIfSwapped(values.toolExecutor, swaps),
 		values.transportDialer,
 		values.deviceRegistry,

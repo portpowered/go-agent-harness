@@ -94,8 +94,7 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 	}
 
 	commandText := formatCommand(cfg.Command, cfg.Args)
-	// Cancellation is handled below by terminating the whole process group,
-	// so the command itself must not be killed early by ctx.
+	// Cancellation terminates the whole process group below, not just cmd.
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), cfg.Command, cfg.Args...)
 	cmd.Dir = cfg.Dir
 	if cfg.Env != nil {
@@ -139,16 +138,14 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 
 	if timedOut || contextCanceled {
 		termination = descendantsTerminated
-		// Termination must run after the caller is canceled.
-		cleanupContext := context.WithoutCancel(ctx)
-		cleanupErr := terminateCommand(cleanupContext, cmd)
+		cleanupErr := terminateCommand(context.WithoutCancel(ctx), cmd)
 		if cleanupErr != nil {
 			termination = "descendant termination reported: " + cleanupErr.Error()
 		}
 		select {
 		case commandErr = <-done:
 		case <-time.After(waitAfterTermination):
-			if retryErr := terminateCommand(cleanupContext, cmd); retryErr != nil {
+			if retryErr := terminateCommand(context.WithoutCancel(ctx), cmd); retryErr != nil {
 				termination += "; retry termination reported: " + retryErr.Error()
 			}
 			select {

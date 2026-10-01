@@ -754,8 +754,7 @@ type osManagedBrowserProcess struct {
 }
 
 func startManagedBrowserProcess(ctx context.Context, executable string, args []string) (ManagedBrowserProcess, error) {
-	// The managed browser outlives the launch request, so the process must not
-	// be killed when the request context is canceled.
+	// The managed browser outlives the launch request and its cancellation.
 	command := exec.CommandContext(context.WithoutCancel(ctx), executable, args...)
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard

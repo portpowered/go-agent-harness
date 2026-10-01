@@ -1,16 +1,21 @@
 package chrome
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/cdproto/target"
 	cdpTarget "github.com/chromedp/cdproto/target"
 	cdpWebMCP "github.com/chromedp/cdproto/webmcp"
+	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 )
 
 func (s *targetSession) convertProtocolEvent(event any) (webmcp.BrowserEvent, bool) {
@@ -265,4 +270,52 @@ func (s *targetSession) convertCrashed(value *cdpTarget.EventTargetCrashed) webm
 		return webmcp.BrowserEvent{}
 	}
 	return webmcp.BrowserEvent{Type: webmcp.EventTargetDetached, Reason: "target_crashed"}
+}
+
+// openTargetSession creates the chromedp target context for targetID and runs
+// the attach bootstrap. The target context deliberately derives from the
+// handle's browser context rather than from the attach request: chromedp ties
+// a tab's lifetime to its context, so the target must live as long as the
+// browser connection, not as long as the request that selected it. A nil
+// session means the target context could not be created; otherwise the
+// session is returned together with any bootstrap error so the caller can
+// abort it.
+func (h *handle) openTargetSession(targetID webmcp.TargetID, selected webmcp.Target, ownership webmcp.TargetOwnership) (*targetSession, *chromedp.Target, error) {
+	h.mu.Lock()
+	parent := h.browserContext
+	h.mu.Unlock()
+	ops := h.resolvedTargetContextOps()
+	if ops.newContext == nil || parent == nil && !hasCustomTargetContext(h) {
+		return nil, nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("browser context is unavailable"))
+	}
+	targetContext, cancelTarget := ops.newContext(parent, target.ID(targetID))
+	if targetContext == nil || cancelTarget == nil {
+		if cancelTarget != nil {
+			cancelTarget()
+		}
+		return nil, nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("target context is unavailable"))
+	}
+	session := newTargetSession(h, targetContext, cancelTarget, selected, ownership)
+	session.runAction = ops.run
+	ops.listen(targetContext, session.enqueueProtocolEvent)
+	ops.listenBrowser(targetContext, session.enqueueBrowserEvent)
+	// Both target and browser lifecycle listeners must be installed before the
+	// first target command starts the chromedp event reader. Direct cancellation
+	// uses this readiness bit in its sanitized wire trace.
+	session.markListenerReady()
+
+	// chromedp starts the target event reader with the context supplied to its
+	// first Run call. Keep that reader alive for the target session, while still
+	// binding it to the handle's disconnect signal. Do not call the returned
+	// release function here: doing so would cancel the reader immediately after
+	// attach and make every later target command time out. The target context
+	// and handle lifecycle cancel the bound context after attach.
+	attachContext, _ := h.bindDisconnect(targetContext)
+	err := ops.run(attachContext,
+		chromedp.ActionFunc(func(context.Context) error { return nil }),
+		pageScriptAction(siteadapter.BootstrapSource()),
+	)
+	protocolTarget := ops.target(targetContext)
+	session.setProtocolTarget(protocolTarget)
+	return session, protocolTarget, err
 }

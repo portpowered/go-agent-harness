@@ -334,29 +334,6 @@ func (b *StatefulBroker) dispatchQueuedInvocation(ctx context.Context, invocatio
 	b.waitForInvocationLane(ctx, invocation)
 }
 
-// dispatchQueuedInvocationWithCallerCancellation dispatches invocation with a
-// context derived from the worker context that is canceled once the admitting
-// caller cancels, mirroring the caller's cancellation for the browser call.
-func (b *StatefulBroker) dispatchQueuedInvocationWithCallerCancellation(ctx context.Context, invocation *brokerInvocation) {
-	dispatchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	select {
-	case <-invocation.callerDone:
-		// The caller is already gone: dispatch with an already-canceled
-		// context, exactly as the caller's own context would behave.
-		cancel()
-	default:
-	}
-	go func() {
-		select {
-		case <-invocation.callerDone:
-			cancel()
-		case <-dispatchCtx.Done():
-		}
-	}()
-	b.dispatchQueuedInvocationWithLock(dispatchCtx, invocation)
-}
-
 func (b *StatefulBroker) clearCurrentInvocation(selected *brokerSession, invocation *brokerInvocation) {
 	b.mu.Lock()
 	if selected.current == invocation {
