@@ -342,15 +342,6 @@ func TestSessionCommand_OpenAIRealtimeReplayBareEmptyPromptWithMaxDuration(t *te
 	}
 }
 
-// writeAudioTurnReplayFixture writes the embedded s2s-08 gate-probe capture
-// (audioTurnReplayFixtureJSON) to path for one test.
-func writeAudioTurnReplayFixture(t *testing.T, path string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(audioTurnReplayFixtureJSON), 0o600); err != nil {
-		t.Fatalf("write audio-turn replay fixture: %v", err)
-	}
-}
-
 // TestSessionCommand_OpenAIRealtimeReplayBareAudioTurnFullyDrivesFromRecordedFramesAndReportsCompletion
 // covers the scheduled-audio-turn shape recorded by --audio-in-turn/--record-dir
 // (probe s2s-08, 2026-08-30): a bare `--replay <capture>` with no --audio-in-turn,

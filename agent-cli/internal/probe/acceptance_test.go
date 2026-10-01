@@ -476,3 +476,29 @@ func recordedArtifactVerifier() ObjectiveVerifier {
 		},
 	}
 }
+
+// TestLiveTransportDoesNotForwardParentWorkspaceEnvironment is the one live
+// process test: the child writes its objective artifact and report, so it
+// also proves the live transport captures a real process end to end.
+func TestLiveTransportDoesNotForwardParentWorkspaceEnvironment(t *testing.T) {
+	workspaceSentinel := filepath.Join(t.TempDir(), "parent-workspace-sentinel")
+	t.Setenv("GITHUB_WORKSPACE", workspaceSentinel)
+	t.Setenv("OLDPWD", workspaceSentinel)
+
+	path := linkDuplexChild(t, blindEnvironmentAgentName)
+
+	runner := NewLiveRunner(recordedArtifactVerifier())
+	runner.ArtifactRoot = t.TempDir()
+	verdict, err := runner.Run(context.Background(), loopprobe.AcceptanceInput{BinaryPath: path, Goal: "Run without parent workspace context"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !verdict.Pass || !verdict.ObjectiveEvidence.Verified {
+		t.Fatalf("live verdict = %+v, want pass without leaked parent environment", verdict)
+	}
+	if data, readErr := os.ReadFile(filepath.Join(verdict.RunDirectory, "stderr.txt")); readErr != nil {
+		t.Fatalf("read stderr artifact: %v", readErr)
+	} else if strings.Contains(string(data), "parent workspace environment leaked") {
+		t.Fatalf("child observed parent workspace environment: %q", data)
+	}
+}

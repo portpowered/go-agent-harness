@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -424,4 +426,53 @@ func TestToolRespondedPageFailureUsesC0InvocationClassification(t *testing.T) {
 	if strings.Contains(responded.Reason, "untrusted") {
 		t.Fatal("page error text leaked into neutral event")
 	}
+}
+
+// discardSecondaryError runs a best-effort release on a path whose outcome is
+// already determined; its error cannot change that outcome.
+func discardSecondaryError(release func() error) {
+	if err := release(); err != nil {
+		return
+	}
+}
+
+// mustFixtureJSON encodes a test-owned fixture value. Fixture types are plain
+// data, so an encoding failure is a programming error in the test itself.
+func mustFixtureJSON(value any) []byte {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("encode fixture %T: %v", value, err))
+	}
+	return encoded
+}
+
+// writeFixtureBody serves a fixture HTTP response. A failed write means the
+// client abandoned the request, which the client-side assertion reports.
+func writeFixtureBody(writer io.Writer, body []byte) {
+	if _, err := writer.Write(body); err != nil {
+		return
+	}
+}
+
+// encodeFixtureJSON serves a JSON fixture response; see writeFixtureBody.
+func encodeFixtureJSON(writer io.Writer, value any) {
+	writeFixtureBody(writer, append(mustFixtureJSON(value), '\n'))
+}
+
+// closeForTest closes a resource whose close is expected to succeed.
+func closeForTest(tb testing.TB, closer io.Closer) {
+	tb.Helper()
+	if err := closer.Close(); err != nil {
+		tb.Errorf("close: %v", err)
+	}
+}
+
+// mustType asserts the dynamic type of value and fails the test otherwise.
+func mustType[T any](tb testing.TB, value any) T {
+	tb.Helper()
+	typed, ok := value.(T)
+	if !ok {
+		tb.Fatalf("value has type %T, want %T", value, typed)
+	}
+	return typed
 }

@@ -491,9 +491,6 @@ func (f *familyCProviderFixture) sendToolCall(connection *websocket.Conn, respon
 		responseID, call.ID, call.Name, call.Args)
 }
 
-// familyCFinalResponseDrain separates the last confirmation from session close.
-const familyCFinalResponseDrain = 25 * time.Millisecond
-
 func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, turnID, text string, marker byte) error {
 	at := f.elapsed()
 	f.recordProductTranscript(probe.TranscriptEvent{ID: "product-" + turnID, TurnID: turnID, Speaker: probe.TranscriptProduct, Text: text, At: at, Final: true})
@@ -517,9 +514,7 @@ func (f *familyCProviderFixture) sendConfirmation(connection *websocket.Conn, tu
 		return err
 	}
 	if marker == 3 {
-		// Let the client drain the final response before the provider closes.
-		drain := time.NewTimer(familyCFinalResponseDrain)
-		<-drain.C
+		<-time.After(25 * time.Millisecond) // let the client drain the final response
 		return f.send(connection, map[string]string{"type": rtEventSessionClosed, "reason": "family_c_complete"})
 	}
 	return nil
@@ -691,14 +686,6 @@ func assertFamilyCTranscriptOrder(t *testing.T, transcript []probe.TranscriptEve
 			t.Fatalf("customer transcript turn %d = %q, want turn-%d", index, transcript[index].TurnID, index+1)
 		}
 	}
-}
-
-func familyCFrame(seed byte) []byte {
-	frame := make([]byte, probe.DefaultDuplexFrameSamples*2)
-	for index := range frame {
-		frame[index] = seed
-	}
-	return frame
 }
 
 // handleInputAudio answers one appended frame and reports whether the

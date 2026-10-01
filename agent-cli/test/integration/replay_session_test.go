@@ -92,3 +92,12 @@ func locateCLIFixture(t *testing.T, name string) string {
 	}
 	return path
 }
+
+// writeAudioTurnReplayFixture writes the embedded s2s-08 gate-probe capture
+// (audioTurnReplayFixtureJSON) to path for one test.
+func writeAudioTurnReplayFixture(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(audioTurnReplayFixtureJSON), 0o600); err != nil {
+		t.Fatalf("write audio-turn replay fixture: %v", err)
+	}
+}

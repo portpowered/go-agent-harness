@@ -1,3 +1,5 @@
+//go:build e2e || live
+
 package chrome
 
 // Shared pinned Chrome for Testing harness: acquisition, isolated launch,
@@ -365,14 +367,6 @@ func readDevToolsTargets(ctx context.Context, baseURL string) ([]devToolsTarget,
 	return targets, nil
 }
 
-// discardSecondaryError runs a best-effort release on a path whose outcome is
-// already determined; its error cannot change that outcome.
-func discardSecondaryError(release func() error) {
-	if err := release(); err != nil {
-		return
-	}
-}
-
 func closeRecoveryTarget(ctx context.Context, baseURL string, targetID webmcp.TargetID) error {
 	requestURL := strings.TrimRight(baseURL, "/") + "/json/close/" + url.PathEscape(string(targetID))
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
@@ -501,45 +495,4 @@ func mustRepositoryRoot() string {
 		panic(err)
 	}
 	return root
-}
-
-// mustFixtureJSON encodes a test-owned fixture value. Fixture types are plain
-// data, so an encoding failure is a programming error in the test itself.
-func mustFixtureJSON(value any) []byte {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		panic(fmt.Sprintf("encode fixture %T: %v", value, err))
-	}
-	return encoded
-}
-
-// writeFixtureBody serves a fixture HTTP response. A failed write means the
-// client abandoned the request, which the client-side assertion reports.
-func writeFixtureBody(writer io.Writer, body []byte) {
-	if _, err := writer.Write(body); err != nil {
-		return
-	}
-}
-
-// encodeFixtureJSON serves a JSON fixture response; see writeFixtureBody.
-func encodeFixtureJSON(writer io.Writer, value any) {
-	writeFixtureBody(writer, append(mustFixtureJSON(value), '\n'))
-}
-
-// closeForTest closes a resource whose close is expected to succeed.
-func closeForTest(tb testing.TB, closer io.Closer) {
-	tb.Helper()
-	if err := closer.Close(); err != nil {
-		tb.Errorf("close: %v", err)
-	}
-}
-
-// mustType asserts the dynamic type of value and fails the test otherwise.
-func mustType[T any](tb testing.TB, value any) T {
-	tb.Helper()
-	typed, ok := value.(T)
-	if !ok {
-		tb.Fatalf("value has type %T, want %T", value, typed)
-	}
-	return typed
 }

@@ -129,3 +129,11 @@ func (f *familyBProviderFixture) Snapshot() familyBProviderObservation {
 		ProtocolError:            f.protocolError,
 	}
 }
+
+func familyCFrame(seed byte) []byte {
+	frame := make([]byte, probe.DefaultDuplexFrameSamples*2)
+	for index := range frame {
+		frame[index] = seed
+	}
+	return frame
+}

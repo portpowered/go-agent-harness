@@ -4,6 +4,7 @@ package chrome
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,9 +38,12 @@ const (
 	conversationalCustomerLaneMerged    = "MERGED"
 )
 
+//go:embed testdata/webmcp_conversational_customer.html
+var conversationalCustomerFixtureHTML []byte
+
 // TestPinnedChromeWebMCPConversationalCustomerLive is the single credentialed
-// acceptance runner for Story 006. It is skipped before any browser, network,
-// provider, or credential side effect unless explicitly enabled. All browser
+// acceptance runner for Story 006. It builds only with the live tag, so no
+// browser, network, provider, or credential side effect happens otherwise. All browser
 // work remains in the production agent binary; this test only supplies the
 // independent fixture/oracle and report boundaries.
 func TestPinnedChromeWebMCPConversationalCustomerLive(t *testing.T) {
@@ -153,7 +157,7 @@ func launchConversationalCustomerLive(t *testing.T, ctx context.Context) *conver
 		t.Fatalf("acquire locked Chrome for Testing: %v", err)
 	}
 
-	live.fixture = newConversationalCustomerFixtureServer()
+	live.fixture = newConversationalCustomerFixtureServer(conversationalCustomerFixtureHTML)
 	t.Cleanup(live.fixture.Close)
 	live.homeURL = live.fixture.URL(conversationalCustomerHomePage)
 	live.settingsURL = live.fixture.URL(conversationalCustomerSettingsPage)
@@ -819,4 +823,38 @@ func postConversationalCustomerLaneFinding(ctx context.Context, report string) e
 		return fmt.Errorf("gh comment failed: %w", err)
 	}
 	return nil
+}
+
+func openConversationalCustomerObserver(ctx context.Context, browserID string, targetID webmcp.TargetID, version devToolsVersion) (webmcp.TargetSession, func() error, error) {
+	candidate := webmcp.BrowserCandidate{
+		ID:           webmcp.BrowserID(browserID),
+		Source:       webmcp.DiscoverySourceExplicit,
+		Product:      version.Browser,
+		Protocol:     version.ProtocolVersion,
+		HTTPURL:      browserHTTPURL(version.WebSocketDebuggerURL),
+		BrowserWSURL: version.WebSocketDebuggerURL,
+		Loopback:     true,
+		Explicit:     true,
+	}
+	runtime := NewRuntime(WithEventBuffer(512), WithCommandTimeout(20*time.Second))
+	handle, err := runtime.Open(ctx, candidate)
+	if err != nil {
+		return nil, nil, err
+	}
+	session, err := handle.Attach(ctx, targetID, webmcp.TargetOwnershipExternal)
+	if err != nil {
+		discardSecondaryError(handle.Close)
+		return nil, nil, err
+	}
+	if err := session.EnableWebMCP(ctx); err != nil {
+		discardSecondaryError(session.Close)
+		discardSecondaryError(handle.Close)
+		return nil, nil, err
+	}
+	closeObserver := func() error {
+		sessionErr := session.Close()
+		handleErr := handle.Close()
+		return errors.Join(sessionErr, handleErr)
+	}
+	return session, closeObserver, nil
 }

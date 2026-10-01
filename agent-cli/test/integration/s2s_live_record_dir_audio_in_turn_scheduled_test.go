@@ -38,17 +38,6 @@ func newCLIScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.Ag
 	return agentCLI
 }
 
-func newCLIGroundedScheduledBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
-	t.Helper()
-	agentCLI, err := wire.InitializeMockAgentCLIWithPorts(t.Context(),
-		wire.NewPortSwap(wire.PortTransportDialer, server),
-	)
-	if err != nil {
-		t.Fatalf("initialize grounded production CLI: %v", err)
-	}
-	return agentCLI
-}
-
 func newCLIServerVADBoundaryAgent(t *testing.T, server transport.Dialer) *cli.AgentCLI {
 	t.Helper()
 	createResponse := false

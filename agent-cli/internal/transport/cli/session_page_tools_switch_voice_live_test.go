@@ -509,3 +509,12 @@ func sessionPageToolsSwitchVoiceFileSize(path string) int64 {
 	}
 	return info.Size()
 }
+
+func directLiveInvoke(t *testing.T, ctx context.Context, binary, cdpURL string, target sessionPageToolsLiveTarget, toolRef string, input any) webmcp.ToolResultEnvelope {
+	t.Helper()
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal direct CLI input: %v", err)
+	}
+	return runDirectLiveCLI(t, ctx, binary, cdpURL, target, "invoke", "--tool-ref", toolRef, "--input-json", string(encoded), "--timeout", "90s", "--invocation-timeout", "120s")
+}

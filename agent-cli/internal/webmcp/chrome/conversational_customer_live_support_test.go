@@ -6,9 +6,7 @@ package chrome
 import (
 	"bufio"
 	"context"
-	_ "embed"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -33,9 +31,6 @@ const (
 )
 
 const conversationalCustomerModelEnv = "WEBMCP_CONVERSATIONAL_MODEL"
-
-//go:embed testdata/webmcp_conversational_customer.html
-var conversationalCustomerFixtureHTML []byte
 
 type conversationalCustomerOracle struct {
 	Page        string   `json:"page"`
@@ -64,7 +59,7 @@ type conversationalCustomerFixtureServer struct {
 	oracle conversationalCustomerOracle
 }
 
-func newConversationalCustomerFixtureServer() *conversationalCustomerFixtureServer {
+func newConversationalCustomerFixtureServer(page []byte) *conversationalCustomerFixtureServer {
 	fixture := &conversationalCustomerFixtureServer{oracle: conversationalCustomerOracle{
 		Page: conversationalCustomerHomePage, Label: "unset", Theme: "default", Priority: "normal", VisibleText: "unset/default",
 	}}
@@ -79,7 +74,7 @@ func newConversationalCustomerFixtureServer() *conversationalCustomerFixtureServ
 			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 			writer.Header().Set("Origin-Agent-Cluster", "?1")
 			writer.Header().Set("Permissions-Policy", "tools=(self)")
-			if _, err := writer.Write(conversationalCustomerFixtureHTML); err != nil {
+			if _, err := writer.Write(page); err != nil {
 				// The browser went away mid-response; the oracle observes that.
 				return
 			}
@@ -521,40 +516,6 @@ func conversationalCustomerCurrentToolRefs(
 	}
 	sort.Slice(refs, func(left, right int) bool { return refs[left] < refs[right] })
 	return refs, generation
-}
-
-func openConversationalCustomerObserver(ctx context.Context, browserID string, targetID webmcp.TargetID, version devToolsVersion) (webmcp.TargetSession, func() error, error) {
-	candidate := webmcp.BrowserCandidate{
-		ID:           webmcp.BrowserID(browserID),
-		Source:       webmcp.DiscoverySourceExplicit,
-		Product:      version.Browser,
-		Protocol:     version.ProtocolVersion,
-		HTTPURL:      browserHTTPURL(version.WebSocketDebuggerURL),
-		BrowserWSURL: version.WebSocketDebuggerURL,
-		Loopback:     true,
-		Explicit:     true,
-	}
-	runtime := NewRuntime(WithEventBuffer(512), WithCommandTimeout(20*time.Second))
-	handle, err := runtime.Open(ctx, candidate)
-	if err != nil {
-		return nil, nil, err
-	}
-	session, err := handle.Attach(ctx, targetID, webmcp.TargetOwnershipExternal)
-	if err != nil {
-		discardSecondaryError(handle.Close)
-		return nil, nil, err
-	}
-	if err := session.EnableWebMCP(ctx); err != nil {
-		discardSecondaryError(session.Close)
-		discardSecondaryError(handle.Close)
-		return nil, nil, err
-	}
-	closeObserver := func() error {
-		sessionErr := session.Close()
-		handleErr := handle.Close()
-		return errors.Join(sessionErr, handleErr)
-	}
-	return session, closeObserver, nil
 }
 
 type conversationalCustomerNavigationObservation struct {

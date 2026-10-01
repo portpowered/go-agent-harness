@@ -398,14 +398,6 @@ func verifyToolDuringAudioExchangeIntact(exchange toolDuringAudioExchange, expec
 	return nil
 }
 
-// toolDuringAudioDeltaSpan renders the canonical affected-range identifier
-// for delta k of the scripted response.
-func toolDuringAudioDeltaSpan(k int) string {
-	start := k * toolDuringAudioDeltaSamples
-	end := start + toolDuringAudioDeltaSamples
-	return fmt.Sprintf("audio delta #%d (samples [%d,%d))", k, start, end)
-}
-
 // verifyToolDuringAudioTurnIntact proves the recorded --audio-out turn carries
 // every scripted output-audio delta intact across the interleaved tool call:
 // none missing, duplicated, reordered, or truncated. It returns a descriptive

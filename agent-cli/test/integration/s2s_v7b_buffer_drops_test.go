@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -261,4 +262,12 @@ func TestS2SV7BNormalTrafficReportsZeroDropsAndEmitsNoLines(t *testing.T) {
 	if records := sink.records(); len(records) != 0 {
 		t.Fatalf("zero-drop run emitted %d drop log lines, want 0", len(records))
 	}
+}
+
+// toolDuringAudioDeltaSpan renders the canonical affected-range identifier
+// for delta k of the scripted response.
+func toolDuringAudioDeltaSpan(k int) string {
+	start := k * toolDuringAudioDeltaSamples
+	end := start + toolDuringAudioDeltaSamples
+	return fmt.Sprintf("audio delta #%d (samples [%d,%d))", k, start, end)
 }

@@ -205,18 +205,6 @@ func materializeReadImageReplayResultFixture(t *testing.T, committedPath, imageP
 	return path
 }
 
-func expectedReadImageMissingError(t *testing.T, imagePath string) string {
-	t.Helper()
-	_, err := os.ReadFile(imagePath)
-	if err == nil {
-		t.Fatalf("missing read_image path unexpectedly exists: %s", imagePath)
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("missing read_image path returned unexpected error: %v", err)
-	}
-	return fmt.Sprintf("session image %q is missing: %v", imagePath, err)
-}
-
 func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataURL, result string) json.RawMessage {
 	t.Helper()
 	var value any

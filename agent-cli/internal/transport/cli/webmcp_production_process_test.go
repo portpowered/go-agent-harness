@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/spf13/cobra"
@@ -209,12 +208,6 @@ func runOSProcessDirectCommand(t *testing.T, configDir string, store WebMCPSelec
 	root.SetErr(os.Stderr)
 	root.SetArgs(args)
 	return root.Execute()
-}
-
-func newDirectGlobalFlags(configDir string) *flags.GlobalFlags {
-	globalFlags := flags.NewGlobalFlags()
-	globalFlags.ConfigDirPath = configDir
-	return globalFlags
 }
 
 func osProcessFixtureFactory(endpoint string) WebMCPDoctorFactory {

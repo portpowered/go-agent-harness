@@ -464,48 +464,35 @@ func chromeForTestingResponse(status int, body []byte) *http.Response {
 	return &http.Response{StatusCode: status, Status: http.StatusText(status), Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header)}
 }
 
-// writeDeflatedArchive writes a highly compressible archive whose entries
-// together expand to entries*entrySize bytes.
-func writeDeflatedArchive(t *testing.T, entries, entrySize int) string {
-	t.Helper()
-	var buffer bytes.Buffer
-	archive := zip.NewWriter(&buffer)
-	for i := range entries {
-		header := &zip.FileHeader{Name: filepath.ToSlash(filepath.Join("chrome", string(rune('a'+i)))), Method: zip.Deflate}
-		header.SetMode(0o600)
-		file, err := archive.CreateHeader(header)
-		if err != nil {
-			t.Fatalf("create entry: %v", err)
+// chromeVersionHelperOutput is what this test binary prints when re-executed
+// as `<binary> --version` (see TestMain).
+const chromeVersionHelperOutput = "Google Chrome for Testing 152.0.7977.64 (version-query helper)"
+
+// TestMain answers `--version` itself, so TestQueryChromeVersionRunsTheExecutable
+// can run the production version query against this already-assessed test
+// binary on every platform.
+func TestMain(m *testing.M) {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		if _, err := os.Stdout.WriteString(chromeVersionHelperOutput + "\n"); err != nil {
+			os.Exit(1)
 		}
-		if _, err := file.Write(bytes.Repeat([]byte{0}, entrySize)); err != nil {
-			t.Fatalf("write entry: %v", err)
-		}
+		os.Exit(0)
 	}
-	if err := archive.Close(); err != nil {
-		t.Fatalf("close archive: %v", err)
-	}
-	path := filepath.Join(t.TempDir(), "chrome.zip")
-	if err := os.WriteFile(path, buffer.Bytes(), 0o600); err != nil {
-		t.Fatalf("write archive: %v", err)
-	}
-	return path
+	os.Exit(m.Run())
 }
 
-func TestExtractManagedChromeArchiveBoundsDecompressedSize(t *testing.T) {
-	const limit = 64 << 10
-	path := writeDeflatedArchive(t, 2, limit/2+1)
-	err := extractManagedChromeArchive(path, t.TempDir(), limit)
-	if !errors.Is(err, errChromeArchiveTooLarge) {
-		t.Fatalf("extract over-budget archive = %v, want %v", err, errChromeArchiveTooLarge)
+// TestQueryChromeVersionRunsTheExecutable runs the production version query
+// against this test binary, which needs no first-run code assessment.
+func TestQueryChromeVersionRunsTheExecutable(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatalf("locate test binary: %v", err)
 	}
-
-	within := writeDeflatedArchive(t, 2, limit/2)
-	destination := t.TempDir()
-	if err := extractManagedChromeArchive(within, destination, limit); err != nil {
-		t.Fatalf("extract archive at budget: %v", err)
+	output, err := queryChromeVersion(context.Background(), executable)
+	if err != nil || strings.TrimSpace(output) != chromeVersionHelperOutput {
+		t.Fatalf("queryChromeVersion(%s) = %q, %v; want %q", executable, output, err, chromeVersionHelperOutput)
 	}
-	info, err := os.Stat(filepath.Join(destination, "chrome", "b"))
-	if err != nil || info.Size() != limit/2 {
-		t.Fatalf("extracted entry = %v, %v; want %d bytes", info, err, limit/2)
+	if _, err := queryChromeVersion(context.Background(), filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Fatal("queryChromeVersion succeeded for a missing executable")
 	}
 }

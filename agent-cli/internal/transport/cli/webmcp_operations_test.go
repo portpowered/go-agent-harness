@@ -827,10 +827,3 @@ func requireBrowserDeathJSON(t *testing.T, result directCommandResult, testCase 
 		t.Errorf("reconnect_required = %#v, want true", got)
 	}
 }
-
-func killSIGINTChild(t *testing.T, command *exec.Cmd) {
-	t.Helper()
-	if err := command.Process.Kill(); err != nil {
-		t.Logf("kill SIGINT child: %v", err)
-	}
-}

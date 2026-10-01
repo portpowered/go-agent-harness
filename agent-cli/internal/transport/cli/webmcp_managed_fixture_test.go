@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -498,4 +499,17 @@ func assertCanceledInvokeEnvelope(t *testing.T, stdout, invocationID string) {
 	if invokeEnvelope.Error.Details["invocation_id"] != invocationID {
 		t.Fatalf("canceled invoke ID = %#v, want %q", invokeEnvelope.Error.Details["invocation_id"], invocationID)
 	}
+}
+
+func killSIGINTChild(t *testing.T, command *exec.Cmd) {
+	t.Helper()
+	if err := command.Process.Kill(); err != nil {
+		t.Logf("kill SIGINT child: %v", err)
+	}
+}
+
+func newDirectGlobalFlags(configDir string) *flags.GlobalFlags {
+	globalFlags := flags.NewGlobalFlags()
+	globalFlags.ConfigDirPath = configDir
+	return globalFlags
 }

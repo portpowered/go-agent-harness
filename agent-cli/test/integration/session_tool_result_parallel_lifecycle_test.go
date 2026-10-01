@@ -421,13 +421,6 @@ func assertParallelLifecycleCalls(t *testing.T, calls []messages.ToolCall) {
 	}
 }
 
-func parallelLifecycleIdentity(callID string) (name, args string) {
-	if callID == parallelLifecycleAlphaID {
-		return parallelLifecycleAlphaName, parallelLifecycleAlphaArgs
-	}
-	return parallelLifecycleBravoName, parallelLifecycleBravoArgs
-}
-
 func assertParallelLifecycleResults(t *testing.T, sent []messages.StreamMessage, wantIDs ...string) {
 	t.Helper()
 	want := make(map[string]struct{}, len(wantIDs))

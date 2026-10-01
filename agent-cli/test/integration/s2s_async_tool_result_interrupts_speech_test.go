@@ -651,14 +651,6 @@ func testSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	t.Logf("provider-facing result delivered exactly once for %q", asyncCollisionCallID)
 }
 
-func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string {
-	types := make([]string, len(outbound))
-	for i, event := range outbound {
-		types[i] = event.Type
-	}
-	return types
-}
-
 func summarizeAsyncCollisionDeltas(deltas []messages.StreamMessage) []string {
 	types := make([]string, len(deltas))
 	for i, delta := range deltas {

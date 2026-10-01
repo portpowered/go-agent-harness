@@ -598,15 +598,6 @@ func findDirectToolRef(t *testing.T, data WebMCPDirectToolsData, name string) st
 	return ""
 }
 
-func directLiveInvoke(t *testing.T, ctx context.Context, binary, cdpURL string, target sessionPageToolsLiveTarget, toolRef string, input any) webmcp.ToolResultEnvelope {
-	t.Helper()
-	encoded, err := json.Marshal(input)
-	if err != nil {
-		t.Fatalf("marshal direct CLI input: %v", err)
-	}
-	return runDirectLiveCLI(t, ctx, binary, cdpURL, target, "invoke", "--tool-ref", toolRef, "--input-json", string(encoded), "--timeout", "90s", "--invocation-timeout", "120s")
-}
-
 func runDirectLiveCLI(t *testing.T, parent context.Context, binary, cdpURL string, target sessionPageToolsLiveTarget, operation string, operationArgs ...string) webmcp.ToolResultEnvelope {
 	t.Helper()
 	commandCtx, cancel := context.WithTimeout(parent, 150*time.Second)

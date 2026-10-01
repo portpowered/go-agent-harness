@@ -1,3 +1,5 @@
+//go:build e2e || live
+
 package chrome
 
 // Actual-binary CLI harness for the Gate I1 family of live proofs: child

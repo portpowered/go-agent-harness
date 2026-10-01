@@ -202,18 +202,30 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 // audio-device-server binary whose manual callback clock the test advances
 // over HTTP. Its device-cadence deliveries drain in real time (11-22 s each).
 // Pull requests keep test45/captured_cadence as the representative real-time
-// continuation across the three processes; the rest of the matrix is only
-// registered when built with the stress tag (remoteToolAudioStress).
-
+// continuation across the three processes; the rest of the matrix is
+// TestAgentBinaryToolContinuationStressMatrix (stress tag).
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 	t.Parallel()
+	runAgentBinaryContinuationMatrix(t, isRepresentativeRemoteToolAudioContinuation)
+}
+
+// isRepresentativeRemoteToolAudioContinuation selects the one real-time
+// continuation that runs on every pull request.
+func isRepresentativeRemoteToolAudioContinuation(testCase remoteToolAudioCase, delivery remoteToolAudioDelivery) bool {
+	return testCase.name == "test45" && delivery.name == "captured_cadence"
+}
+
+// runAgentBinaryContinuationMatrix runs the fresh-process continuation cases
+// that include selects, bounding concurrent process/device pairs.
+func runAgentBinaryContinuationMatrix(t *testing.T, include func(remoteToolAudioCase, remoteToolAudioDelivery) bool) {
+	t.Helper()
 	scenarioSlots := make(chan struct{}, remoteToolAudioScenarioSlots)
 	for _, testCase := range remoteToolAudioContinuationCases() {
 		for _, delivery := range remoteToolAudioDeliveries() {
 			if testCase.healthyControl && delivery.name != "provider_burst" {
 				continue
 			}
-			if !remoteToolAudioStress && (testCase.name != "test45" || delivery.name != "captured_cadence") {
+			if !include(testCase, delivery) {
 				continue
 			}
 			t.Run(testCase.name+"/"+delivery.name, func(t *testing.T) {

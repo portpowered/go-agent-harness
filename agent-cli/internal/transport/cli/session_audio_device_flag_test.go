@@ -123,3 +123,15 @@ func assertSessionFlagHidden(t *testing.T, cmd *cobra.Command, name string) {
 		t.Fatalf("--%s = %+v, want a registered hidden flag", name, flag)
 	}
 }
+
+func TestSessionCommandRejectsNonLoopbackAudioDeviceServerBeforeSessionSetup(t *testing.T) {
+	command := newTestLiveSessionCommand(flags.NewAskFlags(), flags.NewGlobalFlags(), nil, nil).Generate()
+	command.SetArgs([]string{
+		"--replay", "not-opened.session.json",
+		"--audio-device-server", "192.0.2.10:19090",
+	})
+	err := command.Execute()
+	if !errors.Is(err, runtimeDevices.ErrInvalidRemoteEndpoint) {
+		t.Fatalf("session remote device error = %v, want ErrInvalidRemoteEndpoint", err)
+	}
+}

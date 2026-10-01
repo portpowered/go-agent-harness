@@ -521,3 +521,22 @@ func assertScheduledFirstTurnImageItem(t *testing.T, outbound []cliLiveOutbound)
 		}
 	}
 }
+
+func expectedReadImageMissingError(t *testing.T, imagePath string) string {
+	t.Helper()
+	_, err := os.ReadFile(imagePath)
+	if err == nil {
+		t.Fatalf("missing read_image path unexpectedly exists: %s", imagePath)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing read_image path returned unexpected error: %v", err)
+	}
+	return fmt.Sprintf("session image %q is missing: %v", imagePath, err)
+}
+
+func readImageSpokenRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
+	if len(record.Payload) > 0 {
+		return record.Payload
+	}
+	return record.Data
+}

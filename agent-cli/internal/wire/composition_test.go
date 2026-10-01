@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
@@ -600,11 +599,6 @@ func executeSessionCommand(t *testing.T, root *cli.AgentCLI, provider bool) erro
 }
 
 func TestCompositionConstruction_IsInert(t *testing.T) {
-	synctest.Test(t, testCompositionConstruction_IsInert)
-}
-
-func testCompositionConstruction_IsInert(t *testing.T) {
-	t.Helper()
 	toolExecutor := &recordingToolExecutor{}
 	inferencer := &recordingInferencer{response: "unused"}
 	sessionInferencer := &recordingSessionInferencer{}
@@ -637,10 +631,8 @@ func testCompositionConstruction_IsInert(t *testing.T) {
 		t.Fatalf("inert construction failed: root=%v err=%v", root, err)
 	}
 
-	// Let any goroutine construction started settle into the bubble. A
-	// tolerance of two goroutines covers test/runtime noise; construction
-	// itself starts none.
-	synctest.Wait()
+	// Goroutine creation is synchronous, so any started by construction are
+	// already counted; two goroutines of tolerance cover runtime noise.
 	after := runtime.NumGoroutine()
 	if after > before+2 {
 		t.Fatalf("construction left unexpected goroutines: before=%d after=%d", before, after)

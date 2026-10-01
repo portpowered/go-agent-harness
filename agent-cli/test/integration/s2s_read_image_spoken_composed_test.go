@@ -127,13 +127,6 @@ func isReadImageSeedMessage(record gatewaytesting.CapturedSessionEvent) bool {
 	return payload.Item.Type == rtItemMessage
 }
 
-func readImageSpokenRecordPayload(record gatewaytesting.CapturedSessionEvent) []byte {
-	if len(record.Payload) > 0 {
-		return record.Payload
-	}
-	return record.Data
-}
-
 func readImageSpokenClientEvent(t *testing.T, eventType string, payload map[string]string) gatewaytesting.CapturedSessionEvent {
 	t.Helper()
 	data, err := json.Marshal(payload)

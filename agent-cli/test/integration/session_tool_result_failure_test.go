@@ -278,3 +278,11 @@ func TestSessionUnresolvedToolResultTerminalPathsFailWithStableDiagnostic(t *tes
 
 var _ messages.SessionInferencer = (*fixedUnresolvedFailureInferencer)(nil)
 var _ messages.ToolExecutor = (*unresolvedFailureToolExecutor)(nil)
+
+func summarizeAsyncCollisionOutbound(outbound []asyncCollisionOutbound) []string {
+	types := make([]string, len(outbound))
+	for i, event := range outbound {
+		types[i] = event.Type
+	}
+	return types
+}

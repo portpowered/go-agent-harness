@@ -44,6 +44,13 @@ func TestAgentBinaryTest46HighRateToolAudioRegression(t *testing.T) {
 	}
 }
 
-// remoteToolAudioStress registers the full fresh-process continuation matrix
-// in TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio.
-const remoteToolAudioStress = true
+// TestAgentBinaryToolContinuationStressMatrix runs the fresh-process
+// continuation matrix beyond the representative case that
+// TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio keeps on every
+// pull request.
+func TestAgentBinaryToolContinuationStressMatrix(t *testing.T) {
+	t.Parallel()
+	runAgentBinaryContinuationMatrix(t, func(testCase remoteToolAudioCase, delivery remoteToolAudioDelivery) bool {
+		return !isRepresentativeRemoteToolAudioContinuation(testCase, delivery)
+	})
+}

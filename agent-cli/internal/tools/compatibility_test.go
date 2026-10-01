@@ -408,6 +408,34 @@ func assertDisplayDiscovery(t *testing.T, surface DisplaySurface, ctx context.Co
 	if err != nil || bounds.Empty() {
 		t.Fatalf("surface Bounds = %v, %v", bounds, err)
 	}
+	assertUnavailableDisplayDiscovery(t, ctx)
+}
+
+// assertUnavailableDisplayDiscovery proves a failed discovery command makes
+// Probe report the display unavailable. It shares assertDisplayDiscovery's
+// platform guard: the Windows discovery boundary is a host API, not a process
+// seam.
+func assertUnavailableDisplayDiscovery(t *testing.T, ctx context.Context) {
+	t.Helper()
+	process := DisplayProcessAdapter{
+		RunFunc: func(_ context.Context, name string, _ ...string) ([]byte, error) {
+			if name == "xrandr" || name == "system_profiler" {
+				return nil, errors.New("discovery failed")
+			}
+			return nil, nil
+		},
+		LookPathFunc: func(string) (string, error) { return "", errors.New("missing capture command") },
+	}
+	surface := NewHostDisplaySurfaceWithOptions(HostDisplaySurfaceOptions{
+		Process: process,
+		PermissionChecker: DisplayPermissionCheckerFunc(func(context.Context) (DisplayPermission, error) {
+			return DisplayPermission{State: DisplayPermissionGranted}, nil
+		}),
+	})
+	capability, err := surface.Probe(ctx)
+	if err == nil || capability.State != ScreenCaptureUnavailable {
+		t.Fatalf("failed discovery Probe = %+v, %v", capability, err)
+	}
 }
 
 func TestDisplaySurfaceCancellationAndDefaults(t *testing.T) {

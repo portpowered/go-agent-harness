@@ -13,9 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/chromedp/chromedp"
 	webmcp "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
@@ -104,70 +102,6 @@ func protocolImportAliases(file *ast.File) map[string]bool {
 		aliases[parts[len(parts)-1]] = true
 	}
 	return aliases
-}
-
-type capitalOneShoppingLiveOffer struct {
-	Merchant        string   `json:"merchant"`
-	Description     string   `json:"description"`
-	CashbackPercent *float64 `json:"cashback_percent"`
-	BonusUSD        *float64 `json:"bonus_usd"`
-	RewardCapUSD    *float64 `json:"reward_cap_usd"`
-	QualifyingSpend *float64 `json:"qualifying_spend_usd"`
-	CostUSD         *float64 `json:"cost_usd"`
-}
-
-type capitalOneShoppingDocumentState struct {
-	Title             string `json:"title"`
-	ReadyState        string `json:"ready_state"`
-	BodyPresent       bool   `json:"body_present"`
-	ModelContext      string `json:"model_context"`
-	NavigatorContext  string `json:"navigator_context"`
-	AdapterInstalled  bool   `json:"adapter_installed"`
-	AdapterRegistered bool   `json:"adapter_registered"`
-	AdapterError      string `json:"adapter_error"`
-}
-
-func inspectCapitalOneShoppingDocument(t *testing.T, ctx context.Context, session *targetSession) capitalOneShoppingDocumentState {
-	t.Helper()
-	var state capitalOneShoppingDocumentState
-	expression := `(() => { const adapter = globalThis.__yuiCapitalOneShoppingWebMCPAdapterV1; return { title: document.title || "", ready_state: document.readyState, body_present: !!document.body, model_context: typeof document.modelContext, navigator_context: typeof navigator.modelContext, adapter_installed: !!adapter, adapter_registered: !!adapter?.registered, adapter_error: String(adapter?.error || "") }; })()`
-	if err := session.run(ctx, chromedp.Evaluate(expression, &state)); err != nil {
-		t.Fatalf("inspect Capital One Shopping document: %v", err)
-	}
-	return state
-}
-
-func waitForCapitalOneShoppingDocument(t *testing.T, ctx context.Context, session *targetSession) capitalOneShoppingDocumentState {
-	t.Helper()
-	for {
-		state := inspectCapitalOneShoppingDocument(t, ctx, session)
-		if state.BodyPresent && state.ReadyState == "complete" && state.Title != "" {
-			return state
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatalf("wait for Capital One Shopping document: %v (last=%+v)", ctx.Err(), state)
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
-}
-
-func waitForCapitalOneShoppingCatalog(ctx context.Context, session webmcp.TargetSession) (map[string]webmcp.ToolDescriptor, error) {
-	tools := make(map[string]webmcp.ToolDescriptor, 4)
-	for len(tools) < 4 {
-		added, err := waitForIntegrationEvent(ctx, session.Events(), "Capital One Shopping live adapter catalog", func(event webmcp.BrowserEvent) bool {
-			return event.Type == webmcp.EventToolsAdded && len(event.Tools) > 0
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, tool := range added.Tools {
-			if len(tool.Name) >= len("capital_one_shopping_") && tool.Name[:len("capital_one_shopping_")] == "capital_one_shopping_" {
-				tools[tool.Name] = tool
-			}
-		}
-	}
-	return tools, nil
 }
 
 func TestResolveBrowserWebSocketResolvesRootWebSocketEndpoint(t *testing.T) {

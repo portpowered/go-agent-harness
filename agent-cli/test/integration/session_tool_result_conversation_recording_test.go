@@ -202,3 +202,10 @@ func realtimeToolFixturePrelude(t *testing.T, wavPath string) (gwtesting.Session
 	clientEvent(rtEventResponseCreate, json.RawMessage(`{"type":"response.create"}`))
 	return baseCapture, records
 }
+
+func parallelLifecycleIdentity(callID string) (name, args string) {
+	if callID == parallelLifecycleAlphaID {
+		return parallelLifecycleAlphaName, parallelLifecycleAlphaArgs
+	}
+	return parallelLifecycleBravoName, parallelLifecycleBravoArgs
+}

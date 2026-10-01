@@ -93,13 +93,7 @@ func TestLiveVoiceToolGroundingFailuresTwiceAndDateControl(t *testing.T) {
 				// The live model is token-rate limited. Space independent probes
 				// so the required five-run matrix does not turn its final control
 				// into a provider rate-limit failure.
-				spacing := time.NewTimer(liveVoiceToolGroundingProbeDelay)
-				select {
-				case <-t.Context().Done():
-					spacing.Stop()
-					t.Fatalf("live voice grounding cancelled while spacing probes: %v", t.Context().Err())
-				case <-spacing.C:
-				}
+				<-time.After(liveVoiceToolGroundingProbeDelay)
 			}
 			if testCase.Name == "missing-file" {
 				assertMissingVoiceToolGroundingPath(t)
