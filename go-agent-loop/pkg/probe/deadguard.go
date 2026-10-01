@@ -678,9 +678,9 @@ func scenarioSupportsEcho(scenario Scenario) bool {
 	if !hasTextInput {
 		return false
 	}
+	textKinds := []ExpectationKind{ExpectText, ExpectContains, ExpectTranscript, ExpectTranscriptContains}
 	for _, expectation := range scenario.expectedValues() {
-		switch declaredKind(expectation) {
-		case ExpectText, ExpectContains, ExpectTranscript, ExpectTranscriptContains:
+		if slices.Contains(textKinds, declaredKind(expectation)) {
 			return true
 		}
 	}
@@ -696,13 +696,9 @@ func scenarioSupportsSilence(scenario Scenario) bool {
 		}
 	}
 	for _, expectation := range scenario.expectedValues() {
-		switch declaredKind(expectation) {
-		case ExpectAudioEnergy, ExpectAudio:
+		kind := declaredKind(expectation)
+		if kind == ExpectAudioEnergy || kind == ExpectAudio || (kind == ExpectFrameCount && hasAudioInput) {
 			return true
-		case ExpectFrameCount:
-			if hasAudioInput {
-				return true
-			}
 		}
 	}
 	return false

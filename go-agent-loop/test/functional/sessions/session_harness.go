@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -540,13 +541,12 @@ func marshalPayload(value any, fallback []byte) []byte {
 }
 
 func streamForDelta(delta messages.StreamMessage) transcript.Stream {
-	switch delta.Type {
-	case messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
-		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped:
+	audio := []messages.StreamMessageType{messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped}
+	if slices.Contains(audio, delta.Type) {
 		return transcript.StreamRTCAudio
-	default:
-		return transcript.StreamWS
 	}
+	return transcript.StreamWS
 }
 
 func cloneTranscriptRecords(records []transcript.Record) []transcript.Record {

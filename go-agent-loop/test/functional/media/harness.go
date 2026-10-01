@@ -533,20 +533,13 @@ func streamTextFromEvents(stream agentloop.Stream) string {
 	var buf strings.Builder
 	for stream.HasNext() {
 		evt := stream.Response()
-		switch evt.Type {
-		case messages.StreamTypeTextDelta:
-			if v, ok := evt.Value.(*messages.TextDeltaValue); ok {
-				if evt.Role == messages.RoleAssistant {
-					buf.WriteString(v.Content)
-				}
-
-			}
-		case messages.StreamTypeReasoningDelta:
-			if v, ok := evt.Value.(*messages.ReasoningDeltaValue); ok {
-				if evt.Role == messages.RoleAssistant {
-					buf.WriteString(v.Content)
-				}
-			}
+		if evt.Role != messages.RoleAssistant {
+			continue
+		}
+		if v, ok := evt.Value.(*messages.TextDeltaValue); ok && evt.Type == messages.StreamTypeTextDelta {
+			buf.WriteString(v.Content)
+		} else if v, ok := evt.Value.(*messages.ReasoningDeltaValue); ok && evt.Type == messages.StreamTypeReasoningDelta {
+			buf.WriteString(v.Content)
 		}
 	}
 	return buf.String()

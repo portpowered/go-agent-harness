@@ -66,6 +66,8 @@ func validateScenarioV2StepRequiredFields(step ScenarioV2Step, location string, 
 		if !step.HasDurationMS {
 			return newScenarioV2Error(location+".duration_ms", "required field is missing")
 		}
+	case ScenarioV2StepBrowserConnect, ScenarioV2StepBrowserDiscover, ScenarioV2StepBrowserActivate, ScenarioV2StepBrowserDisconnect, ScenarioV2StepWebMCPWaitReady, ScenarioV2StepWebMCPListTools, ScenarioV2StepCloseTab, ScenarioV2StepClose:
+		// These kinds need no handling here.
 	}
 	return nil
 }
@@ -284,6 +286,8 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 		if expectation.ToolRef != "" {
 			return nil
 		}
+	case ScenarioV2ExpectationBrowserCountEquals, ScenarioV2ExpectationEligibleTabCountEquals, ScenarioV2ExpectationCatalogGenerationEquals, ScenarioV2ExpectationNoPendingInvocations, ScenarioV2ExpectationResponseCanceled, ScenarioV2ExpectationAssistantAudioStarted, ScenarioV2ExpectationAssistantAudioStopped, ScenarioV2ExpectationApprovalRequested, ScenarioV2ExpectationApprovalNotRequested, ScenarioV2ExpectationBrowserConnectionClosed:
+		// These kinds need no handling here.
 	}
 	return nil
 }

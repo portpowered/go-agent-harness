@@ -305,6 +305,8 @@ func satisfiable(value ExpectedBehavior, index int, all []ExpectedBehavior, step
 		if value.At > finalTime {
 			return makeError(CategoryUnsatisfiable, location+".at", "logical time %d is unreachable; scenario ends at %d", value.At, finalTime)
 		}
+	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled, ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance, ExpectOutputState, ExpectFrameCount, ExpectMetricsReconcile, ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult, ExpectResponseCancel, ExpectBufferDisposition, ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectText, ExpectToolCall, ExpectEvent, ExpectContains, ExpectTranscript:
+		// These kinds need no handling here.
 	}
 	return nil
 }

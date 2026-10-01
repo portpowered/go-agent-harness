@@ -68,8 +68,7 @@ func (s *acknowledgementSession) Send(ctx context.Context, msg messages.StreamMe
 	default:
 	}
 
-	switch msg.Type {
-	case messages.StreamTypeResponseCreate:
+	if msg.Type == messages.StreamTypeResponseCreate {
 		value, ok := msg.Value.(*messages.ResponseCreateValue)
 		if ok && value != nil && value.IsToolAcknowledgement() {
 			s.mu.Lock()
@@ -77,9 +76,9 @@ func (s *acknowledgementSession) Send(ctx context.Context, msg messages.StreamMe
 			s.mu.Unlock()
 			if s.answerAcknowledgement != nil {
 				s.answerAcknowledgement(ctx, s)
-				break
+			} else {
+				s.emitAcknowledgement(ctx, s.completeAck)
 			}
-			s.emitAcknowledgement(ctx, s.completeAck)
 		} else {
 			s.mu.Lock()
 			acknowledgementOpen := s.acknowledgementOpen
@@ -89,7 +88,7 @@ func (s *acknowledgementSession) Send(ctx context.Context, msg messages.StreamMe
 			}
 			s.emitFinalResponse(ctx)
 		}
-	case messages.StreamTypeResponseCancel:
+	} else if msg.Type == messages.StreamTypeResponseCancel {
 		s.mu.Lock()
 		acknowledgementOpen := s.acknowledgementOpen
 		s.acknowledgementOpen = false
@@ -433,14 +432,11 @@ func TestDuplexSession_BargeInCancelsAcknowledgementAndPreservesToolResult(t *te
 	cancelCount := 0
 	toolResultCount := 0
 	for _, msg := range sent {
-		switch msg.Type {
-		case messages.StreamTypeResponseCreate:
-			if streamValue[*messages.ResponseCreateValue](t, msg).IsToolAcknowledgement() {
-				ackCount++
-			}
-		case messages.StreamTypeResponseCancel:
+		if msg.Type == messages.StreamTypeResponseCreate && streamValue[*messages.ResponseCreateValue](t, msg).IsToolAcknowledgement() {
+			ackCount++
+		} else if msg.Type == messages.StreamTypeResponseCancel {
 			cancelCount++
-		case messages.StreamTypeToolCallEnd:
+		} else if msg.Type == messages.StreamTypeToolCallEnd {
 			toolResultCount++
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -965,28 +966,13 @@ func (l *BargeInLedger) waitError(boundary string, timeout time.Duration, cause 
 }
 
 func validResponseDisposition(disposition BargeInDisposition) bool {
-	switch disposition {
-	case BargeInDispositionCompleted, BargeInDispositionCancelled, BargeInDispositionFailed:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains([]BargeInDisposition{BargeInDispositionCompleted, BargeInDispositionCancelled, BargeInDispositionFailed}, disposition)
 }
 
 func validToolDisposition(disposition BargeInDisposition) bool {
-	switch disposition {
-	case BargeInDispositionDelivered, BargeInDispositionRejected, BargeInDispositionCancelled, BargeInDispositionFailed:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains([]BargeInDisposition{BargeInDispositionDelivered, BargeInDispositionRejected, BargeInDispositionCancelled, BargeInDispositionFailed}, disposition)
 }
 
 func validSessionDisposition(disposition BargeInDisposition) bool {
-	switch disposition {
-	case BargeInDispositionClean, BargeInDispositionFailed, BargeInDispositionCancelled:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains([]BargeInDisposition{BargeInDispositionClean, BargeInDispositionFailed, BargeInDispositionCancelled}, disposition)
 }

@@ -503,8 +503,10 @@ func TestTypedBufferCloseDuringWrite(t *testing.T) {
 			if _, ok := buffer.Read(); ok {
 				t.Fatalf("cancelled concurrent write left a value at iteration %d", iteration)
 			}
-		default:
+		case BufferWriteTimedOut, BufferWriteBufferFull, BufferWriteStopped:
 			t.Fatalf("concurrent write returned unexpected outcome %+v at iteration %d", outcome, iteration)
+		default:
+			t.Fatalf("concurrent write returned unknown outcome %+v at iteration %d", outcome, iteration)
 		}
 
 		postClosed := buffer.WriteContext(ctx, iteration+1000)

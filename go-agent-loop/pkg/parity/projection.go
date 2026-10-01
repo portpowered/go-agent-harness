@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
@@ -287,12 +288,7 @@ func isTransportMechanicKind(kind string) bool {
 }
 
 func knownStream(stream transcript.Stream) bool {
-	switch stream {
-	case transcript.StreamWS, transcript.StreamRTCAudio, transcript.StreamRTCData, transcript.StreamDeviceIn, transcript.StreamDeviceOut:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains([]transcript.Stream{transcript.StreamWS, transcript.StreamRTCAudio, transcript.StreamRTCData, transcript.StreamDeviceIn, transcript.StreamDeviceOut}, stream)
 }
 
 func isAudioStream(stream transcript.Stream) bool {

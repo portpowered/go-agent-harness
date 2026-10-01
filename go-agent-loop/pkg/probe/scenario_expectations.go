@@ -320,6 +320,8 @@ func validateExpectationFields(value ExpectedBehavior, location string) error {
 		if value.Value == "" {
 			return makeError(CategoryMissingField, location+".event", "event name is required")
 		}
+	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled, ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance, ExpectOutputState, ExpectFrameCount, ExpectMetricsReconcile, ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult, ExpectResponseCancel, ExpectBufferDisposition, ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectClose:
+		// These kinds need no handling here.
 	}
 	return nil
 }

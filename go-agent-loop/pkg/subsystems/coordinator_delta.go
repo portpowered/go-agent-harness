@@ -107,6 +107,8 @@ func extractSessionCloseReason(msg messages.Message) string {
 				return "client_close"
 			case messages.ControlPlaneMessageTypeStop:
 				return sessionCloseReasonStop
+			case messages.ControlPlaneMessageTypePause, messages.ControlPlaneMessageTypeResume, messages.ControlPlaneMessageTypeInterrupt, messages.ControlPlaneMessageTypePing:
+				// Not session-close controls; keep scanning.
 			}
 		}
 	}

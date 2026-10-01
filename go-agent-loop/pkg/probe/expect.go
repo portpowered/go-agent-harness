@@ -273,6 +273,8 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		return evaluateMessageCountsReconciliation(expectation, observation)
 	case ExpectResponseCancel:
 		return evaluateResponseCancel(expectation, kind, observation)
+	case ExpectText, ExpectAudio, ExpectToolCall, ExpectToolResult, ExpectClose, ExpectTime, ExpectEvent, ExpectContains, ExpectTranscript:
+		fallthrough
 	default:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
 	}
@@ -391,6 +393,8 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 		ExpectBufferDisposition, ExpectMetricsReconcile,
 		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel:
 		return kind, nil
+	case ExpectText, ExpectAudio, ExpectToolCall, ExpectToolResult, ExpectClose, ExpectTime, ExpectEvent, ExpectContains, ExpectTranscript:
+		fallthrough
 	default:
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
 	}

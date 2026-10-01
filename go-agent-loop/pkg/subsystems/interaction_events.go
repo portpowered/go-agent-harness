@@ -120,6 +120,8 @@ func (s *InteractionEvents) applyEvent(ctx context.Context, curr *state.LoopStat
 	case messages.InteractionEventEnd:
 		curr.Interaction.Completed = true
 		curr.Inputs.TerminateLoop = true
+	case messages.InteractionEventStart:
+		// Starting an interaction changes no loop state.
 	}
 
 	return nil
