@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -162,4 +164,52 @@ func positivePIDOrZero(text string) int {
 		return 0
 	}
 	return pid
+}
+
+func defaultChromeForTestingCacheDir() string {
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+		return filepath.Join(cacheDir, "agent-cli")
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".cache", "agent-cli")
+	}
+	return filepath.Join(os.TempDir(), "agent-cli-cache")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func chromeSourceDirectory() (string, bool) {
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", false
+	}
+	return filepath.Dir(source), true
+}
+
+func findUpward(start, relative string) (string, bool) {
+	start, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+	if info, statErr := os.Stat(start); statErr == nil && !info.IsDir() {
+		start = filepath.Dir(start)
+	}
+	for {
+		candidate := filepath.Join(start, relative)
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			return candidate, true
+		}
+		parent := filepath.Dir(start)
+		if parent == start {
+			return "", false
+		}
+		start = parent
+	}
 }

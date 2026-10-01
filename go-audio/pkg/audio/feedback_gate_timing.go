@@ -2,6 +2,7 @@ package audio
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -70,4 +71,54 @@ func (g *PCM16FeedbackGate) playbackIsRelevantLocked(captureStart time.Duration)
 
 func (g *PCM16FeedbackGate) playbackTailEndLocked() time.Duration {
 	return addPCM16FeedbackDuration(g.lastPlaybackEnd, g.config.PostPlaybackAcousticTail)
+}
+
+// FeedbackGateError is a stable feedback-gate failure classification.
+type FeedbackGateError string
+
+func (e FeedbackGateError) Error() string { return string(e) }
+
+// ErrFeedbackWarningWriterBlocked reports that Close gave up waiting for the
+// one-time feedback warning write because the embedder's writer is blocked.
+const ErrFeedbackWarningWriterBlocked FeedbackGateError = "local feedback warning writer is still blocked at close"
+
+// feedbackWarningCloseBound bounds how long Close waits for an in-flight
+// warning write before reporting ErrFeedbackWarningWriterBlocked.
+const feedbackWarningCloseBound = time.Second
+
+func (g *PCM16FeedbackGate) warnOnceLocked() {
+	if g.warningSent {
+		return
+	}
+	g.warningSent = true
+	if g.warning == nil {
+		return
+	}
+	writer := g.warning
+	done := make(chan struct{})
+	g.warningDone = done
+	// Warning I/O runs off both media pumps. A terminal writer supplied by an
+	// embedding may block or fail; neither condition can hold the gate or
+	// affect provider delivery. Close joins the write within a bound.
+	go func() {
+		defer close(done)
+		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning) //nolint:errcheck // best-effort warning; its failure must not hold the gate or affect delivery.
+	}()
+}
+
+// awaitFeedbackWarning waits, outside the gate lock, for an in-flight warning
+// write. A writer still blocked after feedbackWarningCloseBound is reported
+// rather than silently abandoned.
+func awaitFeedbackWarning(done <-chan struct{}) error {
+	if done == nil {
+		return nil
+	}
+	timer := time.NewTimer(feedbackWarningCloseBound)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return ErrFeedbackWarningWriterBlocked
+	}
 }

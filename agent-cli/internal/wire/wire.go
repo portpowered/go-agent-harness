@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 
+	"net/http"
+
 	"github.com/google/wire"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
@@ -40,7 +42,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	gatewaylogging "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
-	"net/http"
 )
 
 type modelValidation struct {
@@ -197,48 +198,6 @@ func (l sessionLoopLogger) Fatal(message string, fields ...looplogging.Field) {
 }
 
 func (l sessionLoopLogger) Panic(message string, fields ...looplogging.Field) {
-	l.emit("panic", message, fields)
-}
-
-// provideProviderLogger adapts the application's explicit logging port to the
-// gateway provider logger contract so realtime provider diagnostics (send-queue
-// overflow, dropped messages, unclaimed RTC media) reach the host log instead
-// of the providers' no-op default.
-func provideProviderLogger(logger Logger) gatewaylogging.Logger {
-	return providerGatewayLogger{loop: sessionLoopLogger{sink: logger}}
-}
-
-type providerGatewayLogger struct{ loop sessionLoopLogger }
-
-func (l providerGatewayLogger) emit(level, message string, fields []gatewaylogging.Field) {
-	converted := make([]looplogging.Field, len(fields))
-	for i, field := range fields {
-		converted[i] = looplogging.Field{Key: field.Key, Value: field.Value}
-	}
-	l.loop.emit(level, message, converted)
-}
-
-func (l providerGatewayLogger) Debug(message string, fields ...gatewaylogging.Field) {
-	l.emit("debug", message, fields)
-}
-
-func (l providerGatewayLogger) Info(message string, fields ...gatewaylogging.Field) {
-	l.emit("info", message, fields)
-}
-
-func (l providerGatewayLogger) Warn(message string, fields ...gatewaylogging.Field) {
-	l.emit("warn", message, fields)
-}
-
-func (l providerGatewayLogger) Error(message string, fields ...gatewaylogging.Field) {
-	l.emit("error", message, fields)
-}
-
-func (l providerGatewayLogger) Fatal(message string, fields ...gatewaylogging.Field) {
-	l.emit("fatal", message, fields)
-}
-
-func (l providerGatewayLogger) Panic(message string, fields ...gatewaylogging.Field) {
 	l.emit("panic", message, fields)
 }
 

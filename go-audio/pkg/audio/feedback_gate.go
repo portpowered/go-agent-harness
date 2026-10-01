@@ -3,7 +3,6 @@ package audio
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -15,14 +14,6 @@ import (
 const pcm16FeedbackWarning = "Acoustic feedback detected: speaker audio is entering the microphone. Use headphones or route assistant audio to a non-speaker/file output."
 
 var errNilPCM16FeedbackPlaybackWrite = errors.New("local feedback playback write is nil")
-
-// ErrFeedbackWarningWriterBlocked reports that Close gave up waiting for the
-// one-time feedback warning write because the embedder's writer is blocked.
-var ErrFeedbackWarningWriterBlocked = errors.New("local feedback warning writer is still blocked at close")
-
-// feedbackWarningCloseBound bounds how long Close waits for an in-flight
-// warning write before reporting ErrFeedbackWarningWriterBlocked.
-const feedbackWarningCloseBound = time.Second
 
 const pcm16FeedbackIndependentCorrelation = 0.15
 
@@ -491,23 +482,6 @@ func (g *PCM16FeedbackGate) Close() error {
 	return errors.Join(err, awaitFeedbackWarning(warningDone))
 }
 
-// awaitFeedbackWarning waits, outside the gate lock, for an in-flight warning
-// write. A writer still blocked after feedbackWarningCloseBound is reported
-// rather than silently abandoned.
-func awaitFeedbackWarning(done <-chan struct{}) error {
-	if done == nil {
-		return nil
-	}
-	timer := time.NewTimer(feedbackWarningCloseBound)
-	defer timer.Stop()
-	select {
-	case <-done:
-		return nil
-	case <-timer.C:
-		return ErrFeedbackWarningWriterBlocked
-	}
-}
-
 func (g *PCM16FeedbackGate) resetCaptureEvidenceLocked() {
 	g.detector.ResetCapture()
 	g.probe.ResetCapture()
@@ -605,24 +579,4 @@ func (g *PCM16FeedbackGate) ConfirmedLag() time.Duration {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.confirmedLag
-}
-
-func (g *PCM16FeedbackGate) warnOnceLocked() {
-	if g.warningSent {
-		return
-	}
-	g.warningSent = true
-	if g.warning == nil {
-		return
-	}
-	writer := g.warning
-	done := make(chan struct{})
-	g.warningDone = done
-	// Warning I/O runs off both media pumps. A terminal writer supplied by an
-	// embedding may block or fail; neither condition can hold the gate or
-	// affect provider delivery. Close joins the write within a bound.
-	go func() {
-		defer close(done)
-		_, _ = fmt.Fprintln(writer, pcm16FeedbackWarning) //nolint:errcheck // best-effort warning; its failure must not hold the gate or affect delivery.
-	}()
 }

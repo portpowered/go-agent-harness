@@ -37,10 +37,8 @@ import (
 	wire9 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace/wire"
 	tools3 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	wire10 "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
-	"github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 	logging2 "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 	"net/http"
@@ -51,7 +49,7 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry devices.DeviceRegistry, audioSource audio.AudioSource, audioSink AudioSink, clockSource clock.Source, runtimeObserver sessiontrace.SessionRuntimeObserver, metricSampler observability.MetricSampler, logger observability.Logger, toolDefs []messages.ToolDefinition, toolService toolServiceOverride, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
+func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, toolDefs []messages.ToolDefinition, toolService toolServiceOverride, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
 	fileStoreFactory := wire.NewFileStoreFactory()
@@ -81,8 +79,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	deviceService := wire2.NewDeviceService(deviceRegistry)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
 	audioioService := wire3.NewService()
-	probeSessionFactory := wire2.NewDeviceProbeSessionFactory(providersSessionService, audioioService)
-	probeService := wire2.NewDeviceProbeService(deviceRegistry, probeSessionFactory)
+	v := wire2.NewDeviceProbeSessionFactory(providersSessionService, audioioService)
+	v2 := wire2.NewDeviceProbeService(deviceRegistry, v)
 	modelCatalog := provideProviderModelCatalog(fullService)
 	dependencies := wire4.NewDependencies(providersSessionService, modelCatalog, clockSource)
 	selfplayService := wire4.NewService(dependencies)
@@ -92,19 +90,19 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	sessiontraceService := provideSessionTraceService()
 	fileDeviceService := provideFileDeviceService(clockSource, audioioService, sessiontraceService)
 	browserFactory := provideSessionBrowserCapabilityFactory()
-	displaySurface := provideSessionDisplaySurface()
-	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, displaySurface, service)
-	toolCapabilitiesFactory := cli.NewSessionToolCapabilitiesFactoryFromService(toolsService)
+	v3 := provideSessionDisplaySurface()
+	toolsService := provideToolCapabilitiesService(toolService, toolExecutor, browserFactory, v3, service)
+	v4 := cli.NewSessionToolCapabilitiesFactoryFromService(toolsService)
 	liveCredentialReference := provideLiveCredentialReference(wireLiveCredentialVault)
 	modelAdmission := provideProviderModelAdmission(fullService)
-	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, selfplayService, liveService, replayService, devicesService, fileDeviceService, toolCapabilitiesFactory, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)
+	sessionCommand := cli.NewSessionCommandWithLive(askFlags, globalFlags, selfplayService, liveService, replayService, devicesService, fileDeviceService, v4, liveCredentialReference, fileStoreFactory, recordingService, modelAdmission)
 	agentsessionSessionService := cli.NewSessionRequestService(sessionCommand)
 	metricsCollector := wire2.NewMetricsCollector(agentsessionSessionService, replayService)
-	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, probeService, metricsCollector, replayService)
+	probeRunCommand := cli.NewProbeRunCommandWithDeviceService(deviceService, v2, metricsCollector, replayService)
 	probeGateCommand := cli.NewProbeGateCommand()
 	probeReportCommand := cli.NewProbeReportCommand()
-	v := provideFleetEntryExecutors()
-	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, replayService, v...)
+	v5 := provideFleetEntryExecutors()
+	probeFleetCommand := cli.NewProbeFleetCommand(agentsessionSessionService, metricsCollector, replayService, v5...)
 	sessionShowCommand := cli.NewSessionShowCommand(globalFlags, fileStoreFactory)
 	sessionListCommand := cli.NewSessionListCommand(globalFlags, fileStoreFactory)
 	sessionDeleteCommand := cli.NewSessionDeleteCommand(globalFlags, fileStoreFactory)
@@ -118,8 +116,8 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	roomRunCommand := cli.NewRoomRunCommand(globalFlags, roomsService, deviceRegistry)
 	configCommand := cli.NewConfigCommand()
 	configAddLocalCommand := cli.NewConfigAddLocalCommand(globalFlags)
-	v2 := provideAcceptanceCommands()
-	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, sessionReplayCommand, roomRunCommand, configCommand, configAddLocalCommand, deviceRegistry, deviceService, v2...)
+	v6 := provideAcceptanceCommands()
+	router := cli.NewRouter(globalFlags, rootCommand, askCommand, chatCommand, toolCommand, interactionCommand, interactionReplayCommand, probeCommand, probeRunCommand, probeGateCommand, probeReportCommand, probeFleetCommand, sessionCommand, sessionShowCommand, sessionListCommand, sessionDeleteCommand, sessionReplayCommand, roomRunCommand, configCommand, configAddLocalCommand, deviceRegistry, deviceService, v6...)
 	agentCLI := cli.NewAgentCLI(router)
 	return agentCLI, nil
 }
@@ -275,48 +273,6 @@ func (l sessionLoopLogger) Fatal(message string, fields ...logging.Field) {
 }
 
 func (l sessionLoopLogger) Panic(message string, fields ...logging.Field) {
-	l.emit("panic", message, fields)
-}
-
-// provideProviderLogger adapts the application's explicit logging port to the
-// gateway provider logger contract so realtime provider diagnostics (send-queue
-// overflow, dropped messages, unclaimed RTC media) reach the host log instead
-// of the providers' no-op default.
-func provideProviderLogger(logger Logger) logging2.Logger {
-	return providerGatewayLogger{loop: sessionLoopLogger{sink: logger}}
-}
-
-type providerGatewayLogger struct{ loop sessionLoopLogger }
-
-func (l providerGatewayLogger) emit(level, message string, fields []logging2.Field) {
-	converted := make([]logging.Field, len(fields))
-	for i, field := range fields {
-		converted[i] = logging.Field{Key: field.Key, Value: field.Value}
-	}
-	l.loop.emit(level, message, converted)
-}
-
-func (l providerGatewayLogger) Debug(message string, fields ...logging2.Field) {
-	l.emit("debug", message, fields)
-}
-
-func (l providerGatewayLogger) Info(message string, fields ...logging2.Field) {
-	l.emit("info", message, fields)
-}
-
-func (l providerGatewayLogger) Warn(message string, fields ...logging2.Field) {
-	l.emit("warn", message, fields)
-}
-
-func (l providerGatewayLogger) Error(message string, fields ...logging2.Field) {
-	l.emit("error", message, fields)
-}
-
-func (l providerGatewayLogger) Fatal(message string, fields ...logging2.Field) {
-	l.emit("fatal", message, fields)
-}
-
-func (l providerGatewayLogger) Panic(message string, fields ...logging2.Field) {
 	l.emit("panic", message, fields)
 }
 

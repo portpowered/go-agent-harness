@@ -15,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -302,7 +301,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	if err := os.Mkdir(extractDir, 0o700); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("archive_layout", err)
 	}
-	if err := extractManagedChromeArchive(archivePath, extractDir); err != nil {
+	if err := extractManagedChromeArchive(archivePath, extractDir, chromeArchiveExtractLimit); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("archive_layout", err)
 	}
 	executablePath := filepath.Join(extractDir, filepath.FromSlash(lock.ExecutableRelative))
@@ -493,14 +492,9 @@ func verifyManagedChromeArchive(archivePath, expectedSHA string) bool {
 	return hex.EncodeToString(hasher.Sum(nil)) == expectedSHA
 }
 
-func extractManagedChromeArchive(archivePath, destination string) error {
-	return extractManagedChromeArchiveWithin(archivePath, destination, chromeArchiveExtractLimit)
-}
-
-// extractManagedChromeArchiveWithin extracts at most limit decompressed bytes
-// across every regular entry, so a hostile or corrupted archive cannot expand
-// without bound on disk.
-func extractManagedChromeArchiveWithin(archivePath, destination string, limit int64) error {
+// extractManagedChromeArchive extracts at most limit decompressed bytes across
+// every regular entry, so a corrupted archive cannot expand without bound.
+func extractManagedChromeArchive(archivePath, destination string, limit int64) error {
 	archive, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return err
@@ -606,7 +600,11 @@ const chromeArchiveSymlinkTargetLimit = 4096
 // Chrome archive; real Chrome for Testing builds expand to well under 2 GiB.
 const chromeArchiveExtractLimit int64 = 4 << 30
 
-var errChromeArchiveTooLarge = errors.New("chrome for testing archive expands beyond the extraction safety bound")
+const errChromeArchiveTooLarge chromeArchiveError = "chrome for testing archive expands beyond the extraction safety bound"
+
+type chromeArchiveError string
+
+func (e chromeArchiveError) Error() string { return string(e) }
 
 func validateChromeArchivePath(raw string) error {
 	_, err := validateChromeArchivePathValue(raw)
@@ -638,52 +636,4 @@ var lowerHexDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func chromeForTestingCacheKey(platform string, lock ChromeForTestingLock) string {
 	return strings.NewReplacer("/", "-", "\\", "-", " ", "-").Replace(platform + "-" + lock.Version + "-" + lock.Revision)
-}
-
-func defaultChromeForTestingCacheDir() string {
-	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
-		return filepath.Join(cacheDir, "agent-cli")
-	}
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".cache", "agent-cli")
-	}
-	return filepath.Join(os.TempDir(), "agent-cli-cache")
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func chromeSourceDirectory() (string, bool) {
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", false
-	}
-	return filepath.Dir(source), true
-}
-
-func findUpward(start, relative string) (string, bool) {
-	start, err := filepath.Abs(start)
-	if err != nil {
-		return "", false
-	}
-	if info, statErr := os.Stat(start); statErr == nil && !info.IsDir() {
-		start = filepath.Dir(start)
-	}
-	for {
-		candidate := filepath.Join(start, relative)
-		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
-			return candidate, true
-		}
-		parent := filepath.Dir(start)
-		if parent == start {
-			return "", false
-		}
-		start = parent
-	}
 }
