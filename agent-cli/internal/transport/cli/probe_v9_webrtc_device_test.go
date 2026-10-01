@@ -346,15 +346,14 @@ func readDeviceProbeTranscript(t *testing.T, ctx context.Context, out *messages.
 		if !ok {
 			return "", fmt.Errorf("read recognized transcript: %w", ctx.Err())
 		}
-		// Other stream types do not carry the recognized transcript.
-		switch kind := message.Type; {
-		case kind == messages.StreamTypeTranscriptDelta:
+		switch message.Type {
+		case messages.StreamTypeTranscriptDelta:
 			value, ok := message.Value.(*messages.TranscriptDeltaValue)
 			if !ok {
 				return "", fmt.Errorf("recognized transcript delta value = %T, want *messages.TranscriptDeltaValue", message.Value)
 			}
 			deltas.WriteString(value.Text)
-		case kind == messages.StreamTypeTranscriptEnd:
+		case messages.StreamTypeTranscriptEnd:
 			value, ok := message.Value.(*messages.TranscriptEndValue)
 			if !ok {
 				return "", fmt.Errorf("recognized transcript end value = %T, want *messages.TranscriptEndValue", message.Value)
@@ -363,8 +362,23 @@ func readDeviceProbeTranscript(t *testing.T, ctx context.Context, out *messages.
 				return value.FullText, nil
 			}
 			return deltas.String(), nil
-		case kind == messages.StreamTypeMessageEnd:
+		case messages.StreamTypeMessageEnd:
 			return deltas.String(), fmt.Errorf("recognized transcript missing TRANSCRIPT.END before MESSAGE.END; actual transcript = %q", deltas.String())
+		case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+			messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+			messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta,
+			messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta,
+			messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
+			messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
+			messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
+			messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
+			messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+			messages.StreamTypeTranscriptStart, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+			messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+			messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel,
+			messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
+			messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+			// Other stream types do not carry the recognized transcript.
 		}
 	}
 }

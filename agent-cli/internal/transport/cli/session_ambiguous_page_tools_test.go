@@ -473,18 +473,17 @@ type ambiguousCubeConversationEmits struct {
 
 func (s *ambiguousCubeConversationSession) advanceLocked(message messages.StreamMessage) ambiguousCubeConversationEmits {
 	var emits ambiguousCubeConversationEmits
-	// Other stream types do not advance the scripted conversation.
-	switch kind := message.Type; {
-	case kind == messages.StreamTypeSessionUpdate:
+	switch message.Type {
+	case messages.StreamTypeSessionUpdate:
 		s.recordSessionUpdateLocked(message.Value)
-	case kind == messages.StreamTypeTextDelta:
+	case messages.StreamTypeTextDelta:
 		if s.phase == ambiguousCubeConversationInitial {
 			s.phase = ambiguousCubeConversationAwaitingListResult
 			emits.list = true
 		}
-	case kind == messages.StreamTypeToolCallEnd:
+	case messages.StreamTypeToolCallEnd:
 		s.recordToolResultLocked(message.Value)
-	case kind == messages.StreamTypeResponseCreate:
+	case messages.StreamTypeResponseCreate:
 		switch {
 		case s.phase == ambiguousCubeConversationAwaitingChoice && s.lastToolResult == webmcp.ListTabsToolName:
 			emits.question = true
@@ -494,13 +493,27 @@ func (s *ambiguousCubeConversationSession) advanceLocked(message messages.Stream
 			s.phase = ambiguousCubeConversationComplete
 			emits.final = true
 		}
-	case kind == messages.StreamTypeMessageEnd:
+	case messages.StreamTypeMessageEnd:
 		if s.phase == ambiguousCubeConversationAwaitingChoice {
 			s.phase = ambiguousCubeConversationAwaitingSelectionResult
 			emits.selection = true
 		}
-	case kind == messages.StreamTypeSessionClose:
+	case messages.StreamTypeSessionClose:
 		s.closeOnce.Do(func() { close(s.done) })
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
+		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart,
+		messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
+		messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeResponseCancel, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// Other stream types do not advance the scripted conversation.
 	}
 	return emits
 }

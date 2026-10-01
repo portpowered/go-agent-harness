@@ -227,45 +227,57 @@ func isFromTool(evt messages.StreamMessage) bool {
 // applyStreamEvent updates model state for one stream event (thinking, tool, media, text).
 // It routes text by actor: assistant text goes to assistantPartial, tool text to toolTextPartial and then to a tool_result line.
 func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
-	// The chat view does not render the remaining stream types.
-	switch kind := evt.Type; {
-	case kind == messages.StreamTypeReasoningStart:
+	switch evt.Type {
+	case messages.StreamTypeReasoningStart:
 		m.thinkingActive = true
 		m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineThinking, content: "Thinking..."})
-	case kind == messages.StreamTypeReasoningDelta:
+	case messages.StreamTypeReasoningDelta:
 		if v, ok := evt.Value.(*messages.ReasoningDeltaValue); ok {
 			m.reasoningPartial += v.Content
 		}
-	case kind == messages.StreamTypeReasoningEnd:
+	case messages.StreamTypeReasoningEnd:
 		if m.reasoningPartial != "" {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineThinkingBlock, content: m.reasoningPartial})
 		}
 		m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineThinking, content: "Done thinking."})
 		m.reasoningPartial = ""
 		m.thinkingActive = false
-	case kind == messages.StreamTypeToolCallStart:
+	case messages.StreamTypeToolCallStart:
 		if v, ok := evt.Value.(*messages.ToolCallStartValue); ok {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineTool, content: v.Name})
 		}
-	case kind == messages.StreamTypeImageStart:
+	case messages.StreamTypeImageStart:
 		m.appendToolMediaLine(evt, "[Image returned]")
-	case kind == messages.StreamTypeAudioStart:
+	case messages.StreamTypeAudioStart:
 		m.appendToolMediaLine(evt, "[Audio returned]")
-	case kind == messages.StreamTypeVideoStart:
+	case messages.StreamTypeVideoStart:
 		m.appendToolMediaLine(evt, "[Video returned]")
-	case kind == messages.StreamTypeFileStart:
+	case messages.StreamTypeFileStart:
 		m.appendToolMediaLine(evt, toolFileLabel(evt))
-	case kind == messages.StreamTypeTextStart:
+	case messages.StreamTypeTextStart:
 		if isFromTool(evt) {
 			m.toolTextPartial = ""
 		}
-	case kind == messages.StreamTypeTextDelta:
+	case messages.StreamTypeTextDelta:
 		m.appendTextDelta(evt)
-	case kind == messages.StreamTypeTextEnd:
+	case messages.StreamTypeTextEnd:
 		if isFromTool(evt) && m.toolTextPartial != "" {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
 			m.toolTextPartial = ""
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeToolCallEnd, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoDelta,
+		messages.StreamTypeVideoEnd, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// The chat view does not render the remaining stream types.
 	}
 }
 
