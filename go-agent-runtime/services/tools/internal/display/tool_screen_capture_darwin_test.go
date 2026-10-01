@@ -25,11 +25,11 @@ func TestDarwinDisplayBoundsUseDiscoveryWithoutCapturing(t *testing.T) {
 		LookPathFunc: func(string) (string, error) { return screenCaptureCommand, nil },
 	}
 
-	count, err := screenDisplayCountWithContextAndProcess(context.Background(), process)
+	count, err := screenDisplayCountWithContextAndProcess(context.Background(), screenPlatform{}, process)
 	if err != nil || count != 2 {
 		t.Fatalf("display count = %d, err = %v", count, err)
 	}
-	bounds, err := screenDisplayBoundsWithContextAndProcess(context.Background(), 1, process)
+	bounds, err := screenDisplayBoundsWithContextAndProcess(context.Background(), screenPlatform{}, 1, process)
 	if err != nil || bounds != image.Rect(0, 0, 1920, 1080) {
 		t.Fatalf("display bounds = %v, err = %v", bounds, err)
 	}
@@ -60,7 +60,7 @@ func TestDarwinCaptureCleansTemporaryArtifactOnSuccess(t *testing.T) {
 		},
 		LookPathFunc: func(string) (string, error) { return screenCaptureCommand, nil },
 	}
-	_, err := screenCaptureDisplayWithContextAndProcess(context.Background(), 0, image.Rect(0, 0, 2, 2), process)
+	_, err := screenCaptureDisplayWithContextAndProcess(context.Background(), screenPlatform{}, 0, image.Rect(0, 0, 2, 2), process)
 	if err == nil || !strings.Contains(err.Error(), "decode screenshot") {
 		t.Fatalf("invalid capture result err = %v", err)
 	}
@@ -79,7 +79,7 @@ func TestDarwinCaptureClassifiesPermissionDenialAndCancellation(t *testing.T) {
 		},
 		LookPathFunc: func(string) (string, error) { return screenCaptureCommand, nil },
 	}
-	_, err := screenCaptureDisplayWithContextAndProcess(context.Background(), 0, image.Rect(0, 0, 2, 2), permissionProcess)
+	_, err := screenCaptureDisplayWithContextAndProcess(context.Background(), screenPlatform{}, 0, image.Rect(0, 0, 2, 2), permissionProcess)
 	if err == nil || !errors.Is(err, ErrScreenRecordingPermissionDenied) {
 		t.Fatalf("permission capture err = %v", err)
 	}
@@ -94,7 +94,7 @@ func TestDarwinCaptureClassifiesPermissionDenialAndCancellation(t *testing.T) {
 		},
 		LookPathFunc: func(string) (string, error) { return screenCaptureCommand, nil },
 	}
-	_, err = screenCaptureDisplayWithContextAndProcess(ctx, 0, image.Rect(0, 0, 2, 2), cancelProcess)
+	_, err = screenCaptureDisplayWithContextAndProcess(ctx, screenPlatform{}, 0, image.Rect(0, 0, 2, 2), cancelProcess)
 	if err == nil || !errors.Is(err, context.Canceled) || called {
 		t.Fatalf("canceled capture err = %v, process called = %v", err, called)
 	}

@@ -123,6 +123,7 @@ type hostDisplaySurface struct {
 	process    DisplayProcess
 	permission DisplayPermissionChecker
 	capturer   DisplayCapturer
+	platform   screenPlatform
 }
 
 // NewHostDisplaySurface returns the platform display boundary. The optional
@@ -148,6 +149,7 @@ func NewHostDisplaySurfaceWithOptions(options HostDisplaySurfaceOptions) Display
 		process:    process,
 		permission: permission,
 		capturer:   options.Capturer,
+		platform:   newScreenPlatform(),
 	}
 }
 
@@ -164,7 +166,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 	if capability, err := s.probePermission(ctx); err != nil {
 		return capability, err
 	}
-	count, bounds, err := screenDisplayInfoWithContextAndProcess(ctx, s.process)
+	count, bounds, err := screenDisplayInfoWithContextAndProcess(ctx, s.platform, s.process)
 	if err != nil {
 		return unavailableDisplayProbe("display discovery", "display discovery is unavailable", err)
 	}
@@ -172,7 +174,7 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 		capability := UnavailableDisplayCapability("no usable display was discovered")
 		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display discovery", Reason: capability.Reason}
 	}
-	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.process); err != nil {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.platform, s.process); err != nil {
 		return unavailableDisplayProbe("screen capture admission", "the screen capture command is unavailable", err)
 	}
 	if bounds.Empty() {
@@ -234,11 +236,11 @@ func (s *hostDisplaySurface) checkScreenRecordingPermission(ctx context.Context)
 }
 
 func (s *hostDisplaySurface) DisplayCount(ctx context.Context) (int, error) {
-	return screenDisplayCountWithContextAndProcess(ctx, s.process)
+	return screenDisplayCountWithContextAndProcess(ctx, s.platform, s.process)
 }
 
 func (s *hostDisplaySurface) Bounds(ctx context.Context, display int) (image.Rectangle, error) {
-	return screenDisplayBoundsWithContextAndProcess(ctx, display, s.process)
+	return screenDisplayBoundsWithContextAndProcess(ctx, s.platform, display, s.process)
 }
 
 func (s *hostDisplaySurface) Capture(ctx context.Context, bounds image.Rectangle) (*image.RGBA, error) {
@@ -249,7 +251,7 @@ func (s *hostDisplaySurface) CaptureDisplay(ctx context.Context, display int, bo
 	if s.capturer != nil {
 		return s.capturer.Capture(ctx, display, bounds)
 	}
-	return screenCaptureDisplayWithContextAndProcess(ctx, display, bounds, s.process)
+	return screenCaptureDisplayWithContextAndProcess(ctx, s.platform, display, bounds, s.process)
 }
 
 func screenCaptureStateForPermission(state DisplayPermissionState) ScreenCaptureState {

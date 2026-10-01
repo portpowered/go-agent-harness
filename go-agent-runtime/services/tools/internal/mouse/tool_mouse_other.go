@@ -25,3 +25,8 @@ func (mouseDriver) buttonUp(_ context.Context, _, _ int, _ string) error {
 func (mouseDriver) drag(_ context.Context, _, _, _, _ int, _ string) error {
 	return fmt.Errorf(platformMouseErr)
 }
+
+// mousePlatform holds platform input handles; this platform needs none.
+type mousePlatform struct{}
+
+func newMousePlatform() mousePlatform { return mousePlatform{} }

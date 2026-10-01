@@ -61,12 +61,13 @@ func pause(ctx context.Context, duration time.Duration) error {
 
 // mouseDriver carries the injected seams used by the platform operations.
 type mouseDriver struct {
-	process MouseProcess
-	sleep   func(context.Context, time.Duration) error
+	process  MouseProcess
+	sleep    func(context.Context, time.Duration) error
+	platform mousePlatform
 }
 
 func newMouseDriver(options MouseToolOptions) mouseDriver {
-	driver := mouseDriver{process: options.Process, sleep: options.Sleep}
+	driver := mouseDriver{process: options.Process, sleep: options.Sleep, platform: newMousePlatform()}
 	if driver.process == nil {
 		driver.process = osMouseProcess{}
 	}

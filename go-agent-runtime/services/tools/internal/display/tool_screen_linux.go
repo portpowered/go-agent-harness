@@ -14,12 +14,12 @@ import (
 	"strings"
 )
 
-func screenDisplayInfoWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, image.Rectangle, error) {
-	count, err := screenDisplayCountWithContextAndProcess(ctx, process)
+func screenDisplayInfoWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) (int, image.Rectangle, error) {
+	count, err := screenDisplayCountWithContextAndProcess(ctx, screenPlatform{}, process)
 	if err != nil {
 		return 0, image.Rectangle{}, err
 	}
-	bounds, err := screenDisplayBoundsWithContextAndProcess(ctx, 0, process)
+	bounds, err := screenDisplayBoundsWithContextAndProcess(ctx, screenPlatform{}, 0, process)
 	if err != nil {
 		return 0, image.Rectangle{}, err
 	}
@@ -29,7 +29,7 @@ func screenDisplayInfoWithContextAndProcess(ctx context.Context, process Display
 // screenDisplayCountWithContextAndProcess returns only displays positively
 // reported by xrandr. A discovery failure is unavailable, never one fake
 // primary display.
-func screenDisplayCountWithContextAndProcess(ctx context.Context, process DisplayProcess) (int, error) {
+func screenDisplayCountWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) (int, error) {
 	process = normalizeDisplayProcess(process)
 	out, err := process.Run(ctx, "xrandr", "--listmonitors")
 	if err != nil {
@@ -54,7 +54,7 @@ func screenDisplayCountWithContextAndProcess(ctx context.Context, process Displa
 // screenDisplayBoundsWithContextAndProcess returns the pixel dimensions of
 // the primary display using xdotool. The idx parameter remains unused to
 // match the existing Linux capture implementation.
-func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, process DisplayProcess) (image.Rectangle, error) {
+func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ screenPlatform, _ int, process DisplayProcess) (image.Rectangle, error) {
 	process = normalizeDisplayProcess(process)
 	out, err := process.Run(ctx, "xdotool", "getdisplaygeometry")
 	if err != nil {
@@ -76,7 +76,7 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, _ int, proces
 	return image.Rectangle{}, errors.New("xdotool reported invalid display geometry")
 }
 
-func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, process DisplayProcess) error {
+func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, _ screenPlatform, process DisplayProcess) error {
 	if ctx == nil {
 		return errors.New("screen capture context is required")
 	}
@@ -93,11 +93,11 @@ func screenCapturePrerequisitesWithContextAndProcess(ctx context.Context, proces
 // screenCaptureDisplayWithContextAndProcess uses scrot to capture the given
 // screen region. Linux currently has one geometry surface, so display is
 // intentionally ignored while the index remains part of the seam.
-func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ int, bounds image.Rectangle, process DisplayProcess) (result *image.RGBA, resultErr error) {
+func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ screenPlatform, _ int, bounds image.Rectangle, process DisplayProcess) (result *image.RGBA, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("screen capture context is required")
 	}
-	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, process); err != nil {
+	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, screenPlatform{}, process); err != nil {
 		return nil, err
 	}
 	process = normalizeDisplayProcess(process)
@@ -187,3 +187,8 @@ func finishScreenshotFile(result *image.RGBA, resultErr error, file *os.File) (*
 	}
 	return result, resultErr
 }
+
+// screenPlatform holds platform capture handles; this platform needs none.
+type screenPlatform struct{}
+
+func newScreenPlatform() screenPlatform { return screenPlatform{} }

@@ -24,7 +24,7 @@ type windowsPoint struct {
 }
 
 func windowsCursorPosition() (int, int, error) {
-	procGetCursorPos := user32Proc("GetCursorPos")
+	procGetCursorPos := newMousePlatform().user32Proc("GetCursorPos")
 	var point windowsPoint
 	ret, _, err := procGetCursorPos.Call(uintptr(unsafe.Pointer(&point)))
 	if ret == 0 {
@@ -35,11 +35,12 @@ func windowsCursorPosition() (int, int, error) {
 
 func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	t.Helper()
-	h, _, err := user32Proc("GetDC").Call(0)
+	platform := newMousePlatform()
+	h, _, err := platform.user32Proc("GetDC").Call(0)
 	if h == 0 {
 		t.Fatalf("%s: required live capability unavailable: desktop device context (%v)", runtime.GOOS, err)
 	}
-	if released, _, releaseErr := user32Proc("ReleaseDC").Call(0, h); released == 0 {
+	if released, _, releaseErr := platform.user32Proc("ReleaseDC").Call(0, h); released == 0 {
 		t.Logf("ReleaseDC did not release the desktop device context: %v", releaseErr)
 	}
 	bounds := screenDisplayBounds(0)

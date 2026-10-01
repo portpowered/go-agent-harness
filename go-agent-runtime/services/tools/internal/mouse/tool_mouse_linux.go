@@ -103,3 +103,8 @@ func (d mouseDriver) drag(ctx context.Context, fromX, fromY, toX, toY int, butto
 
 	return d.runXdotool(ctx, "mouseup", xdotoolButton(button))
 }
+
+// mousePlatform holds platform input handles; this platform needs none.
+type mousePlatform struct{}
+
+func newMousePlatform() mousePlatform { return mousePlatform{} }
