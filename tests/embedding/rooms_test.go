@@ -530,14 +530,12 @@ type embeddedRoomBrowserLive struct {
 }
 
 func (s *embeddedRoomBrowserLive) OpenLive(ctx context.Context, request session.LiveRequest) (session.LiveHandle, error) {
-	if request.Capabilities != nil {
-		if request.Capabilities.Handle != nil {
-			if err := request.Capabilities.Handle.Initialize(ctx); err != nil {
-				return nil, err
-			}
-			if _, err := request.Capabilities.Handle.RefreshDefinitions(ctx); err != nil {
-				return nil, err
-			}
+	if request.Capabilities != nil && request.Capabilities.Handle != nil {
+		if err := request.Capabilities.Handle.Initialize(ctx); err != nil {
+			return nil, err
+		}
+		if _, err := request.Capabilities.Handle.RefreshDefinitions(ctx); err != nil {
+			return nil, err
 		}
 	}
 	s.mu.Lock()

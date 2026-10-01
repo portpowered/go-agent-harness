@@ -405,25 +405,6 @@ func MaxIntValue(value, floor int) int {
 	return value
 }
 
-// PlaybackStatsProvider exposes the queue observation owned by a playback
-// device. It is optional so existing third-party OpenedDevice implementations
-// remain source-compatible.
-type PlaybackStatsProvider interface {
-	PlaybackStats() PlaybackQueueStats
-}
-
-// CaptureStatsProvider is the optional device capability for synchronized
-// native capture queue and loss counters.
-type CaptureStatsProvider interface {
-	CaptureStats() CaptureQueueStats
-}
-
-// PlaybackDiscarder exposes cancellation-scoped removal of queued samples.
-// It is optional for compatibility with non-queueing device implementations.
-type PlaybackDiscarder interface {
-	DiscardPlayback() int
-}
-
 func EmptyPlaybackQueueStats(format DeviceFormat) PlaybackQueueStats {
 	if format.Validate() != nil {
 		format = DefaultDeviceFormat()

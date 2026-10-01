@@ -169,17 +169,14 @@ func (q *PlaybackCommands) trySubmit(command Command, wantReceipt bool) (<-chan 
 	if q == nil {
 		return nil, ErrClosed
 	}
-	var operation PlaybackOperation
-	switch command.Kind {
-	case CommandInterrupt:
-		operation = PlaybackDiscard
-	default:
+	// Only interrupts cross this boundary; they become queue discards.
+	if command.Kind != CommandInterrupt {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPlaybackCommand, command.Kind)
 	}
 	request := &PlaybackRequest{
 		ID:        command.ID,
 		Epoch:     command.Epoch,
-		Operation: operation,
+		Operation: PlaybackDiscard,
 		observer:  q.receiptObserverSnapshot(),
 	}
 	if wantReceipt {

@@ -374,17 +374,19 @@ func (s *RTCDeviceSource) beginPump(cancel context.CancelCauseFunc) (func(), err
 	}, nil
 }
 
-func nilRTCOutboundMedia(media audio.OutboundMedia) bool {
-	if media == nil {
+func nilRTCOutboundMedia(media audio.OutboundMedia) bool { return isNilValue(media) }
+
+// isNilValue reports whether value is nil, including a typed nil pointer,
+// map, slice, channel or function hidden behind an interface.
+func isNilValue(value any) bool {
+	if value == nil {
 		return true
 	}
-	value := reflect.ValueOf(media)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	v := reflect.ValueOf(value)
+	kind := v.Kind()
+	nilable := kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface ||
+		kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice
+	return nilable && v.IsNil()
 }
 
 // IsNilOutboundMedia reports whether an outbound endpoint is nil, including a

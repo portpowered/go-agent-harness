@@ -245,7 +245,7 @@ func (s *pcm16SelfHearingSummary) observe(window pcm16SelfHearingWindow, lagSamp
 	}
 }
 
-func (s pcm16SelfHearingSummary) observation(rate int, threshold float64) PCM16SelfHearingObservation {
+func (s *pcm16SelfHearingSummary) observation(rate int, threshold float64) PCM16SelfHearingObservation {
 	if s.anyEvidence == 0 {
 		return PCM16SelfHearingObservation{Classification: PCM16SelfHearingNoEvidence}
 	}

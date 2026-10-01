@@ -131,7 +131,7 @@ type MediaSessionOptions struct {
 // ConfigurableMediaSession is an optional extension of MediaSession. Providers
 // that can choose their inbound framing implement it without forcing every
 // embedded session or test double to grow a provider-specific method.
-type ConfigurableMediaSession interface {
+type ConfigurableMediaSession interface { //nolint:iface // shared optional capability: provider sessions in go-llm-gateway implement it and runtime session wrappers consume it; go-audio owns the contract
 	MediaSession
 	RTCMediaWithOptions(MediaSessionOptions) MediaEndpoints
 }

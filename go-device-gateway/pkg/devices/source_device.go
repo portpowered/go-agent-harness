@@ -190,7 +190,7 @@ func (s *DeviceSource) CaptureStats() audio.CaptureQueueStats {
 	if s == nil || s.adapter == nil {
 		return audio.CaptureQueueStats{}
 	}
-	if provider, ok := s.adapter.handle.(audio.CaptureStatsProvider); ok {
+	if provider, ok := s.adapter.handle.(CaptureStatsProvider); ok {
 		return provider.CaptureStats()
 	}
 	return audio.CaptureQueueStats{}
@@ -235,12 +235,13 @@ func nilInterface(value any) bool {
 		return true
 	}
 	v := reflect.ValueOf(value)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return v.IsNil()
-	default:
-		return false
-	}
+	return reflectNilable(v.Kind()) && v.IsNil()
+}
+
+// reflectNilable reports whether values of kind can be nil.
+func reflectNilable(kind reflect.Kind) bool {
+	return kind == reflect.Chan || kind == reflect.Func || kind == reflect.Interface ||
+		kind == reflect.Map || kind == reflect.Pointer || kind == reflect.Slice
 }
 
 func openedDeviceDirection(handle OpenedDevice) (Direction, bool) {

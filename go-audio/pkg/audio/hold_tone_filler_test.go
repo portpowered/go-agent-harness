@@ -245,15 +245,15 @@ func TestApplyHoldTonePCM16RealAudioStopsAndFades(t *testing.T) {
 	for index := range realSamples {
 		realSamples[index] = int16(-(index%77 + 1))
 	}
-	real := codec.EncodePCM16(realSamples)
-	got := ApplyHoldTonePCM16(filler, mid, real)
-	if len(got) < len(real) {
-		t.Fatalf("real frame was shortened: got %d bytes, want at least %d", len(got), len(real))
+	realFrame := codec.EncodePCM16(realSamples)
+	got := ApplyHoldTonePCM16(filler, mid, realFrame)
+	if len(got) < len(realFrame) {
+		t.Fatalf("realFrame frame was shortened: got %d bytes, want at least %d", len(got), len(realFrame))
 	}
-	tailStart := len(got) - len(real)
-	for index := range real {
-		if got[tailStart+index] != real[index] {
-			t.Fatalf("real frame changed at byte %d", index)
+	tailStart := len(got) - len(realFrame)
+	for index := range realFrame {
+		if got[tailStart+index] != realFrame[index] {
+			t.Fatalf("realFrame frame changed at byte %d", index)
 		}
 	}
 	if tailStart > 0 {

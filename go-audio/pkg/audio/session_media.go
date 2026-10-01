@@ -241,6 +241,8 @@ func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
 	}
 }
 
+var _ PlaybackControlledInbound = (*sessionInboundMedia)(nil)
+
 func (m *sessionInboundMedia) SetPlaybackController(controller PlaybackController) {
 	m.mu.Lock()
 	m.controller = controller

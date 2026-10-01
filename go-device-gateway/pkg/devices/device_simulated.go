@@ -647,6 +647,9 @@ func (r *SimulatedDuplexRegistry) applyTimelineFaultsLocked(faults []FaultEvent,
 				r.capturePosition += uint64(repeated(r.scenario.Capture.Quanta, r.captureCallback-1))
 			}
 			return true
+		case FaultDuplicateCallback:
+			// Duplicate callbacks replay data in the render and capture
+			// paths; they do not move the timeline.
 		}
 	}
 	return false

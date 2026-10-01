@@ -256,8 +256,8 @@ func (h *c21DelayedPlaybackHandle) Close() error {
 
 var _ devicegw.DeviceRegistry = (*c21DelayedPlaybackRegistry)(nil)
 var _ devicegw.OpenedDevice = (*c21DelayedPlaybackHandle)(nil)
-var _ audio.PlaybackStatsProvider = (*c21DelayedPlaybackHandle)(nil)
-var _ audio.PlaybackDiscarder = (*c21DelayedPlaybackHandle)(nil)
+var _ devicegw.PlaybackStatsProvider = (*c21DelayedPlaybackHandle)(nil)
+var _ devicegw.PlaybackDiscarder = (*c21DelayedPlaybackHandle)(nil)
 
 func c21StartDelayedRender(handle *c21DelayedPlaybackHandle) chan struct{} {
 	done := make(chan struct{})

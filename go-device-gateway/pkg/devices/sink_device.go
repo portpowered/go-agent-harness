@@ -103,7 +103,7 @@ func (s *DeviceSink) PlaybackStats() audio.PlaybackQueueStats {
 		return audio.PlaybackQueueStats{}
 	}
 	if s.adapter != nil {
-		if provider, ok := s.adapter.handle.(audio.PlaybackStatsProvider); ok {
+		if provider, ok := s.adapter.handle.(PlaybackStatsProvider); ok {
 			return provider.PlaybackStats()
 		}
 	}
@@ -117,7 +117,7 @@ func (s *DeviceSink) DiscardPlayback() int {
 	if s == nil || s.adapter == nil {
 		return 0
 	}
-	if discarder, ok := s.adapter.handle.(audio.PlaybackDiscarder); ok {
+	if discarder, ok := s.adapter.handle.(PlaybackDiscarder); ok {
 		return discarder.DiscardPlayback()
 	}
 	return 0

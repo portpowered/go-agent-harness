@@ -169,23 +169,29 @@ func TestPublicStrictReplayRejectsMissingRecordedToolResult(t *testing.T) {
 }
 
 func TestPublicStrictReplayRejectsMismatchedNestedToolCallID(t *testing.T) {
+	assertStrictReplayRejectsMutation(t, replaceNestedToolCallID, runtimeReplay.ErrBundleMismatch, "nested response ToolCallID")
+}
+
+// assertStrictReplayRejectsMutation replays the checked-in timeline after
+// mutate and requires a wantErr failure naming wantText with no success output.
+func assertStrictReplayRejectsMutation(t *testing.T, mutate func(*testing.T, []byte) []byte, wantErr error, wantText string) {
+	t.Helper()
 	data, err := os.ReadFile(filepath.Join("testdata", "replay", "timeline.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	mutated := replaceNestedToolCallID(t, data)
 	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "timeline.jsonl"), mutated, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "timeline.jsonl"), mutate(t, data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	var output bytes.Buffer
 	_, err = runtimeReplayWire.NewStrictService().Run(t.Context(), &output, runtimeReplay.StrictRequest{BundlePath: directory})
-	if !errors.Is(err, runtimeReplay.ErrBundleMismatch) || !strings.Contains(err.Error(), "nested response ToolCallID") {
-		t.Fatalf("mismatched nested tool ID error=%v, want causal mismatch", err)
+	if !errors.Is(err, wantErr) || !strings.Contains(err.Error(), wantText) {
+		t.Fatalf("mutated replay error=%v, want %v naming %q", err, wantErr, wantText)
 	}
 	if output.Len() != 0 {
-		t.Fatalf("mismatched nested tool ID replay produced %d bytes of success output", output.Len())
+		t.Fatalf("mutated replay produced %d bytes of success output", output.Len())
 	}
 }
 
@@ -238,24 +244,7 @@ func replaceNestedToolCallID(t *testing.T, data []byte) []byte {
 }
 
 func TestPublicStrictReplayRejectsMissingFinalResponseDone(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "replay", "timeline.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	mutated := replaceLastResponseDone(t, data)
-	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "timeline.jsonl"), mutated, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	var output bytes.Buffer
-	_, err = runtimeReplayWire.NewStrictService().Run(t.Context(), &output, runtimeReplay.StrictRequest{BundlePath: directory})
-	if !errors.Is(err, runtimeReplay.ErrBundleIncomplete) || !strings.Contains(err.Error(), "terminal response.done") {
-		t.Fatalf("missing terminal error=%v, want causal incomplete diagnostic", err)
-	}
-	if output.Len() != 0 {
-		t.Fatalf("missing terminal replay produced %d bytes of success output", output.Len())
-	}
+	assertStrictReplayRejectsMutation(t, replaceLastResponseDone, runtimeReplay.ErrBundleIncomplete, "terminal response.done")
 }
 
 func replaceLastResponseDone(t *testing.T, data []byte) []byte {

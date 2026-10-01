@@ -436,6 +436,8 @@ func (g *PCM16FeedbackGate) classifySuppressedCaptureLocked(ctx context.Context,
 		g.suppressUntil = g.playbackTailEndLocked()
 		g.state = pcm16FeedbackGateSuppressing
 		return nil, nil
+	case selfhearing.PCM16SelfHearingConfirmed, selfhearing.PCM16SelfHearingRateMismatch:
+		fallthrough
 	default:
 		// Confirmed feedback or a rate mismatch remains consistent with echo.
 		// Extend the acoustic tail and drop ambiguous held frames.

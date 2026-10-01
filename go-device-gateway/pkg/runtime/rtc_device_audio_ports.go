@@ -253,9 +253,9 @@ func (s *rtcDevicePlaybackObservationState) removeTailLocked(samples int) []rtcD
 	for index := len(s.segments) - 1; index >= 0 && remaining > 0; index-- {
 		segment := &s.segments[index]
 		take := minInt(segment.remaining, remaining)
-		copy := *segment
-		copy.remaining = take
-		reversed = append(reversed, copy)
+		taken := *segment
+		taken.remaining = take
+		reversed = append(reversed, taken)
 		segment.remaining -= take
 		remaining -= take
 		s.pendingSamples -= uint64(take)

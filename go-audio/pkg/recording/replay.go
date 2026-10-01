@@ -147,20 +147,27 @@ func (b *replayBuilder) admit(line []byte) error {
 }
 
 func (b *replayBuilder) admitTimestamp(event Event, eventCount int) error {
-	if event.Timestamp == "" && event.Kind != replayEventClosed {
-		return fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
-	} else if event.Timestamp != "" {
-		timestamp, timestampErr := time.Parse(time.RFC3339Nano, event.Timestamp)
-		if timestampErr != nil {
+	if event.Timestamp == "" {
+		// Only the closing event may omit its timestamp, and never as the
+		// first event that fixes the recording epoch.
+		if event.Kind != replayEventClosed {
 			return fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
 		}
 		if eventCount == 0 {
-			b.base = timestamp
-		} else if timestamp.Sub(b.base) != time.Duration(event.ElapsedNS) {
-			return fmt.Errorf("%w: timeline timestamp does not match elapsed time", ErrIncomplete)
+			return fmt.Errorf("%w: invalid recording epoch", ErrIncomplete)
 		}
-	} else if eventCount == 0 {
-		return fmt.Errorf("%w: invalid recording epoch", ErrIncomplete)
+		return nil
+	}
+	timestamp, timestampErr := time.Parse(time.RFC3339Nano, event.Timestamp)
+	if timestampErr != nil {
+		return fmt.Errorf("%w: invalid timeline timestamp", ErrIncomplete)
+	}
+	if eventCount == 0 {
+		b.base = timestamp
+		return nil
+	}
+	if timestamp.Sub(b.base) != time.Duration(event.ElapsedNS) {
+		return fmt.Errorf("%w: timeline timestamp does not match elapsed time", ErrIncomplete)
 	}
 	return nil
 }

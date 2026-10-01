@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -377,16 +376,10 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 	for {
 		generation, blocked := s.playbackState()
 		frame, err := inbound.ReadFrame(operationCtx)
+		if errors.Is(err, io.EOF) || errors.Is(err, audio.ErrSessionMediaClosed) {
+			return s.finishProviderPlayback(operationCtx, pending)
+		}
 		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, audio.ErrSessionMediaClosed) {
-				if flushErr := s.flushProviderPlayback(operationCtx, pending); flushErr != nil {
-					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: flushErr}
-				}
-				if drainErr := s.sink.WaitForPlayback(operationCtx); drainErr != nil {
-					return &RTCDeviceSinkError{DeviceID: s.id, Operation: "drain", Err: drainErr}
-				}
-				return nil
-			}
 			return &RTCDeviceSinkError{DeviceID: s.id, Operation: "read", Err: err}
 		}
 		if frame.PlaybackResponse.ItemID != "" {
@@ -398,6 +391,19 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 		}
 	}
 }
+
+// finishProviderPlayback flushes buffered provider audio at the end of the
+// inbound stream and waits for the device to play it out.
+func (s *RTCDeviceSink) finishProviderPlayback(ctx context.Context, pending *audio.PlaybackProcessor) error {
+	if err := s.flushProviderPlayback(ctx, pending); err != nil {
+		return &RTCDeviceSinkError{DeviceID: s.id, Operation: "write", Err: err}
+	}
+	if err := s.sink.WaitForPlayback(ctx); err != nil {
+		return &RTCDeviceSinkError{DeviceID: s.id, Operation: "drain", Err: err}
+	}
+	return nil
+}
+
 func (s *RTCDeviceSink) writeProviderFrame(ctx context.Context, pending *audio.PlaybackProcessor, providerFrame audio.PCMFrame, generation uint64, blocked bool) error {
 	samples := providerFrame.Samples
 	if s.loudness != nil {
@@ -678,18 +684,7 @@ func (s *RTCDeviceSink) beginPump(cancel context.CancelCauseFunc) (func(), error
 	}, nil
 }
 
-func nilRTCInboundMedia(media audio.InboundMedia) bool {
-	if media == nil {
-		return true
-	}
-	value := reflect.ValueOf(media)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
-}
+func nilRTCInboundMedia(media audio.InboundMedia) bool { return isNilValue(media) }
 
 // WaitForPump waits for the active playback pump to finish. It is useful to
 // drain provider media before closing the owning session.

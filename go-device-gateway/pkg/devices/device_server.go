@@ -317,7 +317,7 @@ func (s *DeviceServer) handlePlaybackStats(w http.ResponseWriter, r *http.Reques
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	provider, ok := handle.(audio.PlaybackStatsProvider)
+	provider, ok := handle.(PlaybackStatsProvider)
 	if !ok {
 		writeDeviceServerError(w, http.StatusBadRequest, errors.New("device does not expose playback statistics"))
 		return
@@ -329,7 +329,7 @@ func (s *DeviceServer) handleCaptureStats(w http.ResponseWriter, r *http.Request
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	provider, ok := handle.(audio.CaptureStatsProvider)
+	provider, ok := handle.(CaptureStatsProvider)
 	if !ok {
 		writeDeviceServerError(w, http.StatusBadRequest, errors.New("device does not expose capture statistics"))
 		return
@@ -341,7 +341,7 @@ func (s *DeviceServer) handleDiscard(w http.ResponseWriter, r *http.Request, han
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	discarder, ok := handle.(audio.PlaybackDiscarder)
+	discarder, ok := handle.(PlaybackDiscarder)
 	if !ok {
 		writeDeviceServerError(w, http.StatusBadRequest, errors.New("device does not expose playback discard"))
 		return

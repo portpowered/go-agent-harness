@@ -562,7 +562,7 @@ func enumerateEndpoints(enumerator wasapiCOM, flow uint32) (wasapiCOM, error) {
 	return wasapiCOM{ptr: collectionPtr}, nil
 }
 
-func (c wasapiCOM) count() (uint32, error) {
+func (c *wasapiCOM) count() (uint32, error) {
 	var count uint32
 	hresult, err := c.call(immDeviceCollectionVTable, uintptr(unsafe.Pointer(&count)))
 	if err != nil {
@@ -571,7 +571,7 @@ func (c wasapiCOM) count() (uint32, error) {
 	return count, nil
 }
 
-func (c wasapiCOM) item(index uint32) (wasapiCOM, error) {
+func (c *wasapiCOM) item(index uint32) (wasapiCOM, error) {
 	var endpointPtr unsafe.Pointer
 	hresult, err := c.call(immDeviceCollectionVTable+1, uintptr(index), uintptr(unsafe.Pointer(&endpointPtr)))
 	if err != nil {
@@ -761,7 +761,7 @@ func utf16PtrString(ptr *uint16) string {
 
 type wasapiCOM struct{ ptr unsafe.Pointer }
 
-func (c wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
+func (c *wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
 	if c.ptr == nil {
 		return 0x80004003, wasapiHRESULTError(0x80004003)
 	}
@@ -777,7 +777,7 @@ func (c wasapiCOM) call(index int, args ...uintptr) (uint32, error) {
 	return hresult, nil
 }
 
-func (c wasapiCOM) vtableMethod(index int) uintptr {
+func (c *wasapiCOM) vtableMethod(index int) uintptr {
 	vtable := *(*unsafe.Pointer)(c.ptr)
 	return *(*uintptr)(unsafe.Add(vtable, uintptr(index)*unsafe.Sizeof(uintptr(0))))
 }

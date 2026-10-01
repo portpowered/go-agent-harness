@@ -73,8 +73,8 @@ func pcm16SelfHearingBufferDuration(config PCM16SelfHearingConfig) (time.Duratio
 		}
 		lagMagnitude = -lagMagnitude
 	}
-	if max := config.CorrelationLagWindow.Max; max > lagMagnitude {
-		lagMagnitude = max
+	if upper := config.CorrelationLagWindow.Max; upper > lagMagnitude {
+		lagMagnitude = upper
 	}
 	maxBufferDuration, err := addSelfHearingDuration(config.AnalysisWindow, lagMagnitude)
 	if err != nil {

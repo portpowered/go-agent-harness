@@ -378,7 +378,16 @@ func voiceProcessingIgnoreStopped(status int32) error {
 
 func (h *voiceProcessingEndpoint) DeviceDirection() Direction       { return h.direction }
 func (h *voiceProcessingEndpoint) DeviceFormat() audio.DeviceFormat { return h.format }
-func (h *voiceProcessingEndpoint) VoiceProcessingActive() bool      { return true }
+
+// VoiceProcessingProvider reports whether a device endpoint is backed by a
+// native duplex voice-processing graph rather than the portable fallback.
+type VoiceProcessingProvider interface {
+	VoiceProcessingActive() bool
+}
+
+var _ VoiceProcessingProvider = (*voiceProcessingEndpoint)(nil)
+
+func (h *voiceProcessingEndpoint) VoiceProcessingActive() bool { return true }
 
 func (h *voiceProcessingEndpoint) ReadFrame(ctx context.Context, frame []int16) error {
 	if h.direction != DirectionInput {
