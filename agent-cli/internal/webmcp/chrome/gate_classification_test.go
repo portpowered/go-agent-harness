@@ -54,15 +54,15 @@ func TestPinnedChromeWebMCPClassificationContractTwice(t *testing.T) {
 		t.Run(fmt.Sprintf("iteration-%d", iteration), func(t *testing.T) {
 			t.Logf("classification iteration=%d chrome=%s revision=%s platform=%s flags=%s profile=<fresh>", iteration, lockedChromeVersion, lockedChromeRevision, lockedChromePlatform, "WebMCP,WebMCPTesting,DevToolsWebMCPSupport")
 			runPinned := pinnedChrome{Lock: pinned.Lock, Executable: pinned.Executable, WorkDir: t.TempDir()}
-			runLiveClassificationProbe04(t, ctx, runPinned, binaryPath, iteration)
-			runLiveClassificationProbe08(t, ctx, runPinned, binaryPath, iteration)
-			runLiveClassificationProbe09(t, ctx, runPinned, binaryPath, iteration)
-			runLiveClassificationProbe10(t, ctx, runPinned, binaryPath, iteration)
+			runLiveClassificationProbe04(t, ctx, runPinned, binaryPath)
+			runLiveClassificationProbe08(t, ctx, runPinned, binaryPath)
+			runLiveClassificationProbe09(t, ctx, runPinned, binaryPath)
+			runLiveClassificationProbe10(t, ctx, runPinned, binaryPath)
 		})
 	}
 }
 
-func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string, iteration int) {
+func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string) {
 	t.Helper()
 	runDir := filepath.Join(pinned.WorkDir, "probe-04")
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
@@ -97,7 +97,7 @@ func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinn
 	recordClassificationResult(t, result, configDir, "probe-04", fmt.Sprintf(`{"code":%q,"browser_id":%q,"candidate_count":%v,"filters":{"eligible_only":true,"include_zero_tool_pages":true}}`, envelope.Error.Code, browserID, envelope.Error.Details["candidate_count"]))
 }
 
-func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string, iteration int) {
+func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string) {
 	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
@@ -171,7 +171,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	recordClassificationResult(t, stale, configDir, "probe-08-fresh-identity", fmt.Sprintf(`{"code":%q,"old_browser_id":%q,"old_target_id":%q,"selected_generation":%v,"reason":%q,"replacement_work":"not_attached"}`, staleEnvelope.Error.Code, browserID, tabs[0].TargetID, staleEnvelope.Error.Details["selected_generation"], staleEnvelope.Error.Details["reason"]))
 }
 
-func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string, iteration int) {
+func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string) {
 	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
@@ -225,7 +225,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	recordClassificationResult(t, result, configDir, "probe-09", fmt.Sprintf(`{"code":%q,"browser_id":%q,"candidate_target_ids":%s,"selection":"none"}`, envelope.Error.Code, browserID, mustJSON(t, candidateIDs)))
 }
 
-func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string, iteration int) {
+func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinnedChrome, binaryPath string) {
 	t.Helper()
 	readyFixture := newFixtureServer()
 	t.Cleanup(readyFixture.Close)

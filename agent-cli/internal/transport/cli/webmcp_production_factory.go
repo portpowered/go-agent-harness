@@ -142,9 +142,9 @@ func configDirForGlobalFlags(globalFlags *flags.GlobalFlags) string {
 // after flags have been parsed, so --config-dir applies consistently without
 // making command construction touch the filesystem.
 func defaultWebMCPDoctorFactory(globalFlags *flags.GlobalFlags) WebMCPDoctorFactory {
-	// HostWorkDir reports "" with its error; the lock search then starts from
-	// the executable and source directories only.
-	workingDir, _ := globalFlags.HostWorkDir()
+	// Without a host working directory the lock search starts from the
+	// executable and source directories only.
+	workingDir := globalFlags.HostWorkDirOrEmpty()
 	return NewProductionWebMCPDoctorFactory(
 		WithWebMCPProductionConfigDir(configDirForGlobalFlags(globalFlags)),
 		WithWebMCPProductionWorkingDir(workingDir),

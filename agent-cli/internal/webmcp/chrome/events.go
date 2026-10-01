@@ -10,7 +10,6 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
-	"github.com/chromedp/cdproto/target"
 	cdpTarget "github.com/chromedp/cdproto/target"
 	cdpWebMCP "github.com/chromedp/cdproto/webmcp"
 	"github.com/chromedp/chromedp"
@@ -288,7 +287,7 @@ func (h *handle) openTargetSession(targetID webmcp.TargetID, selected webmcp.Tar
 	if ops.newContext == nil || parent == nil && !hasCustomTargetContext(h) {
 		return nil, nil, classifiedTargetError(h.candidate, targetID, "attach", errors.New("browser context is unavailable"))
 	}
-	targetContext, cancelTarget := ops.newContext(parent, target.ID(targetID))
+	targetContext, cancelTarget := ops.newContext(parent, cdpTarget.ID(targetID))
 	if targetContext == nil || cancelTarget == nil {
 		if cancelTarget != nil {
 			cancelTarget()

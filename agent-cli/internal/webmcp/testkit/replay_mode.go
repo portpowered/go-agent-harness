@@ -30,6 +30,9 @@ func IsDiagnosticReadOnlyOperation(request OperationRequest) bool {
 		OperationBrowserDiscover, OperationBrowserListTargets, OperationBrowserListTools,
 		OperationDoctor, OperationContext, OperationBrowsers, OperationTabs, OperationTools:
 		return true
+	case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool,
+		OperationNavigate, OperationCloseTarget, OperationDetachTarget:
+		return false
 	default:
 		return false
 	}

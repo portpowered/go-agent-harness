@@ -152,7 +152,8 @@ func assertAskFlagError(t *testing.T, err error, wantMessage string, wantIs erro
 
 // openRoomEventStream connects to a room's /events stream. The stream is read
 // after the run returns, so the request outlives the run context.
-func openRoomEventStream(t *testing.T, ctx context.Context, url string) *http.Response {
+// openRoomEventStream connects to the room event stream; the body closes at test cleanup.
+func openRoomEventStream(t *testing.T, ctx context.Context, url string) io.Reader {
 	t.Helper()
 	request, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodGet, url, nil)
 	if err != nil {
@@ -163,5 +164,5 @@ func openRoomEventStream(t *testing.T, ctx context.Context, url string) *http.Re
 		t.Fatalf("connect event stream: %v", err)
 	}
 	t.Cleanup(func() { closeTestResource(t, response.Body) })
-	return response
+	return response.Body
 }

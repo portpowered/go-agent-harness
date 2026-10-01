@@ -318,8 +318,8 @@ func (m *ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
 		return m.handleSlashCommand(rawInput)
 	}
 	// Parse @file references before sending to the LLM.
-	// HostWorkDir reports "" with its error; parseAtReferences then leaves the input as is.
-	workDir, _ := m.globalFlags.HostWorkDir()
+	// Without a host working directory parseAtReferences leaves the input as is.
+	workDir := m.globalFlags.HostWorkDirOrEmpty()
 	cleanedText, contentParts, refErr := parseAtReferences(workDir, rawInput)
 	if refErr != "" {
 		errLine := chatLine{kind: chatLineSystem, content: refErr}

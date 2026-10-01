@@ -92,3 +92,21 @@ func (f *GlobalFlags) defaultConfigDir() string {
 	}
 	return filepath.Join(home, config.ConfigDirName)
 }
+
+// HostHomeDirOrEmpty returns the injected home directory, or "" when the host
+// cannot report one.
+func (f *GlobalFlags) HostHomeDirOrEmpty() string {
+	if home, err := f.HostHomeDir(); err == nil {
+		return home
+	}
+	return ""
+}
+
+// HostWorkDirOrEmpty returns the injected working directory, or "" when the
+// host cannot report one.
+func (f *GlobalFlags) HostWorkDirOrEmpty() string {
+	if workDir, err := f.HostWorkDir(); err == nil {
+		return workDir
+	}
+	return ""
+}

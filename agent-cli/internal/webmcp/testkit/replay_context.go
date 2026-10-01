@@ -130,6 +130,12 @@ func scriptReleaser(ctx context.Context, runtime *BrowserScriptRuntime) func(Ope
 			return runtime.CloseTarget(cleanupContext)
 		case OperationDetachTarget:
 			return runtime.DetachTarget(cleanupContext)
+		case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool,
+			OperationNavigate, OperationDiscover, OperationList, OperationListTargets, OperationListTools,
+			OperationBrowserDiscover, OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor,
+			OperationContext, OperationBrowsers, OperationTabs, OperationTools:
+			// No teardown operation is expected; close without driving the fixture.
+			return nil
 		default:
 			return nil
 		}

@@ -131,8 +131,8 @@ func (c *ToolCommand) filesystemPolicy() (*tools.FilesystemPolicy, error) {
 // working directory) and the injected home directory for a filesystem policy.
 // An unavailable home directory protects only the system roots, as before.
 func filesystemHost(globalFlags *flags.GlobalFlags) (tools.FilesystemHost, error) {
-	// HostHomeDir reports "" with its error; no home leaves the system roots protected.
-	homeDir, _ := globalFlags.HostHomeDir()
+	// No home directory leaves only the system roots protected.
+	homeDir := globalFlags.HostHomeDirOrEmpty()
 	workDir, err := globalFlags.EffectiveWorkDir()
 	if err != nil {
 		return tools.FilesystemHost{HomeDir: homeDir}, fmt.Errorf("%w: %w", tools.ErrInvalidFilesystemRoot, err)

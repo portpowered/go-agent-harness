@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -427,7 +426,7 @@ func TestRoomRunCommandRejectsMalformedAndOccupiedStreamBeforeRunner(t *testing.
 
 func TestRoomRunCommandRedactsCredentialsFromEventStreamOutputAndError(t *testing.T) {
 	manifestPath := writeRoomCLIManifest(t)
-	output, stream := &bytes.Buffer{}, (*http.Response)(nil)
+	output, stream := &bytes.Buffer{}, io.Reader(nil)
 	command := newTestRoomRunCommand(flags.NewGlobalFlags(), nil)
 	command.SetRunner(func(ctx context.Context, _ io.Writer, options rooms.RoomRunOptions) (rooms.RoomResult, error) {
 		stream = openRoomEventStream(t, ctx, strings.Fields(strings.SplitN(output.String(), "room stream listening: ", 2)[1])[0])
@@ -443,7 +442,7 @@ func TestRoomRunCommandRedactsCredentialsFromEventStreamOutputAndError(t *testin
 	if err == nil || strings.Contains(err.Error(), "alice-secret") || !strings.Contains(err.Error(), "[REDACTED]") {
 		t.Fatalf("room error = %v, want the credential redacted", err)
 	}
-	body, readErr := io.ReadAll(stream.Body)
+	body, readErr := io.ReadAll(stream)
 	if readErr != nil || !strings.Contains(string(body), `"state":"key [REDACTED]"`) || !strings.Contains(string(body), "auth [REDACTED] rejected") {
 		t.Fatalf("event stream = %q (%v), want redacted participant events", body, readErr)
 	}
