@@ -66,7 +66,6 @@ type Gate struct {
 	target          sharedaudio.MediaEndpoints
 	ready           chan struct{}
 	readyOnce       sync.Once
-	bridgeCtx       context.Context
 	bridgeCancel    context.CancelFunc
 	inboundDone     chan struct{}
 	inboundOnce     sync.Once
@@ -194,8 +193,8 @@ func (g *Gate) Attach(ctx context.Context, target sharedaudio.MediaEndpoints) {
 	// bridge turn a healthy final tail into context.Canceled. Keep the bridge
 	// cancellable by this gate while retaining the caller's values, and let
 	// Close perform the explicit teardown cancellation for failure paths.
-	g.bridgeCtx, g.bridgeCancel = context.WithCancel(context.WithoutCancel(ctx))
-	bridgeCtx := g.bridgeCtx
+	bridgeCtx, bridgeCancel := context.WithCancel(context.WithoutCancel(ctx))
+	g.bridgeCancel = bridgeCancel
 	var inbound, outbound bool
 	if target.Inbound != nil {
 		g.wg.Add(1)

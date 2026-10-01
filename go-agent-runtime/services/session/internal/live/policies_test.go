@@ -572,10 +572,9 @@ func TestMissingMediaCauseSurvivesImmediateProviderTerminal(t *testing.T) {
 // so the graceful drain must also join a pump that is scheduled but not begun.
 func TestGracefulDrainJoinsPlaybackPumpBeforeItBegins(t *testing.T) {
 	playback := &lateStartPlayback{start: make(chan struct{})}
-	invocation := &liveInvocation{ctx: t.Context(), ports: devices.MediaPorts{Playback: playback}, endpoints: sharedaudio.MediaEndpoints{Inbound: playback}}
-	invocation.pumpCtx = t.Context()
-	invocation.startPlaybackPump()
-	require.NoError(t, invocation.drainInvocationPlayback())
+	invocation := &liveInvocation{ports: devices.MediaPorts{Playback: playback}, endpoints: sharedaudio.MediaEndpoints{Inbound: playback}}
+	invocation.startPlaybackPump(t.Context())
+	require.NoError(t, invocation.drainInvocationPlayback(t.Context()))
 	require.True(t, playback.ran, "graceful drain returned before the scheduled playback pump ran")
 	require.NoError(t, <-invocation.pumps)
 }

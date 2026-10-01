@@ -233,12 +233,12 @@ const (
 // consumer empty the local queue, so closing the device does not discard the
 // response tail. Native devices already drain inside the pump; a consumer
 // that stops advancing is abandoned after a bounded stall.
-func (i *liveInvocation) drainInvocationPlayback() error {
-	if err := drainPlayback(i.ctx, i.ports.Playback, i.options.PlaybackDrainTimeout, i.playbackDone); err != nil {
+func (i *liveInvocation) drainInvocationPlayback(ctx context.Context) error {
+	if err := drainPlayback(ctx, i.ports.Playback, i.options.PlaybackDrainTimeout, i.playbackDone); err != nil {
 		return err
 	}
 	if provider, ok := i.device.(devices.PlaybackStatsProvider); ok {
-		waitForPlaybackQueue(i.ctx, provider)
+		waitForPlaybackQueue(ctx, provider)
 	}
 	return nil
 }
@@ -262,7 +262,7 @@ func waitForPlaybackQueue(ctx context.Context, provider devices.PlaybackStatsPro
 	}
 }
 
-func (i *liveInvocation) startPlaybackPump() {
+func (i *liveInvocation) startPlaybackPump(ctx context.Context) {
 	if i.ports.Playback == nil {
 		return
 	}
@@ -272,7 +272,7 @@ func (i *liveInvocation) startPlaybackPump() {
 	}
 	done := make(chan struct{})
 	i.playbackDone = done
-	i.startPump("playback", func(ctx context.Context) error {
+	i.startPump(ctx, "playback", func(ctx context.Context) error {
 		defer close(done)
 		return i.ports.Playback.Pump(ctx, i.endpoints.Inbound)
 	})

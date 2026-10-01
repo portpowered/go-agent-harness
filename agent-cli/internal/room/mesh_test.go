@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,7 +25,7 @@ func TestMeshJoinCreatesOnePairPerUnorderedParticipantPair(t *testing.T) {
 		mu.Unlock()
 		return loopbackFactory(ctx, spec)
 	}
-	mesh := NewMesh(MeshConfig{PairFactory: factory})
+	mesh := NewMesh(t.Context(), MeshConfig{PairFactory: factory})
 	defer releaseTestResource(mesh)
 
 	for _, id := range []string{"zeta", "alpha", "beta"} {
@@ -118,7 +119,7 @@ func TestLoopbackPairClosesPeerAndBothSignalingEndpoints(t *testing.T) {
 }
 
 func TestMeshRejectsDuplicateAndUnknownMembershipOperations(t *testing.T) {
-	mesh := NewMesh()
+	mesh := NewMesh(t.Context())
 	defer releaseTestResource(mesh)
 	if err := mesh.Join(context.Background(), "alpha"); err != nil {
 		t.Fatalf("first Join: %v", err)
@@ -141,7 +142,7 @@ func TestMeshRejectsDuplicateAndUnknownMembershipOperations(t *testing.T) {
 func TestMeshClosesFactoryResourceReturnedWithError(t *testing.T) {
 	wantErr := errors.New("factory returned a partial resource")
 	resource := &countingPair{}
-	mesh := NewMesh(MeshConfig{PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) { return resource, wantErr }})
+	mesh := NewMesh(t.Context(), MeshConfig{PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) { return resource, wantErr }})
 
 	if err := mesh.Join(context.Background(), "alpha"); err != nil {
 		t.Fatalf("first Join: %v", err)
@@ -173,7 +174,7 @@ func TestMeshRemovalClosesOnlyRemovedPairAndLeavesSurvivors(t *testing.T) {
 		resourcesMu.Unlock()
 		return resource, nil
 	}
-	mesh := NewMesh(MeshConfig{PairFactory: factory})
+	mesh := NewMesh(t.Context(), MeshConfig{PairFactory: factory})
 	defer releaseTestResource(mesh)
 	for _, id := range []string{"a", "b", "c"} {
 		if err := mesh.Join(context.Background(), id); err != nil {
@@ -230,7 +231,7 @@ func TestMeshContextCancellationClosesAllPairsAndRepeatedCloseIsSafe(t *testing.
 		resourcesMu.Unlock()
 		return resource, nil
 	}
-	mesh := NewMesh(MeshConfig{Context: ctx, PairFactory: factory})
+	mesh := NewMesh(ctx, MeshConfig{PairFactory: factory})
 	for _, id := range []string{"a", "b", "c"} {
 		if err := mesh.Join(context.Background(), id); err != nil {
 			t.Fatalf("Join(%q): %v", id, err)
@@ -263,8 +264,7 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 		closeErr:     closeErr,
 	}
 	t.Cleanup(pair.releaseClose)
-	mesh := NewMesh(MeshConfig{
-		Context: parentContext,
+	mesh := NewMesh(parentContext, MeshConfig{
 		PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) {
 			return pair, nil
 		},
@@ -276,7 +276,6 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 		t.Fatalf("second Join: %v", err)
 	}
 	cancelParent()
-	awaitClosed(t, mesh.Context().Done())
 	awaitClosed(t, pair.closeStarted)
 	closeResults := make(chan error, 3)
 	closeCallStarted := make(chan struct{}, 3)
@@ -352,7 +351,6 @@ func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing
 	}()
 	awaitClosed(t, doneWaiterStarted)
 	cancelParent()
-	awaitClosed(t, mesh.Context().Done())
 	awaitClosed(t, pending.connectCanceled)
 	firstClosed := awaitFirstCloseStarted(t, connected, pending)
 	select {
@@ -472,7 +470,6 @@ func TestMeshDoneRejectsPendingJoinAndMembershipAliases(t *testing.T) {
 	t.Cleanup(cancelParent)
 	closeResult := make(chan error, 1)
 	go func() { closeResult <- mesh.Close() }()
-	awaitClosed(t, mesh.Context().Done())
 	awaitClosed(t, pending.connectCanceled)
 	firstClosed := awaitFirstCloseStarted(t, connected, pending)
 	select {
@@ -528,7 +525,7 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 		release:      make(chan struct{}),
 		closeErr:     closeErr,
 	}
-	mesh := NewMesh(MeshConfig{
+	mesh := NewMesh(t.Context(), MeshConfig{
 		PairFactory: func(_ context.Context, _ PairSpec) (PairResource, error) {
 			return pair, nil
 		},
@@ -552,7 +549,8 @@ func TestMeshShutdownCapturesPairRemovedDuringGatedClose(t *testing.T) {
 	}
 	closeResult := make(chan error, 1)
 	go func() { closeResult <- mesh.Close() }()
-	awaitClosed(t, mesh.Context().Done())
+	// Shutdown clears membership when it captures the pairs to close.
+	awaitMembershipCleared(t, mesh)
 	select {
 	case <-mesh.Done():
 		t.Fatal("Done closed while Remove-owned PairResource.Close was gated")
@@ -599,7 +597,7 @@ func TestMeshCancellationUnblocksAnInFlightJoinAndClosesPendingPair(t *testing.T
 	ctx, cancel := context.WithCancel(context.Background())
 	pending := &blockingPair{started: make(chan struct{})}
 	factory := func(_ context.Context, _ PairSpec) (PairResource, error) { return pending, nil }
-	mesh := NewMesh(MeshConfig{Context: ctx, PairFactory: factory})
+	mesh := NewMesh(ctx, MeshConfig{PairFactory: factory})
 	defer releaseTestResource(mesh)
 	if err := mesh.Join(context.Background(), "first"); err != nil {
 		t.Fatalf("first Join: %v", err)
@@ -715,7 +713,7 @@ func newConnectedAndPendingMesh(t *testing.T, parent context.Context, connectedE
 			return nil, errors.New("unexpected pair factory spec")
 		}
 	}
-	mesh := NewMesh(MeshConfig{Context: parent, PairFactory: factory})
+	mesh := NewMesh(parent, MeshConfig{PairFactory: factory})
 	t.Cleanup(func() { releaseTestResource(mesh) })
 	t.Cleanup(pending.releaseClose)
 	t.Cleanup(connected.releaseClose)
@@ -795,6 +793,19 @@ func sortStrings(values []string) {
 
 func containsErrorText(err error, want string) bool {
 	return err != nil && strings.Contains(err.Error(), want)
+}
+
+// awaitMembershipCleared yields until the mesh reports no participants, the
+// observable start of shutdown.
+func awaitMembershipCleared(t *testing.T, mesh *Mesh) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for len(mesh.Participants()) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("mesh shutdown did not clear membership")
+		}
+		runtime.Gosched()
+	}
 }
 
 func awaitClosed(t *testing.T, channel <-chan struct{}) {

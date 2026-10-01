@@ -18,8 +18,9 @@ const playbackQueueFrames = 8
 // inputs are every other admitted participant. Source workers read a provider
 // inbound track or local capture once and fan the frame to those target
 // inputs; no source is routed back to itself.
+// roomGraph owns the room mixers and media workers. Its workers receive the
+// graph context as an argument; the graph keeps only the cancel function.
 type roomGraph struct {
-	ctx    context.Context
 	cancel context.CancelFunc
 
 	mu       sync.Mutex
@@ -81,41 +82,41 @@ func newRoomGraph(parent context.Context, scheduler clock.TimerSource, format ro
 	if err != nil {
 		return nil, err
 	}
-	graph := newGraph(parent, recorders)
+	graph, ctx := newGraph(parent, recorders)
 	graph.delivery = delivery
-	if err := graph.initOutputs(scheduler, format, frameSamples, participants); err != nil {
+	if err := graph.initOutputs(ctx, scheduler, format, frameSamples, participants); err != nil {
 		return graph.closeWithError(err)
 	}
 	if err := graph.initRoutes(participants); err != nil {
 		return graph.closeWithError(err)
 	}
-	graph.startWorkers(participants, onError)
+	graph.startWorkers(ctx, participants, onError)
 	return graph, nil
 }
 
-func newGraph(parent context.Context, recorders []audioRecorder) *roomGraph {
+func newGraph(parent context.Context, recorders []audioRecorder) (*roomGraph, context.Context) {
 	ctx, cancel := context.WithCancel(parent)
 	var recorder audioRecorder
 	if len(recorders) > 0 {
 		recorder = recorders[0]
 	}
 	return &roomGraph{
-		ctx: ctx, cancel: cancel, mixers: make(map[string]*mixer.Mixer),
+		cancel: cancel, mixers: make(map[string]*mixer.Mixer),
 		inputs: make(map[string][]*mixer.Input), routeTo: make(map[*mixer.Input]string),
 		retired: make(map[string]struct{}), recorder: recorder,
-	}
+	}, ctx
 }
 
 func (g *roomGraph) closeWithError(err error) (*roomGraph, error) {
 	return nil, errors.Join(err, g.Close())
 }
 
-func (g *roomGraph) initOutputs(scheduler clock.TimerSource, format rooms.AudioFormat, frameSamples int, participants []*activeParticipant) error {
+func (g *roomGraph) initOutputs(ctx context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, frameSamples int, participants []*activeParticipant) error {
 	for _, target := range participants {
 		if target == nil || target.participant.ID == "" {
 			continue
 		}
-		output, err := g.newOutput(scheduler, format, frameSamples, target)
+		output, err := g.newOutput(ctx, scheduler, format, frameSamples, target)
 		if err != nil {
 			return err
 		}
@@ -125,8 +126,8 @@ func (g *roomGraph) initOutputs(scheduler clock.TimerSource, format rooms.AudioF
 	return nil
 }
 
-func (g *roomGraph) newOutput(scheduler clock.TimerSource, format rooms.AudioFormat, frameSamples int, target *activeParticipant) (*graphOutput, error) {
-	mix, err := mixer.New(g.ctx, scheduler, mixer.Config{Format: format, StreamID: "room:" + target.participant.ID})
+func (g *roomGraph) newOutput(ctx context.Context, scheduler clock.TimerSource, format rooms.AudioFormat, frameSamples int, target *activeParticipant) (*graphOutput, error) {
+	mix, err := mixer.New(ctx, scheduler, mixer.Config{Format: format, StreamID: "room:" + target.participant.ID})
 	if err != nil {
 		return nil, fmt.Errorf("create mixer for %q: %w", target.participant.ID, err)
 	}
@@ -174,42 +175,42 @@ func (g *roomGraph) routeSource(source *activeParticipant, participants []*activ
 	return nil
 }
 
-func (g *roomGraph) startWorkers(participants []*activeParticipant, onError func(error)) {
+func (g *roomGraph) startWorkers(ctx context.Context, participants []*activeParticipant, onError func(error)) {
 	for _, output := range g.outputs {
-		g.startOutput(output, onError)
+		g.startOutput(ctx, output, onError)
 	}
 	for _, source := range participants {
 		if source == nil {
 			continue
 		}
 		if source.endpoints.Inbound != nil {
-			g.startSource(source.participant.ID, source.endpoints.Inbound, onError)
+			g.startSource(ctx, source.participant.ID, source.endpoints.Inbound, onError)
 		}
 		if source.media.Capture != nil {
-			g.startCapture(source.participant.ID, onError)
+			g.startCapture(ctx, source.participant.ID, onError)
 		}
 	}
 }
 
-func (g *roomGraph) startSource(sourceID string, inbound audio.InboundMedia, onError func(error)) {
+func (g *roomGraph) startSource(ctx context.Context, sourceID string, inbound audio.InboundMedia, onError func(error)) {
 	g.workers.Add(1)
 	go func() {
 		defer g.workers.Done()
-		g.readSource(sourceID, inbound, onError)
+		g.readSource(ctx, sourceID, inbound, onError)
 	}()
 }
 
-func (g *roomGraph) readSource(sourceID string, inbound audio.InboundMedia, onError func(error)) {
+func (g *roomGraph) readSource(ctx context.Context, sourceID string, inbound audio.InboundMedia, onError func(error)) {
 	fanout := frameFanout{graph: g, sourceID: sourceID, recorder: g.recorder}
 	for {
-		frame, err := inbound.ReadFrame(g.ctx)
+		frame, err := inbound.ReadFrame(ctx)
 		if err != nil {
 			if !isGraphNormalStop(err) {
 				g.reportParticipantError(sourceID, err, onError)
 			}
 			return
 		}
-		if err := fanout.WriteFrame(g.ctx, frame); err != nil {
+		if err := fanout.WriteFrame(ctx, frame); err != nil {
 			if !isGraphNormalStop(err) {
 				g.reportParticipantError(sourceID, fmt.Errorf("fan out provider audio for %q: %w", sourceID, err), onError)
 			}
@@ -218,7 +219,7 @@ func (g *roomGraph) readSource(sourceID string, inbound audio.InboundMedia, onEr
 	}
 }
 
-func (g *roomGraph) startCapture(sourceID string, onError func(error)) {
+func (g *roomGraph) startCapture(ctx context.Context, sourceID string, onError func(error)) {
 	participant := g.participant(sourceID)
 	if participant == nil || participant.media.Capture == nil {
 		return
@@ -226,14 +227,14 @@ func (g *roomGraph) startCapture(sourceID string, onError func(error)) {
 	g.workers.Add(1)
 	go func() {
 		defer g.workers.Done()
-		err := participant.media.Capture.Pump(g.ctx, frameFanout{graph: g, sourceID: sourceID, recorder: g.recorder})
+		err := participant.media.Capture.Pump(ctx, frameFanout{graph: g, sourceID: sourceID, recorder: g.recorder})
 		if err != nil && !isGraphNormalStop(err) {
 			g.reportParticipantError(sourceID, fmt.Errorf("fan out capture for %q: %w", sourceID, err), onError)
 		}
 	}()
 }
 
-func (g *roomGraph) startOutput(output *graphOutput, onError func(error)) {
+func (g *roomGraph) startOutput(ctx context.Context, output *graphOutput, onError func(error)) {
 	if output == nil || output.mixer == nil || (output.provider == nil && output.playback == nil) {
 		// A mixer output is evidence only after it has a consumer. In
 		// particular, a capture-only human has no provider-bound or local
@@ -242,30 +243,30 @@ func (g *roomGraph) startOutput(output *graphOutput, onError func(error)) {
 		return
 	}
 	if output.playback != nil {
-		g.startPlayback(output, onError)
+		g.startPlayback(ctx, output, onError)
 	}
 	g.workers.Add(1)
 	go func() {
 		defer g.workers.Done()
-		g.readOutput(output, onError)
+		g.readOutput(ctx, output, onError)
 	}()
 }
 
-func (g *roomGraph) startPlayback(output *graphOutput, onError func(error)) {
+func (g *roomGraph) startPlayback(ctx context.Context, output *graphOutput, onError func(error)) {
 	g.workers.Add(1)
 	go func() {
 		defer g.workers.Done()
-		err := (bufferedInbound{consumer: output.consumer}).pump(g.ctx, output.playback)
+		err := (bufferedInbound{consumer: output.consumer}).pump(ctx, output.playback)
 		if err != nil && !isGraphNormalStop(err) {
 			g.reportParticipantError(output.target.participant.ID, fmt.Errorf("play back room mix for %q: %w", output.target.participant.ID, err), onError)
 		}
 	}()
 }
 
-func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
+func (g *roomGraph) readOutput(ctx context.Context, output *graphOutput, onError func(error)) {
 	inbound := output.mixer.OutputWithSources()
 	for {
-		mixed, err := inbound.ReadMixedFrame(g.ctx)
+		mixed, err := inbound.ReadMixedFrame(ctx)
 		if err != nil {
 			if !isGraphNormalStop(err) {
 				g.reportParticipantError(output.target.participant.ID, fmt.Errorf("read room mix for %q: %w", output.target.participant.ID, err), onError)
@@ -278,7 +279,7 @@ func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
 		frame := mixed.Frame
 		frame.Epoch = output.epoch
 		mixed.Frame = frame
-		if err := g.deliverOutput(output, mixed); err != nil {
+		if err := g.deliverOutput(ctx, output, mixed); err != nil {
 			if !isGraphNormalStop(err) {
 				g.reportParticipantError(output.target.participant.ID, err, onError)
 			}
@@ -288,14 +289,14 @@ func (g *roomGraph) readOutput(output *graphOutput, onError func(error)) {
 	}
 }
 
-func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) error {
+func (g *roomGraph) deliverOutput(ctx context.Context, output *graphOutput, mixed mixer.MixedFrame) error {
 	frame := mixed.Frame
 	if output.provider != nil {
 		// Stamp the peer-audio emission before the hand-off: once the peer
 		// provider holds the frame it may answer, so a later stamp would
 		// charge the peer's reaction time to local output latency.
 		g.observePeerAudio(mixed.Sources, output.target.participant.ID, frame)
-		if err := output.provider.WriteFrame(g.ctx, frame); err != nil {
+		if err := output.provider.WriteFrame(ctx, frame); err != nil {
 			return fmt.Errorf("write room mix for %q: %w", output.target.participant.ID, err)
 		}
 		if g.recorder != nil {
@@ -305,7 +306,7 @@ func (g *roomGraph) deliverOutput(output *graphOutput, mixed mixer.MixedFrame) e
 	if output.queue == (audio.FrameProducer{}) {
 		return nil
 	}
-	if err := output.queue.Submit(g.ctx, frame); err != nil {
+	if err := output.queue.Submit(ctx, frame); err != nil {
 		return fmt.Errorf("queue room playback for %q: %w", output.target.participant.ID, err)
 	}
 	if output.provider == nil && g.recorder != nil {

@@ -28,7 +28,6 @@ const (
 // Mesh is the pair-neutral participant lifecycle contract. Implementations
 // are provided by rooms/wire; mutable membership and cleanup stay private.
 type Mesh interface {
-	Context() context.Context
 	Done() <-chan struct{}
 	Join(context.Context, string) error
 	AddParticipant(context.Context, string) error
@@ -102,11 +101,11 @@ type PairResource interface {
 // PairFactory creates an inert resource for one canonical PairSpec.
 type PairFactory func(context.Context, PairSpec) (PairResource, error)
 
-// MeshConfig supplies explicit lifecycle context and pair construction.
+// MeshConfig supplies pair construction. The mesh lifetime context is an
+// explicit NewMesh argument.
 // A nil PairFactory is unavailable; host compatibility defaults belong in
 // the CLI adapter, not in the reusable runtime package.
 type MeshConfig struct {
-	Context     context.Context
 	PairFactory PairFactory
 }
 

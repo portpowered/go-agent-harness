@@ -355,7 +355,7 @@ func finalizeRecorder(recorder session.LiveRecorder, ctx context.Context, runErr
 	return recorder.Finalize(context.WithoutCancel(ctx), runErr)
 }
 
-func (i *liveInvocation) closeAfterStartError(startErr error) error {
+func (i *liveInvocation) closeAfterStartError(ctx context.Context, startErr error) error {
 	if i == nil {
 		return startErr
 	}
@@ -365,5 +365,5 @@ func (i *liveInvocation) closeAfterStartError(startErr error) error {
 	}
 	handleErr := i.handle.Close()
 	result := errors.Join(startErr, deviceErr, handleErr)
-	return errors.Join(result, finalizeRecorder(i.options.Recorder, i.ctx, result))
+	return errors.Join(result, finalizeRecorder(i.options.Recorder, ctx, result))
 }

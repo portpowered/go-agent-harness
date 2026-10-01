@@ -75,7 +75,7 @@ func (r Runner) Run(ctx context.Context, _ io.Writer, request rooms.RoomRunOptio
 	runCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	state := newRunState(manifest, cancel)
-	state.delivery, state.deliveryCtx = delivery, runCtx
+	state.delivery, state.deliveryStopped = delivery, runCtx.Done()
 	stopTimer := r.startDurationBound(runCtx, manifest.Room.MaxDuration, state)
 	defer stopTimer()
 	r.openParticipants(ctx, runCtx, state, manifest, request, recorder)
