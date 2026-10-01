@@ -61,19 +61,25 @@ type FilesystemPolicy struct {
 // disabling filesystem confinement or for an operating-system sandbox.
 const FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
 
+// FilesystemHost carries the host directories a filesystem policy is
+// resolved against. The CLI host boundary captures them once per run.
+type FilesystemHost struct {
+	// WorkDir is the effective primary root (--workdir, else the process
+	// working directory captured at startup).
+	WorkDir string
+	// HomeDir is the user home directory; per-user credential stores below it
+	// are protected from reads. Empty protects only the system roots.
+	HomeDir string
+}
+
 // ResolveFilesystemPolicy captures and validates one immutable filesystem
-// scope for a run. An empty primary root means the process current working
-// directory. Relative additional roots are resolved against that captured
-// primary root, not against a later process cwd.
-func ResolveFilesystemPolicy(workdir string, additionalRoots ...string) (*FilesystemPolicy, error) {
-	if strings.TrimSpace(workdir) == "" {
-		var err error
-		workdir, err = os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("%w: get process working directory: %w", ErrInvalidFilesystemRoot, err)
-		}
+// scope for a run. Relative additional roots are resolved against the
+// captured primary root, not against a later process cwd.
+func ResolveFilesystemPolicy(host FilesystemHost, additionalRoots ...string) (*FilesystemPolicy, error) {
+	if strings.TrimSpace(host.WorkDir) == "" {
+		return nil, fmt.Errorf("%w: workdir is required", ErrInvalidFilesystemRoot)
 	}
-	primary, err := validateFilesystemRoot("workdir", workdir)
+	primary, err := validateFilesystemRoot("workdir", host.WorkDir)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +90,7 @@ func ResolveFilesystemPolicy(workdir string, additionalRoots ...string) (*Filesy
 		}
 		resolvedAdditional = append(resolvedAdditional, root)
 	}
-	return NewFilesystemPolicy(primary, resolvedAdditional...)
+	return NewFilesystemPolicy(host.HomeDir, primary, resolvedAdditional...)
 }
 
 // ScopeDescription is the stable human-readable representation used by
@@ -104,7 +110,10 @@ func (p *FilesystemPolicy) ScopeDescription() string {
 // Relative root arguments are resolved against the process working directory
 // at construction time. Callers that need startup-captured cwd semantics
 // should resolve their flags before calling this constructor.
-func NewFilesystemPolicy(primaryRoot string, additionalRoots ...string) (*FilesystemPolicy, error) {
+//
+// homeDir is the injected user home directory whose credential stores are
+// protected from reads.
+func NewFilesystemPolicy(homeDir, primaryRoot string, additionalRoots ...string) (*FilesystemPolicy, error) {
 	primary, err := validateFilesystemRoot("primary", primaryRoot)
 	if err != nil {
 		return nil, err
@@ -127,14 +136,14 @@ func NewFilesystemPolicy(primaryRoot string, additionalRoots ...string) (*Filesy
 	return &FilesystemPolicy{
 		primaryRoot:        primary,
 		additionalRoots:    roots,
-		protectedReadRoots: normalizeProtectedReadRoots(platformProtectedReadRoots()),
+		protectedReadRoots: normalizeProtectedReadRoots(platformProtectedReadRoots(homeDir)),
 	}, nil
 }
 
 // NewFilesystemPolicyFromRoots is the slice-taking form of
 // NewFilesystemPolicy for callers that already collect repeatable roots.
-func NewFilesystemPolicyFromRoots(primaryRoot string, additionalRoots []string) (*FilesystemPolicy, error) {
-	return NewFilesystemPolicy(primaryRoot, additionalRoots...)
+func NewFilesystemPolicyFromRoots(homeDir, primaryRoot string, additionalRoots []string) (*FilesystemPolicy, error) {
+	return NewFilesystemPolicy(homeDir, primaryRoot, additionalRoots...)
 }
 
 // PrimaryRoot returns the canonical primary filesystem root.

@@ -127,6 +127,9 @@ func resolveManagedManager(resolved Options, browser config.BrowserConfig) *chro
 	}
 	return chrome.NewManagedBrowserManager(chrome.ManagedBrowserManagerOptions{
 		ConfigDir: resolved.ConfigDir,
+		LaunchOptions: chrome.ManagedBrowserLaunchOptions{
+			Acquisition: chrome.ManagedChromeAcquisitionOptions{WorkingDir: resolved.WorkingDir},
+		},
 	})
 }
 

@@ -258,7 +258,7 @@ func (r *Router) resolveCommandPaths(command *cobra.Command, args []string) erro
 	}
 	resolver := r.pathResolver
 	if resolver == nil {
-		resolver = newPathResolver()
+		resolver = newPathResolver(r.Flags)
 	}
 	route := commandRoute(command)
 	updates, err := resolveCommandPathFlags(resolver, command, route)

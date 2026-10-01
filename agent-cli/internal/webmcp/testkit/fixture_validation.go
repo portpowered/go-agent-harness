@@ -371,12 +371,7 @@ func (e *OperationExpectation) Validate() error {
 	case OperationCancelTool:
 		return e.validateCancelTool()
 	case OperationNavigate:
-		if e.frameIDSet || e.toolNameSet || e.inputSet || e.invocationIDSet {
-			return newScriptError(jsonFieldType, "operation %q accepts only url", e.Type)
-		}
-		if e.urlSet && strings.TrimSpace(e.URL) == "" {
-			return newScriptError("url", "must not be empty")
-		}
+		return e.validateNavigate()
 	case OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
 		OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
 		OperationBrowsers, OperationTabs, OperationTools:
@@ -403,6 +398,16 @@ func (e *OperationExpectation) validateInvokeTool() error {
 	}
 	if e.invocationIDSet || e.urlSet {
 		return newScriptError(jsonFieldType, "operation %q does not accept invocation_id or url", e.Type)
+	}
+	return nil
+}
+
+func (e *OperationExpectation) validateNavigate() error {
+	if e.frameIDSet || e.toolNameSet || e.inputSet || e.invocationIDSet {
+		return newScriptError(jsonFieldType, "operation %q accepts only url", e.Type)
+	}
+	if e.urlSet && strings.TrimSpace(e.URL) == "" {
+		return newScriptError("url", "must not be empty")
 	}
 	return nil
 }

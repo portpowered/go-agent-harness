@@ -613,14 +613,12 @@ func normalizeManagedBrowserWebSocket(raw string, port int) (string, error) {
 	return parsed.String(), nil
 }
 
+// managedBrowserProfileDir places the profile below configDir, which the
+// CLI host boundary resolves (default ~/.agent-cli).
 func managedBrowserProfileDir(configDir string) (string, error) {
 	resolved := strings.TrimSpace(configDir)
 	if resolved == "" {
-		home, err := os.UserHomeDir()
-		if err != nil || strings.TrimSpace(home) == "" {
-			return "", errors.New("agent config directory could not be resolved")
-		}
-		resolved = filepath.Join(home, ".agent-cli")
+		return "", errors.New("agent config directory could not be resolved")
 	}
 	abs, err := filepath.Abs(resolved)
 	if err != nil || strings.TrimSpace(abs) == "" {

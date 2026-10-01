@@ -2,10 +2,7 @@ package cli
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/selectionstore"
 )
 
@@ -29,13 +26,13 @@ type WebMCPSelectionStore = selectionstore.Store
 // FileWebMCPSelectionStore is the default user-only selection store.
 type FileWebMCPSelectionStore = selectionstore.FileStore
 
-// NewFileWebMCPSelectionStore constructs a selection store below configDir.
-// An empty configDir follows the same ~/.agent-cli default as ConfigStorage.
+// NewFileWebMCPSelectionStore constructs a selection store below configDir,
+// which the caller resolves (GlobalFlags.ConfigDir defaults it to
+// ~/.agent-cli). An empty configDir yields a store with no path, which
+// reports itself unavailable instead of writing below the process cwd.
 func NewFileWebMCPSelectionStore(configDir string) *FileWebMCPSelectionStore {
 	if configDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			configDir = filepath.Join(home, config.ConfigDirName)
-		}
+		return &FileWebMCPSelectionStore{}
 	}
 	return selectionstore.NewFileStore(configDir)
 }

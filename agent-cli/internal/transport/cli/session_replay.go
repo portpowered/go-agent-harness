@@ -56,7 +56,7 @@ func (c *SessionCommand) runReplayTranscript(ctx context.Context, out io.Writer,
 	if capabilities := liveRequest.Capabilities; capabilities != nil && capabilities.Close != nil {
 		defer func() { runErr = errors.Join(runErr, capabilities.Close()) }()
 	}
-	if err := writeRuntimeLiveAnnouncements(out, request, liveRequest, inspection); err != nil {
+	if err := c.liveAnnouncements(out, request, liveRequest, inspection); err != nil {
 		return err
 	}
 	drain := func(runCtx context.Context) error {

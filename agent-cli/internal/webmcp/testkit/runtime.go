@@ -325,11 +325,8 @@ func (r *ScriptedBrowserRuntime) AddCandidate(candidate webmcp.BrowserCandidate,
 }
 
 func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {
-	if err := contextError(ctx); err != nil {
+	if err := r.openAdmission(ctx); err != nil {
 		return nil, err
-	}
-	if r.configErr != nil {
-		return nil, r.configErr
 	}
 	r.mu.Lock()
 	if r.closed {
@@ -389,6 +386,15 @@ func (r *ScriptedBrowserRuntime) Open(ctx context.Context, candidate webmcp.Brow
 
 // Close is not part of webmcp.BrowserRuntime because ownership belongs to
 // the browser handle, but it is useful for fixture teardown and is idempotent.
+// openAdmission rejects a canceled context and any constructor config that
+// AddBrowser refused.
+func (r *ScriptedBrowserRuntime) openAdmission(ctx context.Context) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	return r.configErr
+}
+
 func (r *ScriptedBrowserRuntime) Close() error {
 	r.mu.Lock()
 	if r.closed {

@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -636,10 +637,11 @@ func runDirectLiveCLI(t *testing.T, parent context.Context, binary, cdpURL strin
 
 func liveRepositoryRoot(t *testing.T) string {
 	t.Helper()
-	directory, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get test working directory: %v", err)
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate live test source")
 	}
+	directory := filepath.Dir(source)
 	for {
 		if _, err := os.Stat(filepath.Join(directory, "go.work")); err == nil {
 			return directory

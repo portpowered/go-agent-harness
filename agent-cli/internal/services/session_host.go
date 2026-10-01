@@ -120,15 +120,11 @@ func cliConfigDir(globalFlags *flags.GlobalFlags) (string, error) {
 }
 
 func cliWorkDir(globalFlags *flags.GlobalFlags) (string, error) {
-	workDir := globalFlags.WorkDir()
-	if workDir == "" {
-		var err error
-		workDir, err = os.Getwd() //nolint:forbidigo // This CLI host boundary resolves process state before injecting runtime values.
-		if err != nil {
-			return "", fmt.Errorf("resolve CLI work directory: %w", err)
-		}
+	workDir, err := globalFlags.EffectiveWorkDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve CLI work directory: %w", err)
 	}
-	workDir, err := filepath.Abs(workDir)
+	workDir, err = filepath.Abs(workDir)
 	if err != nil {
 		return "", fmt.Errorf("resolve CLI work directory %q: %w", workDir, err)
 	}

@@ -34,7 +34,7 @@ func newFilesystemPolicyFixture(t *testing.T) filesystemPolicyFixture {
 	if err := os.WriteFile(filepath.Join(additional, "extra.txt"), []byte("extra"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	policy, err := ResolveFilesystemPolicy(primary, additional, additional)
+	policy, err := ResolveFilesystemPolicy(FilesystemHost{WorkDir: primary, HomeDir: t.TempDir()}, additional, additional)
 	if err != nil {
 		t.Fatalf("ResolveFilesystemPolicy: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestFilesystemPolicyAuthorizesRootsAndRejectsEscapes(t *testing.T) {
 
 func TestFilesystemPolicyConstructorsAndNilPolicy(t *testing.T) {
 	fixture := newFilesystemPolicyFixture(t)
-	fromRoots, err := NewFilesystemPolicyFromRoots(fixture.primary, []string{fixture.additional})
+	fromRoots, err := NewFilesystemPolicyFromRoots(t.TempDir(), fixture.primary, []string{fixture.additional})
 	if err != nil || fromRoots.PrimaryRoot() != fixture.canonicalPrimary {
 		t.Fatalf("NewFilesystemPolicyFromRoots = %v, %v", fromRoots, err)
 	}
@@ -123,7 +123,7 @@ func TestFilesystemPolicyConstructorsAndNilPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, badRoot := range []string{"", fileRoot, filepath.Join(t.TempDir(), "missing")} {
-		if _, err := NewFilesystemPolicy(badRoot); !errors.Is(err, ErrInvalidFilesystemRoot) {
+		if _, err := NewFilesystemPolicy(t.TempDir(), badRoot); !errors.Is(err, ErrInvalidFilesystemRoot) {
 			t.Errorf("NewFilesystemPolicy(%q) = %v, want invalid-root error", badRoot, err)
 		}
 	}

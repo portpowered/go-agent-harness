@@ -140,6 +140,9 @@ type ManagedChromeAcquisitionOptions struct {
 	LockPath        string
 	CacheDir        string
 	HTTPClient      *http.Client
+	// WorkingDir is the injected host working directory where the Chrome for
+	// Testing lock search starts.
+	WorkingDir string
 }
 
 // ManagedChromeAcquirer selects a qualified stock Chrome or the verified
@@ -235,6 +238,7 @@ func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, 
 	fallback := a.options.PinnedAcquirer
 	if fallback == nil {
 		fallback = NewChromeForTestingAcquirer(ChromeForTestingOptions{
+			WorkingDir:     a.options.WorkingDir,
 			LockPath:       a.options.LockPath,
 			CacheDir:       a.options.CacheDir,
 			HTTPClient:     a.options.HTTPClient,

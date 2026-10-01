@@ -170,9 +170,6 @@ func defaultChromeForTestingCacheDir() string {
 	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
 		return filepath.Join(cacheDir, "agent-cli")
 	}
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".cache", "agent-cli")
-	}
 	return filepath.Join(os.TempDir(), "agent-cli-cache")
 }
 

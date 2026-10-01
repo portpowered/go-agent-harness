@@ -162,7 +162,9 @@ func resolveAndComposeInstructions(ctx context.Context, request serviceSession.R
 	var scopeDescription string
 	var scopeSet bool
 	if workspaceDir != "" {
-		policy, err := cliTools.ResolveFilesystemPolicy(workspaceDir, request.AllowPaths...)
+		// Only the primary root and scope description are read here, so the
+		// home-derived protected roots are not needed.
+		policy, err := cliTools.ResolveFilesystemPolicy(cliTools.FilesystemHost{WorkDir: workspaceDir}, request.AllowPaths...)
 		if err != nil {
 			return "", fmt.Errorf("resolve live filesystem scope: %w", err)
 		}

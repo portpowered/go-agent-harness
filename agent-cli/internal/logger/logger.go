@@ -29,7 +29,7 @@ func newConsoleWriteSyncer() zapcore.WriteSyncer {
 // LoggerConfig holds configuration for logger initialization.
 type LoggerConfig struct {
 	VerbosityLevel int    // 0 = none, 1 = info, 2+ = debug
-	ConfigDir      string // Config directory for file logging
+	ConfigDir      string // Config directory for file logging; required unless LogToStdout
 	LogToStdout    bool   // If true, log to stdout/stderr instead of file
 	// ConsoleSink overrides the stdout/stderr destination used when
 	// LogToStdout is true. Nil selects the process stdout and stderr.
@@ -98,15 +98,11 @@ func NewLoggerWithCloser(cfg LoggerConfig) (*zap.Logger, io.Closer, error) {
 	return l, closer, nil
 }
 
-// openLogFile opens agent.log for appending in configDir, defaulting to
-// ~/.agent-cli and creating the directory when needed.
+// openLogFile opens agent.log for appending in configDir, creating the
+// directory when needed. The host resolves the config directory.
 func openLogFile(configDir string) (*os.File, error) {
 	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		configDir = filepath.Join(home, ".agent-cli")
+		return nil, errors.New("file logging requires a config directory")
 	}
 	if err := os.MkdirAll(configDir, logDirPerm); err != nil {
 		return nil, err
@@ -122,20 +118,6 @@ func openLogFile(configDir string) (*os.File, error) {
 func NewLogger(cfg LoggerConfig) (*zap.Logger, error) {
 	l, _, err := NewLoggerWithCloser(cfg)
 	return l, err
-}
-
-// NewDefaultLogger creates a logger with default settings (no verbosity, file logging).
-func NewDefaultLogger() *zap.Logger {
-	cfg := LoggerConfig{
-		VerbosityLevel: 0,
-		LogToStdout:    false,
-	}
-	l, err := NewLogger(cfg)
-	if err != nil {
-		// Fallback to no-op logger if file logging fails
-		return zap.NewNop()
-	}
-	return l
 }
 
 // NewRequestLogger returns the context's logger (see GetRequestLoggerFromContext)
@@ -175,7 +157,7 @@ func GetRequestLoggerFromContext(ctx context.Context) *zap.Logger {
 
 // NewVerboseLogger creates a logger based on verbosity level and config directory.
 // verbosityLevel: 0 = none, 1 = info, 2+ = debug
-// configDir: directory for file logging (empty uses default ~/.agent-cli)
+// configDir: directory for file logging (required unless logToStdout; empty yields a no-op logger)
 // logToStdout: if true, log to stdout/stderr instead of file
 func NewVerboseLogger(verbosityLevel int, configDir string, logToStdout bool) *zap.Logger {
 	l, _ := NewVerboseLoggerWithCloser(verbosityLevel, configDir, logToStdout)

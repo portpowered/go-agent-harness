@@ -136,38 +136,7 @@ func (m *ChatModel) Init() tea.Cmd {
 func (m *ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// When any autocomplete is active, intercept navigation keys.
-		if m.interceptAutocompleteKey(msg) {
-			return m, nil
-		}
-
-		// Only Ctrl+C and Enter are handled here; every other tea.KeyType goes to the input below.
-		if msg.Type == tea.KeyCtrlC {
-			m.quitting = true
-			return m, tea.Quit
-		}
-		if msg.Type == tea.KeyEnter {
-			m.fileAutocomplete.Reset()
-			m.cmdAutocomplete.Reset()
-			rawInput := strings.TrimSpace(m.input.Value())
-			m.input.SetValue("")
-			if rawInput == "" {
-				return m, nil
-			}
-			if rawInput == "exit" || rawInput == "quit" {
-				m.writeChatTerminal(m.out, "Goodbye!\n")
-				m.quitting = true
-				return m, tea.Quit
-			}
-			return m.submitInput(rawInput)
-		}
-		// Delegate all other keys to Bubbles textinput (cursor, backspace, runes, etc.)
-		var cmd tea.Cmd
-		*m.input, cmd = m.input.Update(msg)
-		// After updating input, check for @ or / prefix to activate autocomplete.
-		m.updateFileAutocomplete()
-		m.updateCmdAutocomplete()
-		return m, cmd
+		return m.updateKey(msg)
 
 	case FocusInputMsg:
 		// Focus the input on the actual model (Init cannot do this because it has value receiver).
@@ -210,6 +179,43 @@ func (m *ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Pass through to Bubbles textinput (e.g. cursor blink messages from Init).
 	var cmd tea.Cmd
 	*m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
+// updateKey handles one keyboard event: autocomplete navigation, Ctrl+C,
+// Enter, and everything else delegated to the text input.
+func (m *ChatModel) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// When any autocomplete is active, intercept navigation keys.
+	if m.interceptAutocompleteKey(msg) {
+		return m, nil
+	}
+
+	// Only Ctrl+C and Enter are handled here; every other tea.KeyType goes to the input below.
+	if msg.Type == tea.KeyCtrlC {
+		m.quitting = true
+		return m, tea.Quit
+	}
+	if msg.Type == tea.KeyEnter {
+		m.fileAutocomplete.Reset()
+		m.cmdAutocomplete.Reset()
+		rawInput := strings.TrimSpace(m.input.Value())
+		m.input.SetValue("")
+		if rawInput == "" {
+			return m, nil
+		}
+		if rawInput == "exit" || rawInput == "quit" {
+			m.writeChatTerminal(m.out, "Goodbye!\n")
+			m.quitting = true
+			return m, tea.Quit
+		}
+		return m.submitInput(rawInput)
+	}
+	// Delegate all other keys to Bubbles textinput (cursor, backspace, runes, etc.)
+	var cmd tea.Cmd
+	*m.input, cmd = m.input.Update(msg)
+	// After updating input, check for @ or / prefix to activate autocomplete.
+	m.updateFileAutocomplete()
+	m.updateCmdAutocomplete()
 	return m, cmd
 }
 
@@ -312,7 +318,9 @@ func (m *ChatModel) submitInput(rawInput string) (tea.Model, tea.Cmd) {
 		return m.handleSlashCommand(rawInput)
 	}
 	// Parse @file references before sending to the LLM.
-	cleanedText, contentParts, refErr := parseAtReferences(rawInput)
+	// HostWorkDir reports "" with its error; parseAtReferences then leaves the input as is.
+	workDir, _ := m.globalFlags.HostWorkDir()
+	cleanedText, contentParts, refErr := parseAtReferences(workDir, rawInput)
 	if refErr != "" {
 		errLine := chatLine{kind: chatLineSystem, content: refErr}
 		m.lines = append(m.lines, errLine)

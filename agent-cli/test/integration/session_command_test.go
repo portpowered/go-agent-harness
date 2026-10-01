@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -547,11 +548,13 @@ func testSessionCommand_OpenAIRealtimeReplayAudioTurnDivergentResupplyFailsWithM
 
 func defaultFilesystemScopePrefix(t *testing.T) string {
 	t.Helper()
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get test working directory: %v", err)
+	// go test runs this package with its source directory as the process
+	// working directory, which the in-process CLI's host boundary captures.
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate test source directory")
 	}
-	canonical, err := filepath.EvalSymlinks(cwd)
+	canonical, err := filepath.EvalSymlinks(filepath.Dir(source))
 	if err != nil {
 		t.Fatalf("canonicalize test working directory: %v", err)
 	}

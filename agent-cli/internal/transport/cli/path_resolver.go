@@ -2,10 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 )
 
 // PathResolutionError identifies a user-supplied path that could not be
@@ -38,9 +39,11 @@ type pathResolver struct {
 	lookupUser  func(string) (string, error)
 }
 
-func newPathResolver() *pathResolver {
+// newPathResolver expands "~" against the home directory injected into
+// globalFlags by the CLI host boundary.
+func newPathResolver(globalFlags *flags.GlobalFlags) *pathResolver {
 	return &pathResolver{
-		currentHome: os.UserHomeDir,
+		currentHome: globalFlags.HostHomeDir,
 		lookupUser: func(name string) (string, error) {
 			account, err := user.Lookup(name)
 			if err != nil {
@@ -68,7 +71,7 @@ func (r *pathResolver) Resolve(value string) (string, error) {
 	}
 
 	if r == nil {
-		r = newPathResolver()
+		r = newPathResolver(nil)
 	}
 	home, err := r.lookupHome(username)
 	if err != nil {

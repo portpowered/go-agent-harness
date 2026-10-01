@@ -22,6 +22,15 @@ const (
 	ConfigFileName = "config.yaml"
 )
 
+// configError is a constant sentinel error of this package.
+type configError string
+
+func (e configError) Error() string { return string(e) }
+
+// ErrConfigDirRequired reports a storage constructed without a config
+// directory. The CLI host boundary resolves the ~/.agent-cli default.
+const ErrConfigDirRequired = configError("config directory is required")
+
 // Environment variable prefix
 const EnvPrefix = "AGENT_"
 

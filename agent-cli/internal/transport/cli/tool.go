@@ -116,16 +116,28 @@ func (c *ToolCommand) getCapability() (runtimeTools.Capability, error) {
 }
 
 func (c *ToolCommand) filesystemPolicy() (*tools.FilesystemPolicy, error) {
-	if c == nil {
-		return tools.ResolveFilesystemPolicy("")
+	var globalFlags *flags.GlobalFlags
+	if c != nil {
+		globalFlags = c.globalFlags
 	}
-	var workdir string
-	var allowPaths []string
-	if c.globalFlags != nil {
-		workdir = c.globalFlags.WorkDir()
-		allowPaths = c.globalFlags.AllowPaths()
+	host, err := filesystemHost(globalFlags)
+	if err != nil {
+		return nil, err
 	}
-	return tools.ResolveFilesystemPolicy(workdir, allowPaths...)
+	return tools.ResolveFilesystemPolicy(host, globalFlags.AllowPaths()...)
+}
+
+// filesystemHost captures the effective workdir (--workdir, else the host
+// working directory) and the injected home directory for a filesystem policy.
+// An unavailable home directory protects only the system roots, as before.
+func filesystemHost(globalFlags *flags.GlobalFlags) (tools.FilesystemHost, error) {
+	// HostHomeDir reports "" with its error; no home leaves the system roots protected.
+	homeDir, _ := globalFlags.HostHomeDir()
+	workDir, err := globalFlags.EffectiveWorkDir()
+	if err != nil {
+		return tools.FilesystemHost{HomeDir: homeDir}, fmt.Errorf("%w: %w", tools.ErrInvalidFilesystemRoot, err)
+	}
+	return tools.FilesystemHost{WorkDir: workDir, HomeDir: homeDir}, nil
 }
 
 // parseKeyValueArgs parses args of the form "key=value" into a map.

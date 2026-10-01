@@ -36,7 +36,7 @@ func (m *ChatModel) updateFileAutocomplete() {
 	}
 	// Lazy-load file suggestions on first activation.
 	if m.fileSuggestions == nil {
-		workDir, err := os.Getwd()
+		workDir, err := m.globalFlags.HostWorkDir()
 		if err != nil {
 			return
 		}
@@ -72,14 +72,11 @@ func (m *ChatModel) completeAtSuggestion(selected string) {
 // and returns the cleaned prompt text (with @tokens removed), content parts for the LLM,
 // and an error message string (empty on success). If any referenced file does not exist
 // or cannot be read, an error is returned and no content parts are produced.
-func parseAtReferences(input string) (cleanedText string, parts []messages.ContentPart, errMsg string) {
+// Paths resolve against workDir, the host working directory; an empty
+// workDir leaves the input unchanged.
+func parseAtReferences(workDir, input string) (cleanedText string, parts []messages.ContentPart, errMsg string) {
 	words := strings.Fields(input)
-	if len(words) == 0 {
-		return input, nil, ""
-	}
-
-	workDir, err := os.Getwd()
-	if err != nil {
+	if len(words) == 0 || workDir == "" {
 		return input, nil, ""
 	}
 

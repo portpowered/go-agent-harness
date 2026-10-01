@@ -285,6 +285,27 @@ func (b *CustomerEvidenceBundle) Root() string {
 }
 
 func (b *CustomerEvidenceBundle) Validate() error {
+	if err := b.validateRecord(); err != nil {
+		return err
+	}
+	if err := b.validateVerdicts(); err != nil {
+		return err
+	}
+	if err := validateArtifactEntries(b.Artifacts, true); err != nil {
+		return err
+	}
+	if err := validateRequiredArtifactKinds(b.Artifacts); err != nil {
+		return err
+	}
+	if b.MechanicalVerdict.Pass && (len(b.Transcripts.Customer) == 0 || len(b.Transcripts.Product) == 0 || len(b.AudioTurnEvents) == 0 || len(b.FilesystemCheckpoints) == 0) {
+		return contractFieldError(ErrMissingEvidence, "bundle", "a passing run needs paired transcripts, audio/turn events, and checkpoints")
+	}
+	return b.validateEvidenceRefs(availableArtifactPaths(b.Artifacts))
+}
+
+// validateRecord checks the bundle identity, finalization, transcripts, and
+// observed facts.
+func (b *CustomerEvidenceBundle) validateRecord() error {
 	if b.SchemaVersion != CustomerEvidenceSchemaVersion {
 		return contractFieldError(ErrInvalidCustomerEvidence, "schema_version", "must be 1")
 	}
@@ -300,9 +321,12 @@ func (b *CustomerEvidenceBundle) Validate() error {
 	if err := b.Transcripts.validate(); err != nil {
 		return err
 	}
-	if err := validateObservedFacts("", b.AudioTurnEvents, b.ToolObservations, b.FilesystemCheckpoints); err != nil {
-		return err
-	}
+	return validateObservedFacts("", b.AudioTurnEvents, b.ToolObservations, b.FilesystemCheckpoints)
+}
+
+// validateVerdicts checks the family evidence, process record, and the
+// mechanical and validator verdicts against each other.
+func (b *CustomerEvidenceBundle) validateVerdicts() error {
 	if b.MechanicalVerdict == nil || b.ValidatorInput == nil || b.ValidatorVerdict == nil {
 		return contractFieldError(ErrMissingEvidence, "bundle", "mechanical verdict, validator input, and validator verdict are required")
 	}
@@ -325,16 +349,7 @@ func (b *CustomerEvidenceBundle) Validate() error {
 	if b.ValidatorVerdict.Verdict == ValidatorWorked && !b.MechanicalVerdict.Pass {
 		return contractFieldError(ErrValidatorMechanicalDisagreement, "validator_verdict.verdict", "WORKED requires a passing mechanical verdict")
 	}
-	if err := validateArtifactEntries(b.Artifacts, true); err != nil {
-		return err
-	}
-	if err := validateRequiredArtifactKinds(b.Artifacts); err != nil {
-		return err
-	}
-	if b.MechanicalVerdict.Pass && (len(b.Transcripts.Customer) == 0 || len(b.Transcripts.Product) == 0 || len(b.AudioTurnEvents) == 0 || len(b.FilesystemCheckpoints) == 0) {
-		return contractFieldError(ErrMissingEvidence, "bundle", "a passing run needs paired transcripts, audio/turn events, and checkpoints")
-	}
-	return b.validateEvidenceRefs(availableArtifactPaths(b.Artifacts))
+	return nil
 }
 
 func (b *CustomerEvidenceBundle) validateFamilyEvidence() error {

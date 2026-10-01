@@ -68,7 +68,7 @@ func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, err
 		return pinnedChrome{}, err
 	}
 	lockPath := filepath.Join(root, filepath.FromSlash(chromeForTestingLockRelativePath))
-	lock, err := LoadChromeForTestingLock(lockPath)
+	lock, err := LoadChromeForTestingLock(lockPath, root)
 	if err != nil {
 		return pinnedChrome{}, fmt.Errorf("read O0 Chrome lock: %w", err)
 	}

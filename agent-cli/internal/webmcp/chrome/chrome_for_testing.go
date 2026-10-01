@@ -87,9 +87,12 @@ type ChromeForTestingDownload struct {
 // Empty values resolve from the request or repository/cache defaults.
 type ChromeForTestingOptions struct {
 	LockPath, CacheDir string
-	HTTPClient         *http.Client
-	VersionTimeout     time.Duration
-	VersionQuery       VersionQuery
+	// WorkingDir is the injected host working directory; the lock search
+	// starts there when LockPath is empty.
+	WorkingDir     string
+	HTTPClient     *http.Client
+	VersionTimeout time.Duration
+	VersionQuery   VersionQuery
 }
 
 // ChromeForTestingAcquirer downloads and verifies the repository-pinned
@@ -115,7 +118,7 @@ func (a *ChromeForTestingAcquirer) AcquirePinnedChrome(ctx context.Context, requ
 		return ChromeExecutable{}, err
 	}
 	lockPath := firstNonEmpty(request.LockPath, a.options.LockPath)
-	lock, err := LoadChromeForTestingLock(lockPath)
+	lock, err := LoadChromeForTestingLock(lockPath, a.options.WorkingDir)
 	if err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("lock_unavailable", err)
 	}
@@ -183,9 +186,12 @@ func matchingChromeForTestingManifestEntry(manifest ChromeForTestingManifest, lo
 // LoadChromeForTestingLock reads and validates the JSON shape of the pin. It
 // does not trust the lock until ValidateChromeForTestingLock checks its source
 // URLs, digest, platform, and executable layout.
-func LoadChromeForTestingLock(lockPath string) (ChromeForTestingLock, error) {
+//
+// An empty lockPath is located by ResolveChromeForTestingLockPath, starting
+// from workingDir.
+func LoadChromeForTestingLock(lockPath, workingDir string) (ChromeForTestingLock, error) {
 	if strings.TrimSpace(lockPath) == "" {
-		resolved, err := ResolveChromeForTestingLockPath("")
+		resolved, err := ResolveChromeForTestingLockPath("", workingDir)
 		if err != nil {
 			return ChromeForTestingLock{}, err
 		}
@@ -240,8 +246,10 @@ func ValidateChromeForTestingLock(lock ChromeForTestingLock, requiredMajor int, 
 
 // ResolveChromeForTestingLockPath locates the one repository-owned pin. An
 // explicit path is used as-is; the environment override is intended for
-// packaged installations and hermetic tests.
-func ResolveChromeForTestingLockPath(explicit string) (string, error) {
+// packaged installations and hermetic tests. Otherwise the search walks up
+// from workingDir (the injected host working directory, when known), the
+// executable directory, and this package's source directory.
+func ResolveChromeForTestingLockPath(explicit, workingDir string) (string, error) {
 	if strings.TrimSpace(explicit) != "" {
 		return explicit, nil
 	}
@@ -251,7 +259,7 @@ func ResolveChromeForTestingLockPath(explicit string) (string, error) {
 		}
 	}
 	starts := make([]string, 0, chromeForTestingLockSearchRoots)
-	if workingDir, err := os.Getwd(); err == nil {
+	if strings.TrimSpace(workingDir) != "" {
 		starts = append(starts, workingDir)
 	}
 	if executable, err := os.Executable(); err == nil {

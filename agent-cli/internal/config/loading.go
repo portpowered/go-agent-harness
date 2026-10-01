@@ -139,15 +139,12 @@ func (s *ConfigStorage) Path() string {
 	return s.configPath
 }
 
-// NewDefaultConfigStorage creates a ConfigStorage using the default config directory
-// (~/.agent-cli/config.yaml). If configDir is non-empty it is used instead.
+// NewDefaultConfigStorage creates a ConfigStorage for config.yaml in
+// configDir. Callers resolve the directory at the host boundary (the CLI
+// defaults it to ~/.agent-cli); an empty configDir is rejected.
 func NewDefaultConfigStorage(configDir string) (*ConfigStorage, error) {
 	if configDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user home directory: %w", err)
-		}
-		configDir = filepath.Join(homeDir, ConfigDirName)
+		return nil, ErrConfigDirRequired
 	}
 
 	configDir, err := filepath.Abs(configDir)

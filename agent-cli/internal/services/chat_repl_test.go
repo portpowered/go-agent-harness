@@ -317,7 +317,7 @@ func TestChatREPL_ApplyStreamEventsAndDrain(t *testing.T) {
 
 	errorMessage := errors.New("stream startup failed")
 	updated, cmd = model.Update(streamReadyMsg{err: errorMessage})
-	model = chatModelOf(updated)
+	chatModelOf(updated)
 	if cmd != nil || !strings.Contains(harness.errOut.String(), errorMessage.Error()) {
 		t.Fatalf("stream-ready error = cmd %v stderr %q", cmd, harness.errOut.String())
 	}

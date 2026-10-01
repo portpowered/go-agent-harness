@@ -434,12 +434,8 @@ func TestLoggerConstructorsAndConstructionErrors(t *testing.T) {
 		t.Fatalf("expected OpenFile failure for directory agent.log, err=%v closer=%v", err, closer)
 	}
 
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	defaultLogger := NewDefaultLogger()
-	defaultLogger.Info("default fallback")
-	if defaultLogger.Check(zap.InfoLevel, "default fallback") != nil {
-		t.Fatal("default logger fallback should be a no-op when the home directory is unavailable")
+	if _, closer, err := NewLoggerWithCloser(LoggerConfig{}); err == nil || closer != nil {
+		t.Fatalf("expected file logging without a config directory to fail, err=%v closer=%v", err, closer)
 	}
 }
 

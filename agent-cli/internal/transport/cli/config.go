@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,13 +71,6 @@ func (c *ConfigAddLocalCommand) Generate() *cobra.Command {
 func (c *ConfigAddLocalCommand) run(cmd *cobra.Command) error {
 	// Resolve config path
 	configDir := c.globalFlags.ConfigDir()
-	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("get home directory: %w", err)
-		}
-		configDir = filepath.Join(home, config.ConfigDirName)
-	}
 
 	// Load existing config (or create default)
 	storage, err := config.NewDefaultConfigStorage(configDir)
