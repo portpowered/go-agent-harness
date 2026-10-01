@@ -29,22 +29,9 @@ func BuildExecuteInput(stdin io.Reader, argPrompt string, filePaths []string) (a
 		return agentloop.ExecuteInput{}, err
 	}
 
-	var stdinPart messages.ContentPart
-	if stdin != nil {
-		stdinContent, err := input.ReadStdinContent(stdin)
-		if err != nil {
-			return agentloop.ExecuteInput{}, fmt.Errorf("read stdin: %w", err)
-		}
-		if stdinContent.Part != nil {
-			stdinPart = stdinContent.Part
-		} else if stdinContent.Text != "" {
-			if prompt != "" {
-				// stdin is the context; the arg is the instruction.
-				prompt = stdinContent.Text + "\n\n" + prompt
-			} else {
-				prompt = stdinContent.Text
-			}
-		}
+	prompt, stdinPart, err := applyStdinInput(stdin, prompt)
+	if err != nil {
+		return agentloop.ExecuteInput{}, err
 	}
 	if prompt == "" && len(filePaths) == 0 && stdinPart == nil {
 		return agentloop.ExecuteInput{}, fmt.Errorf("no prompt: provide a prompt as an argument or pipe text via stdin")
@@ -55,6 +42,30 @@ func BuildExecuteInput(stdin io.Reader, argPrompt string, filePaths []string) (a
 	}
 	execInput.ContentParts = append(execInput.ContentParts, fileParts...)
 	return execInput, nil
+}
+
+// applyStdinInput reads piped stdin (when present). Binary stdin becomes a
+// content part; text stdin becomes the prompt context ahead of the argument
+// instruction.
+func applyStdinInput(stdin io.Reader, prompt string) (string, messages.ContentPart, error) {
+	if stdin == nil {
+		return prompt, nil, nil
+	}
+	stdinContent, err := input.ReadStdinContent(stdin)
+	if err != nil {
+		return "", nil, fmt.Errorf("read stdin: %w", err)
+	}
+	switch {
+	case stdinContent.Part != nil:
+		return prompt, stdinContent.Part, nil
+	case stdinContent.Text == "":
+		return prompt, nil, nil
+	case prompt != "":
+		// stdin is the context; the arg is the instruction.
+		return stdinContent.Text + "\n\n" + prompt, nil, nil
+	default:
+		return stdinContent.Text, nil, nil
+	}
 }
 
 // BuildAgentConfigFromFlags converts CLI flags to the public, normalized

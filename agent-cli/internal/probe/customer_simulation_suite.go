@@ -552,24 +552,29 @@ func waitForCustomerSimulationPatienceReprompt(
 			return err
 		}
 		if err := waitForCustomerSimulationPatienceChange(ctx, progress); err != nil {
-			// A shipped child may close its provider stream immediately after a
-			// finite response. The runner cancels its context while reaping that
-			// already-completed child, so take the closed-output boundary as the
-			// authoritative terminal signal before classifying the wait as a
-			// customer cancellation. This final observation also captures output
-			// bytes that raced the stdout pump's EOF notification.
-			if progress.OutputClosed() {
-				if observeErr := observeCustomerSimulationOutput(controller, progress, outputIndex); observeErr != nil {
-					return observeErr
-				}
-				if completeErr := completeCustomerSimulationPatience(controller); completeErr != nil {
-					return completeErr
-				}
-				return errDuplexInputComplete
-			}
-			return finishCustomerSimulationPatienceOnContext(controller, ctx, err)
+			return finishCustomerSimulationPatienceWait(ctx, controller, progress, outputIndex, err)
 		}
 	}
+}
+
+// finishCustomerSimulationPatienceWait ends an interrupted patience wait. A
+// shipped child may close its provider stream immediately after a finite
+// response. The runner cancels its context while reaping that
+// already-completed child, so take the closed-output boundary as the
+// authoritative terminal signal before classifying the wait as a customer
+// cancellation. This final observation also captures output bytes that raced
+// the stdout pump's EOF notification.
+func finishCustomerSimulationPatienceWait(ctx context.Context, controller *PatienceController, progress *DuplexProgress, outputIndex *int, waitErr error) error {
+	if !progress.OutputClosed() {
+		return finishCustomerSimulationPatienceOnContext(controller, ctx, waitErr)
+	}
+	if err := observeCustomerSimulationOutput(controller, progress, outputIndex); err != nil {
+		return err
+	}
+	if err := completeCustomerSimulationPatience(controller); err != nil {
+		return err
+	}
+	return errDuplexInputComplete
 }
 
 // stepCustomerSimulationPatienceReprompt performs one observation and policy
