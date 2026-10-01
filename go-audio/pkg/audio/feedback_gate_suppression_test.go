@@ -534,7 +534,7 @@ func feedbackSignal(frameIndex, seed int) []int16 {
 	state := uint32(seed*7919 + frameIndex*104729 + 1)
 	for index := range samples {
 		state = state*1664525 + 1013904223
-		samples[index] = int16(int32(state>>16)%24000 - 12000) //nolint:gosec // bounded deterministic PCM fixture
+		samples[index] = int16(int32(state>>16)%24000 - 12000)
 	}
 	return samples
 }

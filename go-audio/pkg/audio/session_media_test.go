@@ -18,7 +18,7 @@ func TestSessionMediaFramesInboundPCMAndFlushesPartialFrame(t *testing.T) {
 
 	first := make([]int16, audio.DefaultSessionMediaFrameSamples-1)
 	for index := range first {
-		first[index] = int16(index + 1) //nolint:gosec // bounded test sample
+		first[index] = int16(index + 1)
 	}
 	if err := media.PushInbound(first); err != nil {
 		t.Fatalf("push first inbound samples: %v", err)
@@ -403,7 +403,7 @@ func TestSessionMediaInboundQueuePreservesFramesBeyondLegacyLimit(t *testing.T) 
 	const queuedFrames = 257
 	samples := make([]int16, queuedFrames*audio.DefaultSessionMediaFrameSamples)
 	for frameIndex := 0; frameIndex < queuedFrames; frameIndex++ {
-		samples[frameIndex*audio.DefaultSessionMediaFrameSamples] = int16(frameIndex + 1) //nolint:gosec // bounded test marker
+		samples[frameIndex*audio.DefaultSessionMediaFrameSamples] = int16(frameIndex + 1)
 	}
 	if err := media.PushInbound(samples); err != nil {
 		t.Fatalf("push queued inbound frames = %v", err)
@@ -413,7 +413,7 @@ func TestSessionMediaInboundQueuePreservesFramesBeyondLegacyLimit(t *testing.T) 
 		if err != nil {
 			t.Fatalf("read inbound frame %d: %v", frameIndex, err)
 		}
-		if got, want := frame.Samples[0], int16(frameIndex+1); got != want { //nolint:gosec // bounded test marker
+		if got, want := frame.Samples[0], int16(frameIndex+1); got != want {
 			t.Fatalf("inbound frame %d marker = %d, want %d", frameIndex, got, want)
 		}
 	}

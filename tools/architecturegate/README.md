@@ -93,15 +93,13 @@ migration from the former monolith. A pre-migration branch should generate into
 a temporary directory named `baselines`, then apply only its owned fragment
 diffs after rebasing so newer reductions are not overwritten.
 
-The pinned `golangci-lint` configuration is separate from this gate. It has two
-passes: `.golangci.yml` applies hard limits to all code, and
-`.golangci.new.yml` applies to new code only. See
+The pinned `golangci-lint` configuration is separate from this gate: a single
+`.golangci.yml` applies to all code. See
 [lint-policy.md](../../docs/architecture/lint-policy.md).
-Verify both configurations with the resolver's v2.9.0 binary:
+Verify it with the resolver's v2.9.0 binary:
 
 ```sh
 golangci-lint config verify --config .golangci.yml
-golangci-lint config verify --config .golangci.new.yml
 ```
 
 The service shape is recognized only under `services/<name>/`: contracts live

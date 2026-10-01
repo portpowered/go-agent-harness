@@ -357,7 +357,7 @@ func webMCPDeviceSignal(count, seed int) []int16 {
 	state := uint32(seed)
 	for index := range result {
 		state = state*1664525 + 1013904223
-		result[index] = int16(int32(state>>16)%18000 - 9000) //nolint:gosec // deterministic PCM fixture
+		result[index] = int16(int32(state>>16)%18000 - 9000)
 	}
 	return result
 }

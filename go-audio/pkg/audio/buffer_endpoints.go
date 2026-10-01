@@ -32,7 +32,7 @@ func newSessionOutboundMedia(writer SessionMediaWriter) *sessionOutboundMedia {
 
 func (m *sessionOutboundMedia) WriteFrame(ctx context.Context, frame PCMFrame) error { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
 	if ctx == nil {
-		ctx = context.Background() //nolint:contextcheck // A nil context from legacy callers falls back to Background.
+		ctx = context.Background()
 	}
 	if len(frame.Samples) == 0 {
 		return ErrSessionMediaEmptyFrame

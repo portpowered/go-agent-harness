@@ -1,15 +1,20 @@
 version: "2"
 
-# Hard lint policy. Every finding here fails `make lint` for ALL code in every
-# LINT_MODULES module: there is no new-from-rev filter and no legacy baseline.
-# Linters that still carry legacy debt run on new code only through
-# .golangci.new.yml, which `make lint` runs as a second pass.
+# The single, hard lint policy. Every linter below applies to ALL code in
+# every LINT_MODULES module (production and tests, every build tag and
+# platform lane) and any finding fails `make lint`. There is no new-code-only
+# pass, no new-from-rev filter and no baseline. The only exceptions are the
+# documented permanent exclusions and the temporary round-3 exclusions at the
+# end of this file, which the per-module lint tracks remove.
 # See docs/architecture/lint-policy.md.
 
 run:
-  # Tests follow the same limits and error/context/suppression policy as
-  # production. The architecture gate separately keeps the stronger physical
-  # test budgets.
+  # golangci-lint runs once per module directory. Report and match paths
+  # relative to the repository root (e.g. agent-cli/internal/...) so that
+  # exclusion rules can name a module.
+  relative-path-mode: gitroot
+  # Tests follow the same policy as production. The architecture gate
+  # separately keeps the stronger physical test budgets.
   tests: true
   # Opt-in build tags are linted with the same limits as default-tag code.
   # e2e_internal files depend on live helpers, so the tags load together.
@@ -29,26 +34,62 @@ issues:
   uniq-by-line: false
 
 linters:
-  # standard = errcheck, govet, ineffassign, staticcheck, unused.
-  default: standard
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:
-    # Size and complexity limits.
+    # Size and complexity.
     - funlen
     - gocyclo
     - gocognit
     - revive
-
-    # Correctness and error-flow checks.
+    - nestif
+    - dupl
+    # Correctness and error flow.
     - nilerr
+    - nilnesserr
     - bodyclose
     - durationcheck
-
-    # Policy values.
+    - errorlint
+    - contextcheck
+    - containedctx
+    - noctx
+    - fatcontext
+    - gocritic
+    - gosec
+    - makezero
+    - reassign
+    - asasalint
+    - bidichk
+    - wastedassign
+    - unparam
+    - recvcheck
+    - errname
+    - predeclared
+    - iface
+    # Policy values and finite state.
     - goconst
-
-    # Package state, prohibited effects, and suppression hygiene.
+    - mnd
+    - exhaustive
+    # Package state, prohibited effects, suppression hygiene.
+    - gochecknoglobals
     - gochecknoinits
+    - forbidigo
+    - depguard
     - nolintlint
+    - godox
+    # Modern/std idioms.
+    - exptostd
+    - canonicalheader
+    - usestdlibvars
+    - mirror
+    - copyloopvar
+    - intrange
+    - misspell
+    - nakedret
+    # Tests.
+    - testifylint
+    - usetesting
+    - tparallel
+    - thelper
 
   settings:
     funlen:
@@ -59,6 +100,10 @@ linters:
       min-complexity: 30
     gocognit:
       min-complexity: 30
+    nestif:
+      min-complexity: 5
+    dupl:
+      threshold: 150
     revive:
       rules:
         - name: file-length-limit
@@ -75,13 +120,242 @@ linters:
         - (*syscall.LazyProc).Call
         - (*syscall.Proc).Call
         - syscall.SyscallN
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      check:
+        - switch
+      # A default branch must not silently hide a newly added enum member.
+      default-signifies-exhaustive: false
+      package-scope-only: true
     goconst:
       min-len: 4
       min-occurrences: 3
       match-constant: true
       numbers: false
       ignore-calls: true
+    mnd:
+      checks: [argument, case, condition, operation, return, assign]
+      # Language and wire protocol sentinels are intentionally readable as
+      # literals. Meaningful policy values still require named constants.
+      ignored-numbers: ["0", "1", "2", "10", "100", "255"]
+    gocritic:
+      enabled-tags: [diagnostic]
+      disabled-checks: [ifElseChain, singleCaseSwitch, elseif, captLocal, assignOp, unlambda, commentedOutCode, uncheckedInlineErr, evalOrder]
+    gosec:
+      includes: [G110, G112, G114, G201, G202, G203, G402, G403, G501, G502, G503, G504, G505, G601]
+    iface:
+      enable: [identical, unused]
+    godox:
+      keywords: [FIXME, HACK, XXX, BUG, TODO]
+    depguard:
+      rules:
+        deprecated:
+          files: ["$all"]
+          deny:
+            - {pkg: io/ioutil, desc: use io and os}
+            - {pkg: "math/rand$", desc: use math/rand/v2}
+            - {pkg: github.com/pkg/errors, desc: use errors and fmt.Errorf with %w}
+        library-logging:
+          files: ["$all", "!$test", "!**/cmd/**", "!**/main.go"]
+          deny:
+            - {pkg: "log$", desc: inject a logger; library code must not write to the global log}
+    forbidigo:
+      # Patterns match the resolved package path and receiver type, so an
+      # aliased import or a method value cannot hide a call.
+      analyze-types: true
+      forbid:
+        - pattern: '^os\.Getwd$'
+          msg: inject the working directory through a host boundary
+        - pattern: '^os\.UserHomeDir$'
+          msg: inject host directories through a boundary
+        - pattern: '^fmt\.(Print|Printf|Println)$'
+          msg: return diagnostics through an injected writer or typed result
+        - pattern: '^time\.Sleep$'
+          msg: wait on a signal, a fake clock, or testing/synctest
+        - pattern: '^context\.(Background|TODO)$'
+          msg: accept a context from the caller (roots belong in main/cmd and test setup)
+        - pattern: '^panic$'
+          msg: return an error (panics belong only in must-style init of constant inputs, documented with nolint)
+        # With analyze-types a call through testing.TB resolves to
+        # testing.TB.Skip*, and through *testing.F to testing.F.Skip*, so both
+        # are listed next to T and B.
+        - pattern: '^testing\.(common|T|B|TB|F)\.(Skip|Skipf|SkipNow)$'
+          msg: never skip; use build tags or constraints to select where a test runs
     nolintlint:
       require-explanation: true
       require-specific: true
       allow-unused: false
+
+  exclusions:
+    # Generated code (for example Wire's wire_gen.go, which `make wire-check`
+    # keeps in sync with its injector) is excluded.
+    generated: lax
+    rules:
+      # Roots for contexts and panics are legitimate in entrypoints and tests.
+      - path: '(^|/)(cmd/|main\.go$)'
+        linters: [forbidigo]
+        text: 'context\.(Background|TODO)|panic'
+      - path: '_test\.go$'
+        linters: [forbidigo]
+        text: 'context\.(Background|TODO)|panic'
+      # time.Sleep is forbidden by default; device polling backends may
+      # justify it with a specific nolint explanation.
+      # ---- TEMPORARY round-3 exclusions (only shrink; see lint-policy.md) ----
+      # Each entry lists only linters that had findings in its path. The
+      # nolintlint companion rule keeps existing //nolint directives for an
+      # excluded linter from being reported as unused while the exclusion
+      # exists; remove it together with the linter.
+      # owned by audio-dedupe
+      - path: '^go-agent-runtime/services/roomevidence/internal/service/audio_[^/]*\.go$'
+        linters: [errname, intrange, unparam]
+      - path: '^go-agent-runtime/services/roomevidence/internal/service/audio_[^/]*\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(errname|intrange|unparam)"'
+      # owned by audio-dedupe
+      - path: '^go-agent-runtime/services/roomreplay/internal/audiobundle/'
+        linters: [intrange, unparam]
+      - path: '^go-agent-runtime/services/roomreplay/internal/audiobundle/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(intrange|unparam)"'
+      # owned by provider-base
+      - path: '^go-llm-gateway/pkg/providers/grok/'
+        linters: [exhaustive, mnd, thelper]
+      - path: '^go-llm-gateway/pkg/providers/grok/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(exhaustive|mnd|thelper)"'
+      # owned by provider-base
+      - path: '^go-llm-gateway/pkg/providers/openai/session[^/]*\.go$'
+        linters: [contextcheck, exhaustive, forbidigo, intrange, mnd, nestif, thelper, unparam]
+      - path: '^go-llm-gateway/pkg/providers/openai/session[^/]*\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(contextcheck|exhaustive|forbidigo|intrange|mnd|nestif|thelper|unparam)"'
+      # owned by runner-state
+      - path: '^go-agent-loop/pkg/participants/model_runner[^/]*\.go$'
+        linters: [contextcheck, exhaustive, forbidigo, intrange, mnd, nakedret, unparam]
+      - path: '^go-agent-loop/pkg/participants/model_runner[^/]*\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(contextcheck|exhaustive|forbidigo|intrange|mnd|nakedret|unparam)"'
+      # owned by session-wrappers
+      - path: '^go-agent-loop/pkg/messages/session\.go$'
+        linters: [iface]
+      - path: '^go-agent-loop/pkg/messages/session\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(iface)"'
+      # owned by session-wrappers
+      - path: '^go-agent-runtime/services/devices/internal/rtc/binding_transport\.go$'
+        linters: [containedctx, forbidigo]
+      - path: '^go-agent-runtime/services/devices/internal/rtc/binding_transport\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|forbidigo)"'
+      # owned by session-wrappers
+      - path: '^go-agent-runtime/services/session/internal/live/sessionwrap/'
+        linters: [nestif]
+      - path: '^go-agent-runtime/services/session/internal/live/sessionwrap/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(nestif)"'
+      # owned by session-wrappers
+      - path: '^go-agent-runtime/services/sessionduration/internal/service/admission(_forward)?\.go$'
+        linters: [forbidigo]
+      - path: '^go-agent-runtime/services/sessionduration/internal/service/admission(_forward)?\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(forbidigo)"'
+      # owned by session-wrappers
+      - path: '^go-llm-gateway/pkg/testing/session_record\.go$'
+        linters: [containedctx, forbidigo, mnd]
+      - path: '^go-llm-gateway/pkg/testing/session_record\.go$'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|forbidigo|mnd)"'
+      # round-3 cleanup: lint-agent-cli track
+      - path: '^agent-cli/'
+        linters: [containedctx, contextcheck, copyloopvar, dupl, errname, errorlint, exhaustive, fatcontext, forbidigo, gochecknoglobals, gocritic, godox, gosec, iface, intrange, mirror, mnd, nestif, nilnesserr, noctx, predeclared, recvcheck, thelper, tparallel, unparam, usestdlibvars, usetesting, wastedassign]
+      - path: '^agent-cli/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|dupl|errname|errorlint|exhaustive|fatcontext|forbidigo|gochecknoglobals|gocritic|godox|gosec|iface|intrange|mirror|mnd|nestif|nilnesserr|noctx|predeclared|recvcheck|thelper|tparallel|unparam|usestdlibvars|usetesting|wastedassign)"'
+      # round-3 cleanup: lint-go-agent-runtime track
+      - path: '^go-agent-runtime/'
+        linters: [containedctx, copyloopvar, depguard, dupl, errname, forbidigo, gochecknoglobals, gocritic, iface, intrange, mirror, mnd, nestif, nilnesserr, noctx, predeclared, recvcheck, thelper, tparallel, unparam, usestdlibvars]
+      - path: '^go-agent-runtime/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|copyloopvar|depguard|dupl|errname|forbidigo|gochecknoglobals|gocritic|iface|intrange|mirror|mnd|nestif|nilnesserr|noctx|predeclared|recvcheck|thelper|tparallel|unparam|usestdlibvars)"'
+      # round-3 cleanup: lint-loop-gateway track
+      - path: '^go-agent-loop/'
+        linters: [containedctx, contextcheck, copyloopvar, depguard, dupl, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nestif, noctx, predeclared, recvcheck, thelper, tparallel, unparam]
+      - path: '^go-agent-loop/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|depguard|dupl|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nestif|noctx|predeclared|recvcheck|thelper|tparallel|unparam)"'
+      # round-3 cleanup: lint-loop-gateway track
+      - path: '^go-llm-gateway/'
+        linters: [containedctx, contextcheck, copyloopvar, dupl, errname, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nakedret, nestif, noctx, predeclared, thelper, unparam, usestdlibvars]
+      - path: '^go-llm-gateway/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|dupl|errname|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nakedret|nestif|noctx|predeclared|thelper|unparam|usestdlibvars)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^go-audio/'
+        linters: [containedctx, contextcheck, errname, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nestif, predeclared, recvcheck, thelper, unparam]
+      - path: '^go-audio/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|contextcheck|errname|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nestif|predeclared|recvcheck|thelper|unparam)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^go-device-gateway/'
+        linters: [containedctx, contextcheck, copyloopvar, errname, errorlint, exhaustive, forbidigo, gochecknoglobals, gocritic, iface, intrange, mnd, nestif, noctx, predeclared, recvcheck, thelper, unparam]
+      - path: '^go-device-gateway/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|contextcheck|copyloopvar|errname|errorlint|exhaustive|forbidigo|gochecknoglobals|gocritic|iface|intrange|mnd|nestif|noctx|predeclared|recvcheck|thelper|unparam)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^scripts/webmcp-o0/'
+        linters: [containedctx, contextcheck, errorlint, forbidigo, gosec, mnd, noctx, unparam]
+      - path: '^scripts/webmcp-o0/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|contextcheck|errorlint|forbidigo|gosec|mnd|noctx|unparam)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^test/localai/'
+        linters: [containedctx, copyloopvar, forbidigo, gochecknoglobals, intrange, thelper]
+      - path: '^test/localai/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|copyloopvar|forbidigo|gochecknoglobals|intrange|thelper)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tests/embedding/'
+        linters: [containedctx, dupl, forbidigo, nestif, thelper]
+      - path: '^tests/embedding/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(containedctx|dupl|forbidigo|nestif|thelper)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tools/analyzergate/'
+        linters: [errorlint, gochecknoglobals, mnd]
+      - path: '^tools/analyzergate/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(errorlint|gochecknoglobals|mnd)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tools/architecturegate/'
+        linters: [intrange, noctx, unparam]
+      - path: '^tools/architecturegate/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(intrange|noctx|unparam)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tools/coveragegate/'
+        linters: [errorlint, forbidigo, mnd, noctx, unparam]
+      - path: '^tools/coveragegate/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(errorlint|forbidigo|mnd|noctx|unparam)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tools/rtc-race-gate/'
+        linters: [errname, errorlint, gochecknoglobals, mnd, noctx]
+      - path: '^tools/rtc-race-gate/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(errname|errorlint|gochecknoglobals|mnd|noctx)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tools/session-race-gate/'
+        linters: [errname, errorlint, gochecknoglobals, mnd, noctx]
+      - path: '^tools/session-race-gate/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(errname|errorlint|gochecknoglobals|mnd|noctx)"'
+      # round-3 cleanup: lint-media-tools track
+      - path: '^tools/timingate/'
+        linters: [mnd, noctx]
+      - path: '^tools/timingate/'
+        linters: [nolintlint]
+        text: 'is unused for linter "(mnd|noctx)"'
