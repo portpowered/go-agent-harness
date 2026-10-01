@@ -131,7 +131,7 @@ func runV8Duplex(t *testing.T, aToB, bToA []byte, mutateFirst bool) v8DuplexRun 
 			defer wg.Done()
 			<-startGate
 			started := time.Now()
-			root := commandCLI.Generate()
+			root := commandCLI.Generate() //nolint:contextcheck // Generate only builds the cobra tree; the command runs under ctx via ExecuteContext below
 			root.SetIn(input)
 			root.SetOut(output)
 			root.SetErr(io.Discard)

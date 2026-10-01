@@ -113,7 +113,7 @@ func buildIntegrationBinaries(ctx context.Context, dir string) error {
 				errs[index] = fmt.Errorf("install %s binary: %w", build.name, err)
 				return
 			}
-			warmBinary(build.output)
+			warmBinary(ctx, build.output)
 		}()
 	}
 	wg.Wait()
@@ -123,8 +123,8 @@ func buildIntegrationBinaries(ctx context.Context, dir string) error {
 // warmBinary executes a freshly linked binary once. The first exec of a new
 // binary on macOS waits for a code assessment that can take seconds on a
 // loaded machine; paying it here keeps it out of tests' readiness bounds.
-func warmBinary(path string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+func warmBinary(ctx context.Context, path string) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	// Only the exec matters; a non-zero help exit status is irrelevant.
 	var exitErr *exec.ExitError

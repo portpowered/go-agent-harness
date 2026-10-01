@@ -81,7 +81,7 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 			s.thirdInputBeforeContinuation = true
 		}
 		s.mu.Unlock()
-		s.emitInputResponse(inputTurn)
+		s.emitInputResponse(ctx, inputTurn)
 	case kind == messages.StreamTypeToolCallEnd:
 		value, ok := msg.Value.(*messages.ToolCallEndValue)
 		if !ok || value == nil {
@@ -101,7 +101,7 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 		}
 		s.mu.Unlock()
 		if callID != "" {
-			s.emitContinuation(callID)
+			s.emitContinuation(ctx, callID)
 		}
 	case kind == messages.StreamTypeSessionClose:
 		s.closeOnce.Do(func() { close(s.done) })
@@ -129,39 +129,39 @@ func scheduledContinuationSignalObserved(signal <-chan struct{}) bool {
 	}
 }
 
-func (s *scheduledContinuationSession) emitInputResponse(inputTurn int) {
+func (s *scheduledContinuationSession) emitInputResponse(ctx context.Context, inputTurn int) {
 	switch inputTurn {
 	case 1:
-		s.emitToolResponse(scheduledContinuationToolResponseOne, scheduledContinuationCallOne)
+		s.emitToolResponse(ctx, scheduledContinuationToolResponseOne, scheduledContinuationCallOne)
 	case 2:
-		s.emitToolResponse(scheduledContinuationToolResponseTwo, scheduledContinuationCallTwo)
+		s.emitToolResponse(ctx, scheduledContinuationToolResponseTwo, scheduledContinuationCallTwo)
 	case 3:
-		s.emitPlainResponse(scheduledContinuationResponseThree, "third scheduled response")
+		s.emitPlainResponse(ctx, scheduledContinuationResponseThree, "third scheduled response")
 	}
 }
 
-func (s *scheduledContinuationSession) emitToolResponse(responseID, callID string) {
+func (s *scheduledContinuationSession) emitToolResponse(ctx context.Context, responseID, callID string) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ResponseID: responseID, ToolCallId: callID, Value: messages.NewToolCallStartValue(callID, "scheduled_tool")},
 		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ResponseID: responseID, ToolCallId: callID, Value: messages.NewToolCallEndValue(callID, "scheduled_tool", `{"call_id":"`+callID+`"}`)},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
-func (s *scheduledContinuationSession) emitContinuation(callID string) {
+func (s *scheduledContinuationSession) emitContinuation(ctx context.Context, callID string) {
 	responseID := scheduledContinuationResponseOne
 	text := "first scheduled continuation"
 	if callID == scheduledContinuationCallTwo {
 		responseID = scheduledContinuationResponseTwo
 		text = "second scheduled continuation"
 	}
-	s.emitPlainResponse(responseID, text)
+	s.emitPlainResponse(ctx, responseID, text)
 }
 
-func (s *scheduledContinuationSession) emitPlainResponse(responseID, text string) {
+func (s *scheduledContinuationSession) emitPlainResponse(ctx context.Context, responseID, text string) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTextStartValue()},
@@ -169,7 +169,7 @@ func (s *scheduledContinuationSession) emitPlainResponse(responseID, text string
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewTextEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, ResponseID: responseID, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -207,12 +207,12 @@ func newScheduledContinuationInferencer(secondContinuationObserved <-chan struct
 	}
 }
 
-func (i *scheduledContinuationInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+func (i *scheduledContinuationInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("scheduled-continuation-session", "test"),
 	})
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionUpdated,
 		Value: messages.NewSessionUpdatedValue("scheduled-continuation-session"),
 	})

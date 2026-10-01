@@ -58,7 +58,7 @@ func (s *unresolvedFailureSession) SendWithOutcome(ctx context.Context, msg mess
 	// Other client messages need no scripted response.
 	switch kind := msg.Type; {
 	case kind == messages.StreamTypeMessageEnd:
-		s.responseOnce.Do(func() { s.emitToolTurn() })
+		s.responseOnce.Do(func() { s.emitToolTurn(ctx) })
 	case kind == messages.StreamTypeToolCallEnd:
 		if s.resultStatus != "" {
 			return messages.SessionSendOutcome{Status: s.resultStatus, Err: s.resultErr}
@@ -74,14 +74,14 @@ func unresolvedFailureContextOutcome(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
-func (s *unresolvedFailureSession) emitToolTurn() {
+func (s *unresolvedFailureSession) emitToolTurn(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(unresolvedToolCallID, "slow_tool")},
 		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(unresolvedToolCallID, "slow_tool", `{"value":"wait"}`)},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -144,8 +144,8 @@ type fixedUnresolvedFailureInferencer struct {
 	session *unresolvedFailureSession
 }
 
-func (i *fixedUnresolvedFailureInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+func (i *fixedUnresolvedFailureInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("unresolved-failure-session", "test"),
 	})

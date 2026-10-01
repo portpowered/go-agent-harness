@@ -398,7 +398,7 @@ func (o *followOnToolObserver) observe(msg messages.StreamMessage) {
 // newActiveScheduledToolObserver drives the active scheduled session from its
 // stream: it releases the pending barge-in continuation on the ready session
 // update, marks the final grounded response, and records the client close.
-func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) func(messages.StreamMessage) {
+func newActiveScheduledToolObserver(ctx context.Context, inferencer *sessionToolBargeInInferencer) func(messages.StreamMessage) {
 	var finalResponseTextObserved bool
 	return func(msg messages.StreamMessage) {
 		session := inferencer.connectedSession()
@@ -406,7 +406,7 @@ func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) fu
 		case msg.Type == messages.StreamTypeSessionUpdated:
 			value, ok := msg.Value.(*messages.SessionUpdatedValue)
 			if ok && value != nil && value.SessionID == sessionToolBargeInContinuationReadyID && session != nil {
-				session.emitPendingBargeInContinuation()
+				session.emitPendingBargeInContinuation(ctx)
 			}
 		case msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeTextDelta:
 			value, ok := msg.Value.(*messages.TextDeltaValue)
@@ -415,7 +415,7 @@ func newActiveScheduledToolObserver(inferencer *sessionToolBargeInInferencer) fu
 			}
 		case msg.Role == messages.RoleAssistant && msg.Type == messages.StreamTypeMessageEnd:
 			if msg.ResponseID == sessionToolBargeInFinalResponseID && finalResponseTextObserved && session != nil {
-				session.markFinalResponseObserved()
+				session.markFinalResponseObserved(ctx)
 			}
 		case msg.Type == messages.StreamTypeSessionClose:
 			if session != nil {

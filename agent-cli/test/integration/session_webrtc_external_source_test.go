@@ -224,7 +224,7 @@ func runRootCLISession(t *testing.T, ctx context.Context, cfgDir, fixturePath st
 	if err != nil {
 		t.Fatalf("initialize CLI composition: %v", err)
 	}
-	rootCmd := agentCLI.Generate()
+	rootCmd := agentCLI.Generate() //nolint:contextcheck // Generate only builds the cobra tree; the command runs under ctx via ExecuteContext below
 	stdout := &syncBuffer{}
 	stderr := &syncBuffer{}
 	rootCmd.SetOut(stdout)
@@ -255,7 +255,7 @@ func runRootCLIMediaCommand(t *testing.T, ctx context.Context, cfgDir, operation
 	if err != nil {
 		t.Fatalf("initialize CLI composition: %v", err)
 	}
-	rootCmd := agentCLI.Generate()
+	rootCmd := agentCLI.Generate() //nolint:contextcheck // Generate only builds the cobra tree; the command runs under ctx via ExecuteContext below
 	stdout := &syncBuffer{}
 	stderr := &syncBuffer{}
 	rootCmd.SetOut(stdout)

@@ -268,17 +268,17 @@ func newSessionConfigToolInferencer(calls []sessionConfigToolCall) *sessionConfi
 	return &sessionConfigToolInferencer{calls: append([]sessionConfigToolCall(nil), calls...)}
 }
 
-func (i *sessionConfigToolInferencer) ConnectSession(context.Context) (messages.Session, error) {
+func (i *sessionConfigToolInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
 	i.sess = &sessionConfigToolSession{
 		inferencer: i,
 		recv:       messages.NewTypedBuffer[messages.StreamMessage](64),
 		done:       make(chan struct{}),
 	}
-	i.sess.recv.Write(context.Background(), messages.StreamMessage{
+	i.sess.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("session-config-tool-filter", "deterministic"),
 	})
-	i.sess.recv.Write(context.Background(), messages.StreamMessage{
+	i.sess.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionCreated,
 		Value: messages.NewSessionCreatedValue("session-config-tool-filter", "deterministic"),
 	})
@@ -359,7 +359,7 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		closeAfterAcceptance := s.acceptedCalls == len(s.inferencer.calls)
 		s.mu.Unlock()
 		if closeAfterAcceptance {
-			s.emitContinuation()
+			s.emitContinuation(ctx)
 			s.mu.Lock()
 			s.continuationSent = true
 			s.mu.Unlock()
@@ -396,7 +396,7 @@ func (s *sessionConfigToolSession) Send(ctx context.Context, msg messages.Stream
 		Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 	for _, delta := range deltas {
-		if !s.recv.Write(context.Background(), delta) {
+		if !s.recv.Write(ctx, delta) {
 			return false
 		}
 	}
@@ -422,7 +422,7 @@ func (s *sessionConfigToolSession) closeWhenObserved() {
 	}
 }
 
-func (s *sessionConfigToolSession) emitContinuation() {
+func (s *sessionConfigToolSession) emitContinuation(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
@@ -430,7 +430,7 @@ func (s *sessionConfigToolSession) emitContinuation() {
 		{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		if !s.recv.Write(context.Background(), msg) {
+		if !s.recv.Write(ctx, msg) {
 			return
 		}
 	}

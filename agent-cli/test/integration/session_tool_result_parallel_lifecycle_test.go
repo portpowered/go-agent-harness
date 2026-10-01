@@ -111,10 +111,10 @@ func (s *parallelLifecycleSession) SendWithOutcome(ctx context.Context, msg mess
 	s.mu.Unlock()
 
 	if responseNumber == 1 {
-		s.emitTwoCallResponse()
+		s.emitTwoCallResponse(ctx)
 	}
 	if msg.Type == messages.StreamTypeResponseCreate {
-		s.continuationOnce.Do(s.emitContinuation)
+		s.continuationOnce.Do(func() { s.emitContinuation(ctx) })
 	}
 
 	if msg.Type != messages.StreamTypeToolCallEnd {
@@ -158,7 +158,7 @@ func parallelLifecycleContextOutcome(err error) messages.SessionSendOutcome {
 	return messages.SessionSendOutcome{Status: messages.SessionSendCancelled, Err: err}
 }
 
-func (s *parallelLifecycleSession) emitTwoCallResponse() {
+func (s *parallelLifecycleSession) emitTwoCallResponse(ctx context.Context) {
 	for _, call := range []struct {
 		id, name, args string
 	}{
@@ -170,7 +170,7 @@ func (s *parallelLifecycleSession) emitTwoCallResponse() {
 			{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, ToolCallId: call.id, Value: messages.NewToolCallStartValue(call.id, call.name)},
 			{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, ToolCallId: call.id, Value: messages.NewToolCallEndValue(call.id, call.name, call.args)},
 		} {
-			s.recv.Write(context.Background(), msg)
+			s.recv.Write(ctx, msg)
 		}
 	}
 	for _, msg := range []messages.StreamMessage{
@@ -178,22 +178,22 @@ func (s *parallelLifecycleSession) emitTwoCallResponse() {
 		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant, Value: messages.NewAudioDeltaValue([]byte{1, 0, 2, 0})},
 		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant, Value: messages.NewAudioEndValue()},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
-	s.recv.Write(context.Background(), messages.StreamMessage{
+	s.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeMessageEnd,
 		Role:  messages.RoleAssistant,
 		Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 }
 
-func (s *parallelLifecycleSession) emitContinuation() {
+func (s *parallelLifecycleSession) emitContinuation(ctx context.Context) {
 	for _, msg := range []messages.StreamMessage{
 		{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()},
 		{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("parallel grounded continuation")},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		s.recv.Write(context.Background(), msg)
+		s.recv.Write(ctx, msg)
 	}
 }
 
@@ -252,12 +252,12 @@ func newParallelLifecycleInferencer(session *parallelLifecycleSession) *parallel
 	return &parallelLifecycleInferencer{ready: make(chan struct{}), session: session}
 }
 
-func (i *parallelLifecycleInferencer) ConnectSession(context.Context) (messages.Session, error) {
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+func (i *parallelLifecycleInferencer) ConnectSession(ctx context.Context) (messages.Session, error) {
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
 		Value: messages.NewSessionOpenValue("parallel-tool-lifecycle", "test"),
 	})
-	i.session.recv.Write(context.Background(), messages.StreamMessage{
+	i.session.recv.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionUpdated,
 		Value: messages.NewSessionUpdatedValue("parallel-tool-lifecycle"),
 	})

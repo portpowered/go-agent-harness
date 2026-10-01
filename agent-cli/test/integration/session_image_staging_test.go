@@ -256,7 +256,7 @@ func (s *exactStagedImageSession) Send(ctx context.Context, event messages.Strea
 		s.captureAdvertisedPath(event)
 	}
 	if event.Type == messages.StreamTypeMessageEnd {
-		s.toolCall.Do(func() { s.emitToolCall() })
+		s.toolCall.Do(func() { s.emitToolCall(ctx) })
 	}
 	return true
 }
@@ -267,7 +267,7 @@ func (s *exactStagedImageSession) SendMessage(ctx context.Context, message messa
 	}
 	if message.Role == messages.RoleTool {
 		s.captureToolResult(message)
-		s.continuation.Do(func() { s.emitContinuation() })
+		s.continuation.Do(func() { s.emitContinuation(ctx) })
 	}
 	return true
 }
@@ -339,7 +339,7 @@ func (s *exactStagedImageSession) captureAdvertisedPath(event messages.StreamMes
 	s.recordFailure(errors.New("session.update did not advertise read_image"))
 }
 
-func (s *exactStagedImageSession) emitToolCall() {
+func (s *exactStagedImageSession) emitToolCall(ctx context.Context) {
 	s.mu.Lock()
 	path := s.advertisedPath
 	s.toolCallPath = path
@@ -358,7 +358,7 @@ func (s *exactStagedImageSession) emitToolCall() {
 		{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, runtimeTools.ReadImageToolID, string(arguments))},
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 	} {
-		if !s.recv.Write(context.Background(), event) {
+		if !s.recv.Write(ctx, event) {
 			return
 		}
 	}
@@ -392,7 +392,7 @@ func (s *exactStagedImageSession) captureToolResult(message messages.Message) {
 	}
 }
 
-func (s *exactStagedImageSession) emitContinuation() {
+func (s *exactStagedImageSession) emitContinuation(ctx context.Context) {
 	if err := s.capture.server(`{"type":"response.output_text.delta","delta":"staged image verified"}`); err != nil {
 		s.recordFailure(err)
 	}
@@ -405,7 +405,7 @@ func (s *exactStagedImageSession) emitContinuation() {
 		{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 		{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("exact-staged-image", "done")},
 	} {
-		if !s.recv.Write(context.Background(), event) {
+		if !s.recv.Write(ctx, event) {
 			return
 		}
 	}
