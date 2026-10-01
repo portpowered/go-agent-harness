@@ -73,7 +73,7 @@ type ChatModel struct {
 	sessionID   string
 	globalFlags *flags.GlobalFlags
 	askFlags    *flags.AskFlags
-	ctx         context.Context
+	ctx         context.Context //nolint:containedctx // bubbletea's Update/tea.Cmd carry no context; the model lives exactly as long as the Run(ctx) that owns the program
 	out         io.Writer
 	errOut      io.Writer
 	lines       []chatLine       // conversation history (user, assistant, thinking, tool, media)

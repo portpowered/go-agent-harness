@@ -414,7 +414,7 @@ func postDoneBargeInArgs() []string {
 
 func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudioDevice, provider *postDoneBargeInProvider, agent remoteToolAudioAgent) {
 	t.Helper()
-	run := &postDoneBargeInRun{t: t, ctx: ctx, device: device, provider: provider, agent: agent, clock: time.NewTicker(postDoneBargeInCallbackInterval)}
+	run := &postDoneBargeInRun{t: t, device: device, provider: provider, agent: agent, clock: time.NewTicker(postDoneBargeInCallbackInterval)}
 	defer run.clock.Stop()
 	select {
 	case <-provider.responseDone:
@@ -424,19 +424,19 @@ func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudi
 		run.fail("provider response did not complete: %v", ctx.Err())
 	}
 	// The response is done; play part of its queued audio, then speak.
-	for _, heard := run.rendered(); heard < postDoneBargeInHeard; _, heard = run.rendered() {
-		run.advance(postDoneBargeInCallbacksPerCheck)
+	for _, heard := run.rendered(ctx); heard < postDoneBargeInHeard; _, heard = run.rendered(ctx) {
+		run.advance(ctx, postDoneBargeInCallbacksPerCheck)
 	}
 	if err := device.InjectCapture(ctx, postDoneBargeInSpeechPCM()); err != nil {
 		run.fail("inject near-end speech: %v", err)
 	}
-	run.awaitTruncation()
+	run.awaitTruncation(ctx)
 
 	// Playback stopped: further callbacks render nothing more of the response.
-	run.advance(postDoneBargeInSettleCallbacks)
-	stopped, heard := run.rendered()
-	run.advance(postDoneBargeInSettleCallbacks)
-	after, heardAfter := run.rendered()
+	run.advance(ctx, postDoneBargeInSettleCallbacks)
+	stopped, heard := run.rendered(ctx)
+	run.advance(ctx, postDoneBargeInSettleCallbacks)
+	after, heardAfter := run.rendered(ctx)
 	if heardAfter != heard || after.Playback.QueuedSamples != 0 {
 		run.fail("playback continued after the barge-in: rendered %d then %d samples, queued=%d", heard, heardAfter, after.Playback.QueuedSamples)
 	}
@@ -455,7 +455,6 @@ func runPostDoneBargeIn(t *testing.T, ctx context.Context, device remoteToolAudi
 // postDoneBargeInRun drives one scenario's device clock.
 type postDoneBargeInRun struct {
 	t        *testing.T
-	ctx      context.Context
 	device   remoteToolAudioDevice
 	provider *postDoneBargeInProvider
 	agent    remoteToolAudioAgent
@@ -468,24 +467,24 @@ func (r *postDoneBargeInRun) fail(format string, args ...any) {
 }
 
 // advance renders callbacks on the device clock, one per tick.
-func (r *postDoneBargeInRun) advance(callbacks int) {
+func (r *postDoneBargeInRun) advance(ctx context.Context, callbacks int) {
 	r.t.Helper()
 	for range callbacks {
 		select {
 		case <-r.clock.C:
-		case <-r.ctx.Done():
-			r.fail("device clock cancelled: %v", r.ctx.Err())
+		case <-ctx.Done():
+			r.fail("device clock cancelled: %v", ctx.Err())
 		}
-		if err := r.device.Advance(r.ctx, 1); err != nil {
+		if err := r.device.Advance(ctx, 1); err != nil {
 			r.fail("advance device clock: %v", err)
 		}
 	}
 }
 
 // rendered reads the device evidence and how much response audio it rendered.
-func (r *postDoneBargeInRun) rendered() (devicegw.DeviceServerSnapshot, int) {
+func (r *postDoneBargeInRun) rendered(ctx context.Context) (devicegw.DeviceServerSnapshot, int) {
 	r.t.Helper()
-	snapshot, err := r.device.Snapshot(r.ctx)
+	snapshot, err := r.device.Snapshot(ctx)
 	if err != nil {
 		r.fail("read device evidence: %v", err)
 	}
@@ -494,12 +493,12 @@ func (r *postDoneBargeInRun) rendered() (devicegw.DeviceServerSnapshot, int) {
 
 // awaitTruncation keeps the device clock running until the provider sees
 // the interrupted item truncated.
-func (r *postDoneBargeInRun) awaitTruncation() {
+func (r *postDoneBargeInRun) awaitTruncation(ctx context.Context) {
 	r.t.Helper()
 	interrupt := time.NewTimer(postDoneBargeInInterruptWait)
 	defer interrupt.Stop()
 	for {
-		r.advance(1)
+		r.advance(ctx, 1)
 		select {
 		case <-r.provider.truncated:
 			return

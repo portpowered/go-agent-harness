@@ -26,7 +26,7 @@ type targetSession struct {
 	focusMu          sync.Mutex
 	focusUsers       int
 	handle           *handle
-	targetContext    context.Context
+	targetContext    context.Context //nolint:containedctx // chromedp encodes the attached target as a context (chromedp.FromContext); this is the target handle, not a request scope
 	cancelTarget     context.CancelFunc
 	runAction        func(context.Context, ...chromedp.Action) error
 	mu               sync.Mutex

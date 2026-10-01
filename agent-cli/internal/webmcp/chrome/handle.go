@@ -21,7 +21,7 @@ type handle struct {
 	mu sync.Mutex
 
 	candidate       webmcp.BrowserCandidate
-	browserContext  context.Context
+	browserContext  context.Context //nolint:containedctx // chromedp encodes the browser connection as a context (chromedp.FromContext); this is the browser handle, not a request scope
 	cancelBrowser   context.CancelFunc
 	cancelAllocator context.CancelFunc
 	browser         *chromedp.Browser

@@ -118,7 +118,8 @@ func TestCapitalOneShoppingAdapterLive(t *testing.T) {
 		t.Skipf("set %s=1 to run the live Capital One Shopping adapter gate", capitalOneShoppingLiveEnv)
 	}
 	chromeExecutable, chromeVersion := findQualifiedStockChromeForIntegration(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	deadline := time.Now().Add(150 * time.Second)
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	defer cancel()
 	launcher := NewManagedBrowserLauncher(ManagedBrowserLaunchOptions{
 		ConfigDir:  t.TempDir(),
@@ -180,7 +181,7 @@ func TestCapitalOneShoppingAdapterLive(t *testing.T) {
 		readiness = inspectCapitalOneShoppingDocument(t, ctx, targetSession)
 		t.Fatalf("wait for live adapter catalog: %v; page=%+v", catalogErr, readiness)
 	}
-	fixture := adapterFixture{ctx: ctx, session: session, target: targetSession, tools: tools, count: 4, version: chromeVersion}
+	fixture := adapterFixture{deadline: deadline, session: session, target: targetSession, tools: tools, count: 4, version: chromeVersion}
 	output := invokeAdapterTool(t, fixture, "capital_one_shopping_scan_offers", `{"max_pages":20,"max_cost_usd":500,"min_cashback_percent":70,"min_bonus_usd":300,"reward_match":"any","unknown_cost_policy":"separate"}`)
 	var result struct {
 		Data struct {

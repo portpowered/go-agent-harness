@@ -306,6 +306,8 @@ func testXAdapterJourney(t *testing.T) {
 }
 
 func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
 	t.Helper()
 	var prepared xPreparedReply
 	// File selection can precede its preview while Post is still enabled.
@@ -314,7 +316,7 @@ func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
 		t.Fatalf("pending draft=%s error=%v", pending, err)
 	}
 	var pendingState bool
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`(() => {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`(() => {
       window.deferMediaPreview = true;
       window.addPendingFile = () => {
         const input = document.querySelector('input[type="file"]');
@@ -330,22 +332,24 @@ func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
 	}
 	requireAdapterFailure(t, fixture, "x_publish_post", fmt.Sprintf(`{"draft_token":%q,"text":"text only pending guard","confirm":true}`, prepared.Data.Token), "media_changed")
 	var ignored any
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value = ''`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	invokeAdapterTool(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token))
 	// Inject media synchronously on caption entry, after preparation's initial
 	// media check and before its delayed verification.
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('[data-testid="tweetTextarea_0"]').addEventListener('input', () => window.addPendingFile(), {once:true})`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"media during preparation"}`, "existing_media")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('input[type="file"]').value=''; document.querySelector('[data-testid="tweetTextarea_0"]').textContent=''; window.deferMediaPreview=false`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
 	t.Helper()
 	var prepared xPreparedReply
 	var ignored any
@@ -380,16 +384,16 @@ func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
 	}
 	requireAdapterFailure(t, fixture, "x_prepare_post", `{"text":"unrelated"}`, "existing_media")
 	requireAdapterFailure(t, fixture, "x_clear_draft", fmt.Sprintf(`{"draft_token":%q}`, prepared.Data.Token), "manual_clear_required")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/wrong'`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	publishVideo := fmt.Sprintf(`{"draft_token":%q,"text":"video test","confirm":true}`, prepared.Data.Token)
 	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "account_mismatch")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('[data-testid="AppTabBar_Profile_Link"]').href='/fixture_user'; document.querySelector('video').src='blob:changed'`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	requireAdapterFailure(t, fixture, "x_publish_post", publishVideo, "media_changed")
-	if err := fixture.target.run(fixture.ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
+	if err := fixture.target.run(ctx, chromedp.Evaluate(`document.querySelector('video').src='blob:fixture-video'`, &ignored)); err != nil {
 		t.Fatal(err)
 	}
 	invokeAdapterTool(t, fixture, "x_publish_post", publishVideo)
@@ -428,12 +432,14 @@ func TestXAdapterRealMP4Decode(t *testing.T) {
 			t.Errorf("write X media fixture: %v", err)
 		}
 	})
-	release, err := fixture.target.AcquirePageFocus(fixture.ctx)
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	release, err := fixture.target.AcquirePageFocus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		if err := release(fixture.ctx); err != nil {
+		if err := release(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -463,7 +469,7 @@ func TestXAdapterRealMP4Decode(t *testing.T) {
 			return
 		}
 		select {
-		case <-fixture.ctx.Done():
+		case <-ctx.Done():
 			t.Fatal("real MP4 never became ready")
 		case <-time.After(time.Second):
 		}

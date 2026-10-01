@@ -30,13 +30,19 @@ func TestBundledSiteAdaptersStockChromeJourneys(t *testing.T) {
 	t.Run("x", testXAdapterJourney)
 }
 
+// adapterFixtureTimeout bounds one adapter journey from browser launch to the
+// last tool call.
+const adapterFixtureTimeout = 75 * time.Second
+
 type adapterFixture struct {
-	ctx     context.Context
-	session webmcp.TargetSession
-	target  *targetSession
-	tools   map[string]webmcp.ToolDescriptor
-	count   int
-	version string
+	// deadline ends the whole journey; helpers derive their contexts from
+	// the calling test's context with this deadline.
+	deadline time.Time
+	session  webmcp.TargetSession
+	target   *targetSession
+	tools    map[string]webmcp.ToolDescriptor
+	count    int
+	version  string
 }
 
 func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, handler http.HandlerFunc) adapterFixture {
@@ -44,7 +50,8 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	chromeExecutable, chromeVersion := findQualifiedStockChromeForIntegration(t)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	ctx, cancel := context.WithTimeout(context.Background(), 75*time.Second)
+	deadline := time.Now().Add(adapterFixtureTimeout)
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	t.Cleanup(cancel)
 	launcher := NewManagedBrowserLauncher(ManagedBrowserLaunchOptions{
 		ConfigDir: t.TempDir(), StartupURL: server.URL + "/", Headless: true,
@@ -90,7 +97,7 @@ func newAdapterFixture(t *testing.T, name, supportedURL, source, guard string, h
 	}
 	expected := map[string]int{"spotify": 8, "wikipedia": 5, "reddit": 5, "google-maps": 5, "capital-one-shopping": 4, "x": 8}[name]
 	tools := waitForAdapterCatalog(t, ctx, session, "adapter catalog", expected)
-	return adapterFixture{ctx: ctx, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
+	return adapterFixture{deadline: deadline, session: session, target: targetSession, tools: tools, count: expected, version: chromeVersion}
 }
 
 func waitForAdapterCatalog(t *testing.T, ctx context.Context, session webmcp.TargetSession, label string, expected int) map[string]webmcp.ToolDescriptor {
@@ -135,7 +142,9 @@ func invokeAdapterToolEvent(t *testing.T, fixture adapterFixture, name, input st
 		}
 		t.Fatalf("adapter tool %q missing; available=%v", name, available)
 	}
-	return invokeYouTubeAdapterTool(t, fixture.ctx, fixture.session, tool, input)
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	return invokeYouTubeAdapterTool(t, ctx, fixture.session, tool, input)
 }
 
 func requireAdapterFailure(t *testing.T, fixture adapterFixture, name, input, code string) {
@@ -154,7 +163,9 @@ func requireAdapterFailure(t *testing.T, fixture adapterFixture, name, input, co
 
 func refreshAdapterAfterNavigation(t *testing.T, fixture *adapterFixture, supportedURL string) {
 	t.Helper()
-	fixture.tools = waitForAdapterCatalog(t, fixture.ctx, fixture.session, "post-navigation adapter catalog", fixture.count)
+	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
+	defer cancel()
+	fixture.tools = waitForAdapterCatalog(t, ctx, fixture.session, "post-navigation adapter catalog", fixture.count)
 	fixture.target.mu.Lock()
 	fixture.target.page.URL = supportedURL
 	fixture.target.mu.Unlock()
