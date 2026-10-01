@@ -628,13 +628,13 @@ func (s *ambiguousCubeConversationSession) emitAssistantText(text string) {
 	)
 }
 
-func (s *ambiguousCubeConversationSession) write(messagesToWrite ...messages.StreamMessage) bool {
+// write stops at the first message the receiver rejects (it has closed).
+func (s *ambiguousCubeConversationSession) write(messagesToWrite ...messages.StreamMessage) {
 	for _, message := range messagesToWrite {
 		if !s.recv.Write(context.Background(), message) {
-			return false
+			return
 		}
 	}
-	return true
 }
 
 func (s *ambiguousCubeConversationSession) assistantCallsSnapshot() []messages.ToolCall {

@@ -523,8 +523,8 @@ func TestToolsConfig_ToolEnabled(t *testing.T) {
 
 func TestDefaultToolsList_ContainsAllToolIDs(t *testing.T) {
 	list := DefaultToolsList()
-	if len(list) != len(DefaultToolIDs) {
-		t.Errorf("DefaultToolsList length %d, want %d", len(list), len(DefaultToolIDs))
+	if len(list) != len(DefaultToolIDs()) {
+		t.Errorf("DefaultToolsList length %d, want %d", len(list), len(DefaultToolIDs()))
 	}
 	ids := make(map[string]bool)
 	for _, e := range list {
@@ -533,9 +533,9 @@ func TestDefaultToolsList_ContainsAllToolIDs(t *testing.T) {
 		}
 		ids[e.ID] = true
 	}
-	for _, id := range DefaultToolIDs {
+	for _, id := range DefaultToolIDs() {
 		if !ids[id] {
-			t.Errorf("DefaultToolIDs contains %q but DefaultToolsList does not", id)
+			t.Errorf("DefaultToolIDs() contains %q but DefaultToolsList does not", id)
 		}
 	}
 }

@@ -85,7 +85,7 @@ func (b *StatefulBroker) admissionRecordLocked(selected *brokerSession, ref Tool
 		return refRecord{}, ErrClosed
 	}
 	if b.selected != selected || !selected.active || !selected.context.Connected {
-		return refRecord{}, selectionStateErrorLocked(selected, "lifecycle", reason)
+		return refRecord{}, selectionStateErrorLocked(selected, reason)
 	}
 	record, ok := b.refs[ref]
 	if !ok || !refCurrentLocked(selected, record) {

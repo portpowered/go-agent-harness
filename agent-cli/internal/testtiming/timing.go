@@ -36,11 +36,18 @@ type Summary struct {
 	Tests    []Entry
 }
 
+const (
+	// initialScanBufferBytes is the starting line buffer for go test -json output.
+	initialScanBufferBytes = 64 << 10
+	// maxScanLineBytes caps a single go test -json line (1 MiB).
+	maxScanLineBytes = 1 << 20
+)
+
 // Parse consumes go test -json output and extracts package and test timings.
 func Parse(r io.Reader) (Summary, error) {
 	var summary Summary
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, initialScanBufferBytes), maxScanLineBytes)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {

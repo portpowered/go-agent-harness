@@ -343,7 +343,7 @@ func (f *familyCProviderFixture) handle(writer http.ResponseWriter, request *htt
 			}
 		case rtEventConversationItemCreate:
 			if event.Item.Type == rtItemFunctionCallOutput {
-				if err := f.handleToolResult(connection, event.Item.CallID, event.Item.Output); err != nil {
+				if err := f.handleToolResult(event.Item.CallID, event.Item.Output); err != nil {
 					f.failProtocol(err.Error())
 					return
 				}
@@ -433,7 +433,7 @@ func (f *familyCProviderFixture) handleCustomerUtterance(connection *websocket.C
 	return f.sendToolCall(connection, "response-turn-tool-"+fmt.Sprint(index+1), call)
 }
 
-func (f *familyCProviderFixture) handleToolResult(connection *websocket.Conn, callID, output string) error {
+func (f *familyCProviderFixture) handleToolResult(callID, output string) error {
 	f.mu.Lock()
 	pending := f.pendingCall
 	if pending == nil || pending.ID != callID {

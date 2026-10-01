@@ -254,7 +254,7 @@ type asyncCollisionRunResult struct {
 	runErr        error
 }
 
-func runAsyncCollisionScenario(t *testing.T, fixtureCollision, expectedCollision, continuation [][]int16, options asyncCollisionRunOptions) asyncCollisionRunResult {
+func runAsyncCollisionScenario(t *testing.T, fixtureCollision, continuation [][]int16, options asyncCollisionRunOptions) asyncCollisionRunResult {
 	t.Helper()
 	options = options.normalized()
 	trace := &asyncCollisionTrace{}
@@ -628,7 +628,7 @@ func TestSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 
 func testSessionAsyncToolResultInterruptsSpeechThroughCLI(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
-	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{})
+	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, true); err != nil {
 		calls, returned := run.executor.snapshot()
 		t.Logf("async collision run: err=%v trace=%v outbound=%v calls=%+v returned=%+v deltas=%v", run.runErr, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned, summarizeAsyncCollisionDeltas(run.observer.snapshot()))
@@ -672,7 +672,7 @@ func summarizeAsyncCollisionDeltas(deltas []messages.StreamMessage) []string {
 // unrelated outcome before the targeted result-loss assertion names the call.
 func TestSessionAsyncToolResultProviderResultLossFailsVerifier(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
-	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{
+	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{
 		dropProviderResult: true,
 	})
 	if err := validateAsyncCollisionRun(run, collision, continuation, true, false); err != nil {
@@ -696,7 +696,7 @@ func TestSessionAsyncToolResultAudioDamageFailsVerifier(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
 	damaged := cloneAsyncCollisionDeltas(collision)
 	damaged[1][0] ^= 1
-	run := runAsyncCollisionScenario(t, damaged, collision, continuation, asyncCollisionRunOptions{})
+	run := runAsyncCollisionScenario(t, damaged, continuation, asyncCollisionRunOptions{})
 	if err := validateAsyncCollisionRun(run, collision, continuation, false, true); err != nil {
 		calls, returned := run.executor.snapshot()
 		t.Fatalf("audio-damage control changed an unrelated runtime outcome: %v\ntrace=%v outbound=%v calls=%+v returned=%+v", err, run.trace.snapshot(), summarizeAsyncCollisionOutbound(run.outbound), calls, returned)
@@ -720,7 +720,7 @@ func TestSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 
 func testSessionAsyncToolResultMissingTerminalFailsBounded(t *testing.T) {
 	collision, continuation := asyncCollisionAudio(t)
-	run := runAsyncCollisionScenario(t, collision, collision, continuation, asyncCollisionRunOptions{
+	run := runAsyncCollisionScenario(t, collision, continuation, asyncCollisionRunOptions{
 		maxDuration:      asyncCollisionControlMaxDuration,
 		withholdTerminal: true,
 	})

@@ -379,7 +379,7 @@ func (b *StatefulBroker) ListTargets(ctx context.Context, selector BrowserSelect
 		return nil, ErrClosed
 	}
 	if selected := b.selectedForBrowser(selector.BrowserID); selected != nil {
-		if err := b.selectedStateError(selected, "list_targets", "selection_not_connected"); err != nil {
+		if err := b.selectedStateError(selected, "list_targets"); err != nil {
 			return nil, err
 		}
 	}
@@ -860,7 +860,7 @@ func (b *StatefulBroker) invalidateSessionWithCodeLocked(selected *brokerSession
 	if !selected.active {
 		return
 	}
-	rememberLifecycleFailureLocked(selected, code, reason)
+	rememberLifecycleFailureLocked(selected, code)
 	b.terminalizeSessionInvocationsLocked(selected, code, reason)
 	closeInvocationQueueLocked(selected)
 	b.retireCatalogLocked(selected)

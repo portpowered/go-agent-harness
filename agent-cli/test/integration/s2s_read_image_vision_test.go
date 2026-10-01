@@ -257,7 +257,7 @@ func writeReadImageModelConfig(t *testing.T, readImageEnabled bool, model string
 	var configYAML strings.Builder
 	fmt.Fprintf(&configYAML, "model:\n  provider: openai\n  openai:\n    model: %s\n", model)
 	configYAML.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		enabled := readImageEnabled && id == rtToolReadImage
 		fmt.Fprintf(&configYAML, "    - id: %s\n      enabled: %t\n", id, enabled)
 	}

@@ -13,6 +13,10 @@ const (
 	maxAmbiguityOrigin     = 256
 	// maxOriginFilterLabelBytes bounds the origin filter echoed in errors.
 	maxOriginFilterLabelBytes = 128
+	// maxPhaseLabelBytes bounds enum-like phase and kind labels in details.
+	maxPhaseLabelBytes = 32
+	// maxDetailLabelBytes bounds IDs, sources and reason codes in details.
+	maxDetailLabelBytes = 64
 )
 
 // Code is the stable classified discovery error vocabulary.
@@ -97,7 +101,7 @@ func newEndpointNotFound(kind EndpointKind, source Source) *DiscoveryError {
 		Retryable: false,
 		Details: map[string]any{
 			"endpoint_kind": string(kind),
-			"source":        boundedLabel(string(source), 64),
+			"source":        boundedLabel(string(source), maxDetailLabelBytes),
 		},
 	}
 }
@@ -111,7 +115,7 @@ func newEndpointUnreachable(kind EndpointKind, addressClass, phase string, cause
 		Details: map[string]any{
 			"endpoint_kind": string(kind),
 			"address_class": addressClass,
-			"phase":         boundedLabel(phase, 32),
+			"phase":         boundedLabel(phase, maxPhaseLabelBytes),
 		},
 	}
 }
@@ -142,7 +146,7 @@ func newProtocolInvalid(protocol, reason string, cause error) *DiscoveryError {
 		Details: map[string]any{
 			"phase":       "version",
 			"protocol":    protocol,
-			"reason_code": boundedLabel(reason, 64),
+			"reason_code": boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }
@@ -153,14 +157,14 @@ func safeProtocolDetail(value string) string {
 		return ""
 	}
 	if value == unknownValue || protocolVersionPattern.MatchString(value) || strings.HasPrefix(value, "http_") {
-		return boundedLabel(value, 32)
+		return boundedLabel(value, maxPhaseLabelBytes)
 	}
 	return "invalid"
 }
 
 func newProtocolInvalidAt(phase, protocol, reason string, cause error) *DiscoveryError {
 	err := newProtocolInvalid(protocol, reason, cause)
-	err.Details["phase"] = boundedLabel(phase, 32)
+	err.Details["phase"] = boundedLabel(phase, maxPhaseLabelBytes)
 	return err
 }
 
@@ -170,8 +174,8 @@ func newUnsupportedWebMCP(browserID, targetID string) *DiscoveryError {
 		Message:   "target does not provide WebMCP",
 		Retryable: false,
 		Details: map[string]any{
-			"browser_id":          boundedLabel(browserID, 64),
-			"target_id":           boundedLabel(targetID, 64),
+			"browser_id":          boundedLabel(browserID, maxDetailLabelBytes),
+			"target_id":           boundedLabel(targetID, maxDetailLabelBytes),
 			"required_capability": "webmcp",
 		},
 	}
@@ -184,7 +188,7 @@ func newNoEligibleTab(browserID string, options TargetListOptions, candidateCoun
 	}
 	details := map[string]any{"filters": filters, "candidate_count": candidateCount}
 	if browserID != "" {
-		details["browser_id"] = boundedLabel(browserID, 64)
+		details["browser_id"] = boundedLabel(browserID, maxDetailLabelBytes)
 	}
 	if options.OriginContains != "" {
 		filters["origin_contains"] = boundedLabel(options.OriginContains, maxOriginFilterLabelBytes)
@@ -341,10 +345,10 @@ func newStaleSelection(browserID, targetID string, selectedGeneration uint64, re
 		Message:   "the selected browser target is no longer current",
 		Retryable: true,
 		Details: map[string]any{
-			"browser_id":          boundedLabel(browserID, 64),
-			"target_id":           boundedLabel(targetID, 64),
+			"browser_id":          boundedLabel(browserID, maxDetailLabelBytes),
+			"target_id":           boundedLabel(targetID, maxDetailLabelBytes),
 			"selected_generation": selectedGeneration,
-			"reason":              boundedLabel(reason, 64),
+			"reason":              boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }
@@ -356,10 +360,10 @@ func newTargetAttachFailed(browserID, targetID, phase, reason string, cause erro
 		Retryable: true,
 		Cause:     cause,
 		Details: map[string]any{
-			"browser_id":  boundedLabel(browserID, 64),
-			"target_id":   boundedLabel(targetID, 64),
-			"phase":       boundedLabel(phase, 32),
-			"reason_code": boundedLabel(reason, 64),
+			"browser_id":  boundedLabel(browserID, maxDetailLabelBytes),
+			"target_id":   boundedLabel(targetID, maxDetailLabelBytes),
+			"phase":       boundedLabel(phase, maxPhaseLabelBytes),
+			"reason_code": boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }
@@ -370,7 +374,7 @@ func newBrowserDisconnected(browserID, targetID, phase string, cause error) *Dis
 	} else {
 		browserID = strings.TrimSpace(browserID)
 	}
-	phase = boundedLabel(phase, 32)
+	phase = boundedLabel(phase, maxPhaseLabelBytes)
 	if phase == "" {
 		phase = phaseDisconnect
 	}

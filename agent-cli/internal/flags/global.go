@@ -93,10 +93,18 @@ type LoopFlags struct {
 	TraceID                  string  // Resume from an existing trace ID
 }
 
+const (
+	// defaultLoopMaxIterations is the default iteration cap for --loop mode.
+	defaultLoopMaxIterations = 5
+	// defaultContextPressureThreshold is the default context-window fill ratio (0-1)
+	// at which the loop warns about context pressure.
+	defaultContextPressureThreshold = 0.8
+)
+
 // NewLoopFlags returns default loop flags.
 func NewLoopFlags() *LoopFlags {
 	return &LoopFlags{
-		MaxIterations:            5,
-		ContextPressureThreshold: 0.8,
+		MaxIterations:            defaultLoopMaxIterations,
+		ContextPressureThreshold: defaultContextPressureThreshold,
 	}
 }

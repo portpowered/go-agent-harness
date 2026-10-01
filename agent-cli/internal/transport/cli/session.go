@@ -291,25 +291,27 @@ const sessionCommandLongHelp = "Run a bidirectional session inference capture or
 	"Session history management remains available through the show, list, and delete subcommands.\n\n" +
 	filesystemPolicyHelp
 
-// sessionModeFlagNames lists the non-browser flags whose presence names an
+// sessionModeFlagNames returns the non-browser flags whose presence names an
 // explicit session action. Pure browser flags are deliberately excluded: they
 // keep their own dedicated non-admission contract via hasSessionBrowserFlag
 // and browserToolsAdmission, tested by TestSessionBrowserNonAdmissionReturnsHelpWithoutSetup.
-var sessionModeFlagNames = []string{
-	"record",
-	"record-dir",
-	"replay",
-	"replay-timing",
-	"prompt",
-	"system-prompt",
-	"audio-in",
-	"audio-out",
-	"trace-audio",
-	"audio-in-turn",
-	"audio-in-turn-barge",
-	"audio-interrupt",
-	"audio-interrupt-on-tool",
-	"image",
+func sessionModeFlagNames() []string {
+	return []string{
+		"record",
+		"record-dir",
+		"replay",
+		"replay-timing",
+		"prompt",
+		"system-prompt",
+		"audio-in",
+		"audio-out",
+		"trace-audio",
+		"audio-in-turn",
+		"audio-in-turn-barge",
+		"audio-interrupt",
+		"audio-interrupt-on-tool",
+		"image",
+	}
 }
 
 // sessionHasExplicitMode reports whether the invocation names a concrete
@@ -333,7 +335,7 @@ func sessionHasExplicitMode(cmd *cobra.Command, args []string, imagePaths []stri
 	if cmd == nil {
 		return false
 	}
-	for _, name := range sessionModeFlagNames {
+	for _, name := range sessionModeFlagNames() {
 		if cmd.Flags().Changed(name) {
 			return true
 		}
@@ -345,7 +347,7 @@ func isBareSessionInvocation(cmd *cobra.Command, args []string, hasSessionMode b
 	if cmd == nil || hasSessionMode || len(args) > 0 || len(imagePaths) > 0 || hasSessionBrowserFlag(cmd) {
 		return false
 	}
-	for _, name := range sessionModeFlagNames {
+	for _, name := range sessionModeFlagNames() {
 		if cmd.Flags().Changed(name) {
 			return false
 		}
@@ -374,7 +376,7 @@ func isPassiveLiveInvocation(cmd *cobra.Command, args []string, imagePaths []str
 	if !cmd.Flags().Changed("record") && !cmd.Flags().Changed("audio-out") && !cmd.Flags().Changed("trace-audio") {
 		return false
 	}
-	for _, name := range sessionModeFlagNames {
+	for _, name := range sessionModeFlagNames() {
 		if name != "record" && name != "audio-out" && name != "trace-audio" && cmd.Flags().Changed(name) {
 			return false
 		}

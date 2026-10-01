@@ -10,6 +10,13 @@ import (
 
 const BrowserDefaultManagedOpen = "about:blank"
 
+const (
+	// browserDefaultInvocationTimeout bounds a single browser tool invocation.
+	browserDefaultInvocationTimeout = 30 * time.Second
+	// browserDefaultPayloadLimitBytes caps browser tool input and result payloads (256 KiB).
+	browserDefaultPayloadLimitBytes = 256 << 10
+)
+
 // BrowserConnectionMode identifies which owner supplies the browser
 // endpoint after configuration precedence has been resolved.
 type BrowserConnectionMode string
@@ -55,9 +62,9 @@ func DefaultBrowserConfig() BrowserConfig {
 			CancelOnInterrupt: BrowserCancelOnInterruptReadOnly,
 		},
 		Limits: BrowserLimitsConfig{
-			InvocationTimeout:  30 * time.Second,
-			MaxInputBytes:      262144,
-			MaxResultBytes:     262144,
+			InvocationTimeout:  browserDefaultInvocationTimeout,
+			MaxInputBytes:      browserDefaultPayloadLimitBytes,
+			MaxResultBytes:     browserDefaultPayloadLimitBytes,
 			SerializePerTarget: true,
 		},
 		Recording: BrowserRecordingConfig{

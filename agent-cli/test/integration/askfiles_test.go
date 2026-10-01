@@ -70,17 +70,17 @@ func (r *recordingInferencer) hasUserMessageWithFilePart(name string) bool {
 	return false
 }
 
-// TestAskWithImageFile runs ask with a prompt and an image file path and asserts the
-// inferencer receives a user message containing an ImagePart (e.g. image/jpeg).
-func TestAskWithImageFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	// Minimal content; extension drives MIME type in LoadContentPart
-	imgPath := filepath.Join(tmpDir, "photo.jpg")
-	if err := os.WriteFile(imgPath, []byte("\xff\xd8\xff fake jpeg"), 0644); err != nil {
-		t.Fatalf("write image file: %v", err)
+// runAskWithAttachment writes an attachment named fileName into a temp dir,
+// runs `ask <prompt> <attachment>` against a recording inferencer, and returns
+// the inferencer so the caller can assert on the recorded request.
+func runAskWithAttachment(t *testing.T, fileName string, content []byte, prompt, response string) *recordingInferencer {
+	t.Helper()
+	attachmentPath := filepath.Join(t.TempDir(), fileName)
+	if err := os.WriteFile(attachmentPath, content, 0644); err != nil {
+		t.Fatalf("write attachment %s: %v", fileName, err)
 	}
 
-	rec := &recordingInferencer{response: "Looks like an image."}
+	rec := &recordingInferencer{response: response}
 	exec := &mockToolExecutor{}
 
 	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
@@ -92,53 +92,32 @@ func TestAskWithImageFile(t *testing.T) {
 	rootCmd := agentCLI.Generate()
 	rootCmd.SetOut(testWriter.Stdout())
 	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"ask", "describe this picture", imgPath})
+	rootCmd.SetArgs([]string{"ask", prompt, attachmentPath})
 
-	ctx := context.Background()
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
+	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("execute ask: %v", err)
 	}
+	if !rec.containsSystemPrompt(prompt) {
+		t.Errorf("inference request should contain prompt text %q", prompt)
+	}
+	return rec
+}
 
+// TestAskWithImageFile runs ask with a prompt and an image file path and asserts the
+// inferencer receives a user message containing an ImagePart (e.g. image/jpeg).
+func TestAskWithImageFile(t *testing.T) {
+	// Minimal content; extension drives MIME type in LoadContentPart
+	rec := runAskWithAttachment(t, "photo.jpg", []byte("\xff\xd8\xff fake jpeg"), "describe this picture", "Looks like an image.")
 	if !rec.hasUserMessageWithImagePart("image/jpeg") {
 		t.Error("inference request should contain a user message with an ImagePart (image/jpeg); recorded messages did not")
-	}
-	if !rec.containsSystemPrompt("describe this picture") {
-		t.Error("inference request should contain prompt text \"describe this picture\"")
 	}
 }
 
 // TestAskWithAudioFile runs ask with a prompt and an audio file path and asserts the
 // inferencer receives a user message containing an AudioPart.
 func TestAskWithAudioFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	audioPath := filepath.Join(tmpDir, "recording.mp3")
-	if err := os.WriteFile(audioPath, []byte("fake mp3 content"), 0644); err != nil {
-		t.Fatalf("write audio file: %v", err)
-	}
-
-	rec := &recordingInferencer{response: "Sounds good."}
-	exec := &mockToolExecutor{}
-
-	agentCLI, err := wire.InitializeMockAgentCLI(exec, rec)
-	if err != nil {
-		t.Fatalf("failed to initialize mock CLI: %v", err)
-	}
-
-	testWriter := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(testWriter.Stdout())
-	rootCmd.SetErr(testWriter.Stderr())
-	rootCmd.SetArgs([]string{"ask", "what is this audio?", audioPath})
-
-	ctx := context.Background()
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		t.Fatalf("execute ask: %v", err)
-	}
-
+	rec := runAskWithAttachment(t, "recording.mp3", []byte("fake mp3 content"), "what is this audio?", "Sounds good.")
 	if !rec.hasUserMessageWithAudioPart("audio/mpeg") {
 		t.Error("inference request should contain a user message with an AudioPart (audio/mpeg); recorded messages did not")
-	}
-	if !rec.containsSystemPrompt("what is this audio?") {
-		t.Error("inference request should contain prompt text \"what is this audio?\"")
 	}
 }

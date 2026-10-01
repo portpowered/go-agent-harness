@@ -129,31 +129,35 @@ func transportProjectionFailure(scenario, leftTransport, rightTransport string, 
 	return fmt.Sprintf("scenario %q %s and %s projections diverged:\n%s", scenario, leftTransport, rightTransport, parity.FormatReport(differences))
 }
 
+// projectionFacts are the per-category values a divergence case varies; every
+// other projection field is held fixed so each category differs exactly once.
+type projectionFacts struct {
+	turnKind     string
+	frameCount   int
+	transcript   string
+	toolName     string
+	interruption string
+	terminal     string
+}
+
+func divergenceProjection(facts projectionFacts) parity.Projection {
+	return parity.Projection{
+		Turns: []parity.TurnBoundary{{Order: 1, Tick: 1, Kind: facts.turnKind, Boundary: "start", ID: "turn-1", Role: "user", Payload: []byte("turn")}},
+		Audio: parity.AudioSummary{
+			FrameCount: facts.frameCount,
+			TotalBytes: 2,
+			Frames:     []parity.AudioFrame{{Tick: 2, Bytes: []byte{1, 2}, Payload: []byte("audio")}},
+		},
+		Transcripts:   []parity.TranscriptFact{{Order: 1, Tick: 3, Text: facts.transcript, Payload: []byte("hello")}},
+		ToolCalls:     []parity.ToolCallFact{{Order: 1, ID: "tool-1", Name: facts.toolName, Arguments: []byte(`{"q":"x"}`), Result: []byte(`{"ok":true}`), CallTick: 4, ResultTick: 5, CallPayload: []byte("call"), ResultPayload: []byte("result")}},
+		Interruptions: []parity.InterruptionFact{{Order: 1, Tick: 6, Reason: facts.interruption, Provenance: "client", Payload: []byte("interrupt")}},
+		Terminal:      &parity.TerminalOutcome{Tick: 7, Reason: facts.terminal, Provenance: "provider", Payload: []byte("terminal")},
+	}
+}
+
 func TestTransportProjectionDivergenceNamesEveryFactCategory(t *testing.T) {
-	expected := parity.Projection{
-		Turns: []parity.TurnBoundary{{Order: 1, Tick: 1, Kind: "turn.start", Boundary: "start", ID: "turn-1", Role: "user", Payload: []byte("turn")}},
-		Audio: parity.AudioSummary{
-			FrameCount: 1,
-			TotalBytes: 2,
-			Frames:     []parity.AudioFrame{{Tick: 2, Bytes: []byte{1, 2}, Payload: []byte("audio")}},
-		},
-		Transcripts:   []parity.TranscriptFact{{Order: 1, Tick: 3, Text: "hello", Payload: []byte("hello")}},
-		ToolCalls:     []parity.ToolCallFact{{Order: 1, ID: "tool-1", Name: "lookup", Arguments: []byte(`{"q":"x"}`), Result: []byte(`{"ok":true}`), CallTick: 4, ResultTick: 5, CallPayload: []byte("call"), ResultPayload: []byte("result")}},
-		Interruptions: []parity.InterruptionFact{{Order: 1, Tick: 6, Reason: "barge-in", Provenance: "client", Payload: []byte("interrupt")}},
-		Terminal:      &parity.TerminalOutcome{Tick: 7, Reason: "provider_close", Provenance: "provider", Payload: []byte("terminal")},
-	}
-	actual := parity.Projection{
-		Turns: []parity.TurnBoundary{{Order: 1, Tick: 1, Kind: "turn.end", Boundary: "start", ID: "turn-1", Role: "user", Payload: []byte("turn")}},
-		Audio: parity.AudioSummary{
-			FrameCount: 2,
-			TotalBytes: 2,
-			Frames:     []parity.AudioFrame{{Tick: 2, Bytes: []byte{1, 2}, Payload: []byte("audio")}},
-		},
-		Transcripts:   []parity.TranscriptFact{{Order: 1, Tick: 3, Text: "goodbye", Payload: []byte("hello")}},
-		ToolCalls:     []parity.ToolCallFact{{Order: 1, ID: "tool-1", Name: "search", Arguments: []byte(`{"q":"x"}`), Result: []byte(`{"ok":true}`), CallTick: 4, ResultTick: 5, CallPayload: []byte("call"), ResultPayload: []byte("result")}},
-		Interruptions: []parity.InterruptionFact{{Order: 1, Tick: 6, Reason: "user_cancel", Provenance: "client", Payload: []byte("interrupt")}},
-		Terminal:      &parity.TerminalOutcome{Tick: 7, Reason: "client_close", Provenance: "provider", Payload: []byte("terminal")},
-	}
+	expected := divergenceProjection(projectionFacts{turnKind: "turn.start", frameCount: 1, transcript: "hello", toolName: "lookup", interruption: "barge-in", terminal: "provider_close"})
+	actual := divergenceProjection(projectionFacts{turnKind: "turn.end", frameCount: 2, transcript: "goodbye", toolName: "search", interruption: "user_cancel", terminal: "client_close"})
 
 	failure := transportProjectionFailure("negative-path", "WebSocket", "WebRTC", expected, actual)
 	if failure == "" {

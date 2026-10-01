@@ -109,7 +109,7 @@ func writeSessionToolConfig(t *testing.T, configDir string, execEnabled bool) {
 	t.Helper()
 	var yaml strings.Builder
 	yaml.WriteString("model:\n  provider: openai\n  openai:\n    model: gpt-realtime\ntools:\n  exec:\n    enable_deny_patterns: true\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		enabled := id == "exec" && execEnabled
 		fmt.Fprintf(&yaml, "    - id: %s\n      enabled: %t\n", id, enabled)
 	}

@@ -24,34 +24,25 @@ import (
 // v3bFixtureDir holds the recorded barge-in-during-tool-call session fixtures
 // for the s2s v3b vertical. All evidence flows through the real CLI probe run
 // command in replay mode; no internal loop functions are called directly.
-var v3bFixtureDir = "testdata"
+const v3bFixtureDir = "testdata"
 
 func TestV3BBargeInDuringToolCallDeliversToolResult(t *testing.T) {
-	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-delivered.session.json")
-	scenarioPath := writeV3BScenario(t, "v3b-delivered", fixture, true)
-
-	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
-	if err != nil {
-		t.Fatalf("initialize CLI: %v", err)
-	}
-	writer := NewTestWriter()
-	rootCmd := agentCLI.Generate()
-	rootCmd.SetOut(writer.Stdout())
-	rootCmd.SetErr(writer.Stderr())
-	rootCmd.SetArgs([]string{"probe", "run", scenarioPath, "--replay", fixture, "--json"})
-	if execErr := rootCmd.ExecuteContext(context.Background()); execErr != nil {
-		t.Fatalf("delivered-result scenario must pass via CLI: %v\nstderr=%s", execErr, writer.StderrString())
-	}
-	result := decodeSingleV3BResult(t, writer.StdoutString())
-	if result["pass"] != true {
-		t.Fatalf("scenario must pass: %v", result)
-	}
-	assertExpectationKindsPass(t, result, "tool-result-delivered", "no-orphaned-tool-result", "terminal-reason")
+	runPassingV3BScenario(t, "v3b-delivered", "s2s-v3b-barge-in-tool-result-delivered.session.json",
+		"delivered-result scenario must pass via CLI", "tool-result-delivered", "no-orphaned-tool-result", "terminal-reason")
 }
 
 func TestV3BBargeInDuringToolCallExplicitDiscard(t *testing.T) {
-	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-discarded.session.json")
-	scenarioPath := writeV3BScenario(t, "v3b-discarded", fixture, true)
+	runPassingV3BScenario(t, "v3b-discarded", "s2s-v3b-barge-in-tool-result-discarded.session.json",
+		"discard scenario must exit cleanly", "tool-result-discarded", "no-orphaned-tool-result", "terminal-reason")
+}
+
+// runPassingV3BScenario replays one recorded v3b fixture through the real CLI
+// probe run command and requires the scenario and each named expectation kind
+// to pass.
+func runPassingV3BScenario(t *testing.T, id, fixtureName, execFailure string, expectationKinds ...string) {
+	t.Helper()
+	fixture := filepath.Join(v3bFixtureDir, fixtureName)
+	scenarioPath := writeV3BScenario(t, id, true)
 
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
@@ -63,18 +54,18 @@ func TestV3BBargeInDuringToolCallExplicitDiscard(t *testing.T) {
 	rootCmd.SetErr(writer.Stderr())
 	rootCmd.SetArgs([]string{"probe", "run", scenarioPath, "--replay", fixture, "--json"})
 	if execErr := rootCmd.ExecuteContext(context.Background()); execErr != nil {
-		t.Fatalf("discard scenario must exit cleanly: %v\nstderr=%s", execErr, writer.StderrString())
+		t.Fatalf("%s: %v\nstderr=%s", execFailure, execErr, writer.StderrString())
 	}
 	result := decodeSingleV3BResult(t, writer.StdoutString())
 	if result["pass"] != true {
 		t.Fatalf("scenario must pass: %v", result)
 	}
-	assertExpectationKindsPass(t, result, "tool-result-discarded", "no-orphaned-tool-result", "terminal-reason")
+	assertExpectationKindsPass(t, result, expectationKinds...)
 }
 
 func TestV3BNegativeControlOrphanedToolResultFails(t *testing.T) {
 	fixture := filepath.Join(v3bFixtureDir, "s2s-v3b-barge-in-tool-result-orphaned.session.json")
-	scenarioPath := writeV3BScenario(t, "v3b-orphaned", fixture, false)
+	scenarioPath := writeV3BScenario(t, "v3b-orphaned", false)
 
 	agentCLI, err := wire.InitializeMockAgentCLI(&mockToolExecutor{}, &mockInferencer{response: "unused"})
 	if err != nil {
@@ -120,7 +111,7 @@ func TestV3BWrongFunctionCallOutputSubtypeFails(t *testing.T) {
 		item := mustAs[map[string]any](t, payload["item"])
 		item["type"] = rtItemMessage
 	})
-	scenarioPath := writeV3BScenario(t, "v3b-delivered-wrong-subtype", fixture, true)
+	scenarioPath := writeV3BScenario(t, "v3b-delivered-wrong-subtype", true)
 
 	result, execErr := runV3BScenario(t, scenarioPath, fixture)
 	if execErr == nil {
@@ -135,7 +126,7 @@ func TestV3BWrongDirectionDiscardFails(t *testing.T) {
 	fixture := writeMutatedV3BFixture(t, source, "tool.result.discarded", func(record map[string]any) {
 		record["direction"] = "server_to_client"
 	})
-	scenarioPath := writeV3BScenario(t, "v3b-discarded-wrong-direction", fixture, true)
+	scenarioPath := writeV3BScenario(t, "v3b-discarded-wrong-direction", true)
 
 	result, execErr := runV3BScenario(t, scenarioPath, fixture)
 	if execErr == nil {
@@ -212,7 +203,7 @@ func writeMutatedV3BFixture(t *testing.T, source, recordType string, mutate func
 
 // writeV3BScenario writes an on-disk scenario JSON selecting the new
 // measurable expectations, exercising the CLI scenario-file loading path.
-func writeV3BScenario(t *testing.T, id, fixture string, expectNoOrphan bool) string {
+func writeV3BScenario(t *testing.T, id string, expectNoOrphan bool) string {
 	t.Helper()
 	expectations := `[
 		{"type": "tool_result_delivered", "tool_call_id": "call_v3b_weather"},

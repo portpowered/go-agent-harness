@@ -125,13 +125,16 @@ type RedactionConfig struct {
 type BrowserRedactionConfig = RedactionConfig
 type RedactionOptions = RedactionConfig
 
-var redactionPolicyFieldOrder = []string{
-	"url_query",
-	"url_fragment",
-	"tool_arguments",
-	"result_json_pointers",
-	"digest_tools",
-	"raw_cdp",
+// redactionPolicyFieldOrder returns the required redaction policy JSON fields.
+func redactionPolicyFieldOrder() []string {
+	return []string{
+		"url_query",
+		"url_fragment",
+		"tool_arguments",
+		"result_json_pointers",
+		"digest_tools",
+		"raw_cdp",
+	}
 }
 
 // Validate checks the exact C0 policy values. RawCDP is accepted here so the
@@ -215,14 +218,15 @@ func (p *RedactionPolicy) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return wrapPolicyError("policy", err)
 	}
-	allowed := make(map[string]struct{}, len(redactionPolicyFieldOrder))
-	for _, field := range redactionPolicyFieldOrder {
+	policyFields := redactionPolicyFieldOrder()
+	allowed := make(map[string]struct{}, len(policyFields))
+	for _, field := range policyFields {
 		allowed[field] = struct{}{}
 	}
 	if err := rejectUnknownFields(fields, allowed); err != nil {
 		return wrapPolicyError("policy", err)
 	}
-	for _, field := range redactionPolicyFieldOrder {
+	for _, field := range policyFields {
 		if _, ok := fields[field]; !ok {
 			return wrapPolicyError(field, errors.New("is required"))
 		}

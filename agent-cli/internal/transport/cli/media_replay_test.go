@@ -140,9 +140,7 @@ func (w *failAfterWriter) Write(p []byte) (int, error) {
 
 func executeChatWithWriters(t *testing.T, agentCLI *AgentCLI, args []string, input string, out, errOut io.Writer) error {
 	t.Helper()
-	original := chatInputIsInteractive
-	chatInputIsInteractive = func(*cobra.Command) bool { return true }
-	t.Cleanup(func() { chatInputIsInteractive = original })
+	agentCLI.router.ChatCommand.inputIsInteractive = func(*cobra.Command) bool { return true }
 	root := agentCLI.Generate()
 	root.SetIn(strings.NewReader(input))
 	root.SetOut(out)

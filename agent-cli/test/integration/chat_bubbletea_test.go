@@ -38,7 +38,7 @@ func typeInput(model services.ChatModel, text string) services.ChatModel {
 // pressEnter simulates pressing Enter and executes any returned commands
 // until the streaming turn is complete (streamDoneMsg or error).
 // It handles tea.BatchMsg by expanding batch commands into the work queue.
-func pressEnter(model services.ChatModel) (services.ChatModel, string) {
+func pressEnter(model services.ChatModel) services.ChatModel {
 	m, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	model = asChatModel(m)
 	cmds := []tea.Cmd{cmd}
@@ -62,7 +62,7 @@ func pressEnter(model services.ChatModel) (services.ChatModel, string) {
 			cmds = append(cmds, nextCmd)
 		}
 	}
-	return model, ""
+	return model
 }
 
 // TestChatModel_BackspaceEditing verifies that the backspace key removes the
@@ -117,9 +117,9 @@ func TestChatModel_SessionPersistence(t *testing.T) {
 	model = runInit(model)
 
 	model = typeInput(model, "first message")
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 	model = typeInput(model, "second message")
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	// Both turns should appear in ViewHistory (same session used for both turns).
 	history := model.ViewHistory()
@@ -240,7 +240,7 @@ func TestChatModel_MarkdownRendering(t *testing.T) {
 	model = runInit(model)
 
 	model = typeInput(model, "show markdown")
-	model, _ = pressEnter(model)
+	model = pressEnter(model)
 
 	// Committed content is in ViewHistory() after streaming completes.
 	history := model.ViewHistory()

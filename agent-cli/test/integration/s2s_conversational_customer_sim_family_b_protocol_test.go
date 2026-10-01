@@ -77,7 +77,7 @@ func (f *familyBProviderFixture) handleClientEvent(connection *websocket.Conn, e
 		return f.handleInputAudio(connection, event.Audio)
 	case rtEventConversationItemCreate:
 		if event.Item.Type == rtItemFunctionCallOutput {
-			return f.handleToolResult(connection, event.Item.CallID, event.Item.Output)
+			return f.handleToolResult(event.Item.CallID, event.Item.Output)
 		}
 	case familyBResponseCancelEvent:
 		f.recordCancellation()
@@ -208,7 +208,7 @@ func (f *familyBProviderFixture) sendToolCall(connection *websocket.Conn, respon
 	})
 }
 
-func (f *familyBProviderFixture) handleToolResult(connection *websocket.Conn, callID, output string) error {
+func (f *familyBProviderFixture) handleToolResult(callID, output string) error {
 	f.mu.Lock()
 	var expected string
 	var actionID string

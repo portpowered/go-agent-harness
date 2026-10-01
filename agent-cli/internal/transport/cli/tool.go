@@ -251,10 +251,10 @@ func (c *ToolCommand) execute(cmd *cobra.Command, ctx context.Context, capabilit
 	if err != nil {
 		return fmt.Errorf("tool %q: %w", toolID, err)
 	}
-	return c.writeToolResponse(cmd, toolID, response)
+	return c.writeToolResponse(cmd, response)
 }
 
-func (c *ToolCommand) writeToolResponse(cmd *cobra.Command, toolID string, response messages.ToolCallResponse) error {
+func (c *ToolCommand) writeToolResponse(cmd *cobra.Command, response messages.ToolCallResponse) error {
 	if refusal, ok := filesystemRefusalFromResponse(response); ok {
 		if err := c.writeRefusal(cmd.ErrOrStderr(), refusal); err != nil {
 			return err

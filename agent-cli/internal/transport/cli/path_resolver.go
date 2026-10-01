@@ -70,23 +70,9 @@ func (r *pathResolver) Resolve(value string) (string, error) {
 	if r == nil {
 		r = newPathResolver()
 	}
-	var home string
-	if username == "" {
-		if r.currentHome == nil {
-			return "", &PathResolutionError{Path: value, Err: fmt.Errorf("current home lookup is unavailable")}
-		}
-		home, err = r.currentHome()
-		if err != nil {
-			return "", &PathResolutionError{Path: value, Err: fmt.Errorf("current home lookup failed: %w", err)}
-		}
-	} else {
-		if r.lookupUser == nil {
-			return "", &PathResolutionError{Path: value, Err: fmt.Errorf("named-user lookup is unavailable")}
-		}
-		home, err = r.lookupUser(username)
-		if err != nil {
-			return "", &PathResolutionError{Path: value, Err: fmt.Errorf("lookup home for user %q failed: %w", username, err)}
-		}
+	home, err := r.lookupHome(username)
+	if err != nil {
+		return "", &PathResolutionError{Path: value, Err: err}
 	}
 	if home == "" {
 		who := "current user"
@@ -130,4 +116,27 @@ func splitLeadingTildePath(value string) (username, suffix string, err error) {
 
 func isTildePathSeparator(value byte) bool {
 	return value == '/' || value == '\\'
+}
+
+// lookupHome resolves the home directory for username, or for the current
+// user when username is empty.
+func (r *pathResolver) lookupHome(username string) (string, error) {
+	if username == "" {
+		if r.currentHome == nil {
+			return "", fmt.Errorf("current home lookup is unavailable")
+		}
+		home, err := r.currentHome()
+		if err != nil {
+			return "", fmt.Errorf("current home lookup failed: %w", err)
+		}
+		return home, nil
+	}
+	if r.lookupUser == nil {
+		return "", fmt.Errorf("named-user lookup is unavailable")
+	}
+	home, err := r.lookupUser(username)
+	if err != nil {
+		return "", fmt.Errorf("lookup home for user %q failed: %w", username, err)
+	}
+	return home, nil
 }

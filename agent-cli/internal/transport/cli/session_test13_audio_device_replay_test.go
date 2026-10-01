@@ -64,7 +64,7 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 		}
 		providerChunks = append(providerChunks, pcm16Bytes(t, packet))
 	}
-	want := mustResampleStream(t, providerChunks, wavio.Rate24kHz, audio.SampleRate)
+	want := mustResampleProviderToDevice(t, providerChunks)
 
 	capturePath := filepath.Join(t.TempDir(), fixtureName+"-audio-device.session.json")
 	writeOpenAIAudioBurstCapture(t, capturePath, fixtureName, deltas)
@@ -281,7 +281,7 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	frames := playbackBurstFrames(capacity/audio.FrameSize + playbackBurstExtraFrames)
 	// The realtime provider speaks 24 kHz; the device sink owns one continuous
 	// resampler, so the exact device reference is the streamed conversion.
-	want := mustResampleStream(t, frames, wavio.Rate24kHz, audio.SampleRate)
+	want := mustResampleProviderToDevice(t, frames)
 
 	registry, err := devicegw.NewVirtualRegistry(devicegw.DefaultVirtualBackendConfig())
 	if err != nil {

@@ -7,8 +7,12 @@ import (
 	"strings"
 )
 
-// octetStreamMediaType is the generic binary media type.
-const octetStreamMediaType = "application/octet-stream"
+const (
+	// octetStreamMediaType is the generic binary media type.
+	octetStreamMediaType = "application/octet-stream"
+	// sniffLimitBytes is the most bytes net/http.DetectContentType inspects.
+	sniffLimitBytes = 512
+)
 
 // DetectMimeType detects the MIME type of the file at path using both magic
 // bytes (first 512 bytes via net/http.DetectContentType) and file extension.
@@ -30,7 +34,7 @@ func DetectMimeType(path string) (string, error) {
 // detectMimeTypeFromBytes is the pure logic, separated for testability.
 func detectMimeTypeFromBytes(data []byte, ext string) string {
 	magic := detectByMagicBytes(data)
-	extType := mimeByExt[strings.ToLower(ext)]
+	extType := mimeTypeForExtension(strings.ToLower(ext))
 
 	switch {
 	case magic != "" && magic != octetStreamMediaType && magic != "text/plain":
@@ -59,10 +63,10 @@ func detectByMagicBytes(data []byte) string {
 		return ""
 	}
 
-	// http.DetectContentType reads at most 512 bytes.
+	// http.DetectContentType reads at most sniffLimitBytes bytes.
 	sniff := data
-	if len(sniff) > 512 {
-		sniff = sniff[:512]
+	if len(sniff) > sniffLimitBytes {
+		sniff = sniff[:sniffLimitBytes]
 	}
 	detected := http.DetectContentType(sniff)
 

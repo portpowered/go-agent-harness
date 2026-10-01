@@ -12,10 +12,10 @@ import (
 
 // The committed s2s-v3c fixtures live with the integration suite's replay
 // corpus; every assertion here drives the public probe entrypoint offline.
-var v3cFixtureDir = filepath.Join("..", "..", "..", "test", "integration", "testdata")
+const v3cFixtureDir = "../../../test/integration/testdata"
 
 func v3cFixture(name string) string {
-	return filepath.Join(v3cFixtureDir, name)
+	return filepath.Join(filepath.FromSlash(v3cFixtureDir), name)
 }
 
 // The positive case replays three mid-response barge-ins whose bookkeeping
@@ -118,7 +118,7 @@ func TestProbeRunS2SV3CNegativeControlsFailNamingTheirInvariant(t *testing.T) {
 // passes while all three negative controls fail, and the summary reports
 // exactly that.
 func TestProbeRunS2SV3CSuiteSelectionSplitsPositiveFromControls(t *testing.T) {
-	run := executeCLI("probe", "run", "--replay", v3cFixtureDir,
+	run := executeCLI("probe", "run", "--replay", filepath.FromSlash(v3cFixtureDir),
 		"--json",
 		"--scenario", "s2s-v3c-barge-in-repeated",
 		"--scenario", "s2s-v3c-barge-in-repeated-duplicated-turn",

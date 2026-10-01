@@ -63,12 +63,15 @@ func screenDisplayBoundsWithContextAndProcess(ctx context.Context, idx int, proc
 	return resolutions[idx], nil
 }
 
+// darwinResolutionSubmatchCount is the full match plus width and height groups.
+const darwinResolutionSubmatchCount = 3
+
 func darwinDisplayResolutions(output string) []image.Rectangle {
 	lines := strings.Split(output, "\n")
 	resolutions := make([]image.Rectangle, 0, len(lines))
 	for _, line := range lines {
 		match := darwinDisplayResolutionPattern.FindStringSubmatch(line)
-		if len(match) != 3 {
+		if len(match) != darwinResolutionSubmatchCount {
 			continue
 		}
 		var width, height int

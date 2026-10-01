@@ -122,20 +122,22 @@ func openLoopbackTap(t *testing.T, registry *devicegw.VirtualRegistry, nativeID 
 // to an arbitrary sample count.
 func loopbackTone(n, seed int) []int16 {
 	samples := make([]int16, n)
-	state := uint32(seed*7919 + 1)
+	state := uint32(seed*7919 + 1) //nolint:gosec // deterministic bounded fixture
 	for i := range samples {
 		state = state*1664525 + 1013904223
-		samples[i] = int16(int32(state>>16)%24000 - 12000)
+		samples[i] = int16(int32(state>>16)%24000 - 12000) //nolint:gosec // bounded deterministic PCM fixture
 	}
 	return samples
 }
 
-// mustResampleStream mirrors the stream-owned DSP boundary: phase and filter
-// history continue across packet boundaries, and only the final packet flushes
-// the exact tail. Per-packet stateless conversion would compare a different
-// signal at every boundary.
-func mustResampleStream(t *testing.T, chunks [][]int16, from, to int) []int16 {
+// mustResampleProviderToDevice converts provider-rate (24 kHz) chunks to the
+// device rate (16 kHz), mirroring the stream-owned DSP boundary: phase and
+// filter history continue across packet boundaries, and only the final packet
+// flushes the exact tail. Per-packet stateless conversion would compare a
+// different signal at every boundary.
+func mustResampleProviderToDevice(t *testing.T, chunks [][]int16) []int16 {
 	t.Helper()
+	from, to := loopbackProviderRate, loopbackDeviceRate
 	resampler, err := wavio.NewPCM16Resampler(from, to)
 	if err != nil {
 		t.Fatalf("create streaming resampler %d -> %d Hz: %v", from, to, err)
@@ -466,7 +468,7 @@ func TestSessionVirtualDeviceLoopbackFidelity(t *testing.T) {
 		h.inbound.push(t, h.ctx, audio.PCMFrame{Samples: pushed[i], EndOfResponse: i == chunks-1})
 	}
 
-	want := mustResampleStream(t, pushed, loopbackProviderRate, loopbackDeviceRate)
+	want := mustResampleProviderToDevice(t, pushed)
 	got := make([]int16, 0, len(want))
 	for i := range pushed {
 		frame := make([]int16, audio.FrameSize)

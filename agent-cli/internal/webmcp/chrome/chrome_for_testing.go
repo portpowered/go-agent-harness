@@ -30,6 +30,16 @@ const (
 	chromeForTestingArchiveLimit     = 1<<30 + 1
 	chromeForTestingReadyLimit       = 64 << 10
 	chromeForTestingLockStaleAfter   = 10 * time.Minute
+	chromeForTestingLockFileLimit    = 64 << 10
+	chromeForTestingLockPollInterval = 50 * time.Millisecond
+	// chromeForTestingLockSearchRoots counts the lock search roots: the
+	// working directory, the executable directory and the source directory.
+	chromeForTestingLockSearchRoots = 3
+
+	// ownerOnlyDirMode and ownerOnlyFileMode keep the managed browser cache
+	// and profile private to the current user.
+	ownerOnlyDirMode  os.FileMode = 0o700
+	ownerOnlyFileMode os.FileMode = 0o600
 
 	chromeForTestingManifestPrefix = "https://googlechromelabs.github.io/chrome-for-testing/"
 	chromeForTestingDownloadPrefix = "https://storage.googleapis.com/chrome-for-testing-public/"
@@ -187,7 +197,7 @@ func LoadChromeForTestingLock(lockPath string) (ChromeForTestingLock, error) {
 	}
 	defer closeAfterRead(file)
 	var lock ChromeForTestingLock
-	decoder := json.NewDecoder(io.LimitReader(file, 64<<10))
+	decoder := json.NewDecoder(io.LimitReader(file, chromeForTestingLockFileLimit))
 	if err := decoder.Decode(&lock); err != nil {
 		return ChromeForTestingLock{}, err
 	}
@@ -240,7 +250,7 @@ func ResolveChromeForTestingLockPath(explicit string) (string, error) {
 			return value, nil
 		}
 	}
-	starts := make([]string, 0, 3)
+	starts := make([]string, 0, chromeForTestingLockSearchRoots)
 	if workingDir, err := os.Getwd(); err == nil {
 		starts = append(starts, workingDir)
 	}
@@ -261,15 +271,15 @@ func ResolveChromeForTestingLockPath(explicit string) (string, error) {
 }
 
 func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *http.Client, lock ChromeForTestingLock, platform string, requiredMajor int, cacheDir string) (ChromeExecutable, error) {
-	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+	if err := os.MkdirAll(cacheDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
-	if err := os.Chmod(cacheDir, 0o700); err != nil {
+	if err := os.Chmod(cacheDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	key := chromeForTestingCacheKey(platform, lock)
 	finalDir := filepath.Join(cacheDir, chromeForTestingCacheDirName, key)
-	if err := os.MkdirAll(filepath.Dir(finalDir), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(finalDir), ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	unlock, err := acquireChromeForTestingLock(ctx, finalDir+chromeForTestingLockName)
@@ -289,7 +299,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 	defer removeBestEffort(os.RemoveAll, stagingDir)
-	if err := os.Chmod(stagingDir, 0o700); err != nil {
+	if err := os.Chmod(stagingDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", err)
 	}
 
@@ -298,7 +308,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 		return ChromeExecutable{}, newChromeForTestingError("archive_integrity", err)
 	}
 	extractDir := filepath.Join(stagingDir, chromeForTestingExtractedName)
-	if err := os.Mkdir(extractDir, 0o700); err != nil {
+	if err := os.Mkdir(extractDir, ownerOnlyDirMode); err != nil {
 		return ChromeExecutable{}, newChromeForTestingError("archive_layout", err)
 	}
 	if err := extractManagedChromeArchive(archivePath, extractDir, chromeArchiveExtractLimit); err != nil {
@@ -334,7 +344,7 @@ func (a *ChromeForTestingAcquirer) acquireCached(ctx context.Context, client *ht
 	}
 	markerTempName := markerTemp.Name()
 	defer removeBestEffort(os.Remove, markerTempName)
-	if chmodErr := markerTemp.Chmod(0o600); chmodErr != nil {
+	if chmodErr := markerTemp.Chmod(ownerOnlyFileMode); chmodErr != nil {
 		discardCleanupError(markerTemp.Close)
 		return ChromeExecutable{}, newChromeForTestingError("cache_unavailable", chmodErr)
 	}
@@ -397,11 +407,11 @@ func readReadyChromeCache(ctx context.Context, finalDir string, lock ChromeForTe
 }
 
 func acquireChromeForTestingLock(ctx context.Context, lockPath string) (func(), error) {
-	if err := os.Mkdir(filepath.Dir(lockPath), 0o700); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(filepath.Dir(lockPath), ownerOnlyDirMode); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 	for {
-		err := os.Mkdir(lockPath, 0o700)
+		err := os.Mkdir(lockPath, ownerOnlyDirMode)
 		if err == nil {
 			return func() { removeBestEffort(os.Remove, lockPath) }, nil
 		}
@@ -412,7 +422,7 @@ func acquireChromeForTestingLock(ctx context.Context, lockPath string) (func(), 
 			removeBestEffort(os.Remove, lockPath)
 			continue
 		}
-		timer := time.NewTimer(50 * time.Millisecond)
+		timer := time.NewTimer(chromeForTestingLockPollInterval)
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
@@ -455,7 +465,7 @@ func downloadAndVerifyManagedChrome(ctx context.Context, client *http.Client, en
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("chrome for testing archive returned HTTP status %d", response.StatusCode)
 	}
-	file, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_EXCL, ownerOnlyFileMode)
 	if err != nil {
 		return err
 	}

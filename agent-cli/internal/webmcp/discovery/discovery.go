@@ -29,6 +29,10 @@ import (
 
 const defaultProbeTimeout = 5 * time.Second
 
+// protocolVersionSubmatches is the full match plus the major and minor
+// captures of protocolVersionPattern.
+const protocolVersionSubmatches = 3
+
 var (
 	protocolVersionPattern = regexp.MustCompile(`^([0-9]+)\.([0-9]+)$`)
 	publicIDPattern        = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -435,8 +439,12 @@ type endpointAttempt struct {
 	resolve func(context.Context) (Endpoint, error)
 }
 
+// explicitEndpointInputCount is the number of explicit endpoint inputs: CDP
+// URL, browser WebSocket endpoint and user data dir.
+const explicitEndpointInputCount = 3
+
 func (s *Service) explicitAttempts(inputs ConnectionInputs) []endpointAttempt {
-	attempts := make([]endpointAttempt, 0, 3+len(inputs.ConfiguredSources))
+	attempts := make([]endpointAttempt, 0, explicitEndpointInputCount+len(inputs.ConfiguredSources))
 	if strings.TrimSpace(inputs.CDPURL) != "" {
 		endpoint := Endpoint{CDPURL: inputs.CDPURL}
 		attempts = append(attempts, endpointAttempt{
@@ -856,7 +864,7 @@ func safeProtocol(value string, required bool) (string, string) {
 		return value, ""
 	}
 	matches := protocolVersionPattern.FindStringSubmatch(value)
-	if len(matches) != 3 {
+	if len(matches) != protocolVersionSubmatches {
 		return value, "unsupported_protocol_version"
 	}
 	major, err := strconv.Atoi(matches[1])
@@ -910,20 +918,31 @@ func preferFailure(current, next *DiscoveryError) *DiscoveryError {
 	return current
 }
 
+// Failure ranks order discovery failures from least to most informative; the
+// highest-ranked failure across attempts is reported.
+const (
+	failureRankNone = iota
+	failureRankNotFound
+	failureRankUnreachable
+	failureRankProtocolInvalid
+	failureRankRemoteDenied
+	failureRankBrowserDisconnected
+)
+
 func failureRank(code Code) int {
 	switch code {
 	case CodeBrowserDisconnected:
-		return 5
+		return failureRankBrowserDisconnected
 	case CodeRemoteEndpointDenied:
-		return 4
+		return failureRankRemoteDenied
 	case CodeBrowserProtocolInvalid:
-		return 3
+		return failureRankProtocolInvalid
 	case CodeEndpointUnreachable:
-		return 2
+		return failureRankUnreachable
 	case CodeEndpointNotFound:
-		return 1
+		return failureRankNotFound
 	default:
-		return 0
+		return failureRankNone
 	}
 }
 

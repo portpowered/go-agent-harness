@@ -87,7 +87,7 @@ func (s *ConfigStorage) Commit(expected ConfigRevision, data []byte) (err error)
 	if path == "." || strings.TrimSpace(path) == "" {
 		return errors.New("config path is empty")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), configDirPerm); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
 
@@ -153,7 +153,7 @@ func formatConfigRevision(revision ConfigRevision) string {
 
 func configFileMode(path string, revision ConfigRevision) (fs.FileMode, error) {
 	if !revision.Exists {
-		return 0o600, nil
+		return configFilePerm, nil
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -164,7 +164,7 @@ func configFileMode(path string, revision ConfigRevision) (fs.FileMode, error) {
 	}
 	mode := info.Mode().Perm()
 	if mode == 0 {
-		return 0o600, nil
+		return configFilePerm, nil
 	}
 	return mode, nil
 }
@@ -238,7 +238,7 @@ func prepareConfigTemp(path string, data []byte, mode fs.FileMode) (temporaryPat
 	// Keep the private staging file restricted while it is visible in the
 	// shared directory. Apply the destination mode only immediately before
 	// publication.
-	if err := temporary.Chmod(0o600); err != nil {
+	if err := temporary.Chmod(configFilePerm); err != nil {
 		return "", fmt.Errorf("set private temporary file permissions: %w", err)
 	}
 	if _, err := temporary.Write(data); err != nil {
@@ -266,7 +266,7 @@ func acquireConfigCommitLock(path string) (*configCommitLock, error) {
 	lockPath := path + configCommitLockSuffix
 	deadline := time.Now().Add(configCommitLockWait)
 	for {
-		file, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, configFilePerm)
 		if err == nil {
 			return &configCommitLock{path: lockPath, file: file}, nil
 		}

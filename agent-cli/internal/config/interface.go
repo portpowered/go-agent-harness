@@ -271,16 +271,19 @@ type ExecConfig struct {
 	CustomDenyPatterns []string `koanf:"custom_deny_patterns" yaml:"custom_deny_patterns"`
 }
 
-// DefaultToolIDs is the ordered list of all tool IDs. Used to build the default tools list.
-var DefaultToolIDs = []string{
-	"exec", "read_file", "read_image", "write_file", "edit_file", "append_file", "list_dir",
-	"web_fetch", "web_search", "show", "mouse", "load_skill", "sleep",
+// DefaultToolIDs returns the ordered list of all tool IDs. Used to build the default tools list.
+func DefaultToolIDs() []string {
+	return []string{
+		"exec", "read_file", "read_image", "write_file", "edit_file", "append_file", "list_dir",
+		"web_fetch", "web_search", "show", "mouse", "load_skill", "sleep",
+	}
 }
 
 // DefaultToolsList returns the default tools list (all enabled). Used when creating a new config file.
 func DefaultToolsList() []ToolEntry {
-	out := make([]ToolEntry, 0, len(DefaultToolIDs))
-	for _, id := range DefaultToolIDs {
+	ids := DefaultToolIDs()
+	out := make([]ToolEntry, 0, len(ids))
+	for _, id := range ids {
 		out = append(out, ToolEntry{ID: id, Enabled: true})
 	}
 	return out

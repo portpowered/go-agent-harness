@@ -122,7 +122,7 @@ func livePageToolsConfig(t *testing.T, cdpURL string) *config.Config {
 	browser.Connection.CDPURL = cdpURL
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
 	}
 	return cfg

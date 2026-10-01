@@ -21,10 +21,18 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-// updateGolden is intentionally opt-in: ordinary test runs compare against
+// updateGoldenFlag is intentionally opt-in: ordinary test runs compare against
 // committed goldens and never rewrite them. Use `go test -update` when a
 // deliberate formatting change needs a refreshed golden.
-var updateGolden = flag.Bool("update", false, "update logger golden files")
+const updateGoldenFlag = "update"
+
+func TestMain(m *testing.M) {
+	flag.Bool(updateGoldenFlag, false, "update logger golden files")
+	os.Exit(m.Run())
+}
+
+// updateGolden reports whether -update was passed to regenerate golden files.
+func updateGolden() bool { return flag.Lookup(updateGoldenFlag).Value.String() == "true" }
 
 var (
 	ansiSequence = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -67,11 +75,22 @@ func (s *recordingWriteSyncer) WriteCount() int {
 	return len(s.writes)
 }
 
-func withConsoleWriteSyncer(t *testing.T, factory func() zapcore.WriteSyncer) {
+// redirectProcessConsole points os.Stdout and os.Stderr at a temporary file
+// for loggers built through wrappers that cannot take a ConsoleSink.
+func redirectProcessConsole(t *testing.T) {
 	t.Helper()
-	previous := newConsoleWriteSyncer
-	newConsoleWriteSyncer = factory
-	t.Cleanup(func() { newConsoleWriteSyncer = previous })
+	console, err := os.Create(filepath.Join(t.TempDir(), "console"))
+	if err != nil {
+		t.Fatalf("create console capture: %v", err)
+	}
+	previousStdout, previousStderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = console, console
+	t.Cleanup(func() {
+		os.Stdout, os.Stderr = previousStdout, previousStderr
+		if err := console.Close(); err != nil {
+			t.Errorf("close console capture: %v", err)
+		}
+	})
 }
 
 func readAgentLog(t *testing.T, configDir string) string {
@@ -151,10 +170,10 @@ func TestS3FormattedRecordsMatchGolden(t *testing.T) {
 	actual := normalizeFormattedLog(readAgentLog(t, configDir))
 	goldenPath := filepath.Join("testdata", "formatted.golden")
 	want, err := os.ReadFile(goldenPath)
-	if err != nil && (!*updateGolden || !os.IsNotExist(err)) {
+	if err != nil && (!updateGolden() || !os.IsNotExist(err)) {
 		t.Fatalf("read golden %s: %v", goldenPath, err)
 	}
-	if *updateGolden {
+	if updateGolden() {
 		if err := os.WriteFile(goldenPath, []byte(actual), 0644); err != nil {
 			t.Fatalf("update golden %s: %v", goldenPath, err)
 		}
@@ -170,14 +189,12 @@ func TestS5LoggerRoutingAndSinkEffects(t *testing.T) {
 	t.Run("file routing", func(t *testing.T) {
 		consoleOut := &recordingWriteSyncer{}
 		consoleErr := &recordingWriteSyncer{}
-		withConsoleWriteSyncer(t, func() zapcore.WriteSyncer {
-			return zapcore.NewMultiWriteSyncer(consoleOut, consoleErr)
-		})
 
 		configDir := t.TempDir()
 		logger, closer, err := NewLoggerWithCloser(LoggerConfig{
 			VerbosityLevel: 1,
 			ConfigDir:      configDir,
+			ConsoleSink:    zapcore.NewMultiWriteSyncer(consoleOut, consoleErr),
 		})
 		if err != nil {
 			t.Fatalf("create file logger: %v", err)
@@ -204,15 +221,13 @@ func TestS5LoggerRoutingAndSinkEffects(t *testing.T) {
 	t.Run("console routing", func(t *testing.T) {
 		stdout := &recordingWriteSyncer{}
 		stderr := &recordingWriteSyncer{}
-		withConsoleWriteSyncer(t, func() zapcore.WriteSyncer {
-			return zapcore.NewMultiWriteSyncer(stdout, stderr)
-		})
 
 		configDir := t.TempDir()
 		logger, closer, err := NewLoggerWithCloser(LoggerConfig{
 			VerbosityLevel: 1,
 			ConfigDir:      configDir,
 			LogToStdout:    true,
+			ConsoleSink:    zapcore.NewMultiWriteSyncer(stdout, stderr),
 		})
 		if err != nil {
 			t.Fatalf("create console logger: %v", err)
@@ -303,12 +318,11 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 			t.Errorf("close process stderr capture: %v", err)
 		}
 	})
-	withConsoleWriteSyncer(t, func() zapcore.WriteSyncer { return sink })
-
 	logger, closer, err := NewLoggerWithCloser(LoggerConfig{
 		VerbosityLevel: 2,
 		ConfigDir:      t.TempDir(),
 		LogToStdout:    true,
+		ConsoleSink:    sink,
 	})
 	if err != nil {
 		t.Fatalf("create logger: %v", err)
@@ -345,38 +359,22 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 func TestLoggerContextRequestIDAndDefaultBehavior(t *testing.T) {
 	core, observed := observer.New(zapcore.DebugLevel)
 	base := zap.New(core)
-	previous := log
-	log = base
-	t.Cleanup(func() { log = previous })
+	loggedContext := WithLogger(t.Context(), base)
 
-	requestContext := context.WithValue(context.Background(), REQUEST_ID, "request-123")
+	requestContext := context.WithValue(loggedContext, REQUEST_ID, "request-123")
 	NewRequestLogger(requestContext).Info("request-scoped", zap.String("scope", "request"))
 	entries := observed.FilterMessage("request-scoped").All()
 	if len(entries) != 1 || entries[0].ContextMap()["request_id"] != "request-123" {
 		t.Fatalf("request ID was not emitted in the request-scoped record: %#v", entries)
 	}
 
-	NewRequestLogger(context.Background()).Info("request-without-id")
+	NewRequestLogger(loggedContext).Info("request-without-id")
 	entries = observed.FilterMessage("request-without-id").All()
 	if len(entries) != 1 {
 		t.Fatalf("expected one no-ID record, got %d", len(entries))
 	}
 	if _, ok := entries[0].ContextMap()["request_id"]; ok {
 		t.Fatal("request ID unexpectedly appeared when the context had no request ID")
-	}
-
-	WithRequestID("explicit-456").Info("explicit-request")
-	entries = observed.FilterMessage("explicit-request").All()
-	if len(entries) != 1 || entries[0].ContextMap()["request_id"] != "explicit-456" {
-		t.Fatalf("explicit request ID was not emitted: %#v", entries)
-	}
-	WithRequestID("").Info("empty-request")
-	entries = observed.FilterMessage("empty-request").All()
-	if len(entries) != 1 {
-		t.Fatalf("expected one empty-ID record, got %d", len(entries))
-	}
-	if _, ok := entries[0].ContextMap()["request_id"]; ok {
-		t.Fatal("empty request ID unexpectedly appeared in the record")
 	}
 
 	contextLoggerCore, contextObserved := observer.New(zapcore.DebugLevel)
@@ -386,16 +384,11 @@ func TestLoggerContextRequestIDAndDefaultBehavior(t *testing.T) {
 	if entries := contextObserved.FilterMessage("context logger").All(); len(entries) != 1 {
 		t.Fatalf("attached context logger emitted %d records, want 1", len(entries))
 	}
-	GetRequestLoggerFromContext(context.Background()).Info("context default")
-	if entries := observed.FilterMessage("context default").All(); len(entries) != 1 {
-		t.Fatalf("missing context logger did not use the default logger: got %d records", len(entries))
-	}
-
 	if got := GetRequestID(context.WithValue(context.Background(), REQUEST_ID, 42)); got != "" {
 		t.Fatalf("wrongly typed request ID returned %q", got)
 	}
-	log = nil
 	GetRequestLoggerFromContext(context.Background()).Info("default noop")
+	NewRequestLogger(context.WithValue(context.Background(), REQUEST_ID, "request-789")).Info("default noop")
 	if entries := observed.FilterMessage("default noop").All(); len(entries) != 0 {
 		t.Fatalf("no-op default logger emitted %d records", len(entries))
 	}
@@ -403,9 +396,9 @@ func TestLoggerContextRequestIDAndDefaultBehavior(t *testing.T) {
 
 func TestLoggerConstructorsAndConstructionErrors(t *testing.T) {
 	console := &recordingWriteSyncer{}
-	withConsoleWriteSyncer(t, func() zapcore.WriteSyncer { return console })
+	redirectProcessConsole(t)
 
-	logger, err := NewLogger(LoggerConfig{VerbosityLevel: 2, LogToStdout: true})
+	logger, err := NewLogger(LoggerConfig{VerbosityLevel: 2, LogToStdout: true, ConsoleSink: console})
 	if err != nil {
 		t.Fatalf("NewLogger: %v", err)
 	}
@@ -450,79 +443,76 @@ func TestLoggerConstructorsAndConstructionErrors(t *testing.T) {
 	}
 }
 
+// leveledFieldLogger is the non-terminal method set shared by the adapters.
+type leveledFieldLogger[F any] interface {
+	Debug(msg string, fields ...F)
+	Info(msg string, fields ...F)
+	Warn(msg string, fields ...F)
+	Error(msg string, fields ...F)
+}
+
+// assertAdapterPreservesLevels drives each non-terminal level of an adapter
+// and checks the observed zap records keep the level, message, and fields.
+func assertAdapterPreservesLevels[F any](
+	t *testing.T,
+	newAdapter func(*zap.Logger) leveledFieldLogger[F],
+	field func(key string, value any) F,
+	prefix string,
+	adapterName string,
+) {
+	t.Helper()
+	core, observed := observer.New(zapcore.DebugLevel)
+	adapter := newAdapter(zap.New(core))
+	calls := []struct {
+		name string
+		call func(string, ...F)
+	}{
+		{name: "debug", call: adapter.Debug},
+		{name: "info", call: adapter.Info},
+		{name: "warn", call: adapter.Warn},
+		{name: "error", call: adapter.Error},
+	}
+	wantLevels := []zapcore.Level{zap.DebugLevel, zap.InfoLevel, zap.WarnLevel, zap.ErrorLevel}
+	for index, call := range calls {
+		call.call(fmt.Sprintf("%s %s", prefix, call.name), field("adapter", adapterName), field("index", index))
+	}
+	entries := observed.All()
+	if len(entries) != len(calls) {
+		t.Fatalf("got %d %s records, want %d", len(entries), adapterName, len(calls))
+	}
+	for index, entry := range entries {
+		wantMessage := fmt.Sprintf("%s %s", prefix, calls[index].name)
+		if entry.Level != wantLevels[index] || entry.Message != wantMessage {
+			t.Errorf("record %d = level %s message %q, want %s %q", index, entry.Level, entry.Message, wantLevels[index], wantMessage)
+		}
+		fields := entry.ContextMap()
+		if fields["adapter"] != adapterName || fmt.Sprint(fields["index"]) != fmt.Sprint(index) {
+			t.Errorf("record %d fields = %#v", index, fields)
+		}
+	}
+
+	nilAdapter := newAdapter(nil)
+	nilAdapter.Debug("nil debug")
+	nilAdapter.Info("nil info")
+	nilAdapter.Warn("nil warn")
+	nilAdapter.Error("nil error")
+}
+
 func TestS5AdaptersPreserveLevelsMessagesAndFields(t *testing.T) {
 	t.Run("agent loop", func(t *testing.T) {
-		core, observed := observer.New(zapcore.DebugLevel)
-		adapter := NewZapAgentLoopAdapter(zap.New(core))
-		calls := []struct {
-			name string
-			call func(string, ...agentlooplogging.Field)
-		}{
-			{name: "debug", call: adapter.Debug},
-			{name: "info", call: adapter.Info},
-			{name: "warn", call: adapter.Warn},
-			{name: "error", call: adapter.Error},
-		}
-		wantLevels := []zapcore.Level{zap.DebugLevel, zap.InfoLevel, zap.WarnLevel, zap.ErrorLevel}
-		for index, call := range calls {
-			call.call(fmt.Sprintf("agent %s", call.name), agentlooplogging.Field{Key: "adapter", Value: "agent-loop"}, agentlooplogging.Field{Key: "index", Value: index})
-		}
-		entries := observed.All()
-		if len(entries) != len(calls) {
-			t.Fatalf("got %d agent-loop records, want %d", len(entries), len(calls))
-		}
-		for index, entry := range entries {
-			if entry.Level != wantLevels[index] || entry.Message != fmt.Sprintf("agent %s", calls[index].name) {
-				t.Errorf("record %d = level %s message %q, want %s %q", index, entry.Level, entry.Message, wantLevels[index], fmt.Sprintf("agent %s", calls[index].name))
-			}
-			fields := entry.ContextMap()
-			if fields["adapter"] != "agent-loop" || fmt.Sprint(fields["index"]) != fmt.Sprint(index) {
-				t.Errorf("record %d fields = %#v", index, fields)
-			}
-		}
-
-		nilAdapter := NewZapAgentLoopAdapter(nil)
-		nilAdapter.Debug("nil debug")
-		nilAdapter.Info("nil info")
-		nilAdapter.Warn("nil warn")
-		nilAdapter.Error("nil error")
+		assertAdapterPreservesLevels(t,
+			func(z *zap.Logger) leveledFieldLogger[agentlooplogging.Field] { return NewZapAgentLoopAdapter(z) },
+			func(key string, value any) agentlooplogging.Field {
+				return agentlooplogging.Field{Key: key, Value: value}
+			},
+			"agent", "agent-loop")
 	})
 
 	t.Run("gateway", func(t *testing.T) {
-		core, observed := observer.New(zapcore.DebugLevel)
-		adapter := NewZapGatewayAdapter(zap.New(core))
-		calls := []struct {
-			name string
-			call func(string, ...gatewaylogging.Field)
-		}{
-			{name: "debug", call: adapter.Debug},
-			{name: "info", call: adapter.Info},
-			{name: "warn", call: adapter.Warn},
-			{name: "error", call: adapter.Error},
-		}
-		wantLevels := []zapcore.Level{zap.DebugLevel, zap.InfoLevel, zap.WarnLevel, zap.ErrorLevel}
-		for index, call := range calls {
-			call.call(fmt.Sprintf("gateway %s", call.name), gatewaylogging.Field{Key: "adapter", Value: "gateway"}, gatewaylogging.Field{Key: "index", Value: index})
-		}
-		entries := observed.All()
-		if len(entries) != len(calls) {
-			t.Fatalf("got %d gateway records, want %d", len(entries), len(calls))
-		}
-		for index, entry := range entries {
-			if entry.Level != wantLevels[index] || entry.Message != fmt.Sprintf("gateway %s", calls[index].name) {
-				t.Errorf("record %d = level %s message %q, want %s %q", index, entry.Level, entry.Message, wantLevels[index], fmt.Sprintf("gateway %s", calls[index].name))
-			}
-			fields := entry.ContextMap()
-			if fields["adapter"] != "gateway" || fmt.Sprint(fields["index"]) != fmt.Sprint(index) {
-				t.Errorf("record %d fields = %#v", index, fields)
-			}
-		}
-
-		nilAdapter := NewZapGatewayAdapter(nil)
-		nilAdapter.Debug("nil debug")
-		nilAdapter.Info("nil info")
-		nilAdapter.Warn("nil warn")
-		nilAdapter.Error("nil error")
+		assertAdapterPreservesLevels(t,
+			func(z *zap.Logger) leveledFieldLogger[gatewaylogging.Field] { return NewZapGatewayAdapter(z) },
+			func(key string, value any) gatewaylogging.Field { return gatewaylogging.Field{Key: key, Value: value} },
+			"gateway", "gateway")
 	})
 }
 

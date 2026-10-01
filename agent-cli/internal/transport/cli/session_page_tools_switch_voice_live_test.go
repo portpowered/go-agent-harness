@@ -36,7 +36,7 @@ const (
 	sessionPageToolsSwitchVoiceSessionUpdate   = "session.update"
 )
 
-var sessionPageToolsSwitchVoiceSystemPrompt = `You are a concise voice operator controlling two already-open WebMCP pages.
+const sessionPageToolsSwitchVoiceSystemPrompt = `You are a concise voice operator controlling two already-open WebMCP pages.
 
 Follow this protocol exactly:
 - Startup may have no selected page because two eligible pages are present. For the first request, use webmcp_list_tabs, identify Cubecade by its safe title/origin, and call webmcp_select_tab with its exact listed browser_id and target_id. Then read its current cube state with its directly advertised page tool. Do not move the cube.
@@ -47,10 +47,12 @@ Follow this protocol exactly:
 - Keep every spoken response to five words or fewer. After the final cube read, say goodbye.
 `
 
-var sessionPageToolsSwitchVoiceTokenWords = []string{
-	"amber", "beacon", "cedar", "comet", "dawn", "ember", "fern", "harbor",
-	"jade", "maple", "meadow", "mango", "orbit", "otter", "pebble", "quartz",
-	"raven", "river", "saffron", "summit", "thistle", "violet", "willow", "zephyr",
+func sessionPageToolsSwitchVoiceTokenWords() []string {
+	return []string{
+		"amber", "beacon", "cedar", "comet", "dawn", "ember", "fern", "harbor",
+		"jade", "maple", "meadow", "mango", "orbit", "otter", "pebble", "quartz",
+		"raven", "river", "saffron", "summit", "thistle", "violet", "willow", "zephyr",
+	}
 }
 
 // TestSessionPageToolsSwitchVoiceAgainstLiveChrome is the one credentialed
@@ -311,9 +313,10 @@ func sessionPageToolsSwitchVoiceToken(t *testing.T) string {
 	if _, err := rand.Read(raw[:]); err != nil {
 		t.Fatalf("generate voice run token: %v", err)
 	}
+	vocabulary := sessionPageToolsSwitchVoiceTokenWords()
 	words := make([]string, len(raw))
 	for index, value := range raw {
-		words[index] = sessionPageToolsSwitchVoiceTokenWords[int(value)%len(sessionPageToolsSwitchVoiceTokenWords)]
+		words[index] = vocabulary[int(value)%len(vocabulary)]
 	}
 	return strings.Join(words, " ")
 }

@@ -456,11 +456,11 @@ func (f *lateCatalogFixture) WaitForOracle(ctx context.Context, match func(lateC
 func (f *lateCatalogFixture) handle(writer http.ResponseWriter, request *http.Request) {
 	switch request.URL.Path {
 	case lateCatalogPath:
-		f.writeHTML(writer, request, lateCatalogFixtureHTML)
+		f.writeHTML(writer, request, []byte(lateCatalogFixtureHTML))
 	case producerlessPath:
-		f.writeHTML(writer, request, producerlessFixtureHTML)
+		f.writeHTML(writer, request, []byte(producerlessFixtureHTML))
 	case emptyCatalogPath:
-		f.writeHTML(writer, request, emptyCatalogFixtureHTML)
+		f.writeHTML(writer, request, []byte(emptyCatalogFixtureHTML))
 	case "/__test/load-block":
 		f.handleLoadingBlock(writer, request)
 	case "/__test/ready":
@@ -546,7 +546,7 @@ func (f *lateCatalogFixture) handleState(writer http.ResponseWriter, request *ht
 	}
 }
 
-var lateCatalogFixtureHTML = []byte(`<!doctype html>
+const lateCatalogFixtureHTML = `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>WebMCP delayed registration fixture</title></head>
 <body><main><h1>Delayed WebMCP registration</h1><p id="status">waiting for registration gate</p></main>
@@ -599,13 +599,13 @@ var lateCatalogFixtureHTML = []byte(`<!doctype html>
     publish();
   }
 })();
-</script></body></html>`)
+</script></body></html>`
 
-var producerlessFixtureHTML = []byte(`<!doctype html>
+const producerlessFixtureHTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>WebMCP producerless fixture</title></head>
-<body><p>no WebMCP producer</p></body></html>`)
+<body><p>no WebMCP producer</p></body></html>`
 
-var emptyCatalogFixtureHTML = []byte(`<!doctype html>
+const emptyCatalogFixtureHTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>WebMCP empty catalog fixture</title></head>
 <body><p>explicit empty catalog</p>
 <script>
@@ -628,4 +628,4 @@ window.addEventListener("load", async () => {
   } catch (_) {}
   fetch("/__test/ready?path=/empty", { method: "POST" }).catch(() => {});
 });
-</script></body></html>`)
+</script></body></html>`

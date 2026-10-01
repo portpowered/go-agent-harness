@@ -9,6 +9,19 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 )
 
+// Byte caps applied to caller-visible labels so untrusted browser data cannot
+// inflate tool results.
+const (
+	// codeLabelMaxBytes bounds enum-like labels such as phases, protocols and kinds.
+	codeLabelMaxBytes = 32
+	// labelMaxBytes bounds tool names, reason codes and detail keys.
+	labelMaxBytes = 64
+	// textLabelMaxBytes bounds free-form labels such as products and origins.
+	textLabelMaxBytes = 128
+	// pageTitleMaxBytes bounds page titles.
+	pageTitleMaxBytes = 512
+)
+
 func laneBInvalidEnvelope(toolName string, values map[string]any, issues []ToolResultIssue) ([]byte, error) {
 	toolRef := ""
 	if values != nil {
@@ -30,7 +43,7 @@ func laneBInvalidEnvelope(toolName string, values map[string]any, issues []ToolR
 		Message:   "The broker tool input is invalid.",
 		Retryable: true,
 		Details: map[string]any{
-			"tool":         boundedOutputLabel(toolName, 64),
+			"tool":         boundedOutputLabel(toolName, labelMaxBytes),
 			"tool_ref":     toolRef,
 			"input_schema": inputSchema,
 			"issues":       issues,
@@ -104,24 +117,24 @@ func safeDiscoveryDetails(code ErrorCode, details map[string]any) map[string]any
 	}
 	switch code {
 	case ErrorEndpointNotFound:
-		copyField("endpoint_kind", safeLabel(details["endpoint_kind"], 32))
-		copyField("source", safeLabel(details["source"], 64))
+		copyField("endpoint_kind", safeLabel(details["endpoint_kind"], codeLabelMaxBytes))
+		copyField("source", safeLabel(details["source"], labelMaxBytes))
 	case ErrorEndpointUnreachable:
-		copyField("endpoint_kind", safeLabel(details["endpoint_kind"], 32))
-		copyField("address_class", safeLabel(details["address_class"], 32))
-		copyField("phase", safeLabel(details["phase"], 32))
+		copyField("endpoint_kind", safeLabel(details["endpoint_kind"], codeLabelMaxBytes))
+		copyField("address_class", safeLabel(details["address_class"], codeLabelMaxBytes))
+		copyField("phase", safeLabel(details["phase"], codeLabelMaxBytes))
 	case ErrorRemoteEndpointDenied:
-		copyField("endpoint_kind", safeLabel(details["endpoint_kind"], 32))
-		copyField("network_class", safeLabel(details["network_class"], 32))
-		copyField("required_flag", safeLabel(details["required_flag"], 64))
+		copyField("endpoint_kind", safeLabel(details["endpoint_kind"], codeLabelMaxBytes))
+		copyField("network_class", safeLabel(details["network_class"], codeLabelMaxBytes))
+		copyField("required_flag", safeLabel(details["required_flag"], labelMaxBytes))
 	case ErrorBrowserProtocol:
-		copyField("phase", safeLabel(details["phase"], 32))
-		copyField("protocol", safeLabel(details["protocol"], 32))
-		copyField("reason_code", safeLabel(details["reason_code"], 64))
+		copyField("phase", safeLabel(details["phase"], codeLabelMaxBytes))
+		copyField("protocol", safeLabel(details["protocol"], codeLabelMaxBytes))
+		copyField("reason_code", safeLabel(details["reason_code"], labelMaxBytes))
 	case ErrorUnsupportedWebMCP:
 		copyField("browser_id", safeIDValue(details["browser_id"]))
 		copyField("target_id", safeIDValue(details["target_id"]))
-		copyField("required_capability", safeLabel(details["required_capability"], 32))
+		copyField("required_capability", safeLabel(details["required_capability"], codeLabelMaxBytes))
 	case ErrorNoEligibleTab:
 		copyField("browser_id", safeIDValue(details["browser_id"]))
 		if filters, ok := details["filters"].(map[string]any); ok {
@@ -141,18 +154,18 @@ func safeDiscoveryDetails(code ErrorCode, details map[string]any) map[string]any
 		copyField("browser_id", safeIDValue(details["browser_id"]))
 		copyField("target_id", safeIDValue(details["target_id"]))
 		copyField("selected_generation", nonNegativeUint(details["selected_generation"]))
-		copyField("reason", safeLabel(details["reason"], 64))
+		copyField("reason", safeLabel(details["reason"], labelMaxBytes))
 	case ErrorTargetAttachFailed, ErrorTargetDetached:
 		copyField("browser_id", safeIDValue(details["browser_id"]))
 		copyField("target_id", safeIDValue(details["target_id"]))
-		copyField("phase", safeLabel(details["phase"], 32))
-		copyField("reason_code", safeLabel(details["reason_code"], 64))
+		copyField("phase", safeLabel(details["phase"], codeLabelMaxBytes))
+		copyField("reason_code", safeLabel(details["reason_code"], labelMaxBytes))
 		copyField("generation", nonNegativeUint(details["generation"]))
-		copyField("reason", safeLabel(details["reason"], 64))
+		copyField("reason", safeLabel(details["reason"], labelMaxBytes))
 	case ErrorBrowserDisconnected:
 		copyField("browser_id", safeIDValue(details["browser_id"]))
 		copyField("target_id", safeIDValue(details["target_id"]))
-		copyField("phase", safeLabel(details["phase"], 32))
+		copyField("phase", safeLabel(details["phase"], codeLabelMaxBytes))
 		result["reconnect_required"] = true
 	}
 	return result
@@ -337,13 +350,13 @@ func safeFilterDetails(details map[string]any) map[string]any {
 func safeDetails(details map[string]any) map[string]any {
 	result := map[string]any{}
 	for key, value := range details {
-		keyLabel := safeLabel(key, 64)
+		keyLabel := safeLabel(key, labelMaxBytes)
 		if keyLabel == "" {
 			continue
 		}
 		switch typed := value.(type) {
 		case string:
-			result[keyLabel] = safeLabel(typed, 128)
+			result[keyLabel] = safeLabel(typed, textLabelMaxBytes)
 		case bool:
 			result[keyLabel] = typed
 		case int:
@@ -416,7 +429,7 @@ func disconnectedError(browserID, targetID, phase string) error {
 		Details: map[string]any{
 			"browser_id":         safeID(browserID),
 			"target_id":          safeID(targetID),
-			"phase":              boundedOutputLabel(phase, 32),
+			"phase":              boundedOutputLabel(phase, codeLabelMaxBytes),
 			"reconnect_required": true,
 		},
 	}
@@ -522,7 +535,7 @@ func safeOriginFilter(value string) string {
 	if strings.ContainsAny(value, "?#") || strings.Contains(value, "@") {
 		return redactedValue
 	}
-	return boundedOutputLabel(value, 128)
+	return boundedOutputLabel(value, textLabelMaxBytes)
 }
 
 func boundedOutputLabel(value string, max int) string {

@@ -64,9 +64,9 @@ func (s *LaneBToolSet) laneBContextData(selected discovery.Selection) laneBConte
 	}
 	return laneBContextData{
 		BrowserID:      safeID(selected.BrowserID),
-		BrowserProduct: safeLabel(browserProduct, 128),
+		BrowserProduct: safeLabel(browserProduct, textLabelMaxBytes),
 		TargetID:       safeID(selected.TargetID),
-		Title:          boundedOutputLabel(selected.Title, 512),
+		Title:          boundedOutputLabel(selected.Title, pageTitleMaxBytes),
 		URL:            pageURL,
 		Origin:         pageOrigin,
 		Generation:     selected.Generation,
@@ -116,8 +116,8 @@ func browserChoices(candidates []discovery.BrowserCandidate) []browserChoice {
 	for _, candidate := range ordered {
 		result = append(result, browserChoice{
 			BrowserID: candidate.ID,
-			Product:   safeLabel(candidate.Product, 128),
-			Protocol:  safeLabel(candidate.Protocol, 32),
+			Product:   safeLabel(candidate.Product, textLabelMaxBytes),
+			Protocol:  safeLabel(candidate.Protocol, codeLabelMaxBytes),
 		})
 	}
 	return result
@@ -130,8 +130,8 @@ func targetChoices(targets []discovery.Target) []targetChoice {
 		result = append(result, targetChoice{
 			BrowserID:         safeID(target.BrowserID),
 			TargetID:          safeID(target.ID),
-			Type:              boundedOutputLabel(target.Type, 32),
-			Title:             boundedOutputLabel(target.Title, 512),
+			Type:              boundedOutputLabel(target.Type, codeLabelMaxBytes),
+			Title:             boundedOutputLabel(target.Title, pageTitleMaxBytes),
 			URL:               pageURL,
 			Origin:            pageOrigin,
 			Generation:        target.Generation,
@@ -139,7 +139,7 @@ func targetChoices(targets []discovery.Target) []targetChoice {
 			ToolCount:         target.ToolCount,
 			ToolCountKnown:    target.ToolCountKnown,
 			Eligible:          target.Eligible,
-			EligibilityReason: safeLabel(target.EligibilityReason, 64),
+			EligibilityReason: safeLabel(target.EligibilityReason, labelMaxBytes),
 		})
 	}
 	return result

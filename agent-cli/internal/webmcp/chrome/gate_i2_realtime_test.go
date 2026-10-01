@@ -143,7 +143,7 @@ func prepareGateI2Run(t *testing.T) *gateI2Run {
 	}
 	run.inputPath = gateI2SpokenInput(t.Context(), t, run.artifactRoot, run.request)
 	run.systemPromptPath = filepath.Join(run.artifactRoot, "system-prompt.txt")
-	if err := os.WriteFile(run.systemPromptPath, []byte(gateI2SystemPrompt), 0o600); err != nil {
+	if err := os.WriteFile(run.systemPromptPath, []byte(gateI2SystemPrompt()), 0o600); err != nil {
 		t.Fatalf("write Gate I2 system prompt: %v", err)
 	}
 	run.capturePath = filepath.Join(run.artifactRoot, "provider.json")
@@ -332,15 +332,18 @@ func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evid
 	return evidence
 }
 
-var gateI2SystemPrompt = strings.Join([]string{
-	"You are measuring a real WebMCP page through the browser capability. The user's spoken request is authoritative. Follow this exact protocol:",
-	"- First call webmcp_list_tabs and find the one eligible page exposed by the browser.",
-	"- Call webmcp_select_tab with the browser_id and target_id returned by webmcp_list_tabs.",
-	"- Call webmcp_list_tools and find webmcp_lane_d_complete.",
-	"- Call webmcp_invoke using the exact tool_ref returned by webmcp_list_tools. The input_json field must be one syntactically valid JSON object encoded as a JSON string, not prose or a flattened argument. Put the spoken message exactly in that JSON object. The reason field must be a concise user-facing explanation of the requested action.",
-	"- Do not invent or rewrite a tool_ref, silently coerce malformed JSON, retry an invocation, or claim that the page changed before the terminal tool result.",
-	"- After the terminal tool result, speak one concise confirmation grounded in its returned message and the final page state. Do not put tool refs or encoded arguments in the spoken request or final confirmation.",
-}, "\n")
+// gateI2SystemPrompt returns the realtime protocol prompt for the Gate I2 run.
+func gateI2SystemPrompt() string {
+	return strings.Join([]string{
+		"You are measuring a real WebMCP page through the browser capability. The user's spoken request is authoritative. Follow this exact protocol:",
+		"- First call webmcp_list_tabs and find the one eligible page exposed by the browser.",
+		"- Call webmcp_select_tab with the browser_id and target_id returned by webmcp_list_tabs.",
+		"- Call webmcp_list_tools and find webmcp_lane_d_complete.",
+		"- Call webmcp_invoke using the exact tool_ref returned by webmcp_list_tools. The input_json field must be one syntactically valid JSON object encoded as a JSON string, not prose or a flattened argument. Put the spoken message exactly in that JSON object. The reason field must be a concise user-facing explanation of the requested action.",
+		"- Do not invent or rewrite a tool_ref, silently coerce malformed JSON, retry an invocation, or claim that the page changed before the terminal tool result.",
+		"- After the terminal tool result, speak one concise confirmation grounded in its returned message and the final page state. Do not put tool refs or encoded arguments in the spoken request or final confirmation.",
+	}, "\n")
+}
 
 type gateI2Pins struct {
 	Channel             string   `json:"channel"`
@@ -682,7 +685,7 @@ func gateI2PublicIDs(endpoint, rawTargetID string) (string, string, error) {
 func writeGateI2Config(configDir, cdpURL, origin, browserID, targetID string) error {
 	var builder strings.Builder
 	builder.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		fmt.Fprintf(&builder, "    - id: %q\n      enabled: false\n", id)
 	}
 	builder.WriteString("browser:\n")

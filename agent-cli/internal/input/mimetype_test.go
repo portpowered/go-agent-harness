@@ -10,24 +10,24 @@ import (
 )
 
 // Minimal valid file headers for each format.
-var (
+const (
 	// PNG: 8-byte signature.
-	pngHeader = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	pngHeader = "\x89PNG\r\n\x1a\n"
 
 	// JPEG: SOI marker + JFIF APP0 marker start.
-	jpegHeader = []byte{0xFF, 0xD8, 0xFF, 0xE0}
+	jpegHeader = "\xff\xd8\xff\xe0"
 
 	// GIF: GIF89a header.
-	gifHeader = []byte("GIF89a")
+	gifHeader = "GIF89a"
 
 	// WebP: RIFF....WEBP (12 bytes; bytes 4-7 are file size, can be zero for test).
-	webpHeader = []byte{'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P'}
+	webpHeader = "RIFF\x00\x00\x00\x00WEBP"
 
 	// TIFF little-endian: II + magic 42.
-	tiffHeader = []byte{0x49, 0x49, 0x2A, 0x00}
+	tiffHeader = "II\x2a\x00"
 
 	// PDF: %PDF-1.4 header.
-	pdfHeader = []byte("%PDF-1.4")
+	pdfHeader = "%PDF-1.4"
 )
 
 func TestDetectMimeType_MagicBytes(t *testing.T) {
@@ -37,11 +37,11 @@ func TestDetectMimeType_MagicBytes(t *testing.T) {
 		ext      string
 		expected string
 	}{
-		{name: "PNG by magic bytes", header: pngHeader, ext: ".png", expected: "image/png"},
-		{name: "JPEG by magic bytes", header: jpegHeader, ext: ".jpg", expected: "image/jpeg"},
-		{name: "GIF by magic bytes", header: gifHeader, ext: ".gif", expected: "image/gif"},
-		{name: "WebP by magic bytes", header: webpHeader, ext: ".webp", expected: "image/webp"},
-		{name: "PDF by magic bytes", header: pdfHeader, ext: ".pdf", expected: "application/pdf"},
+		{name: "PNG by magic bytes", header: []byte(pngHeader), ext: ".png", expected: "image/png"},
+		{name: "JPEG by magic bytes", header: []byte(jpegHeader), ext: ".jpg", expected: "image/jpeg"},
+		{name: "GIF by magic bytes", header: []byte(gifHeader), ext: ".gif", expected: "image/gif"},
+		{name: "WebP by magic bytes", header: []byte(webpHeader), ext: ".webp", expected: "image/webp"},
+		{name: "PDF by magic bytes", header: []byte(pdfHeader), ext: ".pdf", expected: "application/pdf"},
 	}
 
 	for _, tt := range tests {
@@ -61,7 +61,7 @@ func TestDetectMimeType_MagicBytesTakePrecedence(t *testing.T) {
 	// A file with .txt extension but PNG magic bytes should be detected as PNG.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nottext.txt")
-	require.NoError(t, os.WriteFile(path, pngHeader, 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(pngHeader), 0o644))
 
 	result, err := DetectMimeType(path)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestDetectMimeType_WebPDetection(t *testing.T) {
 	// Verify WebP is detected even without the .webp extension.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "image.bin")
-	require.NoError(t, os.WriteFile(path, webpHeader, 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(webpHeader), 0o644))
 
 	result, err := DetectMimeType(path)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestDetectMimeType_WebPDetection(t *testing.T) {
 func TestDetectMimeType_TIFF(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "photo.tiff")
-	require.NoError(t, os.WriteFile(path, tiffHeader, 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(tiffHeader), 0o644))
 
 	result, err := DetectMimeType(path)
 	require.NoError(t, err)
@@ -133,9 +133,9 @@ func TestDetectMimeTypeFromBytes(t *testing.T) {
 	}{
 		{name: "empty data no ext", data: nil, ext: "", expected: "application/octet-stream"},
 		{name: "empty data with ext", data: nil, ext: ".png", expected: "image/png"},
-		{name: "webp magic no ext", data: webpHeader, ext: "", expected: "image/webp"},
-		{name: "webp magic wrong ext", data: webpHeader, ext: ".jpg", expected: "image/webp"},
-		{name: "png magic correct ext", data: pngHeader, ext: ".png", expected: "image/png"},
+		{name: "webp magic no ext", data: []byte(webpHeader), ext: "", expected: "image/webp"},
+		{name: "webp magic wrong ext", data: []byte(webpHeader), ext: ".jpg", expected: "image/webp"},
+		{name: "png magic correct ext", data: []byte(pngHeader), ext: ".png", expected: "image/png"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

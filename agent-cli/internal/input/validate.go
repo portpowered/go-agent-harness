@@ -14,29 +14,31 @@ type conversionHint struct {
 	convertCommand string
 }
 
-// conversionHints maps a rejected MIME type to possible conversions.
+// conversionHints returns the possible conversions for a rejected MIME type.
 // A hint is shown only when the target MIME type is in the model's supported list.
-var conversionHints = map[string][]conversionHint{
-	"image/webp": {
-		{targetMime: "image/png", convertCommand: "convert input.webp output.png"},
-		{targetMime: "image/jpeg", convertCommand: "convert input.webp output.jpg"},
-	},
-	"image/png": {
-		{targetMime: "image/webp", convertCommand: "convert input.png output.webp"},
-	},
-	"image/jpeg": {
-		{targetMime: "image/webp", convertCommand: "convert input.jpg output.webp"},
-	},
-	"image/tiff": {
-		{targetMime: "image/png", convertCommand: "convert input.tiff output.png"},
-	},
+func conversionHints(rejectedMime string) []conversionHint {
+	switch rejectedMime {
+	case "image/webp":
+		return []conversionHint{
+			{targetMime: "image/png", convertCommand: "convert input.webp output.png"},
+			{targetMime: "image/jpeg", convertCommand: "convert input.webp output.jpg"},
+		}
+	case "image/png":
+		return []conversionHint{{targetMime: "image/webp", convertCommand: "convert input.png output.webp"}}
+	case "image/jpeg":
+		return []conversionHint{{targetMime: "image/webp", convertCommand: "convert input.jpg output.webp"}}
+	case "image/tiff":
+		return []conversionHint{{targetMime: "image/png", convertCommand: "convert input.tiff output.png"}}
+	default:
+		return nil
+	}
 }
 
 // findConversionHint returns a tip string if a known conversion exists from the
 // rejected MIME type to one of the supported types. Returns empty string otherwise.
 func findConversionHint(rejectedMime string, supportedTypes []string) string {
-	hints, ok := conversionHints[rejectedMime]
-	if !ok {
+	hints := conversionHints(rejectedMime)
+	if len(hints) == 0 {
 		return ""
 	}
 	supported := make(map[string]bool, len(supportedTypes))

@@ -155,14 +155,14 @@ func (r *Runtime) Version(ctx context.Context, candidate webmcp.BrowserCandidate
 		if handle.isDisconnected() {
 			return webmcp.BrowserVersion{}, handle.disconnectError("", "version", nil)
 		}
-		return webmcp.BrowserVersion{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "version", errors.New("browser connection is unavailable"))
+		return webmcp.BrowserVersion{}, classifiedHandleError(webmcp.ErrorBrowserProtocol, "version", errors.New("browser connection is unavailable"))
 	}
 	protocolVersion, product, _, _, _, err := browser.GetVersion().Do(cdp.WithExecutor(commandContext, executor))
 	if err != nil {
 		if handle.isDisconnected() {
 			return webmcp.BrowserVersion{}, handle.disconnectError("", "version", err)
 		}
-		return webmcp.BrowserVersion{}, classifiedHandleError(candidate, webmcp.ErrorBrowserProtocol, "version", err)
+		return webmcp.BrowserVersion{}, classifiedHandleError(webmcp.ErrorBrowserProtocol, "version", err)
 	}
 	if handle.isDisconnected() {
 		return webmcp.BrowserVersion{}, handle.disconnectError("", "version", nil)
@@ -254,7 +254,7 @@ func (r *Runtime) resolveBrowserWebSocket(ctx context.Context, endpoint string) 
 	var version struct {
 		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&version); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, devToolsVersionResponseLimit)).Decode(&version); err != nil {
 		return "", errors.New("browser version response is invalid")
 	}
 	websocket := strings.TrimSpace(version.WebSocketDebuggerURL)
@@ -300,6 +300,8 @@ const (
 	schemeHTTP          = "http"
 	schemeHTTPS         = "https"
 	devToolsVersionPath = "/json/version"
+	// devToolsVersionResponseLimit caps the /json/version body read.
+	devToolsVersionResponseLimit = 64 << 10
 )
 
 func httpEndpoint(candidate webmcp.BrowserCandidate) (string, error) {

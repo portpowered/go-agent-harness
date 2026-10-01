@@ -15,6 +15,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	// defaultChatLoopIterations caps --loop chat runs when --max-iterations is not set.
+	defaultChatLoopIterations = 5
+	// defaultChatContextPressure is the 0-1 context-usage ratio that triggers the loop's context-full warning.
+	defaultChatContextPressure = 0.8
+)
+
 // ChatCommand wraps the chat subcommand for interactive conversations.
 type ChatCommand struct {
 	service      session.Service
@@ -23,6 +30,13 @@ type ChatCommand struct {
 	loopFlags    *flags.LoopFlags
 	chatFlags    *flags.ChatFlags
 	globalFlags  *flags.GlobalFlags
+	// openMicrophone keeps audio-input command tests hardware-free; production
+	// uses the real microphone constructor.
+	openMicrophone func() (audio.AudioSource, error)
+	// inputIsInteractive is a seam for composed command tests. Production uses
+	// detectInteractiveTerminal, which only admits an input that exposes a
+	// terminal file descriptor.
+	inputIsInteractive func(*cobra.Command) bool
 }
 
 // chatFlagParseError preserves Cobra's flag-error message while giving callers
@@ -32,19 +46,21 @@ type chatFlagParseError struct{ cause error }
 func (e *chatFlagParseError) Error() string { return e.cause.Error() }
 func (e *chatFlagParseError) Unwrap() error { return e.cause }
 
-// newMicrophoneSource keeps audio-input command tests hardware-free; production
-// uses the real microphone constructor by default.
-var newMicrophoneSource = func() (audio.AudioSource, error) {
-	return devicegw.NewMicrophoneSource()
-}
-
 //lint:ignore ST1005 the terminal admission message is an exact customer-facing CLI contract.
 var errChatRequiresInteractiveTerminal = errors.New(chatInteractiveTerminalMessage) //nolint:staticcheck // ST1005: exact customer-facing CLI contract; the lint:ignore above serves standalone staticcheck.
 
 // NewChatCommand composes the interactive transport with the runtime-owned
 // durable store used by loop trace steering.
 func NewChatCommand(service session.Service, askFlags *flags.AskFlags, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, globalFlags *flags.GlobalFlags, storeFactory session.FileStoreFactory) *ChatCommand {
-	return &ChatCommand{service: service, storeFactory: storeFactory, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags}
+	return &ChatCommand{
+		service: service, storeFactory: storeFactory, askFlags: askFlags, loopFlags: loopFlags, chatFlags: chatFlags, globalFlags: globalFlags,
+		openMicrophone:     openDefaultMicrophone,
+		inputIsInteractive: detectInteractiveTerminal,
+	}
+}
+
+func openDefaultMicrophone() (audio.AudioSource, error) {
+	return devicegw.NewMicrophoneSource()
 }
 
 func validateChatFlags(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags) error {
@@ -64,7 +80,7 @@ func validateChatFlags(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags
 	return nil
 }
 
-func validateChatInvocation(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags) error {
+func validateChatInvocation(cmd *cobra.Command, loopFlags *flags.LoopFlags, chatFlags *flags.ChatFlags, inputIsInteractive func(*cobra.Command) bool) error {
 	if err := validateChatFlags(cmd, loopFlags, chatFlags); err != nil {
 		return err
 	}
@@ -72,7 +88,7 @@ func validateChatInvocation(cmd *cobra.Command, loopFlags *flags.LoopFlags, chat
 	// Audio-only chat does not consume keyboard input. Every other chat flow,
 	// including loop steering, must prove terminal input before constructing a
 	// session or starting Bubble Tea.
-	if !chatFlags.ActivateAudioIn && !chatInputIsInteractive(cmd) {
+	if !chatFlags.ActivateAudioIn && !inputIsInteractive(cmd) {
 		return errChatRequiresInteractiveTerminal
 	}
 	return nil
@@ -86,7 +102,7 @@ func (c *ChatCommand) Generate() *cobra.Command {
 		Long:    "Interactive multi-turn conversation. Type 'exit' or 'quit' to leave.\nWith --activate-audio-in the agent listens on the default microphone instead of stdin.\nWith --loop, runs in iterative mode with user steering between iterations.",
 		Example: "  yui chat\n  yui chat --activate-audio-in",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateChatInvocation(cmd, c.loopFlags, c.chatFlags); err != nil {
+			if err := validateChatInvocation(cmd, c.loopFlags, c.chatFlags, c.inputIsInteractive); err != nil {
 				// Chat preflight failures are already actionable. Leave final
 				// process rendering to the CLI entrypoint without Cobra's usage
 				// dump or a second error prefix.
@@ -98,7 +114,7 @@ func (c *ChatCommand) Generate() *cobra.Command {
 				return c.runLoopChat(cmd)
 			}
 			if c.chatFlags.ActivateAudioIn {
-				src, err := newMicrophoneSource()
+				src, err := c.openMicrophone()
 				if err != nil {
 					return fmt.Errorf("open microphone: %w", err)
 				}
@@ -116,9 +132,9 @@ func (c *ChatCommand) Generate() *cobra.Command {
 	cmd.Flags().BoolVar(&c.chatFlags.ActivateAudioOut, "activate-audio-out", false, "Enable audio output")
 
 	cmd.Flags().BoolVar(&c.loopFlags.Loop, "loop", false, "Enable iterative loop mode (re-instantiates fresh sessions up to --max-iterations)")
-	cmd.Flags().IntVar(&c.loopFlags.MaxIterations, "max-iterations", 5, "Maximum number of loop iterations (requires --loop)")
+	cmd.Flags().IntVar(&c.loopFlags.MaxIterations, "max-iterations", defaultChatLoopIterations, "Maximum number of loop iterations (requires --loop)")
 	cmd.Flags().StringVar(&c.loopFlags.StopWord, "stop-word", "", "Stop the loop when this word appears in the response (requires --loop)")
-	cmd.Flags().Float64Var(&c.loopFlags.ContextPressureThreshold, "context-pressure-threshold", 0.8, "Context pressure threshold 0-1 that triggers a context-full warning (requires --loop)")
+	cmd.Flags().Float64Var(&c.loopFlags.ContextPressureThreshold, "context-pressure-threshold", defaultChatContextPressure, "Context pressure threshold 0-1 that triggers a context-full warning (requires --loop)")
 	cmd.Flags().StringVar(&c.loopFlags.ContextPressureMessage, "context-pressure-message", "", "Custom warning message when context pressure threshold is exceeded (requires --loop)")
 	cmd.Flags().StringVar(&c.loopFlags.TraceID, "trace-id", "", "Resume an existing loop run by trace ID (requires --loop)")
 

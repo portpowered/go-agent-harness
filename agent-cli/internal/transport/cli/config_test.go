@@ -23,7 +23,19 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 )
 
-var updateGoldens = flag.Bool("update", false, "update CLI golden files")
+// updateGoldensFlag is the "go test -update" flag that rewrites CLI golden files.
+const updateGoldensFlag = "update"
+
+func TestMain(m *testing.M) {
+	flag.Bool(updateGoldensFlag, false, "update CLI golden files")
+	os.Exit(m.Run())
+}
+
+// updateGoldensRequested reports whether the test binary ran with -update.
+func updateGoldensRequested() bool {
+	f := flag.Lookup(updateGoldensFlag)
+	return f != nil && f.Value.String() == "true"
+}
 
 type cliResult struct {
 	stdout string
@@ -503,7 +515,7 @@ func normalizeCLIOutput(value, configDir, serverURL string) string {
 func assertConfigGolden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
-	if *updateGoldens {
+	if updateGoldensRequested() {
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			t.Fatalf("create golden directory: %v", err)
 		}

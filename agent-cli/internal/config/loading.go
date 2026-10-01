@@ -50,47 +50,77 @@ type interactiveConfigFieldSpec struct {
 	path string
 }
 
-// browserConfigFieldSpecs is deliberately ordered to keep configuration
-// errors deterministic when more than one browser value is invalid.
-var browserConfigFieldSpecs = []browserConfigFieldSpec{
-	{path: "browser.tools.enabled", kind: browserConfigBool},
-	{path: "browser.tools.backend", kind: browserConfigEnum, allowed: []string{BrowserToolsBackendWebMCP}},
-	{path: "browser.tools.web_cast", kind: browserConfigBool},
-	{path: "browser.connection.cdp_url", kind: browserConfigString},
-	{path: "browser.connection.ws_endpoint", kind: browserConfigString},
-	{path: "browser.connection.user_data_dir", kind: browserConfigString},
-	{path: "browser.connection.allow_process_scan", kind: browserConfigBool},
-	{path: "browser.connection.allow_remote_cdp", kind: browserConfigBool},
-	{path: "browser.managed.headless", kind: browserConfigBool},
-	{path: "browser.managed.open", kind: browserConfigString},
-	{path: "browser.managed.close_on_exit", kind: browserConfigBool},
-	{path: "browser.selection.browser", kind: browserConfigString},
-	{path: "browser.selection.tab", kind: browserConfigString},
-	{path: "browser.selection.origin", kind: browserConfigString},
-	{path: "browser.selection.auto_select", kind: browserConfigEnum, allowed: []string{BrowserAutoSelectOff, BrowserAutoSelectSingle, BrowserAutoSelectPersisted}},
-	{path: "browser.selection.activate_tab", kind: browserConfigBool},
-	{path: "browser.selection.persist", kind: browserConfigBool},
-	{path: "browser.policy.allowed_origins", kind: browserConfigStringList},
-	{path: "browser.policy.denied_origins", kind: browserConfigStringList},
-	{path: "browser.policy.approval", kind: browserConfigEnum, allowed: []string{BrowserApprovalAlways, BrowserApprovalWrites, BrowserApprovalNever}},
-	{path: "browser.policy.cancel_on_interrupt", kind: browserConfigEnum, allowed: []string{BrowserCancelOnInterruptNever, BrowserCancelOnInterruptReadOnly, BrowserCancelOnInterruptAlways}},
-	{path: "browser.limits.invocation_timeout", kind: browserConfigDuration},
-	{path: "browser.limits.max_input_bytes", kind: browserConfigSize},
-	{path: "browser.limits.max_result_bytes", kind: browserConfigSize},
-	{path: "browser.limits.serialize_per_target", kind: browserConfigBool},
-	{path: "browser.recording.enabled", kind: browserConfigBool},
-	{path: "browser.recording.include_arguments", kind: browserConfigBool},
-	{path: "browser.recording.include_results", kind: browserConfigBool},
-	{path: "browser.recording.redact_url_query", kind: browserConfigBool},
-	{path: "browser.recording.redact_url_fragment", kind: browserConfigBool},
-	{path: "browser.replay.path", kind: browserConfigString},
-	{path: "browser.replay.strict", kind: browserConfigBool},
+const (
+	// configDirPerm is the permission for directories that hold agent-cli configuration.
+	configDirPerm os.FileMode = 0o755
+	// configFilePerm is the owner-only permission for configuration files that may hold secrets.
+	configFilePerm os.FileMode = 0o600
+	// modelsFilePerm is the permission for the non-secret models catalog file.
+	modelsFilePerm os.FileMode = 0o644
+)
+
+// browserConfigFieldSpecs returns the browser field specs, deliberately ordered
+// to keep configuration errors deterministic when more than one browser value
+// is invalid.
+func browserConfigFieldSpecs() []browserConfigFieldSpec {
+	return []browserConfigFieldSpec{
+		{path: "browser.tools.enabled", kind: browserConfigBool},
+		{path: "browser.tools.backend", kind: browserConfigEnum, allowed: []string{BrowserToolsBackendWebMCP}},
+		{path: "browser.tools.web_cast", kind: browserConfigBool},
+		{path: "browser.connection.cdp_url", kind: browserConfigString},
+		{path: "browser.connection.ws_endpoint", kind: browserConfigString},
+		{path: "browser.connection.user_data_dir", kind: browserConfigString},
+		{path: "browser.connection.allow_process_scan", kind: browserConfigBool},
+		{path: "browser.connection.allow_remote_cdp", kind: browserConfigBool},
+		{path: "browser.managed.headless", kind: browserConfigBool},
+		{path: "browser.managed.open", kind: browserConfigString},
+		{path: "browser.managed.close_on_exit", kind: browserConfigBool},
+		{path: "browser.selection.browser", kind: browserConfigString},
+		{path: "browser.selection.tab", kind: browserConfigString},
+		{path: "browser.selection.origin", kind: browserConfigString},
+		{path: "browser.selection.auto_select", kind: browserConfigEnum, allowed: []string{BrowserAutoSelectOff, BrowserAutoSelectSingle, BrowserAutoSelectPersisted}},
+		{path: "browser.selection.activate_tab", kind: browserConfigBool},
+		{path: "browser.selection.persist", kind: browserConfigBool},
+		{path: "browser.policy.allowed_origins", kind: browserConfigStringList},
+		{path: "browser.policy.denied_origins", kind: browserConfigStringList},
+		{path: "browser.policy.approval", kind: browserConfigEnum, allowed: []string{BrowserApprovalAlways, BrowserApprovalWrites, BrowserApprovalNever}},
+		{path: "browser.policy.cancel_on_interrupt", kind: browserConfigEnum, allowed: []string{BrowserCancelOnInterruptNever, BrowserCancelOnInterruptReadOnly, BrowserCancelOnInterruptAlways}},
+		{path: "browser.limits.invocation_timeout", kind: browserConfigDuration},
+		{path: "browser.limits.max_input_bytes", kind: browserConfigSize},
+		{path: "browser.limits.max_result_bytes", kind: browserConfigSize},
+		{path: "browser.limits.serialize_per_target", kind: browserConfigBool},
+		{path: "browser.recording.enabled", kind: browserConfigBool},
+		{path: "browser.recording.include_arguments", kind: browserConfigBool},
+		{path: "browser.recording.include_results", kind: browserConfigBool},
+		{path: "browser.recording.redact_url_query", kind: browserConfigBool},
+		{path: "browser.recording.redact_url_fragment", kind: browserConfigBool},
+		{path: "browser.replay.path", kind: browserConfigString},
+		{path: "browser.replay.strict", kind: browserConfigBool},
+	}
 }
 
-var interactiveConfigFieldSpecs = []interactiveConfigFieldSpec{
-	{path: "tools.interactive.fast_read_timeout"},
-	{path: "tools.interactive.long_running_timeout"},
-	{path: "tools.interactive.acknowledgement_threshold"},
+func interactiveConfigFieldSpecs() []interactiveConfigFieldSpec {
+	return []interactiveConfigFieldSpec{
+		{path: "tools.interactive.fast_read_timeout"},
+		{path: "tools.interactive.long_running_timeout"},
+		{path: "tools.interactive.acknowledgement_threshold"},
+	}
+}
+
+// writeDefaultConfigFile creates the config directory and writes defaultCfg as
+// YAML to configPath unless a file already exists there.
+func writeDefaultConfigFile(configPath string, defaultCfg *Config) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), configDirPerm); err != nil {
+		return fmt.Errorf("failed to create config directory for %s: %w", configPath, err)
+	}
+	data, err := yamlv3.Marshal(defaultCfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal default config: %w", err)
+	}
+	if err := writeConfigIfAbsentAtomically(configPath, data, configFilePerm); err != nil {
+		return fmt.Errorf("failed to create config file %s: %w", configPath, err)
+	}
+	return nil
 }
 
 // NewConfigStorage creates a new configuration storage handler.
@@ -181,20 +211,8 @@ func (s *ConfigStorage) Load() (*Config, error) {
 		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to load config file %s: %w", s.configPath, err)
 		}
-
-		if os.IsNotExist(err) {
-			// Create config directory if needed
-			if err := os.MkdirAll(filepath.Dir(s.configPath), 0755); err != nil {
-				return nil, fmt.Errorf("failed to create config directory for %s: %w", s.configPath, err)
-			}
-			// Serialize default config to YAML and write the file
-			data, err := yamlv3.Marshal(defaultCfg)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal default config: %w", err)
-			}
-			if err := writeConfigIfAbsentAtomically(s.configPath, data, 0o600); err != nil {
-				return nil, fmt.Errorf("failed to create config file %s: %w", s.configPath, err)
-			}
+		if err := writeDefaultConfigFile(s.configPath, defaultCfg); err != nil {
+			return nil, err
 		}
 	}
 
@@ -221,7 +239,7 @@ func (s *ConfigStorage) Load() (*Config, error) {
 }
 
 func validateInteractiveEnvironment() error {
-	for _, spec := range interactiveConfigFieldSpecs {
+	for _, spec := range interactiveConfigFieldSpecs() {
 		envName := configEnvironmentName(spec.path)
 		value, ok := os.LookupEnv(envName)
 		if !ok {
@@ -239,7 +257,7 @@ func validateInteractiveYAML(data []byte) error {
 	if err := yamlv3.Unmarshal(data, &root); err != nil {
 		return fmt.Errorf("parse YAML: %w", err)
 	}
-	for _, spec := range interactiveConfigFieldSpecs {
+	for _, spec := range interactiveConfigFieldSpecs() {
 		value, present, err := lookupYAMLPath(root, spec.path)
 		if err != nil {
 			return err
@@ -273,7 +291,7 @@ func validateInteractiveRawDuration(value, source string) error {
 // variables. The generic AGENT_ loader remains available for existing model
 // and tool settings, while browser values get strict type/encoding checks.
 func validateBrowserEnvironment() error {
-	for _, spec := range browserConfigFieldSpecs {
+	for _, spec := range browserConfigFieldSpecs() {
 		envName := browserEnvironmentName(spec.path)
 		value, ok := os.LookupEnv(envName)
 		if !ok {
@@ -299,7 +317,7 @@ func configEnvironmentName(path string) string {
 // weak slice conversion would treat the entire JSON document as one origin.
 func browserEnvironmentProviderValue(key, value string) (string, interface{}) {
 	path := strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(key, EnvPrefix), "__", "."))
-	for _, spec := range browserConfigFieldSpecs {
+	for _, spec := range browserConfigFieldSpecs() {
 		if spec.path != path {
 			continue
 		}
@@ -323,7 +341,7 @@ func validateBrowserYAML(data []byte) error {
 	if err := yamlv3.Unmarshal(data, &root); err != nil {
 		return fmt.Errorf("parse YAML: %w", err)
 	}
-	for _, spec := range browserConfigFieldSpecs {
+	for _, spec := range browserConfigFieldSpecs() {
 		value, present, err := lookupYAMLPath(root, spec.path)
 		if err != nil {
 			return err

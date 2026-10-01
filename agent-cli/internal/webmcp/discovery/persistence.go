@@ -186,7 +186,7 @@ func newSelectionStateError(reason string, cause error) *DiscoveryError {
 		Details: map[string]any{
 			"phase":       "selection_state",
 			"protocol":    "selection_state.v1",
-			"reason_code": boundedLabel(reason, 64),
+			"reason_code": boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }
@@ -198,9 +198,9 @@ func newSelectionPersistenceError(phase, reason string, cause error) *DiscoveryE
 		Retryable: phase == "save",
 		Cause:     cause,
 		Details: map[string]any{
-			"phase":       boundedLabel("selection_"+phase, 32),
+			"phase":       boundedLabel("selection_"+phase, maxPhaseLabelBytes),
 			"protocol":    "selection_state.v1",
-			"reason_code": boundedLabel(reason, 64),
+			"reason_code": boundedLabel(reason, maxDetailLabelBytes),
 		},
 	}
 }

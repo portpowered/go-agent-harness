@@ -338,14 +338,8 @@ func waitForLivePageTargets(t *testing.T, ctx context.Context, executor messages
 		})
 		cancel()
 		if err == nil {
-			var envelope webmcp.ToolResultEnvelope
-			if unmarshalErr := json.Unmarshal([]byte(response.Content), &envelope); unmarshalErr == nil && envelope.OK {
-				var tabs sessionPageToolsLiveTabs
-				if decodeErr := json.Unmarshal(envelope.Data, &tabs); decodeErr == nil {
-					if hasLiveOrigin(tabs.Targets, sessionPageToolsLiveCubecadeOrigin) && hasLiveOrigin(tabs.Targets, sessionPageToolsLiveMarginOrigin) {
-						return tabs
-					}
-				}
+			if tabs, ok := decodeLivePageTargets(response.Content); ok {
+				return tabs
 			}
 		}
 		select {
@@ -356,6 +350,21 @@ func waitForLivePageTargets(t *testing.T, ctx context.Context, executor messages
 			t.Fatalf("waiting for eligible page targets: %v", ctx.Err())
 		}
 	}
+}
+
+// decodeLivePageTargets reports the listed tabs once both the Cubecade and
+// Margin origins are present in a successful list-tabs result.
+func decodeLivePageTargets(content string) (sessionPageToolsLiveTabs, bool) {
+	var envelope webmcp.ToolResultEnvelope
+	if err := json.Unmarshal([]byte(content), &envelope); err != nil || !envelope.OK {
+		return sessionPageToolsLiveTabs{}, false
+	}
+	var tabs sessionPageToolsLiveTabs
+	if err := json.Unmarshal(envelope.Data, &tabs); err != nil {
+		return sessionPageToolsLiveTabs{}, false
+	}
+	ready := hasLiveOrigin(tabs.Targets, sessionPageToolsLiveCubecadeOrigin) && hasLiveOrigin(tabs.Targets, sessionPageToolsLiveMarginOrigin)
+	return tabs, ready
 }
 
 func requireLivePageTargets(t *testing.T, tabs sessionPageToolsLiveTabs) (sessionPageToolsLiveTarget, sessionPageToolsLiveTarget) {

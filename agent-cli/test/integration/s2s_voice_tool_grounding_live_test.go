@@ -309,8 +309,8 @@ func validateLiveVoiceDateControlCase(observation liveVoiceToolGroundingObservat
 }
 
 func hasExactlyDefaultLiveTools(got []string) bool {
-	want := make(map[string]struct{}, len(config.DefaultToolIDs))
-	for _, name := range config.DefaultToolIDs {
+	want := make(map[string]struct{}, len(config.DefaultToolIDs()))
+	for _, name := range config.DefaultToolIDs() {
 		want[name] = struct{}{}
 	}
 	seen := make(map[string]struct{}, len(got))

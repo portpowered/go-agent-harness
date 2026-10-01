@@ -23,6 +23,11 @@ const (
 
 	defaultChromeVersionTimeout = 2 * time.Second
 	maxChromeVersionOutputBytes = 64 << 10
+
+	// acquisitionCategoryMaxBytes and platformLabelMaxBytes bound labels
+	// echoed in acquisition diagnostics.
+	acquisitionCategoryMaxBytes = 48
+	platformLabelMaxBytes       = 32
 )
 
 // ExecutableSource identifies how a Chrome executable was obtained.
@@ -502,7 +507,7 @@ func safeAcquisitionCategory(value string) string {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			builder.WriteRune(r)
 		}
-		if builder.Len() >= 48 {
+		if builder.Len() >= acquisitionCategoryMaxBytes {
 			break
 		}
 	}
@@ -511,8 +516,8 @@ func safeAcquisitionCategory(value string) string {
 
 func safePlatformLabel(value string) string {
 	value = strings.TrimSpace(value)
-	if len(value) > 32 {
-		value = value[:32]
+	if len(value) > platformLabelMaxBytes {
+		value = value[:platformLabelMaxBytes]
 	}
 	for _, r := range value {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '/' && r != '-' && r != '_' {

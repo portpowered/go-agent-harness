@@ -16,6 +16,9 @@ import (
 
 const redactedAPIKey = "<redacted>"
 
+// modelServerProbeTimeout bounds each reachability probe of a configured model server's models endpoint.
+const modelServerProbeTimeout = 5 * time.Second
+
 // ConfigCommand is the config group (parent command); subcommands are wired in core_router.go.
 type ConfigCommand struct{}
 
@@ -166,7 +169,7 @@ func (c *ConfigAddLocalCommand) probeServer(cmd *cobra.Command, baseURL string) 
 		urls = append(urls, strings.TrimRight(baseURL, "/")+"/v1/models")
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: modelServerProbeTimeout}
 	for _, url := range urls {
 		resp, err := client.Get(url)
 		if err == nil {

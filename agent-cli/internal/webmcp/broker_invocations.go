@@ -117,7 +117,7 @@ func (b *StatefulBroker) admitInvocation(ctx context.Context, request InvokeRequ
 	}
 	selected := b.selected
 	b.mu.Unlock()
-	if err := b.selectedStateError(selected, "lifecycle", "selection_not_connected"); err != nil {
+	if err := b.selectedStateError(selected, "lifecycle"); err != nil {
 		return InvokeResult{}, err
 	}
 	b.mu.Lock()
@@ -602,7 +602,7 @@ func (b *StatefulBroker) applyTerminalObservationLocked(invocation *brokerInvoca
 		output = json.RawMessage("null")
 	}
 	if observation.outputBytes > b.maxResultBytes {
-		b.finishInvocationLocked(invocation, resultTooLargeResult(invocation, estimatedInvocationResultSize(invocation, output, observation.outputBytes), b.maxResultBytes))
+		b.finishInvocationLocked(invocation, resultTooLargeResult(invocation, estimatedInvocationResultSize(invocation, observation.outputBytes), b.maxResultBytes))
 		return
 	}
 	output, err := oneJSONValue(output)
@@ -693,7 +693,7 @@ func invocationResultSize(invocation *brokerInvocation, output json.RawMessage) 
 	return len(wire)
 }
 
-func estimatedInvocationResultSize(invocation *brokerInvocation, output json.RawMessage, outputBytes int) int {
+func estimatedInvocationResultSize(invocation *brokerInvocation, outputBytes int) int {
 	placeholder := invocationResultSize(invocation, json.RawMessage("null"))
 	if placeholder == 0 {
 		return outputBytes

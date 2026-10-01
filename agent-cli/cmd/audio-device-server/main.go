@@ -16,6 +16,9 @@ import (
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
+// httpReadHeaderTimeout bounds how long the loopback control server waits for request headers.
+const httpReadHeaderTimeout = 5 * time.Second
+
 func main() {
 	listenAddress := flag.String("listen", "127.0.0.1:0", "loopback listen address")
 	sampleRate := flag.Int("sample-rate", audio.SampleRate, "mock device PCM sample rate")
@@ -65,7 +68,7 @@ func main() {
 		fatal(errors.Join(err, listener.Close()))
 	}
 
-	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	httpServer := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: httpReadHeaderTimeout}
 	if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}

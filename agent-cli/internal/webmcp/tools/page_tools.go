@@ -23,6 +23,10 @@ import (
 // page's own name so a model can call exactly what the catalog listed.
 const PageToolNamePrefix = "page_"
 
+// pageToolRunReserveDivisor reserves 1/N of the caller's remaining deadline
+// for the page tool's own run, leaving the rest for browser setup.
+const pageToolRunReserveDivisor = 3
+
 // pageToolState guards the dynamic first-class page-tool surface. The name
 // map is rebuilt on every definition snapshot and consulted (with a live
 // catalog re-resolution) on every dynamic call, so executor routing follows
@@ -281,7 +285,7 @@ func (s *BrokerToolSet) executePageTool(ctx context.Context, call messages.ToolC
 	setupContext := ctx
 	cancelSetup := func() {}
 	if deadline, ok := ctx.Deadline(); ok {
-		reserve := time.Until(deadline) / 3
+		reserve := time.Until(deadline) / pageToolRunReserveDivisor
 		if reserve > 0 {
 			setupContext, cancelSetup = context.WithDeadline(ctx, deadline.Add(-reserve))
 		}

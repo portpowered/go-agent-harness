@@ -20,8 +20,6 @@ import (
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
-	gwtesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
 const (
@@ -55,7 +53,7 @@ func TestSessionCommandReplaysTest7LongOpenAIAudioTo16kLoopback(t *testing.T) {
 		}
 		providerChunks = append(providerChunks, decodeTest7PCM16(t, chunk))
 	}
-	want := mustResampleStream(t, providerChunks, wavio.Rate24kHz, audio.SampleRate)
+	want := mustResampleProviderToDevice(t, providerChunks)
 
 	capturePath := filepath.Join(t.TempDir(), "test7-long-openai-edge-replay.session.json")
 	writeTest7LongOpenAICapture(t, capturePath, deltas)
@@ -175,72 +173,8 @@ func loadTest7LongOpenAIAudio(t *testing.T) ([]string, []byte) {
 
 func writeTest7LongOpenAICapture(t *testing.T, path string, deltas []string) {
 	t.Helper()
-	sequence := 0
-	records := make([]gwtesting.CapturedSessionEvent, 0, len(deltas)+7)
-	add := func(direction gwtesting.SessionEventDirection, payload any) {
-		sequence++
-		data, err := json.Marshal(payload)
-		if err != nil {
-			t.Fatalf("marshal test7 replay event %d: %v", sequence, err)
-		}
-		var envelope struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal(data, &envelope); err != nil {
-			t.Fatalf("read test7 replay event type %d: %v", sequence, err)
-		}
-		records = append(records, gwtesting.CapturedSessionEvent{
-			Sequence: sequence, Direction: direction, TimestampMs: int64(sequence), Type: envelope.Type,
-			PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage, Payload: data,
-		})
-	}
-
-	add(gwtesting.DirectionClientToServer, map[string]any{
-		"type": "session.update", "session": map[string]any{
-			"model": "gpt-realtime-2.1",
-			"audio": map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}}},
-		},
-	})
-	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "session.created", "session": map[string]any{
-			"id": "sess-test7-long", "type": "realtime", "model": "gpt-realtime-2.1",
-			"audio": map[string]any{"output": map[string]any{"format": map[string]any{"type": "audio/pcm", "rate": 24000}}},
-		},
-	})
-	add(gwtesting.DirectionClientToServer, map[string]any{
-		"type": "conversation.item.create", "item": map[string]any{
-			"type": "message", "role": "user", "content": []map[string]any{{"type": "input_text", "text": "replay test7 long audio"}},
-		},
-	})
-	add(gwtesting.DirectionClientToServer, map[string]any{"type": "response.create"})
-	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.created", "response": map[string]any{"id": "resp-test7-long", "status": "in_progress"},
-	})
-	for _, delta := range deltas {
-		add(gwtesting.DirectionServerToClient, map[string]any{
-			"type": "response.output_audio.delta", "response_id": "resp-test7-long", "item_id": "item-test7-long",
-			"output_index": 0, "content_index": 0, "delta": delta,
-		})
-	}
-	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.output_audio.done", "response_id": "resp-test7-long", "item_id": "item-test7-long",
-		"output_index": 0, "content_index": 0,
-	})
-	add(gwtesting.DirectionServerToClient, map[string]any{
-		"type": "response.done", "response": map[string]any{"id": "resp-test7-long", "status": "completed"},
-	})
-
-	capture := gwtesting.SessionCapture{
-		Version:  gwtesting.SessionCaptureVersion,
-		Provider: gwtesting.SessionProviderMetadata{Name: "openai", Model: "gpt-realtime-2.1"},
-		Session:  gwtesting.SessionMetadata{ID: "sess-test7-long", StartedAtUTC: "2026-09-02T19:41:55.000000Z"},
-		Records:  records,
-	}
-	data, err := json.Marshal(capture)
-	if err != nil {
-		t.Fatalf("marshal test7 replay capture: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write test7 replay capture: %v", err)
-	}
+	writeOpenAIAudioReplayCapture(t, path, openAIAudioReplayCapture{
+		label: "test7", model: "gpt-realtime-2.1", sessionID: "sess-test7-long", responseID: "resp-test7-long",
+		itemID: "item-test7-long", prompt: "replay test7 long audio", startedAtUTC: "2026-09-02T19:41:55.000000Z",
+	}, deltas)
 }

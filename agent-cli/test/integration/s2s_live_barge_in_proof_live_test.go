@@ -701,7 +701,7 @@ func writeLiveBargeInNoToolConfig(t *testing.T, directory string) {
 	}
 	var contents strings.Builder
 	contents.WriteString("tools:\n  list:\n")
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		fmt.Fprintf(&contents, "    - id: %s\n      enabled: false\n", id)
 	}
 	if err := os.WriteFile(filepath.Join(directory, config.ConfigFileName), []byte(contents.String()), 0o600); err != nil {

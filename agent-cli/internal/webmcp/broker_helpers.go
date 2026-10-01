@@ -129,7 +129,7 @@ func targetSessionLifecycleFailure(selected *brokerSession) error {
 	return nil
 }
 
-func rememberLifecycleFailureLocked(selected *brokerSession, code ErrorCode, reason string) {
+func rememberLifecycleFailureLocked(selected *brokerSession, code ErrorCode) {
 	if selected == nil || selected.lifecycleFailure != nil {
 		return
 	}

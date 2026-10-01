@@ -190,7 +190,7 @@ func normalizeDisconnectEvent(event DisconnectEvent) (DisconnectEvent, *Discover
 	if event.TargetID != "" && (hasControl(event.TargetID) || !publicIDPattern.MatchString(event.TargetID)) {
 		return DisconnectEvent{}, newProtocolInvalidAt("disconnect", "unknown", "normalized_target_id_required", nil)
 	}
-	event.Phase = boundedLabel(event.Phase, 32)
+	event.Phase = boundedLabel(event.Phase, maxPhaseLabelBytes)
 	if event.Phase == "" {
 		event.Phase = phaseDisconnect
 	}
@@ -300,7 +300,7 @@ func (s *Service) markBrowserDisconnectedLocked(browserID, targetID, phase strin
 	if publicIDPattern.MatchString(strings.TrimSpace(targetID)) {
 		state.TargetID = strings.TrimSpace(targetID)
 	}
-	state.Phase = boundedLabel(phase, 32)
+	state.Phase = boundedLabel(phase, maxPhaseLabelBytes)
 	if state.Phase == "" {
 		state.Phase = phaseDisconnect
 	}

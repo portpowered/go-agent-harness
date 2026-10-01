@@ -29,7 +29,7 @@ func classifiedOpenError(candidate webmcp.BrowserCandidate, cause error) error {
 	}
 }
 
-func classifiedHandleError(candidate webmcp.BrowserCandidate, code webmcp.ErrorCode, phase string, cause error) error {
+func classifiedHandleError(code webmcp.ErrorCode, phase string, cause error) error {
 	var classified *webmcp.ClassifiedError
 	if errors.As(cause, &classified) && classified != nil {
 		return classified

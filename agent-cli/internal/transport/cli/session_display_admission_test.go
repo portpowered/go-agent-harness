@@ -79,7 +79,7 @@ func TestSessionToolCapabilitiesFactoryOmitsDisplayToolsOnHeadlessProbe(t *testi
 	if _, err := capabilities.Executor.Execute(context.Background(), messages.ToolCall{ID: "headless-show", Name: "show"}); err == nil || !errors.Is(err, runtimeTools.ErrToolNotFound) {
 		t.Fatalf("headless show route result = %v, want absent route", err)
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "read_file"); !ok {
+	if !hasSessionDefinition(capabilities.Definitions, "read_file") {
 		t.Fatal("headless admission dropped unrelated read_file")
 	}
 	if surface.probes != 1 || surface.captures != 0 {
@@ -98,10 +98,10 @@ func TestSessionToolCapabilitiesFactoryRetainsShowOnUsableProbe(t *testing.T) {
 	if !capabilities.DisplayCapability.Usable() {
 		t.Fatalf("display capability = %+v, want usable", capabilities.DisplayCapability)
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "show"); !ok {
+	if !hasSessionDefinition(capabilities.Definitions, "show") {
 		t.Fatal("usable admission omitted show")
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "mouse"); !ok {
+	if !hasSessionDefinition(capabilities.Definitions, "mouse") {
 		t.Fatal("usable admission omitted mouse")
 	}
 	if surface.probes != 1 || surface.captures != 0 {
@@ -146,10 +146,10 @@ func TestSessionToolCapabilitiesFactoryAdvertisesShowWhenPermissionDeniedWithDis
 	if !capabilities.DisplayCapability.Advertisable() {
 		t.Fatalf("display capability = %+v, want advertisable despite denied permission", capabilities.DisplayCapability)
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "show"); !ok {
+	if !hasSessionDefinition(capabilities.Definitions, "show") {
 		t.Fatal("permission-denied-with-display admission omitted show; the model can never reach the invocation-time permission envelope")
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "mouse"); !ok {
+	if !hasSessionDefinition(capabilities.Definitions, "mouse") {
 		t.Fatal("permission-denied-with-display admission omitted mouse")
 	}
 
@@ -198,7 +198,7 @@ func TestSessionToolCapabilitiesFactoryCapturesNormallyWhenPermissionGranted(t *
 	if !capabilities.DisplayCapability.Usable() {
 		t.Fatalf("display capability = %+v, want usable", capabilities.DisplayCapability)
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "show"); !ok {
+	if !hasSessionDefinition(capabilities.Definitions, "show") {
 		t.Fatal("usable admission omitted show")
 	}
 
@@ -251,7 +251,7 @@ func TestSessionDisplayAdmissionProbeIsBoundedAndFailsClosed(t *testing.T) {
 	if capabilities.DisplayCapability.Usable() {
 		t.Fatalf("timed-out probe admitted display tools: %+v", capabilities.DisplayCapability)
 	}
-	if _, ok := findSessionDefinition(capabilities.Definitions, "show"); ok {
+	if hasSessionDefinition(capabilities.Definitions, "show") {
 		t.Fatal("timed-out probe retained show")
 	}
 }
@@ -283,13 +283,13 @@ func TestSessionToolDiagnosticSinkWritesTypedOperatorDetail(t *testing.T) {
 	}
 }
 
-func findSessionDefinition(definitions []messages.ToolDefinition, name string) (messages.ToolDefinition, bool) {
+func hasSessionDefinition(definitions []messages.ToolDefinition, name string) bool {
 	for _, definition := range definitions {
 		if definition.Name == name {
-			return definition, true
+			return true
 		}
 	}
-	return messages.ToolDefinition{}, false
+	return false
 }
 
 var _ tools.DisplaySurface = (*sessionDisplaySurfaceFake)(nil)
@@ -299,7 +299,7 @@ func browserCapabilityConfig(t *testing.T, enabled bool) *config.Config {
 	browser := config.DefaultBrowserConfig()
 	browser.Tools.Enabled = enabled
 	cfg := &config.Config{Browser: browser, FilesystemWorkDir: t.TempDir()}
-	for _, id := range config.DefaultToolIDs {
+	for _, id := range config.DefaultToolIDs() {
 		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "sleep"})
 	}
 	return cfg

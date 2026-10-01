@@ -33,7 +33,7 @@ func TestWebMCPQueryToolScopeUsesFreshnessGuard(t *testing.T) {
 				t.Fatalf("live/direct decoded %s payloads differ: live=%s direct=%s", testCase.name, liveOutput, directOutput)
 			}
 			fixture.assertUnchangedSelection(t)
-			fixture.assertOneTerminalPerInvocation(t, 2)
+			fixture.assertOneTerminalPerInvocation(t)
 		})
 	}
 }

@@ -598,7 +598,7 @@ func writeManagedBrowserState(path string, state ManagedBrowserState) error {
 			removeBestEffort(os.Remove, temporaryPath)
 		}
 	}()
-	if err := temporary.Chmod(0o600); err != nil {
+	if err := temporary.Chmod(ownerOnlyFileMode); err != nil {
 		discardCleanupError(temporary.Close)
 		return err
 	}
@@ -645,7 +645,7 @@ func acquireManagedBrowserLease(ctx context.Context, path string, timeout, poll,
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	for {
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, ownerOnlyFileMode)
 		if err == nil {
 			return recordManagedBrowserLeaseOwner(path, file)
 		}

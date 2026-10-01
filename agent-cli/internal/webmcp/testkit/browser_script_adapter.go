@@ -361,13 +361,17 @@ type BrowserScriptSession struct {
 	err     error
 }
 
+// Scripted session event buffers hold every scripted event plus headroom for
+// runtime-emitted events, and never fall below the minimum size.
+const (
+	minScriptEventBuffer      = 32
+	scriptEventBufferHeadroom = 8
+)
+
 func newBrowserScriptSession(handle *BrowserScriptHandle, target webmcp.Target, ownership webmcp.TargetOwnership) *BrowserScriptSession {
-	capacity := 32
+	capacity := minScriptEventBuffer
 	if handle != nil && handle.adapter != nil {
-		capacity = countScriptEvents(handle.adapter.script()) + 8
-		if capacity < 32 {
-			capacity = 32
-		}
+		capacity = max(countScriptEvents(handle.adapter.script())+scriptEventBufferHeadroom, minScriptEventBuffer)
 	}
 	page := webmcp.PageContext{
 		Key:        webmcp.PageKey{BrowserID: target.BrowserID, TargetID: target.ID},

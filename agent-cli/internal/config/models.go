@@ -112,12 +112,12 @@ func (s *ModelsConfigStorage) Load() (*ModelsConfig, error) {
 }
 
 func (s *ModelsConfigStorage) write(cfg *ModelsConfig) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), configDirPerm); err != nil {
 		return err
 	}
 	data, err := yamlv3.Marshal(cfg)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0644)
+	return os.WriteFile(s.path, data, modelsFilePerm)
 }

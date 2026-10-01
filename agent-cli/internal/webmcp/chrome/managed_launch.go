@@ -33,16 +33,15 @@ const (
 	managedBrowserRequestTimeout         = 2 * time.Second
 )
 
-var (
-	// ErrManagedBrowserLaunch is the stable classification for all failures
-	// while preparing, starting, or waiting for an agent-managed browser.
-	ErrManagedBrowserLaunch = errors.New("managed browser launch failed")
+// ErrManagedBrowserLaunch is the stable classification for all failures
+// while preparing, starting, or waiting for an agent-managed browser.
+var ErrManagedBrowserLaunch = errors.New("managed browser launch failed")
 
-	managedBrowserURLPattern = map[string]struct{}{
-		schemeHTTP:  {},
-		schemeHTTPS: {},
-	}
-)
+// isManagedBrowserURLScheme reports whether a lower-cased URL scheme is one the
+// managed browser launch URL accepts.
+func isManagedBrowserURLScheme(scheme string) bool {
+	return scheme == schemeHTTP || scheme == schemeHTTPS
+}
 
 // ManagedChromeExecutableAcquirer is the executable-selection seam used by
 // the managed launcher. ManagedChromeAcquirer satisfies it, while tests can
@@ -637,7 +636,7 @@ func prepareManagedBrowserProfile(profileDir string) error {
 	if info, err := os.Lstat(profileDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("managed browser profile directory must not be a symlink")
 	}
-	if err := os.MkdirAll(profileDir, 0o700); err != nil {
+	if err := os.MkdirAll(profileDir, ownerOnlyDirMode); err != nil {
 		return err
 	}
 	info, err := os.Lstat(profileDir)
@@ -647,7 +646,7 @@ func prepareManagedBrowserProfile(profileDir string) error {
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return errors.New("managed browser profile directory is not a private directory")
 	}
-	if err := os.Chmod(profileDir, 0o700); err != nil {
+	if err := os.Chmod(profileDir, ownerOnlyDirMode); err != nil {
 		return err
 	}
 	directory, err := os.Open(profileDir)
@@ -684,7 +683,7 @@ func normalizeManagedStartupURL(raw string) (string, error) {
 	if err != nil || parsed == nil || parsed.Scheme == "" || parsed.User != nil {
 		return "", errors.New("startup URL must be an absolute URL without credentials")
 	}
-	if _, supported := managedBrowserURLPattern[strings.ToLower(parsed.Scheme)]; supported && parsed.Hostname() == "" {
+	if isManagedBrowserURLScheme(strings.ToLower(parsed.Scheme)) && parsed.Hostname() == "" {
 		return "", errors.New("HTTP startup URLs require a host")
 	}
 	return value, nil

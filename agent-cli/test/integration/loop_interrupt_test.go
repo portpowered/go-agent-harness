@@ -68,16 +68,7 @@ func (m *blockingMockInferencer) InferStream(ctx context.Context, req messages.I
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan messages.StreamMessage, 8)
-	text := result.Message.TextContent()
-	ch <- messages.StreamMessage{Type: messages.StreamTypeTextStart, ActorProvidedIndex: 0, Value: messages.NewTextStartValue()}
-	if text != "" {
-		ch <- messages.StreamMessage{Type: messages.StreamTypeTextDelta, ActorProvidedIndex: 0, Value: messages.NewTextDeltaValue(text)}
-	}
-	ch <- messages.StreamMessage{Type: messages.StreamTypeTextEnd, ActorProvidedIndex: 0, Value: messages.NewTextEndValue()}
-	ch <- messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ActorProvidedIndex: 0, Value: messages.NewMessageEndValue(result.TokenUsage)}
-	close(ch)
-	return ch, nil
+	return textResultStream(result), nil
 }
 
 // TestIterativeLoop_InterruptMidIteration verifies that cancelling the context during

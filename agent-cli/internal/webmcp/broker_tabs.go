@@ -26,26 +26,27 @@ func (b *StatefulBroker) OpenTab(ctx context.Context, request OpenTabRequest) (P
 	// evidence missed its short diagnostic deadline. Opening the requested page
 	// succeeded; report that selected context so the model can refresh/list its
 	// tools instead of interpreting a slow page as a failed tab creation.
-	if isCatalogEvidenceError(err) {
-		b.mu.Lock()
-		pending := b.selected
-		if pending != nil && (pending.context.Key.BrowserID != opened.BrowserID || pending.context.Key.TargetID != opened.ID) {
-			pending = nil
+	if !isCatalogEvidenceError(err) {
+		return PageContext{}, err
+	}
+	b.mu.Lock()
+	pending := b.selected
+	if pending != nil && (pending.context.Key.BrowserID != opened.BrowserID || pending.context.Key.TargetID != opened.ID) {
+		pending = nil
+	}
+	b.mu.Unlock()
+	if pending != nil {
+		// A newly navigated page commonly registers its WebMCP producer just
+		// after the one-second attach diagnostic. Give that exact selected
+		// session one additional bounded catalog interval before returning a
+		// connected-but-not-ready result to the model.
+		if retryErr := b.waitForCatalog(ctx, pending, false); retryErr != nil && !isCatalogEvidenceError(retryErr) {
+			return PageContext{}, retryErr
 		}
-		b.mu.Unlock()
-		if pending != nil {
-			// A newly navigated page commonly registers its WebMCP producer just
-			// after the one-second attach diagnostic. Give that exact selected
-			// session one additional bounded catalog interval before returning a
-			// connected-but-not-ready result to the model.
-			if retryErr := b.waitForCatalog(ctx, pending, false); retryErr != nil && !isCatalogEvidenceError(retryErr) {
-				return PageContext{}, retryErr
-			}
-		}
-		selected, selectedErr := b.Selected(ctx)
-		if selectedErr == nil && selected.Key.BrowserID == opened.BrowserID && selected.Key.TargetID == opened.ID {
-			return selected, nil
-		}
+	}
+	selected, selectedErr := b.Selected(ctx)
+	if selectedErr == nil && selected.Key.BrowserID == opened.BrowserID && selected.Key.TargetID == opened.ID {
+		return selected, nil
 	}
 	return PageContext{}, err
 }

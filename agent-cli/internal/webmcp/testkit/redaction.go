@@ -386,7 +386,7 @@ func (t redactionTrace) applyTo(event *Event) {
 		mode = RedactionRedacted
 	}
 	rules := make([]string, 0, len(t.rules))
-	for _, rule := range redactionRuleOrder {
+	for _, rule := range redactionRuleOrder() {
 		if t.rules[rule] {
 			rules = append(rules, rule)
 		}
