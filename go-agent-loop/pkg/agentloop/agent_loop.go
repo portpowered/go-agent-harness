@@ -572,12 +572,3 @@ func (al *AgentLoop) SendInterrupt(ctx context.Context, followUp *messages.Messa
 	}
 	return nil
 }
-
-const (
-	// defaultBufferCapacity is the participant buffer capacity used when no
-	// WithBufferCapacity option is given.
-	defaultBufferCapacity = 64
-	// deltaEventReaderCapacity bounds the consumer-facing kernel delta
-	// readers and stream event channels.
-	deltaEventReaderCapacity = 256
-)

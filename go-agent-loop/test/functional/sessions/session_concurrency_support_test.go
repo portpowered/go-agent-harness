@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -67,13 +66,6 @@ const (
 	// concurrentMaxDrainTicks bounds the quiescence drain.
 	concurrentMaxDrainTicks = 2000
 )
-
-// concurrentDefaultTurns is the shared script: a text-led turn, an audio-led
-// turn, and a tool-call turn. Every session runs this identical script, so any
-// foreign marker in a capture is provably cross-session leakage.
-func concurrentDefaultTurns() []concurrentTurnKind {
-	return []concurrentTurnKind{turnText, turnAudio, turnTool}
-}
 
 // concurrentRunBudget bounds one concurrent run in wall-clock time. It is a
 // failure-only watchdog in the coordinator, never pacing: all pacing and
@@ -709,28 +701,3 @@ func sessionOpen(result *concurrentSessionResult) bool {
 		return delta.Type == messages.StreamTypeSessionOpen
 	}) > 0
 }
-
-// settleGoroutines waits until at most limit goroutines run or timeout
-// elapses, and returns the last count. Goroutine exit publishes no signal,
-// so the count is resampled on a ticker; the wait ends as soon as the
-// count is within the limit.
-func settleGoroutines(limit int, timeout time.Duration) int {
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	resample := time.NewTicker(settleResampleInterval)
-	defer resample.Stop()
-	for {
-		count := runtime.NumGoroutine()
-		if count <= limit {
-			return count
-		}
-		select {
-		case <-resample.C:
-		case <-deadline.C:
-			return runtime.NumGoroutine()
-		}
-	}
-}
-
-// settleResampleInterval is how often settleGoroutines resamples the count.
-const settleResampleInterval = 10 * time.Millisecond

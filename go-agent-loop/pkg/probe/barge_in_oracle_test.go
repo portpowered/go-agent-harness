@@ -343,7 +343,6 @@ func (s *bargeInTestStream) input(id, turn string) {
 	s.observe(BargeInEvent{Kind: BargeInEventUserTurn, InputID: id, TurnID: turn})
 }
 
-// response observes input i1 in turn t1 and creates response r1 for it.
 func (s *bargeInTestStream) response() {
 	s.input("i1", "t1")
 	s.observe(BargeInEvent{Kind: BargeInEventResponseCreated, ResponseID: "r1", InputID: "i1", TurnID: "t1"})

@@ -33,18 +33,7 @@ func validateScenarioV2StepRequiredFields(step ScenarioV2Step, location string, 
 			return newScenarioV2Error(location, "url and fixture are mutually exclusive")
 		}
 	case ScenarioV2StepWebMCPInvoke:
-		if err := nonEmpty(step.ToolRef, "tool_ref"); err != nil {
-			return err
-		}
-		if err := nonEmpty(step.InputJSON, "input_json"); err != nil {
-			return err
-		}
-		if err := nonEmpty(step.Reason, "reason"); err != nil {
-			return err
-		}
-		if _, err := decodeScenarioV2Object([]byte(step.InputJSON), location+".input_json"); err != nil {
-			return newScenarioV2Error(location+".input_json", "must contain a JSON object")
-		}
+		return validateScenarioV2InvokeStep(step, location)
 	case ScenarioV2StepWebMCPCancel:
 		return nonEmpty(step.InvocationID, "invocation_id")
 	case ScenarioV2StepSendText:
@@ -282,11 +271,7 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 		}
 	case ScenarioV2ExpectationTranscriptContains:
 		return nonEmpty(expectation.Text, "text")
-	case ScenarioV2ExpectationStaleToolRejected:
-		if expectation.ToolRef != "" {
-			return nil
-		}
-	case ScenarioV2ExpectationBrowserCountEquals, ScenarioV2ExpectationEligibleTabCountEquals, ScenarioV2ExpectationCatalogGenerationEquals, ScenarioV2ExpectationNoPendingInvocations, ScenarioV2ExpectationResponseCanceled, ScenarioV2ExpectationAssistantAudioStarted, ScenarioV2ExpectationAssistantAudioStopped, ScenarioV2ExpectationApprovalRequested, ScenarioV2ExpectationApprovalNotRequested, ScenarioV2ExpectationBrowserConnectionClosed:
+	case ScenarioV2ExpectationStaleToolRejected, ScenarioV2ExpectationBrowserCountEquals, ScenarioV2ExpectationEligibleTabCountEquals, ScenarioV2ExpectationCatalogGenerationEquals, ScenarioV2ExpectationNoPendingInvocations, ScenarioV2ExpectationResponseCanceled, ScenarioV2ExpectationAssistantAudioStarted, ScenarioV2ExpectationAssistantAudioStopped, ScenarioV2ExpectationApprovalRequested, ScenarioV2ExpectationApprovalNotRequested, ScenarioV2ExpectationBrowserConnectionClosed:
 		// These kinds need no handling here.
 	}
 	return nil
@@ -368,4 +353,18 @@ func cloneScenarioV2Raw(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return append(json.RawMessage(nil), raw...)
+}
+
+// validateScenarioV2InvokeStep requires a tool reference, a reason, and a
+// JSON-object input for a WebMCP invoke step.
+func validateScenarioV2InvokeStep(step ScenarioV2Step, location string) error {
+	for _, field := range []struct{ name, value string }{{"tool_ref", step.ToolRef}, {"input_json", step.InputJSON}, {"reason", step.Reason}} {
+		if strings.TrimSpace(field.value) == "" {
+			return newScenarioV2Error(location+"."+field.name, "required field is missing")
+		}
+	}
+	if _, err := decodeScenarioV2Object([]byte(step.InputJSON), location+".input_json"); err != nil {
+		return newScenarioV2Error(location+".input_json", "must contain a JSON object")
+	}
+	return nil
 }

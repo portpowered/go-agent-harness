@@ -7,35 +7,6 @@ import (
 	"testing"
 )
 
-// liveSuiteSmokeScenario exercises the audio and transcript expectation
-// paths the built-in scenarios do not all cover.
-func liveSuiteSmokeScenario() Scenario {
-	return Scenario{
-		ID:   "live-probe-suite-smoke",
-		Name: "live probe suite smoke",
-		Steps: []Step{
-			{Type: StepSendText, Text: "probe input"},
-			{Type: StepSendAudio, CorpusID: "probe-audio"},
-			{Type: StepClose},
-		},
-		Expectations: []ExpectedBehavior{
-			{Type: ExpectTranscriptContains, Text: "expected response"},
-			{Type: ExpectAudioEnergy},
-		},
-	}
-}
-
-// builtinRegistry returns a fresh built-in registry, failing the test when
-// the built-ins cannot be registered.
-func builtinRegistry(t *testing.T) *ScenarioRegistry {
-	t.Helper()
-	registry, err := NewBuiltinScenarioRegistry()
-	if err != nil {
-		t.Fatalf("NewBuiltinScenarioRegistry() error = %v", err)
-	}
-	return registry
-}
-
 func TestDeadSessionGuardCoversBuiltinRegistry(t *testing.T) {
 	entries := builtinRegistry(t).Entries()
 	if len(entries) == 0 {
@@ -47,18 +18,6 @@ func TestDeadSessionGuardCoversBuiltinRegistry(t *testing.T) {
 		t.Fatalf("built-in registry guard failed: %v", err)
 	}
 	assertGuardRunsForEntries(t, result, entries)
-}
-
-func TestDeadSessionGuardCoversLiveSuiteSmokeScenario(t *testing.T) {
-	registry := builtinRegistry(t)
-	if err := registry.Register(liveSuiteSmokeScenario()); err != nil {
-		t.Fatal(err)
-	}
-	result, err := NewDeadSessionGuard(WithScenarioRegistry(registry)).Run(t.Context())
-	if err != nil {
-		t.Fatalf("smoke registry guard failed: %v", err)
-	}
-	assertGuardRunsForEntries(t, result, registry.Entries())
 }
 
 func TestDeadSessionGuardRunsEveryApplicableControlOnceWithFreshSubjects(t *testing.T) {

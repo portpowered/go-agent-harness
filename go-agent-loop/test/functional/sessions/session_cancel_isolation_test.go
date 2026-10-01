@@ -325,3 +325,28 @@ func summarizeKeys(keys []string) string {
 	}
 	return fmt.Sprintf("%v ...(%d total)", keys[:maxShown], len(keys))
 }
+
+// settleGoroutines waits until at most limit goroutines run or timeout
+// elapses, and returns the last count. Goroutine exit publishes no signal,
+// so the count is resampled on a ticker; the wait ends as soon as the
+// count is within the limit.
+func settleGoroutines(limit int, timeout time.Duration) int {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	resample := time.NewTicker(settleResampleInterval)
+	defer resample.Stop()
+	for {
+		count := runtime.NumGoroutine()
+		if count <= limit {
+			return count
+		}
+		select {
+		case <-resample.C:
+		case <-deadline.C:
+			return runtime.NumGoroutine()
+		}
+	}
+}
+
+// settleResampleInterval is how often settleGoroutines resamples the count.
+const settleResampleInterval = 10 * time.Millisecond

@@ -231,3 +231,10 @@ func printableSnippet(payload []byte) string {
 	}, payload[:end])
 	return string(snippet)
 }
+
+// concurrentDefaultTurns is the shared script: a text-led turn, an audio-led
+// turn, and a tool-call turn. Every session runs this identical script, so any
+// foreign marker in a capture is provably cross-session leakage.
+func concurrentDefaultTurns() []concurrentTurnKind {
+	return []concurrentTurnKind{turnText, turnAudio, turnTool}
+}

@@ -138,6 +138,7 @@ func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
 	}
 	for _, testCase := range payloadCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			if got := messagePayload(testCase.message); !bytes.Equal(got, testCase.want) {
 				t.Fatalf("message payload = %v, want %v", got, testCase.want)
 			}
@@ -164,6 +165,7 @@ func TestSessionHarnessPayloadAndStreamContracts(t *testing.T) {
 	}
 	for _, testCase := range streamCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			if got := streamPayload(testCase.delta); !bytes.Equal(got, testCase.want) {
 				t.Fatalf("stream payload = %v, want %v", got, testCase.want)
 			}

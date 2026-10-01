@@ -49,23 +49,31 @@ func run(ctx context.Context, stdout io.Writer, modelsRoot, endpoint, output str
 	if err := generator.WaitReady(ctx); err != nil {
 		return err
 	}
-	for i, text := range ttscorpus.Utterances() {
-		for _, rate := range ttscorpus.SampleRates() {
-			name := ttscorpus.ClipName(i, rate)
-			path := filepath.Join(output, name)
-			if _, err := fmt.Fprintf(stdout, "SYNTHESIZE file=%s rate=%d\n", name, rate); err != nil {
-				return fmt.Errorf("ttscorpus: write progress: %w", err)
-			}
-			if err := generator.Synthesize(ctx, text, path); err != nil {
-				return err
-			}
-		}
+	if err := synthesizeCorpus(ctx, stdout, generator, output); err != nil {
+		return err
 	}
 	if err := ttscorpus.EmitManifest(output); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(stdout, "CORPUS=PASS"); err != nil {
 		return fmt.Errorf("ttscorpus: write result: %w", err)
+	}
+	return nil
+}
+
+// synthesizeCorpus writes every utterance at every session sample rate into
+// output, reporting each clip to stdout.
+func synthesizeCorpus(ctx context.Context, stdout io.Writer, generator *ttscorpus.Generator, output string) error {
+	for i, text := range ttscorpus.Utterances() {
+		for _, rate := range ttscorpus.SampleRates() {
+			name := ttscorpus.ClipName(i, rate)
+			if _, err := fmt.Fprintf(stdout, "SYNTHESIZE file=%s rate=%d\n", name, rate); err != nil {
+				return fmt.Errorf("ttscorpus: write progress: %w", err)
+			}
+			if err := generator.Synthesize(ctx, text, filepath.Join(output, name)); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

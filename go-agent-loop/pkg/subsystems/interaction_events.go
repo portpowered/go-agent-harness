@@ -74,23 +74,7 @@ func (s *InteractionEvents) applyEvent(ctx context.Context, curr *state.LoopStat
 		curr.Outputs.UserInbox.Write(ctx, messages.UserRequest{Message: *msg})
 		writeFullMessage(ctx, curr, messages.Model, *msg)
 	case messages.InteractionEventToolCallRequest:
-		if event.ToolCall == nil {
-			return fmt.Errorf("interaction %q sequence %d: tool call is required", event.InteractionID, event.Sequence)
-		}
-		call := *event.ToolCall
-		curr.Interaction.PendingToolCalls = append(curr.Interaction.PendingToolCalls, call)
-		writeKernelDelta(ctx, curr, messages.Model, messages.StreamMessage{
-			Type:       messages.StreamTypeToolCallStart,
-			Role:       messages.RoleAssistant,
-			ToolCallId: call.ID,
-			Value:      messages.NewToolCallStartValue(call.ID, call.Name),
-		})
-		writeKernelDelta(ctx, curr, messages.Model, messages.StreamMessage{
-			Type:       messages.StreamTypeToolCallEnd,
-			Role:       messages.RoleAssistant,
-			ToolCallId: call.ID,
-			Value:      messages.NewToolCallEndValue(call.ID, call.Name, call.Arguments),
-		})
+		return applyToolCallRequest(ctx, curr, event)
 	case messages.InteractionEventToolResultAccepted:
 		if event.ToolCall == nil {
 			return nil
@@ -176,4 +160,27 @@ func writeFullMessage(ctx context.Context, curr *state.LoopState, source message
 		Type:  messages.StreamTypeSystemFullMessage,
 		Value: messages.NewInferenceResultValue(string(source), msg),
 	})
+}
+
+// applyToolCallRequest records a requested tool call as pending and
+// publishes its TOOLCALL.START/END deltas.
+func applyToolCallRequest(ctx context.Context, curr *state.LoopState, event messages.InteractionEvent) error {
+	if event.ToolCall == nil {
+		return fmt.Errorf("interaction %q sequence %d: tool call is required", event.InteractionID, event.Sequence)
+	}
+	call := *event.ToolCall
+	curr.Interaction.PendingToolCalls = append(curr.Interaction.PendingToolCalls, call)
+	writeKernelDelta(ctx, curr, messages.Model, messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallStart,
+		Role:       messages.RoleAssistant,
+		ToolCallId: call.ID,
+		Value:      messages.NewToolCallStartValue(call.ID, call.Name),
+	})
+	writeKernelDelta(ctx, curr, messages.Model, messages.StreamMessage{
+		Type:       messages.StreamTypeToolCallEnd,
+		Role:       messages.RoleAssistant,
+		ToolCallId: call.ID,
+		Value:      messages.NewToolCallEndValue(call.ID, call.Name, call.Arguments),
+	})
+	return nil
 }

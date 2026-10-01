@@ -434,9 +434,7 @@ func TestSessionModelRunner_HeldOnsetAudioPrecedesLaterControl(t *testing.T) {
 	}
 }
 
-// testFrameSamples is the PCM16 sample count of one test audio frame.
-const testFrameSamples = 480
-
+const testFrameSamples = 480 // PCM16 samples in one test audio frame.
 // pcmFrameAtLevel returns one test frame of PCM16 whose RMS is level.
 func pcmFrameAtLevel(level int16) []byte {
 	pcm := make([]byte, testFrameSamples*2)

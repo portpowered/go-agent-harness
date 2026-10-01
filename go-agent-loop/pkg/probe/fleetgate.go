@@ -209,3 +209,10 @@ func parseFleetArtifact(artifact FleetArtifact) ([]ScenarioResult, error) {
 	}
 	return results, nil
 }
+
+const (
+	// reportScanBufferBytes is the initial line buffer for report scanners.
+	reportScanBufferBytes = 64 * 1024
+	// reportMaxLineBytes bounds one report line.
+	reportMaxLineBytes = 8 * 1024 * 1024
+)

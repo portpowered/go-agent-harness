@@ -69,35 +69,47 @@ func (s *acknowledgementSession) Send(ctx context.Context, msg messages.StreamMe
 	}
 
 	if msg.Type == messages.StreamTypeResponseCreate {
-		value, ok := msg.Value.(*messages.ResponseCreateValue)
-		if ok && value != nil && value.IsToolAcknowledgement() {
-			s.mu.Lock()
-			s.acknowledgementOpen = s.answerAcknowledgement == nil
-			s.mu.Unlock()
-			if s.answerAcknowledgement != nil {
-				s.answerAcknowledgement(ctx, s)
-			} else {
-				s.emitAcknowledgement(ctx, s.completeAck)
-			}
-		} else {
-			s.mu.Lock()
-			acknowledgementOpen := s.acknowledgementOpen
-			s.mu.Unlock()
-			if acknowledgementOpen {
-				panic("normal continuation was sent while acknowledgement was open")
-			}
-			s.emitFinalResponse(ctx)
-		}
-	} else if msg.Type == messages.StreamTypeResponseCancel {
-		s.mu.Lock()
-		acknowledgementOpen := s.acknowledgementOpen
-		s.acknowledgementOpen = false
-		s.mu.Unlock()
-		if acknowledgementOpen {
-			s.emitAcknowledgementEnd(ctx)
-		}
+		s.onResponseCreate(ctx, msg)
+	}
+	if msg.Type == messages.StreamTypeResponseCancel {
+		s.onResponseCancel(ctx)
 	}
 	return true
+}
+
+// onResponseCreate answers an acknowledgement request (directly or through
+// answerAcknowledgement) or a normal continuation with the final response.
+func (s *acknowledgementSession) onResponseCreate(ctx context.Context, msg messages.StreamMessage) {
+	value, ok := msg.Value.(*messages.ResponseCreateValue)
+	if !ok || value == nil || !value.IsToolAcknowledgement() {
+		s.mu.Lock()
+		acknowledgementOpen := s.acknowledgementOpen
+		s.mu.Unlock()
+		if acknowledgementOpen {
+			panic("normal continuation was sent while acknowledgement was open")
+		}
+		s.emitFinalResponse(ctx)
+		return
+	}
+	s.mu.Lock()
+	s.acknowledgementOpen = s.answerAcknowledgement == nil
+	s.mu.Unlock()
+	if s.answerAcknowledgement != nil {
+		s.answerAcknowledgement(ctx, s)
+		return
+	}
+	s.emitAcknowledgement(ctx, s.completeAck)
+}
+
+// onResponseCancel ends an open acknowledgement.
+func (s *acknowledgementSession) onResponseCancel(ctx context.Context) {
+	s.mu.Lock()
+	acknowledgementOpen := s.acknowledgementOpen
+	s.acknowledgementOpen = false
+	s.mu.Unlock()
+	if acknowledgementOpen {
+		s.emitAcknowledgementEnd(ctx)
+	}
 }
 
 func (s *acknowledgementSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {

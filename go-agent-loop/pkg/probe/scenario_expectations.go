@@ -271,17 +271,8 @@ func validateExpectationFields(value ExpectedBehavior, location string) error {
 	if err != nil {
 		return err
 	}
-	if value.HasStep && value.StepIndex < 0 {
-		return makeError(CategoryInvalidField, location+".step", "must not be negative")
-	}
-	if value.HasAfter && value.AfterStep < 0 {
-		return makeError(CategoryInvalidField, location+".after", "must not be negative")
-	}
-	if value.HasBefore && value.BeforeStep < 0 {
-		return makeError(CategoryInvalidField, location+".before", "must not be negative")
-	}
-	if value.HasAfter && value.HasBefore && value.AfterStep >= value.BeforeStep {
-		return makeError(CategoryContradictory, location, "after step must precede before step")
+	if err := validateExpectationAnchors(value, location); err != nil {
+		return err
 	}
 	if value.Count < 0 {
 		return makeError(CategoryInvalidField, location+".count", "must not be negative")
@@ -322,6 +313,23 @@ func validateExpectationFields(value ExpectedBehavior, location string) error {
 		}
 	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled, ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance, ExpectOutputState, ExpectFrameCount, ExpectMetricsReconcile, ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult, ExpectResponseCancel, ExpectBufferDisposition, ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectClose:
 		// These kinds need no handling here.
+	}
+	return nil
+}
+
+// validateExpectationAnchors checks the step, after, and before anchors.
+func validateExpectationAnchors(value ExpectedBehavior, location string) error {
+	if value.HasStep && value.StepIndex < 0 {
+		return makeError(CategoryInvalidField, location+".step", "must not be negative")
+	}
+	if value.HasAfter && value.AfterStep < 0 {
+		return makeError(CategoryInvalidField, location+".after", "must not be negative")
+	}
+	if value.HasBefore && value.BeforeStep < 0 {
+		return makeError(CategoryInvalidField, location+".before", "must not be negative")
+	}
+	if value.HasAfter && value.HasBefore && value.AfterStep >= value.BeforeStep {
+		return makeError(CategoryContradictory, location, "after step must precede before step")
 	}
 	return nil
 }

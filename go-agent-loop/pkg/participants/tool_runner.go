@@ -397,6 +397,3 @@ func (r *ToolRunner) admitCalls(calls []messages.ToolCall) []messages.ToolCall {
 	}
 	return admitted
 }
-
-// streamIDRandomBytes is the random suffix length of generated stream IDs.
-const streamIDRandomBytes = 8
