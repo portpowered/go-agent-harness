@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -160,16 +161,7 @@ func TestFalProvider_Infer_LTXAudioToVideo_ValidRequestAndResponse(t *testing.T)
 		t.Fatalf("Infer() unexpected error: %v", err)
 	}
 
-	// Validate outgoing request
-	if transport.lastReq == nil {
-		t.Fatal("no request was sent")
-	}
-	if transport.lastReq.URL.Path != "/fal-ai/ltx-2-19b/audio-to-video" {
-		t.Errorf("request URL path = %q, want /fal-ai/ltx-2-19b/audio-to-video", transport.lastReq.URL.Path)
-	}
-	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
-		t.Errorf("Authorization header = %q, want Key test-key", auth)
-	}
+	assertFalRequest(t, transport, "/fal-ai/ltx-2-19b/audio-to-video")
 	var body ltxAudioToVideoRequest
 	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
 		t.Fatalf("request body JSON: %v", err)
@@ -181,26 +173,7 @@ func TestFalProvider_Infer_LTXAudioToVideo_ValidRequestAndResponse(t *testing.T)
 		t.Errorf("request audio_url = %q, want https://example.com/speech.mp3", body.AudioURL)
 	}
 
-	// Validate response
-	if resp.Message.Role != models.RoleAssistant {
-		t.Errorf("response Role = %q, want assistant", resp.Message.Role)
-	}
-	if len(resp.Message.ContentParts) != 2 {
-		t.Fatalf("response ContentParts length = %d, want 2 (VideoPart + URL TextPart)", len(resp.Message.ContentParts))
-	}
-	vp, ok := resp.Message.ContentParts[0].(models.VideoPart)
-	if !ok {
-		t.Fatalf("response ContentParts[0] = %T, want models.VideoPart", resp.Message.ContentParts[0])
-	}
-	if vp.URL != "https://storage.example.com/out.mp4" {
-		t.Errorf("VideoPart.URL = %q, want https://storage.example.com/out.mp4", vp.URL)
-	}
-	if vp.MediaType != falTestVideoMediaType {
-		t.Errorf("VideoPart.MediaType = %q, want video/mp4", vp.MediaType)
-	}
-	if resp.Message.TextContent() != "https://storage.example.com/out.mp4" {
-		t.Errorf("Message.TextContent() = %q, want video URL", resp.Message.TextContent())
-	}
+	assertFalVideoResponse(t, resp, "https://storage.example.com/out.mp4")
 }
 
 func TestFalProvider_Infer_LTXAudioToVideo_InlineAudioDataURI(t *testing.T) {
@@ -464,53 +437,144 @@ func TestFalProvider_Infer_QwenTTS_HTTPError(t *testing.T) {
 	}
 }
 
-func TestFalProvider_Infer_GrokImagineVideo_ValidRequestAndResponse(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 200,
-		body:       `{"video":{"url":"https://storage.example.com/grok-out.mp4","content_type":"video/mp4","file_name":"grok-out.mp4"}}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithAPIKey("test-key"), WithBaseURL("https://fal.run"), WithHTTPClient(client))
+// imageToVideoTestCase is one fal image-to-video model under test.
+type imageToVideoTestCase struct {
+	name      string
+	model     string
+	path      string
+	prompt    string
+	imageURL  string
+	outputURL string
+	mediaType string
+	status    int
+}
 
-	req := providers.InferenceRequest{
-		Model: ModelGrokImagineVideoImageToVideo,
-		Messages: []models.Message{{
-			Role: models.RoleUser,
-			ContentParts: []models.ContentPart{
-				models.TextPart{Text: "Animate this photo"},
-				models.ImagePart{URL: "https://example.com/photo.png"},
-			},
-		}},
+func imageToVideoTestCases() []imageToVideoTestCase {
+	return []imageToVideoTestCase{
+		{
+			name: "GrokImagineVideo", model: ModelGrokImagineVideoImageToVideo,
+			path: "/xai/grok-imagine-video/image-to-video", prompt: "Animate this photo",
+			imageURL: "https://example.com/photo.png", outputURL: "https://storage.example.com/grok-out.mp4",
+			mediaType: "image/png", status: http.StatusInternalServerError,
+		},
+		{
+			name: "KlingVideoV3", model: ModelKlingVideoV3ImageToVideo,
+			path: "/fal-ai/kling-video/v3/standard/image-to-video", prompt: "Animate this scene",
+			imageURL: "https://example.com/scene.png", outputURL: "https://storage.example.com/kling-out.mp4",
+			mediaType: "image/jpeg", status: http.StatusBadGateway,
+		},
 	}
+}
 
-	resp, err := p.Infer(ctx, req)
-	if err != nil {
-		t.Fatalf("Infer() unexpected error: %v", err)
+func TestFalProvider_Infer_ImageToVideo_ValidRequestAndResponse(t *testing.T) {
+	for _, tc := range imageToVideoTestCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			transport := &mockTransport{
+				statusCode: http.StatusOK,
+				body:       `{"video":{"url":"` + tc.outputURL + `","content_type":"video/mp4","file_name":"out.mp4"}}`,
+			}
+			p := New(WithAPIKey("test-key"), WithBaseURL("https://fal.run"), WithHTTPClient(&http.Client{Transport: transport}))
+			resp, err := p.Infer(t.Context(), imageToVideoRequestFor(tc.model, models.TextPart{Text: tc.prompt}, models.ImagePart{URL: tc.imageURL}))
+			if err != nil {
+				t.Fatalf("Infer() unexpected error: %v", err)
+			}
+			assertFalRequest(t, transport, tc.path)
+			var body imageToVideoRequest
+			if err := json.Unmarshal(transport.lastBody, &body); err != nil {
+				t.Fatalf("request body JSON: %v", err)
+			}
+			if body.Prompt != tc.prompt || body.ImageURL != tc.imageURL {
+				t.Errorf("request body = %+v, want prompt %q image_url %q", body, tc.prompt, tc.imageURL)
+			}
+			assertFalVideoResponse(t, resp, tc.outputURL)
+		})
 	}
+}
 
-	// Validate outgoing request
+func TestFalProvider_Infer_ImageToVideo_InlineImageDataURI(t *testing.T) {
+	for _, tc := range imageToVideoTestCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			transport := &mockTransport{statusCode: http.StatusOK, body: `{"video":{"url":"https://storage.example.com/out.mp4","content_type":"video/mp4"}}`}
+			p := New(WithHTTPClient(&http.Client{Transport: transport}))
+			image := models.ImagePart{Bytes: []byte("image-bytes"), MediaType: tc.mediaType}
+			if _, err := p.Infer(t.Context(), imageToVideoRequestFor(tc.model, models.TextPart{Text: "Animate"}, image)); err != nil {
+				t.Fatalf("Infer() unexpected error: %v", err)
+			}
+			var body imageToVideoRequest
+			if err := json.Unmarshal(transport.lastBody, &body); err != nil {
+				t.Fatalf("request body JSON: %v", err)
+			}
+			if !strings.HasPrefix(body.ImageURL, "data:"+tc.mediaType+";base64,") {
+				t.Errorf("request image_url should be data URI, got %q", body.ImageURL)
+			}
+		})
+	}
+}
+
+func TestFalProvider_Infer_ImageToVideo_RequiresImage(t *testing.T) {
+	for _, tc := range imageToVideoTestCases() {
+		t.Run(tc.name+"/structured text part", func(t *testing.T) {
+			_, err := New().Infer(t.Context(), imageToVideoRequestFor(tc.model, models.TextPart{Text: "Animate this"}))
+			if err == nil || !strings.Contains(err.Error(), "image_url is required") {
+				t.Fatalf("Infer() error = %v, want image_url is required", err)
+			}
+		})
+		t.Run(tc.name+"/plain text message", func(t *testing.T) {
+			transport := &mockTransport{statusCode: http.StatusOK, body: `{"video":{"url":"https://storage.example.com/out.mp4","content_type":"video/mp4"}}`}
+			p := New(WithHTTPClient(&http.Client{Transport: transport}))
+			_, err := p.Infer(t.Context(), providers.InferenceRequest{
+				Model:    tc.model,
+				Messages: []models.Message{models.NewTextMessage(models.RoleUser, "animate something")},
+			})
+			if err == nil || !strings.Contains(err.Error(), "image_url is required") {
+				t.Fatalf("Infer() error = %v, want image_url is required", err)
+			}
+		})
+	}
+}
+
+func TestFalProvider_Infer_ImageToVideo_HTTPError(t *testing.T) {
+	for _, tc := range imageToVideoTestCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			transport := &mockTransport{statusCode: tc.status, body: `{"detail":"upstream failure"}`}
+			p := New(WithHTTPClient(&http.Client{Transport: transport}))
+			_, err := p.Infer(t.Context(), imageToVideoRequestFor(tc.model, models.ImagePart{URL: tc.imageURL}))
+			if err == nil {
+				t.Fatalf("Infer() expected error on %d, got nil", tc.status)
+			}
+			if want := strconv.Itoa(tc.status); !strings.Contains(err.Error(), want) {
+				t.Errorf("Infer() error = %v, want substring %s", err, want)
+			}
+		})
+	}
+}
+
+// imageToVideoRequestFor builds a single user message request for model.
+func imageToVideoRequestFor(model string, parts ...models.ContentPart) providers.InferenceRequest {
+	return providers.InferenceRequest{
+		Model:    model,
+		Messages: []models.Message{{Role: models.RoleUser, ContentParts: parts}},
+	}
+}
+
+// assertFalRequest checks the outgoing request path and API key header.
+func assertFalRequest(t *testing.T, transport *mockTransport, wantPath string) {
+	t.Helper()
 	if transport.lastReq == nil {
 		t.Fatal("no request was sent")
 	}
-	if transport.lastReq.URL.Path != "/xai/grok-imagine-video/image-to-video" {
-		t.Errorf("request URL path = %q, want /xai/grok-imagine-video/image-to-video", transport.lastReq.URL.Path)
+	if transport.lastReq.URL.Path != wantPath {
+		t.Errorf("request URL path = %q, want %s", transport.lastReq.URL.Path, wantPath)
 	}
 	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
 		t.Errorf("Authorization header = %q, want Key test-key", auth)
 	}
-	var body imageToVideoRequest
-	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
-		t.Fatalf("request body JSON: %v", err)
-	}
-	if body.Prompt != "Animate this photo" {
-		t.Errorf("request prompt = %q, want %q", body.Prompt, "Animate this photo")
-	}
-	if body.ImageURL != "https://example.com/photo.png" {
-		t.Errorf("request image_url = %q, want https://example.com/photo.png", body.ImageURL)
-	}
+}
 
-	// Validate response
+// assertFalVideoResponse checks an assistant response carrying one video and
+// its URL as text.
+func assertFalVideoResponse(t *testing.T, resp providers.InferenceResponse, wantURL string) {
+	t.Helper()
 	if resp.Message.Role != models.RoleAssistant {
 		t.Errorf("response Role = %q, want assistant", resp.Message.Role)
 	}
@@ -521,297 +585,11 @@ func TestFalProvider_Infer_GrokImagineVideo_ValidRequestAndResponse(t *testing.T
 	if !ok {
 		t.Fatalf("response ContentParts[0] = %T, want models.VideoPart", resp.Message.ContentParts[0])
 	}
-	if vp.URL != "https://storage.example.com/grok-out.mp4" {
-		t.Errorf("VideoPart.URL = %q, want https://storage.example.com/grok-out.mp4", vp.URL)
+	if vp.URL != wantURL || vp.MediaType != falTestVideoMediaType {
+		t.Errorf("VideoPart = %+v, want URL %s media type %s", vp, wantURL, falTestVideoMediaType)
 	}
-	if vp.MediaType != falTestVideoMediaType {
-		t.Errorf("VideoPart.MediaType = %q, want video/mp4", vp.MediaType)
-	}
-	if resp.Message.TextContent() != "https://storage.example.com/grok-out.mp4" {
+	if resp.Message.TextContent() != wantURL {
 		t.Errorf("Message.TextContent() = %q, want video URL", resp.Message.TextContent())
-	}
-}
-
-func TestFalProvider_Infer_GrokImagineVideo_InlineImageDataURI(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 200,
-		body:       `{"video":{"url":"https://storage.example.com/out.mp4","content_type":"video/mp4"}}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithHTTPClient(client))
-
-	req := providers.InferenceRequest{
-		Model: ModelGrokImagineVideoImageToVideo,
-		Messages: []models.Message{{
-			Role: models.RoleUser,
-			ContentParts: []models.ContentPart{
-				models.TextPart{Text: "Animate"},
-				models.ImagePart{Bytes: []byte("png-bytes"), MediaType: "image/png"},
-			},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err != nil {
-		t.Fatalf("Infer() unexpected error: %v", err)
-	}
-	var body imageToVideoRequest
-	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
-		t.Fatalf("request body JSON: %v", err)
-	}
-	if !strings.HasPrefix(body.ImageURL, "data:image/png;base64,") {
-		t.Errorf("request image_url should be data URI, got %q", body.ImageURL)
-	}
-}
-
-func TestFalProvider_Infer_GrokImagineVideo_MissingImage(t *testing.T) {
-	ctx := context.Background()
-	p := New()
-
-	req := providers.InferenceRequest{
-		Model: ModelGrokImagineVideoImageToVideo,
-		Messages: []models.Message{{
-			Role:         models.RoleUser,
-			ContentParts: []models.ContentPart{models.TextPart{Text: "Animate this"}},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error for missing image, got nil")
-	}
-	if !strings.Contains(err.Error(), "image_url is required") {
-		t.Errorf("Infer() error = %v, want substring image_url is required", err)
-	}
-}
-
-func TestFalProvider_Infer_GrokImagineVideo_HTTPError(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 500,
-		body:       `{"detail":"internal error"}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithHTTPClient(client))
-
-	req := providers.InferenceRequest{
-		Model: ModelGrokImagineVideoImageToVideo,
-		Messages: []models.Message{{
-			Role: models.RoleUser,
-			ContentParts: []models.ContentPart{
-				models.ImagePart{URL: "https://example.com/photo.png"},
-			},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error on 500, got nil")
-	}
-	if !strings.Contains(err.Error(), "500") {
-		t.Errorf("Infer() error = %v, want substring 500", err)
-	}
-}
-
-func TestFalProvider_Infer_GrokImagineVideo_PromptOnlyNoImage(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 200,
-		body:       `{"video":{"url":"https://storage.example.com/out.mp4","content_type":"video/mp4"}}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithHTTPClient(client))
-
-	// Prompt without image — should extract text but fail on missing image_url
-	req := providers.InferenceRequest{
-		Model: ModelGrokImagineVideoImageToVideo,
-		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "animate something"),
-		},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error for text-only (no image), got nil")
-	}
-	if !strings.Contains(err.Error(), "image_url is required") {
-		t.Errorf("Infer() error = %v, want image_url is required", err)
-	}
-}
-
-func TestFalProvider_Infer_KlingVideoV3_ValidRequestAndResponse(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 200,
-		body:       `{"video":{"url":"https://storage.example.com/kling-out.mp4","content_type":"video/mp4","file_name":"kling-out.mp4"}}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithAPIKey("test-key"), WithBaseURL("https://fal.run"), WithHTTPClient(client))
-
-	req := providers.InferenceRequest{
-		Model: ModelKlingVideoV3ImageToVideo,
-		Messages: []models.Message{{
-			Role: models.RoleUser,
-			ContentParts: []models.ContentPart{
-				models.TextPart{Text: "Animate this scene"},
-				models.ImagePart{URL: "https://example.com/scene.png"},
-			},
-		}},
-	}
-
-	resp, err := p.Infer(ctx, req)
-	if err != nil {
-		t.Fatalf("Infer() unexpected error: %v", err)
-	}
-
-	// Validate outgoing request
-	if transport.lastReq == nil {
-		t.Fatal("no request was sent")
-	}
-	if transport.lastReq.URL.Path != "/fal-ai/kling-video/v3/standard/image-to-video" {
-		t.Errorf("request URL path = %q, want /fal-ai/kling-video/v3/standard/image-to-video", transport.lastReq.URL.Path)
-	}
-	if auth := transport.lastReq.Header.Get("Authorization"); auth != falTestAuthorization {
-		t.Errorf("Authorization header = %q, want Key test-key", auth)
-	}
-	var body imageToVideoRequest
-	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
-		t.Fatalf("request body JSON: %v", err)
-	}
-	if body.Prompt != "Animate this scene" {
-		t.Errorf("request prompt = %q, want %q", body.Prompt, "Animate this scene")
-	}
-	if body.ImageURL != "https://example.com/scene.png" {
-		t.Errorf("request image_url = %q, want https://example.com/scene.png", body.ImageURL)
-	}
-
-	// Validate response
-	if resp.Message.Role != models.RoleAssistant {
-		t.Errorf("response Role = %q, want assistant", resp.Message.Role)
-	}
-	if len(resp.Message.ContentParts) != 2 {
-		t.Fatalf("response ContentParts length = %d, want 2 (VideoPart + URL TextPart)", len(resp.Message.ContentParts))
-	}
-	vp, ok := resp.Message.ContentParts[0].(models.VideoPart)
-	if !ok {
-		t.Fatalf("response ContentParts[0] = %T, want models.VideoPart", resp.Message.ContentParts[0])
-	}
-	if vp.URL != "https://storage.example.com/kling-out.mp4" {
-		t.Errorf("VideoPart.URL = %q, want https://storage.example.com/kling-out.mp4", vp.URL)
-	}
-	if vp.MediaType != falTestVideoMediaType {
-		t.Errorf("VideoPart.MediaType = %q, want video/mp4", vp.MediaType)
-	}
-	if resp.Message.TextContent() != "https://storage.example.com/kling-out.mp4" {
-		t.Errorf("Message.TextContent() = %q, want video URL", resp.Message.TextContent())
-	}
-}
-
-func TestFalProvider_Infer_KlingVideoV3_InlineImageDataURI(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 200,
-		body:       `{"video":{"url":"https://storage.example.com/out.mp4","content_type":"video/mp4"}}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithHTTPClient(client))
-
-	req := providers.InferenceRequest{
-		Model: ModelKlingVideoV3ImageToVideo,
-		Messages: []models.Message{{
-			Role: models.RoleUser,
-			ContentParts: []models.ContentPart{
-				models.TextPart{Text: "Animate"},
-				models.ImagePart{Bytes: []byte("jpeg-bytes"), MediaType: "image/jpeg"},
-			},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err != nil {
-		t.Fatalf("Infer() unexpected error: %v", err)
-	}
-	var body imageToVideoRequest
-	if err := json.Unmarshal(transport.lastBody, &body); err != nil {
-		t.Fatalf("request body JSON: %v", err)
-	}
-	if !strings.HasPrefix(body.ImageURL, "data:image/jpeg;base64,") {
-		t.Errorf("request image_url should be data URI, got %q", body.ImageURL)
-	}
-}
-
-func TestFalProvider_Infer_KlingVideoV3_MissingImage(t *testing.T) {
-	ctx := context.Background()
-	p := New()
-
-	req := providers.InferenceRequest{
-		Model: ModelKlingVideoV3ImageToVideo,
-		Messages: []models.Message{{
-			Role:         models.RoleUser,
-			ContentParts: []models.ContentPart{models.TextPart{Text: "Animate this"}},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error for missing image, got nil")
-	}
-	if !strings.Contains(err.Error(), "image_url is required") {
-		t.Errorf("Infer() error = %v, want substring image_url is required", err)
-	}
-}
-
-func TestFalProvider_Infer_KlingVideoV3_HTTPError(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 502,
-		body:       `{"detail":"bad gateway"}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithHTTPClient(client))
-
-	req := providers.InferenceRequest{
-		Model: ModelKlingVideoV3ImageToVideo,
-		Messages: []models.Message{{
-			Role: models.RoleUser,
-			ContentParts: []models.ContentPart{
-				models.ImagePart{URL: "https://example.com/photo.png"},
-			},
-		}},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error on 502, got nil")
-	}
-	if !strings.Contains(err.Error(), "502") {
-		t.Errorf("Infer() error = %v, want substring 502", err)
-	}
-}
-
-func TestFalProvider_Infer_KlingVideoV3_PromptOnlyNoImage(t *testing.T) {
-	ctx := context.Background()
-	transport := &mockTransport{
-		statusCode: 200,
-		body:       `{"video":{"url":"https://storage.example.com/out.mp4","content_type":"video/mp4"}}`,
-	}
-	client := &http.Client{Transport: transport}
-	p := New(WithHTTPClient(client))
-
-	req := providers.InferenceRequest{
-		Model: ModelKlingVideoV3ImageToVideo,
-		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "animate something"),
-		},
-	}
-
-	_, err := p.Infer(ctx, req)
-	if err == nil {
-		t.Fatal("Infer() expected error for text-only (no image), got nil")
-	}
-	if !strings.Contains(err.Error(), "image_url is required") {
-		t.Errorf("Infer() error = %v, want image_url is required", err)
 	}
 }
 
