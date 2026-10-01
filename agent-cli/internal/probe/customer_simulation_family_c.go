@@ -376,3 +376,18 @@ func customerSimulationMixedModalEvidence(scenario CustomerScenario, transcripts
 		EvidenceRefs: []string{"events/mixed-modal.json", "transcripts/product.jsonl", "process.json"},
 	}
 }
+
+// Customer-simulation timing policy shared by the scenario families.
+const (
+	customerFollowUpListen, familyAFollowUpListen                               = 250 * time.Millisecond, 500 * time.Millisecond
+	customerResponseStartWait, customerInProgressWorkWait, customerRepromptWait = time.Second, 2 * time.Second, 3 * time.Second
+	customerAbsoluteDeadAir, familyEAbsoluteDeadAir                             = 10 * time.Second, 8 * time.Second
+	customerScenarioDeadline, familyEScenarioDeadline                           = 30 * time.Second, 20 * time.Second
+	customerSingleReprompt, familyAMaxReprompts                                 = 1, 2
+)
+
+// customerPatience returns the shared patience thresholds for a scenario family.
+func customerPatience(listen, deadAir time.Duration, maxReprompts int) PatienceThresholds {
+	return PatienceThresholds{ListenBeforeFollowUp: listen, ResponseStart: customerResponseStartWait, InProgressWork: customerInProgressWorkWait,
+		Reprompt: customerRepromptWait, AbsoluteDeadAir: deadAir, MaxReprompts: maxReprompts}
+}
