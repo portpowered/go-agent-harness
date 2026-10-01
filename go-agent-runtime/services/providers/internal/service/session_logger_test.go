@@ -30,7 +30,9 @@ func TestBuildSessionRoutesProviderDiagnosticsToInjectedLogger(t *testing.T) {
 				t.Fatalf("BuildSession: %v", err)
 			}
 			if session, err := inferencer.ConnectSession(t.Context()); err == nil {
-				_ = session.Close()
+				if closeErr := session.Close(); closeErr != nil {
+					t.Logf("close session: %v", closeErr)
+				}
 			}
 			if !logger.contains(tc.want) {
 				t.Fatalf("injected logger messages = %q, want %q", logger.snapshot(), tc.want)

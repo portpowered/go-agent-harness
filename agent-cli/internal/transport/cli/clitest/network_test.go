@@ -108,6 +108,13 @@ func TestPipeListenerStopsAcceptingAndDialingWhenClosed(t *testing.T) {
 	}
 }
 
+func closeClient(t *testing.T, client net.Conn) {
+	t.Helper()
+	if err := client.Close(); err != nil {
+		t.Errorf("close client: %v", err)
+	}
+}
+
 // A client that never finishes its request headers is disconnected once the
 // server's header deadline passes instead of holding the connection open.
 func TestServeDisconnectsStalledRequestHeaders(t *testing.T) {
@@ -118,7 +125,7 @@ func TestServeDisconnectsStalledRequestHeaders(t *testing.T) {
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
-		defer func() { _ = client.Close() }()
+		defer closeClient(t, client)
 		if _, err := client.Write([]byte("GET / HTTP/1.1\r\nHost: pipe\r\n")); err != nil {
 			t.Fatalf("write partial headers: %v", err)
 		}
