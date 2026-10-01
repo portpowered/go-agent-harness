@@ -472,32 +472,6 @@ func (r *ScriptedBrowserRuntime) record(operation Operation) {
 	r.operationMu.Unlock()
 }
 
-func (r *ScriptedBrowserRuntime) decorateEvent(event webmcp.BrowserEvent, browserID webmcp.BrowserID, targetID webmcp.TargetID, generation, sequence uint64) webmcp.BrowserEvent {
-	if event.Version == "" {
-		event.Version = webmcp.BrowserEventsVersion
-	}
-	if event.Sequence == 0 {
-		event.Sequence = sequence
-	}
-	if event.At.IsZero() {
-		event.At = r.clock.Now()
-	}
-	if event.BrowserID == "" {
-		event.BrowserID = browserID
-	}
-	if event.TargetID == "" {
-		event.TargetID = targetID
-	}
-	if event.Generation == 0 {
-		event.Generation = generation
-	}
-	event.Tools = cloneTools(event.Tools)
-	event.RemovedToolNames = append([]string(nil), event.RemovedToolNames...)
-	event.Input = cloneBytes(event.Input)
-	event.Output = cloneBytes(event.Output)
-	return event
-}
-
 func newScriptedBrowserHandle(runtime *ScriptedBrowserRuntime, config BrowserConfig) *ScriptedBrowserHandle {
 	handle := &ScriptedBrowserHandle{
 		runtime:       runtime,

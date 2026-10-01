@@ -867,36 +867,3 @@ func sameJSONStructure(first, second []byte) bool {
 	}
 	return jsonEquivalent(left, right)
 }
-
-func jsonEquivalent(left, right any) bool {
-	switch leftValue := left.(type) {
-	case map[string]any:
-		rightValue, ok := right.(map[string]any)
-		if !ok || len(leftValue) != len(rightValue) {
-			return false
-		}
-		for key, value := range leftValue {
-			other, ok := rightValue[key]
-			if !ok || !jsonEquivalent(value, other) {
-				return false
-			}
-		}
-		return true
-	case []any:
-		rightValue, ok := right.([]any)
-		if !ok || len(leftValue) != len(rightValue) {
-			return false
-		}
-		for index := range leftValue {
-			if !jsonEquivalent(leftValue[index], rightValue[index]) {
-				return false
-			}
-		}
-		return true
-	case json.Number:
-		rightValue, ok := right.(json.Number)
-		return ok && leftValue == rightValue
-	default:
-		return fmt.Sprint(left) == fmt.Sprint(right)
-	}
-}

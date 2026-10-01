@@ -2,10 +2,12 @@ package testkit
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // JSON field names shared by fixture decoding, validation and replay
@@ -212,4 +214,52 @@ func replayJSONFieldPath(base, key string) string {
 
 func replayJSONIdentifierRune(index int, char rune) bool {
 	return char == '_' || char == '-' || char == '.' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || index > 0 && char >= '0' && char <= '9'
+}
+
+func jsonEquivalent(left, right any) bool {
+	switch leftValue := left.(type) {
+	case map[string]any:
+		rightValue, ok := right.(map[string]any)
+		if !ok || len(leftValue) != len(rightValue) {
+			return false
+		}
+		for key, value := range leftValue {
+			other, ok := rightValue[key]
+			if !ok || !jsonEquivalent(value, other) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		rightValue, ok := right.([]any)
+		if !ok || len(leftValue) != len(rightValue) {
+			return false
+		}
+		for index := range leftValue {
+			if !jsonEquivalent(leftValue[index], rightValue[index]) {
+				return false
+			}
+		}
+		return true
+	case json.Number:
+		rightValue, ok := right.(json.Number)
+		return ok && leftValue == rightValue
+	default:
+		return fmt.Sprint(left) == fmt.Sprint(right)
+	}
+}
+
+// validateInvokeToolRequest requires a frame, a tool name, and an object input
+// (an absent input is the empty object).
+func validateInvokeToolRequest(request OperationRequest) error {
+	if err := validateScriptID(request.FrameID); err != nil {
+		return fmt.Errorf("frame_id: %w", err)
+	}
+	if strings.TrimSpace(request.ToolName) == "" {
+		return errors.New("tool_name is required")
+	}
+	if len(request.Input) > 0 && !isJSONObject(request.Input) {
+		return errors.New("input must be a JSON object")
+	}
+	return nil
 }

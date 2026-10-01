@@ -388,19 +388,7 @@ func validateOperationRequest(request OperationRequest) error {
 			return errors.New("operation does not accept additional fields")
 		}
 	case OperationInvokeTool:
-		if err := validateScriptID(request.FrameID); err != nil {
-			return fmt.Errorf("frame_id: %w", err)
-		}
-		if strings.TrimSpace(request.ToolName) == "" {
-			return errors.New("tool_name is required")
-		}
-		input := request.Input
-		if len(input) == 0 {
-			input = json.RawMessage(`{}`)
-		}
-		if !isJSONObject(input) {
-			return errors.New("input must be a JSON object")
-		}
+		return validateInvokeToolRequest(request)
 	case OperationCancelTool:
 		if err := validateScriptID(request.InvocationID); err != nil {
 			return fmt.Errorf("invocation_id: %w", err)

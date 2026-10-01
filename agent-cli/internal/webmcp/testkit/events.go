@@ -453,29 +453,6 @@ func LoadEventsFile(path string) ([]Event, error) {
 	return ValidateEventStream(data)
 }
 
-// MarshalEvents validates stream ordering and emits canonical UTF-8 JSONL.
-func MarshalEvents(events []Event) ([]byte, error) {
-	if len(events) == 0 {
-		return nil, newEventValidationError(0, "stream", "event stream is empty")
-	}
-	var output bytes.Buffer
-	for index, event := range events {
-		if event.Sequence != uint64(index+1) {
-			return nil, newEventValidationError(index+1, "sequence", "want contiguous sequence %d, got %d", index+1, event.Sequence)
-		}
-		if index > 0 && event.MonotonicMS < events[index-1].MonotonicMS {
-			return nil, newEventValidationError(index+1, "monotonic_ms", "decreased from %d to %d", events[index-1].MonotonicMS, event.MonotonicMS)
-		}
-		encoded, err := json.Marshal(event)
-		if err != nil {
-			return nil, withLine(err, index+1)
-		}
-		output.Write(encoded)
-		output.WriteByte('\n')
-	}
-	return output.Bytes(), nil
-}
-
 func validateEvent(event Event) error {
 	if event.Version != BrowserEventsVersion {
 		return newEventValidationError(0, "version", "want %q, got %q", BrowserEventsVersion, event.Version)
