@@ -126,3 +126,4 @@ func (b *StatefulBroker) withSelectedMediaCastController(ctx context.Context, ph
 }
 
 var _ BrokerCastController = (*StatefulBroker)(nil)
+var _ BrokerMediaCastController = (*StatefulBroker)(nil)

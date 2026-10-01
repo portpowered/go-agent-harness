@@ -45,7 +45,7 @@ type FilesystemRefusal struct {
 	Remediation string                  `json:"remediation"`
 }
 
-func (r FilesystemRefusal) Error() string {
+func (r FilesystemRefusal) Summary() string {
 	if r.Operation == "" {
 		return ErrFilesystemRefused.Error()
 	}
@@ -65,7 +65,7 @@ func (e *FilesystemRefusalError) Error() string {
 	if e.Refusal.Operation == "" {
 		return ErrFilesystemRefused.Error()
 	}
-	return e.Refusal.Error()
+	return e.Refusal.Summary()
 }
 
 func (e *FilesystemRefusalError) Unwrap() error { return ErrFilesystemRefused }

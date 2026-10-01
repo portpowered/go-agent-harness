@@ -538,7 +538,7 @@ func assertPortSwapError(t *testing.T, err error, sentinel error, name string) {
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("swap error %v does not preserve %v", err, sentinel)
 	}
-	if sentinel == ErrIncompatiblePort && (swapErr.Expected == nil || swapErr.Actual == nil) {
+	if errors.Is(sentinel, ErrIncompatiblePort) && (swapErr.Expected == nil || swapErr.Actual == nil) {
 		t.Fatalf("incompatible swap %q omitted expected/actual type details: %#v", name, swapErr)
 	}
 }

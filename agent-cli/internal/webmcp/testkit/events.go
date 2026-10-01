@@ -116,7 +116,7 @@ type RedactionMetadata struct {
 type Redaction = RedactionMetadata
 
 // Validate checks the event-level redaction metadata.
-func (r RedactionMetadata) Validate() error {
+func (r *RedactionMetadata) Validate() error {
 	if r.Mode != RedactionNone && r.Mode != RedactionRedacted && r.Mode != RedactionDigest {
 		return fmt.Errorf("redaction.mode must be one of %q, %q, or %q", RedactionNone, RedactionRedacted, RedactionDigest)
 	}
@@ -133,7 +133,7 @@ func (r RedactionMetadata) Validate() error {
 	return nil
 }
 
-func (r RedactionMetadata) normalized() RedactionMetadata {
+func (r *RedactionMetadata) normalized() RedactionMetadata {
 	if len(r.Rules) == 0 {
 		return RedactionMetadata{Mode: r.Mode}
 	}
@@ -287,8 +287,8 @@ func MustJSONValue(value any) json.RawMessage {
 }
 
 // Validate checks one event independently of stream ordering.
-func (e Event) Validate() error {
-	return validateEvent(e)
+func (e *Event) Validate() error {
+	return validateEvent(*e)
 }
 
 // MarshalJSON enforces the canonical field order and omits context fields that

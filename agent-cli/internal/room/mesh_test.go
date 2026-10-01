@@ -315,7 +315,7 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 			}
 			if firstResult == nil {
 				firstResult = err
-			} else if err != firstResult {
+			} else if !errors.Is(err, firstResult) {
 				t.Fatalf("concurrent Close result %d = %v, want same published result %v", index, err, firstResult)
 			}
 		case <-time.After(time.Second):
@@ -328,7 +328,7 @@ func TestMeshCloseWaitsForPairCloseBeforeDoneAndPublishesStableResult(t *testing
 	}
 	for index := range 3 {
 		err := mesh.Close()
-		if err != firstResult {
+		if !errors.Is(err, firstResult) {
 			t.Fatalf("repeated Close result %d = %v, want same published result %v", index, err, firstResult)
 		}
 	}
@@ -394,7 +394,7 @@ func TestMeshParentCancellationWaitsForConnectedAndPendingPairClosure(t *testing
 	}
 	closeResult := mesh.Close()
 	assertJoinedMeshCloseResult(t, closeResult, connected.closeErr, pending.closeErr)
-	if repeated := mesh.Close(); repeated != closeResult {
+	if repeated := mesh.Close(); !errors.Is(repeated, closeResult) {
 		t.Fatalf("repeated Close result = %v, want same published result %v", repeated, closeResult)
 	}
 }
@@ -441,7 +441,7 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 					assertJoinedMeshCloseResult(t, err, connected.closeErr, pending.closeErr)
 					if firstResult == nil {
 						firstResult = err
-					} else if err != firstResult {
+					} else if !errors.Is(err, firstResult) {
 						t.Fatalf("explicit Close result %d = %v, want same published result %v", index, err, firstResult)
 					}
 				case <-time.After(time.Second):
@@ -452,7 +452,7 @@ func TestMeshExplicitCloseAndParentCancellationConvergeWithPendingPair(t *testin
 			if got := mesh.Participants(); len(got) != 0 {
 				t.Fatalf("membership after shutdown = %#v, want empty", got)
 			}
-			if repeated := mesh.Close(); repeated != firstResult {
+			if repeated := mesh.Close(); !errors.Is(repeated, firstResult) {
 				t.Fatalf("repeated Close result = %v, want same published result %v", repeated, firstResult)
 			}
 		})

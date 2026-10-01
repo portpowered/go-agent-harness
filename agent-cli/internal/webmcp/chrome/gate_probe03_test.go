@@ -679,7 +679,7 @@ func waitForProbe03Oracle(ctx context.Context, endpoint string, match func(probe
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for Probe 03 oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for Probe 03 oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		case <-ticker.C:
 		}
 	}

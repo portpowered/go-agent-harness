@@ -337,7 +337,7 @@ func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	if got := sink.WriteCount(); got != 2 {
 		t.Fatalf("sink received %d writes after the first error, want 2", got)
 	}
-	if len(sink.errors) != 2 || sink.errors[0] != sentinel || sink.errors[1] != sentinel {
+	if len(sink.errors) != 2 || !errors.Is(sink.errors[0], sentinel) || !errors.Is(sink.errors[1], sentinel) {
 		t.Fatalf("sink did not return the sentinel error for both attempts: %#v", sink.errors)
 	}
 	output := sink.String()

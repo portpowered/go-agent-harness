@@ -78,7 +78,7 @@ func TestSessionRecordedPCMIntegrity(t *testing.T) {
 	assertRecordedPCMIntegrityRootManifestFailure(t, err, stdout, stderr)
 
 	mutated := copyRecordedPCMIntegrityBundle(t, source, "mutated")
-	pcmPath := filepath.Join(mutated, "audio/out-000.pcm")
+	pcmPath := filepath.Join(mutated, "audio", "out-000.pcm")
 	pcm, err := os.ReadFile(pcmPath)
 	if err != nil {
 		t.Fatal(err)

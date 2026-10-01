@@ -104,16 +104,16 @@ func readCustomerSimulationRecording(recordRoot string, scenario CustomerScenari
 		for scanner.Scan() {
 			var entry customerSimulationSessionLogEntry
 			if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-				failures = append(failures, fmt.Errorf("decode session-log entry: %v", err))
+				failures = append(failures, fmt.Errorf("decode session-log entry: %w", err))
 				continue
 			}
 			sessionLogResponses = append(sessionLogResponses, customerSimulationResponse{Text: entry.Response.Text, Complete: entry.Response.Complete, AudioBytes: entry.Response.AudioBytes})
 		}
 		if err := scanner.Err(); err != nil {
-			failures = append(failures, fmt.Errorf("read session-log: %v", err))
+			failures = append(failures, fmt.Errorf("read session-log: %w", err))
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		failures = append(failures, fmt.Errorf("read session-log: %v", err))
+		failures = append(failures, fmt.Errorf("read session-log: %w", err))
 	}
 
 	var streamFacts customerSimulationRecordingFacts
@@ -141,7 +141,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		if errors.Is(err, os.ErrNotExist) {
 			return facts, nil
 		}
-		return facts, fmt.Errorf("open product transcript: %v", err)
+		return facts, fmt.Errorf("open product transcript: %w", err)
 	}
 	defer closeReadOnlyFile(file)
 	var records []customerSimulationRecordedMessage
@@ -152,7 +152,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 	for scanner.Scan() {
 		record, decodeErr := transcript.Decode(scanner.Bytes())
 		if decodeErr != nil {
-			return facts, fmt.Errorf("decode product transcript: %v", decodeErr)
+			return facts, fmt.Errorf("decode product transcript: %w", decodeErr)
 		}
 		if !isCustomerSimulationAgentRecord(record) {
 			continue
@@ -174,7 +174,7 @@ func readCustomerSimulationStream(recordRoot string, scenario CustomerScenario, 
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return facts, fmt.Errorf("read product transcript: %v", err)
+		return facts, fmt.Errorf("read product transcript: %w", err)
 	}
 
 	parser := customerSimulationStreamParser{
@@ -221,6 +221,20 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 		p.consumeResponseCancel(record)
 	case messages.StreamTypeMessageEnd:
 		p.consumeMessageEnd(record, isAssistant)
+	case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
+		messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeInputItemAdded,
+		messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+		messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
+		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// Other stream types carry no customer-simulation response evidence.
 	}
 	return p.responseIndex > len(p.scenario.Actions)+p.knownResponses+1
 }

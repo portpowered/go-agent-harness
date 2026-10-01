@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -529,7 +530,7 @@ func sigintExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode()
 	}
 	return -1

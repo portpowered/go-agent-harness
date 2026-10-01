@@ -3,6 +3,7 @@ package fleet
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -165,7 +166,7 @@ func readScenarioRef(path string) (ScenarioRef, error) {
 		return ScenarioRef{}, fmt.Errorf("load scenario file %q: %w", path, err)
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = fmt.Errorf("contains more than one JSON value")
 		}

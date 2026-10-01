@@ -214,7 +214,7 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 
 	baseCapture.Session.ID = "sess_tool_parallel_calls"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -222,6 +222,7 @@ func buildParallelToolCallsFixture(t *testing.T, replySamples []int16) string {
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_parallel_calls","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	wirePath := filepath.Join(t.TempDir(), "tool-parallel-calls.session.json")
 	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
 	if err != nil {

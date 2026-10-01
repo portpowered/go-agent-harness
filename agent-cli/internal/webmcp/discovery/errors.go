@@ -68,30 +68,30 @@ func (e *DiscoveryError) Is(target error) bool {
 	if e == nil {
 		return false
 	}
-	var codeErr *classifiedCode
+	var codeErr *classifiedCodeError
 	if errors.As(target, &codeErr) {
 		return e.Code == codeErr.code
 	}
 	return false
 }
 
-type classifiedCode struct{ code Code }
+type classifiedCodeError struct{ code Code }
 
-func (e *classifiedCode) Error() string { return string(e.code) }
+func (e *classifiedCodeError) Error() string { return string(e.code) }
 
 var (
-	ErrEndpointNotFound       error = &classifiedCode{code: CodeEndpointNotFound}
-	ErrEndpointUnreachable    error = &classifiedCode{code: CodeEndpointUnreachable}
-	ErrRemoteEndpointDenied   error = &classifiedCode{code: CodeRemoteEndpointDenied}
-	ErrBrowserProtocolInvalid error = &classifiedCode{code: CodeBrowserProtocolInvalid}
-	ErrUnsupportedWebMCP      error = &classifiedCode{code: CodeUnsupportedWebMCP}
-	ErrNoEligibleTab          error = &classifiedCode{code: CodeNoEligibleTab}
-	ErrAmbiguousBrowser       error = &classifiedCode{code: CodeAmbiguousBrowser}
-	ErrAmbiguousTab           error = &classifiedCode{code: CodeAmbiguousTab}
-	ErrStaleSelection         error = &classifiedCode{code: CodeStaleSelection}
-	ErrTargetAttachFailed     error = &classifiedCode{code: CodeTargetAttachFailed}
-	ErrTargetDetached         error = &classifiedCode{code: CodeTargetDetached}
-	ErrBrowserDisconnected    error = &classifiedCode{code: CodeBrowserDisconnected}
+	ErrEndpointNotFound       error = &classifiedCodeError{code: CodeEndpointNotFound}
+	ErrEndpointUnreachable    error = &classifiedCodeError{code: CodeEndpointUnreachable}
+	ErrRemoteEndpointDenied   error = &classifiedCodeError{code: CodeRemoteEndpointDenied}
+	ErrBrowserProtocolInvalid error = &classifiedCodeError{code: CodeBrowserProtocolInvalid}
+	ErrUnsupportedWebMCP      error = &classifiedCodeError{code: CodeUnsupportedWebMCP}
+	ErrNoEligibleTab          error = &classifiedCodeError{code: CodeNoEligibleTab}
+	ErrAmbiguousBrowser       error = &classifiedCodeError{code: CodeAmbiguousBrowser}
+	ErrAmbiguousTab           error = &classifiedCodeError{code: CodeAmbiguousTab}
+	ErrStaleSelection         error = &classifiedCodeError{code: CodeStaleSelection}
+	ErrTargetAttachFailed     error = &classifiedCodeError{code: CodeTargetAttachFailed}
+	ErrTargetDetached         error = &classifiedCodeError{code: CodeTargetDetached}
+	ErrBrowserDisconnected    error = &classifiedCodeError{code: CodeBrowserDisconnected}
 )
 
 func newEndpointNotFound(kind EndpointKind, source Source) *DiscoveryError {

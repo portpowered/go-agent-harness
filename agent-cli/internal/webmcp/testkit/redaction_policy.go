@@ -140,7 +140,7 @@ func redactionPolicyFieldOrder() []string {
 // Validate checks the exact C0 policy values. RawCDP is accepted here so the
 // same value can describe an explicitly enabled diagnostic configuration;
 // canonical browser-event APIs call ValidateCanonical, which rejects it.
-func (p RedactionPolicy) Validate() error {
+func (p *RedactionPolicy) Validate() error {
 	if err := validatePolicyToolNames("tool_arguments", p.ToolArguments); err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (p RedactionPolicy) Validate() error {
 // ValidateCanonical checks whether the policy may be used for the semantic
 // browser-events.v1 artifact. Raw CDP capture is intentionally a separate
 // diagnostic artifact and can never be canonical input.
-func (p RedactionPolicy) ValidateCanonical() error {
+func (p *RedactionPolicy) ValidateCanonical() error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
@@ -169,14 +169,14 @@ func (p RedactionPolicy) ValidateCanonical() error {
 // Normalize returns the deterministic effective policy used in serialized
 // manifest metadata. It returns an error rather than silently repairing an
 // invalid policy.
-func (p RedactionPolicy) Normalize() (RedactionPolicy, error) {
+func (p *RedactionPolicy) Normalize() (RedactionPolicy, error) {
 	if err := p.Validate(); err != nil {
 		return RedactionPolicy{}, err
 	}
 	return p.normalized(), nil
 }
 
-func (p RedactionPolicy) normalized() RedactionPolicy {
+func (p *RedactionPolicy) normalized() RedactionPolicy {
 	return RedactionPolicy{
 		URLQuery:           p.URLQuery,
 		URLFragment:        p.URLFragment,

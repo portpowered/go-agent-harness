@@ -523,12 +523,12 @@ func safeIDList(value any) []string {
 	return result
 }
 
-func safeLabel(value any, max int) string {
+func safeLabel(value any, maxLen int) string {
 	text := optionalAs[string](value)
 	if strings.Contains(text, "://") || strings.ContainsAny(text, "?#@") {
 		return redactedValue
 	}
-	return boundedOutputLabel(text, max)
+	return boundedOutputLabel(text, maxLen)
 }
 
 func safeOriginFilter(value string) string {
@@ -538,13 +538,13 @@ func safeOriginFilter(value string) string {
 	return boundedOutputLabel(value, textLabelMaxBytes)
 }
 
-func boundedOutputLabel(value string, max int) string {
+func boundedOutputLabel(value string, maxLen int) string {
 	value = strings.TrimSpace(value)
-	if max < 1 {
+	if maxLen < 1 {
 		return ""
 	}
-	if len(value) > max {
-		value = value[:max]
+	if len(value) > maxLen {
+		value = value[:maxLen]
 	}
 	for _, r := range value {
 		if r < 0x20 || r == 0x7f {

@@ -422,7 +422,7 @@ func validateInterruption(t InterruptionTrigger, actions []ActionIntent) error {
 func ParseCustomerScenario(data []byte) (CustomerScenario, error) {
 	var scenario CustomerScenario
 	if err := decodeStrictJSON(data, &scenario); err != nil {
-		return CustomerScenario{}, fmt.Errorf("%w: decode scenario: %v", ErrInvalidCustomerScenario, err)
+		return CustomerScenario{}, fmt.Errorf("%w: decode scenario: %w", ErrInvalidCustomerScenario, err)
 	}
 	if err := scenario.Validate(); err != nil {
 		return CustomerScenario{}, err

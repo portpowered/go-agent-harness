@@ -813,6 +813,8 @@ func (w *sessionAudioInterruptWire) toolSequence() []string {
 		return []string{sessionAudioInterruptReadTool, sessionAudioInterruptQueueTool}
 	case sessionAudioInterruptNegative:
 		return []string{sessionAudioInterruptReadTool}
+	case sessionAudioInterruptUnfiltered:
+		return []string{sessionAudioInterruptQueueTool}
 	default:
 		return []string{sessionAudioInterruptQueueTool}
 	}

@@ -189,15 +189,15 @@ func TestFilesystemRefusalValidation(t *testing.T) {
 	const invalidValue = "wrong"
 	refusal := validFilesystemRefusal()
 	invalid := []FilesystemRefusal{
-		func() FilesystemRefusal { copy := refusal; copy.Type = ""; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Type = invalidValue; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Version = invalidValue; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.OK = true; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Status = "ok"; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Operation = " "; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Reason = invalidValue; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Message = ""; return copy }(),
-		func() FilesystemRefusal { copy := refusal; copy.Remediation = ""; return copy }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Type = ""; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Type = invalidValue; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Version = invalidValue; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.OK = true; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Status = "ok"; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Operation = " "; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Reason = invalidValue; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Message = ""; return mutated }(),
+		func() FilesystemRefusal { mutated := refusal; mutated.Remediation = ""; return mutated }(),
 	}
 	for index, candidate := range invalid {
 		if err := candidate.Validate(); err == nil {
@@ -216,7 +216,7 @@ func TestFilesystemRefusalValidation(t *testing.T) {
 	if nilEnvelope.Error() != ErrFilesystemRefused.Error() {
 		t.Fatalf("nil FilesystemRefusalError = %q", nilEnvelope.Error())
 	}
-	if (FilesystemRefusal{}).Error() != ErrFilesystemRefused.Error() {
+	if (FilesystemRefusal{}).Summary() != ErrFilesystemRefused.Error() {
 		t.Fatal("empty refusal did not use stable sentinel")
 	}
 }

@@ -185,6 +185,9 @@ func isDirectCancellationLifecycleEvent(eventType BrowserEventType) bool {
 	switch eventType {
 	case EventPageNavigated, EventFrameNavigated, EventTargetDetached, EventBrowserDisconnected, EventSessionClosed:
 		return true
+	case EventToolsAdded, EventToolsRemoved, EventCatalogReady, EventToolInvoked, EventToolResponded,
+		EventTargetAttached:
+		return false
 	default:
 		return false
 	}
@@ -319,6 +322,9 @@ func directCancellationLifecycleError(operation *directCancellation, eventType B
 			outcome = "event_stream_closed"
 			message = "the browser event stream closed before cancellation was confirmed"
 		}
+	case EventToolsAdded, EventToolsRemoved, EventCatalogReady, EventToolInvoked, EventToolResponded,
+		EventTargetAttached:
+		// Non-lifecycle events keep the caller's unconfirmed-cancellation outcome.
 	}
 	details := directCancellationDetails(operation, eventType, outcome)
 	if safeReason := safePageErrorCode(reason); safeReason != "" {

@@ -3,6 +3,7 @@ package webmcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -58,7 +59,7 @@ func TestDirectCancelRejectsSessionIdentityMismatchBeforeDispatch(t *testing.T) 
 		Target:       TargetSelector{BrowserID: browserID, TargetID: targetID},
 		InvocationID: "browser-receipt-exact",
 	})
-	classified, ok := err.(*ClassifiedError)
+	classified, ok := errors.AsType[*ClassifiedError](err)
 	if !ok || classified.Code != ErrorStaleSelection || classified.Details["reason"] != "exact_target_session_mismatch" {
 		t.Fatalf("direct cancel error = %#v, want exact target-session stale selection", err)
 	}

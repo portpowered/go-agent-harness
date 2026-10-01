@@ -37,16 +37,16 @@ type Summary struct {
 }
 
 type objectiveArtifact struct {
-	Version               string                `json:"version"`
-	ScenarioID            string                `json:"scenario_id"`
-	CheckedClaim          string                `json:"checked_claim"`
-	Verified              bool                  `json:"verified"`
-	ProviderCapturePath   string                `json:"provider_capture_path"`
-	BrowserEventsPath     string                `json:"browser_events_path,omitempty"`
-	PageStatePath         string                `json:"page_state_path"`
-	WorkspaceSnapshotPath string                `json:"workspace_snapshot_path"`
-	Error                 string                `json:"error,omitempty"`
-	Divergence            *objective.Divergence `json:"divergence,omitempty"`
+	Version               string                     `json:"version"`
+	ScenarioID            string                     `json:"scenario_id"`
+	CheckedClaim          string                     `json:"checked_claim"`
+	Verified              bool                       `json:"verified"`
+	ProviderCapturePath   string                     `json:"provider_capture_path"`
+	BrowserEventsPath     string                     `json:"browser_events_path,omitempty"`
+	PageStatePath         string                     `json:"page_state_path"`
+	WorkspaceSnapshotPath string                     `json:"workspace_snapshot_path"`
+	Error                 string                     `json:"error,omitempty"`
+	Divergence            *objective.DivergenceError `json:"divergence,omitempty"`
 }
 
 type workspaceSnapshot struct {

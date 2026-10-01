@@ -111,6 +111,13 @@ func (r *Redactor) RedactEvents(events []Event) ([]Event, error) {
 			switch event.Type {
 			case EventBrowserInvocationCreated, EventBrowserInvocationDispatched:
 				invocationTools[invocationID] = tool
+			case EventBrowserDiscoveryStarted, EventBrowserDiscoveryCompleted, EventBrowserEndpointVersion,
+				EventBrowserTargetsSnapshot, EventBrowserTargetSelected, EventBrowserChromeTargetAttached,
+				EventBrowserWebMCPEnabled, EventBrowserCatalogToolAdded, EventBrowserCatalogToolRemoved,
+				EventBrowserCatalogReady, EventBrowserInvocationApproval, EventBrowserInvocationCompleted,
+				EventBrowserInvocationError, EventBrowserInvocationCancel, EventBrowserInvocationCanceled,
+				EventBrowserPageGenerationChanged, EventBrowserTargetDetached, EventBrowserChromeTargetClosed:
+				// Only creation and dispatch events bind an invocation to its tool.
 			}
 		}
 	}
@@ -378,7 +385,7 @@ func (t *redactionTrace) merge(other redactionTrace) {
 	}
 }
 
-func (t redactionTrace) applyTo(event *Event) {
+func (t *redactionTrace) applyTo(event *Event) {
 	mode := RedactionNone
 	if t.digest {
 		mode = RedactionDigest

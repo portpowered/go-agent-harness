@@ -198,8 +198,8 @@ func cloneBool(value *bool) *bool {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 
 func ToolConfig(cfg *config.Config, request serviceSession.Request) *config.Config {

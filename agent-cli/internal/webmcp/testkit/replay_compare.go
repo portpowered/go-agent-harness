@@ -42,6 +42,11 @@ func compareReplayOperation(expected OperationExpectation, actual OperationReque
 		if expected.URL != actual.URL {
 			return "url", "URL differs"
 		}
+	case OperationEnableLifecycle, OperationEnableWebMCP, OperationCloseTarget, OperationDetachTarget,
+		OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover, OperationBrowserListTargets,
+		OperationBrowserListTools, OperationDoctor, OperationContext, OperationBrowsers, OperationTabs,
+		OperationTools:
+		// These operations carry no fields beyond the already-compared type.
 	}
 	return "", ""
 }

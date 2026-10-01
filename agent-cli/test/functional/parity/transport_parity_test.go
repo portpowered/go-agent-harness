@@ -207,7 +207,7 @@ func parityScenarioPath(t *testing.T) string {
 	if !ok {
 		t.Fatal("resolve parity scenario path: runtime.Caller failed")
 	}
-	return filepath.Join(filepath.Dir(currentFile), "../../../../go-agent-loop/pkg/probe/testdata/scenarios", parityScenarioFile)
+	return filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..", "go-agent-loop", "pkg", "probe", "testdata", "scenarios", parityScenarioFile)
 }
 
 func scenarioName(scenario committedScenario) string {

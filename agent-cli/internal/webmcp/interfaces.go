@@ -17,7 +17,7 @@ type BrowserDiscoverer interface {
 	Discover(context.Context, DiscoverOptions) ([]BrowserCandidate, error)
 }
 
-type DevToolsCatalog interface {
+type DevToolsCatalog interface { //nolint:iface // shared contract: implemented by chrome.Runtime and production.catalog, consumed by direct and production
 	Version(context.Context, BrowserCandidate) (BrowserVersion, error)
 	ListTargets(context.Context, BrowserCandidate) ([]Target, error)
 }

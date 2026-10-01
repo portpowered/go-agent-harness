@@ -154,7 +154,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 
 	baseCapture.Session.ID = "sess_audio_in_silence_lane"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -162,6 +162,7 @@ func buildAudioInWireFixture(t *testing.T, samples []int16, expectTurn bool) str
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_audio_in_silence_lane","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	wirePath := filepath.Join(t.TempDir(), "audio-in-lane.session.json")
 	wireData, err := json.MarshalIndent(baseCapture, "", "  ")
 	if err != nil {

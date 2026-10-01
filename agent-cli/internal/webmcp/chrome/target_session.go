@@ -523,6 +523,8 @@ func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
 		s.page.DocumentLoadingKnown = false
 	case webmcp.EventTargetDetached, webmcp.EventBrowserDisconnected, webmcp.EventSessionClosed:
 		s.page.Connected = false
+	case webmcp.EventToolInvoked, webmcp.EventToolResponded, webmcp.EventTargetAttached:
+		// Invocation and attach events do not change page readiness.
 	}
 	s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported && s.page.CatalogReady
 }
@@ -649,7 +651,7 @@ func validateObjectInput(input json.RawMessage) error {
 	}
 	if len(input) > webmcp.DefaultMaxInputBytes {
 		err := invalidInputError("too_large")
-		if classified, ok := err.(*webmcp.ClassifiedError); ok {
+		if classified, ok := errors.AsType[*webmcp.ClassifiedError](err); ok {
 			classified.Details["observed_bytes"] = len(input)
 			classified.Details["max_bytes"] = webmcp.DefaultMaxInputBytes
 		}

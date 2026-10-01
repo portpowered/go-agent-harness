@@ -36,15 +36,9 @@ func adaptSelectionStore(value any) (selectionStoreAdapter, error) {
 		return selectionStoreAdapter{}, nil
 	}
 	switch store := value.(type) {
-	case interface {
-		Load(context.Context) (PersistedSelection, error)
-		SaveAtomic(context.Context, PersistedSelection) error
-	}:
+	case AtomicSelectionStore:
 		return selectionStoreAdapter{load: store.Load, save: store.SaveAtomic}, nil
-	case interface {
-		Load(context.Context) (PersistedSelection, error)
-		Save(context.Context, PersistedSelection) error
-	}:
+	case SelectionStore:
 		return selectionStoreAdapter{load: store.Load, save: store.Save}, nil
 	case interface {
 		LoadSelection(context.Context) (PersistedSelection, error)
@@ -56,15 +50,9 @@ func adaptSelectionStore(value any) (selectionStoreAdapter, error) {
 		SaveSelection(context.Context, PersistedSelection) error
 	}:
 		return selectionStoreAdapter{load: store.LoadSelection, save: store.SaveSelection}, nil
-	case interface {
-		Load(context.Context) ([]byte, error)
-		SaveAtomic(context.Context, []byte) error
-	}:
+	case AtomicByteSelectionStore:
 		return byteSelectionStoreAdapter(store.Load, store.SaveAtomic), nil
-	case interface {
-		Load(context.Context) ([]byte, error)
-		Save(context.Context, []byte) error
-	}:
+	case ByteSelectionStore:
 		return byteSelectionStoreAdapter(store.Load, store.Save), nil
 	case interface {
 		LoadSelection(context.Context) ([]byte, error)

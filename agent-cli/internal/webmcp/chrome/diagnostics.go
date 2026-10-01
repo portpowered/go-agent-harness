@@ -195,6 +195,15 @@ func sessionLifecycleError(session *targetSession) *webmcp.ClassifiedError {
 	switch classified.Code {
 	case webmcp.ErrorTargetDetached, webmcp.ErrorBrowserDisconnected:
 		return classified
+	case webmcp.ErrorWebMCPDisabled, webmcp.ErrorEndpointNotFound, webmcp.ErrorEndpointUnreachable,
+		webmcp.ErrorRemoteEndpointDenied, webmcp.ErrorBrowserProtocol, webmcp.ErrorUnsupportedWebMCP,
+		webmcp.ErrorNoEligibleTab, webmcp.ErrorAmbiguousBrowser, webmcp.ErrorAmbiguousTab,
+		webmcp.ErrorStaleSelection, webmcp.ErrorStaleToolRef, webmcp.ErrorOriginDenied,
+		webmcp.ErrorApprovalRequired, webmcp.ErrorApprovalDenied, webmcp.ErrorInvalidToolInput,
+		webmcp.ErrorResultTooLarge, webmcp.ErrorTargetAttachFailed, webmcp.ErrorPageNavigated,
+		webmcp.ErrorInvocationFailed, webmcp.ErrorInvocationCanceled, webmcp.ErrorInvocationTimedOut,
+		webmcp.ErrorInvocationOrphaned:
+		return nil
 	default:
 		return nil
 	}

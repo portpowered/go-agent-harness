@@ -236,7 +236,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 
 	baseCapture.Session.ID = toolDuringAudioSessionID
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -244,6 +244,7 @@ func buildToolDuringAudioFixture(t *testing.T, wavPath string, pre, post [][]int
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"` + toolDuringAudioSessionID + `","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 
 	return writeReplayCaptureFixture(t, baseCapture, "tool-during-audio.session.json")
 }

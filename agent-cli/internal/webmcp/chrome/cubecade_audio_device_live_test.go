@@ -532,7 +532,7 @@ func launchCubecadeAudioChrome(ctx context.Context, pinned pinnedChrome, pageURL
 		running.setEndpoint(value)
 		return running, nil
 	case <-running.done:
-		return nil, fmt.Errorf("Cubecade Chrome exited before DevTools: %v (stdout=%q stderr=%q)", running.waitErr, strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
+		return nil, fmt.Errorf("Cubecade Chrome exited before DevTools: %w (stdout=%q stderr=%q)", running.waitErr, strings.TrimSpace(stdoutLog.String()), strings.TrimSpace(stderrLog.String()))
 	case <-ctx.Done():
 		discardSecondaryError(running.Close)
 		return nil, fmt.Errorf("wait for Cubecade Chrome DevTools: %w", ctx.Err())

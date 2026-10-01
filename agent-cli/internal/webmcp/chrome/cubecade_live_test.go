@@ -920,7 +920,7 @@ func waitForCubecadePageTarget(ctx context.Context, baseURL string) (devToolsTar
 		}
 		select {
 		case <-ctx.Done():
-			return devToolsTarget{}, fmt.Errorf("wait for Cubecade page target: %w (last error: %v)", ctx.Err(), lastErr)
+			return devToolsTarget{}, fmt.Errorf("wait for Cubecade page target: %w (last error: %w)", ctx.Err(), lastErr)
 		case <-ticker.C:
 		}
 	}

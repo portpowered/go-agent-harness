@@ -74,3 +74,5 @@ func (factory Factory) Resolve(cfg *config.Config) (Capabilities, error) {
 	}
 	return factory(cfg)
 }
+
+var _ Service = Factory(nil)

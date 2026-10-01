@@ -2,6 +2,7 @@ package webmcp_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestStatefulBrokerOpenTabRejectsUnsafeURLBeforeBrowserMutation(t *testing.T
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
 	defer closeAtTestEnd(t, broker)
 	_, err := broker.OpenTab(context.Background(), webmcp.OpenTabRequest{URL: "file:///private/notes"})
-	classified, ok := err.(*webmcp.ClassifiedError)
+	classified, ok := errors.AsType[*webmcp.ClassifiedError](err)
 	if !ok || classified.Code != webmcp.ErrorInvalidToolInput {
 		t.Fatalf("unsafe URL error = %T %v, want invalid_tool_input", err, err)
 	}
@@ -59,7 +60,7 @@ func TestStatefulBrokerNavigateSelectedTabRejectsUnsafeURLBeforeBrowserMutation(
 	broker := webmcp.NewBroker(webmcp.BrokerOptions{})
 	defer closeAtTestEnd(t, broker)
 	_, err := broker.NavigateSelectedTab(context.Background(), "file:///private/notes")
-	classified, ok := err.(*webmcp.ClassifiedError)
+	classified, ok := errors.AsType[*webmcp.ClassifiedError](err)
 	if !ok || classified.Code != webmcp.ErrorInvalidToolInput {
 		t.Fatalf("unsafe URL error = %T %v, want invalid_tool_input", err, err)
 	}

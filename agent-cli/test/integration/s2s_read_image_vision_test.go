@@ -709,7 +709,7 @@ func (e *readImageStreamEvidence) observeToolImage(index int, event messages.Str
 
 // verify requires one correlated read_image call whose exact PNG bytes were
 // streamed as a tool image before the post-image provider response began.
-func (e readImageStreamEvidence) verify(imagePath string, expectedBytes []byte) error {
+func (e *readImageStreamEvidence) verify(imagePath string, expectedBytes []byte) error {
 	if len(e.toolCalls) != 1 {
 		return fmt.Errorf("read_image tool calls = %d, want exactly one", len(e.toolCalls))
 	}

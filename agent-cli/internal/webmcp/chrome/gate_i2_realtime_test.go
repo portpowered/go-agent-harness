@@ -234,7 +234,7 @@ func (r *gateI2Run) runSession(t *testing.T, ctx context.Context, binaryPath, ap
 	}
 	runErr := err
 	if runErr == nil && (sessionResult.Err != nil || sessionResult.ExitCode != 0) {
-		runErr = fmt.Errorf("agent session exit=%d err=%v", sessionResult.ExitCode, sessionResult.Err)
+		runErr = fmt.Errorf("agent session exit=%d err=%w", sessionResult.ExitCode, sessionResult.Err)
 	}
 	if runErr != nil {
 		t.Logf("Gate I2 session returned an error (capture validation remains authoritative): %v", runErr)

@@ -172,7 +172,7 @@ func runAgentBinary(t *testing.T, args ...string) s2sV2DCLIResult {
 	err := cmd.Run()
 	exitCode := 0
 	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
+		exitErr, ok := errors.AsType[*exec.ExitError](err)
 		if !ok {
 			t.Fatalf("run agent %v: %v", args, err)
 		}

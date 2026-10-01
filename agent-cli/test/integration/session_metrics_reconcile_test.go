@@ -351,6 +351,21 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 			}
 			inTurn = false
 			turnHasOutput = false
+		case messages.StreamTypeTextStart, messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart,
+			messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd, messages.StreamTypeAudioStart,
+			messages.StreamTypeAudioEnd, messages.StreamTypeImageStart, messages.StreamTypeImageDelta,
+			messages.StreamTypeImageEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
+			messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
+			messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
+			messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
+			messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+			messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded,
+			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
+			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+			messages.StreamTypeSystemFullMessage:
+			// Other stream types do not contribute to accounting.
 		}
 	}
 	if inTurn {

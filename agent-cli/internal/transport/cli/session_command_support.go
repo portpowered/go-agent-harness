@@ -38,8 +38,8 @@ func (c *SessionCommand) SetHoldToneConfig(config serviceSession.HoldToneConfig)
 	if c == nil {
 		return
 	}
-	copy := config
-	c.holdToneConfig = &copy
+	cloned := config
+	c.holdToneConfig = &cloned
 }
 
 func decorateSessionCommandError(err error) error {

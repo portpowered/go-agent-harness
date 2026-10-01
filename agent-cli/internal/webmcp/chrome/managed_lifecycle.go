@@ -744,7 +744,7 @@ func managedCommandLineMatches(commandLine []string, state ManagedBrowserState) 
 
 func managedProcessCommandLine(ctx context.Context, pid int) ([]string, error) {
 	if runtime.GOOS == goosLinux {
-		data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+		data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
 		if err != nil {
 			return nil, err
 		}
@@ -767,7 +767,7 @@ func managedProcessCommandLine(ctx context.Context, pid int) ([]string, error) {
 
 func managedProcessIdentity(ctx context.Context, pid int, commandLine []string) (string, error) {
 	if runtime.GOOS == goosLinux {
-		data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+		data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 		if err != nil {
 			return "", err
 		}

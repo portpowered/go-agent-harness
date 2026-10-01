@@ -259,7 +259,7 @@ func (c *ToolCommand) writeToolResponse(cmd *cobra.Command, response messages.To
 		if err := c.writeRefusal(cmd.ErrOrStderr(), refusal); err != nil {
 			return err
 		}
-		return newToolCommandError(errToolRefusal, refusal.Error(), &tools.FilesystemRefusalError{Refusal: refusal})
+		return newToolCommandError(errToolRefusal, refusal.Summary(), &tools.FilesystemRefusalError{Refusal: refusal})
 	}
 	return c.writeResponse(cmd.OutOrStdout(), response)
 }

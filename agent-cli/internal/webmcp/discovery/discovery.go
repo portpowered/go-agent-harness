@@ -699,7 +699,7 @@ func browserInstanceMetadata(version BrowserVersion) string {
 	return ""
 }
 
-func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *parseURLFailure) {
+func browserIdentityFromVersion(version BrowserVersion, fallback *url.URL) (BrowserIdentity, *parseURLError) {
 	wsRaw := strings.TrimSpace(version.WebSocketDebuggerURL)
 	if wsRaw == "" && fallback != nil {
 		wsRaw = fallback.String()
@@ -882,10 +882,10 @@ func normalizePublicID(value string, identity BrowserIdentity) string {
 	return HashIDMapper{}.BrowserID(identity)
 }
 
-func boundedLabel(value string, max int) string {
+func boundedLabel(value string, maxLen int) string {
 	value = strings.TrimSpace(value)
-	if len(value) > max {
-		value = value[:max]
+	if len(value) > maxLen {
+		value = value[:maxLen]
 	}
 	for _, r := range value {
 		if r < 0x20 || r == 0x7f {
@@ -941,6 +941,9 @@ func failureRank(code Code) int {
 		return failureRankUnreachable
 	case CodeEndpointNotFound:
 		return failureRankNotFound
+	case CodeUnsupportedWebMCP, CodeNoEligibleTab, CodeAmbiguousBrowser, CodeAmbiguousTab, CodeStaleSelection,
+		CodeTargetAttachFailed, CodeTargetDetached:
+		return failureRankNone
 	default:
 		return failureRankNone
 	}

@@ -165,7 +165,7 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 
 	baseCapture.Session.ID = "sess_tool_single_call"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -173,6 +173,7 @@ func buildToolSingleCallFixture(t *testing.T, wavPath string, replySamples []int
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_single_call","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	return writeReplayCaptureFixture(t, baseCapture, "tool-single-call.session.json")
 }
 
@@ -243,8 +244,8 @@ func assertRecordedSpeech(t *testing.T, outputPath string, wantSamples int) {
 	if rate != audio.SampleRate {
 		t.Fatalf("recorded output WAV rate = %d, want %d", rate, audio.SampleRate)
 	}
-	if min, max := wantSamples/2, wantSamples*2; len(samples) < min || len(samples) > max {
-		t.Fatalf("recorded duration %d samples outside plausible bounds [%d, %d]", len(samples), min, max)
+	if minSamples, maxSamples := wantSamples/2, wantSamples*2; len(samples) < minSamples || len(samples) > maxSamples {
+		t.Fatalf("recorded duration %d samples outside plausible bounds [%d, %d]", len(samples), minSamples, maxSamples)
 	}
 	rms := codec.RMS(samples)
 	if rms <= 500.0 {

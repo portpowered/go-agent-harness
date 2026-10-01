@@ -322,6 +322,21 @@ func assertReadImageSpokenSuccessLifecycle(t *testing.T, events []messages.Strea
 				continue
 			}
 			finalAssistantEnd = index
+		case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+			messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+			messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+			messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+			messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+			messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+			messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+			messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+			messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+			messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+			messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+			messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+			messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+			messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+			// Other stream types are not part of the read-image evidence.
 		}
 	}
 	if toolCalls != 1 {
@@ -369,6 +384,20 @@ func assertReadImageSpokenFailureLifecycle(t *testing.T, events []messages.Strea
 			if failedTerminal >= 0 && event.Role != messages.RoleTool {
 				t.Fatalf("failed spoken continuation emitted assistant output after failed terminal at %d: event %d=%#v", failedTerminal, index, event)
 			}
+		case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextEnd,
+			messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeAudioStart,
+			messages.StreamTypeAudioEnd, messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta,
+			messages.StreamTypeVideoEnd, messages.StreamTypeFileStart, messages.StreamTypeFileDelta,
+			messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta,
+			messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta,
+			messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+			messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded,
+			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
+			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
+			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
+			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+			messages.StreamTypeSystemFullMessage:
+			// Other stream types are not part of the read-image evidence.
 		}
 	}
 	if toolCalls != 1 {

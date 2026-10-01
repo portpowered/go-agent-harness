@@ -439,16 +439,16 @@ func normalizeDuplexSegments(input []DuplexAudioSegment) ([]DuplexAudioSegment, 
 func prepareDuplexDirectory(raw, label string) (string, error) {
 	path, err := filepath.Abs(raw)
 	if err != nil {
-		return "", fmt.Errorf("%w: resolve %s: %v", ErrDuplexConfigInvalid, label, err)
+		return "", fmt.Errorf("%w: resolve %s: %w", ErrDuplexConfigInvalid, label, err)
 	}
 	if info, statErr := os.Lstat(path); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return "", fmt.Errorf("%w: %s %q is not a directory", ErrDuplexConfigInvalid, label, path)
 		}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return "", fmt.Errorf("%w: inspect %s %q: %v", ErrDuplexConfigInvalid, label, path, statErr)
+		return "", fmt.Errorf("%w: inspect %s %q: %w", ErrDuplexConfigInvalid, label, path, statErr)
 	} else if err := os.MkdirAll(path, privateDirMode); err != nil {
-		return "", fmt.Errorf("%w: create %s %q: %v", ErrDuplexConfigInvalid, label, path, err)
+		return "", fmt.Errorf("%w: create %s %q: %w", ErrDuplexConfigInvalid, label, path, err)
 	}
 	return path, nil
 }

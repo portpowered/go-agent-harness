@@ -141,12 +141,12 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch msg.Type {
-		case tea.KeyCtrlC:
+		// Only Ctrl+C and Enter are handled here; every other tea.KeyType goes to the input below.
+		if msg.Type == tea.KeyCtrlC {
 			m.quitting = true
 			return m, tea.Quit
-
-		case tea.KeyEnter:
+		}
+		if msg.Type == tea.KeyEnter {
 			m.fileAutocomplete.Reset()
 			m.cmdAutocomplete.Reset()
 			rawInput := strings.TrimSpace(m.input.Value())
@@ -259,6 +259,19 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 			m.currentTurnLines = append(m.currentTurnLines, chatLine{kind: chatLineToolResult, content: m.toolTextPartial})
 			m.toolTextPartial = ""
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeMessageEnd, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeToolCallEnd, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoDelta,
+		messages.StreamTypeVideoEnd, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
+		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		// The chat view does not render the remaining stream types.
 	}
 }
 

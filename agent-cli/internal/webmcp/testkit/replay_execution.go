@@ -34,7 +34,7 @@ func NewBrowserReplay(script BrowserScript, options ...ReplayOption) (*BrowserRe
 		return nil, fmt.Errorf("%w: unknown replay mode %q", ErrInvalidReplayRequest, replay.mode)
 	}
 	if err := validateScriptID(replay.browserID); err != nil {
-		return nil, fmt.Errorf("%w: browser ID: %v", ErrInvalidReplayRequest, err)
+		return nil, fmt.Errorf("%w: browser ID: %w", ErrInvalidReplayRequest, err)
 	}
 	if replay.targetID == "" && len(replay.script.Endpoint.Targets) > 0 {
 		replay.targetID = replay.script.Endpoint.Targets[0].ID

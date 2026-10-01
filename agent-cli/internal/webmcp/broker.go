@@ -301,6 +301,7 @@ func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, 
 var _ Broker = (*StatefulBroker)(nil)
 var _ DirectCanceller = (*StatefulBroker)(nil)
 var _ BrowserEventWatcher = (*StatefulBroker)(nil)
+var _ InvocationWaiter = (*StatefulBroker)(nil)
 
 // Discover obtains candidates from the injected discovery seam and retains
 // their normalized identity for exact later selection.

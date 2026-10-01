@@ -101,8 +101,10 @@ func (a Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
 		return a, nil
 	}
 
-	switch keyMsg.Type {
-	case tea.KeyUp:
+	// Only Up, Down, and Esc change popup state (tea.KeyType has ~85 members,
+	// so an if-chain states that directly). Tab completes the selected
+	// suggestion: the parent reads Selected() and decides whether to dismiss.
+	if keyType := keyMsg.Type; keyType == tea.KeyUp {
 		if a.selected > 0 {
 			a.selected--
 			// Scroll up if needed.
@@ -110,9 +112,7 @@ func (a Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
 				a.offset = a.selected
 			}
 		}
-		return a, nil
-
-	case tea.KeyDown:
+	} else if keyType == tea.KeyDown {
 		if a.selected < len(a.filtered)-1 {
 			a.selected++
 			// Scroll down if needed.
@@ -120,19 +120,10 @@ func (a Autocomplete) Update(msg tea.Msg) (Autocomplete, tea.Cmd) {
 				a.offset = a.selected - maxSuggestions + 1
 			}
 		}
-		return a, nil
-
-	case tea.KeyTab:
-		// Tab completes the selected suggestion — parent reads Selected().
-		// We don't deactivate here; the parent will update the input and
-		// may want to re-filter or dismiss.
-		return a, nil
-
-	case tea.KeyEsc:
+	} else if keyType == tea.KeyEsc {
 		a.active = false
 		a.selected = 0
 		a.offset = 0
-		return a, nil
 	}
 
 	return a, nil

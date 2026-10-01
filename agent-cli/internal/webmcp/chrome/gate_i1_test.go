@@ -406,7 +406,8 @@ func startGateCommandWithEnvironment(parent context.Context, binaryPath, configD
 			}
 			filtered = append(filtered, value)
 		}
-		command.Env = append(filtered, extra)
+		filtered = append(filtered, extra)
+		command.Env = filtered
 	}
 	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
 	command.Stdout = &process.stdout
@@ -517,7 +518,7 @@ func waitForGateFixtureOracle(ctx context.Context, endpoint string, match func(f
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for Gate I1 fixture oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for Gate I1 fixture oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		case <-ticker.C:
 		}
 	}

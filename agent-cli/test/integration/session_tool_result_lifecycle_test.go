@@ -162,6 +162,22 @@ func (s *interactiveTimeoutSession) Send(ctx context.Context, msg messages.Strea
 			s.elapsed[value.ToolCallID] = time.Since(s.started)
 			s.mu.Unlock()
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
+		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeReasoningStart, messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
+		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
+		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
+		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
+		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeRefusal,
+		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		// Other client messages need no scripted response.
 	}
 	return true
 }

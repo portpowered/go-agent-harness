@@ -582,6 +582,11 @@ func (s *BrowserScriptSession) Close() error {
 			closeErr = s.runtime.CloseTarget(context.Background())
 		case OperationDetachTarget:
 			closeErr = s.runtime.DetachTarget(context.Background())
+		case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool,
+			OperationNavigate, OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
+			OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
+			OperationBrowsers, OperationTabs, OperationTools:
+			// No teardown operation is expected; close without driving the fixture.
 		}
 	}
 	s.mu.Lock()

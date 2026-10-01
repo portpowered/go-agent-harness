@@ -288,13 +288,13 @@ func customerSimulationRunRoot(raw string) (string, func(), error) {
 	if strings.TrimSpace(raw) == "" {
 		root, err := os.MkdirTemp("", "agent-customer-simulation-")
 		if err != nil {
-			return "", func() {}, fmt.Errorf("%w: create isolated run root: %v", ErrCustomerSimulationRun, err)
+			return "", func() {}, fmt.Errorf("%w: create isolated run root: %w", ErrCustomerSimulationRun, err)
 		}
 		return root, func() {}, nil
 	}
 	root, err := filepath.Abs(raw)
 	if err != nil {
-		return "", func() {}, fmt.Errorf("%w: resolve run root: %v", ErrCustomerSimulationRun, err)
+		return "", func() {}, fmt.Errorf("%w: resolve run root: %w", ErrCustomerSimulationRun, err)
 	}
 	if info, statErr := os.Lstat(root); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
@@ -302,10 +302,10 @@ func customerSimulationRunRoot(raw string) (string, func(), error) {
 		}
 	} else if errors.Is(statErr, os.ErrNotExist) {
 		if err := os.MkdirAll(root, privateDirMode); err != nil {
-			return "", func() {}, fmt.Errorf("%w: create run root: %v", ErrCustomerSimulationRun, err)
+			return "", func() {}, fmt.Errorf("%w: create run root: %w", ErrCustomerSimulationRun, err)
 		}
 	} else {
-		return "", func() {}, fmt.Errorf("%w: inspect run root: %v", ErrCustomerSimulationRun, statErr)
+		return "", func() {}, fmt.Errorf("%w: inspect run root: %w", ErrCustomerSimulationRun, statErr)
 	}
 	return root, func() {}, nil
 }
@@ -845,6 +845,8 @@ func customerSimulationTextConfirmsAction(action ActionIntent, text string) bool
 func customerSimulationActionEvidenceRefs(scenario CustomerScenario) []string {
 	refs := []string{"transcripts/customer.jsonl", "transcripts/product.jsonl", "events/audio-turn-events.jsonl", "tool-observations.jsonl", "filesystem-checkpoints.jsonl", "process.json"}
 	switch scenario.Family {
+	case ScenarioFamilyA:
+		// Family A records only the common evidence set.
 	case ScenarioFamilyB:
 		refs = append(refs, "events/correction.json")
 	case ScenarioFamilyC:
@@ -876,6 +878,8 @@ func customerSimulationMechanicalVerdict(scenario CustomerScenario, actions []Ac
 			patience = &value
 		}
 		verdict, err = EvaluateCustomerSimulationPatience(scenario, actions, checkpoints, tools, product, *patience)
+	case ScenarioFamilyA:
+		fallthrough
 	default:
 		verdict, err = EvaluateCustomerSimulation(scenario, actions, checkpoints, tools, product)
 	}

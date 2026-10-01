@@ -23,7 +23,7 @@ func runCustomerSimulation(ctx context.Context, suiteRoot string, index int, spe
 	if processErr == nil && len(spec.Scenario.Actions) > 0 {
 		lastAction := len(spec.Scenario.Actions) - 1
 		if err := run.captureCheckpoint(lastAction, duplexResult.Duration); err != nil {
-			processErr = errors.Join(processErr, err)
+			processErr = err
 		}
 		checkpointSnapshot = run.checkpointSnapshot()
 	}

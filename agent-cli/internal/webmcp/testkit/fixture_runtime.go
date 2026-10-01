@@ -416,6 +416,10 @@ func validateOperationRequest(request OperationRequest) error {
 		if request.FrameID != "" || request.ToolName != "" || request.Input != nil || request.InvocationID != "" {
 			return errors.New("operation accepts only url")
 		}
+	case OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
+		OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
+		OperationBrowsers, OperationTabs, OperationTools:
+		return fmt.Errorf("unsupported operation type %q", request.Type)
 	}
 	return nil
 }
@@ -447,6 +451,11 @@ func compareOperation(expected OperationExpectation, actual OperationRequest) (s
 		if expected.URL != actual.URL {
 			return "url", errors.New("URL values differ")
 		}
+	case OperationEnableLifecycle, OperationEnableWebMCP, OperationCloseTarget, OperationDetachTarget,
+		OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover, OperationBrowserListTargets,
+		OperationBrowserListTools, OperationDoctor, OperationContext, OperationBrowsers, OperationTabs,
+		OperationTools:
+		// These operations carry no fields beyond the already-compared type.
 	}
 	return "", nil
 }

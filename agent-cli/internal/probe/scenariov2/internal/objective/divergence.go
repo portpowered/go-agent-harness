@@ -37,11 +37,11 @@ const (
 	jsonPathNotFoundCode       = "jsonpath_not_found"
 )
 
-// Divergence is the stable, redacted explanation attached to a failed typed
+// DivergenceError is the stable, redacted explanation attached to a failed typed
 // expectation. Expected and Actual are deliberately structural summaries:
 // browser arguments, tool results, endpoint credentials, and raw CDP payloads
 // never belong in a run result or objective artifact.
-type Divergence struct {
+type DivergenceError struct {
 	Class             string                          `json:"class"`
 	ScenarioID        string                          `json:"scenario_id"`
 	ExpectationType   probe.ScenarioV2ExpectationType `json:"expectation_type"`
@@ -58,7 +58,7 @@ type Divergence struct {
 	Generation        int64                           `json:"generation,omitempty"`
 }
 
-func (d *Divergence) Error() string {
+func (d *DivergenceError) Error() string {
 	if d == nil {
 		return "browser expectation divergence"
 	}
@@ -107,12 +107,12 @@ func MakeDivergence(
 	index int,
 	expectation probe.ScenarioV2Expectation,
 	check Check,
-) *Divergence {
+) *DivergenceError {
 	artifact := check.EvidenceArtifact
 	if artifact == "" {
 		artifact = ExpectationArtifact(expectation.Type)
 	}
-	return &Divergence{
+	return &DivergenceError{
 		Class:             DivergenceClass,
 		ScenarioID:        scenario.ID,
 		ExpectationType:   expectation.Type,
@@ -152,7 +152,7 @@ func ExpectationArtifact(kind probe.ScenarioV2ExpectationType) string {
 }
 
 // DivergenceEqual reports whether two divergences serialize identically.
-func DivergenceEqual(left, right *Divergence) bool {
+func DivergenceEqual(left, right *DivergenceError) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
@@ -182,7 +182,7 @@ func DivergenceForExpectation(
 	expected, actual string,
 	err error,
 	evidence *BrowserEvidence,
-) *Divergence {
+) *DivergenceError {
 	check := CheckFromError(expectation, expected, actual, err)
 	check.EvidenceArtifact = ExpectationArtifact(expectation.Type)
 	if evidence != nil && IsBrowserObjective(expectation.Type) && expectation.Type != probe.ScenarioV2ExpectationPageStateEquals {

@@ -215,18 +215,18 @@ func (v RecordedArtifactVerifier) Verify(ctx context.Context, input loopprobe.Ac
 	evidence := loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim}
 	path, err := artifacts.Path(relative)
 	if err != nil {
-		return evidence, fmt.Errorf("%w: %v", loopprobe.ErrObjectiveEvidenceMismatch, err)
+		return evidence, fmt.Errorf("%w: %w", loopprobe.ErrObjectiveEvidenceMismatch, err)
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return evidence, fmt.Errorf("%w: read %q: %v", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
+		return evidence, fmt.Errorf("%w: read %q: %w", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return evidence, fmt.Errorf("%w: %q is not a regular artifact", loopprobe.ErrObjectiveEvidenceMismatch, relative)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return evidence, fmt.Errorf("%w: read %q: %v", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
+		return evidence, fmt.Errorf("%w: read %q: %w", loopprobe.ErrObjectiveEvidenceAbsent, relative, err)
 	}
 	if len(data) == 0 || !bytes.Contains(data, []byte(claim)) {
 		return evidence, fmt.Errorf("%w: artifact %q does not contain checked claim", loopprobe.ErrObjectiveEvidenceMismatch, relative)
@@ -235,7 +235,7 @@ func (v RecordedArtifactVerifier) Verify(ctx context.Context, input loopprobe.Ac
 		return evidence, ErrGoalVerificationUnavailable
 	}
 	if err := v.VerifyGoal(ctx, input, data); err != nil {
-		return evidence, fmt.Errorf("%w: goal %q was not verified: %v", loopprobe.ErrObjectiveEvidenceMismatch, input.Goal, err)
+		return evidence, fmt.Errorf("%w: goal %q was not verified: %w", loopprobe.ErrObjectiveEvidenceMismatch, input.Goal, err)
 	}
 	return loopprobe.ObjectiveEvidence{ArtifactPath: relative, CheckedClaim: claim, Verified: true}, nil
 }

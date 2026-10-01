@@ -77,7 +77,7 @@ func (e *executor) populateResult(ctx context.Context, result Result) Result {
 		result.InputDropCount = e.provider.InputDrops
 		result.OutputDropCount = e.provider.OutputDrops
 	}
-	var divergence *Divergence
+	var divergence *DivergenceError
 	result.ExpectationResults, divergence = e.evaluateExpectations(ctx)
 	if divergence != nil {
 		result.Divergence = divergence
@@ -95,9 +95,9 @@ func (e *executor) populateResult(ctx context.Context, result Result) Result {
 	return result
 }
 
-func (e *executor) evaluateExpectations(ctx context.Context) ([]ExpectationResult, *Divergence) {
+func (e *executor) evaluateExpectations(ctx context.Context) ([]ExpectationResult, *DivergenceError) {
 	results := make([]ExpectationResult, 0, len(e.scenario.Expectations))
-	var firstDivergence *Divergence
+	var firstDivergence *DivergenceError
 	evidence := e.persistedBrowserEvidence()
 	for index, expectation := range e.scenario.Expectations {
 		evaluated := e.evaluateExpectation(ctx, expectation)

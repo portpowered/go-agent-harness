@@ -182,7 +182,7 @@ func (r *Recorder) writeLocked(event Event) error {
 	}
 	encoded, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("%w: encode event: %v", ErrRecorderWrite, err)
+		return fmt.Errorf("%w: encode event: %w", ErrRecorderWrite, err)
 	}
 	encoded = append(encoded, '\n')
 	n, writeErr := r.writer.Write(encoded)
@@ -190,7 +190,7 @@ func (r *Recorder) writeLocked(event Event) error {
 		writeErr = io.ErrShortWrite
 	}
 	if writeErr != nil {
-		return fmt.Errorf("%w: %v", ErrRecorderWrite, writeErr)
+		return fmt.Errorf("%w: %w", ErrRecorderWrite, writeErr)
 	}
 	if event.Sequence == ^uint64(0) {
 		return fmt.Errorf("%w: sequence overflow", ErrRecorderWrite)

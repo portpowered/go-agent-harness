@@ -143,7 +143,7 @@ func (p *liveCDPProxy) Close() {
 
 func (p *liveCDPProxy) handle(writer http.ResponseWriter, request *http.Request) {
 	delay := false
-	dead := false
+	var dead bool
 	if request.URL.Path == jsonListPath {
 		p.mu.Lock()
 		delay = p.delayNextList
@@ -740,7 +740,7 @@ func waitForFixtureOracle(ctx context.Context, endpoint string, match func(fixtu
 		}
 		select {
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for fixture oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for fixture oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		case <-ticker.C:
 		}
 	}
@@ -789,7 +789,7 @@ func waitForFixtureTarget(ctx context.Context, baseURL string, targetID webmcp.T
 		}
 		select {
 		case <-ctx.Done():
-			return devToolsTarget{}, fmt.Errorf("wait for target presence=%t: %w (last error: %v)", wantPresent, ctx.Err(), lastErr)
+			return devToolsTarget{}, fmt.Errorf("wait for target presence=%t: %w (last error: %w)", wantPresent, ctx.Err(), lastErr)
 		case <-ticker.C:
 		}
 	}

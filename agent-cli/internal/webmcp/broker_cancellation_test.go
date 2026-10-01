@@ -679,7 +679,7 @@ func TestStatefulBrokerCloseBoundsNonCooperativeHandle(t *testing.T) {
 	default:
 		t.Fatal("non-cooperative handle was not asked to close")
 	}
-	if repeatedErr := broker.Close(); repeatedErr != closeErr {
+	if repeatedErr := broker.Close(); !errors.Is(repeatedErr, closeErr) {
 		t.Fatalf("repeated close error = %v, want recorded error %v", repeatedErr, closeErr)
 	}
 

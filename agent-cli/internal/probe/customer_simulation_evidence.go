@@ -284,7 +284,7 @@ func (b *CustomerEvidenceBundle) Root() string {
 	return b.root
 }
 
-func (b CustomerEvidenceBundle) Validate() error {
+func (b *CustomerEvidenceBundle) Validate() error {
 	if b.SchemaVersion != CustomerEvidenceSchemaVersion {
 		return contractFieldError(ErrInvalidCustomerEvidence, "schema_version", "must be 1")
 	}
@@ -337,7 +337,7 @@ func (b CustomerEvidenceBundle) Validate() error {
 	return b.validateEvidenceRefs(availableArtifactPaths(b.Artifacts))
 }
 
-func (b CustomerEvidenceBundle) validateFamilyEvidence() error {
+func (b *CustomerEvidenceBundle) validateFamilyEvidence() error {
 	slot, ok := familyEvidenceSlotFor(b.Scenario.Family)
 	if !ok {
 		return nil
@@ -357,7 +357,7 @@ func (b CustomerEvidenceBundle) validateFamilyEvidence() error {
 
 // validateEvidenceRefs requires every verdict and family evidence reference to
 // name an available artifact. It runs after all structural validation.
-func (b CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct{}) error {
+func (b *CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct{}) error {
 	for i, result := range b.MechanicalVerdict.ActionResults {
 		if !allEvidenceRefsAvailable(result.EvidenceRefs, available) {
 			return contractFieldError(ErrMissingEvidence, fmt.Sprintf("mechanical_verdict.action_results[%d].evidence_refs", i), unavailableEvidenceMessage)
@@ -388,7 +388,7 @@ func (b CustomerEvidenceBundle) validateEvidenceRefs(available map[string]struct
 
 const unavailableEvidenceMessage = "references unavailable evidence"
 
-func (b CustomerEvidenceBundle) Manifest() CustomerEvidenceManifest {
+func (b *CustomerEvidenceBundle) Manifest() CustomerEvidenceManifest {
 	artifacts := append([]ArtifactEntry(nil), b.Artifacts...)
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Path < artifacts[j].Path })
 	m := CustomerEvidenceManifest{SchemaVersion: CustomerEvidenceSchemaVersion, RunID: b.RunID, ScenarioID: b.Scenario.ID, Finalized: b.Finalized, FinalizedAt: b.FinalizedAt, Artifacts: artifacts}
@@ -481,7 +481,7 @@ func (b *CustomerEvidenceBundle) AddProductRecordDir(source string) error {
 	}
 	info, err := os.Lstat(absSource)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrMissingEvidence, err)
+		return fmt.Errorf("%w: %w", ErrMissingEvidence, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return contractFieldError(ErrInvalidCustomerEvidence, "product_record_dir", "must be a non-symlink directory")
@@ -744,7 +744,7 @@ func productRecordPaths(entries []ArtifactEntry) []string {
 func ParseCustomerEvidenceManifest(data []byte) (CustomerEvidenceManifest, error) {
 	var manifest CustomerEvidenceManifest
 	if err := decodeStrictJSON(data, &manifest); err != nil {
-		return CustomerEvidenceManifest{}, fmt.Errorf("%w: decode manifest: %v", ErrInvalidCustomerEvidence, err)
+		return CustomerEvidenceManifest{}, fmt.Errorf("%w: decode manifest: %w", ErrInvalidCustomerEvidence, err)
 	}
 	if err := manifest.Validate(); err != nil {
 		return CustomerEvidenceManifest{}, err
@@ -779,14 +779,14 @@ func VerifyCustomerEvidenceManifest(root string, manifest CustomerEvidenceManife
 			continue
 		}
 		if statErr != nil {
-			return fmt.Errorf("%w: %v", ErrMissingEvidence, statErr)
+			return fmt.Errorf("%w: %w", ErrMissingEvidence, statErr)
 		}
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return fmt.Errorf("%w: artifact is not regular", ErrArtifactHashMismatch)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrArtifactHashMismatch, err)
+			return fmt.Errorf("%w: %w", ErrArtifactHashMismatch, err)
 		}
 		if int64(len(data)) != entry.Size {
 			return fmt.Errorf("%w: size mismatch for %q", ErrArtifactHashMismatch, entry.Path)

@@ -70,7 +70,7 @@ func ResolveFilesystemPolicy(workdir string, additionalRoots ...string) (*Filesy
 		var err error
 		workdir, err = os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("%w: get process working directory: %v", ErrInvalidFilesystemRoot, err)
+			return nil, fmt.Errorf("%w: get process working directory: %w", ErrInvalidFilesystemRoot, err)
 		}
 	}
 	primary, err := validateFilesystemRoot("workdir", workdir)

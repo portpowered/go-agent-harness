@@ -63,7 +63,7 @@ func (e *BrowserDisconnectedError) Is(target error) bool {
 	if e == nil {
 		return false
 	}
-	var codeErr *classifiedCode
+	var codeErr *classifiedCodeError
 	return errors.As(target, &codeErr) && codeErr.code == CodeBrowserDisconnected
 }
 
@@ -154,6 +154,10 @@ func (s *Service) promoteRetainedBrowserEndpointLossLocked(failure *DiscoveryErr
 	switch failure.Code {
 	case CodeEndpointNotFound, CodeEndpointUnreachable:
 		return newBrowserDisconnectedFromError(failure, browserID, targetID, phase)
+	case CodeRemoteEndpointDenied, CodeBrowserProtocolInvalid, CodeUnsupportedWebMCP, CodeNoEligibleTab,
+		CodeAmbiguousBrowser, CodeAmbiguousTab, CodeStaleSelection, CodeTargetAttachFailed, CodeTargetDetached,
+		CodeBrowserDisconnected:
+		return failure
 	default:
 		return failure
 	}

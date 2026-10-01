@@ -852,7 +852,7 @@ func waitForConversationalCustomerOracle(ctx context.Context, endpoint string, m
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return last, fmt.Errorf("wait for conversational customer oracle: %w (last=%+v err=%v)", ctx.Err(), last, lastErr)
+			return last, fmt.Errorf("wait for conversational customer oracle: %w (last=%+v err=%w)", ctx.Err(), last, lastErr)
 		}
 	}
 }

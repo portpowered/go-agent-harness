@@ -74,7 +74,7 @@ func (s *BrowserScript) UnmarshalJSON(data []byte) error {
 }
 
 // Validate checks a BrowserScript value independently of JSON decoding.
-func (s BrowserScript) Validate() error {
+func (s *BrowserScript) Validate() error {
 	if s.Version != BrowserScriptVersion {
 		return newScriptError("version", "want %q, got %q", BrowserScriptVersion, s.Version)
 	}
@@ -136,7 +136,7 @@ func (e *BrowserEndpoint) UnmarshalJSON(data []byte) error {
 }
 
 // Validate checks an endpoint and all target records.
-func (e BrowserEndpoint) Validate() error {
+func (e *BrowserEndpoint) Validate() error {
 	if strings.TrimSpace(e.Version.Browser) == "" {
 		return newScriptError("version.Browser", "is required")
 	}
@@ -197,7 +197,7 @@ func (t *BrowserTarget) UnmarshalJSON(data []byte) error {
 }
 
 // Validate checks a target's required values and safe opaque IDs.
-func (t BrowserTarget) Validate() error {
+func (t *BrowserTarget) Validate() error {
 	if err := validateScriptID(t.ID); err != nil {
 		return wrapScriptError("id", err)
 	}
@@ -267,7 +267,7 @@ func (o *BrowserScriptOperation) UnmarshalJSON(data []byte) error {
 }
 
 // Validate checks an operation and its controlled response shapes.
-func (o BrowserScriptOperation) Validate() error {
+func (o *BrowserScriptOperation) Validate() error {
 	if err := o.Expect.Validate(); err != nil {
 		return wrapScriptError("expect", err)
 	}
@@ -357,7 +357,7 @@ func (e *OperationExpectation) UnmarshalJSON(data []byte) error {
 }
 
 // Validate checks the operation vocabulary and all per-variant fields.
-func (e OperationExpectation) Validate() error {
+func (e *OperationExpectation) Validate() error {
 	if !isOperationType(e.Type) {
 		return newScriptError(jsonFieldType, "unknown operation type %q", e.Type)
 	}
@@ -377,11 +377,15 @@ func (e OperationExpectation) Validate() error {
 		if e.urlSet && strings.TrimSpace(e.URL) == "" {
 			return newScriptError("url", "must not be empty")
 		}
+	case OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
+		OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
+		OperationBrowsers, OperationTabs, OperationTools:
+		return newScriptError(jsonFieldType, "unsupported operation type %q", e.Type)
 	}
 	return nil
 }
 
-func (e OperationExpectation) validateInvokeTool() error {
+func (e *OperationExpectation) validateInvokeTool() error {
 	if strings.TrimSpace(e.FrameID) == "" {
 		return newScriptError("frame_id", "is required")
 	}
@@ -403,7 +407,7 @@ func (e OperationExpectation) validateInvokeTool() error {
 	return nil
 }
 
-func (e OperationExpectation) validateCancelTool() error {
+func (e *OperationExpectation) validateCancelTool() error {
 	if strings.TrimSpace(e.InvocationID) == "" {
 		return newScriptError(jsonFieldInvocationID, "is required")
 	}
@@ -420,6 +424,10 @@ func isOperationType(value OperationType) bool {
 	switch value {
 	case OperationEnableLifecycle, OperationEnableWebMCP, OperationInvokeTool, OperationCancelTool, OperationNavigate, OperationCloseTarget, OperationDetachTarget:
 		return true
+	case OperationDiscover, OperationList, OperationListTools, OperationBrowserDiscover,
+		OperationBrowserListTargets, OperationBrowserListTools, OperationDoctor, OperationContext,
+		OperationBrowsers, OperationTabs, OperationTools:
+		return false
 	default:
 		return false
 	}
@@ -515,7 +523,7 @@ func (e *EmittedEvent) UnmarshalJSON(data []byte) error {
 }
 
 // Validate checks one emitted neutral event and its terminal response shape.
-func (e EmittedEvent) Validate() error {
+func (e *EmittedEvent) Validate() error {
 	switch e.Type {
 	case EmittedToolsAdded:
 		if !e.toolsSet && e.Tools == nil {
@@ -537,7 +545,7 @@ func (e EmittedEvent) Validate() error {
 	return nil
 }
 
-func (e EmittedEvent) validateToolResponded() error {
+func (e *EmittedEvent) validateToolResponded() error {
 	hasOutput := e.outputSet || len(e.Output) > 0
 	hasError := e.errorSet || len(e.Error) > 0
 	if strings.TrimSpace(e.InvocationID) == "" {
@@ -676,7 +684,7 @@ func (t *ToolDescriptor) UnmarshalJSON(data []byte) error {
 
 // Validate checks the descriptor control values. Its nested schema and
 // annotations remain page-owned JSON and are not field-inventoried.
-func (t ToolDescriptor) Validate() error {
+func (t *ToolDescriptor) Validate() error {
 	if strings.TrimSpace(t.Name) == "" {
 		return newScriptError("name", "is required")
 	}

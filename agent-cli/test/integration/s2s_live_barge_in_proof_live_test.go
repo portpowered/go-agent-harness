@@ -728,6 +728,11 @@ func validateLiveBargeInRuntime(t *testing.T, observations []liveBargeInRuntimeF
 			if !observation.Clean || observation.HasError || !observation.HasAccounting {
 				t.Fatalf("live runtime terminal was not clean and accounted: %s", liveBargeInRuntimeEvidence(observations))
 			}
+		case runtimecontract.SessionRuntimeObservationAudioInput,
+			runtimecontract.SessionRuntimeObservationAudioPlaybackReceipt,
+			runtimecontract.SessionRuntimeObservationAudioRenderTapUnavailable,
+			runtimecontract.SessionRuntimeObservationResponseCreate:
+			// Not part of the input/turn/output/terminal reconciliation.
 		}
 	}
 	if inputCommits != liveBargeInTurns || turns != liveBargeInTurns || terminals != 1 || outputBytes == 0 {

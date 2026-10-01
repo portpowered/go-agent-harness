@@ -94,6 +94,12 @@ func lifecycleClassifiedError(err error) (*ClassifiedError, bool) {
 	switch classified.Code {
 	case ErrorBrowserDisconnected, ErrorTargetDetached:
 		return classified, true
+	case ErrorWebMCPDisabled, ErrorEndpointNotFound, ErrorEndpointUnreachable, ErrorRemoteEndpointDenied,
+		ErrorBrowserProtocol, ErrorUnsupportedWebMCP, ErrorNoEligibleTab, ErrorAmbiguousBrowser, ErrorAmbiguousTab,
+		ErrorStaleSelection, ErrorStaleToolRef, ErrorOriginDenied, ErrorApprovalRequired, ErrorApprovalDenied,
+		ErrorInvalidToolInput, ErrorResultTooLarge, ErrorTargetAttachFailed, ErrorPageNavigated,
+		ErrorInvocationFailed, ErrorInvocationCanceled, ErrorInvocationTimedOut, ErrorInvocationOrphaned:
+		return nil, false
 	default:
 		return nil, false
 	}

@@ -244,6 +244,8 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 	return UsableDisplayCapability(count), nil
 }
 
+var _ ScreenRecordingPermissionRechecker = (*hostDisplaySurface)(nil)
+
 func (s *hostDisplaySurface) ScreenRecordingPermissionRecheckSupported() bool {
 	return screenRecordingPermissionRecheckSupported()
 }

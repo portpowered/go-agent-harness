@@ -718,6 +718,8 @@ func summarizePatienceTimeline(evidence PatienceEvidence) patienceTimelineSummar
 			summary.repromptEvents++
 		case PatienceEventResponseCompleted, PatienceEventDeadAir, PatienceEventTimeout, PatienceEventCancelled:
 			summary.terminalEvent = true
+		case PatienceEventListenStarted:
+			// The listen baseline comes from evidence.ListenStartedAt; the event itself is not progress.
 		}
 	}
 	for _, event := range summary.progressEvents {

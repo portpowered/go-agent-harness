@@ -352,7 +352,7 @@ func ParseManifest(data []byte) (Manifest, error) {
 		return Manifest{}, validation("document", "", err.Error(), ErrInvalidManifest)
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = errors.New("contains more than one JSON value")
 		}

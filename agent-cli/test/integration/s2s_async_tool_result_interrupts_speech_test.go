@@ -404,9 +404,10 @@ func validateAsyncCollisionToolDeltas(deltas []messages.StreamMessage) error {
 		// The enclosing MESSAGE.START/END delimiters belong to the whole
 		// batch and intentionally carry no individual ToolCallID. Content
 		// deltas are the per-call correlation evidence.
-		switch delta.Type {
-		case messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd:
-		default:
+		isTextContent := delta.Type == messages.StreamTypeTextStart ||
+			delta.Type == messages.StreamTypeTextDelta ||
+			delta.Type == messages.StreamTypeTextEnd
+		if !isTextContent {
 			continue
 		}
 		if delta.ToolCallId != asyncCollisionCallID {

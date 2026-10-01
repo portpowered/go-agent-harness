@@ -496,7 +496,7 @@ func assertCLILiveRecordingBundle(t *testing.T, destination string, turns int, e
 
 func readCLIRecordingAudio(t *testing.T, destination string, expected [][]byte) ([]byte, []byte) {
 	t.Helper()
-	paths := []string{filepath.Join(destination, "audio/in-000.pcm"), filepath.Join(destination, "audio/out-000.pcm")}
+	paths := []string{filepath.Join(destination, "audio", "in-000.pcm"), filepath.Join(destination, "audio", "out-000.pcm")}
 	data := make([][]byte, len(paths))
 	for index, path := range paths {
 		var err error

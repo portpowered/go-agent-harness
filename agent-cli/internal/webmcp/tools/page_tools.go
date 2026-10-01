@@ -361,10 +361,10 @@ func pageToolGuidanceEnvelope(requested string, catalog webmcp.ToolCatalogSnapsh
 		available = append(available, descriptor.Name)
 	}
 	sort.Strings(available)
-	close := closeToolMatches(requested, available)
+	closeMatches := closeToolMatches(requested, available)
 	message := fmt.Sprintf("tool %q is not in the connected page catalog", requested)
-	if len(close) > 0 {
-		message += fmt.Sprintf("; close matches: %s", strings.Join(close, ", "))
+	if len(closeMatches) > 0 {
+		message += fmt.Sprintf("; close matches: %s", strings.Join(closeMatches, ", "))
 	}
 	if len(available) > 0 {
 		message += fmt.Sprintf(". Available page tools: %s. Call one directly by name, or use webmcp_list_tools and webmcp_invoke.", strings.Join(available, ", "))

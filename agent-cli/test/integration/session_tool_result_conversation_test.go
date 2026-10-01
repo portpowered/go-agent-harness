@@ -193,7 +193,7 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 
 	baseCapture.Session.ID = "sess_tool_result_conversation"
 	baseCapture.Session.FixtureProvenance = gwtesting.SessionFixtureProvenanceSynthetic
-	baseCapture.Records = append(records, gwtesting.CapturedSessionEvent{
+	records = append(records, gwtesting.CapturedSessionEvent{
 		Sequence:    len(records) + 1,
 		Direction:   gwtesting.DirectionServerToClient,
 		TimestampMs: int64(len(records)),
@@ -201,6 +201,7 @@ func buildToolResultConversationFixture(t *testing.T, wavPath string, replySampl
 		PayloadType: gwtesting.SessionPayloadTypeWebSocketMessage,
 		Payload:     json.RawMessage(`{"type":"session.closed","session_id":"sess_tool_result_conversation","reason":"fixture_complete"}`),
 	})
+	baseCapture.Records = records
 	return writeReplayCaptureFixture(t, baseCapture, "tool-result-conversation.session.json")
 }
 

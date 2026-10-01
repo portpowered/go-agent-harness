@@ -159,6 +159,9 @@ func renderChatLineWrapped(ln chatLine, width int) string {
 			return label
 		}
 		return label + renderMarkdown(ln.content, width) + "\n"
+	case chatLineUser, chatLineThinking, chatLineThinkingBlock, chatLineTool,
+		chatLineMedia, chatLineSystem:
+		// Non-markdown kinds use the plain styled rendering below.
 	}
 
 	plain := getPlainLine(ln)
@@ -179,6 +182,9 @@ func renderChatLineWrapped(ln chatLine, width int) string {
 		style = styleMedia()
 	case chatLineSystem:
 		style = styleSystem()
+	case chatLineAssistant, chatLineToolResult:
+		// Markdown kinds return above; keep the plain fallback for completeness.
+		return plain + "\n"
 	default:
 		return plain + "\n"
 	}

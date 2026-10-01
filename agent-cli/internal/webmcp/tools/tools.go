@@ -587,6 +587,10 @@ func invocationFailure(result webmcp.InvokeResult, toolRef webmcp.ToolRef) ([]by
 			code = webmcp.ErrorInvocationTimedOut
 		case webmcp.InvocationOrphaned:
 			code = webmcp.ErrorInvocationOrphaned
+		case webmcp.InvocationCreated, webmcp.InvocationAwaitingApproval, webmcp.InvocationQueued,
+			webmcp.InvocationDispatching, webmcp.InvocationDispatched, webmcp.InvocationCompleted,
+			webmcp.InvocationError, webmcp.InvocationPolicyDenied:
+			code = webmcp.ErrorInvocationFailed
 		default:
 			code = webmcp.ErrorInvocationFailed
 		}
@@ -671,6 +675,9 @@ func invocationNeedsTerminalResult(state webmcp.InvocationState) bool {
 		webmcp.InvocationOrphaned,
 		webmcp.InvocationPolicyDenied:
 		return false
+	case webmcp.InvocationCreated, webmcp.InvocationAwaitingApproval, webmcp.InvocationQueued,
+		webmcp.InvocationDispatching, webmcp.InvocationDispatched:
+		return true
 	default:
 		return true
 	}

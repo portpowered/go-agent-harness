@@ -181,15 +181,14 @@ func TestSelectTargetActivatesOnlyWhenRequestedAndEmitsSelection(t *testing.T) {
 	})
 	targetID := (HashTargetIDMapper{}).TargetID(TargetIdentity{BrowserID: browser.ID, RawID: descriptor.ID})
 
-	selected, err := service.SelectTarget(context.Background(), browser, targetID)
-	if err != nil {
+	if _, err := service.SelectTarget(context.Background(), browser, targetID); err != nil {
 		t.Fatalf("non-activating selection error = %v", err)
 	}
 	if activator.calls != 0 {
 		t.Fatalf("activation calls for default selection = %d, want 0", activator.calls)
 	}
 
-	selected, err = service.SelectTarget(context.Background(), browser, targetID, SelectionOptions{Activate: true, Reason: "operator_request"})
+	selected, err := service.SelectTarget(context.Background(), browser, targetID, SelectionOptions{Activate: true, Reason: "operator_request"})
 	if err != nil {
 		t.Fatalf("activating selection error = %v", err)
 	}

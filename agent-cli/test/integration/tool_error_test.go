@@ -178,7 +178,7 @@ func (f *toolCallInferencer) Infer(ctx context.Context, req messages.InferenceRe
 	}, nil
 }
 
-func (toolCallInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
+func (*toolCallInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
 	return nil, errors.New("InferStream not used by the s2s-v4c tool-error controls")
 }
 

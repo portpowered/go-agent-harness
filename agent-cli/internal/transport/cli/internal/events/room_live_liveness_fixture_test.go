@@ -189,11 +189,11 @@ func (f *roomLiveLivenessFixture) recordDiagnostic(record runtimeRooms.RoomDiagn
 	f.diagnosticMu.Lock()
 	defer f.diagnosticMu.Unlock()
 	if record.Event == "live_liveness_fault" {
-		copy := runtimeRooms.RoomDiagnosticRecord{Event: record.Event, At: record.At, Fields: map[string]string{}}
+		cloned := runtimeRooms.RoomDiagnosticRecord{Event: record.Event, At: record.At, Fields: map[string]string{}}
 		for key, value := range record.Fields {
-			copy.Fields[key] = value
+			cloned.Fields[key] = value
 		}
-		f.livenessDiagnostic = &copy
+		f.livenessDiagnostic = &cloned
 	}
 	if record.Event == "live_turn_completed" {
 		f.completedTurnDiagnostics++

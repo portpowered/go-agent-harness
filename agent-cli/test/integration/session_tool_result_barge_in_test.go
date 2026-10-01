@@ -148,6 +148,21 @@ func (s *sessionToolBargeInSession) SendWithOutcome(ctx context.Context, msg mes
 				s.queueActiveContinuationReady()
 			})
 		}
+	case messages.StreamTypeMessageStart, messages.StreamTypeTextStart, messages.StreamTypeTextDelta,
+		messages.StreamTypeTextEnd, messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta,
+		messages.StreamTypeAudioStart, messages.StreamTypeAudioEnd, messages.StreamTypeImageStart,
+		messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.StreamTypeVideoStart,
+		messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.StreamTypeFileStart,
+		messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.StreamTypeEmbeddingStart,
+		messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd, messages.StreamTypeReasoningStart,
+		messages.StreamTypeReasoningDelta, messages.StreamTypeReasoningEnd, messages.StreamTypeVADSpeechStarted,
+		messages.StreamTypeVADSpeechStopped, messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta,
+		messages.StreamTypeTranscriptEnd, messages.StreamTypeInputItemAdded, messages.StreamTypePong,
+		messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
+		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeRefusal,
+		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
+		messages.StreamTypeSystemFullMessage:
+		// Other client messages need no scripted response.
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
 }

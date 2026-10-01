@@ -142,11 +142,11 @@ func duplicateConversationCall(t *testing.T, capture *gwtesting.SessionCapture) 
 		}
 		switch record.Type {
 		case rtEventOutputItemAdded:
-			copy := record
-			added = &copy
+			cloned := record
+			added = &cloned
 		case rtEventFunctionCallArgumentsDone:
-			copy := record
-			arguments = &copy
+			cloned := record
+			arguments = &cloned
 		}
 	}
 	if added == nil || arguments == nil {
@@ -247,8 +247,8 @@ func duplicateExpectedConversationResult(t *testing.T, capture *gwtesting.Sessio
 	var result *gwtesting.CapturedSessionEvent
 	for index := range capture.Records {
 		if functionCallOutputRecord(t, &capture.Records[index]) {
-			copy := capture.Records[index]
-			result = &copy
+			cloned := capture.Records[index]
+			result = &cloned
 			break
 		}
 	}
