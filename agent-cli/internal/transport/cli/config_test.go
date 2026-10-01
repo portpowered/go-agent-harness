@@ -96,9 +96,9 @@ func newGeneratedCLIRootWithPathResolver(configDir string, resolver *pathResolve
 // executeGeneratedCLI builds and runs the generated root under the test's
 // context. It takes the test handle rather than a context so the root is
 // constructed outside any context-carrying helper.
-func executeGeneratedCLI(t testing.TB, configDir string, args ...string) cliResult {
-	t.Helper()
-	ctx := t.Context()
+func executeGeneratedCLI(tb testing.TB, configDir string, args ...string) cliResult {
+	tb.Helper()
+	ctx := tb.Context()
 	var stdout, stderr bytes.Buffer
 	root := newGeneratedCLIRoot(configDir)
 	root.SetOut(&stdout)

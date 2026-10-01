@@ -395,9 +395,6 @@ func startGateCommand(parent context.Context, binaryPath, configDir string, args
 }
 
 func startGateCommandWithEnvironment(parent context.Context, binaryPath, configDir string, extraEnvironment []string, args ...string) (*gateCLIProcess, error) {
-	if parent == nil {
-		parent = context.Background()
-	}
 	commandContext, cancel := context.WithCancel(parent)
 	fullArgs := append([]string{"--config-dir", configDir}, args...)
 	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
@@ -415,7 +412,8 @@ func startGateCommandWithEnvironment(parent context.Context, binaryPath, configD
 			}
 			filtered = append(filtered, value)
 		}
-		command.Env = append(filtered, extra)
+		filtered = append(filtered, extra)
+		command.Env = filtered
 	}
 	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
 	command.Stdout = &process.stdout
@@ -438,9 +436,6 @@ func startGateCommandWithEnvironment(parent context.Context, binaryPath, configD
 func (p *gateCLIProcess) wait(ctx context.Context) (gateCLIResult, error) {
 	if p == nil {
 		return gateCLIResult{}, errors.New("nil Gate I1 child process")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	select {
 	case result := <-p.done:
@@ -479,9 +474,6 @@ func probe03RandomToken(t *testing.T) string {
 }
 
 func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir string, args ...string) (*gateCLIProcess, error) {
-	if parent == nil {
-		parent = context.Background()
-	}
 	commandContext, cancel := context.WithCancel(parent)
 	fullArgs := append([]string(nil), args...)
 	if configDir != "" {

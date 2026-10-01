@@ -1,6 +1,7 @@
 package testtimeout
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -21,7 +22,7 @@ const (
 // contract's diagnostics stay comparable.
 func TestMain(m *testing.M) {
 	if mode := os.Getenv(fixtureModeEnv); mode != "" {
-		os.Exit(runTimeoutFixture(mode))
+		os.Exit(runTimeoutFixture(context.Background(), mode))
 	}
 	os.Exit(m.Run())
 }
@@ -30,16 +31,16 @@ func TestMain(m *testing.M) {
 // child and grandchild, then blocks so the production test-command boundary
 // must terminate the entire process group; the success fixture announces
 // itself and exits cleanly.
-func runTimeoutFixture(mode string) int {
+func runTimeoutFixture(ctx context.Context, mode string) int {
 	switch mode {
 	case "blocked":
-		child, err := startFixtureProcess("child")
+		child, err := startFixtureProcess(ctx, "child")
 		if err != nil {
 			return fixtureStartFailure(err)
 		}
 		announceFixture("fixture=blocked-child active_test=TestTimeoutFixtureBlockedChild process=parent parent_pid=%d child_pid=%d", os.Getpid(), child.Pid)
 	case "child":
-		descendant, err := startFixtureProcess("grandchild")
+		descendant, err := startFixtureProcess(ctx, "grandchild")
 		if err != nil {
 			return fixtureStartFailure(err)
 		}
@@ -66,8 +67,8 @@ func fixtureStartFailure(err error) int {
 	return 1
 }
 
-func startFixtureProcess(mode string) (*os.Process, error) {
-	cmd := exec.Command(os.Args[0])
+func startFixtureProcess(ctx context.Context, mode string) (*os.Process, error) {
+	cmd := exec.CommandContext(ctx, os.Args[0])
 	cmd.Env = fixtureEnvironment(mode)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

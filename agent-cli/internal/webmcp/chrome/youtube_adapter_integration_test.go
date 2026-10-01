@@ -325,6 +325,7 @@ func testXAdapterJourney(t *testing.T) {
 }
 
 func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
+	t.Helper()
 	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
 	defer cancel()
 	t.Helper()
@@ -367,6 +368,7 @@ func testXAdapterPendingMedia(t *testing.T, fixture adapterFixture) {
 }
 
 func testXAdapterVideoJourney(t *testing.T, fixture adapterFixture) {
+	t.Helper()
 	ctx, cancel := context.WithDeadline(t.Context(), fixture.deadline)
 	defer cancel()
 	t.Helper()

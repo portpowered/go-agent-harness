@@ -313,7 +313,7 @@ const toolErrorPanicHelperEnv = "S2S_V4C_TOOL_ERROR_PANIC_HELPER"
 // verifies the panic manifests as an explicit crash with a panic report rather
 // than a hang or clean exit.
 func TestNegativeControlUnhandledPanicDetectedByParent(t *testing.T) {
-	cmd := exec.Command(os.Args[0])
+	cmd := exec.CommandContext(t.Context(), os.Args[0])
 	cmd.Env = append(os.Environ(), toolErrorPanicHelperEnv+"=1")
 	var out strings.Builder
 	cmd.Stdout = &out

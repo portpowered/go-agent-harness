@@ -295,8 +295,8 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 				// Preserve that ordering so the session observer registers the
 				// continuation request before its response begins.
 				waitWebMCPDeviceProviderDelay(webMCPDeviceContinuationDelay)
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewMessageStartValue()})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewAudioStartValue()})
 				s.inbound.frames <- audio.PCMFrame{Samples: webMCPDeviceSignal(720, 9300), EndOfResponse: true}
 				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextStartValue()})
 				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, ResponseID: "cube-continuation", Value: messages.NewTextDeltaValue("Cube moves queued.")})
@@ -308,7 +308,7 @@ func (s *webMCPDeviceSession) Send(ctx context.Context, message messages.StreamM
 				case <-time.After(time.Second):
 				}
 				waitWebMCPDeviceProviderDelay(webMCPDeviceCloseDelay)
-				s.recv.Write(context.Background(), messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("webmcp-device", "fixture complete")})
+				s.recv.Write(providerContext, messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: messages.NewSessionCloseValue("webmcp-device", "fixture complete")})
 			}()
 		})
 	}

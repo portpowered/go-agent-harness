@@ -652,17 +652,7 @@ func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
 		t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
 	if runErr != nil {
-		if liveBargeInRunErrorClass(runErr) != liveBargeInRuntimeContractFailure {
-			t.Fatalf("INCONCLUSIVE live barge-in proof: provider result class=%s; capture=%s; trace=%s", liveBargeInRunErrorClass(runErr), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
-		}
-		if validationErr == nil {
-			if boundaryErr := validateLiveBargeInBoundaries(facts, trace); boundaryErr != nil {
-				if errors.As(boundaryErr, &inconclusive) {
-					t.Fatalf("INCONCLUSIVE live barge-in proof: %s; capture=%s; trace=%s", inconclusive.Reason, liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
-				}
-			}
-		}
-		t.Fatalf("live barge-in command returned a contract failure; capture=%s; trace=%s", liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
+		t.Fatalf("%s; capture=%s; trace=%s", liveBargeInRunFailure(runErr, validationErr, facts, trace), liveBargeInCaptureSummary(facts, len(capture.Records)), trace.evidence())
 	}
 	if validationErr != nil {
 		t.Fatalf("live barge-in capture adapter failed; capture=%s", liveBargeInCaptureSummary(facts, len(capture.Records)))
@@ -734,4 +724,18 @@ func validateLiveBargeInRuntime(t *testing.T, observations []liveBargeInRuntimeF
 	if inputCommits != liveBargeInTurns || turns != liveBargeInTurns || terminals != 1 || outputBytes == 0 {
 		t.Fatalf("live runtime did not reconcile inputs, turns, output, and terminal: %s", liveBargeInRuntimeEvidence(observations))
 	}
+}
+
+// liveBargeInRunFailure classifies a failed live barge-in command: a provider
+// or setup failure, or an inconclusive collision boundary, is INCONCLUSIVE;
+// anything else is a runtime contract failure.
+func liveBargeInRunFailure(runErr, validationErr error, facts liveBargeInCaptureFacts, trace *liveBargeInTrace) string {
+	if class := liveBargeInRunErrorClass(runErr); class != liveBargeInRuntimeContractFailure {
+		return fmt.Sprintf("INCONCLUSIVE live barge-in proof: provider result class=%s", class)
+	}
+	var inconclusive *liveBargeInInconclusiveError
+	if validationErr == nil && errors.As(validateLiveBargeInBoundaries(facts, trace), &inconclusive) {
+		return "INCONCLUSIVE live barge-in proof: " + inconclusive.Reason
+	}
+	return "live barge-in command returned a contract failure"
 }
