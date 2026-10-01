@@ -192,7 +192,7 @@ type PlaybackDiagnostics interface {
 	PlaybackObserver(ctx context.Context, existing devicert.RTCDevicePlaybackObserver) devicert.RTCDevicePlaybackObserver
 	PlaybackReceiptObserver(devicert.RTCDevicePlaybackReceiptObserver) devicert.RTCDevicePlaybackReceiptObserver
 	CaptureObserver(ctx context.Context, existing devicert.RTCDeviceCaptureObserver) devicert.RTCDeviceCaptureObserver
-	RecordParticipantPlaybackOverflow(string, *devicegw.DeviceSink)
+	RecordParticipantPlaybackOverflow(ctx context.Context, participantID string, output *devicegw.DeviceSink)
 }
 
 // SessionRuntimeObservationKind identifies an observable runtime boundary.

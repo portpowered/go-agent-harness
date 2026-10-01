@@ -14,31 +14,36 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-// start publishes start failures under the invocation evidence context, which
-// outlives runCtx, rather than under runCtx itself.
-func (h *handle) start(runCtx context.Context) error { //nolint:contextcheck // failStart publishes under the invocation evidence context.
+func (h *handle) start(runCtx context.Context) error {
 	defer h.startFinish.Do(func() { close(h.startDone) })
+	if err := h.startLoop(runCtx); err != nil {
+		return h.failStart(err) //nolint:contextcheck // Start failures publish under the invocation evidence context, which outlives runCtx.
+	}
+	return nil
+}
+
+func (h *handle) startLoop(runCtx context.Context) error {
 	toolExecutor, toolDefinitions, inferencer, err := h.prepareStart(runCtx)
 	if err != nil {
-		return h.failStart(err)
+		return err
 	}
 	loop, err := h.buildLoop(inferencer, toolExecutor, toolDefinitions)
 	if err != nil {
-		return h.failStart(err)
+		return err
 	}
 	capabilityWatch, err := h.installLoop(loop)
 	if err != nil {
-		return h.failStart(err)
+		return err
 	}
 	durationTimer, err := h.newDurationTimer()
 	if err != nil {
-		return h.failStart(err)
+		return err
 	}
 	h.prepareReplayCompletion()
 	h.publish(session.LiveEvent{Kind: string(session.LiveEventStarted), SessionID: h.request.SessionID, Critical: true}, false) //nolint:contextcheck // start publication uses the invocation evidence context.
 	watchEvents := capabilityEventStream(runCtx, capabilityWatch)
 	if h.captureInterruptionsEnabled() && watchEvents == nil {
-		return h.failStart(errors.New("capture interruptions require browser invocation events"))
+		return errors.New("capture interruptions require browser invocation events")
 	}
 	h.launchWorkers(runCtx, loop, durationTimer, watchEvents)
 	return nil

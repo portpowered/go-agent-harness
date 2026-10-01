@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
@@ -170,7 +171,7 @@ func TestPlaybackDiagnosticsPublicContractFansOutQueueAndReceiptObservations(t *
 	receiptObserver(audio.PlaybackReceipt{CommandID: 7, Epoch: 2, Applied: true})
 	captureObserver := diagnostics.CaptureObserver(t.Context(), nil)
 	captureObserver(devicegw.DeviceID("virtual:input"), audio.CaptureQueueStats{CapturedSamples: 4, DroppedSamples: 1, DropPolicy: "drop_oldest"})
-	diagnostics.RecordParticipantPlaybackOverflow("participant-1", nil)
+	diagnostics.RecordParticipantPlaybackOverflow(t.Context(), "participant-1", nil)
 	if len(runtimeObserver.snapshot()) != 1 {
 		t.Fatalf("receipt observations = %d, want one", len(runtimeObserver.snapshot()))
 	}
@@ -566,7 +567,17 @@ func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {
 	if combineRTCDevicePlaybackObservers(absent...) != nil || combineRTCDeviceCaptureObservers(nil) != nil || combineRTCDevicePlaybackReceiptObservers(nil) != nil {
 		t.Fatal("combining only absent observers produced an observer")
 	}
-	if resolvePlaybackDiagnosticSink(nil) == nil {
+	var logged []observability.LogRecord
+	logger := observability.LoggerFunc(func(_ context.Context, record observability.LogRecord) error {
+		logged = append(logged, record)
+		return nil
+	})
+	fallback := resolvePlaybackDiagnosticSink(t.Context(), nil, logger)
+	if fallback == nil {
 		t.Fatal("an unwired playback diagnostic sink was not replaced by the fallback")
+	}
+	fallback.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventPlaybackOverflow, Fields: map[string]string{"dropped": "3"}})
+	if len(logged) != 1 || logged[0].Fields["event"] != SessionDiagnosticEventPlaybackOverflow || logged[0].Fields["dropped"] != "3" {
+		t.Fatalf("fallback diagnostic log = %#v, want one overflow record", logged)
 	}
 }
