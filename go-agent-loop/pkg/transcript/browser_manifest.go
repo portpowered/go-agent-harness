@@ -43,13 +43,8 @@ var (
 	ErrInvalidBrowserArtifact = errors.New("transcript: invalid browser artifact")
 )
 
-var browserRedactionPolicyFieldOrder = []string{
-	"url_query",
-	"url_fragment",
-	"tool_arguments",
-	"result_json_pointers",
-	"digest_tools",
-	"raw_cdp",
+func browserRedactionPolicyFieldOrder() []string {
+	return []string{"url_query", "url_fragment", "tool_arguments", "result_json_pointers", "digest_tools", "raw_cdp"}
 }
 
 // BrowserRedactionPolicy is the effective, serializable C0 browser redaction
@@ -139,14 +134,14 @@ func (p *BrowserRedactionPolicy) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return invalidBrowserArtifact("redaction: %v", err)
 	}
-	allowed := make(map[string]struct{}, len(browserRedactionPolicyFieldOrder))
-	for _, field := range browserRedactionPolicyFieldOrder {
+	allowed := make(map[string]struct{}, len(browserRedactionPolicyFieldOrder()))
+	for _, field := range browserRedactionPolicyFieldOrder() {
 		allowed[field] = struct{}{}
 	}
 	if err := rejectRecordingUnknownFields(fields, allowed); err != nil {
 		return invalidBrowserArtifact("redaction: %v", err)
 	}
-	for _, field := range browserRedactionPolicyFieldOrder {
+	for _, field := range browserRedactionPolicyFieldOrder() {
 		if _, ok := fields[field]; !ok {
 			return invalidBrowserArtifact("redaction.%s is required", field)
 		}
@@ -758,7 +753,7 @@ func parseRecordingStringArray(raw json.RawMessage) ([]string, error) {
 	for index, value := range values {
 		parsed, err := parseRecordingString(value)
 		if err != nil {
-			return nil, fmt.Errorf("item %d %v", index, err)
+			return nil, fmt.Errorf("item %d %w", index, err)
 		}
 		result[index] = parsed
 	}

@@ -197,3 +197,6 @@ func (r *InteractionRunner) WriteBatch(ctx context.Context, events []messages.In
 	}
 	return nil
 }
+
+// streamIDRandomBytes is the random suffix length of generated stream IDs.
+const streamIDRandomBytes = 8

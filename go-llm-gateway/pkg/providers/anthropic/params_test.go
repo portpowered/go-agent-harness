@@ -42,8 +42,8 @@ func TestApplyInferenceRequestOptions_MaxTokens(t *testing.T) {
 		Model:    anthropic.Model("claude-3-5-sonnet"),
 		Messages: []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("Hi"))},
 	}
-	max := 2048
-	applyInferenceRequestOptions(&params, providers.InferenceRequest{MaxTokens: &max})
+	maxTokens := 2048
+	applyInferenceRequestOptions(&params, providers.InferenceRequest{MaxTokens: &maxTokens})
 
 	if params.MaxTokens != 2048 {
 		t.Errorf("MaxTokens: got %d, want 2048", params.MaxTokens)

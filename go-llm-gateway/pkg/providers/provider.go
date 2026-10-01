@@ -42,6 +42,10 @@ type Feature = capabilities.Feature
 // UnsupportedFeatureError re-exports deterministic local validation failures.
 type UnsupportedFeatureError = capabilities.UnsupportedFeatureError
 
+// StreamMessageBuffer bounds the stream messages a stateless provider queues
+// ahead of the caller reading its InferStream channel.
+const StreamMessageBuffer = 64
+
 const (
 	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
 	CapabilityStateSupported   = capabilities.CapabilityStateSupported
@@ -67,6 +71,21 @@ const (
 // without explicit capability reporting.
 func UnknownProviderCapabilities(provider string) capabilities.ProviderCapabilities {
 	return capabilities.UnknownProviderCapabilities(provider)
+}
+
+// ReportedCapabilities returns the capability contract provider reports
+// through CapabilityReporter, naming it after provider when the report omits
+// a name. Providers that do not implement CapabilityReporter report the
+// documented unknown fallback.
+func ReportedCapabilities(provider interface{ Name() string }) ProviderCapabilities {
+	if reporter, ok := provider.(CapabilityReporter); ok {
+		caps := reporter.Capabilities()
+		if caps.Provider == "" {
+			caps.Provider = provider.Name()
+		}
+		return caps
+	}
+	return UnknownProviderCapabilities(provider.Name())
 }
 
 // ThinkingMode configures extended thinking (Anthropic). Ignored by other providers.

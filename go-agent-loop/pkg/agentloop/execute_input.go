@@ -86,7 +86,7 @@ func (in *ExecuteInput) ToMessage() messages.Message {
 
 func encodeImageToJPEG(img image.Image) []byte {
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 92}); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: inputJPEGQuality}); err != nil {
 		return nil
 	}
 	return buf.Bytes()
@@ -162,3 +162,6 @@ func (al *AgentLoop) SendSessionMessage(ctx context.Context, msg messages.Messag
 func (al *AgentLoop) SendSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error {
 	return al.sendSessionInput(ctx, "SendSessionEventWaiting", participants.SessionEvent(msg), participants.SessionAdmitWaiting)
 }
+
+// inputJPEGQuality is the JPEG quality used when encoding image inputs.
+const inputJPEGQuality = 92

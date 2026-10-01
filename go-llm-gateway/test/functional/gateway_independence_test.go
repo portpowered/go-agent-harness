@@ -86,14 +86,14 @@ func TestGatewayConsumerUsesOnlySharedLoopContract(t *testing.T) {
 	var streamedText string
 	var sawEnd bool
 	for msg := range stream {
-		switch msg.Type {
-		case messages.StreamTypeTextDelta:
+		if msg.Type == messages.StreamTypeTextDelta {
 			delta, ok := msg.Value.(*messages.TextDeltaValue)
 			if !ok {
 				t.Fatalf("text delta value: got %T, want *messages.TextDeltaValue", msg.Value)
 			}
 			streamedText += delta.Content
-		case messages.StreamTypeMessageEnd:
+		}
+		if msg.Type == messages.StreamTypeMessageEnd {
 			sawEnd = true
 		}
 	}

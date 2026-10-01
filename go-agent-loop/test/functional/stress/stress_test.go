@@ -4,6 +4,7 @@ package stress
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -246,7 +247,7 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 	const modelResponse = "ok"
 
 	inf := newStressInferencer()
-	for i := 0; i < numCalls; i++ {
+	for range numCalls {
 		inf.AddTextResponse(modelResponse)
 	}
 	tool := newStressToolExecutor()
@@ -259,15 +260,14 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 		t.Fatalf("failed to create loop: %v", err)
 	}
 
-	// Baseline goroutine count after GC + settle.
+	// Baseline goroutine count after GC.
 	runtime.GC()
-	time.Sleep(50 * time.Millisecond)
 	baseline := runtime.NumGoroutine()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	for i := 0; i < numCalls; i++ {
+	for i := range numCalls {
 		result, execErr := loop.Execute(ctx, agentloop.NewExecuteInput(fmt.Sprintf("msg-%d", i)))
 		if execErr != nil {
 			t.Fatalf("Execute call %d: %v", i, execErr)
@@ -279,8 +279,7 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 
 	// Allow goroutines to settle.
 	runtime.GC()
-	time.Sleep(200 * time.Millisecond)
-	final := runtime.NumGoroutine()
+	final := settleGoroutines(baseline+10, 2*time.Second)
 
 	// Allow a margin of 10 goroutines for runtime overhead.
 	if final > baseline+10 {
@@ -303,7 +302,7 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 
 	// Enough responses for all possible inference calls triggered by sends.
 	inf := newStressInferencer()
-	for i := 0; i < totalMessages*2; i++ {
+	for i := range totalMessages * 2 {
 		inf.AddTextResponse(fmt.Sprintf("response-%d", i))
 	}
 	tool := newStressToolExecutor()
@@ -328,28 +327,25 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() { runErr <- loop.Run(ctx) }()
 
-	// Wait a moment for the loop to start.
-	time.Sleep(50 * time.Millisecond)
-
 	var wg sync.WaitGroup
 	// Sends and interrupts race loop shutdown by design; a rejection is not a
 	// failure, but the count is reported so an unexpected surge is visible.
 	var rejected atomic.Int64
 
 	// Sender goroutines.
-	for s := 0; s < numSenders; s++ {
+	for s := range numSenders {
 		wg.Add(1)
 		go func(senderID int) {
 			defer wg.Done()
-			for m := 0; m < messagesPerSender; m++ {
+			for m := range messagesPerSender {
 				msg := messages.NewTextMessage(messages.RoleUser,
 					fmt.Sprintf("sender-%d-msg-%d", senderID, m))
 				if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
 					rejected.Add(1)
 				}
-				// Small jitter to mix sends and interrupts.
+				// Yield to mix sends and interrupts.
 				if m%3 == 0 {
-					time.Sleep(time.Millisecond)
+					runtime.Gosched()
 				}
 			}
 		}(s)
@@ -359,25 +355,28 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < totalMessages/2; i++ {
+		for i := range totalMessages / 2 {
 			followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
 			if err := loop.SendInterrupt(ctx, &followUp); err != nil {
 				rejected.Add(1)
 			}
-			time.Sleep(2 * time.Millisecond)
+			runtime.Gosched()
 		}
 	}()
 
 	wg.Wait()
 
-	// Give the loop time to process remaining messages.
-	time.Sleep(500 * time.Millisecond)
+	// Cancel only once the loop has published at least one response, so
+	// shutdown races in-flight processing rather than an idle loop.
+	if !out.waitFor("response-", 5*time.Second) {
+		t.Logf("no response published before cancellation; output %q", out.String())
+	}
 	cancel()
 
 	select {
 	case loopErr := <-runErr:
 		// context.Canceled is expected after cancel().
-		if loopErr != nil && loopErr != context.Canceled && loopErr.Error() != "context canceled" {
+		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
 			t.Logf("Run exited with: %v (non-fatal for stress test)", loopErr)
 		}
 	case <-time.After(5 * time.Second):
@@ -395,7 +394,7 @@ func TestStress_HighThroughputStreaming(t *testing.T) {
 
 	chunks := make([]string, numChunks)
 	var want strings.Builder
-	for i := 0; i < numChunks; i++ {
+	for i := range numChunks {
 		chunk := fmt.Sprintf("chunk-%04d ", i)
 		chunks[i] = chunk
 		want.WriteString(chunk)
@@ -457,7 +456,7 @@ func TestStress_LargeBatchToolCalls(t *testing.T) {
 	calls := make([]messages.ToolCall, numTools)
 	toolExec := newStressToolExecutor()
 
-	for i := 0; i < numTools; i++ {
+	for i := range numTools {
 		name := fmt.Sprintf("tool_%d", i)
 		tools[i] = messages.ToolDefinition{Name: name, Description: fmt.Sprintf("Tool number %d", i)}
 		calls[i] = messages.ToolCall{

@@ -138,74 +138,73 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 // (MESSAGE.START, MESSAGE.END) uses one stream; each tool call's TEXT.START/DELTA/END uses
 // its own stream so parallel tool calls have separate streams.
 func (r *ToolRunner) emitResultDeltas(ctx context.Context, loopPassID int, results []messages.ToolCallResponse) {
-	envelope := toolStreamWriter{runner: r, ctx: ctx, loopPassID: loopPassID, streamID: mustStreamID("tool-msg")}
-	envelope.write(messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleTool, Value: messages.NewMessageStartValue()})
+	envelope := toolStreamWriter{runner: r, loopPassID: loopPassID, streamID: mustStreamID("tool-msg")}
+	envelope.write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleTool, Value: messages.NewMessageStartValue()})
 	for _, result := range results {
-		call := toolStreamWriter{runner: r, ctx: ctx, loopPassID: loopPassID, streamID: mustStreamID("tool-call"), toolCallID: result.ToolCallID}
-		call.emitResult(result)
+		call := toolStreamWriter{runner: r, loopPassID: loopPassID, streamID: mustStreamID("tool-call"), toolCallID: result.ToolCallID}
+		call.emitResult(ctx, result)
 	}
 	usage := messages.TokenUsage{PromptTokens: 0, CompletionTokens: 0, TotalTokens: 0}
-	envelope.write(messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool, Value: messages.NewMessageEndValue(usage)})
+	envelope.write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, Role: messages.RoleTool, Value: messages.NewMessageEndValue(usage)})
 }
 
 // toolStreamWriter tags deltas for one tool stream with sequential actor
 // indexes. The envelope stream and each tool call stream own separate writers.
 type toolStreamWriter struct {
 	runner     *ToolRunner
-	ctx        context.Context
 	loopPassID int
 	streamID   string
 	toolCallID string
 	idx        int
 }
 
-func (w *toolStreamWriter) write(sm messages.StreamMessage) {
+func (w *toolStreamWriter) write(ctx context.Context, sm messages.StreamMessage) {
 	sm.ActorStreamID = w.streamID
 	sm.ActorProvidedIndex = w.idx
 	sm.ActorProvidedID = fmt.Sprintf("tool-%s-%d", w.streamID, w.idx)
 	sm.ActorID = messages.Tool
 	sm.LoopPassID = w.loopPassID
 	w.idx++
-	w.runner.DeltaOutbox.Write(w.ctx, sm)
+	w.runner.DeltaOutbox.Write(ctx, sm)
 }
 
-func (w *toolStreamWriter) writeContent(streamType messages.StreamMessageType, value messages.StreamMessageValue) {
-	w.write(messages.StreamMessage{Type: streamType, Role: messages.RoleTool, Value: value, ToolCallId: w.toolCallID})
+func (w *toolStreamWriter) writeContent(ctx context.Context, streamType messages.StreamMessageType, value messages.StreamMessageValue) {
+	w.write(ctx, messages.StreamMessage{Type: streamType, Role: messages.RoleTool, Value: value, ToolCallId: w.toolCallID})
 }
 
 // emitResult writes one tool result's content boundaries. Structured parts
 // take precedence over the flat Content fallback.
-func (w *toolStreamWriter) emitResult(result messages.ToolCallResponse) {
+func (w *toolStreamWriter) emitResult(ctx context.Context, result messages.ToolCallResponse) {
 	contentEmitted := false
 	if len(result.ContentParts) > 0 {
 		for _, part := range result.ContentParts {
-			if w.emitContentPart(part) {
+			if w.emitContentPart(ctx, part) {
 				contentEmitted = true
 			}
 		}
 	} else if text := result.Content; text != "" {
 		// Fallback: emit text from the flat Content field.
-		w.emitText(text)
+		w.emitText(ctx, text)
 		contentEmitted = true
 	}
 	if !contentEmitted {
 		// A successful empty result still needs one reconstructible content
 		// boundary. Without it, the tool message loses its call ID and the
 		// provider cannot receive the result or request its continuation.
-		w.writeContent(messages.StreamTypeTextStart, messages.NewTextStartValue())
-		w.writeContent(messages.StreamTypeTextEnd, messages.NewTextEndValue())
+		w.writeContent(ctx, messages.StreamTypeTextStart, messages.NewTextStartValue())
+		w.writeContent(ctx, messages.StreamTypeTextEnd, messages.NewTextEndValue())
 	}
 }
 
 // emitText preserves the text boundaries even for an empty result. The
 // ToolCallId on TEXT.START is the stream-only correlation mechanism used by
 // the ordering layer and must survive a successful empty tool response.
-func (w *toolStreamWriter) emitText(text string) {
-	w.writeContent(messages.StreamTypeTextStart, messages.NewTextStartValue())
+func (w *toolStreamWriter) emitText(ctx context.Context, text string) {
+	w.writeContent(ctx, messages.StreamTypeTextStart, messages.NewTextStartValue())
 	if text != "" {
-		w.writeContent(messages.StreamTypeTextDelta, messages.NewTextDeltaValue(text))
+		w.writeContent(ctx, messages.StreamTypeTextDelta, messages.NewTextDeltaValue(text))
 	}
-	w.writeContent(messages.StreamTypeTextEnd, messages.NewTextEndValue())
+	w.writeContent(ctx, messages.StreamTypeTextEnd, messages.NewTextEndValue())
 }
 
 // binaryBoundary is one START/DELTA/END triple for a binary content part.
@@ -216,35 +215,35 @@ type binaryBoundary struct {
 
 // emitContentPart writes the delta sequence for one content part and reports
 // whether any content boundary was emitted. Empty binary parts are skipped.
-func (w *toolStreamWriter) emitContentPart(part messages.ContentPart) bool {
+func (w *toolStreamWriter) emitContentPart(ctx context.Context, part messages.ContentPart) bool {
 	switch p := part.(type) {
 	case messages.TextPart:
-		w.emitText(p.Text)
+		w.emitText(ctx, p.Text)
 		return true
 	case messages.ImagePart:
-		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.NewImageStartValue(p.MediaType), messages.NewImageDeltaValue(p.Bytes), messages.NewImageEndValue()})
+		return w.emitBinary(ctx, p.Bytes, binaryBoundary{messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd, messages.NewImageStartValue(p.MediaType), messages.NewImageDeltaValue(p.Bytes), messages.NewImageEndValue()})
 	case messages.AudioPart:
-		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.NewAudioStartValue(), messages.NewAudioDeltaValue(p.Bytes), messages.NewAudioEndValue()})
+		return w.emitBinary(ctx, p.Bytes, binaryBoundary{messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd, messages.NewAudioStartValue(), messages.NewAudioDeltaValue(p.Bytes), messages.NewAudioEndValue()})
 	case messages.VideoPart:
-		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.NewVideoStartValue(p.MediaType), messages.NewVideoDeltaValue(p.Bytes), messages.NewVideoEndValue()})
+		return w.emitBinary(ctx, p.Bytes, binaryBoundary{messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd, messages.NewVideoStartValue(p.MediaType), messages.NewVideoDeltaValue(p.Bytes), messages.NewVideoEndValue()})
 	case messages.FilePart:
-		return w.emitBinary(p.Bytes, binaryBoundary{messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.NewFileStartValue(p.MediaType, p.Name), messages.NewFileDeltaValue(p.Bytes), messages.NewFileEndValue()})
+		return w.emitBinary(ctx, p.Bytes, binaryBoundary{messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd, messages.NewFileStartValue(p.MediaType, p.Name), messages.NewFileDeltaValue(p.Bytes), messages.NewFileEndValue()})
 	}
 	return false
 }
 
-func (w *toolStreamWriter) emitBinary(payload []byte, boundary binaryBoundary) bool {
+func (w *toolStreamWriter) emitBinary(ctx context.Context, payload []byte, boundary binaryBoundary) bool {
 	if len(payload) == 0 {
 		return false
 	}
-	w.writeContent(boundary.startType, boundary.start)
-	w.writeContent(boundary.deltaType, boundary.delta)
-	w.writeContent(boundary.endType, boundary.end)
+	w.writeContent(ctx, boundary.startType, boundary.start)
+	w.writeContent(ctx, boundary.deltaType, boundary.delta)
+	w.writeContent(ctx, boundary.endType, boundary.end)
 	return true
 }
 
 func mustStreamID(prefix string) string {
-	b := make([]byte, 8)
+	b := make([]byte, streamIDRandomBytes)
 	if _, err := rand.Read(b); err != nil {
 		return prefix + "-fallback"
 	}

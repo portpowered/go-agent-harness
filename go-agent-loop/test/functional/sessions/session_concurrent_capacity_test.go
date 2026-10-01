@@ -19,7 +19,7 @@ import (
 func TestConcurrentSessionsCompleteScriptedTurns(t *testing.T) {
 	run := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 
@@ -28,12 +28,12 @@ func TestConcurrentSessionsCompleteScriptedTurns(t *testing.T) {
 	}
 
 	for _, state := range run.States {
-		state := state
+
 		t.Run(state.Token, func(t *testing.T) {
 			AssertSessionLifecycle(t, state.Deltas)
 
-			if state.MessageEndCount != len(concurrentDefaultTurns) {
-				t.Fatalf("session %s completed turns: got %d, want %d", state.Token, state.MessageEndCount, len(concurrentDefaultTurns))
+			if state.MessageEndCount != len(concurrentDefaultTurns()) {
+				t.Fatalf("session %s completed turns: got %d, want %d", state.Token, state.MessageEndCount, len(concurrentDefaultTurns()))
 			}
 			assertAudioChunkSequence(t, state.Token, state.Deltas)
 			if len(state.ToolCalls) != 1 {
@@ -91,7 +91,7 @@ func TestSessionScriptWalkerDetectsTurnCompletedDuringSend(t *testing.T) {
 	}
 
 	result := &concurrentSessionResult{ID: 0, Token: concurrentSessionToken(0)}
-	plan := sessionScriptPlan(result, concurrentDefaultTurns)
+	plan := sessionScriptPlan(result, concurrentDefaultTurns())
 	var completions atomic.Int64
 	var completedAt []uint64
 	ops := sessionScriptOps{

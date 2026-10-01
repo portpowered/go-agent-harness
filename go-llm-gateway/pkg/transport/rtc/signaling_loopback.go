@@ -18,6 +18,9 @@ type loopbackExchange struct {
 	messages   [2][]any
 	read       [2]int
 }
+
+var _ Signaling = (*LoopbackEndpoint)(nil)
+
 type LoopbackEndpoint struct {
 	exchange *loopbackExchange
 	index    int
@@ -130,9 +133,6 @@ func (e *LoopbackEndpoint) WaitCandidateGathering(ctx context.Context) error {
 func await[T any](e *LoopbackEndpoint, ctx context.Context, mode int, want string) (T, error) {
 	var zero T
 	x, waitCtx := e.exchange, ctx
-	if waitCtx == nil {
-		waitCtx = context.Background()
-	}
 	var cancel context.CancelFunc
 	if mode != descriptionMode {
 		waitCtx, cancel = context.WithTimeout(waitCtx, x.timeout)
@@ -165,7 +165,7 @@ func (x *loopbackExchange) next(i, mode int, want string) (any, bool, <-chan str
 	defer x.mu.Unlock()
 	wake := x.wake
 	if x.terminal {
-		if mode == gatheringMode && x.err == ErrSignalingClosed {
+		if mode == gatheringMode && errors.Is(x.err, ErrSignalingClosed) {
 			return nil, true, wake, nil
 		}
 		return nil, true, wake, x.opErr()
@@ -176,7 +176,8 @@ func (x *loopbackExchange) next(i, mode int, want string) (any, bool, <-chan str
 	if mode == candidateMode {
 		return x.nextCandidate(i, wake)
 	}
-	return x.nextGathering(i, wake)
+	ready, err := x.nextGathering(i)
+	return nil, ready, wake, err
 }
 
 // nextDescription reads the remote description for endpoint i. The caller
@@ -233,17 +234,17 @@ func (x *loopbackExchange) nextCandidate(i int, wake <-chan struct{}) (any, bool
 // nextGathering reports whether endpoint i completed candidate gathering and
 // ends the exchange once both sides have gathered and drained. The caller
 // holds x.mu.
-func (x *loopbackExchange) nextGathering(i int, wake <-chan struct{}) (any, bool, <-chan struct{}, error) {
+func (x *loopbackExchange) nextGathering(i int) (bool, error) {
 	if len(x.messages[i]) < 2 || x.messages[i][len(x.messages[i])-1] != nil {
-		return nil, false, wake, nil
+		return false, nil
 	}
 	if len(x.messages[i]) == 2 {
-		return nil, true, wake, x.stop(ErrNoCandidates)
+		return true, x.stop(ErrNoCandidates)
 	}
 	if !x.terminal && x.read[0] > 0 && x.read[1] > 0 && len(x.messages[0]) > 1 && len(x.messages[1]) > 1 && x.messages[0][len(x.messages[0])-1] == nil && x.messages[1][len(x.messages[1])-1] == nil && x.read[0] == len(x.messages[0])-1 && x.read[1] == len(x.messages[1])-1 {
 		x.end(nil)
 	}
-	return nil, true, wake, nil
+	return true, nil
 }
 func validDescription(d SessionDescription, want string) bool {
 	sdp := strings.TrimSpace(strings.ReplaceAll(d.SDP, "\r\n", "\n"))

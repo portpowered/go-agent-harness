@@ -57,7 +57,6 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 	workers.Add(aliasedCount)
 	workerErrors := make(chan error, aliasedCount)
 	for _, result := range results {
-		result := result
 		participant, err := functionalTime.Register("aliased-" + result.Token)
 		if err != nil {
 			t.Fatalf("register %s: %v", result.Token, err)
@@ -65,7 +64,7 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 		participant.Run(func() {
 			defer workers.Done()
 			defer atomic.AddInt64(&live, -1)
-			runSessionScript(participant, result, concurrentDefaultTurns, func() {}, func(err error) { workerErrors <- err })
+			runSessionScript(t.Context(), participant, result, concurrentDefaultTurns(), func() {}, func(err error) { workerErrors <- err })
 		})
 	}
 
@@ -74,7 +73,7 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 	for atomic.LoadInt64(&live) > 0 {
 		if time.Now().After(deadline) {
 			t.Fatalf("aliased run did not finish within %v at logical tick %d; unfinished sessions:\n%s",
-				concurrentRunBudget, tick, describeScriptProgress(results, concurrentDefaultTurns))
+				concurrentRunBudget, tick, describeScriptProgress(results, concurrentDefaultTurns()))
 		}
 		if _, err := functionalTime.AdvanceTo(tick); err != nil {
 			t.Fatalf("advance to logical tick %d: %v", tick, err)
@@ -108,7 +107,7 @@ func TestSharedCaptureBufferAliasingFailsIsolationCheck(t *testing.T) {
 	// caused by sharing, not by a checker that fails everything.
 	isolated := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: aliasedCount,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 	for _, state := range isolated.States {

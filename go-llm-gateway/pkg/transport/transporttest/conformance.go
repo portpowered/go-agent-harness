@@ -70,7 +70,10 @@ func RunS11(t *testing.T, h ConformanceHarness) {
 }
 
 // RunConformance is an intentionally descriptive alias for RunS11.
-func RunConformance(t *testing.T, h ConformanceHarness) { RunS11(t, h) }
+func RunConformance(t *testing.T, h ConformanceHarness) {
+	t.Helper()
+	RunS11(t, h)
+}
 
 func validateHarness(h ConformanceHarness) error {
 	if h.NewValid == nil {

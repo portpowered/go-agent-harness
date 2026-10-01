@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -140,12 +141,11 @@ func TestWriterConcurrentPeerWritesAreCompleteAndUnique(t *testing.T) {
 	}
 	results := make(chan appendResult, total)
 	var group sync.WaitGroup
-	for producer := 0; producer < producers; producer++ {
-		producer := producer
+	for producer := range producers {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			for sequence := 0; sequence < recordsPerProducer; sequence++ {
+			for sequence := range recordsPerProducer {
 				record := NewRecord(uint64(producer*recordsPerProducer+sequence+1), time.Unix(0, 0),
 					Peer(producerPeer(producer)), DirectionOut, StreamRTCData,
 					[]byte(fmt.Sprintf("producer=%d sequence=%d", producer, sequence)))
@@ -222,7 +222,7 @@ func TestWriterSinkFailureIsOneWayAndReportedOnce(t *testing.T) {
 		t.Fatalf("status = %+v, want degraded with one accepted record", writer.Status())
 	}
 	thirdErr := writer.Write(NewRecord(3, time.Unix(0, 0), PeerClient, DirectionIn, StreamWS, []byte("third")))
-	if !errors.Is(thirdErr, sinkErr) || thirdErr != secondErr {
+	if !errors.Is(thirdErr, sinkErr) || !errors.Is(thirdErr, secondErr) {
 		t.Fatalf("third Write error = %v, want stable first degradation %v", thirdErr, secondErr)
 	}
 	if len(reports) != 1 || !errors.Is(reports[0], sinkErr) {
@@ -236,8 +236,13 @@ func TestWriterSinkFailureIsOneWayAndReportedOnce(t *testing.T) {
 	}
 }
 
+// The synctest bubble fails the test if Close leaves any goroutine the
+// writer started still running.
 func TestWriterCloseReleasesFileAndStabilizesPostCloseWrites(t *testing.T) {
-	beforeGoroutines := runtime.NumGoroutine()
+	synctest.Test(t, testWriterCloseReleasesFile)
+}
+
+func testWriterCloseReleasesFile(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "close.jsonl")
 	writer, err := NewWriter(path)
@@ -262,10 +267,6 @@ func TestWriterCloseReleasesFileAndStabilizesPostCloseWrites(t *testing.T) {
 	renamed := filepath.Join(directory, "renamed.jsonl")
 	if err := os.Rename(path, renamed); err != nil {
 		t.Fatalf("rename after Close: %v", err)
-	}
-	afterGoroutines := settleGoroutineCount(beforeGoroutines+2, 500*time.Millisecond)
-	if afterGoroutines > beforeGoroutines+2 {
-		t.Fatalf("goroutines after Close = %d, before = %d, want within bounded tolerance", afterGoroutines, beforeGoroutines)
 	}
 }
 
@@ -294,13 +295,12 @@ func TestWriterConcurrentWriteAndCloseLeavesCompleteRecords(t *testing.T) {
 	results := make(chan writeResult, total)
 	start := make(chan struct{})
 	var group sync.WaitGroup
-	for producer := 0; producer < producers; producer++ {
-		producer := producer
+	for producer := range producers {
 		group.Add(1)
 		go func() {
 			defer group.Done()
 			<-start
-			for sequence := 0; sequence < recordsPerProducer; sequence++ {
+			for sequence := range recordsPerProducer {
 				record := NewRecord(uint64(producer*recordsPerProducer+sequence+2), time.Unix(0, 0),
 					Peer(producerPeer(producer)), DirectionOut, StreamRTCData,
 					[]byte(fmt.Sprintf("close producer=%d sequence=%d", producer, sequence)))
@@ -340,7 +340,7 @@ func TestWriterConcurrentWriteAndCloseLeavesCompleteRecords(t *testing.T) {
 	if writer.AcceptedCount() != uint64(len(accepted)) {
 		t.Fatalf("AcceptedCount = %d, want %d", writer.AcceptedCount(), len(accepted))
 	}
-	for index := 0; index < 3; index++ {
+	for index := range 3 {
 		if err := writer.Write(NewRecord(uint64(total+index+2), time.Unix(0, 0), PeerAgent, DirectionIn, StreamWS,
 			[]byte(fmt.Sprintf("post-close-%d", index)))); !errors.Is(err, ErrWriterClosed) {
 			t.Fatalf("post-close Write %d = %v, want ErrWriterClosed", index, err)
@@ -426,17 +426,6 @@ func readRecordsFromSegments(t *testing.T, path string, maxBackups int) []Record
 		t.Fatalf("stat active segment %s: %v", path, err)
 	}
 	return append(records, readRecordsFromFile(t, path)...)
-}
-
-func settleGoroutineCount(maximum int, timeout time.Duration) int {
-	deadline := time.Now().Add(timeout)
-	count := runtime.NumGoroutine()
-	for count > maximum && time.Now().Before(deadline) {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		count = runtime.NumGoroutine()
-	}
-	return count
 }
 
 func readRecordsFromFile(t *testing.T, path string) []Record {

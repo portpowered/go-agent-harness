@@ -27,8 +27,8 @@ func TestApplyInferenceRequestOptions_Defaults(t *testing.T) {
 
 func TestApplyInferenceRequestOptions_MaxTokens(t *testing.T) {
 	req := chatRequest{Model: "gpt-4o"}
-	max := 1024
-	applyInferenceRequestOptions(&req, providers.InferenceRequest{MaxTokens: &max})
+	maxTokens := 1024
+	applyInferenceRequestOptions(&req, providers.InferenceRequest{MaxTokens: &maxTokens})
 
 	if req.MaxTokens == nil || *req.MaxTokens != 1024 {
 		t.Errorf("MaxTokens: got %v, want 1024", req.MaxTokens)
@@ -136,9 +136,9 @@ func TestFrequencyPenaltyOmittedFromJSONWhenNil(t *testing.T) {
 func TestApplyInferenceRequestOptions_ThinkingIgnored(t *testing.T) {
 	// OpenAI provider ignores Thinking; other options should still apply.
 	req := chatRequest{Model: "gpt-4o"}
-	max := 512
+	maxTokens := 512
 	applyInferenceRequestOptions(&req, providers.InferenceRequest{
-		MaxTokens: &max,
+		MaxTokens: &maxTokens,
 		Thinking:  &providers.ThinkingConfig{Mode: providers.ThinkingEnabled, BudgetTokens: 4096},
 	})
 

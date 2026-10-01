@@ -15,6 +15,8 @@ import (
 // ConnectSession returns a messages.Session (declared in go-agent-loop) rather than a
 // provider-specific type, so that the agent loop owns its dependency contracts and
 // go-llm-gateway implements them.
+//
+//nolint:iface // Exported contract: provider subpackages implement it and package gateway consumes it; this package has no implementation to assert.
 type SessionProvider interface {
 	// Name returns the provider name (e.g. "grok").
 	Name() string

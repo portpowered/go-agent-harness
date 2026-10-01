@@ -222,7 +222,7 @@ func TestSessionGatewayRejectsUnsupportedSessionFeaturesBeforeProviderConnect(t 
 	t.Parallel()
 
 	for _, tt := range unsupportedSessionFeatureCases() {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -372,33 +372,18 @@ func assertUnsupportedFeatureError(t *testing.T, err error, provider string, fea
 func TestSessionGatewayReturnsContextErrorBeforeUnsupportedFeatureValidation(t *testing.T) {
 	t.Parallel()
 
+	// Each case's context is already done when ConnectSession runs: a
+	// context cancelled before its deadline, or one whose deadline passed.
 	tests := []struct {
-		name string
-		ctx  context.Context
-		want error
+		name     string
+		deadline time.Duration
+		want     error
 	}{
-		{
-			name: "canceled",
-			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				return ctx
-			}(),
-			want: context.Canceled,
-		},
-		{
-			name: "deadline exceeded",
-			ctx: func() context.Context {
-				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
-				t.Cleanup(cancel)
-				return ctx
-			}(),
-			want: context.DeadlineExceeded,
-		},
+		{name: "canceled", deadline: time.Hour, want: context.Canceled},
+		{name: "deadline exceeded", deadline: -time.Second, want: context.DeadlineExceeded},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -416,7 +401,12 @@ func TestSessionGatewayReturnsContextErrorBeforeUnsupportedFeatureValidation(t *
 				t.Fatalf("NewSessionGateway: %v", err)
 			}
 
-			_, err = gw.ConnectSession(tt.ctx, models.SessionConfig{})
+			ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(tt.deadline))
+			defer cancel()
+			if tt.deadline > 0 {
+				cancel()
+			}
+			_, err = gw.ConnectSession(ctx, models.SessionConfig{})
 
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("error = %v, want %v", err, tt.want)
@@ -473,7 +463,7 @@ func TestGatewayRejectsUnsupportedStatelessFeaturesBeforeProviderCall(t *testing
 	t.Parallel()
 
 	for _, tt := range unsupportedStatelessFeatureCases() {
-		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

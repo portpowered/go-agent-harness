@@ -79,7 +79,7 @@ func v3cExpectations(positive bool) []ExpectedBehavior {
 	return expectations
 }
 
-func registerS2SV3CBargeInRepeatedScenarios(register func(Scenario, ...DeadSessionControl) error) {
+func registerS2SV3CBargeInRepeatedScenarios(register func(Scenario, ...DeadSessionControl) error) error {
 	for _, registration := range []struct {
 		id          string
 		description string
@@ -113,7 +113,8 @@ func registerS2SV3CBargeInRepeatedScenarios(register func(Scenario, ...DeadSessi
 			ExpectedBehavior: v3cExpectations(registration.positive),
 		}
 		if err := register(scenario); err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }

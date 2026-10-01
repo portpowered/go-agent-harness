@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -65,11 +66,6 @@ const (
 	// concurrentMaxDrainTicks bounds the quiescence drain.
 	concurrentMaxDrainTicks = 2000
 )
-
-// concurrentDefaultTurns is the shared script: a text-led turn, an audio-led
-// turn, and a tool-call turn. Every session runs this identical script, so any
-// foreign marker in a capture is provably cross-session leakage.
-var concurrentDefaultTurns = []concurrentTurnKind{turnText, turnAudio, turnTool}
 
 // concurrentRunBudget bounds one concurrent run in wall-clock time. It is a
 // failure-only watchdog in the coordinator, never pacing: all pacing and
@@ -235,10 +231,10 @@ func (k concurrentTurnKind) String() string {
 // queueServerEvents enqueues the scripted provider response for one turn of
 // the named session. Events are consumed by the mock session transport in FIFO
 // order, mirroring a replay source feeding a live provider connection.
-func queueServerEvents(inf *MockSessionInferencer, token string, kind concurrentTurnKind) {
+func queueServerEvents(ctx context.Context, inf *MockSessionInferencer, token string, kind concurrentTurnKind) {
 	switch kind {
 	case turnText:
-		inf.AddServerEventSequence([]messages.StreamMessage{
+		inf.AddServerEventSequence(ctx, []messages.StreamMessage{
 			{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()},
 			{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue(fmt.Sprintf("ack %s text turn", token))},
 			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
@@ -264,12 +260,12 @@ func queueServerEvents(inf *MockSessionInferencer, token string, kind concurrent
 				Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 			},
 		)
-		inf.AddServerEventSequence(events)
+		inf.AddServerEventSequence(ctx, events)
 	case turnTool:
 		callID := fmt.Sprintf("call-%s-1", token)
-		inf.AddServerEventSequence([]messages.StreamMessage{
+		inf.AddServerEventSequence(ctx, []messages.StreamMessage{
 			{Type: messages.StreamTypeToolCallStart, Role: messages.RoleAssistant, Value: messages.NewToolCallStartValue(callID, concurrentToolName)},
-			{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, concurrentToolName, fmt.Sprintf(`{"session":"%s","query":"marker"}`, token))},
+			{Type: messages.StreamTypeToolCallEnd, Role: messages.RoleAssistant, Value: messages.NewToolCallEndValue(callID, concurrentToolName, fmt.Sprintf(`{"session":%q,"query":"marker"}`, token))},
 			{Type: messages.StreamTypeMessageEnd, Role: messages.RoleAssistant, Value: messages.NewMessageEndValue(messages.TokenUsage{})},
 		})
 	}
@@ -277,17 +273,17 @@ func queueServerEvents(inf *MockSessionInferencer, token string, kind concurrent
 
 // sendClientInputs performs the client-side inputs for one turn. Client
 // crossings are recorded synchronously, so they land on the current tick.
-func sendClientInputs(result *concurrentSessionResult, kind concurrentTurnKind) {
+func sendClientInputs(ctx context.Context, result *concurrentSessionResult, kind concurrentTurnKind) {
 	token := result.Token
 	switch kind {
 	case turnText:
-		result.Scenario.SendText(fmt.Sprintf("%s requests a text answer", token))
+		result.Scenario.SendTextContext(ctx, fmt.Sprintf("%s requests a text answer", token))
 	case turnAudio:
 		for seq := 1; seq <= concurrentAudioChunksPerTurn; seq++ {
-			result.Scenario.SendAudioInput(concurrentAudioFrame(token, seq))
+			result.Scenario.SendAudioInputContext(ctx, concurrentAudioFrame(token, seq))
 		}
 	case turnTool:
-		result.Scenario.SendText(fmt.Sprintf("%s asks to run %s", token, concurrentToolName))
+		result.Scenario.SendTextContext(ctx, fmt.Sprintf("%s asks to run %s", token, concurrentToolName))
 	}
 }
 
@@ -470,7 +466,7 @@ func (d *concurrentDriver) launchWorkers() {
 		participant.Run(func() {
 			defer d.workers.Done()
 			defer atomic.AddInt64(&d.live, -1)
-			runSessionScript(participant, result, turns, done, report)
+			runSessionScript(d.t.Context(), participant, result, turns, done, report)
 		})
 	}
 }
@@ -605,13 +601,13 @@ func sessionScriptPlan(result *concurrentSessionResult, turns []concurrentTurnKi
 // inputs synchronously. No wall clock, no sleeps. Failures flow through
 // report exactly once so the coordinator fails the test from its own
 // goroutine; done runs exactly once after the full scripted prefix succeeds.
-func runSessionScript(participant *timeharness.Participant, result *concurrentSessionResult, turns []concurrentTurnKind, done func(), report func(error)) {
+func runSessionScript(ctx context.Context, participant *timeharness.Participant, result *concurrentSessionResult, turns []concurrentTurnKind, done func(), report func(error)) {
 	ops := sessionScriptOps{
 		token: result.Token,
 		open:  func() bool { return sessionOpen(result) },
 		send: func(kind concurrentTurnKind) {
-			queueServerEvents(result.Inferencer, result.Token, kind)
-			sendClientInputs(result, kind)
+			queueServerEvents(ctx, result.Inferencer, result.Token, kind)
+			sendClientInputs(ctx, result, kind)
 		},
 		completions: func() int { return messageEndProgress(result) },
 		completed:   func(tick uint64) { result.turnCompletedAt = append(result.turnCompletedAt, tick) },

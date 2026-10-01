@@ -313,7 +313,7 @@ func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 func TestSessionModelRunnerOrderedIngressReportsFullWithoutBlocking(t *testing.T) {
 	runner := NewSessionModelRunner(nil, 8, nil)
 	ctx := context.Background()
-	for i := 0; i < cap(runner.ingress.ordered); i++ {
+	for i := range cap(runner.ingress.ordered) {
 		if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{byte(i)}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
 		}
@@ -351,7 +351,7 @@ func TestSessionModelRunner_BargeInSendsResponseCancelBeforeAudio(t *testing.T) 
 	enqueueTestAudio(t, runner, loudPCM())
 
 	var sawCancel bool
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case sent := <-session.sendCh:
 			switch sent.Type { //nolint:exhaustive // The test fails on any type it does not expect.

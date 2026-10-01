@@ -105,7 +105,7 @@ func DefaultWriterConfig() WriterConfig {
 		MaxSegmentBytes: DefaultSegmentSize,
 		MaxBackups:      DefaultMaxBackups,
 		BackupCount:     DefaultMaxBackups,
-		Mode:            0o644,
+		Mode:            recordingFileMode,
 	}
 }
 
@@ -445,7 +445,7 @@ func normalizeWriterConfig(config WriterConfig) WriterConfig {
 		backups = DefaultMaxBackups
 	}
 	if config.Mode == 0 {
-		config.Mode = 0o644
+		config.Mode = recordingFileMode
 	}
 	config.SegmentSize = segmentSize
 	config.MaxSegmentBytes = segmentSize

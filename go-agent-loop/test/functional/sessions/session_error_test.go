@@ -11,6 +11,7 @@ import (
 // stopOnCleanup closes the provider and cancels the loop when a test that
 // does not use Stop finishes, so no scenario outlives its test.
 func stopOnCleanup(t *testing.T, scenario *SessionScenario) {
+	t.Helper()
 	t.Cleanup(func() {
 		scenario.Inf.Close()
 		scenario.cancel()
@@ -30,7 +31,7 @@ func TestSessionInferenceError(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeError, Value: messages.NewErrorValue("rate limit exceeded"), Role: messages.RoleAssistant,
 	})
 	scenario.SendText("trigger")
@@ -59,7 +60,7 @@ func TestSessionDisconnect(t *testing.T) {
 
 	// Disconnect only once the provider has received the user turn.
 	scenario.SendText("trigger")
-	if _, ok := inf.WaitForSentMessage(messages.StreamTypeTextDelta, 3*time.Second); !ok {
+	if _, ok := inf.WaitForSentMessage(t.Context(), messages.StreamTypeTextDelta, 3*time.Second); !ok {
 		t.Fatal("timed out waiting for the user turn to reach the provider")
 	}
 	if scenario.WaitForEvent(messages.StreamTypeSessionClose, 0) {

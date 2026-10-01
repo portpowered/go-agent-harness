@@ -118,7 +118,7 @@ func (p *GeminiProvider) InferStream(ctx context.Context, req providers.Inferenc
 
 	iter := client.Models.GenerateContentStream(ctx, model, contents, config)
 
-	ch := make(chan messages.StreamMessage, 64)
+	ch := make(chan messages.StreamMessage, providers.StreamMessageBuffer)
 	go streamGeminiToGateway(iter, ch)
 	return ch, nil
 }

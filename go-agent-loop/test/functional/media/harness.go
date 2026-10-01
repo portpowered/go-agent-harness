@@ -16,7 +16,6 @@ package media
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -212,7 +211,7 @@ func (m *MockInferencer) Infer(ctx context.Context, req messages.InferenceReques
 // When the entry was created with AddChunkedTextResponse, each chunk is emitted
 // as its own TEXT.DELTA event.
 func (m *MockInferencer) InferStream(ctx context.Context, req messages.InferenceRequest) (<-chan messages.StreamMessage, error) {
-	ch := make(chan messages.StreamMessage, 64)
+	ch := make(chan messages.StreamMessage, mockStreamCapacity)
 
 	// Record the call and advance the counter via Infer.
 	result, err := m.Infer(ctx, req)
@@ -373,72 +372,6 @@ func (s binaryPartStream) emit(ch chan<- messages.StreamMessage, parts []message
 }
 
 // ---------------------------------------------------------------------------
-// MockToolExecutor
-// ---------------------------------------------------------------------------
-
-// MockToolExecutor is a configurable test double for messages.ToolExecutor.
-// Use AddResult to configure per-tool responses. CallLog records every invocation.
-// Use SetToolResponse to return rich ContentParts (e.g. ImagePart) for a tool; it takes precedence over AddResult.
-// Safe for concurrent use from ToolRunner's parallel executeBatch.
-type MockToolExecutor struct {
-	mu            sync.Mutex
-	Results       map[string]string
-	CustomResults map[string]messages.ToolCallResponse // keyed by tool name; ToolCallID is set from call.ID at Execute time
-	CallLog       []messages.ToolCall
-}
-
-// NewMockToolExecutor returns an empty MockToolExecutor ready for use.
-func NewMockToolExecutor() *MockToolExecutor {
-	return &MockToolExecutor{
-		Results:       make(map[string]string),
-		CustomResults: make(map[string]messages.ToolCallResponse),
-	}
-}
-
-// AddResult registers a string result for the named tool.
-func (m *MockToolExecutor) AddResult(toolName, result string) *MockToolExecutor {
-	m.mu.Lock()
-	m.Results[toolName] = result
-	m.mu.Unlock()
-	return m
-}
-
-// SetToolResponse registers a full ToolCallResponse for the named tool (e.g. with ContentParts for image/audio).
-// ToolCallID is filled from the call at Execute time.
-func (m *MockToolExecutor) SetToolResponse(toolName string, resp messages.ToolCallResponse) *MockToolExecutor {
-	m.mu.Lock()
-	m.CustomResults[toolName] = resp
-	m.mu.Unlock()
-	return m
-}
-
-// Calls returns a snapshot of tool calls observed by Execute.
-func (m *MockToolExecutor) Calls() []messages.ToolCall {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	calls := make([]messages.ToolCall, len(m.CallLog))
-	copy(calls, m.CallLog)
-	return calls
-}
-
-// Execute implements messages.ToolExecutor.
-func (m *MockToolExecutor) Execute(ctx context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
-	m.mu.Lock()
-	m.CallLog = append(m.CallLog, call)
-	if custom, ok := m.CustomResults[call.Name]; ok {
-		custom.ToolCallID = call.ID
-		m.mu.Unlock()
-		return custom, nil
-	}
-	content := m.Results[call.Name]
-	m.mu.Unlock()
-	return messages.ToolCallResponse{
-		ToolCallID: call.ID,
-		Content:    content,
-	}, nil
-}
-
-// ---------------------------------------------------------------------------
 // Scenario
 // ---------------------------------------------------------------------------
 
@@ -466,7 +399,7 @@ func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts
 	allOpts := []agentloop.Option{
 		agentloop.WithInferencer(inf),
 		agentloop.WithToolExecutor(tool),
-		// agentloop.WithLogger(test_logging.NewPrintLogger()),
+		// agentloop.WithLogger(test_logging.NewTestLogger(t)),
 	}
 	allOpts = append(allOpts, opts...)
 
@@ -480,7 +413,7 @@ func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts
 		Loop:    loop,
 		Inf:     inf,
 		Tool:    tool,
-		Timeout: 1000 * time.Second,
+		Timeout: scenarioTimeout,
 	}
 }
 
@@ -488,7 +421,7 @@ func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts
 // returns the result. The test is failed immediately if Execute returns an error.
 func (s *Scenario) Execute(message string) agentloop.ExecuteResult {
 	s.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
+	ctx, cancel := context.WithTimeout(s.t.Context(), s.Timeout)
 	defer cancel()
 	result, err := s.Loop.Execute(ctx, agentloop.NewExecuteInput(message))
 	if err != nil {
@@ -502,20 +435,13 @@ func streamTextFromEvents(stream agentloop.Stream) string {
 	var buf strings.Builder
 	for stream.HasNext() {
 		evt := stream.Response()
-		switch evt.Type {
-		case messages.StreamTypeTextDelta:
-			if v, ok := evt.Value.(*messages.TextDeltaValue); ok {
-				if evt.Role == messages.RoleAssistant {
-					buf.WriteString(v.Content)
-				}
-
-			}
-		case messages.StreamTypeReasoningDelta:
-			if v, ok := evt.Value.(*messages.ReasoningDeltaValue); ok {
-				if evt.Role == messages.RoleAssistant {
-					buf.WriteString(v.Content)
-				}
-			}
+		if evt.Role != messages.RoleAssistant {
+			continue
+		}
+		if v, ok := evt.Value.(*messages.TextDeltaValue); ok && evt.Type == messages.StreamTypeTextDelta {
+			buf.WriteString(v.Content)
+		} else if v, ok := evt.Value.(*messages.ReasoningDeltaValue); ok && evt.Type == messages.StreamTypeReasoningDelta {
+			buf.WriteString(v.Content)
 		}
 	}
 	return buf.String()
@@ -526,7 +452,7 @@ func streamTextFromEvents(stream agentloop.Stream) string {
 // The test is failed immediately on any error.
 func (s *Scenario) ExecuteStreamingText(message string) (streamText string) {
 	s.t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
+	ctx, cancel := context.WithTimeout(s.t.Context(), s.Timeout)
 	defer cancel()
 
 	result, err := s.Loop.ExecuteStreaming(ctx, agentloop.NewExecuteInput(message))
@@ -634,3 +560,10 @@ func deltaTextContent(d messages.StreamMessage) string {
 	}
 	return ""
 }
+
+const (
+	// mockStreamCapacity bounds one mock inference stream.
+	mockStreamCapacity = 64
+	// scenarioTimeout bounds one scenario turn.
+	scenarioTimeout = 1000 * time.Second
+)

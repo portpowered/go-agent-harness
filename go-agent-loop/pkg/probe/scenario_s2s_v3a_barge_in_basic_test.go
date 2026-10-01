@@ -15,7 +15,7 @@ func (lookup v3aCorpusLookup) Has(id string) bool { return lookup[id] }
 
 func findV3AScenario(t *testing.T, id string) Scenario {
 	t.Helper()
-	for _, scenario := range Scenarios() {
+	for _, scenario := range builtinScenarios(t) {
 		if scenario.ID == id {
 			return scenario
 		}

@@ -123,6 +123,7 @@ func runTicks(p *Participant, out chan<- Observation, ticks int, hold <-chan str
 	p.Complete()
 }
 func waitState(t *testing.T, s *Scenario, ready func(*Scenario) bool) {
+	t.Helper()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for !ready(s) && s.failure == nil {

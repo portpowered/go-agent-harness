@@ -134,7 +134,7 @@ func TestRunSelectedPackageTestsAppliesExternalManifest(t *testing.T) {
 			}
 			ran := false
 			var stdout, stderr bytes.Buffer
-			exit := runSelectedPackageTests(func() int { ran = true; return tc.runExit }, orchestration, &stdout, &stderr)
+			exit := runSelectedPackageTests(t.Context(), func() int { ran = true; return tc.runExit }, orchestration, &stdout, &stderr)
 			if exit != tc.wantExit || ran != tc.wantRun {
 				t.Fatalf("exit = %d ran = %v, want exit %d ran %v\nstdout:\n%s\nstderr:\n%s", exit, ran, tc.wantExit, tc.wantRun, stdout.String(), stderr.String())
 			}

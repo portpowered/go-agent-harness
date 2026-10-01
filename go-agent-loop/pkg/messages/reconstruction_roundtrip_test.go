@@ -155,8 +155,7 @@ func TestReconstructModelMessageFromDeltas_FieldGuard(t *testing.T) {
 	}
 
 	msgType := reflect.TypeFor[Message]()
-	for i := 0; i < msgType.NumField(); i++ {
-		field := msgType.Field(i)
+	for field := range msgType.Fields() {
 		if !field.IsExported() {
 			continue
 		}

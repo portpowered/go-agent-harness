@@ -64,7 +64,7 @@ func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan m
 			r.writeDelta(writeCtx, messages.StreamMessage{
 				Type:  messages.StreamTypeError,
 				Role:  messages.RoleAssistant,
-				Value: cancellationErrorValue(err, messages.TerminalProvenanceLoop, outputState(hasOutput)),
+				Value: cancellationErrorValue(err, outputState(hasOutput)),
 			})
 			return
 		}
@@ -75,7 +75,7 @@ func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan m
 			r.writeDelta(writeCtx, messages.StreamMessage{
 				Type:  messages.StreamTypeError,
 				Role:  messages.RoleAssistant,
-				Value: cancellationErrorValue(execCtx.Err(), messages.TerminalProvenanceLoop, outputState(hasOutput)),
+				Value: cancellationErrorValue(execCtx.Err(), outputState(hasOutput)),
 			})
 			return
 		case msg, ok := <-ch:
@@ -84,7 +84,7 @@ func (r *ModelRunner) drainStream(writeCtx, execCtx context.Context, ch <-chan m
 					r.writeDelta(writeCtx, messages.StreamMessage{
 						Type:  messages.StreamTypeError,
 						Role:  messages.RoleAssistant,
-						Value: cancellationErrorValue(err, messages.TerminalProvenanceLoop, outputState(hasOutput)),
+						Value: cancellationErrorValue(err, outputState(hasOutput)),
 					})
 					return
 				}
@@ -127,7 +127,7 @@ func (r *ModelRunner) emitSyntheticDeltas(ctx context.Context, result messages.I
 		if isCancellationError(inferErr) {
 			r.writeDelta(ctx, messages.StreamMessage{
 				Type:  messages.StreamTypeError,
-				Value: cancellationErrorValue(inferErr, messages.TerminalProvenanceLoop, messages.TerminalOutputNone),
+				Value: cancellationErrorValue(inferErr, messages.TerminalOutputNone),
 			})
 			return
 		}
@@ -254,7 +254,7 @@ func outputState(hasOutput bool) messages.TerminalOutputState {
 	return messages.TerminalOutputNone
 }
 
-func cancellationErrorValue(err error, provenance messages.TerminalProvenance, outputState messages.TerminalOutputState) *messages.ErrorValue {
+func cancellationErrorValue(err error, outputState messages.TerminalOutputState) *messages.ErrorValue {
 	if err == nil {
 		err = context.Canceled
 	}
@@ -262,7 +262,7 @@ func cancellationErrorValue(err error, provenance messages.TerminalProvenance, o
 		err.Error(),
 		string(messages.TerminalReasonCancellation),
 		messages.TerminalReasonCancellation,
-		provenance,
+		messages.TerminalProvenanceLoop,
 		outputState,
 	)
 	value.Err = err

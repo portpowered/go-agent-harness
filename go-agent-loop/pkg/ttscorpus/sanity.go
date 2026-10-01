@@ -25,7 +25,7 @@ func RMS(samples []int16) float64 {
 	}
 	sum := 0.0
 	for _, sample := range samples {
-		normalized := float64(sample) / 32768.0
+		normalized := float64(sample) / pcm16FullScale
 		sum += normalized * normalized
 	}
 	return math.Sqrt(sum / float64(len(samples)))
@@ -53,3 +53,6 @@ func validateWAVBytes(data []byte) error {
 	}
 	return ValidateClip(sampleRate, samples)
 }
+
+// pcm16FullScale is the magnitude of the most negative PCM16 sample.
+const pcm16FullScale = 32768.0

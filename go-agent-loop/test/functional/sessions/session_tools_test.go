@@ -22,7 +22,7 @@ func TestSessionToolCallDuringAudio(t *testing.T) {
 	}
 
 	// Server sends audio then a tool call then more audio.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeToolCallStart, Value: messages.NewToolCallStartValue("call-1", "get_weather"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue("call-1", "get_weather", `{"city":"London"}`), Role: messages.RoleAssistant},
@@ -62,7 +62,7 @@ func TestSessionToolCallDoesNotTerminate(t *testing.T) {
 	}
 
 	// Server sends a tool call that completes.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeToolCallStart, Value: messages.NewToolCallStartValue("call-2", "ping"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue("call-2", "ping", "{}"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},
@@ -108,7 +108,7 @@ func TestSessionToolCallCompleted(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeToolCallStart, Value: messages.NewToolCallStartValue("call-3", "get_weather"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue("call-3", "get_weather", `{"city":"Paris"}`), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},
@@ -148,7 +148,7 @@ func TestSessionMultipleToolCalls(t *testing.T) {
 	}
 
 	// Server sends two tool calls in sequence.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeToolCallStart, Value: messages.NewToolCallStartValue("c1", "tool_a"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeToolCallEnd, Value: messages.NewToolCallEndValue("c1", "tool_a", `{}`), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeToolCallStart, Value: messages.NewToolCallStartValue("c2", "tool_b"), Role: messages.RoleAssistant},
@@ -186,8 +186,5 @@ func TestSessionMultipleToolCalls(t *testing.T) {
 // waitForToolCalls returns once the executor has recorded at least want calls
 // or timeout elapses; callers assert on tool.Calls() afterwards.
 func waitForToolCalls(tool *MockToolExecutor, want int, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for len(tool.Calls()) < want && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
+	tool.WaitForCalls(want, timeout)
 }

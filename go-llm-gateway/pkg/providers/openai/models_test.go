@@ -8,13 +8,11 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 )
 
-var testLogger = logging.DummyLogger()
-
 // ── User message transformation ──────────────────────────────────────────
 
 func TestMessagesToParams_UserMessageTextOnly(t *testing.T) {
 	// When ContentParts has one text part, user message is sent as content array with one text part.
-	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleUser, testGreeting)}, testLogger)
+	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleUser, testGreeting)}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -35,7 +33,7 @@ func TestMessagesToParams_UserMessageWithContentPartsText(t *testing.T) {
 	params := messagesToParams([]models.Message{{
 		Role:         models.RoleUser,
 		ContentParts: []models.ContentPart{models.TextPart{Text: "What is in this image?"}},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -60,7 +58,7 @@ func TestMessagesToParams_UserMessageWithImagePartBase64(t *testing.T) {
 		ContentParts: []models.ContentPart{
 			models.ImagePart{Bytes: imgBytes, MediaType: "image/png"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -85,7 +83,7 @@ func TestMessagesToParams_UserMessageWithImagePartURL(t *testing.T) {
 		ContentParts: []models.ContentPart{
 			models.ImagePart{URL: url, MediaType: "image/png"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -109,7 +107,7 @@ func TestMessagesToParams_UserMessageWithAudioPartBase64(t *testing.T) {
 		ContentParts: []models.ContentPart{
 			models.AudioPart{Bytes: audioBytes, MediaType: "audio/wav"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -136,7 +134,7 @@ func TestMessagesToParams_UserMessageWithAudioPartMp3(t *testing.T) {
 		ContentParts: []models.ContentPart{
 			models.AudioPart{Bytes: audioBytes, MediaType: "audio/mpeg"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -161,7 +159,7 @@ func TestMessagesToParams_UserMessageWithTextAndImage(t *testing.T) {
 			models.TextPart{Text: "What do you see?"},
 			models.ImagePart{Bytes: imgBytes, MediaType: "image/jpeg"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -189,7 +187,7 @@ func TestMessagesToParams_UserMessageWithVideoPartURL(t *testing.T) {
 		ContentParts: []models.ContentPart{
 			models.VideoPart{URL: videoURL, MediaType: "video/mp4"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -213,7 +211,7 @@ func TestMessagesToParams_AudioPartEmptyBytesSkipped(t *testing.T) {
 			models.TextPart{Text: testGreeting},
 			models.AudioPart{MediaType: "audio/wav"}, // no Bytes
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -248,7 +246,7 @@ func TestAudioFormatFromMediaType(t *testing.T) {
 // ── Assistant message transformation ─────────────────────────────────────
 
 func TestMessagesToParams_AssistantMessageTextOnly(t *testing.T) {
-	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleAssistant, "Here is the answer.")}, testLogger)
+	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleAssistant, "Here is the answer.")}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -271,7 +269,7 @@ func TestMessagesToParams_AssistantMessageWithContentPartsText(t *testing.T) {
 	params := messagesToParams([]models.Message{{
 		Role:         models.RoleAssistant,
 		ContentParts: []models.ContentPart{models.TextPart{Text: "Part one."}, models.TextPart{Text: " Part two."}},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -297,7 +295,7 @@ func TestMessagesToParams_AssistantMessageWithContentPartsTextAndImage(t *testin
 			models.TextPart{Text: "Only this text."},
 			models.ImagePart{Bytes: []byte("x"), MediaType: "image/png"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -327,7 +325,7 @@ func TestMessagesToParams_AssistantMessageWithContentPartsTextAndAudio(t *testin
 			models.TextPart{Text: "Summary."},
 			models.AudioPart{Bytes: []byte("wav"), MediaType: "audio/wav"},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -358,7 +356,7 @@ func TestMessagesToParams_AssistantMessageWithToolCallsAndContentParts(t *testin
 		ToolCalls: []models.ToolCall{
 			{ID: "call_1", Name: testToolGetWeather, Arguments: `{"city":"NYC"}`},
 		},
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -382,7 +380,7 @@ func TestMessagesToParams_ToolMessageTextOnly(t *testing.T) {
 		Role:         models.RoleTool,
 		ContentParts: []models.ContentPart{models.TextPart{Text: `{"result": "ok"}`}},
 		ToolCallID:   "call_abc",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -406,7 +404,7 @@ func TestMessagesToParams_ToolMessageWithContentPartsText(t *testing.T) {
 		Role:         models.RoleTool,
 		ContentParts: []models.ContentPart{models.TextPart{Text: "Tool result text."}},
 		ToolCallID:   "call_xyz",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -430,7 +428,7 @@ func TestMessagesToParams_ToolMessageWithContentPartsTextAndImage(t *testing.T) 
 			models.ImagePart{Bytes: []byte("x"), MediaType: "image/png"},
 		},
 		ToolCallID: "call_1",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -463,7 +461,7 @@ func TestMessagesToParams_ToolMessageImageAtSecondPosition(t *testing.T) {
 			models.ImagePart{Bytes: []byte("img"), MediaType: "image/jpeg"},
 		},
 		ToolCallID: "call_img2",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -486,7 +484,7 @@ func TestMessagesToParams_ToolMessageImageAtThirdPosition(t *testing.T) {
 			models.ImagePart{Bytes: []byte("pic"), MediaType: "image/png"},
 		},
 		ToolCallID: "call_img3",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -504,7 +502,7 @@ func TestMessagesToParams_ToolMessageImageOnlyAtFirstPosition(t *testing.T) {
 			models.ImagePart{Bytes: []byte("solo"), MediaType: "image/png"},
 		},
 		ToolCallID: "call_solo",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}
@@ -522,7 +520,7 @@ func TestMessagesToParams_ToolMessageNoImageKeepsToolRole(t *testing.T) {
 			models.AudioPart{Bytes: []byte("wav"), MediaType: "audio/wav"},
 		},
 		ToolCallID: "call_noimg",
-	}}, testLogger)
+	}}, logging.DummyLogger())
 	if len(params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(params))
 	}

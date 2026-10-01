@@ -6,12 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
 )
 
 func TestLoadReadsExactFrames(t *testing.T) {
@@ -71,13 +73,15 @@ func TestMalformedManifestRequiredFields(t *testing.T) {
 		root := t.TempDir()
 		mustOK(t, os.WriteFile(filepath.Join(root, manifestFile), doc.data, 0o600))
 		source, err := NewLoader(root).Load(fixtureID)
-		typed, ok := err.(*MalformedManifestError)
+		var typed *MalformedManifestError
+		ok := errors.As(err, &typed)
 		if source != nil || !ok || typed.Field != doc.field {
 			t.Fatalf("Load() = %#v, %v; want field %q", source, err, doc.field)
 		}
 	}
 }
 func mutateS4(t *testing.T, name, root string) {
+	t.Helper()
 	switch name {
 	case "missing file":
 		mustOK(t, os.Remove(filepath.Join(root, "fixture.wav")))
@@ -99,22 +103,30 @@ func mutateS4(t *testing.T, name, root string) {
 	}
 }
 func checkS4Error(t *testing.T, name string, err error) {
+	t.Helper()
 	check := func(ok bool) {
 		if !ok {
 			t.Fatalf("error = %v", err)
 		}
 	}
-	switch e := err.(type) {
-	case *UnknownIDError:
-		check(name == "unknown ID" && e.ID == "does-not-exist")
-	case *MissingFileError:
-		check(name == "missing file" && e.ID == fixtureID && e.Path == "fixture.wav")
-	case *UnmanifestedFileError:
-		check(name == "unmanifested file" && e.Path == "extra.wav")
-	case *HashMismatchError:
-		check(name == "hash mismatch" && e.ID == fixtureID && e.Path == "fixture.wav" && len(e.Expected) == 64 && len(e.Actual) == 64 && e.Expected != e.Actual)
-	case *MalformedManifestError:
-		check(name == "malformed manifest" && e.Path == manifestFile && e.Field == "json")
+	var (
+		unknown      *UnknownIDError
+		missing      *MissingFileError
+		unmanifested *UnmanifestedFileError
+		hash         *HashMismatchError
+		malformed    *MalformedManifestError
+	)
+	switch {
+	case errors.As(err, &unknown):
+		check(name == "unknown ID" && unknown.ID == "does-not-exist")
+	case errors.As(err, &missing):
+		check(name == "missing file" && missing.ID == fixtureID && missing.Path == "fixture.wav")
+	case errors.As(err, &unmanifested):
+		check(name == "unmanifested file" && unmanifested.Path == "extra.wav")
+	case errors.As(err, &hash):
+		check(name == "hash mismatch" && hash.ID == fixtureID && hash.Path == "fixture.wav" && len(hash.Expected) == 64 && len(hash.Actual) == 64 && hash.Expected != hash.Actual)
+	case errors.As(err, &malformed):
+		check(name == "malformed manifest" && malformed.Path == manifestFile && malformed.Field == "json")
 	default:
 		if name == "invalid audio" {
 			return
@@ -124,6 +136,7 @@ func checkS4Error(t *testing.T, name string, err error) {
 	check(err.Error() != "")
 }
 func assertFrames(t *testing.T, source *Source, samples []int16) {
+	t.Helper()
 	for _, size := range []int{FrameSize - 1, FrameSize + 1} {
 		if err := source.ReadFrame(context.Background(), make([]int16, size)); err == nil {
 			t.Fatalf("ReadFrame() with %d samples succeeded; want exact frame-size error", size)
@@ -141,11 +154,12 @@ func assertFrames(t *testing.T, source *Source, samples []int16) {
 			t.Fatalf("frame at %d = %v, want %v", start, buf, want)
 		}
 	}
-	if err := source.ReadFrame(context.Background(), make([]int16, FrameSize)); err != io.EOF {
+	if err := source.ReadFrame(context.Background(), make([]int16, FrameSize)); !errors.Is(err, io.EOF) {
 		t.Fatalf("after final frame = %v", err)
 	}
 }
 func writeCorpus(t *testing.T, id string, rate int, samples []int16) (string, []int16) {
+	t.Helper()
 	root := t.TempDir()
 	encoded := writeWAV(t, filepath.Join(root, "fixture.wav"), rate, samples)
 	digest := sha256.Sum256(encoded)
@@ -153,26 +167,31 @@ func writeCorpus(t *testing.T, id string, rate int, samples []int16) (string, []
 	return root, append([]int16(nil), samples...)
 }
 func writeManifest(t *testing.T, root string, value manifest) {
+	t.Helper()
 	data := mustJSON(t, value)
 	mustOK(t, os.WriteFile(filepath.Join(root, manifestFile), data, 0o600))
 }
 func writeWAV(t *testing.T, path string, rate int, samples []int16) []byte {
+	t.Helper()
 	var data bytes.Buffer
 	mustOK(t, wavio.Write(&data, rate, samples))
 	mustOK(t, os.WriteFile(path, data.Bytes(), 0o600))
 	return data.Bytes()
 }
 func load(t *testing.T, root, id string) *Source {
+	t.Helper()
 	source, err := NewLoader(root).Load(id)
 	mustOK(t, err)
 	return source
 }
 func mustOK(t *testing.T, err error) {
+	t.Helper()
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
 	data, err := json.Marshal(value)
 	mustOK(t, err)
 	return data

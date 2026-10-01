@@ -14,6 +14,10 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
+// manifestFileMode is the permission of the committed, world-readable
+// fixture manifest.
+const manifestFileMode = 0o644
+
 const sessionCaptureSuffix = ".session.json"
 
 // ErrValidationFailed indicates that fixture hygiene violations were reported.
@@ -109,7 +113,7 @@ func runEmitManifest(outputPath string, paths []string, stdout io.Writer) error 
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+	if err := os.WriteFile(outputPath, data, manifestFileMode); err != nil {
 		return fmt.Errorf("write fixture manifest %s: %w", outputPath, err)
 	}
 	_, err = fmt.Fprintf(stdout, "wrote fixture manifest %s: %d session fixture file(s)\n", outputPath, manifest.Count)

@@ -311,7 +311,7 @@ func TestDiagnosticErrorsAndEvaluationWrapper(t *testing.T) {
 
 	err := EvaluateExpectation(ExpectedBehavior{Type: ExpectationKind(unknownLabel)}, ObservationSnapshot{})
 	var validation *ExpectationValidationError
-	if !errors.As(err, &validation) || validation.Error() == "" || validation.Unwrap() != ErrInvalidExpectation {
+	if !errors.As(err, &validation) || validation.Error() == "" || !errors.Is(validation.Unwrap(), ErrInvalidExpectation) {
 		t.Fatalf("validation diagnostic: %v", err)
 	}
 
@@ -358,6 +358,8 @@ func expect(kind ExpectationKind, value string, count int) ExpectedBehavior {
 		e.At, e.HasAt, e.Count = 10, true, count
 	case ExpectFrameCount:
 		e.Count = count
+	case ExpectAudioEnergy, ExpectMetricsReconcile, ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult, ExpectResponseCancel, ExpectBufferDisposition, ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectText, ExpectAudio, ExpectToolCall, ExpectToolResult, ExpectClose, ExpectTime, ExpectEvent, ExpectContains, ExpectTranscript:
+		// These kinds need no handling here.
 	}
 	return e
 }

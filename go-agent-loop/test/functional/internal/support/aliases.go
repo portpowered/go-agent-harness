@@ -4,7 +4,13 @@
 // entries.
 package support
 
-import "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/media"
+import (
+	"testing"
+
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/agentloop"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/media"
+)
 
 type MockInferencer = media.MockInferencer
 type MockToolExecutor = media.MockToolExecutor
@@ -12,7 +18,23 @@ type Scenario = media.Scenario
 type ExpectedMessage = media.ExpectedMessage
 type ExpectedDelta = media.ExpectedDelta
 
-var NewMockToolExecutor = media.NewMockToolExecutor
-var NewScenario = media.NewScenario
-var AssertMessages = media.AssertMessages
-var AssertDeltaContains = media.AssertDeltaContains
+// NewMockToolExecutor forwards to media.NewMockToolExecutor.
+func NewMockToolExecutor() *MockToolExecutor { return media.NewMockToolExecutor() }
+
+// NewScenario forwards to media.NewScenario.
+func NewScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, opts ...agentloop.Option) *Scenario {
+	t.Helper()
+	return media.NewScenario(t, inf, tool, opts...)
+}
+
+// AssertMessages forwards to media.AssertMessages.
+func AssertMessages(t *testing.T, msgs []messages.Message, expected []ExpectedMessage) {
+	t.Helper()
+	media.AssertMessages(t, msgs, expected)
+}
+
+// AssertDeltaContains forwards to media.AssertDeltaContains.
+func AssertDeltaContains(t *testing.T, deltas []messages.StreamMessage, required []ExpectedDelta) {
+	t.Helper()
+	media.AssertDeltaContains(t, deltas, required)
+}

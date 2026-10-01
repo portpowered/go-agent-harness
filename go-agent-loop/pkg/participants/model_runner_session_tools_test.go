@@ -492,7 +492,7 @@ func TestModelRunner_SendLatestUserTextWaitsForQueuedToolBoundary(t *testing.T) 
 	}
 
 	state := &sessionRunState{}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case input := <-runner.ingress.ordered:
 			if input.kind != sessionInputEvent {

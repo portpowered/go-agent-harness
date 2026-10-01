@@ -38,9 +38,15 @@ func (c *captureWriter) lastMessage() (messages.Message, bool) {
 	return c.written[len(c.written)-1], true
 }
 
-func newTestNotifier(t *testing.T, counter TokenCounter, maxTokens int, threshold float64, msg string, w InterruptWriter) *ContextPressureNotifier {
+// Test notifiers use a 1000-token window with an 80% pressure threshold.
+const (
+	testMaxTokens = 1000
+	testThreshold = 0.8
+)
+
+func newTestNotifier(t *testing.T, counter TokenCounter, msg string, w InterruptWriter) *ContextPressureNotifier {
 	t.Helper()
-	n, err := NewContextPressureNotifier(counter, maxTokens, threshold, msg, w)
+	n, err := NewContextPressureNotifier(counter, testMaxTokens, testThreshold, msg, w)
 	if err != nil {
 		t.Fatalf("NewContextPressureNotifier: unexpected error: %v", err)
 	}
@@ -64,7 +70,7 @@ func loopStateWithTokens(tokenCount int) *state.LoopState {
 
 // TestContextPressureNotifier_TickGroup verifies the subsystem runs at TickGroup 45.
 func TestContextPressureNotifier_TickGroup(t *testing.T) {
-	n := newTestNotifier(t, &fixedTokenCounter{}, 1000, 0.8, "", nil)
+	n := newTestNotifier(t, &fixedTokenCounter{}, "", nil)
 	if got := n.TickGroup(); got != TickGroupContextPressureNotifier {
 		t.Errorf("TickGroup: got %d, want %d", got, TickGroupContextPressureNotifier)
 	}
@@ -80,7 +86,7 @@ func TestContextPressureNotifier_FiresAtThreshold(t *testing.T) {
 	// 800/1000 = 80% exactly at threshold
 	counter := &fixedTokenCounter{count: 800}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
+	n := newTestNotifier(t, counter, "", writer)
 
 	ls := loopStateWithTokens(800)
 	if err := n.Execute(context.Background(), ls); err != nil {
@@ -97,7 +103,7 @@ func TestContextPressureNotifier_FiresAtThreshold(t *testing.T) {
 func TestContextPressureNotifier_FiresAboveThreshold(t *testing.T) {
 	counter := &fixedTokenCounter{count: 950}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
+	n := newTestNotifier(t, counter, "", writer)
 
 	ls := loopStateWithTokens(950)
 	if err := n.Execute(context.Background(), ls); err != nil {
@@ -115,7 +121,7 @@ func TestContextPressureNotifier_DoesNotFireBelowThreshold(t *testing.T) {
 	// 799/1000 = 79.9%, just below 80%
 	counter := &fixedTokenCounter{count: 799}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
+	n := newTestNotifier(t, counter, "", writer)
 
 	ls := loopStateWithTokens(799)
 	if err := n.Execute(context.Background(), ls); err != nil {
@@ -132,10 +138,10 @@ func TestContextPressureNotifier_DoesNotFireBelowThreshold(t *testing.T) {
 func TestContextPressureNotifier_FiresOnlyOnce(t *testing.T) {
 	counter := &fixedTokenCounter{count: 900}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
+	n := newTestNotifier(t, counter, "", writer)
 
 	ls := loopStateWithTokens(900)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := n.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("Execute iteration %d: unexpected error: %v", i, err)
 		}
@@ -152,7 +158,7 @@ func TestContextPressureNotifier_CustomMessage(t *testing.T) {
 	const customMsg = "Custom warning: save your work now!"
 	counter := &fixedTokenCounter{count: 900}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, customMsg, writer)
+	n := newTestNotifier(t, counter, customMsg, writer)
 
 	ls := loopStateWithTokens(900)
 	if err := n.Execute(context.Background(), ls); err != nil {
@@ -173,7 +179,7 @@ func TestContextPressureNotifier_CustomMessage(t *testing.T) {
 func TestContextPressureNotifier_DefaultMessage(t *testing.T) {
 	counter := &fixedTokenCounter{count: 900}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
+	n := newTestNotifier(t, counter, "", writer)
 
 	ls := loopStateWithTokens(900)
 	if err := n.Execute(context.Background(), ls); err != nil {
@@ -194,7 +200,7 @@ func TestContextPressureNotifier_DefaultMessage(t *testing.T) {
 func TestContextPressureNotifier_InterruptMessageFormat(t *testing.T) {
 	counter := &fixedTokenCounter{count: 900}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "warning", writer)
+	n := newTestNotifier(t, counter, "warning", writer)
 
 	ls := loopStateWithTokens(900)
 	if err := n.Execute(context.Background(), ls); err != nil {
@@ -223,7 +229,7 @@ func TestContextPressureNotifier_InterruptMessageFormat(t *testing.T) {
 // TestContextPressureNotifier_FailsWithoutTokenCounter verifies that construction
 // fails fast when no TokenCounter is provided.
 func TestContextPressureNotifier_FailsWithoutTokenCounter(t *testing.T) {
-	_, err := NewContextPressureNotifier(nil, 1000, 0.8, "", nil)
+	_, err := NewContextPressureNotifier(nil, testMaxTokens, testThreshold, "", nil)
 	if err == nil {
 		t.Error("expected error when TokenCounter is nil, got nil")
 	}
@@ -234,7 +240,7 @@ func TestContextPressureNotifier_FailsWithoutTokenCounter(t *testing.T) {
 func TestContextPressureNotifier_EmptyConversationBuffer(t *testing.T) {
 	counter := &fixedTokenCounter{count: 0}
 	writer := &captureWriter{}
-	n := newTestNotifier(t, counter, 1000, 0.8, "", writer)
+	n := newTestNotifier(t, counter, "", writer)
 
 	ls := emptyLoopState()
 	if err := n.Execute(context.Background(), ls); err != nil {

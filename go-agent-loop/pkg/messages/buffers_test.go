@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -327,21 +328,31 @@ func TestTypedBuffer_WriteCancelledContext(t *testing.T) {
 }
 
 func TestTypedBuffer_ReadBlocking(t *testing.T) {
-	buf := NewTypedBuffer[string](10)
-	done := make(chan struct{})
+	synctest.Test(t, func(t *testing.T) {
+		buf := NewTypedBuffer[string](10)
+		done := make(chan struct{})
+		type readResult struct {
+			data string
+			ok   bool
+		}
+		results := make(chan readResult, 1)
+		go func() {
+			data, ok := buf.ReadBlocking(done)
+			results <- readResult{data: data, ok: ok}
+		}()
 
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-		buf.Write(context.Background(), "delayed")
-	}()
+		// The reader is durably blocked on the empty buffer before the write.
+		synctest.Wait()
+		buf.Write(t.Context(), "delayed")
 
-	data, ok := buf.ReadBlocking(done)
-	if !ok {
-		t.Fatal("ReadBlocking should succeed")
-	}
-	if data != "delayed" {
-		t.Errorf("expected 'delayed', got %q", data)
-	}
+		got := <-results
+		if !got.ok {
+			t.Fatal("ReadBlocking should succeed")
+		}
+		if got.data != "delayed" {
+			t.Errorf("expected 'delayed', got %q", got.data)
+		}
+	})
 }
 
 func TestTypedBuffer_ReadBlockingCancelled(t *testing.T) {

@@ -30,7 +30,7 @@ func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
 	}
 
 	// Start the model streaming an audio response (never ends — simulates mid-stream barge-in).
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01, 0x02}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x03, 0x04}), Role: messages.RoleAssistant},
@@ -48,7 +48,7 @@ func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
 	scenario.SendAudioInput(bargInPayload)
 
 	// Agent loop must emit RESPONSE.CANCEL to the inference provider within 500ms.
-	cancelMsg, ok := inf.WaitForSentMessage(messages.StreamTypeResponseCancel, 500*time.Millisecond)
+	cancelMsg, ok := inf.WaitForSentMessage(t.Context(), messages.StreamTypeResponseCancel, 500*time.Millisecond)
 	if !ok {
 		t.Fatal("timed out waiting for RESPONSE.CANCEL — barge-in not implemented or not triggered")
 	}
@@ -57,7 +57,7 @@ func TestSessionBargeIn_SendsResponseCancel(t *testing.T) {
 	}
 
 	// After cancellation, the interrupting audio must also be forwarded to the provider.
-	audioMsg, ok := inf.WaitForSentMessage(messages.StreamTypeAudioDelta, 500*time.Millisecond)
+	audioMsg, ok := inf.WaitForSentMessage(t.Context(), messages.StreamTypeAudioDelta, 500*time.Millisecond)
 	if !ok {
 		t.Fatal("timed out waiting for user AUDIO.DELTA after barge-in")
 	}
@@ -89,7 +89,7 @@ func TestSessionNoBargeIn_AudioWithoutInterruption(t *testing.T) {
 	}
 
 	// Complete audio response with no barge-in.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x10}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioEnd, Value: messages.NewAudioEndValue(), Role: messages.RoleAssistant},

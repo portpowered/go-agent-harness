@@ -2,20 +2,19 @@ package probe
 
 import (
 	"errors"
+	"flag"
+	"os"
 	"testing"
 )
 
-func TestS2SV6CErrorRateLimitRegistrationFailsFast(t *testing.T) {
+func TestS2SV6CErrorRateLimitRegistrationReturnsError(t *testing.T) {
 	want := errors.New("registration failed")
-	defer func() {
-		got, ok := recover().(error)
-		if !ok || !errors.Is(got, want) {
-			t.Fatalf("registration panic = %v, want %v", got, want)
-		}
-	}()
-	registerS2SV6CErrorRateLimitScenario(func(Scenario, ...DeadSessionControl) error {
+	got := registerS2SV6CErrorRateLimitScenario(func(Scenario, ...DeadSessionControl) error {
 		return want
 	})
+	if !errors.Is(got, want) {
+		t.Fatalf("registration error = %v, want %v", got, want)
+	}
 }
 
 // anyCorpus accepts every corpus reference so built-in scenarios validate
@@ -30,7 +29,7 @@ func (anyCorpus) Has(string) bool { return true }
 // Registration does not validate, so this is the only registry-wide guard.
 func TestBuiltinScenariosValidateAndDeclareLaneInvariants(t *testing.T) {
 	registered := map[string]Scenario{}
-	for _, scenario := range newBuiltinScenarioRegistry().Snapshot() {
+	for _, scenario := range builtinScenarios(t) {
 		registered[scenario.ID] = scenario
 		if err := scenario.Validate(anyCorpus{}); err != nil {
 			t.Errorf("scenario %q does not validate: %v", scenario.ID, err)
@@ -78,4 +77,64 @@ func TestBuiltinScenariosValidateAndDeclareLaneInvariants(t *testing.T) {
 			}
 		}
 	}
+}
+
+// builtinScenarios returns the built-in scenarios, failing the test when the
+// built-in registry cannot be built.
+func builtinScenarios(t *testing.T) []Scenario {
+	t.Helper()
+	scenarios, err := Scenarios()
+	if err != nil {
+		t.Fatalf("Scenarios() error = %v", err)
+	}
+	return scenarios
+}
+
+// TestMain registers the golden-update flags before the test binary parses
+// its command line, so they need no package-level variables.
+func TestMain(m *testing.M) {
+	flag.Bool("update-goal-catalog-golden", false, "update the blind-probe goal catalog golden")
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// liveSuiteSmokeScenario exercises the audio and transcript expectation
+// paths the built-in scenarios do not all cover.
+func liveSuiteSmokeScenario() Scenario {
+	return Scenario{
+		ID:   "live-probe-suite-smoke",
+		Name: "live probe suite smoke",
+		Steps: []Step{
+			{Type: StepSendText, Text: "probe input"},
+			{Type: StepSendAudio, CorpusID: "probe-audio"},
+			{Type: StepClose},
+		},
+		Expectations: []ExpectedBehavior{
+			{Type: ExpectTranscriptContains, Text: "expected response"},
+			{Type: ExpectAudioEnergy},
+		},
+	}
+}
+
+// builtinRegistry returns a fresh built-in registry, failing the test when
+// the built-ins cannot be registered.
+func builtinRegistry(t *testing.T) *ScenarioRegistry {
+	t.Helper()
+	registry, err := NewBuiltinScenarioRegistry()
+	if err != nil {
+		t.Fatalf("NewBuiltinScenarioRegistry() error = %v", err)
+	}
+	return registry
+}
+
+func TestDeadSessionGuardCoversLiveSuiteSmokeScenario(t *testing.T) {
+	registry := builtinRegistry(t)
+	if err := registry.Register(liveSuiteSmokeScenario()); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewDeadSessionGuard(WithScenarioRegistry(registry)).Run(t.Context())
+	if err != nil {
+		t.Fatalf("smoke registry guard failed: %v", err)
+	}
+	assertGuardRunsForEntries(t, result, registry.Entries())
 }

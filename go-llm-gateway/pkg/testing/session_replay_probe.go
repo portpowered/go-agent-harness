@@ -101,6 +101,8 @@ func runSessionReplayProbe(ctx context.Context, fixture string, capture SessionC
 				Direction: record.Direction,
 				Type:      record.Type,
 			})
+		case DirectionServerToClient:
+			fallthrough
 		default:
 			_, payload, readErr := conn.ReadMessage()
 			if readErr != nil {

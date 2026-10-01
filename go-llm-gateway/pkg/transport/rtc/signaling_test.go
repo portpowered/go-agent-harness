@@ -22,7 +22,10 @@ func TestLoopbackSignalingExchangePreservesOrder(t *testing.T) {
 	done(t, a)
 }
 
-var failures = []error{rtc.ErrMalformedOffer, rtc.ErrMalformedAnswer, rtc.ErrNoCandidates, rtc.ErrICEGatheringTimeout, rtc.ErrSignalingUnreachable, rtc.ErrAnswerBeforeOffer}
+// signalingFailures lists the terminal failures in runFailure kind order.
+func signalingFailures() []error {
+	return []error{rtc.ErrMalformedOffer, rtc.ErrMalformedAnswer, rtc.ErrNoCandidates, rtc.ErrICEGatheringTimeout, rtc.ErrSignalingUnreachable, rtc.ErrAnswerBeforeOffer}
+}
 
 func TestLoopbackSignalingFailureMatrixAndCleanup(t *testing.T) {
 	base := runtime.NumGoroutine()
@@ -37,8 +40,8 @@ func TestLoopbackSignalingFailureMatrixAndCleanup(t *testing.T) {
 	expect(t, err, context.Canceled)
 	done(t, o)
 	done(t, a)
-	for kind, want := range failures {
-		for n := 0; n < 8; n++ {
+	for kind, want := range signalingFailures() {
+		for range 8 {
 			o, a, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: 5 * time.Millisecond, Unreachable: kind == 4})
 			expect(t, err, nil)
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -56,9 +59,10 @@ func TestLoopbackSignalingFailureMatrixAndCleanup(t *testing.T) {
 	}
 }
 func assertFailure(t *testing.T, got, want error) {
+	t.Helper()
 	expect(t, got, want)
-	for _, other := range failures {
-		if other != want && errors.Is(got, other) {
+	for _, other := range signalingFailures() {
+		if !errors.Is(other, want) && errors.Is(got, other) {
 			t.Fatalf("%v also matches %v", got, other)
 		}
 	}
@@ -102,11 +106,13 @@ func sdp(kind, name string) rtc.SessionDescription {
 	return rtc.SessionDescription{Type: kind, SDP: "v=0\r\no=- " + name + " 1 IN IP4 127.0.0.1\r\ns=" + name + "\r\nt=0 0"}
 }
 func pair(t *testing.T, timeout time.Duration) (*rtc.LoopbackEndpoint, *rtc.LoopbackEndpoint) {
+	t.Helper()
 	o, a, err := rtc.NewLoopbackSignalingPair(rtc.SignalingConfig{ICEGatheringTimeout: timeout})
 	expect(t, err, nil)
 	return o, a
 }
 func exchange(t *testing.T, ctx context.Context, sendDescription func(context.Context, rtc.SessionDescription) error, receiveDescription func(context.Context) (rtc.SessionDescription, error), sendCandidate func(context.Context, rtc.ICECandidate) error, receiveCandidate func(context.Context) (rtc.ICECandidate, error), complete func(context.Context) error, want rtc.SessionDescription, candidates []rtc.ICECandidate) {
+	t.Helper()
 	expect(t, sendDescription(ctx, want), nil)
 	for _, candidate := range candidates {
 		expect(t, sendCandidate(ctx, candidate), nil)
@@ -126,11 +132,13 @@ func exchange(t *testing.T, ctx context.Context, sendDescription func(context.Co
 	expect(t, err, rtc.ErrGatheringComplete)
 }
 func expect(t *testing.T, got, want error) {
+	t.Helper()
 	if !errors.Is(got, want) {
 		t.Fatalf("error = %v, want %v", got, want)
 	}
 }
 func done(t *testing.T, e *rtc.LoopbackEndpoint) {
+	t.Helper()
 	select {
 	case <-e.Done():
 	default:
@@ -138,6 +146,7 @@ func done(t *testing.T, e *rtc.LoopbackEndpoint) {
 	}
 }
 func postTerminal(t *testing.T, ctx context.Context, o, a *rtc.LoopbackEndpoint, want error) {
+	t.Helper()
 	expect(t, o.SendOffer(ctx, sdp("offer", "after")), want)
 	expect(t, a.SendAnswer(ctx, sdp("answer", "after")), want)
 	expect(t, o.SendCandidate(ctx, rtc.ICECandidate{"after"}), want)

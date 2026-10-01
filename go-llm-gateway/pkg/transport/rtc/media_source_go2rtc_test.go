@@ -144,8 +144,8 @@ type go2rtcFixture struct {
 	server         *httptest.Server
 	upgrader       websocket.Upgrader
 	handlerDone    chan struct{}
-	fixtureContext context.Context
-	cancelFixture  context.CancelFunc
+	fixtureStopped chan struct{}
+	stopFixture    func()
 	cleanupOnce    sync.Once
 
 	mu         sync.Mutex
@@ -163,14 +163,14 @@ type go2rtcFixturePeer struct {
 
 func startGo2RTCFixture(t *testing.T, options go2rtcFixtureOptions) *go2rtcFixture {
 	t.Helper()
-	fixtureContext, cancelFixture := context.WithCancel(context.Background())
+	fixtureStopped := make(chan struct{})
 	fixture := &go2rtcFixture{
 		t:              t,
 		options:        options,
 		upgrader:       websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 		handlerDone:    make(chan struct{}),
-		fixtureContext: fixtureContext,
-		cancelFixture:  cancelFixture,
+		fixtureStopped: fixtureStopped,
+		stopFixture:    sync.OnceFunc(func() { close(fixtureStopped) }),
 	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.serve))
 	u, err := url.Parse(fixture.server.URL)
@@ -184,7 +184,7 @@ func startGo2RTCFixture(t *testing.T, options go2rtcFixtureOptions) *go2rtcFixtu
 
 func (f *go2rtcFixture) cleanup() {
 	f.cleanupOnce.Do(func() {
-		f.cancelFixture()
+		f.stopFixture()
 		f.server.CloseClientConnections()
 		f.server.Close()
 		select {
@@ -223,7 +223,7 @@ func (f *go2rtcFixture) serve(w http.ResponseWriter, r *http.Request) {
 	defer cancelHandler()
 	go func() {
 		select {
-		case <-f.fixtureContext.Done():
+		case <-f.fixtureStopped:
 			cancelHandler()
 		case <-handlerContext.Done():
 		}
@@ -355,7 +355,7 @@ func (f *go2rtcFixture) stream(ctx context.Context, peer *go2rtcFixturePeer) {
 	case <-time.After(go2rtcFixtureStepTimeout):
 		return
 	}
-	for i := 0; i < f.options.packets; i++ {
+	for i := range f.options.packets {
 		if err := peer.audio.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0, SequenceNumber: uint16(i + 1), Timestamp: uint32(i * go2rtcFixtureAudioTicks)}, Payload: []byte{0xff, 0x00, 0x7f}}); err != nil {
 			return
 		}

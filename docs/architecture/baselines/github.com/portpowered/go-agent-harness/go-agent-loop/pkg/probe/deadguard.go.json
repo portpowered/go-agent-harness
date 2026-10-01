@@ -27,19 +27,9 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
       "file": "pkg/probe/deadguard.go",
-      "value": 892,
+      "value": 866,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
-      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
-      "file": "pkg/probe/deadguard.go",
-      "symbol": "DefaultScenarioRegistry",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
     },
     {
       "rule": "mutable-global",
@@ -107,26 +97,6 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
       "file": "pkg/probe/deadguard.go",
       "symbol": "ErrNoRegisteredScenarios",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
-      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
-      "file": "pkg/probe/deadguard.go",
-      "symbol": "LiveRegistry",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
-      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
-      "file": "pkg/probe/deadguard.go",
-      "symbol": "liveScenarioRegistry",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
       "message": "mutable package state must be owned by an injected service"

@@ -216,10 +216,7 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 	}
 	switch kind {
 	case ExpectAudioEnergy:
-		rms := pcm16RMS(observation.PCM16Samples)
-		if rms <= AudioEnergyThreshold {
-			return mismatch(expectation, kind, "RMS > 300.0", rms)
-		}
+		return evaluateAudioEnergy(expectation, kind, observation)
 	case ExpectTranscriptContains:
 		want, err := aliasString(expectation, kind, "substring", expectation.Text, expectation.Value)
 		if err != nil {
@@ -273,8 +270,15 @@ func Evaluate(expectation ExpectedBehavior, observation ObservationSnapshot) err
 		return evaluateMessageCountsReconciliation(expectation, observation)
 	case ExpectResponseCancel:
 		return evaluateResponseCancel(expectation, kind, observation)
-	default:
+	case ExpectText, ExpectAudio, ExpectToolCall, ExpectToolResult, ExpectClose, ExpectTime, ExpectEvent, ExpectContains, ExpectTranscript:
 		return invalid(expectation, kind, "type", "unsupported measurable expectation")
+	}
+	return nil
+}
+
+func evaluateAudioEnergy(expectation ExpectedBehavior, kind ExpectationKind, observation ObservationSnapshot) error {
+	if rms := pcm16RMS(observation.PCM16Samples); rms <= AudioEnergyThreshold {
+		return mismatch(expectation, kind, "RMS > 300.0", rms)
 	}
 	return nil
 }
@@ -383,17 +387,13 @@ func validKind(expectation ExpectedBehavior) (ExpectationKind, error) {
 	if expectation.Type != "" && expectation.Kind != "" && expectation.Type != expectation.Kind {
 		return kind, invalid(expectation, kind, "type", "type and kind disagree")
 	}
-	switch kind {
-	case ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
-		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance,
-		ExpectOutputState, ExpectFrameCount,
-		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult,
-		ExpectBufferDisposition, ExpectMetricsReconcile,
-		ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel:
-		return kind, nil
-	default:
+	if !slices.Contains([]ExpectationKind{ExpectAudioEnergy, ExpectTranscriptContains, ExpectToolCalled,
+		ExpectLatencyWithinTicks, ExpectTerminalReason, ExpectTerminalProvenance, ExpectOutputState, ExpectFrameCount,
+		ExpectToolResultDelivered, ExpectToolResultDiscarded, ExpectNoOrphanedToolResult, ExpectBufferDisposition,
+		ExpectMetricsReconcile, ExpectBargeInCancelOnce, ExpectMessageCountsReconcile, ExpectResponseCancel}, kind) {
 		return kind, invalid(expectation, kind, "type", "unknown measurable expectation")
 	}
+	return kind, nil
 }
 func declaredKind(expectation ExpectedBehavior) ExpectationKind {
 	if expectation.Type != "" {

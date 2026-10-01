@@ -3,6 +3,7 @@ package probe
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -273,16 +274,11 @@ func eventLess(left, right SequencedEvent) bool {
 	return left.Identity < right.Identity
 }
 func participantRank(participant Participant) int {
-	switch participant {
-	case ScenarioDriver:
-		return 0
-	case Client:
-		return 1
-	case Agent:
-		return 2
-	default:
-		return 3
+	order := []Participant{ScenarioDriver, Client, Agent}
+	if rank := slices.Index(order, participant); rank >= 0 {
+		return rank
 	}
+	return len(order)
 }
 
 func normalizePlan(plan SequencePlan) (SequencePlan, error) {

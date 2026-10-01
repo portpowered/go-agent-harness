@@ -134,7 +134,7 @@ func TestOutboundTrackSerializesConcurrentWrites(t *testing.T) {
 	results := make(chan error, writes)
 	var workers sync.WaitGroup
 	workers.Add(writes)
-	for index := 0; index < writes; index++ {
+	for index := range writes {
 		go func(index int) {
 			defer workers.Done()
 			results <- track.WriteRTP(&rtp.Packet{
@@ -297,8 +297,8 @@ func testOutboundSuccess(t *testing.T) {
 	samples := make([]int16, 320)
 	samples[0] = 11
 	before := append([]int16(nil), samples...)
-	var nilContext context.Context
-	if err := track.WriteFrame(nilContext, sharedaudio.PCMFrame{Samples: samples}); err != nil {
+	callerContext := t.Context()
+	if err := track.WriteFrame(callerContext, sharedaudio.PCMFrame{Samples: samples}); err != nil {
 		t.Fatalf("WriteFrame(nil) error = %v", err)
 	}
 	if !reflect.DeepEqual(samples, before) {

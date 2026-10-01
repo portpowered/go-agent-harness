@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -146,7 +147,7 @@ func TestRetryDelta_TrimOnErrorThenRetry(t *testing.T) {
 	waitForLoopEnd(t, eventCh, 5*time.Second)
 	cancel2()
 	err2 := <-done
-	if err2 != nil && err2 != context.Canceled {
+	if err2 != nil && !errors.Is(err2, context.Canceled) {
 		t.Fatalf("second RunHotLoop (retry): %v", err2)
 	}
 

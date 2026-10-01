@@ -108,15 +108,17 @@ func (b *TypedBuffer[T]) WriteWaitContext(ctx context.Context, data T) BufferWri
 // extra signal prevents a producer from remaining blocked forever when its
 // consumer shuts down while the buffer is full.
 func (b *TypedBuffer[T]) WriteWaitContextOrDone(ctx context.Context, done <-chan struct{}, data T) BufferWriteOutcome {
-	if ctx == nil {
-		ctx = context.Background()
+	// A nil context never cancels the write; only done or capacity end it.
+	var ctxDone <-chan struct{}
+	if ctx != nil {
+		ctxDone = ctx.Done()
 	}
 	select {
 	case b.ch <- data:
 		return BufferWriteOutcome{Status: BufferWriteSucceeded}
 	case <-done:
 		return BufferWriteOutcome{Status: BufferWriteStopped}
-	case <-ctx.Done():
+	case <-ctxDone:
 		return bufferWriteContextOutcome(ctx)
 	}
 }

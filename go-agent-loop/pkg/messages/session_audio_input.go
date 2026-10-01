@@ -84,7 +84,7 @@ type SessionInputFormat interface {
 // runner's local barge-in asks. Every session wrapper returned to a runner
 // implements it (usually by embedding SessionCapabilities), so a wrapper cannot
 // silently hide the provider's answers.
-type BargeInCapableSession interface {
+type BargeInCapableSession interface { //nolint:iface // Exported contract implemented and consumed outside this package; nothing here asserts against it.
 	Session
 	SessionTurnDetection
 	SessionLocalPlayback

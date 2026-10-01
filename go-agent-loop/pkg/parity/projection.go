@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"slices"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 // Projection is the complete, ordered, transport-independent speech-to-speech
@@ -257,7 +258,7 @@ func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
 
 	kind, present, err := firstString(fields, "kind", "type")
 	if err != nil {
-		return nil, "", fmt.Errorf("kind %s", err)
+		return nil, "", fmt.Errorf("kind %w", err)
 	}
 	if nested, ok := objectField(fields, "value"); ok {
 		for key, value := range nested {
@@ -268,7 +269,7 @@ func decodePayload(raw []byte) (map[string]json.RawMessage, string, error) {
 		if !present {
 			kind, _, err = firstString(fields, "kind", "type")
 			if err != nil {
-				return nil, "", fmt.Errorf("kind %s", err)
+				return nil, "", fmt.Errorf("kind %w", err)
 			}
 		}
 	}
@@ -287,12 +288,7 @@ func isTransportMechanicKind(kind string) bool {
 }
 
 func knownStream(stream transcript.Stream) bool {
-	switch stream {
-	case transcript.StreamWS, transcript.StreamRTCAudio, transcript.StreamRTCData, transcript.StreamDeviceIn, transcript.StreamDeviceOut:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains([]transcript.Stream{transcript.StreamWS, transcript.StreamRTCAudio, transcript.StreamRTCData, transcript.StreamDeviceIn, transcript.StreamDeviceOut}, stream)
 }
 
 func isAudioStream(stream transcript.Stream) bool {

@@ -8,7 +8,7 @@ import (
 
 func registeredS2SV3CScenario(t *testing.T, id string) Scenario {
 	t.Helper()
-	for _, scenario := range Scenarios() {
+	for _, scenario := range builtinScenarios(t) {
 		if scenario.ID == id {
 			return scenario
 		}

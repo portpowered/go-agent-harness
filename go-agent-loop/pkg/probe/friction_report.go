@@ -305,7 +305,7 @@ func readFrictionReportInput(input FrictionReportInput, index int) ([]ScenarioRe
 
 	results := make([]ScenarioResult, 0)
 	scanner := bufio.NewScanner(input.Reader)
-	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, reportScanBufferBytes), reportMaxLineBytes)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
@@ -377,7 +377,7 @@ func malformedReportLine(source string, line int, err error) error {
 	return &FrictionReportError{
 		Source: source,
 		Line:   line,
-		Err:    fmt.Errorf("%w: %v", ErrMalformedReport, err),
+		Err:    fmt.Errorf("%w: %w", ErrMalformedReport, err),
 	}
 }
 

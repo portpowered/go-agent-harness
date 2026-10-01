@@ -18,7 +18,7 @@ import (
 func TestConcurrentSessionsZeroCrossSessionLeakage(t *testing.T) {
 	run := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 
@@ -27,7 +27,7 @@ func TestConcurrentSessionsZeroCrossSessionLeakage(t *testing.T) {
 		checkSessionIsolation(t, state.Token, tokens, state.Records, state.Deltas)
 
 		// End-state equals this session's own script, never another's.
-		if want := len(concurrentDefaultTurns); state.MessageEndCount != want {
+		if want := len(concurrentDefaultTurns()); state.MessageEndCount != want {
 			t.Fatalf("session %s turn count: got %d, want %d", state.Token, state.MessageEndCount, want)
 		}
 		if len(state.ToolCalls) != 1 {
@@ -230,4 +230,11 @@ func printableSnippet(payload []byte) string {
 		return '.'
 	}, payload[:end])
 	return string(snippet)
+}
+
+// concurrentDefaultTurns is the shared script: a text-led turn, an audio-led
+// turn, and a tool-call turn. Every session runs this identical script, so any
+// foreign marker in a capture is provably cross-session leakage.
+func concurrentDefaultTurns() []concurrentTurnKind {
+	return []concurrentTurnKind{turnText, turnAudio, turnTool}
 }

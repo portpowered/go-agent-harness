@@ -33,18 +33,7 @@ func validateScenarioV2StepRequiredFields(step ScenarioV2Step, location string, 
 			return newScenarioV2Error(location, "url and fixture are mutually exclusive")
 		}
 	case ScenarioV2StepWebMCPInvoke:
-		if err := nonEmpty(step.ToolRef, "tool_ref"); err != nil {
-			return err
-		}
-		if err := nonEmpty(step.InputJSON, "input_json"); err != nil {
-			return err
-		}
-		if err := nonEmpty(step.Reason, "reason"); err != nil {
-			return err
-		}
-		if _, err := decodeScenarioV2Object([]byte(step.InputJSON), location+".input_json"); err != nil {
-			return newScenarioV2Error(location+".input_json", "must contain a JSON object")
-		}
+		return validateScenarioV2InvokeStep(step, location)
 	case ScenarioV2StepWebMCPCancel:
 		return nonEmpty(step.InvocationID, "invocation_id")
 	case ScenarioV2StepSendText:
@@ -66,6 +55,8 @@ func validateScenarioV2StepRequiredFields(step ScenarioV2Step, location string, 
 		if !step.HasDurationMS {
 			return newScenarioV2Error(location+".duration_ms", "required field is missing")
 		}
+	case ScenarioV2StepBrowserConnect, ScenarioV2StepBrowserDiscover, ScenarioV2StepBrowserActivate, ScenarioV2StepBrowserDisconnect, ScenarioV2StepWebMCPWaitReady, ScenarioV2StepWebMCPListTools, ScenarioV2StepCloseTab, ScenarioV2StepClose:
+		// These kinds need no handling here.
 	}
 	return nil
 }
@@ -81,7 +72,7 @@ func parseScenarioV2Expectation(raw json.RawMessage, index int) (ScenarioV2Expec
 		return ScenarioV2Expectation{}, err
 	}
 	expectationType := ScenarioV2ExpectationType(typeName)
-	allowed, ok := scenarioV2ExpectationFields[expectationType]
+	allowed, ok := scenarioV2ExpectationFields()[expectationType]
 	if !ok {
 		return ScenarioV2Expectation{}, newScenarioV2Error(location+".type", "unknown expectation variant")
 	}
@@ -280,10 +271,8 @@ func validateScenarioV2ExpectationRequiredFields(expectation ScenarioV2Expectati
 		}
 	case ScenarioV2ExpectationTranscriptContains:
 		return nonEmpty(expectation.Text, "text")
-	case ScenarioV2ExpectationStaleToolRejected:
-		if expectation.ToolRef != "" {
-			return nil
-		}
+	case ScenarioV2ExpectationStaleToolRejected, ScenarioV2ExpectationBrowserCountEquals, ScenarioV2ExpectationEligibleTabCountEquals, ScenarioV2ExpectationCatalogGenerationEquals, ScenarioV2ExpectationNoPendingInvocations, ScenarioV2ExpectationResponseCanceled, ScenarioV2ExpectationAssistantAudioStarted, ScenarioV2ExpectationAssistantAudioStopped, ScenarioV2ExpectationApprovalRequested, ScenarioV2ExpectationApprovalNotRequested, ScenarioV2ExpectationBrowserConnectionClosed:
+		// These kinds need no handling here.
 	}
 	return nil
 }
@@ -346,14 +335,14 @@ func isScenarioV2ToolRefTokenCharacter(character rune) bool {
 }
 
 func validateTypedScenarioV2Step(step ScenarioV2Step, index int, lookup CorpusLookup) error {
-	if _, ok := scenarioV2StepFields[step.Type]; !ok {
+	if _, ok := scenarioV2StepFields()[step.Type]; !ok {
 		return newScenarioV2Error(fmt.Sprintf("steps[%d].type", index), "unknown step variant")
 	}
 	return validateScenarioV2StepRequiredFields(step, fmt.Sprintf("steps[%d]", index), lookup)
 }
 
 func validateTypedScenarioV2Expectation(expectation ScenarioV2Expectation, index int) error {
-	if _, ok := scenarioV2ExpectationFields[expectation.Type]; !ok {
+	if _, ok := scenarioV2ExpectationFields()[expectation.Type]; !ok {
 		return newScenarioV2Error(fmt.Sprintf("expectations[%d].type", index), "unknown expectation variant")
 	}
 	return validateScenarioV2ExpectationRequiredFields(expectation, fmt.Sprintf("expectations[%d]", index))
@@ -364,4 +353,18 @@ func cloneScenarioV2Raw(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return append(json.RawMessage(nil), raw...)
+}
+
+// validateScenarioV2InvokeStep requires a tool reference, a reason, and a
+// JSON-object input for a WebMCP invoke step.
+func validateScenarioV2InvokeStep(step ScenarioV2Step, location string) error {
+	for _, field := range []struct{ name, value string }{{"tool_ref", step.ToolRef}, {"input_json", step.InputJSON}, {"reason", step.Reason}} {
+		if strings.TrimSpace(field.value) == "" {
+			return newScenarioV2Error(location+"."+field.name, "required field is missing")
+		}
+	}
+	if _, err := decodeScenarioV2Object([]byte(step.InputJSON), location+".input_json"); err != nil {
+		return newScenarioV2Error(location+".input_json", "must contain a JSON object")
+	}
+	return nil
 }

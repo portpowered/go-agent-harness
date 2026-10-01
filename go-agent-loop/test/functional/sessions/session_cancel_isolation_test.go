@@ -24,12 +24,12 @@ func TestCancellingOneMidRunSessionLeavesOthersUndisturbed(t *testing.T) {
 
 	reference := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     -1,
 	})
 	cancelled := runConcurrentSessions(t, concurrentDriverOptions{
 		SessionCount: concurrentDefaultSessions,
-		Turns:        concurrentDefaultTurns,
+		Turns:        concurrentDefaultTurns(),
 		CancelID:     0,
 		CancelAfter:  1,
 	})
@@ -94,12 +94,7 @@ func TestCancellingOneMidRunSessionLeavesOthersUndisturbed(t *testing.T) {
 	// tick generation, so it never substitutes for logical synchronization.
 	const settleDeadline = 10 * time.Second
 	const allowedResidual = 4
-	deadline := time.Now().Add(settleDeadline)
-	final := runtime.NumGoroutine()
-	for final > baselineGoroutines+allowedResidual && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
-		final = runtime.NumGoroutine()
-	}
+	final := settleGoroutines(baselineGoroutines+allowedResidual, settleDeadline)
 	if final > baselineGoroutines+allowedResidual {
 		t.Fatalf("goroutines after cancellation runs: baseline=%d final=%d residual exceeds allowance %d", baselineGoroutines, final, allowedResidual)
 	}
@@ -330,3 +325,28 @@ func summarizeKeys(keys []string) string {
 	}
 	return fmt.Sprintf("%v ...(%d total)", keys[:maxShown], len(keys))
 }
+
+// settleGoroutines waits until at most limit goroutines run or timeout
+// elapses, and returns the last count. Goroutine exit publishes no signal,
+// so the count is resampled on a ticker; the wait ends as soon as the
+// count is within the limit.
+func settleGoroutines(limit int, timeout time.Duration) int {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	resample := time.NewTicker(settleResampleInterval)
+	defer resample.Stop()
+	for {
+		count := runtime.NumGoroutine()
+		if count <= limit {
+			return count
+		}
+		select {
+		case <-resample.C:
+		case <-deadline.C:
+			return runtime.NumGoroutine()
+		}
+	}
+}
+
+// settleResampleInterval is how often settleGoroutines resamples the count.
+const settleResampleInterval = 10 * time.Millisecond

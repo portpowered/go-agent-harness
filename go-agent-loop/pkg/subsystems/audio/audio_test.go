@@ -7,6 +7,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/state"
+	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 	audiosubsystem "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -86,5 +87,57 @@ func TestAudioSubsystemControlOverflowIsExplicit(t *testing.T) {
 	st.Inputs.UserControlPlaneMessage = []messages.Message{{ContentParts: []messages.ContentPart{messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeInterrupt}}}}
 	if err := s.Execute(context.Background(), st); !errors.Is(err, audio.ErrControlFull) {
 		t.Fatalf("control overflow=%v", err)
+	}
+}
+
+func TestAudioSubsystemIgnoresNonInterruptControls(t *testing.T) {
+	commands, consumer, err := audio.NewCommandBuffer(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := audiosubsystem.New(audiosubsystem.Ports{Commands: commands})
+	st := &state.LoopState{}
+	st.History.CurrentPassID = 1
+	st.Inputs.UserControlPlaneMessage = []messages.Message{
+		messages.NewTextMessage(messages.RoleUser, "not a control"),
+		{ContentParts: []messages.ContentPart{messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypePing}}},
+	}
+	if err := s.Execute(t.Context(), st); err != nil {
+		t.Fatal(err)
+	}
+	commands.Close()
+	if command, err := consumer.Receive(t.Context()); err == nil {
+		t.Fatalf("non-interrupt controls queued %+v", command)
+	}
+}
+
+func TestAudioSubsystemInterruptWithoutCommandPortOnlyObserves(t *testing.T) {
+	_, _, playback, err := audio.NewFrameBuffer(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := audiosubsystem.New(audiosubsystem.Ports{Playback: playback})
+	st := &state.LoopState{}
+	st.History.CurrentPassID = 1
+	st.Inputs.UserControlPlaneMessage = []messages.Message{{ContentParts: []messages.ContentPart{messages.ControlPlanePart{ControlPlaneMessageType: messages.ControlPlaneMessageTypeInterrupt}}}}
+	if err := s.Execute(t.Context(), st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Audio == nil || st.Audio.LastCommandID != 0 {
+		t.Fatalf("observation=%+v, want no command issued without a command port", st.Audio)
+	}
+}
+
+func TestAudioSubsystemRejectsMissingPortsAndCancelledContext(t *testing.T) {
+	if err := audiosubsystem.New(audiosubsystem.Ports{}).Execute(t.Context(), &state.LoopState{}); !errors.Is(err, audiosubsystem.ErrMissingPorts) {
+		t.Fatalf("missing ports err=%v", err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := audiosubsystem.New(audiosubsystem.Ports{}).Execute(ctx, &state.LoopState{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled err=%v", err)
+	}
+	if got := audiosubsystem.New(audiosubsystem.Ports{}).TickGroup(); got != subsystems.TickGroupToolResultForwarder {
+		t.Fatalf("tick group=%v", got)
 	}
 }

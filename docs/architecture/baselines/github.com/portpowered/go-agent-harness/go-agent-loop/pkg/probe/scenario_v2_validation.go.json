@@ -8,7 +8,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
       "file": "pkg/probe/scenario_v2_validation.go",
       "symbol": "validateScenarioV2StepRequiredFields",
-      "value": 29,
+      "value": 21,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -18,7 +18,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
       "file": "pkg/probe/scenario_v2_validation.go",
       "symbol": "validateScenarioV2ExpectationRequiredFields",
-      "value": 17,
+      "value": 16,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -28,7 +28,7 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe",
       "file": "pkg/probe/scenario_v2_validation.go",
       "symbol": "validateScenarioV2StepRequiredFields",
-      "value": 28,
+      "value": 25,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     }

@@ -34,6 +34,8 @@ func (s MediaSource) openGo2RTC(ctx context.Context) (*MediaStream, error) {
 			inbound.attach(track)
 		case webrtc.RTPCodecTypeVideo:
 			inbound.attachVideo(track)
+		case webrtc.RTPCodecTypeUnknown:
+			// A track of unknown kind carries no media this source reads.
 		}
 	})
 	answer, err := s.negotiateGo2RTC(ctx, ws, pc)
@@ -216,7 +218,7 @@ func parseSDP(sdp string) (audio, video bool, codec string, rate, channels int) 
 	if channels <= 0 {
 		channels = 1
 	}
-	return
+	return audio, video, codec, rate, channels
 }
 
 func isSDPMediaDirection(line string) bool {

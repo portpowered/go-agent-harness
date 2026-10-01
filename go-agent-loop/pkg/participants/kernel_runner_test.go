@@ -2,7 +2,6 @@ package participants
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -20,7 +19,7 @@ func TestKernelRunner_DispatchDeltaToDeltaEventCh(t *testing.T) {
 		Type:  messages.StreamTypeTextDelta,
 		Value: messages.NewTextDeltaValue("hello"),
 	}
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.Model,
 		Delta:  delta,
 	})
@@ -46,7 +45,7 @@ func TestKernelRunner_SystemFullMessageNotSentToDeltaEventCh(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	evCh := kr.NewDeltaEventReader(8)
 
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.Model,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeSystemFullMessage,
@@ -66,7 +65,7 @@ func TestKernelRunner_NoDeltaEventChNoPanic(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	// Do NOT call NewDeltaEventReader — deltaEventCh is nil.
 	// Dispatching should not panic.
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.Model,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
@@ -88,7 +87,7 @@ func TestKernelRunner_MultipleDeltaTypesDispatched(t *testing.T) {
 	}
 
 	for _, d := range deltas {
-		kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+		kr.dispatchDelta(messages.KernelDeltaRequest{
 			Source: messages.Model,
 			Delta:  d,
 		})
@@ -114,7 +113,7 @@ func TestKernelRunner_DispatchFullMessageToMessageOutCh(t *testing.T) {
 	kr.messageOutCh = ch
 
 	msg := messages.NewTextMessage(messages.RoleAssistant, "response")
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.Model,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeSystemFullMessage,
@@ -138,7 +137,7 @@ func TestKernelRunner_DispatchFullMessageToMessageOutCh(t *testing.T) {
 func TestKernelRunner_NoMessageOutChNoPanic(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	// messageOutCh is nil — should not panic.
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.Tool,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeSystemFullMessage,
@@ -152,7 +151,7 @@ func TestKernelRunner_LoopEndClosesMessageOutCh(t *testing.T) {
 	ch := make(chan messages.KernelMessageRequest, 8)
 	kr.messageOutCh = ch
 
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.System,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeLoopEnd,
@@ -175,7 +174,7 @@ func TestKernelRunner_LoopEndClosesDeltaEventCh(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	evCh := kr.NewDeltaEventReader(8)
 
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.System,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeLoopEnd,
@@ -211,7 +210,7 @@ func TestKernelRunner_LoopEndNilsChannels(t *testing.T) {
 	kr.messageOutCh = ch
 	kr.NewDeltaEventReader(8)
 
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.System,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeLoopEnd,
@@ -235,7 +234,7 @@ func TestKernelRunner_CloseStreamWithErrorClosesMessageOutCh(t *testing.T) {
 	ch := make(chan messages.KernelMessageRequest, 8)
 	kr.messageOutCh = ch
 
-	kr.closeStreamWithError(errors.New("test error"))
+	kr.closeStreamWithError()
 
 	select {
 	case _, ok := <-ch:
@@ -251,7 +250,7 @@ func TestKernelRunner_CloseStreamWithErrorClosesDeltaEventCh(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	evCh := kr.NewDeltaEventReader(8)
 
-	kr.closeStreamWithError(errors.New("test error"))
+	kr.closeStreamWithError()
 
 	select {
 	case _, ok := <-evCh:
@@ -277,7 +276,7 @@ func TestKernelRunner_CloseStreamWithErrorDrainsDeltaInbox(t *testing.T) {
 		Delta:  messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("stale2")},
 	})
 
-	kr.closeStreamWithError(errors.New("retry"))
+	kr.closeStreamWithError()
 
 	// DeltaInbox should be empty after drain.
 	if _, ok := kr.DeltaInbox.Read(); ok {
@@ -288,7 +287,7 @@ func TestKernelRunner_CloseStreamWithErrorDrainsDeltaInbox(t *testing.T) {
 func TestKernelRunner_CloseStreamWithErrorNilChannelsSafe(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	// Both messageOutCh and deltaEventCh are nil — should not panic.
-	kr.closeStreamWithError(errors.New("no channels"))
+	kr.closeStreamWithError()
 }
 
 func TestKernelRunner_CloseStreamWithErrorNilsChannels(t *testing.T) {
@@ -297,7 +296,7 @@ func TestKernelRunner_CloseStreamWithErrorNilsChannels(t *testing.T) {
 	kr.messageOutCh = ch
 	kr.NewDeltaEventReader(8)
 
-	kr.closeStreamWithError(errors.New("err"))
+	kr.closeStreamWithError()
 
 	if kr.messageOutCh != nil {
 		t.Error("messageOutCh should be nil after closeStreamWithError")
@@ -316,7 +315,7 @@ func TestKernelRunner_NewDeltaEventReaderReplacesChannel(t *testing.T) {
 
 	// The internal deltaEventCh should now be the second channel.
 	// Dispatch a delta and verify it arrives on the second channel.
-	kr.dispatchDelta(context.Background(), messages.KernelDeltaRequest{
+	kr.dispatchDelta(messages.KernelDeltaRequest{
 		Source: messages.Model,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
@@ -405,7 +404,7 @@ func TestSessionModelRunner_TransientDoesNotBargeInButSustainedSpeechDoes(t *tes
 	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-transient")
-	cough, quiet := pcmFrameAtLevel(9000, 480), pcmFrameAtLevel(0, 480)
+	cough, quiet := pcmFrameAtLevel(9000), pcmFrameAtLevel(0)
 	sendUserAudio(t, runner, session, state, cough)
 	sendUserAudio(t, runner, session, state, quiet)
 	sent := session.sentMessages()
@@ -414,7 +413,7 @@ func TestSessionModelRunner_TransientDoesNotBargeInButSustainedSpeechDoes(t *tes
 		t.Fatalf("a 20 ms transient produced %#v, want the two frames forwarded in order and no cancel", sent)
 	}
 	for range 2 {
-		sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+		sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000))
 	}
 	sent = session.sentMessages()[2:]
 	if len(sent) != 3 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta || sent[2].Type != messages.StreamTypeAudioDelta {
@@ -427,7 +426,7 @@ func TestSessionModelRunner_HeldOnsetAudioPrecedesLaterControl(t *testing.T) {
 	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-held")
-	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000))
 	runner.forwardQueuedSessionEvent(context.Background(), session, state, messages.StreamMessage{Type: messages.StreamTypeMessageEnd})
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeAudioDelta || sent[1].Type != messages.StreamTypeMessageEnd {
@@ -435,9 +434,10 @@ func TestSessionModelRunner_HeldOnsetAudioPrecedesLaterControl(t *testing.T) {
 	}
 }
 
-// pcmFrameAtLevel returns samples of PCM16 whose RMS is level.
-func pcmFrameAtLevel(level int16, samples int) []byte {
-	pcm := make([]byte, samples*2)
+const testFrameSamples = 480 // PCM16 samples in one test audio frame.
+// pcmFrameAtLevel returns one test frame of PCM16 whose RMS is level.
+func pcmFrameAtLevel(level int16) []byte {
+	pcm := make([]byte, testFrameSamples*2)
 	for i := 0; i < len(pcm); i += 2 {
 		sample := level
 		if i%4 == 0 {
@@ -454,7 +454,7 @@ func TestSessionModelRunner_ExplicitCancelPrecedesHeldOnsetAudio(t *testing.T) {
 	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-explicit")
-	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000))
 	runner.forwardQueuedSessionEvent(context.Background(), session, state, messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()})
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
@@ -468,7 +468,7 @@ func TestSessionModelRunner_HeldOnsetAudioReleasedWhenResponseEnds(t *testing.T)
 	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-ending")
-	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000))
 	runner.forwardSessionMessageState(context.Background(), session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-ending"))
 	sent := session.sentMessages()
 	if len(sent) != 1 || sent[0].Type != messages.StreamTypeAudioDelta {
@@ -491,14 +491,14 @@ func TestSessionModelRunner_HeldOnsetAudioReleasedAfterOnsetWindow(t *testing.T)
 		}()
 		session.recv.Write(ctx, sessionMessage(messages.StreamTypeMessageStart, "resp-sparse"))
 		synctest.Wait()
-		if err := runner.EnqueueSessionInput(ctx, SessionAudio(pcmFrameAtLevel(9000, 480), messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
+		if err := runner.EnqueueSessionInput(ctx, SessionAudio(pcmFrameAtLevel(9000), messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 			t.Fatal(err)
 		}
 		synctest.Wait()
 		if got := len(session.sentMessages()); got != 0 {
 			t.Fatalf("sent %d messages while onset was undecided, want the frame held", got)
 		}
-		time.Sleep(DefaultBargeInConfig().MinSpeech)
+		time.Sleep(DefaultBargeInConfig().MinSpeech) //nolint:forbidigo // Inside a synctest bubble: advances virtual time past the onset window; no wall-clock wait.
 		synctest.Wait()
 		sent := session.sentMessages()
 		stop()
@@ -551,7 +551,7 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 	session := &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-ordered")
-	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000))
 	runner.ingress.queuedControls.Add(1)
 	cancel := messages.StreamMessage{Type: messages.StreamTypeResponseCancel, Value: messages.NewResponseCancelValue()}
 	if err := runner.forwardSessionInput(context.Background(), session, state, SessionEvent(cancel)); err != nil {
@@ -586,7 +586,7 @@ func TestSessionModelRunner_HeldOnsetAudioDiscardedAfterAdmissionCloses(t *testi
 	session := &closingSession{playbackSession: &playbackSession{recordingSession: newRecordingSession(), inputRate: 24000}}
 	runner := NewSessionModelRunner(nil, 16, nil)
 	state := newInFlightRunState(t, session, runner, "resp-closing")
-	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000, 480))
+	sendUserAudio(t, runner, session, state, pcmFrameAtLevel(9000))
 	session.closed = true
 	runner.forwardSessionMessageState(context.Background(), session, state, sessionMessage(messages.StreamTypeMessageEnd, "resp-closing"))
 	for msg, ok := runner.DeltaOutbox.Read(); ok; msg, ok = runner.DeltaOutbox.Read() {

@@ -860,7 +860,7 @@ func (i *testSessionInferencer) ConnectSession(context.Context) (messages.Sessio
 
 func TestSessionModelRunner_DrainsPendingMessagesWhenSessionDone(t *testing.T) {
 	session := newCompletedSession()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		session.recv.Write(context.Background(), messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Value: messages.NewTextDeltaValue("x"),

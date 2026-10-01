@@ -53,15 +53,6 @@ func (o SessionReplayOutcome) OK() bool {
 	return o.Status == SessionReplayCompleted
 }
 
-// WithReplayContext makes replay delivery stop when ctx is cancelled.
-func WithReplayContext(ctx context.Context) SessionReplayerOption {
-	return func(r *SessionReplayer) {
-		if ctx != nil {
-			r.replayCtx = ctx
-		}
-	}
-}
-
 // WithReplayTiming enables real-time delays between events based on their
 // recorded timestamps. By default, all events are delivered immediately.
 func WithReplayTiming() SessionReplayerOption {
@@ -107,54 +98,57 @@ type SessionReplayer struct {
 	outboundValidationIndex int
 	validatedOutbound       int
 	mu                      sync.Mutex
-	replayCtx               context.Context
 	cancel                  context.CancelFunc
 }
 
 const maxPendingReplayOutbound = 64
 
+// replayOutboundBuffer bounds the replayed server messages queued for the
+// session reader.
+const replayOutboundBuffer = 64
+
 var _ messages.Session = (*SessionReplayer)(nil)
 var _ messages.SessionSendOutcomeSender = (*SessionReplayer)(nil)
 
 // NewSessionReplayer creates a SessionReplayer from a capture file at the
-// given path. Version-2 captures are fully verified; retained version-1
+// given path. Replay delivery stops when ctx is cancelled. Version-2 captures are fully verified; retained version-1
 // captures are structurally validated and replayed with reduced-integrity
 // guarantees before any replay goroutines are created.
-func NewSessionReplayer(path string, opts ...SessionReplayerOption) (*SessionReplayer, error) {
+func NewSessionReplayer(ctx context.Context, path string, opts ...SessionReplayerOption) (*SessionReplayer, error) {
 	loaded, err := LoadSessionCaptureForReplay(path)
 	if err != nil {
 		return nil, err
 	}
-	return newSessionReplayer(loaded.Capture.Records, opts...), nil
+	return newSessionReplayer(ctx, loaded.Capture.Records, opts...), nil
 }
 
 // NewSessionReplayerFromBytes creates a SessionReplayer from raw protected
 // version-2 capture JSON bytes. It exists for callers that already own the
 // capture bytes; legacy bytes require NewSessionReplayerFromLegacyBytes.
-func NewSessionReplayerFromBytes(data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
+func NewSessionReplayerFromBytes(ctx context.Context, data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
 	capture, err := validateSessionCapturePath("", data)
 	if err != nil {
 		return nil, fmt.Errorf("parse session capture: %w", err)
 	}
-	return newSessionReplayer(capture.Records, opts...), nil
+	return newSessionReplayer(ctx, capture.Records, opts...), nil
 }
 
 // NewSessionReplayerFromLegacyBytes is an explicit compatibility seam for
 // callers that already own legacy bytes. The shipped path-based replay flow
 // uses LoadSessionCaptureForReplay instead, so it can validate the source path
 // and surface the reduced-integrity warning.
-func NewSessionReplayerFromLegacyBytes(data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
+func NewSessionReplayerFromLegacyBytes(ctx context.Context, data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
 	events, err := decodeLegacySessionCaptureEvents(data)
 	if err != nil {
 		return nil, fmt.Errorf("parse legacy session capture: %w", err)
 	}
-	return newSessionReplayer(events, opts...), nil
+	return newSessionReplayer(ctx, events, opts...), nil
 }
 
-func newSessionReplayer(events []CapturedSessionEvent, opts ...SessionReplayerOption) *SessionReplayer {
+func newSessionReplayer(parent context.Context, events []CapturedSessionEvent, opts ...SessionReplayerOption) *SessionReplayer {
 	r := &SessionReplayer{
 		events:   events,
-		outbound: messages.NewTypedBuffer[messages.StreamMessage](64),
+		outbound: messages.NewTypedBuffer[messages.StreamMessage](replayOutboundBuffer),
 		done:     make(chan struct{}),
 	}
 	r.validateOutbound = true
@@ -162,13 +156,11 @@ func newSessionReplayer(events []CapturedSessionEvent, opts ...SessionReplayerOp
 	for _, opt := range opts {
 		opt(r)
 	}
-	if r.replayCtx == nil {
-		r.replayCtx = context.Background()
-	}
-	r.replayCtx, r.cancel = context.WithCancel(r.replayCtx)
+	ctx, cancel := context.WithCancel(parent)
+	r.cancel = cancel
 
-	go r.watchReplayContext()
-	go r.replayLoop()
+	go r.watchReplayContext(ctx)
+	go r.replayLoop(ctx)
 
 	return r
 }
@@ -311,23 +303,23 @@ func (r *SessionReplayer) Outcome() SessionReplayOutcome {
 	return SessionReplayOutcome{Status: SessionReplayOpen}
 }
 
-func (r *SessionReplayer) replayLoop() {
+func (r *SessionReplayer) replayLoop(ctx context.Context) {
 	defer r.close()
 
 	var lastTimestamp int64
 	for {
-		evt, eventIndex, deliver, stop := r.nextReplayEvent()
+		evt, eventIndex, deliver, stop := r.nextReplayEvent(ctx)
 		if stop {
 			return
 		}
 		if !deliver {
 			continue
 		}
-		if !r.waitReplayTiming(evt.TimestampMs, lastTimestamp) {
+		if !r.waitReplayTiming(ctx, evt.TimestampMs, lastTimestamp) {
 			return
 		}
 		lastTimestamp = evt.TimestampMs
-		if !r.deliverReplayEvent(evt, eventIndex) {
+		if !r.deliverReplayEvent(ctx, evt, eventIndex) {
 			return
 		}
 	}
@@ -336,14 +328,14 @@ func (r *SessionReplayer) replayLoop() {
 // nextReplayEvent waits for the chronological cursor to reach a deliverable
 // server record. Client records consume their Send admission and are skipped
 // (deliver=false); stop reports that replay has finished or been cancelled.
-func (r *SessionReplayer) nextReplayEvent() (evt CapturedSessionEvent, eventIndex int, deliver, stop bool) {
+func (r *SessionReplayer) nextReplayEvent(ctx context.Context) (evt CapturedSessionEvent, eventIndex int, deliver, stop bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for r.awaitingOutboundAdmissionLocked() {
+	for r.awaitingOutboundAdmissionLocked(ctx) {
 		r.cond.Wait()
 	}
-	if !r.closed && r.err == nil && r.replayCtx.Err() != nil {
-		r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+	if !r.closed && r.err == nil && ctx.Err() != nil {
+		r.setOutcomeLocked(SessionReplayCancelled, ctx.Err())
 		return evt, 0, false, true
 	}
 	if r.closed || r.err != nil || r.index >= len(r.events) {
@@ -369,8 +361,8 @@ func (r *SessionReplayer) nextReplayEvent() (evt CapturedSessionEvent, eventInde
 
 // awaitingOutboundAdmissionLocked reports whether the cursor is parked on a
 // client record that Send has not yet validated and admitted.
-func (r *SessionReplayer) awaitingOutboundAdmissionLocked() bool {
-	if !r.validateOutbound || r.closed || r.err != nil || r.replayCtx.Err() != nil {
+func (r *SessionReplayer) awaitingOutboundAdmissionLocked(ctx context.Context) bool {
+	if !r.validateOutbound || r.closed || r.err != nil || ctx.Err() != nil {
 		return false
 	}
 	return r.index < len(r.events) && r.events[r.index].Direction == DirectionClientToServer && r.validatedOutbound == 0
@@ -378,16 +370,16 @@ func (r *SessionReplayer) awaitingOutboundAdmissionLocked() bool {
 
 // waitReplayTiming sleeps for the captured inter-event delay when timing is
 // enabled; it returns false when replay closed or was cancelled meanwhile.
-func (r *SessionReplayer) waitReplayTiming(timestampMs, lastTimestamp int64) bool {
+func (r *SessionReplayer) waitReplayTiming(ctx context.Context, timestampMs, lastTimestamp int64) bool {
 	if !r.useTiming || timestampMs <= lastTimestamp {
 		return true
 	}
 	select {
 	case <-r.done:
 		return false
-	case <-r.replayCtx.Done():
+	case <-ctx.Done():
 		r.mu.Lock()
-		r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+		r.setOutcomeLocked(SessionReplayCancelled, ctx.Err())
 		r.mu.Unlock()
 		return false
 	case <-time.After(time.Duration(timestampMs-lastTimestamp) * time.Millisecond):
@@ -397,7 +389,7 @@ func (r *SessionReplayer) waitReplayTiming(timestampMs, lastTimestamp int64) boo
 
 // deliverReplayEvent publishes one server record and advances the cursor; it
 // returns false when delivery stopped because replay closed or was cancelled.
-func (r *SessionReplayer) deliverReplayEvent(evt CapturedSessionEvent, eventIndex int) bool {
+func (r *SessionReplayer) deliverReplayEvent(ctx context.Context, evt CapturedSessionEvent, eventIndex int) bool {
 	msg, err := deserializeStreamMessage(evt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "session replayer: skipping event (type=%s): %v\n", evt.Type, err)
@@ -409,11 +401,11 @@ func (r *SessionReplayer) deliverReplayEvent(evt CapturedSessionEvent, eventInde
 	// backpressure. A dropped server event would falsely advance the
 	// capture cursor and let a later client send diverge. Client admission is
 	// tracked separately, so this wait cannot strand the sending goroutine.
-	outcome := r.outbound.WriteWaitContextOrDone(r.replayCtx, r.done, msg)
+	outcome := r.outbound.WriteWaitContextOrDone(ctx, r.done, msg)
 	if !outcome.OK() {
 		r.mu.Lock()
-		if r.replayCtx.Err() != nil {
-			r.setOutcomeLocked(SessionReplayCancelled, r.replayCtx.Err())
+		if ctx.Err() != nil {
+			r.setOutcomeLocked(SessionReplayCancelled, ctx.Err())
 		}
 		r.mu.Unlock()
 		return false
@@ -447,8 +439,8 @@ func (r *SessionReplayer) nextValidationOutboundLocked() (int, bool) {
 	return 0, false
 }
 
-func (r *SessionReplayer) watchReplayContext() {
-	<-r.replayCtx.Done()
+func (r *SessionReplayer) watchReplayContext(ctx context.Context) {
+	<-ctx.Done()
 	r.mu.Lock()
 	r.cond.Broadcast()
 	r.mu.Unlock()

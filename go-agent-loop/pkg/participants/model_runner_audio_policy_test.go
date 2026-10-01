@@ -66,7 +66,7 @@ func TestSessionModelRunnerWaitingAudioIngressBackpressuresUntilCapacity(t *test
 	runner := NewSessionModelRunner(nil, 8, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	for i := 0; i < cap(runner.ingress.ordered); i++ {
+	for i := range cap(runner.ingress.ordered) {
 		if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{byte(i)}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
 		}
@@ -83,7 +83,7 @@ func TestSessionModelRunnerWaitingAudioIngressBackpressuresUntilCapacity(t *test
 
 func fillSessionIngress(t *testing.T, runner *ModelRunner) {
 	t.Helper()
-	for i := 0; i < cap(runner.ingress.ordered); i++ {
+	for i := range cap(runner.ingress.ordered) {
 		if err := runner.EnqueueSessionInput(t.Context(), SessionAudio([]byte{byte(i)}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 			t.Fatalf("fill ordered session ingress at %d: %v", i, err)
 		}
@@ -174,7 +174,7 @@ func TestSessionModelRunnerStopReleasesParkedWaitingAdmissions(t *testing.T) {
 func TestSessionModelRunnerWaitingEventIngressHonorsCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		runner := NewSessionModelRunner(nil, 8, nil)
-		for i := 0; i < cap(runner.ingress.ordered); i++ {
+		for i := range cap(runner.ingress.ordered) {
 			if err := runner.EnqueueSessionInput(t.Context(), SessionAudio([]byte{byte(i)}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
 				t.Fatalf("fill ordered session ingress at %d: %v", i, err)
 			}
@@ -439,7 +439,7 @@ type pacedRecordingSession struct {
 
 func (s *pacedRecordingSession) Send(ctx context.Context, msg messages.StreamMessage) bool {
 	if msg.Type == messages.StreamTypeAudioDelta {
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(30 * time.Millisecond) //nolint:forbidigo // Runs inside a synctest bubble: models transport pacing in virtual time; no wall-clock wait.
 	}
 	if msg.Type == messages.StreamTypeResponseCancel {
 		s.cancels <- time.Now()
@@ -480,7 +480,7 @@ func TestSessionModelRunner_InterruptOvertakesQueuedAudioAcrossLongSession(t *te
 			}
 			latency = append(latency, (<-session.cancels).Sub(pressed))
 			session.recv.Write(ctx, messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ResponseID: id, Value: messages.NewMessageEndValue(messages.TokenUsage{})})
-			time.Sleep(3 * time.Second) // the transport drains the queued audio
+			time.Sleep(3 * time.Second) //nolint:forbidigo // Inside a synctest bubble: the transport drains the queued audio in virtual time.
 		}
 		stop()
 		<-ran

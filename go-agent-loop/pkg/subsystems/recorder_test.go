@@ -54,7 +54,7 @@ func TestRecorder_RecordsEveryTick_IntervalZero(t *testing.T) {
 	r := NewRecorder(mock, 0)
 	ls := newRecorderTestState(messages.NewTextMessage(messages.RoleUser, "hello"))
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := r.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("tick %d: unexpected error: %v", i, err)
 		}
@@ -70,7 +70,7 @@ func TestRecorder_RecordsEveryTick_IntervalOne(t *testing.T) {
 	r := NewRecorder(mock, 1)
 	ls := newRecorderTestState(messages.NewTextMessage(messages.RoleUser, "hello"))
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := r.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("tick %d: unexpected error: %v", i, err)
 		}
@@ -90,7 +90,7 @@ func TestRecorder_SkipsTicks_IntervalThree(t *testing.T) {
 	ls := newRecorderTestState(messages.NewTextMessage(messages.RoleUser, "hello"))
 
 	// Ticks 1..6; tickCount%3 == 0 at ticks 3 and 6.
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if err := r.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("tick %d: unexpected error: %v", i, err)
 		}
@@ -107,7 +107,7 @@ func TestRecorder_NoRecordBeforeInterval(t *testing.T) {
 	ls := newRecorderTestState(messages.NewTextMessage(messages.RoleUser, "hello"))
 
 	// Execute 4 ticks — none should trigger (first trigger is at tick 5).
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		if err := r.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("tick %d: unexpected error: %v", i, err)
 		}
@@ -221,7 +221,7 @@ func TestRecorder_TickCounterAccumulates(t *testing.T) {
 	ls := newRecorderTestState(messages.NewTextMessage(messages.RoleUser, "hello"))
 
 	// 3 ticks → 1 record (at tick 3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := r.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("Execute: %v", err)
 		}
@@ -231,7 +231,7 @@ func TestRecorder_TickCounterAccumulates(t *testing.T) {
 	}
 
 	// 3 more ticks → 1 more record (at tick 6)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := r.Execute(context.Background(), ls); err != nil {
 			t.Fatalf("Execute: %v", err)
 		}

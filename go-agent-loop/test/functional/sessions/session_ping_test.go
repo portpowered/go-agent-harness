@@ -70,7 +70,7 @@ func TestSessionPingDuringAudio(t *testing.T) {
 	}
 
 	// Start audio and include a text delta so model runner is active.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},
 	})

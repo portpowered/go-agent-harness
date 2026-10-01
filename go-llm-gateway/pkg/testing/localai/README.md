@@ -1,14 +1,14 @@
 # LocalAI endpoint helper
 
-`Endpoint` is intended for opt-in realtime tests. It returns the exact URL it
+`Prober.Endpoint` is intended for opt-in realtime tests built with the `live` tag. It returns the exact URL it
 attempted and probes for a `session.created` WebSocket event before reporting
 that the server is ready.
 
 ```go
 func TestLocalAIRealtime(t *testing.T) {
-	wsURL, ok := localai.Endpoint(t)
+	wsURL, ok := localai.NewProber().Endpoint(t)
 	if !ok {
-		t.Skipf("LocalAI realtime endpoint %s is unavailable; start it with: docker compose -f deploy/localai/docker-compose.yml up -d", wsURL)
+		t.Fatalf("LocalAI realtime endpoint %s is unavailable; start it with: docker compose -f deploy/localai/docker-compose.yml up -d", wsURL)
 	}
 
 	// Use wsURL for the live protocol exchange.
@@ -21,8 +21,8 @@ The default endpoint is
 
 ## Live audio proof
 
-`TestLocalAIRealtimeAudio` uses the helper above and skips when the endpoint is
-absent. When the fixture is running, it opens a second raw WebSocket, waits for
+`TestLocalAIRealtimeAudio` uses the helper above, runs only with `-tags live`, and fails
+when the endpoint is absent. When the fixture is running, it opens a second raw WebSocket, waits for
 `session.created`, declares 16 kHz input and PCM16 output, appends a
 deterministic PCM16 utterance in 100 ms chunks, commits it, and sends
 the LocalAI turn. LocalAI generates the response from that committed turn.
@@ -34,7 +34,7 @@ the WebSocket protocol fails within the test deadline. Dial, read, and write
 operations are bounded to 15 seconds each, with a 60-second overall limit to
 allow a ready fixture to rehydrate its component backends once.
 
-The skipped test names the exact attempted endpoint and start command:
+The failing test names the exact attempted endpoint and start command:
 
 ```text
 docker compose -f deploy/localai/docker-compose.yml up -d

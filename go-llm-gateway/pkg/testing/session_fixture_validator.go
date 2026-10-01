@@ -21,40 +21,6 @@ const (
 	SessionFixtureProvenanceSyntheticFailure = "synthetic_failure"
 )
 
-var providerWireEventTypes = map[string]struct{}{
-	string(models.SessionEventSessionUpdate):                                    {},
-	"conversation.item.create":                                                  {},
-	string(models.SessionEventInputAudioBufferAppend):                           {},
-	string(models.SessionEventInputAudioBufferCommit):                           {},
-	string(models.SessionEventInputAudioBufferClear):                            {},
-	string(models.SessionEventResponseCreate):                                   {},
-	string(models.SessionEventResponseCancel):                                   {},
-	string(models.SessionEventSessionCreated):                                   {},
-	string(models.SessionEventSessionUpdated):                                   {},
-	string(models.SessionEventInputAudioBufferSpeechStarted):                    {},
-	string(models.SessionEventInputAudioBufferSpeechStopped):                    {},
-	string(models.SessionEventResponseCreated):                                  {},
-	string(models.SessionEventResponseDone):                                     {},
-	string(models.SessionEventResponseOutputAudioDelta):                         {},
-	string(models.SessionEventResponseOutputAudioDone):                          {},
-	string(models.SessionEventResponseOutputAudioTranscriptDelta):               {},
-	string(models.SessionEventResponseOutputAudioTranscriptDone):                {},
-	string(models.SessionEventConversationItemInputAudioTranscriptionDelta):     {},
-	string(models.SessionEventConversationItemInputAudioTranscriptionCompleted): {},
-	string(models.SessionEventResponseTextDelta):                                {},
-	string(models.SessionEventResponseTextDone):                                 {},
-	"response.audio.delta":                                                      {},
-	"response.audio.done":                                                       {},
-	"response.audio_transcript.delta":                                           {},
-	"response.audio_transcript.done":                                            {},
-	"response.text.delta":                                                       {},
-	"response.text.done":                                                        {},
-	string(models.SessionEventResponseFunctionCallArgumentsDelta):               {},
-	string(models.SessionEventResponseFunctionCallArgumentsDone):                {},
-	string(models.SessionEventResponseOutputItemAdded):                          {},
-	string(models.SessionEventError):                                            {},
-}
-
 // SessionFixtureValidationError describes one fixture hygiene violation.
 type SessionFixtureValidationError struct {
 	File      string
@@ -168,9 +134,45 @@ func walkFixturePayload(value any, path string, visitKey func(path, key string, 
 	}
 }
 
+// isProviderWireEventType reports whether eventType is a provider wire event
+// a committed session fixture may carry.
 func isProviderWireEventType(eventType string) bool {
-	_, ok := providerWireEventTypes[eventType]
-	return ok
+	switch eventType {
+	case string(models.SessionEventSessionUpdate),
+		"conversation.item.create",
+		string(models.SessionEventInputAudioBufferAppend),
+		string(models.SessionEventInputAudioBufferCommit),
+		string(models.SessionEventInputAudioBufferClear),
+		string(models.SessionEventResponseCreate),
+		string(models.SessionEventResponseCancel),
+		string(models.SessionEventSessionCreated),
+		string(models.SessionEventSessionUpdated),
+		string(models.SessionEventInputAudioBufferSpeechStarted),
+		string(models.SessionEventInputAudioBufferSpeechStopped),
+		string(models.SessionEventResponseCreated),
+		string(models.SessionEventResponseDone),
+		string(models.SessionEventResponseOutputAudioDelta),
+		string(models.SessionEventResponseOutputAudioDone),
+		string(models.SessionEventResponseOutputAudioTranscriptDelta),
+		string(models.SessionEventResponseOutputAudioTranscriptDone),
+		string(models.SessionEventConversationItemInputAudioTranscriptionDelta),
+		string(models.SessionEventConversationItemInputAudioTranscriptionCompleted),
+		string(models.SessionEventResponseTextDelta),
+		string(models.SessionEventResponseTextDone),
+		"response.audio.delta",
+		"response.audio.done",
+		"response.audio_transcript.delta",
+		"response.audio_transcript.done",
+		"response.text.delta",
+		"response.text.done",
+		string(models.SessionEventResponseFunctionCallArgumentsDelta),
+		string(models.SessionEventResponseFunctionCallArgumentsDone),
+		string(models.SessionEventResponseOutputItemAdded),
+		string(models.SessionEventError):
+		return true
+	default:
+		return false
+	}
 }
 
 func isRawAudioField(key string, value any) bool {

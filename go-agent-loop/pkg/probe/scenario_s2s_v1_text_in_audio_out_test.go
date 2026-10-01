@@ -4,7 +4,7 @@ import "testing"
 
 func registeredS2SV1TextInAudioOut(t *testing.T) Scenario {
 	t.Helper()
-	for _, scenario := range Scenarios() {
+	for _, scenario := range builtinScenarios(t) {
 		if scenario.ID == "s2s-v1-text-in-audio-out" {
 			return scenario
 		}

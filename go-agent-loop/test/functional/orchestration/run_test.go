@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -20,18 +21,54 @@ import (
 type safeBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
+	// changed is closed and replaced on every Write so waiters block on a
+	// signal instead of polling.
+	changed chan struct{}
 }
 
 func (b *safeBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.buf.Write(p)
+	n, err := b.buf.Write(p)
+	if b.changed != nil {
+		close(b.changed)
+		b.changed = nil
+	}
+	return n, err
 }
 
 func (b *safeBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+// snapshot returns the buffered text and a channel closed by the next Write.
+func (b *safeBuffer) snapshot() (string, <-chan struct{}) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.changed == nil {
+		b.changed = make(chan struct{})
+	}
+	return b.buf.String(), b.changed
+}
+
+// waitFor blocks until the buffer contains want or timeout elapses, and
+// reports whether want appeared.
+func (b *safeBuffer) waitFor(want string, timeout time.Duration) bool {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		text, changed := b.snapshot()
+		if strings.Contains(text, want) {
+			return true
+		}
+		select {
+		case <-changed:
+		case <-deadline.C:
+			return false
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +84,6 @@ type RunScenario struct {
 	Inf      *MockInferencer
 	Tool     *MockToolExecutor
 	Output   *safeBuffer
-	ctx      context.Context
 	cancel   context.CancelFunc
 	runErr   chan error
 	stopOnce sync.Once
@@ -82,7 +118,6 @@ func NewRunScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, o
 		Inf:    inf,
 		Tool:   tool,
 		Output: out,
-		ctx:    ctx,
 		cancel: cancel,
 		runErr: make(chan error, 1),
 	}
@@ -105,23 +140,16 @@ func NewRunScenario(t *testing.T, inf *MockInferencer, tool *MockToolExecutor, o
 func (rs *RunScenario) Send(message string) {
 	rs.t.Helper()
 	msg := messages.NewTextMessage(messages.RoleUser, message)
-	if err := rs.Loop.Send(rs.ctx, []messages.Message{msg}); err != nil {
+	if err := rs.Loop.Send(rs.t.Context(), []messages.Message{msg}); err != nil {
 		rs.t.Fatalf("RunScenario.Send(%q): %v", message, err)
 	}
 }
 
-// WaitForOutput polls until the output buffer contains want or timeout elapses.
+// WaitForOutput waits until the output buffer contains want or timeout elapses.
 // Returns true if the text appeared within the deadline.
 func (rs *RunScenario) WaitForOutput(want string, timeout time.Duration) bool {
 	rs.t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if s := rs.Output.String(); len(s) >= len(want) && containsString(s, want) {
-			return true
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return false
+	return rs.Output.waitFor(want, timeout)
 }
 
 // Stop cancels the loop context and waits for Run to return. It is idempotent;
@@ -377,13 +405,8 @@ func TestRun_MultipleOutputWriters(t *testing.T) {
 		t.Fatalf("Send: %v", err)
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if containsString(out1.String(), modelResp) && containsString(out2.String(), modelResp) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	out1.waitFor(modelResp, 5*time.Second)
+	out2.waitFor(modelResp, 5*time.Second)
 
 	if !containsString(out1.String(), modelResp) {
 		t.Errorf("out1: got %q, want %q", out1.String(), modelResp)

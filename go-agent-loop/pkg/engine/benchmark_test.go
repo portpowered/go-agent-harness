@@ -32,7 +32,7 @@ func newBenchDeltas(textChunks int) []messages.StreamMessage {
 	deltas := make([]messages.StreamMessage, 0, textChunks+4)
 	deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeMessageStart, Role: messages.RoleAssistant, Value: messages.NewMessageStartValue()})
 	deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeTextStart, Role: messages.RoleAssistant, Value: messages.NewTextStartValue()})
-	for i := 0; i < textChunks; i++ {
+	for range textChunks {
 		deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("chunk ")})
 	}
 	deltas = append(deltas, messages.StreamMessage{Type: messages.StreamTypeTextEnd, Role: messages.RoleAssistant, Value: messages.NewTextEndValue()})
@@ -41,7 +41,7 @@ func newBenchDeltas(textChunks int) []messages.StreamMessage {
 }
 
 // newBenchEngineWithCap creates a minimal engine with the given buffer capacity.
-func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *participants.ToolRunner, *participants.UserRunner, *participants.KernelRunner) {
+func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *participants.UserRunner) {
 	modelRunner := participants.NewModelRunner(&noopInferencer{}, bufCap)
 	toolRunner := participants.NewToolRunner(&messages.DefaultToolExecutor{}, bufCap)
 	userRunner := participants.NewUserRunner(bufCap)
@@ -52,7 +52,7 @@ func newBenchEngineWithCap(bufCap int) (*Engine, *participants.ModelRunner, *par
 	hlps := []subsystems.Subsystem{coord, coordDelta}
 
 	eng := NewEngine(ModeAskOnce, nil, hlps, modelRunner, toolRunner, userRunner, kernelRunner, nil)
-	return eng, modelRunner, toolRunner, userRunner, kernelRunner
+	return eng, modelRunner, userRunner
 }
 
 // --- ReadTick throughput benchmarks ---
@@ -64,19 +64,19 @@ func BenchmarkReadTick(b *testing.B) {
 		b.Run(fmt.Sprintf("history=%d", preload), func(b *testing.B) {
 			// Buffer capacity must be >= b.N so all pre-filled writes succeed.
 			bufCap := b.N + 1
-			eng, modelRunner, _, userRunner, _ := newBenchEngineWithCap(bufCap)
+			eng, modelRunner, userRunner := newBenchEngineWithCap(bufCap)
 			ordering := NewGlobalOrdering(modelRunner, nil, userRunner, nil)
 			ctx := context.Background()
 			ls := eng.State().LoopState
 
-			for i := 0; i < preload; i++ {
+			for i := range preload {
 				ls.History.ConversationBuffer = append(
 					ls.History.ConversationBuffer,
 					messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("message %d", i)),
 				)
 			}
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				modelRunner.DeltaOutbox.Write(ctx, messages.StreamMessage{
 					Type:  messages.StreamTypeTextDelta,
 					Role:  messages.RoleAssistant,
@@ -85,7 +85,7 @@ func BenchmarkReadTick(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				if err := ordering.ReadTick(ctx, ls); err != nil {
 					b.Fatal(err)
 				}
@@ -101,11 +101,11 @@ func BenchmarkReadTick(b *testing.B) {
 func BenchmarkUpdateWorldHistory(b *testing.B) {
 	for _, histLen := range []int{0, 10, 50, 200} {
 		b.Run(fmt.Sprintf("history=%d", histLen), func(b *testing.B) {
-			eng, modelRunner, _, userRunner, _ := newBenchEngineWithCap(64)
+			eng, modelRunner, userRunner := newBenchEngineWithCap(64)
 			ordering := NewGlobalOrdering(modelRunner, nil, userRunner, nil)
 			ls := eng.State().LoopState
 
-			for i := 0; i < histLen; i++ {
+			for range histLen {
 				ls.History.ConversationBuffer = append(
 					ls.History.ConversationBuffer,
 					messages.NewTextMessage(messages.RoleUser, "msg"),
@@ -119,7 +119,7 @@ func BenchmarkUpdateWorldHistory(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				ls.Inputs.ModelInputDelta = append(ls.Inputs.ModelInputDelta[:0], delta)
 				ordering.UpdateWorldHistory(ls)
 				ls.History.CurrentModelDeltaCount = 0
@@ -136,10 +136,10 @@ func BenchmarkUpdateWorldHistory(b *testing.B) {
 // UpdateWorldHistory + executeWorldState + FlushInputs.
 func BenchmarkFullTickCycle(b *testing.B) {
 	bufCap := b.N + 1
-	eng, modelRunner, _, _, _ := newBenchEngineWithCap(bufCap)
+	eng, modelRunner, _ := newBenchEngineWithCap(bufCap)
 	ctx := context.Background()
 
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		modelRunner.DeltaOutbox.Write(ctx, messages.StreamMessage{
 			Type:  messages.StreamTypeTextDelta,
 			Role:  messages.RoleAssistant,
@@ -148,7 +148,7 @@ func BenchmarkFullTickCycle(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		if err := eng.Tick(ctx); err != nil {
 			b.Fatal(err)
 		}
@@ -178,7 +178,7 @@ func BenchmarkExecute(b *testing.B) {
 			eng := NewEngine(ModeAskOnce, nil, hlps, modelRunner, toolRunner, userRunner, kernelRunner, nil)
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				b.StopTimer()
 
 				ls := eng.State().LoopState

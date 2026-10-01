@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,7 +22,7 @@ import (
 type MockSession = sessionmock.Session
 type MockSessionInferencer = sessionmock.Inferencer
 
-var NewMockSessionInferencer = sessionmock.NewInferencer
+func NewMockSessionInferencer() *sessionmock.Inferencer { return sessionmock.NewInferencer() }
 
 // SessionTranscript is a scenario-local, concurrency-safe transcript
 // collector. It implements transcript.RecordSink so callers can provide it to
@@ -108,17 +109,13 @@ type SessionScenario struct {
 // needed alongside those loop options.
 func NewSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, opts ...agentloop.Option) *SessionScenario {
 	t.Helper()
-	return newSessionScenario(t, inf, tool, SessionScenarioOptions{}, opts...)
+	return NewSessionScenarioWithConfig(t, inf, tool, SessionScenarioOptions{}, opts...)
 }
 
 // NewSessionScenarioWithConfig is the typed constructor for callers that keep
 // agentloop options in a typed slice.
 func NewSessionScenarioWithConfig(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
 	t.Helper()
-	return newSessionScenario(t, inf, tool, options, opts...)
-}
-
-func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockToolExecutor, options SessionScenarioOptions, opts ...agentloop.Option) *SessionScenario {
 	allOpts := []agentloop.Option{
 		agentloop.WithSessionInferencer(inf),
 		agentloop.WithToolExecutor(tool),
@@ -153,7 +150,7 @@ func newSessionScenario(t *testing.T, inf *MockSessionInferencer, tool *MockTool
 func (s *SessionScenario) Start() {
 	s.t.Helper()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.t.Context())
 	s.cancel = cancel
 	s.runDone = make(chan struct{})
 
@@ -201,25 +198,17 @@ const sessionOpenWait = 50 * time.Millisecond
 
 // SendControlPlane sends a control plane message to the session (e.g. session_close, stop, ping).
 func (s *SessionScenario) SendControlPlane(cpType messages.ControlPlaneMessageType) {
-	msg := messages.Message{
-		Role: messages.RoleUser,
-		ContentParts: []messages.ContentPart{
-			messages.ControlPlanePart{ControlPlaneMessageType: cpType},
-		},
-	}
-	if err := s.Loop.Send(context.Background(), []messages.Message{msg}); err != nil {
-		s.t.Fatalf("SessionScenario.SendControlPlane: %v", err)
-	}
-	if s.capture != nil {
-		s.capture.clientToAgent(transcript.StreamWS, messagePayload(msg))
-	}
+	part := messages.ControlPlanePart{ControlPlaneMessageType: cpType}
+	s.sendMessage(s.t.Context(), messages.Message{Role: messages.RoleUser, ContentParts: []messages.ContentPart{part}})
 }
 
-// SendAudioInput sends raw PCM audio to the session loop for user audio forwarding
-// and barge-in. Panics if the loop is not in session mode.
-func (s *SessionScenario) SendAudioInput(pcm []byte) {
+// SendAudioInput sends raw PCM audio to the session loop (forwarding, barge-in).
+func (s *SessionScenario) SendAudioInput(pcm []byte) { s.SendAudioInputContext(s.t.Context(), pcm) }
+
+// SendAudioInputContext is SendAudioInput bounded by ctx.
+func (s *SessionScenario) SendAudioInputContext(ctx context.Context, pcm []byte) {
 	s.t.Helper()
-	if err := s.Loop.SendAudioInput(context.Background(), pcm); err != nil {
+	if err := s.Loop.SendAudioInput(ctx, pcm); err != nil {
 		s.t.Fatalf("SessionScenario.SendAudioInput: %v", err)
 	}
 	if s.capture != nil {
@@ -228,10 +217,18 @@ func (s *SessionScenario) SendAudioInput(pcm []byte) {
 }
 
 // SendText sends a text message to the session.
-func (s *SessionScenario) SendText(text string) {
-	msg := messages.NewTextMessage(messages.RoleUser, text)
-	if err := s.Loop.Send(context.Background(), []messages.Message{msg}); err != nil {
-		s.t.Fatalf("SessionScenario.SendText: %v", err)
+func (s *SessionScenario) SendText(text string) { s.SendTextContext(s.t.Context(), text) }
+
+// SendTextContext is SendText bounded by ctx.
+func (s *SessionScenario) SendTextContext(ctx context.Context, text string) {
+	s.sendMessage(ctx, messages.NewTextMessage(messages.RoleUser, text))
+}
+
+// sendMessage sends msg to the session and records it on the capture.
+func (s *SessionScenario) sendMessage(ctx context.Context, msg messages.Message) {
+	s.t.Helper()
+	if err := s.Loop.Send(ctx, []messages.Message{msg}); err != nil {
+		s.t.Fatalf("SessionScenario.Send: %v", err)
 	}
 	if s.capture != nil {
 		s.capture.clientToAgent(transcript.StreamWS, messagePayload(msg))
@@ -367,8 +364,8 @@ func AssertSessionDeltaContains(t *testing.T, deltas []messages.StreamMessage, r
 // SESSION.CLOSE + LOOP.END are the final events in correct order.
 func AssertSessionLifecycle(t *testing.T, deltas []messages.StreamMessage) {
 	t.Helper()
-	if len(deltas) < 3 {
-		t.Fatalf("expected at least 3 delta events (SESSION.OPEN, SESSION.CLOSE, LOOP.END), got %d", len(deltas))
+	if lifecycle := []messages.StreamMessageType{messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeLoopEnd}; len(deltas) < len(lifecycle) {
+		t.Fatalf("expected at least %d delta events %v, got %d", len(lifecycle), lifecycle, len(deltas))
 	}
 
 	if deltas[0].Type != messages.StreamTypeSessionOpen {
@@ -544,13 +541,12 @@ func marshalPayload(value any, fallback []byte) []byte {
 }
 
 func streamForDelta(delta messages.StreamMessage) transcript.Stream {
-	switch delta.Type {
-	case messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
-		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped:
+	audio := []messages.StreamMessageType{messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
+		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped}
+	if slices.Contains(audio, delta.Type) {
 		return transcript.StreamRTCAudio
-	default:
-		return transcript.StreamWS
 	}
+	return transcript.StreamWS
 }
 
 func cloneTranscriptRecords(records []transcript.Record) []transcript.Record {

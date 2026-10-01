@@ -21,31 +21,44 @@ const londonWeatherReply = "The weather in London is sunny."
 type recordingToolSession struct {
 	mu   sync.Mutex
 	sent []messages.StreamMessage
-	recv *messages.TypedBuffer[messages.StreamMessage]
-	done chan struct{}
-	once sync.Once
+	// changed is closed and replaced on every Send, so waiters block on a
+	// signal instead of polling.
+	changed chan struct{}
+	recv    *messages.TypedBuffer[messages.StreamMessage]
+	done    chan struct{}
+	once    sync.Once
 }
 
 func newRecordingToolSession() *recordingToolSession {
 	return &recordingToolSession{
-		recv: messages.NewTypedBuffer[messages.StreamMessage](64),
-		done: make(chan struct{}),
+		recv:    messages.NewTypedBuffer[messages.StreamMessage](64),
+		done:    make(chan struct{}),
+		changed: make(chan struct{}),
 	}
 }
 
 func (s *recordingToolSession) Send(_ context.Context, msg messages.StreamMessage) bool {
 	s.mu.Lock()
 	s.sent = append(s.sent, msg)
+	close(s.changed)
+	s.changed = make(chan struct{})
 	s.mu.Unlock()
 	return true
 }
 
 func (s *recordingToolSession) sentMessages() []messages.StreamMessage {
+	sent, _ := s.sentSnapshot()
+	return sent
+}
+
+// sentSnapshot returns the sent messages and a channel closed by the next
+// Send.
+func (s *recordingToolSession) sentSnapshot() ([]messages.StreamMessage, <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]messages.StreamMessage, len(s.sent))
 	copy(out, s.sent)
-	return out
+	return out, s.changed
 }
 
 func (s *recordingToolSession) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recv }
@@ -86,21 +99,24 @@ func (e *cannedExecutor) callIDs() []string {
 
 func waitForSentCount(t *testing.T, s *recordingToolSession, typ messages.StreamMessageType, n int) []messages.StreamMessage {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
 	for {
+		sent, changed := s.sentSnapshot()
 		matches := 0
-		for _, msg := range s.sentMessages() {
+		for _, msg := range sent {
 			if msg.Type == typ {
 				matches++
 			}
 		}
 		if matches >= n {
-			return s.sentMessages()
+			return sent
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %d %s sends, got %d of %d total", n, typ, matches, len(s.sentMessages()))
+		select {
+		case <-changed:
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for %d %s sends, got %d of %d total", n, typ, matches, len(sent))
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -236,7 +252,7 @@ func TestDuplexSession_ToolResultsForwardedToSessionSinkOnceInOrder(t *testing.T
 	cancel()
 	select {
 	case err := <-runErr:
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("Run error = %v", err)
 		}
 	case <-time.After(2 * time.Second):

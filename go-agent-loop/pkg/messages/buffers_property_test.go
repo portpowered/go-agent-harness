@@ -3,7 +3,7 @@ package messages
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -87,6 +87,7 @@ type fuzzBufferHarness struct {
 }
 
 func newFuzzBufferHarness(t *testing.T, capacity, inputLen int) *fuzzBufferHarness {
+	t.Helper()
 	h := &fuzzBufferHarness{
 		t:                      t,
 		buffer:                 NewTypedBuffer[fuzzBufferValue](capacity),
@@ -258,7 +259,7 @@ type concurrentBufferValue struct {
 }
 
 func TestTypedBufferConcurrentProducersConsumers(t *testing.T) {
-	for iteration := 0; iteration < concurrentBufferIterations; iteration++ {
+	for iteration := range concurrentBufferIterations {
 		runTypedBufferConcurrentIteration(t, iteration)
 	}
 }
@@ -269,7 +270,7 @@ func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 
 	var producerWG sync.WaitGroup
 	producerWG.Add(concurrentProducerCount)
-	for producer := 0; producer < concurrentProducerCount; producer++ {
+	for producer := range concurrentProducerCount {
 		go func(producer int) {
 			defer producerWG.Done()
 			run.produce(producer)
@@ -278,7 +279,7 @@ func runTypedBufferConcurrentIteration(t *testing.T, iteration int) {
 
 	var consumerWG sync.WaitGroup
 	consumerWG.Add(concurrentConsumerCount)
-	for consumer := 0; consumer < concurrentConsumerCount; consumer++ {
+	for consumer := range concurrentConsumerCount {
 		go func(consumer int) {
 			defer consumerWG.Done()
 			run.consume(consumer)
@@ -330,24 +331,24 @@ func newConcurrentBufferRun(iteration int) *concurrentBufferRun {
 }
 
 func (run *concurrentBufferRun) produce(producer int) {
-	rng := rand.New(rand.NewSource(int64(0x51f15e + run.iteration*97 + producer*13)))
-	for sequence := 0; sequence < concurrentValuesPerProducer; sequence++ {
-		if rng.Intn(3) == 0 {
+	rng := rand.New(rand.NewPCG(uint64(0x51f15e+run.iteration*97+producer*13), 0))
+	for sequence := range concurrentValuesPerProducer {
+		if rng.IntN(3) == 0 {
 			runtime.Gosched()
 		}
 		value := concurrentBufferValueFor(run.iteration, producer, sequence)
 		run.statuses[producer][sequence] = run.buffer.WriteContext(context.Background(), value).Status
 		recordBufferMaxLen(run.buffer, &run.maxLen)
-		if rng.Intn(4) == 0 {
+		if rng.IntN(4) == 0 {
 			runtime.Gosched()
 		}
 	}
 }
 
 func (run *concurrentBufferRun) consume(consumer int) {
-	rng := rand.New(rand.NewSource(int64(0x9e3779b9 + run.iteration*101 + consumer*17)))
+	rng := rand.New(rand.NewPCG(uint64(0x9e3779b9+run.iteration*101+consumer*17), 0))
 	for {
-		if rng.Intn(3) == 0 {
+		if rng.IntN(3) == 0 {
 			runtime.Gosched()
 		}
 
@@ -365,7 +366,7 @@ func (run *concurrentBufferRun) consume(consumer int) {
 		run.delivered = append(run.delivered, value)
 		recordBufferMaxLen(run.buffer, &run.maxLen)
 		run.deliveryMu.Unlock()
-		if rng.Intn(4) == 0 {
+		if rng.IntN(4) == 0 {
 			runtime.Gosched()
 		}
 	}
@@ -466,7 +467,7 @@ func recordBufferMaxLen[T any](buffer *TypedBuffer[T], maxLen *atomic.Int64) {
 }
 
 func TestTypedBufferCloseDuringWrite(t *testing.T) {
-	for iteration := 0; iteration < cancellationRaceIterations; iteration++ {
+	for iteration := range cancellationRaceIterations {
 		buffer := NewTypedBuffer[int](1)
 		var dropCount atomic.Int64
 		buffer.SetOnDrop(func(_ int) {
@@ -502,8 +503,10 @@ func TestTypedBufferCloseDuringWrite(t *testing.T) {
 			if _, ok := buffer.Read(); ok {
 				t.Fatalf("cancelled concurrent write left a value at iteration %d", iteration)
 			}
-		default:
+		case BufferWriteTimedOut, BufferWriteBufferFull, BufferWriteStopped:
 			t.Fatalf("concurrent write returned unexpected outcome %+v at iteration %d", outcome, iteration)
+		default:
+			t.Fatalf("concurrent write returned unknown outcome %+v at iteration %d", outcome, iteration)
 		}
 
 		postClosed := buffer.WriteContext(ctx, iteration+1000)
@@ -522,7 +525,7 @@ type typedBufferReadResult[T any] struct {
 }
 
 func TestTypedBufferCloseDuringRead(t *testing.T) {
-	for iteration := 0; iteration < cancellationRaceIterations; iteration++ {
+	for iteration := range cancellationRaceIterations {
 		buffer := NewTypedBuffer[int](1)
 		done := make(chan struct{})
 		started := make(chan struct{})

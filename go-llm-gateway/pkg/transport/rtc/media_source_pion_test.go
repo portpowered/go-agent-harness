@@ -25,7 +25,7 @@ func TestVisualLookPreservesCallerDeadlineIdentityWhenTrackNeverAttaches(t *test
 }
 
 func TestVisualObservationAndLookAliasContracts(t *testing.T) {
-	var nilContext context.Context
+	callerContext := t.Context()
 	available := VisualObservation{Status: VisualObservationAvailable, Bytes: []byte{1}}
 	if !available.Available() {
 		t.Fatal("non-empty available observation was not available")
@@ -40,12 +40,12 @@ func TestVisualObservationAndLookAliasContracts(t *testing.T) {
 	}
 
 	var nilStream *MediaStream
-	observation, err := nilStream.Look(nilContext)
+	observation, err := nilStream.Look(callerContext)
 	if err != nil || observation.Source != "" || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack {
 		t.Fatalf("nil stream look = %#v, error = %v", observation, err)
 	}
 	fallback := &MediaStream{Capabilities: MediaCapabilities{Source: "fallback-source"}}
-	observation, err = fallback.Observe(nilContext)
+	observation, err = fallback.Observe(callerContext)
 	if err != nil || observation.Source != "fallback-source" || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack {
 		t.Fatalf("fallback stream observe = %#v, error = %v", observation, err)
 	}
@@ -60,14 +60,6 @@ func TestVisualObservationAndLookAliasContracts(t *testing.T) {
 		t.Fatalf("delegated stream observe = %#v, error = %v", observation, err)
 	}
 
-	visualContext, cancel := boundedVisualContext(nilContext)
-	if visualContext == nil {
-		t.Fatal("nil visual context was not replaced")
-	}
-	cancel()
-	if err := callerContextError(nilContext); err != nil {
-		t.Fatalf("nil caller context error = %v", err)
-	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	if !errors.Is(callerContextError(canceled), context.Canceled) {
@@ -95,9 +87,9 @@ func TestVisualObservationAndLookAliasContracts(t *testing.T) {
 }
 
 func TestPionInboundLookHandlesNilTrackStates(t *testing.T) {
-	var nilContext context.Context
+	callerContext := t.Context()
 	noTrack := newPionInbound(nil, "no-track")
-	observation, err := noTrack.Look(nilContext)
+	observation, err := noTrack.Look(callerContext)
 	if err != nil || observation.Source != "no-track" || observation.Status != VisualObservationUnavailable || observation.Reason != VisualObservationReasonNoVideoTrack {
 		t.Fatalf("nil-context no-track look = %#v, error = %v", observation, err)
 	}

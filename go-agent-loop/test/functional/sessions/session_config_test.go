@@ -41,13 +41,13 @@ func TestSessionConfigSentOnSessionCreated(t *testing.T) {
 
 	// Inject SESSION.CREATED from the inference provider. In production this
 	// arrives from the WebSocket server; here we simulate it directly.
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type:  messages.StreamTypeSessionCreated,
 		Value: messages.NewSessionCreatedValue("mock-session-id", wantModel),
 	})
 
 	// The model runner must respond with SESSION.UPDATE within 1 second.
-	got, ok := inf.WaitForSentMessage(messages.StreamTypeSessionUpdate, 1*time.Second)
+	got, ok := inf.WaitForSentMessage(t.Context(), messages.StreamTypeSessionUpdate, 1*time.Second)
 	if !ok {
 		t.Fatal("timed out waiting for SESSION.UPDATE — model runner may not be sending session config on SESSION.CREATED")
 	}

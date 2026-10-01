@@ -163,7 +163,7 @@ func TestCoordinator_ToolOutputSendsAllToKernelDeltaInbox(t *testing.T) {
 	}
 
 	// Both tool messages should be sent to KernelDeltaInbox.
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		kd, ok := ls.Outputs.KernelDeltaInbox.Read()
 		if !ok {
 			t.Fatalf("expected KernelDeltaRequest #%d", i)

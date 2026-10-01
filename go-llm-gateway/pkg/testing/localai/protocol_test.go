@@ -8,7 +8,7 @@ import (
 )
 
 func TestVerifyRealtimeAudioRejectsNonSpeakingListener(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for non-speaking endpoint: %v", err)
 	}
@@ -51,7 +51,10 @@ func TestVerifyRealtimeAudioRejectsNonSpeakingListener(t *testing.T) {
 }
 
 func TestDeterministicPCM16UtteranceIsValidAndNonSilent(t *testing.T) {
-	audio := deterministicPCM16Utterance()
+	audio, err := deterministicPCM16Utterance()
+	if err != nil {
+		t.Fatalf("deterministicPCM16Utterance() error = %v", err)
+	}
 	if len(audio) == 0 || len(audio)%2 != 0 {
 		t.Fatalf("generated PCM16 byte count = %d, want a non-zero even count", len(audio))
 	}

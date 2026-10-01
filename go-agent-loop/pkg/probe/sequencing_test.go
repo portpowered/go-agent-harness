@@ -32,7 +32,7 @@ func TestSequencerUsesSharedBarrierAndCanonicalEvidence(t *testing.T) {
 	if result.Expectations[0] != (ExpectationOutcome{ID: "response-at-two", Tick: 2, Passed: true}) {
 		t.Fatalf("expectations = %#v, want exact passing outcome", result.Expectations)
 	}
-	for repetition := 0; repetition < 100; repetition++ {
+	for repetition := range 100 {
 		repeated, _, err := runConcurrentProbe()
 		if err != nil {
 			t.Fatalf("repetition %d Run() error = %v", repetition, err)

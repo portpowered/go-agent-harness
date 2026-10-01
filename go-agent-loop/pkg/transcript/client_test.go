@@ -77,7 +77,7 @@ func TestClientCaptureRecordsOrderedDeviceAndWebSocketBoundaries(t *testing.T) {
 		{0x20, 0x00, 0xfe, 0x02},
 	}}
 	deviceInput := capture.WrapDeviceInput(input)
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		buffer := make([]byte, 4)
 		n, err := deviceInput.Read(buffer)
 		if err != nil || n != len(buffer) {
@@ -209,7 +209,7 @@ func assertDegradedDeviceInputUnchanged(t *testing.T, capture *ClientCapture, li
 	capturedBuffer := make([]byte, len(readPayload))
 	baselineN, baselineErr := baselineReader.Read(baselineBuffer)
 	capturedN, capturedErr := capture.WrapDeviceInput(capturedReader).Read(capturedBuffer)
-	if capturedN != baselineN || !errors.Is(capturedErr, liveReadErr) || capturedErr != baselineErr ||
+	if capturedN != baselineN || !errors.Is(capturedErr, liveReadErr) || !errors.Is(capturedErr, baselineErr) ||
 		!bytes.Equal(capturedBuffer, baselineBuffer) || capturedReader.calls != baselineReader.calls {
 		t.Fatalf("device input changed: captured=(%d,%v,%x,%d), baseline=(%d,%v,%x,%d)",
 			capturedN, capturedErr, capturedBuffer, capturedReader.calls,
@@ -228,7 +228,7 @@ func assertDegradedDeviceOutputUnchanged(t *testing.T, capture *ClientCapture, l
 	writePayload := degradedWritePayload()
 	baselineN, baselineErr := baselineWriter.Write(writePayload)
 	capturedN, capturedErr := capture.WrapDeviceOutput(capturedWriter).Write(writePayload)
-	if capturedN != baselineN || capturedErr != baselineErr || !errors.Is(capturedErr, liveWriteErr) ||
+	if capturedN != baselineN || !errors.Is(capturedErr, baselineErr) || !errors.Is(capturedErr, liveWriteErr) ||
 		!bytes.Equal(capturedWriter.seen, baselineWriter.seen) || capturedWriter.calls != baselineWriter.calls {
 		t.Fatalf("device output changed: captured=(%d,%v,%x,%d), baseline=(%d,%v,%x,%d)",
 			capturedN, capturedErr, capturedWriter.seen, capturedWriter.calls,
@@ -247,7 +247,7 @@ func assertPartialDeviceOutputRecordsAcceptedPrefix(t *testing.T, liveWriteErr e
 	})
 	partialWriter := &scriptedWriter{n: 2, err: liveWriteErr}
 	partialN, partialErr := partialCapture.WrapDeviceOutput(partialWriter).Write(writePayload)
-	if partialN != baselineN || partialErr != baselineErr || !errors.Is(partialErr, liveWriteErr) ||
+	if partialN != baselineN || !errors.Is(partialErr, baselineErr) || !errors.Is(partialErr, liveWriteErr) ||
 		!bytes.Equal(partialWriter.seen, baselineWriter.seen) || partialWriter.calls != baselineWriter.calls {
 		t.Fatalf("partial device output changed: captured=(%d,%v,%x,%d), baseline=(%d,%v,%x,%d)",
 			partialN, partialErr, partialWriter.seen, partialWriter.calls,
@@ -271,13 +271,13 @@ func assertDegradedWebSocketFailuresUnchanged(t *testing.T, capture *ClientCaptu
 	sendPayload := []byte{0x04, 0xfc}
 	baselineSendErr := baselineConnection.WriteMessage(9, sendPayload)
 	capturedErr := capturedConnection.WriteMessage(9, sendPayload)
-	if capturedErr != baselineSendErr ||
+	if !errors.Is(capturedErr, baselineSendErr) ||
 		!errors.Is(capturedErr, liveSendErr) || capturedTransport.sendCalls != baselineTransport.sendCalls {
 		t.Fatalf("websocket send changed: captured=(%v,%d), baseline=(%v,%d)", capturedErr, capturedTransport.sendCalls, baselineSendErr, baselineTransport.sendCalls)
 	}
 	gotType, gotPayload, capturedErr := capturedConnection.ReadMessage()
 	wantType, wantPayload, baselineErr := baselineConnection.ReadMessage()
-	if gotType != wantType || !bytes.Equal(gotPayload, wantPayload) || capturedErr != baselineErr || !errors.Is(capturedErr, liveReceiveErr) ||
+	if gotType != wantType || !bytes.Equal(gotPayload, wantPayload) || !errors.Is(capturedErr, baselineErr) || !errors.Is(capturedErr, liveReceiveErr) ||
 		capturedTransport.receiveCalls != baselineTransport.receiveCalls {
 		t.Fatalf("websocket receive changed: captured=(%d,%x,%v,%d), baseline=(%d,%x,%v,%d)",
 			gotType, gotPayload, capturedErr, capturedTransport.receiveCalls,
@@ -306,14 +306,14 @@ func assertDegradedWebSocketSuccessUnchanged(t *testing.T, capture *ClientCaptur
 	for index, message := range successOutgoing {
 		baselineErr := successBaselineConnection.WriteMessage(message.messageType, message.payload)
 		capturedErr := successCapturedConnection.WriteMessage(message.messageType, message.payload)
-		if capturedErr != baselineErr || capturedErr != nil {
+		if baselineErr != nil || capturedErr != nil {
 			t.Fatalf("successful websocket send %d changed: captured=%v, baseline=%v", index, capturedErr, baselineErr)
 		}
 	}
 	for index := range successIncoming {
 		baselineType, baselinePayload, baselineErr := successBaselineConnection.ReadMessage()
 		capturedType, capturedPayload, capturedErr := successCapturedConnection.ReadMessage()
-		if capturedType != baselineType || !bytes.Equal(capturedPayload, baselinePayload) || capturedErr != baselineErr || capturedErr != nil {
+		if capturedType != baselineType || !bytes.Equal(capturedPayload, baselinePayload) || baselineErr != nil || capturedErr != nil {
 			t.Fatalf("successful websocket receive %d changed: captured=(%d,%x,%v), baseline=(%d,%x,%v)",
 				index, capturedType, capturedPayload, capturedErr, baselineType, baselinePayload, baselineErr)
 		}

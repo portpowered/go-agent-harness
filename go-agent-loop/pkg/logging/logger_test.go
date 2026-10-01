@@ -15,8 +15,6 @@ import (
 	"testing"
 )
 
-var updateCrossingGolden = flag.Bool("update-crossing-golden", false, "update typed-buffer crossing golden output")
-
 // The golden is embedded so ordinary test runs only compare with committed
 // output. The explicit update flag is the only workflow that writes it.
 //
@@ -276,7 +274,7 @@ func TestCrossingEmitterConcurrentRecordsAreCompleteAndMonotonic(t *testing.T) {
 	var wait sync.WaitGroup
 	errCh := make(chan error, producerCount*eventsPerProducer)
 	wait.Add(producerCount)
-	for producer := 0; producer < producerCount; producer++ {
+	for producer := range producerCount {
 		go func(producer int) {
 			defer wait.Done()
 			<-start
@@ -284,7 +282,7 @@ func TestCrossingEmitterConcurrentRecordsAreCompleteAndMonotonic(t *testing.T) {
 			if producer%2 != 0 {
 				direction = CrossingDirectionOut
 			}
-			for eventIndex := 0; eventIndex < eventsPerProducer; eventIndex++ {
+			for eventIndex := range eventsPerProducer {
 				_, err := emitter.Emit(CrossingEvent{
 					Direction: direction,
 					Buffer:    fmt.Sprintf("producer.%d", producer), MessageType: "StreamMessage",
@@ -413,7 +411,7 @@ func canonicalLogBytes(t *testing.T, entries []capturedLog) []byte {
 func assertCrossingGolden(t *testing.T, got []byte) {
 	t.Helper()
 	path := filepath.FromSlash("testdata/crossing.jsonl")
-	if *updateCrossingGolden {
+	if goldenUpdateRequested("update-crossing-golden") {
 		if err := os.WriteFile(path, got, 0o644); err != nil {
 			t.Fatalf("write crossing golden: %v", err)
 		}
@@ -434,9 +432,11 @@ const (
 	crossingAllocationRuns      = 100
 )
 
-var benchmarkCrossingEvent = CrossingEvent{
-	Direction: CrossingDirectionOut, Buffer: "model.delta_outbox", MessageType: "StreamMessage",
-	Modality: CrossingModalityAudio, ByteSize: 640, LogicalTick: 17,
+func benchmarkCrossingEvent() CrossingEvent {
+	return CrossingEvent{
+		Direction: CrossingDirectionOut, Buffer: "model.delta_outbox", MessageType: "StreamMessage",
+		Modality: CrossingModalityAudio, ByteSize: 640, LogicalTick: 17,
+	}
 }
 
 type allocationBenchmarkLogger struct {
@@ -468,8 +468,9 @@ func measureCrossingAllocations(b *testing.B, enabled bool) float64 {
 	b.Helper()
 	emitter, _ := newAllocationBenchmarkSubject(enabled)
 	var emitErr error
+	event := benchmarkCrossingEvent()
 	allocations := testing.AllocsPerRun(crossingAllocationRuns, func() {
-		_, emitErr = emitter.Emit(benchmarkCrossingEvent)
+		_, emitErr = emitter.Emit(event)
 	})
 	if emitErr != nil {
 		b.Fatalf("%s crossing benchmark call: %v", crossingLevelName(enabled), emitErr)
@@ -498,9 +499,10 @@ func assertCrossingAllocationBudget(b *testing.B, path string, measured float64,
 func BenchmarkCrossingEmitterDisabledInfoAllocations(b *testing.B) {
 	b.ReportAllocs()
 	emitter, logger := newAllocationBenchmarkSubject(false)
+	event := benchmarkCrossingEvent()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
+	for range b.N {
+		if _, err := emitter.Emit(event); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -521,9 +523,10 @@ func BenchmarkCrossingEmitterDisabledInfoAllocations(b *testing.B) {
 func BenchmarkCrossingEmitterEnabledInfoAllocations(b *testing.B) {
 	b.ReportAllocs()
 	emitter, logger := newAllocationBenchmarkSubject(true)
+	event := benchmarkCrossingEvent()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := emitter.Emit(benchmarkCrossingEvent); err != nil {
+	for range b.N {
+		if _, err := emitter.Emit(event); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -533,4 +536,19 @@ func BenchmarkCrossingEmitterEnabledInfoAllocations(b *testing.B) {
 		b.Fatalf("enabled crossing info records = %d, want exact count %d", logger.infoRecords, b.N)
 	}
 	assertCrossingAllocationBudget(b, "enabled", measureCrossingAllocations(b, true), enabledCrossingAllocBudget)
+}
+
+// TestMain registers the golden-update flags before the test binary parses
+// its command line, so they need no package-level variables.
+func TestMain(m *testing.M) {
+	flag.Bool("update-crossing-golden", false, "update typed-buffer crossing golden output")
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// goldenUpdateRequested reports whether the named golden-update flag was set
+// on the test command line.
+func goldenUpdateRequested(name string) bool {
+	f := flag.Lookup(name)
+	return f != nil && f.Value.String() == "true"
 }

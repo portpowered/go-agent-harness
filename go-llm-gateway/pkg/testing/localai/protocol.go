@@ -43,8 +43,8 @@ type realtimeAudioProof struct {
 // verifyRealtimeAudio performs one bounded raw WebSocket audio round trip.
 // It is intentionally separate from Endpoint so negative-control tests can
 // exercise the protocol verifier without the endpoint absence cache.
-func verifyRealtimeAudio(endpoint string) (realtimeAudioProof, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), realtimeOverallTimeout)
+func verifyRealtimeAudio(parent context.Context, endpoint string) (realtimeAudioProof, error) {
+	ctx, cancel := context.WithTimeout(parent, realtimeOverallTimeout)
 	defer cancel()
 	return verifyRealtimeAudioContext(ctx, endpoint)
 }
@@ -110,7 +110,10 @@ func configureRealtimeAudioSession(ctx context.Context, conn *websocket.Conn) er
 // sendRealtimePCM16Turn appends the deterministic utterance in bounded chunks
 // and commits it as one user turn.
 func sendRealtimePCM16Turn(ctx context.Context, conn *websocket.Conn) error {
-	audio := deterministicPCM16Utterance()
+	audio, err := deterministicPCM16Utterance()
+	if err != nil {
+		return err
+	}
 	for start := 0; start < len(audio); start += pcmChunkSamples * 2 {
 		end := start + pcmChunkSamples*2
 		if end > len(audio) {

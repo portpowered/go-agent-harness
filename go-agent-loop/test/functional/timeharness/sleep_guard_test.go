@@ -2,6 +2,8 @@ package timeharness
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,27 +16,51 @@ import (
 // time.Sleep, not a real tick of work.
 const diagnosticWatchdog = 100 * time.Millisecond
 
-// TestDiagnosticsChild is the child process for the forbidden-sleep control:
-// its sleeper is abandoned in time.Sleep, so it must not share the parent's
-// process. Run directly, it has nothing to do.
-func TestDiagnosticsChild(t *testing.T) {
-	if os.Getenv("TIMEHARNESS_CHILD") != "sleep" {
-		t.Skip("runs only as the forbidden-sleep child process")
+// sleepChildEnv selects the forbidden-sleep child mode of this test binary.
+const sleepChildEnv = "TIMEHARNESS_CHILD"
+
+// TestMain runs the forbidden-sleep child when this test binary is
+// re-executed as one, and the package tests otherwise.
+func TestMain(m *testing.M) {
+	if os.Getenv(sleepChildEnv) == "sleep" {
+		os.Exit(runForbiddenSleepChild(os.Stderr))
 	}
+	os.Exit(m.Run())
+}
+
+// runForbiddenSleepChild is the child process for the forbidden-sleep
+// control: its sleeper is abandoned in time.Sleep, so it must not share the
+// parent's process. It exits non-zero with the harness diagnosis.
+func runForbiddenSleepChild(stderr io.Writer) int {
 	s := New(time.Unix(0, 0).UTC(), time.Millisecond, WithWatchdogTimeout(diagnosticWatchdog))
-	sleeper, observer := register(t, s, "sleeper"), register(t, s, "observer")
-	sleeper.Run(func() { time.Sleep(time.Hour) })
+	sleeper, err := s.Register("sleeper")
+	if err != nil {
+		return reportChildFailure(stderr, err.Error())
+	}
+	observer, err := s.Register("observer")
+	if err != nil {
+		return reportChildFailure(stderr, err.Error())
+	}
+	sleeper.Run(func() { time.Sleep(time.Hour) })                            //nolint:forbidigo // The forbidden sleep is the subject of this negative control.
 	observer.Run(func() { _, _ = observer.Observe(1); observer.Complete() }) //nolint:errcheck // The observer only needs to reach the barrier; the test asserts the outcome.
 	if _, err := s.AdvanceTo(1); err != nil {
-		t.Fatal(err)
+		return reportChildFailure(stderr, err.Error())
 	}
-	t.Fatal("sleeping participant unexpectedly crossed the barrier")
+	return reportChildFailure(stderr, "sleeping participant unexpectedly crossed the barrier")
+}
+
+// reportChildFailure writes the child's diagnosis and returns its failing
+// exit code; the exit code is the result even if the write fails.
+func reportChildFailure(stderr io.Writer, diagnosis string) int {
+	_, _ = fmt.Fprintln(stderr, diagnosis) //nolint:errcheck // Best-effort diagnostic; the exit code is the result.
+	return 1
 }
 
 func TestDiagnosticNegativeControls(t *testing.T) {
+	t.Parallel()
 	t.Run("forbidden sleep", func(t *testing.T) {
 		t.Parallel()
-		runFailureChild(t, "^TestDiagnosticsChild$", "TIMEHARNESS_CHILD=sleep", "sleeper", "time.Sleep", "forbidden")
+		runFailureChild(t, sleepChildEnv+"=sleep", "sleeper", "time.Sleep", "forbidden")
 	})
 	t.Run("stuck participant", func(t *testing.T) {
 		t.Parallel()
@@ -54,8 +80,9 @@ func TestDiagnosticNegativeControls(t *testing.T) {
 	})
 }
 
-func runFailureChild(t *testing.T, testName, marker string, fragments ...string) {
-	cmd := exec.Command(os.Args[0], "-test.run="+testName, "-test.v", "-test.timeout=10s")
+func runFailureChild(t *testing.T, marker string, fragments ...string) {
+	t.Helper()
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.timeout=10s")
 	cmd.Env = append(os.Environ(), marker)
 	output, err := cmd.CombinedOutput()
 	if err == nil {

@@ -71,7 +71,7 @@ func (g *DefaultGateway) Interact(ctx context.Context, req InteractionRequest) (
 // nil return means the caller emits the END terminal.
 func (g *DefaultGateway) interact(ctx context.Context, req InteractionRequest, emitter *interactionEventEmitter) error {
 	for _, result := range req.ToolResults {
-		result := result
+
 		if err := emitter.emit(ctx, InteractionEvent{
 			Type:        InteractionEventToolResultAccepted,
 			Correlation: InteractionCorrelation{ToolCallID: result.ToolCallID},
@@ -92,7 +92,7 @@ func (g *DefaultGateway) interact(ctx context.Context, req InteractionRequest, e
 	}
 	if toolCalls := normalizedInteractionToolCallsFromModel(resp.Message.ToolCalls); len(toolCalls) > 0 {
 		for _, call := range toolCalls {
-			call := call
+
 			if err := emitter.emitLive(ctx, InteractionEvent{
 				Type:        InteractionEventToolCallRequest,
 				Correlation: InteractionCorrelation{ToolCallID: call.ID},
@@ -535,9 +535,9 @@ func modelRoleFromInteraction(role InteractionRole) models.Role {
 		return models.RoleTool
 	case InteractionRoleSystem:
 		return models.RoleSystem
-	default:
-		return models.RoleUser
+	case InteractionRoleUser:
 	}
+	return models.RoleUser
 }
 
 func interactionRoleFromModel(role models.Role) InteractionRole {

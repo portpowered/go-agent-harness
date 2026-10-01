@@ -252,10 +252,7 @@ replayRT, _ := testing.NewReplayRoundTripper("captures/my-test.http.json")
 client := &http.Client{Transport: replayRT}
 
 // Session replay
-replayer, _ := testing.NewSessionReplayer(
-    "captures/my-test.session.json",
-    testing.WithReplayContext(ctx),
-)
+replayer, _ := testing.NewSessionReplayer(ctx, "captures/my-test.session.json")
 // replayer implements messages.Session — inject where a real session would go
 // Send verifies outbound client events against the next recorded
 // client_to_server record. Err reports replay divergence or an omitted
@@ -263,13 +260,13 @@ replayer, _ := testing.NewSessionReplayer(
 // Replay and recorder relay writes stop when the owned context is cancelled.
 // For read-only transcript rendering, disable outbound validation explicitly:
 reader, _ := testing.NewSessionReplayer(
+    ctx,
     "captures/my-test.session.json",
-    testing.WithReplayContext(ctx),
     testing.WithReplayOutboundValidation(false),
 )
 
 // With timing delays (real-time playback):
-replayer, _ := testing.NewSessionReplayer("captures/my-test.session.json", testing.WithReplayTiming())
+replayer, _ := testing.NewSessionReplayer(ctx, "captures/my-test.session.json", testing.WithReplayTiming())
 
 // Grok WebSocket replay
 replayDialer, _ := testing.NewReplayWebSocketDialer("captures/my-test.session.json")

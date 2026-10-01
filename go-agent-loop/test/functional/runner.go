@@ -36,7 +36,7 @@ func DiscoverFunctionalInventory(ctx context.Context, moduleRoot string) (Invent
 	cmd.Dir = moduleRoot
 	output, err := cmd.Output()
 	if err != nil {
-		return Inventory{}, fmt.Errorf("discover functional packages: %w", commandError(cmd, err, output))
+		return Inventory{}, fmt.Errorf("discover functional packages: %w", commandError(err, output))
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(output))
@@ -143,7 +143,7 @@ func goCommandArgs(command string, args ...string) []string {
 	return append(commandArgs, args...)
 }
 
-func commandError(cmd *exec.Cmd, err error, output []byte) error {
+func commandError(err error, output []byte) error {
 	detail := strings.TrimSpace(string(output))
 	if detail == "" {
 		return err
@@ -156,21 +156,21 @@ func commandError(cmd *exec.Cmd, err error, output []byte) error {
 // discovered runnable set. The root runner validates all package selectors;
 // this hook is what makes direct `go test ./test/functional/...` invocations
 // honor the same subtractive manifest.
-func RunPackageTests(m *testing.M, packagePath string) {
+func RunPackageTests(ctx context.Context, m *testing.M, packagePath string) {
 	if os.Getenv(SelectionAppliedEnv) == "1" {
 		os.Exit(m.Run())
 	}
 	if !flag.Parsed() {
 		flag.Parse()
 	}
-	os.Exit(runSelectedPackageTests(m.Run, packagePath, os.Stdout, os.Stderr))
+	os.Exit(runSelectedPackageTests(ctx, m.Run, packagePath, os.Stdout, os.Stderr))
 }
 
 // runSelectedPackageTests runs one package under its manifest selection and
 // returns the process exit code. run is the package's testing.M.Run; it is
 // never called when the manifest fails validation.
-func runSelectedPackageTests(run func() int, packagePath string, stdout, stderr io.Writer) int {
-	selection, selected, err := selectPackageTests(packagePath)
+func runSelectedPackageTests(ctx context.Context, run func() int, packagePath string, stdout, stderr io.Writer) int {
+	selection, selected, err := selectPackageTests(ctx, packagePath)
 	if err == nil && selected {
 		err = applyPackageSelection(selection, stdout)
 	}
@@ -204,7 +204,7 @@ func runSelectedPackageTests(run func() int, packagePath string, stdout, stderr 
 // selectPackageTests validates the configured manifest against the whole
 // discovered inventory, then selects this package's tests. selected is false
 // when no manifest entry applies to the package.
-func selectPackageTests(packagePath string) (Selection, bool, error) {
+func selectPackageTests(ctx context.Context, packagePath string) (Selection, bool, error) {
 	manifest, err := ReadConfiguredManifest()
 	if err != nil || len(manifest.Entries) == 0 {
 		return Selection{}, false, err
@@ -213,7 +213,7 @@ func selectPackageTests(packagePath string) (Selection, bool, error) {
 	if err != nil {
 		return Selection{}, false, err
 	}
-	inventory, err := DiscoverFunctionalInventory(context.Background(), moduleRoot)
+	inventory, err := DiscoverFunctionalInventory(ctx, moduleRoot)
 	if err != nil {
 		return Selection{}, false, err
 	}
@@ -270,26 +270,23 @@ func packageRunPattern(selected []TestSelector) (string, error) {
 	for _, selector := range selected {
 		allowed[selector.Test] = struct{}{}
 	}
-	var names []string
-	if runFlag := flag.CommandLine.Lookup("test.run"); runFlag != nil {
-		original := runFlag.Value.String()
-		if original != "" {
-			filter, err := regexp.Compile(original)
-			if err != nil {
-				return "", fmt.Errorf("compile existing test.run filter %q: %w", original, err)
-			}
-			for name := range allowed {
-				if filter.MatchString(name) {
-					names = append(names, name)
-				}
-			}
-		} else {
-			for name := range allowed {
-				names = append(names, name)
-			}
-		}
-	} else {
+	runFlag := flag.CommandLine.Lookup("test.run")
+	if runFlag == nil {
 		return "", errors.New("test.run flag is unavailable")
+	}
+	filter := regexp.MustCompile("")
+	if original := runFlag.Value.String(); original != "" {
+		compiled, err := regexp.Compile(original)
+		if err != nil {
+			return "", fmt.Errorf("compile existing test.run filter %q: %w", original, err)
+		}
+		filter = compiled
+	}
+	var names []string
+	for name := range allowed {
+		if filter.MatchString(name) {
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 	if len(names) == 0 {

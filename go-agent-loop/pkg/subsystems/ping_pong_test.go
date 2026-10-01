@@ -290,7 +290,7 @@ func (s *pingClockSession) Close() error {
 	return nil
 }
 
-func startPingClockLoop(t *testing.T, source clock.TimerSource) (*agentloop.AgentLoop, *pingClockSession, *clock.Deterministic) {
+func startPingClockLoop(t *testing.T, source clock.TimerSource) (*agentloop.AgentLoop, *clock.Deterministic) {
 	t.Helper()
 	inferencer := &pingClockInferencer{connected: make(chan *pingClockSession, 1)}
 	options := []agentloop.Option{
@@ -344,7 +344,7 @@ func startPingClockLoop(t *testing.T, source clock.TimerSource) (*agentloop.Agen
 			t.Fatalf("configured clock source = %T, want *clock.Deterministic", source)
 		}
 	}
-	return loop, session, deterministic
+	return loop, deterministic
 }
 
 func waitForPingClockDelta(ctx context.Context, deltas *messages.TypedBuffer[messages.StreamMessage], want messages.StreamMessageType) error {
@@ -396,7 +396,7 @@ func readPingClockPong(t *testing.T, loop *agentloop.AgentLoop) int64 {
 func TestPingClock_PublicLoopUsesConfiguredClock(t *testing.T) {
 	base := time.Date(2026, time.January, 2, 3, 4, 5, 123456000, time.UTC)
 	logicalClock := clock.NewDeterministic(base, time.Millisecond)
-	loop, _, deterministic := startPingClockLoop(t, logicalClock)
+	loop, deterministic := startPingClockLoop(t, logicalClock)
 	if deterministic != logicalClock {
 		t.Fatal("test helper did not retain configured deterministic clock")
 	}
@@ -422,14 +422,14 @@ func TestPingClock_PublicLoopUsesConfiguredClock(t *testing.T) {
 func TestPingClock_PublicLoopEmitsOnePongPerPingMessage(t *testing.T) {
 	base := time.Unix(1700000000, 123000000).UTC()
 	logicalClock := clock.NewDeterministic(base, time.Millisecond)
-	loop, _, _ := startPingClockLoop(t, logicalClock)
+	loop, _ := startPingClockLoop(t, logicalClock)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	ping := pingMessageForTest()
 	if err := loop.Send(ctx, []messages.Message{ping, ping, ping}); err != nil {
 		t.Fatalf("Send pings: %v", err)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if got := readPingClockPong(t, loop); got != base.UnixMilli() {
 			t.Fatalf("PONG[%d] timestamp = %d, want %d", i, got, base.UnixMilli())
 		}
@@ -437,7 +437,7 @@ func TestPingClock_PublicLoopEmitsOnePongPerPingMessage(t *testing.T) {
 }
 
 func TestPingClock_PublicLoopNilClockUsesWallTime(t *testing.T) {
-	loop, _, _ := startPingClockLoop(t, nil)
+	loop, _ := startPingClockLoop(t, nil)
 	before := time.Now().UnixMilli()
 	sendPingForClockTest(t, loop)
 	got := readPingClockPong(t, loop)

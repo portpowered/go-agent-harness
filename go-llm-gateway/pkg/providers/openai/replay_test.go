@@ -585,7 +585,7 @@ func TestReplay_Error400_BadRequest(t *testing.T) {
 	if !errors.As(err, &providerErr) {
 		t.Fatalf("expected ProviderError, got %T: %v", err, err)
 	}
-	if providerErr.Provider != openAIProviderName || providerErr.StatusCode != 400 {
+	if providerErr.Provider != openAIProviderName || providerErr.StatusCode != http.StatusBadRequest {
 		t.Fatalf("ProviderError = %+v, want provider openai status 400", providerErr)
 	}
 	if !strings.Contains(providerErr.Detail, realtimeInvalidRequestErrorType) {
@@ -711,38 +711,41 @@ func TestReplay_InferTransportErrorClassified(t *testing.T) {
 	}
 }
 
-func TestReplay_InferCancellationClassifiedSeparatelyFromTransport(t *testing.T) {
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		<-req.Context().Done()
-		return nil, req.Context().Err()
-	})
-	p := newTestProvider(transport)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := p.Infer(ctx, providers.InferenceRequest{
-		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "test"),
+func TestReplay_CancellationClassifiedSeparatelyFromTransport(t *testing.T) {
+	calls := map[string]func(*OpenAIProvider, context.Context, providers.InferenceRequest) error{
+		"Infer": func(p *OpenAIProvider, ctx context.Context, req providers.InferenceRequest) error {
+			_, err := p.Infer(ctx, req)
+			return err
 		},
-	})
-	if err == nil {
-		t.Fatal("expected cancellation error, got nil")
+		"InferStream": func(p *OpenAIProvider, ctx context.Context, req providers.InferenceRequest) error {
+			_, err := p.InferStream(ctx, req)
+			return err
+		},
 	}
-	if !errors.Is(err, gateway.ErrCancellation) {
-		t.Fatal("expected error to match cancellation classification")
-	}
-	if !errors.Is(err, context.Canceled) {
-		t.Fatal("expected error to preserve context.Canceled cause")
-	}
-	if errors.Is(err, gateway.ErrTransport) {
-		t.Fatal("cancellation should not match transport classification")
-	}
-	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
-		t.Fatal("cancellation should not match provider HTTP status classification")
-	}
-	if errors.Is(err, gateway.ErrReplayMismatch) {
-		t.Fatal("cancellation should not match replay mismatch classification")
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				<-req.Context().Done()
+				return nil, req.Context().Err()
+			})
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			err := call(newTestProvider(transport), ctx, providers.InferenceRequest{
+				Messages: []models.Message{models.NewTextMessage(models.RoleUser, "test")},
+			})
+			if err == nil {
+				t.Fatal("expected cancellation error, got nil")
+			}
+			if !errors.Is(err, gateway.ErrCancellation) || !errors.Is(err, context.Canceled) {
+				t.Fatalf("error = %v, want cancellation classification preserving context.Canceled", err)
+			}
+			for _, other := range []error{gateway.ErrTransport, gateway.ErrProviderHTTPStatus, gateway.ErrReplayMismatch} {
+				if errors.Is(err, other) {
+					t.Fatalf("cancellation error %v must not match %v", err, other)
+				}
+			}
+		})
 	}
 }
 
@@ -816,77 +819,45 @@ func TestReplay_InferStreamTransportErrorClassified(t *testing.T) {
 	}
 }
 
-func TestReplay_InferStreamCancellationClassifiedSeparatelyFromTransport(t *testing.T) {
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		<-req.Context().Done()
-		return nil, req.Context().Err()
-	})
-	p := newTestProvider(transport)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := p.InferStream(ctx, providers.InferenceRequest{
-		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, "test"),
-		},
-	})
-	if err == nil {
-		t.Fatal("expected stream cancellation error, got nil")
-	}
-	if !errors.Is(err, gateway.ErrCancellation) {
-		t.Fatal("expected stream error to match cancellation classification")
-	}
-	if !errors.Is(err, context.Canceled) {
-		t.Fatal("expected stream error to preserve context.Canceled cause")
-	}
-	if errors.Is(err, gateway.ErrTransport) {
-		t.Fatal("stream cancellation should not match transport classification")
-	}
-	if errors.Is(err, gateway.ErrProviderHTTPStatus) {
-		t.Fatal("stream cancellation should not match provider HTTP status classification")
-	}
-	if errors.Is(err, gateway.ErrReplayMismatch) {
-		t.Fatal("stream cancellation should not match replay mismatch classification")
-	}
-}
-
 // --- No-auth (local provider) tests ---
 
-func TestInfer_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
-	body := loadFixture(t, "simple_text.json")
-
-	var capturedReq *http.Request
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		capturedReq = req
-		return &http.Response{
-			StatusCode: 200,
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-			Body:       io.NopCloser(bytes.NewReader(body)),
-			Request:    req,
-		}, nil
-	})
-
-	p := New(
-		WithModel("llama3"),
-		WithBaseURL("http://localhost:11434/v1"),
-		WithHTTPClient(&http.Client{Transport: transport}),
-	)
-
-	_, err := p.Infer(context.Background(), providers.InferenceRequest{
-		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, testGreeting),
-		},
-	})
-	if err != nil {
-		t.Fatalf("Infer failed: %v", err)
+func TestInfer_AuthorizationHeaderFollowsAPIKey(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []Option
+		want string
+	}{
+		{name: "local provider without key", opts: []Option{WithModel("llama3"), WithBaseURL("http://localhost:11434/v1")}, want: ""},
+		{name: "api key", opts: []Option{WithAPIKey("sk-test-key"), WithModel("gpt-4")}, want: "Bearer sk-test-key"},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := loadFixture(t, "simple_text.json")
+			var capturedReq *http.Request
+			transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				capturedReq = req
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewReader(body)),
+					Request:    req,
+				}, nil
+			})
+			p := New(append(tc.opts, WithHTTPClient(&http.Client{Transport: transport}))...)
 
-	if capturedReq == nil {
-		t.Fatal("expected HTTP request to be captured")
-	}
-	if auth := capturedReq.Header.Get("Authorization"); auth != "" {
-		t.Errorf("expected no Authorization header for local provider, got %q", auth)
+			_, err := p.Infer(t.Context(), providers.InferenceRequest{
+				Messages: []models.Message{models.NewTextMessage(models.RoleUser, testGreeting)},
+			})
+			if err != nil {
+				t.Fatalf("Infer failed: %v", err)
+			}
+			if capturedReq == nil {
+				t.Fatal("expected HTTP request to be captured")
+			}
+			if auth := capturedReq.Header.Get("Authorization"); auth != tc.want {
+				t.Errorf("Authorization header = %q, want %q", auth, tc.want)
+			}
+		})
 	}
 }
 
@@ -897,7 +868,7 @@ func TestInferStream_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
 	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		capturedReq = req
 		return &http.Response{
-			StatusCode: 200,
+			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
 			Body:       io.NopCloser(bytes.NewReader(body)),
 			Request:    req,
@@ -926,42 +897,5 @@ func TestInferStream_NoAPIKey_OmitsAuthorizationHeader(t *testing.T) {
 	}
 	if auth := capturedReq.Header.Get("Authorization"); auth != "" {
 		t.Errorf("expected no Authorization header for local provider, got %q", auth)
-	}
-}
-
-func TestInfer_WithAPIKey_IncludesAuthorizationHeader(t *testing.T) {
-	body := loadFixture(t, "simple_text.json")
-
-	var capturedReq *http.Request
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		capturedReq = req
-		return &http.Response{
-			StatusCode: 200,
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-			Body:       io.NopCloser(bytes.NewReader(body)),
-			Request:    req,
-		}, nil
-	})
-
-	p := New(
-		WithAPIKey("sk-test-key"),
-		WithModel("gpt-4"),
-		WithHTTPClient(&http.Client{Transport: transport}),
-	)
-
-	_, err := p.Infer(context.Background(), providers.InferenceRequest{
-		Messages: []models.Message{
-			models.NewTextMessage(models.RoleUser, testGreeting),
-		},
-	})
-	if err != nil {
-		t.Fatalf("Infer failed: %v", err)
-	}
-
-	if capturedReq == nil {
-		t.Fatal("expected HTTP request to be captured")
-	}
-	if auth := capturedReq.Header.Get("Authorization"); auth != "Bearer sk-test-key" {
-		t.Errorf("expected Authorization header 'Bearer sk-test-key', got %q", auth)
 	}
 }

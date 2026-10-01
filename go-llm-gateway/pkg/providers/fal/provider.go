@@ -97,13 +97,13 @@ func (p *FalProvider) Infer(ctx context.Context, req providers.InferenceRequest)
 		if err != nil {
 			return providers.InferenceResponse{}, err
 		}
-		return p.inferGrokImagineVideo(ctx, imageURL, text, config)
+		return p.inferImageToVideo(ctx, ModelGrokImagineVideoImageToVideo, "Grok Imagine Video", imageURL, text, config)
 	case ModelKlingVideoV3ImageToVideo:
 		imageURL, text, err := extractImageAndTextFromMessages(req.Messages)
 		if err != nil {
 			return providers.InferenceResponse{}, err
 		}
-		return p.inferKlingVideoV3(ctx, imageURL, text, config)
+		return p.inferImageToVideo(ctx, ModelKlingVideoV3ImageToVideo, "Kling Video v3", imageURL, text, config)
 	default:
 		audioURL, text, err := extractAudioAndTextFromMessages(req.Messages)
 		if err != nil {
@@ -244,21 +244,42 @@ func mediaDataURI(mediaType, fallbackType, encoded string) string {
 	return "data:" + mediaType + ";base64," + encoded
 }
 
+// falFile is a generated media file reference returned by fal models.
+type falFile struct {
+	URL         string `json:"url"`
+	ContentType string `json:"content_type"`
+	FileName    string `json:"file_name,omitempty"`
+}
+
+// falVideoResponse is the response shape shared by the fal video models.
+type falVideoResponse struct {
+	Video falFile `json:"video"`
+}
+
+// mediaFileResponse builds the assistant response for a generated media
+// file: the media part followed by its URL as text when one was returned.
+func mediaFileResponse(media models.ContentPart, url string) providers.InferenceResponse {
+	parts := []models.ContentPart{media}
+	if url != "" {
+		parts = append(parts, models.TextPart{Text: url})
+	}
+	msg := models.Message{
+		Role:         models.RoleAssistant,
+		ContentParts: parts,
+	}
+	return providers.InferenceResponse{Message: msg, Usage: models.TokenUsage{}}
+}
+
+// videoFileResponse builds the assistant response for a generated video.
+func videoFileResponse(video falFile) providers.InferenceResponse {
+	return mediaFileResponse(models.VideoPart{URL: video.URL, MediaType: video.ContentType}, video.URL)
+}
+
 // --- LTX audio-to-video ---
 
 type ltxAudioToVideoRequest struct {
 	Prompt   string `json:"prompt"`
 	AudioURL string `json:"audio_url"`
-}
-
-type ltxVideoFile struct {
-	URL         string `json:"url"`
-	ContentType string `json:"content_type"`
-	FileName    string `json:"file_name"`
-}
-
-type ltxAudioToVideoResponse struct {
-	Video ltxVideoFile `json:"video"`
 }
 
 func (p *FalProvider) inferLTXAudioToVideo(ctx context.Context, audioURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
@@ -269,108 +290,32 @@ func (p *FalProvider) inferLTXAudioToVideo(ctx context.Context, audioURL, prompt
 		prompt = "A person speaks to the camera"
 	}
 	body := ltxAudioToVideoRequest{Prompt: prompt, AudioURL: audioURL}
-	var resp ltxAudioToVideoResponse
+	var resp falVideoResponse
 	if err := p.doJSON(ctx, ModelLTXAudioToVideo, body, &resp, config); err != nil {
 		return providers.InferenceResponse{}, err
 	}
-	parts := []models.ContentPart{
-		models.VideoPart{
-			URL:       resp.Video.URL,
-			MediaType: resp.Video.ContentType,
-		},
-	}
-	if resp.Video.URL != "" {
-		parts = append(parts, models.TextPart{Text: resp.Video.URL})
-	}
-	msg := models.Message{
-		Role:         models.RoleAssistant,
-		ContentParts: parts,
-	}
-	return providers.InferenceResponse{Message: msg, Usage: models.TokenUsage{}}, nil
+	return videoFileResponse(resp.Video), nil
 }
 
-// --- Grok Imagine Video image-to-video ---
+// --- Image-to-video (Grok Imagine Video, Kling Video v3) ---
 
-type grokImagineVideoRequest struct {
+type imageToVideoRequest struct {
 	ImageURL string `json:"image_url"`
 	Prompt   string `json:"prompt,omitempty"`
 }
 
-type grokImagineVideoFile struct {
-	URL         string `json:"url"`
-	ContentType string `json:"content_type"`
-	FileName    string `json:"file_name"`
-}
-
-type grokImagineVideoResponse struct {
-	Video grokImagineVideoFile `json:"video"`
-}
-
-func (p *FalProvider) inferGrokImagineVideo(ctx context.Context, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
+// inferImageToVideo runs an image-to-video model; modelName labels the model
+// in validation errors.
+func (p *FalProvider) inferImageToVideo(ctx context.Context, modelID, modelName, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
 	if imageURL == "" {
-		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal Grok Imagine Video: image_url is required")
+		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal "+modelName+": image_url is required")
 	}
-	body := grokImagineVideoRequest{ImageURL: imageURL, Prompt: prompt}
-	var resp grokImagineVideoResponse
-	if err := p.doJSON(ctx, ModelGrokImagineVideoImageToVideo, body, &resp, config); err != nil {
+	body := imageToVideoRequest{ImageURL: imageURL, Prompt: prompt}
+	var resp falVideoResponse
+	if err := p.doJSON(ctx, modelID, body, &resp, config); err != nil {
 		return providers.InferenceResponse{}, err
 	}
-	parts := []models.ContentPart{
-		models.VideoPart{
-			URL:       resp.Video.URL,
-			MediaType: resp.Video.ContentType,
-		},
-	}
-	if resp.Video.URL != "" {
-		parts = append(parts, models.TextPart{Text: resp.Video.URL})
-	}
-	msg := models.Message{
-		Role:         models.RoleAssistant,
-		ContentParts: parts,
-	}
-	return providers.InferenceResponse{Message: msg, Usage: models.TokenUsage{}}, nil
-}
-
-// --- Kling Video v3 image-to-video ---
-
-type klingVideoV3Request struct {
-	ImageURL string `json:"image_url"`
-	Prompt   string `json:"prompt,omitempty"`
-}
-
-type klingVideoV3File struct {
-	URL         string `json:"url"`
-	ContentType string `json:"content_type"`
-	FileName    string `json:"file_name"`
-}
-
-type klingVideoV3Response struct {
-	Video klingVideoV3File `json:"video"`
-}
-
-func (p *FalProvider) inferKlingVideoV3(ctx context.Context, imageURL, prompt string, config json.RawMessage) (providers.InferenceResponse, error) {
-	if imageURL == "" {
-		return providers.InferenceResponse{}, providers.NewInvalidRequestError("fal", "image_url", "fal Kling Video v3: image_url is required")
-	}
-	body := klingVideoV3Request{ImageURL: imageURL, Prompt: prompt}
-	var resp klingVideoV3Response
-	if err := p.doJSON(ctx, ModelKlingVideoV3ImageToVideo, body, &resp, config); err != nil {
-		return providers.InferenceResponse{}, err
-	}
-	parts := []models.ContentPart{
-		models.VideoPart{
-			URL:       resp.Video.URL,
-			MediaType: resp.Video.ContentType,
-		},
-	}
-	if resp.Video.URL != "" {
-		parts = append(parts, models.TextPart{Text: resp.Video.URL})
-	}
-	msg := models.Message{
-		Role:         models.RoleAssistant,
-		ContentParts: parts,
-	}
-	return providers.InferenceResponse{Message: msg, Usage: models.TokenUsage{}}, nil
+	return videoFileResponse(resp.Video), nil
 }
 
 // --- Qwen 3 TTS clone-voice ---
@@ -380,14 +325,8 @@ type qwenCloneVoiceRequest struct {
 	ReferenceText string `json:"reference_text,omitempty"`
 }
 
-type qwenFile struct {
-	URL         string `json:"url"`
-	ContentType string `json:"content_type"`
-	FileName    string `json:"file_name"`
-}
-
 type qwenCloneVoiceResponse struct {
-	SpeakerEmbedding qwenFile `json:"speaker_embedding"`
+	SpeakerEmbedding falFile `json:"speaker_embedding"`
 }
 
 func (p *FalProvider) inferQwenCloneVoice(ctx context.Context, audioURL, referenceText string, config json.RawMessage) (providers.InferenceResponse, error) {
@@ -399,20 +338,8 @@ func (p *FalProvider) inferQwenCloneVoice(ctx context.Context, audioURL, referen
 	if err := p.doJSON(ctx, ModelQwenCloneVoice, body, &resp, config); err != nil {
 		return providers.InferenceResponse{}, err
 	}
-	parts := []models.ContentPart{
-		models.EmbeddingPart{
-			URL:       resp.SpeakerEmbedding.URL,
-			MediaType: resp.SpeakerEmbedding.ContentType,
-		},
-	}
-	if resp.SpeakerEmbedding.URL != "" {
-		parts = append(parts, models.TextPart{Text: resp.SpeakerEmbedding.URL})
-	}
-	msg := models.Message{
-		Role:         models.RoleAssistant,
-		ContentParts: parts,
-	}
-	return providers.InferenceResponse{Message: msg, Usage: models.TokenUsage{}}, nil
+	embedding := resp.SpeakerEmbedding
+	return mediaFileResponse(models.EmbeddingPart{URL: embedding.URL, MediaType: embedding.ContentType}, embedding.URL), nil
 }
 
 // --- Qwen 3 TTS text-to-speech ---
@@ -438,13 +365,8 @@ const (
 	QwenVoiceSohee   qwenTTSVoice = "Sohee"
 )
 
-type qwenTTSAudioFile struct {
-	URL         string `json:"url"`
-	ContentType string `json:"content_type"`
-}
-
 type qwenTTSResponse struct {
-	Audio qwenTTSAudioFile `json:"audio"`
+	Audio falFile `json:"audio"`
 }
 
 func (p *FalProvider) inferQwenTTS(ctx context.Context, request qwenTTSRequest, config json.RawMessage) (providers.InferenceResponse, error) {
@@ -457,20 +379,7 @@ func (p *FalProvider) inferQwenTTS(ctx context.Context, request qwenTTSRequest, 
 	if err := p.doJSON(ctx, ModelQwenTTS, body, &resp, config); err != nil {
 		return providers.InferenceResponse{}, err
 	}
-	parts := []models.ContentPart{
-		models.AudioPart{
-			URL:       resp.Audio.URL,
-			MediaType: resp.Audio.ContentType,
-		},
-	}
-	if resp.Audio.URL != "" {
-		parts = append(parts, models.TextPart{Text: resp.Audio.URL})
-	}
-	msg := models.Message{
-		Role:         models.RoleAssistant,
-		ContentParts: parts,
-	}
-	return providers.InferenceResponse{Message: msg, Usage: models.TokenUsage{}}, nil
+	return mediaFileResponse(models.AudioPart{URL: resp.Audio.URL, MediaType: resp.Audio.ContentType}, resp.Audio.URL), nil
 }
 
 func (p *FalProvider) doJSON(ctx context.Context, modelID string, body any, result any, config ...json.RawMessage) error {

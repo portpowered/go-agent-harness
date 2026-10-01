@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -124,7 +125,7 @@ func TestFile_StreamingResponse(t *testing.T) {
 func TestFile_ChunkedStreamingResponse(t *testing.T) {
 	chunk1 := []byte("%PDF-1.4")      // first half
 	chunk2 := []byte(" test content") // second half
-	wantBytes := append(chunk1, chunk2...)
+	wantBytes := slices.Concat(chunk1, chunk2)
 
 	const mediaType = "application/pdf"
 	const fileName = "chunked.pdf"

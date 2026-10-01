@@ -286,131 +286,97 @@ type V2Expectation = ScenarioV2Expectation
 
 type scenarioV2Object map[string]json.RawMessage
 
-var scenarioV2StepFields = map[ScenarioV2StepType]map[string]struct{}{
-	ScenarioV2StepBrowserConnect: {
-		"browser_id": {}, "endpoint_id": {},
-	},
-	ScenarioV2StepBrowserDiscover: {
-		"browser_id": {}, "origin_contains": {}, "eligible_only": {}, "include_zero_tool_pages": {},
-	},
-	ScenarioV2StepBrowserSelect: {
-		"browser_id": {}, "target_id": {}, "activate": {},
-	},
-	ScenarioV2StepBrowserActivate: {
-		"browser_id": {}, "target_id": {},
-	},
-	ScenarioV2StepBrowserDisconnect: {
-		"browser_id": {},
-	},
-	ScenarioV2StepBrowserNavigateFixture: {
-		"url": {}, "fixture": {},
-	},
-	ScenarioV2StepWebMCPWaitReady: {},
-	ScenarioV2StepWebMCPListTools: {
-		"refresh": {}, "name_contains": {}, "include_schemas": {}, "frame_id": {},
-	},
-	ScenarioV2StepWebMCPInvoke: {
-		"tool_ref": {}, "input_json": {}, "reason": {},
-	},
-	ScenarioV2StepWebMCPCancel: {
-		"invocation_id": {}, "reason": {},
-	},
-	ScenarioV2StepSendText: {
-		"text": {},
-	},
-	ScenarioV2StepSendAudio: {
-		"corpus_id": {}, "text": {},
-	},
-	ScenarioV2StepInterrupt: {
-		"after_event": {},
-	},
-	ScenarioV2StepCloseTab: {
-		"browser_id": {}, "target_id": {},
-	},
-	ScenarioV2StepOpenTab: {
-		"browser_id": {}, "url": {},
-	},
-	ScenarioV2StepSwitchBrowser: {
-		"browser_id": {},
-	},
-	ScenarioV2StepSleepFake: {
-		"duration_ms": {},
-	},
-	ScenarioV2StepClose: {},
+func scenarioV2StepFields() map[ScenarioV2StepType]map[string]struct{} {
+	return map[ScenarioV2StepType]map[string]struct{}{
+		ScenarioV2StepBrowserConnect: {
+			"browser_id": {}, "endpoint_id": {},
+		},
+		ScenarioV2StepBrowserDiscover: {
+			"browser_id": {}, "origin_contains": {}, "eligible_only": {}, "include_zero_tool_pages": {},
+		},
+		ScenarioV2StepBrowserSelect: {
+			"browser_id": {}, "target_id": {}, "activate": {},
+		},
+		ScenarioV2StepBrowserActivate: {
+			"browser_id": {}, "target_id": {},
+		},
+		ScenarioV2StepBrowserDisconnect: {"browser_id": {}},
+		ScenarioV2StepBrowserNavigateFixture: {
+			"url": {}, "fixture": {},
+		},
+		ScenarioV2StepWebMCPWaitReady: {},
+		ScenarioV2StepWebMCPListTools: {
+			"refresh": {}, "name_contains": {}, "include_schemas": {}, "frame_id": {},
+		},
+		ScenarioV2StepWebMCPInvoke: {
+			"tool_ref": {}, "input_json": {}, "reason": {},
+		},
+		ScenarioV2StepWebMCPCancel: {
+			"invocation_id": {}, "reason": {},
+		},
+		ScenarioV2StepSendText: {"text": {}},
+		ScenarioV2StepSendAudio: {
+			"corpus_id": {}, "text": {},
+		},
+		ScenarioV2StepInterrupt: {"after_event": {}},
+		ScenarioV2StepCloseTab: {
+			"browser_id": {}, "target_id": {},
+		},
+		ScenarioV2StepOpenTab: {
+			"browser_id": {}, "url": {},
+		},
+		ScenarioV2StepSwitchBrowser: {"browser_id": {}},
+		ScenarioV2StepSleepFake:     {"duration_ms": {}},
+		ScenarioV2StepClose:         {},
+	}
 }
 
-var scenarioV2ExpectationFields = map[ScenarioV2ExpectationType]map[string]struct{}{
-	ScenarioV2ExpectationBrowserCountEquals: {
-		"equals": {},
-	},
-	ScenarioV2ExpectationEligibleTabCountEquals: {
-		"equals": {},
-	},
-	ScenarioV2ExpectationSelectedTabEquals: {
-		"target_id": {},
-	},
-	ScenarioV2ExpectationSelectedOriginEquals: {
-		"origin": {},
-	},
-	ScenarioV2ExpectationCatalogGenerationEquals: {
-		"equals": {},
-	},
-	ScenarioV2ExpectationToolCatalogContains: {
-		"name": {},
-	},
-	ScenarioV2ExpectationToolCatalogNotContains: {
-		"name": {},
-	},
-	ScenarioV2ExpectationToolSchemaEquals: {
-		"name": {}, "schema": {},
-	},
-	ScenarioV2ExpectationToolInvocationCount: {
-		"name": {}, "equals": {},
-	},
-	ScenarioV2ExpectationToolInputJSONEquals: {
-		"name": {}, "input_json": {},
-	},
-	ScenarioV2ExpectationToolResultJSONPathEquals: {
-		"name": {}, "path": {}, "value": {},
-	},
-	ScenarioV2ExpectationToolStatusEquals: {
-		"name": {}, "status": {},
-	},
-	ScenarioV2ExpectationChromeOperationOrder: {
-		"operations": {},
-	},
-	ScenarioV2ExpectationNoUnexpectedChromeOperations: {
-		"operations": {},
-	},
-	ScenarioV2ExpectationGeneratedCDPMethodOrder: {
-		"methods": {},
-	},
-	ScenarioV2ExpectationNoUnexpectedGeneratedCDPMethods: {
-		"methods": {},
-	},
-	ScenarioV2ExpectationNoPendingInvocations: {},
-	ScenarioV2ExpectationPageStateEquals: {
-		"path": {}, "value": {},
-	},
-	ScenarioV2ExpectationResponseCanceled:      {},
-	ScenarioV2ExpectationAssistantAudioStarted: {},
-	ScenarioV2ExpectationAssistantAudioStopped: {},
-	ScenarioV2ExpectationTranscriptContains: {
-		"text": {},
-	},
-	ScenarioV2ExpectationApprovalRequested: {
-		"tool_ref": {},
-	},
-	ScenarioV2ExpectationApprovalNotRequested: {
-		"tool_ref": {},
-	},
-	ScenarioV2ExpectationStaleToolRejected: {
-		"tool_ref": {},
-	},
-	ScenarioV2ExpectationBrowserConnectionClosed: {},
+func scenarioV2ExpectationFields() map[ScenarioV2ExpectationType]map[string]struct{} {
+	return map[ScenarioV2ExpectationType]map[string]struct{}{
+		ScenarioV2ExpectationBrowserCountEquals:      {"equals": {}},
+		ScenarioV2ExpectationEligibleTabCountEquals:  {"equals": {}},
+		ScenarioV2ExpectationSelectedTabEquals:       {"target_id": {}},
+		ScenarioV2ExpectationSelectedOriginEquals:    {"origin": {}},
+		ScenarioV2ExpectationCatalogGenerationEquals: {"equals": {}},
+		ScenarioV2ExpectationToolCatalogContains:     {"name": {}},
+		ScenarioV2ExpectationToolCatalogNotContains:  {"name": {}},
+		ScenarioV2ExpectationToolSchemaEquals: {
+			"name": {}, "schema": {},
+		},
+		ScenarioV2ExpectationToolInvocationCount: {
+			"name": {}, "equals": {},
+		},
+		ScenarioV2ExpectationToolInputJSONEquals: {
+			"name": {}, "input_json": {},
+		},
+		ScenarioV2ExpectationToolResultJSONPathEquals: {
+			"name": {}, "path": {}, "value": {},
+		},
+		ScenarioV2ExpectationToolStatusEquals: {
+			"name": {}, "status": {},
+		},
+		ScenarioV2ExpectationChromeOperationOrder:            {"operations": {}},
+		ScenarioV2ExpectationNoUnexpectedChromeOperations:    {"operations": {}},
+		ScenarioV2ExpectationGeneratedCDPMethodOrder:         {"methods": {}},
+		ScenarioV2ExpectationNoUnexpectedGeneratedCDPMethods: {"methods": {}},
+		ScenarioV2ExpectationNoPendingInvocations:            {},
+		ScenarioV2ExpectationPageStateEquals: {
+			"path": {}, "value": {},
+		},
+		ScenarioV2ExpectationResponseCanceled:        {},
+		ScenarioV2ExpectationAssistantAudioStarted:   {},
+		ScenarioV2ExpectationAssistantAudioStopped:   {},
+		ScenarioV2ExpectationTranscriptContains:      {"text": {}},
+		ScenarioV2ExpectationApprovalRequested:       {"tool_ref": {}},
+		ScenarioV2ExpectationApprovalNotRequested:    {"tool_ref": {}},
+		ScenarioV2ExpectationStaleToolRejected:       {"tool_ref": {}},
+		ScenarioV2ExpectationBrowserConnectionClosed: {},
+	}
 }
 
-var scenarioV2RootFields = map[string]struct{}{
-	"schema_version": {}, "id": {}, "name": {}, "description": {},
-	"browser_fixture": {}, "provider_fixture": {}, "steps": {}, "expectations": {},
+func scenarioV2RootFields() map[string]struct{} {
+	return map[string]struct{}{
+		"schema_version": {}, "id": {}, "name": {}, "description": {},
+		"browser_fixture": {}, "provider_fixture": {}, "steps": {}, "expectations": {},
+	}
 }

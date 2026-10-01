@@ -26,7 +26,7 @@ func TestCatalogGoldenAndOneToOne(t *testing.T) {
 	if err != nil || json.Unmarshal(data, &golden) != nil {
 		t.Fatalf("read/decode golden: %v", err)
 	}
-	loader := agentprofile.NewLoader(realCatalogFS(t))
+	loader := agentprofile.NewLoader(realCatalogFS())
 	names, err := loader.Names()
 	if err != nil {
 		t.Fatalf("Names: %v", err)
@@ -87,6 +87,7 @@ func TestCatalogRejectsOrphanDeclaration(t *testing.T) {
 const validOutcome = `{"kind":"no-tools","call_count":0}`
 
 func assertMalformed(t *testing.T, profile agentprofile.Profile, err error) {
+	t.Helper()
 	var malformed *agentprofile.MalformedProfileError
 	if err == nil || !errors.As(err, &malformed) || !errors.Is(err, agentprofile.ErrMalformedProfile) || malformed.Profile != "profile" || strings.TrimSpace(malformed.Reason) == "" || !reflect.DeepEqual(profile, agentprofile.Profile{}) {
 		t.Fatalf("error = %T %v, want typed profile diagnostic", err, err)
@@ -101,7 +102,7 @@ func mapFS(files map[string]string) fstest.MapFS {
 	return result
 }
 
-func realCatalogFS(t *testing.T) fs.FS {
+func realCatalogFS() fs.FS {
 	_, source, _, _ := runtime.Caller(0)
 	return os.DirFS(filepath.Join(filepath.Dir(source), "..", "..", "..", "agent-cli", "testdata", "agents-profiles"))
 }

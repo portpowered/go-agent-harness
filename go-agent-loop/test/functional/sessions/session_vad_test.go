@@ -18,10 +18,10 @@ func TestSessionVADSpeechStarted(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeVADSpeechStarted, Value: messages.NewVADSpeechStartedValue(),
 	})
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 
@@ -52,10 +52,10 @@ func TestSessionVADSpeechStopped(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeVADSpeechStopped, Value: messages.NewVADSpeechStoppedValue(),
 	})
-	inf.AddServerEvent(messages.StreamMessage{
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{
 		Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}),
 	})
 
@@ -82,7 +82,7 @@ func TestSessionVADInterleavedWithAudio(t *testing.T) {
 	}
 
 	// Interleave VAD events with audio deltas.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeAudioStart, Value: messages.NewAudioStartValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeVADSpeechStarted, Value: messages.NewVADSpeechStartedValue()},
@@ -163,7 +163,7 @@ func TestSessionVADMultipleTurns(t *testing.T) {
 	}
 
 	// Simulate multiple speech turns with VAD boundaries.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeVADSpeechStarted, Value: messages.NewVADSpeechStartedValue()},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeVADSpeechStopped, Value: messages.NewVADSpeechStoppedValue()},

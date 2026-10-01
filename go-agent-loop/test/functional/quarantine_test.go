@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -43,24 +44,30 @@ const (
 	fixtureFailExit    = 42
 )
 
-// TestQuarantineFixtureProcess is the child process RunSubprocess executes in
-// the exact-selector proof. Run directly, it has nothing to do. As a child it
-// reports its selector and, when asked to fail, exits non-zero with a
-// sentinel the parent must never observe for a quarantined selector.
-func TestQuarantineFixtureProcess(t *testing.T) {
-	selector := os.Getenv(fixtureSelectorEnv)
-	if selector == "" {
-		t.Skip("runs only as the RunSubprocess fixture child")
+// TestMain runs the RunSubprocess fixture child when this test binary is
+// re-executed as one, and the package tests otherwise.
+func TestMain(m *testing.M) {
+	if selector := os.Getenv(fixtureSelectorEnv); selector != "" {
+		os.Exit(runQuarantineFixtureChild(selector, os.Stdout, os.Stderr))
 	}
-	if _, err := fmt.Fprintf(os.Stdout, "fixture-ran selector=%s\n", selector); err != nil {
-		t.Fatal(err)
+	os.Exit(m.Run())
+}
+
+// runQuarantineFixtureChild is the child process RunSubprocess executes in
+// the exact-selector proof. It reports its selector and, when asked to fail,
+// exits non-zero with a sentinel the parent must never observe for a
+// quarantined selector.
+func runQuarantineFixtureChild(selector string, stdout, stderr io.Writer) int {
+	if _, err := fmt.Fprintf(stdout, "fixture-ran selector=%s\n", selector); err != nil {
+		return 1
 	}
 	if os.Getenv(fixtureFailEnv) == "1" {
-		if _, err := fmt.Fprintln(os.Stderr, "quarantine-sentinel-executed"); err != nil {
-			t.Fatal(err)
+		if _, err := fmt.Fprintln(stderr, "quarantine-sentinel-executed"); err != nil {
+			return 1
 		}
-		os.Exit(fixtureFailExit)
+		return fixtureFailExit
 	}
+	return 0
 }
 
 func TestFunctionalQuarantine_ExactSelectorSkipsFailingInjectedSubprocess(t *testing.T) {
@@ -84,7 +91,7 @@ func TestFunctionalQuarantine_ExactSelectorSkipsFailingInjectedSubprocess(t *tes
 		invoked = append(invoked, selector.String())
 		// Re-execute this test binary as the fixture process instead of
 		// compiling a separate fixture with `go run` on every run.
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestQuarantineFixtureProcess$", "-test.count=1")
+		cmd := exec.CommandContext(ctx, os.Args[0])
 		cmd.Env = append(os.Environ(), fixtureSelectorEnv+"="+selector.String())
 		if selector.Test == "TestQuarantined" {
 			cmd.Env = append(cmd.Env, fixtureFailEnv+"=1")

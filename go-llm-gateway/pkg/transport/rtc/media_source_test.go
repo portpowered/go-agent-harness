@@ -198,7 +198,7 @@ func testProbeBoundsNonResponsiveEndpoint(t *testing.T) {
 // ends.
 func listenLoopback(t *testing.T) net.Listener {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func testMediaSourceErrorContracts(t *testing.T) {
 	if !strings.Contains(unknownError, "rtsp://host/camera") || !strings.Contains(unknownError, "check the source") {
 		t.Fatalf("unknown source error = %q", unknownError)
 	}
-	if (safeCause{err: errors.New("private cause")}).Error() != "source operation failed" {
+	if (safeCauseError{err: errors.New("private cause")}).Error() != "source operation failed" {
 		t.Fatal("safe cause did not use stable public text")
 	}
 	if errString(nil) != "" {
@@ -316,7 +316,7 @@ func testMediaSourceParsingAndAccessorContracts(t *testing.T) {
 }
 
 func testMediaStreamLifecycleContracts(t *testing.T) {
-	var nilContext context.Context
+	callerContext := t.Context()
 	normalized := (MediaCapabilities{Codec: "PCMA", AudioSampleRate: 16000, AudioChannels: 2, Video: true}).normalized()
 	if normalized.AudioCodec != "PCMA" || normalized.SampleRate != 16000 || normalized.Channels != 2 || !normalized.HasVideo || !normalized.VideoPresent || !normalized.VideoPresence {
 		t.Fatalf("normalized capabilities = %#v", normalized)
@@ -329,7 +329,7 @@ func testMediaStreamLifecycleContracts(t *testing.T) {
 	if err := stream.Close(); err != nil || stream.Close() != nil {
 		t.Fatalf("fallback stream close = %v", err)
 	}
-	if _, err := stream.ReadFrame(nilContext); !errors.Is(err, io.EOF) {
+	if _, err := stream.ReadFrame(callerContext); !errors.Is(err, io.EOF) {
 		t.Fatalf("closed stream frame error = %v", err)
 	}
 	closeErr := errors.New("close failed")
@@ -340,11 +340,6 @@ func testMediaStreamLifecycleContracts(t *testing.T) {
 	if !errors.Is(firstClose, closeErr) || !errors.Is(secondClose, closeErr) || closeCalls != 1 {
 		t.Fatalf("owned close = %v/%v/%d", firstClose, secondClose, closeCalls)
 	}
-	bounded, cancel := boundedSourceContext(nilContext)
-	if bounded == nil {
-		t.Fatal("nil context was not replaced")
-	}
-	cancel()
 	if _, err := (MediaSource{identity: "stub"}).Open(context.Background()); !errors.Is(err, ErrMalformedSource) {
 		t.Fatalf("zero source open error = %v", err)
 	}
@@ -394,7 +389,7 @@ func testMediaSourceSDPAndControlContracts(t *testing.T) {
 }
 
 func testMediaSourceInboundReadContracts(t *testing.T) {
-	var nilContext context.Context
+	callerContext := t.Context()
 	inbound := newPionInbound(nil)
 	ctx, cancelRead := context.WithCancel(context.Background())
 	cancelRead()
@@ -402,7 +397,7 @@ func testMediaSourceInboundReadContracts(t *testing.T) {
 		t.Fatalf("canceled Pion read = %v", err)
 	}
 	requireClosed(t, "inbound", inbound)
-	if _, err := inbound.ReadFrame(nilContext); !errors.Is(err, io.EOF) {
+	if _, err := inbound.ReadFrame(callerContext); !errors.Is(err, io.EOF) {
 		t.Fatalf("closed Pion read = %v", err)
 	}
 	pipeReader, pipeWriter := net.Pipe()
@@ -417,7 +412,7 @@ func testMediaSourceInboundReadContracts(t *testing.T) {
 }
 
 func testRTSPProtocolFramingContracts(t *testing.T) {
-	var nilContext context.Context
+	callerContext := t.Context()
 	response := &rtspClient{reader: bufio.NewReader(strings.NewReader("RTSP/1.0 200 OK\r\nContent-Length: 3\r\nX-Fixture: yes\r\n\r\nabc"))}
 	parsedResponse, err := response.readResponse()
 	if err != nil || parsedResponse.code != 200 || string(parsedResponse.body) != "abc" || parsedResponse.headers["x-fixture"] != "yes" {
@@ -435,7 +430,7 @@ func testRTSPProtocolFramingContracts(t *testing.T) {
 		}
 	}
 	emptyInbound := &rtspInbound{client: &rtspClient{reader: bufio.NewReader(strings.NewReader(""))}}
-	if _, err := emptyInbound.ReadFrame(nilContext); err == nil {
+	if _, err := emptyInbound.ReadFrame(callerContext); err == nil {
 		t.Fatal("empty RTSP frame read returned nil error")
 	}
 	packet, err := (&rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 0}, Payload: []byte{0x80}}).Marshal()
@@ -461,10 +456,10 @@ func testRTSPProtocolFramingContracts(t *testing.T) {
 // requireClosed closes a test-owned resource and reports an unexpected close
 // failure. A resource a fixture or earlier close already released reports
 // net.ErrClosed, which is the expected terminal state and is tolerated.
-func requireClosed(t testing.TB, name string, closer io.Closer) {
-	t.Helper()
+func requireClosed(tb testing.TB, name string, closer io.Closer) {
+	tb.Helper()
 	if err := closer.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-		t.Errorf("close %s: %v", name, err)
+		tb.Errorf("close %s: %v", name, err)
 	}
 }
 

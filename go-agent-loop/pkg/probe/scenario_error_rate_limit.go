@@ -1,5 +1,7 @@
 package probe
 
+import "fmt"
+
 // Registered scenario for the v6c rate-limit error-path vertical. The
 // throttled case requires the session to terminate with a rate-limit-
 // classified error (surfaced by the replay exec seam as the terminal reason
@@ -27,34 +29,23 @@ const (
 )
 
 func s2sv6CErrorRateLimitScenario() Scenario {
-	expectation := ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "error:rate_limited"}
-	return Scenario{
-		ID:          ScenarioIDS2SV6CErrorRateLimitThrottled,
-		Name:        ScenarioIDS2SV6CErrorRateLimitThrottled,
-		Description: "Session receiving a provider rate-limit error must terminate with the typed rate_limited classification",
-		Steps: []Step{
-			{Type: StepSendText, Text: "probe input"},
-			{Type: StepClose},
-		},
-		Expectations:     []ExpectedBehavior{expectation},
-		Expected:         []ExpectedBehavior{expectation},
-		ExpectedBehavior: []ExpectedBehavior{expectation},
-	}
+	return terminalReasonScenario(terminalReasonCase{
+		id:          ScenarioIDS2SV6CErrorRateLimitThrottled,
+		description: "Session receiving a provider rate-limit error must terminate with the typed rate_limited classification",
+		reason:      "error:rate_limited",
+	})
 }
 
-func registerS2SV6CErrorRateLimitScenario(register func(Scenario, ...DeadSessionControl) error) {
-	if err := register(s2sv6CErrorRateLimitScenario()); err != nil {
-		panic(err)
-	}
+func registerS2SV6CErrorRateLimitScenario(register func(Scenario, ...DeadSessionControl) error) error {
+	return register(s2sv6CErrorRateLimitScenario())
 }
 
-// newBuiltinScenarioRegistry builds the live registry with every built-in
-// scenario registered explicitly and in a fixed order. It runs during package
-// variable initialization, so the built-ins are present before any caller can
-// observe the live registry.
-func newBuiltinScenarioRegistry() *ScenarioRegistry {
+// NewBuiltinScenarioRegistry builds a fresh registry with every built-in
+// scenario registered explicitly and in a fixed order. Each call returns an
+// independent registry, so callers never share mutable scenario state.
+func NewBuiltinScenarioRegistry() (*ScenarioRegistry, error) {
 	registry := NewScenarioRegistry()
-	for _, registerBuiltin := range []func(func(Scenario, ...DeadSessionControl) error){
+	for _, registerBuiltin := range []func(func(Scenario, ...DeadSessionControl) error) error{
 		registerS2SV1TextInAudioOutScenario,
 		registerS2SV3ABargeInBasicScenarios,
 		registerS2SV3BBargeInToolResultScenarios,
@@ -65,7 +56,19 @@ func newBuiltinScenarioRegistry() *ScenarioRegistry {
 		registerS2SV6CErrorRateLimitScenario,
 		registerS2SV7AMetricsModalityScenarios,
 	} {
-		registerBuiltin(registry.Register)
+		if err := registerBuiltin(registry.Register); err != nil {
+			return nil, fmt.Errorf("register built-in probe scenario: %w", err)
+		}
 	}
-	return registry
+	return registry, nil
+}
+
+// Scenarios returns a snapshot of the built-in scenarios in registration
+// order.
+func Scenarios() ([]Scenario, error) {
+	registry, err := NewBuiltinScenarioRegistry()
+	if err != nil {
+		return nil, err
+	}
+	return registry.Snapshot(), nil
 }

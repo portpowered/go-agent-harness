@@ -57,10 +57,10 @@ func (r *KernelRunner) Run(ctx context.Context) error {
 func (r *KernelRunner) Tick(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		r.closeStreamWithError(ctx.Err())
+		r.closeStreamWithError()
 		return ctx.Err()
 	case delta := <-r.DeltaInbox.Chan():
-		r.dispatchDelta(ctx, delta)
+		r.dispatchDelta(delta)
 	}
 	return nil
 }
@@ -87,7 +87,7 @@ func (r *KernelRunner) NewDeltaEventReader(capacity int) <-chan messages.StreamM
 // appropriate streaming pipe: TEXT.DELTA → text pipe, AUDIO.DELTA → audio pipe,
 // REASONING.DELTA → reasoning pipe. All pipes and messageOutCh are closed on LOOP.END.
 // SYSTEM.FULL_MESSAGE events are forwarded to messageOutCh as full messages.
-func (r *KernelRunner) dispatchDelta(ctx context.Context, req messages.KernelDeltaRequest) {
+func (r *KernelRunner) dispatchDelta(req messages.KernelDeltaRequest) {
 	// Forward every delta except SYSTEM.FULL_MESSAGE to the event channel.
 	// Full message events are internal coordination signals, not streaming events.
 	if req.Delta.Type != messages.StreamTypeSystemFullMessage {
@@ -176,7 +176,7 @@ func (r *KernelRunner) dispatchDelta(ctx context.Context, req messages.KernelDel
 // loop exited with error). We close both the message outbox and delta event channel
 // so collectors can exit, but we do NOT close the delta stream pipes so that a
 // retry can write RESET + new content to the same stream.
-func (r *KernelRunner) closeStreamWithError(err error) {
+func (r *KernelRunner) closeStreamWithError() {
 	// Close the message outbox so any ranging goroutine can exit cleanly.
 	r.messageOutMu.Lock()
 	mch := r.messageOutCh

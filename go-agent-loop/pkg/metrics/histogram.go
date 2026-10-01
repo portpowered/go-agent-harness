@@ -2,12 +2,10 @@ package metrics
 
 import "fmt"
 
-var defaultHistogramBounds = [...]int64{0, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576}
-
-// DefaultHistogramBounds returns a copy of the default inclusive upper
+// DefaultHistogramBounds returns a fresh copy of the default inclusive upper
 // bounds used when NewInMemorySink is called without explicit bounds.
 func DefaultHistogramBounds() []int64 {
-	return append([]int64(nil), defaultHistogramBounds[:]...)
+	return []int64{0, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576}
 }
 
 func validateHistogramBounds(bounds []int64) ([]int64, error) {

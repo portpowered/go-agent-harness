@@ -225,17 +225,11 @@ func AccumulateStreamToMessage(ch <-chan messages.StreamMessage) models.Message 
 	var content string
 	var toolCalls []models.ToolCall
 	for m := range ch {
-		switch m.Type {
-		case messages.StreamTypeTextDelta:
-			if v, ok := m.Value.(*messages.TextDeltaValue); ok {
-				content += v.Content
-			}
-		case messages.StreamTypeToolCallEnd:
-			if v, ok := m.Value.(*messages.ToolCallEndValue); ok {
-				toolCalls = append(toolCalls, models.ToolCall{ID: v.ToolCallID, Name: v.Name, Arguments: v.Arguments})
-			}
-		case messages.StreamTypeMessageEnd:
-			// Usage is available on MessageEndValue if needed
+		if v, ok := m.Value.(*messages.TextDeltaValue); ok && m.Type == messages.StreamTypeTextDelta {
+			content += v.Content
+		}
+		if v, ok := m.Value.(*messages.ToolCallEndValue); ok && m.Type == messages.StreamTypeToolCallEnd {
+			toolCalls = append(toolCalls, models.ToolCall{ID: v.ToolCallID, Name: v.Name, Arguments: v.Arguments})
 		}
 	}
 	return StreamChunksToMessage(content, toolCalls)

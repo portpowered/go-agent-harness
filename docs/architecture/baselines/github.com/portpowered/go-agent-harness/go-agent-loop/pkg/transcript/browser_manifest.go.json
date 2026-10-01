@@ -27,7 +27,7 @@
       "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
       "file": "pkg/transcript/browser_manifest.go",
-      "value": 770,
+      "value": 765,
       "rationale": "Pre-existing P0 debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0"
     },
@@ -57,16 +57,6 @@
       "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
       "file": "pkg/transcript/browser_manifest.go",
       "symbol": "ErrUnknownRecordingManifestVersion",
-      "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
-      "phase": "P0",
-      "message": "mutable package state must be owned by an injected service"
-    },
-    {
-      "rule": "mutable-global",
-      "module": "github.com/portpowered/go-agent-harness/go-agent-loop",
-      "package": "github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript",
-      "file": "pkg/transcript/browser_manifest.go",
-      "symbol": "browserRedactionPolicyFieldOrder",
       "rationale": "Pre-existing P0 architecture debt measured at merge base f3bf26132c27fdd411a923265d2c2b7a56f05efd; retain only through the owning package migration.",
       "phase": "P0",
       "message": "mutable package state must be owned by an injected service"

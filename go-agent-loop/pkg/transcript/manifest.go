@@ -108,7 +108,7 @@ func (e *RecordingError) Unwrap() error {
 		return nil
 	}
 	identities := []error{e.Kind}
-	if e.Kind == ErrRecordingDestinationNotEmpty {
+	if errors.Is(e.Kind, ErrRecordingDestinationNotEmpty) {
 		identities = append(identities, ErrRecordingDestination)
 	}
 	if e.Cause != nil {
@@ -224,24 +224,24 @@ func (s *RecordingStatus) UnmarshalJSON(data []byte) error {
 	}
 	fields, err := decodeRecordingJSONObject(data)
 	if err != nil {
-		return fmt.Errorf("recording status: %v", err)
+		return fmt.Errorf("recording status: %w", err)
 	}
 	allowed := map[string]struct{}{"state": {}, "reason": {}}
 	if err := rejectRecordingUnknownFields(fields, allowed); err != nil {
-		return fmt.Errorf("recording status: %v", err)
+		return fmt.Errorf("recording status: %w", err)
 	}
 	if _, ok := fields["state"]; !ok {
 		return errors.New("recording status: state is required")
 	}
 	state, err := parseRecordingString(fields["state"])
 	if err != nil {
-		return fmt.Errorf("recording status.state: %v", err)
+		return fmt.Errorf("recording status.state: %w", err)
 	}
 	reason := ""
 	if raw, ok := fields["reason"]; ok {
 		reason, err = parseRecordingString(raw)
 		if err != nil {
-			return fmt.Errorf("recording status.reason: %v", err)
+			return fmt.Errorf("recording status.reason: %w", err)
 		}
 	}
 	result := RecordingStatus{State: state, Reason: reason}
@@ -430,7 +430,7 @@ func WriteRecordingBundle(config RecordingConfig) error {
 
 	destination := filepath.Clean(normalized.destination)
 	parent := filepath.Dir(destination)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := os.MkdirAll(parent, recordingDirectoryMode); err != nil {
 		return recordingError(ErrRecordingDestination, "prepare destination", destination, err, redactor)
 	}
 	existingEmpty, err := inspectDestination(destination)
@@ -449,7 +449,7 @@ func WriteRecordingBundle(config RecordingConfig) error {
 		}
 	}()
 
-	if err := os.Mkdir(filepath.Join(staging, "audio"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(staging, "audio"), recordingDirectoryMode); err != nil {
 		return recordingError(ErrRecordingDestination, "create audio directory", destination, err, redactor)
 	}
 	stage := &recordingStage{normalized: &normalized, redactor: redactor, staging: staging, destination: destination}

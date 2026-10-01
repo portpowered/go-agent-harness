@@ -49,12 +49,16 @@ func ThinkingConfigToAnthropic(c providers.ThinkingConfig) anthropic.ThinkingCon
 	return thinkingConfigToAnthropic(c)
 }
 
+// minThinkingBudgetTokens is the smallest extended-thinking budget the
+// Anthropic Messages API accepts.
+const minThinkingBudgetTokens = 1024
+
 func thinkingConfigToAnthropic(c providers.ThinkingConfig) anthropic.ThinkingConfigParamUnion {
 	switch c.Mode {
 	case providers.ThinkingEnabled:
 		budget := c.BudgetTokens
-		if budget < 1024 {
-			budget = 1024
+		if budget < minThinkingBudgetTokens {
+			budget = minThinkingBudgetTokens
 		}
 		return anthropic.ThinkingConfigParamOfEnabled(budget)
 	case providers.ThinkingAdaptive:

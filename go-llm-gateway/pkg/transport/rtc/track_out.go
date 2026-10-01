@@ -143,9 +143,6 @@ func nilOutboundValue(value any) bool {
 }
 
 func (t *OutboundTrack) WriteFrame(ctx context.Context, frame sharedaudio.PCMFrame) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

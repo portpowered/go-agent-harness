@@ -115,18 +115,18 @@ func (ExpectationScenarioRunner) Run(ctx context.Context, scenario Scenario, sub
 	}
 	for index, step := range scenario.Steps {
 		if err := contextErr(ctx); err != nil {
-			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %v", ErrDeadSessionExecution, index, err)
+			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %w", ErrDeadSessionExecution, index, err)
 		}
 		if err := subject.Accept(ctx, step); err != nil {
-			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %v", ErrDeadSessionExecution, index, err)
+			return ScenarioRunResult{}, fmt.Errorf("%w: step %d: %w", ErrDeadSessionExecution, index, err)
 		}
 	}
 	if err := contextErr(ctx); err != nil {
-		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %v", ErrDeadSessionExecution, err)
+		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %w", ErrDeadSessionExecution, err)
 	}
 	observation, err := subject.Snapshot(ctx)
 	if err != nil {
-		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %v", ErrDeadSessionExecution, err)
+		return ScenarioRunResult{}, fmt.Errorf("%w: snapshot: %w", ErrDeadSessionExecution, err)
 	}
 	return ScenarioRunResult{
 		Observation:        observation,
@@ -231,26 +231,6 @@ func (r *ScenarioRegistry) Snapshot() []Scenario {
 	return scenarios
 }
 
-var liveScenarioRegistry = newBuiltinScenarioRegistry() //nolint:gochecknoglobals // Pre-existing live registry seam; only its initializer changed when init() registration was removed.
-
-// LiveRegistry and DefaultScenarioRegistry are aliases to the package's
-// ordinary live registry seam. Guard construction captures the pointer, not
-// its contents; registration after construction is visible on the next run.
-var LiveRegistry = liveScenarioRegistry
-var DefaultScenarioRegistry = liveScenarioRegistry
-
-func LiveScenarioRegistry() *ScenarioRegistry { return liveScenarioRegistry }
-
-func RegisterScenario(scenario Scenario, controls ...DeadSessionControl) error {
-	return liveScenarioRegistry.Register(scenario, controls...)
-}
-
-func UnregisterScenario(id string) { liveScenarioRegistry.Unregister(id) }
-
-func ResetScenarioRegistry() { liveScenarioRegistry.Clear() }
-
-func Scenarios() []Scenario { return liveScenarioRegistry.Snapshot() }
-
 // DeadSessionGuardConfig customizes the registry, runner, or subject factory.
 // Nil fields use the package defaults.
 type DeadSessionGuardConfig struct {
@@ -286,7 +266,6 @@ type DeadSessionGuard struct {
 // seam useful to small package-level tests without a second constructor.
 func NewDeadSessionGuard(args ...any) *DeadSessionGuard {
 	guard := &DeadSessionGuard{
-		registry:       liveScenarioRegistry,
 		runner:         ExpectationScenarioRunner{},
 		subjectFactory: DefaultDeadSessionSubjectFactory,
 	}
@@ -339,7 +318,14 @@ func (g *DeadSessionGuard) applyConfig(config DeadSessionGuardConfig) {
 
 func (g *DeadSessionGuard) setDefaults() {
 	if g.registry == nil {
-		g.registry = liveScenarioRegistry
+		registry, err := NewBuiltinScenarioRegistry()
+		if err != nil && g.configurationErr == nil {
+			g.configurationErr = fmt.Errorf("%w: %w", ErrDeadSessionExecution, err)
+		}
+		if registry == nil {
+			registry = NewScenarioRegistry()
+		}
+		g.registry = registry
 	}
 	if g.runner == nil {
 		g.runner = ExpectationScenarioRunner{}
@@ -455,9 +441,6 @@ func (g *DeadSessionGuard) Run(ctx context.Context) (DeadSessionGuardResult, err
 		result.Findings = []DeadSessionFinding{finding}
 		return result, &DeadSessionGuardError{Findings: result.Findings}
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	entries := g.registry.Entries()
 	if len(entries) == 0 {
 		finding := DeadSessionFinding{
@@ -570,7 +553,7 @@ func classifyScenarioRun(scenario Scenario, run ScenarioRunResult, runErr error)
 				hasMismatch = true
 				continue
 			}
-			return DeadSessionExecutionFailure, fmt.Errorf("%w: scenario %q expectation %d: %v", ErrDeadSessionExecution, stableScenarioID(scenario), expectation.Index, expectation.Err)
+			return DeadSessionExecutionFailure, fmt.Errorf("%w: scenario %q expectation %d: %w", ErrDeadSessionExecution, stableScenarioID(scenario), expectation.Index, expectation.Err)
 		}
 		if !expectation.Passed {
 			return DeadSessionExecutionFailure, fmt.Errorf("%w: scenario %q expectation %d returned false without an error", ErrDeadSessionExecution, stableScenarioID(scenario), expectation.Index)
@@ -590,7 +573,7 @@ func (r ScenarioRunResult) expectations() []ExpectationResult {
 }
 
 func wrapExecutionError(scenarioID string, control any, err error) error {
-	return fmt.Errorf("%w: scenario %q control %q: %v", ErrDeadSessionExecution, scenarioID, control, err)
+	return fmt.Errorf("%w: scenario %q control %q: %w", ErrDeadSessionExecution, scenarioID, control, err)
 }
 
 // DefaultDeadSessionSubjectFactory creates one isolated deterministic
@@ -695,9 +678,9 @@ func scenarioSupportsEcho(scenario Scenario) bool {
 	if !hasTextInput {
 		return false
 	}
+	textKinds := []ExpectationKind{ExpectText, ExpectContains, ExpectTranscript, ExpectTranscriptContains}
 	for _, expectation := range scenario.expectedValues() {
-		switch declaredKind(expectation) {
-		case ExpectText, ExpectContains, ExpectTranscript, ExpectTranscriptContains:
+		if slices.Contains(textKinds, declaredKind(expectation)) {
 			return true
 		}
 	}
@@ -713,13 +696,9 @@ func scenarioSupportsSilence(scenario Scenario) bool {
 		}
 	}
 	for _, expectation := range scenario.expectedValues() {
-		switch declaredKind(expectation) {
-		case ExpectAudioEnergy, ExpectAudio:
+		kind := declaredKind(expectation)
+		if kind == ExpectAudioEnergy || kind == ExpectAudio || (kind == ExpectFrameCount && hasAudioInput) {
 			return true
-		case ExpectFrameCount:
-			if hasAudioInput {
-				return true
-			}
 		}
 	}
 	return false
@@ -806,16 +785,11 @@ func evaluateGuardLogicalTime(expectation ExpectedBehavior, observation Observat
 }
 
 func controlRank(control DeadSessionControl) int {
-	switch control {
-	case ControlNull:
-		return 0
-	case ControlEcho:
-		return 1
-	case ControlSilence:
-		return 2
-	default:
-		return 3
+	order := []DeadSessionControl{ControlNull, ControlEcho, ControlSilence}
+	if rank := slices.Index(order, control); rank >= 0 {
+		return rank
 	}
+	return len(order)
 }
 
 func stableScenarioID(scenario Scenario) string {

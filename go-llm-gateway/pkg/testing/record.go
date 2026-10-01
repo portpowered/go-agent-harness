@@ -96,7 +96,7 @@ func (t *RecordRoundTripper) FlushToFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("encode captures: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, legacyCaptureFileMode); err != nil {
 		return fmt.Errorf("write capture file: %w", err)
 	}
 	return nil

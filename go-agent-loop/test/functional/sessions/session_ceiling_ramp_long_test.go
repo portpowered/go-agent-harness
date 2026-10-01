@@ -64,7 +64,7 @@ func TestLongConcurrencyCeilingRamp(t *testing.T) {
 		clean := t.Run(fmt.Sprintf("ramp-%03d", n), func(st *testing.T) {
 			run := runConcurrentSessions(st, concurrentDriverOptions{
 				SessionCount: n,
-				Turns:        concurrentDefaultTurns,
+				Turns:        concurrentDefaultTurns(),
 				CancelID:     -1,
 			})
 			assertEverySessionCompletedScript(st, n, run)
@@ -104,8 +104,8 @@ func assertEverySessionCompletedScript(t *testing.T, sessionCount int, run *conc
 	tokens := concurrentAllTokens(sessionCount)
 	for _, state := range run.States {
 		checkSessionIsolation(t, state.Token, tokens, state.Records, state.Deltas)
-		if state.MessageEndCount != len(concurrentDefaultTurns) {
-			t.Fatalf("session %s completed turns: got %d, want %d", state.Token, state.MessageEndCount, len(concurrentDefaultTurns))
+		if state.MessageEndCount != len(concurrentDefaultTurns()) {
+			t.Fatalf("session %s completed turns: got %d, want %d", state.Token, state.MessageEndCount, len(concurrentDefaultTurns()))
 		}
 		last := state.Deltas[len(state.Deltas)-1]
 		if last.Type != messages.StreamTypeLoopEnd {

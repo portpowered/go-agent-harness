@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -184,10 +185,10 @@ func (n *normalizedRecording) planArtifactLayout(config RecordingConfig, redacto
 		appendArtifact("session-log.jsonl")
 	}
 	expectedPaths = append(expectedPaths, recordingAudioDir)
-	for index := 0; index < len(n.inputSegments)+len(n.inputSegmentPaths); index++ {
+	for index := range len(n.inputSegments) + len(n.inputSegmentPaths) {
 		appendArtifact(fmt.Sprintf("audio/in-%03d.pcm", index))
 	}
-	for index := 0; index < len(n.outputSegments)+len(n.outputSegmentPaths); index++ {
+	for index := range len(n.outputSegments) + len(n.outputSegmentPaths) {
 		appendArtifact(fmt.Sprintf("audio/out-%03d.pcm", index))
 	}
 	if n.browser != nil {
@@ -205,7 +206,7 @@ func (n *normalizedRecording) planArtifactLayout(config RecordingConfig, redacto
 		expectedPaths = append(expectedPaths, artifact.path)
 	}
 	n.artifactPaths = artifactPaths
-	n.expectedPaths = append(expectedPaths, "manifest.json")
+	n.expectedPaths = slices.Concat(expectedPaths, []string{"manifest.json"})
 	n.additional = additional
 	return nil
 }

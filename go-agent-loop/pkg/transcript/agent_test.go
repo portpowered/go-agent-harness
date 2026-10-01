@@ -255,7 +255,7 @@ func TestAgentCapturePreservesLiveResultsAndBoundaryBytes(t *testing.T) {
 		data[0] = 'X'
 		return 7, liveErr
 	})
-	if inboundCount != 7 || inboundError != liveErr {
+	if inboundCount != 7 || !errors.Is(inboundError, liveErr) {
 		t.Fatalf("Inbound result = (%d, %v), want (7, exact live error)", inboundCount, inboundError)
 	}
 	if !bytes.Equal(inboundBytes, []byte("provider-ingress")) {
@@ -269,7 +269,7 @@ func TestAgentCapturePreservesLiveResultsAndBoundaryBytes(t *testing.T) {
 		data[0] = 'X'
 		return len(data), liveErr
 	})
-	if egressCount != len(egressInput) || egressError != liveErr {
+	if egressCount != len(egressInput) || !errors.Is(egressError, liveErr) {
 		t.Fatalf("Outbound result = (%d, %v), want (%d, exact live error)", egressCount, egressError, len(egressInput))
 	}
 	if !bytes.Equal(egressBytes, []byte("provider-egress")) {
@@ -286,11 +286,11 @@ func TestAgentCaptureEnabledAndDisabledLivePathsAreEquivalent(t *testing.T) {
 	sink := &retainingRecordSink{}
 	enabled := runAgentLiveScenario(t, NewAgentCapture(sink, clock.NewDeterministic(time.Unix(1, 0), time.Second)), liveErr)
 
-	if baseline.inCount != enabled.inCount || baseline.inError != enabled.inError || baseline.inCalls != enabled.inCalls ||
+	if baseline.inCount != enabled.inCount || !errors.Is(baseline.inError, enabled.inError) || baseline.inCalls != enabled.inCalls ||
 		!bytes.Equal(baseline.inSeen, enabled.inSeen) || !bytes.Equal(baseline.inPayload, enabled.inPayload) {
 		t.Fatalf("inbound enabled result differs:\nbaseline=%+v\nenabled=%+v", baseline, enabled)
 	}
-	if baseline.outCount != enabled.outCount || baseline.outError != enabled.outError || baseline.outCalls != enabled.outCalls ||
+	if baseline.outCount != enabled.outCount || !errors.Is(baseline.outError, enabled.outError) || baseline.outCalls != enabled.outCalls ||
 		!bytes.Equal(baseline.outSeen, enabled.outSeen) || !bytes.Equal(baseline.outPayload, enabled.outPayload) {
 		t.Fatalf("outbound enabled result differs:\nbaseline=%+v\nenabled=%+v", baseline, enabled)
 	}
@@ -325,7 +325,7 @@ func TestAgentCaptureDoesNotRecordPartialOrRejectedEgress(t *testing.T) {
 				}
 				return test.accepted, test.err
 			})
-			if count != test.accepted || err != test.err {
+			if count != test.accepted || !errors.Is(err, test.err) {
 				t.Fatalf("Outbound result = (%d, %v), want (%d, %v)", count, err, test.accepted, test.err)
 			}
 			if test.name == "complete" {

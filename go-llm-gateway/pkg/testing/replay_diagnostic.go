@@ -144,7 +144,7 @@ func firstReplayJSONArrayDifference(expectedValue, actualValue []any, pointer st
 	if len(actualValue) < commonLength {
 		commonLength = len(actualValue)
 	}
-	for index := 0; index < commonLength; index++ {
+	for index := range commonLength {
 		childPointer := appendReplayJSONPointer(pointer, strconv.Itoa(index))
 		if difference := firstReplayJSONDifference(expectedValue[index], actualValue[index], childPointer); difference != nil {
 			return difference
@@ -210,7 +210,7 @@ func firstReplayByteDifference(expected, actual []byte) int {
 	if len(actual) < commonLength {
 		commonLength = len(actual)
 	}
-	for index := 0; index < commonLength; index++ {
+	for index := range commonLength {
 		if expected[index] != actual[index] {
 			return index
 		}

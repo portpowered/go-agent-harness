@@ -17,14 +17,12 @@ import (
 // text message with no tool calls), so assertions can use finalText == expected
 // regardless of mode. The raw stream in streaming mode may include tool results;
 // we derive finalText from Messages() for consistency with ExecuteResult.Text().
-func executeOrStream(t *testing.T, s *Scenario, mode string, message string) (finalText string, turnMessages []messages.Message) {
+func executeOrStream(t *testing.T, s *Scenario, mode string, message string) string {
 	t.Helper()
 	if mode == "stream" {
-		finalText := s.ExecuteStreamingText(message)
-		return finalText, turnMessages
+		return s.ExecuteStreamingText(message)
 	}
-	result := s.Execute(message)
-	return result.Text(), result.Messages
+	return s.Execute(message).Text()
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +65,7 @@ func TestTool_SingleToolUse(t *testing.T) {
 			tool := NewMockToolExecutor().AddResult("get_weather", toolResult)
 			s := NewScenario(t, inf, tool, agentloop.WithTools(tools))
 
-			finalText, _ := executeOrStream(t, s, mode, userMessage)
+			finalText := executeOrStream(t, s, mode, userMessage)
 
 			// --- final text ---
 			if finalText != finalResponse {
@@ -148,7 +146,7 @@ func TestTool_MultiTurnTool(t *testing.T) {
 				AddResult("get_time", timeResult)
 			s := NewScenario(t, inf, tool, agentloop.WithTools(tools))
 
-			finalText, _ := executeOrStream(t, s, mode, userMessage)
+			finalText := executeOrStream(t, s, mode, userMessage)
 
 			// --- final text ---
 			if finalText != finalResponse {
@@ -233,7 +231,7 @@ func TestTool_BatchToolCall(t *testing.T) {
 				AddResult("get_time", timeResult)
 			s := NewScenario(t, inf, tool, agentloop.WithTools(tools))
 
-			finalText, _ := executeOrStream(t, s, mode, userMessage)
+			finalText := executeOrStream(t, s, mode, userMessage)
 
 			// --- final text ---
 			if finalText != finalResponse {

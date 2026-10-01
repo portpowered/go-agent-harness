@@ -13,10 +13,10 @@ import (
 //go:embed testdata/utterance.pcm.b64
 var deterministicPCM16Fixture string
 
-func deterministicPCM16Utterance() []byte {
+func deterministicPCM16Utterance() ([]byte, error) {
 	audio, err := codec.DecodeBase64(deterministicPCM16Fixture)
 	if err != nil {
-		panic(fmt.Sprintf("decode checked-in PCM16 fixture: %v", err))
+		return nil, fmt.Errorf("decode checked-in PCM16 fixture: %w", err)
 	}
-	return audio
+	return audio, nil
 }

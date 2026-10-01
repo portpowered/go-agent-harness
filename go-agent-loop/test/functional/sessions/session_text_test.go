@@ -19,7 +19,7 @@ func TestSessionSendText(t *testing.T) {
 	}
 
 	// Queue a text response from the server.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hello"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},
@@ -54,7 +54,7 @@ func TestSessionTextResponse(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("The weather"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(" is sunny"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue(), Role: messages.RoleAssistant},
@@ -91,7 +91,7 @@ func TestSessionTextAndAudioMixed(t *testing.T) {
 	}
 
 	// Server sends interleaved text and audio.
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("hi"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeAudioDelta, Value: messages.NewAudioDeltaValue([]byte{0x01}), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue(), Role: messages.RoleAssistant},
@@ -139,7 +139,7 @@ func TestSessionTextDoesNotTerminate(t *testing.T) {
 		t.Fatal("timed out waiting for SESSION.OPEN")
 	}
 
-	inf.AddServerEventSequence([]messages.StreamMessage{
+	inf.AddServerEventSequence(t.Context(), []messages.StreamMessage{
 		{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("answer"), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeTextEnd, Value: messages.NewTextEndValue(), Role: messages.RoleAssistant},
 		{Type: messages.StreamTypeMessageEnd, Value: messages.NewMessageEndValue(messages.TokenUsage{}), Role: messages.RoleAssistant},
