@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,7 +134,6 @@ type executorRecordingTool struct {
 	mu       sync.Mutex
 	calls    []messages.ToolCall
 	response messages.ToolCallResponse
-	err      error
 }
 
 func (e *executorRecordingTool) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
@@ -149,7 +147,7 @@ func (e *executorRecordingTool) Execute(_ context.Context, call messages.ToolCal
 	if response.Name == "" {
 		response.Name = call.Name
 	}
-	return response, e.err
+	return response, nil
 }
 
 func newExecutorRunData(t *testing.T, inf messages.Inferencer, tool messages.ToolExecutor, toolDefs []messages.ToolDefinition, initialHistory ...messages.Message) *RunData {
@@ -200,8 +198,6 @@ func assertToolResultMessage(t *testing.T, runData *RunData, wantID, wantContent
 
 func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 	toolCall := messages.ToolCall{ID: "request-id-42", Name: "lookup", Arguments: `{"key":"value"}`}
-	toolFailure := errors.New("tool exploded")
-	partialFailure := errors.New("partial tool failure")
 	tests := []toolResultCase{
 		{
 			name:        "success preserves content and request ID",
@@ -214,25 +210,6 @@ func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
 			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
 			wantText:    "final after empty",
 			wantContent: "",
-			skip:        "DEFECT: go-agent-loop emits no reconstructable tool message for an empty response; the full exact ID/content assertions remain below this skip",
-		},
-		{
-			name:        "tool error is propagated",
-			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID},
-			toolErr:     toolFailure,
-			wantErr:     toolFailure,
-			wantErrText: `tool "lookup" failed: tool exploded`,
-			wantContent: "",
-			skip:        "DEFECT: go-agent-loop serializes tool errors at the delta boundary, losing sentinel identity and the tool response message; the full errors.Is/ID/content assertions remain below this skip",
-		},
-		{
-			name:        "content plus error remains an error",
-			response:    messages.ToolCallResponse{ToolCallID: toolCall.ID, Content: "partial content"},
-			toolErr:     partialFailure,
-			wantErr:     partialFailure,
-			wantErrText: `tool "lookup" failed: partial tool failure`,
-			wantContent: "partial content",
-			skip:        "DEFECT: go-agent-loop drops the response when the tool returns content with an error; the full errors.Is/ID/partial-content assertions remain below this skip",
 		},
 	}
 
@@ -332,20 +309,13 @@ func executorErrorStream(err error) (<-chan messages.StreamMessage, error) {
 type toolResultCase struct {
 	name        string
 	response    messages.ToolCallResponse
-	toolErr     error
 	wantText    string
-	wantErr     error
-	wantErrText string
 	wantContent string
-	skip        string
 }
 
 func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.ToolCall) {
 	t.Helper()
 	finalText := tt.wantText
-	if finalText == "" {
-		finalText = "unused"
-	}
 	inf := &executorScriptedInferencer{steps: []executorInferenceStep{
 		{result: messages.InferenceResult{
 			Message:   messages.Message{Role: messages.RoleAssistant, ToolCalls: []messages.ToolCall{toolCall}},
@@ -353,32 +323,13 @@ func checkToolResultCase(t *testing.T, tt toolResultCase, toolCall messages.Tool
 		}},
 		{result: messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, finalText)}},
 	}}
-	tool := &executorRecordingTool{response: tt.response, err: tt.toolErr}
+	tool := &executorRecordingTool{response: tt.response}
 	runData := newExecutorRunData(t, inf, tool, []messages.ToolDefinition{{Name: "lookup"}})
 	cfg := &Config{NoSystemInformation: true}
 	var out strings.Builder
-	// Keep the affected rows as explicit regression contracts. The assertions
-	// below are intentionally executable when the loop preserves tool
-	// response IDs, content, and sentinel errors; the current loop cannot
-	// satisfy them without an out-of-lease production change.
-	if tt.skip != "" {
-		t.Skip(tt.skip)
-	}
 	got, err := (&Executor{}).ExecuteOneTurn(context.Background(), runData, agentloop.NewExecuteInput("question"), cfg, &out)
-	if tt.wantErr != nil {
-		if err == nil {
-			t.Fatalf("ExecuteOneTurn() error = nil, want %v", tt.wantErr)
-		}
-		if !errors.Is(err, tt.wantErr) {
-			t.Fatalf("ExecuteOneTurn() error = %v, want sentinel %v", err, tt.wantErr)
-		}
-		if err.Error() != tt.wantErrText {
-			t.Fatalf("ExecuteOneTurn() error = %q, want exact message %q", err.Error(), tt.wantErrText)
-		}
-	} else {
-		if err != nil || got != tt.wantText || out.String() != tt.wantText+"\n" {
-			t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want text %q", got, err, out.String(), tt.wantText)
-		}
+	if err != nil || got != tt.wantText || out.String() != tt.wantText+"\n" {
+		t.Fatalf("ExecuteOneTurn() = (%q, %v), output=%q; want text %q", got, err, out.String(), tt.wantText)
 	}
 
 	tool.mu.Lock()

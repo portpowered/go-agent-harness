@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && live
 
 package mouse
 
@@ -36,14 +36,14 @@ func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	t.Helper()
 	h, _, err := user32dll.NewProc("GetDC").Call(0)
 	if h == 0 {
-		t.Skipf("%s: unavailable capability: desktop device context (%v)", runtime.GOOS, err)
+		t.Fatalf("%s: required live capability unavailable: desktop device context (%v)", runtime.GOOS, err)
 	}
 	if released, _, releaseErr := user32dll.NewProc("ReleaseDC").Call(0, h); released == 0 {
 		t.Logf("ReleaseDC did not release the desktop device context: %v", releaseErr)
 	}
 	bounds := screenDisplayBounds(0)
 	if bounds.Dx() < 64 || bounds.Dy() < 64 {
-		t.Skipf("%s: unavailable capability: usable display bounds (%v)", runtime.GOOS, bounds)
+		t.Fatalf("%s: required live capability unavailable: usable display bounds (%v)", runtime.GOOS, bounds)
 	}
 	return bounds
 }
@@ -86,7 +86,7 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 	bounds := requireWindowsDesktop(t)
 	originalX, originalY, err := windowsCursorPosition()
 	if err != nil {
-		t.Skipf("%s: unavailable capability: cursor position query (%v)", runtime.GOOS, err)
+		t.Fatalf("%s: required live capability unavailable: cursor position query (%v)", runtime.GOOS, err)
 	}
 	driver := newMouseDriver(MouseToolOptions{})
 	t.Cleanup(func() {
@@ -106,7 +106,7 @@ func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
 func assertWindowsCursorMove(t *testing.T, driver mouseDriver, targetX, targetY int) {
 	t.Helper()
 	if err := driver.move(targetX, targetY); err != nil {
-		t.Skipf("%s: unavailable capability: cursor input (%v)", runtime.GOOS, err)
+		t.Fatalf("%s: required live capability unavailable: cursor input (%v)", runtime.GOOS, err)
 	}
 	if x, y, err := windowsCursorPosition(); err != nil || x != targetX || y != targetY {
 		t.Fatalf("cursor after move = (%d, %d), err = %v; want (%d, %d)", x, y, err, targetX, targetY)
@@ -165,7 +165,7 @@ func assertWindowsMouseOperation(t *testing.T, tool core.Tool, operation windows
 	}
 	x, y, err := windowsCursorPosition()
 	if err != nil {
-		t.Skipf("%s: unavailable capability: cursor position query after %s (%v)", runtime.GOOS, operation.name, err)
+		t.Fatalf("%s: required live capability unavailable: cursor position query after %s (%v)", runtime.GOOS, operation.name, err)
 	}
 	if x < operation.wantCursorX-1 || x > operation.wantCursorX+1 || y < operation.wantCursorY-1 || y > operation.wantCursorY+1 {
 		t.Fatalf("cursor after %s = (%d, %d), want (%d, %d) within one pixel", operation.name, x, y, operation.wantCursorX, operation.wantCursorY)

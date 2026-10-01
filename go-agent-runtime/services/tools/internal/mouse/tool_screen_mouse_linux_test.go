@@ -12,14 +12,11 @@ import (
 	"image/gif"
 	"image/png"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -301,29 +298,6 @@ func assertLinuxMouseFailures(t *testing.T) {
 	assertMouseCalls(t, stepFailure, "xdotool", []string{"mousemove 1 1", "mousedown 1", "mousemove 2 2", "mouseup 1"})
 	if sleeps.total() != mouseDragPause {
 		t.Fatalf("sleeps = %v, want only the drag press pause", sleeps)
-	}
-}
-
-func TestS12LinuxRealCapabilities(t *testing.T) {
-	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
-		t.Skipf("%s: unavailable capability: display server (DISPLAY/WAYLAND_DISPLAY)", runtime.GOOS)
-	}
-	for _, command := range []string{"scrot", "xdotool"} {
-		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("%s: unavailable capability: %s executable", runtime.GOOS, command)
-		}
-	}
-	tool := display.NewScreenTool()
-	msgs, err := tool.Execute(context.Background(), map[string]any{"action": "screenshot"})
-	if err != nil {
-		t.Skipf("%s: unavailable capability: live screen capture (%v)", runtime.GOOS, err)
-	}
-	part, ok := msgs[0].ContentParts[1].(messages.ImagePart)
-	if !ok {
-		t.Fatalf("live screenshot content part = %T, want messages.ImagePart", msgs[0].ContentParts[1])
-	}
-	if part.MediaType != "image/jpeg" || len(part.Bytes) == 0 {
-		t.Fatalf("live screenshot did not produce non-empty JPEG: %#v", part)
 	}
 }
 

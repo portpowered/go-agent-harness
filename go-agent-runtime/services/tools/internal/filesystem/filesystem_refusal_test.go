@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -311,7 +311,7 @@ func assertExternalSymlinkWrite(t *testing.T, f writeRootsFixture, writeTool cor
 	t.Helper()
 	linkParent := filepath.Join(f.primary, "external")
 	if err := os.Symlink(f.outside, linkParent); err != nil {
-		t.Skipf("symlinks unavailable on %s: %v", runtime.GOOS, err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	path := filepath.Join(linkParent, "created.txt")
 	msgs, err := writeTool.Execute(context.Background(), map[string]any{"path": path, "content": "must not write"})

@@ -34,7 +34,7 @@ func TestValidateNoSymlinkChecksComponentsAndContainment(t *testing.T) {
 
 	direct := filepath.Join(nested, "direct.pcm")
 	if err := os.Symlink(external, direct); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	if err := ValidateNoSymlink(root, direct); !errors.Is(err, errSymlink) {
 		t.Fatalf("direct symlink error = %v, want symlink failure", err)
@@ -42,7 +42,7 @@ func TestValidateNoSymlinkChecksComponentsAndContainment(t *testing.T) {
 
 	parent := filepath.Join(root, "linked")
 	if err := os.Symlink(filepath.Dir(external), parent); err != nil {
-		t.Skipf("parent symlink unavailable: %v", err)
+		t.Fatalf("create parent symlink: %v", err)
 	}
 	if err := ValidateNoSymlink(root, filepath.Join(parent, filepath.Base(external))); !errors.Is(err, errSymlink) {
 		t.Fatalf("parent symlink error = %v, want symlink failure", err)
@@ -53,7 +53,7 @@ func TestValidateNoSymlinkRejectsSymlinkedRoot(t *testing.T) {
 	target := t.TempDir()
 	root := filepath.Join(t.TempDir(), "root-link")
 	if err := os.Symlink(target, root); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	if err := ValidateNoSymlink(root, root); !errors.Is(err, errSymlink) {
 		t.Fatalf("symlinked root error = %v, want symlink failure", err)

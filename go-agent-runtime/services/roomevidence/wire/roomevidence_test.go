@@ -476,7 +476,7 @@ func TestServiceOutputSafety(t *testing.T) {
 	redirected := filepath.Join(t.TempDir(), "redirected")
 	outside := t.TempDir()
 	if err := os.Symlink(outside, redirected); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	if err := service.ValidateOutput(filepath.Join(redirected, "bundle")); !errors.Is(err, roomevidence.ErrInvalidOutput) || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("symlinked output parent error = %v, want invalid symlink output", err)

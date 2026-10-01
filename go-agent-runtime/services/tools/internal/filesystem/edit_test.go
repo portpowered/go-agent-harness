@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -101,7 +100,6 @@ type editAtomicityCase struct {
 	wantMessage   string
 	assertError   func(*testing.T, error)
 	hashPath      string
-	skipOnWindows bool
 }
 
 func editAtomicityCases(f editAtomicityFixture) []editAtomicityCase {
@@ -109,28 +107,31 @@ func editAtomicityCases(f editAtomicityFixture) []editAtomicityCase {
 }
 
 func editAtomicityMissingCases(f editAtomicityFixture) []editAtomicityCase {
-	return []editAtomicityCase{
-		{name: "path does not exist", run: func() (string, error) { return editCase(&hostFs{}, f.missing, "NEEDLE", "changed") }, wantMessage: "failed to read file: file not found", assertError: requireNotExistError},
-		{name: "directory where file is expected", run: func() (string, error) { return editCase(&hostFs{}, f.directory, "NEEDLE", "changed") }, wantMessage: "failed to read file:", assertError: requirePathError},
-		{name: "permission denied", run: func() (string, error) { return editPermissionCase(f.permissionPath) }, wantMessage: "failed to read file: access denied", assertError: requirePermissionError, hashPath: f.permissionPath, skipOnWindows: true},
+	cases := []editAtomicityCase{
+		{name: "path does not exist", run: func() (string, error) { return editCase(&hostFs{}, f.missing, "NEEDLE") }, wantMessage: "failed to read file: file not found", assertError: requireNotExistError},
+		{name: "directory where file is expected", run: func() (string, error) { return editCase(&hostFs{}, f.directory, "NEEDLE") }, wantMessage: "failed to read file:", assertError: requirePathError},
 		{name: "target outside allowed root", run: func() (string, error) {
-			return editCase(&sandboxFs{workspace: f.workspace}, f.outside, "NEEDLE", "changed")
+			return editCase(&sandboxFs{workspace: f.workspace}, f.outside, "NEEDLE")
 		}, wantMessage: "path escapes workspace: " + f.outside, assertError: requireAnyError, hashPath: f.outside},
 	}
+	if permissionBitsDenyAccess() {
+		cases = append(cases, editAtomicityCase{name: "permission denied", run: func() (string, error) { return editPermissionCase(f.permissionPath) }, wantMessage: "failed to read file: access denied", assertError: requirePermissionError, hashPath: f.permissionPath})
+	}
+	return cases
 }
 
 func editAtomicityMutationCases(f editAtomicityFixture) []editAtomicityCase {
 	return []editAtomicityCase{
-		{name: "absent match text", run: func() (string, error) { return editCase(&hostFs{}, f.target, "ABSENT", "changed") }, wantMessage: "old_text not found in file. Make sure it matches exactly", assertError: requireAnyError, hashPath: f.target},
-		{name: "multiply occurring match text", run: func() (string, error) { return editCase(&hostFs{}, f.repeated, "NEEDLE", "changed") }, wantMessage: "old_text appears 2 times. Please provide more context to make it unique", assertError: requireAnyError, hashPath: f.repeated},
+		{name: "absent match text", run: func() (string, error) { return editCase(&hostFs{}, f.target, "ABSENT") }, wantMessage: "old_text not found in file. Make sure it matches exactly", assertError: requireAnyError, hashPath: f.target},
+		{name: "multiply occurring match text", run: func() (string, error) { return editCase(&hostFs{}, f.repeated, "NEEDLE") }, wantMessage: "old_text appears 2 times. Please provide more context to make it unique", assertError: requireAnyError, hashPath: f.repeated},
 		{name: "empty replacement input", run: func() (string, error) {
 			return toolTextResult(NewEditFileTool("", false).Execute(context.Background(), map[string]any{"path": f.target, "old_text": "NEEDLE"}))
 		}, wantMessage: "new_text is required", assertError: requireNoError, hashPath: f.target},
 	}
 }
 
-func editCase(fs fileSystem, path, oldText, newText string) (string, error) {
-	err := editFile(fs, path, oldText, newText)
+func editCase(fs fileSystem, path, oldText string) (string, error) {
+	err := editFile(fs, path, oldText, "changed")
 	if err == nil {
 		return "", nil
 	}
@@ -153,12 +154,14 @@ func editPermissionCase(path string) (string, error) {
 }
 
 func requireNotExistError(t *testing.T, err error) {
+	t.Helper()
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("error identity = %T %v; want errors.Is(fs.ErrNotExist)", err, err)
 	}
 }
 
 func requirePathError(t *testing.T, err error) {
+	t.Helper()
 	var pathErr *os.PathError
 	if !errors.As(err, &pathErr) {
 		t.Fatalf("error identity = %T %v; want errors.As(*os.PathError)", err, err)
@@ -166,18 +169,21 @@ func requirePathError(t *testing.T, err error) {
 }
 
 func requirePermissionError(t *testing.T, err error) {
+	t.Helper()
 	if !errors.Is(err, fs.ErrPermission) {
 		t.Fatalf("error identity = %T %v; want errors.Is(fs.ErrPermission)", err, err)
 	}
 }
 
 func requireAnyError(t *testing.T, err error) {
+	t.Helper()
 	if err == nil {
 		t.Fatal("edit unexpectedly returned no error")
 	}
 }
 
 func requireNoError(t *testing.T, err error) {
+	t.Helper()
 	if err != nil {
 		t.Fatalf("tool returned an unexpected Go error: %v", err)
 	}
@@ -194,17 +200,11 @@ func runEditAtomicityCases(t *testing.T, f editAtomicityFixture) {
 
 func runEditAtomicityCase(t *testing.T, tc editAtomicityCase) {
 	t.Helper()
-	if tc.skipOnWindows && runtime.GOOS == windowsPlatform {
-		t.Skip("Windows chmod does not reliably deny reads without ACL changes")
-	}
 	before := [sha256.Size]byte{}
 	if tc.hashPath != "" {
 		before = sha256File(t, tc.hashPath)
 	}
 	gotMessage, err := tc.run()
-	if tc.name == "permission denied" && !errors.Is(err, fs.ErrPermission) {
-		t.Skipf("chmod did not produce a permission error on %s: %v", runtime.GOOS, err)
-	}
 	tc.assertError(t, err)
 	if !strings.Contains(gotMessage, tc.wantMessage) {
 		t.Fatalf("error message = %q, want substring %q", gotMessage, tc.wantMessage)

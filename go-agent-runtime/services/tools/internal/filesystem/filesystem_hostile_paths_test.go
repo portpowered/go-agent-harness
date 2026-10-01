@@ -1,13 +1,12 @@
 package filesystem
 
 import (
-	"errors"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 )
 
 const editedAppendedContent = "edited-appended"
@@ -34,9 +33,11 @@ func TestFilesystemPolicyHostilePathBehavior(t *testing.T) {
 	t.Run("conflicting file and directory shapes are reported", func(t *testing.T) {
 		assertHostileShapes(t, primary, writeTool)
 	})
-	t.Run("read-only parent is reported without creating a target", func(t *testing.T) {
-		assertHostileReadOnlyParent(t, primary, writeTool)
-	})
+	if permissionBitsDenyAccess() {
+		t.Run("read-only parent is reported without creating a target", func(t *testing.T) {
+			assertHostileReadOnlyParent(t, primary, writeTool)
+		})
+	}
 }
 
 func assertHostileValidPaths(t *testing.T, primary string, writeTool, readTool, editTool, appendTool, listTool core.Tool) {
@@ -106,9 +107,6 @@ func assertHostileShapes(t *testing.T, primary string, writeTool core.Tool) {
 
 func assertHostileReadOnlyParent(t *testing.T, primary string, writeTool core.Tool) {
 	t.Helper()
-	if runtime.GOOS == windowsPlatform {
-		t.Skip("chmod does not reliably deny directory writes on Windows")
-	}
 	readOnly := filepath.Join(primary, "read-only")
 	if err := os.Mkdir(readOnly, 0o555); err != nil {
 		t.Fatal(err)
@@ -118,20 +116,6 @@ func assertHostileReadOnlyParent(t *testing.T, primary string, writeTool core.To
 			t.Errorf("restore read-only directory permissions: %v", err)
 		}
 	})
-	probe := filepath.Join(readOnly, "permission-probe")
-	probeFile, probeErr := os.OpenFile(probe, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if probeErr == nil {
-		if err := probeFile.Close(); err != nil {
-			t.Errorf("close permission probe: %v", err)
-		}
-		if err := os.Remove(probe); err != nil {
-			t.Errorf("remove permission probe: %v", err)
-		}
-		t.Skip("test process can write a read-only directory")
-	}
-	if !errors.Is(probeErr, os.ErrPermission) && !os.IsPermission(probeErr) {
-		t.Skipf("read-only probe produced a platform-specific error: %v", probeErr)
-	}
 	target := filepath.Join("read-only", "not-created.txt")
 	got := requireToolTextContains(t, mustToolExecute(t, writeTool, map[string]any{"path": target, "content": "must not write"}), nil, "failed to write to temp file")
 	if strings.Contains(got, "File written") || strings.Contains(got, "must not write") {

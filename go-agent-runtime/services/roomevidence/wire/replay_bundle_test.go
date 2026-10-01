@@ -88,7 +88,7 @@ func TestServiceRejectsDirectAndParentSymlinkedReplayArtifacts(t *testing.T) {
 			t.Fatalf("move participant directory outside bundle: %v", err)
 		}
 		if err := os.Symlink(outside, participantDirectory); err != nil {
-			t.Skipf("symlink unavailable: %v", err)
+			t.Fatalf("create symlink: %v", err)
 		}
 		assertReplaySymlinkRejected(t, service, destination, outside)
 		if _, err := service.Load(plan); err == nil {
@@ -218,7 +218,7 @@ func replaceWithSymlink(t *testing.T, path, outside string) {
 		t.Fatalf("move artifact outside bundle: %v", err)
 	}
 	if err := os.Symlink(outside, path); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 }
 

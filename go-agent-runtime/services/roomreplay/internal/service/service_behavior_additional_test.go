@@ -164,7 +164,7 @@ func TestRoomReplayServiceValidatesOutputBoundaryThroughSymlinks(t *testing.T) {
 	external := t.TempDir()
 	linkToBundle := filepath.Join(external, "bundle-link")
 	if err := os.Symlink(bundle, linkToBundle); err != nil {
-		t.Skipf("create symlink: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	if err := service.ValidateOutput(plan, filepath.Join(linkToBundle, "output")); err == nil {
 		t.Fatal("output through an external symlink into the source bundle was accepted")
@@ -172,7 +172,7 @@ func TestRoomReplayServiceValidatesOutputBoundaryThroughSymlinks(t *testing.T) {
 
 	linkFromBundle := filepath.Join(bundle, "external-link")
 	if err := os.Symlink(external, linkFromBundle); err != nil {
-		t.Skipf("create symlink: %v", err)
+		t.Fatalf("create symlink: %v", err)
 	}
 	if err := service.ValidateOutput(plan, filepath.Join(linkFromBundle, "output")); err != nil {
 		t.Fatalf("output through a source symlink to an external directory was rejected: %v", err)
