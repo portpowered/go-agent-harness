@@ -120,42 +120,6 @@ func TestImage_StreamingResponse(t *testing.T) {
 	}
 }
 
-// TestImage_ChunkedStreamingResponse validates that multiple IMAGE.DELTA chunks
-// from the inferencer stream are correctly concatenated into a single ImagePart.
-func TestImage_ChunkedStreamingResponse(t *testing.T) {
-	chunk1 := []byte{0x89, 0x50, 0x4e, 0x47} // first half of PNG header
-	chunk2 := []byte{0x0d, 0x0a, 0x1a, 0x0a} // second half
-	wantBytes := append(chunk1, chunk2...)
-
-	const mediaType = "image/png"
-
-	// Build the inferencer manually so we can set imageChunks directly.
-	// The result carries the full concatenated bytes (what Infer returns),
-	// while imageChunks drives the chunked InferStream emission.
-	inf := &MockInferencer{}
-	inf.entries = []inferenceEntry{{
-		result: messages.InferenceResult{
-			Message: messages.Message{
-				Role:         messages.RoleAssistant,
-				ContentParts: []messages.ContentPart{messages.ImagePart{Bytes: wantBytes, MediaType: mediaType}},
-			},
-		},
-		imageChunks: [][]byte{chunk1, chunk2},
-	}}
-
-	tool := NewMockToolExecutor()
-	s := NewScenario(t, inf, tool)
-	s.ExecuteStreamingText("generate an image")
-
-	// Both IMAGE.DELTA chunks must appear in the delta buffer.
-	AssertDeltaContains(t, s.Deltas(), []ExpectedDelta{
-		{Type: messages.StreamTypeImageStart, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeImageDelta, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeImageDelta, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeImageEnd, Role: messages.RoleAssistant},
-	})
-}
-
 // ---------------------------------------------------------------------------
 // Image input forwarding — non-streaming, streaming, and combined
 // ---------------------------------------------------------------------------

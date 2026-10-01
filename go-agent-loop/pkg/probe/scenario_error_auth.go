@@ -20,41 +20,53 @@ const (
 )
 
 func registerErrorAuthScenarios(register func(Scenario, ...DeadSessionControl) error) error {
-	for _, registration := range []struct {
-		id          string
-		name        string
-		description string
-		text        string
-		expectation ExpectedBehavior
-	}{
-		{
+	return registerTerminalReasonScenarios(register,
+		terminalReasonCase{
 			id:          ScenarioIDS2SV6AErrorAuthInvalidCredentials,
-			name:        "v6a auth failure: invalid credentials",
 			description: "Session attempt with invalid credentials must terminate with an auth-classified error",
-			text:        "probe input",
-			expectation: ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "error:authentication"},
+			reason:      "error:authentication",
 		},
-		{
+		terminalReasonCase{
 			id:          ScenarioIDS2SV6AErrorAuthHealthyControl,
-			name:        "v6a auth failure: healthy control",
 			description: "Healthy session must terminate cleanly without firing the error or deadguard paths",
-			text:        "probe input",
-			expectation: ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "disconnect"},
+			reason:      "disconnect",
 		},
-	} {
-		scenario := Scenario{
-			ID:          registration.id,
-			Name:        registration.id,
-			Description: registration.description,
-			Steps: []Step{
-				{Type: StepSendText, Text: registration.text},
-				{Type: StepClose},
-			},
-			Expectations:     []ExpectedBehavior{registration.expectation},
-			Expected:         []ExpectedBehavior{registration.expectation},
-			ExpectedBehavior: []ExpectedBehavior{registration.expectation},
-		}
-		if err := register(scenario); err != nil {
+	)
+}
+
+// terminalReasonInput is the text every terminal-reason error-path scenario
+// sends before closing.
+const terminalReasonInput = "probe input"
+
+// terminalReasonCase is an error-path scenario that sends one text input,
+// closes the session, and is judged only by its terminal reason.
+type terminalReasonCase struct {
+	id          string
+	description string
+	reason      string
+}
+
+// terminalReasonScenario builds the scenario for one terminal-reason case.
+func terminalReasonScenario(c terminalReasonCase) Scenario {
+	expectation := ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: c.reason}
+	return Scenario{
+		ID:          c.id,
+		Name:        c.id,
+		Description: c.description,
+		Steps: []Step{
+			{Type: StepSendText, Text: terminalReasonInput},
+			{Type: StepClose},
+		},
+		Expectations:     []ExpectedBehavior{expectation},
+		Expected:         []ExpectedBehavior{expectation},
+		ExpectedBehavior: []ExpectedBehavior{expectation},
+	}
+}
+
+// registerTerminalReasonScenarios registers each case in order.
+func registerTerminalReasonScenarios(register func(Scenario, ...DeadSessionControl) error, cases ...terminalReasonCase) error {
+	for _, c := range cases {
+		if err := register(terminalReasonScenario(c)); err != nil {
 			return err
 		}
 	}

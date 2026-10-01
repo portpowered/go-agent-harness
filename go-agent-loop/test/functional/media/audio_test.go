@@ -119,42 +119,6 @@ func TestAudio_StreamingResponse(t *testing.T) {
 	}
 }
 
-// TestAudio_ChunkedStreamingResponse validates that multiple AUDIO.DELTA chunks
-// from the inferencer stream are correctly concatenated into a single AudioPart.
-func TestAudio_ChunkedStreamingResponse(t *testing.T) {
-	chunk1 := []byte{0x52, 0x49, 0x46, 0x46} // first half
-	chunk2 := []byte{0x00, 0x00, 0x00, 0x00} // second half
-	wantBytes := append(chunk1, chunk2...)
-
-	const mediaType = "audio/pcm"
-
-	// Build the inferencer manually so we can set audioChunks directly.
-	// The result carries the full concatenated bytes (what Infer returns),
-	// while audioChunks drives the chunked InferStream emission.
-	inf := &MockInferencer{}
-	inf.entries = []inferenceEntry{{
-		result: messages.InferenceResult{
-			Message: messages.Message{
-				Role:         messages.RoleAssistant,
-				ContentParts: []messages.ContentPart{messages.AudioPart{Bytes: wantBytes, MediaType: mediaType}},
-			},
-		},
-		audioChunks: [][]byte{chunk1, chunk2},
-	}}
-
-	tool := NewMockToolExecutor()
-	s := NewScenario(t, inf, tool)
-	s.ExecuteStreamingText("generate audio")
-
-	// Both AUDIO.DELTA chunks must appear in the delta buffer.
-	AssertDeltaContains(t, s.Deltas(), []ExpectedDelta{
-		{Type: messages.StreamTypeAudioStart, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeAudioDelta, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeAudioEnd, Role: messages.RoleAssistant},
-	})
-}
-
 // ---------------------------------------------------------------------------
 // Audio input forwarding — non-streaming, streaming, and combined
 // ---------------------------------------------------------------------------

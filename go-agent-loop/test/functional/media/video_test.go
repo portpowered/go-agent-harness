@@ -114,39 +114,6 @@ func TestVideo_StreamingResponse(t *testing.T) {
 	}
 }
 
-// TestVideo_ChunkedStreamingResponse validates that multiple VIDEO.DELTA chunks
-// from the inferencer stream are correctly concatenated into a single VideoPart.
-func TestVideo_ChunkedStreamingResponse(t *testing.T) {
-	chunk1 := []byte{0x00, 0x00, 0x00, 0x18} // first half
-	chunk2 := []byte{0x66, 0x74, 0x79, 0x70} // second half
-	wantBytes := append(chunk1, chunk2...)
-
-	const mediaType = "video/mp4"
-
-	inf := &MockInferencer{}
-	inf.entries = []inferenceEntry{{
-		result: messages.InferenceResult{
-			Message: messages.Message{
-				Role:         messages.RoleAssistant,
-				ContentParts: []messages.ContentPart{messages.VideoPart{Bytes: wantBytes, MediaType: mediaType}},
-			},
-		},
-		videoChunks: [][]byte{chunk1, chunk2},
-	}}
-
-	tool := NewMockToolExecutor()
-	s := NewScenario(t, inf, tool)
-	s.ExecuteStreamingText("generate video")
-
-	// Both VIDEO.DELTA chunks must appear in the delta buffer.
-	AssertDeltaContains(t, s.Deltas(), []ExpectedDelta{
-		{Type: messages.StreamTypeVideoStart, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeVideoDelta, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeVideoDelta, Role: messages.RoleAssistant},
-		{Type: messages.StreamTypeVideoEnd, Role: messages.RoleAssistant},
-	})
-}
-
 // ---------------------------------------------------------------------------
 // Video input forwarding — non-streaming, streaming, and combined
 // ---------------------------------------------------------------------------

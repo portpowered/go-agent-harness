@@ -29,19 +29,11 @@ const (
 )
 
 func s2sv6CErrorRateLimitScenario() Scenario {
-	expectation := ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "error:rate_limited"}
-	return Scenario{
-		ID:          ScenarioIDS2SV6CErrorRateLimitThrottled,
-		Name:        ScenarioIDS2SV6CErrorRateLimitThrottled,
-		Description: "Session receiving a provider rate-limit error must terminate with the typed rate_limited classification",
-		Steps: []Step{
-			{Type: StepSendText, Text: "probe input"},
-			{Type: StepClose},
-		},
-		Expectations:     []ExpectedBehavior{expectation},
-		Expected:         []ExpectedBehavior{expectation},
-		ExpectedBehavior: []ExpectedBehavior{expectation},
-	}
+	return terminalReasonScenario(terminalReasonCase{
+		id:          ScenarioIDS2SV6CErrorRateLimitThrottled,
+		description: "Session receiving a provider rate-limit error must terminate with the typed rate_limited classification",
+		reason:      "error:rate_limited",
+	})
 }
 
 func registerS2SV6CErrorRateLimitScenario(register func(Scenario, ...DeadSessionControl) error) error {

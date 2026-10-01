@@ -25,43 +25,16 @@ const (
 )
 
 func registerErrorMalformedResponseScenarios(register func(Scenario, ...DeadSessionControl) error) error {
-	for _, registration := range []struct {
-		id          string
-		name        string
-		description string
-		text        string
-		expectation ExpectedBehavior
-	}{
-		{
+	return registerTerminalReasonScenarios(register,
+		terminalReasonCase{
 			id:          ScenarioIDS2SV6DMalformed,
-			name:        "v6d malformed response: truncated provider frame",
 			description: "Session receiving an unparseable truncated-JSON provider frame must terminate with a parse/malformed-classified typed error",
-			text:        "probe input",
-			expectation: ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "error:invalid_request"},
+			reason:      "error:invalid_request",
 		},
-		{
+		terminalReasonCase{
 			id:          ScenarioIDS2SV6DHealthyControl,
-			name:        "v6d malformed response: healthy control",
 			description: "Session receiving well-formed provider frames must terminate cleanly without firing the error or deadguard paths",
-			text:        "probe input",
-			expectation: ExpectedBehavior{Type: ExpectTerminalReason, Kind: ExpectTerminalReason, Value: "disconnect"},
+			reason:      "disconnect",
 		},
-	} {
-		scenario := Scenario{
-			ID:          registration.id,
-			Name:        registration.id,
-			Description: registration.description,
-			Steps: []Step{
-				{Type: StepSendText, Text: registration.text},
-				{Type: StepClose},
-			},
-			Expectations:     []ExpectedBehavior{registration.expectation},
-			Expected:         []ExpectedBehavior{registration.expectation},
-			ExpectedBehavior: []ExpectedBehavior{registration.expectation},
-		}
-		if err := register(scenario); err != nil {
-			return err
-		}
-	}
-	return nil
+	)
 }
