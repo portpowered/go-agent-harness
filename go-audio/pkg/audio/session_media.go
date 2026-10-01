@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const (
@@ -203,9 +205,7 @@ func newSessionInboundMedia(frameSamples, sampleRate int, padPartial bool) *sess
 }
 
 func (m *sessionInboundMedia) ReadFrame(ctx context.Context) (PCMFrame, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		m.mu.Lock()
 		if len(m.frames) > 0 {

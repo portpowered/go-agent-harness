@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+
 	"github.com/gen2brain/malgo"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -383,9 +385,7 @@ func (h *coreAudioHandle) ReadFrame(ctx context.Context, frame []int16) error {
 	if h.capture == nil {
 		return fmt.Errorf("audio device %q has no capture source", h.id)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	return h.capture.ReadFrame(ctx, frame)
 }
 func (h *coreAudioHandle) WriteFrame(ctx context.Context, frame []int16) error {
@@ -481,9 +481,7 @@ func (h *coreAudioHandle) WaitForPlaybackCapacity(ctx context.Context, samples i
 	if h == nil || samples <= 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	low, high, err := audio.PlaybackQueueWatermarks(h.format)
 	if err != nil {
 		return err
@@ -526,9 +524,7 @@ func (h *coreAudioHandle) WaitForPlayback(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		h.mu.Lock()
 		if h.closed.Load() {

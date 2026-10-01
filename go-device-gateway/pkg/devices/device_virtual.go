@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -11,6 +9,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 const VirtualBackendName = "virtual"
@@ -319,9 +320,7 @@ func (r *VirtualRegistry) WaitForPCMObservations(ctx context.Context, count int)
 	if r == nil || count <= 0 {
 		return r.PCMObservations(), nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		r.mu.Lock()
 		if len(r.pcm) >= count {
@@ -448,9 +447,7 @@ func (s *VirtualStream) WriteSamples(ctx context.Context, samples []int16) error
 	return nil
 }
 func (s *VirtualStream) Read(ctx context.Context) ([]byte, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		if err := audio.ContextError(ctx); err != nil {
 			return nil, err
@@ -484,9 +481,7 @@ func (s *VirtualStream) ReadFrame(ctx context.Context, frame []int16) error {
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		if err := audio.ContextError(ctx); err != nil {
 			return err
@@ -523,9 +518,7 @@ func (s *VirtualStream) ReadSamples(ctx context.Context, samples []int16) error 
 	if len(samples) == 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		if err := audio.ContextError(ctx); err != nil {
 			return err
@@ -559,9 +552,7 @@ func (s *VirtualStream) WaitForPlaybackCapacity(ctx context.Context, samples int
 	if s == nil || samples <= 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	low, high, err := audio.PlaybackQueueWatermarks(s.format)
 	if err != nil {
 		return err

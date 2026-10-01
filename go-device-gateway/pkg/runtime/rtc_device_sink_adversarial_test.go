@@ -1,15 +1,16 @@
 package runtime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"io"
 	"reflect"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
@@ -19,7 +20,7 @@ import (
 // the provider-pump/hold-tone race: capacity admission and enqueue must behave
 // as one producer transaction even though cancellation remains independent.
 func TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite(t *testing.T) {
-	handle := &adversarialCapacityHandle{release: make(chan struct{})}
+	handle := &adversarialCapacityHandle{release: make(chan struct{}), entered: make(chan struct{}, 1)}
 	registry := newAdversarialCapacityRegistry(t, handle)
 	sink, err := NewRTCDeviceSink(registry, "adversarial:output")
 	if err != nil {
@@ -40,16 +41,19 @@ func TestRTCDeviceSinkSerializesConcurrentProducersAcrossCapacityAndWrite(t *tes
 	}
 	close(start)
 
-	deadline := time.Now().Add(time.Second)
-	for handle.current.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	select {
+	case <-handle.entered:
+	case <-time.After(time.Second):
+		t.Fatal("no producer reached the backend capacity wait")
 	}
 	if handle.current.Load() != 1 {
 		t.Fatalf("capacity wait concurrency before release = %d, want 1", handle.current.Load())
 	}
 	// Give every goroutine a chance to contend. Without pacingMu all 24 enter
 	// the backend capacity check before any enqueue occurs.
-	time.Sleep(20 * time.Millisecond)
+	for range producers * 100 {
+		runtime.Gosched()
+	}
 	if got := handle.maximum.Load(); got != 1 {
 		t.Fatalf("concurrent capacity admissions = %d, want exactly 1", got)
 	}
@@ -98,6 +102,7 @@ func (r *adversarialCapacityRegistry) Open(devicegw.DeviceID) (devicegw.OpenedDe
 
 type adversarialCapacityHandle struct {
 	release chan struct{}
+	entered chan struct{} // receives once a producer enters the capacity wait
 	current atomic.Int32
 	maximum atomic.Int32
 	writes  atomic.Int32
@@ -119,6 +124,10 @@ func (h *adversarialCapacityHandle) WaitForPlaybackCapacity(ctx context.Context,
 		if current <= maximum || h.maximum.CompareAndSwap(maximum, current) {
 			break
 		}
+	}
+	select {
+	case h.entered <- struct{}{}:
+	default:
 	}
 	select {
 	case <-h.release:
@@ -310,7 +319,7 @@ func c21WaitForDeviceSamples(t *testing.T, sub *RTCDevicePlaybackObservationSubs
 		if !time.Now().Before(deadline) {
 			t.Fatalf("device sample clock = %d, want at least %d after callback drain", sub.Stats().DeviceSamples, want)
 		}
-		time.Sleep(time.Millisecond)
+		runtime.Gosched()
 	}
 }
 

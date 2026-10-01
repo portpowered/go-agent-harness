@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"crypto/sha256"
@@ -13,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 )
 
@@ -164,8 +164,14 @@ func NewSimulatedDuplexRegistryWithObservability(s DuplexScenario, sampler obser
 	if s.Acoustic.GainQ15 == 0 {
 		s.Acoustic.GainQ15 = 32768
 	}
-	input := constantDevice(SimulatedDuplexBackendName, "input", "Simulated Duplex Input", DirectionInput)
-	output := constantDevice(SimulatedDuplexBackendName, "output", "Simulated Duplex Output", DirectionOutput)
+	input, err := NewDevice(SimulatedDuplexBackendName, "input", "Simulated Duplex Input", DirectionInput)
+	if err != nil {
+		return nil, err
+	}
+	output, err := NewDevice(SimulatedDuplexBackendName, "output", "Simulated Duplex Output", DirectionOutput)
+	if err != nil {
+		return nil, err
+	}
 	return &SimulatedDuplexRegistry{
 		scenario: s, format: format, input: input, output: output,
 		playback: playback, captureCapacity: captureCapacity,
@@ -271,9 +277,7 @@ func (s *SimulatedDuplexStream) ReadFrame(ctx context.Context, frame []int16) er
 	if err := audio.ValidateFrame("read", frame); err != nil {
 		return err
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	for {
 		s.registry.mu.Lock()
 		if s.registry.lost[side(s.direction)] {
@@ -423,10 +427,10 @@ func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
 			"clock_epoch": strconv.FormatUint(uint64(event.ClockEpoch), 10),
 			"sample_rate": strconv.Itoa(event.SampleRate),
 		}
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: "audio.device.callbacks", Kind: "counter", Value: 1, Unit: "callbacks", Fields: fields,
 		})
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: "audio.device.queue.depth", Kind: "gauge", Value: float64(event.QueueAfter), Unit: "samples", Fields: fields,
 		})
 		if len(event.Flags) == 0 {
@@ -439,10 +443,10 @@ func (r *SimulatedDuplexRegistry) observeEvents(events []DeviceTraceEvent) {
 			"flags":       strings.Join(event.Flags, ","),
 			"fault_id":    event.FaultID,
 		}
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: "audio.device.faults", Kind: "counter", Value: 1, Unit: "events", Fields: faultFields,
 		})
-		r.log(context.Background(), r.logger, observability.LogRecord{
+		r.log(r.logger, observability.LogRecord{
 			Level: "warn", Message: "simulated audio device callback fault", Fields: faultFields,
 		})
 	}
@@ -470,12 +474,12 @@ func (r *SimulatedDuplexRegistry) observeQueueDeltas(playback, previousPlayback 
 			continue
 		}
 		loss = true
-		r.sample(context.Background(), r.metricSampler, observability.MetricSample{
+		r.sample(r.metricSampler, observability.MetricSample{
 			Name: metric.name, Kind: "counter", Value: float64(metric.value), Unit: metric.unit, Fields: fields,
 		})
 	}
 	if loss {
-		r.log(context.Background(), r.logger, observability.LogRecord{
+		r.log(r.logger, observability.LogRecord{
 			Level: "warn", Message: "simulated audio buffer loss", Fields: fields,
 		})
 	}

@@ -2,8 +2,6 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -13,6 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // voiceProcessingIO is Apple's duplex AUVoiceIO endpoint. Unlike two
@@ -460,9 +460,7 @@ func (h *voiceProcessingEndpoint) WaitForPlaybackCapacity(ctx context.Context, s
 	if h == nil || samples <= 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	low, high, err := audio.PlaybackQueueWatermarks(h.format)
 	if err != nil {
 		return err

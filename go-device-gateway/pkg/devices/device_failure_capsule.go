@@ -208,7 +208,7 @@ func LoadDuplexFailureCapsule(dir string) (*DuplexFailureCapsule, error) {
 	return &DuplexFailureCapsule{Manifest: manifest, ProviderInput: provider, Rendered: rendered, Captured: captured, NearEnd: near, Background: background, Events: events}, nil
 }
 
-func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err error) {
+func ReplayDuplexFailureCapsule(ctx context.Context, dir string) (_ *SimulatedDuplexRegistry, err error) {
 	capsule, err := LoadDuplexFailureCapsule(dir)
 	if err != nil {
 		return nil, err
@@ -226,10 +226,10 @@ func ReplayDuplexFailureCapsule(dir string) (_ *SimulatedDuplexRegistry, err err
 	if !ok {
 		return nil, fmt.Errorf("simulated duplex registry opened %T", opened)
 	}
-	if err := stream.WriteSamples(context.Background(), capsule.ProviderInput); err != nil {
+	if err := stream.WriteSamples(ctx, capsule.ProviderInput); err != nil {
 		return nil, err
 	}
-	if err := registry.Advance(capsule.Manifest.CallbackCount); err != nil {
+	if err := registry.Advance(capsule.Manifest.CallbackCount); err != nil { //nolint:contextcheck // the simulated registry advances synchronously in memory; its callbacks are a telemetry root with no caller context
 		return nil, err
 	}
 	if got := encodeSamples(registry.RenderedSamples()); !bytes.Equal(got, encodeSamples(capsule.Rendered)) {
@@ -261,11 +261,13 @@ const duplexTapRender = "render"
 // sample records simulated device telemetry. Observability is best effort:
 // TrySample already isolates sampler panics, and a failing sampler must not
 // change simulated device behavior.
-func (r *SimulatedDuplexRegistry) sample(ctx context.Context, sampler observability.MetricSampler, sample observability.MetricSample) {
-	_ = observability.TrySample(ctx, sampler, sample) //nolint:errcheck // best-effort telemetry must not change simulated device behavior.
+// Simulated callbacks run on the virtual hardware clock, not on behalf of a
+// caller, so their telemetry has no caller context to inherit.
+func (r *SimulatedDuplexRegistry) sample(sampler observability.MetricSampler, sample observability.MetricSample) {
+	_ = observability.TrySample(context.Background(), sampler, sample) //nolint:errcheck,forbidigo // best-effort telemetry from a simulated hardware callback: no caller context, and errors must not change device behavior
 }
 
 // log records a simulated device diagnostic with the same best-effort policy.
-func (r *SimulatedDuplexRegistry) log(ctx context.Context, logger observability.Logger, record observability.LogRecord) {
-	_ = observability.TryLog(ctx, logger, record) //nolint:errcheck // best-effort diagnostics must not change simulated device behavior.
+func (r *SimulatedDuplexRegistry) log(logger observability.Logger, record observability.LogRecord) {
+	_ = observability.TryLog(context.Background(), logger, record) //nolint:errcheck,forbidigo // best-effort diagnostics from a simulated hardware callback: no caller context, and errors must not change device behavior
 }

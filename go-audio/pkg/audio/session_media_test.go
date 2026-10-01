@@ -452,6 +452,12 @@ func TestSessionMediaInboundBacklogLimitFailsInsteadOfDroppingPCM(t *testing.T) 
 }
 
 // closeForTest closes a test-owned resource and reports an unexpected failure.
+// advanceBubbleClock advances the synctest bubble's fake clock by d. Call it
+// only inside synctest.Test, where time.Sleep is virtual.
+func advanceBubbleClock(d time.Duration) {
+	time.Sleep(d) //nolint:forbidigo // inside synctest.Test, Sleep advances the bubble's fake clock instead of waiting on the wall clock
+}
+
 func closeForTest(tb testing.TB, closer io.Closer) {
 	tb.Helper()
 	if err := closer.Close(); err != nil {
@@ -512,9 +518,9 @@ func TestSessionMediaPlaybackActivityFollowsAudibleAudio(t *testing.T) {
 			_, err := media.Endpoints().Inbound.ReadFrame(t.Context())
 			requireNoError(t, err)
 		}
-		time.Sleep(500 * time.Millisecond)
+		advanceBubbleClock(500 * time.Millisecond)
 		assertPlaybackActivity(t, media, "mid-playback", true, 2900, 3100)
-		time.Sleep(time.Second) // past the audio and its acoustic tail
+		advanceBubbleClock(time.Second) // past the audio and its acoustic tail
 		assertPlaybackActivity(t, media, "finished", false, 0, 0)
 
 		pushSpeech(t, media, "resp-next")

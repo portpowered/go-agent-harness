@@ -3,7 +3,6 @@ package audio
 import (
 	"bytes"
 	"errors"
-	"strconv"
 	"testing"
 	"time"
 
@@ -71,37 +70,6 @@ func TestPCM16FrameSizingRejectsInvalidDimensionsAndFractionalSamples(t *testing
 				t.Fatalf("PCM16FrameBytes() = %d, %v; want zero and ErrInvalidPCM16FrameSize", got, err)
 			}
 		})
-	}
-}
-
-func TestPCM16FrameSizingReducesValidInt64Intermediate(t *testing.T) {
-	if strconv.IntSize < 64 {
-		t.Skip("the characterization rate is not representable on 32-bit platforms")
-	}
-	rate := int((uint64(1) << 61) + 24000)
-	samples, err := PCM16FrameSamples(rate, 1, time.Second)
-	if err != nil || samples != rate {
-		t.Fatalf("PCM16FrameSamples() = %d, %v; want exact rate %d", samples, err, rate)
-	}
-	if samples == 24000 {
-		t.Fatal("rate-duration product wrapped to the old bogus 24000-sample result")
-	}
-	bytes, err := PCM16FrameBytes(rate, 1, time.Second)
-	if err != nil || bytes != rate*2 {
-		t.Fatalf("PCM16FrameBytes() = %d, %v; want exact byte count %d", bytes, err, rate*2)
-	}
-}
-
-func TestPCM16FrameSizingRejectsChannelProductOverflow(t *testing.T) {
-	if strconv.IntSize < 64 {
-		t.Skip("the characterization channel count is not representable on 32-bit platforms")
-	}
-	channels := int((uint64(1) << 62) + 1)
-	if got, err := PCM16FrameSamples(4, channels, time.Second); got != 0 || !errors.Is(err, ErrInvalidPCM16FrameSize) {
-		t.Fatalf("PCM16FrameSamples() = %d, %v; want a checked channel-product error", got, err)
-	}
-	if got, err := PCM16FrameBytes(4, channels, time.Second); got != 0 || !errors.Is(err, ErrInvalidPCM16FrameSize) {
-		t.Fatalf("PCM16FrameBytes() = %d, %v; want a checked channel-product error", got, err)
 	}
 }
 

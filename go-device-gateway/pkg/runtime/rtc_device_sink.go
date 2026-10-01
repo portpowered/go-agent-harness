@@ -1,6 +1,5 @@
 package runtime
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 import (
 	"context"
 	"errors"
@@ -10,6 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
@@ -91,8 +93,9 @@ type RTCDeviceSink struct {
 	playbackObservations    rtcDevicePlaybackObservationState
 	loudness                *audio.LoudnessNormalizer
 
-	lifeCtx        context.Context
-	lifeCancel     context.CancelCauseFunc
+	// runCancel cancels the active pump; Close calls it so an in-flight pump
+	// observes ErrRTCDeviceSinkClosed. Guarded by mu.
+	runCancel      context.CancelCauseFunc
 	commands       *audio.PlaybackCommands
 	commandDone    chan struct{}
 	renderWork     chan uint64
@@ -144,8 +147,7 @@ func newRTCDeviceSinkAtRate(registry devicegw.DeviceRegistry, id devicegw.Device
 	return newRTCDeviceSinkFromOpened(sink, deviceRate, rate, voice, playbackObserver), nil
 }
 func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, playbackObserver RTCDevicePlaybackObserver) *RTCDeviceSink {
-	lifeCtx, lifeCancel := context.WithCancelCause(context.Background())
-	commands := newRTCDevicePlaybackCommands()
+	commands := audio.NewDefaultPlaybackCommands()
 	result := &RTCDeviceSink{
 		sink:             sink,
 		commands:         commands,
@@ -158,8 +160,6 @@ func newRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerR
 		deviceRate:       deviceRate,
 		playbackObserver: playbackObserver,
 		loudness:         audio.NewLoudnessNormalizer(audio.LoudnessNormalizerConfig{GainDB: audio.VoiceLoudnessGainDB(voice)}),
-		lifeCtx:          lifeCtx,
-		lifeCancel:       lifeCancel,
 		holdToneConfig:   audio.DefaultHoldToneConfig(),
 		holdToneTick:     defaultRTCDeviceHoldToneTick,
 	}
@@ -352,28 +352,20 @@ func (s *RTCDeviceSink) Pump(ctx context.Context, inbound audio.InboundMedia) er
 	if nilRTCInboundMedia(inbound) {
 		return ErrNilRTCInboundMedia
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 
-	lifeCtx, finish, err := s.beginPump()
+	operationCtx, cancel := context.WithCancelCause(ctx)
+	finish, err := s.beginPump(cancel)
 	if err != nil {
+		cancel(nil)
 		return err
 	}
 	defer finish()
 	if controlled, ok := inbound.(audio.PlaybackControlledInbound); ok {
-		controlled.SetPlaybackController(audio.BufferedPlaybackController{Context: s.lifeCtx, Commands: s.commands})
+		controlled.SetPlaybackController(audio.BufferedPlaybackController{Commands: s.commands})
 		defer controlled.SetPlaybackController(nil)
 	}
-
-	operationCtx, cancel := context.WithCancelCause(ctx)
-	stopLifeHook := context.AfterFunc(lifeCtx, func() {
-		cancel(ErrRTCDeviceSinkClosed)
-	})
-	defer func() {
-		stopLifeHook()
-		cancel(nil)
-	}()
+	defer cancel(nil)
 
 	stopHoldTone := s.startHoldTone(operationCtx)
 	defer stopHoldTone()
@@ -599,9 +591,12 @@ func (s *RTCDeviceSink) Close() error {
 		s.closed = true
 		s.snapshotClosed.Store(true)
 		done := s.runDone
+		cancelRun := s.runCancel
 		s.mu.Unlock()
 
-		s.lifeCancel(ErrRTCDeviceSinkClosed)
+		if cancelRun != nil {
+			cancelRun(ErrRTCDeviceSinkClosed)
+		}
 		if s.commands != nil {
 			s.commands.Close()
 			<-s.commandDone
@@ -647,9 +642,7 @@ func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 	if done == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	select {
 	case <-done:
 		return nil
@@ -658,23 +651,24 @@ func (s *RTCDeviceSink) waitForPump(ctx context.Context) error {
 	}
 }
 
-func (s *RTCDeviceSink) beginPump() (context.Context, func(), error) {
+func (s *RTCDeviceSink) beginPump(cancel context.CancelCauseFunc) (func(), error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, nil, ErrRTCDeviceSinkClosed
+		return nil, ErrRTCDeviceSinkClosed
 	}
 	if s.running {
 		s.mu.Unlock()
-		return nil, nil, ErrRTCDeviceSinkRunning
+		return nil, ErrRTCDeviceSinkRunning
 	}
 	s.running = true
 	s.runDone = make(chan struct{})
-	lifeCtx := s.lifeCtx
+	s.runCancel = cancel
 	s.mu.Unlock()
 
-	return lifeCtx, func() {
+	return func() {
 		s.mu.Lock()
+		s.runCancel = nil
 		if s.running {
 			s.running = false
 			close(s.runDone)

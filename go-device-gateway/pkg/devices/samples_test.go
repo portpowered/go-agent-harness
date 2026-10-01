@@ -2,14 +2,14 @@
 
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
@@ -64,7 +64,7 @@ func testPacedPlaybackBackend(t *testing.T, backend pacedPlaybackBackendForTest,
 			if time.Now().After(deadline) {
 				t.Fatalf("frame %d did not reach the native playback queue", frameIndex)
 			}
-			time.Sleep(time.Millisecond)
+			runtime.Gosched()
 		}
 		raw := make([]byte, audio.FrameSize*2)
 		render(raw)

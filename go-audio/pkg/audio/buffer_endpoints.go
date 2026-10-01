@@ -3,6 +3,8 @@ package audio
 import (
 	"context"
 	"sync"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // BufferedOutbound is the adapter for consumers of the frame media contract.
@@ -10,9 +12,7 @@ import (
 type BufferedOutbound struct{ Producer FrameProducer }
 
 func (b BufferedOutbound) WriteFrame(ctx context.Context, frame PCMFrame) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	return b.Producer.Submit(ctx, frame)
 }
 func (b BufferedOutbound) Close() error { b.Producer.Close(); return nil }
@@ -30,10 +30,8 @@ func newSessionOutboundMedia(writer SessionMediaWriter) *sessionOutboundMedia {
 	}
 }
 
-func (m *sessionOutboundMedia) WriteFrame(ctx context.Context, frame PCMFrame) error { //nolint:contextcheck // A nil context from legacy callers falls back to Background.
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func (m *sessionOutboundMedia) WriteFrame(ctx context.Context, frame PCMFrame) error {
+	ctx = contract.ContextOrBackground(ctx)
 	if len(frame.Samples) == 0 {
 		return ErrSessionMediaEmptyFrame
 	}

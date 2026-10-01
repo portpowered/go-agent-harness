@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -49,7 +50,7 @@ type endpointConfig struct {
 	outputRate           int
 	manualResponseCreate bool
 	available            bool
-	skipReason           string
+	unavailableReason    string
 }
 
 type sessionSettings struct {
@@ -698,4 +699,36 @@ func envFirst(names ...string) string {
 
 func decodeBase64(encoded string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(encoded)
+}
+
+const contextFact = "cobalt-17"
+
+// discardClose closes a connection or body whose exchange already produced
+// its result. A close failure on a finished exchange cannot change the
+// observed behavior, so it must not turn a passing observation into a failure.
+func discardClose(closer io.Closer) {
+	if err := closer.Close(); err != nil {
+		return
+	}
+}
+
+const imageFact = "ORBIT"
+
+// lookupWeatherTool is the single tool offered to the model-chosen function
+// call behavior and its controls.
+func lookupWeatherTool() toolDefinition {
+	return toolDefinition{
+		name:        "lookup_weather",
+		description: "Look up the weather for one city.",
+		parameters: map[string]toolParameter{
+			"city": {typeName: "string", description: "City name."},
+		},
+		required: []string{"city"},
+	}
+}
+
+func openAIInputRate() int {
+	// Keep the behavior body shared while allowing endpoint-specific audio
+	// encoding details required by the two realtime services.
+	return 24000
 }

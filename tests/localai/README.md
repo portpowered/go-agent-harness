@@ -11,8 +11,10 @@ root module:
 
 ```powershell
 $env:GOWORK = "off"
-go test ./... -count=1 -timeout 120s
+go test -tags live ./... -count=1 -timeout 120s
 ```
+
+Without `-tags live` only the offline assertion controls build and run.
 
 The LocalAI case uses `LOCALAI_REALTIME_URL`, then
 `AGENT_MODEL__LOCALAI__BASE_URL`, then the pinned fixture default. The OpenAI
@@ -21,8 +23,8 @@ case requires `AGENT_MODEL__OPENAI__API_KEY` and always requests
 WebSocket endpoint. Secret values are never printed and the suite never reads
 the repository `credentials` file.
 
-Missing LocalAI or OpenAI prerequisites are named skips. A reachable endpoint
-that fails a behavior is a test failure. The four assertion controls run
+With `-tags live`, a missing LocalAI or OpenAI prerequisite is a named test
+failure, as is a reachable endpoint that fails a behavior. The four assertion controls run
 without live services and intentionally log their expected rejection: silent
 PCM, withheld history, no tools, and no image.
 

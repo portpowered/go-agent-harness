@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -18,7 +17,6 @@ import (
 
 const (
 	wasapiBackend       = "wasapi"
-	wasapiPollInterval  = 25 * time.Millisecond // paces WASAPI packet and padding polls
 	coinitMultithreaded = 0
 	clsctxAll           = 0x17
 	deviceStateActive   = 0x1
@@ -325,30 +323,11 @@ func (r *wasapiDeviceRegistry) releaseReservation(id DeviceID) {
 	r.mu.Unlock()
 }
 
-func (r *wasapiDeviceRegistry) observations() DeviceRegistryObservations {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return DeviceRegistryObservations{
-		ListCalls:    r.listCalls,
-		DefaultCalls: r.defaultCalls,
-		OpenCount:    r.openCount,
-		ReleaseCount: r.releaseCount,
-	}
-}
-
 func (r *wasapiDeviceRegistry) isHidden(id DeviceID) bool {
 	r.mu.Lock()
 	hidden := r.hidden[id]
 	r.mu.Unlock()
 	return hidden
-}
-
-// hideForTest lets the shared conformance fixture model a device disappearing
-// after enumeration without changing the production registry contract.
-func (r *wasapiDeviceRegistry) hideForTest(id DeviceID) {
-	r.mu.Lock()
-	r.hidden[id] = true
-	r.mu.Unlock()
 }
 
 type wasapiOpenedDevice struct {
@@ -361,137 +340,6 @@ type wasapiOpenedDevice struct {
 	formatErr error
 	mu        sync.Mutex
 	closed    bool
-}
-
-// verifyDataPathForTest observes the live client rather than only checking
-// that COM activation returned a handle. Capture must expose and consume a
-// packet with measurable energy, while render is fed an explicit silent packet
-// and must show that the audio engine consumes the submitted frames.
-func (d *wasapiOpenedDevice) verifyDataPathForTest() error {
-	cleanup, err := initializeCOM()
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	if d.direction == DirectionInput {
-		return d.verifyCaptureDataPath()
-	}
-	return d.verifyRenderDataPath()
-}
-
-// verifyCaptureDataPath polls until the capture client exposes a non-empty
-// packet. Energy is measured for every packet so a malformed buffer fails,
-// while a valid but currently silent microphone remains a usable capability.
-func (d *wasapiOpenedDevice) verifyCaptureDataPath() error {
-	if d.formatErr != nil {
-		return fmt.Errorf("inspect WASAPI capture format: %w", d.formatErr)
-	}
-	for range 40 {
-		var packets uint32
-		if _, err := d.service.call(audioCaptureClientVTableGetNextPacketSize, uintptr(unsafe.Pointer(&packets))); err != nil {
-			return fmt.Errorf("read WASAPI capture packet size: %w", err)
-		}
-		if packets == 0 {
-			time.Sleep(wasapiPollInterval)
-			continue
-		}
-		frames, err := d.consumeCapturePacket()
-		if err != nil || frames > 0 {
-			// A non-empty packet is the positive data-path signal.
-			return err
-		}
-	}
-	return fmt.Errorf("WASAPI capture produced no positive signal: frames=0 max-energy=0")
-}
-
-// consumeCapturePacket acquires, measures, and releases one capture packet and
-// returns its frame count.
-func (d *wasapiOpenedDevice) consumeCapturePacket() (uint32, error) {
-	var data unsafe.Pointer
-	var frames, flags uint32
-	if _, err := d.service.call(audioCaptureClientVTableGetBuffer, uintptr(unsafe.Pointer(&data)), uintptr(unsafe.Pointer(&frames)), uintptr(unsafe.Pointer(&flags)), 0, 0); err != nil {
-		return 0, fmt.Errorf("acquire WASAPI capture buffer: %w", err)
-	}
-	if frames == 0 {
-		return 0, nil
-	}
-	_, energyErr := wasapiCapturePacketEnergy(data, frames, flags, d.format)
-	if _, releaseErr := d.service.call(audioCaptureClientVTableReleaseBuffer, uintptr(frames)); releaseErr != nil {
-		return 0, fmt.Errorf("release WASAPI capture buffer: %w", releaseErr)
-	}
-	return frames, energyErr
-}
-
-// verifyRenderDataPath feeds an explicit silent packet and requires the audio
-// engine to consume the submitted frames.
-func (d *wasapiOpenedDevice) verifyRenderDataPath() error {
-	var bufferSize uint32
-	if _, err := d.client.call(audioClientVTableGetBufferSize, uintptr(unsafe.Pointer(&bufferSize))); err != nil {
-		return fmt.Errorf("read WASAPI render buffer size: %w", err)
-	}
-	if bufferSize == 0 {
-		return fmt.Errorf("WASAPI render buffer size is zero")
-	}
-	var lastBefore, lastAfter, lastSubmitted uint32
-	for range 40 {
-		padding, err := d.renderPadding("read WASAPI render padding")
-		if err != nil {
-			return err
-		}
-		if padding >= bufferSize {
-			time.Sleep(wasapiPollInterval)
-			continue
-		}
-		frames := bufferSize - padding
-		submittedPadding, err := d.submitSilentRenderPacket(frames)
-		if err != nil {
-			return err
-		}
-		lastBefore, lastAfter, lastSubmitted = padding, submittedPadding, frames
-		if submittedPadding <= padding {
-			// The engine may have consumed the packet between ReleaseBuffer
-			// and this observation. Retry until a queued packet is observable.
-			time.Sleep(wasapiPollInterval)
-			continue
-		}
-		return d.awaitRenderConsumption(padding, submittedPadding, frames)
-	}
-	return fmt.Errorf("WASAPI render submission was not observable: before=%d after=%d submitted=%d", lastBefore, lastAfter, lastSubmitted)
-}
-
-func (d *wasapiOpenedDevice) renderPadding(operation string) (uint32, error) {
-	var padding uint32
-	if _, err := d.client.call(audioClientVTableGetCurrentPadding, uintptr(unsafe.Pointer(&padding))); err != nil {
-		return 0, fmt.Errorf("%s: %w", operation, err)
-	}
-	return padding, nil
-}
-
-// submitSilentRenderPacket submits frames of silence and returns the padding
-// observed immediately after submission.
-func (d *wasapiOpenedDevice) submitSilentRenderPacket(frames uint32) (uint32, error) {
-	var buffer unsafe.Pointer
-	if _, err := d.service.call(audioRenderClientVTableGetBuffer, uintptr(frames), uintptr(unsafe.Pointer(&buffer))); err != nil {
-		return 0, fmt.Errorf("acquire WASAPI render buffer: %w", err)
-	}
-	if _, err := d.service.call(audioRenderClientVTableReleaseBuffer, uintptr(frames), audclntBufferFlagsSilent); err != nil {
-		return 0, fmt.Errorf("release WASAPI render buffer: %w", err)
-	}
-	return d.renderPadding("read WASAPI render padding after submission")
-}
-
-func (d *wasapiOpenedDevice) awaitRenderConsumption(padding, submittedPadding, frames uint32) error {
-	for range 40 {
-		time.Sleep(wasapiPollInterval)
-		consumedPadding, err := d.renderPadding("read WASAPI render padding during consumption")
-		if err != nil {
-			return err
-		}
-		if consumedPadding < submittedPadding {
-			return nil
-		}
-	}
-	return fmt.Errorf("WASAPI render engine did not consume submitted frames: before=%d after=%d submitted=%d", padding, submittedPadding, frames)
 }
 
 func (d *wasapiOpenedDevice) Close() error {

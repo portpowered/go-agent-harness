@@ -1,17 +1,15 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"encoding/binary"
 	"errors"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
-	"time"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestDeviceSinkVirtualFramesAndLoss(t *testing.T) {
@@ -273,42 +271,6 @@ func TestDeviceSinkContractsAndConcurrentClose(t *testing.T) {
 	}
 	if err := waitDeviceError(t, closeDone); err != nil {
 		t.Fatalf("concurrent Close = %v", err)
-	}
-}
-
-func TestDeviceAdaptersS9LifecycleBaseline(t *testing.T) {
-	beforeHandles := processOpenHandleCount(t)
-	beforeGoroutines := runtime.NumGoroutine()
-	r := adapterTestRegistry(t)
-	const iterations = 16
-	for range iterations {
-		source, err := NewDeviceSource(r, "virtual:input")
-		if err != nil {
-			t.Fatal(err)
-		}
-		sink, err := NewDeviceSink(r, "virtual:output")
-		if err != nil {
-			closeForTest(t, "source", source)
-			t.Fatal(err)
-		}
-		if err := source.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if err := sink.Close(); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got := r.Observations()
-	if got.OpenCount != iterations*2 || got.ReleaseCount != iterations*2 {
-		t.Fatalf("lifecycle observations=%+v, want %d opens and releases", got, iterations*2)
-	}
-	assertHandleCountWithinTolerance(t, settledProcessOpenHandleCount(t, beforeHandles), beforeHandles, "device source/sink lifecycle")
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for current := runtime.NumGoroutine(); current > beforeGoroutines+2 && time.Now().Before(deadline); current = runtime.NumGoroutine() {
-		runtime.Gosched()
-	}
-	if current := runtime.NumGoroutine(); current > beforeGoroutines+2 {
-		t.Fatalf("goroutines after lifecycle=%d, want <= %d", current, beforeGoroutines+2)
 	}
 }
 

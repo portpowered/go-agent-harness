@@ -7,13 +7,14 @@
 package clock
 
 import (
-	"container/heap"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // Source supplies the current time to code that should not depend directly on
@@ -250,7 +251,7 @@ func (d *Deterministic) NewTimer(duration time.Duration) Timer {
 		clock: d, deadlineElapsed: deadlineElapsed, deadline: d.base.Add(deadlineElapsed),
 		sequence: d.sequence, ch: make(chan time.Time, 1), active: true, index: -1,
 	}
-	heap.Push(&d.timers, timer)
+	d.timers.push(timer)
 	d.notifyTimersChangedLocked()
 	d.fireDueTimersLocked()
 	d.advanceMu.Unlock()
@@ -297,7 +298,7 @@ func (d *Deterministic) fireDueTimersLocked() {
 		if timer.deadlineElapsed > nowElapsed {
 			return
 		}
-		heap.Pop(&d.timers)
+		d.timers.remove(0)
 		d.notifyTimersChangedLocked()
 		timer.fire(d.base.Add(nowElapsed))
 	}
@@ -363,9 +364,7 @@ func WithTimeout(parent context.Context, source Source, timeout time.Duration) (
 	return ctx, cancel, nil
 }
 func wait(ctx context.Context, source TimerSource, duration time.Duration) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	timer := source.NewTimer(duration)
 	if timer == nil {
 		return ErrTimerSourceUnavailable
@@ -379,9 +378,7 @@ func wait(ctx context.Context, source TimerSource, duration time.Duration) error
 	}
 }
 func withDeadline(parent context.Context, source TimerSource, deadline time.Time) (context.Context, context.CancelFunc) {
-	if parent == nil {
-		parent = context.Background()
-	}
+	parent = contract.ContextOrBackground(parent)
 	child := &deadlineContext{parent: parent, deadline: deadline, source: source, done: make(chan struct{})}
 	if err := parent.Err(); err != nil {
 		child.finish(contextCause(parent))

@@ -1,10 +1,12 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+import (
+	"context"
 
-import "context"
-
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+)
 
 type devicePlaybackWaiter interface {
 	WaitForPlayback(context.Context) error
@@ -140,9 +142,7 @@ func (s *DeviceSink) WriteFrame(ctx context.Context, frame []int16) error {
 	if err := audio.ContextError(ctx); err != nil {
 		return err
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	if err := audio.ValidateFrame("write", frame); err != nil {
 		return err
 	}
@@ -167,9 +167,7 @@ func (s *DeviceSink) WaitForPlayback(ctx context.Context) error {
 	if s == nil || s.playbackWaiter == nil {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	return s.adapter.finish("wait for playback", s.playbackWaiter.WaitForPlayback(ctx))
 }
 
@@ -180,9 +178,7 @@ func (s *DeviceSink) WaitForPlaybackCapacity(ctx context.Context, samples int) e
 	if s == nil || s.capacityWaiter == nil || samples <= 0 {
 		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	return s.adapter.finish("wait for playback capacity", s.capacityWaiter.WaitForPlaybackCapacity(ctx, samples))
 }
 
@@ -199,9 +195,7 @@ func (s *DeviceSink) WriteSamples(ctx context.Context, samples []int16) error {
 	if len(samples) == audio.FrameSize {
 		return s.WriteFrame(ctx, samples)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	if err := s.adapter.begin("write"); err != nil {
 		return err
 	}

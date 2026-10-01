@@ -1,7 +1,5 @@
 package devices
 
-import audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
 	"context"
 	"errors"
@@ -9,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 func TestDeviceSourceConformanceAndValidation(t *testing.T) {

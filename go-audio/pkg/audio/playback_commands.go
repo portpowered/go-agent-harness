@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 )
 
 // ErrUnsupportedPlaybackCommand identifies a control kind with no equivalent
@@ -84,16 +86,40 @@ func NewPlaybackCommands(capacity int) (*PlaybackCommands, error) {
 	if capacity <= 0 {
 		return nil, errors.New("playback command capacity must be positive")
 	}
-	return &PlaybackCommands{requests: make(chan *PlaybackRequest, capacity), done: make(chan struct{})}, nil
+	return newPlaybackCommands(capacity), nil
+}
+
+// DefaultPlaybackCommandCapacity bounds the playback control requests a
+// device playback worker queues before TrySubmit reports ErrControlFull.
+const DefaultPlaybackCommandCapacity = 32
+
+// NewDefaultPlaybackCommands returns a queue holding up to
+// DefaultPlaybackCommandCapacity requests. It cannot fail.
+func NewDefaultPlaybackCommands() *PlaybackCommands {
+	return newPlaybackCommands(DefaultPlaybackCommandCapacity)
+}
+
+func newPlaybackCommands(capacity int) *PlaybackCommands {
+	return &PlaybackCommands{requests: make(chan *PlaybackRequest, capacity), done: make(chan struct{})}
 }
 
 func (q *PlaybackCommands) Exchange(ctx context.Context, operation PlaybackOperation, response PlaybackResponse) PlaybackReceipt {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	if err := ctx.Err(); err != nil {
 		return PlaybackReceipt{Err: err}
 	}
+	return q.exchange(ctx.Done(), ctx.Err, operation, response)
+}
+
+// exchangeUntilClosed is Exchange bounded only by the queue's own lifetime:
+// it returns ErrClosed once Close is called.
+func (q *PlaybackCommands) exchangeUntilClosed(operation PlaybackOperation, response PlaybackResponse) PlaybackReceipt {
+	return q.exchange(nil, nil, operation, response)
+}
+
+// exchange admits one request and waits for its receipt until cancel fires
+// (reporting cause) or the queue closes. A nil cancel channel never fires.
+func (q *PlaybackCommands) exchange(cancel <-chan struct{}, cause func() error, operation PlaybackOperation, response PlaybackResponse) PlaybackReceipt {
 	req := &PlaybackRequest{ID: q.sequence.Add(1), Operation: operation, Response: response, reply: make(chan PlaybackReceipt, 1), observer: q.receiptObserverSnapshot()}
 	select {
 	case <-q.done:
@@ -102,16 +128,16 @@ func (q *PlaybackCommands) Exchange(ctx context.Context, operation PlaybackOpera
 	}
 	select {
 	case q.requests <- req:
-	case <-ctx.Done():
-		return PlaybackReceipt{CommandID: req.ID, Err: ctx.Err()}
+	case <-cancel:
+		return PlaybackReceipt{CommandID: req.ID, Err: cause()}
 	case <-q.done:
 		return PlaybackReceipt{CommandID: req.ID, Err: ErrClosed}
 	}
 	select {
 	case receipt := <-req.reply:
 		return receipt
-	case <-ctx.Done():
-		return PlaybackReceipt{CommandID: req.ID, Err: ctx.Err()}
+	case <-cancel:
+		return PlaybackReceipt{CommandID: req.ID, Err: cause()}
 	case <-q.done:
 		return PlaybackReceipt{CommandID: req.ID, Err: ErrClosed}
 	}
@@ -198,6 +224,18 @@ func (q *PlaybackCommands) receiptObserverSnapshot() PlaybackReceiptObserver {
 }
 
 func (q *PlaybackCommands) Receive(ctx context.Context) (*PlaybackRequest, error) {
+	return q.receive(ctx.Done(), ctx.Err)
+}
+
+// ReceiveUntilClosed is Receive for the queue's owning worker: it waits for
+// the next request until Close is called and then returns ErrClosed.
+func (q *PlaybackCommands) ReceiveUntilClosed() (*PlaybackRequest, error) {
+	return q.receive(nil, nil)
+}
+
+// receive waits for the next request until cancel fires (reporting cause) or
+// the queue closes. A nil cancel channel never fires.
+func (q *PlaybackCommands) receive(cancel <-chan struct{}, cause func() error) (*PlaybackRequest, error) {
 	select {
 	case <-q.done:
 		return nil, ErrClosed
@@ -206,8 +244,8 @@ func (q *PlaybackCommands) Receive(ctx context.Context) (*PlaybackRequest, error
 	select {
 	case req := <-q.requests:
 		return req, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-cancel:
+		return nil, cause()
 	case <-q.done:
 		return nil, ErrClosed
 	}
@@ -217,19 +255,19 @@ func (q *PlaybackCommands) Close() { q.once.Do(func() { close(q.done) }) }
 // BufferedPlaybackController adapts the provider's synchronous truncation
 // protocol to explicit queued commands and applied receipts. Its only
 // capability is the memory control port; physical I/O stays with its consumer.
+// Each exchange waits until the worker applies it or Commands is closed.
 type BufferedPlaybackController struct {
-	Context  context.Context
 	Commands *PlaybackCommands
 }
 
 func (c BufferedPlaybackController) StartPlayback(response PlaybackResponse) {
-	c.Commands.Exchange(c.Context, PlaybackStart, response)
+	c.Commands.exchangeUntilClosed(PlaybackStart, response)
 }
 func (c BufferedPlaybackController) InterruptPlayback(response PlaybackResponse) (int, bool) {
-	r := c.Commands.Exchange(c.Context, PlaybackInterrupt, response)
+	r := c.Commands.exchangeUntilClosed(PlaybackInterrupt, response)
 	return r.Interruption.AudioEndMS, r.Applied && r.Err == nil
 }
 func (c BufferedPlaybackController) InterruptActivePlayback() (PlaybackInterruption, bool) {
-	r := c.Commands.Exchange(c.Context, PlaybackInterruptActive, PlaybackResponse{})
+	r := c.Commands.exchangeUntilClosed(PlaybackInterruptActive, PlaybackResponse{})
 	return r.Interruption, r.Applied && r.Err == nil
 }

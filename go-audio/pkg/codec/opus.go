@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+
 	"github.com/pion/opus"
 )
 
@@ -187,9 +189,7 @@ func NewOpusEncoder(configs ...OpusCodecConfig) (*OpusEncoder, error) {
 // Encode consumes one caller-owned PCM16 frame and returns independent Opus
 // packet storage. The input is neither mutated nor retained.
 func (e *OpusEncoder) Encode(ctx context.Context, samples []int16) ([]byte, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {

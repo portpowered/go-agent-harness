@@ -3,58 +3,13 @@ package devices
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
-	"os"
 	"reflect"
-	"runtime"
 	"testing"
-	"time"
 
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
-
-const processHandleCountSettleTolerance = 1
-
-func processOpenHandleCount(t *testing.T) int {
-	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skipf("S9 open-handle count skipped: /proc/self/fd is unavailable on %s", runtime.GOOS)
-	}
-	entries, err := os.ReadDir("/proc/self/fd")
-	if err != nil {
-		t.Skipf("S9 open-handle count skipped: cannot read /proc/self/fd: %v", err)
-	}
-	return len(entries)
-}
-
-func settledProcessOpenHandleCount(t *testing.T, want int) int {
-	t.Helper()
-	last := want
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		last = processOpenHandleCount(t)
-		if withinHandleCountTolerance(last, want) {
-			return last
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return last
-}
-
-func assertHandleCountWithinTolerance(t *testing.T, got, want int, operation string) {
-	t.Helper()
-	if !withinHandleCountTolerance(got, want) {
-		t.Fatalf("open-handle count after %s = %d, want %d +/- %d", operation, got, want, processHandleCountSettleTolerance)
-	}
-}
-
-func withinHandleCountTolerance(got, want int) bool {
-	delta := got - want
-	if delta < 0 {
-		delta = -delta
-	}
-	return delta <= processHandleCountSettleTolerance
-}
 
 func assertSourceFrames(t *testing.T, source audio.AudioSource, samples []int16) {
 	t.Helper()
@@ -89,6 +44,16 @@ func closeForTest(tb testing.TB, name string, closer io.Closer) {
 	if err := closer.Close(); err != nil {
 		tb.Errorf("close %s: %v", name, err)
 	}
+}
+
+// constantDevice builds a device descriptor from test-constant identifiers.
+// Invalid constants are a fixture bug, not a runtime state.
+func constantDevice(backend, nativeID, name string, direction Direction) Device {
+	device, err := NewDevice(backend, nativeID, name, direction)
+	if err != nil {
+		panic(fmt.Sprintf("devices: invalid constant device %s/%s: %v", backend, nativeID, err))
+	}
+	return device
 }
 
 // noErrorForTest fails the test immediately on an unexpected error.

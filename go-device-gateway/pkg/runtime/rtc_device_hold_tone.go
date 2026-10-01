@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
@@ -28,9 +30,7 @@ var ErrInvalidSessionTimingClock = errors.New("session timing clock does not pro
 // not implement TimerSource is treated as an invalid explicit injection and
 // does not silently fall back to host time.
 func WithTimingClock(ctx context.Context, source platformclock.Source) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = contract.ContextOrBackground(ctx)
 	return context.WithValue(ctx, timingClockContextKey{}, timingClockValue{source: source})
 }
 

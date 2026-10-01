@@ -69,7 +69,7 @@ func TestNegativeControlsRejectFalsePositives(t *testing.T) {
 		{
 			name: "no-tools",
 			check: func() error {
-				return requireExactlyOneToolCall(nil, lookupWeatherTool.name)
+				return requireExactlyOneToolCall(nil, lookupWeatherTool().name)
 			},
 		},
 		{

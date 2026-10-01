@@ -59,7 +59,7 @@ func TestDuplexCapsuleAdversarialAcousticMatrix(t *testing.T) {
 			if err := WriteDuplexFailureCapsule(dir, scenario, provider, registry); err != nil {
 				t.Fatal(err)
 			}
-			replayed, err := ReplayDuplexFailureCapsule(dir)
+			replayed, err := ReplayDuplexFailureCapsule(t.Context(), dir)
 			if err != nil {
 				t.Fatal(err)
 			}

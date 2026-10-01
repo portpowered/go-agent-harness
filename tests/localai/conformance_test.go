@@ -1,10 +1,14 @@
+//go:build live
+
+// The live conformance suite needs reachable LocalAI and OpenAI Realtime
+// endpoints; build it with -tags live. A missing prerequisite is a failure.
+
 package localai
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -22,24 +26,26 @@ type behaviorCase struct {
 	run  func(*testing.T, context.Context, endpointConfig) (behaviorObservation, error)
 }
 
-var behaviorCases = []behaviorCase{
-	{name: "audio-round-trip", run: runAudioRoundTrip},
-	{name: "three-turn-context", run: runThreeTurnContext},
-	{name: "vad-barge-in", run: runVADBargeIn},
-	{name: "model-chosen-function-call", run: runFunctionCall},
-	{name: "image-input", run: runImageInput},
+func behaviorCases() []behaviorCase {
+	return []behaviorCase{
+		{name: "audio-round-trip", run: runAudioRoundTrip},
+		{name: "three-turn-context", run: runThreeTurnContext},
+		{name: "vad-barge-in", run: runVADBargeIn},
+		{name: "model-chosen-function-call", run: runFunctionCall},
+		{name: "image-input", run: runImageInput},
+	}
 }
 
 func TestLiveRealtimeTierConformance(t *testing.T) {
 	endpoints := configuredEndpoints(t)
-	for _, behavior := range behaviorCases {
+	for _, behavior := range behaviorCases() {
 
 		t.Run(behavior.name, func(t *testing.T) {
 			for _, endpoint := range endpoints {
 
 				t.Run(endpoint.name, func(t *testing.T) {
 					if !endpoint.available {
-						t.Skip(endpoint.skipReason)
+						t.Fatal(endpoint.unavailableReason)
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), behaviorTimeout)
 					defer cancel()
@@ -75,9 +81,9 @@ func configuredEndpoints(t *testing.T) []endpointConfig {
 		manualResponseCreate: false,
 	}
 	if localErr != nil {
-		local.skipReason = "localai-endpoint-unavailable: invalid endpoint configuration"
+		local.unavailableReason = "localai-endpoint-unavailable: invalid endpoint configuration"
 	} else if !probeLocalEndpoint(local) {
-		local.skipReason = fmt.Sprintf("localai-endpoint-unavailable: %s (start deploy/localai with docker compose)", safeEndpoint(local.url))
+		local.unavailableReason = fmt.Sprintf("localai-endpoint-unavailable: %s (start deploy/localai with docker compose)", safeEndpoint(local.url))
 	} else {
 		local.available = true
 	}
@@ -98,19 +104,13 @@ func configuredEndpoints(t *testing.T) []endpointConfig {
 	}
 	switch {
 	case openAIErr != nil:
-		openAI.skipReason = "openai-endpoint-unavailable: invalid endpoint configuration"
+		openAI.unavailableReason = "openai-endpoint-unavailable: invalid endpoint configuration"
 	case openAI.apiKey == "":
-		openAI.skipReason = "openai-credential-missing: set AGENT_MODEL__OPENAI__API_KEY"
+		openAI.unavailableReason = "openai-credential-missing: set AGENT_MODEL__OPENAI__API_KEY"
 	default:
 		openAI.available = true
 	}
 	return []endpointConfig{local, openAI}
-}
-
-func openAIInputRate() int {
-	// Keep the behavior body shared while allowing endpoint-specific audio
-	// encoding details required by the two realtime services.
-	return 24000
 }
 
 func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
@@ -152,8 +152,6 @@ func runAudioRoundTrip(t *testing.T, ctx context.Context, endpoint endpointConfi
 		evidence: fmt.Sprintf("audio_deltas=%d pcm_bytes=%d rms=%s", countAudioDeltas(response.events), len(response.audio), rmsEvidence(response.audio)),
 	}, nil
 }
-
-const contextFact = "cobalt-17"
 
 func runThreeTurnContext(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
 	t.Helper()
@@ -351,15 +349,6 @@ func (r *bargeInRun) finish(event realtimeEvent) (behaviorObservation, error) {
 	}, nil
 }
 
-var lookupWeatherTool = toolDefinition{
-	name:        "lookup_weather",
-	description: "Look up the weather for one city.",
-	parameters: map[string]toolParameter{
-		"city": {typeName: "string", description: "City name."},
-	},
-	required: []string{"city"},
-}
-
 const functionCallPrompt = "Use the lookup_weather tool exactly once for Seattle. Do not answer in text before choosing the tool."
 
 func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
@@ -368,7 +357,7 @@ func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig)
 	conn, err := endpoint.connect(ctx, sessionSettings{
 		modalities:   []string{"text"},
 		instructions: "When a user asks for weather, choose the named tool rather than inventing an answer.",
-		tools:        []toolDefinition{lookupWeatherTool},
+		tools:        []toolDefinition{lookupWeatherTool()},
 	})
 	if err != nil {
 		return behaviorObservation{}, err
@@ -378,7 +367,7 @@ func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig)
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("tool-enabled response: %w", err)
 	}
-	if err := requireExactlyOneToolCall(positive.calls, lookupWeatherTool.name); err != nil {
+	if err := requireExactlyOneToolCall(positive.calls, lookupWeatherTool().name); err != nil {
 		return behaviorObservation{}, err
 	}
 
@@ -394,18 +383,16 @@ func runFunctionCall(t *testing.T, ctx context.Context, endpoint endpointConfig)
 	if err != nil {
 		return behaviorObservation{}, fmt.Errorf("no-tools control response: %w", err)
 	}
-	if err := requireExactlyOneToolCall(control.calls, lookupWeatherTool.name); err == nil {
+	if err := requireExactlyOneToolCall(control.calls, lookupWeatherTool().name); err == nil {
 		return behaviorObservation{}, fmt.Errorf("no-tools negative control unexpectedly passed: calls=%v", control.calls)
 	} else {
 		t.Logf("negative control no-tools rejected: %v (observed calls=%d)", err, len(control.calls))
 	}
 	return behaviorObservation{
 		latency:  time.Since(started),
-		evidence: fmt.Sprintf("tool=%s calls=%d no_tools_calls=%d", lookupWeatherTool.name, len(positive.calls), len(control.calls)),
+		evidence: fmt.Sprintf("tool=%s calls=%d no_tools_calls=%d", lookupWeatherTool().name, len(positive.calls), len(control.calls)),
 	}, nil
 }
-
-const imageFact = "ORBIT"
 
 func runImageInput(t *testing.T, ctx context.Context, endpoint endpointConfig) (behaviorObservation, error) {
 	t.Helper()
@@ -474,15 +461,6 @@ func rmsEvidence(audio []byte) string {
 		return "invalid(" + err.Error() + ")"
 	}
 	return fmt.Sprintf("%.6f", rms)
-}
-
-// discardClose closes a connection or body whose exchange already produced
-// its result. A close failure on a finished exchange cannot change the
-// observed behavior, so it must not turn a passing observation into a failure.
-func discardClose(closer io.Closer) {
-	if err := closer.Close(); err != nil {
-		return
-	}
 }
 
 func decodePCMDelta(encoded string) ([]byte, error) {

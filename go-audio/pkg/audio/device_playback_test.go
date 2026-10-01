@@ -1,12 +1,12 @@
 package audio
 
-import "github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-
 import (
 	"errors"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 func TestPlaybackQueueCapacityUsesResolvedFormatAndLatency(t *testing.T) {
