@@ -30,8 +30,10 @@ var (
 // final response frame is retained at its actual length and marks the output
 // boundary instead of being padded as if it were a provider packet.
 type Mixer struct {
-	ctx       context.Context
+	// cancel stops the run goroutine, which owns the derived run context;
+	// stopping closes once Close or a failure has cancelled it.
 	cancel    context.CancelFunc
+	stopping  <-chan struct{}
 	scheduler clock.TimerSource
 	format    Format
 	streamID  string
@@ -67,12 +69,12 @@ func New(ctx context.Context, scheduler clock.TimerSource, config Config) (*Mixe
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	m := &Mixer{
-		ctx: runCtx, cancel: cancel, scheduler: scheduler, format: config.Format,
+		cancel: cancel, stopping: runCtx.Done(), scheduler: scheduler, format: config.Format,
 		streamID:  config.StreamID,
 		frameSize: samples, inputCap: config.InputQueueFrames, sourceLimit: MaxPCM16MixSources,
 		inputs: make(map[string]*input), output: make(chan MixedFrame, config.OutputQueueFrames), done: make(chan struct{}),
 	}
-	go m.run()
+	go m.run(runCtx)
 	return m, nil
 }
 
@@ -83,7 +85,7 @@ func (m *Mixer) Format() Format {
 	return m.format
 }
 
-func (m *Mixer) run() {
+func (m *Mixer) run(ctx context.Context) {
 	defer close(m.done)
 	defer close(m.output)
 	next := m.scheduler.Now().Add(m.format.FrameDuration)
@@ -98,7 +100,7 @@ func (m *Mixer) run() {
 			return
 		}
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C():
@@ -120,7 +122,7 @@ func (m *Mixer) run() {
 		}
 		select {
 		case m.output <- MixedFrame{Frame: frame, Sources: sources}:
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}

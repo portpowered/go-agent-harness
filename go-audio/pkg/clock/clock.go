@@ -402,7 +402,7 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 }
 
 type deadlineContext struct {
-	parent   context.Context
+	parent   context.Context //nolint:containedctx // deadlineContext is itself a context.Context derived from parent; it must hold its parent
 	deadline time.Time
 	source   TimerSource
 	done     chan struct{}

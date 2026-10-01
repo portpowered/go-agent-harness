@@ -155,8 +155,8 @@ func capacityWaiterRemainsBlockedAboveLowWatermark(t *testing.T) {
 // with the waiter through the public context contract, without production
 // hooks or timing assumptions.
 type blockObservingContext struct {
-	context.Context
-	blocked chan struct{}
+	context.Context //nolint:containedctx // this type is a context.Context that observes Done calls; it must wrap its parent
+	blocked         chan struct{}
 }
 
 func newBlockObservingContext() *blockObservingContext {

@@ -453,7 +453,7 @@ func pendingReadCloses(t *testing.T, in *devicegw.VirtualStream) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	ready, result := make(chan struct{}, 1), make(chan error, 1)
-	go func() { _, err := in.Read(readyContext{Context: ctx, ready: ready}); result <- err }()
+	go func() { _, err := in.Read(readyContext{Context: ctx, ready: ready}); result <- err }() //nolint:contextcheck // readyContext wraps ctx and inherits its cancellation
 	<-ready
 	require.NoError(t, in.Close())
 	require.NoError(t, in.Close())
@@ -480,8 +480,8 @@ func openVirtualStream(t *testing.T, r *devicegw.VirtualRegistry, id devicegw.De
 }
 
 type readyContext struct {
-	context.Context
-	ready chan<- struct{}
+	context.Context //nolint:containedctx // this type is a context.Context that signals each Done call; it must wrap its parent
+	ready           chan<- struct{}
 }
 
 func (c readyContext) Done() <-chan struct{} { c.ready <- struct{}{}; return c.Context.Done() }

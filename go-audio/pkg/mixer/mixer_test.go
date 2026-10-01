@@ -302,7 +302,7 @@ func readFrame(t *testing.T, endpoint audio.InboundMedia) audio.PCMFrame {
 // This lets the test close the mixer at the otherwise intermittent boundary.
 type closeRaceClock struct {
 	*clock.Deterministic
-	ctx     context.Context
+	abort   <-chan struct{} // closes when the test deadline expires
 	ready   chan struct{}
 	mixing  chan struct{}
 	release chan struct{}
@@ -316,7 +316,7 @@ func (c *closeRaceClock) Now() time.Time {
 		close(c.mixing)
 		select {
 		case <-c.release:
-		case <-c.ctx.Done():
+		case <-c.abort:
 		}
 	}
 	return c.Deterministic.Now()
@@ -335,7 +335,7 @@ func TestMixerCloseDuringReadyCadenceDoesNotBecomeFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	scheduler := &closeRaceClock{
-		Deterministic: clock.NewDeterministic(time.Time{}, time.Millisecond), ctx: ctx,
+		Deterministic: clock.NewDeterministic(time.Time{}, time.Millisecond), abort: ctx.Done(),
 		ready: make(chan struct{}, 1), mixing: make(chan struct{}), release: make(chan struct{}),
 	}
 	mix, err := New(ctx, scheduler, Config{Format: Format{SampleRate: 1000, Channels: 1, FrameDuration: time.Millisecond}})
@@ -355,7 +355,7 @@ func TestMixerCloseDuringReadyCadenceDoesNotBecomeFailure(t *testing.T) {
 	await(scheduler.mixing, "ready cadence")
 	result := make(chan error, 1)
 	go func() { result <- mix.Close() }()
-	await(mix.ctx.Done(), "close initiation")
+	await(mix.stopping, "close initiation")
 	close(scheduler.release)
 	select {
 	case err := <-result:

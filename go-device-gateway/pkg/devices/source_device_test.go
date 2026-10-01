@@ -216,9 +216,9 @@ func (h *adapterByteHandle) Read(context.Context) ([]byte, error) {
 func (h *adapterByteHandle) Close() error { return nil }
 
 type adapterReadyContext struct {
-	context.Context
-	ready chan<- struct{}
-	once  sync.Once
+	context.Context //nolint:containedctx // this type is a context.Context that signals its first Done call; it must wrap its parent
+	ready           chan<- struct{}
+	once            sync.Once
 }
 
 func (c *adapterReadyContext) Done() <-chan struct{} {

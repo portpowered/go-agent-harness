@@ -234,7 +234,6 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 	}
 
 	run := &bargeInRun{
-		ctx:      ctx,
 		conn:     conn,
 		rate:     endpoint.inputRate,
 		audio:    audio,
@@ -247,7 +246,7 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 		if err != nil {
 			return behaviorObservation{}, fmt.Errorf("read barge-in event: %w", err)
 		}
-		result, done, err := run.handle(event)
+		result, done, err := run.handle(ctx, event)
 		if err != nil {
 			return behaviorObservation{}, err
 		}
@@ -261,7 +260,6 @@ func runVADBargeIn(t *testing.T, ctx context.Context, endpoint endpointConfig) (
 // sent once the first response audio arrives, and local playback is flushed
 // exactly once when the server reports cancellation.
 type bargeInRun struct {
-	ctx         context.Context
 	conn        *websocket.Conn
 	rate        int
 	audio       []byte
@@ -282,14 +280,14 @@ func (r *bargeInRun) flushPlayback() {
 	r.playback.flush()
 }
 
-func (r *bargeInRun) sendBargeAudio() error {
+func (r *bargeInRun) sendBargeAudio(ctx context.Context) error {
 	if r.bargeSent {
 		return nil
 	}
-	if err := appendAudio(r.ctx, r.conn, r.audio, r.rate); err != nil {
+	if err := appendAudio(ctx, r.conn, r.audio, r.rate); err != nil {
 		return fmt.Errorf("append barge-in audio: %w", err)
 	}
-	if err := appendAudio(r.ctx, r.conn, r.silence, r.rate); err != nil {
+	if err := appendAudio(ctx, r.conn, r.silence, r.rate); err != nil {
 		return fmt.Errorf("append barge-in silence: %w", err)
 	}
 	r.bargeSent = true
@@ -297,7 +295,7 @@ func (r *bargeInRun) sendBargeAudio() error {
 }
 
 // handle applies one server event and reports whether the exchange finished.
-func (r *bargeInRun) handle(event realtimeEvent) (behaviorObservation, bool, error) {
+func (r *bargeInRun) handle(ctx context.Context, event realtimeEvent) (behaviorObservation, bool, error) {
 	r.observation.events = append(r.observation.events, fmt.Sprintf("%s@%s", event.typeName, time.Since(r.started).Round(time.Millisecond)))
 	switch event.typeName {
 	case serverEventError:
@@ -307,7 +305,7 @@ func (r *bargeInRun) handle(event realtimeEvent) (behaviorObservation, bool, err
 			r.vadStarted = true
 		}
 	case "response.output_audio.delta", "response.audio.delta", "response.audio.output.delta":
-		return behaviorObservation{}, false, r.observeAudioDelta(event)
+		return behaviorObservation{}, false, r.observeAudioDelta(ctx, event)
 	case "response.cancelled":
 		r.flushPlayback()
 	case "response.done":
@@ -317,7 +315,7 @@ func (r *bargeInRun) handle(event realtimeEvent) (behaviorObservation, bool, err
 	return behaviorObservation{}, false, nil
 }
 
-func (r *bargeInRun) observeAudioDelta(event realtimeEvent) error {
+func (r *bargeInRun) observeAudioDelta(ctx context.Context, event realtimeEvent) error {
 	chunk, err := decodePCMDelta(stringAt(event.data, "delta"))
 	if err != nil {
 		return err
@@ -329,7 +327,7 @@ func (r *bargeInRun) observeAudioDelta(event realtimeEvent) error {
 	}
 	r.observation.audio = append(r.observation.audio, chunk...)
 	r.playback.enqueue(chunk)
-	return r.sendBargeAudio()
+	return r.sendBargeAudio(ctx)
 }
 
 func (r *bargeInRun) finish(event realtimeEvent) (behaviorObservation, error) {
