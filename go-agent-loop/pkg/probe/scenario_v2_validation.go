@@ -81,7 +81,7 @@ func parseScenarioV2Expectation(raw json.RawMessage, index int) (ScenarioV2Expec
 		return ScenarioV2Expectation{}, err
 	}
 	expectationType := ScenarioV2ExpectationType(typeName)
-	allowed, ok := scenarioV2ExpectationFields[expectationType]
+	allowed, ok := scenarioV2ExpectationFields()[expectationType]
 	if !ok {
 		return ScenarioV2Expectation{}, newScenarioV2Error(location+".type", "unknown expectation variant")
 	}
@@ -346,14 +346,14 @@ func isScenarioV2ToolRefTokenCharacter(character rune) bool {
 }
 
 func validateTypedScenarioV2Step(step ScenarioV2Step, index int, lookup CorpusLookup) error {
-	if _, ok := scenarioV2StepFields[step.Type]; !ok {
+	if _, ok := scenarioV2StepFields()[step.Type]; !ok {
 		return newScenarioV2Error(fmt.Sprintf("steps[%d].type", index), "unknown step variant")
 	}
 	return validateScenarioV2StepRequiredFields(step, fmt.Sprintf("steps[%d]", index), lookup)
 }
 
 func validateTypedScenarioV2Expectation(expectation ScenarioV2Expectation, index int) error {
-	if _, ok := scenarioV2ExpectationFields[expectation.Type]; !ok {
+	if _, ok := scenarioV2ExpectationFields()[expectation.Type]; !ok {
 		return newScenarioV2Error(fmt.Sprintf("expectations[%d].type", index), "unknown expectation variant")
 	}
 	return validateScenarioV2ExpectationRequiredFields(expectation, fmt.Sprintf("expectations[%d]", index))

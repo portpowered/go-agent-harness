@@ -223,7 +223,7 @@ func parseScenarioV2Step(raw json.RawMessage, index int, lookup CorpusLookup, fi
 		return ScenarioV2Step{}, err
 	}
 	stepType := ScenarioV2StepType(typeName)
-	allowed, ok := scenarioV2StepFields[stepType]
+	allowed, ok := scenarioV2StepFields()[stepType]
 	if !ok {
 		return ScenarioV2Step{}, newScenarioV2Error(location+".type", "unknown step variant")
 	}

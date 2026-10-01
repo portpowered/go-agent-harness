@@ -16,8 +16,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
 )
 
-var updateGoalCatalogGolden = flag.Bool("update-goal-catalog-golden", false, "update the blind-probe goal catalog golden")
-
 // Ordinary test runs compare against committed output. The explicit update
 // flag is the only path that rewrites the golden fixture.
 //
@@ -494,7 +492,7 @@ func TestGoalCatalogGoalTextIsBlindProbeReadyAndMatchesGolden(t *testing.T) {
 
 	got := []byte(renderGoalList(catalog))
 	path := filepath.FromSlash("testdata/goal_catalog.golden")
-	if *updateGoalCatalogGolden {
+	if goalCatalogUpdateRequested() {
 		if err := os.WriteFile(path, got, 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
@@ -507,6 +505,13 @@ func TestGoalCatalogGoalTextIsBlindProbeReadyAndMatchesGolden(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("goal catalog golden differs; run with -update-goal-catalog-golden only after reviewing the behavior change\ngot:\n%s\nwant:\n%s", got, want)
 	}
+}
+
+// goalCatalogUpdateRequested reports whether -update-goal-catalog-golden,
+// registered by the package TestMain, was set on the test command line.
+func goalCatalogUpdateRequested() bool {
+	f := flag.Lookup("update-goal-catalog-golden")
+	return f != nil && f.Value.String() == "true"
 }
 
 func TestGoalCatalogValidationRejectsBlindProbeHints(t *testing.T) {

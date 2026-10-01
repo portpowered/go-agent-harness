@@ -13,8 +13,6 @@ import (
 	"testing"
 )
 
-var updateReconstructionGoldens = flag.Bool("update", false, "update reconstruction golden files")
-
 // The fixtures are intentionally embedded so ordinary test runs only compare
 // against the committed files. The -update flag is the only path that writes
 // them back to the worktree.
@@ -332,7 +330,8 @@ func TestReconstructModelMessageFromDeltas_TruncatedStreamContract(t *testing.T)
 	if got.TextContent() != "partial" {
 		t.Fatalf("current partial payload changed: got %q", got.TextContent())
 	}
-	t.Skip("DEFECT: reconstruction has no partial/completion marker; add the intended partial-result assertion when the public contract exposes one")
+	// Known gap: reconstruction has no partial/completion marker. Add the
+	// intended partial-result assertion when the public contract exposes one.
 }
 
 // StreamMessage carries ordering metadata, but reconstruction currently ignores
@@ -347,7 +346,9 @@ func TestReconstructModelMessageFromDeltas_OutOfOrderContract(t *testing.T) {
 	if got.TextContent() != "secondfirst" {
 		t.Fatalf("unexpected current observation: got %q", got.TextContent())
 	}
-	t.Skip("DEFECT: reconstruction ignores GlobalIndex and has no typed out-of-order error; add canonical-order or typed-error assertion when the public contract exists")
+	// Known gap: reconstruction ignores GlobalIndex and has no typed
+	// out-of-order error. Add a canonical-order or typed-error assertion when
+	// the public contract exists.
 }
 
 func modelDelta(typ StreamMessageType, value StreamMessageValue) StreamMessage {
@@ -391,7 +392,7 @@ func assertReconstructionGolden(t *testing.T, name string, messages []Message) {
 	encoded = append(encoded, '\n')
 
 	path := filepath.FromSlash("testdata/reconstruction/golden/" + name + ".json")
-	if *updateReconstructionGoldens {
+	if goldenUpdateRequested("update") {
 		if err := os.WriteFile(path, encoded, 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
@@ -526,4 +527,19 @@ func fuzzToolDeltas(controls []byte, text string, payload []byte, toolCount int)
 		}
 	}
 	return deltas
+}
+
+// TestMain registers the golden-update flags before the test binary parses
+// its command line, so they need no package-level variables.
+func TestMain(m *testing.M) {
+	flag.Bool("update", false, "update reconstruction golden files")
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// goldenUpdateRequested reports whether the named golden-update flag was set
+// on the test command line.
+func goldenUpdateRequested(name string) bool {
+	f := flag.Lookup(name)
+	return f != nil && f.Value.String() == "true"
 }

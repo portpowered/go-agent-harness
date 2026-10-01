@@ -2,6 +2,8 @@ package probe
 
 import (
 	"errors"
+	"flag"
+	"os"
 	"testing"
 )
 
@@ -86,4 +88,19 @@ func builtinScenarios(t *testing.T) []Scenario {
 		t.Fatalf("Scenarios() error = %v", err)
 	}
 	return scenarios
+}
+
+// TestMain registers the golden-update flags before the test binary parses
+// its command line, so they need no package-level variables.
+func TestMain(m *testing.M) {
+	flag.Bool("update-goal-catalog-golden", false, "update the blind-probe goal catalog golden")
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// goldenUpdateRequested reports whether the named golden-update flag was set
+// on the test command line.
+func goldenUpdateRequested(name string) bool {
+	f := flag.Lookup(name)
+	return f != nil && f.Value.String() == "true"
 }

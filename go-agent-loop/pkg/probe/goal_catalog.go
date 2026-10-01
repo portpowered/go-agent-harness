@@ -37,11 +37,13 @@ type requiredGoalDefinition struct {
 	capability CapabilityArea
 }
 
-var requiredGoalDefinitions = [...]requiredGoalDefinition{
-	{id: GoalIDTextHelpfulAnswer, capability: CapabilityTextInteraction},
-	{id: GoalIDAudioSpokenAnswer, capability: CapabilityAudioInteraction},
-	{id: GoalIDToolListCurrentFolder, capability: CapabilityToolUse},
-	{id: GoalIDMultimodalDescribePicture, capability: CapabilityMultimodalInput},
+func requiredGoalDefinitions() []requiredGoalDefinition {
+	return []requiredGoalDefinition{
+		{id: GoalIDTextHelpfulAnswer, capability: CapabilityTextInteraction},
+		{id: GoalIDAudioSpokenAnswer, capability: CapabilityAudioInteraction},
+		{id: GoalIDToolListCurrentFolder, capability: CapabilityToolUse},
+		{id: GoalIDMultimodalDescribePicture, capability: CapabilityMultimodalInput},
+	}
 }
 
 // GoalInputSourceKind identifies how a non-text input is supplied to a goal.
@@ -265,7 +267,7 @@ func validateRequiredGoals(c GoalCatalog, seen map[string]int) error {
 	// Structural validation above protects each entry. This second pass protects
 	// the fleet contract itself: every canonical goal must still be present and
 	// must remain assigned to its declared capability area.
-	for _, required := range requiredGoalDefinitions {
+	for _, required := range requiredGoalDefinitions() {
 		index, ok := seen[required.id]
 		if !ok {
 			return catalogValidationError(-1, required.id, "id", ErrMissingGoalID, "required by the shipped acceptance catalog")

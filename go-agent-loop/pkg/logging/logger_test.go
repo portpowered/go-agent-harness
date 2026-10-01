@@ -15,8 +15,6 @@ import (
 	"testing"
 )
 
-var updateCrossingGolden = flag.Bool("update-crossing-golden", false, "update typed-buffer crossing golden output")
-
 // The golden is embedded so ordinary test runs only compare with committed
 // output. The explicit update flag is the only workflow that writes it.
 //
@@ -413,7 +411,7 @@ func canonicalLogBytes(t *testing.T, entries []capturedLog) []byte {
 func assertCrossingGolden(t *testing.T, got []byte) {
 	t.Helper()
 	path := filepath.FromSlash("testdata/crossing.jsonl")
-	if *updateCrossingGolden {
+	if goldenUpdateRequested("update-crossing-golden") {
 		if err := os.WriteFile(path, got, 0o644); err != nil {
 			t.Fatalf("write crossing golden: %v", err)
 		}
@@ -533,4 +531,19 @@ func BenchmarkCrossingEmitterEnabledInfoAllocations(b *testing.B) {
 		b.Fatalf("enabled crossing info records = %d, want exact count %d", logger.infoRecords, b.N)
 	}
 	assertCrossingAllocationBudget(b, "enabled", measureCrossingAllocations(b, true), enabledCrossingAllocBudget)
+}
+
+// TestMain registers the golden-update flags before the test binary parses
+// its command line, so they need no package-level variables.
+func TestMain(m *testing.M) {
+	flag.Bool("update-crossing-golden", false, "update typed-buffer crossing golden output")
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// goldenUpdateRequested reports whether the named golden-update flag was set
+// on the test command line.
+func goldenUpdateRequested(name string) bool {
+	f := flag.Lookup(name)
+	return f != nil && f.Value.String() == "true"
 }

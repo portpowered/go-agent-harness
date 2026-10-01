@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-var updateFrameGolden = flag.Bool("update", false, "update transcript frame golden files")
-
 // The fixtures are embedded so ordinary test runs only compare against
 // committed data. The -update flag is the only path that writes them back.
 //
@@ -51,7 +49,7 @@ func TestEncodeDecodeS3Golden(t *testing.T) {
 	}
 
 	path := filepath.FromSlash("testdata/frame.jsonl")
-	if *updateFrameGolden {
+	if goldenUpdateRequested("update") {
 		if err := os.WriteFile(path, encoded.Bytes(), 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
@@ -489,4 +487,20 @@ func recordsEqual(left, right Record) bool {
 // failure that errors.Is would hide.
 func sameErrorValue(got, want error) bool {
 	return got == want //nolint:errorlint // identity, not chain membership, is the contract under test
+}
+
+// TestMain registers the golden-update flags before the test binary parses
+// its command line, so they need no package-level variables.
+func TestMain(m *testing.M) {
+	flag.Bool("update", false, "update transcript frame golden files")
+	flag.Bool("update-recording-manifest-golden", false, "print the deterministic recording manifest golden")
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// goldenUpdateRequested reports whether the named golden-update flag was set
+// on the test command line.
+func goldenUpdateRequested(name string) bool {
+	f := flag.Lookup(name)
+	return f != nil && f.Value.String() == "true"
 }

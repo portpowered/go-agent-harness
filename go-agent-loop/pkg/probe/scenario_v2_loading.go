@@ -76,7 +76,7 @@ func decodeScenarioV2Root(input any) (scenarioV2Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := rejectScenarioV2Fields(root, scenarioV2RootFields, "scenario"); err != nil {
+	if err := rejectScenarioV2Fields(root, scenarioV2RootFields(), "scenario"); err != nil {
 		return nil, err
 	}
 	return root, nil

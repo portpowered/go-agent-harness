@@ -47,14 +47,14 @@ func TestWaitReadyAndSynthesizeAgainstPinnedContract(t *testing.T) {
 	if !sawReadyz {
 		t.Fatal("readiness probe never hit /readyz")
 	}
-	if err := gen.Synthesize(context.Background(), Utterances[0], output); err != nil {
+	if err := gen.Synthesize(context.Background(), Utterances()[0], output); err != nil {
 		t.Fatalf("Synthesize() = %v", err)
 	}
 	data, err := os.ReadFile(output)
 	if err != nil || len(data) == 0 {
 		t.Fatalf("synthesized clip missing: %v", err)
 	}
-	if sawRequest["model"] != "qwen3-tts-cpp" || sawRequest["input"] != Utterances[0] ||
+	if sawRequest["model"] != "qwen3-tts-cpp" || sawRequest["input"] != Utterances()[0] ||
 		sawRequest["language"] != "English" || sawRequest["response_format"] != "wav" {
 		t.Fatalf("request contract = %#v", sawRequest)
 	}
@@ -78,7 +78,7 @@ func TestSynthesizeNeverFabricatesAudioOnBackendFailure(t *testing.T) {
 		t.Fatalf("WaitReady() = %v", err)
 	}
 	output := filepath.Join(t.TempDir(), "clip.wav")
-	err := gen.Synthesize(context.Background(), Utterances[0], output)
+	err := gen.Synthesize(context.Background(), Utterances()[0], output)
 	if err == nil || !strings.Contains(err.Error(), "status 500") {
 		t.Fatalf("Synthesize() error = %v; want observed status failure", err)
 	}
@@ -111,8 +111,8 @@ func TestWaitReadySurfacesObservedError(t *testing.T) {
 
 func TestEmitManifestHashesClosedSet(t *testing.T) {
 	dir := t.TempDir()
-	for i := range Utterances {
-		for _, rate := range SampleRates {
+	for i := range Utterances() {
+		for _, rate := range SampleRates() {
 			name := fmt.Sprintf("qwen_utt%02d_%dk.wav", i+1, rate/1000)
 			var buf bytes.Buffer
 			if err := wavio.Write(&buf, rate, loudSamples(rate, 1000)); err != nil {
@@ -134,7 +134,7 @@ func TestEmitManifestHashesClosedSet(t *testing.T) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.SchemaVersion != 1 || len(manifest.Files) != len(Utterances)*len(SampleRates) {
+	if manifest.SchemaVersion != 1 || len(manifest.Files) != len(Utterances())*len(SampleRates()) {
 		t.Fatalf("manifest = schema %d files %d", manifest.SchemaVersion, len(manifest.Files))
 	}
 	if manifest.CorpusByteTotal <= 0 || manifest.CorpusByteTotal >= MaxCorpusBytes {

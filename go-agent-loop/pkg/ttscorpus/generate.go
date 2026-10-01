@@ -24,12 +24,16 @@ const MaxCorpusBytes = 25 * 1024 * 1024
 const DefaultEndpoint = "http://127.0.0.1:8080"
 
 // SampleRates are the session-path sample rates the corpus must cover.
-var SampleRates = []int{wavio.Rate16kHz, wavio.Rate24kHz}
+func SampleRates() []int {
+	return []int{wavio.Rate16kHz, wavio.Rate24kHz}
+}
 
 // Utterances is the closed synthesis set; nothing outside it may be synthesized.
-var Utterances = []string{
-	"The timer is ready for the next step.",
-	"Open the calendar.",
+func Utterances() []string {
+	return []string{
+		"The timer is ready for the next step.",
+		"Open the calendar.",
+	}
 }
 
 // pinnedRequest mirrors probe.request in deploy/localai/models/qwen3-tts-pinned.json.
@@ -222,9 +226,9 @@ type corpusManifest struct {
 // the 25 MB program budget.
 func EmitManifest(outputDir string) error {
 	var total int64
-	files := make([]corpusFile, 0, len(Utterances)*len(SampleRates))
-	for i, text := range Utterances {
-		for _, rate := range SampleRates {
+	files := make([]corpusFile, 0, len(Utterances())*len(SampleRates()))
+	for i, text := range Utterances() {
+		for _, rate := range SampleRates() {
 			name := fmt.Sprintf("qwen_utt%02d_%dk.wav", i+1, rate/1000)
 			path := filepath.Join(outputDir, name)
 			data, err := os.ReadFile(path)
@@ -282,7 +286,7 @@ func EmitManifest(outputDir string) error {
 	manifestBytes, err := json.MarshalIndent(corpusManifest{
 		SchemaVersion:   1,
 		CorpusByteTotal: total,
-		SampleRatesHz:   SampleRates,
+		SampleRatesHz:   SampleRates(),
 		Files:           files,
 	}, "", "  ")
 	if err != nil {

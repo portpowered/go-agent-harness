@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -22,8 +21,6 @@ const (
 	manifestTestPassword = "media-password-7f5f"
 	manifestTestAPIKey   = "api-key-2c9b"
 )
-
-var updateManifestGolden = flag.Bool("update-recording-manifest-golden", false, "print the deterministic recording manifest golden")
 
 // redactionBundleConfig configures a complete bundle whose transcripts,
 // media source, and configuration contain the test credentials.
@@ -142,7 +139,7 @@ func TestWriteRecordingBundleLayoutManifestAndRedaction(t *testing.T) {
 	}
 
 	const wantGolden = `{"format_version":1,"input_device":{"id":"mic-01","name":"Desk Mic","driver":"virtual","sample_rate_hz":16000,"channels":1},"output_device":{"id":"speaker-02","name":"Desk Speaker","driver":"virtual","sample_rate_hz":24000,"channels":2},"transport":"websocket","model":"speech-model-fixed","clock_base":"2026-01-02T03:04:05.000000000Z","media_source":{"url":"rtsp://operator:REDACTED@camera.example/live","name":"front-door"},"configuration":{"api_key":"REDACTED","region":"us-test-1"},"corpus":[{"path":"a-first.pcm","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"path":"z-last.pcm","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],"artifacts":[{"path":"client.transcript.jsonl","sha256":"886c3af4c218f02b7b38349fadef6be01ba88df369e9c28c3f494ab8615b541f"},{"path":"agent.transcript.jsonl","sha256":"64363afc74e658d57bbc5be15417c9157d58b15f0b75ed537100030ecee75a69"},{"path":"audio/in-000.pcm","sha256":"9beb9b4fbb3161c1c60d01c253b504f0dd2ea909f764fd3d7c8213fa1580ae94"},{"path":"audio/out-000.pcm","sha256":"f4e3f0b04771c047e227c9ecaba65d3fe2fd0e1eee0a7552b956d1a7c535a7cf"}]}\n`
-	if *updateManifestGolden {
+	if goldenUpdateRequested("update-recording-manifest-golden") {
 		t.Fatalf("manifest golden update requested; replace wantGolden with:\n%s", manifestBytes)
 	}
 	golden := strings.TrimSuffix(wantGolden, `\n`) + "\n"

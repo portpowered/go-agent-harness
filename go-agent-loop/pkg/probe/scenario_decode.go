@@ -105,10 +105,12 @@ func optionalString(value object, location string, names ...string) (string, err
 	return stringValue(raw, location+"."+key)
 }
 
-var scenarioFields = map[string]bool{"id": true, "name": true, "description": true, "steps": true, "expectations": true, "expected_behavior": true, "expected": true}
+func scenarioFields() map[string]bool {
+	return map[string]bool{"id": true, "name": true, "description": true, "steps": true, "expectations": true, "expected_behavior": true, "expected": true}
+}
 
 func parseScenario(value object) (Scenario, error) {
-	if err := unknown(value, scenarioFields, "scenario"); err != nil {
+	if err := unknown(value, scenarioFields(), "scenario"); err != nil {
 		return Scenario{}, err
 	}
 	id, err := optionalString(value, "scenario", "id")
@@ -174,7 +176,9 @@ func parseScenario(value object) (Scenario, error) {
 	return Scenario{ID: id, Name: name, Description: description, Steps: steps, Expectations: expectations, Expected: expectations, ExpectedBehavior: expectations}, nil
 }
 
-var stepFields = map[string]bool{"type": true, "kind": true, "payload": true, "text": true, "value": true, "corpus_id": true, "corpusID": true, "corpus": true, "tool_call_id": true, "toolCallID": true, "tool_name": true, "toolName": true, "result": true, "tool_result": true, "at": true, "time": true, "logical_time": true, "logicalTime": true, "duration": true}
+func stepFields() map[string]bool {
+	return map[string]bool{"type": true, "kind": true, "payload": true, "text": true, "value": true, "corpus_id": true, "corpusID": true, "corpus": true, "tool_call_id": true, "toolCallID": true, "tool_name": true, "toolName": true, "result": true, "tool_result": true, "at": true, "time": true, "logical_time": true, "logicalTime": true, "duration": true}
+}
 
 func stepKind(value string) (StepKind, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -219,7 +223,7 @@ func parseStep(raw json.RawMessage, index int) (Step, error) {
 	if json.Unmarshal(raw, &value) != nil || value == nil {
 		return Step{}, makeError(CategoryMalformed, location, "step must be a JSON object")
 	}
-	if err := unknown(value, stepFields, location); err != nil {
+	if err := unknown(value, stepFields(), location); err != nil {
 		return Step{}, err
 	}
 	kind, err := parseStepKind(value, location)

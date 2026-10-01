@@ -7,9 +7,13 @@ import (
 	"strings"
 )
 
-var expectationFields = map[string]bool{"type": true, "kind": true, "payload": true, "text": true, "value": true, "message": true, "event": true, "corpus_id": true, "corpusID": true, "tool_call_id": true, "toolCallID": true, "tool_name": true, "toolName": true, "name": true, "result": true, "at": true, "time": true, "logical_time": true, "logicalTime": true, "count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
+func expectationFields() map[string]bool {
+	return map[string]bool{"type": true, "kind": true, "payload": true, "text": true, "value": true, "message": true, "event": true, "corpus_id": true, "corpusID": true, "tool_call_id": true, "toolCallID": true, "tool_name": true, "toolName": true, "name": true, "result": true, "at": true, "time": true, "logical_time": true, "logicalTime": true, "count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
+}
 
-var expectationModifiers = map[string]bool{"count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
+func expectationModifiers() map[string]bool {
+	return map[string]bool{"count": true, "step": true, "step_index": true, "after": true, "after_step": true, "before": true, "before_step": true}
+}
 
 func expectationKind(value string) (ExpectationKind, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -47,7 +51,7 @@ func parseExpectation(raw json.RawMessage, index int) (ExpectedBehavior, error) 
 	if json.Unmarshal(raw, &value) != nil || value == nil {
 		return ExpectedBehavior{}, makeError(CategoryMalformed, location, "expected behavior must be a JSON object")
 	}
-	if err := unknown(value, expectationFields, location); err != nil {
+	if err := unknown(value, expectationFields(), location); err != nil {
 		return ExpectedBehavior{}, err
 	}
 	kind, err := parseExpectationKind(value, location)
@@ -58,7 +62,7 @@ func parseExpectation(raw json.RawMessage, index int) (ExpectedBehavior, error) 
 	if err != nil {
 		return ExpectedBehavior{}, err
 	}
-	if err := unknown(fields, expectationFieldsByKind[kind], location); err != nil {
+	if err := unknown(fields, expectationFieldsByKind()[kind], location); err != nil {
 		return ExpectedBehavior{}, err
 	}
 	expectation := ExpectedBehavior{Type: kind, Kind: kind, StepIndex: -1, Step: -1}
@@ -209,37 +213,39 @@ func expectationTimeValue(value ExpectedBehavior, location string) (LogicalTime,
 	return 0, false, nil
 }
 
-var typedExpectationFieldsByKind = map[ExpectationKind]map[string]bool{
-	ExpectText:       {"text": true},
-	ExpectTranscript: {"text": true},
-	ExpectContains:   {"text": true},
-	ExpectAudio:      {"corpus_id": true},
-	ExpectToolCall:   {"tool_call_id": true, "tool_name": true},
-	ExpectToolResult: {"tool_call_id": true, "result": true}, ExpectToolResultDelivered: {"tool_call_id": true},
-	ExpectToolResultDiscarded: {"tool_call_id": true}, ExpectNoOrphanedToolResult: {}, ExpectClose: {},
-	ExpectTime:  {"at": true},
-	ExpectEvent: {"value": true},
+func typedExpectationFieldsByKind() map[ExpectationKind]map[string]bool {
+	return map[ExpectationKind]map[string]bool{
+		ExpectText:       {"text": true},
+		ExpectTranscript: {"text": true},
+		ExpectContains:   {"text": true},
+		ExpectAudio:      {"corpus_id": true},
+		ExpectToolCall:   {"tool_call_id": true, "tool_name": true},
+		ExpectToolResult: {"tool_call_id": true, "result": true}, ExpectToolResultDelivered: {"tool_call_id": true},
+		ExpectToolResultDiscarded: {"tool_call_id": true}, ExpectNoOrphanedToolResult: {}, ExpectClose: {},
+		ExpectTime:  {"at": true},
+		ExpectEvent: {"value": true},
 
-	// Measurable expectation kinds.
-	ExpectAudioEnergy:        {},
-	ExpectTranscriptContains: {"text": true},
-	ExpectToolCalled:         {"tool_name": true},
-	ExpectLatencyWithinTicks: {"at": true},
-	ExpectTerminalReason:     {"value": true},
-	ExpectTerminalProvenance: {"value": true},
-	ExpectOutputState:        {"value": true},
-	ExpectFrameCount:         {},
-	ExpectBufferDisposition:  {"value": true},
-	ExpectMetricsReconcile:   {},
-	ExpectResponseCancel:     {"value": true, "at": true},
+		// Measurable expectation kinds.
+		ExpectAudioEnergy:        {},
+		ExpectTranscriptContains: {"text": true},
+		ExpectToolCalled:         {"tool_name": true},
+		ExpectLatencyWithinTicks: {"at": true},
+		ExpectTerminalReason:     {"value": true},
+		ExpectTerminalProvenance: {"value": true},
+		ExpectOutputState:        {"value": true},
+		ExpectFrameCount:         {},
+		ExpectBufferDisposition:  {"value": true},
+		ExpectMetricsReconcile:   {},
+		ExpectResponseCancel:     {"value": true, "at": true},
 
-	// Repeated barge-in (v3c) expectation kinds.
-	ExpectBargeInCancelOnce:      {},
-	ExpectMessageCountsReconcile: {"value": true},
+		// Repeated barge-in (v3c) expectation kinds.
+		ExpectBargeInCancelOnce:      {},
+		ExpectMessageCountsReconcile: {"value": true},
+	}
 }
 
 func rejectTypedExpectationFields(value ExpectedBehavior, location string, hasAt bool) error {
-	allowed := typedExpectationFieldsByKind[value.Kind]
+	allowed := typedExpectationFieldsByKind()[value.Kind]
 	fields := []struct {
 		name      string
 		populated bool
