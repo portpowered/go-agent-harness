@@ -54,6 +54,13 @@ func TestLiveRealtimeAudio(t *testing.T) {
 
 	readCtx, readCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer readCancel()
+	assertLiveAudioResponse(t, readCtx, session, endpoint)
+}
+
+// assertLiveAudioResponse reads the session until the response ends and
+// requires decoded, non-silent audio.
+func assertLiveAudioResponse(t *testing.T, readCtx context.Context, session messages.Session, endpoint string) {
+	t.Helper()
 	var decoded []byte
 	for {
 		msg, ok := session.Receive().ReadBlockingContext(readCtx)

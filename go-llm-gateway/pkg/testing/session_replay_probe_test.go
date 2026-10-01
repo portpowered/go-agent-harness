@@ -110,7 +110,7 @@ func containsAll(haystack string, needles ...string) bool {
 // is delivered until the expected outbound event is sent, after which the
 // provider response arrives and the replay completes successfully.
 func TestSessionReplayer_CommittedClientFirstCaptureCompletesAfterExpectedOutbound(t *testing.T) {
-	replayer := mustNewSessionReplayer(t, SharedSessionFixturePath("session_outbound_then_inbound.session.json"))
+	replayer := mustNewSessionReplayer(t, t.Context(), SharedSessionFixturePath("session_outbound_then_inbound.session.json"))
 
 	select {
 	case msg := <-replayer.Receive().Chan():

@@ -29,4 +29,6 @@ const (
 )
 
 // NewTextMessage re-exports the loop-owned helper for building a text message.
-var NewTextMessage = messages.NewTextMessage
+func NewTextMessage(role Role, text string) Message {
+	return messages.NewTextMessage(role, text)
+}

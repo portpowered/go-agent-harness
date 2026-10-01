@@ -186,7 +186,7 @@ func TestSessionReplayerMismatchIncludesDivergenceContext(t *testing.T) {
 	writeCapture(t, path, []CapturedSessionEvent{
 		makeCapture(DirectionClientToServer, 0, messages.StreamTypeTextDelta, messages.NewTextDeltaValue("expected")),
 	})
-	replayer := mustNewSessionReplayer(t, path)
+	replayer := mustNewSessionReplayer(t, t.Context(), path)
 
 	if replayer.Send(context.Background(), messages.StreamMessage{
 		Type:  messages.StreamTypeTextDelta,

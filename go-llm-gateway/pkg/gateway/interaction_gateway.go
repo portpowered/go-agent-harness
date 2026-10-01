@@ -536,10 +536,8 @@ func modelRoleFromInteraction(role InteractionRole) models.Role {
 	case InteractionRoleSystem:
 		return models.RoleSystem
 	case InteractionRoleUser:
-		return models.RoleUser
-	default:
-		return models.RoleUser
 	}
+	return models.RoleUser
 }
 
 func interactionRoleFromModel(role models.Role) InteractionRole {

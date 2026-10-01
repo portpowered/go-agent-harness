@@ -26,16 +26,6 @@ const committedFixtureManifestRelPath = "testdata/committed-fixtures.manifest.js
 
 const sessionFixtureValidatorPackageRelPath = "go-llm-gateway/internal/sessionfixturevalidator"
 
-// committedFixtureRootRegistry is the single authoritative registry for the
-// committed session-fixture roots. Keep these repository-relative paths
-// explicit: both the validator's committed-fixture check and manifest emitter
-// resolve and consume this registry.
-var committedFixtureRootRegistry = [...]string{
-	"go-llm-gateway/pkg/providers/openai/testdata",
-	"go-llm-gateway/pkg/testing/testdata/session-fixtures",
-	"agent-cli/test/integration/testdata",
-}
-
 // fixtureManifest is the checked-in registry of every committed session
 // fixture under the registered roots. Fixture registration is generated, not
 // hand-maintained: a fixture change without regenerating the manifest is a
@@ -45,10 +35,17 @@ type fixtureManifest struct {
 	Files []string `json:"files"`
 }
 
-// authoritativeCommittedFixtureRootRelPaths returns a copy so callers cannot
-// accidentally alter the registry while assembling command arguments.
+// authoritativeCommittedFixtureRootRelPaths is the single authoritative
+// registry for the committed session-fixture roots. Keep these
+// repository-relative paths explicit: both the validator's committed-fixture
+// check and manifest emitter resolve and consume this registry. Each call
+// returns a fresh slice, so callers cannot alter the registry.
 func authoritativeCommittedFixtureRootRelPaths() []string {
-	return append([]string(nil), committedFixtureRootRegistry[:]...)
+	return []string{
+		"go-llm-gateway/pkg/providers/openai/testdata",
+		"go-llm-gateway/pkg/testing/testdata/session-fixtures",
+		"agent-cli/test/integration/testdata",
+	}
 }
 
 // allCommittedFixtureRoots resolves the authoritative registry from the
@@ -56,8 +53,9 @@ func authoritativeCommittedFixtureRootRelPaths() []string {
 // verification and is deliberately kept in production package state so the
 // emitter and verifier cannot silently acquire different roots.
 func allCommittedFixtureRoots() []string {
-	paths := make([]string, 0, len(committedFixtureRootRegistry))
-	for _, relPath := range committedFixtureRootRegistry {
+	registry := authoritativeCommittedFixtureRootRelPaths()
+	paths := make([]string, 0, len(registry))
+	for _, relPath := range registry {
 		paths = append(paths, filepath.Join(repositoryRootPath(), filepath.FromSlash(relPath)))
 	}
 	return paths

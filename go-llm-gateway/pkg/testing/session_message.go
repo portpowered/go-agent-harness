@@ -138,15 +138,15 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 	case messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
 		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
 		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
-		messages.StreamTypeInputItemAdded:
-		v = unmarshalAudioValue(t)
-	case messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
+		messages.StreamTypeInputItemAdded,
+		messages.StreamTypeImageStart, messages.StreamTypeImageDelta, messages.StreamTypeImageEnd,
 		messages.StreamTypeVideoStart, messages.StreamTypeVideoDelta, messages.StreamTypeVideoEnd,
 		messages.StreamTypeFileStart, messages.StreamTypeFileDelta, messages.StreamTypeFileEnd,
-		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd:
-		v = unmarshalMediaValue(t)
-	case messages.StreamTypeSystemFullMessage:
-		// System messages are loop-internal and never captured on a session.
+		messages.StreamTypeEmbeddingStart, messages.StreamTypeEmbeddingDelta, messages.StreamTypeEmbeddingEnd,
+		messages.StreamTypeSystemFullMessage:
+		// System messages are loop-internal and never captured on a session,
+		// so neither category helper recognizes them.
+		v = unmarshalAudioOrMediaValue(t)
 	}
 	if v == nil {
 		return nil, fmt.Errorf("unknown stream message type: %s", t)
@@ -156,6 +156,15 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 		return nil, fmt.Errorf("unmarshal value for type %s: %w", t, err)
 	}
 	return v, nil
+}
+
+// unmarshalAudioOrMediaValue returns the audio or media value for t, or nil
+// when t belongs to neither category.
+func unmarshalAudioOrMediaValue(t messages.StreamMessageType) messages.StreamMessageValue {
+	if v := unmarshalAudioValue(t); v != nil {
+		return v
+	}
+	return unmarshalMediaValue(t)
 }
 
 func unmarshalAudioValue(t messages.StreamMessageType) messages.StreamMessageValue {

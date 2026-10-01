@@ -13,7 +13,20 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-var updateShapeGolden = flag.Bool("update", false, "update session fixture validator golden files")
+// TestMain registers the -update flag that regenerates golden files.
+func TestMain(m *testing.M) {
+	flag.Bool(updateGoldenFlag, false, "update session fixture validator golden files")
+	os.Exit(m.Run())
+}
+
+// updateGoldens reports whether the test run was asked to regenerate golden
+// files with -update.
+func updateGoldens() bool {
+	update := flag.Lookup(updateGoldenFlag)
+	return update != nil && update.Value.String() == "true"
+}
+
+const updateGoldenFlag = "update"
 
 func TestValidateSessionCaptureShapes_ErrorPathTable(t *testing.T) {
 	call := providerRecord("response.function_call_arguments.done", `{"type":"response.function_call_arguments.done","call_id":"call-weather","name":"weather","arguments":"{}"}`)
@@ -256,7 +269,7 @@ func TestRun_MultiViolationReportMatchesGolden(t *testing.T) {
 
 	got := strings.ReplaceAll(stderr.String(), path, "multi-violation.session.json")
 	goldenPath := repoPathFromHere("testdata/golden/multi-violation.stderr")
-	if *updateShapeGolden {
+	if updateGoldens() {
 		if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
 			t.Fatalf("update golden file: %v", err)
 		}

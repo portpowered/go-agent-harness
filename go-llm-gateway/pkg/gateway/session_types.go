@@ -1,6 +1,10 @@
 package gateway
 
-import "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+import (
+	"encoding/json"
+
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+)
 
 // Re-export session types from models so gateway consumers can use them
 // without importing the models package directly.
@@ -69,12 +73,24 @@ const (
 	SessionEventError                              = models.SessionEventError
 )
 
-// Re-export event constructors.
-var (
-	NewAudioBufferAppendEvent = models.NewAudioBufferAppendEvent
-	NewAudioBufferCommitEvent = models.NewAudioBufferCommitEvent
-	NewAudioBufferClearEvent  = models.NewAudioBufferClearEvent
-	NewResponseCreateEvent    = models.NewResponseCreateEvent
-	NewResponseCancelEvent    = models.NewResponseCancelEvent
-	NewSessionUpdateEvent     = models.NewSessionUpdateEvent
-)
+// NewAudioBufferAppendEvent re-exports models.NewAudioBufferAppendEvent.
+func NewAudioBufferAppendEvent(audioBase64 string) SessionEvent {
+	return models.NewAudioBufferAppendEvent(audioBase64)
+}
+
+// NewAudioBufferCommitEvent re-exports models.NewAudioBufferCommitEvent.
+func NewAudioBufferCommitEvent() SessionEvent { return models.NewAudioBufferCommitEvent() }
+
+// NewAudioBufferClearEvent re-exports models.NewAudioBufferClearEvent.
+func NewAudioBufferClearEvent() SessionEvent { return models.NewAudioBufferClearEvent() }
+
+// NewResponseCreateEvent re-exports models.NewResponseCreateEvent.
+func NewResponseCreateEvent() SessionEvent { return models.NewResponseCreateEvent() }
+
+// NewResponseCancelEvent re-exports models.NewResponseCancelEvent.
+func NewResponseCancelEvent() SessionEvent { return models.NewResponseCancelEvent() }
+
+// NewSessionUpdateEvent re-exports models.NewSessionUpdateEvent.
+func NewSessionUpdateEvent(config json.RawMessage) SessionEvent {
+	return models.NewSessionUpdateEvent(config)
+}

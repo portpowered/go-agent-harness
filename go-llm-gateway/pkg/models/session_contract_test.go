@@ -14,7 +14,20 @@ import (
 	"testing"
 )
 
-var updateModelsGolden = flag.Bool("update", false, "update the gateway model JSON golden file")
+// TestMain registers the -update flag that regenerates golden files.
+func TestMain(m *testing.M) {
+	flag.Bool(updateGoldenFlag, false, "update the gateway model JSON golden file")
+	os.Exit(m.Run())
+}
+
+// updateGoldens reports whether the test run was asked to regenerate golden
+// files with -update.
+func updateGoldens() bool {
+	update := flag.Lookup(updateGoldenFlag)
+	return update != nil && update.Value.String() == "true"
+}
+
+const updateGoldenFlag = "update"
 
 //go:embed testdata/session_models.golden
 var sessionModelsGolden []byte
@@ -26,26 +39,29 @@ type modelJSONCase struct {
 	compare func(*testing.T, any, any)
 }
 
-var wantModelCaseNames = []string{
-	"AudioFormat",
-	"SampleRate",
-	"SessionModality",
-	"TurnDetectionConfig",
-	"SessionConfig",
-	"SessionEventType",
-	"SessionEvent",
-	"Role",
-	"ToolCall",
-	"ContentPart",
-	"TextPart",
-	"ImagePart",
-	"AudioPart",
-	"VideoPart",
-	"EmbeddingPart",
-	"Message",
-	"ToolDefinition",
-	"ToolParameter",
-	"TokenUsage",
+// wantModelCaseNames lists the exported model cases in registry order.
+func wantModelCaseNames() []string {
+	return []string{
+		"AudioFormat",
+		"SampleRate",
+		"SessionModality",
+		"TurnDetectionConfig",
+		"SessionConfig",
+		"SessionEventType",
+		"SessionEvent",
+		"Role",
+		"ToolCall",
+		"ContentPart",
+		"TextPart",
+		"ImagePart",
+		"AudioPart",
+		"VideoPart",
+		"EmbeddingPart",
+		"Message",
+		"ToolDefinition",
+		"ToolParameter",
+		"TokenUsage",
+	}
 }
 
 func decodeModelAs[T any](data []byte) (any, error) {
@@ -181,10 +197,11 @@ func exportedModelCases() []modelJSONCase {
 
 func assertModelCaseRegistry(t *testing.T, cases []modelJSONCase) {
 	t.Helper()
-	if len(cases) != len(wantModelCaseNames) {
-		t.Fatalf("expected %d exported model cases, got %d", len(wantModelCaseNames), len(cases))
+	wantNames := wantModelCaseNames()
+	if len(cases) != len(wantNames) {
+		t.Fatalf("expected %d exported model cases, got %d", len(wantNames), len(cases))
 	}
-	for i, wantName := range wantModelCaseNames {
+	for i, wantName := range wantNames {
 		if cases[i].name != wantName {
 			t.Fatalf("model case %d: want %q, got %q", i, wantName, cases[i].name)
 		}
@@ -232,7 +249,7 @@ func TestModels_S3GoldenJSON(t *testing.T) {
 	}
 	actual := []byte(got.String())
 
-	if *updateModelsGolden {
+	if updateGoldens() {
 		_, sourceFile, _, ok := runtime.Caller(0)
 		if !ok {
 			t.Fatal("locate model golden source file")

@@ -144,33 +144,39 @@ func TestS11OfflineStatelessProviderConformance(t *testing.T) {
 			}
 			provider := tc.new(&http.Client{Transport: probe}, conformanceSecret)
 			_, err := provider.Infer(t.Context(), tc.request)
-			if !assertStatelessFailure(t, tc.name, probe, err, ErrorExpectation{
+			if assertStatelessFailure(t, tc.name, probe, err, ErrorExpectation{
 				class:     providers.ErrorClassRateLimited,
 				cause:     providers.ErrRateLimited,
 				signal:    "s2s-conformance-protocol-failure",
 				retryable: true,
 			}) {
-				return
-			}
-			var typed *providers.ProviderError
-			if !errors.As(err, &typed) {
-				t.Fatalf("protocol failure did not provide *providers.ProviderError: %T: %v", err, err)
-			}
-			if typed.Provider != tc.name || typed.StatusCode != http.StatusTooManyRequests {
-				t.Fatalf("ProviderError = %+v, want provider %q status %d", typed, tc.name, http.StatusTooManyRequests)
-			}
-			wrapped := fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", err))
-			if !errors.Is(wrapped, providers.ErrProviderRejected) || !errors.Is(wrapped, providers.ErrRateLimited) {
-				t.Fatal("protocol taxonomy did not survive two wrapping levels")
-			}
-			if !providers.IsRetryable(wrapped) {
-				t.Fatal("protocol retryability did not survive two wrapping levels")
-			}
-			var wrappedTyped *providers.ProviderError
-			if !errors.As(wrapped, &wrappedTyped) || wrappedTyped.StatusCode != http.StatusTooManyRequests {
-				t.Fatalf("wrapped ProviderError = %+v", wrappedTyped)
+				assertProtocolFailureTyping(t, tc.name, err)
 			}
 		})
+	}
+}
+
+// assertProtocolFailureTyping checks that a provider protocol failure is a
+// typed *providers.ProviderError whose taxonomy survives wrapping.
+func assertProtocolFailureTyping(t *testing.T, providerName string, err error) {
+	t.Helper()
+	var typed *providers.ProviderError
+	if !errors.As(err, &typed) {
+		t.Fatalf("protocol failure did not provide *providers.ProviderError: %T: %v", err, err)
+	}
+	if typed.Provider != providerName || typed.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("ProviderError = %+v, want provider %q status %d", typed, providerName, http.StatusTooManyRequests)
+	}
+	wrapped := fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", err))
+	if !errors.Is(wrapped, providers.ErrProviderRejected) || !errors.Is(wrapped, providers.ErrRateLimited) {
+		t.Fatal("protocol taxonomy did not survive two wrapping levels")
+	}
+	if !providers.IsRetryable(wrapped) {
+		t.Fatal("protocol retryability did not survive two wrapping levels")
+	}
+	var wrappedTyped *providers.ProviderError
+	if !errors.As(wrapped, &wrappedTyped) || wrappedTyped.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("wrapped ProviderError = %+v", wrappedTyped)
 	}
 }
 
