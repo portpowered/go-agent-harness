@@ -122,7 +122,7 @@ func (p *capturingProbeProviders) BuildSession(_ context.Context, cfg runtimePro
 func TestDeviceProbeSessionFactoryBuildsPCM16Session(t *testing.T) {
 	clearProbeCredentials(t)
 	providers := &capturingProbeProviders{}
-	factory := NewDeviceProbeSessionFactory(providers, audioiowire.NewService())
+	factory := NewDeviceProbeSessionFactory(t.Context(), providers, audioiowire.NewService())
 	_, model, err := factory(probeRequest(t, "", probeOpenAIKey, ""), "probe instructions")
 	if err != nil {
 		t.Fatalf("device probe factory: %v", err)
@@ -142,7 +142,7 @@ func TestDeviceProbeSessionFactoryBuildsPCM16Session(t *testing.T) {
 	if _, _, err := factory(probeRequest(t, "", probeOpenAIKey, ""), ""); !errors.Is(err, providers.err) {
 		t.Fatalf("provider failure = %v, want %v", err, providers.err)
 	}
-	if _, _, err := NewDeviceProbeSessionFactory(nil, nil)(probeRequest(t, "", probeOpenAIKey, ""), ""); err == nil {
+	if _, _, err := NewDeviceProbeSessionFactory(t.Context(), nil, nil)(probeRequest(t, "", probeOpenAIKey, ""), ""); err == nil {
 		t.Fatal("factory without services built a session")
 	}
 }

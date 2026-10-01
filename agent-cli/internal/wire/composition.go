@@ -289,6 +289,7 @@ func ComposeAgentCLI(
 		return nil, err
 	}
 	return assembleAgentCLI(
+		ctx,
 		markToolExecutorReplacement(values.toolExecutor),
 		values.transportDialer,
 		values.deviceRegistry,
@@ -375,6 +376,7 @@ func initializeAgentCLIWithPorts(ctx context.Context, relaxModelValidation bool,
 		return nil, err
 	}
 	return assembleAgentCLI(
+		ctx,
 		markToolExecutorReplacementIfSwapped(values.toolExecutor, swaps),
 		values.transportDialer,
 		values.deviceRegistry,

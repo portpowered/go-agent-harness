@@ -359,6 +359,7 @@ var CliSet = wire.NewSet(
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
 func assembleAgentCLI(
+	ctx context.Context,
 	toolExecutor messages.ToolExecutor,
 	transportDialer transport.Dialer,
 	deviceRegistry DeviceRegistry,

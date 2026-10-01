@@ -30,7 +30,7 @@ type deviceProbeProvider struct {
 // the provider service. Probe sessions exchange PCM16 audio in both
 // directions at the realtime default rate so a device bridge never depends on
 // a later control message to change the wire contract.
-func NewDeviceProbeSessionFactory(providerService runtimeProviders.SessionService, audioService audioio.Service) serviceDevices.DeviceProbeSessionFactory {
+func NewDeviceProbeSessionFactory(ctx context.Context, providerService runtimeProviders.SessionService, audioService audioio.Service) serviceDevices.DeviceProbeSessionFactory {
 	return func(request serviceDevices.DeviceProbeRequest, instructions string) (messages.SessionInferencer, string, error) {
 		if providerService == nil || audioService == nil {
 			return nil, "", errors.New("device probe provider and audio services are required")
@@ -41,8 +41,8 @@ func NewDeviceProbeSessionFactory(providerService runtimeProviders.SessionServic
 		}
 		transcription := audioService.ResolveTranscription(audioio.TranscriptionRequest{Provider: resolved.provider, AcceptsAudioInput: true})
 		// go-agent-runtime's devices.ProbeSessionFactory contract carries no
-		// context, so this adapter is the root for session construction.
-		inferencer, err := providerService.BuildSession(context.Background(), runtimeProviders.SessionConfig{ //nolint:forbidigo // devices.ProbeSessionFactory (go-agent-runtime contract) passes no caller context to thread
+		// context, so sessions are built under the composition's context.
+		inferencer, err := providerService.BuildSession(ctx, runtimeProviders.SessionConfig{
 
 			Provider: resolved.provider, Model: resolved.model, APIKey: resolved.apiKey, BaseURL: resolved.baseURL,
 			Instructions: instructions, ReasoningEffort: resolved.reasoningEffort,

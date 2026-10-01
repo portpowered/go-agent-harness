@@ -49,7 +49,7 @@ import (
 // assembleAgentCLI is the generated implementation shared by production and
 // mock composition. Its parameters are explicit so the generated graph cannot
 // hide a dependency behind a bag or locator.
-func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, toolDefs []messages.ToolDefinition, toolService toolServiceOverride, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
+func assembleAgentCLI(ctx context.Context, toolExecutor messages.ToolExecutor, transportDialer transport.Dialer, deviceRegistry DeviceRegistry, audioSource AudioSource, audioSink AudioSink, clockSource Clock, runtimeObserver SessionRuntimeObserver, metricSampler MetricSampler, logger Logger, toolDefs []messages.ToolDefinition, toolService toolServiceOverride, inferencer messages.Inferencer, sessionInferencer messages.SessionInferencer, relaxModelValidation bool, observer assemblyObserver) (*cli.AgentCLI, error) {
 	globalFlags := flags.NewGlobalFlags()
 	rootCommand := cli.NewRootCommand(globalFlags)
 	fileStoreFactory := wire.NewFileStoreFactory()
@@ -79,7 +79,7 @@ func assembleAgentCLI(toolExecutor messages.ToolExecutor, transportDialer transp
 	deviceService := wire2.NewDeviceService(deviceRegistry)
 	providersSessionService := provideProviderSessionServiceRole(fullService)
 	audioioService := wire3.NewService()
-	v := wire2.NewDeviceProbeSessionFactory(providersSessionService, audioioService)
+	v := wire2.NewDeviceProbeSessionFactory(ctx, providersSessionService, audioioService)
 	v2 := wire2.NewDeviceProbeService(deviceRegistry, v)
 	modelCatalog := provideProviderModelCatalog(fullService)
 	dependencies := wire4.NewDependencies(providersSessionService, modelCatalog, clockSource)
