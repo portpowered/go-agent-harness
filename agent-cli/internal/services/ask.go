@@ -92,4 +92,3 @@ func BuildAgentConfigFromFlags(_ *flags.GlobalFlags, askFlags *flags.AskFlags, i
 	}
 	return cfg
 }
-

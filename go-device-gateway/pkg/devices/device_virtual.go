@@ -715,7 +715,8 @@ func (s *VirtualStream) Close() error {
 
 type AudioBackendRegistry struct{}
 
-func NewAudioBackendRegistry() *AudioBackendRegistry { return &AudioBackendRegistry{} }
+func NewAudioBackendRegistry() *AudioBackendRegistry           { return &AudioBackendRegistry{} }
+func NewProductionAudioBackendRegistry() *AudioBackendRegistry { return NewAudioBackendRegistry() }
 func (r *AudioBackendRegistry) New(name string, c VirtualBackendConfig) (DeviceRegistry, error) {
 	if name == VirtualBackendName {
 		return NewVirtualRegistry(c)

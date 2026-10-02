@@ -57,8 +57,9 @@ func TestDetectMimeTypeFromBytes_MagicBytes(t *testing.T) {
 }
 
 func TestDetectMimeTypeFromBytes_TIFF(t *testing.T) {
-	// Go's http.DetectContentType does not detect TIFF; only check the result is reasonable.
-	assert.NotEmpty(t, detectMimeTypeFromBytes([]byte(tiffHeader), ".tiff"))
+	// net/http does not sniff TIFF and .tiff is not an attachment extension,
+	// so a TIFF is reported as a generic binary attachment.
+	assert.Equal(t, "application/octet-stream", detectMimeTypeFromBytes([]byte(tiffHeader), ".tiff"))
 }
 
 func TestDetectMimeTypeFromBytes_UnknownType(t *testing.T) {
