@@ -34,14 +34,14 @@ func TestDiscoverWorkspacePackagesListsEveryModuleDeterministically(t *testing.T
 }
 
 func TestValidateRegistrationAcceptsExactSetInAnyDiscoveryOrder(t *testing.T) {
-	manifest := mustParseManifest(t, `{"packages":[{"package":"example/a","minimum":0.00},{"package":"example/b","exception":"generated"}]}`)
+	manifest := mustParseManifest(t, `{"packages":[{"package":"example/a","minimum":1.00},{"package":"example/b","exception":"generated"}]}`)
 	if err := ValidateRegistration(manifest, []string{"example/b", "example/a"}); err != nil {
 		t.Fatalf("ValidateRegistration() error = %v", err)
 	}
 }
 
 func TestValidateRegistrationReportsMissingAndStalePackages(t *testing.T) {
-	manifest := mustParseManifest(t, `{"packages":[{"package":"example/a","minimum":0.00},{"package":"example/stale","minimum":0.00}]}`)
+	manifest := mustParseManifest(t, `{"packages":[{"package":"example/a","minimum":1.00},{"package":"example/stale","minimum":1.00}]}`)
 	err := ValidateRegistration(manifest, []string{"example/new", "example/a"})
 	if err == nil {
 		t.Fatal("ValidateRegistration() succeeded for a mismatched package set")
@@ -68,7 +68,7 @@ func TestValidateRegistrationReportsMissingAndStalePackages(t *testing.T) {
 }
 
 func TestValidateRegistrationRejectsDuplicateManifestEntry(t *testing.T) {
-	_, err := ParseManifest([]byte(`{"packages":[{"package":"example/a","minimum":0.00},{"package":"example/a","minimum":0.00}]}`))
+	_, err := ParseManifest([]byte(`{"packages":[{"package":"example/a","minimum":1.00},{"package":"example/a","minimum":1.00}]}`))
 	if err == nil {
 		t.Fatal("ParseManifest() accepted a duplicate package")
 	}
@@ -82,7 +82,7 @@ func TestValidateRegistrationRejectsDuplicateManifestEntry(t *testing.T) {
 
 func TestRunValidateRegistrationDoesNotRunCoverageTests(t *testing.T) {
 	moduleDir := t.TempDir()
-	manifestPath := writeRegistrationManifest(t, `{"packages":[{"package":"example.test/pkg","minimum":0.00}]}`)
+	manifestPath := writeRegistrationManifest(t, `{"packages":[{"package":"example.test/pkg","minimum":1.00}]}`)
 	fakeGo := filepath.Join(t.TempDir(), "go")
 	fakeScript := `#!/bin/sh
 for argument in "$@"; do
@@ -113,7 +113,7 @@ printf '%s\n' 'example.test/pkg'
 }
 
 func TestRunValidateRegistrationRejectsManifestOrder(t *testing.T) {
-	manifestPath := writeRegistrationManifest(t, `{"packages":[{"package":"example/z","minimum":0.00},{"package":"example/a","minimum":0.00}]}`)
+	manifestPath := writeRegistrationManifest(t, `{"packages":[{"package":"example/z","minimum":1.00},{"package":"example/a","minimum":1.00}]}`)
 	var stdout, stderr strings.Builder
 	err := run([]string{
 		"--validate-registration",

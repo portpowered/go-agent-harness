@@ -1,2 +1,1 @@
-{"package": "github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming", "minimum": 0.00}
-
+{"package": "github.com/portpowered/go-agent-harness/agent-cli/cmd/testtiming","exception": "Process entrypoint: flag parsing, wiring and exit status only; the logic it calls lives in tested packages, and the binary runs only as a subprocess whose coverage is not collected."}

@@ -392,6 +392,18 @@ jobs:
       - name: Run coverage gate
         run: make coverage-gate
 
+      # Floors are set from what this gate measures on CI linux (platform
+      # files and capability paths differ from a developer machine), so
+      # publish every profile it read, pass or fail.
+      - name: Upload gated coverage profiles
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-coverage-profiles
+          path: coverage/*.out
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Save Go cache
         if: always()
         uses: ./.github/actions/go-cache-save
@@ -595,10 +607,11 @@ jobs:
           gomodcache: ${{ steps.go.outputs.gomodcache }}
           extra-paths: ${{ runner.temp }}/golangci-lint
 
-  # The Windows device backend (every TestWindows*/TestWASAPI* test in
-  # device_windows_test.go; the WASAPI endpoint tests skip without an audio
-  # endpoint), the portable capacity regression and the codec coverage the
-  # Windows cases rely on. Only the two packages that hold them are compiled.
+  # The Windows device backend and the codec it relies on, natively on
+  # Windows. Every test the Windows build of these two packages compiles runs:
+  # Windows-only tests are selected by their file constraints (_windows_test.go
+  # and //go:build windows), never by name, so a new one cannot be missed. The
+  # WASAPI endpoint tests skip without an audio endpoint.
   windows-audio-portable:
     name: CI (Windows audio portable)
     runs-on: windows-latest
@@ -621,7 +634,7 @@ jobs:
           cache-name: windows
 
       - name: Run Windows audio queue regressions
-        run: go test ./go-audio/pkg/codec ./go-device-gateway/pkg/devices -run '^(TestWindowsPortablePlaybackBurstPreservesFIFO.*|TestWASAPI.*|TestVirtualPlaybackCapacityAdversarial|TestPacketEnergyPaddedLayoutsAndFailureModes)$' -count=1
+        run: go test ./go-audio/pkg/codec ./go-device-gateway/pkg/devices -count=1
 
       - name: Save Go cache
         uses: ./.github/actions/go-cache-save

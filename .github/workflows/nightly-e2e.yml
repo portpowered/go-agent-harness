@@ -84,13 +84,16 @@ jobs:
             audio: true
             packages: ./agent-cli/test/functional ./go-agent-runtime/services/tools/internal/mouse
             run: ^(TestLinuxPhysicalAudioDeviceLoop|TestLinuxRealScreenAndMouse)$
+          # Every test the Windows e2e build of these packages compiles, so
+          # the live WASAPI, screen and mouse tests are selected by their file
+          # constraints (windows && e2e), not by name.
           - name: Windows devices
             runner: windows-latest
             cache: nightly-e2e-windows-devices
             fallback: windows
             audio: true
             packages: ./go-device-gateway/pkg/devices ./go-agent-runtime/services/tools/internal/mouse
-            run: ^(TestWASAPIOpenHasLiveDataPath|TestWASAPIDeviceRegistryConformance|TestWindowsMouseOperationsRestoreCursor|TestWindowsScreenCaptureAndRecord)$
+            run: .
 
     steps:
       - name: Check out repository

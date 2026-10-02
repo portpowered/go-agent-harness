@@ -21,7 +21,7 @@ func main() {
 type options struct {
 	manifestPath, goBinary, gitBinary, repoDir, base, testTimeout string
 	tags, selectPath                                              string
-	validateRegistration, changedCoverage, affected               bool
+	validateRegistration, changedCoverage, affected, ratchet      bool
 	moduleDirs, standaloneDirs, profilePaths                      stringList
 }
 
@@ -44,6 +44,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&opts.affected, "affected", false, "print the changed-package test and floor scope (reverse dependency closure) instead of gating")
 	flags.Var(&opts.standaloneDirs, "standalone-module-dir", "module directory listed with GOWORK=off for -affected (may be repeated)")
 	flags.StringVar(&opts.tags, "tags", "", "build tags used to list package dependencies for -affected")
+	flags.BoolVar(&opts.ratchet, "ratchet", false, "also fail floors more than the allowed headroom below measured coverage (floors are measured on CI linux, where make enables it)")
 	flags.StringVar(&opts.selectPath, "select", "", "file of import paths (one per line); gate only these packages' floors against partial profiles")
 	if err := flags.Parse(args); err != nil {
 		return options{}, err
@@ -94,7 +95,7 @@ func runGate(opts options, stdout io.Writer) error {
 				return err
 			}
 		}
-		return gateSelected(manifest, opts.selectPath, measurements, len(opts.profilePaths), stdout)
+		return gateSelected(manifest, opts.selectPath, measurements, len(opts.profilePaths), opts.ratchet, stdout)
 	}
 	if len(opts.profilePaths) == 0 {
 		return errors.New("coverage gate requires at least one coverage profile")
@@ -103,7 +104,7 @@ func runGate(opts options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := Compare(manifest, measurements); err != nil {
+	if err := applyRatchet(Compare(manifest, measurements), opts.ratchet); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "coverage gate passed: %d registered packages checked across %d profiles\n", len(manifest.Packages), len(opts.profilePaths))
@@ -155,35 +156,35 @@ func runAffected(gitBinary, goBinary, repoDir, base, tags string, moduleDirs, st
 // gateSelected enforces floors only for the import paths listed in
 // selectPath, so partial (changed-package) profiles do not report every
 // other registered package as unmeasured.
-func gateSelected(manifest Manifest, selectPath string, measurements map[string]Coverage, profileCount int, stdout io.Writer) error {
+func gateSelected(manifest Manifest, selectPath string, measurements map[string]Coverage, profileCount int, ratchet bool, stdout io.Writer) error {
 	data, err := os.ReadFile(selectPath)
 	if err != nil {
 		return fmt.Errorf("read --select file: %w", err)
 	}
-	floors := make(map[string]PackageEntry, len(manifest.Packages))
-	for _, entry := range manifest.Packages {
-		floors[entry.ImportPath] = entry
-	}
 	var selected []string
 	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+		if line = strings.TrimSpace(line); line != "" {
+			selected = append(selected, line)
 		}
-		// A zero floor passes whatever the measurement; a partial run may
-		// not have produced a profile for its module at all.
-		if entry, ok := floors[line]; ok && entry.HasMinimum && entry.MinimumCents == 0 {
-			if _, measured := measurements[line]; !measured {
-				continue
-			}
-		}
-		selected = append(selected, line)
 	}
-	if err := CompareSelected(manifest, selected, measurements); err != nil {
+	if err := applyRatchet(CompareSelected(manifest, selected, measurements), ratchet); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "coverage gate passed: %d selected packages checked across %d profiles\n", len(selected), profileCount)
 	return err
+}
+
+// applyRatchet drops stale-floor findings unless the ratchet is on. Floors
+// are measured on CI linux, where platform files and capability paths cover
+// differently than on a developer machine, so a floor is stale only by CI's
+// measurement; regressions and every other finding are always enforced.
+func applyRatchet(err error, ratchet bool) error {
+	var findings *FindingsError
+	if ratchet || !errors.As(err, &findings) {
+		return err
+	}
+	findings.Stale = nil
+	return finishFindings(findings)
 }
 
 type stringList []string

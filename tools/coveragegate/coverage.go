@@ -28,6 +28,9 @@ var (
 	ErrUnregisteredPackage      = errors.New("coverage profile contains an unregistered package")
 	ErrMissingCoverage          = errors.New("manifest package has no measured coverage")
 	ErrCoverageFloorViolation   = errors.New("measured coverage is below its minimum")
+	ErrCoverageFloorStale       = errors.New("coverage minimum is too far below measured coverage")
+	ErrManifestNoopMinimum      = errors.New("coverage minimum passes with no statement covered")
+	ErrExceptionMeasured        = errors.New("coverage exception registered for a package with covered statements")
 )
 
 // Manifest is the validated coverage registration set loaded from the legacy
@@ -61,6 +64,18 @@ type Violation struct {
 	DeltaCents    int
 }
 
+// StaleFloor is a floor that has fallen more than its allowed headroom below
+// the measured coverage. Floors only ratchet up: the gate fails until the
+// manifest minimum is raised above ActualCents-AllowedCents; SuggestedCents
+// is where to place it (see suggestedMinimumCents).
+type StaleFloor struct {
+	ImportPath     string
+	MinimumCents   int
+	ActualCents    int
+	AllowedCents   int
+	SuggestedCents int
+}
+
 // FindingsError aggregates every missing package and floor regression found
 // in one comparison. It unwraps to typed sentinels so callers can branch on
 // the failure category without parsing the rendered report.
@@ -68,6 +83,17 @@ type FindingsError struct {
 	Unregistered []string
 	Unmeasured   []string
 	Violations   []Violation
+	Stale        []StaleFloor
+	// MeasuredExceptions are exception registrations whose package has
+	// covered statements: it has something to measure, so it needs a floor.
+	MeasuredExceptions []MeasuredException
+}
+
+// MeasuredException is an exception registration contradicted by the
+// measurement.
+type MeasuredException struct {
+	ImportPath string
+	Coverage   Coverage
 }
 
 func (e *FindingsError) Error() string {
@@ -101,6 +127,35 @@ func (e *FindingsError) Error() string {
 		}
 		sections = append(sections, b.String())
 	}
+	if len(e.Stale) > 0 {
+		var b strings.Builder
+		b.WriteString("coverage gate found stale coverage floors (raise each minimum to the suggested value):")
+		for _, stale := range e.Stale {
+			fmt.Fprintf(&b, "\n- %s: minimum %s%%, actual %s%%, headroom %s%% exceeds allowed %s%%; raise minimum to %s",
+				stale.ImportPath,
+				formatCents(stale.MinimumCents),
+				formatCents(stale.ActualCents),
+				formatCents(stale.ActualCents-stale.MinimumCents),
+				formatCents(stale.AllowedCents),
+				formatCents(stale.SuggestedCents),
+			)
+		}
+		sections = append(sections, b.String())
+	}
+	if len(e.MeasuredExceptions) > 0 {
+		var b strings.Builder
+		b.WriteString("coverage gate found exceptions for packages with covered statements (register a minimum instead):")
+		for _, measured := range e.MeasuredExceptions {
+			fmt.Fprintf(&b, "\n- %s: actual %s%% (%d of %d statements); register minimum %s",
+				measured.ImportPath,
+				formatCents(measured.Coverage.actualCents()),
+				measured.Coverage.Covered,
+				measured.Coverage.Total,
+				formatCents(suggestedMinimumCents(measured.Coverage)),
+			)
+		}
+		sections = append(sections, b.String())
+	}
 	return strings.Join(sections, "\n")
 }
 
@@ -114,6 +169,12 @@ func (e *FindingsError) Unwrap() []error {
 	}
 	if len(e.Violations) > 0 {
 		causes = append(causes, ErrCoverageFloorViolation)
+	}
+	if len(e.Stale) > 0 {
+		causes = append(causes, ErrCoverageFloorStale)
+	}
+	if len(e.MeasuredExceptions) > 0 {
+		causes = append(causes, ErrExceptionMeasured)
 	}
 	return causes
 }
@@ -163,6 +224,38 @@ var minimumPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.[0-9]{2}$`)
 // coverageComparisonBandCents accounts for the one-decimal precision of Go
 // coverage measurements without changing the configured two-decimal floor.
 const coverageComparisonBandCents = 10
+
+// ratchetHeadroomCents is the most a floor may sit below measured coverage
+// (2.00 points). A larger gap means coverage rose without the floor
+// following it, so a later regression of that size would pass unnoticed.
+const ratchetHeadroomCents = 200
+
+// lowestMeaningfulMinimumCents is the lowest suggested minimum. A minimum at
+// or below the comparison band (0.10) passes with no statement covered, so it
+// is rejected like 0.00; 0.20 is the lowest value on Go's 0.1 grid that fails.
+const lowestMeaningfulMinimumCents = 2 * coverageComparisonBandCents
+
+// allowedHeadroomCents is the ratchet headroom for a package with total
+// statements: 2.00 points, or, in a package so small that one statement
+// (rounded up to Go's 0.1 precision) plus the comparison band is worth more
+// than half of that, twice that amount. The suggested minimum sits half the
+// headroom below the measurement, so it tolerates run-to-run jitter in either
+// direction and the loss of a single covered statement.
+func allowedHeadroomCents(total int64) int {
+	if total <= 0 {
+		return ratchetHeadroomCents
+	}
+	oneStatementTenths := (permille + total - 1) / total
+	return max(ratchetHeadroomCents, 2*(int(oneStatementTenths)*10+coverageComparisonBandCents))
+}
+
+// suggestedMinimumCents is where a floor belongs for a measurement: half the
+// allowed headroom below it, never below the lowest meaningful minimum.
+// Placed there, the floor neither fails when coverage dips nor goes stale
+// when coverage rises, by up to half the headroom either way.
+func suggestedMinimumCents(coverage Coverage) int {
+	return max(lowestMeaningfulMinimumCents, coverage.actualCents()-allowedHeadroomCents(coverage.Total)/2)
+}
 
 // LoadManifest loads either the fragment directory used by the repository
 // gate or the legacy single JSON manifest. Keeping the file form available
@@ -364,15 +457,7 @@ func parseEntry(raw json.RawMessage) (PackageEntry, error) {
 		}
 	}
 	if hasException {
-		var exception string
-		if err := json.Unmarshal(exceptionRaw, &exception); err != nil {
-			return PackageEntry{}, &ManifestError{
-				Kind:       ErrManifestException,
-				ImportPath: importPath,
-				Message:    fmt.Sprintf("coverage manifest package %q exception must be a string", importPath),
-			}
-		}
-		return PackageEntry{ImportPath: importPath, Exception: exception, HasException: true}, nil
+		return parseException(importPath, exceptionRaw)
 	}
 
 	lexeme := strings.TrimSpace(string(minimumRaw))
@@ -414,7 +499,36 @@ func parseEntry(raw json.RawMessage) (PackageEntry, error) {
 			Message:    fmt.Sprintf("coverage manifest package %q minimum must be between 0.00 and 100.00: got %s", importPath, lexeme),
 		}
 	}
+	if minimumCents <= coverageComparisonBandCents {
+		return PackageEntry{}, &ManifestError{
+			Kind:       ErrManifestNoopMinimum,
+			ImportPath: importPath,
+			Message:    fmt.Sprintf("coverage manifest package %q minimum %s passes with no statement covered; register a minimum of at least %s, or an exception stating why the package has nothing to measure", importPath, lexeme, formatCents(lowestMeaningfulMinimumCents)),
+		}
+	}
 	return PackageEntry{ImportPath: importPath, MinimumCents: minimumCents, HasMinimum: true}, nil
+}
+
+// parseException reads an exception registration. Its reason is required:
+// an exception exempts the package from every floor, so the manifest must
+// say why there is nothing to measure.
+func parseException(importPath string, raw json.RawMessage) (PackageEntry, error) {
+	var exception string
+	if err := json.Unmarshal(raw, &exception); err != nil {
+		return PackageEntry{}, &ManifestError{
+			Kind:       ErrManifestException,
+			ImportPath: importPath,
+			Message:    fmt.Sprintf("coverage manifest package %q exception must be a string", importPath),
+		}
+	}
+	if strings.TrimSpace(exception) == "" {
+		return PackageEntry{}, &ManifestError{
+			Kind:       ErrManifestException,
+			ImportPath: importPath,
+			Message:    fmt.Sprintf("coverage manifest package %q exception must state its reason", importPath),
+		}
+	}
+	return PackageEntry{ImportPath: importPath, Exception: exception, HasException: true}, nil
 }
 
 // ReadProfiles parses explicit Go coverage profile paths and aggregates
@@ -483,6 +597,7 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 
 	for _, entry := range manifest.Packages {
 		if entry.HasException {
+			findings.checkException(entry, measurements[entry.ImportPath])
 			continue
 		}
 		coverage, ok := measurements[entry.ImportPath]
@@ -490,15 +605,7 @@ func Compare(manifest Manifest, measurements map[string]Coverage) error {
 			findings.Unmeasured = append(findings.Unmeasured, entry.ImportPath)
 			continue
 		}
-		actualCents := coverage.actualCents()
-		if actualCents+coverageComparisonBandCents < entry.MinimumCents {
-			findings.Violations = append(findings.Violations, Violation{
-				ImportPath:    entry.ImportPath,
-				ExpectedCents: entry.MinimumCents,
-				ActualCents:   actualCents,
-				DeltaCents:    actualCents - entry.MinimumCents,
-			})
-		}
+		findings.checkFloor(entry, coverage)
 	}
 
 	return finishFindings(findings)
@@ -530,6 +637,7 @@ func CompareSelected(manifest Manifest, selected []string, measurements map[stri
 			continue
 		}
 		if entry.HasException {
+			findings.checkException(entry, measurements[packagePath])
 			continue
 		}
 		coverage, measured := measurements[packagePath]
@@ -537,17 +645,43 @@ func CompareSelected(manifest Manifest, selected []string, measurements map[stri
 			findings.Unmeasured = append(findings.Unmeasured, packagePath)
 			continue
 		}
-		actualCents := coverage.actualCents()
-		if actualCents+coverageComparisonBandCents < entry.MinimumCents {
-			findings.Violations = append(findings.Violations, Violation{
-				ImportPath:    packagePath,
-				ExpectedCents: entry.MinimumCents,
-				ActualCents:   actualCents,
-				DeltaCents:    actualCents - entry.MinimumCents,
-			})
-		}
+		findings.checkFloor(entry, coverage)
 	}
 	return finishFindings(findings)
+}
+
+// checkException records an exception whose package has covered statements.
+// A process entrypoint measured at 0% keeps its exception; anything a test
+// covers can hold a floor.
+func (e *FindingsError) checkException(entry PackageEntry, coverage Coverage) {
+	if coverage.Covered > 0 {
+		e.MeasuredExceptions = append(e.MeasuredExceptions, MeasuredException{ImportPath: entry.ImportPath, Coverage: coverage})
+	}
+}
+
+// checkFloor records a floor regression, or a stale floor when coverage has
+// risen more than the allowed headroom above the registered minimum.
+func (e *FindingsError) checkFloor(entry PackageEntry, coverage Coverage) {
+	actualCents := coverage.actualCents()
+	if actualCents+coverageComparisonBandCents < entry.MinimumCents {
+		e.Violations = append(e.Violations, Violation{
+			ImportPath:    entry.ImportPath,
+			ExpectedCents: entry.MinimumCents,
+			ActualCents:   actualCents,
+			DeltaCents:    actualCents - entry.MinimumCents,
+		})
+		return
+	}
+	allowed := allowedHeadroomCents(coverage.Total)
+	if actualCents-entry.MinimumCents > allowed {
+		e.Stale = append(e.Stale, StaleFloor{
+			ImportPath:     entry.ImportPath,
+			MinimumCents:   entry.MinimumCents,
+			ActualCents:    actualCents,
+			AllowedCents:   allowed,
+			SuggestedCents: suggestedMinimumCents(coverage),
+		})
+	}
 }
 
 func finishFindings(findings *FindingsError) error {
@@ -556,7 +690,14 @@ func finishFindings(findings *FindingsError) error {
 	sort.Slice(findings.Violations, func(i, j int) bool {
 		return findings.Violations[i].ImportPath < findings.Violations[j].ImportPath
 	})
-	if len(findings.Unregistered) != 0 || len(findings.Unmeasured) != 0 || len(findings.Violations) != 0 {
+	sort.Slice(findings.Stale, func(i, j int) bool {
+		return findings.Stale[i].ImportPath < findings.Stale[j].ImportPath
+	})
+	sort.Slice(findings.MeasuredExceptions, func(i, j int) bool {
+		return findings.MeasuredExceptions[i].ImportPath < findings.MeasuredExceptions[j].ImportPath
+	})
+	if len(findings.Unregistered) != 0 || len(findings.Unmeasured) != 0 || len(findings.Violations) != 0 ||
+		len(findings.Stale) != 0 || len(findings.MeasuredExceptions) != 0 {
 		return findings
 	}
 	return nil
@@ -603,6 +744,9 @@ func validateManifest(manifest Manifest) error {
 		}
 		if entry.HasMinimum && (entry.MinimumCents < 0 || entry.MinimumCents > 10000) {
 			return fmt.Errorf("%w: package %q minimum is outside 0.00..100.00", ErrManifestInvalid, entry.ImportPath)
+		}
+		if entry.HasMinimum && entry.MinimumCents <= coverageComparisonBandCents {
+			return fmt.Errorf("%w: package %q", ErrManifestNoopMinimum, entry.ImportPath)
 		}
 		previous = entry.ImportPath
 	}
