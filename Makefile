@@ -488,12 +488,24 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 # in-process on a virtual clock in TestToolContinuationPreservesDeviceAudio);
 # the scheduled Nightly audio stress workflow runs this target with the
 # coverage job's build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
+#
+# AUDIO_STRESS_LEG selects a disjoint part so the workflow can run the parts
+# as parallel jobs, each well inside the per-unit time budget: one leg per
+# high-rate trace, and the device-cadence continuations. The legs together
+# select exactly what "all" (the default) selects.
 AUDIO_STRESS_COUNT ?= 1
-test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
+AUDIO_STRESS_LEG ?= all
+AUDIO_STRESS_RUN_all = ^TestAgentBinary(HighRateToolAudioRepeatedTrials|ToolContinuationPreservesRemoteDeviceAudio|ToolContinuationStressMatrix)$$
+AUDIO_STRESS_RUN_high-rate-96000 = ^TestAgentBinaryHighRateToolAudioRepeatedTrials$$/^high_rate_96000_final$$
+AUDIO_STRESS_RUN_high-rate-111600 = ^TestAgentBinaryHighRateToolAudioRepeatedTrials$$/^high_rate_111600_final$$
+AUDIO_STRESS_RUN_continuation = ^TestAgentBinaryToolContinuation(PreservesRemoteDeviceAudio|StressMatrix)$$
+test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions, AUDIO_STRESS_LEG part).
 	@set -euo pipefail; \
-	echo "==> test-audio-stress high-rate tool audio (20 trials per trace) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
+	run='$(AUDIO_STRESS_RUN_$(AUDIO_STRESS_LEG))'; \
+	if [ -z "$$run" ]; then echo "unknown AUDIO_STRESS_LEG '$(AUDIO_STRESS_LEG)': use all, high-rate-96000, high-rate-111600 or continuation" >&2; exit 2; fi; \
+	echo "==> test-audio-stress leg $(AUDIO_STRESS_LEG) of high-rate tool audio (20 trials per trace) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone,stress \
-		-run '^TestAgentBinary(HighRateToolAudioRepeatedTrials|ToolContinuationPreservesRemoteDeviceAudio|ToolContinuationStressMatrix)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+		-run "$$run" -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \

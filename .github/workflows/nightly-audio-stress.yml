@@ -11,6 +11,10 @@ name: Nightly audio stress
 # delivery in-process on a virtual clock), so it runs here too. Locally:
 # `make test-audio-stress AUDIO_STRESS_COUNT=N`.
 #
+# The trials run as three parallel legs (one per high-rate trace, and the
+# device-cadence continuations) so each job stays well inside the 3-minute
+# per-unit budget; together the legs select the whole corpus.
+#
 # A scheduled failure opens (or comments on) a "Nightly audio stress failed"
 # issue, so a regression is noticed without anyone watching the Actions tab.
 
@@ -40,8 +44,12 @@ concurrency:
 
 jobs:
   audio-stress:
-    name: Nightly audio stress
+    name: Nightly audio stress (${{ matrix.leg }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [high-rate-96000, high-rate-111600, continuation]
     timeout-minutes: 20
     # actions: write lets go-cache-save delete superseded main caches;
     # issues: write lets a scheduled failure open or update its issue.
@@ -60,16 +68,17 @@ jobs:
         id: go
         uses: ./.github/actions/go-cache
         with:
-          cache-name: nightly-audio-stress
+          cache-name: nightly-audio-stress-${{ matrix.leg }}
 
       - name: Run high-rate tool-audio stress trials
         env:
           AUDIO_STRESS_COUNT: ${{ github.event.inputs.count || '4' }}
+          AUDIO_STRESS_LEG: ${{ matrix.leg }}
         run: |
           case "$AUDIO_STRESS_COUNT" in
             '' | *[!0-9]* | 0*) echo "::error::count must be a positive integer, got '$AUDIO_STRESS_COUNT'"; exit 2 ;;
           esac
-          make test-audio-stress AUDIO_STRESS_COUNT="$AUDIO_STRESS_COUNT"
+          make test-audio-stress AUDIO_STRESS_COUNT="$AUDIO_STRESS_COUNT" AUDIO_STRESS_LEG="$AUDIO_STRESS_LEG"
 
       - name: Save Go cache
         if: always()
@@ -87,8 +96,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TITLE: Nightly audio stress failed
+          AUDIO_STRESS_LEG: ${{ matrix.leg }}
         run: |
-          body="The ${GITHUB_EVENT_NAME} run of the Nightly audio stress workflow failed on ${GITHUB_SHA::9}: ${RUN_URL}"
+          body="The ${GITHUB_EVENT_NAME} run of the Nightly audio stress workflow failed on ${GITHUB_SHA::9} (leg ${AUDIO_STRESS_LEG}): ${RUN_URL}"
           number="$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
             --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")"
           if [ -n "$number" ]; then
@@ -96,5 +106,5 @@ jobs:
           else
             gh issue create --title "$TITLE" --body "$body
 
-          Reproduce locally with \`make test-audio-stress AUDIO_STRESS_COUNT=4\`. Close this issue once the stress trials pass again."
+          Reproduce locally with \`make test-audio-stress AUDIO_STRESS_COUNT=4 AUDIO_STRESS_LEG=${AUDIO_STRESS_LEG}\`. Close this issue once the stress trials pass again."
           fi
