@@ -118,6 +118,9 @@ type Resolution struct {
 	SystemPromptResolved bool
 	WorkspaceDir         string
 	AllowPaths           []string
+	// HomeDir is the host-resolved user home directory. The filesystem tools
+	// refuse its credential stores whenever a scope root contains them.
+	HomeDir string
 	// SkillRoots are host-resolved directories that directly contain skills.
 	// The session service passes them to the tools owner without inferring
 	// config or workspace layouts.

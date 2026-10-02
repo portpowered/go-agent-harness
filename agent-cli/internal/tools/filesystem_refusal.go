@@ -23,6 +23,7 @@ type FilesystemRefusalReason string
 const (
 	FilesystemRefusalOutsidePermittedRoots FilesystemRefusalReason = "outside_permitted_roots"
 	FilesystemRefusalSensitiveRead         FilesystemRefusalReason = "sensitive_read"
+	FilesystemRefusalSensitiveWrite        FilesystemRefusalReason = "sensitive_write"
 	FilesystemRefusalInvalidScope          FilesystemRefusalReason = "invalid_scope"
 )
 
@@ -87,7 +88,7 @@ func (r FilesystemRefusal) Validate() error {
 		return fmt.Errorf("filesystem refusal operation, path, and workdir are required")
 	}
 	switch r.Reason {
-	case FilesystemRefusalOutsidePermittedRoots, FilesystemRefusalSensitiveRead, FilesystemRefusalInvalidScope:
+	case FilesystemRefusalOutsidePermittedRoots, FilesystemRefusalSensitiveRead, FilesystemRefusalSensitiveWrite, FilesystemRefusalInvalidScope:
 	default:
 		return fmt.Errorf("unsupported filesystem refusal reason %q", r.Reason)
 	}

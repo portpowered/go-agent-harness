@@ -26,6 +26,7 @@ const (
 	imageWebPExtension        = ".webp"
 	imageGIFExtension         = ".gif"
 	windowsPlatform           = "windows"
+	darwinPlatform            = "darwin"
 	filesystemJPEGQuality     = 92
 	sandboxDirectoryMode      = 0o755
 	sandboxFileMode           = 0o644

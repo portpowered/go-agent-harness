@@ -275,12 +275,14 @@ type toolDefaults struct {
 // composition edge. The CLI owns the process working directory resolution;
 // the reusable service never infers host paths from ambient process state.
 func newToolDefaults(ctx context.Context) (toolDefaults, error) {
-	workdir, err := hostServices.ResolveCLIWorkDir(flags.NewGlobalFlags())
+	globalFlags := flags.NewGlobalFlags()
+	workdir, err := hostServices.ResolveCLIWorkDir(globalFlags)
 	if err != nil {
 		return toolDefaults{}, fmt.Errorf("resolve tool working directory: %w", err)
 	}
 	capability, err := runtimeToolsWire.NewService().Resolve(ctx, runtimeTools.Request{
 		WorkDir:        workdir,
+		HomeDir:        globalFlags.HostHomeDirOrEmpty(),
 		UseDefaultTool: true,
 	})
 	if err != nil {

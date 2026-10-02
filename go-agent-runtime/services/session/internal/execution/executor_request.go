@@ -35,6 +35,7 @@ func (e *Executor) resolveToolCapability(ctx context.Context, workDir string, al
 	request := runtimeTools.Request{
 		WorkDir:     workDir,
 		AllowPaths:  append([]string(nil), allowPaths...),
+		HomeDir:     e.resolvedHomeDir,
 		SkillRoots:  append([]runtimeTools.SkillRoot(nil), e.resolvedSkillRoots...),
 		Inferencer:  inf,
 		Executor:    e.executor,

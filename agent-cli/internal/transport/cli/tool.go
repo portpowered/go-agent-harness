@@ -101,6 +101,7 @@ func (c *ToolCommand) getCapability(ctx context.Context) (runtimeTools.Capabilit
 	capability, err := service.Resolve(ctx, runtimeTools.Request{
 		WorkDir:    policy.PrimaryRoot(),
 		AllowPaths: policy.AdditionalRoots(),
+		HomeDir:    c.globalFlags.HostHomeDirOrEmpty(),
 		Selections: selections,
 		Exec: runtimeTools.ExecPolicy{
 			EnableDenyPatterns: cfg.Tools.Exec.EnableDenyPatterns,

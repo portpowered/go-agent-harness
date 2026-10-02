@@ -28,7 +28,7 @@ type FilesystemPolicy struct {
 // printed alongside a resolved session scope. Shell-command deny patterns are
 // intentionally described separately so disabling them cannot be mistaken for
 // disabling filesystem confinement or for an operating-system sandbox.
-const FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
+const FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential locations can be neither read nor written even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
 
 // FilesystemHost carries the host directories a filesystem policy is
 // resolved against. The CLI host boundary captures them once per run.

@@ -23,6 +23,11 @@ profile.cov
 __pycache__/
 .cache/go-tools/
 .cache/deadcode/
+# Local Go build and golangci-lint caches (GOCACHE, GOLANGCI_LINT_CACHE).
+# Keep them outside the repository; these patterns stop an accidental commit.
+/gocache*/
+/golangci-cache*/
+/.gocache/
 # make prepush phase result cache and coverage profiles/scope files
 .cache/prepush/
 /coverage/

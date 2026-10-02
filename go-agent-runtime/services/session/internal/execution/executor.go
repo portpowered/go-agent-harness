@@ -70,6 +70,7 @@ type RuntimeResolution struct {
 	Storage         Storage
 	WorkspaceDir    string
 	AllowPaths      []string
+	HomeDir         string
 	SkillRoots      []tools.SkillRoot
 	Logger          looplogging.Logger
 	// PromptResolved distinguishes an explicitly resolved empty prompt from
@@ -117,6 +118,7 @@ type Executor struct {
 	resolvedStorage         Storage
 	resolvedWorkspace       string
 	resolvedAllowPaths      []string
+	resolvedHomeDir         string
 	resolvedSkillRoots      []tools.SkillRoot
 	resolvedPrompt          bool
 	logger                  looplogging.Logger
@@ -168,6 +170,7 @@ func (e *Executor) WithResolution(resolution RuntimeResolution) *Executor {
 	clone.resolvedStorage = resolution.Storage
 	clone.resolvedWorkspace = resolution.WorkspaceDir
 	clone.resolvedAllowPaths = append([]string(nil), resolution.AllowPaths...)
+	clone.resolvedHomeDir = resolution.HomeDir
 	clone.resolvedSkillRoots = append([]tools.SkillRoot(nil), resolution.SkillRoots...)
 	clone.resolvedPrompt = resolution.PromptResolved
 	if resolution.Logger != nil {

@@ -59,6 +59,9 @@ type Config struct {
 	// the process launch directory remains the default for each run.
 	FilesystemWorkDir    string   `koanf:"-" yaml:"-" json:"-"`
 	FilesystemAllowPaths []string `koanf:"-" yaml:"-" json:"-"`
+	// FilesystemHomeDir is the host's user home directory. Filesystem tools
+	// refuse its credential stores whenever a scope root contains them.
+	FilesystemHomeDir string `koanf:"-" yaml:"-" json:"-"`
 	// ConfigPath is runtime metadata identifying the file that produced this
 	// snapshot. It is excluded from persisted configuration so prerequisite
 	// errors can name the effective file without guessing its location.

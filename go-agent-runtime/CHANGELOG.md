@@ -11,8 +11,29 @@
   with the values `providers.RealtimeDelegationClient` and
   `providers.RealtimeDelegationResponses`. `gpt-live-1` is `Duplex` with
   client delegation; the OpenAI Realtime models are neither.
+- `tools.Request.HomeDir` and `session.Resolution.HomeDir`: the host's user
+  home directory. The filesystem tools refuse reads and writes of its
+  credential stores (`.ssh`, `.aws`, `.gnupg`, `.kube`, `Library/Keychains`
+  and the rest), including through a scope root inside one of them.
+- Filesystem refusal reason `sensitive_write` (`filesystem.refusal.v1`): a
+  write, append, edit or create into a protected location.
 
 ### Changed
+
+- Security: a broad scope root such as `--allow-path /` or a parent of the
+  home directory no longer exposes `~/.ssh` and the other home credential
+  stores to `read_file`, `list_dir`, `read_image` or a symlink, provided the
+  host sets `HomeDir`. Before, credential stores were refused only directly
+  below a scope root. The Unix protected set also covers the macOS system and
+  root keychains (`/Library/Keychains`, `/var/root/Library/Keychains`).
+- Security: `write_file`, `append_file` and `edit_file` now refuse protected
+  system and credential locations, so a broad root can no longer be used to
+  plant `~/.ssh/authorized_keys`. Before, only reads were refused.
+- Security: protected locations are matched case-insensitively per path
+  component on macOS and Windows, and by file identity on any filesystem, so
+  `~/.SSH/id_rsa` or `~/.Aws/credentials` no longer bypass the refusal.
+- `tools.FilesystemScopeStartupNotice` now says protected locations can be
+  neither read nor written.
 
 - Model admission restricts `openai-live` to its catalog, as it already does
   for `openai`, so only `gpt-live-1` is admitted there. The rejection's

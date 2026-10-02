@@ -21,6 +21,11 @@ var ErrFilesystemAccessDenied = errors.New("filesystem access denied")
 // path belongs to a platform-protected system or credential location.
 var ErrProtectedFilesystemRead = errors.New("protected filesystem read")
 
+// ErrProtectedFilesystemWrite identifies a write, append, edit or create
+// denied because the resolved path belongs to a platform-protected system or
+// credential location.
+var ErrProtectedFilesystemWrite = errors.New("protected filesystem write")
+
 type filesystemAccessDeniedError struct {
 	message string
 	workdir string
@@ -59,7 +64,7 @@ type FilesystemPolicy struct {
 // printed alongside a resolved session scope. Shell-command deny patterns are
 // intentionally described separately so disabling them cannot be mistaken for
 // disabling filesystem confinement or for an operating-system sandbox.
-const FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
+const FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential locations can be neither read nor written even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
 
 // ResolveFilesystemPolicy captures and validates one immutable filesystem
 // scope for a run. The host boundary must provide the primary root explicitly;
@@ -132,6 +137,33 @@ func NewFilesystemPolicy(primaryRoot string, additionalRoots ...string) (*Filesy
 	}, nil
 }
 
+// WithHomeDir returns a copy of the policy that also refuses reads and writes
+// of the per-user credential stores (.ssh, .aws, .gnupg, Keychains and the
+// rest) under homeDir. A broad root such as "/" or a parent of the home
+// directory cannot expose or plant them, and neither can a scope root inside
+// one (--allow-path ~/.ssh/keys). The host injects homeDir; an empty homeDir
+// returns the policy unchanged.
+func (p *FilesystemPolicy) WithHomeDir(homeDir string) *FilesystemPolicy {
+	if p == nil || strings.TrimSpace(homeDir) == "" {
+		return p
+	}
+	homes := []string{filepath.Clean(homeDir)}
+	if absolute, err := filepath.Abs(homeDir); err == nil {
+		homes = append(homes, filepath.Clean(absolute))
+	}
+	if resolved, err := filepath.EvalSymlinks(homeDir); err == nil {
+		homes = append(homes, filepath.Clean(resolved))
+	}
+	protectedRoots := append([]string(nil), p.protectedReadRoots...)
+	for _, home := range homes {
+		protectedRoots = append(protectedRoots, credentialReadRoots(home)...)
+	}
+	clone := *p
+	clone.additionalRoots = append([]string(nil), p.additionalRoots...)
+	clone.protectedReadRoots = normalizeProtectedReadRoots(protectedRoots)
+	return &clone
+}
+
 // PrimaryRoot returns the canonical primary filesystem root.
 func (p *FilesystemPolicy) PrimaryRoot() string {
 	if p == nil {
@@ -162,8 +194,8 @@ func (p *FilesystemPolicy) WritableRoots() []string {
 }
 
 // ProtectedReadRoots returns a copy of the platform-aware system and
-// credential roots that remain unreadable even when a caller allowlists their
-// containing directory for ordinary filesystem access.
+// credential roots that remain unreadable and unwritable even when a caller
+// allowlists their containing directory for ordinary filesystem access.
 func (p *FilesystemPolicy) ProtectedReadRoots() []string {
 	if p == nil {
 		return nil
@@ -257,6 +289,9 @@ func unixProtectedReadRoots() []string {
 		"/dev",
 		"/boot",
 		"/root",
+		// macOS system and root-user keychains.
+		"/Library/Keychains",
+		"/var/root/Library/Keychains",
 	}
 
 	return roots

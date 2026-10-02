@@ -138,6 +138,7 @@ func resolveSessionBrowserConfig(globalFlags *flags.GlobalFlags, cmd *cobra.Comm
 	if err != nil {
 		return nil, err
 	}
+	resolved.FilesystemHomeDir = globalFlags.HostHomeDirOrEmpty()
 	// Keep the command's config-directory override attached to this resolved
 	// snapshot so request-scoped browser persistence follows the same -C path.
 	resolved.ConfigDir = configDir

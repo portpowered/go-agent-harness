@@ -6,7 +6,7 @@ package cli
 // boundaries.
 const filesystemPolicyHelp = `Filesystem tool scope:
 With no --workdir, the effective workdir is the process current directory and relative filesystem-tool paths resolve there. --workdir <directory> selects an existing accessible directory. Repeat --allow-path <directory> to add existing accessible roots; relative allow-path values resolve from the effective workdir and duplicate roots are normalized.
-Read and list operations refuse protected system and credential locations even when a broad --allow-path contains them. Shell-command deny-pattern policy is separate; filesystem confinement is not an operating-system sandbox.
+Read, list, write, append and edit operations refuse protected system and credential locations (such as ~/.ssh, ~/.aws and Keychains, in any letter case) even when a broad --allow-path contains them or an --allow-path lies inside one. Shell-command deny-pattern policy is separate; filesystem confinement is not an operating-system sandbox.
 
 Examples:
   allowed: agent --workdir ./project tool write_file path=notes/today.txt content=hello

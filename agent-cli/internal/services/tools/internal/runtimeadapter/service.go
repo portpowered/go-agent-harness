@@ -84,6 +84,7 @@ func cliToolConfig(request runtimeTools.Request) *config.Config {
 		Browser:              config.DefaultBrowserConfig(),
 		FilesystemWorkDir:    request.WorkDir,
 		FilesystemAllowPaths: append([]string(nil), request.AllowPaths...),
+		FilesystemHomeDir:    request.HomeDir,
 	}
 	if len(request.Selections) > 0 {
 		result.Tools.List = make([]config.ToolEntry, 0, len(request.Selections))
