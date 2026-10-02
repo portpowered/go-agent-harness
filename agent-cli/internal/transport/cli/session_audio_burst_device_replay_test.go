@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,23 +30,43 @@ import (
 )
 
 const (
-	test13OpenAIAudioFixture      = "testdata/test13-openai-audio.base64"
-	test13FullProviderPacketBytes = 19_200
-	test13ProviderPacketCount     = 25
-	test13ProviderBytes           = 468_000
-	test13SeedSHA256              = "4178a70df57de1e70701ceb83553f611ebf041c7b501f1ff9d30d2e0af5a68ad"
-	test13ProviderSHA256          = "b00851d38de650d2a12ebd7b2bec4b4aef6de7a7ca0457962c3729d2b0914808"
+	openAIAudioBurstFixture       = "testdata/openai-audio-burst.base64"
+	openAIFullProviderPacketBytes = 19_200
+	openAIAudioBurstPacketCount   = 25
+	openAIAudioBurstBytes         = 468_000
+	openAIAudioBurstSeedSHA256    = "4178a70df57de1e70701ceb83553f611ebf041c7b501f1ff9d30d2e0af5a68ad"
+	openAIAudioBurstSHA256        = "b00851d38de650d2a12ebd7b2bec4b4aef6de7a7ca0457962c3729d2b0914808"
+
+	openAILongAudioFixture        = "testdata/openai-long-audio-output.base64"
+	openAILongAudioSeedPackets    = 4
+	openAILongAudioPacketCount    = 127
+	openAILongAudioFinalPacketLen = 12_000
+	openAILongAudioBytes          = 2_431_200
+	openAILongAudioSeedSHA256     = "2660b60334df1c3ea7c6d2c8419e5c861eeb9d8a54187d12878e715ec1d1bc11"
+
+	// openAIReplayHangBound bounds a hang only: nothing asserts elapsed time.
+	// The long replay is CPU-bound JSON/base64 decoding of ~50 s of 24 kHz
+	// audio, ~20 s end to end under -race at load average ~90.
+	openAIReplayHangBound = 2 * time.Minute
 )
 
-// TestSessionCommandReplaysTest13AudioBurstWithoutDeviceLoss preserves the
-// completed 25-packet response shape from test13.json. OpenAI supplied twenty-
-// four 400 ms PCM16/24 kHz packets and one 150 ms tail in about two seconds,
-// while the output device consumed the resulting 9.75 seconds at 16 kHz.
-// Exact loopback equality catches every dropped, duplicated, or reordered
-// sample at the provider-to-device boundary.
-func TestSessionCommandReplaysTest13AudioBurstWithoutDeviceLoss(t *testing.T) {
-	deltas, providerPCM := loadTest13ProviderPackets(t)
-	runCapturedOpenAIAudioToVirtualDevice(t, "test13", deltas, providerPCM)
+// TestSessionReplayDeliversOpenAIAudioSampleExactToDevice replays captured
+// OpenAI response audio through the shipped session command to the 16 kHz
+// virtual output device. Both responses arrive much faster than playback:
+// the burst is 24 400 ms packets plus a 150 ms tail delivered in about two
+// seconds (9.75 s of audio), and the long response is 126 400 ms packets plus
+// a 250 ms tail (50.65 s). Exact loopback equality and zero drops, overflows
+// or retained samples prove conversion and device pacing lose, duplicate and
+// reorder nothing at the provider-to-device boundary.
+func TestSessionReplayDeliversOpenAIAudioSampleExactToDevice(t *testing.T) {
+	t.Run("burst", func(t *testing.T) {
+		deltas, providerPCM := loadOpenAIAudioBurstPackets(t)
+		runCapturedOpenAIAudioToVirtualDevice(t, "burst", deltas, providerPCM)
+	})
+	t.Run("long_response", func(t *testing.T) {
+		deltas, providerPCM := loadOpenAILongAudioPackets(t)
+		runCapturedOpenAIAudioToVirtualDevice(t, "long-response", deltas, providerPCM)
+	})
 }
 
 func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, deltas []string, providerPCM []byte) {
@@ -90,7 +111,7 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 	command.SetErr(&stderr)
 	command.SetArgs([]string{"--replay", capturePath, "--audio-out-device", "virtual:output"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openAIReplayHangBound)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() { runErr <- command.ExecuteContext(ctx) }()
@@ -106,7 +127,7 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 	if err := <-runErr; err != nil {
 		t.Fatalf("execute %s OpenAI edge replay: %v; stderr=%q", fixtureName, err, stderr.String())
 	}
-	if !equalPCM16(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("%s device PCM differs: got %d samples, want %d exact samples", fixtureName, len(got), len(want))
 	}
 	stats := observer.PlaybackStats()
@@ -116,12 +137,12 @@ func runCapturedOpenAIAudioToVirtualDevice(t *testing.T, fixtureName string, del
 	t.Logf("%s preserved %d provider samples as %d exact 16 kHz device samples; playback=%+v", fixtureName, len(providerSamples), len(got), stats)
 }
 
-func loadTest13ProviderPackets(t *testing.T) ([]string, []byte) {
+func loadOpenAIAudioBurstPackets(t *testing.T) ([]string, []byte) {
 	t.Helper()
 
-	file, err := os.Open(test13OpenAIAudioFixture)
+	file, err := os.Open(openAIAudioBurstFixture)
 	if err != nil {
-		t.Fatalf("open test13 OpenAI audio fixture: %v", err)
+		t.Fatalf("open OpenAI burst audio fixture: %v", err)
 	}
 	defer closeForTest(t, file.Close)
 
@@ -134,7 +155,7 @@ func loadTest13ProviderPackets(t *testing.T) ([]string, []byte) {
 		case line == "--packet--":
 			packet, decodeErr := base64.StdEncoding.DecodeString(encoded.String())
 			if decodeErr != nil {
-				t.Fatalf("decode test13 OpenAI packet %d: %v", len(seeds), decodeErr)
+				t.Fatalf("decode OpenAI burst packet %d: %v", len(seeds), decodeErr)
 			}
 			seeds = append(seeds, packet)
 			encoded.Reset()
@@ -145,42 +166,96 @@ func loadTest13ProviderPackets(t *testing.T) ([]string, []byte) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		t.Fatalf("scan test13 OpenAI audio fixture: %v", err)
+		t.Fatalf("scan OpenAI burst audio fixture: %v", err)
 	}
 	if encoded.Len() != 0 {
-		t.Fatal("test13 OpenAI fixture ended without a packet delimiter")
+		t.Fatal("OpenAI burst fixture ended without a packet delimiter")
 	}
 	if len(seeds) != 5 {
-		t.Fatalf("test13 OpenAI seed packets = %d, want four full packets and one tail", len(seeds))
+		t.Fatalf("OpenAI burst seed packets = %d, want four full packets and one tail", len(seeds))
 	}
 	for index, packet := range seeds {
-		wantBytes := test13FullProviderPacketBytes
+		wantBytes := openAIFullProviderPacketBytes
 		if index == len(seeds)-1 {
 			wantBytes = 7_200
 		}
 		if len(packet) != wantBytes {
-			t.Fatalf("test13 OpenAI packet %d bytes = %d, want %d", index, len(packet), wantBytes)
+			t.Fatalf("OpenAI burst packet %d bytes = %d, want %d", index, len(packet), wantBytes)
 		}
 	}
 	seedPCM := bytes.Join(seeds[:4], nil)
-	if got := fmt.Sprintf("%x", sha256.Sum256(seedPCM)); got != test13SeedSHA256 {
-		t.Fatalf("test13 OpenAI seed SHA-256 = %s, want %s", got, test13SeedSHA256)
+	if got := fmt.Sprintf("%x", sha256.Sum256(seedPCM)); got != openAIAudioBurstSeedSHA256 {
+		t.Fatalf("OpenAI burst seed SHA-256 = %s, want %s", got, openAIAudioBurstSeedSHA256)
 	}
 
-	deltas := make([]string, 0, test13ProviderPacketCount)
-	providerPCM := make([]byte, 0, test13ProviderBytes)
-	for index := range test13ProviderPacketCount - 1 {
+	deltas := make([]string, 0, openAIAudioBurstPacketCount)
+	providerPCM := make([]byte, 0, openAIAudioBurstBytes)
+	for index := range openAIAudioBurstPacketCount - 1 {
 		packet := seeds[index%4]
 		deltas = append(deltas, base64.StdEncoding.EncodeToString(packet))
 		providerPCM = append(providerPCM, packet...)
 	}
 	deltas = append(deltas, base64.StdEncoding.EncodeToString(seeds[4]))
 	providerPCM = append(providerPCM, seeds[4]...)
-	if len(providerPCM) != test13ProviderBytes {
-		t.Fatalf("test13 reconstructed provider PCM bytes = %d, want %d", len(providerPCM), test13ProviderBytes)
+	if len(providerPCM) != openAIAudioBurstBytes {
+		t.Fatalf("OpenAI burst reconstructed provider PCM bytes = %d, want %d", len(providerPCM), openAIAudioBurstBytes)
 	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(providerPCM)); got != test13ProviderSHA256 {
-		t.Fatalf("test13 reconstructed provider SHA-256 = %s, want %s", got, test13ProviderSHA256)
+	if got := fmt.Sprintf("%x", sha256.Sum256(providerPCM)); got != openAIAudioBurstSHA256 {
+		t.Fatalf("OpenAI burst reconstructed provider SHA-256 = %s, want %s", got, openAIAudioBurstSHA256)
+	}
+	return deltas, providerPCM
+}
+
+// loadOpenAILongAudioPackets cycles four consecutive captured 400 ms packets
+// into the 127-packet long response, keeping real provider PCM and packet
+// sizing while the committed fixture stays compact.
+func loadOpenAILongAudioPackets(t *testing.T) ([]string, []byte) {
+	t.Helper()
+	file, err := os.Open(openAILongAudioFixture)
+	if err != nil {
+		t.Fatalf("open OpenAI long audio fixture: %v", err)
+	}
+	defer closeForTest(t, file.Close)
+
+	var seeds [][]byte
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 1024), 64*1024)
+	for scanner.Scan() {
+		encoded := strings.TrimSpace(scanner.Text())
+		if encoded == "" || strings.HasPrefix(encoded, "#") {
+			continue
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			t.Fatalf("decode OpenAI long audio seed %d: %v", len(seeds), err)
+		}
+		if len(decoded) != openAIFullProviderPacketBytes {
+			t.Fatalf("OpenAI long audio seed %d bytes = %d, want %d", len(seeds), len(decoded), openAIFullProviderPacketBytes)
+		}
+		seeds = append(seeds, decoded)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan OpenAI long audio fixture: %v", err)
+	}
+	if len(seeds) != openAILongAudioSeedPackets {
+		t.Fatalf("OpenAI long audio seeds = %d, want %d", len(seeds), openAILongAudioSeedPackets)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(bytes.Join(seeds, nil))); got != openAILongAudioSeedSHA256 {
+		t.Fatalf("OpenAI long audio seed SHA-256 = %s, want %s", got, openAILongAudioSeedSHA256)
+	}
+
+	deltas := make([]string, 0, openAILongAudioPacketCount)
+	providerPCM := make([]byte, 0, openAILongAudioBytes)
+	for index := range openAILongAudioPacketCount {
+		packet := seeds[index%len(seeds)]
+		if index == openAILongAudioPacketCount-1 {
+			packet = packet[:openAILongAudioFinalPacketLen]
+		}
+		deltas = append(deltas, base64.StdEncoding.EncodeToString(packet))
+		providerPCM = append(providerPCM, packet...)
+	}
+	if len(providerPCM) != openAILongAudioBytes {
+		t.Fatalf("OpenAI long audio PCM bytes = %d, want %d", len(providerPCM), openAILongAudioBytes)
 	}
 	return deltas, providerPCM
 }
@@ -343,7 +418,7 @@ func TestSessionCommandBackpressuresPlaybackBurstWithoutOverflow(t *testing.T) {
 	if err := <-runErr; err != nil {
 		t.Fatalf("session command: %v; stderr=%q", err, stderr.String())
 	}
-	if !equalPCM16(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("device playback differs from the provider burst: got %d samples, want %d exact samples", len(got), len(want))
 	}
 	if stats := observer.PlaybackStats(); stats.DroppedSamples != 0 || stats.OverflowEvents != 0 || stats.QueuedSamples != 0 {

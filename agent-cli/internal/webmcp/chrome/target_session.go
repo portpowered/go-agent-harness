@@ -418,7 +418,7 @@ func (s *targetSession) EnableWebMCP(ctx context.Context) error {
 	if probeErr == nil && probe.CatalogReady && probe.ToolCount == 0 {
 		s.mu.Lock()
 		s.page.CatalogReady = true
-		s.page.CatalogEvidence = "page_producer"
+		s.page.CatalogEvidence = catalogEvidencePageProducer
 		s.page.Ready = s.page.Connected && s.page.WebMCPDomainSupported
 		s.mu.Unlock()
 		s.publish(ctx, webmcp.BrowserEvent{
@@ -514,7 +514,7 @@ func (s *targetSession) updatePageReadinessLocked(event webmcp.BrowserEvent) {
 	case webmcp.EventCatalogReady:
 		s.page.CatalogReady = true
 		if s.page.CatalogEvidence == "" {
-			s.page.CatalogEvidence = "page_producer"
+			s.page.CatalogEvidence = catalogEvidencePageProducer
 		}
 	case webmcp.EventPageNavigated, webmcp.EventFrameNavigated:
 		s.page.CatalogReady = false

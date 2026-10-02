@@ -5,15 +5,10 @@ package chrome
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
@@ -29,8 +24,6 @@ const (
 	conversationalCustomerPriority     = "high"
 	conversationalCustomerCorrected    = "live corrected"
 )
-
-const conversationalCustomerModelEnv = "WEBMCP_CONVERSATIONAL_MODEL"
 
 type conversationalCustomerOracle struct {
 	Page        string   `json:"page"`
@@ -51,84 +44,6 @@ type conversationalCustomerPageState struct {
 	Priority    string `json:"priority"`
 	Pending     bool   `json:"pending"`
 	VisibleText string `json:"visibleText"`
-}
-
-type conversationalCustomerFixtureServer struct {
-	server *httptest.Server
-	mu     sync.Mutex
-	oracle conversationalCustomerOracle
-}
-
-func newConversationalCustomerFixtureServer(page []byte) *conversationalCustomerFixtureServer {
-	fixture := &conversationalCustomerFixtureServer{oracle: conversationalCustomerOracle{
-		Page: conversationalCustomerHomePage, Label: "unset", Theme: "default", Priority: "normal", VisibleText: "unset/default",
-	}}
-	fixture.server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/", "/settings":
-			if request.Method != http.MethodGet {
-				writer.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
-			writer.Header().Set("Cache-Control", "no-store")
-			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-			writer.Header().Set("Origin-Agent-Cluster", "?1")
-			writer.Header().Set("Permissions-Policy", "tools=(self)")
-			if _, err := writer.Write(page); err != nil {
-				// The browser went away mid-response; the oracle observes that.
-				return
-			}
-		case "/__test/conversational-state":
-			fixture.handleOracle(writer, request)
-		default:
-			http.NotFound(writer, request)
-		}
-	}))
-	return fixture
-}
-
-func (f *conversationalCustomerFixtureServer) Origin() string { return f.server.URL }
-
-func (f *conversationalCustomerFixtureServer) URL(page string) string {
-	if page == conversationalCustomerSettingsPage {
-		return f.server.URL + "/settings"
-	}
-	return f.server.URL + "/"
-}
-
-func (f *conversationalCustomerFixtureServer) StateURL() string {
-	return f.server.URL + "/__test/conversational-state"
-}
-
-func (f *conversationalCustomerFixtureServer) Close() {
-	if f != nil && f.server != nil {
-		f.server.Close()
-	}
-}
-
-func (f *conversationalCustomerFixtureServer) handleOracle(writer http.ResponseWriter, request *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	switch request.Method {
-	case http.MethodGet:
-		writer.Header().Set("Cache-Control", "no-store")
-		writer.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(writer).Encode(f.oracle); err != nil {
-			// The polling client went away; its next read reports the failure.
-			return
-		}
-	case http.MethodPost:
-		var oracle conversationalCustomerOracle
-		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&oracle); err != nil {
-			http.Error(writer, "invalid oracle", http.StatusBadRequest)
-			return
-		}
-		oracle.Invocations = append([]string(nil), oracle.Invocations...)
-		f.oracle = oracle
-		writer.WriteHeader(http.StatusNoContent)
-	default:
-		writer.WriteHeader(http.StatusMethodNotAllowed)
-	}
 }
 
 func newConversationalCustomerScenario(homeURL, settingsURL string) browserconversation.BrowserConversationScenario {
@@ -168,69 +83,6 @@ func conversationalCustomerState(page, label, theme, priority, visible string) j
 		return nil
 	}
 	return state
-}
-
-func conversationalCustomerSystemPrompt() string {
-	return `You are operating a real declarative WebMCP customer fixture through the browser tools in this session. Follow each customer request in order. Use webmcp_list_tools to discover current page tools and use only the exact current tool_ref and a syntactically valid JSON object string in webmcp_invoke. Never invent, reuse, or receive tool references or encoded arguments out of band. After customer navigation, list tools again; if a stale_tool_ref error occurs, retain that failed attempt as evidence and retry only with a freshly listed reference. Perform the requested page mutation before speaking confirmation, and ground confirmation in the resulting page state. A customer interruption or stop request cancels in-flight work; never claim a canceled action completed.`
-}
-
-func conversationalCustomerModel() string {
-	if value := strings.TrimSpace(os.Getenv(conversationalCustomerModelEnv)); value != "" {
-		return value
-	}
-	return "gpt-realtime"
-}
-
-type conversationalCustomerEventCollector struct {
-	mu      sync.Mutex
-	events  []webmcp.BrowserEvent
-	changed chan struct{}
-}
-
-func newConversationalCustomerEventCollector() *conversationalCustomerEventCollector {
-	return &conversationalCustomerEventCollector{changed: make(chan struct{})}
-}
-
-func (c *conversationalCustomerEventCollector) consume(session webmcp.TargetSession) {
-	for event := range session.Events() {
-		c.mu.Lock()
-		c.events = append(c.events, event)
-		close(c.changed)
-		c.changed = make(chan struct{})
-		c.mu.Unlock()
-	}
-}
-
-func (c *conversationalCustomerEventCollector) len() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.events)
-}
-
-func (c *conversationalCustomerEventCollector) snapshot() []webmcp.BrowserEvent {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]webmcp.BrowserEvent(nil), c.events...)
-}
-
-func (c *conversationalCustomerEventCollector) wait(ctx context.Context, start int, match func(webmcp.BrowserEvent) bool) (webmcp.BrowserEvent, error) {
-	for {
-		c.mu.Lock()
-		for index := start; index < len(c.events); index++ {
-			if match(c.events[index]) {
-				event := c.events[index]
-				c.mu.Unlock()
-				return event, nil
-			}
-		}
-		changed := c.changed
-		c.mu.Unlock()
-		select {
-		case <-changed:
-		case <-ctx.Done():
-			return webmcp.BrowserEvent{}, ctx.Err()
-		}
-	}
 }
 
 type conversationalCustomerSessionLogEntry struct {

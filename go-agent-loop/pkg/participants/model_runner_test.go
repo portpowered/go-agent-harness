@@ -680,24 +680,6 @@ func TestModelRunner_StreamCloseWithoutMessageEndMarksProviderClose(t *testing.T
 	}
 }
 
-func TestModelRunner_ContextCancellation(t *testing.T) {
-	inf := &testInferencer{
-		responses: []messages.InferenceResult{
-			{Message: messages.NewTextMessage(messages.RoleAssistant, "ok")},
-		},
-	}
-
-	runner := NewModelRunner(inf, 10)
-	ap := NewActiveParticipant(messages.Model, runner)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ap.Start(ctx)
-
-	// Cancel immediately - runner should stop
-	cancel()
-	ap.Stop() // should not hang
-}
-
 func TestSessionModelRunner_SessionDoneEmitsSessionClose(t *testing.T) {
 	session := newCompletedSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 10, nil)

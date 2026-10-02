@@ -8,7 +8,7 @@ import (
 	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
 
-func TestS4ScreenAndMouseErrorPaths(t *testing.T) {
+func TestScreenAndMouseErrorPaths(t *testing.T) {
 	// Keep the display-index error path independent from the host desktop. The
 	// session admission path intentionally fails closed when the host has no
 	// usable display, so a host-backed tool cannot reach this validation branch

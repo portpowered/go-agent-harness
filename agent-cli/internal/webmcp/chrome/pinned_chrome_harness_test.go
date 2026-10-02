@@ -1,4 +1,4 @@
-//go:build e2e || live
+//go:build e2e
 
 package chrome
 
@@ -81,17 +81,41 @@ func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, err
 	if err != nil {
 		return pinnedChrome{}, err
 	}
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{})
+	cacheDir, err := pinnedChromeCacheDir()
+	if err != nil {
+		return pinnedChrome{}, err
+	}
+	// macOS assesses a freshly extracted bundle on its first launch, which
+	// can hold the --version query well past the production bound.
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{VersionTimeout: pinnedChromeVersionTimeout})
 	executable, err := acquirer.AcquirePinnedChrome(ctx, PinnedChromeRequest{
 		Platform:      platform,
 		RequiredMajor: MinimumManagedChromeMajor,
 		LockPath:      lockPath,
-		CacheDir:      workDir,
+		CacheDir:      cacheDir,
 	})
 	if err != nil {
 		return pinnedChrome{}, err
 	}
 	return pinnedChrome{Lock: lock, Executable: executable.Path, WorkDir: workDir}, nil
+}
+
+// pinnedChromeVersionTimeout bounds the first --version query of the pinned
+// artifact in tests.
+const pinnedChromeVersionTimeout = time.Minute
+
+// pinnedChromeCacheDir is the Chrome for Testing cache every suite in this
+// package shares. The acquirer serializes it with a file lock and re-verifies
+// the archive digest and version of a ready entry, so sharing it is safe; a
+// per-test cache re-downloaded and re-extracted the ~150 MB artifact for every
+// test, and macOS assesses each freshly extracted bundle on first launch,
+// which pushed the version query past its bound on a loaded host.
+func pinnedChromeCacheDir() (string, error) {
+	root, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("locate user cache for pinned Chrome: %w", err)
+	}
+	return filepath.Join(root, "go-agent-harness", "chrome-for-testing-tests"), nil
 }
 
 func repositoryRoot() (string, error) {
@@ -495,4 +519,27 @@ func mustRepositoryRoot() string {
 		panic(err)
 	}
 	return root
+}
+
+// removeKilledChromeProfile removes the profile of a Chrome whose main process
+// the test killed. Its helper processes outlive the kill briefly and keep
+// writing to the profile, so removal is retried until they have exited.
+func removeKilledChromeProfile(t *testing.T, profileDir string) {
+	t.Helper()
+	deadline := time.NewTimer(15 * time.Second)
+	defer deadline.Stop()
+	retry := time.NewTicker(100 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		err := os.RemoveAll(profileDir)
+		if err == nil {
+			return
+		}
+		select {
+		case <-retry.C:
+		case <-deadline.C:
+			t.Errorf("remove killed Chrome profile: %v", err)
+			return
+		}
+	}
 }

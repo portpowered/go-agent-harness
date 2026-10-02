@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestPeerS4Lifecycle(t *testing.T) {
+func TestPeerLifecycle(t *testing.T) {
 	t.Run("timeout", func(t *testing.T) {
 		cause := errors.New("timeout")
 		p := peer(func(context.Context, int) (Conn, error) { return nil, cause }, 1)
@@ -57,7 +57,7 @@ func TestPeerS4Lifecycle(t *testing.T) {
 	})
 }
 
-func TestPeerS4CloseCancelsPendingRetry(t *testing.T) {
+func TestPeerCloseCancelsPendingRetry(t *testing.T) {
 	started := make(chan struct{})
 	d := &fake{fn: func(_ context.Context, n int) (Conn, error) {
 		if n == 1 {
@@ -141,7 +141,7 @@ func TestPeerBackoffCancellationAndZeroDelay(t *testing.T) {
 	})
 }
 
-func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
+func TestPeerConcurrentConnectCloseAndReads(t *testing.T) {
 	started, conn := make(chan struct{}), newConn(nil, nil)
 	p := peer(func(ctx context.Context, _ int) (Conn, error) { close(started); <-ctx.Done(); return conn, nil }, 1)
 	a, b := make(chan error, 1), make(chan error, 1)
@@ -170,7 +170,7 @@ func TestPeerS8ConcurrentConnectCloseAndReads(t *testing.T) {
 	check(t, p.State() == StateClosed && conn.closes.Load() == 1, "state/close = %s/%d", p.State(), conn.closes.Load())
 }
 
-func TestPeerS9OneHundredConnectTeardownCycles(t *testing.T) {
+func TestPeerOneHundredConnectTeardownCycles(t *testing.T) {
 	baseG, open := runtime.NumGoroutine(), new(atomic.Int32)
 	baseOpen := open.Load()
 	var created, closed atomic.Int32

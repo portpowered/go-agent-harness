@@ -181,7 +181,7 @@ func normalizeChatTranscript(transcript string) string {
 	return chatTimestampPattern.ReplaceAllString(strings.Join(lines, "\n"), "<timestamp>")
 }
 
-func TestChatREPL_S1ScriptedInput_S3Golden(t *testing.T) {
+func TestChatREPL_ScriptedInputGolden(t *testing.T) {
 	harness := newChatTestHarness(t, "Scripted assistant response.")
 	model := harness.model
 	model = submitChatInput(model, "hello from scripted input")

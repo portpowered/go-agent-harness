@@ -26,7 +26,7 @@ type fuzzSeed struct {
 	Payload string `json:"payload"`
 }
 
-func TestEncodeDecodeS3Golden(t *testing.T) {
+func TestEncodeDecodeGolden(t *testing.T) {
 	records := goldenRecords()
 	var encoded bytes.Buffer
 	for index, want := range records {

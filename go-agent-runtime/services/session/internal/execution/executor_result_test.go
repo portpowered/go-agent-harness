@@ -198,7 +198,7 @@ func assertToolResultMessage(t *testing.T, runData *RunData, wantID, wantContent
 	}
 }
 
-func TestExecuteOneTurn_ToolResultS5Table(t *testing.T) {
+func TestExecuteOneTurn_ToolResultTable(t *testing.T) {
 	toolCall := messages.ToolCall{ID: "request-id-42", Name: "lookup", Arguments: `{"key":"value"}`}
 	toolFailure := errors.New("tool exploded")
 	partialFailure := errors.New("partial tool failure")

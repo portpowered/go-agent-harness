@@ -52,7 +52,7 @@ func (c *providerCloseRaceConn) Close() error {
 	return nil
 }
 
-func TestOpenAIRealtimeSharedTransportS11Conformance(t *testing.T) {
+func TestOpenAIRealtimeSharedTransportConformance(t *testing.T) {
 	dialErr := &openAITransportOperationError{operation: "dial"}
 	readErr := &openAITransportOperationError{operation: "read"}
 	writeErr := &openAITransportOperationError{operation: "write"}

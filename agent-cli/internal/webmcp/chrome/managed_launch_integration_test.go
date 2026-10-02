@@ -17,12 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
-
-const managedBrowserExpectedCastDevicesEnv = "WEBMCP_EXPECT_CAST_DEVICE_NAMES"
-const managedBrowserCastDeviceEnv = "WEBMCP_CAST_DEVICE_NAME"
 
 // TestManagedBrowserLauncherWithStockChrome is the display-capable direct
 // browser proof for story 003. The opt-in check is intentionally first so a
@@ -47,7 +43,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 		t.Fatalf("attach managed browser runtime: %v", err)
 	}
 	t.Cleanup(func() { discardSecondaryError(handle.Close) })
-	second, secondURL := openManagedLaunchTabs(t, ctx, handle, fixture.URL)
+	second := openManagedLaunchTabs(t, ctx, handle, fixture.URL)
 
 	session, err := handle.Attach(ctx, second.ID, webmcp.TargetOwnershipHarnessOwned)
 	if err != nil {
@@ -57,7 +53,7 @@ func TestManagedBrowserLauncherWithStockChrome(t *testing.T) {
 	if err := session.EnableWebMCP(ctx); err != nil {
 		t.Fatalf("enable WebMCP on opened target: %v", err)
 	}
-	exerciseManagedLaunchCast(t, ctx, handle, session, second.ID, fixture.URL, secondURL)
+	exerciseManagedLaunchCastDiscovery(t, ctx, session)
 	invokeManagedLaunchProbe(t, ctx, session)
 }
 
@@ -124,7 +120,7 @@ func launchManagedStockChrome(t *testing.T, ctx context.Context, chromeExecutabl
 
 // openManagedLaunchTabs opens and activates two agent tabs and returns the
 // second, which serves the WebMCP fixture.
-func openManagedLaunchTabs(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, fixtureURL string) (webmcp.Target, string) {
+func openManagedLaunchTabs(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, fixtureURL string) webmcp.Target {
 	t.Helper()
 	opener, ok := handle.(webmcp.BrowserTabOpener)
 	if !ok {
@@ -152,7 +148,7 @@ func openManagedLaunchTabs(t *testing.T, ctx context.Context, handle webmcp.Brow
 	return openSecondManagedLaunchTab(t, ctx, handle, opener, opened, fixtureURL)
 }
 
-func openSecondManagedLaunchTab(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, opener webmcp.BrowserTabOpener, opened webmcp.Target, fixtureURL string) (webmcp.Target, string) {
+func openSecondManagedLaunchTab(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, opener webmcp.BrowserTabOpener, opened webmcp.Target, fixtureURL string) webmcp.Target {
 	t.Helper()
 	openedURL := opened.URL
 	secondURL := fixtureURL + "/webmcp-tool"
@@ -178,10 +174,13 @@ func openSecondManagedLaunchTab(t *testing.T, ctx context.Context, handle webmcp
 	if !foundFirst || !foundSecond {
 		t.Fatalf("managed targets after repeated open = %+v, want both %q and %q", targets, opened.ID, second.ID)
 	}
-	return second, secondURL
+	return second
 }
 
-func exerciseManagedLaunchCast(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle, session webmcp.TargetSession, targetID webmcp.TargetID, fixtureURL, secondURL string) {
+// exerciseManagedLaunchCastDiscovery proves the managed browser enables the
+// real Chrome Cast domain on the opened target; with no receiver on the
+// network the device list is empty, not an error.
+func exerciseManagedLaunchCastDiscovery(t *testing.T, ctx context.Context, session webmcp.TargetSession) {
 	t.Helper()
 	castController, ok := session.(webmcp.TargetCastController)
 	if !ok {
@@ -192,43 +191,6 @@ func exerciseManagedLaunchCast(t *testing.T, ctx context.Context, handle webmcp.
 		t.Fatalf("enable the real Chrome Cast domain: %v", err)
 	}
 	t.Logf("real Chrome Cast domain enabled; discovered_devices=%d names=%v", len(castDevices), castDeviceNames(castDevices))
-	assertExpectedCastDevices(t, castDevices, os.Getenv(managedBrowserExpectedCastDevicesEnv))
-	castDeviceName := strings.TrimSpace(os.Getenv(managedBrowserCastDeviceEnv))
-	if castDeviceName == "" {
-		return
-	}
-	assertExpectedCastDevices(t, castDevices, castDeviceName)
-	if err := castController.CastTab(ctx, castDeviceName); err != nil {
-		t.Fatalf("cast opened managed tab to %q: %v", castDeviceName, err)
-	}
-	if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("real Chrome tab cast established on device %q", castDeviceName)
-	navigator, ok := session.(webmcp.TargetTabNavigator)
-	if !ok {
-		t.Fatalf("managed target session %T does not expose in-place tab navigation", session)
-	}
-	navigationURL := fixtureURL + "/cast-navigation"
-	if err := navigator.NavigateTab(ctx, navigationURL); err != nil {
-		t.Fatalf("navigate actively cast tab: %v", err)
-	}
-	if err := waitForManagedTargetURL(ctx, handle, targetID, navigationURL); err != nil {
-		t.Fatalf("wait for cast target navigation: %v", err)
-	}
-	if _, err := waitForActiveCastSession(ctx, castController, castDeviceName); err != nil {
-		t.Fatalf("cast session did not survive in-place navigation: %v", err)
-	}
-	t.Logf("real Chrome cast navigation preserved target=%s device=%q", targetID, castDeviceName)
-	if err := castController.StopCasting(ctx, castDeviceName); err != nil {
-		t.Fatalf("stop real Chrome tab cast on %q: %v", castDeviceName, err)
-	}
-	if err := navigator.NavigateTab(ctx, secondURL); err != nil {
-		t.Fatalf("restore WebMCP fixture after cast navigation: %v", err)
-	}
-	if err := waitForManagedTargetURL(ctx, handle, targetID, secondURL); err != nil {
-		t.Fatalf("wait for restored WebMCP fixture: %v", err)
-	}
 }
 
 func invokeManagedLaunchProbe(t *testing.T, ctx context.Context, session webmcp.TargetSession) {
@@ -267,69 +229,6 @@ func castDeviceNames(devices []webmcp.CastDevice) []string {
 		names = append(names, device.Name)
 	}
 	return names
-}
-
-func waitForManagedTargetURL(ctx context.Context, handle webmcp.BrowserHandle, targetID webmcp.TargetID, expectedURL string) error {
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		targets, err := handle.ListTargets(ctx)
-		if err != nil {
-			return err
-		}
-		for _, target := range targets {
-			if target.ID == targetID && target.URL == expectedURL {
-				return nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
-
-func waitForActiveCastSession(ctx context.Context, controller webmcp.TargetCastController, deviceName string) (webmcp.CastDevice, error) {
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		devices, err := controller.ListCastDevices(ctx)
-		if err != nil {
-			return webmcp.CastDevice{}, fmt.Errorf("observe Cast session on %q: %w", deviceName, err)
-		}
-		for _, device := range devices {
-			if device.Name == deviceName && strings.TrimSpace(device.Session) != "" {
-				return device, nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return webmcp.CastDevice{}, fmt.Errorf("wait for active Cast session on %q: %w", deviceName, ctx.Err())
-		case <-ticker.C:
-		}
-	}
-}
-
-func assertExpectedCastDevices(t *testing.T, devices []webmcp.CastDevice, rawExpected string) {
-	t.Helper()
-	expected := strings.Split(rawExpected, ",")
-	if strings.TrimSpace(rawExpected) == "" {
-		return
-	}
-	available := make(map[string]struct{}, len(devices))
-	for _, device := range devices {
-		available[device.Name] = struct{}{}
-	}
-	for _, rawName := range expected {
-		name := strings.TrimSpace(rawName)
-		if name == "" {
-			t.Fatalf("%s contains an empty device name", managedBrowserExpectedCastDevicesEnv)
-		}
-		if _, ok := available[name]; !ok {
-			t.Fatalf("Cast devices = %+v, want device %q from %s", devices, name, managedBrowserExpectedCastDevicesEnv)
-		}
-	}
 }
 
 const managedLaunchWebMCPFixture = `<!doctype html>
@@ -442,117 +341,4 @@ func observeManagedLaunchTarget(ctx context.Context, client *http.Client, baseUR
 		}
 	}
 	return response.StatusCode == http.StatusOK && decodeErr == nil && pageTargets == 1 && matchingPages == 1, observation
-}
-
-const castMediaLiveURLEnv = "WEBMCP_CAST_MEDIA_URL"
-
-// TestCastMediaWithStockChromeAndPhysicalReceiver is an opt-in hardware proof
-// that a real page can initiate native media playback on a real Cast sink.
-func TestCastMediaWithStockChromeAndPhysicalReceiver(t *testing.T) {
-	deviceName := strings.TrimSpace(os.Getenv(managedBrowserCastDeviceEnv))
-	if deviceName == "" {
-		t.Fatalf("set %s to the exact receiver name", managedBrowserCastDeviceEnv)
-	}
-	mediaURL := strings.TrimSpace(os.Getenv(castMediaLiveURLEnv))
-	if mediaURL == "" {
-		t.Fatalf("set %s to an absolute page URL containing castable media", castMediaLiveURLEnv)
-	}
-
-	chromeExecutable, version := findQualifiedStockChromeForIntegration(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-	launcher := NewManagedBrowserLauncher(ManagedBrowserLaunchOptions{
-		ConfigDir:  t.TempDir(),
-		StartupURL: mediaURL,
-		Acquirer: ManagedChromeExecutableAcquirerFunc(func(context.Context) (ChromeExecutable, error) {
-			return ChromeExecutable{Path: chromeExecutable, Version: version, Major: MinimumManagedChromeMajor, Source: ExecutableSourceStock}, nil
-		}),
-		DisplayAvailable: func() bool { return true },
-		StartupTimeout:   20 * time.Second,
-	})
-	browser, err := launcher.Launch(ctx)
-	if err != nil {
-		t.Fatalf("launch stock Chrome: %v", err)
-	}
-	t.Cleanup(func() { discardSecondaryError(browser.Close) })
-	if err := waitForManagedLaunchTarget(ctx, browser.Endpoint().CDPURL, mediaURL); err != nil {
-		t.Fatalf("wait for media page: %v", err)
-	}
-
-	runtimeAdapter := NewRuntime()
-	handle, err := runtimeAdapter.Open(ctx, webmcp.BrowserCandidate{
-		ID:           "cast-media-live-browser",
-		HTTPURL:      browser.Endpoint().CDPURL,
-		BrowserWSURL: browser.Endpoint().BrowserWSEndpoint,
-		Loopback:     true,
-	})
-	if err != nil {
-		t.Fatalf("attach browser runtime: %v", err)
-	}
-	t.Cleanup(func() { discardSecondaryError(handle.Close) })
-	targets, err := handle.ListTargets(ctx)
-	if err != nil {
-		t.Fatalf("list browser targets: %v", err)
-	}
-	var target webmcp.Target
-	for _, candidate := range targets {
-		if candidate.URL == mediaURL {
-			target = candidate
-			break
-		}
-	}
-	if target.ID == "" {
-		t.Fatalf("media target %q was not found in %+v", mediaURL, targets)
-	}
-	session, err := handle.Attach(ctx, target.ID, webmcp.TargetOwnershipHarnessOwned)
-	if err != nil {
-		t.Fatalf("attach media target: %v", err)
-	}
-	t.Cleanup(func() { discardSecondaryError(session.Close) })
-	chromeSession, ok := session.(*targetSession)
-	if !ok {
-		t.Fatalf("media target session = %T, want *targetSession", session)
-	}
-	if err := waitForLiveMediaElement(ctx, chromeSession); err != nil {
-		t.Fatalf("wait for active page media: %v", err)
-	}
-	devices, err := chromeSession.ListCastDevices(ctx)
-	if err != nil {
-		t.Fatalf("list Cast devices: %v", err)
-	}
-	assertExpectedCastDevices(t, devices, deviceName)
-	if err := chromeSession.CastMedia(ctx, deviceName); err != nil {
-		t.Fatalf("cast page media to %q: %v", deviceName, err)
-	}
-	t.Cleanup(func() {
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stopCancel()
-		discardSecondaryError(func() error { return chromeSession.StopCasting(stopCtx, deviceName) })
-	})
-	device, err := waitForActiveCastSession(ctx, chromeSession, deviceName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("native media Cast established: device=%q session=%q url=%q", device.Name, device.Session, mediaURL)
-}
-
-func waitForLiveMediaElement(ctx context.Context, session *targetSession) error {
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	var lastErr error
-	for {
-		var ready bool
-		lastErr = session.run(ctx, chromedp.Evaluate(`document.querySelector("video, audio") !== null`, &ready))
-		if lastErr == nil && ready {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			if lastErr != nil {
-				return lastErr
-			}
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
 }

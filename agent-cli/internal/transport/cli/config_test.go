@@ -110,7 +110,7 @@ func executeGeneratedCLI(tb testing.TB, configDir string, args ...string) cliRes
 	return cliResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
 }
 
-func TestConfigAddLocalS2FlagMatrix(t *testing.T) {
+func TestConfigAddLocalFlagMatrix(t *testing.T) {
 	configSummaryPath := filepath.Join("<config-dir>", config.ConfigFileName)
 	tests := []configAddLocalCase{
 		{
@@ -367,7 +367,7 @@ func TestConfigAddLocalInvalidConfigHasCommandContext(t *testing.T) {
 	}
 }
 
-func TestConfigRenderingS3Goldens(t *testing.T) {
+func TestConfigRenderingGoldens(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		seed   string

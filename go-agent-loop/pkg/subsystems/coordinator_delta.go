@@ -28,7 +28,7 @@ var _ Subsystem = (*CoordinatorDelta)(nil)
 func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) error {
 	for _, delta := range curr.Inputs.ModelInputDelta {
 		c.logInfo("CoordinatorDelta: model delta", logging.Field{Key: "delta", Value: delta})
-		c.kernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+		messages.WriteKernelDelta(ctx, c.kernelDeltaInbox, messages.KernelDeltaRequest{
 			Source: messages.Model,
 			Delta:  delta,
 		})
@@ -36,7 +36,7 @@ func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) e
 
 	for _, delta := range curr.Inputs.ToolInputDelta {
 		c.logInfo("CoordinatorDelta: tool delta", logging.Field{Key: "delta", Value: delta})
-		c.kernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+		messages.WriteKernelDelta(ctx, c.kernelDeltaInbox, messages.KernelDeltaRequest{
 			Source: messages.Tool,
 			Delta:  delta,
 		})
@@ -44,7 +44,7 @@ func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) e
 
 	for _, delta := range curr.Inputs.UserInputDelta {
 		c.logInfo("CoordinatorDelta: user delta", logging.Field{Key: "delta", Value: delta})
-		c.kernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+		messages.WriteKernelDelta(ctx, c.kernelDeltaInbox, messages.KernelDeltaRequest{
 			Source: messages.User,
 			Delta:  delta,
 		})
@@ -64,7 +64,7 @@ func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) e
 					break
 				}
 			}
-			c.kernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+			messages.WriteKernelDelta(ctx, c.kernelDeltaInbox, messages.KernelDeltaRequest{
 				Source: messages.System,
 				Delta: messages.StreamMessage{
 					Type:  messages.StreamTypeSessionClose,
@@ -73,7 +73,7 @@ func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) e
 			})
 		}
 
-		c.kernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+		messages.WriteKernelDelta(ctx, c.kernelDeltaInbox, messages.KernelDeltaRequest{
 			Source: messages.System,
 			Delta: messages.StreamMessage{
 				Type:  messages.StreamTypeLoopEnd,

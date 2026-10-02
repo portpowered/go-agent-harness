@@ -1,4 +1,4 @@
-//go:build live
+//go:build e2e
 
 package chrome
 

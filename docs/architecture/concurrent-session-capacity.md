@@ -14,7 +14,8 @@ Rung progression (all clean unless noted): 8 → 16 → 32 → 64 clean; 128 exc
 
 ## Method
 
-The on-demand ramp `TestLongConcurrencyCeilingRamp` doubles the session count from the
+The on-demand ramp `TestLongConcurrencyCeilingRamp` (since retired; see Reproduction)
+doubled the session count from the
 contract floor (8) and drives each rung through the same tick-scheduled driver used by
 the required proofs: one shared deterministic clock, per-session replay transports and
 capture sinks, three scripted turns (text, audio, tool) per session. A rung is "clean"
@@ -25,14 +26,12 @@ anything.
 
 ## Reproduction
 
-```
-CGO_ENABLED=1 go test -race -tags=sessioncapacityramp -count=1 \
-  -run '^TestLongConcurrencyCeilingRamp$' -v -timeout 1800s \
-  ./go-agent-loop/test/functional/sessions/
-```
-
-The ramp is behind the `sessioncapacityramp` build tag so default PR-tier suites stay
-inside their time budget.
+The ramp was a measurement, not a gate: its only failing condition was the
+8-session contract floor, which `TestConcurrentSessionsCompleteScriptedTurns`
+proves on every pull request, so it was removed instead of being kept as a
+suite no CI job ran. To re-measure, restore
+`go-agent-loop/test/functional/sessions/session_ceiling_ramp_long_test.go` from
+history and run `go test -race -run '^TestLongConcurrencyCeilingRamp$'`.
 
 ## Interpretation
 

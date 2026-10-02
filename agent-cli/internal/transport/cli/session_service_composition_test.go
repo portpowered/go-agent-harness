@@ -75,10 +75,6 @@ func newTestSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFl
 // conversations select.
 const ambiguousCubeStateTool = "get_cube_state"
 
-func newTestReplaySessionCommand(globalFlags *flags.GlobalFlags, registry devicegw.DeviceRegistry) *SessionCommand {
-	return newTestSessionCommand(nil, globalFlags, testSessionDeps{Registry: registry})
-}
-
 func newTestLiveSessionCommand(askFlags *flags.AskFlags, globalFlags *flags.GlobalFlags, inferencer messages.SessionInferencer, registry devicegw.DeviceRegistry, capabilities ...SessionToolCapabilitiesFactory) *SessionCommand {
 	deps := testSessionDeps{Inferencer: inferencer, Registry: registry}
 	if len(capabilities) > 0 {

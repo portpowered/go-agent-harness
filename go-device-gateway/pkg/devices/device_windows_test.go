@@ -182,3 +182,29 @@ func wasapiFloat64Packet(values ...float64) []byte {
 	}
 	return raw
 }
+
+// TestWASAPIParsesPackedExtensibleMixFormat feeds the byte-packed
+// WAVEFORMATEXTENSIBLE that shared-mode endpoints return from GetMixFormat:
+// the valid bits and SubFormat GUID must be read at their packed offsets.
+func TestWASAPIParsesPackedExtensibleMixFormat(t *testing.T) {
+	raw := make([]byte, 18+waveFormatExtensibleExtraBytes+8)
+	base := (*wasapiWaveFormatEx)(unsafe.Pointer(&raw[0]))
+	base.formatTag = waveFormatExtensible
+	base.channels = 2
+	base.samplesPerSec = 48000
+	base.avgBytesPerSec = 48000 * 8
+	base.blockAlign = 8
+	base.bitsPerSample = 32
+	base.cbSize = waveFormatExtensibleExtraBytes
+	*(*uint16)(unsafe.Pointer(&raw[waveFormatExtensibleValidBitsOffset])) = 24
+	*(*uint32)(unsafe.Pointer(&raw[20])) = 0x3 // SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT
+	*(*syscall.GUID)(unsafe.Pointer(&raw[waveFormatExtensibleSubFormatOffset])) = wasapiSubtypeIEEEFloat
+
+	format, err := parseWASAPIAudioFormat(unsafe.Pointer(&raw[0]))
+	if err != nil {
+		t.Fatalf("parse packed extensible mix format: %v", err)
+	}
+	if format.subFormat != wasapiSubtypeIEEEFloat || format.validBitsPerSample != 24 || format.channels != 2 || format.blockAlign != 8 {
+		t.Fatalf("parsed format = %+v, want 2-channel IEEE float with 24 valid bits", format)
+	}
+}

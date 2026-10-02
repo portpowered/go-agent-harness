@@ -134,11 +134,11 @@ jobs:
   # 36211278527, 36211944579). The single lanes took 66-148s cold there.
   #
   # Every lane enforces the single policy in .golangci.yml on all code (it
-  # also loads the opt-in live/e2e/e2e_internal/stress/sessioncapacityramp
-  # test tags). The linux lanes add the wireinject pass and the other-OS
-  # stub packages (GOOS=js GOARCH=wasm); the windows and darwin lanes lint
-  # with cgo disabled (darwin as GOARCH=arm64, for the darwin && arm64 live
-  # tests, and with the nomicrophone tag). The cgo-constrained darwin packages are linted
+  # also loads the opt-in e2e/stress test tags). The linux lanes add
+  # the wireinject pass and the other-OS stub packages (GOOS=js
+  # GOARCH=wasm); the windows and darwin lanes lint with cgo disabled
+  # (darwin as GOARCH=arm64, for the darwin && arm64 e2e tests, and with
+  # the nomicrophone tag). The cgo-constrained darwin packages are linted
   # natively in CI (WebMCP Chrome), which already runs on macOS. See
   # docs/architecture/lint-policy.md.
   static-lint:
@@ -621,7 +621,7 @@ jobs:
           cache-name: windows
 
       - name: Run Windows audio queue regressions
-        run: go test ./go-audio/pkg/codec ./go-device-gateway/pkg/devices -run '^(TestWindowsPortablePlaybackBurstPreservesFIFO.*|TestWASAPI.*|TestVirtualPlaybackCapacityAdversarial|TestPacketEnergyC42Coverage)$' -count=1
+        run: go test ./go-audio/pkg/codec ./go-device-gateway/pkg/devices -run '^(TestWindowsPortablePlaybackBurstPreservesFIFO.*|TestWASAPI.*|TestVirtualPlaybackCapacityAdversarial|TestPacketEnergyPaddedLayoutsAndFailureModes)$' -count=1
 
       - name: Save Go cache
         uses: ./.github/actions/go-cache-save

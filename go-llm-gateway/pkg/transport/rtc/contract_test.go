@@ -26,7 +26,7 @@ var (
 	_ rtc.Conn         = (*dataConn)(nil)
 )
 
-func TestRTCDataS11Conformance(t *testing.T) { transporttest.RunS11(t, s11Harness()) }
+func TestRTCDataConformance(t *testing.T) { transporttest.RunS11(t, s11Harness()) }
 
 func s11Harness() transporttest.ConformanceHarness {
 	dialErr := &operationError{opDial}
@@ -61,7 +61,7 @@ func failure(op string, want error) transporttest.FailureCase {
 	}
 }
 
-func TestRTCS4OperationErrorIdentity(t *testing.T) {
+func TestRTCOperationErrorIdentity(t *testing.T) {
 	cases := []struct{ name string }{{opDial}, {opRead}, {opWrite}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

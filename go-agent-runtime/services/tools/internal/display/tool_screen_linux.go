@@ -112,8 +112,10 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ screenPlat
 	}
 	defer func() { result, resultErr = finishScreenCapture(result, resultErr, path) }()
 
+	// path is the reserved, already existing temp file. Without --overwrite
+	// scrot writes a numbered sibling (name_000.png) and leaves path empty.
 	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
-	args := []string{"-a", area, path}
+	args := []string{"-a", area, "--overwrite", path}
 	out, err := process.Run(ctx, "scrot", args...)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {

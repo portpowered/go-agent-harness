@@ -167,3 +167,7 @@ func (s *targetSession) AcquirePageFocus(ctx context.Context) (func(context.Cont
 }
 
 var _ webmcp.PageFocusLeaser = (*targetSession)(nil)
+
+// catalogEvidencePageProducer records that the page's own WebMCP producer
+// reported its catalog, including an empty one.
+const catalogEvidencePageProducer = "page_producer"

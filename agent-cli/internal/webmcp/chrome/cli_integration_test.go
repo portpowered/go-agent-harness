@@ -60,7 +60,6 @@ func launchCLIChromeIntegration(t *testing.T, ctx context.Context, assertHeaders
 	if err != nil {
 		t.Fatalf("acquire locked Chrome for Testing: %v", err)
 	}
-
 	run.fixture = newFixtureServer()
 	t.Cleanup(run.fixture.Close)
 	run.fixtureURL = run.fixture.URL()
@@ -73,6 +72,7 @@ func launchCLIChromeIntegration(t *testing.T, ctx context.Context, assertHeaders
 	}
 	t.Cleanup(func() {
 		if run.killed {
+			removeKilledChromeProfile(t, filepath.Join(run.workDir, "profile"))
 			return
 		}
 		if closeErr := run.browser.Close(); closeErr != nil {

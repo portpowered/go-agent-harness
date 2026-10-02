@@ -14,7 +14,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 )
 
-func TestInteractionReplayS2FlagMatrix(t *testing.T) {
+func TestInteractionReplayFlagMatrix(t *testing.T) {
 	fixture := interactionFixture()
 	fixturePath := writeInteractionFixture(t, fixture)
 	missingPath := filepath.Join(t.TempDir(), "missing.interaction.json")

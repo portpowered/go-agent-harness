@@ -41,28 +41,12 @@ They deliberately reset at every committed input turn. They do not include a
 local hold tone and are not a substitute for device-edge PCM verification when
 investigating loss, duplication, or callback stalls.
 
-## Reproduce with the real model
+## Reproduce a regression
 
-The billed E2E test crosses the compiled binary, WAV ingress, the live
-`gpt-realtime-2.1` WebSocket, a real tool execution and continuation, protected
-capture, and WAV egress. It applies broad live ceilings to each timing bucket
-and prints a sanitized summary:
-
-```bash
-export AGENT_MODEL__OPENAI__API_KEY='<private test key>'
-export OPENAI_REALTIME_21_LIVE=1
-
-go test -tags=e2e ./agent-cli/test/e2e \
-  -run '^TestGPTRealtime21BinaryAudioAndToolRoundTrip$' \
-  -count=1 -v
-```
-
-Live model timing is supplemental and must not run in ordinary CI. When it
-finds a regression, reproduce the same response/tool/audio topology with the
-local WebSocket provider, injected tool executor, and external
-`audio-device-server` in `agent-cli/test/integration`. Hermetic assertions
-should cover exact PCM and harness-owned timing; the live test should retain
-generous bounds for provider variability.
+Reproduce a captured response/tool/audio topology with the local WebSocket
+provider, injected tool executor, and external `audio-device-server` in
+`agent-cli/test/integration`. Hermetic assertions cover exact PCM and
+harness-owned timing.
 
 ## Interpret serial tool latency
 

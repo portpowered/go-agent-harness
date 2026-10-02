@@ -239,14 +239,9 @@ func rewriteReadImagePayload(t *testing.T, raw json.RawMessage, imagePath, dataU
 
 func writeReadImageConfig(t *testing.T, readImageEnabled bool) string {
 	t.Helper()
-	return writeReadImageModelConfig(t, readImageEnabled, "gpt-realtime")
-}
-
-func writeReadImageModelConfig(t *testing.T, readImageEnabled bool, model string) string {
-	t.Helper()
 	dir := t.TempDir()
 	var configYAML strings.Builder
-	fmt.Fprintf(&configYAML, "model:\n  provider: openai\n  openai:\n    model: %s\n", model)
+	configYAML.WriteString("model:\n  provider: openai\n  openai:\n    model: gpt-realtime\n")
 	configYAML.WriteString("tools:\n  list:\n")
 	for _, id := range config.DefaultToolIDs() {
 		enabled := readImageEnabled && id == rtToolReadImage

@@ -12,7 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
-func TestS4ProviderHTTPErrorTable(t *testing.T) {
+func TestProviderHTTPErrorTable(t *testing.T) {
 	tests := []struct {
 		name        string
 		status      int
@@ -65,7 +65,7 @@ func TestS4ProviderHTTPErrorTable(t *testing.T) {
 	}
 }
 
-func TestS4ProviderErrorFormattingBranches(t *testing.T) {
+func TestProviderErrorFormattingBranches(t *testing.T) {
 	tests := []struct {
 		name string
 		err  *ProviderError
@@ -92,7 +92,7 @@ func TestS4ProviderErrorFormattingBranches(t *testing.T) {
 	}
 }
 
-func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
+func TestValidationErrorConstructorsAndFormatting(t *testing.T) {
 	tests := []struct {
 		name      string
 		err       *ValidationError
@@ -189,7 +189,7 @@ func TestS4ValidationErrorConstructorsAndFormatting(t *testing.T) {
 	}
 }
 
-func TestS4ErrorClassificationTableAndPrecedence(t *testing.T) {
+func TestErrorClassificationTableAndPrecedence(t *testing.T) {
 	tests := []struct {
 		name      string
 		err       error
@@ -254,7 +254,7 @@ func TestS4ErrorClassificationTableAndPrecedence(t *testing.T) {
 	}
 }
 
-func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) {
+func TestTwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) {
 	providerErr := NewProviderHTTPError("fake", 429, "slow down")
 	wrappedProvider := fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", providerErr))
 	if !errors.Is(wrappedProvider, ErrProviderRejected) || !errors.Is(wrappedProvider, ErrRateLimited) {
@@ -313,7 +313,7 @@ func TestS4TwoLevelWrappingPreservesTypedErrorsAndJoinedSentinels(t *testing.T) 
 	}
 }
 
-func TestS4StreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
+func TestStreamValueTablePreservesTerminalContractAndCauses(t *testing.T) {
 	providerErr := NewProviderHTTPError("fake", 429, "slow down")
 	wrappedTransport := fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", io.ErrUnexpectedEOF))
 	unknownErr := errors.New("reader exploded")
@@ -415,7 +415,7 @@ func assertStreamValuesPreserveProviderTaxonomy(t *testing.T, providerErr, wrapp
 	}
 }
 
-func TestS4RetryabilityPolicyMatrix(t *testing.T) {
+func TestRetryabilityPolicyMatrix(t *testing.T) {
 	cases := []struct {
 		name      string
 		err       error

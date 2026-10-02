@@ -139,7 +139,7 @@ func withinHandleCountTolerance(got, want int) bool {
 	return delta <= processHandleCountSettleTolerance
 }
 
-func TestDeviceAdaptersS9LifecycleBaseline(t *testing.T) {
+func TestDeviceAdaptersRepeatedLifecycle(t *testing.T) {
 	beforeHandles := processOpenHandleCount(t)
 	beforeGoroutines := runtime.NumGoroutine()
 	r := adapterTestRegistry(t)

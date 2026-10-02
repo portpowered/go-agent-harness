@@ -1,11 +1,8 @@
-//go:build stress
-
 package stress
 
 import (
 	"bytes"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +10,7 @@ import (
 )
 
 // inferenceEntry is the minimal package-local response fixture needed by the
-// stress-only inferencer. The ordinary media harness remains shared through
+// load inferencer. The ordinary media harness remains shared through
 // internal/support; stress keeps its own concurrency-oriented double isolated.
 type inferenceEntry struct {
 	result messages.InferenceResult
@@ -23,44 +20,12 @@ type inferenceEntry struct {
 type safeBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
-	// changed is closed and cleared by the next Write so waiters block on a
-	// signal instead of polling.
-	changed chan struct{}
 }
 
 func (b *safeBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	n, err := b.buf.Write(p)
-	if b.changed != nil {
-		close(b.changed)
-		b.changed = nil
-	}
-	return n, err
-}
-
-// waitFor blocks until the buffer contains want or timeout elapses, and
-// reports whether want appeared.
-func (b *safeBuffer) waitFor(want string, timeout time.Duration) bool {
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	for {
-		b.mu.Lock()
-		text := b.buf.String()
-		if b.changed == nil {
-			b.changed = make(chan struct{})
-		}
-		changed := b.changed
-		b.mu.Unlock()
-		if strings.Contains(text, want) {
-			return true
-		}
-		select {
-		case <-changed:
-		case <-deadline.C:
-			return false
-		}
-	}
+	return b.buf.Write(p)
 }
 
 func (b *safeBuffer) String() string {

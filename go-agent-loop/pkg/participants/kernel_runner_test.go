@@ -61,19 +61,6 @@ func TestKernelRunner_SystemFullMessageNotSentToDeltaEventCh(t *testing.T) {
 	}
 }
 
-func TestKernelRunner_NoDeltaEventChNoPanic(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	// Do NOT call NewDeltaEventReader — deltaEventCh is nil.
-	// Dispatching should not panic.
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Model,
-		Delta: messages.StreamMessage{
-			Type:  messages.StreamTypeTextDelta,
-			Value: messages.NewTextDeltaValue("no listener"),
-		},
-	})
-}
-
 func TestKernelRunner_MultipleDeltaTypesDispatched(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	evCh := kr.NewDeltaEventReader(8)
@@ -132,18 +119,6 @@ func TestKernelRunner_DispatchFullMessageToMessageOutCh(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for message on messageOutCh")
 	}
-}
-
-func TestKernelRunner_NoMessageOutChNoPanic(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	// messageOutCh is nil — should not panic.
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Tool,
-		Delta: messages.StreamMessage{
-			Type:  messages.StreamTypeSystemFullMessage,
-			Value: messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, "result")),
-		},
-	})
 }
 
 func TestKernelRunner_LoopEndClosesMessageOutCh(t *testing.T) {
@@ -282,12 +257,6 @@ func TestKernelRunner_CloseStreamWithErrorDrainsDeltaInbox(t *testing.T) {
 	if _, ok := kr.DeltaInbox.Read(); ok {
 		t.Error("DeltaInbox should be drained after closeStreamWithError")
 	}
-}
-
-func TestKernelRunner_CloseStreamWithErrorNilChannelsSafe(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	// Both messageOutCh and deltaEventCh are nil — should not panic.
-	kr.closeStreamWithError()
 }
 
 func TestKernelRunner_CloseStreamWithErrorNilsChannels(t *testing.T) {
@@ -560,5 +529,36 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("sent %#v, want RESPONSE.CANCEL before the held frame", sent)
+	}
+}
+
+// TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas
+// covers dispatch with no delta reader or message outbox: those deltas are
+// dropped, and listeners attached later receive only what follows.
+func TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas(t *testing.T) {
+	text := func(content string) messages.KernelDeltaRequest {
+		return messages.KernelDeltaRequest{Source: messages.Model, Delta: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(content)}}
+	}
+	full := func(content string) messages.KernelDeltaRequest {
+		value := messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, content))
+		return messages.KernelDeltaRequest{Source: messages.Tool, Delta: messages.StreamMessage{Type: messages.StreamTypeSystemFullMessage, Value: value}}
+	}
+	kr := NewKernelRunner(nil, 8)
+	kr.dispatchDelta(text("unheard"))
+	kr.dispatchDelta(full("unheard"))
+	kr.closeStreamWithError()
+	evCh := kr.NewDeltaEventReader(8)
+	messageCh := make(chan messages.KernelMessageRequest, 8)
+	kr.messageOutCh = messageCh
+	kr.dispatchDelta(text("heard"))
+	kr.dispatchDelta(full("heard"))
+	if len(evCh) != 1 || len(messageCh) != 1 {
+		t.Fatalf("listeners hold %d deltas and %d messages, want only the one of each dispatched after they attached", len(evCh), len(messageCh))
+	}
+	if value, ok := (<-evCh).Value.(*messages.TextDeltaValue); !ok || value.Content != "heard" {
+		t.Fatalf("delta reader got %+v, want the later text delta", value)
+	}
+	if got := <-messageCh; got.Message.TextContent() != "heard" {
+		t.Fatalf("message outbox got %q, want the later tool message", got.Message.TextContent())
 	}
 }

@@ -39,15 +39,6 @@ type realtimeAudioProof struct {
 	TotalDuration     time.Duration
 }
 
-// verifyRealtimeAudio performs one bounded raw WebSocket audio round trip.
-// It is intentionally separate from Endpoint so negative-control tests can
-// exercise the protocol verifier without the endpoint absence cache.
-func verifyRealtimeAudio(parent context.Context, endpoint string) (realtimeAudioProof, error) {
-	ctx, cancel := context.WithTimeout(parent, realtimeOverallTimeout)
-	defer cancel()
-	return verifyRealtimeAudioContext(ctx, endpoint)
-}
-
 func verifyRealtimeAudioContext(ctx context.Context, endpoint string) (realtimeAudioProof, error) {
 	started := time.Now()
 	var proof realtimeAudioProof

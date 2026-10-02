@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -273,5 +274,28 @@ func TestCancellationIntentRecordsOperatorSIGINT(t *testing.T) {
 	intent.MarkSIGINT()
 	if !intent.SIGINTReceived() {
 		t.Fatal("cancellation intent lost the operator SIGINT")
+	}
+}
+
+// TestPlaybackDiagnosticsForwardsReceiptsToTheRuntimeRecorder covers the
+// playback receipt path: with a runtime recorder configured, every receipt
+// the device applies reaches both the caller's observer and the runtime
+// observer; without one, the caller's observer is returned unchanged.
+func TestPlaybackDiagnosticsForwardsReceiptsToTheRuntimeRecorder(t *testing.T) {
+	observer := &recordingObserver{}
+	diagnostics := NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{Runtime: NewRuntimeRecorder(observer, clock.Real{})})
+	var callerReceipts int
+	receipts := diagnostics.PlaybackReceiptObserver(func(audio.PlaybackReceipt) { callerReceipts++ })
+	receipts(audio.PlaybackReceipt{Applied: true})
+	if callerReceipts != 1 {
+		t.Fatalf("caller observer saw %d receipts, want 1", callerReceipts)
+	}
+	observations := observer.snapshot()
+	if len(observations) != 1 || observations[0].Kind != sessiontrace.SessionRuntimeObservationAudioPlaybackReceipt {
+		t.Fatalf("runtime observations = %+v, want one playback receipt", observations)
+	}
+
+	if got := NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{}).PlaybackReceiptObserver(nil); got != nil {
+		t.Fatal("diagnostics without a runtime recorder invented a receipt observer")
 	}
 }

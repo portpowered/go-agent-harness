@@ -120,7 +120,7 @@ func runToolTestCommand(t *testing.T, command *ToolCommand, args []string, out i
 	return cmd.ExecuteContext(context.Background())
 }
 
-func TestToolCommandS2FlagMatrix(t *testing.T) {
+func TestToolCommandFlagMatrix(t *testing.T) {
 	good := &cliTestTool{id: "capture", result: []messages.Message{messages.NewTextMessage(messages.RoleTool, "captured")}}
 	listTool := &cliTestTool{id: "only-tool"}
 	tests := []struct {
@@ -173,7 +173,7 @@ func TestToolCommandS2FlagMatrix(t *testing.T) {
 	}
 }
 
-func TestToolCommandS4ErrorTable(t *testing.T) {
+func TestToolCommandErrorTable(t *testing.T) {
 	unknown := testToolCapability()
 	unavailable := &cliTestTool{id: "unavailable", err: errToolUnavailable}
 	writeErr := errors.New("tool output failed")

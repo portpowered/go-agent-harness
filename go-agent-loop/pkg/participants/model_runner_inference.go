@@ -42,7 +42,8 @@ func (r *ModelRunner) runInference(ctx context.Context) error {
 	}
 }
 
-// writeDelta assigns runner-specific ordering (ActorStreamID, ActorProvidedIndex, ActorProvidedID, ActorID, LoopPassID) and writes to DeltaOutbox.
+// writeDelta assigns runner-specific ordering (ActorStreamID, ActorProvidedIndex, ActorProvidedID, ActorID, LoopPassID) and writes to DeltaOutbox,
+// waiting for capacity until ctx ends.
 func (r *ModelRunner) writeDelta(ctx context.Context, sm messages.StreamMessage) {
 	sm.ActorStreamID = r.streamID
 	sm.ActorProvidedIndex = r.actorIndex
@@ -50,7 +51,10 @@ func (r *ModelRunner) writeDelta(ctx context.Context, sm messages.StreamMessage)
 	sm.ActorID = messages.Model
 	sm.LoopPassID = r.currentPassID
 	r.actorIndex++
-	r.DeltaOutbox.Write(ctx, sm)
+	// A turn-based response is not realtime media: every delta, including the
+	// tool calls it assembles into, must reach the ordering layer, so a full
+	// outbox applies backpressure instead of dropping.
+	r.DeltaOutbox.WriteWaitContext(ctx, sm)
 }
 
 // drainStream forwards each StreamMessage from the inferencer channel to DeltaOutbox.

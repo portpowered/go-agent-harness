@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -216,17 +217,25 @@ func TestToolRunner_ErrorPropagation(t *testing.T) {
 	}
 }
 
-func TestToolRunner_ContextCancellation(t *testing.T) {
-	exec := &testToolExecutor{results: map[string]string{}}
-
-	runner := NewToolRunner(exec, 10)
-	ap := NewActiveParticipant(messages.Tool, runner)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ap.Start(ctx)
-
-	cancel()
-	ap.Stop() // should not hang
+// TestActiveParticipantParentCancellationStopsRunnerWithCanceled covers the
+// model and tool runners: cancelling the parent context stops the runner, and
+// Stop reports context.Canceled.
+func TestActiveParticipantParentCancellationStopsRunnerWithCanceled(t *testing.T) {
+	inf := &testInferencer{responses: []messages.InferenceResult{{Message: messages.NewTextMessage(messages.RoleAssistant, "ok")}}}
+	for name, participant := range map[string]*ActiveParticipant{
+		"model": NewActiveParticipant(messages.Model, NewModelRunner(inf, 10)),
+		"tool":  NewActiveParticipant(messages.Tool, NewToolRunner(&testToolExecutor{results: map[string]string{}}, 10)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			participant.Start(ctx)
+			cancel()
+			participant.Stop()
+			if err := participant.Err(); !errors.Is(err, context.Canceled) {
+				t.Fatalf("runner stopped with %v, want context.Canceled", err)
+			}
+		})
+	}
 }
 
 func TestExecuteBatch_AllSucceed(t *testing.T) {
@@ -484,6 +493,53 @@ func TestExecuteBatch_AllFail(t *testing.T) {
 	for _, name := range []string{"x", "y", "z"} {
 		if !strings.Contains(errStr, fmt.Sprintf("tool %q failed", name)) {
 			t.Errorf("error should mention tool %s, got: %v", name, err)
+		}
+	}
+}
+
+// TestUserRunnerConcurrentWritesTakeUniqueOrderedIndices covers
+// AgentLoop.Send and SendInterrupt writing the user participant from separate
+// goroutines: every message takes its own actor index and reaches the outbox
+// in index order.
+func TestUserRunnerConcurrentWritesTakeUniqueOrderedIndices(t *testing.T) {
+	const writers, perWriter = 4, 50
+	runner := NewUserRunner(writers * perWriter)
+	var group sync.WaitGroup
+	for writer := range writers {
+		group.Go(func() { writeUserRunnerMessages(t, runner, writer, perWriter) })
+	}
+	group.Wait()
+
+	if got := runner.Outbox.Len(); got != writers*perWriter {
+		t.Fatalf("outbox holds %d messages, want %d", got, writers*perWriter)
+	}
+	for want := range writers * perWriter {
+		response, ok := runner.Outbox.Read()
+		if !ok {
+			t.Fatalf("outbox ended at index %d", want)
+		}
+		if got := response.Message.ActorProvidedIndex; got != want {
+			t.Fatalf("message %d has actor index %d, want %d", want, got, want)
+		}
+		if response.Message.ActorID != messages.User {
+			t.Fatalf("message %d actor = %v, want user", want, response.Message.ActorID)
+		}
+	}
+}
+
+// writeUserRunnerMessages alternates Write and Stop on runner, as Send and
+// SendInterrupt do.
+func writeUserRunnerMessages(t *testing.T, runner *UserRunner, writer, count int) {
+	t.Helper()
+	for index := range count {
+		var err error
+		if index%2 == 0 {
+			err = runner.Write(context.Background(), messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("w%d-%d", writer, index)))
+		} else {
+			err = runner.Stop(context.Background())
+		}
+		if err != nil {
+			t.Errorf("writer %d message %d: %v", writer, index, err)
 		}
 	}
 }

@@ -59,7 +59,7 @@ func expectedDarwinDragLog(fromX, fromY, toX, toY int) []string {
 	return append(lines, fmt.Sprintf("r:%d,%d", toX, toY))
 }
 
-func TestS12DarwinFakeScreenOperations(t *testing.T) {
+func TestDarwinFakeScreenOperations(t *testing.T) {
 	surface := display.NewHostDisplaySurfaceWithOptions(display.HostDisplaySurfaceOptions{
 		Process: fakeDarwinDisplayProcess(darwinFixturePNG(t)),
 		PermissionChecker: display.DisplayPermissionCheckerFunc(func(context.Context) (display.DisplayPermission, error) {
@@ -100,7 +100,7 @@ func TestS12DarwinFakeScreenOperations(t *testing.T) {
 	}
 }
 
-func TestS12DarwinFakeMouseOperations(t *testing.T) {
+func TestDarwinFakeMouseOperations(t *testing.T) {
 	t.Parallel()
 	dragSleeps := append([]time.Duration{mouseDragPause}, repeatDuration(mouseDragStepPause, 20)...)
 	for _, tt := range []struct {
@@ -142,9 +142,9 @@ func repeatDuration(duration time.Duration, count int) []time.Duration {
 	return durations
 }
 
-// TestS12DarwinMouseToolRunsCliclickSubprocess keeps the production process
+// TestDarwinMouseToolRunsCliclickSubprocess keeps the production process
 // runner covered end to end with one fake cliclick executable on PATH.
-func TestS12DarwinMouseToolRunsCliclickSubprocess(t *testing.T) {
+func TestDarwinMouseToolRunsCliclickSubprocess(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "cliclick.log")
 	writeFakeCommand(t, dir, "cliclick", `printf '%s\n' "$*" >> "$GO_AGENT_HARNESS_CLICLICK_LOG"`)
@@ -203,7 +203,7 @@ func TestDarwinHostDisplaySurfaceProbeUsesOneMetadataQuery(t *testing.T) {
 	}
 }
 
-func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
+func TestDarwinUnsupportedMouseButtons(t *testing.T) {
 	process := &fakeMouseProcess{}
 	var sleeps recordedSleeps
 	driver := newFakeMouseDriver(process, &sleeps)
@@ -225,7 +225,7 @@ func TestS4DarwinUnsupportedMouseButtons(t *testing.T) {
 	}
 }
 
-func TestS4DarwinCliclickErrors(t *testing.T) {
+func TestDarwinCliclickErrors(t *testing.T) {
 	var sleeps recordedSleeps
 	failing := &fakeMouseProcess{run: func([]string) ([]byte, error) {
 		return []byte("command failed\n"), errors.New("exit status 7")

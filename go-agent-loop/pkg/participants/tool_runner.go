@@ -116,7 +116,7 @@ func (r *ToolRunner) Tick(ctx context.Context) error {
 		// this nonterminal ERROR instead of converting the diagnostic into a
 		// provider/engine failure.
 		errStreamID := mustStreamID("tool-error")
-		r.DeltaOutbox.Write(ctx, messages.StreamMessage{
+		r.DeltaOutbox.WriteWaitContext(ctx, messages.StreamMessage{
 			Type:               messages.StreamTypeError,
 			Value:              messages.NewToolExecutionErrorValue(err),
 			ActorID:            messages.Tool,
@@ -165,7 +165,7 @@ func (w *toolStreamWriter) write(ctx context.Context, sm messages.StreamMessage)
 	sm.ActorID = messages.Tool
 	sm.LoopPassID = w.loopPassID
 	w.idx++
-	w.runner.DeltaOutbox.Write(ctx, sm)
+	w.runner.DeltaOutbox.WriteWaitContext(ctx, sm) // tool results are never dropped
 }
 
 func (w *toolStreamWriter) writeContent(ctx context.Context, streamType messages.StreamMessageType, value messages.StreamMessageValue) {

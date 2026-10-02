@@ -6,7 +6,7 @@ name: Nightly audio stress
 # 4-vCPU runner already running the timing-bound integration shards). They
 # run here once a day against main instead, and on demand. The same gate
 # holds the fresh-process tool-continuation matrix, whose device-cadence
-# deliveries drain in real time (all but test45/captured_cadence, which stays
+# deliveries drain in real time (all but high_rate_96000_final/captured_cadence, which stays
 # in the pull-request corpus; pull requests also run every topology and
 # delivery in-process on a virtual clock), so it runs here too. Locally:
 # `make test-audio-stress AUDIO_STRESS_COUNT=N`.
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       count:
-        description: Repetitions of the 20-trial Test45/Test46 stress pair and the device-cadence tool continuations.
+        description: Repetitions of the 20-trial high-rate tool-audio stress trials and the device-cadence tool continuations.
         required: false
         default: "4"
   # Exercise the workflow itself when it changes.

@@ -1,5 +1,3 @@
-//go:build stress
-
 package stress
 
 import (
@@ -239,10 +237,10 @@ func (e *stressToolExecutor) CallCount() int64 {
 // Stress tests
 // ---------------------------------------------------------------------------
 
-// TestStress_RapidConsecutiveExecute verifies that 120 rapid consecutive
+// TestRapidConsecutiveExecuteReleasesGoroutines verifies that 120 rapid consecutive
 // Execute calls do not leak goroutines. After all calls complete, the
 // goroutine count should return to approximately the baseline.
-func TestStress_RapidConsecutiveExecute(t *testing.T) {
+func TestRapidConsecutiveExecuteReleasesGoroutines(t *testing.T) {
 	const numCalls = 120
 	const modelResponse = "ok"
 
@@ -292,10 +290,10 @@ func TestStress_RapidConsecutiveExecute(t *testing.T) {
 	}
 }
 
-// TestStress_SimultaneousSendAndInterrupt exercises concurrent Send and
+// TestConcurrentSendAndInterruptShutsDownCleanly exercises concurrent Send and
 // SendInterrupt calls on a turn-taking loop from multiple goroutines.
 // The test verifies that no panics, deadlocks, or data races occur (run with -race).
-func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
+func TestConcurrentSendAndInterruptShutsDownCleanly(t *testing.T) {
 	const numSenders = 5
 	const messagesPerSender = 20
 	const totalMessages = numSenders * messagesPerSender
@@ -332,64 +330,32 @@ func TestStress_SimultaneousSendAndInterrupt(t *testing.T) {
 	// failure, but the count is reported so an unexpected surge is visible.
 	var rejected atomic.Int64
 
-	// Sender goroutines.
 	for s := range numSenders {
-		wg.Add(1)
-		go func(senderID int) {
-			defer wg.Done()
-			for m := range messagesPerSender {
-				msg := messages.NewTextMessage(messages.RoleUser,
-					fmt.Sprintf("sender-%d-msg-%d", senderID, m))
-				if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
-					rejected.Add(1)
-				}
-				// Yield to mix sends and interrupts.
-				if m%3 == 0 {
-					runtime.Gosched()
-				}
-			}
-		}(s)
+		wg.Go(func() { sendUserMessages(ctx, loop, s, messagesPerSender, &rejected) })
 	}
-
-	// Interrupt goroutine (sends interrupts periodically).
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := range totalMessages / 2 {
-			followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
-			if err := loop.SendInterrupt(ctx, &followUp); err != nil {
-				rejected.Add(1)
-			}
-			runtime.Gosched()
-		}
-	}()
+	wg.Go(func() { sendInterrupts(ctx, loop, totalMessages/2, &rejected) })
 
 	wg.Wait()
-
-	// Cancel only once the loop has published at least one response, so
-	// shutdown races in-flight processing rather than an idle loop.
-	if !out.waitFor("response-", 5*time.Second) {
-		t.Logf("no response published before cancellation; output %q", out.String())
-	}
 	cancel()
 
 	select {
 	case loopErr := <-runErr:
-		// context.Canceled is expected after cancel().
 		if loopErr != nil && !errors.Is(loopErr, context.Canceled) {
-			t.Logf("Run exited with: %v (non-fatal for stress test)", loopErr)
+			t.Fatalf("Run exited with %v, want nil or context.Canceled", loopErr)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not exit within 5s after context cancellation (potential deadlock)")
 	}
-
-	// The primary assertion is that we reach here without panic, deadlock, or data race.
-	t.Logf("stress test completed: %d inference calls made, %d sends rejected", inf.CallCount(), rejected.Load())
+	// Writes beyond the user buffer's capacity are refused, never lost
+	// silently, so the loop must have accepted at least one write.
+	if attempted := int64(totalMessages + totalMessages/2); rejected.Load() >= attempted {
+		t.Fatalf("all %d sends and interrupts were refused", attempted)
+	}
 }
 
-// TestStress_HighThroughputStreaming verifies that 1500 deltas per response
+// TestStreamingDeliversEveryDeltaOfALargeResponse verifies that 1500 deltas per response
 // are delivered without drops when buffer capacity is adequate.
-func TestStress_HighThroughputStreaming(t *testing.T) {
+func TestStreamingDeliversEveryDeltaOfALargeResponse(t *testing.T) {
 	const numChunks = 1500
 
 	chunks := make([]string, numChunks)
@@ -446,9 +412,9 @@ func TestStress_HighThroughputStreaming(t *testing.T) {
 	}
 }
 
-// TestStress_LargeBatchToolCalls verifies that a batch with 60 concurrent
+// TestLargeToolBatchExecutesEveryCall verifies that a batch with 60 concurrent
 // tool calls executes without race conditions or deadlocks.
-func TestStress_LargeBatchToolCalls(t *testing.T) {
+func TestLargeToolBatchExecutesEveryCall(t *testing.T) {
 	const numTools = 60
 	const finalResponse = "All tools completed."
 
@@ -475,7 +441,8 @@ func TestStress_LargeBatchToolCalls(t *testing.T) {
 		agentloop.WithInferencer(inf),
 		agentloop.WithToolExecutor(toolExec),
 		agentloop.WithTools(tools),
-		agentloop.WithBufferCapacity(256),
+		// Default buffer capacity (64): the batch's deltas far exceed it, so
+		// every tool call executing proves no tool or terminal delta is dropped.
 	)
 	if err != nil {
 		t.Fatalf("failed to create loop: %v", err)
@@ -515,5 +482,31 @@ func TestStress_LargeBatchToolCalls(t *testing.T) {
 
 	if inf.CallCount() != 2 {
 		t.Errorf("inference calls: got %d, want 2 (batch call + final response)", inf.CallCount())
+	}
+}
+
+// sendUserMessages sends count user messages, yielding every third send so
+// sends interleave with interrupts; rejected counts the refused sends.
+func sendUserMessages(ctx context.Context, loop *agentloop.AgentLoop, sender, count int, rejected *atomic.Int64) {
+	for m := range count {
+		msg := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("sender-%d-msg-%d", sender, m))
+		if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
+			rejected.Add(1)
+		}
+		if m%3 == 0 {
+			runtime.Gosched()
+		}
+	}
+}
+
+// sendInterrupts sends count interrupts with follow-up messages; rejected
+// counts the refused interrupts.
+func sendInterrupts(ctx context.Context, loop *agentloop.AgentLoop, count int, rejected *atomic.Int64) {
+	for i := range count {
+		followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
+		if err := loop.SendInterrupt(ctx, &followUp); err != nil {
+			rejected.Add(1)
+		}
+		runtime.Gosched()
 	}
 }

@@ -78,7 +78,17 @@ if [ "${GO_AGENT_HARNESS_XDOTOOL_MODE}" = fail ]; then
   printf 'capture failed\n' >&2
   exit 2
 fi
-cp "$GO_AGENT_HARNESS_SCREEN_FIXTURE" "${3}"`)
+# Like scrot, never overwrite an existing target without -o/--overwrite:
+# it gets a numbered sibling instead.
+overwrite=no
+for arg; do
+  case "$arg" in -o|--overwrite) overwrite=yes ;; esac
+  target="$arg"
+done
+if [ -e "$target" ] && [ "$overwrite" = no ]; then
+  target="${target%.png}_000.png"
+fi
+cp "$GO_AGENT_HARNESS_SCREEN_FIXTURE" "$target"`)
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return dir, logPath
 }
@@ -106,7 +116,7 @@ func grayPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
+func TestLinuxScreenFakeCaptureAndRecord(t *testing.T) {
 	fakeLinuxDesktop(t, tinyPNG(t))
 	tool := display.NewScreenToolWithOptions(display.ScreenToolOptions{
 		DisplaySurface: display.NewHostDisplaySurface(),
@@ -136,7 +146,7 @@ func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
 	}
 }
 
-func TestS12LinuxMouseFakeOperations(t *testing.T) {
+func TestLinuxMouseFakeOperations(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		action  string
@@ -169,9 +179,9 @@ func TestS12LinuxMouseFakeOperations(t *testing.T) {
 	}
 }
 
-// TestS12LinuxMouseToolRunsXdotoolSubprocess keeps the production process
+// TestLinuxMouseToolRunsXdotoolSubprocess keeps the production process
 // runner covered end to end with one fake xdotool executable on PATH.
-func TestS12LinuxMouseToolRunsXdotoolSubprocess(t *testing.T) {
+func TestLinuxMouseToolRunsXdotoolSubprocess(t *testing.T) {
 	_, logPath := fakeLinuxDesktop(t, tinyPNG(t))
 	msgs, err := NewMouseTool().Execute(context.Background(), map[string]any{"action": "move", "x": float64(2), "y": float64(3)})
 	if err != nil || len(msgs) != 1 || msgs[0].TextContent() != "Mouse moved to (2, 3)" {
@@ -197,7 +207,7 @@ func expectedLinuxDragLog(fromX, fromY, toX, toY int) []string {
 	return append(lines, "mouseup 1")
 }
 
-func TestS12LinuxHelpersAndCapabilityErrors(t *testing.T) {
+func TestLinuxHelpersAndCapabilityErrors(t *testing.T) {
 	dir, _ := fakeLinuxDesktop(t, grayPNG(t))
 	assertLinuxDisplayHelpers(t)
 	assertLinuxImageHelpers(t, dir)
@@ -302,7 +312,7 @@ func assertLinuxMouseFailures(t *testing.T) {
 	}
 }
 
-func TestS4LinuxProcessErrorIdentity(t *testing.T) {
+func TestLinuxProcessErrorIdentity(t *testing.T) {
 	process := &fakeMouseProcess{run: func([]string) ([]byte, error) {
 		return []byte("command failed\n"), errors.New("exit status 9")
 	}}
@@ -312,4 +322,28 @@ func TestS4LinuxProcessErrorIdentity(t *testing.T) {
 		t.Fatalf("process error = %v", err)
 	}
 
+}
+
+// TestLinuxScreenCaptureWritesIntoTheReservedTempFile covers scrot's
+// no-overwrite default: the capture reserves its temp file before running
+// scrot, so it must pass --overwrite or decode the empty reservation.
+func TestLinuxScreenCaptureWritesIntoTheReservedTempFile(t *testing.T) {
+	fakeLinuxDesktop(t, tinyPNG(t))
+	img, err := display.NewHostDisplaySurface().Capture(context.Background(), image.Rect(0, 0, 2, 2))
+	if err != nil {
+		t.Fatalf("capture into the reserved temp file: %v", err)
+	}
+	if got := img.Bounds(); got.Dx() != 2 || got.Dy() != 2 {
+		t.Fatalf("captured image bounds = %v, want the 2x2 fixture", got)
+	}
+}
+
+// screenDisplayBounds reports the host display's bounds, or empty when
+// discovery fails. Only the Linux and Windows tests read the live bounds.
+func screenDisplayBounds(index int) image.Rectangle {
+	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
+	if err != nil {
+		return image.Rectangle{}
+	}
+	return bounds
 }

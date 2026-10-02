@@ -64,7 +64,7 @@ func TestMediaSourceParsingRedactsPrivateDialState(t *testing.T) {
 	}
 }
 
-func TestMediaSourceS4TypedErrors(t *testing.T) {
+func TestMediaSourceTypedErrors(t *testing.T) {
 	cases := []struct {
 		name string
 		raw  string
@@ -94,7 +94,7 @@ func TestMediaSourceS4TypedErrors(t *testing.T) {
 	}
 }
 
-func TestMediaSourceS4RuntimeErrorTaxonomy(t *testing.T) {
+func TestMediaSourceRuntimeErrorTaxonomy(t *testing.T) {
 	t.Run("unreachable host preserves network cause", func(t *testing.T) {
 		source, err := ParseMediaSource("rtsp://camera:secret@unreachable.invalid:554/camera")
 		if err != nil {

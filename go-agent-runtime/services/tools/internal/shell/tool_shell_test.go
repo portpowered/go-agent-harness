@@ -93,7 +93,7 @@ func injectFakeShellProcess(tool *ExecTool, process *fakeShellProcess) {
 	}
 }
 
-func TestExecTool_S5InjectedProcessLifecycleAndStreams(t *testing.T) {
+func TestExecTool_InjectedProcessLifecycleAndStreams(t *testing.T) {
 	workDir := t.TempDir()
 	process := newFakeShellProcess("stdout payload", "stderr payload", nil, nil, false)
 	tool := NewExecTool("", false)
@@ -132,7 +132,7 @@ type shellProcessOutcome struct {
 	wantKillCount int32
 }
 
-func TestExecTool_S4InjectedProcessOutcomes(t *testing.T) {
+func TestExecTool_InjectedProcessOutcomes(t *testing.T) {
 	const timeout = 20 * time.Millisecond
 	errShellStart := errors.New("injected command not found")
 	errShellExit := errors.New("exit status 17")

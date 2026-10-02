@@ -1,4 +1,4 @@
-//go:build live && windows && !nomicrophone
+//go:build e2e && windows && !nomicrophone
 
 // These tests need real WASAPI capture and render endpoints, so they build
 // only with the live tag on a Windows host with audio hardware; a missing

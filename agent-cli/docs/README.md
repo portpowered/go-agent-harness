@@ -7,10 +7,9 @@ This is the local entrypoint for Agent CLI guides, fixture notes, prompt referen
 - [Local speaker-feedback manual check](../../docs/MANUAL-UX-TESTING.md) documents the repaired paired-live-device requirement, bounded MacBook recipe, warning, bypasses, and room distinction.
 - [PNIG interaction replay](interaction-replay.md) explains how to replay normalized interaction fixtures as NDJSON without provider credentials or live network calls.
 - [Agent session record and replay](session-record-replay.md) explains how to record live Grok and OpenAI Realtime sessions, replay captures without provider network calls, and interpret replay divergence errors.
-- [Live audio-in round-trip proof](session-audio-in-live.md) documents the bounded spoken-audio proof and the per-session input-transcription cost policy.
-- [Bare live-session startup probe](session-bare-live-acceptance.md) documents the exact zero-flag billed startup/readiness/SIGINT confirmation.
+- [Input transcription cost policy](session-audio-in-live.md) documents the per-session input-transcription cost and how to opt out.
 - [Interactive voice tool latency contract](session-interactive-tool-timeouts.md) catalogs voice tool classes, timeout configuration, display admission, observable timing boundaries, hermetic evidence, and the one-live-confirmation procedure.
-- [Realtime session timing analysis](session-timing-analysis.md) explains how to attribute captured latency across provider, tool executor, continuation, burst delivery, and estimated playback queues, then reproduce it with the billed E2E gate.
+- [Realtime session timing analysis](session-timing-analysis.md) explains how to attribute captured latency across provider, tool executor, continuation, burst delivery, and estimated playback queues, then reproduce it hermetically.
 - [Blind acceptance probes](acceptance-probe.md) explains the artifact-backed verdict contract and live/replay transport seam.
 - [Conversational customer simulation](customer-simulation-live.md) documents the explicit billed live suite, A/B/D selectors, safe key setup, audio layout, and hermetic versus live reruns.
 - [Room live visualizer](room-visualizer.html) is a zero-build browser page for the room's transcript, diagnostic, and lifecycle SSE events.

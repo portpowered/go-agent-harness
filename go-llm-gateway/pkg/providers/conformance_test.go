@@ -114,7 +114,7 @@ func s11StatelessProviderCases() []statelessProviderCase {
 	}
 }
 
-func TestS11OfflineStatelessProviderConformance(t *testing.T) {
+func TestOfflineStatelessProviderConformance(t *testing.T) {
 	for _, tc := range s11StatelessProviderCases() {
 		t.Run(tc.name+"/identity", func(t *testing.T) {
 			provider := tc.new(&http.Client{Transport: &conformanceRoundTripper{
@@ -218,8 +218,8 @@ func assertStatelessFailure(t *testing.T, providerName string, probe *conformanc
 // stops reproducing, so this list can only shrink.
 func knownProviderDefects() map[string]string {
 	const (
-		stateless = "TestS11OfflineStatelessProviderConformance/"
-		session   = "TestS11OfflineSessionProviderConformance/"
+		stateless = "TestOfflineStatelessProviderConformance/"
+		session   = "TestOfflineSessionProviderConformance/"
 	)
 	return map[string]string{
 		stateless + "anthropic/transport-failure:classification": "anthropic transport errors are not classified as transport",
@@ -453,7 +453,7 @@ func s11SessionProviderCases() []sessionProviderCase {
 	}
 }
 
-func TestS11OfflineSessionProviderConformance(t *testing.T) {
+func TestOfflineSessionProviderConformance(t *testing.T) {
 	for _, tc := range s11SessionProviderCases() {
 		t.Run(tc.name+"/identity", func(t *testing.T) {
 			provider := tc.new(newSessionProbe(errors.New("s2s-conformance-identity-probe"), nil), conformanceSecret)
@@ -512,7 +512,7 @@ func assertSessionFailure(t *testing.T, providerName string, probe *sessionProbe
 	return contractHolds(t, "retryable", got == wantRetryable, "%s session failure retryable = %v, want %v: %T: %v", providerName, got, wantRetryable, err, err)
 }
 
-func TestS11OfflineSessionProviderContract(t *testing.T) {
+func TestOfflineSessionProviderContract(t *testing.T) {
 	for _, tc := range s11SessionProviderCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			probe := newSessionProbe(nil, nil)

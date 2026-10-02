@@ -53,6 +53,10 @@ const (
 	waveFormatExtensible                      = 0xfffe
 	// waveFormatExtensibleExtraBytes is the WAVEFORMATEXTENSIBLE cbSize.
 	waveFormatExtensibleExtraBytes = 22
+	// WAVEFORMATEXTENSIBLE is byte packed: Samples follows the 18-byte
+	// WAVEFORMATEX at offset 18 and SubFormat follows dwChannelMask at 24.
+	waveFormatExtensibleValidBitsOffset = 18
+	waveFormatExtensibleSubFormatOffset = 24
 	// hresultEPointer is E_POINTER, returned for a call on a released object.
 	hresultEPointer = 0x80004003
 	// IMMDeviceEnumerator vtable slots.
@@ -602,9 +606,10 @@ func endpointFriendlyName(endpoint wasapiCOM) (string, error) {
 	return name, nil
 }
 
-// wasapiWaveFormatEx and wasapiWaveFormatExtensible mirror the Windows
-// WAVEFORMATEX layouts returned by IAudioClient::GetMixFormat. The extended
-// format is needed for the common shared-mode PCM/IEEE-float endpoint format.
+// wasapiWaveFormatEx mirrors the leading fields of the Windows WAVEFORMATEX
+// returned by IAudioClient::GetMixFormat. The WAVEFORMATEXTENSIBLE tail is
+// read at its packed byte offsets: a Go struct embedding this one would be
+// padded to 20 bytes and misplace every extensible field.
 type wasapiWaveFormatEx struct {
 	formatTag      uint16
 	channels       uint16
@@ -613,13 +618,6 @@ type wasapiWaveFormatEx struct {
 	blockAlign     uint16
 	bitsPerSample  uint16
 	cbSize         uint16
-}
-
-type wasapiWaveFormatExtensible struct {
-	wasapiWaveFormatEx
-	validBitsPerSample uint16
-	channelMask        uint32
-	subFormat          syscall.GUID
 }
 
 type wasapiAudioFormat struct {
@@ -656,12 +654,11 @@ func parseWASAPIAudioFormat(raw unsafe.Pointer) (wasapiAudioFormat, error) {
 		if base.cbSize < waveFormatExtensibleExtraBytes {
 			return wasapiAudioFormat{}, fmt.Errorf("WASAPI extensible format has %d extra bytes, want at least 22", base.cbSize)
 		}
-		extended := *(*wasapiWaveFormatExtensible)(raw)
-		format.validBitsPerSample = extended.validBitsPerSample
+		format.validBitsPerSample = *(*uint16)(unsafe.Add(raw, waveFormatExtensibleValidBitsOffset))
 		if format.validBitsPerSample == 0 {
 			format.validBitsPerSample = format.bitsPerSample
 		}
-		format.subFormat = extended.subFormat
+		format.subFormat = *(*syscall.GUID)(unsafe.Add(raw, waveFormatExtensibleSubFormatOffset))
 	default:
 		return wasapiAudioFormat{}, fmt.Errorf("unsupported WASAPI format tag 0x%04x", base.formatTag)
 	}

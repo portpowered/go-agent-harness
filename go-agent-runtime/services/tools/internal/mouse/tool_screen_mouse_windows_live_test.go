@@ -1,4 +1,4 @@
-//go:build windows && live
+//go:build windows && e2e
 
 package mouse
 
@@ -50,7 +50,7 @@ func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	return bounds
 }
 
-func TestS12WindowsScreenCaptureAndRecord(t *testing.T) {
+func TestWindowsScreenCaptureAndRecord(t *testing.T) {
 	bounds := requireWindowsDesktop(t)
 	tool := display.NewScreenTool()
 
@@ -84,7 +84,7 @@ func TestS12WindowsScreenCaptureAndRecord(t *testing.T) {
 
 }
 
-func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
+func TestWindowsMouseOperationsRestoreCursor(t *testing.T) {
 	bounds := requireWindowsDesktop(t)
 	originalX, originalY, err := windowsCursorPosition()
 	if err != nil {
@@ -176,4 +176,14 @@ func assertWindowsMouseOperation(t *testing.T, tool core.Tool, operation windows
 		t.Fatalf("cursor did not move for %s; still at (%d, %d)", operation.name, x, y)
 	}
 	return x, y
+}
+
+// screenDisplayBounds reports the host display's bounds, or empty when
+// discovery fails. Only the Linux and Windows tests read the live bounds.
+func screenDisplayBounds(index int) image.Rectangle {
+	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
+	if err != nil {
+		return image.Rectangle{}
+	}
+	return bounds
 }

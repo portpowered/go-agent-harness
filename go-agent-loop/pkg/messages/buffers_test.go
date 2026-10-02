@@ -173,11 +173,20 @@ func TestTypedBuffer_OnDropNotCalledOnContextCancel(t *testing.T) {
 	}
 }
 
-func TestTypedBuffer_OnDropNilSafe(t *testing.T) {
+func TestTypedBuffer_DropWithoutCallbackIsCountedAndKeepsQueuedMessage(t *testing.T) {
 	buf := NewTypedBuffer[string](1)
-	// No OnDrop set — should not panic
-	buf.Write(context.Background(), "first")
-	buf.Write(context.Background(), "second") // buffer full, no callback set
+	if !buf.Write(context.Background(), "first") {
+		t.Fatal("first write into an empty buffer was rejected")
+	}
+	if buf.Write(context.Background(), "second") {
+		t.Fatal("write into a full buffer reported success")
+	}
+	if got := buf.Drops(); got != 1 {
+		t.Fatalf("drops = %d, want 1", got)
+	}
+	if got, ok := buf.Read(); !ok || got != "first" {
+		t.Fatalf("read = %q, %v; want the queued first message", got, ok)
+	}
 }
 
 func TestTypedBuffer_DropCountsWithoutObserver(t *testing.T) {

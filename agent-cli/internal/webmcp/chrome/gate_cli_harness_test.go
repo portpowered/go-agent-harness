@@ -1,4 +1,4 @@
-//go:build e2e || live
+//go:build e2e
 
 package chrome
 
@@ -306,11 +306,11 @@ func recordGateTranscript(t *testing.T, transcript *[]string, result gateCLIResu
 	*transcript = append(*transcript, fmt.Sprintf("$ agent %s\n%s", command, output))
 }
 
-func runProbe03Command(t *testing.T, parent context.Context, binaryPath, configDir, homeDir string, args ...string) gateCLIResult {
+func runStaleRefCommand(t *testing.T, parent context.Context, binaryPath, configDir, homeDir string, args ...string) gateCLIResult {
 	t.Helper()
 	commandContext, cancel := context.WithTimeout(parent, 45*time.Second)
 	defer cancel()
-	process, err := startProbe03Command(commandContext, binaryPath, configDir, homeDir, args...)
+	process, err := startStaleRefCommand(commandContext, binaryPath, configDir, homeDir, args...)
 	if err != nil {
 		return gateCLIResult{Args: append([]string(nil), args...), ExitCode: -1, Err: err}
 	}
@@ -323,7 +323,7 @@ func runProbe03Command(t *testing.T, parent context.Context, binaryPath, configD
 	return result
 }
 
-func probe03ChildEnvironment(homeDir string) []string {
+func staleRefChildEnvironment(homeDir string) []string {
 	base := gateChildEnvironment()
 	if homeDir == "" {
 		return base
@@ -340,7 +340,7 @@ func probe03ChildEnvironment(homeDir string) []string {
 	return environment
 }
 
-func recordProbe03Command(transcript *[]string, result gateCLIResult, cdpURL, fixtureToken, profileDir, configDir, homeDir string) {
+func recordStaleRefCommand(transcript *[]string, result gateCLIResult, cdpURL, fixtureToken, profileDir, configDir, homeDir string) {
 	if transcript == nil {
 		return
 	}
@@ -364,7 +364,7 @@ func recordProbe03Command(transcript *[]string, result gateCLIResult, cdpURL, fi
 	*transcript = append(*transcript, fmt.Sprintf("$ agent %s exit=%d\n%s", args, result.ExitCode, output))
 }
 
-func assertProbe03SafeOutput(t *testing.T, result gateCLIResult, cdpURL, token string) {
+func assertStaleRefSafeOutput(t *testing.T, result gateCLIResult, cdpURL, token string) {
 	t.Helper()
 	output := result.Stdout + "\n" + result.Stderr
 	for _, secret := range []string{cdpURL, "probe03-fragment-" + token} {
@@ -375,7 +375,7 @@ func assertProbe03SafeOutput(t *testing.T, result gateCLIResult, cdpURL, token s
 	assertGateSafeOutput(t, result)
 }
 
-func requireProbe03Failure(t *testing.T, result gateCLIResult, wantCode webmcp.ErrorCode) webmcp.ToolResultEnvelope {
+func requireStaleRefFailure(t *testing.T, result gateCLIResult, wantCode webmcp.ErrorCode) webmcp.ToolResultEnvelope {
 	t.Helper()
 	if result.Err == nil || result.ExitCode == 0 {
 		t.Fatalf("Probe 03 failure command unexpectedly succeeded: args=%q exit=%d err=%v stdout=%q stderr=%q", result.Args, result.ExitCode, result.Err, result.Stdout, result.Stderr)
@@ -464,7 +464,7 @@ func hasFixtureInvocation(oracle fixtureOracle, want string) bool {
 	return false
 }
 
-func probe03RandomToken(t *testing.T) string {
+func staleRefRandomToken(t *testing.T) string {
 	t.Helper()
 	bytes := make([]byte, 8)
 	if _, err := rand.Read(bytes); err != nil {
@@ -473,7 +473,7 @@ func probe03RandomToken(t *testing.T) string {
 	return hex.EncodeToString(bytes)
 }
 
-func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir string, args ...string) (*gateCLIProcess, error) {
+func startStaleRefCommand(parent context.Context, binaryPath, configDir, homeDir string, args ...string) (*gateCLIProcess, error) {
 	commandContext, cancel := context.WithCancel(parent)
 	fullArgs := append([]string(nil), args...)
 	if configDir != "" {
@@ -481,7 +481,7 @@ func startProbe03Command(parent context.Context, binaryPath, configDir, homeDir 
 	}
 	command := exec.CommandContext(commandContext, binaryPath, fullArgs...)
 	command.Dir = mustRepositoryRoot()
-	command.Env = probe03ChildEnvironment(homeDir)
+	command.Env = staleRefChildEnvironment(homeDir)
 	process := &gateCLIProcess{args: fullArgs, cmd: command, done: make(chan gateCLIResult, 1), cancel: cancel}
 	command.Stdout = &process.stdout
 	command.Stderr = &process.stderr

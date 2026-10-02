@@ -39,7 +39,7 @@ func TestLoadReadsExactFrames(t *testing.T) {
 		t.Fatalf("normalized samples = %v, want %v", normalized.samples, want24)
 	}
 }
-func TestS4ErrorPaths(t *testing.T) {
+func TestAudioFixtureErrorPaths(t *testing.T) {
 	for _, name := range []string{"unknown ID", "missing file", "unmanifested file", "hash mismatch", "malformed manifest", "invalid audio"} {
 		t.Run(name, func(t *testing.T) {
 			root, want := writeCorpus(t, fixtureID, wavio.Rate16kHz, patternSamples())

@@ -225,7 +225,7 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 		state.Response.HasOutput = true
 	}
 	r.forwardInitialSessionConfig(ctx, session, state, msg)
-	r.DeltaOutbox.Write(ctx, msg)
+	messages.WriteStreamDelta(ctx, r.DeltaOutbox, msg)
 	return messageEndOwned
 }
 
@@ -277,7 +277,7 @@ func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.
 		terminalProvenance = messages.TerminalProvenanceSession
 		terminalOutputState = messages.TerminalOutputNotApplicable
 	}
-	r.DeltaOutbox.Write(ctx, messages.StreamMessage{
+	messages.WriteStreamDelta(ctx, r.DeltaOutbox, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
@@ -309,7 +309,7 @@ func (r *ModelRunner) tagSessionAcknowledgement(ctx context.Context, state *sess
 	if rejectsActiveResponseCreate(*msg) && ack.Outstanding() {
 		ack.Reject()
 		if start := ack.Start; start != nil && start.ResponseID == state.Response.ID {
-			r.DeltaOutbox.Write(ctx, *start)
+			messages.WriteStreamDelta(ctx, r.DeltaOutbox, *start)
 		}
 	}
 	if !ack.Outstanding() {

@@ -1,5 +1,3 @@
-//go:build stress
-
 package stress
 
 import (

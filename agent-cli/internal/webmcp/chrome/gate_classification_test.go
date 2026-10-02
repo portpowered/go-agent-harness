@@ -1,4 +1,4 @@
-//go:build live
+//go:build e2e
 
 package chrome
 
@@ -74,7 +74,7 @@ func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 04 wait for Chrome: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe04=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe04=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "04")
 	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "select", "--browser", browserID, "--json")
@@ -96,7 +96,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	fixtureURL := fixture.URL() + "?probe08=" + probe03RandomToken(t)
+	fixtureURL := fixture.URL() + "?probe08=" + staleRefRandomToken(t)
 	runDir := filepath.Join(pinned.WorkDir, "probe-08")
 	initialDir := filepath.Join(runDir, "initial")
 	if err := os.MkdirAll(initialDir, 0o700); err != nil {
@@ -118,10 +118,10 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 08 read initial port: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe08=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe08=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, true)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "08-initial")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "08-initial")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "08-initial", 1)
 	if len(tabs) != 1 {
 		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 initial eligible tabs = %+v, want one", tabs)
@@ -160,8 +160,8 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	if staleEnvelope.Error.Details["browser_id"] != browserID || staleEnvelope.Error.Details["target_id"] != tabs[0].TargetID || staleEnvelope.Error.Details["selected_generation"] == nil {
 		t.Fatalf("probe 08 stale details = %#v", staleEnvelope.Error.Details)
 	}
-	if !strings.Contains(strings.ToLower(staleEnvelope.Error.Message), "rediscover") || !strings.Contains(strings.ToLower(staleEnvelope.Error.Message), "select") {
-		t.Fatalf("probe 08 stale guidance = %q, want rediscover and explicit select", staleEnvelope.Error.Message)
+	if !strings.Contains(staleEnvelope.Error.Message, "browser was replaced") || !strings.Contains(staleEnvelope.Error.Message, "agent webmcp select") {
+		t.Fatalf("probe 08 stale guidance = %q, want the replaced browser named and an explicit agent webmcp select", staleEnvelope.Error.Message)
 	}
 	recordClassificationResult(t, stale, configDir, "probe-08-fresh-identity", fmt.Sprintf(`{"code":%q,"old_browser_id":%q,"old_target_id":%q,"selected_generation":%v,"reason":%q,"replacement_work":"not_attached"}`, staleEnvelope.Error.Code, browserID, tabs[0].TargetID, staleEnvelope.Error.Details["selected_generation"], staleEnvelope.Error.Details["reason"]))
 }
@@ -170,7 +170,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	token := probe03RandomToken(t)
+	token := staleRefRandomToken(t)
 	firstURL := fixture.URL() + "?probe09=" + token + "-a"
 	secondURL := fixture.URL() + "?probe09=" + token + "-b"
 	runDir := filepath.Join(pinned.WorkDir, "probe-09")
@@ -196,10 +196,10 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 09 wait for second page: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe09=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe09=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "09")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "09")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "09", 2)
 	if len(tabs) != 2 {
 		t.Fatalf("probe 09 eligible tabs = %+v, want two", tabs)
 	}
@@ -226,7 +226,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	t.Cleanup(readyFixture.Close)
 	noTools := newClassificationNoToolsServer()
 	t.Cleanup(noTools.Close)
-	token := probe03RandomToken(t)
+	token := staleRefRandomToken(t)
 	readyURL := readyFixture.URL() + "?probe10-ready=" + token
 	noToolsURL := noTools.URL + "/?probe10-unverified=" + token
 	runDir := filepath.Join(pinned.WorkDir, "probe-10")
@@ -252,10 +252,10 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 10 wait for unverified page: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe10=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe10=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "10")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "10")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "10", 2)
 	readyTab, unverifiedTab := classificationTabsByOrigin(t, tabs, readyFixture.server.URL, noTools.URL)
 
 	unselected := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--json")
@@ -265,12 +265,14 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	}
 	recordClassificationResult(t, unselected, configDir, "probe-10-unselected", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":false,"catalog_evidence":%q,"selection":"none"}`, unselectedReport.Status, unselectedReport.PageTools, unselectedReport.Catalog.Evidence))
 
-	unverified := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", unverifiedTab.TargetID, "--json")
-	unverifiedReport := requireClassificationDoctor(t, unverified, false)
-	if unverifiedReport.Status != "not_ready" || unverifiedReport.PageTools != "unverified" || unverifiedReport.Catalog.Ready {
-		t.Fatalf("probe 10 exact unverified report = %+v, want not_ready/unverified/false", unverifiedReport)
+	// A page with the WebMCP domain and no tools publishes an empty catalog:
+	// the page producer itself is the readiness evidence.
+	empty := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", unverifiedTab.TargetID, "--json")
+	emptyReport := requireClassificationDoctor(t, empty, true)
+	if emptyReport.Status != gateStatusReady || !emptyReport.Catalog.Ready || emptyReport.Catalog.Evidence != catalogEvidencePageProducer {
+		t.Fatalf("probe 10 exact empty-catalog report = %+v, want ready with page_producer catalog evidence", emptyReport)
 	}
-	recordClassificationResult(t, unverified, configDir, "probe-10-exact-unverified", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":false,"target_id":%q,"error_code":%q}`, unverifiedReport.Status, unverifiedReport.PageTools, unverifiedTab.TargetID, classificationDoctorErrorCode(unverifiedReport)))
+	recordClassificationResult(t, empty, configDir, "probe-10-exact-empty-catalog", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":true,"catalog_evidence":%q,"target_id":%q}`, emptyReport.Status, emptyReport.PageTools, emptyReport.Catalog.Evidence, unverifiedTab.TargetID))
 
 	ready := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", readyTab.TargetID, "--json")
 	readyReport := requireClassificationDoctor(t, ready, true)
@@ -294,20 +296,36 @@ func liveClassificationBrowserID(t *testing.T, ctx context.Context, binaryPath, 
 	return data.Browsers[0].ID
 }
 
-func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, configDir, browserID, probe string) []gateTab {
+// liveClassificationTabs lists the eligible pages, retrying until want of
+// them are eligible: a freshly opened page becomes eligible only once its
+// document has loaded and WebMCP has enabled on it.
+func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, configDir, browserID, probe string, want int) []gateTab {
 	t.Helper()
-	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
-	data := requireGateSuccessData[gateTabsData](t, result)
+	waitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	for {
+		result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
+		data := requireGateSuccessData[gateTabsData](t, result)
+		eligible := eligibleClassificationTabs(data, browserID)
+		if len(eligible) >= want {
+			recordClassificationResult(t, result, configDir, "probe-"+probe+"-tabs", fmt.Sprintf(`{"eligible_target_ids":%s}`, mustJSON(t, classificationTabIDs(eligible))))
+			return eligible
+		}
+		select {
+		case <-waitCtx.Done():
+			t.Fatalf("probe %s tabs = %+v, want %d eligible pages", probe, data, want)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+func eligibleClassificationTabs(data gateTabsData, browserID string) []gateTab {
 	eligible := make([]gateTab, 0, len(data.Tabs))
 	for _, tab := range data.Tabs {
 		if tab.BrowserID == browserID && tab.Type == pageTargetType && tab.Eligible {
 			eligible = append(eligible, tab)
 		}
 	}
-	if len(eligible) == 0 {
-		t.Fatalf("probe %s tabs = %+v, want at least one eligible page", probe, data)
-	}
-	recordClassificationResult(t, result, configDir, "probe-"+probe+"-tabs", fmt.Sprintf(`{"eligible_target_ids":%s}`, mustJSON(t, classificationTabIDs(eligible))))
 	return eligible
 }
 
@@ -403,13 +421,6 @@ func requireClassificationDoctor(t *testing.T, result gateCLIResult, wantSuccess
 		t.Fatalf("decode doctor report: %v; output=%q", err, result.Stdout)
 	}
 	return report
-}
-
-func classificationDoctorErrorCode(report classificationDoctorReport) string {
-	if report.Error == nil {
-		return "none"
-	}
-	return report.Error.Code
 }
 
 func requireClassificationFailure(t *testing.T, result gateCLIResult, wantCode webmcp.ErrorCode) webmcp.ToolResultEnvelope {

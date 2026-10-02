@@ -64,7 +64,7 @@ STANDALONE_MODULES = (
 # Matches every module of this repository, so the embedding consumer's run
 # reports (and so proves reachable) library functions.
 REPO_FILTER = r"^github\.com/portpowered/go-agent-harness/"
-TAGS = "live,e2e,e2e_internal,stress,sessioncapacityramp"
+TAGS = "e2e,stress"
 GOOS_LIST = ("linux", "darwin", "windows")
 ALLOWLIST_HEADER = """\
 # Functions golang.org/x/tools/cmd/deadcode -test finds unreachable from every

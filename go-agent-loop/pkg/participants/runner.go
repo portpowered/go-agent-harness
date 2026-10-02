@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -96,8 +97,13 @@ type UserRunner struct {
 	Outbox     *messages.TypedBuffer[messages.UserResponse]
 	outChannel chan messages.UserRequest
 
-	streamID   string // stable stream id for this runner (one stream per user participant)
-	actorIndex int    // incremented for each message written
+	streamID string // stable stream id for this runner (one stream per user participant)
+
+	// writeMu serializes Write and Stop: AgentLoop.Send and SendInterrupt
+	// call them from caller goroutines, and each message must take a unique
+	// actorIndex and reach Outbox in that index order.
+	writeMu    sync.Mutex
+	actorIndex int // incremented for each message written; guarded by writeMu
 }
 
 func NewUserRunner(bufferCapacity int) *UserRunner {
@@ -137,12 +143,7 @@ func (r *UserRunner) OutChannel() <-chan messages.UserRequest {
 }
 
 func (r *UserRunner) Write(ctx context.Context, msg messages.Message) error {
-	r.applyOrdering(&msg)
-	write := r.Outbox.Write(ctx, messages.UserResponse{Message: msg})
-	if !write {
-		return fmt.Errorf("failed to write user request, buffer is full")
-	}
-	return nil
+	return r.publish(ctx, msg)
 }
 
 // Send a signal to stop the model.
@@ -151,15 +152,22 @@ func (r *UserRunner) Stop(ctx context.Context) error {
 		Role:         messages.RoleUser,
 		ContentParts: []messages.ContentPart{messages.NewTextPart("stop")},
 	}
+	return r.publish(ctx, msg)
+}
+
+// publish orders msg and writes it to Outbox under writeMu.
+func (r *UserRunner) publish(ctx context.Context, msg messages.Message) error {
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
 	r.applyOrdering(&msg)
-	write := r.Outbox.Write(ctx, messages.UserResponse{Message: msg})
-	if !write {
+	if !r.Outbox.Write(ctx, messages.UserResponse{Message: msg}) {
 		return fmt.Errorf("failed to write user request, buffer is full")
 	}
 	return nil
 }
 
 // applyOrdering sets runner-specific ordering on the message (ActorStreamID, ActorProvidedIndex, ActorProvidedID, ActorID).
+// The caller holds writeMu.
 func (r *UserRunner) applyOrdering(msg *messages.Message) {
 	msg.ActorStreamID = r.streamID
 	msg.ActorProvidedIndex = r.actorIndex

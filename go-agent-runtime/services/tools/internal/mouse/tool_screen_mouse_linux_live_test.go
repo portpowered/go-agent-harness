@@ -1,4 +1,4 @@
-//go:build linux && live
+//go:build linux && e2e
 
 package mouse
 
@@ -12,7 +12,7 @@ import (
 	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
 
-func TestS12LinuxRealCapabilities(t *testing.T) {
+func TestLinuxRealScreenAndMouse(t *testing.T) {
 	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
 		t.Fatalf("%s: required live capability unavailable: display server (DISPLAY/WAYLAND_DISPLAY)", runtime.GOOS)
 	}

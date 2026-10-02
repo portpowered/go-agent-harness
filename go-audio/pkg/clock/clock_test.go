@@ -11,7 +11,7 @@ import (
 
 type contextValueKey string
 
-func TestS11SourceConformance(t *testing.T) {
+func TestSourceConformance(t *testing.T) {
 	base := time.Date(2026, time.January, 2, 3, 4, 5, 6, time.FixedZone("test", 90*60))
 	deterministic := NewDeterministic(base, 10*time.Millisecond)
 
@@ -316,7 +316,12 @@ func TestDeterministicConcurrentTimerLifecycleAndAdvancement(t *testing.T) {
 	clock := NewDeterministic(time.Unix(42, 0).UTC(), time.Microsecond)
 	const workers = 8
 	const iterations = 500
+	type created struct {
+		timer   Timer
+		stopped bool // Stop reported that it prevented the timer from firing
+	}
 	start := make(chan struct{})
+	timers := make([][]created, workers)
 	var group sync.WaitGroup
 	group.Add(workers)
 	for worker := range workers {
@@ -325,9 +330,8 @@ func TestDeterministicConcurrentTimerLifecycleAndAdvancement(t *testing.T) {
 			<-start
 			for i := range iterations {
 				timer := clock.NewTimer(time.Duration((worker+i)%17) * time.Microsecond)
-				if (worker+i)%2 == 0 {
-					timer.Stop()
-				}
+				stopped := (worker+i)%2 == 0 && timer.Stop()
+				timers[worker] = append(timers[worker], created{timer: timer, stopped: stopped})
 			}
 		}(worker)
 	}
@@ -342,6 +346,27 @@ func TestDeterministicConcurrentTimerLifecycleAndAdvancement(t *testing.T) {
 	close(start)
 	group.Wait()
 	clock.AdvanceBy(time.Hour)
+
+	if got, want := clock.Elapsed(), time.Duration(workers*iterations)*time.Microsecond+time.Hour; got != want {
+		t.Fatalf("elapsed = %v, want %v", got, want)
+	}
+	for worker, created := range timers {
+		for index, entry := range created {
+			if fired := timerFired(entry.timer); fired == entry.stopped {
+				t.Fatalf("worker %d timer %d fired=%t after Stop reported prevented=%t; every deadline has passed", worker, index, fired, entry.stopped)
+			}
+		}
+	}
+}
+
+// timerFired reports whether timer has delivered its fire time.
+func timerFired(timer Timer) bool {
+	select {
+	case <-timer.C():
+		return true
+	default:
+		return false
+	}
 }
 
 func TestRequireTimerSourceDoesNotFallbackToHostTime(t *testing.T) {
@@ -472,7 +497,7 @@ func observeS8MonotonicLattice(clock *Deterministic, base time.Time, tickDuratio
 	return ""
 }
 
-func TestS8ConcurrentReadersAndAdvancers(t *testing.T) {
+func TestConcurrentReadersAndAdvancers(t *testing.T) {
 	base := time.Unix(100, 0).UTC()
 	tickDuration := time.Microsecond
 	clock := NewDeterministic(base, tickDuration)

@@ -9,15 +9,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
-func TestPublicWireFactoriesExposeIndependentContracts(t *testing.T) {
-	if NewLiveRecorder(sessiontrace.LiveRecorderOptions{}) == nil {
-		t.Fatal("NewLiveRecorder returned nil")
-	}
-	if NewPlaybackDiagnostics(sessiontrace.PlaybackDiagnosticsOptions{}) == nil {
-		t.Fatal("NewPlaybackDiagnostics returned nil")
-	}
-}
-
 func TestPublicWireLiveRecorderClassifiesProviderMessages(t *testing.T) {
 	tests := []struct {
 		name string

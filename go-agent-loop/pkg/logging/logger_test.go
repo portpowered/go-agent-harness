@@ -82,7 +82,7 @@ type canonicalCrossingLine struct {
 	LogicalTick uint64            `json:"logical_tick"`
 }
 
-func TestCrossingEmitterS3GoldenScenario(t *testing.T) {
+func TestCrossingEmitterGoldenScenario(t *testing.T) {
 	logger := &captureLogger{}
 	emitter := NewCrossingEmitter(logger)
 	events := []CrossingEvent{

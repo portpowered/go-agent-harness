@@ -33,8 +33,8 @@ LINT_CROSS_GOOS ?= windows darwin
 # needs cgo.
 LINT_CROSS_TAGS_darwin := nomicrophone
 # GOARCH for one cross GOOS (empty keeps the host's). Darwin lints arm64 so
-# the files constrained to darwin && arm64 (the macOS live and e2e_internal
-# tests) are linted; no file is constrained to darwin && amd64.
+# files constrained to darwin && arm64 are linted; no file is constrained to
+# darwin && amd64.
 LINT_CROSS_GOARCH_darwin := arm64
 # Modules `make lint` and `make lint-cross` run at once. Each golangci-lint
 # run is itself parallel, but small modules are dominated by per-run startup
@@ -167,7 +167,7 @@ RACE_GORACE ?= atexit_sleep_ms=0
 SESSIONS_RACE_TIMEOUT ?= 600s
 # tools/racegate runs these tests under the race detector and fails unless
 # each one runs exactly once and passes (comma-separated).
-RTC_RACE_TESTS := TestPeerS8ConcurrentConnectCloseAndReads,TestOutboundTrackSerializesConcurrentWrites,TestOutboundTrackConcurrentWriteCancelClose,TestInboundTrackS8ConcurrentIngestReadCancelClose
+RTC_RACE_TESTS := TestPeerConcurrentConnectCloseAndReads,TestOutboundTrackSerializesConcurrentWrites,TestOutboundTrackConcurrentWriteCancelClose,TestInboundTrackConcurrentIngestReadCancelClose
 SESSIONS_RACE_TESTS := TestConcurrentSessionsCompleteScriptedTurns,TestConcurrentSessionsZeroCrossSessionLeakage,TestIsolationCheckerNamesLeakingSessionAndRecord,TestSharedCaptureBufferAliasingFailsIsolationCheck,TestConcurrentSessionsPerEventOrderingUnderInterleaving,TestCancellingOneMidRunSessionLeavesOthersUndisturbed
 # A session capacity test that fails only with this watchdog is retried once alone.
 SESSIONS_RACE_WATCHDOG := concurrent run did not finish within 2m0s (stuck sessions likely)
@@ -444,7 +444,7 @@ test-audio-stability-race: ## Run callback, cancellation, queue, and replay audi
 # hot loop, participant runners and duplex turns. The six capacity tests that
 # test-sessions-race gates (with its own retry and event verification) are
 # skipped here so each runs once.
-LOOP_RACE_PACKAGES := ./test/functional/sessions ./test/functional/duplex ./pkg/engine ./pkg/participants ./pkg/agentloop
+LOOP_RACE_PACKAGES := ./test/functional/sessions ./test/functional/duplex ./test/functional/stress ./pkg/engine ./pkg/participants ./pkg/agentloop
 test-loop-race: ## Run the go-agent-loop session, engine, participant, agent-loop and duplex tests with the race detector.
 	@set -euo pipefail; \
 	echo "==> test-loop-race go-agent-loop $(LOOP_RACE_PACKAGES)"; \
@@ -473,24 +473,24 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 	@set -euo pipefail; \
 	echo "==> test-audio-device-server-integration agent + audio-device-server replay"; \
 	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=stress \
-		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryToolContinuationStressMatrix|AgentBinaryTest45HighRateToolAudioRegression|AgentBinaryTest46HighRateToolAudioRegression|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryToolContinuationStressMatrix|AgentBinaryHighRateToolAudioRepeatedTrials|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
-# The fresh-process high-rate tool-audio stress trials (Test45/Test46, 20
-# trials each per repetition) and the fresh-process continuation matrix
-# TestAgentBinaryToolContinuationStressMatrix (every case other than
-# test45/captured_cadence, whose device-cadence deliveries drain in real
-# time) build only with the stress tag. They hunt rare races rather than
-# prove behavior, so pull requests run only test45/captured_cadence as the
-# real-process representative (every topology and delivery also runs
+# The fresh-process high-rate tool-audio stress trials (both captured
+# high-rate traces, 20 trials each per repetition) and the fresh-process
+# continuation matrix TestAgentBinaryToolContinuationStressMatrix (every case
+# other than high_rate_96000_final/captured_cadence, whose device-cadence
+# deliveries drain in real time) build only with the stress tag. They hunt
+# rare races rather than prove behavior, so pull requests run only
+# high_rate_96000_final/captured_cadence as the real-process representative (every topology and delivery also runs
 # in-process on a virtual clock in TestToolContinuationPreservesDeviceAudio);
 # the scheduled Nightly audio stress workflow runs this target with the
 # coverage job's build (hermetic tags, CGO_ENABLED=$(BUILD_CGO_ENABLED)).
 AUDIO_STRESS_COUNT ?= 1
 test-audio-stress: ## Run the fresh-process high-rate tool-audio stress trials (AUDIO_STRESS_COUNT repetitions).
 	@set -euo pipefail; \
-	echo "==> test-audio-stress Test45/Test46 high-rate tool audio (20 trials each) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
+	echo "==> test-audio-stress high-rate tool audio (20 trials per trace) and device-cadence tool continuation, $(AUDIO_STRESS_COUNT) repetition(s)"; \
 	(cd agent-cli && CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=nomicrophone,stress \
-		-run '^TestAgentBinary(Test4[56]HighRateToolAudioRegression|ToolContinuationPreservesRemoteDeviceAudio|ToolContinuationStressMatrix)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+		-run '^TestAgentBinary(HighRateToolAudioRepeatedTrials|ToolContinuationPreservesRemoteDeviceAudio|ToolContinuationStressMatrix)$$' -count=$(AUDIO_STRESS_COUNT) -v -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 test-rtc-race: ## Run the focused RTC concurrency acceptance tests with the race detector.
 	@set -euo pipefail; \

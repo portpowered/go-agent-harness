@@ -146,7 +146,7 @@ func assertMessagesInOrder(t *testing.T, output string, messages ...string) {
 	}
 }
 
-func TestS3FormattedRecordsMatchGolden(t *testing.T) {
+func TestLoggerFormattedRecordsMatchGolden(t *testing.T) {
 	configDir := t.TempDir()
 	logger, closer, err := NewLoggerWithCloser(LoggerConfig{
 		VerbosityLevel: 2,
@@ -185,7 +185,7 @@ func TestS3FormattedRecordsMatchGolden(t *testing.T) {
 	assertMessagesInOrder(t, actual, "debug record", "info record", "warn record", "error record")
 }
 
-func TestS5LoggerRoutingAndSinkEffects(t *testing.T) {
+func TestLoggerRoutingAndSinkEffects(t *testing.T) {
 	t.Run("file routing", func(t *testing.T) {
 		consoleOut := &recordingWriteSyncer{}
 		consoleErr := &recordingWriteSyncer{}
@@ -253,7 +253,7 @@ func TestS5LoggerRoutingAndSinkEffects(t *testing.T) {
 	})
 }
 
-func TestS5LoggerLevelThresholds(t *testing.T) {
+func TestLoggerLevelThresholds(t *testing.T) {
 	tests := []struct {
 		name       string
 		verbosity  int
@@ -301,7 +301,7 @@ func TestS5LoggerLevelThresholds(t *testing.T) {
 	}
 }
 
-func TestS5LoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
+func TestLoggerSinkErrorsDoNotSuppressLaterWrites(t *testing.T) {
 	sentinel := errors.New("sentinel sink failure")
 	sink := &recordingWriteSyncer{writeError: sentinel}
 	errorOutput := &recordingWriteSyncer{}
@@ -494,7 +494,7 @@ func assertAdapterPreservesLevels[F any](
 	nilAdapter.Error("nil error")
 }
 
-func TestS5AdaptersPreserveLevelsMessagesAndFields(t *testing.T) {
+func TestLoggerAdaptersPreserveLevelsMessagesAndFields(t *testing.T) {
 	t.Run("agent loop", func(t *testing.T) {
 		assertAdapterPreservesLevels(t,
 			func(z *zap.Logger) leveledFieldLogger[agentlooplogging.Field] { return NewZapAgentLoopAdapter(z) },

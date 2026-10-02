@@ -16,10 +16,10 @@ import (
 
 const inboundTrackRaceTimeout = 2 * time.Second
 
-// TestInboundTrackS8ConcurrentIngestReadCancelClose keeps the legacy race-gate
+// TestInboundTrackConcurrentIngestReadCancelClose keeps the legacy race-gate
 // name while exercising the remaining Pion-facing inbound adapter. RTP policy
 // and transport lifecycle coverage lives in the runtime transport package.
-func TestInboundTrackS8ConcurrentIngestReadCancelClose(t *testing.T) {
+func TestInboundTrackConcurrentIngestReadCancelClose(t *testing.T) {
 	t.Parallel()
 
 	inbound := newPionInbound(nil, "race")
