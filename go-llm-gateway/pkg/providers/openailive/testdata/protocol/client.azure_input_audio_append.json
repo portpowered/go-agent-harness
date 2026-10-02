@@ -1,0 +1,3 @@
+{ "type": "session.input_audio.append",
+  "audio": "<base64-encoded-24khz-pcm16le-mono-audio>"
+}

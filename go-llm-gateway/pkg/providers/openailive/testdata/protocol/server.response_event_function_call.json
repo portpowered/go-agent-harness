@@ -1,0 +1,14 @@
+   {
+     "type": "response.event",
+     "delegation_id": "item_delegation_456",
+     "event": {
+       "type": "response.output_item.done",
+       "item": {
+         "type": "function_call",
+         "call_id": "call_123",
+         "name": "get_weather",
+         "arguments": "{\"location\":\"Seattle\"}"
+       }
+     }
+   }
+   

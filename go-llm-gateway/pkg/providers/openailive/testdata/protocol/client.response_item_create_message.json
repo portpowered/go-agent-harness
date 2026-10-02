@@ -1,0 +1,14 @@
+{
+  "type": "response.item.create",
+  "event_id": "evt_item_001",
+  "item": {
+    "type": "message",
+    "role": "user",
+    "content": [
+      {
+        "type": "input_text",
+        "text": "Please check for a table for two at 7 PM."
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "error",
+  "error": {
+    "type": "invalid_request_error",
+    "code": "invalid_audio",
+    "message": "PCM16 audio must contain an even number of bytes",
+    "param": "audio",
+    "client_event_id": "event_audio_1"
+  }
+}

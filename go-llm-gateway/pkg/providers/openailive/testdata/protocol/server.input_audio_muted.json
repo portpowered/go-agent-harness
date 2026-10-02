@@ -1,0 +1,5 @@
+{
+  "type": "session.input_audio.muted",
+  "event_id": "evt_muted_001",
+  "client_event_id": "evt_mute_001"
+}

@@ -1,0 +1,29 @@
+{
+  "type": "session.closed",
+  "event_id": "evt_closed_001",
+  "client_event_id": "evt_close_001",
+  "reason": "close_requested",
+  "session": {
+    "id": "live_abc123",
+    "model": "gpt-live-1",
+    "status": "active",
+    "expires_at": 1788555600,
+    "instructions": "Help the caller plan a restaurant reservation. Confirm details before booking.",
+    "input": [],
+    "audio": {
+      "format": {
+        "type": "audio/pcm",
+        "rate": 24000
+      },
+      "output": {
+        "voice": "marin"
+      }
+    },
+    "delegation": {
+      "type": "client"
+    }
+  },
+  "usage": {
+    "seconds": 45.8
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "type": "info",
+  "event_id": "evt_info_001",
+  "code": "data_channel_permissions",
+  "message": "The frontend data channel is configured with restricted event permissions."
+}

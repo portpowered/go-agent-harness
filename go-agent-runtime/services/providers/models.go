@@ -15,6 +15,15 @@ type RealtimeModel struct {
 	SupportsImageInput      bool
 	SupportsFunctionCalling bool
 	SupportsReasoning       bool
+	// Duplex marks a full-duplex model that owns turn-taking itself (it
+	// listens and speaks at once and has no turn detector). Callers must not
+	// send turn-detection, transcription or tool configuration to it.
+	Duplex bool
+	// Delegation names how a Duplex model reaches tools and reasoning:
+	// RealtimeDelegationClient (the harness runs the backend work) or
+	// RealtimeDelegationResponses. It is empty for models that call tools
+	// themselves.
+	Delegation string
 }
 
 // ErrUnsupportedRealtimeModel identifies a model that is not registered for
@@ -68,4 +77,19 @@ const (
 	OpenAIRealtimeLegacyModel  = "gpt-realtime"
 	OpenAIRealtimeDefaultModel = "gpt-realtime-2.1-mini"
 	OpenAIRealtime21Model      = "gpt-realtime-2.1"
+)
+
+// OpenAILiveProvider is the session provider for the OpenAI GPT-Live protocol
+// (/v1/live/sessions). It is separate from "openai" because the provider name
+// selects the wire protocol, and GPT-Live is not the Realtime API. Admission
+// restricts it to its catalog; no session can be built for it yet.
+const OpenAILiveProvider = "openai-live"
+
+// OpenAILive1Model is the only GPT-Live model.
+const OpenAILive1Model = "gpt-live-1"
+
+// RealtimeModel.Delegation values.
+const (
+	RealtimeDelegationClient    = "client"
+	RealtimeDelegationResponses = "responses"
 )

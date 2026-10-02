@@ -1,0 +1,6 @@
+{
+  "type": "session.instructions.append",
+  "event_id": "evt_instructions_001",
+  "delegation_id": null,
+  "content": "The caller prefers outdoor seating."
+}

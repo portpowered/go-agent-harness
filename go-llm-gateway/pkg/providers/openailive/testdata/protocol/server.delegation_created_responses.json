@@ -1,0 +1,12 @@
+   {
+     "type": "session.delegation.created",
+     "event_id": "event_delegation",
+     "offset_ms": 1000,
+     "delegation": {
+       "id": "item_delegation_456",
+       "type": "delegation",
+       "target": "responses",
+       "response_id": "resp_123"
+     }
+   }
+   

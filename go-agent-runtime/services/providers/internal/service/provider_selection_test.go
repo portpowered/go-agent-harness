@@ -180,7 +180,7 @@ func TestProviderServiceSharesInjectedAdmissionDecision(t *testing.T) {
 		t.Fatalf("built-in model error = %v, want typed rejection", err)
 	}
 	var unsupported *runtimeproviders.UnsupportedRealtimeModelError
-	if !errors.As(err, &unsupported) || unsupported.Provider != "OpenAI" || len(unsupported.SupportedModels) != 1 || unsupported.SupportedModels[0] != "custom-only" {
+	if !errors.As(err, &unsupported) || unsupported.Provider != openAIProviderLabel || len(unsupported.SupportedModels) != 1 || unsupported.SupportedModels[0] != "custom-only" {
 		t.Fatalf("built-in model error = %v, want injected catalog snapshot", err)
 	}
 	unsupported.SupportedModels[0] = "mutated"

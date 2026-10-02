@@ -1,0 +1,11 @@
+{
+  "type": "error",
+  "event_id": "evt_error_001",
+  "error": {
+    "type": "invalid_request_error",
+    "code": "unknown_parameter",
+    "message": "Unknown parameter: 'session.voice'.",
+    "param": "session.voice",
+    "client_event_id": "evt_invalid_001"
+  }
+}

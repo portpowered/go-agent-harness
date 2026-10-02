@@ -1,0 +1,9 @@
+{ "type": "session.started",
+  "session": {
+    "id": "sess_123",
+    "model": "gpt-live-1",
+    "instructions": "Be concise.",
+    "audio": { "output": { "voice": "marin" } },
+    "delegation": { "type": "client" }
+  }
+}

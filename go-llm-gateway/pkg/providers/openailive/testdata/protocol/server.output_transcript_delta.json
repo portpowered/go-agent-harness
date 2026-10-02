@@ -1,0 +1,7 @@
+{
+  "type": "session.output_transcript.delta",
+  "event_id": "evt_output_transcript_001",
+  "delta": "Would you like me to reserve that table?",
+  "start_ms": 5400,
+  "end_ms": 7200
+}

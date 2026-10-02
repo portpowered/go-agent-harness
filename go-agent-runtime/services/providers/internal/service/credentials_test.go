@@ -148,7 +148,7 @@ func TestBuildSessionNormalizesBlankProviderBeforeModelAdmission(t *testing.T) {
 		t.Fatalf("BuildSession blank provider error = %v, want unsupported model", err)
 	}
 	var unsupported *providers.UnsupportedRealtimeModelError
-	if !errors.As(err, &unsupported) || unsupported.Provider != "OpenAI" {
+	if !errors.As(err, &unsupported) || unsupported.Provider != openAIProviderLabel {
 		t.Fatalf("BuildSession blank provider error = %v, want typed OpenAI model error", err)
 	}
 }
