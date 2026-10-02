@@ -52,7 +52,7 @@ func (p *PingPong) Execute(ctx context.Context, curr *state.LoopState) error {
 			p.logger.Debug("PingPong: responding to ping")
 		}
 
-		p.kernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+		messages.WriteKernelDelta(ctx, p.kernelDeltaInbox, messages.KernelDeltaRequest{
 			Source: messages.System,
 			Delta: messages.StreamMessage{
 				Type:  messages.StreamTypePong,

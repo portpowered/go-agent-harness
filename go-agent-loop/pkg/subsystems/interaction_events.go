@@ -149,7 +149,7 @@ func removePendingToolCall(calls []messages.ToolCall, id string) []messages.Tool
 }
 
 func writeKernelDelta(ctx context.Context, curr *state.LoopState, source messages.ParticipantID, delta messages.StreamMessage) {
-	curr.Outputs.KernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+	messages.WriteKernelDelta(ctx, curr.Outputs.KernelDeltaInbox, messages.KernelDeltaRequest{
 		Source: source,
 		Delta:  delta,
 	})

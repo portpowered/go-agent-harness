@@ -47,7 +47,7 @@ func (c *Coordinator) logInfo(msg string, fields ...logging.Field) {
 // sendInferenceResult pushes a full message to the kernel via the shared delta
 // inbox as a SYSTEM.FULL_MESSAGE event.
 func (c *Coordinator) sendInferenceResult(ctx context.Context, state *state.LoopState, source messages.ParticipantID, msg messages.Message) {
-	state.Outputs.KernelDeltaInbox.Write(ctx, messages.KernelDeltaRequest{
+	messages.WriteKernelDelta(ctx, state.Outputs.KernelDeltaInbox, messages.KernelDeltaRequest{
 		Source: source,
 		Delta: messages.StreamMessage{
 			Type:  messages.StreamTypeSystemFullMessage,
@@ -161,7 +161,9 @@ func (c *Coordinator) routeModelOutput(ctx context.Context, curr *state.LoopStat
 	case len(message.ToolCalls) > 0:
 		c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
 		passID := c.nextToolBatchPass(curr)
-		curr.Outputs.ToolInbox.Write(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: passID})
+		// A dropped batch would leave its calls unexecuted and the turn
+		// waiting for results that never come, so wait for the tool runner.
+		curr.Outputs.ToolInbox.WriteWaitContext(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: passID})
 		return false
 	case !message.HasOnlyReasoning():
 		c.logInfo("Coordinator: model output message", logging.Field{Key: "message", Value: message})

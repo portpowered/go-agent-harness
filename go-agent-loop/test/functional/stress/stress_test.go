@@ -441,11 +441,8 @@ func TestLargeToolBatchExecutesEveryCall(t *testing.T) {
 		agentloop.WithInferencer(inf),
 		agentloop.WithToolExecutor(toolExec),
 		agentloop.WithTools(tools),
-		// The batch emits several hundred tool deltas in one burst. Size the
-		// buffers to hold it: CoordinatorDelta forwards to the kernel with a
-		// dropping Write, and a dropped terminal delta stalls Execute until
-		// its deadline (seen at capacity 256 under -race).
-		agentloop.WithBufferCapacity(1024),
+		// Default buffer capacity (64): the batch's deltas far exceed it, so
+		// every tool call executing proves no tool or terminal delta is dropped.
 	)
 	if err != nil {
 		t.Fatalf("failed to create loop: %v", err)
