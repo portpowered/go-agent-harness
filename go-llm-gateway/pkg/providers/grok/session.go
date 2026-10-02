@@ -17,14 +17,19 @@ import (
 )
 
 var (
-	_ messages.Session                   = (*grokSession)(nil)
-	_ messages.SessionSendOutcomeSender  = (*grokSession)(nil)
-	_ messages.SessionResponseRequester  = (*grokSession)(nil)
-	_ messages.SessionResponseCapability = (*grokSession)(nil)
-	_ messages.SessionDropCounters       = (*grokSession)(nil)
-	_ messages.SessionOutboundFlusher    = (*grokSession)(nil)
-	_ sharedaudio.MediaSession           = (*grokSession)(nil)
-	_ realtime.Handler                   = (*grokSession)(nil)
+	_ messages.Session                     = (*grokSession)(nil)
+	_ messages.SessionSendOutcomeSender    = (*grokSession)(nil)
+	_ messages.SessionResponseRequester    = (*grokSession)(nil)
+	_ messages.SessionResponseCapability   = (*grokSession)(nil)
+	_ messages.SessionDropCounters         = (*grokSession)(nil)
+	_ messages.SessionOutboundFlusher      = (*grokSession)(nil)
+	_ sharedaudio.MediaSession             = (*grokSession)(nil)
+	_ messages.SessionInitialConfigMarker  = (*grokSession)(nil)
+	_ messages.SessionTerminalError        = (*grokSession)(nil)
+	_ messages.SessionLocalPlayback        = (*grokSession)(nil)
+	_ messages.SessionInputFormat          = (*grokSession)(nil)
+	_ sharedaudio.ConfigurableMediaSession = (*grokSession)(nil)
+	_ realtime.Handler                     = (*grokSession)(nil)
 )
 
 // grokSession wraps a WebSocket connection as a bidirectional StreamMessage

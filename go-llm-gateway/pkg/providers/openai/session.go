@@ -15,14 +15,19 @@ import (
 )
 
 var (
-	_ messages.Session                   = (*realtimeSession)(nil)
-	_ messages.SessionSendOutcomeSender  = (*realtimeSession)(nil)
-	_ messages.SessionResponseRequester  = (*realtimeSession)(nil)
-	_ messages.SessionResponseCapability = (*realtimeSession)(nil)
-	_ messages.SessionDropCounters       = (*realtimeSession)(nil)
-	_ messages.SessionOutboundFlusher    = (*realtimeSession)(nil)
-	_ sharedaudio.MediaSession           = (*realtimeSession)(nil)
-	_ realtime.Handler                   = (*realtimeSession)(nil)
+	_ messages.Session                     = (*realtimeSession)(nil)
+	_ messages.SessionSendOutcomeSender    = (*realtimeSession)(nil)
+	_ messages.SessionResponseRequester    = (*realtimeSession)(nil)
+	_ messages.SessionResponseCapability   = (*realtimeSession)(nil)
+	_ messages.SessionDropCounters         = (*realtimeSession)(nil)
+	_ messages.SessionOutboundFlusher      = (*realtimeSession)(nil)
+	_ sharedaudio.MediaSession             = (*realtimeSession)(nil)
+	_ messages.SessionInitialConfigMarker  = (*realtimeSession)(nil)
+	_ messages.SessionTerminalError        = (*realtimeSession)(nil)
+	_ messages.SessionLocalPlayback        = (*realtimeSession)(nil)
+	_ messages.SessionInputFormat          = (*realtimeSession)(nil)
+	_ sharedaudio.ConfigurableMediaSession = (*realtimeSession)(nil)
+	_ realtime.Handler                     = (*realtimeSession)(nil)
 )
 
 // realtimeSession is the OpenAI Realtime session. The shared realtime

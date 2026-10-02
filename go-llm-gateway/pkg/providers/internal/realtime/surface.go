@@ -55,5 +55,9 @@ func (v Surface) InterruptLocalPlayback(ctx context.Context) bool {
 	return v.s.InterruptLocalPlayback(ctx)
 }
 
+// InitialSessionConfigSent reports that ConnectSession already sent the
+// initial session.update (messages.SessionInitialConfigMarker).
+func (v Surface) InitialSessionConfigSent() bool { return v.s.InitialSessionConfigSent() }
+
 // InputAudioSampleRate reports the provider input audio rate.
 func (v Surface) InputAudioSampleRate() int { return v.s.InputAudioSampleRate() }
