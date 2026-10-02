@@ -55,18 +55,22 @@ func (r *reasoningReplay) before(callID string) []json.RawMessage {
 	return r.items[callID]
 }
 
-// replayedReasoning is the reasoning input item sent back: the fields Codex
-// keeps (id, summary, encrypted_content), without status or plain content.
+// replayedReasoning is the reasoning input item sent back: summary and
+// encrypted_content, without id, status or plain content. OpenClaw's ChatGPT
+// path replays reasoning without its item id (replayResponsesItemIds:false,
+// openai-responses-replay-messages-internal.ts:460-462): this provider sends
+// function_call items without ids, and the Responses API rejects a
+// reasoning id whose required following item is missing.
 type replayedReasoning struct {
 	Type             string          `json:"type"`
-	ID               string          `json:"id,omitempty"`
 	Summary          json.RawMessage `json:"summary"`
 	EncryptedContent string          `json:"encrypted_content"`
 }
 
 // replayableReasoning returns the input item for a completed reasoning
 // output item, or nil when it carries no encrypted_content (with store:false
-// a bare reasoning id cannot be resolved, so OpenClaw drops those too).
+// a reasoning item without its ciphertext cannot be resolved, so OpenClaw
+// drops those too).
 func replayableReasoning(item *outputItem) json.RawMessage {
 	if item.EncryptedContent == "" {
 		return nil
@@ -75,7 +79,7 @@ func replayableReasoning(item *outputItem) json.RawMessage {
 	if len(summary) == 0 || string(summary) == "null" {
 		summary = json.RawMessage(`[]`)
 	}
-	encoded, err := json.Marshal(replayedReasoning{Type: itemTypeReasoning, ID: item.ID, Summary: summary, EncryptedContent: item.EncryptedContent})
+	encoded, err := json.Marshal(replayedReasoning{Type: itemTypeReasoning, Summary: summary, EncryptedContent: item.EncryptedContent})
 	if err != nil {
 		return nil
 	}

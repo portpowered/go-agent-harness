@@ -222,17 +222,12 @@ func imageURL(part models.ImagePart) string {
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(part.Bytes)
 }
 
-// assistantItems replays an earlier model turn: the reasoning items kept for
-// its tool calls first (reasoning precedes the output it led to, as in the
-// response), then its text as a completed assistant message, then each tool
-// call as a function_call item.
+// assistantItems replays an earlier model turn: its text as a completed
+// assistant message, then each tool call as a function_call item, each
+// preceded by the reasoning items kept for that call, so an interleaved
+// response keeps its order (reasoning1, callA, reasoning2, callB).
 func assistantItems(msg models.Message, replay *reasoningReplay) []any {
 	items := make([]any, 0, len(msg.ToolCalls)+1)
-	for _, call := range msg.ToolCalls {
-		for _, item := range replay.before(call.ID) {
-			items = append(items, item)
-		}
-	}
 	if text := msg.TextContent(); text != "" {
 		annotations := []string{}
 		items = append(items, inputItem{
@@ -246,6 +241,9 @@ func assistantItems(msg models.Message, replay *reasoningReplay) []any {
 		arguments := call.Arguments
 		if arguments == "" {
 			arguments = "{}"
+		}
+		for _, item := range replay.before(call.ID) {
+			items = append(items, item)
 		}
 		items = append(items, inputItem{Type: itemTypeFunctionCall, CallID: call.ID, Name: call.Name, Arguments: &arguments})
 	}

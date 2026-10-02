@@ -22,8 +22,10 @@
     `stream_idle_timeout`; `WithStreamIdleTimeout`) fails with
     `ErrStreamIdle`.
   - Reasoning items that carry `encrypted_content` are kept per function
-    call and sent back before that call in the next request, so reasoning
-    carries across tool steps with `store:false`.
+    call and sent back immediately before that call in the next request,
+    without their item id (as OpenClaw's ChatGPT path does), so reasoning
+    carries across tool steps with `store:false` and interleaved responses
+    keep their order.
   - With no model configured, the provider lists
     `GET {base}/models?client_version=...` once and uses the account's
     default model by Codex's rule (`DefaultModel`; `Provider.Models`).

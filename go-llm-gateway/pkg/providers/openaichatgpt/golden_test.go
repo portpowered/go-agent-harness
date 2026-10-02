@@ -215,10 +215,12 @@ func translateFixture(body io.Reader, replay ...*reasoningReplay) <-chan message
 }
 
 // TestReasoningReplayMatchesGolden follows one tool step: the reasoning item
-// that preceded a function call (with its encrypted_content, without status
-// or plain content, as Codex replays ResponseItem::Reasoning) goes back
-// before that call in the next request; a reasoning item without
-// encrypted_content is dropped, as OpenClaw drops bare rs_ ids
+// that preceded a function call goes back before that call in the next
+// request with its summary and encrypted_content, but without its id,
+// status or plain content, as OpenClaw's ChatGPT path replays it
+// (replayResponsesItemIds:false,
+// openai-responses-replay-messages-internal.ts:460-462). A reasoning item
+// without encrypted_content is dropped, as OpenClaw drops bare rs_ ids
 // (openai-responses-replay-messages-internal.ts:520-532).
 func TestReasoningReplayMatchesGolden(t *testing.T) {
 	replay := newReasoningReplay()
@@ -237,6 +239,57 @@ func TestReasoningReplayMatchesGolden(t *testing.T) {
 		t.Fatalf("marshal request: %v", err)
 	}
 	assertJSONEqual(t, got, readTestdata(t, "request_reasoning_replay.json"))
+}
+
+// TestInterleavedReasoningKeepsItsOrder replays a response in which each
+// function call has its own reasoning: the next request must keep the
+// original order reasoning1, callA, reasoning2, callB, with no item ids.
+func TestInterleavedReasoningKeepsItsOrder(t *testing.T) {
+	stream := strings.Join([]string{
+		`data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_a","summary":[],"encrypted_content":"enc-a"}}`,
+		`data: {"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","id":"fc_a","call_id":"call_a","name":"first","arguments":"{}"}}`,
+		`data: {"type":"response.output_item.done","output_index":2,"item":{"type":"reasoning","id":"rs_b","summary":[],"encrypted_content":"enc-b"}}`,
+		`data: {"type":"response.output_item.done","output_index":3,"item":{"type":"function_call","id":"fc_b","call_id":"call_b","name":"second","arguments":"{}"}}`,
+		`data: {"type":"response.completed","response":{}}`,
+	}, "\n\n") + "\n\n"
+	replay := newReasoningReplay()
+	for range translateFixture(strings.NewReader(stream), replay) {
+	}
+	request, err := buildRequest(providers.InferenceRequest{Messages: []models.Message{
+		messages.NewTextMessage(models.RoleUser, "go"),
+		{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "call_a", Name: "first", Arguments: "{}"}, {ID: "call_b", Name: "second", Arguments: "{}"}}},
+		{Role: models.RoleTool, ToolCallID: "call_a", ContentParts: []models.ContentPart{models.TextPart{Text: "a"}}},
+		{Role: models.RoleTool, ToolCallID: "call_b", ContentParts: []models.ContentPart{models.TextPart{Text: "b"}}},
+	}}, requestOptions{model: "gpt-test", replay: replay})
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	encoded, err := json.Marshal(request.Input)
+	if err != nil {
+		t.Fatalf("marshal input: %v", err)
+	}
+	var input []map[string]any
+	if err := json.Unmarshal(encoded, &input); err != nil {
+		t.Fatalf("decode input: %v", err)
+	}
+	var order []string
+	for _, item := range input {
+		label := fmt.Sprint(item["type"])
+		switch item["type"] {
+		case "reasoning":
+			if _, hasID := item["id"]; hasID {
+				t.Fatalf("replayed reasoning %v carries an id", item)
+			}
+			label += ":" + fmt.Sprint(item["encrypted_content"])
+		case "function_call", "function_call_output":
+			label += ":" + fmt.Sprint(item["call_id"])
+		}
+		order = append(order, label)
+	}
+	want := "message reasoning:enc-a function_call:call_a reasoning:enc-b function_call:call_b function_call_output:call_a function_call_output:call_b"
+	if got := strings.Join(order, " "); got != want {
+		t.Fatalf("input order = %s\nwant %s", got, want)
+	}
 }
 
 func TestReasoningReplayIsBounded(t *testing.T) {

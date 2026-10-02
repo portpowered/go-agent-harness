@@ -3,7 +3,7 @@
   "instructions": "You are a helpful assistant.",
   "input": [
     {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "weather in Paris?"}]},
-    {"type": "reasoning", "id": "rs_1", "summary": [{"type": "summary_text", "text": "Need the weather"}], "encrypted_content": "gAAAAencrypted-1"},
+    {"type": "reasoning", "summary": [{"type": "summary_text", "text": "Need the weather"}], "encrypted_content": "gAAAAencrypted-1"},
     {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{\"city\":\"Paris\"}"},
     {"type": "function_call_output", "call_id": "call_1", "output": "sunny, 21C"}
   ],
