@@ -1,0 +1,8 @@
+{
+  "type": "input_transcript.added",
+  "item": {
+    "id": "input-1",
+    "type": "input_transcript",
+    "text": "hello"
+  }
+}

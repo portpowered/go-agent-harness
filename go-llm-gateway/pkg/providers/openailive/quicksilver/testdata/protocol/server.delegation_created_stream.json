@@ -1,0 +1,14 @@
+{
+  "type": "delegation.created",
+  "item": {
+    "id": "delegation_stream",
+    "type": "delegation",
+    "target": "client",
+    "content": [
+      {
+        "type": "input_text",
+        "text": "delegate streaming"
+      }
+    ]
+  }
+}

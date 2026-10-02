@@ -1,0 +1,6 @@
+{
+  "type": "session.started",
+  "session": {
+    "expires_at": 123
+  }
+}
