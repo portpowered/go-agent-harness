@@ -1,61 +1,14 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
-
-// livePageToolsConfig enables WebMCP browser tools against one live endpoint
-// with single-target automatic selection.
-func livePageToolsConfig(t *testing.T, cdpURL string) *config.Config {
-	t.Helper()
-	browser := config.DefaultBrowserConfig()
-	browser.Tools.Enabled = true
-	browser.Tools.Backend = config.BrowserToolsBackendWebMCP
-	browser.Connection.CDPURL = cdpURL
-	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
-	cfg := &config.Config{Browser: browser, ConfigDir: t.TempDir()}
-	for _, id := range config.DefaultToolIDs() {
-		cfg.Tools.List = append(cfg.Tools.List, config.ToolEntry{ID: id, Enabled: id == "exec"})
-	}
-	return cfg
-}
-
-func executeSessionPageToolsLiveCall(t *testing.T, ctx context.Context, executor messages.ToolExecutor, name, args string) webmcp.ToolResultEnvelope {
-	t.Helper()
-	response, err := executor.Execute(ctx, messages.ToolCall{ID: "live-" + name, Name: name, Arguments: args})
-	if err != nil {
-		t.Fatalf("execute %s: %v", name, err)
-	}
-	envelope, err := webmcp.UnmarshalToolResult([]byte(response.Content))
-	if err != nil {
-		t.Fatalf("%s result is not a valid envelope: %v; content=%s", name, err, truncateLiveText(json.RawMessage(response.Content), 1200))
-	}
-	return envelope
-}
-
-func requireLiveSuccess(t *testing.T, envelope webmcp.ToolResultEnvelope, operation string) {
-	t.Helper()
-	if !envelope.OK {
-		t.Fatalf("%s failed: %+v", operation, envelope.Error)
-	}
-}
-
-func truncateLiveText(raw []byte, limit int) string {
-	text := string(raw)
-	if len(text) <= limit {
-		return text
-	}
-	return text[:limit] + "…"
-}
 
 // Page-tool names shared by the live WebMCP session proofs and their trace validators.
 const (

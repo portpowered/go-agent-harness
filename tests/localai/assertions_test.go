@@ -2,12 +2,7 @@ package localai
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
-	"io"
 	"strings"
 	"testing"
 )
@@ -109,63 +104,7 @@ func TestPlaybackFlushAssertionRejectsQueuedPlayback(t *testing.T) {
 	}
 }
 
-func fixtureImageDataURI() (string, error) {
-	const (
-		glyphWidth  = 5
-		glyphHeight = 7
-		scale       = 5
-		padding     = 10
-		spacing     = 1
-	)
-	patterns := map[rune][]string{
-		'O': {"01110", "10001", "10001", "10001", "10001", "10001", "01110"},
-		'R': {"11110", "10001", "10001", "11110", "10100", "10010", "10001"},
-		'B': {"11110", "10001", "10001", "11110", "10001", "10001", "11110"},
-		'I': {"11111", "00100", "00100", "00100", "00100", "00100", "11111"},
-		'T': {"11111", "00100", "00100", "00100", "00100", "00100", "00100"},
-	}
-	word := imageFact
-	width := padding*2 + (glyphWidth*scale+spacing*scale)*(len(word)-1) + glyphWidth*scale
-	height := padding*2 + glyphHeight*scale
-	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := range height {
-		for x := range width {
-			canvas.Set(x, y, color.RGBA{R: 245, G: 249, B: 255, A: 255})
-		}
-	}
-	for charIndex, char := range word {
-		pattern, ok := patterns[char]
-		if !ok {
-			return "", fmt.Errorf("missing fixture glyph %q", char)
-		}
-		for row, line := range pattern {
-			for column, bit := range line {
-				if bit != '1' {
-					continue
-				}
-				for y := range scale {
-					for x := range scale {
-						canvas.Set(padding+charIndex*(glyphWidth+spacing)*scale+column*scale+x, padding+row*scale+y, color.RGBA{R: 15, G: 55, B: 95, A: 255})
-					}
-				}
-			}
-		}
-	}
-	var encoded bytes.Buffer
-	if err := png.Encode(&encoded, canvas); err != nil {
-		return "", fmt.Errorf("encode fixture image: %w", err)
-	}
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes()), nil
-}
-
 const contextFact = "cobalt-17"
-
-// discardClose closes a connection or body whose exchange already produced
-// its result. A close failure on a finished exchange cannot change the
-// observed behavior, so it must not turn a passing observation into a failure.
-func discardClose(closer io.Closer) {
-	_ = closer.Close() //nolint:errcheck // the exchange already produced its result; a close failure cannot change the observed behavior
-}
 
 const imageFact = "ORBIT"
 

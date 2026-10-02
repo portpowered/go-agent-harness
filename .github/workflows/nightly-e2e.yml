@@ -3,8 +3,7 @@ name: Nightly e2e
 # Every suite behind the e2e build tag: real Chrome, compiled binaries,
 # physical audio devices and the desktop screen and mouse. Pull requests run
 # one real-process representative (CI (WebMCP Chrome)); the rest run here once
-# a day against main, and on demand. The live tag (credentialed or billed
-# provider calls) is not run here: the repository holds no provider secret.
+# a day against main, and on demand.
 #
 # Each job runs one package family so it stays within three minutes. A
 # scheduled failure opens (or comments on) a "Nightly e2e failed" issue.

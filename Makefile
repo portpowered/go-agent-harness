@@ -33,8 +33,8 @@ LINT_CROSS_GOOS ?= windows darwin
 # needs cgo.
 LINT_CROSS_TAGS_darwin := nomicrophone
 # GOARCH for one cross GOOS (empty keeps the host's). Darwin lints arm64 so
-# the files constrained to darwin && arm64 (the macOS live and e2e_internal
-# tests) are linted; no file is constrained to darwin && amd64.
+# files constrained to darwin && arm64 are linted; no file is constrained to
+# darwin && amd64.
 LINT_CROSS_GOARCH_darwin := arm64
 # Modules `make lint` and `make lint-cross` run at once. Each golangci-lint
 # run is itself parallel, but small modules are dominated by per-run startup

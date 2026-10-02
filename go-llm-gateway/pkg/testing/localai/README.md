@@ -1,6 +1,6 @@
 # LocalAI endpoint helper
 
-`Prober.Endpoint` is intended for opt-in realtime tests built with the `live` tag. It returns the exact URL it
+`Prober.Endpoint` is intended for manual realtime checks against a local LocalAI fixture. It returns the exact URL it
 attempted and probes for a `session.created` WebSocket event before reporting
 that the server is ready.
 
@@ -18,24 +18,3 @@ func TestLocalAIRealtime(t *testing.T) {
 The default endpoint is
 `ws://localhost:8080/v1/realtime?model=gpt-realtime`. Set
 `LOCALAI_REALTIME_URL` to replace that whole URL for a test or local fixture.
-
-## Live audio proof
-
-`TestLocalAIRealtimeAudio` uses the helper above, runs only with `-tags live`, and fails
-when the endpoint is absent. When the fixture is running, it opens a second raw WebSocket, waits for
-`session.created`, declares 16 kHz input and PCM16 output, appends a
-deterministic PCM16 utterance in 100 ms chunks, commits it, and sends
-the LocalAI turn. LocalAI generates the response from that committed turn.
-The utterance is checked in as mono 16 kHz PCM16, so the test never invokes a
-TTS binary. It base64-decodes
-`response.output_audio.delta`, computes normalized little-endian PCM16 RMS,
-and requires RMS above `0.01`; a socket that accepts TCP but never completes
-the WebSocket protocol fails within the test deadline. Dial, read, and write
-operations are bounded to 15 seconds each, with a 60-second overall limit to
-allow a ready fixture to rehydrate its component backends once.
-
-The failing test names the exact attempted endpoint and start command:
-
-```text
-docker compose -f deploy/localai/docker-compose.yml up -d
-```

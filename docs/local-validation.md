@@ -120,8 +120,8 @@ everything. CI uses the same test cache, restored with each job's build cache (s
 - The `e2e` suites (real Chrome, compiled binaries, audio devices, desktop
   screen and mouse) run in the scheduled Nightly e2e workflow, one job per
   package family; pull requests keep one real-process Chrome representative.
-  The `live` suites need provider credentials the repository does not hold
-  and run only by hand.
+  There are no credentialed or billed (`live`) suites: no CI job could run
+  them, so they were removed.
 - `test-cgo-delta` runs the native build of the build-constrained packages;
   packages that merely import them are tested against the microphone stub, as
   in CI.

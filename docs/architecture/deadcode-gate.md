@@ -17,7 +17,7 @@ reports it unreachable from every main and every test.
 
 | Configuration | Purpose |
 | --- | --- |
-| workspace, GOOS linux / darwin / windows, cgo off, tags `live,e2e,e2e_internal,stress,sessioncapacityramp` | the portable baseline |
+| workspace, GOOS linux / darwin / windows, cgo off, tags `e2e,stress` | the portable baseline |
 | workspace, linux + `nomicrophone,wireinject` | the hermetic coverage build and the Wire injector sources (they replace `wire_gen.go`); the two tags select independent files |
 | workspace, windows + `nomicrophone` | the windows no-microphone device backend |
 | the packages holding other-OS files (`!linux && !darwin && !windows`), as GOOS=js GOARCH=wasm, selected like `make lint-other-os` | the other-OS stubs; only those packages' tests are roots, so a stub whose portable twin is reached only from a main is allowlisted |

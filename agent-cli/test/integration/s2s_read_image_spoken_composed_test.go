@@ -392,7 +392,7 @@ func testReadImageSpokenProductionComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	wavPath := visionDescribeQuestionWAVPath(t)
-	configDir := writeReadImageModelConfig(t, true, readImageSpokenModel)
+	configDir := writeReadImageConfig(t, true)
 	materialized := materializeReadImageReplayFixture(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes)
 	fixture := buildSpokenReadImageFixture(t, materialized, wavPath, false)
 	assertSpokenReadImageWireContract(t, fixture, wavPath, imagePath, imageBytes)
@@ -426,7 +426,7 @@ func testReadImageSpokenFailedContinuationIsActionable(t *testing.T) {
 		t.Fatal(err)
 	}
 	wavPath := visionDescribeQuestionWAVPath(t)
-	configDir := writeReadImageModelConfig(t, true, readImageSpokenModel)
+	configDir := writeReadImageConfig(t, true)
 	materialized := materializeReadImageReplayFixture(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes)
 	fixture := buildSpokenReadImageFixture(t, materialized, wavPath, true)
 	assertSpokenReadImageWireContract(t, fixture, wavPath, imagePath, imageBytes)
@@ -448,7 +448,7 @@ func TestReadImageSpokenStrictReplayRejectsUnboundedAndDuplicatedPixels(t *testi
 		t.Fatalf("write deterministic strict-gate image: %v", err)
 	}
 	wavPath := visionDescribeQuestionWAVPath(t)
-	configDir := writeReadImageModelConfig(t, true, readImageSpokenModel)
+	configDir := writeReadImageConfig(t, true)
 	validMaterialized := materializeReadImageReplayFixture(t, readImageReplayFixturePath(t, readImagePositiveFixtureName), imagePath, imageBytes)
 	validFixture := buildSpokenReadImageFixture(t, validMaterialized, wavPath, false)
 	dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)

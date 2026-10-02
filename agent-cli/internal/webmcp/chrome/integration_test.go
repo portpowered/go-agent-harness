@@ -1,7 +1,7 @@
 // The live proofs reuse this file's pinned-Chrome fixture, so it builds
 // with either opt-in tag; its own adapter proof is credential-free.
 
-//go:build e2e || live
+//go:build e2e
 
 package chrome
 

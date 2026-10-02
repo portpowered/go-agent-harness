@@ -139,11 +139,10 @@ temporary rule; fix the finding or justify a specific `//nolint` instead.
 
 ## Build tags
 
-The configuration sets `run.build-tags` to the opt-in test tags `live`, `e2e`
-and `stress`. Files behind these tags are held to the same limits as
-default-tag code even though ordinary `go test` never compiles them. The tags
-load together because some `e2e` and `live` files share helpers. A new opt-in
-test tag must be added to it.
+The configuration sets `run.build-tags` to the opt-in test tags `e2e` and
+`stress`. Files behind these tags are held to the same limits as default-tag
+code even though ordinary `go test` never compiles them. A new opt-in test tag
+must be added to it, and every tagged suite must run in a CI job.
 
 `wireinject` cannot join that list: a Wire injector file replaces its package's
 `!wireinject` files, so loading both sets would redeclare every injector.
@@ -171,12 +170,12 @@ the recorded regeneration command stable.
 | --- | --- | --- |
 | Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; wireinject; other-OS stubs (`make lint-other-os`, below) |
 | Windows cross | `make lint-cross LINT_CROSS_GOOS=windows` | `GOOS=windows CGO_ENABLED=0` (WASAPI, Win32 syscalls) |
-| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, cgo and microphone stubs, and the `darwin && arm64` live and e2e_internal tests) |
+| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, and cgo and microphone stubs) |
 | Darwin cgo | `make lint-darwin-cgo` (macOS only) | cgo on, for packages holding a cgo-constrained file (CoreAudio capture, display permission) |
 
 The darwin lane sets `GOARCH=arm64` (`LINT_CROSS_GOARCH_darwin`) on every
-host: several macOS live and e2e_internal tests are constrained to
-`darwin && arm64`, and no file is constrained to `darwin && amd64`.
+host, so any file constrained to `darwin && arm64` is linted; no file is
+constrained to `darwin && amd64`.
 
 `make lint-other-os` (run by `make lint`) lints, as `GOOS=js GOARCH=wasm`
 with cgo disabled, only the packages holding a file whose build constraint

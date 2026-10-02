@@ -292,3 +292,11 @@ func constantDevice(backend, nativeID, name string, direction Direction) Device 
 	}
 	return device
 }
+
+// TestNewHostDeviceRegistrySelectsCoreAudioOnMacOS covers host registry
+// selection for a cgo macOS build: the host registry is the CoreAudio one.
+func TestNewHostDeviceRegistrySelectsCoreAudioOnMacOS(t *testing.T) {
+	if registry, ok := NewHostDeviceRegistry().(*CoreAudioDeviceRegistry); !ok || registry == nil {
+		t.Fatalf("NewHostDeviceRegistry() = %T, want *CoreAudioDeviceRegistry", NewHostDeviceRegistry())
+	}
+}
