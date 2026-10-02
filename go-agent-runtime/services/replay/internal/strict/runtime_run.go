@@ -11,8 +11,19 @@ import (
 	publicreplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
+// replayLoop is the part of [agentloop.AgentLoop] the offline replay drives.
+type replayLoop interface {
+	Run(ctx context.Context) error
+	Deltas() *messages.TypedBuffer[messages.StreamMessage]
+	Send(ctx context.Context, msg []messages.Message) error
+	SendAudioInput(ctx context.Context, pcm []byte) error
+	SendSessionEventWaiting(ctx context.Context, msg messages.StreamMessage) error
+}
+
+var _ replayLoop = (*agentloop.AgentLoop)(nil)
+
 type coreRuntime struct {
-	loop    *agentloop.AgentLoop
+	loop    replayLoop
 	actions []replayInputAction
 }
 
@@ -83,16 +94,28 @@ func (r *coreRuntime) awaitSessionOpen(readCtx context.Context, cancel context.C
 	}
 }
 
+// runAction sends one recorded input and forwards the model deltas until
+// the recorded number of responses has ended. Deltas are drained while the
+// input is still being sent: must-deliver deltas wait for outbox capacity,
+// so a provider that answers mid-input would otherwise fill the outbox and
+// stall the input behind it.
 func (r *coreRuntime) runAction(runCtx, readCtx context.Context, cancel context.CancelFunc, state *runState, action replayInputAction, out io.Writer) error {
 	if action.responseEnds <= 0 {
 		return fmt.Errorf("%w: final recorded input has no response.done completion boundary", publicreplay.ErrBundleIncomplete)
 	}
-	if err := r.runInput(readCtx, action); err != nil {
-		return err
-	}
+	inputDone := make(chan error, 1)
+	go func() { inputDone <- r.runInput(readCtx, action) }()
 	ended := 0
-	for ended < action.responseEnds {
-		message, err := r.loop.Deltas().ReadContext(readCtx)
+	for ended < action.responseEnds || inputDone != nil {
+		message, err := r.readActionDelta(readCtx, &inputDone)
+		if errors.Is(err, errInputSent) {
+			continue
+		}
+		if err != nil && inputDone != nil {
+			// The input failed, or the read ended while the input was still
+			// being sent: the action cannot complete.
+			return err
+		}
 		if err != nil {
 			ended += r.drainProviderEnds()
 			if ended >= action.responseEnds {
@@ -108,6 +131,31 @@ func (r *coreRuntime) runAction(runCtx, readCtx context.Context, cancel context.
 		}
 	}
 	return nil
+}
+
+// errInputSent reports that the action's input finished sending; it is not
+// a failure.
+var errInputSent = errors.New("replay input sent")
+
+// readActionDelta reads the next delta while also observing the action's
+// input. When the input finishes, *inputDone is cleared and errInputSent is
+// returned, or the input's error when it failed.
+func (r *coreRuntime) readActionDelta(readCtx context.Context, inputDone *chan error) (messages.StreamMessage, error) {
+	if *inputDone == nil {
+		return r.loop.Deltas().ReadContext(readCtx)
+	}
+	select {
+	case err := <-*inputDone:
+		if err != nil {
+			return messages.StreamMessage{}, err
+		}
+		*inputDone = nil
+		return messages.StreamMessage{}, errInputSent
+	case message := <-r.loop.Deltas().Chan():
+		return message, nil
+	case <-readCtx.Done():
+		return messages.StreamMessage{}, readCtx.Err()
+	}
 }
 
 func (r *coreRuntime) runInput(ctx context.Context, action replayInputAction) error {
