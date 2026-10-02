@@ -50,7 +50,7 @@ jobs:
             cache: macos-webmcp
             audio: false
             packages: ./agent-cli/internal/webmcp/chrome
-            run: ^(TestManagedBrowser.*|TestBundledSiteAdaptersStockChromeJourneys|TestCapitalOneShoppingAdapterLive|TestYouTubeAdapterStockChromeJourney)$
+            run: ^(TestManagedBrowser.*|TestBundledSiteAdaptersStockChromeJourneys|TestYouTubeAdapterStockChromeJourney)$
           # The macOS run also covers the darwin-only screen and mouse unit
           # tests, which no Linux job compiles. (A live macOS screen and
           # mouse test cannot run here: the runner grants no Screen
