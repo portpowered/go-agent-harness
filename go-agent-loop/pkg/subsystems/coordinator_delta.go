@@ -52,6 +52,11 @@ func (c *CoordinatorDelta) Execute(ctx context.Context, curr *state.LoopState) e
 
 	if curr.Inputs.TerminateLoop {
 		c.logInfo("CoordinatorDelta: terminating loop", logging.Field{Key: "terminateLoop", Value: curr.Inputs.TerminateLoop})
+		// A subsystem after the coordinator (interaction events) may have
+		// ended the loop: held user turns still precede LOOP.END.
+		PlaceHeldUserMessages(curr, func(message messages.Message) {
+			writeUserFullMessage(ctx, c.kernelDeltaInbox, message)
+		})
 
 		// In DuplexSession, emit SESSION.CLOSE before LOOP.END so consumers
 		// see the session lifecycle bracket: SESSION.OPEN ... SESSION.CLOSE → LOOP.END.
@@ -160,18 +165,23 @@ func (c *Coordinator) trackOpenExchange(curr *state.LoopState) {
 				c.modelResponseOpen = false
 			}
 		default:
-			if opensModelResponse(delta.Type) {
+			if opensModelResponse(delta) {
 				c.modelResponseOpen = true
 			}
 		}
 	}
 }
 
-// opensModelResponse reports whether a model delta of typ is response
-// content. Session lifecycle, control and usage events are not: a session's
-// SESSION.OPEN does not start a response that a MESSAGE.END would close.
-func opensModelResponse(typ messages.StreamMessageType) bool {
-	switch typ { //nolint:exhaustive // Response content opens a response; every other type leaves it as is.
+// opensModelResponse reports whether a model delta is assistant response
+// content. Session lifecycle, control and usage events are not, and neither
+// is the user's own input transcription, which realtime providers emit as
+// TRANSCRIPT deltas with RoleUser. An empty role is the model's, as for
+// turn-based providers that do not set it.
+func opensModelResponse(delta messages.StreamMessage) bool {
+	if delta.Role != "" && delta.Role != messages.RoleAssistant {
+		return false
+	}
+	switch delta.Type { //nolint:exhaustive // Response content opens a response; every other type leaves it as is.
 	case messages.StreamTypeMessageStart,
 		messages.StreamTypeTextStart, messages.StreamTypeTextDelta, messages.StreamTypeTextEnd,
 		messages.StreamTypeToolCallStart, messages.StreamTypeToolCallDelta, messages.StreamTypeToolCallEnd,
@@ -208,11 +218,38 @@ func (c *Coordinator) holdUserTurns(curr *state.LoopState) {
 // placeHeldUserTurns records the held user turns, in arrival order, to the
 // kernel and to history, so both see them after the exchange they waited for.
 func (c *Coordinator) placeHeldUserTurns(ctx context.Context, curr *state.LoopState) {
-	for _, message := range curr.History.HeldUserMessages {
+	PlaceHeldUserMessages(curr, func(message messages.Message) {
 		c.sendInferenceResult(ctx, curr, messages.User, message)
+	})
+}
+
+// PlaceHeldUserMessages appends the held user turns to history in arrival
+// order, passing each to record first (the kernel's full-message stream).
+// Every path that ends the loop places them, so a turn the user sent is never
+// lost from history, whatever ended the exchange it waited for.
+func PlaceHeldUserMessages(curr *state.LoopState, record func(messages.Message)) {
+	for _, message := range curr.History.HeldUserMessages {
+		record(message)
 	}
 	curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, curr.History.HeldUserMessages...)
 	curr.History.HeldUserMessages = nil
+}
+
+// writeUserFullMessage records a user message on the kernel's full-message
+// stream.
+func writeUserFullMessage(ctx context.Context, inbox *messages.TypedBuffer[messages.KernelDeltaRequest], message messages.Message) {
+	messages.WriteKernelDelta(ctx, inbox, UserFullMessage(message))
+}
+
+// UserFullMessage is the kernel record of a user message.
+func UserFullMessage(message messages.Message) messages.KernelDeltaRequest {
+	return messages.KernelDeltaRequest{
+		Source: messages.User,
+		Delta: messages.StreamMessage{
+			Type:  messages.StreamTypeSystemFullMessage,
+			Value: messages.NewInferenceResultValue(string(messages.User), message),
+		},
+	}
 }
 
 func (c *Coordinator) resetModelDeltaWindow(curr *state.LoopState) {

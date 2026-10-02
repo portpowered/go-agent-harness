@@ -33,6 +33,15 @@ func (h *Recorder) TickGroup() TickGroup {
 	return TickGroupRecorder
 }
 
+// Flush records the conversation now, regardless of the tick interval. The
+// engine calls it when the loop exits outside a tick after changing history.
+func (h *Recorder) Flush(ctx context.Context, curr *state.LoopState) error {
+	if h.recorder == nil {
+		return nil
+	}
+	return h.recorder.Record(ctx, curr.History.ConversationBuffer)
+}
+
 func (h *Recorder) Execute(ctx context.Context, curr *state.LoopState) error {
 	if h.recorder == nil {
 		return nil

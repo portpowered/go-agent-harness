@@ -200,7 +200,7 @@ func TestCoordinator_InterruptSettlesHeldUserTurn(t *testing.T) {
 	if err := NewInterruptHandler(nil, nil, nil).Execute(context.Background(), ls); err != nil {
 		t.Fatalf("interrupt: %v", err)
 	}
-	assertMessages(t, "history after interrupt", ls.History.ConversationBuffer, "[user:first assistant:tool_call user:second]")
+	assertMessages(t, "history after interrupt", ls.History.ConversationBuffer, "[user:first assistant:tool_call tool:result user:second]")
 	nextRequest(t, ls)
 	exchangeTick(t, c, ls, interrupt)
 	exchangeTick(t, c, ls, finalAnswer())

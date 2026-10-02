@@ -121,3 +121,13 @@ every program that imports `pkg/probe`. These names have no replacement:
     as stale.
   - Explicit interrupts (`SendInterrupt`) place held turns at once, ahead of
     the interrupt's own text; barge-in cancellation behaves as before.
+  - Every way the loop ends places held turns, so a turn the user sent is
+    never lost: a final answer, session close or stop, a failed tool or
+    interaction end (before LOOP.END), and a terminal model ERROR or
+    cancellation (as the engine exits; recorders are flushed then).
+  - Only assistant response content opens a response. A user's input
+    transcription (TRANSCRIPT deltas with RoleUser from realtime providers)
+    and session events such as SESSION.OPEN do not hold typed turns.
+- An interrupt that cuts off tool calls before they return now adds a
+  cancelled result for each one, so history never leaves a tool call
+  without its result.

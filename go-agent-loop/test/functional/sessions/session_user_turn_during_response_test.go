@@ -92,3 +92,37 @@ func describeHistory(history []messages.Message) []string {
 	}
 	return out
 }
+
+// TestSessionCloseRecordsUserTurnHeldDuringResponse closes the session while
+// a response is still open and a typed user turn is held behind it. The
+// provider already received that turn, so history must still record it.
+func TestSessionCloseRecordsUserTurnHeldDuringResponse(t *testing.T) {
+	t.Parallel()
+	const wait = 3 * time.Second
+	inf := NewMockSessionInferencer()
+	scenario := NewSessionScenario(t, inf, NewMockToolExecutor())
+	scenario.Start()
+	if !scenario.WaitForEvent(messages.StreamTypeSessionOpen, wait) {
+		t.Fatal("timed out waiting for SESSION.OPEN")
+	}
+	scenario.SendText("first")
+	if !inf.WaitForSentCount(t.Context(), messages.StreamTypeTextDelta, 1, wait) {
+		t.Fatal("provider never received the first user turn")
+	}
+	inf.AddServerEvent(t.Context(), messages.StreamMessage{Type: messages.StreamTypeTextDelta, Role: messages.RoleAssistant, Value: messages.NewTextDeltaValue("partial")})
+	if !scenario.WaitForEvent(messages.StreamTypeTextDelta, wait) {
+		t.Fatal("client never saw the open response")
+	}
+	scenario.SendText("second")
+	if !inf.WaitForSentCount(t.Context(), messages.StreamTypeTextDelta, 2, wait) {
+		t.Fatal("provider never received the second user turn")
+	}
+
+	if err := scenario.Stop(5 * time.Second); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	if got, want := describeHistory(scenario.Loop.GetConversationHistory()), []string{"user:first", "user:second"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("history after session close:\n got %q\nwant %q", got, want)
+	}
+}

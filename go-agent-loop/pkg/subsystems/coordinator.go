@@ -94,6 +94,12 @@ func (c *Coordinator) Execute(ctx context.Context, curr *state.LoopState) error 
 	case len(curr.Inputs.UserOutputMessage) > 0:
 		c.dispatchUserOutputs(ctx, curr)
 	}
+	if curr.Inputs.TerminateLoop {
+		// The loop ends (final answer, session close or stop, failed tool)
+		// before the exchange a held turn waited for completed: the turn was
+		// sent, so history and the kernel stream still record it.
+		c.placeHeldUserTurns(ctx, curr)
+	}
 	return nil
 }
 

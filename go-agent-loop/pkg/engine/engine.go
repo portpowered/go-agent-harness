@@ -203,6 +203,9 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 		e.kernelParticipant.Start(ctx)
 		defer e.kernelParticipant.Stop()
 	}
+	// Runs before the participants stop: a terminal error or cancellation
+	// ends the loop outside a tick, with held user turns still unplaced.
+	defer e.settleHeldUserMessages(ctx)
 
 	if sendInitialInference {
 		e.loopMu.Lock()
@@ -232,6 +235,32 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 
 		if err := e.waitForNextTick(ctx, tickStart); err != nil {
 			return err
+		}
+	}
+}
+
+// settleHeldUserMessages places user turns still held when the loop exits
+// outside a tick (a terminal error, or cancellation): they were sent, so
+// history, the kernel stream and the recorders still record them. Kernel
+// records are best effort, since nothing may drain the kernel any more.
+func (e *Engine) settleHeldUserMessages(ctx context.Context) {
+	e.loopMu.Lock()
+	defer e.loopMu.Unlock()
+	ls := e.state.LoopState
+	if len(ls.History.HeldUserMessages) == 0 {
+		return
+	}
+	subsystems.PlaceHeldUserMessages(ls, func(message messages.Message) {
+		if ls.Outputs.KernelDeltaInbox != nil {
+			ls.Outputs.KernelDeltaInbox.TryWrite(subsystems.UserFullMessage(message))
+		}
+	})
+	recordCtx := context.WithoutCancel(ctx)
+	for _, h := range e.subsystems {
+		if recorder, ok := h.(*subsystems.Recorder); ok {
+			if err := recorder.Flush(recordCtx, ls); err != nil {
+				e.logError("engine: recording settled history failed", err)
+			}
 		}
 	}
 }
