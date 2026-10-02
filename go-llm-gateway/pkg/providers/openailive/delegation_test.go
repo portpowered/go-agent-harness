@@ -204,6 +204,31 @@ func TestDelegationIsReportedAfterTheSettleWindow(t *testing.T) {
 	})
 }
 
+// The settle window holds inside an open segment: with the idle watcher
+// already asleep until the segment's gap, a delegation arriving 50 ms in is
+// still reported at its own deadline, 50 ms + D, not at the gap.
+func TestDelegationSettleWindowInsideASegmentKeepsItsDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const arrival = 50 * time.Millisecond
+		server := newFake(fakelive.AwaitStarted(),
+			fakelive.Send(outputText("Sure, ", 0, 200)),
+			fakelive.Wait(arrival),
+			fakelive.Send(delegationAt(testDelegationID, 1000)),
+		)
+		session := connectFake(t, server, pcmConfig())
+		skipOpen(t, session)
+		received := collectUntil(t, session, time.Now(), messages.StreamTypeDelegationCreated)
+		if got, want := received[len(received)-1].at, arrival+live.DefaultDelegationSettle; got != want {
+			t.Fatalf("delegation reported at %v, want %v (before the %v segment gap)", got, want, live.DefaultSegmentGap)
+		}
+		for _, r := range received {
+			if r.msg.Type == messages.StreamTypeMessageEnd {
+				t.Fatal("the segment closed before the delegation's settle deadline")
+			}
+		}
+	})
+}
+
 // A delegation held in its settle window when the session closes is still
 // reported, before SESSION.CLOSE. Responses-mode delegations never are.
 func TestHeldDelegationIsReportedBeforeTheSessionCloses(t *testing.T) {
@@ -321,9 +346,9 @@ func TestLongContextAppendIsSplitUnderTheTokenLimit(t *testing.T) {
 			if commentary.DelegationID == nil || *commentary.DelegationID != testDelegationID {
 				t.Fatalf("chunk delegation id = %v, want del_1", commentary.DelegationID)
 			}
-			// A conservative bound: three ASCII characters per token.
-			if len(commentary.Content) > 3*live.MaxAppendTokens {
-				t.Fatalf("chunk of %d bytes exceeds %d tokens", len(commentary.Content), live.MaxAppendTokens)
+			// No byte-level BPE token covers less than one byte.
+			if len(commentary.Content) > live.MaxAppendTokens {
+				t.Fatalf("chunk of %d bytes may exceed %d tokens", len(commentary.Content), live.MaxAppendTokens)
 			}
 			if !strings.HasSuffix(commentary.Content, ".") {
 				t.Fatalf("chunk %q does not end at a sentence", commentary.Content)

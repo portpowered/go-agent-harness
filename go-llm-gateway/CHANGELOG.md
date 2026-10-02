@@ -16,10 +16,12 @@
   logged and dropped. `CONTEXT.APPEND` maps to `session.instructions.append`,
   `session.thinking.append` or `session.commentary.append` by kind, with
   `delegation_id` the value's id or `null` and numbered event ids
-  (`evt_ctx_<n>`). Content over `MaxAppendTokens` (500, estimated
-  conservatively) is split at sentence or word boundaries into several
-  appends under the same delegation id. An empty append or an unknown kind
-  fails with `ErrNoWireEvent`.
+  (`evt_ctx_<n>`). Content over `MaxAppendTokens` (500) UTF-8 bytes, a
+  guaranteed ceiling for a byte-level BPE token count, is split at sentence
+  or word boundaries (never inside a rune, invalid bytes included) into
+  several appends under the same delegation id. Appends on one session are
+  serialized, so their chunks never interleave; a multi-chunk append is not
+  atomic. An empty append or an unknown kind fails with `ErrNoWireEvent`.
 - `pkg/testing`: session captures decode `DELEGATION.CREATED` and
   `CONTEXT.APPEND` values.
 

@@ -24,7 +24,7 @@
 // A client delegation (session.delegation.created) becomes DELEGATION.CREATED
 // with no response id, once the user transcript covering it arrives or a
 // settle window passes (delegations.go), and CONTEXT.APPEND becomes the
-// matching append command, split under the 500-token limit
+// matching append command, split into chunks of at most 500 bytes
 // (context_append.go). The design, the protocol spec it follows and the
 // phased plan are in docs/architecture/gpt-live-provider.md. The scripted
 // fake server used by tests lives in the fakelive subpackage.

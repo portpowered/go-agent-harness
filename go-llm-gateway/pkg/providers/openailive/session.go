@@ -86,8 +86,12 @@ type liveSession struct {
 	segments    *segmenter
 	delegations *delegationTracker
 	watching    bool
-	outbox      []outboxEntry
-	backlog     int
+	// armed is the deadline the running watcher sleeps until; rearm wakes
+	// it when an earlier deadline appears.
+	armed   time.Time
+	rearm   chan struct{}
+	outbox  []outboxEntry
+	backlog int
 	// pumpExited is set once the pump has drained after the session ended;
 	// later entries are written directly.
 	pumpExited bool
@@ -98,8 +102,10 @@ type liveSession struct {
 	// sendMu orders audio appends and holds a trailing odd PCM byte.
 	sendMu  sync.Mutex
 	oddByte []byte
-	// appends numbers the event ids of context appends.
-	appends atomic.Int64
+	// appendMu serializes context appends so their chunks never interleave;
+	// appends numbers their event ids.
+	appendMu sync.Mutex
+	appends  atomic.Int64
 }
 
 func newLiveSession(conn transport.Conn, logger logging.Logger, settings sessionSettings) *liveSession {
@@ -109,6 +115,7 @@ func newLiveSession(conn transport.Conn, logger logging.Logger, settings session
 		closeTimeout: settings.closeTimeout,
 		closed:       make(chan struct{}),
 		pumpWake:     make(chan struct{}, 1),
+		rearm:        make(chan struct{}, 1),
 		drained:      make(chan struct{}, 1),
 		segments:     newSegmenter(settings.segmentGap, settings.format),
 		delegations:  newDelegationTracker(settings.delegationSettle, settings.segmentGap),
@@ -237,12 +244,21 @@ func (s *liveSession) sessionClosed() bool {
 func (s *liveSession) markClosed() { s.closedOnce.Do(func() { close(s.closed) }) }
 
 // watchLocked starts the idle watcher if something can fall due and no
-// watcher runs. Callers hold mu.
+// watcher runs, or wakes the running watcher when something now falls due
+// before the deadline it sleeps until (a delegation settle window inside an
+// open segment's gap, for example). Callers hold mu.
 func (s *liveSession) watchLocked() {
-	if s.watching {
+	next, pending := s.nextDeadlineLocked()
+	if !pending {
 		return
 	}
-	if _, pending := s.nextDeadlineLocked(); !pending {
+	if s.watching {
+		if next.Before(s.armed) {
+			select {
+			case s.rearm <- struct{}{}:
+			default:
+			}
+		}
 		return
 	}
 	s.watching = true
@@ -280,10 +296,15 @@ func (s *liveSession) watch() {
 			s.mu.Unlock()
 			return
 		}
+		s.armed = deadline
 		s.mu.Unlock()
 		timer := source.NewTimer(deadline.Sub(source.Now()))
 		select {
 		case <-timer.C():
+		case <-s.rearm:
+			// An earlier deadline appeared: sleep until that one instead.
+			timer.Stop()
+			continue
 		case <-s.base.Done():
 			timer.Stop()
 			return

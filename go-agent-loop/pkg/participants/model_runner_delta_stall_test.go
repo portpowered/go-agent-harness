@@ -237,10 +237,14 @@ func TestSessionModelRunner_DelegationSurvivesFullOutbox(t *testing.T) {
 			t.Fatal("outbox drops = 0, want the stalled consumer to shed ordinary audio")
 		}
 
+		// Drain on virtual time: once the outbox stays empty for a second the
+		// delegation was dropped, which fails here instead of deadlocking.
 		for {
-			got, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
-			if !ok {
-				t.Fatal("outbox closed before DELEGATION.CREATED was delivered")
+			var got messages.StreamMessage
+			select {
+			case got = <-runner.DeltaOutbox.Chan():
+			case <-time.After(time.Second):
+				t.Fatal("the outbox drained without DELEGATION.CREATED: it was dropped")
 			}
 			if got.Type == messages.StreamTypeDelegationCreated {
 				value, ok := got.Value.(*messages.DelegationCreatedValue)
