@@ -1,7 +1,7 @@
 # GPT-Live auth via ChatGPT: `yui auth chatgpt`
 
 ---
-status: proposed (phase 1 design; phase 2 implements the login and token store only)
+status: decided (user decisions of 2026-10-02 below); phase 2, the login and token store, is #635
 component: go-llm-gateway, go-agent-runtime, agent-cli
 extends: docs/architecture/gpt-live-provider.md (#630); answers its 2.3 "Auth" and 2.4 "Delegation mode", both PENDING this document
 sources verified: 2026-10-02
@@ -69,6 +69,17 @@ with no `OPENAI_API_KEY`.
    of the Codex client id is permitted. OpenClaw offers a separate
    app-registered flow, "Sign in with ChatGPT (Beta)", as the app-specific
    alternative, and that flow does not cover realtime voice. See section 5.
+
+## Decisions (user, 2026-10-02)
+
+| Topic | Decision | Where |
+| --- | --- | --- |
+| Voice | Build the Codex WebRTC route. `openai-live` routes by model: `gpt-live-1-codex` runs on the ChatGPT login over WebRTC plus the sideband; `gpt-live-1` runs on an API key over the primary WebSocket. | 3.2, 3.5; `gpt-live-provider.md` 2.3 and PR 9 |
+| Client id | Reuse the Codex public client id `app_EMoamEEZ73f0CkXaXp7hrann`. | 1.1, 5 |
+| API-key exchange | Not offered. The login never exchanges the id token for a Platform API key. | 3.4 |
+| Delegation | Client delegation. The backend runs Responses at `chatgpt.com/backend-api/codex/responses` with the same token. | 2, 3.3; `gpt-live-provider.md` 2.4 |
+| Credential order | ChatGPT login first, API key as the fallback. An explicit `--model` narrows the order to the credential that model accepts. | 3.5; `gpt-live-provider.md` 2.3 |
+| Scopes | Keep `openid profile email offline_access`. The Codex source shows the `api.connectors.*` scopes are not needed (4.3). | 1.1, 4.3 |
 
 Labels used below: **CONFIRMED** means it is read directly from code or
 docs in the cited reference. **INFERRED** means it is reasoned from that
@@ -296,10 +307,10 @@ and the headers above. It is not built here.
 
 | # | Route | ChatGPT token? | Evidence |
 | --- | --- | --- | --- |
-| A | Public GPT-Live `gpt-live-1`, primary WebSocket `wss://api.openai.com/v1/live/sessions` (`gpt-live-provider.md`) | **No** | CONFIRMED (OpenClaw): `createOpenAIQuicksilverCall` throws "GPT-Live API sessions require a Platform API key"; the docs say "ChatGPT subscription credentials are not a fallback for `gpt-live-1`". |
+| A | Public GPT-Live `gpt-live-1`, primary WebSocket `wss://api.openai.com/v1/live/sessions` (`gpt-live-provider.md`) | **No** | CONFIRMED (OpenClaw): the direct WebSocket is gated on a Platform API key in `realtime-quicksilver-gateway-bridge.ts:234` (`connectDirect` only for `auth.type === "api-key"`), `realtime-voice-provider-factory.ts:423` and `realtime-voice-session-policy.ts:480`. The docs say "ChatGPT subscription credentials are not a fallback for `gpt-live-1`". |
 | B | Public GPT-Live `gpt-live-1` over WebRTC, `POST /v1/live/sessions` | **No** | CONFIRMED (OpenClaw, same branch of code) |
 | C | Codex GPT-Live `gpt-live-1-codex`: WebRTC call created on the **ChatGPT backend**, then a sideband on `api.openai.com/v1/live/{call_id}` | **Yes** | CONFIRMED in both references (3.2) |
-| D | Codex GPT-Live over a **direct** WebSocket (`wss://api.openai.com/v1/live?model=...`) | **No evidence of support** | CONFIRMED that both references use API keys only here: OpenClaw `connectDirect` takes `auth.type === "api-key"`; Codex `realtime_api_key` fails for ChatGPT auth ("TODO: remove this temporary fallback once realtime auth no longer requires API key auth for ChatGPT/SIWC sessions"). |
+| D | Codex GPT-Live over a **direct** WebSocket (`wss://api.openai.com/v1/live?model=...`) | **No evidence of support** | CONFIRMED that both references use API keys only here: OpenClaw `connectDirect` takes `auth.type === "api-key"`; Codex `realtime_api_key` fails for ChatGPT auth; its fallback is marked "TODO(aibrahim): Remove this temporary fallback once realtime auth no longer requires API key auth for ChatGPT/SIWC sessions." |
 | E | GA Realtime `gpt-realtime-*` over WebSocket `/v1/realtime` | **No** | CONFIRMED (OpenClaw docs: "Gateway-controlled GA relay, ... direct backend sockets ... require Platform auth"; Codex as for D) |
 | F | GA Realtime over WebRTC, `POST https://api.openai.com/v1/realtime/calls` (multipart) | **Yes, if the account has access** | CONFIRMED in OpenClaw code and tests (`realtime-quicksilver-ga-oauth.test.ts` sends `Authorization: Bearer <oauth>` plus `chatgpt-account-id`). OpenClaw uses it only for its browser "Talk" fallback. Not exercised live here. |
 | G | Ephemeral client secrets (`/v1/realtime/client_secrets`) | **No evidence** | OpenClaw mints them only from a Platform credential. No GPT-Live client-secret flow is documented (`gpt-live-provider.md` 1.3). |
@@ -328,10 +339,12 @@ and the headers above. It is not built here.
                 "initial_items": [...]}}
    ```
 
-   The response has an SDP answer body and either
-   `Location: /v1/live/rtc_<id>` or an `openai-session-id` header that holds
-   the call id. The body is JSON on this backend. The Platform equivalent uses
-   multipart; Codex has a TODO to align the two.
+   The **request** body is JSON on this backend; the Platform equivalent
+   uses multipart, and Codex has a TODO to align the two. The **response**
+   body is the raw SDP answer (Codex `realtime_call.rs:162`,
+   `decode_sdp_response`). Codex requires a `Location` header such as
+   `/v1/live/rtc_<id>` and takes the call id from it; only OpenClaw falls
+   back to an `openai-session-id` header when `Location` is missing.
 2. **Media:** audio goes over the negotiated WebRTC track (Opus). OpenClaw
    runs the peer server side with `werift` and `libopus-wasm`, at 24 kHz PCM
    at the edges.
@@ -394,8 +407,9 @@ Responses API. 2.4 asks which delegation mode follows from that.
   token (section 2). One credential then covers voice and reasoning, and the
   delegation backend needs no API key. Q8 in `gpt-live-provider.md` ("which
   backend model") gets a natural default: the account's default Codex model.
-- **Answer for 2.4:** choose **client delegation**, as the design already
-  does for PRs 4 and 5.
+- **Answer for 2.4:** **client delegation**. `gpt-live-provider.md` had left
+  the mode PENDING (2.4 and the PR plan in 2.12); the user has now chosen
+  client delegation, and 2.4 records it.
 
 ### 3.4 Exchanging the id token for an API key
 
@@ -426,11 +440,10 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
   - With that key, route A (`gpt-live-1`) works if the org has GPT-Live
     access (Tier 1 or higher).
 - It is therefore a convenience, not a subscription path. It still needs a
-  funded Platform org. It removes copy-pasting a key, nothing more. Offer it
-  only as an explicit opt-in (`yui auth chatgpt --exchange-api-key`), if at
-  all.
+  funded Platform org, and it removes copy-pasting a key, nothing more.
+- **Decision: not offered.** `yui auth chatgpt` never performs this exchange.
 
-### 3.5 Recommendation
+### 3.5 Recommendation (adopted)
 
 1. Keep the single provider name `openai-live` (`gpt-live-provider.md`
    2.2). Admit two
@@ -544,10 +557,24 @@ Put the core in **`go-llm-gateway/pkg/providers/openai/chatgptauth`**:
   }
   ```
 
-- Locking: `<file>.lock` is a directory created with `os.Mkdir`, which is
-  atomic on every OS the CLI ships on. A lock older than two minutes, by its
-  modification time on the injected clock, is treated as stale and removed.
-  Waiters poll through an injected sleeper. Inside the lock the manager
+- Windows: file modes are not enforced. The store relies on the ACL it
+  inherits from the config directory, which is under the user's profile by
+  default. Elsewhere, a pre-existing store directory with looser permissions
+  is tightened to `0700`.
+- Locking: `<file>.lock` is a directory that holds an `owner` file with a
+  random per-holder token. It is staged under a unique name and renamed into
+  place, so it is never visible without its owner. Renaming onto an
+  existing, non-empty lock fails on every supported OS.
+  - A lock older than two minutes, by its modification time on the injected
+    clock, is stale. A waiter breaks it by first renaming it to a unique
+    name. Only one waiter's rename can succeed, so two waiters never both
+    break it and both refresh with the same rotating token. If the lock it
+    took has a different owner than the one it judged stale, it is renamed
+    back.
+  - Release removes the lock only while it still carries the holder's
+    token, so a holder whose lock was broken never deletes its successor's
+    lock.
+  - Waiters poll through an injected sleeper. Inside the lock the manager
   **reloads** the file before refreshing. If another process already rotated
   the token and it is fresh, the manager returns it without refreshing, as
   Codex does.
@@ -572,6 +599,15 @@ Put the core in **`go-llm-gateway/pkg/providers/openai/chatgptauth`**:
 | `yui auth chatgpt --no-browser` | Browser flow without launching a browser. The user opens the URL by hand, or forwards port 1455 over SSH (`ssh -L 1455:127.0.0.1:1455`). |
 | `yui auth status [--json]` | Shows signed in or not, email, account id, plan, access-token expiry, last refresh, the store path, and a warning when the file mode is too open. It does not refresh, so it has no side effects. |
 | `yui auth logout` | Best-effort `POST /oauth/revoke` of the refresh token, then delete the file under the lock. A revoke failure is reported, but local deletion still happens. |
+
+**Scopes (checked in the Codex source).** Codex requests
+`api.connectors.read api.connectors.invoke` only in its browser authorize URL
+(`login/src/server.rs:590` and the TUI onboarding URL). Nothing in `core` or
+`codex-api` checks them for `/backend-api/codex/responses` or for realtime
+calls. Codex's device-code flow sends no scope at all and still drives both.
+OpenClaw's minimal-scope login drives `gpt-live-1-codex` and Codex
+Responses. The connectors scopes are for OpenAI-hosted connectors only, so
+the login keeps `openid profile email offline_access`.
 
 The originator is `yui`, following OpenClaw's precedent of sending its own
 name rather than impersonating `codex_cli_rs`.
@@ -668,19 +704,15 @@ Not in phase 2:
 - the Responses client;
 - the route C transport.
 
-## 7. Open questions for the user
+## 7. Resolved questions
 
-1. **Model target.** The end-to-end goal names `gpt-live-1`, which a ChatGPT
-   login cannot open. Is `gpt-live-1-codex` over WebRTC (route C) acceptable
-   as the ChatGPT-credential GPT-Live model? It is more work than the
-   WebSocket in `gpt-live-provider.md`, and it uses a second wire dialect.
-2. **Credential precedence.** This design keeps ChatGPT first, then an API
-   key (3.5). OpenClaw uses the opposite order. Confirm that ChatGPT first is
-   wanted when both credentials exist and no model is given.
-3. **Client id.** Is it acceptable to reuse the Codex public client id
-   (section 5)? Or should we wait for, or apply for, an app-specific
-   registration like SIWC? SIWC does not cover voice today.
-4. **API-key exchange (3.4).** Should `--exchange-api-key` be offered at all?
-   It yields a Platform-billed key, not subscription usage.
-5. **Scope.** Should the login stay at minimal OIDC plus `offline_access`
-   (proposed), or also request Codex's `api.connectors.*` scopes?
+All five questions this document raised were answered on 2026-10-02 (see
+"Decisions" at the top):
+
+1. **Model target:** build the `gpt-live-1-codex` WebRTC route for the
+   ChatGPT login; `gpt-live-1` stays on an API key.
+2. **Credential precedence:** ChatGPT first, API key as the fallback, with
+   `--model` narrowing the order.
+3. **Client id:** reuse the Codex public client id.
+4. **API-key exchange:** not offered.
+5. **Scope:** minimal; the connectors scopes are not needed (4.3).

@@ -1034,7 +1034,8 @@ Reasons:
    would put two unrelated state machines behind one `ConnectSession` and
    would weaken the Realtime response-admission code.
 2. **Admission stays honest.** The catalog is keyed by provider. Under
-   `openai-live`, only `gpt-live-1` is admitted, and `gpt-live-1` is never
+   `openai-live`, only `gpt-live-1` is admitted (and `gpt-live-1-codex` once
+   PR 9 lands, 2.3), and `gpt-live-1` is never
    admitted under `openai` (where the Realtime endpoint rejects it). Admission
    today treats every provider except `openai` as unrestricted, so the change
    must also add `openai-live` to the catalog-restricted set. Without it, any
@@ -1059,42 +1060,55 @@ A collision to be aware of: `models.DefaultInputAudioTranscriptionModel` and
 Realtime transcription model. It is unrelated to GPT-Live, and the
 `openai-live` provider ignores `InputAudioTranscription` entirely.
 
-## 2.3 Auth (PENDING `chatgpt-oauth.md`)
+## 2.3 Auth (decided; see `chatgpt-oauth.md`)
 
 The end goal is to sign in with `yui auth chatgpt` (ChatGPT OAuth, as in
 OpenClaw and Codex) and run GPT-Live on that credential. The OAuth flow,
-token store, refresh and endpoint details belong to
-`docs/architecture/chatgpt-oauth.md`, which a separate track is writing. That
-document is **PENDING**. Until it lands, this section fixes only the
-integration shape:
+token store, refresh and endpoint evidence are in
+[`chatgpt-oauth.md`](chatgpt-oauth.md). The user decided (2026-10-02):
 
-- **Credential source.** The default is the ChatGPT auth store written by
-  `yui auth chatgpt`. The fallback is an OpenAI API key (`model.openai.api_key`
-  or `OPENAI_API_KEY`).
+- **Routing by model.** `openai-live` admits two models:
+  - `gpt-live-1` runs on an **API key** over the primary WebSocket, with the
+    public protocol this document specifies.
+  - `gpt-live-1-codex` runs on the **ChatGPT login** over WebRTC plus a
+    sideband. The call is created at
+    `chatgpt.com/backend-api/codex/realtime/calls`, and the sideband
+    attaches at `wss://api.openai.com/v1/live/{call_id}`. That route speaks
+    the older Codex "quicksilver v2" dialect (`chatgpt-oauth.md` 3.2) and is
+    built as a separate transport behind the same provider.
+
+  A ChatGPT token cannot open `gpt-live-1`. Both references confirm this
+  (`chatgpt-oauth.md` 3.1).
+- **Credential order.** The ChatGPT auth store comes first, and an OpenAI
+  API key (`model.openai.api_key` or `OPENAI_API_KEY`) is the fallback. With
+  no `--model`, the credential found picks the model. An explicit `--model`
+  narrows the order to the credential that model accepts: `gpt-live-1`
+  needs an API key and fails fast, before any dial, when only a ChatGPT
+  login exists.
 - **Header injection.** The `openailive` provider never builds
   `Authorization: Bearer <api key>` itself. It takes a credential provider
   option, for example `WithCredentialProvider(func(ctx) (headers map[string]string, err error))`.
   The provider calls it once per dial (and once per sideband or fork dial),
-  so a refreshed OAuth token is used on reconnect. The API-key fallback is
-  simply a credential provider that returns the bearer header. The fake
-  server checks whatever headers the credential provider supplies.
-- **PENDING research.** Whether a ChatGPT OAuth token is accepted on
-  `wss://api.openai.com/v1/live/sessions` (or needs another host or extra
-  headers), and whether it can call the Responses API, is not known yet. The
-  public GPT-Live docs document only project API keys (1.3). The credential
-  check in `providers/internal/service/credentials.go`, which today requires
-  an API key for `api.openai.com`, must accept the auth store once this is
-  confirmed.
+  so a refreshed OAuth token is used on reconnect. For the ChatGPT login it
+  is backed by `chatgptauth.Manager` and returns the bearer token,
+  `chatgpt-account-id` and the route's headers. The API-key fallback simply
+  returns the bearer header. The fake server checks whatever headers the
+  credential provider supplies.
+- **No Platform API-key exchange** from the ChatGPT login.
+- **Credential check.** `providers/internal/service/credentials.go`, which
+  today requires an API key for `api.openai.com`, must accept the auth store
+  for `openai-live`.
 
-## 2.4 Delegation mode: client or Responses (PENDING)
+## 2.4 Delegation mode: client (decided)
 
-The choice between client delegation and Responses delegation is **PENDING**
-the ChatGPT OAuth research in 2.3. If the OAuth credential can call the
-Responses API, Responses delegation becomes a one-credential, low-complexity
-option. If it cannot, Responses delegation needs a separate API key, and
-client delegation, with the backend on a provider the user can authorize, is
-the practical choice. Both options are described neutrally here. The rest of
-Part 2 marks which parts depend on the choice.
+**Client delegation was chosen** (user decision, 2026-10-02). The backend
+runs Responses at `https://chatgpt.com/backend-api/codex/responses` with the
+same ChatGPT token as the voice route, so one login covers voice and
+reasoning. Responses delegation would not save a credential: on `gpt-live-1`
+it runs on the Platform project that opened the session, which a ChatGPT
+token cannot open, and the `gpt-live-1-codex` route uses only client
+delegation (`chatgpt-oauth.md` 3.3). The comparison below is kept for the
+record.
 
 | | Client delegation | Responses delegation |
 | --- | --- | --- |
@@ -1102,19 +1116,18 @@ Part 2 marks which parts depend on the choice.
 | Harness tools | All harness tools, under harness policy (approval, ordering, images) | Harness tools must be declared as `function` tools in `delegation.responses.tools`; only `function` and `web_search` are allowed |
 | Context | The harness chooses exactly what the backend sees | GPT-Live supplies the conversation context |
 | Result review | The harness can validate, redact or drop results before GPT-Live hears them | Backend output reaches GPT-Live directly; only function results pass through the harness |
-| Credentials | One for the voice socket, plus whatever the backend provider needs | One credential if it can reach both Live and Responses (PENDING 2.3) |
+| Credentials | One for the voice socket, plus whatever the backend provider needs | Not one credential with a ChatGPT login: hosted Responses delegation needs the Platform session that only an API key opens |
 | Wire mapping | `delegation.created` to the executor; results as `commentary`/`thinking` appends | Nested `response.output_item.done` to a tool call; result as `response.item.create`, then `response.create` |
 | Harness work | New executor (2.5) and two stream types | Close to the existing Realtime tool loop, but the loop hazards in 2.6.3 (serialized tool batches, the `response.create` continuation, interrupt cancellation) must be designed out for a provider whose speech has no response boundaries |
 | Supported by OpenAI for | "you need to run your own workflow or review results" | "you want GPT-Live to manage requests" |
 
-The PR 1 codec models both modes, so neither choice needs protocol work.
-PRs 1 to 3 do not depend on the choice. PR 4 and PR 5 implement whichever
-mode is chosen; the client-delegation design is in 2.5. A Responses design
-would be added to this document when it is chosen.
+The PR 1 codec models both modes, so the choice needs no protocol work.
+PRs 4 and 5 implement client delegation (2.5). Responses delegation remains
+the optional PR 7.
 
 ## 2.5 Client delegation design: a dedicated asynchronous delegation executor
 
-This section applies **if client delegation is chosen** (2.4, PENDING). Its
+This section is the chosen mode (2.4). Its
 loop-safety rules in 2.6.3 also bind a Responses design: the voice loop must
 not open responses, tool batches or continuations that GPT-Live will never
 close.
@@ -1228,7 +1241,7 @@ continuation and interrupt handling would still need special cases.
 | `session.output_transcript.delta` | `TRANSCRIPT.DELTA(Role=assistant, ResponseID=live_seg_<n>)`. It opens a segment if none is open. |
 | `session.input_transcript.delta` | `TRANSCRIPT.DELTA(Role=user)` with a synthetic utterance id (`live_utt_<n>`), announced once with `INPUT_ITEM.ADDED`. The utterance closes with `TRANSCRIPT.END(Role=user)` after a server-timeline gap of `G` ms or more. User transcripts are never treated as stale output, so they are safe during a segment. |
 | `session.delegation.created` (`target:"client"`) | After the settle window: `DELEGATION.CREATED` with **no `ResponseID`**. It is not a response stream type (2.7), so it cannot open, retire or tag a response. |
-| `session.delegation.created` (`target:"responses"`) and `response.event` | Ignored and logged. They occur only in Responses mode (2.4, PENDING). A Responses design must map them without opening a response id while a speech segment is open. |
+| `session.delegation.created` (`target:"responses"`) and `response.event` | Ignored and logged. They occur only in Responses mode, which was not chosen (2.4). A Responses design must map them without opening a response id while a speech segment is open. |
 | `*.appended`, `session.input_audio.muted` / `unmuted` | Consumed inside the provider. Each settles the pending command it acknowledges, matched by `client_event_id` or in FIFO order. No stream message. |
 | `session.usage.updated` | Kept as the latest cumulative seconds and context ratio. The `USAGE.INFO` mapping is open question Q7. |
 | `session.closed` | Closes any open segment, then emits `SESSION.CLOSE` (see the table below). |
@@ -1292,7 +1305,7 @@ which acts only on a failed `MESSAGE.END`, never fires for this provider.
 | `AUDIO.DELTA` | `session.input_audio.append`. A trailing odd byte is held back and joined to the next PCM chunk, as in the official sample. G.711 bytes pass through unchanged. |
 | `MESSAGE.END` (the Realtime "commit and respond") | **No wire event.** Success is reported locally. GPT-Live decides when to speak. |
 | `RESPONSE.CANCEL` | **No wire event.** See 2.6.3. |
-| `RESPONSE.CREATE` | **No wire event.** Terminal-failure outcome (see 2.6.3). In Responses mode (2.4, PENDING) the provider would send `response.create` itself after all function results, not on the loop's request. |
+| `RESPONSE.CREATE` | **No wire event.** Terminal-failure outcome (see 2.6.3). In Responses mode (not chosen, 2.4) the provider would send `response.create` itself after all function results, not on the loop's request. |
 | `CONTEXT.APPEND` (new) | `session.instructions.append`, `session.thinking.append` or `session.commentary.append`. `delegation_id` is the value's id, or `null`. |
 | `TOOLCALL.END` | Terminal-failure outcome, logged. GPT-Live has no generic tool-result channel. |
 | `SESSION.UPDATE` | No wire event, success (see 2.6.3). |
@@ -1402,12 +1415,12 @@ PR 2 (provider session without delegation):
 - `go-llm-gateway/pkg/providers/openailive/{provider,options,session,session_inbound,session_outbound,segments,close}.go`
 - `go-llm-gateway/pkg/providers/internal/realtime/`: the close hook and clock injection.
 - `go-agent-runtime/services/providers/internal/service/session.go`: `openai-live` branches in `buildSessionProvider` and `sessionDialer`, passing a credential provider (2.3).
-- `go-agent-runtime/services/providers/internal/service/credentials.go`: accept the ChatGPT auth store as a credential for `openai-live` once `chatgpt-oauth.md` confirms it.
+- `go-agent-runtime/services/providers/internal/service/credentials.go`: accept the ChatGPT auth store as a credential for `openai-live` (2.3).
 - `go-agent-runtime/services/audioio/internal/service/service.go` (and the `audioio` contract): treat `openai-live` as a 24 kHz provider. Today it would fall back to `DefaultSampleRate`, 16 kHz.
 - `agent-cli/internal/services/livehost/events.go`:
   - `selectProvider` must stop turning `openai-live` into `openai`;
   - `providerConfig` must accept it and resolve credentials through the credential provider (ChatGPT auth store first, then the `model.openai` API key);
-  - the default model for `openai-live` is `gpt-live-1`;
+  - the default model for `openai-live` follows the credential (2.3): `gpt-live-1` with an API key, `gpt-live-1-codex` with the ChatGPT login once PR 9 lands;
   - the `/realtime` suffix rule must not apply; the Live path is `/live/sessions`.
 - `agent-cli/internal/config/{interface,overrides,loading}.go`, `services/session_host.go`, `services/wire/device_probe_session.go`, and the `--provider` help text: `ProviderOpenAILive = "openai-live"`.
 
@@ -1447,7 +1460,7 @@ no wall-clock sleeps.
      append.
 2. **Strictness test for `session.start` (PR 1).** The built `session`
    object's key set is checked against an allowlist taken from 1.5.
-3. **Admission (PR 1).** `openai-live` admits only `gpt-live-1`. `openai`
+3. **Admission (PR 1).** `openai-live` admits only `gpt-live-1` (PR 9 adds `gpt-live-1-codex`). `openai`
    does not admit `gpt-live-1`. The unsupported-model error names the
    requested provider.
 4. **Fake GPT-Live server (`fakelive`, PR 1, used from PR 2).** It runs
@@ -1524,11 +1537,12 @@ no wall-clock sleeps.
 | **1** | `openailive` protocol types, codec, `session.start` builder, goldens, `fakelive`, the catalog entry `openai-live`/`gpt-live-1`, the admission restriction and the error provider name. | No production path reaches it yet: `BuildSession` still rejects the provider. Pure additions plus tests. |
 | **2** | The `openailive` provider session: handshake, inbound audio and transcripts, speech segments, outbound audio, the fail-closed mappings, graceful close, and the close-reason mapping. Also the skeleton hooks, provider-service branches, the `audioio` rate, the tool-acknowledgement regression pin (no code change), the `livehost` and CLI provider plumbing, and `--provider openai-live`. Delegations are logged and dropped. | An end-to-end voice conversation works with no tools. |
 | **3** | `DELEGATION.CREATED` and `CONTEXT.APPEND` stream types: kept out of response state and reconstruction, `DELEGATION.CREATED` added to `MustDeliver`, both registered in the three capture decoders and every exhaustive switch, and their `openailive` mappings. Plus the transcript ring, the settle window, and an optional greeting. | New vocabulary that other providers decline. |
-| **4** | The chosen delegation mode (2.4, PENDING). For client delegation: the `livedelegation` asynchronous executor: worker pool, nested `agentloop`, observer hookup, result and progress appends, session-scoped lifetime. | Tools work through the harness backend, concurrently and independently of speech and interrupts. |
+| **4** | Client delegation (2.4): the `livedelegation` asynchronous executor: worker pool, nested `agentloop`, observer hookup, result and progress appends, session-scoped lifetime. | Tools work through the harness backend, concurrently and independently of speech and interrupts. |
 | **5** | Task revisions and `Cancel(delegationID)`, stale-result handling, budgets and failure commentary, result splitting, mute and unmute. | Hardening on top of PR 4. |
 | **6** | Replay and recording support (`replay/internal/strict/runtime.go`), synthetic fixtures, and the opt-in smoke test. | Regression coverage. |
 | **7** (optional) | The delegation mode not chosen in 2.4, if it is still wanted. A Responses design must avoid the hazards in 2.6.3. | Only if Q3 asks for both modes. |
 | **8** (optional) | Sideband attach, WebRTC session creation, `store` and fork. | Only if a browser or telephony host needs them. |
+| **9** | The `gpt-live-1-codex` route on the ChatGPT login (2.3): a provider-side pion WebRTC peer with Opus through `go-audio/pkg/codec`, call creation on the ChatGPT backend, the sideband, and a quicksilver-v2 codec behind the same session state machine. See `chatgpt-oauth.md` 3.2 and 3.5. | The ChatGPT login runs voice with no API key. |
 
 ## 2.13 Open questions for the user
 
@@ -1536,12 +1550,13 @@ no wall-clock sleeps.
    GPT-Live access (Tier 1 or higher)? May PR 6 record one real, sanitized
    capture?
 2. **Q2 Naming and auth.** Is `openai-live` with `gpt-live-1` acceptable?
-   Auth defaults to the `yui auth chatgpt` store with an API-key fallback
-   (2.3, PENDING `chatgpt-oauth.md`).
+   **Decided (2.3):** the `yui auth chatgpt` store first with an API-key
+   fallback; `gpt-live-1-codex` on the ChatGPT login, `gpt-live-1` on an
+   API key.
    Is Azure Foundry a target?
-3. **Q3 Delegation mode (PENDING).** Client or Responses delegation (2.4)?
-   This depends on whether the ChatGPT OAuth token can reach the Responses
-   API. Should the other mode also be built later (PR 7)?
+3. **Q3 Delegation mode. Decided (2.4):** client delegation, with the
+   backend on Responses over the ChatGPT backend. Should Responses delegation
+   also be built later (PR 7)?
 4. **Q4 Typed text input.** Options: (a) unsupported, failing fast;
    (b) route it to the delegation executor and mirror it as `thinking`;
    (c) send it as `commentary`. The proposal is (b).
