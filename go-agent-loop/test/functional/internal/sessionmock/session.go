@@ -14,10 +14,22 @@ type Session struct {
 	sendBuf *messages.TypedBuffer[messages.StreamMessage]
 	done    chan struct{}
 	once    sync.Once
+
+	// sentMu guards sent, the per-type tally of messages the provider
+	// accepted. It is kept apart from sendBuf so observing what the provider
+	// received never consumes the queue that WaitForSentMessage reads.
+	sentMu sync.Mutex
+	sent   map[messages.StreamMessageType]int
 }
 
 func (s *Session) Send(ctx context.Context, msg messages.StreamMessage) bool {
-	return s.sendBuf.Write(ctx, msg)
+	if !s.sendBuf.Write(ctx, msg) {
+		return false
+	}
+	s.sentMu.Lock()
+	s.sent[msg.Type]++
+	s.sentMu.Unlock()
+	return true
 }
 
 func (s *Session) Receive() *messages.TypedBuffer[messages.StreamMessage] { return s.recvBuf }
@@ -48,6 +60,7 @@ func (m *Inferencer) ConnectSession(ctx context.Context) (messages.Session, erro
 		recvBuf: messages.NewTypedBuffer[messages.StreamMessage](sessionBufferCapacity),
 		sendBuf: messages.NewTypedBuffer[messages.StreamMessage](sessionBufferCapacity),
 		done:    make(chan struct{}),
+		sent:    make(map[messages.StreamMessageType]int),
 	}
 	s.recvBuf.Write(ctx, messages.StreamMessage{
 		Type:  messages.StreamTypeSessionOpen,
@@ -73,6 +86,22 @@ func (m *Inferencer) AddServerEventSequence(ctx context.Context, events []messag
 	for _, event := range events {
 		m.AddServerEvent(ctx, event)
 	}
+}
+
+// SentCount reports how many messages of msgType the current provider session
+// has received from the runner. It does not consume the send queue, so a
+// scripted provider can gate its reply on the request having arrived, as a
+// real provider would, while WaitForSentMessage callers still see every frame.
+func (m *Inferencer) SentCount(msgType messages.StreamMessageType) int {
+	m.mu.Lock()
+	sess := m.session
+	m.mu.Unlock()
+	if sess == nil {
+		return 0
+	}
+	sess.sentMu.Lock()
+	defer sess.sentMu.Unlock()
+	return sess.sent[msgType]
 }
 
 func (m *Inferencer) SimulateError(ctx context.Context, msg string) {
