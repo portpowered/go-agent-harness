@@ -330,37 +330,10 @@ func TestConcurrentSendAndInterruptShutsDownCleanly(t *testing.T) {
 	// failure, but the count is reported so an unexpected surge is visible.
 	var rejected atomic.Int64
 
-	// Sender goroutines.
 	for s := range numSenders {
-		wg.Add(1)
-		go func(senderID int) {
-			defer wg.Done()
-			for m := range messagesPerSender {
-				msg := messages.NewTextMessage(messages.RoleUser,
-					fmt.Sprintf("sender-%d-msg-%d", senderID, m))
-				if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
-					rejected.Add(1)
-				}
-				// Yield to mix sends and interrupts.
-				if m%3 == 0 {
-					runtime.Gosched()
-				}
-			}
-		}(s)
+		wg.Go(func() { sendUserMessages(ctx, loop, s, messagesPerSender, &rejected) })
 	}
-
-	// Interrupt goroutine (sends interrupts periodically).
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := range totalMessages / 2 {
-			followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
-			if err := loop.SendInterrupt(ctx, &followUp); err != nil {
-				rejected.Add(1)
-			}
-			runtime.Gosched()
-		}
-	}()
+	wg.Go(func() { sendInterrupts(ctx, loop, totalMessages/2, &rejected) })
 
 	wg.Wait()
 	cancel()
@@ -466,7 +439,11 @@ func TestLargeToolBatchExecutesEveryCall(t *testing.T) {
 		agentloop.WithInferencer(inf),
 		agentloop.WithToolExecutor(toolExec),
 		agentloop.WithTools(tools),
-		agentloop.WithBufferCapacity(256),
+		// The batch emits several hundred tool deltas in one burst. Size the
+		// buffers to hold it: CoordinatorDelta forwards to the kernel with a
+		// dropping Write, and a dropped terminal delta stalls Execute until
+		// its deadline (seen at capacity 256 under -race).
+		agentloop.WithBufferCapacity(1024),
 	)
 	if err != nil {
 		t.Fatalf("failed to create loop: %v", err)
@@ -506,5 +483,31 @@ func TestLargeToolBatchExecutesEveryCall(t *testing.T) {
 
 	if inf.CallCount() != 2 {
 		t.Errorf("inference calls: got %d, want 2 (batch call + final response)", inf.CallCount())
+	}
+}
+
+// sendUserMessages sends count user messages, yielding every third send so
+// sends interleave with interrupts; rejected counts the refused sends.
+func sendUserMessages(ctx context.Context, loop *agentloop.AgentLoop, sender, count int, rejected *atomic.Int64) {
+	for m := range count {
+		msg := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("sender-%d-msg-%d", sender, m))
+		if err := loop.Send(ctx, []messages.Message{msg}); err != nil {
+			rejected.Add(1)
+		}
+		if m%3 == 0 {
+			runtime.Gosched()
+		}
+	}
+}
+
+// sendInterrupts sends count interrupts with follow-up messages; rejected
+// counts the refused interrupts.
+func sendInterrupts(ctx context.Context, loop *agentloop.AgentLoop, count int, rejected *atomic.Int64) {
+	for i := range count {
+		followUp := messages.NewTextMessage(messages.RoleUser, fmt.Sprintf("interrupt-%d", i))
+		if err := loop.SendInterrupt(ctx, &followUp); err != nil {
+			rejected.Add(1)
+		}
+		runtime.Gosched()
 	}
 }

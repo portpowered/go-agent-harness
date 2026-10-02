@@ -352,17 +352,20 @@ func TestDeterministicConcurrentTimerLifecycleAndAdvancement(t *testing.T) {
 	}
 	for worker, created := range timers {
 		for index, entry := range created {
-			select {
-			case <-entry.timer.C():
-				if entry.stopped {
-					t.Fatalf("worker %d timer %d fired after Stop prevented it", worker, index)
-				}
-			default:
-				if !entry.stopped {
-					t.Fatalf("worker %d timer %d never fired although every deadline has passed", worker, index)
-				}
+			if fired := timerFired(entry.timer); fired == entry.stopped {
+				t.Fatalf("worker %d timer %d fired=%t after Stop reported prevented=%t; every deadline has passed", worker, index, fired, entry.stopped)
 			}
 		}
+	}
+}
+
+// timerFired reports whether timer has delivered its fire time.
+func timerFired(timer Timer) bool {
+	select {
+	case <-timer.C():
+		return true
+	default:
+		return false
 	}
 }
 

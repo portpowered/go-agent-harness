@@ -532,48 +532,30 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 	}
 }
 // TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas
-// covers dispatch before any delta reader or message outbox is attached: those
-// deltas are dropped, a closing stream with no listeners is a no-op, and
-// listeners attached afterwards receive only what is dispatched to them.
+// covers dispatch with no delta reader or message outbox: those deltas are
+// dropped, and listeners attached later receive only what follows.
 func TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas(t *testing.T) {
+	text := func(content string) messages.KernelDeltaRequest {
+		return messages.KernelDeltaRequest{Source: messages.Model, Delta: messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue(content)}}
+	}
+	full := func(content string) messages.KernelDeltaRequest {
+		value := messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, content))
+		return messages.KernelDeltaRequest{Source: messages.Tool, Delta: messages.StreamMessage{Type: messages.StreamTypeSystemFullMessage, Value: value}}
+	}
 	kr := NewKernelRunner(nil, 8)
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Model,
-		Delta:  messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("unheard")},
-	})
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Tool,
-		Delta: messages.StreamMessage{
-			Type:  messages.StreamTypeSystemFullMessage,
-			Value: messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, "unheard")),
-		},
-	})
+	kr.dispatchDelta(text("unheard"))
+	kr.dispatchDelta(full("unheard"))
 	kr.closeStreamWithError()
-
 	evCh := kr.NewDeltaEventReader(8)
 	messageCh := make(chan messages.KernelMessageRequest, 8)
 	kr.messageOutCh = messageCh
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Model,
-		Delta:  messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("heard")},
-	})
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Tool,
-		Delta: messages.StreamMessage{
-			Type:  messages.StreamTypeSystemFullMessage,
-			Value: messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, "heard")),
-		},
-	})
-
-	if len(evCh) != 1 {
-		t.Fatalf("delta reader holds %d events, want only the delta dispatched after it attached", len(evCh))
+	kr.dispatchDelta(text("heard"))
+	kr.dispatchDelta(full("heard"))
+	if len(evCh) != 1 || len(messageCh) != 1 {
+		t.Fatalf("listeners hold %d deltas and %d messages, want only the one of each dispatched after they attached", len(evCh), len(messageCh))
 	}
-	got := <-evCh
-	if value, ok := got.Value.(*messages.TextDeltaValue); !ok || got.Type != messages.StreamTypeTextDelta || value.Content != "heard" {
-		t.Fatalf("delta reader got %+v, want the later text delta", got)
-	}
-	if len(messageCh) != 1 {
-		t.Fatalf("message outbox holds %d messages, want only the one dispatched after it attached", len(messageCh))
+	if value, ok := (<-evCh).Value.(*messages.TextDeltaValue); !ok || value.Content != "heard" {
+		t.Fatalf("delta reader got %+v, want the later text delta", value)
 	}
 	if got := <-messageCh; got.Message.TextContent() != "heard" {
 		t.Fatalf("message outbox got %q, want the later tool message", got.Message.TextContent())

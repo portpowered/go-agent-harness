@@ -520,3 +520,26 @@ func mustRepositoryRoot() string {
 	}
 	return root
 }
+
+// removeKilledChromeProfile removes the profile of a Chrome whose main process
+// the test killed. Its helper processes outlive the kill briefly and keep
+// writing to the profile, so removal is retried until they have exited.
+func removeKilledChromeProfile(t *testing.T, profileDir string) {
+	t.Helper()
+	deadline := time.NewTimer(15 * time.Second)
+	defer deadline.Stop()
+	retry := time.NewTicker(100 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		err := os.RemoveAll(profileDir)
+		if err == nil {
+			return
+		}
+		select {
+		case <-retry.C:
+		case <-deadline.C:
+			t.Errorf("remove killed Chrome profile: %v", err)
+			return
+		}
+	}
+}

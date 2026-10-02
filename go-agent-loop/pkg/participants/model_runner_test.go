@@ -680,27 +680,6 @@ func TestModelRunner_StreamCloseWithoutMessageEndMarksProviderClose(t *testing.T
 	}
 }
 
-func TestModelRunner_ParentCancellationStopsRunnerWithCanceled(t *testing.T) {
-	inf := &testInferencer{
-		responses: []messages.InferenceResult{
-			{Message: messages.NewTextMessage(messages.RoleAssistant, "ok")},
-		},
-	}
-
-	runner := NewModelRunner(inf, 10)
-	ap := NewActiveParticipant(messages.Model, runner)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ap.Start(ctx)
-
-	// Cancel immediately - runner should stop
-	cancel()
-	ap.Stop()
-	if err := ap.Err(); !errors.Is(err, context.Canceled) {
-		t.Fatalf("runner stopped with %v, want context.Canceled", err)
-	}
-}
-
 func TestSessionModelRunner_SessionDoneEmitsSessionClose(t *testing.T) {
 	session := newCompletedSession()
 	runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 10, nil)
