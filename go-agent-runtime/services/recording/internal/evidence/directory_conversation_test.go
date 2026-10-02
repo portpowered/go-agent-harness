@@ -19,6 +19,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"go.uber.org/goleak"
 )
 
 type pairedPrefixFailureCase struct {
@@ -575,3 +576,6 @@ func newEvidenceRecorder(t *testing.T, limits ...recording.ResourceLimits) *dire
 	})
 	return r
 }
+
+// TestMain fails the package when any test leaves a goroutine running.
+func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }
