@@ -29,6 +29,7 @@ type FilesystemRefusalReason string
 const (
 	FilesystemRefusalOutsidePermittedRoots FilesystemRefusalReason = "outside_permitted_roots"
 	FilesystemRefusalSensitiveRead         FilesystemRefusalReason = "sensitive_read"
+	FilesystemRefusalSensitiveWrite        FilesystemRefusalReason = "sensitive_write"
 	FilesystemRefusalInvalidScope          FilesystemRefusalReason = "invalid_scope"
 )
 
@@ -95,7 +96,7 @@ func (r FilesystemRefusal) Validate() error {
 		return fmt.Errorf("filesystem refusal operation, path, and workdir are required")
 	}
 	switch r.Reason {
-	case FilesystemRefusalOutsidePermittedRoots, FilesystemRefusalSensitiveRead, FilesystemRefusalInvalidScope:
+	case FilesystemRefusalOutsidePermittedRoots, FilesystemRefusalSensitiveRead, FilesystemRefusalSensitiveWrite, FilesystemRefusalInvalidScope:
 	default:
 		return fmt.Errorf("unsupported filesystem refusal reason %q", r.Reason)
 	}
@@ -129,7 +130,7 @@ func newFilesystemRefusal(operation, path, workdir string, reason FilesystemRefu
 	if strings.TrimSpace(path) == "" {
 		path = "[unavailable]"
 	}
-	if reason == FilesystemRefusalSensitiveRead {
+	if reason == FilesystemRefusalSensitiveRead || reason == FilesystemRefusalSensitiveWrite {
 		path = filesystemProtectedPath
 	}
 	if strings.TrimSpace(workdir) == "" {
@@ -155,6 +156,8 @@ func filesystemRefusalMessage(reason FilesystemRefusalReason, path string) strin
 		return fmt.Sprintf("path escapes workspace: %s", path)
 	case FilesystemRefusalSensitiveRead:
 		return "filesystem access denied: protected read"
+	case FilesystemRefusalSensitiveWrite:
+		return "filesystem access denied: protected write"
 	case FilesystemRefusalInvalidScope:
 		return "invalid filesystem scope"
 	default:
@@ -168,6 +171,8 @@ func filesystemRefusalRemediation(reason FilesystemRefusalReason) string {
 		return "Use a path inside the effective workdir or add --allow-path for a non-sensitive directory, then retry."
 	case FilesystemRefusalSensitiveRead:
 		return "Use a non-sensitive path inside the permitted roots; --allow-path cannot authorize protected reads."
+	case FilesystemRefusalSensitiveWrite:
+		return "Write to a non-sensitive path inside the permitted roots; --allow-path cannot authorize writes to protected credential locations."
 	case FilesystemRefusalInvalidScope:
 		return "Set --workdir and --allow-path to existing, accessible directories, then retry."
 	default:
@@ -194,6 +199,8 @@ func filesystemRefusalFor(operation, path string, sysFS fileSystem, err error) (
 	switch {
 	case errors.Is(err, ErrProtectedFilesystemRead):
 		reason = FilesystemRefusalSensitiveRead
+	case errors.Is(err, ErrProtectedFilesystemWrite):
+		reason = FilesystemRefusalSensitiveWrite
 	case errors.Is(err, ErrInvalidFilesystemRoot):
 		reason = FilesystemRefusalInvalidScope
 	case errors.Is(err, ErrFilesystemAccessDenied):

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 )
@@ -82,7 +83,7 @@ func (r *sandboxFs) resolve(path string) (string, string, error) {
 }
 
 func (r *sandboxFs) resolveRead(path string) (string, string, error) {
-	if r.isProtectedRead(path) {
+	if r.isProtected(path) {
 		denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveRead, ErrFilesystemAccessDenied.Error())
 		return "", "", fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemRead)
 	}
@@ -94,7 +95,22 @@ func (r *sandboxFs) authorizeRead(path string) error {
 	return err
 }
 
-func (r *sandboxFs) isProtectedRead(path string) bool {
+// resolveWrite refuses writes, appends, edits and creates into protected
+// system and credential locations before resolving the scope, so a broad
+// root cannot be used to plant a credential such as ~/.ssh/authorized_keys.
+func (r *sandboxFs) resolveWrite(path string) (string, string, error) {
+	if r.isProtected(path) {
+		denial := newFilesystemAccessDeniedWithContext(r.filesystemWorkDir(), FilesystemRefusalSensitiveWrite, ErrFilesystemAccessDenied.Error())
+		return "", "", fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemWrite)
+	}
+	return r.resolve(path)
+}
+
+// isProtected reports whether path, lexically or after resolving symlinks,
+// lies within a protected root. On case-insensitive platforms the comparison
+// folds case per component, and any filesystem that names a protected root
+// through another spelling is caught by comparing file identity.
+func (r *sandboxFs) isProtected(path string) bool {
 	roots, err := r.rootPaths()
 	if err != nil || len(roots) == 0 {
 		return false
@@ -113,11 +129,79 @@ func (r *sandboxFs) isProtectedRead(path string) bool {
 		protectedRoots = normalizeProtectedReadRoots(platformProtectedReadRoots())
 	}
 	for _, protectedRoot := range protectedRoots {
-		if isWithinWorkspace(candidate, protectedRoot) || isWithinWorkspace(comparisonCandidate, protectedRoot) {
+		if isWithinProtectedRoot(candidate, protectedRoot) || isWithinProtectedRoot(comparisonCandidate, protectedRoot) {
 			return true
 		}
 	}
-	return false
+	return hasProtectedAncestor(comparisonCandidate, protectedRoots)
+}
+
+// caseInsensitivePaths reports whether the platform's default filesystems
+// compare names without regard to case (APFS/HFS+ on macOS, NTFS on
+// Windows).
+func caseInsensitivePaths() bool {
+	return runtime.GOOS == darwinPlatform || runtime.GOOS == windowsPlatform
+}
+
+// isWithinProtectedRoot is isWithinWorkspace with per-component case folding
+// on case-insensitive platforms, so ~/.SSH matches the ~/.ssh root.
+func isWithinProtectedRoot(candidate, protectedRoot string) bool {
+	if isWithinWorkspace(candidate, protectedRoot) {
+		return true
+	}
+	if !caseInsensitivePaths() {
+		return false
+	}
+	candidateParts := splitPathComponents(candidate)
+	rootParts := splitPathComponents(protectedRoot)
+	if len(candidateParts) < len(rootParts) {
+		return false
+	}
+	for index, part := range rootParts {
+		if !strings.EqualFold(part, candidateParts[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func splitPathComponents(path string) []string {
+	clean := filepath.Clean(path)
+	volume := filepath.VolumeName(clean)
+	rest := strings.Trim(clean[len(volume):], string(filepath.Separator))
+	parts := []string{volume}
+	if rest != "" {
+		parts = append(parts, strings.Split(rest, string(filepath.Separator))...)
+	}
+	return parts
+}
+
+// hasProtectedAncestor reports whether an existing ancestor of candidate (or
+// candidate itself) is the same file as an existing protected root. This
+// catches every spelling a case-insensitive or case-folding filesystem
+// accepts, on any platform.
+func hasProtectedAncestor(candidate string, protectedRoots []string) bool {
+	rootInfos := make([]os.FileInfo, 0, len(protectedRoots))
+	for _, protectedRoot := range protectedRoots {
+		if info, err := os.Stat(protectedRoot); err == nil {
+			rootInfos = append(rootInfos, info)
+		}
+	}
+	if len(rootInfos) == 0 {
+		return false
+	}
+	for current := filepath.Clean(candidate); ; current = filepath.Dir(current) {
+		if info, err := os.Stat(current); err == nil {
+			for _, rootInfo := range rootInfos {
+				if os.SameFile(info, rootInfo) {
+					return true
+				}
+			}
+		}
+		if filepath.Dir(current) == current {
+			return false
+		}
+	}
 }
 
 // canonicalizeExistingPath resolves the existing portion of a path and then

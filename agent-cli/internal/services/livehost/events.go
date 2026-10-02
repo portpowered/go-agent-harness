@@ -210,6 +210,7 @@ func ToolConfig(cfg *config.Config, request serviceSession.Request) *config.Conf
 	copyConfig.Tools.List = append([]config.ToolEntry(nil), cfg.Tools.List...)
 	copyConfig.FilesystemWorkDir = request.WorkDir
 	copyConfig.FilesystemAllowPaths = append([]string(nil), request.AllowPaths...)
+	copyConfig.FilesystemHomeDir = request.HomeDir
 	set := func(id string, enabled bool) {
 		for index := range copyConfig.Tools.List {
 			if copyConfig.Tools.List[index].ID == id {

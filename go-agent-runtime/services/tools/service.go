@@ -139,6 +139,12 @@ type ExecPolicy struct {
 type Request struct {
 	WorkDir    string
 	AllowPaths []string
+	// HomeDir is the host-resolved user home directory. When a scope root
+	// contains it, the filesystem tools refuse its credential stores (.ssh,
+	// .aws, .gnupg, Keychains and the rest) even though the root allows the
+	// surrounding tree. Empty protects only credential stores directly below
+	// a scope root.
+	HomeDir string
 	// DisplaySurface is an optional host-provided physical display boundary.
 	// When DisplayCapabilitySet is true, the runtime gates show/mouse
 	// definitions using DisplayCapability and binds this surface to them.

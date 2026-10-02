@@ -159,7 +159,7 @@ func (r *sandboxFs) filesystemWorkDir() string {
 }
 
 func (r *sandboxFs) execute(path string, fn func(root *os.Root, relPath string) error) error {
-	rootPath, relPath, err := r.resolve(path)
+	rootPath, relPath, err := r.resolveWrite(path)
 	if err != nil {
 		return err
 	}

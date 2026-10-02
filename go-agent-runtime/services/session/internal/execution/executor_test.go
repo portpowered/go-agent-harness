@@ -67,11 +67,15 @@ func TestExecutorResolutionCopiesInvocationValues(t *testing.T) {
 		Storage:        storage,
 		WorkspaceDir:   "/workspace",
 		AllowPaths:     allowPaths,
+		HomeDir:        "/home/user",
 		SkillRoots:     skillRoots,
 		PromptResolved: true,
 	})
 	allowPaths[0] = "mutated"
 	skillRoots[0].Directory = "mutated"
+	if exec.resolvedHomeDir != "/home/user" {
+		t.Fatalf("resolved home = %q, want the host home", exec.resolvedHomeDir)
+	}
 	if exec.resolvedWorkspace != "/workspace" || exec.resolvedProvider.Fal == nil || exec.resolvedProvider.Fal.Model != "fal-model" {
 		t.Fatalf("resolved provider/workspace = %+v/%q", exec.resolvedProvider, exec.resolvedWorkspace)
 	}

@@ -76,6 +76,7 @@ func (h *sessionHostResolver) Resolve(ctx context.Context, request session.Reque
 		SystemPromptResolved: true,
 		WorkspaceDir:         workDir,
 		AllowPaths:           globalAllowPaths(h.globalFlags, workDir),
+		HomeDir:              h.globalFlags.HostHomeDirOrEmpty(),
 		SkillRoots: []runtimeTools.SkillRoot{
 			{Directory: filepath.Join(workDir, "skills")},
 			{Directory: filepath.Join(configDir, "skills")},

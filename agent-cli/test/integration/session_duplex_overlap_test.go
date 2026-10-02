@@ -251,7 +251,7 @@ func assertStartupAnnouncementStreams(t *testing.T, proof startupAnnouncementPro
 	}
 	for _, announcement := range []string{
 		"Filesystem scope: workdir=" + proof.announcementWorkDir + "; additional_allowed_roots=none",
-		"Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied",
+		"Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential locations can be neither read nor written",
 		"Tools: append_file, edit_file, exec, list_dir, read_file, read_image, write_file",
 	} {
 		if !strings.Contains(string(proof.result.Stderr), announcement) {

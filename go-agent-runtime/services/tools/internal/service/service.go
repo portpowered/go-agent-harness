@@ -118,7 +118,7 @@ func resolveRequestPolicy(request public.Request) (*filesystem.FilesystemPolicy,
 	if err != nil {
 		return nil, fmt.Errorf("resolve filesystem scope: %w", err)
 	}
-	return policy, nil
+	return policy.WithHomeDir(request.HomeDir), nil
 }
 
 func scopedExecutor(executor messages.ToolExecutor, policy *filesystem.FilesystemPolicy) messages.ToolExecutor {

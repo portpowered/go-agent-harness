@@ -50,6 +50,7 @@ type Request struct {
 	ConfigDir                     string
 	WorkDir                       string
 	AllowPaths                    []string
+	HomeDir                       string
 	Prompt                        string
 	PromptProvided                bool
 	Voice                         string

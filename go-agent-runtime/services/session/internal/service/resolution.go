@@ -125,6 +125,7 @@ func toRuntimeResolution(resolution session.Resolution) agent.RuntimeResolution 
 		Storage:         newStorageAdapter(resolution.Store, resolution.TraceStore, resolution.WorkspaceDir),
 		WorkspaceDir:    resolution.WorkspaceDir,
 		AllowPaths:      append([]string(nil), resolution.AllowPaths...),
+		HomeDir:         resolution.HomeDir,
 		SkillRoots:      append([]tools.SkillRoot(nil), resolution.SkillRoots...),
 		Logger:          resolution.Logger,
 		PromptResolved:  true,

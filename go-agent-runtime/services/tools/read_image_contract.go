@@ -10,7 +10,7 @@ const (
 	ReadImageResultTypedProjectionInputImage = "input_image"
 	// FilesystemScopeStartupNotice is the user-facing explanation for the
 	// normalized filesystem boundary carried by a tool request.
-	FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential reads remain denied even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
+	FilesystemScopeStartupNotice = "Filesystem tools are confined to the effective workdir and additional allowed roots; protected system and credential locations can be neither read nor written even when --allow-path includes them. Shell-command deny-pattern policy is separate, and this is not an operating-system sandbox."
 )
 
 // ReadImageResult is the provider-neutral textual projection emitted by the

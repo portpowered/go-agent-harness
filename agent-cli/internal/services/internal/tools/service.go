@@ -235,10 +235,10 @@ func (s *Service) resolveStatic(ctx context.Context, cfg *config.Config, display
 	if s != nil && s.staticExecutor != nil {
 		return s.staticExecutor, nil, nil
 	}
-	var workdir string
+	var workdir, homeDir string
 	var allowPaths []string
 	if cfg != nil {
-		workdir, allowPaths = cfg.FilesystemWorkDir, cfg.FilesystemAllowPaths
+		workdir, allowPaths, homeDir = cfg.FilesystemWorkDir, cfg.FilesystemAllowPaths, cfg.FilesystemHomeDir
 	}
 	if strings.TrimSpace(workdir) == "" {
 		return nil, nil, errors.New("resolve filesystem scope: workdir must be supplied by the CLI host")
@@ -262,6 +262,7 @@ func (s *Service) resolveStatic(ctx context.Context, cfg *config.Config, display
 	capability, err := s.runtimeService.Resolve(ctx, runtimeTools.Request{
 		WorkDir:              workdir,
 		AllowPaths:           append([]string(nil), allowPaths...),
+		HomeDir:              homeDir,
 		Selections:           selections,
 		Exec:                 execPolicy,
 		DisplaySurface:       s.displaySurface,
