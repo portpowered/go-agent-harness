@@ -161,8 +161,7 @@ func (c *Coordinator) routeModelOutput(ctx context.Context, curr *state.LoopStat
 	case len(message.ToolCalls) > 0:
 		c.logInfo("Coordinator: model tool call output message", logging.Field{Key: "message", Value: message})
 		passID := c.nextToolBatchPass(curr)
-		// A dropped batch would leave its calls unexecuted and the turn
-		// waiting for results that never come, so wait for the tool runner.
+		// Wait for the tool runner: a dropped batch is never executed.
 		curr.Outputs.ToolInbox.WriteWaitContext(ctx, messages.ToolBatchRequest{Calls: message.ToolCalls, LoopPassID: passID})
 		return false
 	case !message.HasOnlyReasoning():
