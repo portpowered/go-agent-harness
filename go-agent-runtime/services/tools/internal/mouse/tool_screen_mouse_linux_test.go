@@ -78,7 +78,12 @@ if [ "${GO_AGENT_HARNESS_XDOTOOL_MODE}" = fail ]; then
   printf 'capture failed\n' >&2
   exit 2
 fi
-cp "$GO_AGENT_HARNESS_SCREEN_FIXTURE" "${3}"`)
+# Like scrot, never overwrite: an existing target gets a numbered sibling.
+target="${3}"
+if [ -e "$target" ]; then
+  target="${target%.png}_000.png"
+fi
+cp "$GO_AGENT_HARNESS_SCREEN_FIXTURE" "$target"`)
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return dir, logPath
 }

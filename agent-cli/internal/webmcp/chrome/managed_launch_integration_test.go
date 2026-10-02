@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
@@ -342,25 +341,4 @@ func observeManagedLaunchTarget(ctx context.Context, client *http.Client, baseUR
 		}
 	}
 	return response.StatusCode == http.StatusOK && decodeErr == nil && pageTargets == 1 && matchingPages == 1, observation
-}
-
-func waitForLiveMediaElement(ctx context.Context, session *targetSession) error {
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	var lastErr error
-	for {
-		var ready bool
-		lastErr = session.run(ctx, chromedp.Evaluate(`document.querySelector("video, audio") !== null`, &ready))
-		if lastErr == nil && ready {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			if lastErr != nil {
-				return lastErr
-			}
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
 }

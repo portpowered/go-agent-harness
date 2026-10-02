@@ -160,8 +160,8 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	if staleEnvelope.Error.Details["browser_id"] != browserID || staleEnvelope.Error.Details["target_id"] != tabs[0].TargetID || staleEnvelope.Error.Details["selected_generation"] == nil {
 		t.Fatalf("probe 08 stale details = %#v", staleEnvelope.Error.Details)
 	}
-	if !strings.Contains(strings.ToLower(staleEnvelope.Error.Message), "rediscover") || !strings.Contains(strings.ToLower(staleEnvelope.Error.Message), "select") {
-		t.Fatalf("probe 08 stale guidance = %q, want rediscover and explicit select", staleEnvelope.Error.Message)
+	if !strings.Contains(staleEnvelope.Error.Message, "browser was replaced") || !strings.Contains(staleEnvelope.Error.Message, "agent webmcp select") {
+		t.Fatalf("probe 08 stale guidance = %q, want the replaced browser named and an explicit agent webmcp select", staleEnvelope.Error.Message)
 	}
 	recordClassificationResult(t, stale, configDir, "probe-08-fresh-identity", fmt.Sprintf(`{"code":%q,"old_browser_id":%q,"old_target_id":%q,"selected_generation":%v,"reason":%q,"replacement_work":"not_attached"}`, staleEnvelope.Error.Code, browserID, tabs[0].TargetID, staleEnvelope.Error.Details["selected_generation"], staleEnvelope.Error.Details["reason"]))
 }

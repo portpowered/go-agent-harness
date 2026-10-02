@@ -111,8 +111,14 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ screenPlat
 		return nil, closeScreenCaptureTempFileAfterCloseFailure(path, closeErr)
 	}
 	defer func() { result, resultErr = finishScreenCapture(result, resultErr, path) }()
+	// scrot never overwrites: given an existing file it writes a numbered
+	// sibling (name_000.png) and leaves the reserved empty file in place.
+	// Free the reserved name so the capture lands at path.
+	if err := cleanupScreenCaptureTempFile(path); err != nil {
+		return nil, fmt.Errorf("release screenshot temp name: %w", err)
+	}
 
-	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
+	area :=fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
 	args := []string{"-a", area, path}
 	out, err := process.Run(ctx, "scrot", args...)
 	if err != nil {

@@ -531,16 +531,25 @@ func (s *traceContractSampleSource) ReadSamples(_ context.Context, buf []int16) 
 	return copy(buf, s.samples), nil
 }
 
+// TestNilRuntimeRecorderIsInert covers sessions without a runtime observer:
+// every observation on the nil recorder returns without doing any work, so
+// none of them allocates.
 func TestNilRuntimeRecorderIsInert(t *testing.T) {
 	var recorder *sessionRuntimeObservationRecorder
-	recorder.audioOutputMessage([]byte{1}, messages.StreamMessage{})
-	recorder.audioPlaybackReceipt(audio.PlaybackReceipt{Applied: true})
-	recorder.audioInput([]byte{1})
-	recorder.providerAudioSent([]byte{1})
-	recorder.inputCommit()
-	recorder.providerInputCommit()
-	recorder.responseCreate(messages.StreamMessage{})
-	recorder.terminalWithAccounting(1, nil, nil)
+	pcm := []byte{1}
+	allocations := testing.AllocsPerRun(10, func() {
+		recorder.audioOutputMessage(pcm, messages.StreamMessage{})
+		recorder.audioPlaybackReceipt(audio.PlaybackReceipt{Applied: true})
+		recorder.audioInput(pcm)
+		recorder.providerAudioSent(pcm)
+		recorder.inputCommit()
+		recorder.providerInputCommit()
+		recorder.responseCreate(messages.StreamMessage{})
+		recorder.terminalWithAccounting(1, nil, nil)
+	})
+	if allocations != 0 {
+		t.Fatalf("nil recorder observations allocated %.0f times per run, want none", allocations)
+	}
 }
 
 func TestPlaybackObserverCombinersDropAbsentObservers(t *testing.T) {

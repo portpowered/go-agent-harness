@@ -52,7 +52,9 @@ jobs:
             packages: ./agent-cli/internal/webmcp/chrome
             run: ^(TestManagedBrowser.*|TestBundledSiteAdaptersStockChromeJourneys|TestCapitalOneShoppingAdapterLive|TestYouTubeAdapterStockChromeJourney)$
           # The macOS run also covers the darwin-only screen and mouse unit
-          # tests, which no Linux job compiles.
+          # tests, which no Linux job compiles. (A live macOS screen and
+          # mouse test cannot run here: the runner grants no Screen
+          # Recording or Accessibility permission.)
           - name: macOS devices
             runner: macos-14
             cache: macos
@@ -94,9 +96,18 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q xvfb scrot xdotool x11-xserver-utils
 
-      - name: Install desktop tools (macOS)
-        if: runner.os == 'macOS' && matrix.audio
-        run: brew install cliclick
+      # Desktop apps may not capture audio until the microphone privacy
+      # consent allows it; WASAPI then fails with E_ACCESSDENIED.
+      - name: Allow microphone access (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($root in 'HKCU:', 'HKLM:') {
+            $store = "$root\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"
+            New-Item -Path "$store\NonPackaged" -Force | Out-Null
+            Set-ItemProperty -Path $store -Name Value -Value Allow
+            Set-ItemProperty -Path "$store\NonPackaged" -Name Value -Value Allow
+          }
 
       - name: Run e2e suites
         shell: bash

@@ -568,7 +568,8 @@ func TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDe
 	if len(evCh) != 1 {
 		t.Fatalf("delta reader holds %d events, want only the delta dispatched after it attached", len(evCh))
 	}
-	if got := <-evCh; got.Type != messages.StreamTypeTextDelta || got.Value.(*messages.TextDeltaValue).Content != "heard" {
+	got := <-evCh
+	if value, ok := got.Value.(*messages.TextDeltaValue); !ok || got.Type != messages.StreamTypeTextDelta || value.Content != "heard" {
 		t.Fatalf("delta reader got %+v, want the later text delta", got)
 	}
 	if len(messageCh) != 1 {
