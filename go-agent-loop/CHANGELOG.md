@@ -65,3 +65,6 @@ every program that imports `pkg/probe`. These names have no replacement:
   They are valid only in a provider-only document.
 - `ScenarioV2.ProviderOnly`, `ScenarioV2.ProviderScenario`,
   `ScenarioV2Step.ProviderStep` and `ScenarioV2Expectation.ProviderExpectation`.
+- `messages.(*TypedBuffer).Shed` records a value as dropped by a full buffer
+  without writing it, for an owner that queues ahead of the buffer and sheds
+  overload there.
