@@ -33,6 +33,9 @@ type AgentLoopConfig struct {
 	InferenceDefaults *messages.InferenceDefaults
 	TickRate          time.Duration
 	Clock             clock.TimerSource
+	// SettleRecordTimeout bounds the recorder flush when the loop ends
+	// outside a tick with held user turns; zero keeps the engine default.
+	SettleRecordTimeout time.Duration
 	// SessionConfig, when set, is sent once as SESSION.UPDATE immediately after
 	// the inference provider emits its first SESSION.OPEN or SESSION.CREATED.
 	// Only used in DuplexSession mode.
@@ -241,6 +244,15 @@ func WithInferenceDefaults(defaults messages.InferenceDefaults) Option {
 func WithTickRate(d time.Duration) Option {
 	return func(c *AgentLoopConfig) {
 		c.TickRate = d
+	}
+}
+
+// WithSettleRecordTimeout bounds how long the loop waits for the recorder
+// when it records held user turns while ending outside a tick (a terminal
+// error or cancellation). The default is engine.DefaultSettleRecordTimeout.
+func WithSettleRecordTimeout(d time.Duration) Option {
+	return func(c *AgentLoopConfig) {
+		c.SettleRecordTimeout = d
 	}
 }
 

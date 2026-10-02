@@ -3,8 +3,10 @@ package agentloop
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -81,4 +83,67 @@ func TestHeldUserTurnSurvivesLoopEndOutsideATick(t *testing.T) {
 			})
 		})
 	}
+}
+
+// ctxBoundRecorder honours its context once stuck, like a bounded async
+// writer whose queue is full.
+type ctxBoundRecorder struct {
+	stuck   atomic.Bool
+	records atomic.Int64
+}
+
+func (r *ctxBoundRecorder) Record(ctx context.Context, _ []messages.Message) error {
+	r.records.Add(1)
+	if !r.stuck.Load() {
+		return nil
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// The recorder flush that records held turns when the loop is cancelled is
+// bounded: a recorder that blocks until its context ends must not hang
+// shutdown. The flush runs with WithSettleRecordTimeout's bound, outside the
+// history lock, so the stream finishes once that bound elapses.
+func TestSettleRecorderFlushOnCancelIsBounded(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bound = 2 * time.Second
+		inf := &gatedErrorInferencer{gate: make(chan struct{})}
+		rec := &ctxBoundRecorder{}
+		loop, err := New(WithInferencer(inf), WithToolExecutor(&countingToolExecutor{}), WithRecorder(rec), WithSettleRecordTimeout(bound))
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		result, err := loop.ExecuteStreaming(ctx, NewExecuteInput("first"))
+		if err != nil {
+			t.Fatalf("ExecuteStreaming: %v", err)
+		}
+		awaitEvent(t, messages.StreamTypeTextDelta)(result.EventStream)
+		if err := loop.Send(ctx, []messages.Message{messages.NewTextMessage(messages.RoleUser, "second")}); err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+		synctest.Wait()
+		rec.stuck.Store(true)
+		started := time.Now()
+		cancel()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for result.EventStream.HasNext() {
+				result.EventStream.Response()
+			}
+		}()
+		select {
+		case <-done:
+		case <-time.After(time.Hour):
+			t.Fatal("stream never finished after cancel: the settle flush ignored its bound and blocked shutdown")
+		}
+		if elapsed := time.Since(started); elapsed < bound || elapsed > bound+time.Second {
+			t.Fatalf("shutdown took %v, want the %v flush bound", elapsed, bound)
+		}
+		if history := describeTurnHistory(loop.GetConversationHistory()); fmt.Sprint(history) != fmt.Sprint([]string{"user:first", "user:second"}) {
+			t.Fatalf("history: got %q, want the held turn placed", history)
+		}
+	})
 }

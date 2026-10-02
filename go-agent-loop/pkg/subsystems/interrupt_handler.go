@@ -95,11 +95,14 @@ func (h *InterruptHandler) Execute(ctx context.Context, curr *state.LoopState) e
 
 	// Every tool call the interrupt cut off gets a cancelled result, so no
 	// tool call is left without its result, which providers reject.
-	curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, cancelledToolResults(curr.History.ConversationBuffer)...)
+	for _, result := range cancelledToolResults(curr.History.ConversationBuffer) {
+		recordFullMessage(ctx, curr, messages.Tool, result)
+		curr.History.ConversationBuffer = append(curr.History.ConversationBuffer, result)
+	}
 
 	// Held user turns were sent before the interrupt; they precede its text.
 	PlaceHeldUserMessages(curr, func(message messages.Message) {
-		messages.WriteKernelDelta(ctx, curr.Outputs.KernelDeltaInbox, UserFullMessage(message))
+		recordFullMessage(ctx, curr, messages.User, message)
 	})
 
 	// 3. If the interrupt message carries text content, add it as a user turn so
@@ -235,4 +238,20 @@ func cancelledToolResults(history []messages.Message) []messages.Message {
 		}
 	}
 	return results
+}
+
+// recordFullMessage records a message the interrupt adds to history on the
+// kernel's full-message stream, as the coordinator does for the messages it
+// adds, so the stream and history agree.
+func recordFullMessage(ctx context.Context, curr *state.LoopState, source messages.ParticipantID, message messages.Message) {
+	if curr.Outputs.KernelDeltaInbox == nil {
+		return
+	}
+	messages.WriteKernelDelta(ctx, curr.Outputs.KernelDeltaInbox, messages.KernelDeltaRequest{
+		Source: source,
+		Delta: messages.StreamMessage{
+			Type:  messages.StreamTypeSystemFullMessage,
+			Value: messages.NewInferenceResultValue(string(source), message),
+		},
+	})
 }

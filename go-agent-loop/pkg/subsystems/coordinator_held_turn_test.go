@@ -122,5 +122,8 @@ func TestInterruptHandler_CancelledToolCallGetsAResult(t *testing.T) {
 	if got := history[3]; got.ToolCallID != "call-x" || got.TextContent() != interruptedToolResultText {
 		t.Fatalf("cancelled result: got %+v, want call-x cancelled", got)
 	}
+	if kernel, ok := ls.Outputs.KernelDeltaInbox.Read(); !ok || kernel.Source != messages.Tool {
+		t.Fatalf("kernel record: got %+v ok=%t, want the cancelled result on the full-message stream", kernel, ok)
+	}
 	nextRequest(t, ls)
 }

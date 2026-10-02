@@ -35,6 +35,10 @@ type Engine struct {
 	tickRate time.Duration
 	clock    clock.TimerSource
 
+	// settleRecordTimeout bounds the recorder flush when the loop exits
+	// outside a tick with held user turns; see settleHeldUserMessages.
+	settleRecordTimeout time.Duration
+
 	// Global ordering: assigns strictly increasing indices to consumed messages/deltas.
 	ordering *GlobalOrdering
 
@@ -94,6 +98,8 @@ func NewEngine(
 		modelRunner:  modelRunner,
 		kernelRunner: kernelRunner,
 		clock:        clock.Real{},
+
+		settleRecordTimeout: DefaultSettleRecordTimeout,
 	}
 	if len(clocks) > 0 {
 		e.SetClock(clocks[0])
@@ -244,24 +250,54 @@ func (e *Engine) runHotLoop(ctx context.Context, sendInitialInference bool) erro
 // history, the kernel stream and the recorders still record them. Kernel
 // records are best effort, since nothing may drain the kernel any more.
 func (e *Engine) settleHeldUserMessages(ctx context.Context) {
+	history := e.placeHeldUserMessagesOnExit()
+	if history == nil {
+		return
+	}
+	// The flush runs outside loopMu, so a slow recorder never blocks history
+	// readers, and it is bounded: the loop context may already be cancelled,
+	// and a recorder that honours its context must not hang shutdown.
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), e.settleRecordTimeout)
+	defer cancel()
+	for _, h := range e.subsystems {
+		if recorder, ok := h.(*subsystems.Recorder); ok {
+			if err := recorder.Flush(recordCtx, history); err != nil {
+				e.logError("engine: recording settled history failed", err)
+			}
+		}
+	}
+}
+
+// placeHeldUserMessagesOnExit places held user turns under loopMu and
+// returns a copy of the settled history, or nil when nothing was held.
+func (e *Engine) placeHeldUserMessagesOnExit() []messages.Message {
 	e.loopMu.Lock()
 	defer e.loopMu.Unlock()
 	ls := e.state.LoopState
 	if len(ls.History.HeldUserMessages) == 0 {
-		return
+		return nil
 	}
 	subsystems.PlaceHeldUserMessages(ls, func(message messages.Message) {
-		if ls.Outputs.KernelDeltaInbox != nil {
-			ls.Outputs.KernelDeltaInbox.TryWrite(subsystems.UserFullMessage(message))
+		if ls.Outputs.KernelDeltaInbox == nil {
+			return
+		}
+		if outcome := ls.Outputs.KernelDeltaInbox.TryWrite(subsystems.UserFullMessage(message)); !outcome.OK() && e.logger != nil {
+			e.logger.Debug("engine: kernel stream full at exit; held user turn recorded in history only")
 		}
 	})
-	recordCtx := context.WithoutCancel(ctx)
-	for _, h := range e.subsystems {
-		if recorder, ok := h.(*subsystems.Recorder); ok {
-			if err := recorder.Flush(recordCtx, ls); err != nil {
-				e.logError("engine: recording settled history failed", err)
-			}
-		}
+	return append([]messages.Message(nil), ls.History.ConversationBuffer...)
+}
+
+// DefaultSettleRecordTimeout is the default bound on the recorder flush that
+// records held user turns when the loop exits outside a tick.
+const DefaultSettleRecordTimeout = 3 * time.Second
+
+// SetSettleRecordTimeout bounds the recorder flush that records held user
+// turns when the loop exits outside a tick (a terminal error or
+// cancellation). Non-positive values keep DefaultSettleRecordTimeout.
+func (e *Engine) SetSettleRecordTimeout(d time.Duration) {
+	if d > 0 {
+		e.settleRecordTimeout = d
 	}
 }
 

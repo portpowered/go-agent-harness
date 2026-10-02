@@ -124,10 +124,14 @@ every program that imports `pkg/probe`. These names have no replacement:
   - Every way the loop ends places held turns, so a turn the user sent is
     never lost: a final answer, session close or stop, a failed tool or
     interaction end (before LOOP.END), and a terminal model ERROR or
-    cancellation (as the engine exits; recorders are flushed then).
+    cancellation (as the engine exits). On that exit the recorders are
+    flushed outside the history lock with a bounded context, which
+    `agentloop.WithSettleRecordTimeout` (`Engine.SetSettleRecordTimeout`)
+    configures; the default is `engine.DefaultSettleRecordTimeout` (3s).
   - Only assistant response content opens a response. A user's input
     transcription (TRANSCRIPT deltas with RoleUser from realtime providers)
     and session events such as SESSION.OPEN do not hold typed turns.
 - An interrupt that cuts off tool calls before they return now adds a
   cancelled result for each one, so history never leaves a tool call
-  without its result.
+  without its result. The results are also recorded on the kernel's
+  full-message stream.
