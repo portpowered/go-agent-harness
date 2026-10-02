@@ -2,7 +2,7 @@ package strict
 
 import (
 	"context"
-	"strings"
+	"io"
 	"testing"
 	"testing/synctest"
 
@@ -29,21 +29,22 @@ func (l *floodingReplayLoop) Send(context.Context, []messages.Message) error { r
 
 func (l *floodingReplayLoop) SendAudioInput(ctx context.Context, _ []byte) error {
 	for range l.perFrame {
-		msg := messages.StreamMessage{Type: messages.StreamTypeToolCallDelta, ActorID: messages.Model}
-		if outcome := messages.WriteStreamDelta(ctx, l.deltas, msg); !outcome.OK() {
-			return outcome.Err
+		if err := l.writeMustDeliver(ctx, messages.StreamTypeToolCallDelta); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
+// SendSessionEventWaiting ends the turn; the provider's response ends behind
+// the flooded deltas.
 func (l *floodingReplayLoop) SendSessionEventWaiting(ctx context.Context, _ messages.StreamMessage) error {
-	text := messages.StreamMessage{Type: messages.StreamTypeTextDelta, ActorID: messages.Model, Value: messages.NewTextDeltaValue("done")}
-	end := messages.StreamMessage{Type: messages.StreamTypeMessageEnd, ActorID: messages.Model}
-	for _, msg := range []messages.StreamMessage{text, end} {
-		if outcome := messages.WriteStreamDelta(ctx, l.deltas, msg); !outcome.OK() {
-			return outcome.Err
-		}
+	return l.writeMustDeliver(ctx, messages.StreamTypeMessageEnd)
+}
+
+func (l *floodingReplayLoop) writeMustDeliver(ctx context.Context, kind messages.StreamMessageType) error {
+	if outcome := messages.WriteStreamDelta(ctx, l.deltas, messages.StreamMessage{Type: kind, ActorID: messages.Model}); !outcome.OK() {
+		return outcome.Err
 	}
 	return nil
 }
@@ -58,12 +59,13 @@ func TestStrictReplayDrainsDeltasWhileSendingInput(t *testing.T) {
 			loop:    loop,
 			actions: []replayInputAction{{audio: [][]byte{{0, 0}, {0, 0}, {0, 0}}, responseEnds: 1}},
 		}
-		var out strings.Builder
-		if err := runtime.Run(context.Background(), &out); err != nil {
+		// Run returns only once replay has read the response's MESSAGE.END,
+		// which the provider queues behind the flooded input.
+		if err := runtime.Run(context.Background(), io.Discard); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
-		if out.String() != "done" {
-			t.Fatalf("replay output = %q, want the response text after the flooded input", out.String())
+		if queued := loop.deltas.Len(); queued != 0 {
+			t.Fatalf("replay left %d deltas unread", queued)
 		}
 	})
 }
