@@ -106,3 +106,29 @@ func TestParseAskArgs_RecognizesQuotedLeadingTildePathWithSpaces(t *testing.T) {
 		t.Fatalf("attachment paths = %#v, want quoted leading-tilde path", paths)
 	}
 }
+
+func TestParseAskArgs_ClassifiesEdgeShapes(t *testing.T) {
+	prompt, files := ParseAskArgs([]string{"", "see https://example.com/a.png", "~", "~/notes", `~user\notes.txt`, "~alice", "~bob smith", "dir/"})
+	wantFiles := []string{"~", "~/notes", `~user\notes.txt`, "~alice", "dir/"}
+	if !reflect.DeepEqual(files, wantFiles) {
+		t.Fatalf("files = %#v, want %#v", files, wantFiles)
+	}
+	if prompt != "see https://example.com/a.png ~bob smith" {
+		t.Fatalf("prompt = %q", prompt)
+	}
+	if looksLikeLocalPath("https://example.com/a.png") || looksLikeLeadingTildePath("~ space/x") {
+		t.Fatal("URLs and tilde paths with a spaced user name are prompt text")
+	}
+}
+
+func TestMimeTypeForExtensionCoversEveryAttachmentKind(t *testing.T) {
+	for ext, want := range map[string]string{
+		".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp",
+		".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".flac": "audio/flac",
+		".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".mkv": "video/x-matroska", ".xyz": "",
+	} {
+		if got := mimeTypeForExtension(ext); got != want {
+			t.Errorf("mimeTypeForExtension(%q) = %q, want %q", ext, got, want)
+		}
+	}
+}
