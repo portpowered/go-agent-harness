@@ -45,6 +45,16 @@ func TestMustIsolateFixtureProcessIsolates(t *testing.T) {
 	}
 }
 
+func TestMustIsolateFixtureProcessExitsWithStatusTwoOnFailure(t *testing.T) {
+	t.Setenv("GOCOVERDIR", filepath.Join(t.TempDir(), "missing"))
+	var reported error
+	status := -1
+	mustIsolateFixtureProcess(func(err error) { reported = err }, func(code int) { status = code })
+	if status != 2 || reported == nil || !strings.Contains(reported.Error(), "isolate fixture coverage directory") {
+		t.Fatalf("exit status %d, reported %v; want status 2 and the isolation error", status, reported)
+	}
+}
+
 func TestIsolateFixtureProcessWithoutCoverageDoesNothing(t *testing.T) {
 	t.Setenv("GOCOVERDIR", "")
 	if err := IsolateFixtureProcess(); err != nil || os.Getenv("GOCOVERDIR") != "" {
