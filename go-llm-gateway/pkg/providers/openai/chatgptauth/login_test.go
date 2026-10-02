@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -103,6 +104,55 @@ func TestBrowserLoginExchangesTheCallbackCodeWithItsVerifierAndIgnoresForgedStat
 	}
 }
 
+type browserPage struct {
+	status int
+	body   string
+	err    error
+}
+
+// TestBrowserLoginDeliversTheWholeSuccessPage follows the redirect the way a
+// real browser does: asynchronously, after the CLI is already waiting. The
+// login must not close the listener before the success page reaches it.
+func TestBrowserLoginDeliversTheWholeSuccessPage(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	issuer.queueToken(issuerReply{status: http.StatusOK, body: tokenBody(t, "access-1", "refresh-1", 60)})
+	pages := make(chan browserPage, 1)
+	opener := func(ctx context.Context, rawURL string) error {
+		authorize, err := url.Parse(rawURL)
+		if err != nil {
+			return err
+		}
+		redirect, err := url.Parse(authorize.Query().Get("redirect_uri"))
+		if err != nil {
+			return err
+		}
+		redirect.Host = net.JoinHostPort("127.0.0.1", redirect.Port())
+		redirect.RawQuery = url.Values{"code": {"c"}, "state": {authorize.Query().Get("state")}}.Encode()
+		go func() { pages <- fetchPage(context.WithoutCancel(ctx), redirect.String()) }()
+		return nil
+	}
+	if _, err := issuer.client(newVirtualClock()).LoginBrowser(t.Context(), BrowserLogin{OpenBrowser: opener, Ports: []int{0}}); err != nil {
+		t.Fatalf("LoginBrowser: %v", err)
+	}
+	page := <-pages
+	if page.err != nil || page.status != http.StatusOK || !strings.Contains(page.body, "<h1>Signed in</h1>") || !strings.HasSuffix(page.body, "</html>") {
+		t.Fatalf("browser got %d %q (%v), want the complete success page", page.status, page.body, page.err)
+	}
+}
+
+func fetchPage(ctx context.Context, target string) browserPage {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return browserPage{err: err}
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return browserPage{err: err}
+	}
+	body, readErr := io.ReadAll(resp.Body)
+	return browserPage{status: resp.StatusCode, body: string(body), err: errors.Join(readErr, resp.Body.Close())}
+}
+
 func TestBrowserLoginSendsTheVerifierMatchingTheAuthorizeChallenge(t *testing.T) {
 	clock := newVirtualClock()
 	issuer := newFakeIssuer(t)
@@ -196,7 +246,7 @@ func TestCallbackWithoutStateIsRejectedAndTheLoginKeepsWaiting(t *testing.T) {
 	if err != nil || code != "good" {
 		t.Fatalf("Wait = %q, %v; want the code from the valid redirect only", code, err)
 	}
-	if err := server.Close(); err != nil {
+	if err := server.Close(t.Context()); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 }
@@ -207,7 +257,7 @@ func TestCallbackServerCancelEndsTheLogin(t *testing.T) {
 		t.Fatalf("ListenCallback: %v", err)
 	}
 	defer func() {
-		if err := server.Close(); err != nil {
+		if err := server.Close(t.Context()); err != nil {
 			t.Errorf("Close: %v", err)
 		}
 	}()
@@ -252,7 +302,7 @@ func TestCallbackServerFallsBackToTheNextPort(t *testing.T) {
 	if server.Port() == busyPort || server.Port() == 0 {
 		t.Fatalf("port = %d, want a free fallback port other than %d", server.Port(), busyPort)
 	}
-	if err := server.Close(); err != nil {
+	if err := server.Close(t.Context()); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if _, err := ListenCallback(t.Context(), "s", busyPort); err == nil || !strings.Contains(err.Error(), "bind ChatGPT login callback") {

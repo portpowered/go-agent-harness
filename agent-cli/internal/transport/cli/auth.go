@@ -59,9 +59,6 @@ func authStore(globalFlags *flags.GlobalFlags, effects authEffects) (*chatgptaut
 		return nil, errors.New("no config directory: pass --config-dir")
 	}
 	options := []chatgptauth.StoreOption{}
-	if effects.config.Now != nil {
-		options = append(options, chatgptauth.WithStoreClock(effects.config.Now))
-	}
 	if effects.sleep != nil {
 		options = append(options, chatgptauth.WithStoreSleeper(effects.sleep))
 	}
@@ -127,11 +124,11 @@ func (c *AuthChatGPTCommand) run(ctx context.Context, out io.Writer) error {
 }
 
 func saveLocked(ctx context.Context, store *chatgptauth.FileStore, cred chatgptauth.Credential) error {
-	unlock, err := store.Lock(ctx)
+	lock, err := store.Lock(ctx)
 	if err != nil {
 		return err
 	}
-	return errors.Join(store.Save(cred), unlock())
+	return errors.Join(store.Save(cred), lock.Release())
 }
 
 func describeAccount(cred chatgptauth.Credential) string {
@@ -284,12 +281,12 @@ func (c *AuthLogoutCommand) run(ctx context.Context, out, errOut io.Writer) erro
 	if err != nil {
 		return err
 	}
-	unlock, err := store.Lock(ctx)
+	lock, err := store.Lock(ctx)
 	if err != nil {
 		return err
 	}
 	message, logoutErr := c.logoutLocked(ctx, store, errOut)
-	if err := errors.Join(logoutErr, unlock()); err != nil {
+	if err := errors.Join(logoutErr, lock.Release()); err != nil {
 		return err
 	}
 	_, err = io.WriteString(out, message)

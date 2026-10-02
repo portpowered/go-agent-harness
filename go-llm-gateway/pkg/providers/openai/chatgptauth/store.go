@@ -2,7 +2,6 @@ package chatgptauth
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,10 +18,6 @@ const (
 	storeFileMode     = 0o600
 	insecureModeBits  = 0o077
 	lockSuffix        = ".lock"
-	lockOwnerFile     = "owner"
-	lockStagingSuffix = ".new"
-	lockTakenSuffix   = ".old"
-	defaultLockStale  = 2 * time.Minute
 	defaultLockPoll   = 100 * time.Millisecond
 	windowsGOOS       = "windows"
 	storeTempPattern  = ".chatgpt-*.tmp"
@@ -35,24 +30,17 @@ var ErrInsecureStore = errors.New("ChatGPT auth store is readable by other users
 // FileStore keeps one credential in a JSON file (mode 0600, directory 0700).
 // Modes are enforced outside Windows; on Windows the store relies on the ACL
 // it inherits from the config directory.
-// A sibling lock directory serializes refresh across processes, because
+// An OS advisory lock on a sibling file serializes refresh across processes, because
 // refresh tokens rotate and a concurrent refresh would log one process out.
 type FileStore struct {
 	path       string
-	now        func() time.Time
 	sleep      Sleeper
-	lockStale  time.Duration
 	lockPoll   time.Duration
 	enforceACL bool
 }
 
 // StoreOption configures a FileStore.
 type StoreOption func(*FileStore)
-
-// WithStoreClock sets the clock used to judge stale locks.
-func WithStoreClock(now func() time.Time) StoreOption {
-	return func(s *FileStore) { s.now = now }
-}
 
 // WithStoreSleeper sets how a waiter pauses between lock attempts.
 func WithStoreSleeper(sleep Sleeper) StoreOption {
@@ -63,9 +51,7 @@ func WithStoreSleeper(sleep Sleeper) StoreOption {
 func NewFileStore(path string, options ...StoreOption) *FileStore {
 	s := &FileStore{
 		path:       path,
-		now:        time.Now,
 		sleep:      WaitContext,
-		lockStale:  defaultLockStale,
 		lockPoll:   defaultLockPoll,
 		enforceACL: runtime.GOOS != windowsGOOS,
 	}
@@ -214,117 +200,47 @@ func removeIfExists(path string) error {
 	return nil
 }
 
-// Lock takes the store's cross-process lock and returns its release
-// function.
+// StoreLock is a held store lock: an OS advisory lock on the store's
+// sibling lock file.
+type StoreLock struct {
+	file *os.File
+}
+
+// Release releases the lock and closes its file. The lock file itself is
+// kept: deleting it would let a waiter that opened the old file and a newer
+// caller that created a fresh one both hold "the" lock.
+func (l *StoreLock) Release() error {
+	return errors.Join(unlockFile(l.file), l.file.Close())
+}
+
+// Lock takes the store's cross-process lock, waiting through the store's
+// sleeper while another holder has it.
 //
-// The lock is a sibling directory holding an owner file with a random
-// per-holder token. It is staged under a unique name and renamed into place,
-// so it is never visible without its owner. A lock older than the stale age
-// (by its modification time on the store clock) is left over from a crashed
-// process and is broken by renaming it to a unique name first: only one
-// waiter's rename can succeed, so two waiters never both break it. Release
-// removes the lock only while it still carries the holder's token, so a
-// holder whose lock was broken never deletes its successor's lock.
-func (s *FileStore) Lock(ctx context.Context) (func() error, error) {
-	lockPath := s.path + lockSuffix
+// The lock is an OS advisory lock (flock on Unix, LockFileEx on Windows) on
+// the sibling file <store>.lock. The operating system releases it when its
+// holder exits or crashes, so there is no staleness to judge and no way for
+// two processes to hold it at once. The lock belongs to the open file, so
+// two Lock calls in one process also exclude each other.
+func (s *FileStore) Lock(ctx context.Context) (*StoreLock, error) {
 	if err := s.ensureDir(); err != nil {
 		return nil, err
 	}
-	token := rand.Text()
+	file, err := os.OpenFile(s.path+lockSuffix, os.O_RDWR|os.O_CREATE, storeFileMode)
+	if err != nil {
+		return nil, fmt.Errorf("open ChatGPT auth store lock: %w", err)
+	}
 	for {
-		acquired, err := tryAcquireLock(lockPath, token)
+		acquired, err := tryLockFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("lock ChatGPT auth store: %w", err)
+			return nil, errors.Join(fmt.Errorf("lock ChatGPT auth store: %w", err), file.Close())
 		}
 		if acquired {
-			return func() error { return releaseLock(lockPath, token) }, nil
-		}
-		if s.breakStaleLock(lockPath) {
-			continue
+			return &StoreLock{file: file}, nil
 		}
 		if err := s.sleep(ctx, s.lockPoll); err != nil {
-			return nil, fmt.Errorf("wait for ChatGPT auth store lock: %w", err)
+			return nil, errors.Join(fmt.Errorf("wait for ChatGPT auth store lock: %w", err), file.Close())
 		}
 	}
-}
-
-// tryAcquireLock publishes a lock directory that already holds token. It
-// reports false, without error, when another holder's lock is in place.
-func tryAcquireLock(lockPath, token string) (bool, error) {
-	staging := lockPath + "." + token + lockStagingSuffix
-	if err := os.Mkdir(staging, storeDirMode); err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(filepath.Join(staging, lockOwnerFile), []byte(token), storeFileMode); err != nil {
-		return false, errors.Join(err, os.RemoveAll(staging))
-	}
-	// Renaming a directory onto an existing, non-empty lock directory fails
-	// on every supported OS; every lock holds its owner file.
-	renameErr := os.Rename(staging, lockPath)
-	if renameErr == nil {
-		return true, nil
-	}
-	cleanupErr := os.RemoveAll(staging)
-	// EEXIST and ENOTEMPTY both match fs.ErrExist; Windows reports access
-	// denied instead, so an existing lock also counts as contention.
-	if _, err := os.Lstat(lockPath); err == nil || errors.Is(renameErr, fs.ErrExist) {
-		return false, cleanupErr
-	}
-	return false, errors.Join(renameErr, cleanupErr)
-}
-
-func releaseLock(lockPath, token string) error {
-	if lockOwner(lockPath) != token {
-		// Broken as stale, and possibly taken by another process since.
-		return nil
-	}
-	if err := takeLockFrom(lockPath, token); err != nil && !errors.Is(err, errLockChangedHands) {
-		return fmt.Errorf("release ChatGPT auth store lock: %w", err)
-	}
-	return nil
-}
-
-func (s *FileStore) breakStaleLock(lockPath string) bool {
-	info, err := os.Stat(lockPath)
-	if errors.Is(err, fs.ErrNotExist) {
-		return true
-	}
-	if err != nil || s.now().Sub(info.ModTime()) < s.lockStale {
-		return false
-	}
-	return takeLockFrom(lockPath, lockOwner(lockPath)) == nil
-}
-
-// errLockChangedHands reports that the lock taken away was not the one the
-// caller judged, so it was put back.
-var errLockChangedHands = errors.New("ChatGPT auth store lock changed hands")
-
-// takeLockFrom removes the lock at lockPath if it still belongs to owner. It
-// first renames the lock to a unique name, which only one caller can do, and
-// then checks the owner of what it took. A lock that changed hands in
-// between is renamed back.
-func takeLockFrom(lockPath, owner string) error {
-	taken := lockPath + "." + rand.Text() + lockTakenSuffix
-	if err := os.Rename(lockPath, taken); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	if lockOwner(taken) != owner {
-		if err := os.Rename(taken, lockPath); err == nil {
-			return errLockChangedHands
-		}
-	}
-	return os.RemoveAll(taken)
-}
-
-func lockOwner(lockDir string) string {
-	owner, err := os.ReadFile(filepath.Join(lockDir, lockOwnerFile))
-	if err != nil {
-		return ""
-	}
-	return string(owner)
 }
 
 // ensureDir creates the store directory with mode 0700 and, outside Windows,

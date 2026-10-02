@@ -11,7 +11,7 @@ import (
 )
 
 func TestFileStoreWritesOwnerOnlyFilesAndRefusesReadableOnes(t *testing.T) {
-	store := newTestStore(t, newVirtualClock(), nil)
+	store := newTestStore(t)
 	if err := store.Save(storedCredentialFixture(t, testEpoch().Add(time.Hour))); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestFileStoreWritesOwnerOnlyFilesAndRefusesReadableOnes(t *testing.T) {
 }
 
 func TestFileStoreTightensALooseStoreDirectory(t *testing.T) {
-	store := newTestStore(t, newVirtualClock(), nil)
+	store := newTestStore(t)
 	dir := filepath.Dir(store.Path())
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)

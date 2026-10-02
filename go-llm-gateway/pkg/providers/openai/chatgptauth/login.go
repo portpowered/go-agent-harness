@@ -42,7 +42,7 @@ func (c *Client) LoginBrowser(ctx context.Context, opts BrowserLogin) (Credentia
 		return Credential{}, err
 	}
 	code, waitErr := c.awaitBrowserCode(ctx, server, opts, c.AuthorizeURL(server.RedirectURI(), pkce, state))
-	closeErr := server.Close()
+	closeErr := server.Close(ctx)
 	if waitErr != nil {
 		return Credential{}, waitErr
 	}

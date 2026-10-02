@@ -21,6 +21,7 @@ const (
 	callbackReadTimeout       = 10 * time.Second
 	callbackWriteTimeout      = 10 * time.Second
 	callbackIdleTimeout       = 30 * time.Second
+	callbackShutdownTimeout   = 2 * time.Second
 	missingEntitlementMarker  = "missing_codex_entitlement"
 	htmlContentType           = "text/html; charset=utf-8"
 )
@@ -116,9 +117,16 @@ func (s *CallbackServer) Wait(ctx context.Context) (string, error) {
 	}
 }
 
-// Close stops the listener and waits for the serve loop to return.
-func (s *CallbackServer) Close() error {
-	err := s.server.Close()
+// Close stops the listener gracefully: it lets in-flight responses, such
+// as the success page, reach the browser before the connections close, for
+// at most callbackShutdownTimeout. It then waits for the serve loop.
+func (s *CallbackServer) Close(ctx context.Context) error {
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackShutdownTimeout)
+	defer cancel()
+	err := s.server.Shutdown(shutdownCtx)
+	if err != nil {
+		err = errors.Join(err, s.server.Close())
+	}
 	<-s.served
 	return err
 }
@@ -137,6 +145,7 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 	if code := query.Get("error"); code != "" {
 		err := callbackError(code, query.Get("error_description"))
 		writePage(w, http.StatusForbidden, "Sign-in failed", err.Error())
+		flushPage(w)
 		s.deliver(callbackResult{err: err})
 		return
 	}
@@ -144,15 +153,20 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 	if code == "" {
 		err := errors.New("ChatGPT login callback is missing the authorization code")
 		writePage(w, http.StatusBadRequest, "Sign-in failed", err.Error())
+		flushPage(w)
 		s.deliver(callbackResult{err: err})
 		return
 	}
 	writePage(w, http.StatusOK, "Signed in", "ChatGPT sign-in finished. You can close this window and return to the terminal.")
+	// Push the page to the browser before waking the login, which then
+	// closes the server.
+	flushPage(w)
 	s.deliver(callbackResult{code: code})
 }
 
 func (s *CallbackServer) handleCancel(w http.ResponseWriter, _ *http.Request) {
 	writePage(w, http.StatusOK, "Cancelled", "Login cancelled.")
+	flushPage(w)
 	s.deliver(callbackResult{err: ErrLoginCancelled})
 }
 
@@ -173,6 +187,14 @@ func writePage(w http.ResponseWriter, status int, title, message string) {
 	page := "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + html.EscapeString(title) +
 		"</title></head><body><h1>" + html.EscapeString(title) + "</h1><p>" + html.EscapeString(message) + "</p></body></html>"
 	if _, err := w.Write([]byte(page)); err != nil {
+		return
+	}
+}
+
+// flushPage sends a written page now. A flush failure means the browser has
+// gone; the login outcome does not depend on it.
+func flushPage(w http.ResponseWriter) {
+	if err := http.NewResponseController(w).Flush(); err != nil {
 		return
 	}
 }

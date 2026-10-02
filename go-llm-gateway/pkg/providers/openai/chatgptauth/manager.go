@@ -30,12 +30,12 @@ func (m *Manager) Credential(ctx context.Context) (Credential, error) {
 	if err != nil || !cred.NeedsRefresh(now) {
 		return cred, err
 	}
-	unlock, err := m.store.Lock(ctx)
+	lock, err := m.store.Lock(ctx)
 	if err != nil {
 		return Credential{}, err
 	}
 	cred, err = m.refreshLocked(ctx)
-	return cred, errors.Join(err, unlock())
+	return cred, errors.Join(err, lock.Release())
 }
 
 func (m *Manager) refreshLocked(ctx context.Context) (Credential, error) {
