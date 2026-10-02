@@ -83,13 +83,37 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 			r.sendLatestUserText(ctx, session, req)
 		}
 	case <-state.Onset.Expiry():
-		// Onset can no longer be reached: release the held frames.
-		r.flushHeldAudio(ctx, session, state)
+		return r.expireHeldOnset(ctx, session, state)
 	case msg, ok := <-session.Receive().Chan():
 		if !ok {
 			return true, r.endSession(ctx, state, nil)
 		}
 		r.forwardSessionMessageState(ctx, session, state, msg)
+	}
+	return false, nil
+}
+
+// expireHeldOnset releases the frames held for barge-in onset once the onset
+// window has elapsed. Input already admitted to the runner arrived before
+// that release, so it decides the onset first: queued speech completes the
+// barge-in and sends the cancel ahead of the held audio, and a queued quiet
+// frame releases it in order. select picks at random among ready cases, so
+// without this a runner that resumes after a stall could let the timer
+// overtake the very frame that completes the onset, and the interrupting
+// audio would reach the provider before its cancel.
+//
+// Only the hold whose window expired is released. The drained input can end
+// that hold and start a new one (quiet past the hangover, then a new loud
+// frame); the new hold has its own window and must stay held, or its audio
+// would precede the cancel its onset may still produce.
+func (r *ModelRunner) expireHeldOnset(ctx context.Context, session messages.Session, state *sessionRunState) (bool, error) {
+	expired := state.Onset.Expiry()
+	if _, err := r.forwardPendingSessionInputs(ctx, session, state); err != nil {
+		return true, r.endSession(ctx, state, err)
+	}
+	if state.Onset.Expiry() == expired {
+		// Onset can no longer be reached: release the expired hold.
+		r.flushHeldAudio(ctx, session, state)
 	}
 	return false, nil
 }

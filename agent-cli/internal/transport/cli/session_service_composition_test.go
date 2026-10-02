@@ -203,9 +203,12 @@ func collectLiveTranscript(handle runtimeSession.LiveHandle, output *strings.Bui
 }
 
 type chatFlagMatrixCase struct {
-	name            string
-	args            []string
-	input           string
+	name  string
+	args  []string
+	input string
+	// keysAfterPrompt, when set, replaces input: the keys are typed only once
+	// the text session's prompt frame is on stdout.
+	keysAfterPrompt string
 	wantExit        int
 	wantOutput      string
 	wantOutputParts []string
@@ -215,7 +218,6 @@ type chatFlagMatrixCase struct {
 	checkFlags      func(*testing.T, *flags.ChatFlags, *flags.LoopFlags)
 }
 
-const chatTextCancelOutput = "Port OS Agent Chat (type 'exit' or 'quit' to end)\n---\n\x1b[?25l\x1b[?2004h\r \r\x1b[2K\r\x1b[?2004l\x1b[?25h\x1b[?1002l\x1b[?1003l\x1b[?1006l"
 const chatAudioEOFOutput = "Port OS Agent Chat - Audio Mode (Ctrl+C to exit)\n---\n\nListening...\nGoodbye!\n"
 
 func TestChatCommand_FlagMatrix(t *testing.T) {
@@ -237,7 +239,12 @@ func runChatFlagMatrixCase(t *testing.T, tt chatFlagMatrixCase) {
 	t.Helper()
 	inf := &chatTestInferencer{response: "matrix response"}
 	agentCLI, chatFlags, loopFlags := newTestAgentCLIAtWithFlags(t, inf, t.TempDir())
-	got := executeInteractiveRoot(t, agentCLI, tt.args, tt.input)
+	var got chatRun
+	if tt.keysAfterPrompt != "" {
+		got = executeInteractiveRootAfterPrompt(t, agentCLI, tt.args, tt.keysAfterPrompt)
+	} else {
+		got = executeInteractiveRoot(t, agentCLI, tt.args, tt.input)
+	}
 	if got.exitCode != tt.wantExit {
 		t.Fatalf("exit code = %d, want %d (err=%v)", got.exitCode, tt.wantExit, got.err)
 	}
@@ -308,11 +315,11 @@ func chatFlagMatrixAudioCases() []chatFlagMatrixCase {
 			},
 		},
 		{
-			name:       "activate audio output alone",
-			args:       []string{"chat", "--activate-audio-out"},
-			input:      "\x03",
-			wantExit:   0,
-			wantOutput: chatTextCancelOutput,
+			name:            "activate audio output alone",
+			args:            []string{"chat", "--activate-audio-out"},
+			keysAfterPrompt: "\x03",
+			wantExit:        0,
+			wantOutput:      chatTextCancelAfterPromptOutput(),
 			checkFlags: func(t *testing.T, chatFlags *flags.ChatFlags, _ *flags.LoopFlags) {
 				t.Helper()
 				if !chatFlags.ActivateAudioOut {
