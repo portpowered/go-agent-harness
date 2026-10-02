@@ -180,3 +180,11 @@ func constantDevice(backend, nativeID, name string, direction Direction) Device 
 	}
 	return device
 }
+
+// TestLinuxHostRegistrySelection covers host registry selection for a cgo
+// Linux build: the host registry is the Linux miniaudio one.
+func TestLinuxHostRegistrySelection(t *testing.T) {
+	if registry, ok := NewHostDeviceRegistry().(*LinuxDeviceRegistry); !ok || registry == nil {
+		t.Fatalf("NewHostDeviceRegistry() = %T, want *LinuxDeviceRegistry", NewHostDeviceRegistry())
+	}
+}
