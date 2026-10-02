@@ -473,7 +473,7 @@ test-audio-device-server-integration: ## Build both binaries and run the process
 	@set -euo pipefail; \
 	echo "==> test-audio-device-server-integration agent + audio-device-server replay"; \
 	(cd agent-cli && $(GO) run $(AGENT_CLI_TEST_RUNNER) --timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)" -- $(GO) test ./test/integration -tags=stress \
-		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryAudioOutRecordsRemoteDevicePCM|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryToolContinuationStressMatrix|AgentBinaryHighRateToolAudioRepeatedTrials|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
+		-run '^Test(AgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|AgentBinaryToolContinuationPreservesRemoteDeviceAudio|AgentBinaryToolContinuationStressMatrix|AgentBinaryHighRateToolAudioRepeatedTrials|AudioDeviceServerBinaryDefaultClockRunsWithoutController)$$' -count=1 -timeout "$(AGENT_CLI_INTEGRATION_TIMEOUT)")
 
 # The fresh-process high-rate tool-audio stress trials (both captured
 # high-rate traces, 20 trials each per repetition) and the fresh-process

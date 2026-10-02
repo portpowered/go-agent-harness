@@ -5,7 +5,6 @@
 # event); a missing or stale entry only affects balance, never which tests
 # run.
 TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio 11.50
-TestAgentBinaryAudioOutRecordsRemoteDevicePCM 4.99
 TestAgentBinarySerialToolTimingAtProcessEdges 4.13
 TestShippedSessionProcessFamilyEPatienceInitialOutputThenStall 1.73
 TestAgentBinaryNaturalCloseDrainsRemoteDevicePCM 1.70

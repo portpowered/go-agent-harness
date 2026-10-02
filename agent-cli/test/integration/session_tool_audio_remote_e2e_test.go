@@ -100,29 +100,19 @@ func TestNaturalCloseDrainsDevicePCM(t *testing.T) {
 	}
 }
 
-// TestAgentBinaryAudioOutRecordsRemoteDevicePCM pins --audio-out as a
-// secondary observation of the selected playback device. The provider emits
-// 24 kHz audio on both sides of a real mock tool call, while the remote device
-// accepts 16 kHz PCM. The finished WAV must therefore carry the negotiated
-// device rate and exactly the samples observed at the remote device edge.
-func TestAgentBinaryAudioOutRecordsRemoteDevicePCM(t *testing.T) {
-	runRemoteToolAudioScenario(t, remoteToolAudioCase{
-		name:            "device_wav_tool_continuation",
-		responseSamples: []int{38400, 66000},
-		toolResponses:   map[int]bool{0: true},
-		deviceWAV:       true,
-	}, 0, 3*time.Millisecond, 30*time.Millisecond, 0, 0, 0)
-}
-
-// TestAgentBinarySerialToolTimingAtProcessEdges distills the six-call browser
-// chain observed in test7.json. The compiled CLI crosses a real WebSocket, a
+// TestAgentBinarySerialToolTimingAtProcessEdges distills a six-call browser
+// chain from a captured live session. The compiled CLI crosses a real WebSocket, a
 // fixture-controlled executor process, and the remote device HTTP boundary.
 // It proves that harness scheduling does not manufacture the multi-second
 // pauses seen in the live recording and that burst audio remains queued while
-// the serial tool chain completes.
+// the serial tool chain completes. It also pins --audio-out as a secondary
+// observation of the selected playback device: the provider emits 24 kHz audio
+// around the tool chain while the remote device accepts 16 kHz PCM, so the
+// finished WAV must carry the negotiated device rate and exactly the samples
+// observed at the remote device edge.
 func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 	runRemoteToolAudioScenario(t, remoteToolAudioCase{
-		name:            "test7_serial_tool_timing",
+		name:            "serial_tool_timing",
 		responseSamples: []int{48000, 0, 0, 0, 0, 0, 24000},
 		toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true, 5: true},
 		deviceWAV:       true,

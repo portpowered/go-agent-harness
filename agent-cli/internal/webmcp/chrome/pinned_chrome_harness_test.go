@@ -85,7 +85,9 @@ func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, err
 	if err != nil {
 		return pinnedChrome{}, err
 	}
-	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{})
+	// macOS assesses a freshly extracted bundle on its first launch, which
+	// can hold the --version query well past the production bound.
+	acquirer := NewChromeForTestingAcquirer(ChromeForTestingOptions{VersionTimeout: pinnedChromeVersionTimeout})
 	executable, err := acquirer.AcquirePinnedChrome(ctx, PinnedChromeRequest{
 		Platform:      platform,
 		RequiredMajor: MinimumManagedChromeMajor,
@@ -97,6 +99,10 @@ func acquirePinnedChrome(ctx context.Context, workDir string) (pinnedChrome, err
 	}
 	return pinnedChrome{Lock: lock, Executable: executable.Path, WorkDir: workDir}, nil
 }
+
+// pinnedChromeVersionTimeout bounds the first --version query of the pinned
+// artifact in tests.
+const pinnedChromeVersionTimeout = time.Minute
 
 // pinnedChromeCacheDir is the Chrome for Testing cache every suite in this
 // package shares. The acquirer serializes it with a file lock and re-verifies
