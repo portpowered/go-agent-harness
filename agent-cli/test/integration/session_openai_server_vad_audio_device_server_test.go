@@ -542,13 +542,13 @@ func startPacedRemoteToolAudioTopology(t *testing.T, testCase remoteToolAudioCas
 // late the agent may be.
 //
 // Only these callbacks consume the queue, so one reading showing Q queued
-// samples covers the next Q/FrameSize callbacks; the device is asked again
-// only once that credit is spent. Mid-stream the reading is the queue stats
+// samples covers the next Q/FrameSize callbacks, which render in one request;
+// the device is asked again only once that credit is spent. Mid-stream the reading is the queue stats
 // alone: a full snapshot carries every sample rendered so far, so polling it
 // per credit made the wait quadratic in the stream length and, on a loaded
 // race-enabled host, longer than the scenario deadline. The rendered stream
 // is read only for the tail: once every response has been sent and the
-// agent has delivered the expected stream or stopped delivering.
+// agent has handed the device at least the expected sample count.
 type queueFedDevice struct {
 	remoteToolAudioDevice
 	allSent <-chan struct{}
@@ -561,21 +561,26 @@ type queueFedDevice struct {
 
 	mu     sync.Mutex
 	credit int // callbacks already known to render queued audio
-	// delivered is the agent-written sample count at the last tail poll;
-	// see renderableCallbacks.
-	delivered int
 }
 
+// Advance renders at least the requested callbacks, one batch per known
+// credit: every callback already known to render queued audio goes in the
+// same request. The device is paced by queued audio, not wall time, so
+// rendering a whole credit at once changes no rendered sample; it only
+// saves one round trip per frame, which on a starved host was most of the
+// scenario's time.
 func (d *queueFedDevice) Advance(ctx context.Context, callbacks int) error {
-	for range callbacks {
-		if err := d.awaitCredit(ctx); err != nil {
+	for remaining := callbacks; remaining > 0; {
+		batch, err := d.takeCredit(ctx)
+		if err != nil {
 			return err
 		}
-		stats, err := d.AdvanceStats(ctx, 1)
+		stats, err := d.AdvanceStats(ctx, batch)
 		if err != nil {
 			return err
 		}
 		d.refreshCredit(stats)
+		remaining -= batch
 	}
 	return nil
 }
@@ -588,7 +593,9 @@ func (d *queueFedDevice) refreshCredit(stats devicegw.DeviceServerStats) {
 	d.credit = stats.Playback.QueuedSamples / audio.FrameSize
 }
 
-func (d *queueFedDevice) awaitCredit(ctx context.Context) error {
+// takeCredit waits until at least one callback may render and returns every
+// callback currently known to render, spending that credit.
+func (d *queueFedDevice) takeCredit(ctx context.Context) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	ticker := time.NewTicker(d.poll)
@@ -596,7 +603,7 @@ func (d *queueFedDevice) awaitCredit(ctx context.Context) error {
 	for d.credit == 0 {
 		credit, err := d.renderableCallbacks(ctx)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if credit > 0 {
 			d.credit = credit
@@ -605,11 +612,12 @@ func (d *queueFedDevice) awaitCredit(ctx context.Context) error {
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return ctx.Err()
+			return 0, ctx.Err()
 		}
 	}
-	d.credit--
-	return nil
+	batch := d.credit
+	d.credit = 0
+	return batch, nil
 }
 
 // renderableCallbacks reports how many callbacks may render now without an
@@ -629,15 +637,14 @@ func (d *queueFedDevice) renderableCallbacks(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	// Every sample the agent handed the device, consumed, queued or lost.
-	// While it is short of the expected stream and still growing, the agent
-	// is mid-stream: wait a poll rather than read the whole rendered stream.
+	// While it is short of the expected stream the agent is mid-stream: the
+	// tail cannot have arrived, so wait a poll rather than read the whole
+	// rendered stream.
 	playback := stats.Playback
 	delivered := int(playback.RenderedSamples-playback.ZeroFilledSamples+playback.DroppedSamples+playback.DiscardedSamples) + queued
-	if delivered < d.expectedNonzero && delivered != d.delivered {
-		d.delivered = delivered
+	if delivered < d.expectedNonzero {
 		return 0, nil
 	}
-	d.delivered = delivered
 	snapshot, err := d.Snapshot(ctx)
 	if err != nil {
 		return 0, err
