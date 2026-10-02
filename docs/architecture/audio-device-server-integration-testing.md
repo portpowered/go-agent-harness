@@ -46,6 +46,9 @@ heard until render callbacks advance. The Go harness helpers are:
 - `audio.InjectRemoteDeviceServerCapture`
 - `audio.AdvanceRemoteDeviceServer`
 - `audio.ReadRemoteDeviceServerSnapshot`
+- `audio.ReadRemoteDeviceServerStats` (queue stats only; poll this per
+  callback, since a snapshot carries every sample rendered and captured so
+  far and its cost grows with the session)
 
 This makes assertions use rendered samples rather than sleeps or received
 network bytes. The server accepts only loopback endpoints; authentication is

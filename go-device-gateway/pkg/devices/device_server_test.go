@@ -108,6 +108,11 @@ func TestRemoteDeviceServerRoundTripUsesExplicitCallbackClock(t *testing.T) {
 		t.Fatalf("wait for remote playback: %v", err)
 	}
 	assertRemoteRenderedSnapshot(t, endpoint, append(append([]int16(nil), want...), tail...))
+	// An advance reports the queue evidence after its callbacks.
+	advanced, err := devicegw.AdvanceRemoteDeviceServerWithStats(context.Background(), endpoint, 1)
+	if err != nil || advanced.Playback.CallbackCount != 3 || advanced.Playback.QueuedSamples != 0 {
+		t.Fatalf("advance with stats = %+v, %v; want three callbacks and an empty queue", advanced.Playback, err)
+	}
 	opened, err := remote.Open(output.ID)
 	if err != nil {
 		t.Fatalf("open remote default-format device: %v", err)

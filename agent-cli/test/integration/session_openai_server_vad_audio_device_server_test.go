@@ -272,6 +272,9 @@ type remoteToolAudioDevice interface {
 	// Stats reads only the queue evidence; unlike Snapshot its cost does
 	// not grow with the samples rendered so far.
 	Stats(ctx context.Context) (devicegw.DeviceServerStats, error)
+	// AdvanceStats is Advance that also returns the queue stats after the
+	// callbacks, saving a separate Stats round trip.
+	AdvanceStats(ctx context.Context, callbacks int) (devicegw.DeviceServerStats, error)
 }
 
 // remoteDeviceServer drives an audio-device-server process.
@@ -291,6 +294,10 @@ func (d remoteDeviceServer) Snapshot(ctx context.Context) (devicegw.DeviceServer
 
 func (d remoteDeviceServer) Stats(ctx context.Context) (devicegw.DeviceServerStats, error) {
 	return devicegw.ReadRemoteDeviceServerStats(ctx, d.endpoint)
+}
+
+func (d remoteDeviceServer) AdvanceStats(ctx context.Context, callbacks int) (devicegw.DeviceServerStats, error) {
+	return devicegw.AdvanceRemoteDeviceServerWithStats(ctx, d.endpoint, callbacks)
 }
 
 // inProcessDuplexDevice is the manually clocked simulated registry that the
@@ -327,6 +334,13 @@ func (d inProcessDuplexDevice) Snapshot(context.Context) (devicegw.DeviceServerS
 
 func (d inProcessDuplexDevice) Stats(context.Context) (devicegw.DeviceServerStats, error) {
 	return devicegw.DeviceServerStats{Playback: d.registry.PlaybackStats(), Capture: d.registry.CaptureStats()}, nil
+}
+
+func (d inProcessDuplexDevice) AdvanceStats(ctx context.Context, callbacks int) (devicegw.DeviceServerStats, error) {
+	if err := d.Advance(ctx, callbacks); err != nil {
+		return devicegw.DeviceServerStats{}, err
+	}
+	return d.Stats(ctx)
 }
 
 // remoteToolAudioAgent is one running agent session of a scenario; done
@@ -557,11 +571,21 @@ func (d *queueFedDevice) Advance(ctx context.Context, callbacks int) error {
 		if err := d.awaitCredit(ctx); err != nil {
 			return err
 		}
-		if err := d.remoteToolAudioDevice.Advance(ctx, 1); err != nil {
+		stats, err := d.remoteToolAudioDevice.AdvanceStats(ctx, 1)
+		if err != nil {
 			return err
 		}
+		d.refreshCredit(stats)
 	}
 	return nil
+}
+
+// refreshCredit replaces the credit with what the queue holds after a
+// callback, so a queue the agent keeps full is never polled separately.
+func (d *queueFedDevice) refreshCredit(stats devicegw.DeviceServerStats) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.credit = stats.Playback.QueuedSamples / audio.FrameSize
 }
 
 func (d *queueFedDevice) awaitCredit(ctx context.Context) error {

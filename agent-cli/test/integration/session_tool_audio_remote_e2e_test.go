@@ -257,8 +257,9 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	device, startAgent := startPacedRemoteToolAudioTopology(t, testCase, provider, responses, callbackInterval)
 
 	paths := newRemoteToolAudioPaths(t, testCase, calls, toolDelay)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), remoteToolAudioScenarioDeadline)
 	defer cancel()
+	defer logRemoteToolAudioDeadlineMargin(t, ctx)
 	agent := startAgent(ctx, remoteToolAudioArgs(testCase, inputFrames > 0, prompt, paths), paths)
 	done, stdout, stderr := agent.done, agent.stdout, agent.stderr
 	if inputFrames > 0 {
@@ -314,6 +315,19 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	if paths.capture != "" {
 		assertRemoteToolTimingEvidence(t, paths.capture, len(calls))
 	}
+}
+
+// remoteToolAudioScenarioDeadline bounds one process-boundary scenario, from
+// agent start through its verified exit and timing analysis.
+const remoteToolAudioScenarioDeadline = 30 * time.Second
+
+// logRemoteToolAudioDeadlineMargin records how much of the scenario deadline
+// the run used, so a shrinking margin under load is visible before it fails.
+func logRemoteToolAudioDeadlineMargin(t *testing.T, ctx context.Context) {
+	t.Helper()
+	deadline, _ := ctx.Deadline()
+	remaining := time.Until(deadline)
+	t.Logf("scenario used %v of its %v deadline (margin %v)", (remoteToolAudioScenarioDeadline - remaining).Round(time.Millisecond), remoteToolAudioScenarioDeadline, remaining.Round(time.Millisecond))
 }
 
 func assertRemoteToolTimingEvidence(t *testing.T, capturePath string, wantCalls int) {

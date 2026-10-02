@@ -372,7 +372,21 @@ func (s *DeviceServer) handleAdvance(w http.ResponseWriter, r *http.Request) {
 		writeDeviceServerError(w, http.StatusBadRequest, errors.New("advance callbacks must be positive"))
 		return
 	}
-	writeDeviceServerJSON(w, struct{}{}, controller.Advance(request.Callbacks))
+	if err := controller.Advance(request.Callbacks); err != nil {
+		writeDeviceServerJSON(w, nil, err)
+		return
+	}
+	// Report the queue evidence after the callbacks, so a harness pacing the
+	// clock by queued audio needs no separate stats request per callback.
+	stats, ok := s.registry.(interface {
+		PlaybackStats() audio.PlaybackQueueStats
+		CaptureStats() audio.CaptureQueueStats
+	})
+	if !ok {
+		writeDeviceServerJSON(w, struct{}{}, nil)
+		return
+	}
+	writeDeviceServerJSON(w, DeviceServerStats{Playback: stats.PlaybackStats(), Capture: stats.CaptureStats()}, nil)
 }
 
 func (s *DeviceServer) handleInjectCapture(w http.ResponseWriter, r *http.Request) {
@@ -789,6 +803,27 @@ func AdvanceRemoteDeviceServer(ctx context.Context, endpoint string, callbacks i
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return registry.do(req, nil)
+}
+
+// AdvanceRemoteDeviceServerWithStats advances an explicitly-clocked harness
+// server and returns its queue evidence after those callbacks.
+func AdvanceRemoteDeviceServerWithStats(ctx context.Context, endpoint string, callbacks int) (DeviceServerStats, error) {
+	registry, err := NewRemoteDeviceRegistry(endpoint)
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	data, err := json.Marshal(remoteAdvanceRequest{Callbacks: callbacks})
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	req, err := newRemoteRequest(ctx, http.MethodPost, registry.baseURL+"/control/advance", bytes.NewReader(data))
+	if err != nil {
+		return DeviceServerStats{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	var stats DeviceServerStats
+	err = registry.do(req, &stats)
+	return stats, err
 }
 
 func ReadRemoteDeviceServerSnapshot(ctx context.Context, endpoint string) (DeviceServerSnapshot, error) {

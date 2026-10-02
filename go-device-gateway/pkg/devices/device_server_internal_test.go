@@ -163,6 +163,9 @@ func TestRemoteDeviceRegistryRejectsInvalidServerResponses(t *testing.T) {
 	if _, err := ReadRemoteDeviceServerSnapshot(context.Background(), "not-an-endpoint"); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
 		t.Fatalf("invalid snapshot endpoint error = %v", err)
 	}
+	if _, err := AdvanceRemoteDeviceServerWithStats(context.Background(), "not-an-endpoint", 1); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
+		t.Fatalf("invalid advance-with-stats endpoint error = %v", err)
+	}
 	if _, err := ReadRemoteDeviceServerStats(context.Background(), "not-an-endpoint"); !errors.Is(err, ErrRemoteDeviceServerEndpoint) {
 		t.Fatalf("invalid stats endpoint error = %v", err)
 	}
