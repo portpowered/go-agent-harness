@@ -3,13 +3,13 @@
 ---
 status: decided (user decisions of 2026-10-02 below); phase 2, the login and token store, is #635
 component: go-llm-gateway, go-agent-runtime, agent-cli
-extends: docs/architecture/gpt-live-provider.md (#630); answers its 2.3 "Auth" and 2.4 "Delegation mode", both PENDING this document
+extends: docs/architecture/gpt-live-provider.md (#630); settles its 2.3 "Auth" and 2.4 "Delegation mode", which were PENDING this document
 sources verified: 2026-10-02
 ---
 
 This document extends the GPT-Live provider design
-([`gpt-live-provider.md`](gpt-live-provider.md), #630). That design leaves two
-sections PENDING this document:
+([`gpt-live-provider.md`](gpt-live-provider.md), #630). That design left two
+sections PENDING this document, and both are now decided:
 
 - 2.3 "Auth": it fixes the shape (ChatGPT auth store by default, API key as
   the fallback, headers injected through a credential provider);
