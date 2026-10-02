@@ -521,13 +521,22 @@ gate fails naming that package.
 - The `packages` array stays **sorted** by import path.
 - Each entry carries **exactly one** of `minimum` or `exception`.
 - Floors **ratchet up**. The gate fails a floor more than 2.00 points below
-  the measured coverage (in a package so small that one statement is worth
-  more than that, one statement plus 0.10) and prints the minimum to raise it
-  to. Raise the floor in the same change that adds the coverage.
-- `0.00` is rejected: it enforces nothing. An `exception` must state its
-  reason, and is accepted only while no test covers a statement of the package
-  (declarations only, or a process entrypoint run only as a subprocess); once
-  a test covers one, register a `minimum`.
+  the measured coverage and prints the minimum to raise it to: measured minus
+  1.00, half the allowed headroom, so the floor survives the next run moving
+  up to a point either way. In a package so small that one statement (plus the
+  0.10 comparison band) is worth more than 1.00, both widen to that one
+  statement, so the suggested floor also tolerates losing a single covered
+  statement. Raise the floor in the same change that adds the coverage.
+- A minimum of `0.10` or less is rejected: it passes with no statement
+  covered, so it enforces nothing. The lowest minimum is `0.20`. The one
+  documented consequence: in a one-statement package (for example the
+  `audioio`, `sessionturn` and `go-llm-gateway/pkg/logging` facades) the
+  floor cannot tolerate losing that statement, because tolerating it would
+  mean passing with nothing covered.
+- An `exception` must state its reason, and is accepted only while no test
+  covers a statement of the package (declarations only, or a process
+  entrypoint run only as a subprocess); once a test covers one, the gate
+  prints the `minimum` to register instead.
 - A refactor that moves code into a nested `internal/` subdirectory creates a
   **new measured package** — Go treats `.../foo/internal` as separate from
   `.../foo`, and the parent entry does not cover the child. Enumerate every new

@@ -29,7 +29,7 @@ var (
 	ErrMissingCoverage          = errors.New("manifest package has no measured coverage")
 	ErrCoverageFloorViolation   = errors.New("measured coverage is below its minimum")
 	ErrCoverageFloorStale       = errors.New("coverage minimum is too far below measured coverage")
-	ErrManifestZeroMinimum      = errors.New("coverage minimum 0.00 enforces nothing")
+	ErrManifestNoopMinimum      = errors.New("coverage minimum passes with no statement covered")
 	ErrExceptionMeasured        = errors.New("coverage exception registered for a package with covered statements")
 )
 
@@ -66,7 +66,8 @@ type Violation struct {
 
 // StaleFloor is a floor that has fallen more than its allowed headroom below
 // the measured coverage. Floors only ratchet up: the gate fails until the
-// manifest minimum is raised to at least SuggestedCents.
+// manifest minimum is raised above ActualCents-AllowedCents; SuggestedCents
+// is where to place it (see suggestedMinimumCents).
 type StaleFloor struct {
 	ImportPath     string
 	MinimumCents   int
@@ -128,7 +129,7 @@ func (e *FindingsError) Error() string {
 	}
 	if len(e.Stale) > 0 {
 		var b strings.Builder
-		b.WriteString("coverage gate found stale coverage floors (raise each minimum to at least the suggested value):")
+		b.WriteString("coverage gate found stale coverage floors (raise each minimum to the suggested value):")
 		for _, stale := range e.Stale {
 			fmt.Fprintf(&b, "\n- %s: minimum %s%%, actual %s%%, headroom %s%% exceeds allowed %s%%; raise minimum to %s",
 				stale.ImportPath,
@@ -145,11 +146,12 @@ func (e *FindingsError) Error() string {
 		var b strings.Builder
 		b.WriteString("coverage gate found exceptions for packages with covered statements (register a minimum instead):")
 		for _, measured := range e.MeasuredExceptions {
-			fmt.Fprintf(&b, "\n- %s: actual %s%% (%d of %d statements)",
+			fmt.Fprintf(&b, "\n- %s: actual %s%% (%d of %d statements); register minimum %s",
 				measured.ImportPath,
 				formatCents(measured.Coverage.actualCents()),
 				measured.Coverage.Covered,
 				measured.Coverage.Total,
+				formatCents(suggestedMinimumCents(measured.Coverage)),
 			)
 		}
 		sections = append(sections, b.String())
@@ -228,17 +230,31 @@ const coverageComparisonBandCents = 10
 // following it, so a later regression of that size would pass unnoticed.
 const ratchetHeadroomCents = 200
 
+// lowestMeaningfulMinimumCents is the lowest suggested minimum. A minimum at
+// or below the comparison band (0.10) passes with no statement covered, so it
+// is rejected like 0.00; 0.20 is the lowest value on Go's 0.1 grid that fails.
+const lowestMeaningfulMinimumCents = 2 * coverageComparisonBandCents
+
 // allowedHeadroomCents is the ratchet headroom for a package with total
-// statements. In a small package one statement is worth more than 2.00
-// points, so the headroom widens to one statement (rounded up to Go's 0.1
-// precision) plus the comparison band: a floor that tolerates losing a
-// single covered statement is never reported as stale.
+// statements: 2.00 points, or, in a package so small that one statement
+// (rounded up to Go's 0.1 precision) plus the comparison band is worth more
+// than half of that, twice that amount. The suggested minimum sits half the
+// headroom below the measurement, so it tolerates run-to-run jitter in either
+// direction and the loss of a single covered statement.
 func allowedHeadroomCents(total int64) int {
 	if total <= 0 {
 		return ratchetHeadroomCents
 	}
 	oneStatementTenths := (permille + total - 1) / total
-	return max(ratchetHeadroomCents, int(oneStatementTenths)*10+coverageComparisonBandCents)
+	return max(ratchetHeadroomCents, 2*(int(oneStatementTenths)*10+coverageComparisonBandCents))
+}
+
+// suggestedMinimumCents is where a floor belongs for a measurement: half the
+// allowed headroom below it, never below the lowest meaningful minimum.
+// Placed there, the floor neither fails when coverage dips nor goes stale
+// when coverage rises, by up to half the headroom either way.
+func suggestedMinimumCents(coverage Coverage) int {
+	return max(lowestMeaningfulMinimumCents, coverage.actualCents()-allowedHeadroomCents(coverage.Total)/2)
 }
 
 // LoadManifest loads either the fragment directory used by the repository
@@ -483,11 +499,11 @@ func parseEntry(raw json.RawMessage) (PackageEntry, error) {
 			Message:    fmt.Sprintf("coverage manifest package %q minimum must be between 0.00 and 100.00: got %s", importPath, lexeme),
 		}
 	}
-	if minimumCents == 0 {
+	if minimumCents <= coverageComparisonBandCents {
 		return PackageEntry{}, &ManifestError{
-			Kind:       ErrManifestZeroMinimum,
+			Kind:       ErrManifestNoopMinimum,
 			ImportPath: importPath,
-			Message:    fmt.Sprintf("coverage manifest package %q minimum 0.00 enforces nothing; register a positive minimum, or an exception stating why the package has nothing to measure", importPath),
+			Message:    fmt.Sprintf("coverage manifest package %q minimum %s passes with no statement covered; register a minimum of at least %s, or an exception stating why the package has nothing to measure", importPath, lexeme, formatCents(lowestMeaningfulMinimumCents)),
 		}
 	}
 	return PackageEntry{ImportPath: importPath, MinimumCents: minimumCents, HasMinimum: true}, nil
@@ -663,7 +679,7 @@ func (e *FindingsError) checkFloor(entry PackageEntry, coverage Coverage) {
 			MinimumCents:   entry.MinimumCents,
 			ActualCents:    actualCents,
 			AllowedCents:   allowed,
-			SuggestedCents: actualCents - allowed,
+			SuggestedCents: suggestedMinimumCents(coverage),
 		})
 	}
 }
@@ -729,8 +745,8 @@ func validateManifest(manifest Manifest) error {
 		if entry.HasMinimum && (entry.MinimumCents < 0 || entry.MinimumCents > 10000) {
 			return fmt.Errorf("%w: package %q minimum is outside 0.00..100.00", ErrManifestInvalid, entry.ImportPath)
 		}
-		if entry.HasMinimum && entry.MinimumCents == 0 {
-			return fmt.Errorf("%w: package %q", ErrManifestZeroMinimum, entry.ImportPath)
+		if entry.HasMinimum && entry.MinimumCents <= coverageComparisonBandCents {
+			return fmt.Errorf("%w: package %q", ErrManifestNoopMinimum, entry.ImportPath)
 		}
 		previous = entry.ImportPath
 	}

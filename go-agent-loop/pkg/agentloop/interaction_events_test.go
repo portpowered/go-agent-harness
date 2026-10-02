@@ -48,6 +48,19 @@ func TestRunDeliversNormalizedInteractionEvents(t *testing.T) {
 	if got := <-outputs.texts; got != "done" {
 		t.Fatalf("output = %q, want the interaction's final message", got)
 	}
+	// The final message reaches the outputs before the End event's tick may
+	// have run. The End event is applied in the same tick that publishes
+	// LOOP.END (InteractionEvents precedes CoordinatorDelta), so LOOP.END on
+	// the public delta stream proves the interaction is complete.
+	for {
+		delta, err := al.Deltas().ReadContext(ctx)
+		if err != nil {
+			t.Fatalf("read deltas before LOOP.END: %v", err)
+		}
+		if delta.Type == messages.StreamTypeLoopEnd {
+			break
+		}
+	}
 	// Run is continuous turn-taking: it keeps serving later turns until its
 	// caller stops it.
 	cancel()
