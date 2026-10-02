@@ -106,7 +106,7 @@ func grayPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
+func TestLinuxScreenFakeCaptureAndRecord(t *testing.T) {
 	fakeLinuxDesktop(t, tinyPNG(t))
 	tool := display.NewScreenToolWithOptions(display.ScreenToolOptions{
 		DisplaySurface: display.NewHostDisplaySurface(),
@@ -136,7 +136,7 @@ func TestS12LinuxScreenFakeCaptureAndRecord(t *testing.T) {
 	}
 }
 
-func TestS12LinuxMouseFakeOperations(t *testing.T) {
+func TestLinuxMouseFakeOperations(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		action  string
@@ -169,9 +169,9 @@ func TestS12LinuxMouseFakeOperations(t *testing.T) {
 	}
 }
 
-// TestS12LinuxMouseToolRunsXdotoolSubprocess keeps the production process
+// TestLinuxMouseToolRunsXdotoolSubprocess keeps the production process
 // runner covered end to end with one fake xdotool executable on PATH.
-func TestS12LinuxMouseToolRunsXdotoolSubprocess(t *testing.T) {
+func TestLinuxMouseToolRunsXdotoolSubprocess(t *testing.T) {
 	_, logPath := fakeLinuxDesktop(t, tinyPNG(t))
 	msgs, err := NewMouseTool().Execute(context.Background(), map[string]any{"action": "move", "x": float64(2), "y": float64(3)})
 	if err != nil || len(msgs) != 1 || msgs[0].TextContent() != "Mouse moved to (2, 3)" {
@@ -197,7 +197,7 @@ func expectedLinuxDragLog(fromX, fromY, toX, toY int) []string {
 	return append(lines, "mouseup 1")
 }
 
-func TestS12LinuxHelpersAndCapabilityErrors(t *testing.T) {
+func TestLinuxHelpersAndCapabilityErrors(t *testing.T) {
 	dir, _ := fakeLinuxDesktop(t, grayPNG(t))
 	assertLinuxDisplayHelpers(t)
 	assertLinuxImageHelpers(t, dir)
@@ -302,7 +302,7 @@ func assertLinuxMouseFailures(t *testing.T) {
 	}
 }
 
-func TestS4LinuxProcessErrorIdentity(t *testing.T) {
+func TestLinuxProcessErrorIdentity(t *testing.T) {
 	process := &fakeMouseProcess{run: func([]string) ([]byte, error) {
 		return []byte("command failed\n"), errors.New("exit status 9")
 	}}

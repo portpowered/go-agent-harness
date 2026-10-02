@@ -1,4 +1,4 @@
-//go:build windows && live
+//go:build windows && e2e
 
 package mouse
 
@@ -50,7 +50,7 @@ func requireWindowsDesktop(t *testing.T) image.Rectangle {
 	return bounds
 }
 
-func TestS12WindowsScreenCaptureAndRecord(t *testing.T) {
+func TestWindowsScreenCaptureAndRecord(t *testing.T) {
 	bounds := requireWindowsDesktop(t)
 	tool := display.NewScreenTool()
 
@@ -84,7 +84,7 @@ func TestS12WindowsScreenCaptureAndRecord(t *testing.T) {
 
 }
 
-func TestS12WindowsMouseOperationsRestoreCursor(t *testing.T) {
+func TestWindowsMouseOperationsRestoreCursor(t *testing.T) {
 	bounds := requireWindowsDesktop(t)
 	originalX, originalY, err := windowsCursorPosition()
 	if err != nil {

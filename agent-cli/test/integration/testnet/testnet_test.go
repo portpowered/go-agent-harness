@@ -10,7 +10,7 @@ import (
 )
 
 // clampedReceiveWindowBytes is the agent's receive window in the failing
-// nightly run of test46/slow_device (ss: rb52438, snd_wnd 52224). The
+// nightly run of high_rate_111600_final/slow_device (ss: rb52438, snd_wnd 52224). The
 // fixture's side of that connection had negotiated a 64512-byte segment and
 // 91908 bytes stayed unsent on a persist timer for 30 s.
 const clampedReceiveWindowBytes = 52224

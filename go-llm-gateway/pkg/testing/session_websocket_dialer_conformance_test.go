@@ -13,12 +13,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport/transporttest"
 )
 
-// TestRecordingWebSocketDialerSharedTransportS11Conformance proves
+// TestRecordingWebSocketDialerSharedTransportConformance proves
 // RecordingWebSocketDialer satisfies the shared pkg/transport behavioral
 // contract through the transporttest.RunS11 suite: dial forwarding without
 // header mutation, caller-owned connections, ordered typed reads, byte-exact
 // writes, single close observation, and identity-preserving operation errors.
-func TestRecordingWebSocketDialerSharedTransportS11Conformance(t *testing.T) {
+func TestRecordingWebSocketDialerSharedTransportConformance(t *testing.T) {
 	dialErr := &dialerTransportOperationError{operation: "dial"}
 	readErr := &dialerTransportOperationError{operation: "read"}
 	writeErr := &dialerTransportOperationError{operation: "write"}

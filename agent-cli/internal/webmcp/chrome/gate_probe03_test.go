@@ -24,15 +24,15 @@ import (
 )
 
 const (
-	probe03PageA = "a"
-	probe03PageB = "b"
+	staleRefPageA = "a"
+	staleRefPageB = "b"
 )
 
-// TestPinnedChromeWebMCPProbe03ThroughActualBinary is the end-to-end stale
+// TestPinnedChromeWebMCPStaleReferenceThroughActualBinary is the end-to-end stale
 // reference proof for the shipped CLI. It is opt-in because it downloads and
 // launches the pinned Chrome for Testing artifact, while the ordinary package
 // tests remain hermetic and offline.
-func TestPinnedChromeWebMCPProbe03ThroughActualBinary(t *testing.T) {
+func TestPinnedChromeWebMCPStaleReferenceThroughActualBinary(t *testing.T) {
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -67,11 +67,11 @@ func TestPinnedChromeWebMCPProbe03ThroughActualBinary(t *testing.T) {
 	run.closed = true
 }
 
-// probe03Run is the actual binary, pinned browser, randomized fixture, and
+// staleRefRun is the actual binary, pinned browser, randomized fixture, and
 // sanitized transcript shared by the Probe 03 phases.
-type probe03Run struct {
+type staleRefRun struct {
 	binaryPath        string
-	fixture           *probe03Fixture
+	fixture           *staleRefFixture
 	pageAURL          string
 	pageBURL          string
 	browser           *runningChrome
@@ -88,9 +88,9 @@ type probe03Run struct {
 	transcript        []string
 }
 
-func launchProbe03(t *testing.T, ctx context.Context) *probe03Run {
+func launchProbe03(t *testing.T, ctx context.Context) *staleRefRun {
 	t.Helper()
-	run := &probe03Run{workDir: t.TempDir()}
+	run := &staleRefRun{workDir: t.TempDir()}
 	root, err := repositoryRoot()
 	if err != nil {
 		t.Fatalf("locate repository root: %v", err)
@@ -104,9 +104,9 @@ func launchProbe03(t *testing.T, ctx context.Context) *probe03Run {
 	if err != nil {
 		t.Fatalf("acquire locked Chrome for Testing: %v", err)
 	}
-	run.fixture = newProbe03Fixture(t, probe03RandomToken(t))
-	run.pageAURL = run.fixture.PageURL(probe03PageA)
-	run.pageBURL = run.fixture.PageURL(probe03PageB)
+	run.fixture = newStaleRefFixture(t, staleRefRandomToken(t))
+	run.pageAURL = run.fixture.PageURL(staleRefPageA)
+	run.pageBURL = run.fixture.PageURL(staleRefPageB)
 	launchCtx, cancelLaunch := context.WithTimeout(ctx, 45*time.Second)
 	run.browser, err = launchPinnedChrome(launchCtx, pinned, run.pageAURL)
 	cancelLaunch()
@@ -130,18 +130,18 @@ func launchProbe03(t *testing.T, ctx context.Context) *probe03Run {
 	if err != nil {
 		t.Fatalf("discover Probe 03 page A target: %v", err)
 	}
-	if _, err := run.waitInitial(ctx, probe03PageA); err != nil {
+	if _, err := run.waitInitial(ctx, staleRefPageA); err != nil {
 		t.Fatalf("wait for Probe 03 page A readiness: %v", err)
 	}
 	run.configureExplicit(t, version)
 	return run
 }
 
-func (r *probe03Run) configureExplicit(t *testing.T, version devToolsVersion) {
+func (r *staleRefRun) configureExplicit(t *testing.T, version devToolsVersion) {
 	t.Helper()
 	r.profileDir = filepath.Join(r.workDir, "profile")
 	r.explicitConfigDir = filepath.Join(r.workDir, "explicit-config")
-	if err := writeProbe03Config(r.explicitConfigDir, "", r.fixture.Origin()); err != nil {
+	if err := writeStaleRefConfig(r.explicitConfigDir, "", r.fixture.Origin()); err != nil {
 		t.Fatalf("write explicit Probe 03 config: %v", err)
 	}
 	r.cdpURL = r.baseURL + "/json/version?probe03_endpoint=" + r.fixture.Token() + "#probe03-fragment-" + r.fixture.Token()
@@ -158,17 +158,17 @@ func (r *probe03Run) configureExplicit(t *testing.T, version devToolsVersion) {
 
 // command runs one CLI child, records its sanitized transcript line, and
 // asserts that no endpoint or fixture secret leaked into its output.
-func (r *probe03Run) command(t *testing.T, ctx context.Context, configDir, homeDir string, args ...string) gateCLIResult {
+func (r *staleRefRun) command(t *testing.T, ctx context.Context, configDir, homeDir string, args ...string) gateCLIResult {
 	t.Helper()
-	result := runProbe03Command(t, ctx, r.binaryPath, configDir, homeDir, args...)
-	recordProbe03Command(&r.transcript, result, r.cdpURL, r.fixture.Token(), r.profileDir, configDir, homeDir)
-	assertProbe03SafeOutput(t, result, r.cdpURL, r.fixture.Token())
+	result := runStaleRefCommand(t, ctx, r.binaryPath, configDir, homeDir, args...)
+	recordStaleRefCommand(&r.transcript, result, r.cdpURL, r.fixture.Token(), r.profileDir, configDir, homeDir)
+	assertStaleRefSafeOutput(t, result, r.cdpURL, r.fixture.Token())
 	return result
 }
 
 // waitInitial waits until a fixture page is ready and still untouched.
-func (r *probe03Run) waitInitial(ctx context.Context, page string) (probe03PageState, error) {
-	return waitForProbe03Oracle(ctx, r.fixture.StateURL(page), func(state probe03PageState) bool {
+func (r *staleRefRun) waitInitial(ctx context.Context, page string) (staleRefPageState, error) {
+	return waitForStaleRefOracle(ctx, r.fixture.StateURL(page), func(state staleRefPageState) bool {
 		return state.Ready && state.Value == "initial-"+page && len(state.Invocations) == 0
 	})
 }
@@ -176,7 +176,7 @@ func (r *probe03Run) waitInitial(ctx context.Context, page string) (probe03PageS
 // discoverExplicitPageATool uses the original explicit --cdp-url shape. No
 // selection is persisted, so every child process must resolve the exact
 // browser and target it was given.
-func (r *probe03Run) discoverExplicitPageATool(t *testing.T, ctx context.Context) gateTool {
+func (r *staleRefRun) discoverExplicitPageATool(t *testing.T, ctx context.Context) gateTool {
 	t.Helper()
 	explicitBrowsers := r.command(t, ctx, r.explicitConfigDir, "", "webmcp", "browsers", "--cdp-url", r.cdpURL, "--json")
 	explicitBrowsersData := requireGateSuccessData[gateBrowsersData](t, explicitBrowsers)
@@ -190,12 +190,12 @@ func (r *probe03Run) discoverExplicitPageATool(t *testing.T, ctx context.Context
 
 	explicitTabs := r.command(t, ctx, r.explicitConfigDir, "", "webmcp", "tabs", "--cdp-url", r.cdpURL, "--browser", r.browserID, "--eligible", "--json")
 	explicitTabsData := requireGateSuccessData[gateTabsData](t, explicitTabs)
-	pageATab := probe03FindTab(t, explicitTabsData, r.browserID, r.fixture.Origin(), r.pageAURL)
+	pageATab := staleRefFindTab(t, explicitTabsData, r.browserID, r.fixture.Origin(), r.pageAURL)
 	r.publicTargetID = pageATab.TargetID
 
 	pageATools := r.command(t, ctx, r.explicitConfigDir, "", "webmcp", "tools", "--cdp-url", r.cdpURL, "--browser", r.browserID, "--tab", r.publicTargetID, "--json")
 	pageAToolsData := requireGateSuccessData[gateToolsData](t, pageATools)
-	pageATool := probe03FindTool(t, pageAToolsData, r.fixture.ToolName(probe03PageA))
+	pageATool := staleRefFindTool(t, pageAToolsData, r.fixture.ToolName(staleRefPageA))
 	if pageATool.Generation == 0 || !webmcp.IsValidToolRef(webmcp.ToolRef(pageATool.Ref)) {
 		t.Fatalf("page A tool = %+v, want generation-bound reference", pageATool)
 	}
@@ -206,10 +206,10 @@ func (r *probe03Run) discoverExplicitPageATool(t *testing.T, ctx context.Context
 // browser from Chrome's DevToolsActivePort file without an explicit endpoint,
 // so the production factory, rather than a test-only injected runtime, serves
 // the no-explicit-endpoint path.
-func (r *probe03Run) verifyActivePortDiscovery(t *testing.T, ctx context.Context, pageATool gateTool) {
+func (r *staleRefRun) verifyActivePortDiscovery(t *testing.T, ctx context.Context, pageATool gateTool) {
 	t.Helper()
 	activeConfigDir := filepath.Join(r.workDir, "active-config")
-	if err := writeProbe03Config(activeConfigDir, r.profileDir, r.fixture.Origin()); err != nil {
+	if err := writeStaleRefConfig(activeConfigDir, r.profileDir, r.fixture.Origin()); err != nil {
 		t.Fatalf("write active-port Probe 03 config: %v", err)
 	}
 	activeBrowsers := r.command(t, ctx, activeConfigDir, "", "webmcp", "browsers", "--json")
@@ -220,7 +220,7 @@ func (r *probe03Run) verifyActivePortDiscovery(t *testing.T, ctx context.Context
 
 	r.defaultHome = filepath.Join(r.workDir, "default-home")
 	defaultConfigDir := filepath.Join(r.defaultHome, ".agent-cli")
-	if err := writeProbe03Config(defaultConfigDir, r.profileDir, r.fixture.Origin()); err != nil {
+	if err := writeStaleRefConfig(defaultConfigDir, r.profileDir, r.fixture.Origin()); err != nil {
 		t.Fatalf("write default-home Probe 03 config: %v", err)
 	}
 	defaultBrowsers := r.command(t, ctx, "", r.defaultHome, "webmcp", "browsers", "--json")
@@ -231,7 +231,7 @@ func (r *probe03Run) verifyActivePortDiscovery(t *testing.T, ctx context.Context
 
 	defaultTools := r.command(t, ctx, "", r.defaultHome, "webmcp", "tools", "--browser", r.browserID, "--tab", r.publicTargetID, "--json")
 	defaultToolsData := requireGateSuccessData[gateToolsData](t, defaultTools)
-	defaultPageATool := probe03FindTool(t, defaultToolsData, r.fixture.ToolName(probe03PageA))
+	defaultPageATool := staleRefFindTool(t, defaultToolsData, r.fixture.ToolName(staleRefPageA))
 	if defaultPageATool.Ref != pageATool.Ref || defaultPageATool.Generation != pageATool.Generation {
 		t.Fatalf("default-config page A tool = %+v, want explicit ref/generation %+v", defaultPageATool, pageATool)
 	}
@@ -241,9 +241,9 @@ func (r *probe03Run) verifyActivePortDiscovery(t *testing.T, ctx context.Context
 // independent CDP observer navigates the target. Its event envelope is the
 // proof that the catalog generation advanced inside the same selected page
 // session.
-func (r *probe03Run) watchNavigationToPageB(t *testing.T, ctx context.Context, initialGeneration uint64) {
+func (r *staleRefRun) watchNavigationToPageB(t *testing.T, ctx context.Context, initialGeneration uint64) {
 	t.Helper()
-	watchProcess, err := startProbe03Command(ctx, r.binaryPath, r.explicitConfigDir, "", "webmcp", "watch", "--cdp-url", r.cdpURL, "--browser", r.browserID, "--tab", r.publicTargetID, "--timeout", "12s", "--json")
+	watchProcess, err := startStaleRefCommand(ctx, r.binaryPath, r.explicitConfigDir, "", "webmcp", "watch", "--cdp-url", r.cdpURL, "--browser", r.browserID, "--tab", r.publicTargetID, "--timeout", "12s", "--json")
 	if err != nil {
 		t.Fatalf("start Probe 03 generation watcher: %v", err)
 	}
@@ -252,16 +252,16 @@ func (r *probe03Run) watchNavigationToPageB(t *testing.T, ctx context.Context, i
 	if err != nil {
 		t.Fatalf("wait for Probe 03 generation watcher: %v", err)
 	}
-	recordProbe03Command(&r.transcript, watchResult, r.cdpURL, r.fixture.Token(), r.profileDir, r.explicitConfigDir, "")
-	assertProbe03SafeOutput(t, watchResult, r.cdpURL, r.fixture.Token())
+	recordStaleRefCommand(&r.transcript, watchResult, r.cdpURL, r.fixture.Token(), r.profileDir, r.explicitConfigDir, "")
+	assertStaleRefSafeOutput(t, watchResult, r.cdpURL, r.fixture.Token())
 	watchData := requireGateSuccessData[gateWatchData](t, watchResult)
 	if watchData.Status != invocationStatusCanceled {
 		t.Fatalf("Probe 03 watch = %+v, want bounded canceled status", watchData)
 	}
-	assertProbe03GenerationChanged(t, watchData, r.browserID, r.publicTargetID, initialGeneration)
+	assertStaleRefGenerationChanged(t, watchData, r.browserID, r.publicTargetID, initialGeneration)
 }
 
-func (r *probe03Run) navigateWhileWatching(t *testing.T, ctx context.Context, watchProcess *gateCLIProcess) {
+func (r *staleRefRun) navigateWhileWatching(t *testing.T, ctx context.Context, watchProcess *gateCLIProcess) {
 	t.Helper()
 	abandon := func(format string, args ...any) {
 		watchProcess.cancel()
@@ -279,54 +279,54 @@ func (r *probe03Run) navigateWhileWatching(t *testing.T, ctx context.Context, wa
 	case <-ctx.Done():
 		abandon("settle Probe 03 generation watcher: %v", ctx.Err())
 	}
-	if err := navigateProbe03Target(ctx, r.browser.endpoint(), r.rawTarget.ID, r.pageBURL); err != nil {
+	if err := navigateStaleRefTarget(ctx, r.browser.endpoint(), r.rawTarget.ID, r.pageBURL); err != nil {
 		abandon("navigate Probe 03 target from page A to page B: %v", err)
 	}
-	if _, err := r.waitInitial(ctx, probe03PageB); err != nil {
+	if _, err := r.waitInitial(ctx, staleRefPageB); err != nil {
 		abandon("wait for Probe 03 page B readiness: %v", err)
 	}
 }
 
-func (r *probe03Run) invokeStaleReference(t *testing.T, ctx context.Context, pageATool gateTool) (probe03PageState, probe03PageState) {
+func (r *staleRefRun) invokeStaleReference(t *testing.T, ctx context.Context, pageATool gateTool) (staleRefPageState, staleRefPageState) {
 	t.Helper()
-	if _, err := r.waitInitial(ctx, probe03PageA); err != nil {
+	if _, err := r.waitInitial(ctx, staleRefPageA); err != nil {
 		t.Fatalf("page A oracle before stale invocation: %v", err)
 	}
-	if _, err := r.waitInitial(ctx, probe03PageB); err != nil {
+	if _, err := r.waitInitial(ctx, staleRefPageB); err != nil {
 		t.Fatalf("page B oracle before stale invocation: %v", err)
 	}
 
 	staleMessage := "old-" + r.fixture.Token()
-	staleResult := r.command(t, ctx, r.explicitConfigDir, "", "webmcp", "invoke", "--cdp-url", r.cdpURL, "--browser", r.browserID, "--tab", r.publicTargetID, "--tool-ref", pageATool.Ref, "--input-json", probe03Input(staleMessage), "--json")
-	staleEnvelope := requireProbe03Failure(t, staleResult, webmcp.ErrorStaleToolRef)
+	staleResult := r.command(t, ctx, r.explicitConfigDir, "", "webmcp", "invoke", "--cdp-url", r.cdpURL, "--browser", r.browserID, "--tab", r.publicTargetID, "--tool-ref", pageATool.Ref, "--input-json", staleRefInput(staleMessage), "--json")
+	staleEnvelope := requireStaleRefFailure(t, staleResult, webmcp.ErrorStaleToolRef)
 	if staleEnvelope.Error == nil || staleEnvelope.Error.Details["refresh_required"] != true {
 		t.Fatalf("stale envelope = %+v, want refresh_required=true", staleEnvelope.Error)
 	}
 	if strings.Contains(staleResult.Stdout+staleResult.Stderr, staleMessage) {
 		t.Fatalf("stale error exposed tool input %q", staleMessage)
 	}
-	pageAAfterStale, err := r.waitInitial(ctx, probe03PageA)
+	pageAAfterStale, err := r.waitInitial(ctx, staleRefPageA)
 	if err != nil {
 		t.Fatalf("page A oracle after stale invocation: %v", err)
 	}
-	pageBAfterNavigation, err := r.waitInitial(ctx, probe03PageB)
+	pageBAfterNavigation, err := r.waitInitial(ctx, staleRefPageB)
 	if err != nil {
 		t.Fatalf("page B oracle after stale invocation: %v", err)
 	}
 	return pageAAfterStale, pageBAfterNavigation
 }
 
-func (r *probe03Run) invokeFreshReference(t *testing.T, ctx context.Context, pageATool gateTool) (probe03PageState, probe03PageState, probe03PageSnapshot) {
+func (r *staleRefRun) invokeFreshReference(t *testing.T, ctx context.Context, pageATool gateTool) (staleRefPageState, staleRefPageState, staleRefPageSnapshot) {
 	t.Helper()
 	pageBTools := r.command(t, ctx, "", r.defaultHome, "webmcp", "tools", "--browser", r.browserID, "--tab", r.publicTargetID, "--json")
 	pageBToolsData := requireGateSuccessData[gateToolsData](t, pageBTools)
-	pageBTool := probe03FindTool(t, pageBToolsData, r.fixture.ToolName(probe03PageB))
+	pageBTool := staleRefFindTool(t, pageBToolsData, r.fixture.ToolName(staleRefPageB))
 	if pageBTool.Ref == pageATool.Ref || pageBTool.Generation == 0 {
 		t.Fatalf("page B tool = %+v, want a fresh ref distinct from page A %q", pageBTool, pageATool.Ref)
 	}
 
 	freshMessage := "fresh-" + r.fixture.Token()
-	freshResult := r.command(t, ctx, "", r.defaultHome, "webmcp", "invoke", "--browser", r.browserID, "--tab", r.publicTargetID, "--tool-ref", pageBTool.Ref, "--input-json", probe03Input(freshMessage), "--json")
+	freshResult := r.command(t, ctx, "", r.defaultHome, "webmcp", "invoke", "--browser", r.browserID, "--tab", r.publicTargetID, "--tool-ref", pageBTool.Ref, "--input-json", staleRefInput(freshMessage), "--json")
 	freshData := requireGateSuccessData[gateInvocation](t, freshResult)
 	if freshData.InvocationID == "" || freshData.ToolRef != pageBTool.Ref || freshData.Status != string(webmcp.InvocationCompleted) {
 		t.Fatalf("fresh invocation = %+v, want one completed invocation for page B", freshData)
@@ -335,41 +335,41 @@ func (r *probe03Run) invokeFreshReference(t *testing.T, ctx context.Context, pag
 	if err := json.Unmarshal(freshData.Output, &freshOutput); err != nil {
 		t.Fatalf("decode fresh Probe 03 output: %v", err)
 	}
-	if freshOutput["page"] != probe03PageB || freshOutput["message"] != freshMessage {
-		t.Fatalf("fresh output = %+v, want page=%q message=%q", freshOutput, probe03PageB, freshMessage)
+	if freshOutput["page"] != staleRefPageB || freshOutput["message"] != freshMessage {
+		t.Fatalf("fresh output = %+v, want page=%q message=%q", freshOutput, staleRefPageB, freshMessage)
 	}
 
-	pageBAfterFresh, err := waitForProbe03Oracle(ctx, r.fixture.StateURL(probe03PageB), func(state probe03PageState) bool {
-		return state.Ready && state.Value == "completed:"+freshMessage && len(state.Invocations) == 1 && state.Invocations[0] == r.fixture.ToolName(probe03PageB)+":"+freshMessage
+	pageBAfterFresh, err := waitForStaleRefOracle(ctx, r.fixture.StateURL(staleRefPageB), func(state staleRefPageState) bool {
+		return state.Ready && state.Value == "completed:"+freshMessage && len(state.Invocations) == 1 && state.Invocations[0] == r.fixture.ToolName(staleRefPageB)+":"+freshMessage
 	})
 	if err != nil {
 		t.Fatalf("page B oracle after fresh invocation: %v", err)
 	}
-	pageAAfterFresh, err := r.waitInitial(ctx, probe03PageA)
+	pageAAfterFresh, err := r.waitInitial(ctx, staleRefPageA)
 	if err != nil {
 		t.Fatalf("page A oracle after fresh invocation: %v", err)
 	}
-	pageBDirect, err := inspectProbe03Target(ctx, r.browser.endpoint(), r.rawTarget.ID)
+	pageBDirect, err := inspectStaleRefTarget(ctx, r.browser.endpoint(), r.rawTarget.ID)
 	if err != nil {
 		t.Fatalf("independent page B CDP oracle: %v", err)
 	}
-	if pageBDirect.Page != probe03PageB || pageBDirect.URL != r.pageBURL || pageBDirect.Value != pageBAfterFresh.Value || len(pageBDirect.Invocations) != 1 {
+	if pageBDirect.Page != staleRefPageB || pageBDirect.URL != r.pageBURL || pageBDirect.Value != pageBAfterFresh.Value || len(pageBDirect.Invocations) != 1 {
 		t.Fatalf("independent page B state = %+v, oracle = %+v", pageBDirect, pageBAfterFresh)
 	}
 	return pageAAfterFresh, pageBAfterFresh, pageBDirect
 }
 
-type probe03Fixture struct {
+type staleRefFixture struct {
 	server *httptest.Server
 	token  string
 	origin string
 	tools  map[string]string
 
 	mu     sync.Mutex
-	states map[string]probe03PageState
+	states map[string]staleRefPageState
 }
 
-type probe03PageState struct {
+type staleRefPageState struct {
 	Page        string   `json:"page"`
 	Ready       bool     `json:"ready"`
 	Value       string   `json:"value"`
@@ -377,7 +377,7 @@ type probe03PageState struct {
 	Invocations []string `json:"invocations"`
 }
 
-type probe03PageSnapshot struct {
+type staleRefPageSnapshot struct {
 	Page        string   `json:"page"`
 	URL         string   `json:"url"`
 	Ready       bool     `json:"ready"`
@@ -386,17 +386,17 @@ type probe03PageSnapshot struct {
 	Invocations []string `json:"invocations"`
 }
 
-func newProbe03Fixture(t *testing.T, token string) *probe03Fixture {
+func newStaleRefFixture(t *testing.T, token string) *staleRefFixture {
 	t.Helper()
-	fixture := &probe03Fixture{
+	fixture := &staleRefFixture{
 		token: token,
 		tools: map[string]string{
-			probe03PageA: "probe03_a_" + token,
-			probe03PageB: "probe03_b_" + token,
+			staleRefPageA: "probe03_a_" + token,
+			staleRefPageB: "probe03_b_" + token,
 		},
-		states: map[string]probe03PageState{
-			probe03PageA: {Page: probe03PageA, Value: "initial-a", VisibleText: "initial-a", Invocations: []string{}},
-			probe03PageB: {Page: probe03PageB, Value: "initial-b", VisibleText: "initial-b", Invocations: []string{}},
+		states: map[string]staleRefPageState{
+			staleRefPageA: {Page: staleRefPageA, Value: "initial-a", VisibleText: "initial-a", Invocations: []string{}},
+			staleRefPageB: {Page: staleRefPageB, Value: "initial-b", VisibleText: "initial-b", Invocations: []string{}},
 		},
 	}
 	fixture.server = httptest.NewServer(http.HandlerFunc(fixture.handle))
@@ -405,58 +405,58 @@ func newProbe03Fixture(t *testing.T, token string) *probe03Fixture {
 	return fixture
 }
 
-func (f *probe03Fixture) Token() string {
+func (f *staleRefFixture) Token() string {
 	if f == nil {
 		return ""
 	}
 	return f.token
 }
 
-func (f *probe03Fixture) Origin() string {
+func (f *staleRefFixture) Origin() string {
 	if f == nil {
 		return ""
 	}
 	return f.origin
 }
 
-func (f *probe03Fixture) ToolName(page string) string {
+func (f *staleRefFixture) ToolName(page string) string {
 	if f == nil {
 		return ""
 	}
 	return f.tools[page]
 }
 
-func (f *probe03Fixture) PageURL(page string) string {
+func (f *staleRefFixture) PageURL(page string) string {
 	return f.origin + "/page-" + page + "?fixture=" + f.token + "#fragment-" + f.token
 }
 
-func (f *probe03Fixture) StateURL(page string) string {
+func (f *staleRefFixture) StateURL(page string) string {
 	return f.origin + "/__probe03/state/" + page
 }
 
-func (f *probe03Fixture) Close() {
+func (f *staleRefFixture) Close() {
 	if f != nil && f.server != nil {
 		f.server.Close()
 	}
 }
 
-func (f *probe03Fixture) handle(writer http.ResponseWriter, request *http.Request) {
+func (f *staleRefFixture) handle(writer http.ResponseWriter, request *http.Request) {
 	switch request.URL.Path {
 	case "/page-a":
-		f.writePage(writer, probe03PageA)
+		f.writePage(writer, staleRefPageA)
 	case "/page-b":
-		f.writePage(writer, probe03PageB)
+		f.writePage(writer, staleRefPageB)
 	case "/__probe03/state/a":
-		f.handleState(writer, request, probe03PageA)
+		f.handleState(writer, request, staleRefPageA)
 	case "/__probe03/state/b":
-		f.handleState(writer, request, probe03PageB)
+		f.handleState(writer, request, staleRefPageB)
 	default:
 		http.NotFound(writer, request)
 	}
 }
 
-func (f *probe03Fixture) writePage(writer http.ResponseWriter, page string) {
-	if page != probe03PageA && page != probe03PageB {
+func (f *staleRefFixture) writePage(writer http.ResponseWriter, page string) {
+	if page != staleRefPageA && page != staleRefPageB {
 		http.NotFound(writer, nil)
 		return
 	}
@@ -464,10 +464,10 @@ func (f *probe03Fixture) writePage(writer http.ResponseWriter, page string) {
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.Header().Set("Origin-Agent-Cluster", "?1")
 	writer.Header().Set("Permissions-Policy", "tools=(self)")
-	writeFixtureBody(writer, []byte(renderProbe03Page(page, f.ToolName(page), f.StateURL(page))))
+	writeFixtureBody(writer, []byte(renderStaleRefPage(page, f.ToolName(page), f.StateURL(page))))
 }
 
-func (f *probe03Fixture) handleState(writer http.ResponseWriter, request *http.Request, page string) {
+func (f *staleRefFixture) handleState(writer http.ResponseWriter, request *http.Request, page string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch request.Method {
@@ -478,7 +478,7 @@ func (f *probe03Fixture) handleState(writer http.ResponseWriter, request *http.R
 		state.Invocations = append([]string(nil), state.Invocations...)
 		encodeFixtureJSON(writer, state)
 	case http.MethodPost:
-		var state probe03PageState
+		var state staleRefPageState
 		if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&state); err != nil || state.Page != page {
 			http.Error(writer, "invalid Probe 03 state", http.StatusBadRequest)
 			return
@@ -491,7 +491,7 @@ func (f *probe03Fixture) handleState(writer http.ResponseWriter, request *http.R
 	}
 }
 
-func renderProbe03Page(page, toolName, stateURL string) string {
+func renderStaleRefPage(page, toolName, stateURL string) string {
 	return fmt.Sprintf(`<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>WebMCP Probe 03 %s</title></head>
@@ -536,7 +536,7 @@ func renderProbe03Page(page, toolName, stateURL string) string {
 `, page, page, page, toolName, page, strconv.Quote(page), strconv.Quote(toolName), strconv.Quote(stateURL))
 }
 
-func writeProbe03Config(configDir, userDataDir, origin string) error {
+func writeStaleRefConfig(configDir, userDataDir, origin string) error {
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		return err
 	}
@@ -564,12 +564,12 @@ func writeProbe03Config(configDir, userDataDir, origin string) error {
 	return os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(contents), 0o600)
 }
 
-func probe03Input(message string) string {
+func staleRefInput(message string) string {
 	encoded := mustFixtureJSON(map[string]string{"message": message})
 	return string(encoded)
 }
 
-func probe03FindTab(t *testing.T, data gateTabsData, browserID, origin, pageURL string) gateTab {
+func staleRefFindTab(t *testing.T, data gateTabsData, browserID, origin, pageURL string) gateTab {
 	t.Helper()
 	var match *gateTab
 	for index := range data.Tabs {
@@ -589,7 +589,7 @@ func probe03FindTab(t *testing.T, data gateTabsData, browserID, origin, pageURL 
 	return *match
 }
 
-func probe03FindTool(t *testing.T, data gateToolsData, name string) gateTool {
+func staleRefFindTool(t *testing.T, data gateToolsData, name string) gateTool {
 	t.Helper()
 	for _, tool := range data.Tools {
 		if tool.Name == name {
@@ -600,7 +600,7 @@ func probe03FindTool(t *testing.T, data gateToolsData, name string) gateTool {
 	return gateTool{}
 }
 
-func assertProbe03GenerationChanged(t *testing.T, data gateWatchData, browserID, targetID string, initialGeneration uint64) {
+func assertStaleRefGenerationChanged(t *testing.T, data gateWatchData, browserID, targetID string, initialGeneration uint64) {
 	t.Helper()
 	var changed bool
 	for _, event := range data.Events {
@@ -617,14 +617,14 @@ func assertProbe03GenerationChanged(t *testing.T, data gateWatchData, browserID,
 	}
 }
 
-func waitForProbe03Oracle(ctx context.Context, endpoint string, match func(probe03PageState) bool) (probe03PageState, error) {
+func waitForStaleRefOracle(ctx context.Context, endpoint string, match func(staleRefPageState) bool) (staleRefPageState, error) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	var last probe03PageState
+	var last staleRefPageState
 	var lastErr error
 	for {
 		requestContext, cancel := context.WithTimeout(ctx, time.Second)
-		state, err := readProbe03Oracle(requestContext, endpoint)
+		state, err := readStaleRefOracle(requestContext, endpoint)
 		cancel()
 		if err == nil {
 			last = state
@@ -642,27 +642,27 @@ func waitForProbe03Oracle(ctx context.Context, endpoint string, match func(probe
 	}
 }
 
-func readProbe03Oracle(ctx context.Context, endpoint string) (probe03PageState, error) {
+func readStaleRefOracle(ctx context.Context, endpoint string) (staleRefPageState, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return probe03PageState{}, err
+		return staleRefPageState{}, err
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return probe03PageState{}, err
+		return staleRefPageState{}, err
 	}
 	defer closeAfterRead(response.Body)
 	if response.StatusCode != http.StatusOK {
-		return probe03PageState{}, fmt.Errorf("Probe 03 oracle HTTP status: %s", response.Status)
+		return staleRefPageState{}, fmt.Errorf("Probe 03 oracle HTTP status: %s", response.Status)
 	}
-	var state probe03PageState
+	var state staleRefPageState
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&state); err != nil {
-		return probe03PageState{}, err
+		return staleRefPageState{}, err
 	}
 	return state, nil
 }
 
-func navigateProbe03Target(ctx context.Context, endpoint, targetID, destination string) (err error) {
+func navigateStaleRefTarget(ctx context.Context, endpoint, targetID, destination string) (err error) {
 	rootContext, cancelRoot := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelRoot()
 	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
@@ -680,7 +680,7 @@ func navigateProbe03Target(ctx context.Context, endpoint, targetID, destination 
 	return nil
 }
 
-func inspectProbe03Target(ctx context.Context, endpoint, targetID string) (state probe03PageSnapshot, err error) {
+func inspectStaleRefTarget(ctx context.Context, endpoint, targetID string) (state staleRefPageSnapshot, err error) {
 	rootContext, cancelRoot := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelRoot()
 	allocatorContext, cancelAllocator := chromedp.NewRemoteAllocator(rootContext, endpoint, chromedp.NoModifyURL)
@@ -693,7 +693,7 @@ func inspectProbe03Target(ctx context.Context, endpoint, targetID string) (state
 		}
 	}()
 	if err := chromedp.Run(targetContext, chromedp.WaitReady("#probe03-ready")); err != nil {
-		return probe03PageSnapshot{}, fmt.Errorf("attach Probe 03 page oracle: %w", err)
+		return staleRefPageSnapshot{}, fmt.Errorf("attach Probe 03 page oracle: %w", err)
 	}
 	if err := chromedp.Run(targetContext, chromedp.Evaluate(`(() => {
   const state = window.__webmcpProbe03;
@@ -707,7 +707,7 @@ func inspectProbe03Target(ctx context.Context, endpoint, targetID string) (state
     invocations: state && Array.isArray(state.invocations) ? state.invocations.map((value) => String(value)) : []
   };
 })()`, &state)); err != nil {
-		return probe03PageSnapshot{}, fmt.Errorf("read Probe 03 page oracle: %w", err)
+		return staleRefPageSnapshot{}, fmt.Errorf("read Probe 03 page oracle: %w", err)
 	}
 	return state, nil
 }

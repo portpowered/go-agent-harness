@@ -300,33 +300,24 @@ func float64Packet(values ...float64) []byte {
 	return data
 }
 
-func TestPacketEnergyC42Coverage(t *testing.T) {
-	runPacketEnergyC42Coverage(t)
+// TestPacketEnergyPaddedLayoutsAndFailureModes measures padded PCM and float
+// layouts, zero frames, accumulation overflow, late non-finite samples,
+// truncated and malformed input, and allocation bounds. The Windows portable
+// CI job selects it as well, so its codec controls run on that platform.
+func TestPacketEnergyPaddedLayoutsAndFailureModes(t *testing.T) {
+	t.Run("pcm16-padded", runPacketEnergyPCM16Padded)
+	t.Run("pcm24-padded", runPacketEnergyPCM24Padded)
+	t.Run("pcm32-padded", runPacketEnergyPCM32Padded)
+	t.Run("float64-padded", runPacketEnergyFloat64Padded)
+	t.Run("zero-frames", runPacketEnergyZeroFrames)
+	t.Run("accumulation-overflow", runPacketEnergyAccumulationOverflow)
+	t.Run("later-nonfinite", runPacketEnergyLaterNonFinite)
+	t.Run("truncated", runPacketEnergyTruncated)
+	t.Run("malformed", runPacketEnergyMalformed)
+	t.Run("allocations", runPacketEnergyAllocations)
 }
 
-// TestWindowsPortablePlaybackBurstPreservesFIFOCaptureEnergyCodecCoverage is
-// selected by the existing Windows portable software-test regex. It keeps the
-// codec controls in this package so the Windows job exercises the same
-// canonical implementation as the normal package run.
-func TestWindowsPortablePlaybackBurstPreservesFIFOCaptureEnergyCodecCoverage(t *testing.T) {
-	runPacketEnergyC42Coverage(t)
-}
-
-func runPacketEnergyC42Coverage(t *testing.T) {
-	t.Helper()
-	t.Run("pcm16-padded", runC42PCM16Padded)
-	t.Run("pcm24-padded", runC42PCM24Padded)
-	t.Run("pcm32-padded", runC42PCM32Padded)
-	t.Run("float64-padded", runC42Float64Padded)
-	t.Run("zero-frames", runC42ZeroFrames)
-	t.Run("accumulation-overflow", runC42AccumulationOverflow)
-	t.Run("later-nonfinite", runC42LaterNonFinite)
-	t.Run("truncated", runC42Truncated)
-	t.Run("malformed", runC42Malformed)
-	t.Run("allocations", runC42Allocations)
-}
-
-func runC42PCM16Padded(t *testing.T) {
+func runPacketEnergyPCM16Padded(t *testing.T) {
 	format := pcmFormat(16, 12)
 	data := []byte{
 		0x01, 0x40, 0x00, 0xc0, 0x00, 0x20, 0xaa, 0xbb,
@@ -335,33 +326,33 @@ func runC42PCM16Padded(t *testing.T) {
 	}
 	wantSamples := []float64{16385.0 / 32768.0, -0.5, 0.25, 0, -1, -0.25}
 	wantEnergy := 1744863233.0 / 1073741824.0
-	assertC42PacketSamples(t, data, 3, 8, format, wantSamples)
-	assertC42PacketMutations(t, data, 3, 8, format, []int{6, 7, 14, 15, 16, 17}, 0, wantEnergy)
+	assertPacketEnergyPacketSamples(t, data, 3, 8, format, wantSamples)
+	assertPacketEnergyPacketMutations(t, data, 3, 8, format, []int{6, 7, 14, 15, 16, 17}, 0, wantEnergy)
 }
 
-func runC42PCM24Padded(t *testing.T) {
+func runPacketEnergyPCM24Padded(t *testing.T) {
 	format := pcmFormat(24, 20)
 	data := []byte{
 		0x00, 0x00, 0x40, 0x00, 0x00, 0xc0, 0xde, 0xad,
 		0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0xbe, 0xef,
 		0x5a,
 	}
-	assertC42PacketSamples(t, data, 2, 8, format, []float64{0.5, -0.5, 8388607.0 / 8388608.0, 0})
-	assertC42PacketMutations(t, data, 2, 8, format, []int{6, 7, 14, 15, 16}, 0, 0.5+(8388607.0/8388608.0)*(8388607.0/8388608.0))
+	assertPacketEnergyPacketSamples(t, data, 2, 8, format, []float64{0.5, -0.5, 8388607.0 / 8388608.0, 0})
+	assertPacketEnergyPacketMutations(t, data, 2, 8, format, []int{6, 7, 14, 15, 16}, 0, 0.5+(8388607.0/8388608.0)*(8388607.0/8388608.0))
 }
 
-func runC42PCM32Padded(t *testing.T) {
+func runPacketEnergyPCM32Padded(t *testing.T) {
 	format := pcmFormat(32, 24)
 	data := []byte{
 		0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0xe0, 0xaa, 0xbb, 0xcc, 0xdd,
 		0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x60, 0x11, 0x22, 0x33, 0x44,
 		0x55, 0x66,
 	}
-	assertC42PacketSamples(t, data, 2, 12, format, []float64{0.5, -0.25, -1, 0.75})
-	assertC42PacketMutations(t, data, 2, 12, format, []int{8, 9, 10, 11, 20, 21, 22, 23, 24, 25}, 0, 1.875)
+	assertPacketEnergyPacketSamples(t, data, 2, 12, format, []float64{0.5, -0.25, -1, 0.75})
+	assertPacketEnergyPacketMutations(t, data, 2, 12, format, []int{8, 9, 10, 11, 20, 21, 22, 23, 24, 25}, 0, 1.875)
 }
 
-func runC42Float64Padded(t *testing.T) {
+func runPacketEnergyFloat64Padded(t *testing.T) {
 	data := make([]byte, 50)
 	copy(data[0:16], float64Packet(0.5, -0.25))
 	copy(data[24:40], float64Packet(-1, 0.75))
@@ -369,11 +360,11 @@ func runC42Float64Padded(t *testing.T) {
 		data[index] = 0xd3
 	}
 	format := floatFormat(64)
-	assertC42PacketSamples(t, data, 2, 24, format, []float64{0.5, -0.25, -1, 0.75})
-	assertC42PacketMutations(t, data, 2, 24, format, []int{16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, 7, 1.875)
+	assertPacketEnergyPacketSamples(t, data, 2, 24, format, []float64{0.5, -0.25, -1, 0.75})
+	assertPacketEnergyPacketMutations(t, data, 2, 24, format, []int{16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, 7, 1.875)
 }
 
-func assertC42PacketMutations(t *testing.T, data []byte, channels, stride int, format codec.SampleFormat, padding []int, measuredIndex int, wantEnergy float64) {
+func assertPacketEnergyPacketMutations(t *testing.T, data []byte, channels, stride int, format codec.SampleFormat, padding []int, measuredIndex int, wantEnergy float64) {
 	t.Helper()
 	frames := 2
 	const measuredXor byte = 0x01
@@ -407,7 +398,7 @@ func assertC42PacketMutations(t *testing.T, data []byte, channels, stride int, f
 	}
 }
 
-func runC42ZeroFrames(t *testing.T) {
+func runPacketEnergyZeroFrames(t *testing.T) {
 	data := littleEndian64(math.Float64bits(math.NaN()))
 	before := append([]byte(nil), data...)
 	energy, err := codec.PacketEnergy(data, 0, 1, 8, floatFormat(64))
@@ -427,7 +418,7 @@ func runC42ZeroFrames(t *testing.T) {
 	}
 }
 
-func runC42AccumulationOverflow(t *testing.T) {
+func runPacketEnergyAccumulationOverflow(t *testing.T) {
 	const sample float64 = 0x1p+511
 	const wantSquare float64 = 0x1p+1022
 
@@ -468,7 +459,7 @@ func runC42AccumulationOverflow(t *testing.T) {
 	}
 }
 
-func runC42LaterNonFinite(t *testing.T) {
+func runPacketEnergyLaterNonFinite(t *testing.T) {
 	for _, testCase := range []struct {
 		name             string
 		data             []byte
@@ -495,7 +486,7 @@ func runC42LaterNonFinite(t *testing.T) {
 	}
 }
 
-func runC42Truncated(t *testing.T) {
+func runPacketEnergyTruncated(t *testing.T) {
 	backing := make([]byte, 24)
 	for index := range backing {
 		backing[index] = 0xa5
@@ -509,7 +500,7 @@ func runC42Truncated(t *testing.T) {
 	}
 }
 
-func runC42Malformed(t *testing.T) {
+func runPacketEnergyMalformed(t *testing.T) {
 	if _, err := codec.PacketEnergy([]byte{0x00}, 1, 3, 5, pcmFormat(16, 16)); !errors.Is(err, codec.ErrInvalidPacketDimensions) {
 		t.Fatalf("malformed channel/stride error = %v, want codec.ErrInvalidPacketDimensions", err)
 	}
@@ -519,7 +510,7 @@ func runC42Malformed(t *testing.T) {
 	}
 }
 
-func runC42Allocations(t *testing.T) {
+func runPacketEnergyAllocations(t *testing.T) {
 	packets := []struct {
 		name             string
 		data             []byte
@@ -546,7 +537,7 @@ func runC42Allocations(t *testing.T) {
 	}
 }
 
-func assertC42PacketSamples(t *testing.T, data []byte, channels, stride int, format codec.SampleFormat, want []float64) {
+func assertPacketEnergyPacketSamples(t *testing.T, data []byte, channels, stride int, format codec.SampleFormat, want []float64) {
 	t.Helper()
 	frames := 2
 	width, err := format.ByteWidth()

@@ -61,19 +61,6 @@ func TestKernelRunner_SystemFullMessageNotSentToDeltaEventCh(t *testing.T) {
 	}
 }
 
-func TestKernelRunner_NoDeltaEventChNoPanic(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	// Do NOT call NewDeltaEventReader — deltaEventCh is nil.
-	// Dispatching should not panic.
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Model,
-		Delta: messages.StreamMessage{
-			Type:  messages.StreamTypeTextDelta,
-			Value: messages.NewTextDeltaValue("no listener"),
-		},
-	})
-}
-
 func TestKernelRunner_MultipleDeltaTypesDispatched(t *testing.T) {
 	kr := NewKernelRunner(nil, 8)
 	evCh := kr.NewDeltaEventReader(8)
@@ -132,18 +119,6 @@ func TestKernelRunner_DispatchFullMessageToMessageOutCh(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for message on messageOutCh")
 	}
-}
-
-func TestKernelRunner_NoMessageOutChNoPanic(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	// messageOutCh is nil — should not panic.
-	kr.dispatchDelta(messages.KernelDeltaRequest{
-		Source: messages.Tool,
-		Delta: messages.StreamMessage{
-			Type:  messages.StreamTypeSystemFullMessage,
-			Value: messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, "result")),
-		},
-	})
 }
 
 func TestKernelRunner_LoopEndClosesMessageOutCh(t *testing.T) {
@@ -282,12 +257,6 @@ func TestKernelRunner_CloseStreamWithErrorDrainsDeltaInbox(t *testing.T) {
 	if _, ok := kr.DeltaInbox.Read(); ok {
 		t.Error("DeltaInbox should be drained after closeStreamWithError")
 	}
-}
-
-func TestKernelRunner_CloseStreamWithErrorNilChannelsSafe(t *testing.T) {
-	kr := NewKernelRunner(nil, 8)
-	// Both messageOutCh and deltaEventCh are nil — should not panic.
-	kr.closeStreamWithError()
 }
 
 func TestKernelRunner_CloseStreamWithErrorNilsChannels(t *testing.T) {
@@ -560,5 +529,52 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 	sent := session.sentMessages()
 	if len(sent) != 2 || sent[0].Type != messages.StreamTypeResponseCancel || sent[1].Type != messages.StreamTypeAudioDelta {
 		t.Fatalf("sent %#v, want RESPONSE.CANCEL before the held frame", sent)
+	}
+}
+// TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas
+// covers dispatch before any delta reader or message outbox is attached: those
+// deltas are dropped, a closing stream with no listeners is a no-op, and
+// listeners attached afterwards receive only what is dispatched to them.
+func TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas(t *testing.T) {
+	kr := NewKernelRunner(nil, 8)
+	kr.dispatchDelta(messages.KernelDeltaRequest{
+		Source: messages.Model,
+		Delta:  messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("unheard")},
+	})
+	kr.dispatchDelta(messages.KernelDeltaRequest{
+		Source: messages.Tool,
+		Delta: messages.StreamMessage{
+			Type:  messages.StreamTypeSystemFullMessage,
+			Value: messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, "unheard")),
+		},
+	})
+	kr.closeStreamWithError()
+
+	evCh := kr.NewDeltaEventReader(8)
+	messageCh := make(chan messages.KernelMessageRequest, 8)
+	kr.messageOutCh = messageCh
+	kr.dispatchDelta(messages.KernelDeltaRequest{
+		Source: messages.Model,
+		Delta:  messages.StreamMessage{Type: messages.StreamTypeTextDelta, Value: messages.NewTextDeltaValue("heard")},
+	})
+	kr.dispatchDelta(messages.KernelDeltaRequest{
+		Source: messages.Tool,
+		Delta: messages.StreamMessage{
+			Type:  messages.StreamTypeSystemFullMessage,
+			Value: messages.NewInferenceResultValue("tool", messages.NewTextMessage(messages.RoleTool, "heard")),
+		},
+	})
+
+	if len(evCh) != 1 {
+		t.Fatalf("delta reader holds %d events, want only the delta dispatched after it attached", len(evCh))
+	}
+	if got := <-evCh; got.Type != messages.StreamTypeTextDelta || got.Value.(*messages.TextDeltaValue).Content != "heard" {
+		t.Fatalf("delta reader got %+v, want the later text delta", got)
+	}
+	if len(messageCh) != 1 {
+		t.Fatalf("message outbox holds %d messages, want only the one dispatched after it attached", len(messageCh))
+	}
+	if got := <-messageCh; got.Message.TextContent() != "heard" {
+		t.Fatalf("message outbox got %q, want the later tool message", got.Message.TextContent())
 	}
 }

@@ -57,7 +57,7 @@ type reconstructionFuzzSeed struct {
 	Interrupted bool   `json:"interrupted"`
 }
 
-func TestReconstructMessages_S3Goldens(t *testing.T) {
+func TestReconstructMessages_Goldens(t *testing.T) {
 	tests := []struct {
 		name   string
 		deltas []StreamMessage
@@ -159,7 +159,7 @@ func TestReconstructMessages_S3Goldens(t *testing.T) {
 	}
 }
 
-func TestReconstructToolMessages_S3Golden(t *testing.T) {
+func TestReconstructToolMessages_Golden(t *testing.T) {
 	const (
 		firstTool  = "tool-first"
 		secondTool = "tool-second"

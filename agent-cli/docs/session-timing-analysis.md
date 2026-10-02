@@ -50,10 +50,8 @@ and prints a sanitized summary:
 
 ```bash
 export AGENT_MODEL__OPENAI__API_KEY='<private test key>'
-export OPENAI_REALTIME_21_LIVE=1
-
-go test -tags=e2e ./agent-cli/test/e2e \
-  -run '^TestGPTRealtime21BinaryAudioAndToolRoundTrip$' \
+go test -tags=live ./agent-cli/test/e2e \
+  -run '^TestBilledRealtimeBinaryAudioAndToolRoundTrip$' \
   -count=1 -v
 ```
 

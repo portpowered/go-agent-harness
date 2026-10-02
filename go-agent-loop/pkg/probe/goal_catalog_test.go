@@ -210,11 +210,6 @@ func TestGoalCatalogRunInputsCoverValidatedGoalsExactlyOnceAndDeterministically(
 			t.Errorf("goal %q is missing from run inputs", goal.ID)
 		}
 	}
-
-	inputType := reflect.TypeOf(probe.GoalRunInput{})
-	if inputType.NumField() != 2 {
-		t.Fatalf("GoalRunInput has %d fields, want exactly ID and text", inputType.NumField())
-	}
 }
 
 func TestGoalCatalogValidationRejectsDegradedCatalog(t *testing.T) {

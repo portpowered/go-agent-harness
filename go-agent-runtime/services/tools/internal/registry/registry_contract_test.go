@@ -186,7 +186,7 @@ func assertRegistryError(t *testing.T, err error, kind RegistryErrorKind, messag
 	}
 }
 
-func TestRegistryS4Errors(t *testing.T) {
+func TestRegistryErrors(t *testing.T) {
 	original := newContractTool("original")
 	duplicateRegistry := newEmptyRegistry()
 	if err := duplicateRegistry.Register(original); err != nil {

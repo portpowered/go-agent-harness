@@ -18,7 +18,7 @@ func visibleAutocompleteLines(view string) []string {
 	return strings.Split(strings.TrimSuffix(view, "\n"), "\n")
 }
 
-func TestAutocomplete_S4FilterShapes(t *testing.T) {
+func TestAutocomplete_FilterShapes(t *testing.T) {
 	tests := []struct {
 		name         string
 		items        []Suggestion

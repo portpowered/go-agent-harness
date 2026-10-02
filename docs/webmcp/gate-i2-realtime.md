@@ -17,7 +17,7 @@ export WEBMCP_GATE_I2=1
 export OPENAI_API_KEY_FILE=/secure/path/openai-api-key
 export WEBMCP_GATE_I2_ARTIFACT_DIR="$PWD/.artifacts/webmcp-gate-i2"
 go test -tags live ./agent-cli/internal/webmcp/chrome \
-  -run '^TestPinnedChromeOpenAIRealtimeWebMCPGateI2$' -count=1 -v
+  -run '^TestPinnedChromeOpenAIRealtimeDrivesWebMCPTools$' -count=1 -v
 ```
 
 `OPENAI_API_KEY_FILE` is preferred. The runner reads it through the documented

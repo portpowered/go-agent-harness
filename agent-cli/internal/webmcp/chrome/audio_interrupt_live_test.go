@@ -271,7 +271,7 @@ func startAudioInterruptChrome(t *testing.T, parent context.Context, scenarioRoo
 		t.Fatalf("discover exact audio interrupt fixture target: %v", err)
 	}
 	run.rawTargetID = rawTarget.ID
-	if run.browserID, run.targetID, err = gateI2PublicIDs(run.version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
+	if run.browserID, run.targetID, err = realtimeToolsPublicIDs(run.version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
 		t.Fatalf("derive normalized browser and target IDs: %v", err)
 	}
 	run.configDir = filepath.Join(scenarioRoot, "config")
@@ -324,8 +324,8 @@ func (r *audioInterruptRun) sessionArgs(ctx context.Context, t *testing.T, scena
 	if err := os.Mkdir(interruptDir, 0o700); err != nil {
 		t.Fatalf("create interrupt audio directory: %v", err)
 	}
-	requestPath := gateI2SpokenInput(ctx, t, requestDir, scenario.request)
-	interruptPath := gateI2SpokenInput(ctx, t, interruptDir, "Interrupt the active browser action now.")
+	requestPath := realtimeToolsSpokenInput(ctx, t, requestDir, scenario.request)
+	interruptPath := realtimeToolsSpokenInput(ctx, t, interruptDir, "Interrupt the active browser action now.")
 	systemPromptPath := filepath.Join(r.scenarioRoot, "system-prompt.txt")
 	if err := os.WriteFile(systemPromptPath, []byte(audioInterruptSystemPrompt(scenario)), 0o600); err != nil {
 		t.Fatalf("write audio interrupt system prompt: %v", err)

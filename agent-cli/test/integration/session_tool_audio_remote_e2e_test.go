@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	remoteToolAudioDeltaSamples = 9600 // 25,600 base64 bytes, matching test45/test46.
+	remoteToolAudioDeltaSamples = 9600 // 25,600 base64 bytes, matching the captured high-rate traces.
 	remoteToolAudioResult       = `{"ok":true,"source":"mock-tool-edge"}`
 )
 
@@ -131,33 +131,34 @@ func TestAgentBinarySerialToolTimingAtProcessEdges(t *testing.T) {
 }
 
 // remoteToolAudioContinuationCases reproduce the complete response topology of
-// test45 and test46. Each trace has nine model responses, four audio
-// responses, seven mock tool calls, an audio-only response immediately
-// followed by fresh model audio, and a five-tool continuation chain before the
-// longest final utterance; test47/test48 are matched healthy controls.
+// two captured high-rate tool-audio sessions. Each trace has nine model
+// responses, four audio responses, seven mock tool calls, an audio-only
+// response immediately followed by fresh model audio, and a five-tool
+// continuation chain before the longest final utterance; the two healthy
+// controls are matched segments from sessions that played cleanly.
 func remoteToolAudioContinuationCases() []remoteToolAudioCase {
 	return []remoteToolAudioCase{
 		{
-			name:            "test45",
+			name:            "high_rate_96000_final",
 			responseSamples: []int{38400, 0, 66000, 66000, 0, 0, 0, 0, 96000},
 			toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
 		},
 		{
-			name:            "test46",
+			name:            "high_rate_111600_final",
 			responseSamples: []int{46800, 0, 48000, 55200, 0, 0, 0, 0, 111600},
 			toolResponses:   map[int]bool{0: true, 1: true, 3: true, 4: true, 5: true, 6: true, 7: true},
 		},
 		{
-			// Responses 9-14 are the test47 segment with the same long
-			// audio-plus-tool, tool-only continuation chain, and final audio.
-			name:            "test47_matched_healthy_control",
+			// A healthy segment with the same long audio-plus-tool,
+			// tool-only continuation chain, and final audio.
+			name:            "healthy_control_96000_final",
 			responseSamples: []int{50400, 0, 0, 0, 0, 96000},
 			toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true},
 			healthyControl:  true,
 		},
 		{
-			// Responses 8-13 are the equivalent healthy test48 chain.
-			name:            "test48_matched_healthy_control",
+			// The equivalent healthy chain from a second session.
+			name:            "healthy_control_98400_final",
 			responseSamples: []int{82800, 0, 0, 0, 0, 98400},
 			toolResponses:   map[int]bool{0: true, 1: true, 2: true, 3: true, 4: true},
 			healthyControl:  true,
@@ -201,7 +202,7 @@ func TestToolContinuationPreservesDeviceAudio(t *testing.T) {
 // the fixture tool executor), a real local WebSocket provider, and the
 // audio-device-server binary whose manual callback clock the test advances
 // over HTTP. Its device-cadence deliveries drain in real time (11-22 s each).
-// Pull requests keep test45/captured_cadence as the representative real-time
+// Pull requests keep high_rate_96000_final/captured_cadence as the representative real-time
 // continuation across the three processes; the rest of the matrix is
 // TestAgentBinaryToolContinuationStressMatrix (stress tag).
 func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
@@ -212,7 +213,7 @@ func TestAgentBinaryToolContinuationPreservesRemoteDeviceAudio(t *testing.T) {
 // isRepresentativeRemoteToolAudioContinuation selects the one real-time
 // continuation that runs on every pull request.
 func isRepresentativeRemoteToolAudioContinuation(testCase remoteToolAudioCase, delivery remoteToolAudioDelivery) bool {
-	return testCase.name == "test45" && delivery.name == "captured_cadence"
+	return testCase.name == "high_rate_96000_final" && delivery.name == "captured_cadence"
 }
 
 // runAgentBinaryContinuationMatrix runs the fresh-process continuation cases

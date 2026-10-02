@@ -129,7 +129,7 @@ func corpusPCM16(t *testing.T, name string) []int16 {
 	return samples
 }
 
-func TestS4MismatchDiagnosticsCoverEveryKind(t *testing.T) {
+func TestMismatchDiagnosticsCoverEveryKind(t *testing.T) {
 	tests := []struct {
 		name string
 		e    ExpectedBehavior

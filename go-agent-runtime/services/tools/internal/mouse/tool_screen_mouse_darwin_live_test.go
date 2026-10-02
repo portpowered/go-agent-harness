@@ -1,4 +1,4 @@
-//go:build darwin && live
+//go:build darwin && e2e
 
 package mouse
 
@@ -15,7 +15,7 @@ import (
 	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
 
-func TestS12DarwinRealCapabilities(t *testing.T) {
+func TestDarwinRealScreenAndMouse(t *testing.T) {
 	assertDarwinLiveScreen(t)
 	assertDarwinLiveMouse(t)
 }

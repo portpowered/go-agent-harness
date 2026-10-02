@@ -1,0 +1,149 @@
+name: Nightly e2e
+
+# Every suite behind the e2e build tag: real Chrome, compiled binaries,
+# physical audio devices and the desktop screen and mouse. Pull requests run
+# one real-process representative (CI (WebMCP Chrome)); the rest run here once
+# a day against main, and on demand. The live tag (credentialed or billed
+# provider calls) is not run here: the repository holds no provider secret.
+#
+# Each job runs one package family so it stays within three minutes. A
+# scheduled failure opens (or comments on) a "Nightly e2e failed" issue.
+
+on:
+  schedule:
+    - cron: "47 7 * * *"
+  workflow_dispatch:
+  # Exercise the workflow itself when it changes.
+  pull_request:
+    paths:
+      - .github/workflows/nightly-e2e.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-e2e-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e:
+    name: Nightly e2e (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    # actions: write lets go-cache-save delete superseded main caches.
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The pinned Chrome for Testing artifact is darwin/arm64 only.
+          - name: pinned Chrome
+            runner: macos-14
+            cache: macos-webmcp
+            audio: false
+            packages: ./agent-cli/internal/webmcp/chrome
+            run: ^(TestPinnedChrome.*|TestWebMCPDirectCLISelectBrowserDeathWithPinnedChrome)$
+          - name: stock Chrome
+            runner: macos-14
+            cache: macos-webmcp
+            audio: false
+            packages: ./agent-cli/internal/webmcp/chrome
+            run: ^(TestManagedBrowser.*|TestBundledSiteAdaptersStockChromeJourneys|TestCapitalOneShoppingAdapterLive|TestYouTubeAdapterStockChromeJourney)$
+          # The macOS run also covers the darwin-only screen and mouse unit
+          # tests, which no Linux job compiles.
+          - name: macOS devices
+            runner: macos-14
+            cache: macos
+            audio: true
+            packages: ./agent-cli/test/functional ./go-agent-runtime/services/tools/internal/mouse ./go-agent-runtime/services/tools/internal/display
+            run: .
+          - name: Linux devices
+            runner: ubuntu-latest
+            cache: nightly-e2e-linux
+            audio: true
+            packages: ./agent-cli/test/functional ./go-agent-runtime/services/tools/internal/mouse
+            run: ^(TestLinuxPhysicalAudioDeviceLoop|TestLinuxRealScreenAndMouse)$
+          - name: Windows devices
+            runner: windows-latest
+            cache: windows
+            audio: true
+            packages: ./go-device-gateway/pkg/devices ./go-agent-runtime/services/tools/internal/mouse
+            run: ^(TestWASAPIOpenHasLiveDataPath|TestWASAPIDeviceRegistryConformance|TestWindowsMouseOperationsRestoreCursor|TestWindowsScreenCaptureAndRecord)$
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+
+      - name: Set up Go
+        id: go
+        uses: ./.github/actions/go-cache
+        with:
+          cache-name: ${{ matrix.cache }}
+
+      - name: Install a virtual sound card
+        if: matrix.audio
+        uses: LABSN/sound-ci-helpers@v1
+
+      - name: Install desktop tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb scrot xdotool x11-xserver-utils
+
+      - name: Install desktop tools (macOS)
+        if: runner.os == 'macOS' && matrix.audio
+        run: brew install cliclick
+
+      - name: Run e2e suites
+        shell: bash
+        env:
+          PACKAGES: ${{ matrix.packages }}
+          RUN: ${{ matrix.run }}
+        run: |
+          # shellcheck disable=SC2086 # PACKAGES is a space-separated list.
+          command=(go test -tags e2e $PACKAGES -run "$RUN" -count=1 -v -timeout 10m)
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a "${command[@]}"
+          else
+            "${command[@]}"
+          fi
+
+      - name: Save Go cache
+        if: always()
+        uses: ./.github/actions/go-cache-save
+        with:
+          primary-key: ${{ steps.go.outputs.primary-key }}
+          matched-key: ${{ steps.go.outputs.matched-key }}
+          gocache: ${{ steps.go.outputs.gocache }}
+          gomodcache: ${{ steps.go.outputs.gomodcache }}
+
+  report:
+    name: Report nightly e2e failure
+    if: failure() && github.event_name == 'schedule'
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Nightly e2e failed
+        run: |
+          body="The nightly e2e run failed on ${GITHUB_SHA::9}: ${RUN_URL}"
+          number="$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body
+
+          Each matrix job names the suite that failed; reproduce it locally with the job's go test command. Close this issue once the nightly e2e run passes again."
+          fi

@@ -145,7 +145,7 @@ func textInference(text string) messages.InferenceResult {
 	return messages.InferenceResult{Message: messages.NewTextMessage(messages.RoleAssistant, text)}
 }
 
-func TestAskCommandS2FlagMatrix(t *testing.T) {
+func TestAskCommandFlagMatrix(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
@@ -354,7 +354,7 @@ func TestAskCommandValidThenInvalidAttachmentSendsNoPartialRequest(t *testing.T)
 	}
 }
 
-func TestAskCommandS4ErrorTable(t *testing.T) {
+func TestAskCommandErrorTable(t *testing.T) {
 	sentinel := errors.New("inferencer failed")
 	stdinErr := errors.New("stdin failed")
 	outputErr := errors.New("output failed")
@@ -485,7 +485,7 @@ func TestAskCommandWriterErrorKeepsIdentity(t *testing.T) {
 	}
 }
 
-func TestAskCommandS4PreservesExecutionIdentity(t *testing.T) {
+func TestAskCommandPreservesExecutionIdentity(t *testing.T) {
 	want := errors.New("inferencer sentinel")
 	subject, cmd, stdout, stderr := newAskTestSubject(t, &askTestInferencer{})
 	subject.runAsk = func(context.Context, *session.Request, agentloop.ExecuteInput) (string, error) {

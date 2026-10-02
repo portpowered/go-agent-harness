@@ -1,4 +1,4 @@
-//go:build live
+//go:build e2e
 
 package chrome
 
@@ -74,7 +74,7 @@ func runLiveClassificationProbe04(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 04 wait for Chrome: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe04=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe04=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "04")
 	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "select", "--browser", browserID, "--json")
@@ -96,7 +96,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	fixtureURL := fixture.URL() + "?probe08=" + probe03RandomToken(t)
+	fixtureURL := fixture.URL() + "?probe08=" + staleRefRandomToken(t)
 	runDir := filepath.Join(pinned.WorkDir, "probe-08")
 	initialDir := filepath.Join(runDir, "initial")
 	if err := os.MkdirAll(initialDir, 0o700); err != nil {
@@ -118,7 +118,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 08 read initial port: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe08=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe08=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, true)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "08-initial")
 	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "08-initial")
@@ -170,7 +170,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	t.Helper()
 	fixture := newFixtureServer()
 	t.Cleanup(fixture.Close)
-	token := probe03RandomToken(t)
+	token := staleRefRandomToken(t)
 	firstURL := fixture.URL() + "?probe09=" + token + "-a"
 	secondURL := fixture.URL() + "?probe09=" + token + "-b"
 	runDir := filepath.Join(pinned.WorkDir, "probe-09")
@@ -196,7 +196,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 09 wait for second page: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe09=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe09=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "09")
 	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "09")
@@ -226,7 +226,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	t.Cleanup(readyFixture.Close)
 	noTools := newClassificationNoToolsServer()
 	t.Cleanup(noTools.Close)
-	token := probe03RandomToken(t)
+	token := staleRefRandomToken(t)
 	readyURL := readyFixture.URL() + "?probe10-ready=" + token
 	noToolsURL := noTools.URL + "/?probe10-unverified=" + token
 	runDir := filepath.Join(pinned.WorkDir, "probe-10")
@@ -252,7 +252,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 		t.Fatalf("probe 10 wait for unverified page: %v", err)
 	}
 	configDir := filepath.Join(runDir, "config")
-	cdpURL := baseURL + "/json/version?probe10=" + probe03RandomToken(t) + "#redacted"
+	cdpURL := baseURL + "/json/version?probe10=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "10")
 	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "10")

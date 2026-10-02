@@ -22,11 +22,11 @@ const (
 	gateWatchMessage    = "gate-watch"
 )
 
-// TestPinnedChromeWebMCPGateI1ThroughActualBinary is the release-facing
+// TestPinnedChromeWebMCPCLIJourneyThroughActualBinary is the release-facing
 // composition proof. It deliberately lives beside the Lane D integration
 // harness so it reuses the qualified Chrome lock, flags, local fixture, and
 // detach-only browser oracle without duplicating those security boundaries.
-func TestPinnedChromeWebMCPGateI1ThroughActualBinary(t *testing.T) {
+func TestPinnedChromeWebMCPCLIJourneyThroughActualBinary(t *testing.T) {
 	if runtime.GOOS != goosDarwin || runtime.GOARCH != goarchARM64 {
 		t.Fatalf("the locked Chrome artifact is for darwin/arm64, observed %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -58,9 +58,9 @@ func TestPinnedChromeWebMCPGateI1ThroughActualBinary(t *testing.T) {
 	}
 }
 
-// gateI1Run is the actual binary, pinned browser, and sanitized transcript
+// cliJourneyRun is the actual binary, pinned browser, and sanitized transcript
 // shared by the Gate I1 phases.
-type gateI1Run struct {
+type cliJourneyRun struct {
 	binaryPath string
 	configDir  string
 	fixture    *fixtureServer
@@ -73,14 +73,14 @@ type gateI1Run struct {
 	transcript []string
 }
 
-func launchGateI1(t *testing.T, ctx context.Context) *gateI1Run {
+func launchGateI1(t *testing.T, ctx context.Context) *cliJourneyRun {
 	t.Helper()
 	root, err := repositoryRoot()
 	if err != nil {
 		t.Fatalf("locate repository root: %v", err)
 	}
 	workDir := t.TempDir()
-	run := &gateI1Run{configDir: filepath.Join(workDir, "config"), binaryPath: filepath.Join(workDir, "agent")}
+	run := &cliJourneyRun{configDir: filepath.Join(workDir, "config"), binaryPath: filepath.Join(workDir, "agent")}
 	if err := os.Mkdir(run.configDir, 0o700); err != nil {
 		t.Fatalf("create Gate I1 config directory: %v", err)
 	}
@@ -133,13 +133,13 @@ func launchGateI1(t *testing.T, ctx context.Context) *gateI1Run {
 
 // record checks a command's output for leaked secrets and appends its
 // sanitized form to the Gate I1 transcript.
-func (r *gateI1Run) record(t *testing.T, result gateCLIResult) {
+func (r *cliJourneyRun) record(t *testing.T, result gateCLIResult) {
 	t.Helper()
 	assertGateSafeOutput(t, result)
 	recordGateTranscript(t, &r.transcript, result)
 }
 
-func (r *gateI1Run) discoverBrowserAndTab(t *testing.T, ctx context.Context) (gateBrowser, *gateTab) {
+func (r *cliJourneyRun) discoverBrowserAndTab(t *testing.T, ctx context.Context) (gateBrowser, *gateTab) {
 	t.Helper()
 	browsers := runGateCommand(t, ctx, r.binaryPath, r.configDir, "webmcp", "browsers", "--json")
 	browsersData := requireGateSuccessData[gateBrowsersData](t, browsers)
@@ -179,7 +179,7 @@ func (r *gateI1Run) discoverBrowserAndTab(t *testing.T, ctx context.Context) (ga
 	return browserRow, tabRow
 }
 
-func (r *gateI1Run) selectExactTarget(t *testing.T, ctx context.Context, browserID, targetID string) gateContext {
+func (r *cliJourneyRun) selectExactTarget(t *testing.T, ctx context.Context, browserID, targetID string) gateContext {
 	t.Helper()
 	selectedDoctor := runGateCommand(t, ctx, r.binaryPath, r.configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", targetID, "--json")
 	selectedDoctorReport := requireGateDoctor(t, selectedDoctor)
@@ -212,7 +212,7 @@ func (r *gateI1Run) selectExactTarget(t *testing.T, ctx context.Context, browser
 	return contextData
 }
 
-func (r *gateI1Run) findCompleteTool(t *testing.T, ctx context.Context, browserID, targetID string, generation uint64) *gateTool {
+func (r *cliJourneyRun) findCompleteTool(t *testing.T, ctx context.Context, browserID, targetID string, generation uint64) *gateTool {
 	t.Helper()
 	toolsResult := runGateCommand(t, ctx, r.binaryPath, r.configDir, "webmcp", "tools", "--json")
 	toolsData := requireGateSuccessData[gateToolsData](t, toolsResult)
@@ -236,7 +236,7 @@ func (r *gateI1Run) findCompleteTool(t *testing.T, ctx context.Context, browserI
 	return completeTool
 }
 
-func (r *gateI1Run) invokeComplete(t *testing.T, ctx context.Context, toolRef string) {
+func (r *cliJourneyRun) invokeComplete(t *testing.T, ctx context.Context, toolRef string) {
 	t.Helper()
 	invoke := runGateCommand(t, ctx, r.binaryPath, r.configDir, "webmcp", "invoke", "--tool-ref", toolRef, "--input-json", `{"message":"`+gateCompleteMessage+`"}`, "--timeout", "20s", "--json")
 	invokeData := requireGateSuccessData[gateInvocation](t, invoke)
@@ -265,7 +265,7 @@ func (r *gateI1Run) invokeComplete(t *testing.T, ctx context.Context, toolRef st
 // watchSecondInvocation runs a watch command, which owns a separate broker and
 // target session, while a second invocation is issued. The watch transcript is
 // the authoritative proof that its broker was attached before that invocation.
-func (r *gateI1Run) watchSecondInvocation(t *testing.T, ctx context.Context, browserID, targetID, toolRef string) gateWatchData {
+func (r *cliJourneyRun) watchSecondInvocation(t *testing.T, ctx context.Context, browserID, targetID, toolRef string) gateWatchData {
 	t.Helper()
 	watchContext, cancelWatch := context.WithCancel(ctx)
 	watchProcess, err := startGateCommand(watchContext, r.binaryPath, r.configDir, "webmcp", "watch", "--timeout", "8s", "--json")
@@ -301,7 +301,7 @@ func (r *gateI1Run) watchSecondInvocation(t *testing.T, ctx context.Context, bro
 // after attach; the bounded settling window keeps the invocation event paired
 // with the watch broker's catalog-bound reference without making the test
 // depend on a fixed process startup duration alone.
-func (r *gateI1Run) awaitWatchAttachment(t *testing.T, ctx context.Context, watchProcess *gateCLIProcess, cancelWatch context.CancelFunc) {
+func (r *cliJourneyRun) awaitWatchAttachment(t *testing.T, ctx context.Context, watchProcess *gateCLIProcess, cancelWatch context.CancelFunc) {
 	t.Helper()
 	abandon := func(format string, args ...any) {
 		cancelWatch()
@@ -322,7 +322,7 @@ func (r *gateI1Run) awaitWatchAttachment(t *testing.T, ctx context.Context, watc
 	}
 }
 
-func (r *gateI1Run) verifyDetachedTarget(t *testing.T, ctx context.Context) fixtureOracle {
+func (r *cliJourneyRun) verifyDetachedTarget(t *testing.T, ctx context.Context) fixtureOracle {
 	t.Helper()
 	watchOracle, err := waitForGateFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
 		return oracle.Ready && oracle.Value == "completed:"+gateWatchMessage && oracle.VisibleText == "completed:"+gateWatchMessage && !oracle.Pending && hasFixtureInvocation(oracle, completeToolName+":"+gateWatchMessage)
@@ -350,7 +350,7 @@ func (r *gateI1Run) verifyDetachedTarget(t *testing.T, ctx context.Context) fixt
 
 // closeBrowser closes exactly the harness-owned Chrome process and returns
 // its PID for the transcript.
-func (r *gateI1Run) closeBrowser(t *testing.T) int {
+func (r *cliJourneyRun) closeBrowser(t *testing.T) int {
 	t.Helper()
 	chromePID := 0
 	if r.browser.cmd != nil && r.browser.cmd.Process != nil {

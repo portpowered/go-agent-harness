@@ -260,7 +260,7 @@ Proposed performance acceptance budgets, to be baselined in phase 0: no unbounde
 
 The user has authorized the local test credential at `~/.you-agent-factory/secrets/OPENAPI_API_KEY`. During implementation, load it directly into the child process environment without printing it, embedding it in argv, committing it, or recording headers. No key is needed for this design review.
 
-Reuse the existing `TestGPTRealtime21BinaryAudioAndToolRoundTrip` E2E entry point described in `agent-cli/docs/session-timing-analysis.md`, gated by `OPENAI_REALTIME_21_LIVE=1` and `AGENT_MODEL__OPENAI__API_KEY`. Inspect its current model/config and deadlines before execution; record the actual model returned and build provenance. This is the repository's existing test target, not a claim about current model availability.
+Reuse the existing `TestBilledRealtimeBinaryAudioAndToolRoundTrip` E2E entry point described in `agent-cli/docs/session-timing-analysis.md`, gated by `OPENAI_REALTIME_21_LIVE=1` and `AGENT_MODEL__OPENAI__API_KEY`. Inspect its current model/config and deadlines before execution; record the actual model returned and build provenance. This is the repository's existing test target, not a claim about current model availability.
 
 Extend live evidence to cover spoken input/output with the unified bundle, tool continuation, barge-in, and a bounded multi-turn session. Run a separate device loopback/native test where supported: WAV egress alone does not prove physical output. Verify capture completeness and replay the resulting supported topology offline. Use broad provider latency ceilings and exact local sample invariants. When live nondeterminism reveals a failure, add a sanitized deterministic regression before changing behavior.
 

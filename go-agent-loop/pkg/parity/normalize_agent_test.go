@@ -410,7 +410,7 @@ type agentNormalizationErrorCase struct {
 	reasonPart string
 }
 
-func TestNormalizeAgentS4RecordAndPayloadErrors(t *testing.T) {
+func TestNormalizeAgentRecordAndPayloadErrors(t *testing.T) {
 	runAgentNormalizationErrorCases(t, []agentNormalizationErrorCase{
 		{
 			name:       "unknown projection kind",
@@ -433,7 +433,7 @@ func TestNormalizeAgentS4RecordAndPayloadErrors(t *testing.T) {
 	})
 }
 
-func TestNormalizeAgentS4EnvelopeErrors(t *testing.T) {
+func TestNormalizeAgentEnvelopeErrors(t *testing.T) {
 	valid := agentFixtureRecords()[0]
 	runAgentNormalizationErrorCases(t, []agentNormalizationErrorCase{
 		{

@@ -203,7 +203,7 @@ func observeCubecadeProduction(ctx context.Context, endpoint, baseURL, capturePa
 	var expectedBrowserID, expectedTargetID string
 	if versionErr == nil && targetErr == nil {
 		var err error
-		expectedBrowserID, expectedTargetID, err = gateI2PublicIDs(version.WebSocketDebuggerURL, rawTarget.ID)
+		expectedBrowserID, expectedTargetID, err = realtimeToolsPublicIDs(version.WebSocketDebuggerURL, rawTarget.ID)
 		if err != nil {
 			versionErr = fmt.Errorf("derive public browser/target IDs: %w", err)
 		}

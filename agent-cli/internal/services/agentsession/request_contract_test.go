@@ -14,9 +14,9 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
-const c156MutationValue = "mutated"
+const contractMutationValue = "mutated"
 
-func TestC156SessionMaxDurationContract(t *testing.T) {
+func TestSessionMaxDurationContract(t *testing.T) {
 	for _, test := range []struct {
 		name     string
 		duration time.Duration
@@ -58,7 +58,7 @@ func TestC156SessionMaxDurationContract(t *testing.T) {
 	}
 }
 
-func TestC156AudioInTurnBargeContract(t *testing.T) {
+func TestAudioInTurnBargeContract(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		enabled   bool
@@ -117,7 +117,7 @@ func assertC156BargeError(t *testing.T, err error, wantTurns int) {
 	}
 }
 
-func TestC156ReasoningEffortContract(t *testing.T) {
+func TestReasoningEffortContract(t *testing.T) {
 	for _, effort := range []string{"", " ", "minimal", "low", "medium", "high", "xhigh", " medium "} {
 		if err := ValidateOpenAIRealtimeReasoningEffort(effort); err != nil {
 			t.Fatalf("ValidateOpenAIRealtimeReasoningEffort(%q) = %v, want nil", effort, err)
@@ -130,7 +130,7 @@ func TestC156ReasoningEffortContract(t *testing.T) {
 	}
 }
 
-func TestC156RequestAndAudioInputPreserveCallerMetadata(t *testing.T) {
+func TestRequestAndAudioInputPreserveCallerMetadata(t *testing.T) {
 	reader := bytes.NewReader([]byte{0x01, 0x02, 0x03})
 	request := Request{
 		Provider:         "provider-name",
@@ -179,7 +179,7 @@ func TestC156RequestAndAudioInputPreserveCallerMetadata(t *testing.T) {
 	}
 }
 
-func TestC156CancellationIntentIsOptionalAndMonotonic(t *testing.T) {
+func TestCancellationIntentIsOptionalAndMonotonic(t *testing.T) {
 	var nilIntent SessionCancellationIntent
 	if nilIntent != nil {
 		t.Fatal("unset cancellation intent was non-nil")
@@ -223,7 +223,7 @@ func TestC156CancellationIntentIsOptionalAndMonotonic(t *testing.T) {
 	}
 }
 
-func TestC156DiagnosticCallbacksPreservePublicRecords(t *testing.T) {
+func TestDiagnosticCallbacksPreservePublicRecords(t *testing.T) {
 	var nilSessionDiagnostic SessionDiagnosticFunc
 	nilSessionDiagnostic.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventFailure})
 
@@ -268,7 +268,7 @@ func TestC156DiagnosticCallbacksPreservePublicRecords(t *testing.T) {
 	}
 }
 
-func TestC156UnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
+func TestUnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
 	statuses := map[string]messages.SessionSendStatus{
 		"call-z":        messages.SessionSendCancelled,
 		"call-a":        "",
@@ -290,7 +290,7 @@ func TestC156UnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
 		t.Fatalf("unresolved call IDs = %v, want %v", got, wantIDs)
 	}
 	copyOfIDs := unresolvedErr.UnresolvedCallIDs()
-	copyOfIDs[0] = c156MutationValue
+	copyOfIDs[0] = contractMutationValue
 	if got := unresolvedErr.UnresolvedCallIDs(); !reflect.DeepEqual(got, wantIDs) {
 		t.Fatalf("unresolved call IDs changed after caller mutation: %v", got)
 	}
@@ -316,13 +316,13 @@ func TestC156UnresolvedToolResultsPreserveDeterministicOutcome(t *testing.T) {
 	}
 }
 
-func TestC156VoiceContractIsOrderedAndCopyIsolated(t *testing.T) {
+func TestVoiceContractIsOrderedAndCopyIsolated(t *testing.T) {
 	wantVoices := []string{"alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"}
 	voices := SupportedOpenAIRealtimeVoices()
 	if !reflect.DeepEqual(voices, wantVoices) {
 		t.Fatalf("supported voices = %v, want %v", voices, wantVoices)
 	}
-	voices[0] = c156MutationValue
+	voices[0] = contractMutationValue
 	if got := SupportedOpenAIRealtimeVoices(); !reflect.DeepEqual(got, wantVoices) {
 		t.Fatalf("supported voice registry changed after caller mutation: %v", got)
 	}
@@ -366,7 +366,7 @@ func assertC156InvalidVoice(t *testing.T, voice string, wantVoices []string) {
 	if got := voiceErr.Error(); got != wantMessage {
 		t.Fatalf("invalid voice error text = %q, want %q", got, wantMessage)
 	}
-	voiceErr.SupportedVoices[0] = c156MutationValue
+	voiceErr.SupportedVoices[0] = contractMutationValue
 	if got := SupportedOpenAIRealtimeVoices(); !reflect.DeepEqual(got, wantVoices) {
 		t.Fatalf("voice registry changed through typed error: %v", got)
 	}

@@ -133,7 +133,7 @@ func startCubecadeLiveVoiceChrome(t *testing.T, ctx context.Context, workDir str
 	if err != nil {
 		t.Fatalf("discover exact Cubecade target: %v", err)
 	}
-	if sight.browserID, sight.targetID, err = gateI2PublicIDs(version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
+	if sight.browserID, sight.targetID, err = realtimeToolsPublicIDs(version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
 		t.Fatalf("derive public browser and target IDs: %v", err)
 	}
 	if sight.oracle, err = inspectCubecadeSightOracle(ctx, browser.endpoint(), rawTarget.ID); err != nil {
@@ -175,7 +175,7 @@ func prepareCubecadeLiveVoiceInputs(t *testing.T, artifactRoot string, sight *cu
 	if err := os.WriteFile(paths.systemPromptPath, []byte(cubecadeLiveVoiceSystemPrompt), cubecadeLiveVoiceEvidenceMode); err != nil {
 		t.Fatalf("write spoken sight system prompt: %v", err)
 	}
-	paths.audioInPath = gateI2SpokenInput(t.Context(), t, artifactRoot, cubecadeLiveVoiceQuestion)
+	paths.audioInPath = realtimeToolsSpokenInput(t.Context(), t, artifactRoot, cubecadeLiveVoiceQuestion)
 	return paths
 }
 

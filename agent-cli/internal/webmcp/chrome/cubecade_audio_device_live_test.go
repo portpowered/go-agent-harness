@@ -1,4 +1,4 @@
-//go:build e2e_internal && darwin && arm64
+//go:build live && darwin && arm64
 
 package chrome
 
@@ -150,7 +150,7 @@ func (p *cubecadeAudioDeviceProof) startChrome(t *testing.T, ctx context.Context
 		t.Fatalf("discover exact Cubecade target: %v", err)
 	}
 	p.rawTargetID = rawTarget.ID
-	if p.browserID, p.targetID, err = gateI2PublicIDs(version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
+	if p.browserID, p.targetID, err = realtimeToolsPublicIDs(version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
 		t.Fatalf("derive public browser and target IDs: %v", err)
 	}
 	p.cdpURL = strings.TrimRight(baseURL, "/") + "/json/version"

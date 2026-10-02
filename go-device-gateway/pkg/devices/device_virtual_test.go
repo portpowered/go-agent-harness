@@ -399,7 +399,7 @@ func TestVirtualPCMRecorderDisabledWaitAndAcousticValidation(t *testing.T) {
 	}
 }
 
-func TestVirtualS8Accounting(t *testing.T) {
+func TestVirtualConcurrentAccounting(t *testing.T) {
 	r, out, in := openPair(t)
 	const frames, attempts = 24, 20
 	start, done := make(chan struct{}), make(chan struct{}, 4)

@@ -170,14 +170,14 @@ func TestLocalFeedbackGateNeverForwardsRealisticSustainedFeedback(t *testing.T) 
 	}
 }
 
-// TestLocalFeedbackGateDropsTest42ShortEchoTransient reproduces the false
-// server-VAD barge-in from test42.json. After this paired device has already
+// TestLocalFeedbackGateDropsShortEchoTransient reproduces the false
+// server-VAD barge-in from a captured session. After this paired device has already
 // established real speaker-to-microphone coupling, a later response leaks a
 // short, inverted onset through the acoustic path and then returns to silence.
 // The onset is shorter than MinimumEvidence, so it can never be called user
 // speech merely because the bounded startup hold expires. Forwarding it is
 // enough for provider VAD to cancel several seconds of queued assistant audio.
-func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
+func TestLocalFeedbackGateDropsShortEchoTransient(t *testing.T) {
 	config := selfhearing.DefaultSelfHearingConfig()
 	gate, err := NewPCM16FeedbackGate(config, nil, SampleRate, SampleRate)
 	if err != nil {
@@ -190,7 +190,7 @@ func TestLocalFeedbackGateDropsTest42ShortEchoTransient(t *testing.T) {
 	}()
 
 	// Establish the physical loop once, as the earlier assistant turns did in
-	// test42. The next response is separated by enough quiet capture to force
+	// that capture. The next response is separated by enough quiet capture to force
 	// the normal response re-anchor path.
 	first := speechLikeStream(8)
 	writeAssistantResponse(t, gate, first)
@@ -254,7 +254,7 @@ func assertSilentSubmission(t *testing.T, submitted [][]int16) {
 	for frameIndex, frame := range submitted {
 		for _, sample := range frame {
 			if sample != 0 {
-				t.Fatalf("test42 echo transient reached provider in submitted frame %d", frameIndex)
+				t.Fatalf("short echo transient reached provider in submitted frame %d", frameIndex)
 			}
 		}
 	}
@@ -381,8 +381,8 @@ func TestLocalFeedbackGateForwardsBargeInDuringActivePlayback(t *testing.T) {
 	}
 }
 
-// TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses reproduces the
-// multi-response device timeline that terminated test14.json. The first assistant response
+// TestLocalFeedbackGateRetargetsAcrossAssistantResponses reproduces the
+// multi-response device timeline that terminated a captured session. The first assistant response
 // is heard back at essentially zero lag and narrows the post-confirmation
 // probe. After that response and its acoustic tail expire, a later assistant
 // response is heard back at a different physical lag. That second response is
@@ -390,7 +390,7 @@ func TestLocalFeedbackGateForwardsBargeInDuringActivePlayback(t *testing.T) {
 // must not terminate the microphone pump. A subsequent independent customer
 // signal is the barge-in and must be released once, with a bounded amount of
 // provider-bound audio.
-func TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses(t *testing.T) {
+func TestLocalFeedbackGateRetargetsAcrossAssistantResponses(t *testing.T) {
 	config := selfhearing.DefaultSelfHearingConfig()
 	config.PostPlaybackAcousticTail = 120 * time.Millisecond
 	gate, err := NewPCM16FeedbackGate(config, nil, SampleRate, SampleRate)
@@ -414,7 +414,7 @@ func TestLocalFeedbackGateRetargetsTest14AcrossAssistantResponses(t *testing.T) 
 
 	// Advance capture beyond the prior response, configured acoustic tail, and
 	// maximum correlation horizon. This is the ordinary quiet gap between two
-	// assistant responses in test14, not a customer turn.
+	// assistant responses in that capture, not a customer turn.
 	frameDuration := feedbackDeviceDurationAtRate(FrameSize, SampleRate)
 	quietFrames := int((config.PostPlaybackAcousticTail+config.CorrelationLagWindow.Max)/frameDuration) + 3
 	advanceQuietCapture(t, gate, quietFrames)

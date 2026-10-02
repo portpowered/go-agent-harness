@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build live
 
 package e2e
 
@@ -21,11 +21,11 @@ import (
 	audiorecording "github.com/portpowered/go-agent-harness/go-audio/pkg/recording"
 )
 
-// TestGPTRealtime21BinaryAudioAndToolRoundTrip is the billed, real-provider
+// TestBilledRealtimeBinaryAudioAndToolRoundTrip is the billed, real-provider
 // counterpart to the hermetic burst regression. It crosses the compiled CLI,
 // WAV ingress, OpenAI Realtime websocket, tool execution/continuation, capture,
 // and WAV egress boundaries and compares the provider bytes with both files.
-func TestGPTRealtime21BinaryAudioAndToolRoundTrip(t *testing.T) {
+func TestBilledRealtimeBinaryAudioAndToolRoundTrip(t *testing.T) {
 	if os.Getenv("AGENT_MODEL__OPENAI__API_KEY") == "" {
 		t.Fatal("AGENT_MODEL__OPENAI__API_KEY is required")
 	}
@@ -161,7 +161,7 @@ func (e *realtime21WireEvidence) observe(t *testing.T, recordType string, payloa
 	t.Helper()
 	switch recordType {
 	case "session.update":
-		reasoning := eacObject(eacObject(payload, "session"), "reasoning")
+		reasoning := payloadObject(payloadObject(payload, "session"), "reasoning")
 		e.reasoningLow = reasoning["effort"] == "low"
 	case "input_audio_buffer.append":
 		e.ingress = append(e.ingress, requireBase64Field(t, payload, "audio")...)
@@ -170,12 +170,12 @@ func (e *realtime21WireEvidence) observe(t *testing.T, recordType string, payloa
 	case "response.output_audio.done":
 		e.audioDone++
 	case "response.output_item.done":
-		item := eacObject(payload, "item")
+		item := payloadObject(payload, "item")
 		if item["type"] == "function_call" && item["name"] == "list_dir" {
 			e.toolCall++
 		}
 	case "conversation.item.create":
-		if eacObject(payload, "item")["type"] == "function_call_output" {
+		if payloadObject(payload, "item")["type"] == "function_call_output" {
 			e.toolResult++
 		}
 	}
@@ -263,4 +263,12 @@ func wavData(t *testing.T, path string) []byte {
 	}
 	t.Fatalf("WAV data chunk missing in %s", path)
 	return nil
+}
+
+func payloadObject(payload map[string]any, key string) map[string]any {
+	value, ok := payload[key].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return value
 }

@@ -81,7 +81,7 @@ func liveTerminalStatus(responseStatus, eventStatus string) string {
 // Gate I2 provider-capture inspection. The measurement in
 // gate_i2_realtime_test.go validates the resulting observation.
 
-type gateI2Observation struct {
+type realtimeToolsObservation struct {
 	Provider              string
 	Model                 string
 	Instructions          string
@@ -89,10 +89,10 @@ type gateI2Observation struct {
 	SessionUpdateCount    int
 	SessionUpdateIndex    int
 	FirstInputIndex       int
-	Calls                 []gateI2Call
-	Outputs               []gateI2Output
+	Calls                 []realtimeToolsCall
+	Outputs               []realtimeToolsOutput
 	ResponseCreates       []int
-	AudioDeltas           []gateI2AudioDelta
+	AudioDeltas           []realtimeToolsAudioDelta
 	SpokenTranscript      string
 	SpokenTranscriptIndex int
 	AudioBytesAfterInvoke int
@@ -101,7 +101,7 @@ type gateI2Observation struct {
 	ProviderErrors        int
 }
 
-type gateI2Call struct {
+type realtimeToolsCall struct {
 	Index          int
 	ArgumentsIndex int
 	Name           string
@@ -109,26 +109,26 @@ type gateI2Call struct {
 	Arguments      string
 }
 
-type gateI2Output struct {
+type realtimeToolsOutput struct {
 	Index  int
 	CallID string
 	Output string
 }
 
-type gateI2AudioDelta struct {
+type realtimeToolsAudioDelta struct {
 	Index int
 	Bytes int
 }
 
-type gateI2Validation struct {
+type realtimeToolsValidation struct {
 	ListToolRef   string
 	InvokeToolRef string
 	RawInputJSON  string
 	Reason        string
 }
 
-func inspectGateI2Capture(capture gwtesting.SessionCapture) (gateI2Observation, error) {
-	observation := gateI2Observation{
+func inspectRealtimeToolsCapture(capture gwtesting.SessionCapture) (realtimeToolsObservation, error) {
+	observation := realtimeToolsObservation{
 		Provider:              capture.Provider.Name,
 		Model:                 capture.Provider.Model,
 		SessionUpdateIndex:    -1,
@@ -152,11 +152,11 @@ func inspectGateI2Capture(capture gwtesting.SessionCapture) (gateI2Observation, 
 			return observation, err
 		}
 	}
-	observation.AudioBytesAfterInvoke = gateI2AudioBytesAfterInvoke(observation)
+	observation.AudioBytesAfterInvoke = realtimeToolsAudioBytesAfterInvoke(observation)
 	return observation, nil
 }
 
-func (o *gateI2Observation) observeClient(index int, eventType string, payload []byte) error {
+func (o *realtimeToolsObservation) observeClient(index int, eventType string, payload []byte) error {
 	switch eventType {
 	case liveEventSessionUpdate:
 		return o.observeSessionUpdate(index, payload)
@@ -176,7 +176,7 @@ func (o *gateI2Observation) observeClient(index int, eventType string, payload [
 			return fmt.Errorf("decode conversation.item.create: %w", err)
 		}
 		if event.Item.Type == liveItemFunctionCallOutput {
-			o.Outputs = append(o.Outputs, gateI2Output{Index: index, CallID: event.Item.CallID, Output: event.Item.Output})
+			o.Outputs = append(o.Outputs, realtimeToolsOutput{Index: index, CallID: event.Item.CallID, Output: event.Item.Output})
 		}
 	case liveEventResponseCreate:
 		o.ResponseCreates = append(o.ResponseCreates, index)
@@ -184,7 +184,7 @@ func (o *gateI2Observation) observeClient(index int, eventType string, payload [
 	return nil
 }
 
-func (o *gateI2Observation) observeSessionUpdate(index int, payload []byte) error {
+func (o *realtimeToolsObservation) observeSessionUpdate(index int, payload []byte) error {
 	o.SessionUpdateCount++
 	var event struct {
 		Session struct {
@@ -208,7 +208,7 @@ func (o *gateI2Observation) observeSessionUpdate(index int, payload []byte) erro
 	return nil
 }
 
-func (o *gateI2Observation) observeServer(index int, eventType string, payload []byte) error {
+func (o *realtimeToolsObservation) observeServer(index int, eventType string, payload []byte) error {
 	switch eventType {
 	case liveEventOutputItemAdded:
 		return o.observeOutputItem(index, payload)
@@ -226,7 +226,7 @@ func (o *gateI2Observation) observeServer(index int, eventType string, payload [
 	return nil
 }
 
-func (o *gateI2Observation) observeOutputItem(index int, payload []byte) error {
+func (o *realtimeToolsObservation) observeOutputItem(index int, payload []byte) error {
 	var event struct {
 		Item struct {
 			Type   string `json:"type"`
@@ -238,12 +238,12 @@ func (o *gateI2Observation) observeOutputItem(index int, payload []byte) error {
 		return fmt.Errorf("decode response.output_item.added: %w", err)
 	}
 	if event.Item.Type == liveItemFunctionCall {
-		o.Calls = append(o.Calls, gateI2Call{Index: index, ArgumentsIndex: -1, Name: event.Item.Name, CallID: event.Item.CallID})
+		o.Calls = append(o.Calls, realtimeToolsCall{Index: index, ArgumentsIndex: -1, Name: event.Item.Name, CallID: event.Item.CallID})
 	}
 	return nil
 }
 
-func (o *gateI2Observation) observeCallArguments(index int, payload []byte) error {
+func (o *realtimeToolsObservation) observeCallArguments(index int, payload []byte) error {
 	var event struct {
 		Name      string `json:"name"`
 		CallID    string `json:"call_id"`
@@ -270,7 +270,7 @@ func (o *gateI2Observation) observeCallArguments(index int, payload []byte) erro
 	return nil
 }
 
-func (o *gateI2Observation) observeTranscript(index int, payload []byte) error {
+func (o *realtimeToolsObservation) observeTranscript(index int, payload []byte) error {
 	var event struct {
 		Transcript string `json:"transcript"`
 	}
@@ -291,7 +291,7 @@ func (o *gateI2Observation) observeTranscript(index int, payload []byte) error {
 	return nil
 }
 
-func (o *gateI2Observation) observeAudioDelta(index int, payload []byte) error {
+func (o *realtimeToolsObservation) observeAudioDelta(index int, payload []byte) error {
 	var event struct {
 		Delta string `json:"delta"`
 	}
@@ -305,11 +305,11 @@ func (o *gateI2Observation) observeAudioDelta(index int, payload []byte) error {
 	if err != nil {
 		return fmt.Errorf("decode output audio delta: %w", err)
 	}
-	o.AudioDeltas = append(o.AudioDeltas, gateI2AudioDelta{Index: index, Bytes: len(decoded)})
+	o.AudioDeltas = append(o.AudioDeltas, realtimeToolsAudioDelta{Index: index, Bytes: len(decoded)})
 	return nil
 }
 
-func (o *gateI2Observation) observeResponseDone(index int, payload []byte) error {
+func (o *realtimeToolsObservation) observeResponseDone(index int, payload []byte) error {
 	var event struct {
 		Status   string `json:"status"`
 		Response struct {
@@ -327,7 +327,7 @@ func (o *gateI2Observation) observeResponseDone(index int, payload []byte) error
 	return nil
 }
 
-func gateI2AudioBytesAfterInvoke(observation gateI2Observation) int {
+func realtimeToolsAudioBytesAfterInvoke(observation realtimeToolsObservation) int {
 	invokeOutputIndex := -1
 	for _, call := range observation.Calls {
 		if call.Name != webmcp.InvokeToolName || call.CallID == "" {

@@ -567,11 +567,11 @@ func liveBargeInSanitizedLedger(facts liveBargeInCaptureFacts, trace *liveBargeI
 		strings.Join(parts, "; "), facts.Appends, facts.Commits, facts.UserItems, len(facts.Responses), facts.Cancels, facts.ProviderLateOutput)
 }
 
-// TestLiveSessionS2SBargeInProofV3 is the only billed test in this story. It
+// TestLiveSessionS2SBargeInProof is the only billed test in this story. It
 // requires both a build tag and an environment opt-in. A missing credential,
 // provider setup failure, unavailable service, timeout, or missed timing gate
 // is reported as inconclusive; it is never turned into a successful ledger.
-func TestLiveSessionS2SBargeInProofV3(t *testing.T) {
+func TestLiveSessionS2SBargeInProof(t *testing.T) {
 	apiKey := os.Getenv(liveBargeInAPIKeyEnv)
 	if apiKey == "" {
 		t.Fatalf("%s is not set; live OpenAI Realtime barge-in confirmation is inconclusive", liveBargeInAPIKeyEnv)

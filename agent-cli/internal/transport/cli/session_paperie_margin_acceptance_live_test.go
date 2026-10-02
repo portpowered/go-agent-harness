@@ -1,4 +1,4 @@
-//go:build e2e_internal
+//go:build live
 
 package cli
 

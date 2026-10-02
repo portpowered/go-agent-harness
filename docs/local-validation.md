@@ -113,10 +113,15 @@ everything. CI uses the same test cache, restored with each job's build cache (s
   `test-audio-stability-race`, `test-sessions-race`), `lint-cross`,
   `lint-darwin-cgo`, the WebMCP Chrome and macOS audio release jobs.
 - Neither the prepush gate nor pull-request CI runs the fresh-process
-  Test45/Test46 audio stress trials (`-tags stress`). The scheduled
+  high-rate tool-audio stress trials (`-tags stress`). The scheduled
   Nightly audio stress workflow runs them on main and opens a "Nightly audio
   stress failed" issue when they fail; run them locally with
   `make test-audio-stress AUDIO_STRESS_COUNT=N`.
+- The `e2e` suites (real Chrome, compiled binaries, audio devices, desktop
+  screen and mouse) run in the scheduled Nightly e2e workflow, one job per
+  package family; pull requests keep one real-process Chrome representative.
+  The `live` suites need provider credentials the repository does not hold
+  and run only by hand.
 - `test-cgo-delta` runs the native build of the build-constrained packages;
   packages that merely import them are tested against the microphone stub, as
   in CI.

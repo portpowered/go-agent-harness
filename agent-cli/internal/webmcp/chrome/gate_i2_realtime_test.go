@@ -33,24 +33,24 @@ import (
 )
 
 const (
-	gateI2ArtifactEnv = "WEBMCP_GATE_I2_ARTIFACT_DIR"
-	gateI2KeyFileEnv  = "OPENAI_API_KEY_FILE"
-	gateI2Model       = "gpt-realtime-2.1-mini"
-	gateI2Timeout     = 90 * time.Second
+	realtimeToolsArtifactEnv = "WEBMCP_GATE_I2_ARTIFACT_DIR"
+	realtimeToolsKeyFileEnv  = "OPENAI_API_KEY_FILE"
+	realtimeToolsModel       = "gpt-realtime-2.1-mini"
+	realtimeToolsTimeout     = 90 * time.Second
 
-	gateI2RequestPrefix = "Please use the available browser capability to set the fixture message to "
+	realtimeToolsRequestPrefix = "Please use the available browser capability to set the fixture message to "
 )
 
 var errGateI2MissingAPIKey = errors.New("OpenAI API key is not configured")
 
-// TestPinnedChromeOpenAIRealtimeWebMCPGateI2 is the release-facing spoken
+// TestPinnedChromeOpenAIRealtimeDrivesWebMCPTools is the release-facing spoken
 // JSON-in-string measurement. The only user request is synthesized into the
 // audio input; browser IDs, tool refs, and encoded page arguments are not
 // passed through a prompt, flag, or fixture-side shortcut.
-func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
+func TestPinnedChromeOpenAIRealtimeDrivesWebMCPTools(t *testing.T) {
 	apiKey, keySource := requireLiveOpenAIKey(t, "OPENAI_API_KEY or OPENAI_API_KEY_FILE is not set; it is required by the credentialed Gate I2 measurement")
 
-	run := prepareGateI2Run(t)
+	run := prepareRealtimeToolsRun(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 	run.startChrome(t, ctx)
@@ -67,7 +67,7 @@ func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
 	outcome := run.observe(ctx, runErr)
 	evidence := run.evidence(keySource, outcome)
 	evidencePath := filepath.Join(run.artifactRoot, "acceptance-report.json")
-	if err := writeGateI2Evidence(evidencePath, evidence); err != nil {
+	if err := writeRealtimeToolsEvidence(evidencePath, evidence); err != nil {
 		t.Fatalf("write Gate I2 evidence: %v", err)
 	}
 	t.Logf("Gate I2 evidence: %s", evidencePath)
@@ -81,9 +81,9 @@ func TestPinnedChromeOpenAIRealtimeWebMCPGateI2(t *testing.T) {
 	t.Logf("WEBMCP_GATE_I2_PASS chrome=%s revision=%s browser=%s target=%s list_tools_ref=%s invoke_ref=%s input_json=%q transcript=%q output_audio_bytes=%d capture=%s record_dir=%s", lockedChromeVersion, lockedChromeRevision, run.browserID, run.targetID, outcome.validation.ListToolRef, outcome.validation.InvokeToolRef, outcome.validation.RawInputJSON, outcome.observation.SpokenTranscript, outcome.observation.AudioBytesAfterInvoke, run.capturePath, run.recordDir)
 }
 
-// gateI2Run holds one Gate I2 measurement's inputs, pinned browser, and
+// realtimeToolsRun holds one Gate I2 measurement's inputs, pinned browser, and
 // artifact paths.
-type gateI2Run struct {
+type realtimeToolsRun struct {
 	message          string
 	request          string
 	artifactRoot     string
@@ -107,10 +107,10 @@ type gateI2Run struct {
 	beforeOracle fixtureOracle
 }
 
-// gateI2Outcome is everything observed after the session ends.
-type gateI2Outcome struct {
-	observation      gateI2Observation
-	validation       gateI2Validation
+// realtimeToolsOutcome is everything observed after the session ends.
+type realtimeToolsOutcome struct {
+	observation      realtimeToolsObservation
+	validation       realtimeToolsValidation
 	validationErr    error
 	afterOracle      fixtureOracle
 	postVersion      devToolsVersion
@@ -121,20 +121,20 @@ type gateI2Outcome struct {
 	audioFileBytes   int64
 }
 
-func prepareGateI2Run(t *testing.T) *gateI2Run {
+func prepareRealtimeToolsRun(t *testing.T) *realtimeToolsRun {
 	t.Helper()
-	message, err := randomGateI2Message()
+	message, err := randomRealtimeToolsMessage()
 	if err != nil {
 		t.Fatalf("generate randomized fixture message: %v", err)
 	}
-	run := &gateI2Run{message: message, request: gateI2Request(message), artifactRoot: gateI2ArtifactRoot(t)}
+	run := &realtimeToolsRun{message: message, request: realtimeToolsRequest(message), artifactRoot: realtimeToolsArtifactRoot(t)}
 	run.configDir = filepath.Join(run.artifactRoot, "config")
 	if err := os.Mkdir(run.configDir, 0o700); err != nil {
 		t.Fatalf("create Gate I2 config directory: %v", err)
 	}
-	run.inputPath = gateI2SpokenInput(t.Context(), t, run.artifactRoot, run.request)
+	run.inputPath = realtimeToolsSpokenInput(t.Context(), t, run.artifactRoot, run.request)
 	run.systemPromptPath = filepath.Join(run.artifactRoot, "system-prompt.txt")
-	if err := os.WriteFile(run.systemPromptPath, []byte(gateI2SystemPrompt()), 0o600); err != nil {
+	if err := os.WriteFile(run.systemPromptPath, []byte(realtimeToolsSystemPrompt()), 0o600); err != nil {
 		t.Fatalf("write Gate I2 system prompt: %v", err)
 	}
 	run.capturePath = filepath.Join(run.artifactRoot, "provider.json")
@@ -145,7 +145,7 @@ func prepareGateI2Run(t *testing.T) *gateI2Run {
 
 // startChrome launches the qualified Chrome on the local fixture, records the
 // initial independent oracle, and writes the exact-target browser config.
-func (r *gateI2Run) startChrome(t *testing.T, ctx context.Context) {
+func (r *realtimeToolsRun) startChrome(t *testing.T, ctx context.Context) {
 	t.Helper()
 	workDir := filepath.Join(r.artifactRoot, "chrome")
 	if err := os.Mkdir(workDir, 0o700); err != nil {
@@ -175,7 +175,7 @@ func (r *gateI2Run) startChrome(t *testing.T, ctx context.Context) {
 		t.Fatalf("discover exact fixture target: %v", err)
 	}
 	r.rawTargetID = rawTarget.ID
-	if r.browserID, r.targetID, err = gateI2PublicIDs(r.version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
+	if r.browserID, r.targetID, err = realtimeToolsPublicIDs(r.version.WebSocketDebuggerURL, rawTarget.ID); err != nil {
 		t.Fatalf("derive opaque browser and target IDs: %v", err)
 	}
 	r.beforeOracle, err = waitForFixtureOracle(ctx, r.fixture.StateURL(), func(oracle fixtureOracle) bool {
@@ -185,16 +185,16 @@ func (r *gateI2Run) startChrome(t *testing.T, ctx context.Context) {
 		t.Fatalf("read initial independent page oracle: %v", err)
 	}
 	r.cdpURL = strings.TrimRight(r.baseURL, "/") + "/json/version"
-	if err := writeGateI2Config(r.configDir, r.cdpURL, r.fixture.server.URL, r.browserID, r.targetID); err != nil {
+	if err := writeRealtimeToolsConfig(r.configDir, r.cdpURL, r.fixture.server.URL, r.browserID, r.targetID); err != nil {
 		t.Fatalf("write Gate I2 browser config: %v", err)
 	}
 }
 
-func (r *gateI2Run) sessionArgs() []string {
+func (r *realtimeToolsRun) sessionArgs() []string {
 	return []string{
 		"session",
 		"--provider", liveProviderOpenAI,
-		"--model", gateI2Model,
+		"--model", realtimeToolsModel,
 		"--browser-tools", "webmcp",
 		"--browser-cdp-url", r.cdpURL,
 		"--browser-browser", r.browserID,
@@ -210,15 +210,15 @@ func (r *gateI2Run) sessionArgs() []string {
 		"--audio-in", r.inputPath,
 		"--audio-out", r.audioPath,
 		"--system-prompt", r.systemPromptPath,
-		"--max-duration", gateI2Timeout.String(),
+		"--max-duration", realtimeToolsTimeout.String(),
 	}
 }
 
 // runSession runs the production CLI. A session error is returned rather than
 // fatal because capture validation remains authoritative.
-func (r *gateI2Run) runSession(t *testing.T, ctx context.Context, binaryPath, apiKey string) error {
+func (r *realtimeToolsRun) runSession(t *testing.T, ctx context.Context, binaryPath, apiKey string) error {
 	t.Helper()
-	sessionResult, err := runLiveAgentSession(ctx, gateI2Timeout+25*time.Second, binaryPath, r.configDir, apiKey, r.sessionArgs())
+	sessionResult, err := runLiveAgentSession(ctx, realtimeToolsTimeout+25*time.Second, binaryPath, r.configDir, apiKey, r.sessionArgs())
 	var startErr liveSessionStartError
 	if errors.As(err, &startErr) {
 		t.Fatalf("start production agent CLI: %v", startErr.cause)
@@ -235,15 +235,15 @@ func (r *gateI2Run) runSession(t *testing.T, ctx context.Context, binaryPath, ap
 
 // observe reads the provider capture and both independent page oracles, then
 // validates them together. The first failure becomes the validation error.
-func (r *gateI2Run) observe(ctx context.Context, runErr error) gateI2Outcome {
-	var outcome gateI2Outcome
+func (r *realtimeToolsRun) observe(ctx context.Context, runErr error) realtimeToolsOutcome {
+	var outcome realtimeToolsOutcome
 	capture, inspectErr := gwtesting.LoadSessionCapture(r.capturePath)
 	if inspectErr == nil {
-		outcome.observation, inspectErr = inspectGateI2Capture(capture)
+		outcome.observation, inspectErr = inspectRealtimeToolsCapture(capture)
 	}
-	outcome.afterOracle = readGateI2Oracle(ctx, r.fixture.StateURL())
+	outcome.afterOracle = readRealtimeToolsOracle(ctx, r.fixture.StateURL())
 	outcome.postVersion, outcome.postVersionErr = readDevToolsVersion(ctx, r.baseURL)
-	outcome.postTarget, outcome.postTargetErr = readGateI2FixtureTarget(ctx, r.baseURL, r.rawTargetID, r.fixtureURL)
+	outcome.postTarget, outcome.postTargetErr = readRealtimeToolsFixtureTarget(ctx, r.baseURL, r.rawTargetID, r.fixtureURL)
 	var independentErr error
 	if outcome.postVersionErr == nil && outcome.postTargetErr == nil {
 		outcome.independentState, independentErr = inspectExternalTarget(ctx, r.browser.browser.endpoint(), r.rawTargetID)
@@ -252,7 +252,7 @@ func (r *gateI2Run) observe(ctx context.Context, runErr error) gateI2Outcome {
 
 	outcome.validationErr = inspectErr
 	if outcome.validationErr == nil {
-		outcome.validation, outcome.validationErr = validateGateI2Observation(outcome.observation, r.fixtureURL, r.browserID, r.targetID, r.message, outcome.audioFileBytes)
+		outcome.validation, outcome.validationErr = validateRealtimeToolsObservation(outcome.observation, r.fixtureURL, r.browserID, r.targetID, r.message, outcome.audioFileBytes)
 	}
 	if outcome.validationErr == nil && runErr != nil {
 		outcome.validationErr = fmt.Errorf("live session returned an error: %w", runErr)
@@ -263,7 +263,7 @@ func (r *gateI2Run) observe(ctx context.Context, runErr error) gateI2Outcome {
 	return outcome
 }
 
-func (r *gateI2Run) validatePostSession(outcome gateI2Outcome, independentErr error) error {
+func (r *realtimeToolsRun) validatePostSession(outcome realtimeToolsOutcome, independentErr error) error {
 	after := outcome.afterOracle
 	if after.Value != "completed:"+r.message || after.VisibleText != "completed:"+r.message || after.Pending || !hasFixtureInvocation(after, completeToolName+":"+r.message) {
 		return fmt.Errorf("after oracle=%+v, want completed fixture mutation", after)
@@ -274,18 +274,18 @@ func (r *gateI2Run) validatePostSession(outcome gateI2Outcome, independentErr er
 	if independentErr != nil {
 		return fmt.Errorf("independent DOM oracle failed: %w", independentErr)
 	}
-	if !gateI2StateMatchesOracle(outcome.independentState, after) {
+	if !realtimeToolsStateMatchesOracle(outcome.independentState, after) {
 		return fmt.Errorf("independent DOM state=%+v disagrees with HTTP oracle=%+v", outcome.independentState, after)
 	}
 	return nil
 }
 
-func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evidence {
+func (r *realtimeToolsRun) evidence(keySource string, outcome realtimeToolsOutcome) realtimeToolsEvidence {
 	observation := outcome.observation
-	evidence := gateI2Evidence{
+	evidence := realtimeToolsEvidence{
 		Schema:                 "webmcp.gate-i2.evidence.v1",
 		ObservedAtUTC:          time.Now().UTC().Format(time.RFC3339Nano),
-		Pins:                   gateI2PinsFromLock(r.pinned.Lock, r.version.Browser),
+		Pins:                   realtimeToolsPinsFromLock(r.pinned.Lock, r.version.Browser),
 		Provider:               observation.Provider,
 		Model:                  observation.Model,
 		APIKeySource:           keySource,
@@ -294,8 +294,8 @@ func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evid
 		RequestInput:           "audio-only",
 		AdvertisedTools:        append([]string(nil), observation.AdvertisedTools...),
 		SessionUpdateCount:     observation.SessionUpdateCount,
-		Calls:                  gateI2EvidenceCalls(observation.Calls),
-		ToolOutputs:            gateI2EvidenceOutputs(observation.Outputs),
+		Calls:                  realtimeToolsEvidenceCalls(observation.Calls),
+		ToolOutputs:            realtimeToolsEvidenceOutputs(observation.Outputs),
 		SpokenTranscript:       observation.SpokenTranscript,
 		TerminalStatus:         observation.TerminalStatus,
 		OutputAudioBytes:       observation.AudioBytesAfterInvoke,
@@ -310,7 +310,7 @@ func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evid
 		CapturePath:            r.capturePath,
 		RecordDir:              r.recordDir,
 		AudioPath:              r.audioPath,
-		ValidationError:        gateI2ErrorString(outcome.validationErr),
+		ValidationError:        realtimeToolsErrorString(outcome.validationErr),
 		Pass:                   outcome.validationErr == nil,
 	}
 	if outcome.validationErr == nil {
@@ -323,8 +323,8 @@ func (r *gateI2Run) evidence(keySource string, outcome gateI2Outcome) gateI2Evid
 	return evidence
 }
 
-// gateI2SystemPrompt returns the realtime protocol prompt for the Gate I2 run.
-func gateI2SystemPrompt() string {
+// realtimeToolsSystemPrompt returns the realtime protocol prompt for the Gate I2 run.
+func realtimeToolsSystemPrompt() string {
 	return strings.Join([]string{
 		"You are measuring a real WebMCP page through the browser capability. The user's spoken request is authoritative. Follow this exact protocol:",
 		"- First call webmcp_list_tabs and find the one eligible page exposed by the browser.",
@@ -336,7 +336,7 @@ func gateI2SystemPrompt() string {
 	}, "\n")
 }
 
-type gateI2Pins struct {
+type realtimeToolsPins struct {
 	Channel             string   `json:"channel"`
 	Platform            string   `json:"platform"`
 	Version             string   `json:"version"`
@@ -349,44 +349,44 @@ type gateI2Pins struct {
 	LaunchFlags         []string `json:"launch_flags"`
 }
 
-type gateI2Evidence struct {
-	Schema                 string                 `json:"schema"`
-	ObservedAtUTC          string                 `json:"observed_at_utc"`
-	Pins                   gateI2Pins             `json:"pins"`
-	Provider               string                 `json:"provider"`
-	Model                  string                 `json:"model"`
-	APIKeySource           string                 `json:"api_key_source"`
-	SpokenRequest          string                 `json:"spoken_request"`
-	ExpectedMessage        string                 `json:"expected_message"`
-	RequestInput           string                 `json:"request_input"`
-	AdvertisedTools        []string               `json:"advertised_tools"`
-	SessionUpdateCount     int                    `json:"session_update_count"`
-	Calls                  []gateI2EvidenceCall   `json:"calls"`
-	ToolOutputs            []gateI2EvidenceOutput `json:"tool_outputs"`
-	ListToolRef            string                 `json:"list_tools_ref,omitempty"`
-	InvokeToolRef          string                 `json:"invoke_tool_ref,omitempty"`
-	RawInputJSON           string                 `json:"raw_input_json,omitempty"`
-	Reason                 string                 `json:"reason,omitempty"`
-	SpokenTranscript       string                 `json:"spoken_transcript"`
-	GroundedFinalState     bool                   `json:"grounded_final_state"`
-	TerminalStatus         string                 `json:"terminal_status"`
-	OutputAudioBytes       int                    `json:"output_audio_bytes"`
-	AudioFileBytes         int64                  `json:"audio_file_bytes"`
-	BeforeOracle           fixtureOracle          `json:"page_state_before"`
-	AfterOracle            fixtureOracle          `json:"page_state_after"`
-	IndependentDOM         inspectedPageState     `json:"independent_dom_oracle"`
-	ChromeAliveAfterRun    bool                   `json:"chrome_alive_after_run"`
-	TargetPresentAfterRun  bool                   `json:"target_present_after_run"`
-	BrowserVersionAfterRun string                 `json:"browser_version_after_run,omitempty"`
-	TargetURLAfterRun      string                 `json:"target_url_after_run,omitempty"`
-	CapturePath            string                 `json:"provider_capture_path"`
-	RecordDir              string                 `json:"record_dir"`
-	AudioPath              string                 `json:"assistant_audio_path"`
-	ValidationError        string                 `json:"validation_error,omitempty"`
-	Pass                   bool                   `json:"pass"`
+type realtimeToolsEvidence struct {
+	Schema                 string                        `json:"schema"`
+	ObservedAtUTC          string                        `json:"observed_at_utc"`
+	Pins                   realtimeToolsPins             `json:"pins"`
+	Provider               string                        `json:"provider"`
+	Model                  string                        `json:"model"`
+	APIKeySource           string                        `json:"api_key_source"`
+	SpokenRequest          string                        `json:"spoken_request"`
+	ExpectedMessage        string                        `json:"expected_message"`
+	RequestInput           string                        `json:"request_input"`
+	AdvertisedTools        []string                      `json:"advertised_tools"`
+	SessionUpdateCount     int                           `json:"session_update_count"`
+	Calls                  []realtimeToolsEvidenceCall   `json:"calls"`
+	ToolOutputs            []realtimeToolsEvidenceOutput `json:"tool_outputs"`
+	ListToolRef            string                        `json:"list_tools_ref,omitempty"`
+	InvokeToolRef          string                        `json:"invoke_tool_ref,omitempty"`
+	RawInputJSON           string                        `json:"raw_input_json,omitempty"`
+	Reason                 string                        `json:"reason,omitempty"`
+	SpokenTranscript       string                        `json:"spoken_transcript"`
+	GroundedFinalState     bool                          `json:"grounded_final_state"`
+	TerminalStatus         string                        `json:"terminal_status"`
+	OutputAudioBytes       int                           `json:"output_audio_bytes"`
+	AudioFileBytes         int64                         `json:"audio_file_bytes"`
+	BeforeOracle           fixtureOracle                 `json:"page_state_before"`
+	AfterOracle            fixtureOracle                 `json:"page_state_after"`
+	IndependentDOM         inspectedPageState            `json:"independent_dom_oracle"`
+	ChromeAliveAfterRun    bool                          `json:"chrome_alive_after_run"`
+	TargetPresentAfterRun  bool                          `json:"target_present_after_run"`
+	BrowserVersionAfterRun string                        `json:"browser_version_after_run,omitempty"`
+	TargetURLAfterRun      string                        `json:"target_url_after_run,omitempty"`
+	CapturePath            string                        `json:"provider_capture_path"`
+	RecordDir              string                        `json:"record_dir"`
+	AudioPath              string                        `json:"assistant_audio_path"`
+	ValidationError        string                        `json:"validation_error,omitempty"`
+	Pass                   bool                          `json:"pass"`
 }
 
-type gateI2EvidenceCall struct {
+type realtimeToolsEvidenceCall struct {
 	Index          int    `json:"index"`
 	ArgumentsIndex int    `json:"arguments_index"`
 	Name           string `json:"name"`
@@ -394,15 +394,15 @@ type gateI2EvidenceCall struct {
 	Arguments      string `json:"arguments"`
 }
 
-type gateI2EvidenceOutput struct {
+type realtimeToolsEvidenceOutput struct {
 	Index  int    `json:"index"`
 	CallID string `json:"call_id"`
 	Output string `json:"output"`
 }
 
-// gateI2Expectation is the independently known ground truth a Gate I2
+// realtimeToolsExpectation is the independently known ground truth a Gate I2
 // capture is validated against.
-type gateI2Expectation struct {
+type realtimeToolsExpectation struct {
 	fixtureURL     string
 	browserID      string
 	targetID       string
@@ -410,39 +410,39 @@ type gateI2Expectation struct {
 	audioFileBytes int64
 }
 
-func validateGateI2Observation(observation gateI2Observation, fixtureURL, expectedBrowserID, expectedTargetID, expectedMessage string, audioFileBytes int64) (gateI2Validation, error) {
-	want := gateI2Expectation{fixtureURL: fixtureURL, browserID: expectedBrowserID, targetID: expectedTargetID, message: expectedMessage, audioFileBytes: audioFileBytes}
-	if err := validateGateI2Session(observation); err != nil {
-		return gateI2Validation{}, err
+func validateRealtimeToolsObservation(observation realtimeToolsObservation, fixtureURL, expectedBrowserID, expectedTargetID, expectedMessage string, audioFileBytes int64) (realtimeToolsValidation, error) {
+	want := realtimeToolsExpectation{fixtureURL: fixtureURL, browserID: expectedBrowserID, targetID: expectedTargetID, message: expectedMessage, audioFileBytes: audioFileBytes}
+	if err := validateRealtimeToolsSession(observation); err != nil {
+		return realtimeToolsValidation{}, err
 	}
-	outputsByCall, err := validateGateI2CallSequence(observation)
+	outputsByCall, err := validateRealtimeToolsCallSequence(observation)
 	if err != nil {
-		return gateI2Validation{}, err
+		return realtimeToolsValidation{}, err
 	}
-	if err := validateGateI2TabSelection(observation, outputsByCall, want); err != nil {
-		return gateI2Validation{}, err
+	if err := validateRealtimeToolsTabSelection(observation, outputsByCall, want); err != nil {
+		return realtimeToolsValidation{}, err
 	}
-	listToolRef, err := gateI2CatalogRef(outputsByCall[observation.Calls[2].CallID])
+	listToolRef, err := realtimeToolsCatalogRef(outputsByCall[observation.Calls[2].CallID])
 	if err != nil {
-		return gateI2Validation{}, err
+		return realtimeToolsValidation{}, err
 	}
-	validation, err := validateGateI2InvokeArguments(observation.Calls[3].Arguments, listToolRef, want.message)
+	validation, err := validateRealtimeToolsInvokeArguments(observation.Calls[3].Arguments, listToolRef, want.message)
 	if err != nil {
-		return gateI2Validation{}, err
+		return realtimeToolsValidation{}, err
 	}
 	invokeOutput := outputsByCall[observation.Calls[3].CallID]
-	if err := validateGateI2InvokeResult(invokeOutput, listToolRef, want.message); err != nil {
-		return gateI2Validation{}, err
+	if err := validateRealtimeToolsInvokeResult(invokeOutput, listToolRef, want.message); err != nil {
+		return realtimeToolsValidation{}, err
 	}
-	if err := validateGateI2SpokenConfirmation(observation, invokeOutput.Index, want); err != nil {
-		return gateI2Validation{}, err
+	if err := validateRealtimeToolsSpokenConfirmation(observation, invokeOutput.Index, want); err != nil {
+		return realtimeToolsValidation{}, err
 	}
 	return validation, nil
 }
 
-func validateGateI2Session(observation gateI2Observation) error {
-	if observation.Provider != liveProviderOpenAI || observation.Model != gateI2Model {
-		return fmt.Errorf("provider identity=(%q,%q), want (openai,%q)", observation.Provider, observation.Model, gateI2Model)
+func validateRealtimeToolsSession(observation realtimeToolsObservation) error {
+	if observation.Provider != liveProviderOpenAI || observation.Model != realtimeToolsModel {
+		return fmt.Errorf("provider identity=(%q,%q), want (openai,%q)", observation.Provider, observation.Model, realtimeToolsModel)
 	}
 	if observation.ProviderErrors != 0 {
 		return fmt.Errorf("provider emitted %d error event(s)", observation.ProviderErrors)
@@ -462,11 +462,11 @@ func validateGateI2Session(observation gateI2Observation) error {
 	return nil
 }
 
-// validateGateI2CallSequence checks the exact four-call broker sequence and
+// validateRealtimeToolsCallSequence checks the exact four-call broker sequence and
 // returns each call's single textual output keyed by call_id.
-func validateGateI2CallSequence(observation gateI2Observation) (map[string]gateI2Output, error) {
+func validateRealtimeToolsCallSequence(observation realtimeToolsObservation) (map[string]realtimeToolsOutput, error) {
 	wantedNames := []string{webmcp.ListTabsToolName, webmcp.SelectTabToolName, webmcp.ListToolsToolName, webmcp.InvokeToolName}
-	outputsByCall := make(map[string]gateI2Output, len(observation.Outputs))
+	outputsByCall := make(map[string]realtimeToolsOutput, len(observation.Outputs))
 	for _, output := range observation.Outputs {
 		if output.CallID == "" {
 			return nil, fmt.Errorf("function_call_output at index %d has an empty call_id", output.Index)
@@ -494,7 +494,7 @@ func validateGateI2CallSequence(observation gateI2Observation) (map[string]gateI
 	return outputsByCall, nil
 }
 
-func validateGateI2TabSelection(observation gateI2Observation, outputsByCall map[string]gateI2Output, want gateI2Expectation) error {
+func validateRealtimeToolsTabSelection(observation realtimeToolsObservation, outputsByCall map[string]realtimeToolsOutput, want realtimeToolsExpectation) error {
 	var tabs struct {
 		Targets []struct {
 			BrowserID string `json:"browser_id"`
@@ -505,7 +505,7 @@ func validateGateI2TabSelection(observation gateI2Observation, outputsByCall map
 			Eligible  bool   `json:"eligible"`
 		} `json:"targets"`
 	}
-	if err := decodeGateI2EnvelopeData(outputsByCall[observation.Calls[0].CallID].Output, &tabs); err != nil {
+	if err := decodeRealtimeToolsEnvelopeData(outputsByCall[observation.Calls[0].CallID].Output, &tabs); err != nil {
 		return fmt.Errorf("decode webmcp_list_tabs envelope: %w", err)
 	}
 	matches := 0
@@ -518,26 +518,26 @@ func validateGateI2TabSelection(observation gateI2Observation, outputsByCall map
 		return fmt.Errorf("webmcp_list_tabs returned %d exact eligible fixture target rows, want one", matches)
 	}
 
-	selectArgs, err := decodeGateI2Object(observation.Calls[1].Arguments)
+	selectArgs, err := decodeRealtimeToolsObject(observation.Calls[1].Arguments)
 	if err != nil {
 		return fmt.Errorf("decode webmcp_select_tab arguments: %w", err)
 	}
-	if gateI2StringValue(selectArgs, "browser_id") != want.browserID || gateI2StringValue(selectArgs, "target_id") != want.targetID {
-		return fmt.Errorf("webmcp_select_tab did not reuse list_tabs IDs: browser=%q target=%q", gateI2StringValue(selectArgs, "browser_id"), gateI2StringValue(selectArgs, "target_id"))
+	if realtimeToolsStringValue(selectArgs, "browser_id") != want.browserID || realtimeToolsStringValue(selectArgs, "target_id") != want.targetID {
+		return fmt.Errorf("webmcp_select_tab did not reuse list_tabs IDs: browser=%q target=%q", realtimeToolsStringValue(selectArgs, "browser_id"), realtimeToolsStringValue(selectArgs, "target_id"))
 	}
 	return nil
 }
 
-// gateI2CatalogRef returns the one valid ref webmcp_list_tools exposed for
+// realtimeToolsCatalogRef returns the one valid ref webmcp_list_tools exposed for
 // the fixture's completion tool.
-func gateI2CatalogRef(listToolsOutput gateI2Output) (string, error) {
+func realtimeToolsCatalogRef(listToolsOutput realtimeToolsOutput) (string, error) {
 	var catalog struct {
 		Tools []struct {
 			Ref  string `json:"ref"`
 			Name string `json:"name"`
 		} `json:"tools"`
 	}
-	if err := decodeGateI2EnvelopeData(listToolsOutput.Output, &catalog); err != nil {
+	if err := decodeRealtimeToolsEnvelopeData(listToolsOutput.Output, &catalog); err != nil {
 		return "", fmt.Errorf("decode webmcp_list_tools envelope: %w", err)
 	}
 	listToolRef := ""
@@ -555,41 +555,41 @@ func gateI2CatalogRef(listToolsOutput gateI2Output) (string, error) {
 	return listToolRef, nil
 }
 
-func validateGateI2InvokeArguments(rawArguments, listToolRef, expectedMessage string) (gateI2Validation, error) {
-	invokeArgs, err := decodeGateI2Object(rawArguments)
+func validateRealtimeToolsInvokeArguments(rawArguments, listToolRef, expectedMessage string) (realtimeToolsValidation, error) {
+	invokeArgs, err := decodeRealtimeToolsObject(rawArguments)
 	if err != nil {
-		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: decode webmcp_invoke arguments: %w; raw arguments=%s; raw-schema acceleration fallback is required if the provider cannot reliably produce input_json", err, rawArguments)
+		return realtimeToolsValidation{}, fmt.Errorf("Gate I2 measurement: decode webmcp_invoke arguments: %w; raw arguments=%s; raw-schema acceleration fallback is required if the provider cannot reliably produce input_json", err, rawArguments)
 	}
-	invokeToolRef := gateI2StringValue(invokeArgs, "tool_ref")
+	invokeToolRef := realtimeToolsStringValue(invokeArgs, "tool_ref")
 	if invokeToolRef != listToolRef {
-		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: webmcp_invoke tool_ref=%q did not reuse webmcp_list_tools ref=%q", invokeToolRef, listToolRef)
+		return realtimeToolsValidation{}, fmt.Errorf("Gate I2 measurement: webmcp_invoke tool_ref=%q did not reuse webmcp_list_tools ref=%q", invokeToolRef, listToolRef)
 	}
-	rawInputJSON := gateI2StringValue(invokeArgs, "input_json")
+	rawInputJSON := realtimeToolsStringValue(invokeArgs, "input_json")
 	if strings.TrimSpace(rawInputJSON) == "" || !json.Valid([]byte(rawInputJSON)) || !strings.HasPrefix(strings.TrimSpace(rawInputJSON), "{") {
-		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: input_json is not one syntactically valid JSON object string: raw=%q; no coercion or retry was performed; use raw-schema acceleration fallback", rawInputJSON)
+		return realtimeToolsValidation{}, fmt.Errorf("Gate I2 measurement: input_json is not one syntactically valid JSON object string: raw=%q; no coercion or retry was performed; use raw-schema acceleration fallback", rawInputJSON)
 	}
-	inputObject, err := decodeGateI2Object(rawInputJSON)
+	inputObject, err := decodeRealtimeToolsObject(rawInputJSON)
 	if err != nil {
-		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: input_json object validation failed: %w; raw=%q; no coercion or retry was performed; use raw-schema acceleration fallback", err, rawInputJSON)
+		return realtimeToolsValidation{}, fmt.Errorf("Gate I2 measurement: input_json object validation failed: %w; raw=%q; no coercion or retry was performed; use raw-schema acceleration fallback", err, rawInputJSON)
 	}
-	if len(inputObject) != 1 || gateI2StringValue(inputObject, "message") != expectedMessage {
-		return gateI2Validation{}, fmt.Errorf("Gate I2 measurement: input_json message=%q, want exactly %q with no extra fields; raw=%q", gateI2StringValue(inputObject, "message"), expectedMessage, rawInputJSON)
+	if len(inputObject) != 1 || realtimeToolsStringValue(inputObject, "message") != expectedMessage {
+		return realtimeToolsValidation{}, fmt.Errorf("Gate I2 measurement: input_json message=%q, want exactly %q with no extra fields; raw=%q", realtimeToolsStringValue(inputObject, "message"), expectedMessage, rawInputJSON)
 	}
-	reason := gateI2StringValue(invokeArgs, "reason")
+	reason := realtimeToolsStringValue(invokeArgs, "reason")
 	if strings.TrimSpace(reason) == "" {
-		return gateI2Validation{}, errors.New("Gate I2 measurement: webmcp_invoke reason is empty")
+		return realtimeToolsValidation{}, errors.New("Gate I2 measurement: webmcp_invoke reason is empty")
 	}
-	return gateI2Validation{ListToolRef: listToolRef, InvokeToolRef: invokeToolRef, RawInputJSON: rawInputJSON, Reason: reason}, nil
+	return realtimeToolsValidation{ListToolRef: listToolRef, InvokeToolRef: invokeToolRef, RawInputJSON: rawInputJSON, Reason: reason}, nil
 }
 
-func validateGateI2InvokeResult(invokeOutput gateI2Output, listToolRef, expectedMessage string) error {
+func validateRealtimeToolsInvokeResult(invokeOutput realtimeToolsOutput, listToolRef, expectedMessage string) error {
 	var invokeEnvelope struct {
 		InvocationID string          `json:"invocation_id"`
 		ToolRef      string          `json:"tool_ref"`
 		Status       string          `json:"status"`
 		Output       json.RawMessage `json:"output"`
 	}
-	if err := decodeGateI2EnvelopeData(invokeOutput.Output, &invokeEnvelope); err != nil {
+	if err := decodeRealtimeToolsEnvelopeData(invokeOutput.Output, &invokeEnvelope); err != nil {
 		return fmt.Errorf("decode webmcp_invoke envelope: %w", err)
 	}
 	if invokeEnvelope.InvocationID == "" || invokeEnvelope.ToolRef != listToolRef || invokeEnvelope.Status != string(webmcp.InvocationCompleted) {
@@ -605,7 +605,7 @@ func validateGateI2InvokeResult(invokeOutput gateI2Output, listToolRef, expected
 	return nil
 }
 
-func validateGateI2SpokenConfirmation(observation gateI2Observation, invokeOutputIndex int, want gateI2Expectation) error {
+func validateRealtimeToolsSpokenConfirmation(observation realtimeToolsObservation, invokeOutputIndex int, want realtimeToolsExpectation) error {
 	responseCreatesAfterInvoke := 0
 	for _, index := range observation.ResponseCreates {
 		if index > invokeOutputIndex {
@@ -627,7 +627,7 @@ func validateGateI2SpokenConfirmation(observation gateI2Observation, invokeOutpu
 	return nil
 }
 
-func decodeGateI2EnvelopeData(output string, destination any) error {
+func decodeRealtimeToolsEnvelopeData(output string, destination any) error {
 	envelope, err := webmcp.UnmarshalToolResult([]byte(output))
 	if err != nil {
 		return err
@@ -638,7 +638,7 @@ func decodeGateI2EnvelopeData(output string, destination any) error {
 	return json.Unmarshal(envelope.Data, destination)
 }
 
-func decodeGateI2Object(raw string) (map[string]json.RawMessage, error) {
+func decodeRealtimeToolsObject(raw string) (map[string]json.RawMessage, error) {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &object); err != nil {
 		return nil, err
@@ -649,7 +649,7 @@ func decodeGateI2Object(raw string) (map[string]json.RawMessage, error) {
 	return object, nil
 }
 
-func gateI2StringValue(object map[string]json.RawMessage, key string) string {
+func realtimeToolsStringValue(object map[string]json.RawMessage, key string) string {
 	var value string
 	if err := json.Unmarshal(object[key], &value); err != nil {
 		return ""
@@ -657,7 +657,7 @@ func gateI2StringValue(object map[string]json.RawMessage, key string) string {
 	return value
 }
 
-func gateI2PublicIDs(endpoint, rawTargetID string) (string, string, error) {
+func realtimeToolsPublicIDs(endpoint, rawTargetID string) (string, string, error) {
 	parsed, err := url.Parse(endpoint)
 	if err != nil || parsed.Scheme == "" || parsed.Hostname() == "" || parsed.Port() == "" || parsed.Path == "" {
 		return "", "", errors.New("invalid browser websocket endpoint")
@@ -673,7 +673,7 @@ func gateI2PublicIDs(endpoint, rawTargetID string) (string, string, error) {
 	return browserID, targetID, nil
 }
 
-func writeGateI2Config(configDir, cdpURL, origin, browserID, targetID string) error {
+func writeRealtimeToolsConfig(configDir, cdpURL, origin, browserID, targetID string) error {
 	var builder strings.Builder
 	builder.WriteString("tools:\n  list:\n")
 	for _, id := range config.DefaultToolIDs() {
@@ -731,12 +731,12 @@ func writeLiveBrowserConfig(configDir string, browser liveBrowserConfig) error {
 	return os.WriteFile(filepath.Join(configDir, liveConfigFileName), []byte(contents), 0o600)
 }
 
-func loadGateI2APIKey(ctx context.Context) (string, string, error) {
-	path := strings.TrimSpace(os.Getenv(gateI2KeyFileEnv))
+func loadRealtimeToolsAPIKey(ctx context.Context) (string, string, error) {
+	path := strings.TrimSpace(os.Getenv(realtimeToolsKeyFileEnv))
 	if path != "" {
 		file, err := os.Open(path)
 		if err != nil {
-			return "", gateI2KeyFileEnv, err
+			return "", realtimeToolsKeyFileEnv, err
 		}
 		defer discardSecondaryError(file.Close)
 		// This is the documented operator protocol:
@@ -746,13 +746,13 @@ func loadGateI2APIKey(ctx context.Context) (string, string, error) {
 		var output bytes.Buffer
 		command.Stdout = &output
 		if err := command.Run(); err != nil {
-			return "", gateI2KeyFileEnv, fmt.Errorf("run tr -d CR/LF: %w", err)
+			return "", realtimeToolsKeyFileEnv, fmt.Errorf("run tr -d CR/LF: %w", err)
 		}
 		key := output.String()
 		if key == "" {
-			return "", gateI2KeyFileEnv, errGateI2MissingAPIKey
+			return "", realtimeToolsKeyFileEnv, errGateI2MissingAPIKey
 		}
-		return key, gateI2KeyFileEnv + " (tr -d CR/LF)", nil
+		return key, realtimeToolsKeyFileEnv + " (tr -d CR/LF)", nil
 	}
 	key := os.Getenv("OPENAI_API_KEY")
 	if key == "" {
@@ -761,7 +761,7 @@ func loadGateI2APIKey(ctx context.Context) (string, string, error) {
 	return key, "OPENAI_API_KEY", nil
 }
 
-func randomGateI2Message() (string, error) {
+func randomRealtimeToolsMessage() (string, error) {
 	var token [8]byte
 	if _, err := rand.Read(token[:]); err != nil {
 		return "", err
@@ -769,11 +769,11 @@ func randomGateI2Message() (string, error) {
 	return "lane-i-" + hex.EncodeToString(token[:]), nil
 }
 
-func gateI2Request(message string) string {
-	return gateI2RequestPrefix + fmt.Sprintf("%q", message) + ". First discover the available page tools, then perform that exact action, verify the resulting page state, and tell me the value you observed."
+func realtimeToolsRequest(message string) string {
+	return realtimeToolsRequestPrefix + fmt.Sprintf("%q", message) + ". First discover the available page tools, then perform that exact action, verify the resulting page state, and tell me the value you observed."
 }
 
-func gateI2SpokenInput(parent context.Context, t *testing.T, artifactRoot, request string) string {
+func realtimeToolsSpokenInput(parent context.Context, t *testing.T, artifactRoot, request string) string {
 	t.Helper()
 	for _, command := range []string{"say", "afconvert"} {
 		if _, err := exec.LookPath(command); err != nil {
@@ -793,9 +793,9 @@ func gateI2SpokenInput(parent context.Context, t *testing.T, artifactRoot, reque
 	return wavPath
 }
 
-func gateI2ArtifactRoot(t *testing.T) string {
+func realtimeToolsArtifactRoot(t *testing.T) string {
 	t.Helper()
-	parent := strings.TrimSpace(os.Getenv(gateI2ArtifactEnv))
+	parent := strings.TrimSpace(os.Getenv(realtimeToolsArtifactEnv))
 	if parent == "" {
 		return t.TempDir()
 	}
@@ -809,7 +809,7 @@ func gateI2ArtifactRoot(t *testing.T) string {
 	return root
 }
 
-func readGateI2Oracle(ctx context.Context, endpoint string) fixtureOracle {
+func readRealtimeToolsOracle(ctx context.Context, endpoint string) fixtureOracle {
 	oracle, err := readFixtureOracle(ctx, endpoint)
 	if err != nil {
 		return fixtureOracle{}
@@ -817,7 +817,7 @@ func readGateI2Oracle(ctx context.Context, endpoint string) fixtureOracle {
 	return oracle
 }
 
-func readGateI2FixtureTarget(ctx context.Context, baseURL, rawTargetID, fixtureURL string) (devToolsTarget, error) {
+func readRealtimeToolsFixtureTarget(ctx context.Context, baseURL, rawTargetID, fixtureURL string) (devToolsTarget, error) {
 	targets, err := readDevToolsTargets(ctx, baseURL)
 	if err != nil {
 		return devToolsTarget{}, err
@@ -830,7 +830,7 @@ func readGateI2FixtureTarget(ctx context.Context, baseURL, rawTargetID, fixtureU
 	return devToolsTarget{}, errors.New("fixture target is absent")
 }
 
-func gateI2StateMatchesOracle(state inspectedPageState, oracle fixtureOracle) bool {
+func realtimeToolsStateMatchesOracle(state inspectedPageState, oracle fixtureOracle) bool {
 	return state.Ready == oracle.Ready &&
 		state.Value == oracle.Value &&
 		state.VisibleText == oracle.VisibleText &&
@@ -838,8 +838,8 @@ func gateI2StateMatchesOracle(state inspectedPageState, oracle fixtureOracle) bo
 		slices.Equal(state.Invocations, oracle.Invocations)
 }
 
-func gateI2PinsFromLock(lock chromeForTestingLock, executableVersion string) gateI2Pins {
-	return gateI2Pins{
+func realtimeToolsPinsFromLock(lock chromeForTestingLock, executableVersion string) realtimeToolsPins {
+	return realtimeToolsPins{
 		Channel:             lock.Channel,
 		Platform:            lock.Platform,
 		Version:             lock.Version,
@@ -860,23 +860,23 @@ func gateI2PinsFromLock(lock chromeForTestingLock, executableVersion string) gat
 	}
 }
 
-func gateI2EvidenceCalls(calls []gateI2Call) []gateI2EvidenceCall {
-	result := make([]gateI2EvidenceCall, 0, len(calls))
+func realtimeToolsEvidenceCalls(calls []realtimeToolsCall) []realtimeToolsEvidenceCall {
+	result := make([]realtimeToolsEvidenceCall, 0, len(calls))
 	for _, call := range calls {
-		result = append(result, gateI2EvidenceCall(call))
+		result = append(result, realtimeToolsEvidenceCall(call))
 	}
 	return result
 }
 
-func gateI2EvidenceOutputs(outputs []gateI2Output) []gateI2EvidenceOutput {
-	result := make([]gateI2EvidenceOutput, 0, len(outputs))
+func realtimeToolsEvidenceOutputs(outputs []realtimeToolsOutput) []realtimeToolsEvidenceOutput {
+	result := make([]realtimeToolsEvidenceOutput, 0, len(outputs))
 	for _, output := range outputs {
-		result = append(result, gateI2EvidenceOutput(output))
+		result = append(result, realtimeToolsEvidenceOutput(output))
 	}
 	return result
 }
 
-func writeGateI2Evidence(path string, evidence gateI2Evidence) error {
+func writeRealtimeToolsEvidence(path string, evidence realtimeToolsEvidence) error {
 	data, err := json.MarshalIndent(evidence, "", "  ")
 	if err != nil {
 		return err
@@ -885,7 +885,7 @@ func writeGateI2Evidence(path string, evidence gateI2Evidence) error {
 	return os.WriteFile(path, data, 0o600)
 }
 
-func gateI2ErrorString(err error) string {
+func realtimeToolsErrorString(err error) string {
 	if err == nil {
 		return ""
 	}
@@ -896,7 +896,7 @@ func gateI2ErrorString(err error) string {
 // with missingMessage when none is configured.
 func requireLiveOpenAIKey(t *testing.T, missingMessage string) (string, string) {
 	t.Helper()
-	apiKey, keySource, err := loadGateI2APIKey(t.Context())
+	apiKey, keySource, err := loadRealtimeToolsAPIKey(t.Context())
 	if errors.Is(err, errGateI2MissingAPIKey) {
 		t.Fatal(missingMessage)
 	}

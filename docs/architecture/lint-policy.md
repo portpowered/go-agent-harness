@@ -139,11 +139,11 @@ temporary rule; fix the finding or justify a specific `//nolint` instead.
 
 ## Build tags
 
-The configuration sets `run.build-tags` to the opt-in test tags `live`, `e2e`,
-`e2e_internal`, `stress` and `sessioncapacityramp`. Files behind these tags are
-held to the same limits as default-tag code even though ordinary `go test`
-never compiles them. The tags load together because `e2e_internal` files use
-helpers defined in `live` files. A new opt-in test tag must be added to it.
+The configuration sets `run.build-tags` to the opt-in test tags `live`, `e2e`
+and `stress`. Files behind these tags are held to the same limits as
+default-tag code even though ordinary `go test` never compiles them. The tags
+load together because some `e2e` and `live` files share helpers. A new opt-in
+test tag must be added to it.
 
 `wireinject` cannot join that list: a Wire injector file replaces its package's
 `!wireinject` files, so loading both sets would redeclare every injector.

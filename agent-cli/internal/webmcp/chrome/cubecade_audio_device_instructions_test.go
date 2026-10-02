@@ -1,4 +1,4 @@
-//go:build e2e_internal && darwin && arm64
+//go:build live && darwin && arm64
 
 package chrome
 

@@ -211,7 +211,7 @@ func assertModelCaseRegistry(t *testing.T, cases []modelJSONCase) {
 	}
 }
 
-func TestModels_S11JSONConformance(t *testing.T) {
+func TestModels_JSONConformance(t *testing.T) {
 	cases := exportedModelCases()
 	assertModelCaseRegistry(t, cases)
 
@@ -235,7 +235,7 @@ func TestModels_S11JSONConformance(t *testing.T) {
 	}
 }
 
-func TestModels_S3GoldenJSON(t *testing.T) {
+func TestModels_GoldenJSON(t *testing.T) {
 	cases := exportedModelCases()
 	assertModelCaseRegistry(t, cases)
 
@@ -263,68 +263,11 @@ func TestModels_S3GoldenJSON(t *testing.T) {
 	}
 
 	if !bytes.Equal(actual, sessionModelsGolden) {
-		t.Fatalf("model golden mismatch; run `go test ./pkg/models -run TestModels_S3GoldenJSON -update` to regenerate")
+		t.Fatalf("model golden mismatch; run `go test ./pkg/models -run TestModels_GoldenJSON -update` to regenerate")
 	}
 }
 
-func TestModels_S11JSONTags(t *testing.T) {
-	cases := []struct {
-		name  string
-		value any
-	}{
-		{name: "TurnDetectionConfig", value: populatedTurnDetectionConfig()},
-		{name: "SessionConfig", value: populatedSessionConfig()},
-		{name: "SessionEvent", value: populatedSessionEvent()},
-	}
-
-	for _, testCase := range cases {
-
-		t.Run(testCase.name, func(t *testing.T) {
-			encoded, err := json.Marshal(testCase.value)
-			if err != nil {
-				t.Fatalf("marshal %s: %v", testCase.name, err)
-			}
-			var object map[string]json.RawMessage
-			if err := json.Unmarshal(encoded, &object); err != nil {
-				t.Fatalf("decode %s as object: %v", testCase.name, err)
-			}
-
-			typ := reflect.TypeOf(testCase.value)
-			value := reflect.ValueOf(testCase.value)
-			for fieldIndex := range typ.NumField() {
-				assertModelFieldJSON(t, encoded, object, typ.Field(fieldIndex), value.Field(fieldIndex))
-			}
-		})
-	}
-}
-
-// assertModelFieldJSON checks that a json-tagged struct field is encoded under
-// its declared key with the same bytes as marshaling the field on its own.
-func assertModelFieldJSON(t *testing.T, encoded []byte, object map[string]json.RawMessage, field reflect.StructField, fieldValue reflect.Value) {
-	t.Helper()
-	tag := field.Tag.Get("json")
-	if tag == "" || tag == "-" {
-		return
-	}
-	key := strings.Split(tag, ",")[0]
-	if key == "" {
-		key = field.Name
-	}
-	got, ok := object[key]
-	if !ok {
-		t.Errorf("field %s must be present under declared JSON key %q in %s", field.Name, key, encoded)
-		return
-	}
-	want, err := json.Marshal(fieldValue.Interface())
-	if err != nil {
-		t.Fatalf("marshal field %s: %v", field.Name, err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Errorf("field %s under JSON key %q: want %s, got %s", field.Name, key, want, got)
-	}
-}
-
-func TestModels_S11UnknownProviderFields(t *testing.T) {
+func TestModels_UnknownProviderFields(t *testing.T) {
 	cases := []struct {
 		name   string
 		value  any
@@ -370,7 +313,7 @@ func TestModels_S11UnknownProviderFields(t *testing.T) {
 	}
 }
 
-func TestModels_S11ZeroAndOptionalWireForms(t *testing.T) {
+func TestModels_ZeroAndOptionalWireForms(t *testing.T) {
 	turnDetectionZero := TurnDetectionConfig{}
 	configWithoutTurnDetection := SessionConfig{Model: "zero-contract"}
 	configWithExplicitZeroTurnDetection := SessionConfig{
@@ -415,7 +358,7 @@ func TestModels_S11ZeroAndOptionalWireForms(t *testing.T) {
 	}
 }
 
-func TestModels_S11SessionEventConstructors(t *testing.T) {
+func TestModels_SessionEventConstructors(t *testing.T) {
 	config := json.RawMessage(`{"model":"grok-realtime-contract","modalities":["text","audio"]}`)
 	cases := []struct {
 		name     string

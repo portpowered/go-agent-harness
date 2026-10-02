@@ -2,6 +2,7 @@ package participants
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -216,7 +217,7 @@ func TestToolRunner_ErrorPropagation(t *testing.T) {
 	}
 }
 
-func TestToolRunner_ContextCancellation(t *testing.T) {
+func TestToolRunner_ParentCancellationStopsRunnerWithCanceled(t *testing.T) {
 	exec := &testToolExecutor{results: map[string]string{}}
 
 	runner := NewToolRunner(exec, 10)
@@ -226,7 +227,10 @@ func TestToolRunner_ContextCancellation(t *testing.T) {
 	ap.Start(ctx)
 
 	cancel()
-	ap.Stop() // should not hang
+	ap.Stop()
+	if err := ap.Err(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("runner stopped with %v, want context.Canceled", err)
+	}
 }
 
 func TestExecuteBatch_AllSucceed(t *testing.T) {
