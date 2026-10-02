@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/capabilities"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )

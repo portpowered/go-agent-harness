@@ -75,21 +75,6 @@ func NewAgentCaptureWithReporter(sink RecordSink, clock AgentClock, reporter fun
 	return NewAgentCapture(sink, clock, WithAgentCaptureReporter(reporter))
 }
 
-// CaptureInbound records one provider-boundary ingress frame before any live
-// processing can mutate the caller's payload. Its return value is the sink
-// result; use Inbound when sink failures must remain isolated from the live
-// path.
-func (capture *AgentCapture) CaptureInbound(stream Stream, payload []byte) error {
-	return capture.capture(DirectionIn, stream, payload)
-}
-
-// CaptureOutbound records one provider-boundary egress frame. Callers should
-// invoke it only after the live boundary has accepted the complete payload;
-// Outbound provides that acceptance gate for byte-oriented boundaries.
-func (capture *AgentCapture) CaptureOutbound(stream Stream, payload []byte) error {
-	return capture.capture(DirectionOut, stream, payload)
-}
-
 // Inbound records an ingress frame before invoking live. The live argument may
 // be a func([]byte) (int, error), func([]byte) error, io.Writer, or an object
 // exposing one of the equivalent Write, Consume, Send, or WriteMessage
@@ -139,16 +124,6 @@ func (capture *AgentCapture) Outbound(stream Stream, payload []byte, live any) (
 	tee := capture.newTee(teeLive)
 	_, _ = tee.Write(record) //nolint:errcheck // Tee reports transcript failures; the live result was captured above.
 	return accepted, liveErr
-}
-
-// ProviderIngress is a descriptive alias for Inbound.
-func (capture *AgentCapture) ProviderIngress(stream Stream, payload []byte, live any) (int, error) {
-	return capture.Inbound(stream, payload, live)
-}
-
-// ProviderEgress is a descriptive alias for Outbound.
-func (capture *AgentCapture) ProviderEgress(stream Stream, payload []byte, live any) (int, error) {
-	return capture.Outbound(stream, payload, live)
 }
 
 func (capture *AgentCapture) newTee(live RecordConsumer) *Tee {
@@ -249,4 +224,19 @@ func callAgentBoundary(consumer agentBoundaryConsumer, payload []byte, acceptedW
 		return acceptedWithoutLive, nil
 	}
 	return consumer(payload)
+}
+
+// CaptureInbound records one provider-boundary ingress frame before any live
+// processing can mutate the caller's payload. Its return value is the sink
+// result; use Inbound when sink failures must remain isolated from the live
+// path.
+func (capture *AgentCapture) CaptureInbound(stream Stream, payload []byte) error {
+	return capture.capture(DirectionIn, stream, payload)
+}
+
+// CaptureOutbound records one provider-boundary egress frame. Callers should
+// invoke it only after the live boundary has accepted the complete payload;
+// Outbound provides that acceptance gate for byte-oriented boundaries.
+func (capture *AgentCapture) CaptureOutbound(stream Stream, payload []byte) error {
+	return capture.capture(DirectionOut, stream, payload)
 }

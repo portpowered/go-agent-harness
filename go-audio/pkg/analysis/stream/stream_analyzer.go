@@ -17,11 +17,6 @@ func AnalyzePCM16(input PCM16Input, config PCM16AnalysisConfig) (PCM16Analysis, 
 	return analysis, nil
 }
 
-// Analyze is a concise alias for AnalyzePCM16.
-func Analyze(input PCM16Input, config PCM16AnalysisConfig) (PCM16Analysis, error) {
-	return AnalyzePCM16(input, config)
-}
-
 // AssertPCM16 evaluates a stream and returns a typed error for any measured
 // property violation. The report-oriented AnalyzePCM16 function remains
 // available when callers need all measurements and failures.
@@ -34,9 +29,4 @@ func AssertPCM16(input PCM16Input, config PCM16AnalysisConfig) error {
 		return nil
 	}
 	return &PCM16AssertionError{StreamID: analysis.StreamID, Failures: analysis.FailuresCopy()}
-}
-
-// ValidatePCM16 is an assertion-oriented alias for AssertPCM16.
-func ValidatePCM16(input PCM16Input, config PCM16AnalysisConfig) error {
-	return AssertPCM16(input, config)
 }

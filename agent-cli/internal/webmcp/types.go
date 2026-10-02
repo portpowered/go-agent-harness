@@ -55,23 +55,6 @@ const (
 	CastStopCastingMethod         = "Cast.stopCasting"
 )
 
-// WireTraceSink receives safe WebMCP wire-boundary evidence. Implementations
-// should keep recording bounded and must not add raw transport or page data.
-type WireTraceSink interface {
-	RecordWebMCPWireTrace(WebMCPWireTrace)
-}
-
-// WireTraceFunc adapts a function to WireTraceSink.
-type WireTraceFunc func(WebMCPWireTrace)
-
-var _ WireTraceSink = WireTraceFunc(nil)
-
-func (f WireTraceFunc) RecordWebMCPWireTrace(trace WebMCPWireTrace) {
-	if f != nil {
-		f(trace)
-	}
-}
-
 // BrowserCandidate is the normalized identity and connection metadata for a
 // browser endpoint. Browser-specific protocol values stay at the adapter
 // boundary and are represented here only as neutral strings.

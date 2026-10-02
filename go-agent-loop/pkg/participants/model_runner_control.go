@@ -171,12 +171,6 @@ func (r *ModelRunner) forwardSessionEvent(ctx context.Context, session messages.
 // event was admitted at all (distinguishing an accepted RESPONSE.CANCEL from
 // an ordinary event rejected silently).
 func (r *ModelRunner) forwardSessionEventOutcome(ctx context.Context, session messages.Session, msg messages.StreamMessage) (messages.StreamMessage, bool, bool, bool) {
-	if sessionAdmissionClosed(session) && sessionEventBlockedByAdmission(session, msg) {
-		// The room has already recorded its bound and is draining an existing
-		// response. Tool results, continuations, and configuration updates that
-		// cross this boundary are not admitted and are not session failures.
-		return messages.StreamMessage{}, false, false, false
-	}
 	outcome := messages.SendSessionWithOutcome(ctx, session, msg)
 	if outcome.OK() {
 		return messages.StreamMessage{}, false, msg.Type == messages.StreamTypeResponseCreate, true
@@ -227,29 +221,6 @@ func unresolvedSendFailure(msg messages.StreamMessage, outcome messages.SessionS
 	)
 	value.Err = outcome.Err
 	return messages.StreamMessage{Type: messages.StreamTypeError, Value: value}, true
-}
-
-type sessionAdmissionController interface {
-	SessionAdmissionClosed() bool
-}
-
-type sessionAdmissionPolicy interface {
-	SessionAdmissionAllows(messages.StreamMessage) bool
-}
-
-func sessionAdmissionClosed(session messages.Session) bool {
-	controller, ok := session.(sessionAdmissionController)
-	return ok && controller.SessionAdmissionClosed()
-}
-
-// sessionEventBlockedByAdmission reports whether a closed admission boundary
-// blocks msg. Without a session policy only RESPONSE.CANCEL and SESSION.CLOSE
-// still cross it.
-func sessionEventBlockedByAdmission(session messages.Session, msg messages.StreamMessage) bool {
-	if policy, ok := session.(sessionAdmissionPolicy); ok {
-		return !policy.SessionAdmissionAllows(msg)
-	}
-	return msg.Type != messages.StreamTypeResponseCancel && msg.Type != messages.StreamTypeSessionClose
 }
 
 func forwardSessionCompleteMessage(ctx context.Context, session messages.Session, msg messages.Message, requestResponse bool) error {

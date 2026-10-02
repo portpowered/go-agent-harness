@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
 func validateRoomReplayArtifacts(root string, refs []roomReplayArtifactRef, metadata map[string]roomReplayArtifactRef) ([]RoomReplayArtifact, map[string]RoomReplayArtifact, error) {
@@ -116,7 +117,7 @@ func validateRoomReplayCaptures(ctx context.Context, replayService replay.Captur
 	return nil
 }
 
-func validateRoomReplayCapture(ctx context.Context, replayService replay.CaptureInspector, participant RoomReplayParticipant) error {
+func validateRoomReplayCapture(ctx context.Context, replayService replay.CaptureInspector, participant roomreplay.RoomReplayParticipant) error {
 	if participant.Capture.AbsolutePath == "" {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "participants["+participant.ID+"].capture", "", "provider capture", "missing", ErrRoomReplayBundleIncomplete)
 	}

@@ -4,8 +4,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"io"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 const (
@@ -72,11 +73,6 @@ func Read(r io.Reader) (sampleRate int, samples []int16, err error) {
 	return int(format.sampleRate), samples, nil
 }
 
-// Decode is an explicit synonym for Read.
-func Decode(r io.Reader) (sampleRate int, samples []int16, err error) {
-	return Read(r)
-}
-
 // Write encodes samples as deterministic PCM16 mono WAV bytes at sampleRate.
 // It writes the canonical RIFF/WAVE header and little-endian sample payload to
 // the caller-owned writer, which remains open. Empty samples are rejected.
@@ -121,11 +117,6 @@ func Write(w io.Writer, sampleRate int, samples []int16) error {
 	}
 
 	return nil
-}
-
-// Encode is an explicit synonym for Write.
-func Encode(w io.Writer, sampleRate int, samples []int16) error {
-	return Write(w, sampleRate, samples)
 }
 
 type waveFormat struct {

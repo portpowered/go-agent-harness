@@ -61,8 +61,8 @@ func TestLoadRoomReplayPlanValidatesCompleteBundleBeforeRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadRoomReplayPlan: %v", err)
 	}
-	if !plan.Finalized || plan.SchemaVersion != RoomReplayBundleSchemaVersion {
-		t.Fatalf("plan metadata = finalized:%t schema:%d, want finalized schema %d", plan.Finalized, plan.SchemaVersion, RoomReplayBundleSchemaVersion)
+	if !plan.Finalized || plan.SchemaVersion != roomreplay.RoomReplayBundleSchemaVersion {
+		t.Fatalf("plan metadata = finalized:%t schema:%d, want finalized schema %d", plan.Finalized, plan.SchemaVersion, roomreplay.RoomReplayBundleSchemaVersion)
 	}
 	if len(plan.Participants) != 2 || plan.Participants[0].ID != "alpha" || plan.Participants[1].ID != "beta" {
 		t.Fatalf("plan participants = %+v, want manifest-order-independent alpha/beta projections", plan.Participants)
@@ -278,7 +278,7 @@ func TestLoadRoomReplayPlanRejectsOversizedManifestWithTypedMismatch(t *testing.
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("oversized manifest error = %v, want typed mismatch", err)
 	}
-	var bundleErr *RoomReplayBundleError
+	var bundleErr *roomreplay.RoomReplayBundleError
 	if !errors.As(err, &bundleErr) || bundleErr.Field != "run-manifest.json" || !strings.Contains(bundleErr.Actual, "maximum") {
 		t.Fatalf("oversized manifest error = %+v, want bounded manifest context", bundleErr)
 	}
@@ -297,7 +297,7 @@ func TestLoadRoomReplayPlanRejectsOversizedTimelineLineWithTypedMismatch(t *test
 	if err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) || !errors.Is(err, gateway.ErrReplayMismatch) {
 		t.Fatalf("oversized timeline error = %v, want typed mismatch", err)
 	}
-	var bundleErr *RoomReplayBundleError
+	var bundleErr *roomreplay.RoomReplayBundleError
 	if !errors.As(err, &bundleErr) || bundleErr.Field != "room_timeline" || !strings.Contains(bundleErr.Expected, "JSONL lines") {
 		t.Fatalf("oversized timeline error = %+v, want bounded line context", bundleErr)
 	}
@@ -448,7 +448,7 @@ func writeRoomReplayBundle(t *testing.T) (string, map[string]any) {
 	}
 
 	manifest := map[string]any{
-		"schema_version": RoomReplayBundleSchemaVersion,
+		"schema_version": roomreplay.RoomReplayBundleSchemaVersion,
 		"finalized":      true,
 		"clock_base":     clockBase.Format(time.RFC3339Nano),
 		"timing":         map[string]any{"started_at": clockBase.Format(time.RFC3339Nano), "ended_at": clockBase.Add(100 * time.Millisecond).Format(time.RFC3339Nano), "elapsed": "100ms"},

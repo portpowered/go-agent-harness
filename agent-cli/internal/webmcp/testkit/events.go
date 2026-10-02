@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -426,12 +425,6 @@ func ValidateEventStream(data []byte) ([]Event, error) {
 	return events, nil
 }
 
-// DecodeEvents is an alias for ValidateEventStream for callers that prefer a
-// decoder-shaped name.
-func DecodeEvents(data []byte) ([]Event, error) {
-	return ValidateEventStream(data)
-}
-
 // LoadEvents reads and validates a browser JSONL artifact from a stream.
 func LoadEvents(reader io.Reader) ([]Event, error) {
 	if reader == nil {
@@ -440,15 +433,6 @@ func LoadEvents(reader io.Reader) ([]Event, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("read browser event stream: %w", err)
-	}
-	return ValidateEventStream(data)
-}
-
-// LoadEventsFile reads and validates a browser JSONL artifact from disk.
-func LoadEventsFile(path string) ([]Event, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read browser event stream %q: %w", path, err)
 	}
 	return ValidateEventStream(data)
 }

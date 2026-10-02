@@ -45,9 +45,10 @@ jobs:
   # Every job restores its own Go build and module caches through
   # .github/actions/go-cache.
 
-  # The required "CI (static)" check: gofmt, the CI test partition and the
+  # The required "CI (static)" check: gofmt, the CI test partition, the
   # architecture gate (service shape and boundaries; size and complexity are
-  # golangci-lint's), then every lint lane. (make wire-check runs in CI
+  # golangci-lint's) and the dead-code gate (which compares its allowlist with
+  # the merge base, so it needs full history), then every lint lane. (make wire-check runs in CI
   # (unit), which has cold-budget room for it.)
   # Each check step runs with `if: always()` so an early failure does not
   # hide later results.
@@ -69,6 +70,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # The dead-code gate compares its allowlist with the merge base.
+          fetch-depth: 0
+          filter: blob:none
 
       - name: Set up Go
         id: go
@@ -87,6 +92,12 @@ jobs:
       - name: Verify service architecture
         if: always()
         run: make architecture-check
+
+      # Dead functions must match docs/architecture/deadcode-allowlist.txt,
+      # which may only shrink (scripts/deadcode-check.py).
+      - name: Verify no new dead code
+        if: always()
+        run: make deadcode-check
 
       - name: Save Go cache
         if: always()

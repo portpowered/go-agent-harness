@@ -33,7 +33,7 @@ than accepting an uncorrelated result.
 
 ## Disabled-sleep negative control
 
-`TestSessionCommand_DefaultToolSetActive_DisabledSleepRejectsSuccess` invokes
+`TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess` invokes
 the same production CLI, replay capture, text seed, and argument shape with no
 `--tools` flag. Its temporary `config.yaml` explicitly contains:
 
@@ -74,19 +74,19 @@ Positive proof:
 
 ```sh
 cd agent-cli
-go test ./test/integration -run '^TestSessionCommand_DefaultToolSetActive$' -count=1 -v
+go test ./test/integration -run '^TestSessionCommand_ExperimentalToolSetActive$' -count=1 -v
 ```
 
 Disabled-sleep control:
 
 ```sh
 cd agent-cli
-go test ./test/integration -run '^TestSessionCommand_DefaultToolSetActive_DisabledSleepRejectsSuccess$' -count=1 -v
+go test ./test/integration -run '^TestSessionCommand_ExperimentalToolSetActive_DisabledSleepRejectsSuccess$' -count=1 -v
 ```
 
 The combined focused run is:
 
 ```sh
 cd agent-cli
-go test ./test/integration -run '^TestSessionCommand_DefaultToolSetActive' -count=1 -v
+go test ./test/integration -run '^TestSessionCommand_ExperimentalToolSetActive' -count=1 -v
 ```

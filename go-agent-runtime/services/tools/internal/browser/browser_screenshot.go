@@ -103,7 +103,7 @@ func invalidScreenshot(reason string, cause error) error {
 	if strings.TrimSpace(reason) == "" {
 		reason = "invalid_capture"
 	}
-	classified := NewClassifiedError(ErrorInvocationFailed, "The browser returned an invalid page capture.", map[string]any{
+	classified := NewClassifiedError(public.ErrorInvocationFailed, "The browser returned an invalid page capture.", map[string]any{
 		"phase":       "capture_page",
 		"reason_code": reason,
 	})

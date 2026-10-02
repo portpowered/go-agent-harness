@@ -4,6 +4,8 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	analysisstream "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
 func (d *PCM16SelfHearingDetector) classifyLocked() PCM16SelfHearingObservation {
@@ -33,7 +35,7 @@ type pcm16SelfHearingLagResult struct {
 }
 
 type pcm16SelfHearingSummary struct {
-	measurement    PCM16CorrelationMeasurement
+	measurement    analysisstream.PCM16CorrelationMeasurement
 	minimumSamples int
 	bestEvidence   int
 	anyEvidence    int
@@ -131,7 +133,7 @@ func (d *PCM16SelfHearingDetector) alignLagWindow() (time.Duration, time.Duratio
 func (d *PCM16SelfHearingDetector) measureClassification(window pcm16SelfHearingWindow) pcm16SelfHearingSummary {
 	summary := pcm16SelfHearingSummary{
 		minimumSamples: window.minimumSamples,
-		measurement: PCM16CorrelationMeasurement{
+		measurement: analysisstream.PCM16CorrelationMeasurement{
 			SourceStreamID:        "assistant-playback",
 			SourceParticipantID:   "assistant",
 			ReceivedStreamID:      "microphone-capture",

@@ -126,7 +126,7 @@ reviewed record once, and prepare new project-scope missions.  No
 is changed by this plumbing.  The bounded controller/evidence probe is run as:
 
 ```text
-python3 docs/temp/projects/audio-runtime/audio-runtime-c39-authorized-scope-amendment/probe.py --source-revision <tested-sha> --yui <same-source-immutable-yui> --output <fresh-owned-evidence-directory>
+python3 factory/scripts/tests/fixtures/scope-amendment/c39-probe.py --source-revision <tested-sha> --yui <same-source-immutable-yui> --output <fresh-owned-evidence-directory>
 ```
 
 When the reviewed C32 inputs are staged, repeat `--replay-fixture` and

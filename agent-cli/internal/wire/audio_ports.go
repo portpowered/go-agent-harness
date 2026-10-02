@@ -1,12 +1,13 @@
 package wire
 
-import devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 import (
 	"context"
 	"io"
 
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
+
 	sessiontrace "github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
+
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
@@ -31,9 +32,7 @@ type AudioSink interface {
 type Clock = clock.Source
 
 type MetricSampler = observability.MetricSampler
-type MetricSamplerFunc = observability.MetricSamplerFunc
 type Logger = observability.Logger
-type LoggerFunc = observability.LoggerFunc
 
 // SessionRuntimeObserver is the optional runtime evidence sink used by
 // hermetic command-level tests. It observes events emitted from inside the
@@ -44,12 +43,7 @@ type SessionRuntimeObserver = sessiontrace.SessionRuntimeObserver
 type SessionRuntimeObservation = sessiontrace.SessionRuntimeObservation
 
 const (
-	SessionRuntimeObservationAudioOutput    = sessiontrace.SessionRuntimeObservationAudioOutput
-	SessionRuntimeObservationAudioInput     = sessiontrace.SessionRuntimeObservationAudioInput
-	SessionRuntimeObservationInputCommit    = sessiontrace.SessionRuntimeObservationInputCommit
-	SessionRuntimeObservationResponseCreate = sessiontrace.SessionRuntimeObservationResponseCreate
-	SessionRuntimeObservationTurnCompleted  = sessiontrace.SessionRuntimeObservationTurnCompleted
-	SessionRuntimeObservationTerminal       = sessiontrace.SessionRuntimeObservationTerminal
+	SessionRuntimeObservationTerminal = sessiontrace.SessionRuntimeObservationTerminal
 )
 
 // SessionFinalAccounting is the production-owned terminal token and metrics

@@ -8,11 +8,10 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
-	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
 	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/wavio"
+	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
 )
 
 var (
@@ -192,12 +191,6 @@ func openRTCDeviceSourceAtRate(registry devicegw.DeviceRegistry, id devicegw.Dev
 // NewDefaultRTCDeviceSource opens the directional input default from registry.
 func NewDefaultRTCDeviceSource(registry devicegw.DeviceRegistry) (*RTCDeviceSource, error) {
 	return NewRTCDeviceSource(registry, "")
-}
-
-// NewRTCDeviceSourceFromOpened adopts an already-opened input endpoint.
-// Ownership transfers to the returned worker, which releases it on Close.
-func NewRTCDeviceSourceFromOpened(source *devicegw.DeviceSource, sourceRate, providerRate int) *RTCDeviceSource {
-	return newRTCDeviceSourceFromOpened(source, sourceRate, providerRate)
 }
 
 func (s *RTCDeviceSource) SetCaptureFilter(filter CaptureFilter) {
@@ -391,9 +384,15 @@ func isNilValue(value any) bool {
 	return nilable && v.IsNil()
 }
 
+// nilValueString is the diagnostic rendering of an absent value.
+const nilValueString = "<nil>"
+
 // IsNilOutboundMedia reports whether an outbound endpoint is nil, including a
 // typed nil hidden behind the media interface.
 func IsNilOutboundMedia(media audio.OutboundMedia) bool { return nilRTCOutboundMedia(media) }
 
-// nilValueString is the diagnostic rendering of an absent value.
-const nilValueString = "<nil>"
+// NewRTCDeviceSourceFromOpened adopts an already-opened input endpoint.
+// Ownership transfers to the returned worker, which releases it on Close.
+func NewRTCDeviceSourceFromOpened(source *devicegw.DeviceSource, sourceRate, providerRate int) *RTCDeviceSource {
+	return newRTCDeviceSourceFromOpened(source, sourceRate, providerRate)
+}

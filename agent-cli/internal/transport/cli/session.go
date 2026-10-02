@@ -71,7 +71,6 @@ type SessionCapabilityState = sessionbroker.State
 const (
 	SessionCapabilityInitializing = sessionbroker.StateInitializing
 	SessionCapabilityReady        = sessionbroker.StateReady
-	SessionCapabilityFailed       = sessionbroker.StateFailed
 )
 
 // SessionCapabilityStatus is a read-only snapshot of capability setup.

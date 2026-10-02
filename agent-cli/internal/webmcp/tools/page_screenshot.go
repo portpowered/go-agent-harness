@@ -15,7 +15,6 @@ const (
 	// show_page. The image bytes never cross the textual tool-result boundary.
 	ShowPageResultVersion                   = sight.ResultVersion
 	ShowPageResultStatusSuccess             = sight.StatusSuccess
-	ShowPageResultStatusError               = sight.StatusError
 	ShowPageResultTypedProjectionInputImage = sight.TypedProjectionInputImage
 	showPageSource                          = sight.SourceBrowserPage
 )

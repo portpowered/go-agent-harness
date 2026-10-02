@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 )
 
 const (
@@ -19,12 +21,6 @@ func NormalizedPCM16CrossCorrelation(source, received PCM16TimedStream, interval
 		return PCM16CorrelationMeasurement{}, err
 	}
 	return scanPCM16Correlation(prepared), nil
-}
-
-// MeasurePCM16Correlation is a concise alias for the explicit correlation
-// primitive.
-func MeasurePCM16Correlation(source, received PCM16TimedStream, interval PCM16TimeInterval, lagWindow PCM16LagWindow, silenceFloorDBFS float64) (PCM16CorrelationMeasurement, error) {
-	return NormalizedPCM16CrossCorrelation(source, received, interval, lagWindow, silenceFloorDBFS)
 }
 
 // MeasurePCM16Drift measures sample duration versus the declared timeline
@@ -263,7 +259,7 @@ func (e *InvalidPCM16RoomAnalysisInputError) Error() string {
 }
 
 func (e *InvalidPCM16RoomAnalysisInputError) Unwrap() error {
-	return errors.Join(ErrInvalidPCM16RoomAnalysisInput, ErrInvalidPCM16AnalysisInput)
+	return errors.Join(ErrInvalidPCM16RoomAnalysisInput, stream.ErrInvalidPCM16AnalysisInput)
 }
 
 func joinPropertyFailures(parts []string) string {

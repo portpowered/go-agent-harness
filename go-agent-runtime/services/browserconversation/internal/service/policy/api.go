@@ -12,10 +12,6 @@ const (
 	StaleToolRef        = browserConversationStaleToolRef
 )
 
-func ValidateScenario(scenario BrowserConversationScenario) error {
-	return validateScenario(scenario)
-}
-
 func ParseScenarioJSON(data []byte) (BrowserConversationScenario, error) {
 	return parseScenarioJSON(data)
 }
@@ -58,10 +54,6 @@ func ValidateJSONObject(path string, raw json.RawMessage) error {
 
 func ValidateResult(result BrowserConversationResult) error {
 	return validateResult(result)
-}
-
-func ValidatorRubricValues() []string {
-	return validatorRubricValues()
 }
 
 func SafeText(value string) string {

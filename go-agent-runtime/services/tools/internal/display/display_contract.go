@@ -77,34 +77,27 @@ func admitScreenCapture(ctx context.Context, surface DisplaySurface, display int
 	}
 	if display >= capability.DisplayCount {
 		return &ScreenCaptureError{
-			State: ScreenCaptureUnavailable, Operation: "show",
+			State: public.ScreenCaptureUnavailable, Operation: "show",
 			Reason: fmt.Sprintf("display %d not available (only %d display(s) found)", display, capability.DisplayCount),
 		}
 	}
 	return nil
 }
 
-type ScreenCaptureState = public.ScreenCaptureState
-
 const (
-	ScreenCaptureGranted          = public.ScreenCaptureGranted
-	ScreenCaptureDenied           = public.ScreenCaptureDenied
-	ScreenCaptureUnavailable      = public.ScreenCaptureUnavailable
-	ScreenCaptureCanceled         = public.ScreenCaptureCanceled
-	ScreenCaptureTimedOut         = public.ScreenCaptureTimedOut
-	ScreenCaptureFailed           = public.ScreenCaptureFailed
-	ScreenCapturePermissionDenied = public.ScreenCapturePermissionDenied
-	ScreenCaptureTimeout          = public.ScreenCaptureTimeout
-	ScreenCaptureCancelled        = public.ScreenCaptureCancelled
+	ScreenCaptureDenied   = public.ScreenCaptureDenied
+	ScreenCaptureCanceled = public.ScreenCaptureCanceled
+	ScreenCaptureTimedOut = public.ScreenCaptureTimedOut
+	ScreenCaptureFailed   = public.ScreenCaptureFailed
 )
 
 // DisplayCapabilityState is retained as an alias for callers that only need
 // to inspect the admission state of a display surface.
-type DisplayCapabilityState = ScreenCaptureState
+type DisplayCapabilityState = public.ScreenCaptureState
 
 const (
-	DisplayCapabilityUsable      = ScreenCaptureGranted
-	DisplayCapabilityUnavailable = ScreenCaptureUnavailable
+	DisplayCapabilityUsable      = public.ScreenCaptureGranted
+	DisplayCapabilityUnavailable = public.ScreenCaptureUnavailable
 )
 
 var (
@@ -131,19 +124,19 @@ func UsableDisplayCapability(displayCount int) DisplayCapability {
 	if displayCount < 0 {
 		displayCount = 0
 	}
-	return DisplayCapability{State: ScreenCaptureGranted, Available: displayCount > 0, DisplayCount: displayCount}
+	return DisplayCapability{State: public.ScreenCaptureGranted, Available: displayCount > 0, DisplayCount: displayCount}
 }
 
 // UnavailableDisplayCapability constructs a normalized failed capability.
 func UnavailableDisplayCapability(reason string) DisplayCapability {
-	return DisplayCapability{State: ScreenCaptureUnavailable, Reason: reason}
+	return DisplayCapability{State: public.ScreenCaptureUnavailable, Reason: reason}
 }
 
 // ScreenCaptureError is a stable, inspectable error for display failures.
 // Reason is safe for model-facing output and Cause retains context/process
 // identity for programmatic callers.
 type ScreenCaptureError struct {
-	State     ScreenCaptureState
+	State     public.ScreenCaptureState
 	Operation string
 	Reason    string
 	Cause     error
@@ -181,11 +174,11 @@ func (e *ScreenCaptureError) Unwrap() error {
 	}
 	errs := []error{ErrScreenCapture}
 	switch e.State {
-	case ScreenCaptureGranted:
+	case public.ScreenCaptureGranted:
 		// A successful capability cannot carry a capture failure sentinel.
 	case ScreenCaptureDenied:
 		errs = append(errs, ErrScreenRecordingPermissionDenied)
-	case ScreenCaptureUnavailable:
+	case public.ScreenCaptureUnavailable:
 		errs = append(errs, ErrDisplayUnavailable)
 	case ScreenCaptureCanceled:
 		errs = append(errs, ErrScreenCaptureCanceled)
@@ -226,16 +219,6 @@ func (e *ScreenRecordingPermissionError) Unwrap() error {
 // Probe must not capture or persist screen content.
 type DisplayCapabilityProbe = public.DisplayCapabilityProbe
 
-// DisplayCapabilityProbeFunc adapts a function to the admission probe seam.
-type DisplayCapabilityProbeFunc func(context.Context) (DisplayCapability, error)
-
-func (f DisplayCapabilityProbeFunc) Probe(ctx context.Context) (DisplayCapability, error) {
-	if f == nil {
-		return UnavailableDisplayCapability("display capability probe is not configured"), nil
-	}
-	return f(ctx)
-}
-
 // DisplayPermissionState and DisplayPermission are aliases of the neutral
 // tools contract. Platform display code can therefore be surfaced through a
 // composed runtime executor without importing the CLI display package.
@@ -245,9 +228,6 @@ const (
 	DisplayPermissionGranted     = public.DisplayPermissionGranted
 	DisplayPermissionDenied      = public.DisplayPermissionDenied
 	DisplayPermissionUnavailable = public.DisplayPermissionUnavailable
-	DisplayPermissionCanceled    = public.DisplayPermissionCanceled
-	DisplayPermissionTimedOut    = public.DisplayPermissionTimedOut
-	DisplayPermissionFailed      = public.DisplayPermissionFailed
 )
 
 type DisplayPermission = public.DisplayPermission

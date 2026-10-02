@@ -17,12 +17,10 @@ import (
 
 // Operator defaults for a customer simulation run.
 const (
-	DefaultProvider          = config.ProviderOpenAI
-	DefaultModel             = "gpt-realtime-2.1-mini"
-	DefaultValidatorProvider = config.ProviderOpenAI
-	DefaultValidatorModel    = "gpt-4o-mini"
-	DefaultAPIKeyEnv         = "OPENAI_API_KEY"
-	DefaultSecretFile        = "~/.you-agent-factory/secrets/OPENAPI_API_KEY"
+	DefaultModel          = "gpt-realtime-2.1-mini"
+	DefaultValidatorModel = "gpt-4o-mini"
+	DefaultAPIKeyEnv      = "OPENAI_API_KEY"
+	DefaultSecretFile     = "~/.you-agent-factory/secrets/OPENAPI_API_KEY"
 )
 
 // Request is one operator's customer simulation invocation.
@@ -58,9 +56,9 @@ type Request struct {
 // DefaultRequest returns a request carrying the operator defaults.
 func DefaultRequest() Request {
 	return Request{
-		Provider:            DefaultProvider,
+		Provider:            config.ProviderOpenAI,
 		Model:               DefaultModel,
-		ValidatorProvider:   DefaultValidatorProvider,
+		ValidatorProvider:   config.ProviderOpenAI,
 		APIKeyEnv:           DefaultAPIKeyEnv,
 		SecretFile:          DefaultSecretFile,
 		ValidatorModel:      DefaultValidatorModel,

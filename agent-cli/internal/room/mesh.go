@@ -28,7 +28,6 @@ var (
 
 type MeshError = runtimeRooms.MeshError
 type PairSpec = runtimeRooms.PairSpec
-type PairKey = runtimeRooms.PairKey
 type PairResource = runtimeRooms.PairResource
 type PairFactory = runtimeRooms.PairFactory
 type MeshConfig = runtimeRooms.MeshConfig

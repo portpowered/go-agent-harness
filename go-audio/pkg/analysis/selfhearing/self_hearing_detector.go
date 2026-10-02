@@ -44,12 +44,6 @@ func NewPCM16SelfHearingDetector(config PCM16SelfHearingConfig) (*PCM16SelfHeari
 	}, nil
 }
 
-// NewPCM16SelfHearingController is a constructor-shaped alias for session
-// owners that use controller terminology.
-func NewPCM16SelfHearingController(config PCM16SelfHearingConfig) (*PCM16SelfHearingDetector, error) {
-	return NewPCM16SelfHearingDetector(config)
-}
-
 // NewPCM16SelfHearingDetectorForTopology creates a detector only for the
 // paired-live-device topology. Bypass paths return (nil, nil), making the
 // absence of the policy observable without opening or wrapping media pumps.
@@ -58,12 +52,6 @@ func NewPCM16SelfHearingDetectorForTopology(topology PCM16SelfHearingTopology, c
 		return nil, nil
 	}
 	return NewPCM16SelfHearingDetector(config)
-}
-
-// NewPCM16SelfHearingControllerForTopology is the controller-named alias of
-// NewPCM16SelfHearingDetectorForTopology.
-func NewPCM16SelfHearingControllerForTopology(topology PCM16SelfHearingTopology, config PCM16SelfHearingConfig) (*PCM16SelfHearingDetector, error) {
-	return NewPCM16SelfHearingDetectorForTopology(topology, config)
 }
 
 // Config returns the immutable policy copy used by the detector.

@@ -4362,11 +4362,10 @@ agent-cli/go.sum
 go-agent-loop/go.mod
 go-llm-gateway/go.mod
 go-llm-gateway/go.sum
-test/localai/go.mod
-test/localai/go.sum
+tests/localai/go.mod
+tests/localai/go.sum
 tools/coveragegate/go.mod
-tools/rtc-race-gate/go.mod
-tools/session-race-gate/go.mod
+tools/racegate/go.mod
 tools/timingate/go.mod
 .github/workflows/ci.yml
 Makefile

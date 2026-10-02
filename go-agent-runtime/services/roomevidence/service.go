@@ -29,23 +29,12 @@ type Participant = rooms.Participant
 type ParticipantKind = rooms.ParticipantKind
 type AudioFormat = rooms.AudioFormat
 type RoomResult = rooms.RoomResult
-type RoomParticipantResult = rooms.RoomParticipantResult
-type RoomTerminationReason = rooms.RoomTerminationReason
-type ParticipantTerminationReason = rooms.ParticipantTerminationReason
 
 const (
-	ParticipantKindAgent    = rooms.ParticipantKindAgent
-	ParticipantKindHuman    = rooms.ParticipantKindHuman
-	ParticipantKindCustomer = rooms.ParticipantKindCustomer
+	ParticipantKindAgent = rooms.ParticipantKindAgent
+	ParticipantKindHuman = rooms.ParticipantKindHuman
 
-	RoomTerminationStopped            = rooms.RoomTerminationStopped
-	RoomTerminationMaxTurnsReached    = rooms.RoomTerminationMaxTurnsReached
-	RoomTerminationMaxDurationReached = rooms.RoomTerminationMaxDurationReached
-	RoomTerminationFailed             = rooms.RoomTerminationFailed
-
-	ParticipantTerminationEnded        = rooms.ParticipantTerminationEnded
-	ParticipantTerminationDisconnected = rooms.ParticipantTerminationDisconnected
-	ParticipantTerminationError        = rooms.ParticipantTerminationError
+	RoomTerminationMaxTurnsReached = rooms.RoomTerminationMaxTurnsReached
 )
 
 type sentinelError string
@@ -158,7 +147,6 @@ type Recorder interface {
 	Close() error
 }
 type Observation = rooms.EvidenceObservation
-type ObservationKind = rooms.EvidenceObservationKind
 type Finalization = rooms.EvidenceFinalization
 type Result = rooms.EvidenceResult
 type DiagnosticRecord = rooms.EvidenceDiagnosticRecord

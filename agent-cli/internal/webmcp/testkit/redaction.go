@@ -41,12 +41,6 @@ func NewRedactor(policy RedactionPolicy, credentials ...[]string) (*Redactor, er
 	return &Redactor{policy: normalized, credentials: secretBytes}, nil
 }
 
-// NewBrowserRedactor constructs a canonical redactor from a policy/config
-// pair. It is useful when the policy and credential list are decoded together.
-func NewBrowserRedactor(config RedactionConfig) (*Redactor, error) {
-	return NewRedactor(config.Policy, config.Credentials)
-}
-
 // Policy returns a copy of the effective policy. Credentials are not returned
 // as part of it.
 func (r *Redactor) Policy() RedactionPolicy {
@@ -186,16 +180,6 @@ func (r *Redactor) ValidateArtifactBytes(data []byte) error {
 	return nil
 }
 
-// RedactEvent applies a canonical policy to one event. Credentials may be
-// omitted, supplied as one variadic slice, or supplied through policy.Credentials.
-func RedactEvent(event Event, policy RedactionPolicy, credentials ...[]string) (Event, error) {
-	redactor, err := NewRedactor(policy, credentials...)
-	if err != nil {
-		return Event{}, err
-	}
-	return redactor.RedactEvent(event)
-}
-
 // RedactEvents applies a canonical policy to a complete event stream.
 func RedactEvents(events []Event, policy RedactionPolicy, credentials ...[]string) ([]Event, error) {
 	redactor, err := NewRedactor(policy, credentials...)
@@ -212,25 +196,6 @@ func MarshalRedactedEvents(events []Event, policy RedactionPolicy, credentials .
 		return nil, err
 	}
 	return redactor.MarshalEvents(events)
-}
-
-// MarshalRedactedEventsWithConfig is the config-shaped variant of
-// MarshalRedactedEvents.
-func MarshalRedactedEventsWithConfig(events []Event, config RedactionConfig) ([]byte, error) {
-	redactor, err := NewBrowserRedactor(config)
-	if err != nil {
-		return nil, err
-	}
-	return redactor.MarshalEvents(events)
-}
-
-// HashRedactedEvents returns final redacted bytes and their artifact digest.
-func HashRedactedEvents(events []Event, policy RedactionPolicy, credentials ...[]string) ([]byte, string, error) {
-	redactor, err := NewRedactor(policy, credentials...)
-	if err != nil {
-		return nil, "", err
-	}
-	return redactor.HashEvents(events)
 }
 
 // RedactedBrowserArtifact is the durable semantic artifact produced by the
@@ -266,40 +231,12 @@ func (a RedactedBrowserArtifact) RecordingArtifact(path string) transcript.Brows
 	}
 }
 
-// BuildRedactedBrowserArtifact performs the complete pre-persistence boundary
-// and computes the digest used by a paired recording manifest.
-func BuildRedactedBrowserArtifact(events []Event, config RedactionConfig) (RedactedBrowserArtifact, error) {
-	redactor, err := NewBrowserRedactor(config)
-	if err != nil {
-		return RedactedBrowserArtifact{}, err
-	}
-	data, digest, err := redactor.HashEvents(events)
-	if err != nil {
-		return RedactedBrowserArtifact{}, err
-	}
-	return RedactedBrowserArtifact{
-		Format:    BrowserEventsVersion,
-		Data:      append([]byte(nil), data...),
-		SHA256:    digest,
-		Redaction: redactor.Policy(),
-	}, nil
-}
-
 // WithRedaction configures Recorder to apply the canonical boundary before
 // each event is written. Invalid policy/credential configuration is returned
 // by NewRecorder after options are applied.
 func WithRedaction(policy RedactionPolicy, credentials ...[]string) RecorderOption {
 	return recorderOptionFunc(func(recorder *Recorder) {
 		redactor, err := NewRedactor(policy, credentials...)
-		recorder.redactor = redactor
-		recorder.redactionErr = err
-	})
-}
-
-// WithRedactionConfig is the config-shaped Recorder option.
-func WithRedactionConfig(config RedactionConfig) RecorderOption {
-	return recorderOptionFunc(func(recorder *Recorder) {
-		redactor, err := NewBrowserRedactor(config)
 		recorder.redactor = redactor
 		recorder.redactionErr = err
 	})

@@ -306,7 +306,7 @@ The live owner now reacts to `SESSION_CLOSE` for ordinary providers as well as r
 
 A deterministic mixer regression reproduces Close winning after a cadence timer becomes ready but before mixing acquires its state lock. The previous implementation incorrectly retained `ErrClosed` as a runtime failure. Normal shutdown now exits without inventing that failure; other mixer errors remain observable. Mixer race tests and 20 repetitions of the affected room admission test pass after the fix.
 
-Formatting, vet and Staticcheck targets now use the same maintained inventory as lint. Vet and Staticcheck run each module with `GOWORK=off`, so independent consumers and auxiliary tools cannot be skipped or fail merely because they are outside `go.work`. Vet passes across all 15 maintained modules at this checkpoint; final formatting and analyzer checks remain part of stabilization.
+Formatting uses the same maintained inventory as lint, and lint (which runs the go vet and staticcheck analyzers) covers independent consumers and auxiliary tools outside `go.work`, so they cannot be skipped. Final formatting and analyzer checks remain part of stabilization.
 
 Checkpoint history: `449c935f` preserves the aggregate migration; `20c50614` moves scheduled recording fixtures through provider composition; `8134c2e6` does the same for plain-speech and turn-start barge-in; `35c243c7` lowers the corresponding measured debt. The integration package architecture gate passes across 108 files after these reductions. Independent runtime and embedding race suites passed again on the subsequent working tree. This evidence does not supersede the failing full CLI run or establish release readiness.
 

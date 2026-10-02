@@ -305,24 +305,6 @@ func (s *SessionScenario) CapturedRecords() []transcript.Record {
 	return s.Transcript.Records()
 }
 
-// ClientRecords returns the client-authored records from the configured
-// collector.
-func (s *SessionScenario) ClientRecords() []transcript.Record {
-	if s == nil || s.Transcript == nil {
-		return nil
-	}
-	return s.Transcript.ClientRecords()
-}
-
-// AgentRecords returns the agent-authored records from the configured
-// collector.
-func (s *SessionScenario) AgentRecords() []transcript.Record {
-	if s == nil || s.Transcript == nil {
-		return nil
-	}
-	return s.Transcript.AgentRecords()
-}
-
 // WaitForEvent blocks until a delta event with the given type appears or times out.
 // It wakes on each collected delta rather than polling.
 func (s *SessionScenario) WaitForEvent(eventType messages.StreamMessageType, timeout time.Duration) bool {

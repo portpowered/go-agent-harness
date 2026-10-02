@@ -23,7 +23,6 @@ const (
 	realtimeInvalidRequestErrorType     = "invalid_request_error"
 	realtimeResponseCancelNotActiveCode = "response_cancel_not_active"
 	realtimeResponseCreateActiveCode    = "conversation_already_has_active_response"
-	realtimeResponseCreateActiveClass   = messages.ErrorClassificationResponseCreateActive
 	realtimeMaxStatusDetailBytes        = 256
 )
 
@@ -183,7 +182,7 @@ func realtimeSessionErrorValue(data json.RawMessage) *messages.ErrorValue {
 		// admission boundary. It must not terminate the session or make the
 		// caller lose the already accepted continuation intent.
 		value := messages.NewNonTerminalErrorValueWithDetails(msg, errorType, code, param, eventID)
-		value.Classification = realtimeResponseCreateActiveClass
+		value.Classification = messages.ErrorClassificationResponseCreateActive
 		return value
 	}
 	value := messages.NewErrorValueWithTerminal(msg, providers.SessionErrorClassification(errorType, code),

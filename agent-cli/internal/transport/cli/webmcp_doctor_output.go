@@ -10,7 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 )
 
-func writeWebMCPDoctorReport(out io.Writer, report WebMCPDoctorReport, asJSON bool) error {
+func writeWebMCPDoctorReport(out io.Writer, report doctor.Report, asJSON bool) error {
 	if out == nil {
 		return errors.New("webmcp doctor output writer is required")
 	}
@@ -23,7 +23,7 @@ func writeWebMCPDoctorReport(out io.Writer, report WebMCPDoctorReport, asJSON bo
 	return writeWebMCPDoctorHuman(out, report)
 }
 
-func writeWebMCPDoctorHuman(out io.Writer, report WebMCPDoctorReport) error {
+func writeWebMCPDoctorHuman(out io.Writer, report doctor.Report) error {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "WebMCP doctor: %s\n", report.Status)
 	fmt.Fprintf(&builder, "Endpoint source: %s\n", report.Endpoint.Source)

@@ -182,12 +182,6 @@ func NewManagedChromeAcquirer(options ManagedChromeAcquisitionOptions) *ManagedC
 	return &ManagedChromeAcquirer{options: options}
 }
 
-// NewAcquirer is a concise constructor alias for callers that already name
-// the managed-browser context around the acquisition seam.
-func NewAcquirer(options ManagedChromeAcquisitionOptions) *ManagedChromeAcquirer {
-	return NewManagedChromeAcquirer(options)
-}
-
 // Acquire selects a qualified executable. Stock failures are intentionally
 // collapsed and never prevent the verified fallback from being attempted.
 func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, error) {
@@ -263,12 +257,6 @@ func (a *ManagedChromeAcquirer) Acquire(ctx context.Context) (ChromeExecutable, 
 	executable = validated
 	executable.Source = ExecutableSourceChromeForTesting
 	return executable, nil
-}
-
-// AcquireManagedChrome is the function-form entry point for composition
-// roots that do not need to retain an acquirer instance.
-func AcquireManagedChrome(ctx context.Context, options ManagedChromeAcquisitionOptions) (ChromeExecutable, error) {
-	return NewManagedChromeAcquirer(options).Acquire(ctx)
 }
 
 func (a *ManagedChromeAcquirer) validateFallbackExecutable(ctx context.Context, executable ChromeExecutable) (ChromeExecutable, error) {

@@ -34,11 +34,6 @@ type Prober struct {
 	failed map[string]struct{}
 }
 
-// NewProber returns a prober with no remembered failures.
-func NewProber() *Prober {
-	return &Prober{failed: make(map[string]struct{})}
-}
-
 // Endpoint resolves and probes the optional LocalAI realtime endpoint.
 //
 // It returns the exact endpoint that was attempted, including an
@@ -115,4 +110,9 @@ func probe(parent context.Context, endpoint string) bool {
 			return true
 		}
 	}
+}
+
+// NewProber returns a prober with no remembered failures.
+func NewProber() *Prober {
+	return &Prober{failed: make(map[string]struct{})}
 }

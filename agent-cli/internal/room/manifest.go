@@ -13,38 +13,30 @@ import (
 const SchemaVersion = runtimeRooms.SchemaVersion
 
 var (
-	ErrInvalidManifest        = runtimeRooms.ErrInvalidManifest
-	ErrUnsupportedSchema      = runtimeRooms.ErrUnsupportedSchema
-	ErrMissingBound           = runtimeRooms.ErrMissingBound
-	ErrInvalidBound           = runtimeRooms.ErrInvalidBound
-	ErrTooFewParticipants     = runtimeRooms.ErrTooFewParticipants
-	ErrInvalidParticipant     = runtimeRooms.ErrInvalidParticipant
-	ErrUnknownParticipantKind = runtimeRooms.ErrUnknownParticipantKind
-	ErrDuplicateParticipant   = runtimeRooms.ErrDuplicateParticipant
-	ErrCredential             = runtimeRooms.ErrCredential
-	ErrUnknownProvider        = runtimeRooms.ErrUnknownProvider
-	ErrUnknownModel           = runtimeRooms.ErrUnknownModel
-	ErrUnknownTool            = runtimeRooms.ErrUnknownTool
-	ErrUnknownVoice           = runtimeRooms.ErrUnknownVoice
-	ErrDuplicateTool          = runtimeRooms.ErrDuplicateTool
-	ErrInvalidRecording       = runtimeRooms.ErrInvalidRecording
-	ErrInvalidDocument        = runtimeRooms.ErrInvalidDocument
-	ErrNoRoomOpener           = runtimeRooms.ErrNoRoomOpener
+	ErrUnsupportedSchema    = runtimeRooms.ErrUnsupportedSchema
+	ErrMissingBound         = runtimeRooms.ErrMissingBound
+	ErrInvalidBound         = runtimeRooms.ErrInvalidBound
+	ErrTooFewParticipants   = runtimeRooms.ErrTooFewParticipants
+	ErrInvalidParticipant   = runtimeRooms.ErrInvalidParticipant
+	ErrDuplicateParticipant = runtimeRooms.ErrDuplicateParticipant
+	ErrCredential           = runtimeRooms.ErrCredential
+	ErrUnknownProvider      = runtimeRooms.ErrUnknownProvider
+	ErrUnknownModel         = runtimeRooms.ErrUnknownModel
+	ErrUnknownTool          = runtimeRooms.ErrUnknownTool
+	ErrUnknownVoice         = runtimeRooms.ErrUnknownVoice
+	ErrInvalidRecording     = runtimeRooms.ErrInvalidRecording
+	ErrInvalidDocument      = runtimeRooms.ErrInvalidDocument
+	ErrNoRoomOpener         = runtimeRooms.ErrNoRoomOpener
 )
 
-type ParticipantKind = runtimeRooms.ParticipantKind
-
 const (
-	ParticipantKindAgent    = runtimeRooms.ParticipantKindAgent
-	ParticipantKindHuman    = runtimeRooms.ParticipantKindHuman
-	ParticipantKindCustomer = runtimeRooms.ParticipantKindCustomer
+	ParticipantKindAgent = runtimeRooms.ParticipantKindAgent
+	ParticipantKindHuman = runtimeRooms.ParticipantKindHuman
 )
 
 type ValidationError = runtimeRooms.ValidationError
 type Manifest = runtimeRooms.Manifest
 type Room = runtimeRooms.Room
-type RoomRecordingConfig = runtimeRooms.RoomRecordingConfig
-type RecordingConfig = runtimeRooms.RecordingConfig
 type Participant = runtimeRooms.Participant
 type ValidationOptions = runtimeRooms.ValidationOptions
 type ValidationRegistry = runtimeRooms.ValidationRegistry

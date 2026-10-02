@@ -112,7 +112,7 @@ func TestRoomReplayBoundsAndPCMHelpers(t *testing.T) {
 		t.Fatalf("bounded artifact = %v err=%v", got, err)
 	}
 	artifact.SHA256 = strings.Repeat("0", 64)
-	if _, err := readRoomReplayArtifact(directory, artifact, 16, "sample"); err == nil || !errors.Is(err, ErrInvalidRoomReplayBundle) {
+	if _, err := readRoomReplayArtifact(directory, artifact, 16, "sample"); err == nil || !errors.Is(err, roomevidence.ErrInvalidRoomReplayBundle) {
 		t.Fatalf("digest mismatch = %v", err)
 	}
 	artifact.SHA256 = ""
@@ -152,7 +152,7 @@ func TestRoomReplayBoundsAndPCMHelpers(t *testing.T) {
 		t.Fatal("empty plan was accepted")
 	}
 	invalid := RoomReplayPlan{ManifestPath: path, ClockBase: time.Unix(2, 0), EndedAt: time.Unix(1, 0)}
-	if _, err := New(roomevidence.ServiceOptions{}).Load(invalid); err == nil || !errors.Is(err, ErrRoomReplayAudioTimeline) {
+	if _, err := New(roomevidence.ServiceOptions{}).Load(invalid); err == nil || !errors.Is(err, roomevidence.ErrRoomReplayAudioTimeline) {
 		t.Fatalf("negative room duration = %v", err)
 	}
 }
@@ -168,7 +168,7 @@ func TestRoomReplayServiceRejectsUnadmittedShape(t *testing.T) {
 	if err := os.WriteFile(manifestPath, manifest, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	plan := RoomReplayPlan{ManifestPath: manifestPath, ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second)), PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBits: 16, ByteOrder: "little", Encoding: "pcm_s16le"}}
+	plan := RoomReplayPlan{ManifestPath: manifestPath, ClockBase: time.Unix(0, 0), EndedAt: time.Unix(0, int64(time.Second)), PCMFormat: roomevidence.RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBits: 16, ByteOrder: "little", Encoding: "pcm_s16le"}}
 	if _, err := New(roomevidence.ServiceOptions{}).Load(plan); err == nil || !errors.Is(err, ErrRoomReplayBundleIncomplete) {
 		t.Fatalf("missing room mix = %v", err)
 	}
@@ -261,12 +261,12 @@ func writeRoomReplayAudioBundle(t *testing.T) (string, map[string]any, map[strin
 	for _, participantID := range []string{"alpha", "beta"} {
 		artifactValues := map[string]any{}
 		for role, name := range map[string]string{
-			roomReplayArtifactRoleWAV:         "participants/" + participantID + "/agent.wav",
-			roomReplayArtifactRoleDiagnostics: "participants/" + participantID + "/diagnostics.jsonl",
-			roomReplayArtifactRoleDeltas:      "participants/" + participantID + "/deltas.jsonl",
-			roomReplayArtifactRoleSentPCM:     "participants/" + participantID + "/sent.pcm",
-			roomReplayArtifactRoleReceivedPCM: "participants/" + participantID + "/received.pcm",
-			roomReplayArtifactRoleEvents:      "participants/" + participantID + "/events.jsonl",
+			roomevidence.RoomReplayAudioRoleWAV:         "participants/" + participantID + "/agent.wav",
+			roomevidence.RoomReplayAudioRoleDiagnostics: "participants/" + participantID + "/diagnostics.jsonl",
+			roomevidence.RoomReplayAudioRoleDeltas:      "participants/" + participantID + "/deltas.jsonl",
+			roomevidence.RoomReplayAudioRoleSentPCM:     "participants/" + participantID + "/sent.pcm",
+			roomevidence.RoomReplayAudioRoleReceivedPCM: "participants/" + participantID + "/received.pcm",
+			roomevidence.RoomReplayAudioRoleEvents:      "participants/" + participantID + "/events.jsonl",
 		} {
 			artifactValues[role] = roomReplayAudioArtifactValue(paths[name], name)
 		}
@@ -288,7 +288,7 @@ func writeRoomReplayAudioManifest(t *testing.T, bundle string, manifest map[stri
 	if err != nil {
 		t.Fatalf("marshal audio manifest: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(bundle, RoomReplayBundleManifestPath), append(data, '\n'), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(bundle, roomevidence.RoomReplayBundleManifestPath), append(data, '\n'), 0o600); err != nil {
 		t.Fatalf("write audio manifest: %v", err)
 	}
 }
@@ -359,10 +359,10 @@ func jsonLines(t *testing.T, values []map[string]any) []byte {
 	return buffer.Bytes()
 }
 
-func loadTestRoomReplayAudioBundle(bundle string) (Bundle, error) {
+func loadTestRoomReplayAudioBundle(bundle string) (roomevidence.Bundle, error) {
 	plan, err := testRoomReplayPlan(bundle)
 	if err != nil {
-		return Bundle{}, err
+		return roomevidence.Bundle{}, err
 	}
 	return New(roomevidence.ServiceOptions{}).Load(plan)
 }
@@ -543,7 +543,7 @@ func assertRoomReplayPCMStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	artifact := RoomReplayArtifact{Path: "stream.wav", AbsolutePath: path}
-	plan := RoomReplayPlan{BundlePath: directory, PCMFormat: RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBit: 16, ByteOrder: "little", Encoding: "signed_pcm16"}}
+	plan := RoomReplayPlan{BundlePath: directory, PCMFormat: roomevidence.RoomReplayPCMFormat{SampleRate: 24000, Channels: 1, SampleWidthBit: 16, ByteOrder: "little", Encoding: "signed_pcm16"}}
 	stream, err := loadRoomReplayPCMStream(plan, artifact, roomReplayTestSentRole, "alpha", roomReplayTestSentRole)
 	if err != nil || stream.SampleCount != 3 || stream.StreamID != roomReplayTestSentRole {
 		t.Fatalf("WAV-backed PCM stream = %+v err=%v", stream, err)

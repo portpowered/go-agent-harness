@@ -9,18 +9,15 @@ import (
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
-type ToolResultIssue = public.ToolResultIssue
-type ToolResultEnvelope = public.ToolResultEnvelope
-
 // NewToolResultSuccess builds a success envelope with one non-null JSON value
 // as data.
-func NewToolResultSuccess(data any) (ToolResultEnvelope, error) {
+func NewToolResultSuccess(data any) (public.ToolResultEnvelope, error) {
 	raw, err := marshalOneJSONValue(data, false)
 	if err != nil {
-		return ToolResultEnvelope{}, err
+		return public.ToolResultEnvelope{}, err
 	}
-	return ToolResultEnvelope{
-		Version: ToolResultVersion,
+	return public.ToolResultEnvelope{
+		Version: public.ToolResultVersion,
 		OK:      true,
 		Data:    raw,
 		Error:   nil,
@@ -29,12 +26,12 @@ func NewToolResultSuccess(data any) (ToolResultEnvelope, error) {
 
 // NewToolResultFailure builds a failure envelope with null data and a
 // normalized details object.
-func NewToolResultFailure(resultError ToolResultError) ToolResultEnvelope {
+func NewToolResultFailure(resultError public.ToolResultError) public.ToolResultEnvelope {
 	if resultError.Details == nil {
 		resultError.Details = map[string]any{}
 	}
-	return ToolResultEnvelope{
-		Version: ToolResultVersion,
+	return public.ToolResultEnvelope{
+		Version: public.ToolResultVersion,
 		OK:      false,
 		Data:    json.RawMessage("null"),
 		Error:   &resultError,
@@ -42,7 +39,7 @@ func NewToolResultFailure(resultError ToolResultError) ToolResultEnvelope {
 }
 
 // EncodeToolResult is the common success/failure serializer.
-func EncodeToolResult(data any, resultError *ToolResultError) ([]byte, error) {
+func EncodeToolResult(data any, resultError *public.ToolResultError) ([]byte, error) {
 	if resultError != nil {
 		return MarshalToolResult(NewToolResultFailure(*resultError))
 	}
@@ -54,7 +51,7 @@ func EncodeToolResult(data any, resultError *ToolResultError) ([]byte, error) {
 }
 
 // MarshalToolResult validates and emits exactly one compact JSON object.
-func MarshalToolResult(envelope ToolResultEnvelope) ([]byte, error) {
+func MarshalToolResult(envelope public.ToolResultEnvelope) ([]byte, error) {
 	if err := envelope.Validate(); err != nil {
 		return nil, err
 	}
@@ -63,13 +60,13 @@ func MarshalToolResult(envelope ToolResultEnvelope) ([]byte, error) {
 
 // UnmarshalToolResult strictly decodes a C0 envelope. Unknown members and
 // unknown versions are rejected rather than guessed.
-func UnmarshalToolResult(data []byte) (ToolResultEnvelope, error) {
-	var envelope ToolResultEnvelope
+func UnmarshalToolResult(data []byte) (public.ToolResultEnvelope, error) {
+	var envelope public.ToolResultEnvelope
 	if err := json.Unmarshal(data, &envelope); err != nil {
-		return ToolResultEnvelope{}, err
+		return public.ToolResultEnvelope{}, err
 	}
 	if err := envelope.Validate(); err != nil {
-		return ToolResultEnvelope{}, err
+		return public.ToolResultEnvelope{}, err
 	}
 	return envelope, nil
 }

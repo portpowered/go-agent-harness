@@ -269,3 +269,15 @@ func TestSiteAdapterUnknownLookupsFailClosed(t *testing.T) {
 		t.Fatal("unknown tool requested trusted activation")
 	}
 }
+
+// Supported returns a defensive copy of the bundled adapter registry.
+func Supported() []Info {
+	adapters := registry()
+	result := make([]Info, 0, len(adapters))
+	for _, adapter := range adapters {
+		info := adapter.info
+		info.URLPatterns = append([]string(nil), info.URLPatterns...)
+		result = append(result, info)
+	}
+	return result
+}

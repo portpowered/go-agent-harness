@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/sight"
 )
 
@@ -125,13 +126,13 @@ func TestScreenToolUnavailableAndCommandFailureNeverReturnPixels(t *testing.T) {
 		capability DisplayCapability
 		bounds     image.Rectangle
 		captureErr error
-		state      ScreenCaptureState
+		state      public.ScreenCaptureState
 		errIs      error
 	}{
 		{
 			name:       "unavailable display",
 			capability: UnavailableDisplayCapability("no usable display was discovered"),
-			state:      ScreenCaptureUnavailable,
+			state:      public.ScreenCaptureUnavailable,
 			errIs:      ErrDisplayUnavailable,
 		},
 		{
@@ -175,7 +176,7 @@ func TestScreenToolCanceledAndTimedOutContextsAreClassified(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		context func() context.Context
-		state   ScreenCaptureState
+		state   public.ScreenCaptureState
 		want    error
 	}{
 		{name: "canceled", context: canceledContext, state: ScreenCaptureCanceled, want: context.Canceled},

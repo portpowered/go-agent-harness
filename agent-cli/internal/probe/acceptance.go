@@ -129,16 +129,6 @@ type ObjectiveVerifier interface {
 	Verify(context.Context, loopprobe.AcceptanceInput, ArtifactSet, loopprobe.AcceptanceAgentReport) (loopprobe.ObjectiveEvidence, error)
 }
 
-// ObjectiveVerifierFunc adapts a function to ObjectiveVerifier.
-type ObjectiveVerifierFunc func(context.Context, loopprobe.AcceptanceInput, ArtifactSet, loopprobe.AcceptanceAgentReport) (loopprobe.ObjectiveEvidence, error)
-
-func (f ObjectiveVerifierFunc) Verify(ctx context.Context, input loopprobe.AcceptanceInput, artifacts ArtifactSet, report loopprobe.AcceptanceAgentReport) (loopprobe.ObjectiveEvidence, error) {
-	if f == nil {
-		return loopprobe.ObjectiveEvidence{}, loopprobe.ErrObjectiveEvidenceAbsent
-	}
-	return f(ctx, input, artifacts, report)
-}
-
 // ArtifactSet describes the stable files emitted for one run. Paths in a
 // verdict are relative to Root, so the result can be moved or consumed by a
 // downstream fleet lane without rewriting evidence references.

@@ -13,7 +13,7 @@ Open questions for review are whether the raw-schema lane should explicitly requ
 I independently spot-checked the understanding document against the repository and the source plan, sampling citations from every section rather than trusting the executor's summary. Result: every check passed. Assessment and evidence follow.
 
 **Verified accurate (sampled independently):**
-- Workspace/toolchain: `go.work` and all three module manifests are Go 1.24.2; no `chromedp`/`cdproto` anywhere in `agent-cli/go.mod`, `go-agent-loop/go.mod`, `go-llm-gateway/go.mod`, or `go.work.sum`. Helper modules (`test/localai/go.mod`, `tools/coveragegate`, `tools/rtc-race-gate`, `tools/session-race-gate`, `tools/timingate`) all exist as cited.
+- Workspace/toolchain: `go.work` and all three module manifests are Go 1.24.2; no `chromedp`/`cdproto` anywhere in `agent-cli/go.mod`, `go-agent-loop/go.mod`, `go-llm-gateway/go.mod`, or `go.work.sum`. Helper modules (`tests/localai/go.mod`, `tools/coveragegate`, `tools/racegate`, `tools/timingate`) all exist as cited.
 - Routing: `agent-cli/internal/cli/routes.go` has exactly the ask/chat/tool/interaction/probe/media/session/config/devices groups and no WebMCP route.
 - Config: `Config` in `agent-cli/internal/config/interface.go` has only `Model` and `Tools`; `loading.go` confirms `AGENT_` prefix with `__` nesting.
 - Session capability: `SessionToolCapabilities` (`agent-cli/internal/cli/session.go:26-29`) has only `Executor` and `Definitions`. The plan's proposed `Close func() error` (source-plan.md ~line 2035) genuinely does not exist — the document's framing as "design, not current machinery" is correct.

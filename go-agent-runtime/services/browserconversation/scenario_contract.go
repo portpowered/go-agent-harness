@@ -24,22 +24,6 @@ type ScheduledAudioInput struct {
 	EndOfTurn           bool
 }
 
-// ScheduledAudioInputs is a defensive-copyable sequence of public scheduling
-// values. The byte payload is copied before asynchronous dispatch.
-type ScheduledAudioInputs []ScheduledAudioInput
-
-func (inputs ScheduledAudioInputs) Clone() ScheduledAudioInputs {
-	if inputs == nil {
-		return nil
-	}
-	clone := make(ScheduledAudioInputs, len(inputs))
-	for index, input := range inputs {
-		clone[index] = input
-		clone[index].PCM = append([]byte(nil), input.PCM...)
-	}
-	return clone
-}
-
 // BrowserConversationScenarioError carries the exact scenario location that
 // prevented admission. Its message intentionally contains no credentials or
 // page payloads.
@@ -178,17 +162,6 @@ type BrowserConversationValidator interface {
 	ValidateBrowserConversation(ctx context.Context, result BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
 }
 
-// BrowserConversationValidatorFunc adapts a function to the validator seam.
-type BrowserConversationValidatorFunc func(context.Context, BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
-
-// ValidateBrowserConversation implements BrowserConversationValidator.
-func (f BrowserConversationValidatorFunc) ValidateBrowserConversation(ctx context.Context, result BrowserConversationResult) (BrowserConversationValidatorVerdict, error) {
-	if f == nil {
-		return BrowserConversationValidatorVerdict{}, errors.New("browser conversation validator function is nil")
-	}
-	return f(ctx, result)
-}
-
 // BrowserConversationScenarioForSession is the narrow extension seam consumed by a shared session runner.
 type BrowserConversationScenarioForSession interface {
 	BrowserConversationScenario() BrowserConversationScenario
@@ -202,4 +175,31 @@ type BrowserConversationScenarioValue struct {
 // BrowserConversationScenario returns a defensive scenario copy.
 func (v BrowserConversationScenarioValue) BrowserConversationScenario() BrowserConversationScenario {
 	return v.Scenario.Clone()
+}
+
+// ScheduledAudioInputs is a defensive-copyable sequence of public scheduling
+// values. The byte payload is copied before asynchronous dispatch.
+type ScheduledAudioInputs []ScheduledAudioInput
+
+func (inputs ScheduledAudioInputs) Clone() ScheduledAudioInputs {
+	if inputs == nil {
+		return nil
+	}
+	clone := make(ScheduledAudioInputs, len(inputs))
+	for index, input := range inputs {
+		clone[index] = input
+		clone[index].PCM = append([]byte(nil), input.PCM...)
+	}
+	return clone
+}
+
+// BrowserConversationValidatorFunc adapts a function to the validator seam.
+type BrowserConversationValidatorFunc func(context.Context, BrowserConversationResult) (BrowserConversationValidatorVerdict, error)
+
+// ValidateBrowserConversation implements BrowserConversationValidator.
+func (f BrowserConversationValidatorFunc) ValidateBrowserConversation(ctx context.Context, result BrowserConversationResult) (BrowserConversationValidatorVerdict, error) {
+	if f == nil {
+		return BrowserConversationValidatorVerdict{}, errors.New("browser conversation validator function is nil")
+	}
+	return f(ctx, result)
 }

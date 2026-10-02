@@ -211,10 +211,6 @@ func validateToolRefSyntax(ref ToolRef) error {
 	return nil
 }
 
-// ValidateToolRef reports whether ref has the exact C0 wire grammar. It does
-// not assert that the reference is current in any broker session.
-func ValidateToolRef(ref ToolRef) error { return validateToolRefSyntax(ref) }
-
 // IsValidToolRef is the boolean form of ValidateToolRef.
 func IsValidToolRef(ref ToolRef) bool { return validateToolRefSyntax(ref) == nil }
 

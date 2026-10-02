@@ -63,5 +63,3 @@ func ResultErrorFor(err error, fallback ErrorCode, details map[string]any) ToolR
 }
 
 func DefaultErrorMessage(code ErrorCode) string { return browserContract().DefaultErrorMessage(code) }
-
-func ContextErrorCode(err error) ErrorCode { return browserContract().ContextErrorCode(err) }

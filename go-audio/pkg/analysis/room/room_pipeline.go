@@ -92,7 +92,7 @@ func (s *pcm16RoomAnalysisState) prepareBargeAnalyses() error {
 	}
 	s.bargeAnalyses = make(map[string]PCM16Analysis, len(s.normalized.BargeIns)*2)
 	bargeConfig := s.config.StreamConfig
-	bargeConfig.FrameDuration = PCM16AnalysisFrameDuration
+	bargeConfig.FrameDuration = analysisstream.PCM16AnalysisFrameDuration
 	for _, annotation := range s.normalized.BargeIns {
 		if err := s.prepareBargeStream(annotation.InterrupterStreamID, bargeConfig); err != nil {
 			return err

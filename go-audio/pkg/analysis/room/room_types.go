@@ -15,24 +15,17 @@ import (
 // neutral stream types keeps room values assignable to the stream analyzer
 // without retaining a second copy of their error or measurement shapes.
 type (
-	PCM16Input                     = stream.PCM16Input
-	SpeechAnnotation               = stream.SpeechAnnotation
-	PCM16AnalysisConfig            = stream.PCM16AnalysisConfig
-	PCM16Analysis                  = stream.PCM16Analysis
-	PropertyError                  = stream.PropertyError
-	PCM16LagWindow                 = stream.PCM16LagWindow
-	PCM16CorrelationMeasurement    = stream.PCM16CorrelationMeasurement
-	InvalidPCM16AnalysisInputError = stream.InvalidPCM16AnalysisInputError
-)
-
-const (
-	PCM16AnalysisFrameDuration    = stream.PCM16AnalysisFrameDuration
-	PCM16AnalysisSilenceFloorDBFS = stream.PCM16AnalysisSilenceFloorDBFS
+	PCM16Input                  = stream.PCM16Input
+	SpeechAnnotation            = stream.SpeechAnnotation
+	PCM16AnalysisConfig         = stream.PCM16AnalysisConfig
+	PCM16Analysis               = stream.PCM16Analysis
+	PropertyError               = stream.PropertyError
+	PCM16LagWindow              = stream.PCM16LagWindow
+	PCM16CorrelationMeasurement = stream.PCM16CorrelationMeasurement
 )
 
 var (
-	ErrInvalidPCM16AnalysisInput = stream.ErrInvalidPCM16AnalysisInput
-	ErrPCM16AnalysisFailed       = stream.ErrPCM16AnalysisFailed
+	ErrPCM16AnalysisFailed = stream.ErrPCM16AnalysisFailed
 )
 
 // DefaultPCM16AnalysisConfig returns a fresh stream profile for callers that
@@ -159,7 +152,7 @@ func DefaultPCM16RoomAnalysisConfig() PCM16RoomAnalysisConfig {
 	return PCM16RoomAnalysisConfig{
 		StreamConfig:                stream.DefaultPCM16AnalysisConfig(),
 		CorrelationLagWindow:        PCM16LagWindow{Min: PCM16AnalysisDefaultCorrelationLagMin, Max: PCM16AnalysisDefaultCorrelationLagMax},
-		CorrelationSilenceFloorDBFS: PCM16AnalysisSilenceFloorDBFS,
+		CorrelationSilenceFloorDBFS: stream.PCM16AnalysisSilenceFloorDBFS,
 		MinPeerCorrelation:          PCM16AnalysisDefaultPeerCorrelation,
 		MaxSelfCorrelation:          PCM16AnalysisDefaultSelfCorrelation,
 		BargeInSpeechThresholdDBFS:  PCM16AnalysisDefaultBargeInSpeechThresholdDBFS,

@@ -107,8 +107,6 @@ type ExpectationScenarioRunner struct{}
 
 type DefaultScenarioRunner = ExpectationScenarioRunner
 
-func NewDefaultScenarioRunner() ScenarioRunner { return ExpectationScenarioRunner{} }
-
 func (ExpectationScenarioRunner) Run(ctx context.Context, scenario Scenario, subject DeadSessionSubject) (ScenarioRunResult, error) {
 	if subject == nil {
 		return ScenarioRunResult{}, fmt.Errorf("%w: nil subject", ErrDeadSessionExecution)
@@ -587,20 +585,6 @@ func DefaultDeadSessionSubjectFactory(control DeadSessionControl, _ Scenario) (D
 	}
 }
 
-// The built-in controls always resolve to the deterministic subject that
-// DefaultDeadSessionSubjectFactory returns for them.
-func NewNullSubject() DeadSessionSubject {
-	return &deterministicDeadSessionSubject{control: ControlNull}
-}
-
-func NewEchoSubject() DeadSessionSubject {
-	return &deterministicDeadSessionSubject{control: ControlEcho}
-}
-
-func NewSilenceSubject() DeadSessionSubject {
-	return &deterministicDeadSessionSubject{control: ControlSilence}
-}
-
 type deterministicDeadSessionSubject struct {
 	control    DeadSessionControl
 	transcript strings.Builder
@@ -861,4 +845,20 @@ func cloneExpectations(expectations []ExpectedBehavior) []ExpectedBehavior {
 		clone[index].Result = append([]byte(nil), clone[index].Result...)
 	}
 	return clone
+}
+
+func NewDefaultScenarioRunner() ScenarioRunner { return ExpectationScenarioRunner{} }
+
+// The built-in controls always resolve to the deterministic subject that
+// DefaultDeadSessionSubjectFactory returns for them.
+func NewNullSubject() DeadSessionSubject {
+	return &deterministicDeadSessionSubject{control: ControlNull}
+}
+
+func NewEchoSubject() DeadSessionSubject {
+	return &deterministicDeadSessionSubject{control: ControlEcho}
+}
+
+func NewSilenceSubject() DeadSessionSubject {
+	return &deterministicDeadSessionSubject{control: ControlSilence}
 }

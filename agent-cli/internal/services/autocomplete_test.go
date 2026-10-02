@@ -226,3 +226,8 @@ func sameStrings(got, want []string) bool {
 
 // firstAutocompleteItem is the first label of the generated suggestion list.
 const firstAutocompleteItem = "item-a"
+
+// NewAutocomplete creates an empty, inactive Autocomplete model.
+func NewAutocomplete() Autocomplete {
+	return Autocomplete{}
+}

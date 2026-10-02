@@ -25,8 +25,7 @@ type (
 )
 
 const (
-	RoomReplayBundleSchemaVersion = runtimeRooms.RoomReplayBundleSchemaVersion
-	RoomReplayBundleManifestPath  = runtimeRooms.RoomReplayBundleManifestPath
+	RoomReplayBundleManifestPath = runtimeRooms.RoomReplayBundleManifestPath
 
 	RoomReplayAudioRoleWAV         = "wav"
 	RoomReplayAudioRoleDiagnostics = "diagnostics"

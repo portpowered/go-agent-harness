@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/admission"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -94,7 +96,7 @@ func validateRoomReplaySpeechAnnotations(stream AudioStream, field string) error
 }
 
 func loadRoomReplayJSONL(root string, artifact RoomReplayArtifact, field string) ([]json.RawMessage, error) {
-	data, err := readRoomReplayArtifact(root, artifact, maxRoomReplayArtifactBytes, field)
+	data, err := readRoomReplayArtifact(root, artifact, admission.MaxArtifactBytes, field)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +128,7 @@ func loadRoomReplayJSONL(root string, artifact RoomReplayArtifact, field string)
 }
 
 func loadRoomReplayWAVStream(plan RoomReplayPlan, artifact RoomReplayArtifact, streamID, participantID, role string) (AudioStream, error) {
-	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, maxRoomReplayArtifactBytes, "artifact."+role)
+	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, admission.MaxArtifactBytes, "artifact."+role)
 	if err != nil {
 		return AudioStream{}, err
 	}
@@ -157,7 +159,7 @@ func loadRoomReplayWAVStream(plan RoomReplayPlan, artifact RoomReplayArtifact, s
 }
 
 func loadRoomReplayPCMStream(plan RoomReplayPlan, artifact RoomReplayArtifact, streamID, participantID, role string) (AudioStream, error) {
-	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, maxRoomReplayArtifactBytes, "artifact."+role)
+	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, admission.MaxArtifactBytes, "artifact."+role)
 	if err != nil {
 		return AudioStream{}, err
 	}
@@ -288,7 +290,7 @@ func decodeRoomReplayWAV(data []byte, artifact string) (roomReplayWAVPayload, er
 	return roomReplayWAVPayload{SampleRate: layout.SampleRate, Channels: 1, Bits: roomReplayPCM16Bits, PCM: append([]byte(nil), data[start:end]...)}, nil
 }
 
-func validateRoomReplayWAVFormat(wav roomReplayWAVPayload, declared RoomReplayPCMFormat, artifact string) error {
+func validateRoomReplayWAVFormat(wav roomReplayWAVPayload, declared roomevidence.RoomReplayPCMFormat, artifact string) error {
 	width := declared.SampleWidthBits
 	if width == 0 {
 		width = declared.SampleWidthBit
@@ -371,18 +373,18 @@ func roomReplayAudioParticipantID(object roomReplayJSONObject, key string) (stri
 
 func roomReplayAudioMismatch(field, artifact, expected, actual string, cause error) error {
 	if cause == nil {
-		cause = ErrInvalidRoomReplayBundle
+		cause = roomevidence.ErrInvalidRoomReplayBundle
 	}
-	return newRoomReplayBundleError(BundleMismatch, field, artifact, expected, actual, cause)
+	return newRoomReplayBundleError(roomevidence.BundleMismatch, field, artifact, expected, actual, cause)
 }
 
 func roomReplayAudioIncomplete(field, artifact, expected, actual string, cause error) error {
 	if cause == nil {
 		cause = ErrRoomReplayBundleIncomplete
 	}
-	return newRoomReplayBundleError(BundleIncomplete, field, artifact, expected, actual, cause)
+	return newRoomReplayBundleError(roomevidence.BundleIncomplete, field, artifact, expected, actual, cause)
 }
 
 func roomReplayAudioTimeline(field, artifact, expected, actual string) error {
-	return newRoomReplayBundleError(BundleMismatch, field, artifact, expected, actual, errors.Join(ErrRoomReplayAudioTimeline, ErrInvalidRoomReplayBundle))
+	return newRoomReplayBundleError(roomevidence.BundleMismatch, field, artifact, expected, actual, errors.Join(roomevidence.ErrRoomReplayAudioTimeline, roomevidence.ErrInvalidRoomReplayBundle))
 }

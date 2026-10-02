@@ -1,0 +1,10 @@
+# Functions golang.org/x/tools/cmd/deadcode -test finds unreachable from every
+# main and every test, in every build configuration (docs/architecture/deadcode-gate.md).
+# One "<import path> <function>" per line, sorted. This list may only shrink:
+# delete dead code instead of adding it here. `make deadcode-check` fails on
+# a dead function missing from this list and on an entry that is no longer
+# dead; `make deadcode-write` rewrites the list after dead code is deleted.
+github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery parseURLError.Error
+github.com/portpowered/go-agent-harness/agent-cli/test/integration dropProbeSession.Close
+github.com/portpowered/go-agent-harness/agent-cli/test/integration dropProbeSession.Done
+github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices openInterruptibleInput

@@ -139,7 +139,7 @@ TEST_TOOLS_ARCHITECTURE_GATE ?= 1
 # test-tools runs these independent suites concurrently (scripts/run-bounded.sh
 # prints each one's output as a block); the Python modules themselves run
 # test-by-test across processes (scripts/unittest-parallel.py).
-TOOLS_PYTHON_TEST_MODULES := scripts.test_go_test_input_guard scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_module
+TOOLS_PYTHON_TEST_MODULES := scripts.test_go_test_input_guard scripts.test_deadcode_check scripts.test_check_wire scripts.test_check_ci_test_partition scripts.test_ci_await_jobs scripts.test_unittest_parallel factory.scripts.tests.test_golangci_lint_module
 TOOLS_GO_TEST_MODULES := tools/analyzergate tools/racegate
 # Tool modules whose tests always run fresh (-count=1): coveragegate runs `go
 # list` over the workspace and reads the repository's coverage-manifest,
@@ -154,6 +154,11 @@ CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 ANALYZER_TOOL_DIR ?= .cache/go-tools
 ARCHITECTURE_POLICY := docs/architecture/architecture-policy.json
+# Functions the pinned deadcode tool finds unreachable from every main and
+# test; scripts/deadcode-check.py keeps it exact and lets it only shrink
+# against DEADCODE_BASE. See docs/architecture/deadcode-gate.md.
+DEADCODE_ALLOWLIST := docs/architecture/deadcode-allowlist.txt
+DEADCODE_BASE ?= origin/main
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
 # Race test binaries sleep 1s at exit by default (GORACE atexit_sleep_ms);
@@ -173,7 +178,7 @@ GORELEASER_INSTALL ?= go install github.com/goreleaser/goreleaser/v2@v2.17.0
 PREPUSH_MAKE ?= $(MAKE)
 AGENT_CLI_INTEGRATION_PACKAGE := ./test/integration
 GO_AGENT_LOOP_FUNCTIONAL_PACKAGE := ./test/functional/...
-AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice|TestReplayStreaming_2_2
+AGENT_CLI_REGRESSION_TESTS := TestRecordReplayStateless|TestSessionCommand_Replay.*|TestSessionCommand_OpenAIRealtimeReplay.*|TestAgentBinaryOpenAIServerVADBargeInUsesRemoteAudioDevice
 GO_LLM_GATEWAY_REGRESSION_PACKAGES := ./internal/sessionfixturevalidator ./pkg/testing ./pkg/providers/anthropic ./pkg/providers/gemini ./pkg/providers/openai
 FACTORY_TEST_MODULES := factory.scripts.tests.test_setup_workspace factory.scripts.tests.test_validate_worktree_hygiene_convergence factory.scripts.tests.test_prepush_target factory.scripts.tests.test_ci_wait factory.scripts.tests.test_project_admission factory.scripts.tests.test_project_control factory.scripts.tests.test_factory_graph factory.scripts.tests.test_reconcile_projects factory.scripts.tests.test_fresh_board factory.scripts.tests.test_worktree_cleanup
 RELEASE_VERSION ?= v0.0.2
@@ -198,7 +203,7 @@ define agent_cli_split_tests
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: architecture-check test-architecture-gate verify-architecture embed-check
+.PHONY: architecture-check deadcode-check deadcode-write test-architecture-gate verify-architecture embed-check
 .PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-other-os lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-providers-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
 
 help: ## Show available targets.
@@ -399,6 +404,12 @@ test-cgo-delta: ## Test natively (cgo, real microphone backend) only the package
 # express. See docs/architecture/lint-policy.md.
 architecture-check: ## Enforce service shape, public-surface and boundary rules (tools/architecturegate).
 	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY)
+
+deadcode-check: ## Fail on Go functions unreachable from every main and test (the allowlist may only shrink).
+	@GO="$(GO)" python3 scripts/deadcode-check.py --allowlist $(DEADCODE_ALLOWLIST) --base "$(DEADCODE_BASE)"
+
+deadcode-write: ## Rewrite the dead-code allowlist to the current dead set (after deleting dead code).
+	@GO="$(GO)" python3 scripts/deadcode-check.py --allowlist $(DEADCODE_ALLOWLIST) --write
 
 # -count=1: its tests read docs/architecture and .golangci.yml at the repository root, outside
 # the module, where Go's test cache cannot see a change.

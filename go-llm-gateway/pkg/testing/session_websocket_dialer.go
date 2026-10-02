@@ -82,14 +82,6 @@ var _ ReplayOutboundPacer = (*ReplayWebSocketDialer)(nil)
 // strict payload and direction validation contract.
 type ReplayWebSocketDialerOption func(*ReplayWebSocketDialer)
 
-// WithRecordedSessionTiming preserves the relative timestamp_ms cadence from
-// the capture. The first record is released immediately; every later record is
-// gated by its offset from that first timestamp. The default remains the fast,
-// order-only replay used by deterministic unit tests.
-func WithRecordedSessionTiming() ReplayWebSocketDialerOption {
-	return func(d *ReplayWebSocketDialer) { d.preserveTiming = true }
-}
-
 // NewReplayWebSocketDialer loads a raw WebSocket session capture from path.
 // Current captures are fully verified; retained version-1 captures are
 // structurally validated and replayed with a reduced-integrity guarantee.
@@ -460,16 +452,6 @@ func isLegacySessionCaptureData(data []byte) bool {
 	return header.Version != nil && *header.Version == SessionCaptureLegacyVersion
 }
 
-// LoadSessionCaptureUnverified loads an old or otherwise unprotected capture
-// for controlled migration tooling. It must not be used as a replay input.
-func LoadSessionCaptureUnverified(path string) (SessionCapture, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return SessionCapture{}, fmt.Errorf("read session capture file: %w", err)
-	}
-	return decodeUnverifiedSessionCapture(data)
-}
-
 func decodeUnverifiedSessionCapture(data []byte) (SessionCapture, error) {
 	var capture SessionCapture
 	if err := json.Unmarshal(data, &capture); err == nil && capture.Version != 0 {
@@ -521,4 +503,22 @@ func validateSessionCaptureReplayEnvelope(path string, capture SessionCapture) e
 		return validateLegacySessionCaptureStructure(path, capture)
 	}
 	return validateSessionCaptureEnvelope(path, capture)
+}
+
+// LoadSessionCaptureUnverified loads an old or otherwise unprotected capture
+// for controlled migration tooling. It must not be used as a replay input.
+func LoadSessionCaptureUnverified(path string) (SessionCapture, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return SessionCapture{}, fmt.Errorf("read session capture file: %w", err)
+	}
+	return decodeUnverifiedSessionCapture(data)
+}
+
+// WithRecordedSessionTiming preserves the relative timestamp_ms cadence from
+// the capture. The first record is released immediately; every later record is
+// gated by its offset from that first timestamp. The default remains the fast,
+// order-only replay used by deterministic unit tests.
+func WithRecordedSessionTiming() ReplayWebSocketDialerOption {
+	return func(d *ReplayWebSocketDialer) { d.preserveTiming = true }
 }

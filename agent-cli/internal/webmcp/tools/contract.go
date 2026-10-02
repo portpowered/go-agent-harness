@@ -1,9 +1,6 @@
 package tools
 
 import (
-	"encoding/json"
-
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
 )
@@ -32,13 +29,6 @@ type ToolResultIssue = runtimeTools.ToolResultIssue
 type ToolResultError = runtimeTools.ToolResultError
 type ToolResultEnvelope = runtimeTools.ToolResultEnvelope
 
-// Result serialization is owned by the reusable tools service. These aliases
-// keep this CLI package source-compatible for its Lane B adapter and tests
-// while avoiding a second envelope implementation.
-type ResultEnvelope = runtimeTools.ResultEnvelope
-type ResultError = runtimeTools.ResultError
-type ResultIssue = runtimeTools.ResultIssue
-
 const (
 	ToolResultVersion = runtimeTools.ToolResultVersion
 
@@ -46,31 +36,30 @@ const (
 	ListTabsToolName   = runtimeTools.ListTabsToolName
 	SelectTabToolName  = runtimeTools.SelectTabToolName
 
-	ErrorWebMCPDisabled         = runtimeTools.ErrorWebMCPDisabled
-	ErrorEndpointNotFound       = runtimeTools.ErrorEndpointNotFound
-	ErrorEndpointUnreachable    = runtimeTools.ErrorEndpointUnreachable
-	ErrorRemoteEndpointDenied   = runtimeTools.ErrorRemoteEndpointDenied
-	ErrorBrowserProtocol        = runtimeTools.ErrorBrowserProtocol
-	ErrorUnsupportedWebMCP      = runtimeTools.ErrorUnsupportedWebMCP
-	ErrorNoEligibleTab          = runtimeTools.ErrorNoEligibleTab
-	ErrorAmbiguousBrowser       = runtimeTools.ErrorAmbiguousBrowser
-	ErrorAmbiguousTab           = runtimeTools.ErrorAmbiguousTab
-	ErrorStaleSelection         = runtimeTools.ErrorStaleSelection
-	ErrorStaleToolRef           = runtimeTools.ErrorStaleToolRef
-	ErrorOriginDenied           = runtimeTools.ErrorOriginDenied
-	ErrorApprovalRequired       = runtimeTools.ErrorApprovalRequired
-	ErrorApprovalDenied         = runtimeTools.ErrorApprovalDenied
-	ErrorResultTooLarge         = runtimeTools.ErrorResultTooLarge
-	ErrorTargetAttachFailed     = runtimeTools.ErrorTargetAttachFailed
-	ErrorTargetDetached         = runtimeTools.ErrorTargetDetached
-	ErrorPageNavigated          = runtimeTools.ErrorPageNavigated
-	ErrorInvocationFailed       = runtimeTools.ErrorInvocationFailed
-	ErrorInvocationCanceled     = runtimeTools.ErrorInvocationCanceled
-	ErrorInvocationTimedOut     = runtimeTools.ErrorInvocationTimedOut
-	ErrorInvocationOrphaned     = runtimeTools.ErrorInvocationOrphaned
-	ErrorBrowserDisconnected    = runtimeTools.ErrorBrowserDisconnected
-	ErrorInvalidToolInput       = runtimeTools.ErrorInvalidToolInput
-	ErrorBrowserProtocolInvalid = runtimeTools.ErrorBrowserProtocolInvalid
+	ErrorWebMCPDisabled       = runtimeTools.ErrorWebMCPDisabled
+	ErrorEndpointNotFound     = runtimeTools.ErrorEndpointNotFound
+	ErrorEndpointUnreachable  = runtimeTools.ErrorEndpointUnreachable
+	ErrorRemoteEndpointDenied = runtimeTools.ErrorRemoteEndpointDenied
+	ErrorBrowserProtocol      = runtimeTools.ErrorBrowserProtocol
+	ErrorUnsupportedWebMCP    = runtimeTools.ErrorUnsupportedWebMCP
+	ErrorNoEligibleTab        = runtimeTools.ErrorNoEligibleTab
+	ErrorAmbiguousBrowser     = runtimeTools.ErrorAmbiguousBrowser
+	ErrorAmbiguousTab         = runtimeTools.ErrorAmbiguousTab
+	ErrorStaleSelection       = runtimeTools.ErrorStaleSelection
+	ErrorStaleToolRef         = runtimeTools.ErrorStaleToolRef
+	ErrorOriginDenied         = runtimeTools.ErrorOriginDenied
+	ErrorApprovalRequired     = runtimeTools.ErrorApprovalRequired
+	ErrorApprovalDenied       = runtimeTools.ErrorApprovalDenied
+	ErrorResultTooLarge       = runtimeTools.ErrorResultTooLarge
+	ErrorTargetAttachFailed   = runtimeTools.ErrorTargetAttachFailed
+	ErrorTargetDetached       = runtimeTools.ErrorTargetDetached
+	ErrorPageNavigated        = runtimeTools.ErrorPageNavigated
+	ErrorInvocationFailed     = runtimeTools.ErrorInvocationFailed
+	ErrorInvocationCanceled   = runtimeTools.ErrorInvocationCanceled
+	ErrorInvocationTimedOut   = runtimeTools.ErrorInvocationTimedOut
+	ErrorInvocationOrphaned   = runtimeTools.ErrorInvocationOrphaned
+	ErrorBrowserDisconnected  = runtimeTools.ErrorBrowserDisconnected
+	ErrorInvalidToolInput     = runtimeTools.ErrorInvalidToolInput
 )
 
 const (
@@ -102,18 +91,6 @@ const (
 )
 
 func IsKnownErrorCode(code ErrorCode) bool { return code.IsKnown() }
-
-func NewToolResultSuccess(data any) (ToolResultEnvelope, error) {
-	return runtimeToolsWire.NewService().BrowserContract().NewToolResultSuccess(data)
-}
-
-func NewToolResultFailure(resultError ToolResultError) ToolResultEnvelope {
-	return runtimeToolsWire.NewService().BrowserContract().NewToolResultFailure(resultError)
-}
-
-func MarshalToolResult(envelope ToolResultEnvelope) ([]byte, error) {
-	return runtimeToolsWire.NewService().BrowserContract().MarshalToolResult(envelope)
-}
 
 func EncodeToolResult(data any, resultError *ToolResultError) ([]byte, error) {
 	return runtimeToolsWire.NewService().BrowserContract().EncodeToolResult(data, resultError)
@@ -165,81 +142,11 @@ func StableToolDefinitions() []ToolDefinition {
 	return result
 }
 
-// ToolDefinitions is a descriptive alias for StableToolDefinitions.
-func ToolDefinitions() []ToolDefinition { return StableToolDefinitions() }
-
-// Definitions is a concise alias for StableToolDefinitions.
-func Definitions() []ToolDefinition { return StableToolDefinitions() }
-
-// StableToolSchemas returns complete function definitions for the existing
-// CLI registry boundary. Every parameters object is closed.
-func StableToolSchemas() []map[string]any {
-	definitions := StableToolDefinitions()
-	result := make([]map[string]any, 0, len(definitions))
-	for _, definition := range definitions {
-		result = append(result, map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        definition.Name,
-				"description": definition.Description,
-				"parameters":  definition.Parameters,
-			},
-		})
-	}
-	return result
-}
-
-// ToolSchemas is a descriptive alias for StableToolSchemas.
-func ToolSchemas() []map[string]any { return StableToolSchemas() }
-
-// BrokerToolSchemas is a compatibility alias for StableToolSchemas.
-func BrokerToolSchemas() []map[string]any { return StableToolSchemas() }
-
 func objectSchema() map[string]any {
 	result := map[string]any{
 		"type":                 schemaTypeObject,
 		"properties":           map[string]any{},
 		"additionalProperties": false,
-	}
-	return result
-}
-
-// DefinitionSchemas returns fresh complete schemas. It is the model/provider
-// definition view; no dynamic page schema is projected into these values.
-func DefinitionSchemas() []map[string]any { return StableToolSchemas() }
-
-// AgentLoopDefinitions returns the flat representation accepted by the
-// existing go-agent-loop ToolDefinition contract.
-func AgentLoopDefinitions() []messages.ToolDefinition {
-	definitions := StableToolDefinitions()
-	result := make([]messages.ToolDefinition, 0, len(definitions))
-	for _, definition := range definitions {
-		properties := optionalAs[map[string]any](definition.Parameters["properties"])
-		ordered := schemaOrder(definition.Name)
-		required := requiredNames(definition.Parameters)
-		for name := range properties {
-			if !containsString(ordered, name) {
-				ordered = append(ordered, name)
-			}
-		}
-		parameters := make([]messages.ToolParameter, 0, len(ordered))
-		for _, name := range ordered {
-			property := optionalAs[map[string]any](properties[name])
-			valueType := optionalAs[string](property["type"])
-			description := optionalAs[string](property["description"])
-			parameters = append(parameters, messages.ToolParameter{
-				Name:        name,
-				Type:        valueType,
-				Description: description,
-				Required:    required[name],
-			})
-		}
-		result = append(result, messages.ToolDefinition{
-			Name:             definition.Name,
-			Description:      definition.Description,
-			Parameters:       parameters,
-			ParametersClosed: true,
-		})
 	}
 	return result
 }
@@ -257,15 +164,6 @@ func schemaOrder(name string) []string {
 	}
 }
 
-func requiredNames(schema map[string]any) map[string]bool {
-	result := make(map[string]bool)
-	values := optionalAs[[]string](schema["required"])
-	for _, value := range values {
-		result[value] = true
-	}
-	return result
-}
-
 func containsString(values []string, wanted string) bool {
 	for _, value := range values {
 		if value == wanted {
@@ -274,7 +172,3 @@ func containsString(values []string, wanted string) bool {
 	}
 	return false
 }
-
-// MarshalSchema is a small convenience for callers that snapshot the
-// provider-facing definitions.
-func MarshalSchema() ([]byte, error) { return json.Marshal(StableToolSchemas()) }

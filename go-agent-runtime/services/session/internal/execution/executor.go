@@ -9,7 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
+	session "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/internal/persistence"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
@@ -125,13 +125,6 @@ type Executor struct {
 // NewExecutor creates a new Executor with the given dependencies.
 func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
 	return newExecutor(nil, executor, toolDefs, inferencerOverride, nil, relaxModelValidation...)
-}
-
-// NewExecutorWithToolService constructs an executor whose default tool
-// surface is resolved by the reusable tools service. The legacy constructor
-// remains available for tests and hosts that inject a complete executor.
-func NewExecutorWithToolService(toolService tools.Service, executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
-	return newExecutor(toolService, executor, toolDefs, inferencerOverride, nil, relaxModelValidation...)
 }
 
 // NewExecutorWithToolServiceAndLogger constructs an executor with the host's

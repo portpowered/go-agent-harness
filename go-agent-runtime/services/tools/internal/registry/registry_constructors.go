@@ -22,17 +22,6 @@ type RegistryOptions struct {
 	Exec       public.ExecPolicy
 }
 
-func NewToolRegistry() *ToolRegistry {
-	return NewToolRegistryWithPolicyAndSkillRoots(RegistryOptions{}, nil, nil, io.Discard)
-}
-
-// NewEmptyToolRegistry creates a registry with no tools. Callers that compose
-// a participant- or session-specific allowlist can register only the selected
-// tools without accidentally inheriting the default registry.
-func NewEmptyToolRegistry() *ToolRegistry {
-	return &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: io.Discard}
-}
-
 // NewToolRegistryWithPolicyAndSkillRoots creates the default tool
 // registry with request-bound skill roots and diagnostics. The roots are
 // ordered directories that directly contain skill subdirectories; no path is
@@ -44,38 +33,6 @@ func NewToolRegistryWithPolicyAndSkillRoots(
 	diagnosticWriter io.Writer,
 ) *ToolRegistry {
 	return newToolRegistry(options, display.DisplayCapability{}, nil, false, policy, true, skillRoots, diagnosticWriter)
-}
-
-// NewToolRegistryFromConfigWithDisplayCapability creates the session-specific
-// registry after display admission has been resolved. Display-dependent tools
-// are omitted together, so the definitions and executor routes cannot drift.
-// The ordinary constructor above intentionally retains its direct/batch
-// behavior for callers that have not opted into session capability admission.
-//
-// Gating uses capability.Advertisable(), not capability.Usable(): a display
-// that is structurally present but not currently capturable (for example,
-// macOS Screen Recording permission has not been granted) still advertises
-// show/mouse, so the model can invoke them and receive the actionable,
-// invocation-time permission-denied envelope. Only a capability that could
-// not prove a display exists at all (headless CI) omits them.
-func NewToolRegistryWithDisplayCapability(
-	options RegistryOptions,
-	capability display.DisplayCapability,
-	surface display.DisplaySurface,
-) *ToolRegistry {
-	return newToolRegistry(options, capability, surface, true, nil, false, nil, nil)
-}
-
-// NewToolRegistryFromConfigWithDisplayCapabilityAndPolicy is the session
-// capability-aware constructor with the same filesystem boundary as direct
-// and one-shot tool registries.
-func NewToolRegistryWithDisplayCapabilityAndPolicy(
-	options RegistryOptions,
-	capability display.DisplayCapability,
-	surface display.DisplaySurface,
-	policy *filesystem.FilesystemPolicy,
-) *ToolRegistry {
-	return newToolRegistry(options, capability, surface, true, policy, true, nil, nil)
 }
 
 // NewToolRegistryFromConfigWithDisplayCapabilityAndPolicyAndSkillRoots is the

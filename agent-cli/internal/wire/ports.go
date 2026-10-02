@@ -28,19 +28,6 @@ func normalizeClock(values *compositionValues) {
 	values.clockSource = clock.Ensure(values.clockSource)
 }
 
-// LivePorts returns the authoritative live port list in deterministic order.
-func LivePorts() []PortDescriptor {
-	definitions := livePortDefinitions()
-	ports := make([]PortDescriptor, len(definitions))
-	for index, definition := range definitions {
-		ports[index] = definition.descriptor
-	}
-	return ports
-}
-
-// RegisteredPorts is a descriptive alias for LivePorts.
-func RegisteredPorts() []PortDescriptor { return LivePorts() }
-
 func validateDependencies(values *compositionValues) error {
 	return validateDependenciesWithDefinitions(values, livePortDefinitions())
 }

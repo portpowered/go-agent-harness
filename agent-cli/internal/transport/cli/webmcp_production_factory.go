@@ -18,87 +18,68 @@ import (
 // WebMCPProductionOptions holds the injectable production dependencies.
 type WebMCPProductionOptions = production.Options
 
-// WebMCPProductionOption customizes one production factory dependency.
-type WebMCPProductionOption = production.Option
-
 // WithWebMCPProductionRuntime injects the raw browser runtime.
-func WithWebMCPProductionRuntime(runtime webmcp.BrowserRuntime) WebMCPProductionOption {
+func WithWebMCPProductionRuntime(runtime webmcp.BrowserRuntime) production.Option {
 	return production.WithRuntime(runtime)
 }
 
-// WithWebMCPProductionCatalog injects the DevTools catalog.
-func WithWebMCPProductionCatalog(catalog webmcp.DevToolsCatalog) WebMCPProductionOption {
-	return production.WithCatalog(catalog)
-}
-
 // WithWebMCPProductionDiscovery injects the discovery service.
-func WithWebMCPProductionDiscovery(service WebMCPDiscoveryService) WebMCPProductionOption {
+func WithWebMCPProductionDiscovery(service WebMCPDiscoveryService) production.Option {
 	return production.WithDiscovery(service)
 }
 
 // WithWebMCPProductionConfigDir keeps managed-browser state and selection
 // persistence on the same resolved config directory.
-func WithWebMCPProductionConfigDir(configDir string) WebMCPProductionOption {
+func WithWebMCPProductionConfigDir(configDir string) production.Option {
 	return production.WithConfigDir(configDir)
 }
 
 // WithWebMCPProductionWorkingDir injects the host working directory for
 // managed Chrome for Testing lock discovery.
-func WithWebMCPProductionWorkingDir(workingDir string) WebMCPProductionOption {
+func WithWebMCPProductionWorkingDir(workingDir string) production.Option {
 	return production.WithWorkingDir(workingDir)
 }
 
 // WithWebMCPProductionManagedBrowserManager injects the managed-browser
 // lifecycle manager.
-func WithWebMCPProductionManagedBrowserManager(manager *chrome.ManagedBrowserManager) WebMCPProductionOption {
+func WithWebMCPProductionManagedBrowserManager(manager *chrome.ManagedBrowserManager) production.Option {
 	return production.WithManagedBrowserManager(manager)
 }
 
-// WithWebMCPProductionManagedBrowserManagerFactory defers manager creation
-// until the browser configuration has been resolved.
-func WithWebMCPProductionManagedBrowserManagerFactory(factory func(string) *chrome.ManagedBrowserManager) WebMCPProductionOption {
-	return production.WithManagedBrowserManagerFactory(factory)
-}
-
 // WithWebMCPProductionHTTPClient injects the discovery HTTP client.
-func WithWebMCPProductionHTTPClient(client discovery.HTTPClient) WebMCPProductionOption {
+func WithWebMCPProductionHTTPClient(client discovery.HTTPClient) production.Option {
 	return production.WithHTTPClient(client)
 }
 
 // WithWebMCPProductionActivePortReader injects the DevToolsActivePort reader.
-func WithWebMCPProductionActivePortReader(reader discovery.ActivePortReader) WebMCPProductionOption {
+func WithWebMCPProductionActivePortReader(reader discovery.ActivePortReader) production.Option {
 	return production.WithActivePortReader(reader)
 }
 
 // WithWebMCPProductionProcessEnumerator injects the process enumerator.
-func WithWebMCPProductionProcessEnumerator(enumerator discovery.ProcessEnumerator) WebMCPProductionOption {
+func WithWebMCPProductionProcessEnumerator(enumerator discovery.ProcessEnumerator) production.Option {
 	return production.WithProcessEnumerator(enumerator)
 }
 
 // WithWebMCPProductionIDMapper injects the browser ID mapper.
-func WithWebMCPProductionIDMapper(mapper discovery.IDMapper) WebMCPProductionOption {
+func WithWebMCPProductionIDMapper(mapper discovery.IDMapper) production.Option {
 	return production.WithIDMapper(mapper)
 }
 
-// WithWebMCPProductionTargetIDMapper injects the target ID mapper.
-func WithWebMCPProductionTargetIDMapper(mapper discovery.TargetIDMapper) WebMCPProductionOption {
-	return production.WithTargetIDMapper(mapper)
-}
-
 // WithWebMCPProductionClock injects the discovery and broker clock.
-func WithWebMCPProductionClock(clock discovery.Clock) WebMCPProductionOption {
+func WithWebMCPProductionClock(clock discovery.Clock) production.Option {
 	return production.WithClock(clock)
 }
 
 // WithWebMCPProductionSelectionStore injects the selection store.
-func WithWebMCPProductionSelectionStore(store any) WebMCPProductionOption {
+func WithWebMCPProductionSelectionStore(store any) production.Option {
 	return production.WithSelectionStore(store)
 }
 
 // WithWebMCPProductionSelectionStoreFactory defers selection-store creation
 // until command execution. This keeps a parsed --config-dir override aligned
 // with the store used by the direct command.
-func WithWebMCPProductionSelectionStoreFactory(factory func() any) WebMCPProductionOption {
+func WithWebMCPProductionSelectionStoreFactory(factory func() any) production.Option {
 	return production.WithSelectionStoreFactory(factory)
 }
 
@@ -106,7 +87,7 @@ func WithWebMCPProductionSelectionStoreFactory(factory func() any) WebMCPProduct
 // configuration at the command boundary and then delegates composition to
 // the production package. Construction remains lazy: no browser endpoint is
 // opened until a command invokes the returned factory runtime.
-func NewProductionWebMCPDoctorFactory(options ...WebMCPProductionOption) WebMCPDoctorFactory {
+func NewProductionWebMCPDoctorFactory(options ...production.Option) WebMCPDoctorFactory {
 	build := production.NewFactory(options...)
 	return func(browser config.BrowserConfig) (WebMCPDoctorRuntime, error) {
 		if err := browser.Validate(); err != nil {

@@ -536,15 +536,7 @@ func NewManualPatienceClock(base time.Time) *ManualPatienceClock {
 	return &ManualPatienceClock{base: base}
 }
 
-func NewPatienceTestClock() *ManualPatienceClock {
-	return NewManualPatienceClock(time.Unix(0, 0).UTC())
-}
-
 type DeterministicPatienceClock = ManualPatienceClock
-
-func NewDeterministicPatienceClock(base time.Time) *ManualPatienceClock {
-	return NewManualPatienceClock(base)
-}
 
 func (c *ManualPatienceClock) Now() time.Time {
 	if c == nil {
@@ -605,10 +597,6 @@ func FamilyEReprompt(count int) string {
 		return "I am still listening. Could you give me a quick progress update when you can?"
 	}
 	return "I am here; is the request still moving forward, or should I wait a little longer?"
-}
-
-func FamilyERepromptScript() []string {
-	return []string{FamilyEReprompt(0), FamilyEReprompt(1)}
 }
 
 func FamilyEPatienceEvidenceRefs() []string {

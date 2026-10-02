@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"image"
+	"io"
 	"strings"
 	"testing"
 
@@ -211,4 +212,11 @@ func (t *canonicalRegistryTestTool) Description() string        { return "canoni
 func (t *canonicalRegistryTestTool) Parameters() map[string]any { return t.params }
 func (t *canonicalRegistryTestTool) Execute(context.Context, map[string]any) ([]messages.Message, error) {
 	return []messages.Message{messages.NewTextMessage(messages.RoleTool, "ok")}, nil
+}
+
+// NewEmptyToolRegistry creates a registry with no tools. Callers that compose
+// a participant- or session-specific allowlist can register only the selected
+// tools without accidentally inheriting the default registry.
+func NewEmptyToolRegistry() *ToolRegistry {
+	return &ToolRegistry{tools: make(map[string]core.Tool), diagnosticWriter: io.Discard}
 }

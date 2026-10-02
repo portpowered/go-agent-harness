@@ -187,15 +187,6 @@ func NewInteractionFixtureReplayerFromFile(path string) (*InteractionFixtureRepl
 	return NewInteractionFixtureReplayer(fixture)
 }
 
-// Fixture returns a cloned copy of the validated fixture envelope.
-func (r *InteractionFixtureReplayer) Fixture() InteractionFixture {
-	cloned, err := cloneInteractionFixture(r.fixture)
-	if err != nil {
-		return InteractionFixture{}
-	}
-	return cloned
-}
-
 // Replay streams a fresh clone of the fixture events in fixture order.
 func (r *InteractionFixtureReplayer) Replay(ctx context.Context) <-chan InteractionEvent {
 	out := make(chan InteractionEvent)
@@ -240,4 +231,13 @@ func cloneInteractionEvents(events []InteractionEvent) ([]InteractionEvent, erro
 		return nil, err
 	}
 	return cloned, nil
+}
+
+// Fixture returns a cloned copy of the validated fixture envelope.
+func (r *InteractionFixtureReplayer) Fixture() InteractionFixture {
+	cloned, err := cloneInteractionFixture(r.fixture)
+	if err != nil {
+		return InteractionFixture{}
+	}
+	return cloned
 }

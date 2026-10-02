@@ -10,9 +10,6 @@ import (
 )
 
 const (
-	shapePayloadTypeStreamMessage = gatewaytesting.SessionPayloadTypeStreamMessage
-	shapePayloadTypeWebSocket     = gatewaytesting.SessionPayloadTypeWebSocketMessage
-
 	streamToolCallStart           = "TOOLCALL.START"
 	streamToolCallEnd             = "TOOLCALL.END"
 	wireOutputItemAdded           = "response.output_item.added"
@@ -153,14 +150,14 @@ func shapePayload(record gatewaytesting.CapturedSessionEvent) (map[string]any, b
 func recognizedAudioPayload(record gatewaytesting.CapturedSessionEvent, recordIndex int, payload map[string]any) (string, any, bool) {
 	base := fmt.Sprintf("records[%d].payload", recordIndex)
 	switch record.PayloadType {
-	case shapePayloadTypeStreamMessage:
+	case gatewaytesting.SessionPayloadTypeStreamMessage:
 		if record.Type != "AUDIO.DELTA" {
 			return "", nil, false
 		}
 		value, _ := objectField(payload, "value")
 		audio, _ := field(value, "content")
 		return base + ".value.content", audio, true
-	case shapePayloadTypeWebSocket:
+	case gatewaytesting.SessionPayloadTypeWebSocketMessage:
 		switch record.Type {
 		case "response.output_audio.delta", "response.audio.delta":
 			audio, _ := field(payload, "delta")
@@ -179,7 +176,7 @@ func recognizedAudioPayload(record gatewaytesting.CapturedSessionEvent, recordIn
 func recognizedToolObservation(record gatewaytesting.CapturedSessionEvent, recordIndex int, payload map[string]any) (toolObservation, bool) {
 	base := fmt.Sprintf("records[%d].payload", recordIndex)
 	switch record.PayloadType {
-	case shapePayloadTypeStreamMessage:
+	case gatewaytesting.SessionPayloadTypeStreamMessage:
 		switch record.Type {
 		case streamToolCallStart, streamToolCallEnd:
 			id, fieldPath := streamToolCallID(payload, base)
@@ -194,7 +191,7 @@ func recognizedToolObservation(record gatewaytesting.CapturedSessionEvent, recor
 		default:
 			return toolObservation{}, false
 		}
-	case shapePayloadTypeWebSocket:
+	case gatewaytesting.SessionPayloadTypeWebSocketMessage:
 		switch record.Type {
 		case wireOutputItemAdded:
 			item, ok := objectField(payload, "item")
@@ -251,11 +248,11 @@ func isToolRole(message map[string]any) bool {
 func hasRecognizedTerminal(capture gatewaytesting.SessionCapture) bool {
 	for _, record := range capture.Records {
 		switch record.PayloadType {
-		case shapePayloadTypeWebSocket:
+		case gatewaytesting.SessionPayloadTypeWebSocketMessage:
 			if record.Type == "response.done" || record.Type == "error" {
 				return true
 			}
-		case shapePayloadTypeStreamMessage:
+		case gatewaytesting.SessionPayloadTypeStreamMessage:
 			if record.Type == "MESSAGE.END" || record.Type == "ERROR" {
 				return true
 			}

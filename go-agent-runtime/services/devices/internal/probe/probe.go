@@ -20,14 +20,11 @@ import (
 
 const (
 	deviceProbeDefaultCaptureDuration = 5 * time.Second
-	deviceProbeProviderSampleRate     = wavio.Rate24kHz
 	deviceProbeInputSampleRate        = audio.SampleRate
 	deviceProbeFrameDuration          = 20 * time.Millisecond
 	deviceProbeInputFrameSamples      = deviceProbeInputSampleRate / 50
-	deviceProbeProviderFrameSamples   = deviceProbeProviderSampleRate / 50
+	deviceProbeProviderFrameSamples   = wavio.Rate24kHz / 50
 )
-
-type deviceProbeRuntimeOptions = runtimeDevices.ProbeRequest
 
 // deviceProbeInputPlan is the explicit hardware-input contract carried by a
 // device-tier scenario. The corpus ID identifies the authored utterance used
@@ -39,7 +36,7 @@ type deviceProbeInputPlan struct {
 	Utterance string
 }
 
-func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availability devicegw.DeviceProbeAvailability, registry devicegw.DeviceRegistry, opts deviceProbeRuntimeOptions, sessionFactory runtimeDevices.ProbeSessionFactory) (observation probe.ObservationSnapshot, runErr error) {
+func runDeviceProbeScenario(ctx context.Context, scenario probe.Scenario, availability devicegw.DeviceProbeAvailability, registry devicegw.DeviceRegistry, opts runtimeDevices.ProbeRequest, sessionFactory runtimeDevices.ProbeSessionFactory) (observation probe.ObservationSnapshot, runErr error) {
 	if ctx == nil {
 		return observation, errors.New("device probe context is required")
 	}
@@ -95,7 +92,7 @@ func validateProbeAvailability(availability devicegw.DeviceProbeAvailability) er
 	return nil
 }
 
-func resolveProbeSession(input deviceProbeInputPlan, scenario probe.Scenario, opts deviceProbeRuntimeOptions, sessionFactory runtimeDevices.ProbeSessionFactory) (string, messages.SessionInferencer, error) {
+func resolveProbeSession(input deviceProbeInputPlan, scenario probe.Scenario, opts runtimeDevices.ProbeRequest, sessionFactory runtimeDevices.ProbeSessionFactory) (string, messages.SessionInferencer, error) {
 	instructions := opts.Instructions
 	if strings.TrimSpace(instructions) == "" {
 		instructions = deviceProbeInstructionsForInput(input, scenarioDeviceProbeTranscript(scenario))

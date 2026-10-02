@@ -19,14 +19,12 @@ fixtures in `go-llm-gateway/pkg/testing/testdata/session-fixtures/`.
 Reconstruction of WHICH failure occurred and WHERE it happened in the turn
 sequence relies on the emitted diagnostic log records plus the final metrics
 snapshot — nothing else. The claim is guarded by a negative control kept as a
-failing-control demonstration inside the suite
-(`TestSessionDiagnostics_ZeroTurnDeadSessionFailsEveryDiagnosis`): the identical
+failing-control demonstration inside the suite: the identical
 assertion set FAILS against a committed zero-turn dead-session capture
 (`session_dead_zeroturn.session.json`), so a dead or empty run cannot masquerade
 as a healthy one or as any known failure mode. Pairwise distinctness of all five
-signatures and non-match of a healthy multi-turn run are asserted in
-`TestSessionDiagnostics_FailureModeSignaturesArePairwiseDistinct` and
-`TestSessionDiagnostics_HealthyRunMatchesNoFailureSignature`.
+signatures and non-match of a healthy multi-turn run were asserted by the
+session-diagnostics suite (its named tests have since been removed).
 
 ## Where diagnostics are emitted
 

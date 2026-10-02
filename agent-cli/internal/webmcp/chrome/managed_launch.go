@@ -154,12 +154,6 @@ func NewManagedBrowserLauncher(options ManagedBrowserLaunchOptions) *ManagedBrow
 	return &ManagedBrowserLauncher{options: options}
 }
 
-// LaunchManagedBrowser is the function-form entry point for callers that do
-// not need to retain a launcher instance.
-func LaunchManagedBrowser(ctx context.Context, options ManagedBrowserLaunchOptions) (*ManagedBrowser, error) {
-	return NewManagedBrowserLauncher(options).Launch(ctx)
-}
-
 // Launch prepares the private profile, acquires a qualified executable,
 // starts Chrome, and waits for a responsive loopback DevTools version
 // response. A failed attempt terminates only the process it started.

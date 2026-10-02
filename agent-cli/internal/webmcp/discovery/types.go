@@ -252,14 +252,6 @@ type OriginPolicy interface {
 	Allows(string) bool
 }
 
-// OriginPolicyFunc adapts a function to OriginPolicy.
-type OriginPolicyFunc func(string) bool
-
-// Allows implements OriginPolicy.
-func (f OriginPolicyFunc) Allows(origin string) bool {
-	return f == nil || f(origin)
-}
-
 // TargetListOptions are the model-facing list filters. EligibleOnly is a
 // pointer because C0 distinguishes an omitted value (default true) from an
 // explicit false. IncludeZeroToolPages defaults to false.
@@ -277,12 +269,6 @@ type TargetFilters = TargetListOptions
 
 // Bool returns a pointer suitable for optional boolean list fields.
 func Bool(value bool) *bool { return &value }
-
-// WithEligibleOnly makes the C0 default explicit for callers constructing
-// options programmatically.
-func WithEligibleOnly(value bool) TargetListOptions {
-	return TargetListOptions{EligibleOnly: Bool(value)}
-}
 
 // TargetSnapshot is the deterministic result of one target refresh.
 type TargetSnapshot struct {
@@ -315,17 +301,6 @@ type TargetDetacher interface {
 	Detach(context.Context) error
 }
 
-// TargetDetacherFunc adapts a detach function to TargetDetacher.
-type TargetDetacherFunc func(context.Context) error
-
-// Detach implements TargetDetacher.
-func (f TargetDetacherFunc) Detach(ctx context.Context) error {
-	if f == nil {
-		return nil
-	}
-	return f(ctx)
-}
-
 // TargetAttacher attaches a neutral selection to a target. The returned
 // resource must expose detach only; browser-specific attach implementations
 // remain outside this package.
@@ -355,17 +330,6 @@ func (f TargetAttacherFunc) Attach(ctx context.Context, browser BrowserCandidate
 // for it. Selection itself never calls this seam unless Activate is true.
 type TargetActivator interface {
 	Activate(context.Context, BrowserCandidate, Target) error
-}
-
-// TargetActivatorFunc adapts an activation function to TargetActivator.
-type TargetActivatorFunc func(context.Context, BrowserCandidate, Target) error
-
-// Activate implements TargetActivator.
-func (f TargetActivatorFunc) Activate(ctx context.Context, browser BrowserCandidate, target Target) error {
-	if f == nil {
-		return nil
-	}
-	return f(ctx, browser, target)
 }
 
 // SelectionOptions controls the state-changing part of an exact selection.

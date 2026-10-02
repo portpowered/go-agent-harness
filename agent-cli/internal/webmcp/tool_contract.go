@@ -25,24 +25,12 @@ const (
 	StopCastingToolName     = runtimeTools.StopCastingToolName
 )
 
-func StableBrokerToolDefinitions() []BrokerToolDefinition {
-	return browserContract().StableBrokerToolDefinitions()
-}
-
-func StableBrokerToolSchemas() []map[string]any {
-	return browserContract().StableBrokerToolSchemas()
-}
-
 func BrowserToolDefinitions(webCast ...bool) []BrokerToolDefinition {
 	return browserContract().BrowserToolDefinitions(webCast...)
 }
 
 func BrowserToolSchemas(webCast ...bool) []map[string]any {
 	return browserContract().BrowserToolSchemas(webCast...)
-}
-
-func BrokerToolDefinitions() []BrokerToolDefinition {
-	return browserContract().BrokerToolDefinitions()
 }
 
 func StableToolNames() []string {

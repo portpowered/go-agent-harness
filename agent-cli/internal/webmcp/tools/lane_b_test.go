@@ -8,6 +8,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 func TestStableLaneBDefinitionsAreClosedAndHaveFrozenDefaults(t *testing.T) {
@@ -192,7 +193,7 @@ func assertLaneBInvalidInputIssue(t *testing.T, content, wantPath, wantCode stri
 	if err != nil {
 		t.Fatalf("decode result: %v", err)
 	}
-	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(ErrorInvalidToolInput) {
+	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(runtimeTools.ErrorInvalidToolInput) {
 		t.Fatalf("envelope = %#v, want invalid_tool_input", envelope)
 	}
 	var details struct {
@@ -298,7 +299,7 @@ func TestLaneBToolFailuresRefreshAndActivation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertFailureCode(t, response, ErrorAmbiguousTab)
+		assertFailureCode(t, response, runtimeTools.ErrorAmbiguousTab)
 		if !strings.Contains(response.Content, `"candidate_choices":[{"browser_id":"browser-a","origin":"https://orders.example.test","target_id":"target-a","title":"Orders"},{"browser_id":"browser-a","origin":"https://billing.example.test","target_id":"target-b","title":"Billing"}]`) {
 			t.Fatalf("candidate choices = %s", response.Content)
 		}
@@ -393,7 +394,7 @@ func TestLaneBListTabsRequiresExactBrowserBeforeListing(t *testing.T) {
 func TestResultEnvelopeStrictShape(t *testing.T) {
 	valid := `{"version":"webmcp.tool-result.v1","ok":true,"data":{"value":1},"error":null}`
 	for _, raw := range []string{
-		strings.Replace(valid, ToolResultVersion, "webmcp.tool-result.v0", 1),
+		strings.Replace(valid, runtimeTools.ToolResultVersion, "webmcp.tool-result.v0", 1),
 		strings.Replace(valid, `,"error":null`, `,"error":null,"extra":true`, 1),
 		strings.Replace(valid, `,"error":null`, `,"error":null,"ok":true`, 1),
 		strings.Replace(valid, `"version":"webmcp.tool-result.v1"`, `"version":null`, 1),
@@ -411,7 +412,7 @@ func TestResultEnvelopeStrictShape(t *testing.T) {
 			t.Fatalf("accepted null result error scalar %s", raw)
 		}
 	}
-	failure, err := EncodeToolResult(nil, &ToolResultError{Code: string(ErrorNoEligibleTab), Message: "No eligible browser tab matched the request.", Retryable: true, Details: map[string]any{}})
+	failure, err := EncodeToolResult(nil, &runtimeTools.ToolResultError{Code: string(ErrorNoEligibleTab), Message: "No eligible browser tab matched the request.", Retryable: true, Details: map[string]any{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,7 +499,7 @@ func assertLaneBTextualResponse(t *testing.T, response messages.ToolCallResponse
 	}
 }
 
-func assertFailureCode(t *testing.T, response messages.ToolCallResponse, want ErrorCode) {
+func assertFailureCode(t *testing.T, response messages.ToolCallResponse, want runtimeTools.ErrorCode) {
 	t.Helper()
 	envelope, err := UnmarshalToolResult([]byte(response.Content))
 	if err != nil {
@@ -554,4 +555,22 @@ func TestLaneBGetContextReportsNoPageSelected(t *testing.T) {
 	if details := envelope.Error.Details; details["browser_id"] != "" || details["target_id"] != "" || details["selected_generation"] != float64(0) || details["reason"] != "selection_not_connected" {
 		t.Fatalf("no-page context details = %#v, want empty identity at generation zero", details)
 	}
+}
+
+// StableToolSchemas returns complete function definitions for the existing
+// CLI registry boundary. Every parameters object is closed.
+func StableToolSchemas() []map[string]any {
+	definitions := StableToolDefinitions()
+	result := make([]map[string]any, 0, len(definitions))
+	for _, definition := range definitions {
+		result = append(result, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        definition.Name,
+				"description": definition.Description,
+				"parameters":  definition.Parameters,
+			},
+		})
+	}
+	return result
 }

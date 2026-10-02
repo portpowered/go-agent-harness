@@ -9,10 +9,6 @@ type ToolResultIssue = runtimeTools.ToolResultIssue
 type ToolResultError = runtimeTools.ToolResultError
 type ToolResultEnvelope = runtimeTools.ToolResultEnvelope
 
-type ResultEnvelope = runtimeTools.ResultEnvelope
-type ResultError = runtimeTools.ResultError
-type ResultIssue = runtimeTools.ResultIssue
-
 func NewToolResultSuccess(data any) (ToolResultEnvelope, error) {
 	return browserContract().NewToolResultSuccess(data)
 }

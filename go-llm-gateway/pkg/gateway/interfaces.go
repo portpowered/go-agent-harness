@@ -56,24 +56,3 @@ type Feature = capabilities.Feature
 
 // UnsupportedFeatureError re-exports deterministic local validation failures.
 type UnsupportedFeatureError = capabilities.UnsupportedFeatureError
-
-const (
-	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
-	CapabilityStateSupported   = capabilities.CapabilityStateSupported
-	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
-
-	RequestedModeStateless       = capabilities.RequestedModeStateless
-	RequestedModeStatelessStream = capabilities.RequestedModeStatelessStream
-	RequestedModeSession         = capabilities.RequestedModeSession
-
-	FeatureSessions               = capabilities.FeatureSessions
-	FeatureTools                  = capabilities.FeatureTools
-	FeatureStreaming              = capabilities.FeatureStreaming
-	FeatureImageInput             = capabilities.FeatureImageInput
-	FeatureAudioInput             = capabilities.FeatureAudioInput
-	FeatureAudioOutput            = capabilities.FeatureAudioOutput
-	FeatureVideoOutput            = capabilities.FeatureVideoOutput
-	FeatureReasoning              = capabilities.FeatureReasoning
-	FeaturePromptCaching          = capabilities.FeaturePromptCaching
-	FeatureProviderSpecificConfig = capabilities.FeatureProviderSpecificConfig
-)

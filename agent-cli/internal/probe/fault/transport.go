@@ -217,22 +217,6 @@ func WithDropWriteFrames(frameNumbers ...int) Option {
 	return WithDropFrames(DirectionOutbound, frameNumbers...)
 }
 
-// WithFrameDelay delays every read and write frame by the supplied logical
-// duration. Use WithReadFrameDelay or WithWriteFrameDelay to target one side.
-func WithFrameDelay(delay time.Duration) Option {
-	return func(cfg *config) error {
-		if err := configureFrameDelay(cfg, DirectionInbound, delay); err != nil {
-			return err
-		}
-		return configureFrameDelay(cfg, DirectionOutbound, delay)
-	}
-}
-
-// WithDelay is a concise alias for WithFrameDelay.
-func WithDelay(delay time.Duration) Option {
-	return WithFrameDelay(delay)
-}
-
 // WithDelayFrames delays selected one-based frames in the requested direction
 // by a logical duration. With no frame numbers, every frame is delayed.
 func WithDelayFrames(direction FrameDirection, delay time.Duration, frameNumbers ...int) Option {
@@ -250,11 +234,6 @@ func WithReadFrameDelay(delay time.Duration, frameNumbers ...int) Option {
 	return WithDelayFrames(DirectionInbound, delay, frameNumbers...)
 }
 
-// WithWriteFrameDelay delays selected client-to-provider frames.
-func WithWriteFrameDelay(delay time.Duration, frameNumbers ...int) Option {
-	return WithDelayFrames(DirectionOutbound, delay, frameNumbers...)
-}
-
 // WithSlowConsumer stalls selected provider-to-client (egress) frames for a
 // bounded duration on the configured logical clock. With no frame numbers,
 // every egress frame is stalled. It never sleeps on host time.
@@ -267,11 +246,6 @@ func WithSlowConsumer(duration time.Duration, frameNumbers ...int) Option {
 
 // WithEgressStall is a concise alias for WithSlowConsumer.
 func WithEgressStall(duration time.Duration, frameNumbers ...int) Option {
-	return WithSlowConsumer(duration, frameNumbers...)
-}
-
-// WithSlowConsumerEgress is an explicit alias for WithSlowConsumer.
-func WithSlowConsumerEgress(duration time.Duration, frameNumbers ...int) Option {
 	return WithSlowConsumer(duration, frameNumbers...)
 }
 
@@ -414,11 +388,6 @@ func WrapConn(inner transport.Conn, options ...Option) (*Conn, error) {
 		return nil, err
 	}
 	return &Conn{inner: inner, cfg: cfg}, nil
-}
-
-// NewConn is an explicit constructor alias for WrapConn.
-func NewConn(inner transport.Conn, options ...Option) (*Conn, error) {
-	return WrapConn(inner, options...)
 }
 
 // ReadMessage returns the next non-dropped inner frame, or triggers the
@@ -749,11 +718,6 @@ func WrapDialer(inner transport.Dialer, options ...Option) (*Dialer, error) {
 		return nil, err
 	}
 	return &Dialer{inner: inner, cfg: cfg}, nil
-}
-
-// NewDialer is an explicit constructor alias for WrapDialer.
-func NewDialer(inner transport.Dialer, options ...Option) (*Dialer, error) {
-	return WrapDialer(inner, options...)
 }
 
 // Dial forwards endpoint and headers unchanged, then wraps the successful

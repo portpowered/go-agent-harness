@@ -24,14 +24,6 @@ type MouseProcess interface {
 	Run(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
-// MouseProcessFunc adapts a function to MouseProcess.
-type MouseProcessFunc func(ctx context.Context, name string, args ...string) ([]byte, error)
-
-// Run calls f.
-func (f MouseProcessFunc) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return f(ctx, name, args...)
-}
-
 // MouseToolOptions configures the process and pacing seams of MouseTool.
 // Nil fields select the host process runner and a context-aware timer wait.
 type MouseToolOptions struct {

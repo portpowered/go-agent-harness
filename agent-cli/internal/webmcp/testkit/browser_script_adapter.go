@@ -74,11 +74,6 @@ func NewBrowserScriptAdapter(script BrowserScript, runtime *BrowserScriptRuntime
 	}, nil
 }
 
-// NewFixtureBrowserAdapter is a descriptive constructor alias.
-func NewFixtureBrowserAdapter(script BrowserScript, runtime *BrowserScriptRuntime) (*BrowserScriptAdapter, error) {
-	return NewBrowserScriptAdapter(script, runtime)
-}
-
 // Runtime returns the run-scoped fixture runtime for evidence inspection.
 func (a *BrowserScriptAdapter) Runtime() *BrowserScriptRuntime {
 	if a == nil {

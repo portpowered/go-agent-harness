@@ -99,12 +99,6 @@ func (f SampleFormat) ByteWidth() (int, error) {
 	}
 }
 
-// Validate checks the format without reading audio data.
-func (f SampleFormat) Validate() error {
-	_, err := f.ByteWidth()
-	return err
-}
-
 // DecodeSampleValue decodes one little-endian sample into the historical
 // normalized float64 representation. The returned value is finite on success;
 // the input is read-only and no allocation is performed.
@@ -269,4 +263,10 @@ func checkedPacketProduct(left, right int) (int, bool) {
 		return 0, true
 	}
 	return left * right, false
+}
+
+// Validate checks the format without reading audio data.
+func (f SampleFormat) Validate() error {
+	_, err := f.ByteWidth()
+	return err
 }

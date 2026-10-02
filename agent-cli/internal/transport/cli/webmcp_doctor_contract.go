@@ -2,7 +2,6 @@ package cli
 
 import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/doctor"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 )
 
@@ -33,18 +32,6 @@ type WebMCPDoctorFactory = direct.Factory
 type (
 	WebMCPRuntimeFactory       = WebMCPDoctorFactory
 	WebMCPDoctorRuntimeFactory = WebMCPDoctorFactory
-)
-
-// Doctor report shapes; see internal/webmcp/doctor.
-type (
-	WebMCPDoctorReport    = doctor.Report
-	WebMCPDoctorEndpoint  = doctor.Endpoint
-	WebMCPDoctorBrowser   = doctor.Browser
-	WebMCPDoctorTarget    = doctor.Target
-	WebMCPDoctorCatalog   = doctor.Catalog
-	WebMCPDoctorCheck     = doctor.Check
-	WebMCPDoctorErrorData = doctor.ErrorData
-	WebMCPDoctorError     = doctor.Error
 )
 
 // closeWebMCPDoctorRuntime keeps the probe caller on its existing name; it

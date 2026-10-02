@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,4 +15,12 @@ func asChatModel(model tea.Model) *services.ChatModel {
 		panic(fmt.Sprintf("model is %T, want *services.ChatModel", model))
 	}
 	return chat
+}
+
+// NewTestWriter returns a writer that captures stdout and stderr.
+func NewTestWriter() *testWriter {
+	return &testWriter{
+		stdout: bytes.Buffer{},
+		stderr: bytes.Buffer{},
+	}
 }

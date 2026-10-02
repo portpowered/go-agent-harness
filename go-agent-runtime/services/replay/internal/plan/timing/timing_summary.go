@@ -3,6 +3,8 @@ package timing
 import (
 	"math"
 	"slices"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 )
 
 const (
@@ -10,7 +12,7 @@ const (
 	percentile95Quantile = 0.95
 )
 
-func summarize(report Report, commits []int64) Summary {
+func summarize(report replay.CaptureTimingReport, commits []int64) Summary {
 	responseSamples := collectResponseSamples(report.Responses)
 	toolSamples, unfinished := collectToolSamples(report.Tools)
 	inputLatencies := collectInputLatencies(report.Responses, commits)
@@ -42,7 +44,7 @@ type responseSamples struct {
 	audibleGaps    []int64
 }
 
-func collectResponseSamples(responses []ResponseTiming) responseSamples {
+func collectResponseSamples(responses []replay.CaptureResponseTiming) responseSamples {
 	samples := responseSamples{}
 	for _, response := range responses {
 		if response.FirstAudioMS != nil {
@@ -64,7 +66,7 @@ func collectResponseSamples(responses []ResponseTiming) responseSamples {
 	return samples
 }
 
-func collectInputLatencies(responses []ResponseTiming, commits []int64) []int64 {
+func collectInputLatencies(responses []replay.CaptureResponseTiming, commits []int64) []int64 {
 	latencies := make([]int64, 0)
 	for commitIndex, commit := range commits {
 		nextCommit := nextCommitTime(commits, commitIndex)
@@ -85,7 +87,7 @@ func nextCommitTime(commits []int64, index int) int64 {
 	return math.MaxInt64
 }
 
-func isResponseToCommit(response ResponseTiming, commit, nextCommit int64) bool {
+func isResponseToCommit(response replay.CaptureResponseTiming, commit, nextCommit int64) bool {
 	return response.CreatedMS >= commit && response.CreatedMS < nextCommit && response.FirstOutputMS != nil
 }
 
@@ -98,7 +100,7 @@ type toolSamples struct {
 	resultToAudio    []int64
 }
 
-func collectToolSamples(tools []ToolTiming) (toolSamples, int) {
+func collectToolSamples(tools []replay.CaptureToolTiming) (toolSamples, int) {
 	samples := toolSamples{}
 	unfinished := 0
 	for _, tool := range tools {
@@ -112,7 +114,7 @@ func collectToolSamples(tools []ToolTiming) (toolSamples, int) {
 	return samples, unfinished
 }
 
-func appendToolSamples(samples *toolSamples, tool ToolTiming) {
+func appendToolSamples(samples *toolSamples, tool replay.CaptureToolTiming) {
 	if tool.ResultToFirstOutputMS != nil {
 		samples.resultToOutput = append(samples.resultToOutput, *tool.ResultToFirstOutputMS)
 	}
@@ -130,13 +132,13 @@ func appendToolSamples(samples *toolSamples, tool ToolTiming) {
 	}
 }
 
-func durationSummary(values []int64) DurationSummary {
+func durationSummary(values []int64) replay.CaptureDurationSummary {
 	if len(values) == 0 {
-		return DurationSummary{}
+		return replay.CaptureDurationSummary{}
 	}
 	values = append([]int64(nil), values...)
 	slices.Sort(values)
-	return DurationSummary{
+	return replay.CaptureDurationSummary{
 		Count: len(values),
 		P50MS: percentile(values, medianQuantile),
 		P95MS: percentile(values, percentile95Quantile),

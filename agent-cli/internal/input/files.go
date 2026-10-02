@@ -67,16 +67,6 @@ func (e *AttachmentError) Error() string {
 
 func (e *AttachmentError) Unwrap() error { return e.Cause }
 
-// LoadContentPart reads the file at path and returns a ContentPart (ImagePart, AudioPart, VideoPart, or FilePart)
-// based on the detected MIME type. The filename (base) is preserved for FilePart name.
-func LoadContentPart(path string) (messages.ContentPart, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return contentPartFromBytes(path, data), nil
-}
-
 // LoadAskContentPart validates and loads one positional ask attachment. It
 // performs the regular-file check before reading, which prevents special files
 // such as FIFOs from blocking the command during local preflight.

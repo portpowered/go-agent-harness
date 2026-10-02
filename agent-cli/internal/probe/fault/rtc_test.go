@@ -252,3 +252,14 @@ func (c *scheduledFaultTestConn) ReadMessage() (int, []byte, error) {
 	c.nextTick++
 	return frame.Type, append([]byte(nil), frame.Payload...), nil
 }
+
+// WithICEFailure arms a failure after the wrapped signaling exchange has
+// completed candidate gathering. The trigger is tied to that ordered
+// signaling boundary, not host time, so the same loopback scenario always
+// produces the same outcome.
+func WithICEFailure() SignalingOption {
+	return func(cfg *signalingConfig) error {
+		cfg.iceFailure = true
+		return nil
+	}
+}

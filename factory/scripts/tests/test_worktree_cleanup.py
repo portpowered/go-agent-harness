@@ -90,8 +90,7 @@ class WorktreeCleanupTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, str(custom), "")
 
             # Stay hermetic: an inherited GOCACHE would bypass the runner,
-            # and the default approved root is the real user cache, which
-            # the staticcheck candidate would otherwise size.
+            # and the default approved root is the real user cache.
             environment = {k: v for k, v in os.environ.items() if k not in ("GOCACHE", "FACTORY_GOCACHE")}
             with mock.patch.dict(os.environ, environment, clear=True):
                 candidates = MODULE.global_cache_candidates(

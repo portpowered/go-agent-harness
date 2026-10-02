@@ -9,10 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/contract"
 	devicegw "github.com/portpowered/go-agent-harness/go-device-gateway/pkg/devices"
-
-	audio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
 )
 
 var (
@@ -174,9 +173,6 @@ func NewDefaultRTCDeviceSink(registry devicegw.DeviceRegistry) (*RTCDeviceSink, 
 }
 func NewRTCDeviceSinkAtRateWithOptions(registry devicegw.DeviceRegistry, id devicegw.DeviceID, rate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) (*RTCDeviceSink, error) {
 	return newRTCDeviceSinkAtRate(registry, id, rate, voice, observer)
-}
-func NewRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) *RTCDeviceSink {
-	return newRTCDeviceSinkFromOpened(sink, deviceRate, providerRate, voice, observer)
 }
 func (s *RTCDeviceSink) SetPlaybackObserver(observer PlaybackObserver) {
 	if s != nil {
@@ -726,16 +722,6 @@ func (s *RTCDeviceSink) WritePlaybackHoldTone(ctx context.Context, samples []int
 	return s.observedWriteHoldTone(ctx, samples, generation, blocked)
 }
 
-// IsNilInboundMedia reports whether an inbound endpoint is nil, including a
-// typed nil hidden behind the media interface.
-func IsNilInboundMedia(media audio.InboundMedia) bool { return nilRTCInboundMedia(media) }
-
-// ConsumedPlaybackSamples returns the monotonic device samples consumed from
-// a playback queue snapshot.
-func ConsumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
-	return consumedPlaybackSamples(stats)
-}
-
 // WriteDeviceFrame enqueues a native device-rate frame directly on the
 // underlying output handle. It is reserved for device-tier diagnostics and
 // feeder paths; provider media should use Pump or WritePlayback.
@@ -751,4 +737,18 @@ func (s *RTCDeviceSink) WriteDeviceFrame(ctx context.Context, samples []int16) e
 	}
 	s.playbackObservations.commit(reservation, samples, s.id, s.deviceRate)
 	return nil
+}
+
+// ConsumedPlaybackSamples returns the monotonic device samples consumed from
+// a playback queue snapshot.
+func ConsumedPlaybackSamples(stats audio.PlaybackQueueStats) uint64 {
+	return consumedPlaybackSamples(stats)
+}
+
+// IsNilInboundMedia reports whether an inbound endpoint is nil, including a
+// typed nil hidden behind the media interface.
+func IsNilInboundMedia(media audio.InboundMedia) bool { return nilRTCInboundMedia(media) }
+
+func NewRTCDeviceSinkFromOpened(sink *devicegw.DeviceSink, deviceRate, providerRate int, voice string, observer func(devicegw.DeviceID, audio.PlaybackQueueStats)) *RTCDeviceSink {
+	return newRTCDeviceSinkFromOpened(sink, deviceRate, providerRate, voice, observer)
 }

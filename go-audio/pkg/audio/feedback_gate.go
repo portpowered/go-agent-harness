@@ -561,16 +561,6 @@ func (g *PCM16FeedbackGate) PlaybackPosition() time.Duration {
 	return g.playbackPosition
 }
 
-// CapturePosition reports the gate's observed capture cursor.
-func (g *PCM16FeedbackGate) CapturePosition() time.Duration {
-	if g == nil {
-		return 0
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.capturePosition
-}
-
 // ConfirmedLag reports the most recently learned acoustic lag.
 func (g *PCM16FeedbackGate) ConfirmedLag() time.Duration {
 	if g == nil {
@@ -579,4 +569,14 @@ func (g *PCM16FeedbackGate) ConfirmedLag() time.Duration {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.confirmedLag
+}
+
+// CapturePosition reports the gate's observed capture cursor.
+func (g *PCM16FeedbackGate) CapturePosition() time.Duration {
+	if g == nil {
+		return 0
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.capturePosition
 }

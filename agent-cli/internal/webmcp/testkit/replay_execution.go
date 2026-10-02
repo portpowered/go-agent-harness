@@ -2,7 +2,6 @@ package testkit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
 
@@ -56,51 +55,6 @@ func NewBrowserReplay(script BrowserScript, options ...ReplayOption) (*BrowserRe
 	return replay, nil
 }
 
-// NewReplay is an alias for NewBrowserReplay.
-func NewReplay(script BrowserScript, options ...ReplayOption) (*BrowserReplay, error) {
-	return NewBrowserReplay(script, options...)
-}
-
-// NewBrowserScriptReplay is an alias for NewBrowserReplay.
-func NewBrowserScriptReplay(script BrowserScript, options ...ReplayOption) (*BrowserReplay, error) {
-	return NewBrowserReplay(script, options...)
-}
-
-// NewScriptReplay is an alias for NewBrowserReplay.
-func NewScriptReplay(script BrowserScript, options ...ReplayOption) (*BrowserReplay, error) {
-	return NewBrowserReplay(script, options...)
-}
-
-// NewBrowserReplayFromBytes loads a strict browser-script.v1 document before
-// constructing a replay.
-func NewBrowserReplayFromBytes(data []byte, options ...ReplayOption) (*BrowserReplay, error) {
-	script, err := LoadBrowserScript(data)
-	if err != nil {
-		return nil, err
-	}
-	return NewBrowserReplay(script, options...)
-}
-
-// NewReplayFromBytes is an alias for NewBrowserReplayFromBytes.
-func NewReplayFromBytes(data []byte, options ...ReplayOption) (*BrowserReplay, error) {
-	return NewBrowserReplayFromBytes(data, options...)
-}
-
-// NewBrowserReplayFromFile loads a fixture from disk before constructing a
-// replay.
-func NewBrowserReplayFromFile(path string, options ...ReplayOption) (*BrowserReplay, error) {
-	script, err := LoadBrowserScriptFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return NewBrowserReplay(script, options...)
-}
-
-// NewReplayFromFile is an alias for NewBrowserReplayFromFile.
-func NewReplayFromFile(path string, options ...ReplayOption) (*BrowserReplay, error) {
-	return NewBrowserReplayFromFile(path, options...)
-}
-
 // ObserveOperation consumes one operation from the expected sequence and
 // returns the scripted response. Declared emitted events remain pending and
 // must be supplied to ObserveEvent in the same order.
@@ -126,11 +80,6 @@ func (r *BrowserReplay) ObserveOperation(ctx context.Context, request OperationR
 	}
 	r.maybeCompleteLocked()
 	return execution, nil
-}
-
-// MatchOperation is an alias for ObserveOperation.
-func (r *BrowserReplay) MatchOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
-	return r.ObserveOperation(ctx, request)
 }
 
 // Execute consumes the next expected operation and all of its declared
@@ -166,60 +115,6 @@ func (r *BrowserReplay) Execute(ctx context.Context, request OperationRequest) (
 	return execution, nil
 }
 
-// ExecuteOperation, Run, and RunOperation are descriptive aliases for
-// Execute.
-func (r *BrowserReplay) ExecuteOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
-	return r.Execute(ctx, request)
-}
-
-func (r *BrowserReplay) Run(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
-	return r.Execute(ctx, request)
-}
-
-func (r *BrowserReplay) RunOperation(ctx context.Context, request OperationRequest) (RuntimeExecution, error) {
-	return r.Execute(ctx, request)
-}
-
-// ObserveExecution matches an operation, its scripted result, and the actual
-// emitted events captured by a caller. It is the atomic conformance helper.
-func (r *BrowserReplay) ObserveExecution(ctx context.Context, execution RuntimeExecution) error {
-	if r == nil {
-		return ErrReplayClosed
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if err := r.prepareLocked(ctx); err != nil {
-		return err
-	}
-	if r.mode == ReplayDiagnostic && isDiagnosticReadOnlyOperation(execution.Request) {
-		if err := validateDiagnosticReadOnlyRequest(execution.Request); err != nil {
-			return r.divergeOperationLocked(execution.Request, "request", requestTypeLabel(execution.Request), "invalid read-only discovery/list request", err)
-		}
-		r.ignored = append(r.ignored, cloneOperationRequest(execution.Request))
-		return nil
-	}
-	expected, err := r.matchOperationLocked(execution.Request)
-	if err != nil {
-		return err
-	}
-	if diff := replayJSONDifference(expected.Result, execution.Result); diff != "" {
-		return r.divergeOperationLocked(execution.Request, "result", requestTypeLabel(execution.Request), requestTypeLabel(execution.Request), errors.New("scripted result differs at "+diff))
-	}
-	if expected.InvocationID != execution.InvocationID {
-		return r.divergeOperationLocked(execution.Request, jsonFieldInvocationID, requestTypeLabel(execution.Request), requestTypeLabel(execution.Request), errors.New("invocation ID differs"))
-	}
-	for index, actual := range execution.Events {
-		if index >= len(expected.Events) {
-			return r.divergeEventLocked(actual, "event", "end", eventTypeLabel(actual), errors.New("unexpected event after scripted events"))
-		}
-		if err := r.matchEventLocked(actual); err != nil {
-			return err
-		}
-	}
-	r.maybeCompleteLocked()
-	return nil
-}
-
 // ObserveEvent consumes the next expected emitted event. It accepts either a
 // FixtureEvent (with runtime context) or an EmittedEvent (semantic fields
 // only), allowing the same verifier to serve the scripted runtime and an
@@ -244,25 +139,6 @@ func (r *BrowserReplay) ObserveEvent(ctx context.Context, value any) error {
 	return nil
 }
 
-// MatchEvent, ObserveEmittedEvent, MatchEmittedEvent, and SendEvent are
-// aliases for ObserveEvent. The typed helpers make call sites self-documenting
-// while retaining one dynamic entry point for the two event representations.
-func (r *BrowserReplay) MatchEvent(ctx context.Context, event FixtureEvent) error {
-	return r.ObserveEvent(ctx, event)
-}
-
-func (r *BrowserReplay) ObserveEmittedEvent(ctx context.Context, event EmittedEvent) error {
-	return r.ObserveEvent(ctx, event)
-}
-
-func (r *BrowserReplay) MatchEmittedEvent(ctx context.Context, event EmittedEvent) error {
-	return r.ObserveEvent(ctx, event)
-}
-
-func (r *BrowserReplay) SendEvent(ctx context.Context, event FixtureEvent) error {
-	return r.ObserveEvent(ctx, event)
-}
-
 // Complete succeeds only after all expected operations/events and invocation
 // responses have been consumed. A failed replay keeps its primary error.
 func (r *BrowserReplay) Complete() error {
@@ -281,9 +157,6 @@ func (r *BrowserReplay) Complete() error {
 	return nil
 }
 
-// Finish is an alias for Complete.
-func (r *BrowserReplay) Finish() error { return r.Complete() }
-
 // Close terminates an unfinished replay as incomplete. A completed replay is
 // safe to close repeatedly.
 func (r *BrowserReplay) Close() error {
@@ -296,20 +169,6 @@ func (r *BrowserReplay) Close() error {
 		return r.outcome.Err
 	}
 	return r.incompleteLocked("replay close")
-}
-
-// Cancel marks an open replay canceled. Divergence or incompletion already
-// recorded remains the primary outcome.
-func (r *BrowserReplay) Cancel() error {
-	if r == nil {
-		return ErrReplayClosed
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed {
-		return r.outcome.Err
-	}
-	return r.cancelLocked(context.Canceled)
 }
 
 // Wait blocks until replay reaches a terminal state or ctx/replay context is
@@ -344,11 +203,6 @@ func (r *BrowserReplay) Wait(ctx context.Context) error {
 	}
 }
 
-// Await and WaitForCompletion are aliases for Wait.
-func (r *BrowserReplay) Await(ctx context.Context) error { return r.Wait(ctx) }
-
-func (r *BrowserReplay) WaitForCompletion(ctx context.Context) error { return r.Wait(ctx) }
-
 // Done closes when replay completes, diverges, becomes incomplete, or is
 // canceled.
 func (r *BrowserReplay) Done() <-chan struct{} {
@@ -358,16 +212,6 @@ func (r *BrowserReplay) Done() <-chan struct{} {
 		return closed
 	}
 	return r.done
-}
-
-// Events returns the finite buffered stream of events accepted by replay.
-func (r *BrowserReplay) Events() <-chan FixtureEvent {
-	if r == nil {
-		closed := make(chan FixtureEvent)
-		close(closed)
-		return closed
-	}
-	return r.stream
 }
 
 // Observations returns accepted events in order.
@@ -420,37 +264,4 @@ func (r *BrowserReplay) PendingInvocationIDs() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return pendingIDs(r.pending)
-}
-
-// PendingInvocations is a descriptive alias for PendingInvocationIDs.
-func (r *BrowserReplay) PendingInvocations() []string { return r.PendingInvocationIDs() }
-
-// Mode returns the configured replay mode.
-func (r *BrowserReplay) Mode() ReplayMode {
-	if r == nil {
-		return ""
-	}
-	return r.mode
-}
-
-// Script returns an immutable-by-convention copy of the fixture used by the
-// replay. Raw page-owned JSON is cloned with the same semantics as runtime
-// execution results.
-func (r *BrowserReplay) Script() BrowserScript {
-	if r == nil {
-		return BrowserScript{}
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return cloneBrowserScript(r.script)
-}
-
-// Position returns the number of expected operations/events consumed.
-func (r *BrowserReplay) Position() int {
-	if r == nil {
-		return 0
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.position
 }

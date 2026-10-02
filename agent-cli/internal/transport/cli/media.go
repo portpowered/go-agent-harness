@@ -180,25 +180,10 @@ func (c *MediaProbeCommand) runReplayProbe(ctx context.Context, out io.Writer) e
 	return nil
 }
 
-// RunMediaProbe is a small function-shaped entry point for composition roots.
-func RunMediaProbe(ctx context.Context, out io.Writer, rawURL string, probe MediaProbeFunc, timeout time.Duration) error {
-	return (&MediaProbeCommand{Probe: probe, Timeout: timeout}).Run(ctx, out, rawURL)
-}
-
 // MediaLookCommand implements `yui media look <url>`.
 type MediaLookCommand struct {
 	Look    MediaLookFunc
 	Timeout time.Duration
-}
-
-// NewMediaLookCommand constructs a visual look command with an optional
-// injected source operation. The live RTC look operation is the default.
-func NewMediaLookCommand(look ...MediaLookFunc) *MediaLookCommand {
-	command := &MediaLookCommand{Timeout: rtc.DefaultMediaSourceTimeout}
-	if len(look) > 0 {
-		command.Look = look[0]
-	}
-	return command
 }
 
 // Generate returns the Cobra command for `media look`.
@@ -251,9 +236,4 @@ func (c *MediaLookCommand) Run(ctx context.Context, out io.Writer, rawURL string
 		return fmt.Errorf("media look returned unknown status %q", observation.Status)
 	}
 	return err
-}
-
-// RunMediaLook is a function-shaped entry point for composition roots.
-func RunMediaLook(ctx context.Context, out io.Writer, rawURL string, look MediaLookFunc, timeout time.Duration) error {
-	return (&MediaLookCommand{Look: look, Timeout: timeout}).Run(ctx, out, rawURL)
 }

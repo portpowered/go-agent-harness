@@ -14,7 +14,7 @@ merged. A worker retry is not evidence that a failing candidate is healthy.
   failed 11 interleavings before the fix; all pass after the fix.
 - Interrupts can discard a queued response-end boundary. Inbound media now carries
   an interrupt epoch, and file playback resets conversion when the epoch changes.
-  `TestInterruptedPlaybackResetsEvenWhenQueuedEndWasDiscarded` reproduces the
+  A regression test (since removed with that playback path) reproduced the
   previous stream-identity error without scheduling sleeps.
 - Provider response identity remains useful without an item ID. Media preserves
   that identity, and correction evidence joins actual media boundaries by ID.

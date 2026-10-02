@@ -3,10 +3,11 @@ package composition
 import (
 	"context"
 	"fmt"
-	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 	"reflect"
 	"sort"
 	"strings"
+
+	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
@@ -203,16 +204,6 @@ func ValidateToolDefinitionNamespaces(
 	}
 	sort.Strings(collisions)
 	return fmt.Errorf("%w: tool %q is advertised by both static and broker surfaces", ErrToolCompositionCollision, collisions[0])
-}
-
-// ComposeExecutors is a descriptive alias for ComposeToolSurface.
-func ComposeExecutors(
-	staticExecutor messages.ToolExecutor,
-	staticDefinitions []messages.ToolDefinition,
-	brokerExecutor messages.ToolExecutor,
-	brokerDefinitions []messages.ToolDefinition,
-) (ToolSurface, error) {
-	return ComposeToolSurface(staticExecutor, staticDefinitions, brokerExecutor, brokerDefinitions)
 }
 
 type toolRoute struct {

@@ -724,13 +724,6 @@ func browserIdentityClaim(identity BrowserIdentity) string {
 	return "incarnation-" + hex.EncodeToString(digest[:12])
 }
 
-// BrowserIDForIdentity derives the same opaque browser ID used by discovery.
-// It is provided for composition adapters that need to associate a transport
-// response with a normalized candidate without exposing the endpoint.
-func BrowserIDForIdentity(mapper IDMapper, identity BrowserIdentity) string {
-	return browserIDForIdentity(mapper, identity)
-}
-
 func browserIDForIdentity(mapper IDMapper, identity BrowserIdentity) string {
 	if mapper == nil {
 		mapper = HashIDMapper{}

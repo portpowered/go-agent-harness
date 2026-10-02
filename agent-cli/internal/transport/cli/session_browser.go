@@ -288,14 +288,6 @@ func browserConfigEnablesTools(cfg *config.Config) bool {
 	return cfg != nil && cfg.Browser.BrowserBackendEnabled()
 }
 
-// NewSessionBrowserBroker creates the production browser broker used by
-// browser-enabled sessions. The runtime is request-scoped so session cleanup
-// can retire both broker state and discovery resources through one idempotent
-// close hook.
-func NewSessionBrowserBroker(browser config.BrowserConfig) (webmcp.Broker, error) {
-	return newSessionBrowserBrokerWithConfigDir(browser, "")
-}
-
 // NewSessionBrowserBrokerWithConfigDir constructs one request-scoped browser
 // runtime with the config directory used for persisted selection state.
 func NewSessionBrowserBrokerWithConfigDir(browser config.BrowserConfig, configDir string) (webmcp.Broker, error) {

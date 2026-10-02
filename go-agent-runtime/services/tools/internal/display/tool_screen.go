@@ -68,7 +68,6 @@ const (
 
 	ScreenResultVersion                   = sight.ResultVersion
 	ScreenResultStatusSuccess             = sight.StatusSuccess
-	ScreenResultStatusError               = sight.StatusError
 	ScreenResultTypedProjectionInputImage = sight.TypedProjectionInputImage
 	ScreenResultSource                    = sight.SourceScreen
 )
@@ -84,20 +83,6 @@ type ScreenResult = sight.Result
 // adapters use this envelope when they need to keep the session alive.
 func ScreenToolErrorResult(err error) string {
 	return encodeScreenToolErrorResult(err, true)
-}
-
-// ScreenToolSessionErrorResult creates the customer-safe result sent across
-// a live session boundary. It retains the typed source and error code while
-// intentionally omitting operator remediation; the original typed Go error
-// remains available to the direct tool/logger path.
-func ScreenToolSessionErrorResult(err error) string {
-	return encodeScreenToolErrorResult(err, false)
-}
-
-// ScreenToolErrorCode returns the stable classification used by both the
-// typed result envelope and operator diagnostics.
-func ScreenToolErrorCode(err error) string {
-	return screenErrorCode(err)
 }
 
 func encodeScreenToolErrorResult(err error, includeOperatorGuidance bool) string {
@@ -132,13 +117,6 @@ func screenErrorCode(err error) string {
 		result.ErrorCode = ScreenRecordingPermissionDeniedErrorCode
 	}
 	return result.ErrorCode
-}
-
-// IsPhysicalDisplayToolName identifies names that can reach the host display
-// backend. The generic ScreenToolID remains physical for plain/direct
-// sessions; composed browser sessions additionally use HostDisplayToolID.
-func IsPhysicalDisplayToolName(name string) bool {
-	return name == ScreenToolID || name == HostDisplayToolID
 }
 
 // ScreenRecordingValidationError describes one invalid record argument. It is

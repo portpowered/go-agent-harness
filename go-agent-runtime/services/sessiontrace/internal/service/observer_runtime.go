@@ -15,29 +15,12 @@ import (
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 )
 
-type SessionRuntimeObservationKind = sessiontrace.SessionRuntimeObservationKind
-type SessionTokenUsageSemantics = sessiontrace.SessionTokenUsageSemantics
-type SessionFinalAccounting = sessiontrace.SessionFinalAccounting
-type SessionRuntimeFinalAccounting = sessiontrace.SessionRuntimeFinalAccounting
-type SessionRuntimeObservation = sessiontrace.SessionRuntimeObservation
-type SessionRuntimeObserver = sessiontrace.SessionRuntimeObserver
-
-const SessionRuntimeObservationAudioOutput = sessiontrace.SessionRuntimeObservationAudioOutput
-const SessionRuntimeObservationAudioInput = sessiontrace.SessionRuntimeObservationAudioInput
-const SessionRuntimeObservationAudioPlaybackReceipt = sessiontrace.SessionRuntimeObservationAudioPlaybackReceipt
-const SessionRuntimeObservationAudioRenderTapUnavailable = sessiontrace.SessionRuntimeObservationAudioRenderTapUnavailable
-const SessionRuntimeObservationInputCommit = sessiontrace.SessionRuntimeObservationInputCommit
-const SessionRuntimeObservationResponseCreate = sessiontrace.SessionRuntimeObservationResponseCreate
-const SessionRuntimeObservationTurnCompleted = sessiontrace.SessionRuntimeObservationTurnCompleted
-const SessionRuntimeObservationTerminal = sessiontrace.SessionRuntimeObservationTerminal
-const SessionTokenUsageIncremental = sessiontrace.SessionTokenUsageIncremental
-
 // sessionRuntimeObservationRecorder is the runtime-owned adapter between the
 // session lifecycle and an optional observer. Its clock is supplied by CLI
 // composition, so deterministic callers observe the same source that was
 // injected into the generated command graph.
 type sessionRuntimeObservationRecorder struct {
-	observer                  SessionRuntimeObserver
+	observer                  sessiontrace.SessionRuntimeObserver
 	clock                     platformclock.Source
 	sequence                  atomic.Uint64
 	providerBoundaryObserving bool
@@ -49,7 +32,7 @@ type sessionRuntimeObservationRecorder struct {
 	inputCommits int
 }
 
-func newSessionRuntimeObservationRecorder(observer SessionRuntimeObserver, source platformclock.Source) *sessionRuntimeObservationRecorder {
+func newSessionRuntimeObservationRecorder(observer sessiontrace.SessionRuntimeObserver, source platformclock.Source) *sessionRuntimeObservationRecorder {
 	if observer == nil {
 		return nil
 	}
@@ -76,36 +59,36 @@ func (r *sessionRuntimeObservationRecorder) enableProviderBoundaryObservations()
 	}
 }
 
-func (r *sessionRuntimeObservationRecorder) observe(kind SessionRuntimeObservationKind, payload []byte, turns int, clean bool, runErr error) {
+func (r *sessionRuntimeObservationRecorder) observe(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns int, clean bool, runErr error) {
 	r.observeWithMetadata(kind, payload, turns, 0, clean, runErr, "", "")
 }
 
-func (r *sessionRuntimeObservationRecorder) observeWithInputCommit(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error) {
+func (r *sessionRuntimeObservationRecorder) observeWithInputCommit(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error) {
 	r.observeFinalWithMetadata(kind, payload, turns, inputCommit, clean, runErr, nil, "", "")
 }
 
-func (r *sessionRuntimeObservationRecorder) observeFinal(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *SessionFinalAccounting) {
+func (r *sessionRuntimeObservationRecorder) observeFinal(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting) {
 	r.observeFinalWithMetadata(kind, payload, turns, inputCommit, clean, runErr, finalAccounting, "", "")
 }
 
-func (r *sessionRuntimeObservationRecorder) observeWithMetadata(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, responseID string, responsePurpose messages.ResponsePurpose) {
+func (r *sessionRuntimeObservationRecorder) observeWithMetadata(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, responseID string, responsePurpose messages.ResponsePurpose) {
 	r.observeWithMetadataAndIdentity(kind, payload, turns, inputCommit, clean, runErr, responseID, responsePurpose, "", 0, 0)
 }
 
-func (r *sessionRuntimeObservationRecorder) observeWithMetadataAndIdentity(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, responseID string, responsePurpose messages.ResponsePurpose, streamID string, loopPassID int, epoch uint64) {
+func (r *sessionRuntimeObservationRecorder) observeWithMetadataAndIdentity(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, responseID string, responsePurpose messages.ResponsePurpose, streamID string, loopPassID int, epoch uint64) {
 	r.observeFinalWithMetadataAndIdentity(kind, payload, turns, inputCommit, clean, runErr, nil, responseID, responsePurpose, streamID, loopPassID, epoch)
 }
 
-func (r *sessionRuntimeObservationRecorder) observeFinalWithMetadata(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *SessionFinalAccounting, responseID string, responsePurpose messages.ResponsePurpose) {
+func (r *sessionRuntimeObservationRecorder) observeFinalWithMetadata(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting, responseID string, responsePurpose messages.ResponsePurpose) {
 	r.observeFinalWithMetadataAndIdentity(kind, payload, turns, inputCommit, clean, runErr, finalAccounting, responseID, responsePurpose, "", 0, 0)
 }
 
-func (r *sessionRuntimeObservationRecorder) observeFinalWithMetadataAndIdentity(kind SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *SessionFinalAccounting, responseID string, responsePurpose messages.ResponsePurpose, streamID string, loopPassID int, epoch uint64) {
+func (r *sessionRuntimeObservationRecorder) observeFinalWithMetadataAndIdentity(kind sessiontrace.SessionRuntimeObservationKind, payload []byte, turns, inputCommit int, clean bool, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting, responseID string, responsePurpose messages.ResponsePurpose, streamID string, loopPassID int, epoch uint64) {
 	if r == nil || r.observer == nil {
 		return
 	}
 	tick, timestamp := r.snapshot()
-	r.observer.ObserveSessionRuntime(SessionRuntimeObservation{
+	r.observer.ObserveSessionRuntime(sessiontrace.SessionRuntimeObservation{
 		Kind:            kind,
 		Tick:            tick,
 		Timestamp:       timestamp,
@@ -133,7 +116,7 @@ func (r *sessionRuntimeObservationRecorder) audioOutputMessage(payload []byte, m
 	// LoopPassID identifies the agent-loop pass. It must not be promoted to a
 	// playback epoch: epochs belong to the device playback worker and are only
 	// available on its applied/rejected receipt boundary.
-	r.observeWithMetadataAndIdentity(SessionRuntimeObservationAudioOutput, payload, 0, 0, false, nil, msg.ResponseID, msg.ResponsePurpose, msg.ActorStreamID, msg.LoopPassID, 0)
+	r.observeWithMetadataAndIdentity(sessiontrace.SessionRuntimeObservationAudioOutput, payload, 0, 0, false, nil, msg.ResponseID, msg.ResponsePurpose, msg.ActorStreamID, msg.LoopPassID, 0)
 }
 
 // audioPlaybackReceipt records the result of an admitted playback control at
@@ -161,7 +144,7 @@ func (r *sessionRuntimeObservationRecorder) audioPlaybackReceipt(receipt audio.P
 	if err != nil {
 		return
 	}
-	r.observe(SessionRuntimeObservationAudioPlaybackReceipt, payload, 0, false, receipt.Err)
+	r.observe(sessiontrace.SessionRuntimeObservationAudioPlaybackReceipt, payload, 0, false, receipt.Err)
 }
 
 // audioInput observes admission to the agent's input buffer. Provider sends
@@ -170,7 +153,7 @@ func (r *sessionRuntimeObservationRecorder) audioInput(payload []byte) {
 	if r == nil {
 		return
 	}
-	r.observe(SessionRuntimeObservationAudioInput, payload, 0, false, nil)
+	r.observe(sessiontrace.SessionRuntimeObservationAudioInput, payload, 0, false, nil)
 }
 
 // providerAudioSent accumulates only audio accepted by the session transport.
@@ -201,7 +184,7 @@ func (r *sessionRuntimeObservationRecorder) inputCommit() {
 	payload := append([]byte(nil), r.inputPayload...)
 	r.inputPayload = nil
 	r.inputMu.Unlock()
-	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, commit, true, nil)
+	r.observeWithInputCommit(sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, commit, true, nil)
 }
 
 // providerInputCommit records a provider-originated commit boundary, such as
@@ -216,7 +199,7 @@ func (r *sessionRuntimeObservationRecorder) providerInputCommit() {
 	payload := append([]byte(nil), r.inputPayload...)
 	r.inputPayload = nil
 	r.inputMu.Unlock()
-	r.observeWithInputCommit(SessionRuntimeObservationInputCommit, payload, 0, 0, true, nil)
+	r.observeWithInputCommit(sessiontrace.SessionRuntimeObservationInputCommit, payload, 0, 0, true, nil)
 }
 
 // responseCreate records the response request accepted by the session. A
@@ -227,19 +210,19 @@ func (r *sessionRuntimeObservationRecorder) responseCreate(msg messages.StreamMe
 	if r == nil {
 		return
 	}
-	r.observeWithMetadata(SessionRuntimeObservationResponseCreate, nil, 0, 0, true, nil, msg.ResponseID, msg.ResponsePurpose)
+	r.observeWithMetadata(sessiontrace.SessionRuntimeObservationResponseCreate, nil, 0, 0, true, nil, msg.ResponseID, msg.ResponsePurpose)
 }
 
 func (r *sessionRuntimeObservationRecorder) turnCompleted(turns int) {
-	r.observe(SessionRuntimeObservationTurnCompleted, nil, turns, true, nil)
+	r.observe(sessiontrace.SessionRuntimeObservationTurnCompleted, nil, turns, true, nil)
 }
 
-func (r *sessionRuntimeObservationRecorder) terminalWithAccounting(turns int, runErr error, finalAccounting *SessionFinalAccounting) {
+func (r *sessionRuntimeObservationRecorder) terminalWithAccounting(turns int, runErr error, finalAccounting *sessiontrace.SessionFinalAccounting) {
 	if r == nil || r.observer == nil {
 		return
 	}
 	r.terminalOnce.Do(func() {
-		r.observeFinal(SessionRuntimeObservationTerminal, nil, turns, 0, runErr == nil, runErr, finalAccounting)
+		r.observeFinal(sessiontrace.SessionRuntimeObservationTerminal, nil, turns, 0, runErr == nil, runErr, finalAccounting)
 	})
 }
 
@@ -258,7 +241,7 @@ func sessionRuntimeObservationError(err error) string {
 	return err.Error()
 }
 
-func cloneSessionFinalAccounting(accounting *SessionFinalAccounting) *SessionFinalAccounting {
+func cloneSessionFinalAccounting(accounting *sessiontrace.SessionFinalAccounting) *sessiontrace.SessionFinalAccounting {
 	if accounting == nil {
 		return nil
 	}

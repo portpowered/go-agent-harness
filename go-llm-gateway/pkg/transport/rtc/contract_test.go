@@ -1,9 +1,6 @@
 package rtc_test
 
-import sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
-
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -23,12 +20,10 @@ const (
 )
 
 var (
-	_ transport.Dialer          = (*dataDialer)(nil)
-	_ transport.Conn            = (*dataConn)(nil)
-	_ rtc.Dialer                = (*dataDialer)(nil)
-	_ rtc.Conn                  = (*dataConn)(nil)
-	_ sharedaudio.InboundMedia  = (*inboundStub)(nil)
-	_ sharedaudio.OutboundMedia = (*outboundStub)(nil)
+	_ transport.Dialer = (*dataDialer)(nil)
+	_ transport.Conn   = (*dataConn)(nil)
+	_ rtc.Dialer       = (*dataDialer)(nil)
+	_ rtc.Conn         = (*dataConn)(nil)
 )
 
 func TestRTCDataS11Conformance(t *testing.T) { transporttest.RunS11(t, s11Harness()) }
@@ -195,18 +190,6 @@ func (c *dataConn) Close() error {
 	}
 	return nil
 }
-
-type inboundStub struct{}
-
-func (*inboundStub) ReadFrame(context.Context) (sharedaudio.PCMFrame, error) {
-	return sharedaudio.PCMFrame{}, nil
-}
-func (*inboundStub) Close() error { return nil }
-
-type outboundStub struct{}
-
-func (*outboundStub) WriteFrame(context.Context, sharedaudio.PCMFrame) error { return nil }
-func (*outboundStub) Close() error                                           { return nil }
 
 func cloneMessages(messages []transporttest.Message) []transporttest.Message {
 	cloned := make([]transporttest.Message, len(messages))

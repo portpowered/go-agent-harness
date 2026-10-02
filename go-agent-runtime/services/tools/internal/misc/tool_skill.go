@@ -14,10 +14,6 @@ type LoadSkillTool struct {
 	loader *skills.Loader
 }
 
-func NewLoadSkillTool() *LoadSkillTool {
-	return NewLoadSkillToolFromRoots()
-}
-
 // NewLoadSkillToolFromRoots binds one immutable request-scoped loader to the
 // tool. Roots directly contain skill subdirectories and are ordered by
 // precedence. Execution never reads workspace or config paths from context.

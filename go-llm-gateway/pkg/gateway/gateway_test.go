@@ -294,10 +294,10 @@ func TestInferStream_TerminalErrorNormalizationPreservesProviderCapabilities(t *
 	if gotErr.OutputState != messages.TerminalOutputNone {
 		t.Fatalf("output state = %q, want %q", gotErr.OutputState, messages.TerminalOutputNone)
 	}
-	if before.Stateless.Streaming.State != CapabilityStateSupported || after.Stateless.Streaming.State != CapabilityStateSupported {
+	if before.Stateless.Streaming.State != capabilities.CapabilityStateSupported || after.Stateless.Streaming.State != capabilities.CapabilityStateSupported {
 		t.Fatalf("streaming capability changed: before=%q after=%q", before.Stateless.Streaming.State, after.Stateless.Streaming.State)
 	}
-	if before.Stateless.Tools.State != CapabilityStateUnsupported || after.Stateless.Tools.State != CapabilityStateUnsupported {
+	if before.Stateless.Tools.State != capabilities.CapabilityStateUnsupported || after.Stateless.Tools.State != capabilities.CapabilityStateUnsupported {
 		t.Fatalf("tools capability changed: before=%q after=%q", before.Stateless.Tools.State, after.Stateless.Tools.State)
 	}
 	if provider.streamCalls != 1 {

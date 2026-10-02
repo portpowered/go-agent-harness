@@ -13,12 +13,11 @@ import (
 	"time"
 
 	servicetest "github.com/portpowered/go-agent-harness/agent-cli/internal/services/servicetest"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/wire"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
-
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli/clitest"
 )
 
 func TestSessionCommand_ReplayMissingFileReturnsActionableError(t *testing.T) {
