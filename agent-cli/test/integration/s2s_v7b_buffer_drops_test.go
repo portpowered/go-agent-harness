@@ -19,10 +19,10 @@ import (
 // forced drops.
 //
 // The subject is an in-process duplex session with tiny input (client-to-
-// provider send) and output (provider-to-client receive) buffers, following
-// the same Session contract the provider sessions implement. Overflow is
-// forced deterministically by writing past capacity with no consumer; no
-// network, wall clock, or fixture replay is involved.
+// provider send) and output (provider-to-client receive) buffers, exposing
+// the same Send/Receive and drop-counter surface the provider sessions do.
+// Overflow is forced deterministically by writing past capacity with no
+// consumer; no network, wall clock, or fixture replay is involved.
 
 const dropProbeCapacity = 2
 
@@ -32,19 +32,14 @@ const dropProbeCapacity = 2
 type dropProbeSession struct {
 	input  *messages.TypedBuffer[messages.StreamMessage]
 	output *messages.TypedBuffer[messages.StreamMessage]
-	done   chan struct{}
 }
 
-var (
-	_ messages.Session             = (*dropProbeSession)(nil)
-	_ messages.SessionDropCounters = (*dropProbeSession)(nil)
-)
+var _ messages.SessionDropCounters = (*dropProbeSession)(nil)
 
 func newDropProbeSession() *dropProbeSession {
 	return &dropProbeSession{
 		input:  messages.NewTypedBuffer[messages.StreamMessage](dropProbeCapacity),
 		output: messages.NewTypedBuffer[messages.StreamMessage](dropProbeCapacity),
-		done:   make(chan struct{}),
 	}
 }
 
@@ -54,17 +49,6 @@ func (s *dropProbeSession) Send(ctx context.Context, msg messages.StreamMessage)
 
 func (s *dropProbeSession) Receive() *messages.TypedBuffer[messages.StreamMessage] {
 	return s.output
-}
-
-func (s *dropProbeSession) Done() <-chan struct{} { return s.done }
-
-func (s *dropProbeSession) Close() error {
-	select {
-	case <-s.done:
-	default:
-		close(s.done)
-	}
-	return nil
 }
 
 func (s *dropProbeSession) InputDrops() int64  { return s.input.Drops() }

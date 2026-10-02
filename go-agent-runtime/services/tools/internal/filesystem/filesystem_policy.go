@@ -132,12 +132,6 @@ func NewFilesystemPolicy(primaryRoot string, additionalRoots ...string) (*Filesy
 	}, nil
 }
 
-// NewFilesystemPolicyFromRoots is the slice-taking form of
-// NewFilesystemPolicy for callers that already collect repeatable roots.
-func NewFilesystemPolicyFromRoots(primaryRoot string, additionalRoots []string) (*FilesystemPolicy, error) {
-	return NewFilesystemPolicy(primaryRoot, additionalRoots...)
-}
-
 // PrimaryRoot returns the canonical primary filesystem root.
 func (p *FilesystemPolicy) PrimaryRoot() string {
 	if p == nil {

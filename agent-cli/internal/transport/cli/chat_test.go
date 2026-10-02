@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/services"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	textsessionwire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session/wire"
@@ -32,10 +31,9 @@ type chatTestInferencer struct {
 	calls    int
 }
 
-func newChatTestSessionService(inferencer messages.Inferencer, defs []messages.ToolDefinition) session.Service {
+func newChatTestSessionService(inferencer messages.Inferencer) session.Service {
 	return textsessionwire.NewService(textsessionwire.Dependencies{
-		ToolExecutor: chatTestToolExecutor{}, ToolDefinitions: defs,
-		Inferencer: inferencer, RelaxValidation: true,
+		ToolExecutor: chatTestToolExecutor{}, Inferencer: inferencer, RelaxValidation: true,
 	})
 }
 
@@ -112,7 +110,7 @@ func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, co
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = configDir
 	rootCommand := NewRootCommand(globalFlags)
-	textService := newChatTestSessionService(inferencer, services.DefaultToolDefs(nil))
+	textService := newChatTestSessionService(inferencer)
 	askFlags := flags.NewAskFlags()
 	askFlags.NoSystemInformation = true
 	loopFlags := flags.NewLoopFlags()
@@ -352,7 +350,7 @@ func normalizeTraceIDs(output string) string {
 
 func TestChatCommand_AudioHelperStopsAtEOF(t *testing.T) {
 	inf := &chatTestInferencer{response: "unused"}
-	textService := newChatTestSessionService(inf, nil)
+	textService := newChatTestSessionService(inf)
 	global := flags.NewGlobalFlags()
 	global.ConfigDirPath = t.TempDir()
 	ask := flags.NewAskFlags()

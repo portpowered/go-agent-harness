@@ -79,27 +79,3 @@ Step 2: Process it.
 		t.Error("body should not contain frontmatter")
 	}
 }
-
-func TestLoader_LoadSkillWithPath_resource(t *testing.T) {
-	dir := t.TempDir()
-	skillDir := filepath.Join(dir, "skills", "ref-skill")
-	refDir := filepath.Join(skillDir, "references")
-	if err := os.MkdirAll(refDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(skillDir, SkillFileName), []byte("---\nname: ref-skill\ndescription: Ref skill.\n---\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(refDir, "REFERENCE.md"), []byte("# Reference\nDetails here."), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	loader := NewLoader(dir, "")
-	content, err := loader.LoadSkillWithPath("ref-skill", "references/REFERENCE.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(content, "Details here.") {
-		t.Errorf("expected reference content: %s", content)
-	}
-}

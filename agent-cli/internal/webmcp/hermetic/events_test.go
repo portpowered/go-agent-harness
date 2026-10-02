@@ -273,7 +273,7 @@ func TestLoadEventsAndIDSource(t *testing.T) {
 	if _, err := recorder.NewID("invocation"); !errors.Is(err, ErrIDSourceUnavailable) {
 		t.Fatalf("nil recorder ID error = %v", err)
 	}
-	ids := NewFakeIDs("demo")
+	ids := NewDeterministicIDSource("demo")
 	if got := ids.NextID("tool"); got != "demo-tool-001" {
 		t.Fatalf("first deterministic ID = %q", got)
 	}

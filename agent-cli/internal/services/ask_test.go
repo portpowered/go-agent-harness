@@ -275,7 +275,7 @@ func TestBuildAgentConfigFromFlags_MapsAllFlags(t *testing.T) {
 func TestCLIHostDefaultWorkDirUsesHostWorkDir(t *testing.T) {
 	launchDir := t.TempDir()
 
-	workDir, err := cliWorkDir(&flags.GlobalFlags{ConfigDirPath: t.TempDir(), Host: flags.FixedHostDirs(t.TempDir(), launchDir)})
+	workDir, err := cliWorkDir(&flags.GlobalFlags{ConfigDirPath: t.TempDir(), Host: fixedHostDirs(t.TempDir(), launchDir)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,22 +291,11 @@ func TestBuildAgentConfigFromFlags_UsesCallSessionWithoutGlobalFlags(t *testing.
 	}
 }
 
-func TestDefaultToolDefs_DelegatesToRegistry(t *testing.T) {
-	input := []messages.ToolDefinition{{Name: "read_file", Description: "read a file"}}
-	defs := DefaultToolDefs(input)
-	if len(defs) != len(input) {
-		t.Fatalf("definition count = %d, want input count %d", len(defs), len(input))
-	}
-	if len(defs) == 0 {
-		t.Fatal("DefaultToolDefs() returned no definitions for the default registry")
-	}
-	defs[0].Name = "mutated"
-	if input[0].Name == "mutated" {
-		t.Fatal("DefaultToolDefs returned aliased definitions")
-	}
-	for _, def := range defs {
-		if def.Name == "" || def.Description == "" {
-			t.Errorf("definition = %#v, want name and description", def)
-		}
+// fixedHostDirs returns host-directory lookups that report fixed directories,
+// so the test does not depend on the process environment.
+func fixedHostDirs(homeDir, workDir string) flags.HostDirs {
+	return flags.HostDirs{
+		HomeDir: func() (string, error) { return homeDir, nil },
+		WorkDir: func() (string, error) { return workDir, nil },
 	}
 }

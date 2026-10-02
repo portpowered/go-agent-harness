@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 )
 
 // TestProductionWebMCPCLISelectAcceptsListedCompositeReference locks the
@@ -59,8 +60,8 @@ browser:
 `, server.URL+"/json/version"))
 	newFactory := func() WebMCPDoctorFactory {
 		return NewProductionWebMCPDoctorFactory(
-			WithWebMCPProductionRuntime(runtime),
-			WithWebMCPProductionHTTPClient(server.Client()),
+			production.WithRuntime(runtime),
+			production.WithHTTPClient(server.Client()),
 		)
 	}
 

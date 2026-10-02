@@ -6,41 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // ErrInvalidFilesystemRoot identifies a workdir or additional filesystem root
 // that cannot be used as an authorization boundary.
 var ErrInvalidFilesystemRoot = errors.New("invalid filesystem root")
-
-// ErrFilesystemAccessDenied identifies a filesystem operation rejected by the
-// policy before it can expose or change host filesystem state.
-var ErrFilesystemAccessDenied = errors.New("filesystem access denied")
-
-// ErrProtectedFilesystemRead identifies a read denied because the resolved
-// path belongs to a platform-protected system or credential location.
-var ErrProtectedFilesystemRead = errors.New("protected filesystem read")
-
-type filesystemAccessDeniedError struct {
-	message string
-	workdir string
-	reason  FilesystemRefusalReason
-}
-
-func (e *filesystemAccessDeniedError) Error() string {
-	return e.message
-}
-
-func (e *filesystemAccessDeniedError) Unwrap() error {
-	return ErrFilesystemAccessDenied
-}
-
-func newFilesystemAccessDeniedWithContext(workdir string, reason FilesystemRefusalReason, message string) error {
-	if reason == "" {
-		reason = FilesystemRefusalOutsidePermittedRoots
-	}
-	return &filesystemAccessDeniedError{message: message, workdir: workdir, reason: reason}
-}
 
 // FilesystemPolicy is the immutable set of roots available to filesystem
 // tools. The primary root is used to resolve relative tool paths; additional
@@ -50,9 +20,8 @@ func newFilesystemAccessDeniedWithContext(workdir string, reason FilesystemRefus
 // constructed. The returned policy does not expose its backing slices, so
 // callers cannot widen a live tool surface after construction.
 type FilesystemPolicy struct {
-	primaryRoot        string
-	additionalRoots    []string
-	protectedReadRoots []string
+	primaryRoot     string
+	additionalRoots []string
 }
 
 // FilesystemScopeStartupNotice is the stable customer-facing explanation
@@ -67,9 +36,6 @@ type FilesystemHost struct {
 	// WorkDir is the effective primary root (--workdir, else the process
 	// working directory captured at startup).
 	WorkDir string
-	// HomeDir is the user home directory; per-user credential stores below it
-	// are protected from reads. Empty protects only the system roots.
-	HomeDir string
 }
 
 // ResolveFilesystemPolicy captures and validates one immutable filesystem
@@ -90,7 +56,7 @@ func ResolveFilesystemPolicy(host FilesystemHost, additionalRoots ...string) (*F
 		}
 		resolvedAdditional = append(resolvedAdditional, root)
 	}
-	return NewFilesystemPolicy(host.HomeDir, primary, resolvedAdditional...)
+	return NewFilesystemPolicy(primary, resolvedAdditional...)
 }
 
 // ScopeDescription is the stable human-readable representation used by
@@ -110,10 +76,7 @@ func (p *FilesystemPolicy) ScopeDescription() string {
 // Relative root arguments are resolved against the process working directory
 // at construction time. Callers that need startup-captured cwd semantics
 // should resolve their flags before calling this constructor.
-//
-// homeDir is the injected user home directory whose credential stores are
-// protected from reads.
-func NewFilesystemPolicy(homeDir, primaryRoot string, additionalRoots ...string) (*FilesystemPolicy, error) {
+func NewFilesystemPolicy(primaryRoot string, additionalRoots ...string) (*FilesystemPolicy, error) {
 	primary, err := validateFilesystemRoot("primary", primaryRoot)
 	if err != nil {
 		return nil, err
@@ -134,16 +97,9 @@ func NewFilesystemPolicy(homeDir, primaryRoot string, additionalRoots ...string)
 	}
 
 	return &FilesystemPolicy{
-		primaryRoot:        primary,
-		additionalRoots:    roots,
-		protectedReadRoots: normalizeProtectedReadRoots(platformProtectedReadRoots(homeDir)),
+		primaryRoot:     primary,
+		additionalRoots: roots,
 	}, nil
-}
-
-// NewFilesystemPolicyFromRoots is the slice-taking form of
-// NewFilesystemPolicy for callers that already collect repeatable roots.
-func NewFilesystemPolicyFromRoots(homeDir, primaryRoot string, additionalRoots []string) (*FilesystemPolicy, error) {
-	return NewFilesystemPolicy(homeDir, primaryRoot, additionalRoots...)
 }
 
 // PrimaryRoot returns the canonical primary filesystem root.
@@ -160,40 +116,6 @@ func (p *FilesystemPolicy) AdditionalRoots() []string {
 		return nil
 	}
 	return append([]string(nil), p.additionalRoots...)
-}
-
-// WritableRoots returns the primary root followed by the additional roots.
-// The copy prevents a caller from mutating a policy after it has been passed
-// to a filesystem tool.
-func (p *FilesystemPolicy) WritableRoots() []string {
-	if p == nil || p.primaryRoot == "" {
-		return nil
-	}
-	roots := make([]string, 0, 1+len(p.additionalRoots))
-	roots = append(roots, p.primaryRoot)
-	roots = append(roots, p.additionalRoots...)
-	return roots
-}
-
-// ProtectedReadRoots returns a copy of the platform-aware system and
-// credential roots that remain unreadable even when a caller allowlists their
-// containing directory for ordinary filesystem access.
-func (p *FilesystemPolicy) ProtectedReadRoots() []string {
-	if p == nil {
-		return nil
-	}
-	return append([]string(nil), p.protectedReadRoots...)
-}
-
-// AuthorizeRead validates a path against this policy without opening or
-// reading it. Filesystem tools use the same check immediately before their
-// os.Root operation; this method is also the guard used by read_image before
-// invoking a session-owned image preparer.
-func (p *FilesystemPolicy) AuthorizeRead(path string) error {
-	if p == nil {
-		return nil
-	}
-	return authorizeFilesystemRead(p, path)
 }
 
 func validateFilesystemRoot(label, path string) (string, error) {
@@ -221,137 +143,4 @@ func validateFilesystemRoot(label, path string) (string, error) {
 		return "", fmt.Errorf("%w: %s root %q is not a directory", ErrInvalidFilesystemRoot, label, path)
 	}
 	return filepath.Clean(realPath), nil
-}
-
-func normalizeProtectedReadRoots(rawRoots []string) []string {
-	seen := make(map[string]struct{}, len(rawRoots)*2)
-	roots := make([]string, 0, len(rawRoots)*2)
-	add := func(path string) {
-		if strings.TrimSpace(path) == "" {
-			return
-		}
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return
-		}
-		cleanPath := filepath.Clean(absPath)
-		if _, exists := seen[cleanPath]; !exists {
-			seen[cleanPath] = struct{}{}
-			roots = append(roots, cleanPath)
-		}
-	}
-	for _, rawRoot := range rawRoots {
-		add(rawRoot)
-		if resolved, err := filepath.EvalSymlinks(rawRoot); err == nil {
-			// Keep both spellings. This matters on platforms such as macOS,
-			// where /etc and /private/etc can name the same protected tree.
-			add(resolved)
-		}
-	}
-	return roots
-}
-
-// authorizeFilesystemRead checks the canonical target of a read against the
-// immutable host policy. It resolves existing symlinks and retains missing
-// descendants so a dangling link cannot turn a future outside target into an
-// apparently in-root path.
-func authorizeFilesystemRead(policy *FilesystemPolicy, path string) error {
-	if policy == nil {
-		return nil
-	}
-	roots := policy.WritableRoots()
-	if len(roots) == 0 {
-		return newFilesystemAccessDeniedWithContext("", FilesystemRefusalInvalidScope, "workspace is not defined")
-	}
-	candidate := path
-	if !filepath.IsAbs(candidate) {
-		candidate = filepath.Join(roots[0], candidate)
-	}
-	candidate = filepath.Clean(candidate)
-	canonicalCandidate, err := canonicalizeFilesystemPath(candidate)
-	if err != nil {
-		return newFilesystemAccessDeniedWithContext(policy.PrimaryRoot(), FilesystemRefusalOutsidePermittedRoots, "unable to resolve requested path")
-	}
-	for _, protectedRoot := range policy.ProtectedReadRoots() {
-		if isWithinFilesystemPath(candidate, protectedRoot) || isWithinFilesystemPath(canonicalCandidate, protectedRoot) {
-			denial := newFilesystemAccessDeniedWithContext(policy.PrimaryRoot(), FilesystemRefusalSensitiveRead, ErrFilesystemAccessDenied.Error())
-			return fmt.Errorf("%w: %w", denial, ErrProtectedFilesystemRead)
-		}
-	}
-	for _, root := range roots {
-		canonicalRoot, rootErr := canonicalizeFilesystemPath(root)
-		if rootErr != nil {
-			return newFilesystemAccessDeniedWithContext(policy.PrimaryRoot(), FilesystemRefusalInvalidScope, rootErr.Error())
-		}
-		if isWithinFilesystemPath(canonicalCandidate, canonicalRoot) {
-			return nil
-		}
-	}
-	return newFilesystemAccessDeniedWithContext(policy.PrimaryRoot(), FilesystemRefusalOutsidePermittedRoots, fmt.Sprintf("path escapes workspace: %s", path))
-}
-
-func isWithinFilesystemPath(candidate, root string) bool {
-	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
-	return err == nil && filepath.IsLocal(rel)
-}
-
-func canonicalizeFilesystemPath(path string) (string, error) {
-	if strings.ContainsRune(path, '\x00') {
-		return filepath.Clean(path), nil
-	}
-	absolute, err := filepath.Abs(filepath.Clean(path))
-	if err != nil {
-		return "", err
-	}
-	return canonicalizeFilesystemPathWithMissing(absolute, make(map[string]struct{}))
-}
-
-func canonicalizeFilesystemPathWithMissing(path string, seen map[string]struct{}) (string, error) {
-	current := filepath.Clean(path)
-	missing := make([]string, 0)
-	for {
-		info, err := os.Lstat(current)
-		if err == nil {
-			resolved, resolveErr := canonicalizeFilesystemNode(current, info, seen)
-			if resolveErr != nil {
-				return "", resolveErr
-			}
-			for index := len(missing) - 1; index >= 0; index-- {
-				resolved = filepath.Join(resolved, missing[index])
-			}
-			return filepath.Clean(resolved), nil
-		}
-		if !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
-			return "", err
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", err
-		}
-		missing = append(missing, filepath.Base(current))
-		current = parent
-	}
-}
-
-func canonicalizeFilesystemNode(path string, info os.FileInfo, seen map[string]struct{}) (string, error) {
-	if info.Mode()&os.ModeSymlink != 0 {
-		path = filepath.Clean(path)
-		if _, exists := seen[path]; exists {
-			return "", fmt.Errorf("resolve symlink %q: too many levels of symbolic links", path)
-		}
-		seen[path] = struct{}{}
-		target, err := os.Readlink(path)
-		if err != nil {
-			return "", err
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(path), target)
-		}
-		return canonicalizeFilesystemPathWithMissing(target, seen)
-	}
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Abs(resolved)
 }

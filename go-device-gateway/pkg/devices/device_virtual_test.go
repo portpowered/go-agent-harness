@@ -64,7 +64,7 @@ func TestVirtualProductionConfiguration(t *testing.T) {
 		{ID: "input", Name: "Input", Direction: devicegw.DirectionInput, Capabilities: caps, LoopbackID: "output"},
 		{ID: "output", Name: "Output", Direction: devicegw.DirectionOutput, Capabilities: caps, LoopbackID: "input"},
 	}, Defaults: map[devicegw.Direction]string{devicegw.DirectionInput: "input", devicegw.DirectionOutput: "output"}}
-	production := devicegw.NewProductionAudioBackendRegistry()
+	production := devicegw.NewAudioBackendRegistry()
 	require.Equal(t, []string{devicegw.VirtualBackendName}, production.Names())
 	registry, err := production.New(devicegw.VirtualBackendName, c)
 	require.NoError(t, err)

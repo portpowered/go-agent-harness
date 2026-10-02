@@ -28,19 +28,10 @@ type ComposeInput struct {
 	AllowEntryLimitOverride bool
 }
 
-// Options is a compatibility alias for callers that prefer option language.
-type Options = ComposeInput
-
-// Composer expands a validated ComposeInput into a complete manifest.
-type Composer struct{}
-
-// NewComposer returns a stateless fleet composer.
-func NewComposer() Composer { return Composer{} }
-
 // Compose creates one entry for every scenario × transport × repeat-index
 // coordinate. Inputs are normalized into sorted order so equivalent sets
 // produce byte-equivalent manifests regardless of caller order.
-func (Composer) Compose(input ComposeInput) (Manifest, error) {
+func Compose(input ComposeInput) (Manifest, error) {
 	scenarios, err := loadScenarioRefs(input.ScenarioFiles)
 	if err != nil {
 		return Manifest{}, err
@@ -95,27 +86,6 @@ func (Composer) Compose(input ComposeInput) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("validate composed fleet: %w", err)
 	}
 	return manifest, nil
-}
-
-// Compose is the function-shaped entry point for callers that do not need to
-// retain a Composer value.
-func Compose(input ComposeInput) (Manifest, error) {
-	return NewComposer().Compose(input)
-}
-
-// ComposeFiles is a convenience entry point for string transport names from
-// CLI flag parsing or JSON configuration.
-func ComposeFiles(scenarioFiles []string, transports []string, repeatCount, concurrency int) (Manifest, error) {
-	typed := make([]Transport, len(transports))
-	for index, transport := range transports {
-		typed[index] = Transport(transport)
-	}
-	return Compose(ComposeInput{
-		ScenarioFiles: scenarioFiles,
-		Transports:    typed,
-		RepeatCount:   repeatCount,
-		Concurrency:   concurrency,
-	})
 }
 
 func loadScenarioRefs(paths []string) ([]ScenarioRef, error) {

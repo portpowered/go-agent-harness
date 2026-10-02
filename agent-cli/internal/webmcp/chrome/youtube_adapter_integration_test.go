@@ -83,8 +83,9 @@ func TestYouTubeAdapterStockChromeJourney(t *testing.T) {
 	if !ok {
 		t.Fatalf("session type = %T", session)
 	}
-	testSource := strings.Replace(siteadapter.YouTubeSource(), `if (location.protocol !== ALLOWED_PROTOCOL || !ALLOWED_HOSTS.has(location.hostname)) return;`, `if (location.hostname !== "127.0.0.1") return;`, 1)
-	if testSource == siteadapter.YouTubeSource() {
+	youtubeSource, _ := siteadapter.Source(siteadapter.YouTubeName)
+	testSource := strings.Replace(youtubeSource, `if (location.protocol !== ALLOWED_PROTOCOL || !ALLOWED_HOSTS.has(location.hostname)) return;`, `if (location.hostname !== "127.0.0.1") return;`, 1)
+	if testSource == youtubeSource {
 		t.Fatal("test-only loopback origin substitution did not match the production script")
 	}
 	if err := targetSession.installPageScript(ctx, testSource); err != nil {

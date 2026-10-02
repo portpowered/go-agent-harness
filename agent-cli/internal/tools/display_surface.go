@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"errors"
-	"fmt"
 	"image"
 	"io"
 	"os/exec"
@@ -43,15 +42,6 @@ type DisplayPermissionChecker interface {
 	Check(context.Context) (DisplayPermission, error)
 }
 
-type DisplayPermissionCheckerFunc func(context.Context) (DisplayPermission, error)
-
-func (f DisplayPermissionCheckerFunc) Check(ctx context.Context) (DisplayPermission, error) {
-	if f == nil {
-		return DisplayPermission{State: DisplayPermissionGranted}, nil
-	}
-	return f(ctx)
-}
-
 // ScreenRecordingPermissionRechecker is the optional session boundary used to
 // inspect a macOS permission state after an interactive screen call times out.
 // The recheck is deliberately separate from DisplaySurface so non-screen tools
@@ -83,40 +73,11 @@ func (osDisplayProcess) LookPath(file string) (string, error) {
 
 func defaultDisplayProcess() DisplayProcess { return osDisplayProcess{} }
 
-// DisplayProcessAdapter is a deterministic process seam for platform tests.
-type DisplayProcessAdapter struct {
-	RunFunc      func(context.Context, string, ...string) ([]byte, error)
-	LookPathFunc func(string) (string, error)
-}
-
-func (p DisplayProcessAdapter) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if p.RunFunc == nil {
-		return nil, fmt.Errorf("display process runner is not configured")
-	}
-	return p.RunFunc(ctx, name, args...)
-}
-
-func (p DisplayProcessAdapter) LookPath(file string) (string, error) {
-	if p.LookPathFunc == nil {
-		return file, nil
-	}
-	return p.LookPathFunc(file)
-}
-
 // DisplayCapturer is the injectable image-producing boundary. The display
 // index is preserved so macOS can use screencapture -D without reconstructing
 // a region from a second frame.
 type DisplayCapturer interface {
 	Capture(context.Context, int, image.Rectangle) (*image.RGBA, error)
-}
-
-type DisplayCapturerFunc func(context.Context, int, image.Rectangle) (*image.RGBA, error)
-
-func (f DisplayCapturerFunc) Capture(ctx context.Context, display int, bounds image.Rectangle) (*image.RGBA, error) {
-	if f == nil {
-		return nil, errors.New("display capturer is not configured")
-	}
-	return f(ctx, display, bounds)
 }
 
 // contextReader fails reads once its context is done. It keeps only the

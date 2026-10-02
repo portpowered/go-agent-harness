@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
+
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
@@ -90,7 +92,7 @@ func newWirePageToolsCapabilities(t *testing.T, cdpURL string, runtime *webmcpte
 	cfg := browserCapabilityConfig(t, true)
 	cfg.Browser = browser
 	cfg.Model = config.ModelConfig{Provider: config.ProviderOpenAI, OpenAI: &config.OpenAIConfig{Model: "gpt-realtime", APIKey: "unused"}}
-	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(runtime), WithWebMCPProductionDiscovery(discoveryService))
+	productionFactory := NewProductionWebMCPDoctorFactory(production.WithRuntime(runtime), production.WithDiscovery(discoveryService))
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
 	})(t.Context(), cfg)

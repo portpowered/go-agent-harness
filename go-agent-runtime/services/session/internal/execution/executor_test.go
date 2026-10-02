@@ -125,7 +125,7 @@ func TestConfigValidation(t *testing.T) {
 // way the session service's storage adapter does in production.
 type fileStorage struct{ files *session.Storage }
 
-func newFileStorage(dir string) fileStorage { return fileStorage{files: session.NewStorage(dir)} }
+func newFileStorage(dir string) fileStorage { return fileStorage{files: session.NewStorageWithWorkspace(dir, dir)} }
 
 func (s fileStorage) Load(ctx context.Context, id string) ([]messages.Message, error) {
 	if err := ctx.Err(); err != nil {

@@ -114,9 +114,9 @@ func TestComposeRejectsNonPositiveRepeatAndConcurrencyFields(t *testing.T) {
 
 func TestManifestRoundTripsAndRejectsMissingEntries(t *testing.T) {
 	path := writeScenario(t, t.TempDir(), "scenario")
-	manifest, err := ComposeFiles([]string{path}, []string{"replay"}, 2, 1)
+	manifest, err := Compose(ComposeInput{ScenarioFiles: []string{path}, Transports: []Transport{TransportReplay}, RepeatCount: 2, Concurrency: 1})
 	if err != nil {
-		t.Fatalf("ComposeFiles: %v", err)
+		t.Fatalf("Compose: %v", err)
 	}
 	data, err := json.Marshal(manifest)
 	if err != nil {

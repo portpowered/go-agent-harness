@@ -78,12 +78,6 @@ type Storage struct {
 	workspaceDir string
 }
 
-// NewStorage creates a Storage using the workspace directory (e.g. ~/.agent-cli).
-// Sessions are stored in <workspace>/sessions/.
-func NewStorage(workspaceDir string) *Storage {
-	return NewStorageWithWorkspace(workspaceDir, workspaceDir)
-}
-
 // NewStorageWithWorkspace keeps session persistence under storageDir while
 // exposing workspaceDir to prompt and tool callers. This separates the
 // config/session store from the customer's filesystem-tool workdir.

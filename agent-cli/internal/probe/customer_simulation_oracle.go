@@ -96,17 +96,6 @@ func (o *FilesystemOracle) CaptureCheckpoint(id, actionID string, at time.Durati
 	return checkpoint, errors.Join(observationErrors...)
 }
 
-// Checkpoint captures and immediately verifies one declared action oracle.
-// The checkpoint is returned on mismatch so a caller can still write it to
-// paired evidence before classifying the action as broken.
-func (o *FilesystemOracle) Checkpoint(id, actionID string, at time.Duration, expectations []FilesystemExpectation) (FilesystemCheckpoint, error) {
-	checkpoint, captureErr := o.CaptureCheckpoint(id, actionID, at, expectations)
-	if captureErr != nil {
-		return checkpoint, captureErr
-	}
-	return checkpoint, VerifyFilesystemExpectations(expectations, checkpoint)
-}
-
 func (o *FilesystemOracle) observe(relative string) (FilesystemCheckpointEntry, error) {
 	if err := validateRelativePath("filesystem.path", relative, false); err != nil {
 		return FilesystemCheckpointEntry{}, err
@@ -166,26 +155,6 @@ func safeFilesystemPath(root, relative string) (string, error) {
 		return "", fmt.Errorf("%w: path %q escapes root", ErrFilesystemOracleObservation, relative)
 	}
 	return path, nil
-}
-
-// FilesystemDirectorySHA256 returns the deterministic fingerprint used for
-// directory checkpoint entries. It includes the relative type of every
-// descendant and the content hash of regular files, without following
-// symlinks. A directory checkpoint therefore proves more than just a path
-// type while remaining stable across machines.
-func FilesystemDirectorySHA256(root string) (string, error) {
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return "", fmt.Errorf("%w: resolve directory: %w", ErrFilesystemOracleInvalidRoot, err)
-	}
-	info, err := os.Lstat(absRoot)
-	if err != nil {
-		return "", fmt.Errorf("%w: inspect directory: %w", ErrFilesystemOracleInvalidRoot, err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return "", fmt.Errorf("%w: %q is not a non-symlink directory", ErrFilesystemOracleInvalidRoot, absRoot)
-	}
-	return filesystemDirectorySHA256(absRoot)
 }
 
 func filesystemDirectorySHA256(root string) (string, error) {
@@ -637,4 +606,15 @@ func findActionResult(results []ActionResult, actionID string) (ActionResult, bo
 		}
 	}
 	return ActionResult{}, false
+}
+
+// Checkpoint captures and immediately verifies one declared action oracle.
+// The checkpoint is returned on mismatch so a caller can still write it to
+// paired evidence before classifying the action as broken.
+func (o *FilesystemOracle) Checkpoint(id, actionID string, at time.Duration, expectations []FilesystemExpectation) (FilesystemCheckpoint, error) {
+	checkpoint, captureErr := o.CaptureCheckpoint(id, actionID, at, expectations)
+	if captureErr != nil {
+		return checkpoint, captureErr
+	}
+	return checkpoint, VerifyFilesystemExpectations(expectations, checkpoint)
 }

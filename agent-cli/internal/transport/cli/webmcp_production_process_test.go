@@ -19,6 +19,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/spf13/cobra"
 )
 
@@ -212,7 +213,7 @@ func runOSProcessDirectCommand(t *testing.T, configDir string, store WebMCPSelec
 
 func osProcessFixtureFactory(endpoint string) WebMCPDoctorFactory {
 	return NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(newOSProcessWebMCPRuntime(endpoint)),
+		production.WithRuntime(newOSProcessWebMCPRuntime(endpoint)),
 	)
 }
 

@@ -236,14 +236,6 @@ func loadRoomReplayMix(plan RoomReplayPlan, owners map[string]string) (AudioStre
 
 var _ roomevidence.Service = (*Service)(nil)
 
-func Validate(service roomevidence.Service, plan RoomReplayPlan) error {
-	if service == nil {
-		return errors.New("room evidence service is required")
-	}
-	_, err := service.Load(plan)
-	return err
-}
-
 func validateOutputTarget(destination string) error {
 	if err := pathguard.ValidateNoSymlinkPath(destination); err != nil {
 		return fmt.Errorf("%w: output path is unsafe: %w", roomevidence.ErrInvalidOutput, err)

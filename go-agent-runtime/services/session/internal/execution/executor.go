@@ -122,11 +122,6 @@ type Executor struct {
 	logger                  looplogging.Logger
 }
 
-// NewExecutor creates a new Executor with the given dependencies.
-func NewExecutor(executor messages.ToolExecutor, toolDefs []messages.ToolDefinition, inferencerOverride messages.Inferencer, relaxModelValidation ...bool) *Executor {
-	return newExecutor(nil, executor, toolDefs, inferencerOverride, nil, relaxModelValidation...)
-}
-
 // NewExecutorWithToolServiceAndLogger constructs an executor with the host's
 // loop logger. Logger ownership stays at the composition edge; a nil logger
 // is handled by the loop's no-op default.

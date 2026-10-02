@@ -27,16 +27,6 @@ type IDSource interface {
 	NextID(kind string) string
 }
 
-// IDSourceFunc adapts a function to IDSource.
-type IDSourceFunc func(kind string) string
-
-func (f IDSourceFunc) NextID(kind string) string {
-	if f == nil {
-		return ""
-	}
-	return f(kind)
-}
-
 // WithIDSource injects deterministic ID allocation. A nil source is ignored.
 func WithIDSource(source IDSource) RecorderOption {
 	return recorderOptionFunc(func(recorder *Recorder) {

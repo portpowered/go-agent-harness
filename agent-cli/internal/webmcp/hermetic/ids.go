@@ -44,11 +44,6 @@ func NewDeterministicIDSource(prefix ...string) *DeterministicIDSource {
 
 func NewDeterministicIDs() *DeterministicIDs { return NewDeterministicIDSource() }
 
-// NewFakeIDs is a descriptive alias for NewDeterministicIDSource.
-func NewFakeIDs(prefix string) *DeterministicIDSource {
-	return NewDeterministicIDSource(prefix)
-}
-
 func (s *DeterministicIDSource) NextID(kind string) string {
 	if s == nil {
 		return ""

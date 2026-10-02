@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"strings"
+
+	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -122,25 +123,6 @@ func DecodeFilesystemRefusal(data []byte) (FilesystemRefusal, error) {
 		return FilesystemRefusal{}, err
 	}
 	return refusal, nil
-}
-
-// FilesystemRefusalFromContent recognizes both the direct refusal shape and
-// the nested refusal carried by the read_image result envelope.
-func FilesystemRefusalFromContent(content string) (FilesystemRefusal, bool) {
-	if refusal, err := DecodeFilesystemRefusal([]byte(content)); err == nil {
-		return refusal, true
-	}
-
-	var wrapped struct {
-		Refusal *FilesystemRefusal `json:"refusal"`
-	}
-	if err := json.Unmarshal([]byte(content), &wrapped); err != nil || wrapped.Refusal == nil {
-		return FilesystemRefusal{}, false
-	}
-	if err := wrapped.Refusal.Validate(); err != nil {
-		return FilesystemRefusal{}, false
-	}
-	return *wrapped.Refusal, true
 }
 
 func newFilesystemRefusal(operation, path, workdir string, reason FilesystemRefusalReason) FilesystemRefusal {

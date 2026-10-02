@@ -32,11 +32,6 @@ type RuntimeTrace struct {
 	accounting    *streamAccounting
 }
 
-// NewRuntimeTrace constructs an inert observer for one live invocation.
-func NewRuntimeTrace(observer sessiontrace.RuntimeObserver, clock session.LiveClock, tick func() uint64) *RuntimeTrace {
-	return NewInvocationTrace(observer, nil, clock, tick)
-}
-
 // NewInvocationTrace constructs the observer for one live invocation whose
 // host also collects per-invocation stream accounting. The recorder receives
 // every accounted observation even when no service observer is installed.

@@ -484,7 +484,7 @@ func TestCustomerEvidenceRecordDirectoryAndManifestParsing(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(bundle.root, "product-record-dir", "nested", "session.json")); err != nil {
 		t.Fatalf("copied record artifact missing: %v", err)
 	}
-	if err := bundle.WriteArtifact("notes/alias.txt", ArtifactKindScenario, []byte("alias"), false); err != nil {
+	if err := bundle.AddArtifactBytes("notes/alias.txt", ArtifactKindScenario, []byte("alias"), false); err != nil {
 		t.Fatalf("WriteArtifact alias: %v", err)
 	}
 	if err := bundle.RegisterArtifact("missing.txt", ArtifactKindScenario, false); err != nil {

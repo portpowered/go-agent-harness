@@ -179,12 +179,6 @@ func BootstrapSource() string {
 	return strings.Join(parts, "\n")
 }
 
-// YouTubeSource returns the embedded adapter for hermetic adapter tests. The
-// production selection boundary remains ForURL.
-func YouTubeSource() string {
-	return youtubeSource
-}
-
 // Source returns an embedded adapter by registry name for hermetic tests.
 func Source(name string) (string, bool) {
 	for _, adapter := range registry() {

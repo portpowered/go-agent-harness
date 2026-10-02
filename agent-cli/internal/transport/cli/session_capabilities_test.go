@@ -15,6 +15,7 @@ import (
 	cliTools "github.com/portpowered/go-agent-harness/agent-cli/internal/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/sessionbroker/bootstrap"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
@@ -111,8 +112,8 @@ func TestSessionBrowserBrokerRestoresPersistedSelectionBeforeFirstToolCall(t *te
 	browserConfig.Selection.Persist = true
 	selectionStore := NewFileWebMCPSelectionStore(t.TempDir())
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 		WithWebMCPProductionSelectionStore(selectionStore),
 	)
 
@@ -201,8 +202,8 @@ func TestSessionBrowserBrokerKeepsBrowserUsableWhenPersistedTargetIsGone(t *test
 	browserConfig.Connection.CDPURL = server.URL + "/json/version"
 	selectionStore := NewFileWebMCPSelectionStore(t.TempDir())
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 		WithWebMCPProductionSelectionStore(selectionStore),
 	)
 
@@ -278,8 +279,8 @@ func TestSessionBrowserBrokerSharesInitializationAcrossConcurrentFirstUse(t *tes
 	browserConfig.Connection.CDPURL = server.URL + "/json/version"
 	selectionStore := NewFileWebMCPSelectionStore(t.TempDir())
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(server.Client()),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(server.Client()),
 		WithWebMCPProductionSelectionStore(selectionStore),
 	)
 	seedSessionSelection(t, browserConfig, factory, browserID, targetID)
@@ -823,8 +824,8 @@ func newScriptedSessionBroker(t *testing.T) (webmcp.Broker, *webmcptest.Scripted
 	browserConfig.Tools.Enabled = true
 	browserConfig.Connection.CDPURL = testCDPURL
 	productionFactory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(sessionBrokerDiscovery{candidate: laneCandidate, target: laneTarget}),
+		production.WithRuntime(runtime),
+		production.WithDiscovery(sessionBrokerDiscovery{candidate: laneCandidate, target: laneTarget}),
 	)
 	broker, err := newSessionBrowserBrokerWithDoctorFactory(browserConfig, productionFactory)
 	if err != nil {

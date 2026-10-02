@@ -40,37 +40,10 @@ type RuntimeOptions struct {
 // Option customizes a Runtime.
 type Option func(*RuntimeOptions)
 
-func WithEventBuffer(size int) Option {
-	return func(options *RuntimeOptions) {
-		if size > 0 {
-			options.EventBuffer = size
-		}
-	}
-}
-
-func WithCommandTimeout(timeout time.Duration) Option {
-	return func(options *RuntimeOptions) {
-		if timeout > 0 {
-			options.CommandTimeout = timeout
-		}
-	}
-}
-
 func WithHTTPClient(client *http.Client) Option {
 	return func(options *RuntimeOptions) {
 		if client != nil {
 			options.HTTPClient = client
-		}
-	}
-}
-
-// WithWireTraceSink records safe target/session and CDP method evidence at
-// the command boundary. The sink never receives endpoint, input, or output
-// values from the adapter.
-func WithWireTraceSink(sink WireTraceSink) Option {
-	return func(options *RuntimeOptions) {
-		if sink != nil {
-			options.WireTrace = sink
 		}
 	}
 }

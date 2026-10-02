@@ -15,6 +15,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/spf13/cobra"
 )
 
@@ -113,12 +114,12 @@ func runDiscoveryShapeCase(t *testing.T, doctorConfig string, args []string, wan
 	fixture := newCLIProductionDiscoveryFixture()
 	runtime := &productionFakeRuntime{}
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionHTTPClient(fixture.http),
-		WithWebMCPProductionActivePortReader(fixture.activePort),
-		WithWebMCPProductionProcessEnumerator(fixture.process),
-		WithWebMCPProductionIDMapper(cliProductionIDMapper{}),
-		WithWebMCPProductionClock(cliProductionClock{now: time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC)}),
+		production.WithRuntime(runtime),
+		production.WithHTTPClient(fixture.http),
+		production.WithActivePortReader(fixture.activePort),
+		production.WithProcessEnumerator(fixture.process),
+		production.WithIDMapper(cliProductionIDMapper{}),
+		production.WithClock(cliProductionClock{now: time.Date(2026, time.August, 28, 12, 0, 0, 0, time.UTC)}),
 	)
 	result := executeShippedWebMCPCommand(t, writeDoctorConfig(t, doctorConfig), factory, args...)
 	if result.err != nil {
@@ -220,11 +221,11 @@ browser:
 			fixture := newCLIProductionDiscoveryFixture()
 			fixture.http.responses = tc.responses
 			factory := NewProductionWebMCPDoctorFactory(
-				WithWebMCPProductionRuntime(&productionFakeRuntime{}),
-				WithWebMCPProductionHTTPClient(fixture.http),
-				WithWebMCPProductionActivePortReader(fixture.activePort),
-				WithWebMCPProductionProcessEnumerator(fixture.process),
-				WithWebMCPProductionIDMapper(cliProductionIDMapper{}),
+				production.WithRuntime(&productionFakeRuntime{}),
+				production.WithHTTPClient(fixture.http),
+				production.WithActivePortReader(fixture.activePort),
+				production.WithProcessEnumerator(fixture.process),
+				production.WithIDMapper(cliProductionIDMapper{}),
 			)
 			result := executeShippedWebMCPCommand(t, writeDoctorConfig(t, tc.config), factory, "browsers", "--json")
 			assertClassifiedDiscoveryFailure(t, result, tc.wantCode, tc.wantDetail, tc.forbiddenText)

@@ -24,15 +24,6 @@ func ProcessHostDirs() HostDirs {
 	}
 }
 
-// FixedHostDirs returns lookups that report fixed directories, for embedders
-// and tests that must not depend on the process environment.
-func FixedHostDirs(homeDir, workDir string) HostDirs {
-	return HostDirs{
-		HomeDir: func() (string, error) { return homeDir, nil },
-		WorkDir: func() (string, error) { return workDir, nil },
-	}
-}
-
 // hostDirError is a constant sentinel error for unavailable host directories.
 type hostDirError string
 

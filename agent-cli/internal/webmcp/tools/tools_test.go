@@ -23,7 +23,7 @@ import (
 )
 
 func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T) {
-	set := NewToolSet(nil)
+	set := NewBrokerToolSet(nil)
 	schemas := set.DefinitionSchemas()
 	if len(schemas) != 9 {
 		t.Fatalf("schema count = %d, want six stable tools plus open-tab, navigate-tab, and show_page", len(schemas))
@@ -71,7 +71,7 @@ func TestBrokerToolSetPreservesFrozenSchemasAndAddsBrowserControls(t *testing.T)
 
 	first := mustAs[map[string]any](t, mustAs[map[string]any](t, schemas[0]["function"])["parameters"])
 	first["additionalProperties"] = true
-	second := mustAs[map[string]any](t, mustAs[map[string]any](t, NewToolSet(nil).DefinitionSchemas()[0]["function"])["parameters"])
+	second := mustAs[map[string]any](t, mustAs[map[string]any](t, NewBrokerToolSet(nil).DefinitionSchemas()[0]["function"])["parameters"])
 	if second["additionalProperties"] != false {
 		t.Fatal("stable definitions share mutable schema state")
 	}
@@ -391,7 +391,7 @@ func TestShowPageNamespaceIsPreflightedWithStaticTools(t *testing.T) {
 
 func TestExecutorRejectsInvalidBrokerArgumentsBeforeCallingBroker(t *testing.T) {
 	broker := &recordingBroker{}
-	executor := NewExecutor(broker)
+	executor := NewBrokerToolSet(broker).Executor()
 	cases := []struct {
 		name       string
 		arguments  string
@@ -502,7 +502,7 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 		},
 		InvokeResult: webmcp.InvokeResult{InvocationID: "inv-1", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"value":42}`)},
 	}}
-	executor := NewExecutor(broker)
+	executor := NewBrokerToolSet(broker).Executor()
 
 	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-context", Name: webmcp.GetContextToolName, Arguments: `{}`})
 	if err != nil {
@@ -604,7 +604,7 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 		Discoverer: staticToolTestDiscoverer{candidate: candidate},
 	})
 	defer closeAtTestEnd(t, browser)
-	executor := NewExecutor(browser)
+	executor := NewBrokerToolSet(browser).Executor()
 
 	selected, err := executor.Execute(context.Background(), messages.ToolCall{
 		ID:        "call-select-headless",
@@ -665,7 +665,7 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 
 func TestToolSetExecutorPreservesShowPageImageProjection(t *testing.T) {
 	imageBytes := testPNG(t, 1, 1)
-	set := NewToolSet(&recordingBroker{
+	set := NewBrokerToolSet(&recordingBroker{
 		Broker:     webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 		screenshot: webmcp.PageScreenshot{MIMEType: pngMIMEType, Bytes: imageBytes},
 	})

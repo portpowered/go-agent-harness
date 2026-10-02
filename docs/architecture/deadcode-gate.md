@@ -53,13 +53,8 @@ overrides that bound.
 
 ## Allowlist policy
 
-The allowlist holds only genuine exceptions:
+The allowlist holds only genuine exceptions. Today that is one entry:
 
-- `discovery.parseURLError.Error`: the type is returned as a concrete pointer
-  and its `Error` method keeps it a well-formed error type, as the errname
-  lint expects;
-- `dropProbeSession.Done` and `Close` (agent-cli/test/integration): methods
-  that `messages.Session` requires but that the probe never calls;
 - `devices.openInterruptibleInput` in `interruptible_input_other.go`: the
   other-OS stub of a function reached only from mains, so the js/wasm run,
   whose roots are tests, cannot reach it.

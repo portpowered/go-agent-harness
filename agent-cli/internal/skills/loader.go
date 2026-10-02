@@ -99,32 +99,6 @@ func (l *Loader) LoadSkill(name string) (body string, err error) {
 	return "", fmt.Errorf("skill %q not found", name)
 }
 
-// LoadSkillWithPath returns the full SKILL.md body. If resourcePath is non-empty, it returns that file's content from the skill (under scripts/, references/, or assets/).
-func (l *Loader) LoadSkillWithPath(name, resourcePath string) (content string, err error) {
-	list, err := l.List()
-	if err != nil {
-		return "", err
-	}
-	var skillDir string
-	for _, s := range list {
-		if s.Meta.Name == name {
-			skillDir = s.Dir
-			break
-		}
-	}
-	if skillDir == "" {
-		return "", fmt.Errorf("skill %q not found", name)
-	}
-	if resourcePath == "" {
-		return l.LoadSkill(name)
-	}
-	data, err := ReadResource(skillDir, resourcePath)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 // loadSkillEntry loads the skill in directory name under dir. found is false
 // for a directory without a skill file and for an invalid skill, which are
 // skipped rather than reported.

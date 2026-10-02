@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	webmcpTools "github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -80,8 +81,8 @@ func TestSessionBrowserBrokerSelectsExactTargetAfterAutomaticAmbiguity(t *testin
 	browser.Selection.AutoSelect = config.BrowserAutoSelectSingle
 	browser.Selection.Persist = false
 	factory := NewProductionWebMCPDoctorFactory(
-		WithWebMCPProductionRuntime(runtime),
-		WithWebMCPProductionDiscovery(discoveryService),
+		production.WithRuntime(runtime),
+		production.WithDiscovery(discoveryService),
 	)
 	broker, err := newSessionBrowserBrokerWithDoctorFactory(browser, factory)
 	if err != nil {

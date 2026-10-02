@@ -67,28 +67,6 @@ func (e *BrowserDisconnectedError) Is(target error) bool {
 	return errors.As(target, &codeErr) && codeErr.code == CodeBrowserDisconnected
 }
 
-// NewBrowserDisconnectedError constructs a safe marker for injected seams.
-func NewBrowserDisconnectedError(browserID, targetID, phase string, cause error) error {
-	return &BrowserDisconnectedError{
-		BrowserID: browserID,
-		TargetID:  targetID,
-		Phase:     phase,
-		Cause:     cause,
-	}
-}
-
-// NewBrowserDisconnectError is a concise constructor alias.
-func NewBrowserDisconnectError(browserID, targetID, phase string, cause error) error {
-	return NewBrowserDisconnectedError(browserID, targetID, phase, cause)
-}
-
-// IsBrowserDisconnected reports whether an injected error represents loss of
-// the browser connection. EOF and a closed network connection are included so
-// simple neutral fakes need not import a browser websocket package.
-func IsBrowserDisconnected(err error) bool {
-	return isBrowserDisconnected(err)
-}
-
 func isBrowserDisconnected(err error) bool {
 	if err == nil {
 		return false

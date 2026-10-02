@@ -17,6 +17,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/hermetic"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/production"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
@@ -182,7 +183,7 @@ func newAmbiguousBrowserFixture(t *testing.T, ctx context.Context, cubeTools ...
 	f.cfg = browserCapabilityConfig(t, true)
 	f.cfg.Browser = browser
 	f.cfg.Model = config.ModelConfig{Provider: config.ProviderGrok, Grok: &config.GrokConfig{Model: "ambiguous-session", APIKey: "unused"}}
-	productionFactory := NewProductionWebMCPDoctorFactory(WithWebMCPProductionRuntime(f.runtime), WithWebMCPProductionDiscovery(discoveryService))
+	productionFactory := NewProductionWebMCPDoctorFactory(production.WithRuntime(f.runtime), production.WithDiscovery(discoveryService))
 	capabilities, err := NewSessionToolCapabilitiesFactory(nil, func(browser config.BrowserConfig) (webmcp.Broker, error) {
 		return newSessionBrowserBrokerWithDoctorFactory(browser, productionFactory)
 	})(ctx, f.cfg)

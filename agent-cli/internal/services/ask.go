@@ -93,9 +93,3 @@ func BuildAgentConfigFromFlags(_ *flags.GlobalFlags, askFlags *flags.AskFlags, i
 	return cfg
 }
 
-// DefaultToolDefs returns an owned copy of the definitions selected by the
-// runtime tools capability. Keeping this helper value-oriented prevents the
-// CLI service layer from depending on a concrete tool registry.
-func DefaultToolDefs(definitions []messages.ToolDefinition) []messages.ToolDefinition {
-	return append([]messages.ToolDefinition(nil), definitions...)
-}
