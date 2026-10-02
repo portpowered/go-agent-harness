@@ -93,6 +93,9 @@ func TestServiceResolvesRatesAndAudioPolicies(t *testing.T) {
 		request audioio.RateRequest
 	}{
 		{name: "realtime default", want: audioio.RealtimeSampleRate, request: audioio.RateRequest{Provider: audioio.ProviderOpenAI}},
+		{name: "grok default", want: audioio.RealtimeSampleRate, request: audioio.RateRequest{Provider: audioio.ProviderGrok}},
+		{name: "gpt-live default", want: audioio.RealtimeSampleRate, request: audioio.RateRequest{Provider: " OpenAI-Live "}},
+		{name: "other provider default", want: audioio.DefaultSampleRate, request: audioio.RateRequest{Provider: "local"}},
 		{name: "replay default", want: audioio.DefaultSampleRate, request: audioio.RateRequest{Provider: audioio.ProviderOpenAI, Replay: true}},
 		{name: "requested", want: audioio.SampleRate48kHz, request: audioio.RateRequest{RequestedInputRate: audioio.SampleRate48kHz}},
 		{name: "captured", want: audioio.SampleRate16kHz, request: audioio.RateRequest{CapturedOutputRate: audioio.SampleRate16kHz}},
@@ -115,6 +118,9 @@ func TestServiceResolvesRatesAndAudioPolicies(t *testing.T) {
 	}
 	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAI, AcceptsAudioInput: true}); !got.Enabled || got.Model != audioio.DefaultTranscriptionModel {
 		t.Fatalf("transcription = %+v, want enabled default", got)
+	}
+	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAILive, AcceptsAudioInput: true}); got.Enabled {
+		t.Fatal("GPT-Live transcription enabled; its transcripts are always on and take no config")
 	}
 	if got := service.ResolveTranscription(audioio.TranscriptionRequest{Provider: audioio.ProviderOpenAI, AcceptsAudioInput: true, Replay: true}); got.Enabled {
 		t.Fatal("replay transcription unexpectedly enabled")

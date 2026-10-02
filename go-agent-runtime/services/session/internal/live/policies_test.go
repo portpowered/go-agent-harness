@@ -594,3 +594,18 @@ func TestLiveResponseCancelControlSyncsProviderLifecycleFirst(t *testing.T) {
 	require.NoError(t, opened.Send(context.Background(), session.LiveControl{Kind: session.LiveControlResponseCancel}))
 	require.True(t, synced && s.sentMatch(cancel), "interrupt reached the runner before the provider lifecycle barrier")
 }
+
+// TestToolAcknowledgementStaysOffForGPTLive is the regression pin from the
+// GPT-Live design: an acknowledgement RESPONSE.CREATE has no wire event on
+// openai-live and would mis-tag the next speech segment, so the live session
+// adds the tool-acknowledgement policy only for the OpenAI Realtime provider.
+func TestToolAcknowledgementStaysOffForGPTLive(t *testing.T) {
+	for _, provider := range []string{"openai-live", " OpenAI-Live ", "grok", "local"} {
+		if recoversActiveResponseRejection(provider) {
+			t.Errorf("provider %q would get the tool-acknowledgement policy", provider)
+		}
+	}
+	if !recoversActiveResponseRejection("openai") {
+		t.Error("the OpenAI Realtime provider lost its tool-acknowledgement policy")
+	}
+}

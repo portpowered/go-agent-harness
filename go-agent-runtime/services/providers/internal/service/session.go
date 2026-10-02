@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -11,6 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/recording"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/inference"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
@@ -18,6 +20,7 @@ import (
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	grokprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/grok"
 	openaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -25,6 +28,8 @@ const (
 	providerOpenAI           = "openai"
 	defaultRealtimeOpenAIURL = "wss://api.openai.com/v1/realtime"
 	defaultRealtimeGrokURL   = "wss://api.x.ai/v1/realtime"
+	// liveSessionsPath is the GPT-Live primary WebSocket path under /v1.
+	liveSessionsPath = "/live/sessions"
 )
 
 var _ runtimeproviders.SessionService = (*Service)(nil)
@@ -149,8 +154,18 @@ func closeProviderReplay(prepared runtimeReplay.LivePrepared, err error) error {
 	return errors.Join(err, prepared.Close())
 }
 
-func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, model string, dialer transport.Dialer, logger logging.Logger) (llmproviders.SessionProvider, error) {
+func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, model string, dialer transport.Dialer, logger logging.Logger, source clock.TimerSource) (llmproviders.SessionProvider, error) {
 	switch providerName {
+	case runtimeproviders.OpenAILiveProvider:
+		// GPT-Live takes its auth headers from a credential provider. The
+		// OpenAI API key is the only credential source for gpt-live-1.
+		return openailive.New(
+			openailive.WithCredentialProvider(openailive.APIKeyCredentials(cfg.APIKey)),
+			openailive.WithEndpoint(liveSessionsEndpoint(cfg)),
+			openailive.WithWebSocketDialer(dialer),
+			openailive.WithLogger(logger),
+			openailive.WithClock(source),
+		), nil
 	case providerOpenAI, "openrouter", "local", "":
 		options := []openaiprovider.Option{
 			openaiprovider.WithAPIKey(cfg.APIKey),
@@ -192,6 +207,34 @@ func buildSessionProvider(cfg runtimeproviders.SessionConfig, providerName, mode
 		return nil, fmt.Errorf("realtime sessions do not support provider %q", providerName)
 	}
 
+}
+
+// liveSessionsEndpoint is the GPT-Live primary WebSocket for cfg: the
+// explicit realtime URL, else the base URL, else the default endpoint. An
+// HTTP(S) URL becomes WS(S), and a URL that does not already name the
+// /live/sessions path gets it appended (an OpenAI base URL ends in /v1).
+func liveSessionsEndpoint(cfg runtimeproviders.SessionConfig) string {
+	endpoint := strings.TrimSpace(cfg.RealtimeURL)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(cfg.BaseURL)
+	}
+	if endpoint == "" {
+		return openailive.DefaultEndpoint
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme == "" {
+		return endpoint
+	}
+	switch parsed.Scheme {
+	case "http":
+		parsed.Scheme = "ws"
+	case "https":
+		parsed.Scheme = "wss"
+	}
+	if !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), liveSessionsPath) {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + liveSessionsPath
+	}
+	return parsed.String()
 }
 
 func sessionConfig(cfg runtimeproviders.SessionConfig, model string) models.SessionConfig {
@@ -273,6 +316,8 @@ func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider str
 			dialer = openaiprovider.NewDefaultWebSocketDialer()
 		case "grok":
 			dialer = grokprovider.NewDefaultWebSocketDialer()
+		case runtimeproviders.OpenAILiveProvider:
+			dialer = openailive.NewDefaultWebSocketDialer()
 		default:
 			return nil, fmt.Errorf("realtime sessions do not support provider %q", provider)
 		}
@@ -281,7 +326,7 @@ func (s *Service) sessionDialer(cfg runtimeproviders.SessionConfig, provider str
 }
 
 func (s *Service) buildSessionInferencer(cfg runtimeproviders.SessionConfig, provider, model string, dialer transport.Dialer, prepared runtimeReplay.LivePrepared) (messages.SessionInferencer, error) {
-	providerClient, err := buildSessionProvider(cfg, provider, model, dialer, s.logger)
+	providerClient, err := buildSessionProvider(cfg, provider, model, dialer, s.logger, s.clock)
 	if err != nil {
 		return nil, err
 	}

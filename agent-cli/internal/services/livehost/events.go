@@ -9,6 +9,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	serviceSession "github.com/portpowered/go-agent-harness/agent-cli/internal/services/agentsession"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	runtimeProviders "github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	runtimeReplay "github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
@@ -18,6 +19,8 @@ const (
 	cliLiveParticipantID = "cli"
 	cliLiveDefaultModel  = "gpt-realtime-2.1-mini"
 	cliLiveDefaultRate   = 24000
+	// liveSessionsPath is the GPT-Live primary WebSocket path under /v1.
+	liveSessionsPath = "/live/sessions"
 )
 
 // ProviderValues resolves provider selection using only the host's already
@@ -29,7 +32,7 @@ func ProviderValues(cfg config.Config, request serviceSession.Request, inspectio
 	if err != nil {
 		return provider, "", "", "", err
 	}
-	model = resolveModel(cfg, request, model, replayModel)
+	model = resolveModel(cfg, request, model, replayModel, defaultModel(provider))
 	apiKey, model, baseURL = applyProviderOverrides(request, apiKey, model, baseURL)
 	if err := validateProviderCredential(provider, apiKey, request.ReplayPath); err != nil {
 		return provider, model, "", baseURL, err
@@ -66,21 +69,29 @@ func selectProvider(cfg config.Config, request serviceSession.Request, inspectio
 	}
 	if provider == "" {
 		provider = strings.ToLower(strings.TrimSpace(cfg.Model.Provider))
-		if provider != config.ProviderOpenAI && provider != config.ProviderGrok {
+		if provider != config.ProviderOpenAI && provider != config.ProviderGrok && provider != config.ProviderOpenAILive {
 			provider = config.ProviderOpenAI
 		}
 	}
 	return provider, replayModel
 }
 
-func resolveModel(cfg config.Config, request serviceSession.Request, model, replayModel string) string {
+// defaultModel is the live model a provider uses when none is configured.
+func defaultModel(provider string) string {
+	if provider == config.ProviderOpenAILive {
+		return runtimeProviders.OpenAILive1Model
+	}
+	return cliLiveDefaultModel
+}
+
+func resolveModel(cfg config.Config, request serviceSession.Request, model, replayModel, fallback string) string {
 	if cfg.Session != nil && cfg.Session.Model != "" && request.Model == "" {
 		model = cfg.Session.Model
 	}
 	if model == "" {
-		model = cliLiveDefaultModel
+		model = fallback
 	}
-	if model == cliLiveDefaultModel && replayModel != "" && !request.ModelProvided {
+	if model == fallback && replayModel != "" && !request.ModelProvided {
 		model = replayModel
 	}
 	return model
@@ -101,6 +112,9 @@ func applyProviderOverrides(request serviceSession.Request, apiKey, model, baseU
 
 func validateProviderCredential(provider, apiKey, replayPath string) error {
 	if apiKey == "" && provider != config.ProviderLocal && replayPath == "" {
+		if provider == config.ProviderOpenAILive {
+			return fmt.Errorf("%s requires an OpenAI API key (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure model.openai.api_key in %s); a ChatGPT sign-in is not accepted for %s", provider, config.ConfigFileName, runtimeProviders.OpenAILive1Model)
+		}
 		if provider == config.ProviderGrok {
 			return fmt.Errorf("grok API key is required for live session record mode (set AGENT_MODEL__GROK__API_KEY, pass --api-key, or configure model.grok.api_key in %s)", config.ConfigFileName)
 		}
@@ -118,6 +132,12 @@ func providerConfig(cfg config.Config, provider string) (string, string, string,
 	case config.ProviderGrok:
 		if cfg.Model.Grok != nil {
 			return cfg.Model.Grok.Model, cfg.Model.Grok.APIKey, cfg.Model.Grok.BaseURL, nil
+		}
+	case config.ProviderOpenAILive:
+		// GPT-Live uses the OpenAI API key and base URL. model.openai.model
+		// names a Realtime model, so it is not the GPT-Live default.
+		if cfg.Model.OpenAI != nil {
+			return "", cfg.Model.OpenAI.APIKey, cfg.Model.OpenAI.BaseURL, nil
 		}
 	default:
 		return "", "", "", fmt.Errorf("unsupported realtime session provider %q", provider)
@@ -252,8 +272,15 @@ func realtimeEndpoint(provider, baseURL string) string {
 	if parsed.Scheme == "https" {
 		parsed.Scheme = "wss"
 	}
-	if provider == config.ProviderOpenAI && !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/realtime") {
-		parsed.Path = strings.TrimRight(parsed.Path, "/") + "/realtime"
+	suffix := ""
+	switch provider {
+	case config.ProviderOpenAI:
+		suffix = "/realtime"
+	case config.ProviderOpenAILive:
+		suffix = liveSessionsPath
+	}
+	if suffix != "" && !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), suffix) {
+		parsed.Path = strings.TrimRight(parsed.Path, "/") + suffix
 	}
 	return parsed.String()
 }

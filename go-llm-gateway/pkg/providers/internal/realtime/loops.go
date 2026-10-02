@@ -27,6 +27,16 @@ type Handler interface {
 	EventWritten(event models.SessionEvent)
 }
 
+// ReadEndHandler is an optional Handler extension for a protocol with its
+// own terminal event. When the read loop ends with an error that is not an
+// orderly close (ExpectedReadClose is false and the session is not
+// stopping), ReadEnded runs before the session closes. Returning true means
+// the provider reported the end itself, so the skeleton closes the session
+// without recording its own transport ERROR.
+type ReadEndHandler interface {
+	ReadEnded(ctx context.Context, err error) bool
+}
+
 // Start launches the read and write loops.
 func (s *Session) Start(ctx context.Context, h Handler) {
 	go s.ReadLoop(ctx, h)
@@ -85,6 +95,10 @@ func (s *Session) deliver(ctx context.Context, msg messages.StreamMessage) bool 
 
 func (s *Session) handleReadError(ctx context.Context, h Handler, err error) {
 	if s.Stopping(ctx) || h.ExpectedReadClose(err) {
+		s.CloseWithLog()
+		return
+	}
+	if ender, ok := h.(ReadEndHandler); ok && ender.ReadEnded(ctx, err) {
 		s.CloseWithLog()
 		return
 	}

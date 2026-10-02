@@ -57,6 +57,12 @@ every program that imports `pkg/probe`. These names have no replacement:
 
 ### Added
 
+- `messages.SessionFullDuplex` (`FullDuplex() bool`), forwarded by
+  `messages.SessionCapabilities` and part of `messages.BargeInCapableSession`.
+  A session that reports it (OpenAI GPT-Live) owns interruption itself, so
+  the session model runner never runs local barge-in against it: loud or
+  overlapping user audio is forwarded as audio, with no `RESPONSE.CANCEL` and
+  no local playback interrupt. Sessions without it behave as before.
 - `probe.scenario.v2` provider-runner expectations: `frame_count`,
   `terminal_reason`, `terminal_provenance`, `output_state`,
   `buffer_disposition`, `audio_energy`, `tool_called`,

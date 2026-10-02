@@ -20,6 +20,7 @@ const (
 	ErrUnsupportedRate        Error = "unsupported audio sample rate"
 	ProviderOpenAI                  = "openai"
 	ProviderGrok                    = "grok"
+	ProviderOpenAILive              = "openai-live"
 	SampleRate16kHz                 = 16000
 	SampleRate24kHz                 = 24000
 	SampleRate48kHz                 = 48000

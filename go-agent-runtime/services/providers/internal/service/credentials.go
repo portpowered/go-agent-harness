@@ -37,5 +37,10 @@ func validateSessionCredential(cfg providers.SessionConfig, provider string) err
 	if !requiresCredential(endpoint) {
 		return nil
 	}
+	if provider == providers.OpenAILiveProvider {
+		// gpt-live-1 accepts only an OpenAI API key; a ChatGPT sign-in is not
+		// a credential for it.
+		return fmt.Errorf("%s requires an OpenAI API key; a ChatGPT sign-in is not accepted for %s", provider, providers.OpenAILive1Model)
+	}
 	return fmt.Errorf("%s realtime api key is missing", provider)
 }

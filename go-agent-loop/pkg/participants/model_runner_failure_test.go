@@ -513,6 +513,31 @@ func TestSessionModelRunner_ProviderTurnDetectionOwnsPlayback(t *testing.T) {
 	}
 }
 
+// fullDuplexSession is a provider that listens while it speaks and owns
+// interruption itself (GPT-Live).
+type fullDuplexSession struct{ *playbackSession }
+
+func (fullDuplexSession) FullDuplex() bool { return true }
+
+// A full-duplex provider hears overlapping speech (backchannels included) as
+// conversation: loud user audio during a response is forwarded as audio,
+// with no RESPONSE.CANCEL and no local playback interrupt.
+func TestSessionModelRunner_FullDuplexProviderGetsNoLocalBargeIn(t *testing.T) {
+	session := fullDuplexSession{&playbackSession{recordingSession: newRecordingSession(), providerVAD: true, playback: messages.LocalPlaybackState{Active: true, Level: 1000}}}
+	runner := NewSessionModelRunner(nil, 16, nil)
+	state := newInFlightRunState(t, session, runner, "live_seg_1")
+	for range 3 {
+		sendUserAudio(t, runner, session, state, pcmAtLevel(8000))
+	}
+	sent := session.sentMessages()
+	if countSent(sent, messages.StreamTypeResponseCancel) != 0 || countSent(sent, messages.StreamTypeAudioDelta) != 3 || session.interrupts != 0 {
+		t.Fatalf("full-duplex overlap sent=%#v interrupts=%d, want three audio frames only", sent, session.interrupts)
+	}
+	if !state.Response.InFlight() || state.CancelPending() {
+		t.Fatalf("response state = %+v, want the segment still in flight", state.Response)
+	}
+}
+
 // A user turn's response request (MESSAGE.END: commit + response.create) that
 // has been sent but not yet opened is answered before a continuation requested
 // after it. The first response to open is the user's turn, not the

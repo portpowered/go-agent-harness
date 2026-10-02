@@ -30,6 +30,7 @@ type fullSession struct {
 
 func (s *fullSession) record(call string)          { s.calls = append(s.calls, call) }
 func (s *fullSession) ProviderTurnDetection() bool { return true }
+func (s *fullSession) FullDuplex() bool            { return true }
 func (s *fullSession) InputAudioSampleRate() int   { return 24000 }
 func (s *fullSession) LocalPlayback() messages.LocalPlaybackState {
 	return messages.LocalPlaybackState{Active: true, Level: 1234}
@@ -92,7 +93,7 @@ func TestSessionCapabilitiesRelayEveryCapabilityThroughNestedWrappers(t *testing
 	relay := wrap(wrap(provider))
 	var session messages.Session = relay
 	var capable messages.BargeInCapableSession = relay
-	if !capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 24000 || capable.LocalPlayback().Level != 1234 {
+	if !capable.ProviderTurnDetection() || !capable.FullDuplex() || capable.InputAudioSampleRate() != 24000 || capable.LocalPlayback().Level != 1234 {
 		t.Fatal("barge-in answers were not relayed")
 	}
 	ctx := context.Background()
@@ -139,7 +140,7 @@ func TestSessionCapabilitiesDoNotAdvertiseMissingCapabilities(t *testing.T) {
 		}
 		var capable messages.BargeInCapableSession = relay
 		capable.SyncReceive(ctx)
-		if capable.ProviderTurnDetection() || capable.InputAudioSampleRate() != 0 || capable.LocalPlayback().Active || capable.InterruptLocalPlayback(ctx) {
+		if capable.ProviderTurnDetection() || capable.FullDuplex() || capable.InputAudioSampleRate() != 0 || capable.LocalPlayback().Active || capable.InterruptLocalPlayback(ctx) {
 			t.Fatalf("%s: barge-in capability advertised", name)
 		}
 		if relay.FlushOutbound(ctx) != nil || relay.TerminalError() != nil || relay.InputDrops() != 0 || relay.InitialSessionConfigSent() {

@@ -157,9 +157,10 @@ func (r *ModelRunner) bargeInTuning() BargeInConfig {
 // unresolved (a room participant died exactly so, 557 ms into its
 // continuation, having produced no audio). A response that was already playing
 // when the continuation was queued is not the continuation -- the request is
-// deferred until that response ends -- so it stays interruptible.
+// deferred until that response ends -- so it stays interruptible. A
+// full-duplex session owns interruption itself and gets no local barge-in.
 func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, state *sessionRunState, input messages.SessionAudioInput) error {
-	if input.InterruptionPolicy.InterruptsResponse() {
+	if input.InterruptionPolicy.InterruptsResponse() && !fullDuplex(session) {
 		held, err := r.bargeIn(ctx, session, input.PCM, state)
 		if held || err != nil {
 			return err
@@ -241,6 +242,13 @@ func (r *ModelRunner) sendBargeInCancel(ctx context.Context, session messages.Se
 func providerOwnsTurnDetection(session messages.Session) bool {
 	detector, ok := session.(messages.SessionTurnDetection)
 	return ok && detector.ProviderTurnDetection()
+}
+
+// fullDuplex reports a provider that owns interruption itself, so user speech
+// is never a local barge-in.
+func fullDuplex(session messages.Session) bool {
+	duplex, ok := session.(messages.SessionFullDuplex)
+	return ok && duplex.FullDuplex()
 }
 
 func inputSampleRate(session messages.Session) int {
