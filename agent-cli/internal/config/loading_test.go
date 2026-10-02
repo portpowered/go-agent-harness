@@ -640,6 +640,33 @@ func TestApplyOverrides_GrokProvider(t *testing.T) {
 	}
 }
 
+// openai-live borrows the OpenAI key and endpoint; --model names the
+// GPT-Live model and must never overwrite model.openai.model, and the
+// cached config must not change.
+func TestApplyOverrides_OpenAILiveProvider(t *testing.T) {
+	base := Config{Model: ModelConfig{Provider: ProviderOpenAI, OpenAI: &OpenAIConfig{Model: "gpt-realtime-2.1", APIKey: testAPIKey}}}
+	out := base.ApplyOverrides("sk-live", "gpt-live-1", ProviderOpenAILive, "https://live.example.test/v1")
+	if out.Model.Provider != ProviderOpenAILive || out.Model.OpenAI == nil {
+		t.Fatalf("overrides = %+v", out.Model)
+	}
+	if out.Model.OpenAI.Model != "gpt-realtime-2.1" {
+		t.Errorf("model.openai.model = %q, want it untouched by --model", out.Model.OpenAI.Model)
+	}
+	if out.Model.OpenAI.APIKey != "sk-live" || out.Model.OpenAI.BaseURL != "https://live.example.test/v1" {
+		t.Errorf("OpenAI endpoint = %+v, want the --api-key and --base-url", out.Model.OpenAI)
+	}
+	if base.Model.OpenAI.APIKey != testAPIKey {
+		t.Error("ApplyOverrides mutated the loaded config")
+	}
+	empty := Config{}.ApplyOverrides("", "gpt-live-1", ProviderOpenAILive, "")
+	if empty.Model.OpenAI == nil || empty.Model.OpenAI.Model != "" {
+		t.Errorf("openai-live without model.openai = %+v, want an empty OpenAI block", empty.Model.OpenAI)
+	}
+	if err := (Config{Model: ModelConfig{Provider: ProviderOpenAILive}}).Validate(); err == nil || !strings.Contains(err.Error(), "session-only") {
+		t.Errorf("Validate(openai-live) = %v, want the session-only refusal", err)
+	}
+}
+
 func TestApplyOverrides_LocalProvider_PreservesExisting(t *testing.T) {
 	base := Config{
 		Model: ModelConfig{

@@ -83,6 +83,16 @@ func (c Config) ApplyOverrides(apiKey, model, provider, baseURL string) Config {
 		}
 		endpoint.apply(&cfg.APIKey, &cfg.Model, &cfg.BaseURL)
 		out.Model.Fal = cfg
+	case ProviderOpenAILive:
+		// GPT-Live authenticates with the OpenAI key and endpoint. --model
+		// names the GPT-Live model, so it never rewrites model.openai.model.
+		cfg := copyOpenAIConfig(out.Model.OpenAI)
+		if cfg == nil {
+			cfg = &OpenAIConfig{}
+		}
+		overrideNonEmpty(&cfg.APIKey, endpoint.apiKey)
+		overrideNonEmpty(&cfg.BaseURL, endpoint.baseURL)
+		out.Model.OpenAI = cfg
 	case ProviderGrok:
 		cfg := copyGrokConfig(out.Model.Grok)
 		if cfg == nil {

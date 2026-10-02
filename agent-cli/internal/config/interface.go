@@ -14,6 +14,10 @@ const (
 	ProviderLocal      = "local"
 	ProviderFal        = "fal"
 	ProviderGrok       = "grok"
+	// ProviderOpenAILive is the OpenAI GPT-Live voice-session provider
+	// (model gpt-live-1). It has no config block of its own: it uses the
+	// model.openai API key and base URL.
+	ProviderOpenAILive = "openai-live"
 )
 
 // Configuration directory and file names

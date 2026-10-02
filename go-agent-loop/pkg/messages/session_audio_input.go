@@ -74,6 +74,16 @@ type SessionTurnDetection interface {
 	ProviderTurnDetection() bool
 }
 
+// SessionFullDuplex is implemented by sessions whose provider listens while it
+// speaks and owns interruption itself (OpenAI GPT-Live). Overlapping user
+// speech, including backchannels, is part of the conversation there, not an
+// interruption: the session runner never runs local barge-in against such a
+// session, so it never cancels a response or interrupts local playback on
+// user speech.
+type SessionFullDuplex interface {
+	FullDuplex() bool
+}
+
 // SessionInputFormat is implemented by sessions that know the sample rate of
 // the PCM16 audio the client sends, so audio durations can be measured.
 type SessionInputFormat interface {
@@ -86,6 +96,7 @@ type SessionInputFormat interface {
 type BargeInCapableSession interface {
 	Session
 	SessionTurnDetection
+	SessionFullDuplex
 	SessionLocalPlayback
 	SessionInputFormat
 	SessionReceiveSyncer

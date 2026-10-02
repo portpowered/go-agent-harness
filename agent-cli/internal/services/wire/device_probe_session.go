@@ -72,6 +72,8 @@ func resolveDeviceProbeProvider(request serviceDevices.DeviceProbeRequest) (devi
 	switch provider {
 	case config.ProviderOpenAI:
 		return openAIDeviceProbeProvider(effective, loaded, request.Model)
+	case config.ProviderOpenAILive:
+		return openAILiveDeviceProbeProvider(effective, request.Model)
 	case config.ProviderGrok:
 		if err := effective.ValidateGrokSession(); err != nil {
 			return deviceProbeProvider{}, err
@@ -82,7 +84,7 @@ func resolveDeviceProbeProvider(request serviceDevices.DeviceProbeRequest) (devi
 		}
 		return deviceProbeProvider{provider: provider, model: active.Model, apiKey: active.APIKey, baseURL: active.BaseURL}, nil
 	default:
-		return deviceProbeProvider{}, fmt.Errorf("--devices real supports realtime providers %q and %q; got %q", config.ProviderOpenAI, config.ProviderGrok, provider)
+		return deviceProbeProvider{}, fmt.Errorf("--devices real supports realtime providers %q, %q and %q; got %q", config.ProviderOpenAI, config.ProviderGrok, config.ProviderOpenAILive, provider)
 	}
 }
 
@@ -102,6 +104,23 @@ func deviceProbeProviderName(requested string, cfg *config.Config) string {
 		return provider
 	}
 	return config.ProviderOpenAI
+}
+
+// openAILiveDeviceProbeProvider resolves a GPT-Live probe. It uses the
+// OpenAI API key, which is its only credential, and gpt-live-1 by default.
+func openAILiveDeviceProbeProvider(effective config.Config, requestedModel string) (deviceProbeProvider, error) {
+	var apiKey, baseURL string
+	if active := effective.Model.OpenAI; active != nil {
+		apiKey, baseURL = active.APIKey, active.BaseURL
+	}
+	if strings.TrimSpace(apiKey) == "" {
+		return deviceProbeProvider{}, fmt.Errorf("%s requires an OpenAI API key (set AGENT_MODEL__OPENAI__API_KEY, pass --api-key, or configure model.openai.api_key in %s); a ChatGPT sign-in is not accepted for %s", config.ProviderOpenAILive, config.ConfigFileName, runtimeProviders.OpenAILive1Model)
+	}
+	model := strings.TrimSpace(requestedModel)
+	if model == "" {
+		model = runtimeProviders.OpenAILive1Model
+	}
+	return deviceProbeProvider{provider: config.ProviderOpenAILive, model: model, apiKey: apiKey, baseURL: baseURL}, nil
 }
 
 func openAIDeviceProbeProvider(effective config.Config, loaded *config.Config, requestedModel string) (deviceProbeProvider, error) {

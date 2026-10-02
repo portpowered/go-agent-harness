@@ -57,6 +57,12 @@ every program that imports `pkg/probe`. These names have no replacement:
 
 ### Added
 
+- `messages.SessionFullDuplex` (`FullDuplex() bool`), forwarded by
+  `messages.SessionCapabilities`. A session that reports it (OpenAI GPT-Live)
+  owns interruption itself, so the session model runner never runs local
+  barge-in against it: loud or overlapping user audio is forwarded as audio,
+  with no `RESPONSE.CANCEL` and no local playback interrupt. Sessions without
+  it behave as before.
 - `probe.scenario.v2` provider-runner expectations: `frame_count`,
   `terminal_reason`, `terminal_provenance`, `output_state`,
   `buffer_disposition`, `audio_energy`, `tool_called`,
@@ -75,6 +81,11 @@ every program that imports `pkg/probe`. These names have no replacement:
 
 ### Changed
 
+- **Breaking:** `messages.BargeInCapableSession` now also requires
+  `SessionFullDuplex` (`FullDuplex() bool`). Types that embed
+  `messages.SessionCapabilities` get it automatically; an outside type that
+  implements the interface by hand must add the method (return false to keep
+  local barge-in).
 - The session model runner no longer blocks its event loop on a full
   `DeltaOutbox`, so barge-in is decided even while the delta consumer is
   stalled. A must-deliver delta that meets a full outbox is queued in order

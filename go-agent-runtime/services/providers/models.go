@@ -82,7 +82,8 @@ const (
 // OpenAILiveProvider is the session provider for the OpenAI GPT-Live protocol
 // (/v1/live/sessions). It is separate from "openai" because the provider name
 // selects the wire protocol, and GPT-Live is not the Realtime API. Admission
-// restricts it to its catalog; no session can be built for it yet.
+// restricts it to its catalog, and its sessions authenticate with an OpenAI
+// API key only.
 const OpenAILiveProvider = "openai-live"
 
 // OpenAILive1Model is the only GPT-Live model.

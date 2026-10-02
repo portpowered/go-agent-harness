@@ -10,6 +10,7 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/providers/internal/catalog"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/fakelive"
 )
 
@@ -72,24 +73,64 @@ func TestOpenAILiveCatalogDescribesADuplexClientDelegationModel(t *testing.T) {
 	}
 }
 
-// TestBuildSessionDoesNotReachTheLiveProviderYet pins that an admitted
-// openai-live session is still refused before any connection is dialed.
-func TestBuildSessionDoesNotReachTheLiveProviderYet(t *testing.T) {
+// TestBuildSessionConnectsTheLiveProviderWithTheAPIKey builds an admitted
+// openai-live session and connects it to the fake GPT-Live server, which
+// requires the API-key bearer on the default endpoint.
+func TestBuildSessionConnectsTheLiveProviderWithTheAPIKey(t *testing.T) {
 	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
-	fake := fakelive.New()
-	_, err := service.BuildSession(t.Context(), providers.SessionConfig{
+	fake := fakelive.New(fakelive.WithAPIKey("test-key"))
+	inferencer, err := service.BuildSession(t.Context(), providers.SessionConfig{
 		Provider: providers.OpenAILiveProvider, Model: providers.OpenAILive1Model, APIKey: "test-key",
 		WebSocketDialer: fake.Dialer(),
 	})
-	if err == nil || !strings.Contains(err.Error(), `do not support provider "openai-live"`) {
-		t.Fatalf("BuildSession(openai-live) = %v, want the unsupported-provider refusal", err)
+	if err != nil {
+		t.Fatalf("BuildSession(openai-live): %v", err)
 	}
-	if calls := fake.DialCalls(); len(calls) != 0 {
-		t.Fatalf("BuildSession dialed %d times, want none", len(calls))
+	session, err := inferencer.ConnectSession(t.Context())
+	if err != nil {
+		t.Fatalf("ConnectSession: %v", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	calls := fake.DialCalls()
+	if len(calls) != 1 || calls[0].Endpoint != openailive.DefaultEndpoint {
+		t.Fatalf("dial calls = %+v, want one dial of the default live endpoint", calls)
 	}
 	if _, err := service.BuildSession(t.Context(), providers.SessionConfig{
 		Provider: providers.OpenAILiveProvider, Model: "gpt-realtime", APIKey: "test-key",
 	}); !errors.Is(err, providers.ErrUnsupportedRealtimeModel) {
 		t.Fatalf("BuildSession(openai-live, gpt-realtime) = %v, want admission rejection first", err)
+	}
+}
+
+// TestBuildSessionRefusesTheLiveProviderWithoutAnAPIKey pins that gpt-live-1
+// takes only an API key: with none, the build fails before any dial.
+func TestBuildSessionRefusesTheLiveProviderWithoutAnAPIKey(t *testing.T) {
+	service := New(nil, nil, clock.Real{}, nil, catalog.New(), nil)
+	fake := fakelive.New()
+	_, err := service.BuildSession(t.Context(), providers.SessionConfig{
+		Provider: providers.OpenAILiveProvider, Model: providers.OpenAILive1Model, WebSocketDialer: fake.Dialer(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires an OpenAI API key") {
+		t.Fatalf("BuildSession without a key = %v, want the API-key refusal", err)
+	}
+	if calls := fake.DialCalls(); len(calls) != 0 {
+		t.Fatalf("BuildSession dialed %d times, want none", len(calls))
+	}
+}
+
+func TestLiveSessionsEndpointFollowsTheConfiguredURL(t *testing.T) {
+	for _, tc := range []struct{ realtime, base, want string }{
+		{want: openailive.DefaultEndpoint},
+		{base: "https://api.openai.com/v1", want: openailive.DefaultEndpoint},
+		{base: "http://127.0.0.1:8080/v1/", want: "ws://127.0.0.1:8080/v1/live/sessions"},
+		{realtime: "wss://example.test/v1/live/sessions", base: "https://ignored.test/v1", want: "wss://example.test/v1/live/sessions"},
+		{realtime: "wss://example.openai.azure.com/openai/v1", want: "wss://example.openai.azure.com/openai/v1/live/sessions"},
+		{base: "not a url", want: "not a url"},
+	} {
+		if got := liveSessionsEndpoint(providers.SessionConfig{RealtimeURL: tc.realtime, BaseURL: tc.base}); got != tc.want {
+			t.Errorf("liveSessionsEndpoint(%q, %q) = %q, want %q", tc.realtime, tc.base, got, tc.want)
+		}
 	}
 }

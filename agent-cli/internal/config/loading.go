@@ -425,6 +425,9 @@ func (c Config) Validate() error {
 	if c.Model.Provider == ProviderGrok {
 		return fmt.Errorf("model.provider %q is session-only; use agent session --record or --replay for Grok realtime sessions", ProviderGrok)
 	}
+	if c.Model.Provider == ProviderOpenAILive {
+		return fmt.Errorf("model.provider %q is session-only; use agent session --provider %s for GPT-Live voice sessions", ProviderOpenAILive, ProviderOpenAILive)
+	}
 	active, err := c.ActiveOpenAIConfig()
 	if err != nil {
 		return err

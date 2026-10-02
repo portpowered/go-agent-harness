@@ -16,12 +16,38 @@
   rejected). Invalid configs wrap `ErrInvalidSessionConfig`, and frames that
   are not well-formed events wrap `ErrMalformedEvent`. Every server event
   that may carry `client_event_id` keeps it, and `OptionalID` keeps an absent,
-  null or string `response.event` `delegation_id` as it arrived. There is no
-  session provider yet, so nothing in production reaches the package.
+  null or string `response.event` `delegation_id` as it arrived.
 - `pkg/providers/openailive/fakelive`: a scripted fake GPT-Live server for
   tests, served in process (`Server.Dialer`) or over `httptest`
   (`Server.ServeHTTP`). It is test support; only `_test.go` files may import
   it.
+- `openailive.Provider` (`openailive.New`, name `"openai-live"`): the GPT-Live
+  session provider over the primary WebSocket, phase 2 of
+  docs/architecture/gpt-live-provider.md. `ConnectSession` sends
+  `session.start` and waits for `session.started`; a startup `error` fails it
+  with `*openailive.StartupError`. Auth headers come from a
+  `CredentialProvider` (`WithCredentialProvider`), called once per dial;
+  `APIKeyCredentials` (the bearer API key) is the only implementation. Audio
+  flows both ways in the one session format (PCM16 at 24 or 16 kHz, or
+  G.711), with a trailing odd PCM byte held for the next chunk. Assistant
+  audio and transcripts become synthesized speech segments (`live_seg_<n>`,
+  one `MESSAGE.START`..`MESSAGE.END` each) that close at a quiet gap of
+  `WithSegmentGap` (default 600 ms) on the injected clock (`WithClock`) or on
+  the server timeline; user transcripts become utterances (`live_utt_<n>`).
+  `session.closed` reasons map onto the existing `TerminalReason` values,
+  with the GPT-Live reason kept as `SessionCloseValue.Reason`; a socket that
+  ends before `session.closed` reports `terminal_failure` with reason
+  `finalization_unconfirmed`. `Close` (and the end of the connect context)
+  runs the `session.close` handshake, bounded by `WithCloseTimeout` (default
+  15 s). Inbound messages go through one ordered outbox with backpressure;
+  once the handshake starts, delivery stops waiting for the reader (messages
+  that do not fit are dropped and counted, terminal ones always land), so a
+  close during streaming output reaches `session.closed` at once. The session reports `ProviderTurnDetection`, the new `FullDuplex`
+  capability and no response requests; `RESPONSE.CREATE`, `TOOLCALL.END` and
+  `TEXT.DELTA` fail with `openailive.ErrNoWireEvent`, `MESSAGE.END` and
+  `SESSION.UPDATE` succeed with no wire event, and `RESPONSE.CANCEL` ends the
+  open segment locally. Command errors are non-terminal `ERROR`s.
+  `session.delegation.created` is logged and ignored for now.
 
 - `pkg/providers/openailive/quicksilver`: the wire layer of the older GPT-Live
   dialect that a ChatGPT login can open (`gpt-live-1-codex`, "OpenAI-Alpha:

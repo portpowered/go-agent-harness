@@ -12,9 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	sharedaudio "github.com/portpowered/go-agent-harness/go-audio/pkg/audio"
+	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
@@ -51,6 +53,10 @@ type Config struct {
 	// OnClose runs once inside Close, after Done is closed and before the
 	// media and connection are released.
 	OnClose func()
+	// Clock drives the provider's timers (CloseGracefully and any
+	// provider-owned idle timers). Nil selects the host clock, which is
+	// virtual inside a testing/synctest bubble.
+	Clock clock.TimerSource
 }
 
 // Session is the provider-neutral realtime WebSocket session. Providers embed
@@ -80,6 +86,9 @@ func NewSession(conn transport.Conn, logger logging.Logger, cfg Config) *Session
 	if logger == nil {
 		logger = logging.DummyLogger()
 	}
+	if cfg.Clock == nil {
+		cfg.Clock = clock.Real{}
+	}
 	s := &Session{
 		conn:      conn,
 		logger:    logger,
@@ -94,6 +103,9 @@ func NewSession(conn transport.Conn, logger logging.Logger, cfg Config) *Session
 
 // Logger returns the session logger.
 func (s *Session) Logger() logging.Logger { return s.logger }
+
+// Clock returns the clock that drives the session's timers.
+func (s *Session) Clock() clock.TimerSource { return s.cfg.Clock }
 
 // SendQueue returns the outbound wire queue.
 func (s *Session) SendQueue() *messages.TypedBuffer[models.SessionEvent] { return s.sendQueue }
@@ -164,6 +176,30 @@ func (s *Session) Close() error {
 		closeErr = errors.Join(s.CurrentRTCMedia().Close(), s.conn.Close())
 	})
 	return closeErr
+}
+
+// CloseGracefully runs a protocol close handshake, then closes the session.
+// It admits closeEvent to the outbound queue and waits until settled is
+// closed (the provider acknowledged the close), the session ends on its own,
+// ctx ends, or timeout passes on the session clock, whichever comes first.
+func (s *Session) CloseGracefully(ctx context.Context, closeEvent models.SessionEvent, settled <-chan struct{}, timeout time.Duration) error {
+	if s.Closed() {
+		return s.Close()
+	}
+	ctx, cancel, err := clock.WithTimeout(ctx, s.cfg.Clock, timeout)
+	if err != nil {
+		return errors.Join(err, s.Close())
+	}
+	defer cancel()
+	if outcome := s.EnqueueEventWait(ctx, closeEvent); outcome.OK() {
+		select {
+		case <-settled:
+		case <-s.done:
+		case <-ctx.Done():
+			s.logger.Warn(s.cfg.LogPrefix+": close handshake timed out", logging.Field{Key: "timeout", Value: timeout})
+		}
+	}
+	return s.Close()
 }
 
 // CloseWithLog closes the session from a background loop that has no caller
@@ -298,6 +334,21 @@ func ParseEvent(raw []byte) (models.SessionEvent, error) {
 		return models.SessionEvent{}, errors.New("event missing type field")
 	}
 	return models.SessionEvent{Type: models.SessionEventType(envelope.Type), Data: raw}, nil
+}
+
+// TryDeliver writes one normalized message to the inbound buffer if it fits;
+// a full buffer drops and counts it. Providers that deliver messages outside
+// HandleEvent use it.
+func (s *Session) TryDeliver(msg messages.StreamMessage) bool {
+	return s.recvBuf.TryWrite(msg).OK()
+}
+
+// DeliverWait writes one normalized message to the inbound buffer, waiting
+// for space until ctx ends or the session terminates. Unlike the read loop's
+// delivery, an ended ctx does not close the session: the caller decides what
+// a stopped write means.
+func (s *Session) DeliverWait(ctx context.Context, msg messages.StreamMessage) messages.BufferWriteOutcome {
+	return s.recvBuf.WriteWaitContextOrDone(ctx, s.done, msg)
 }
 
 // WriteTerminal delivers a terminal record to the normalized inbound buffer,

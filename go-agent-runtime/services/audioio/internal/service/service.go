@@ -42,7 +42,7 @@ func (s *Service) ResolveRates(ctx context.Context, request audioio.RateRequest)
 	}
 	if rate <= 0 {
 		rate = audioio.DefaultSampleRate
-		if !request.Replay && (strings.EqualFold(strings.TrimSpace(request.Provider), audioio.ProviderOpenAI) || strings.EqualFold(strings.TrimSpace(request.Provider), audioio.ProviderGrok)) {
+		if !request.Replay && realtimeRateProvider(request.Provider) {
 			rate = audioio.RealtimeSampleRate
 		}
 	}
@@ -50,6 +50,14 @@ func (s *Service) ResolveRates(ctx context.Context, request audioio.RateRequest)
 		return audioio.RateResolution{}, err
 	}
 	return audioio.RateResolution{InputRate: rate, OutputRate: rate}, nil
+}
+
+// realtimeRateProvider reports a provider whose sessions default to the
+// 24 kHz realtime rate: OpenAI Realtime, Grok and GPT-Live.
+func realtimeRateProvider(provider string) bool {
+	provider = strings.TrimSpace(provider)
+	return strings.EqualFold(provider, audioio.ProviderOpenAI) || strings.EqualFold(provider, audioio.ProviderGrok) ||
+		strings.EqualFold(provider, audioio.ProviderOpenAILive)
 }
 
 func (s *Service) ConvertPCM16(ctx context.Context, request audioio.PCM16Request) ([]byte, error) {

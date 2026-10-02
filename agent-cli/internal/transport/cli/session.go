@@ -498,7 +498,7 @@ func (c *SessionCommand) registerSessionFlags(cmd *cobra.Command, t sessionFlagT
 	cmd.Flags().StringVar(&c.askFlags.ReplayTiming, "replay-timing", "immediate", "Replay cadence: immediate for fast order validation, or recorded to preserve timestamp_ms timing")
 	cmd.Flags().StringVar(t.prompt, "prompt", "", "Seed the realtime session with text")
 	cmd.Flags().StringVar(&c.askFlags.SystemPrompt, "system-prompt", "", "Path to system prompt file or literal text")
-	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok or openai for live record mode)")
+	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Session provider ID (use grok, openai or openai-live for live record mode)")
 	cmd.Flags().DurationVar(t.maxDuration, "max-duration", 0, "Maximum session duration as a Go duration; exits cleanly when the bound is reached")
 	cmd.Flags().BoolVar(t.waitForClose, "wait-for-close", false, "Keep the session running after a completed response until the provider closes it")
 	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Session model ID for live record mode")

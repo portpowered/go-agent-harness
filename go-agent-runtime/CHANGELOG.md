@@ -41,9 +41,17 @@
   not admitted under `openai`. The catalog lookups (`RealtimeModels`,
   `LookupRealtimeModel`, `SupportedRealtimeModelIDs` and
   `ModelAdmissionResolver.ResolveRealtimeModel`) now answer for
-  `openai-live` too. `BuildSession` still refuses `openai-live`
-  ("realtime sessions do not support provider"), so no session can be built
-  for it yet.
+  `openai-live` too.
+- `BuildSession` builds `openai-live` sessions with the GPT-Live provider
+  (`go-llm-gateway/pkg/providers/openailive`). The OpenAI API key is the only
+  credential: without one, a hosted endpoint is refused before dialing, and a
+  ChatGPT sign-in is not accepted. The endpoint is the realtime URL, else the
+  base URL, else `wss://api.openai.com/v1/live/sessions`; `/live/sessions` is
+  appended when missing and HTTP(S) becomes WS(S). The provider's timers use
+  the service clock.
+- `audioio`: `openai-live` resolves the 24 kHz realtime rate when no rate is
+  requested (new `audioio.ProviderOpenAILive`), and gets no transcription
+  config, since GPT-Live transcripts are always on.
 
 ### Removed
 

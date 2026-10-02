@@ -6,7 +6,7 @@
 // it is a separate session provider ("openai-live") rather than a model of
 // the "openai" Realtime provider.
 //
-// This package currently holds the wire layer only:
+// The package holds:
 //
 //   - typed structs for every documented client and server event
 //     (protocol.go, events.go);
@@ -14,10 +14,15 @@
 //     an unknown event type decodes to UnknownEvent instead of failing;
 //   - BuildSessionStart (start.go), which turns a models.SessionConfig and the
 //     GPT-Live Options carried in its raw Config into a strict session.start
-//     event.
+//     event;
+//   - Provider (provider.go), the "openai-live" session provider: it dials the
+//     primary WebSocket with headers from a CredentialProvider, waits for
+//     session.started, and maps the session onto the harness stream with
+//     synthesized speech segments (segments.go), a fail-closed outbound
+//     mapping and the session.close handshake.
 //
-// No production session reaches this package yet. The design, the protocol
-// spec it follows and the phased plan are in
-// docs/architecture/gpt-live-provider.md. The scripted fake server used by
-// tests lives in the fakelive subpackage.
+// Client delegations (session.delegation.created) are logged and ignored
+// until the delegation phase. The design, the protocol spec it follows and
+// the phased plan are in docs/architecture/gpt-live-provider.md. The scripted
+// fake server used by tests lives in the fakelive subpackage.
 package openailive

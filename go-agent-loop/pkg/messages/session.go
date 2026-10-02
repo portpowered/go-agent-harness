@@ -166,7 +166,7 @@ type Session interface {
 // SupportsSessionMessages, SupportsSessionMessagesWithoutResponse,
 // SessionMedia). Every other forwarded capability answers its zero value when
 // the wrapped session lacks it, which is the answer a session without it gives:
-// no provider turn detection, no local playback, an unknown input rate, no
+// no provider turn detection, no full duplex, no local playback, an unknown input rate, no
 // receive relay, no outbound queue, no terminal error and no drops.
 //
 // A wrapper that answers a queried capability itself, instead of relaying it,
@@ -234,6 +234,11 @@ var (
 func (c SessionCapabilities) ProviderTurnDetection() bool {
 	detector, ok := c.Wrapped.(SessionTurnDetection)
 	return ok && detector.ProviderTurnDetection()
+}
+
+func (c SessionCapabilities) FullDuplex() bool {
+	duplex, ok := c.Wrapped.(SessionFullDuplex)
+	return ok && duplex.FullDuplex()
 }
 
 func (c SessionCapabilities) LocalPlayback() LocalPlaybackState {
