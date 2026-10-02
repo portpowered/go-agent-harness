@@ -233,7 +233,8 @@ func (p *customerSimulationStreamParser) consume(record customerSimulationRecord
 		messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
 		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
-		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// Other stream types carry no customer-simulation response evidence.
 	}
 	return p.responseIndex > len(p.scenario.Actions)+p.knownResponses+1

@@ -46,13 +46,14 @@ func (e *StartupError) Error() string {
 // Provider is the GPT-Live session provider: one primary WebSocket per
 // session, client delegation, no tools in the voice loop.
 type Provider struct {
-	credentials  CredentialProvider
-	endpoint     string
-	dialer       transport.Dialer
-	logger       logging.Logger
-	clock        clock.TimerSource
-	segmentGap   time.Duration
-	closeTimeout time.Duration
+	credentials      CredentialProvider
+	endpoint         string
+	dialer           transport.Dialer
+	logger           logging.Logger
+	clock            clock.TimerSource
+	segmentGap       time.Duration
+	delegationSettle time.Duration
+	closeTimeout     time.Duration
 }
 
 var _ providers.SessionProvider = (*Provider)(nil)
@@ -60,11 +61,12 @@ var _ providers.SessionProvider = (*Provider)(nil)
 // New returns a Provider configured by options.
 func New(options ...Option) *Provider {
 	p := &Provider{
-		endpoint:     DefaultEndpoint,
-		logger:       logging.DummyLogger(),
-		clock:        clock.Real{},
-		segmentGap:   DefaultSegmentGap,
-		closeTimeout: DefaultCloseTimeout,
+		endpoint:         DefaultEndpoint,
+		logger:           logging.DummyLogger(),
+		clock:            clock.Real{},
+		segmentGap:       DefaultSegmentGap,
+		delegationSettle: DefaultDelegationSettle,
+		closeTimeout:     DefaultCloseTimeout,
 	}
 	for _, option := range options {
 		option(p)
@@ -122,10 +124,11 @@ func (p *Provider) ConnectSession(ctx context.Context, cfg models.SessionConfig)
 		return nil, errors.Join(err, conn.Close())
 	}
 	session := newLiveSession(conn, p.logger, sessionSettings{
-		format:       *start.Session.Audio.Format,
-		clock:        p.clock,
-		segmentGap:   p.segmentGap,
-		closeTimeout: p.closeTimeout,
+		format:           *start.Session.Audio.Format,
+		clock:            p.clock,
+		segmentGap:       p.segmentGap,
+		delegationSettle: p.delegationSettle,
+		closeTimeout:     p.closeTimeout,
 	})
 	session.open(ctx, started.Session)
 	return session, nil

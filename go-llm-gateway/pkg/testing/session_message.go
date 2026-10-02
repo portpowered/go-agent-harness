@@ -135,6 +135,10 @@ func unmarshalValue(t messages.StreamMessageType, data json.RawMessage) (message
 		v = new(messages.RefusalValue)
 	case messages.StreamTypeLoopEnd:
 		v = new(messages.LoopEndValue)
+	case messages.StreamTypeDelegationCreated:
+		v = new(messages.DelegationCreatedValue)
+	case messages.StreamTypeContextAppend:
+		v = new(messages.ContextAppendValue)
 	case messages.StreamTypeAudioStart, messages.StreamTypeAudioDelta, messages.StreamTypeAudioEnd,
 		messages.StreamTypeVADSpeechStarted, messages.StreamTypeVADSpeechStopped,
 		messages.StreamTypeTranscriptStart, messages.StreamTypeTranscriptDelta, messages.StreamTypeTranscriptEnd,
@@ -222,7 +226,9 @@ func unmarshalAudioValue(t messages.StreamMessageType) messages.StreamMessageVal
 		messages.StreamTypeLoopEnd,
 		messages.StreamTypeUsageInfo,
 		messages.StreamTypeError,
-		messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated,
+		messages.StreamTypeContextAppend:
 		return nil
 	default:
 		return nil
@@ -268,7 +274,7 @@ func unmarshalMediaValue(t messages.StreamMessageType) messages.StreamMessageVal
 		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
 		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
-		messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeSystemFullMessage, messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		return nil
 	default:
 		return nil

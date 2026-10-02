@@ -4,6 +4,13 @@
 
 ### Added
 
+- Recording evidence and replay captures decode the new `DELEGATION.CREATED`
+  and `CONTEXT.APPEND` stream messages instead of rejecting them as unknown.
+  The live session, liveness, session-duration, browser-conversation and
+  device-probe observers treat both as non-response messages; routing
+  `DELEGATION.CREATED` to a delegation executor is PR 4 of
+  docs/architecture/gpt-live-provider.md.
+
 - `providers.OpenAIChatGPTProvider` (`"openai-chatgpt"`) and
   `providers.Config.ChatGPTAuthPath`: the provider service builds the
   `openai-chatgpt` text provider over the ChatGPT auth store the host names.

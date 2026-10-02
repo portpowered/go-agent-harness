@@ -348,7 +348,8 @@ func foldAccounting(ledger []ledgerEntry) (accountingFold, error) {
 			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
 			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
-			messages.StreamTypeSystemFullMessage:
+			messages.StreamTypeSystemFullMessage,
+			messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 			// Other stream types do not contribute to accounting.
 		}
 	}

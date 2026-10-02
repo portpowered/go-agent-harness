@@ -1345,7 +1345,9 @@ barge-in against a session that reports it.
 2. **Two new stream types in `go-agent-loop/pkg/messages`**, both carried by
    `Send` and `Receive`:
    - `DELEGATION.CREATED` (inbound, observational) with
-     `DelegationCreatedValue{ID, OffsetMS, Target, Transcript []TranscriptFragment}`.
+     `DelegationCreatedValue{ID, OffsetMS, Target, Task, Transcript []TranscriptFragment}`.
+     `Task` is the task text when the dialect sends one: the public dialect
+     never does, the quicksilver `delegation.created` item carries content.
      It is not a response stream type: it must not be added to
      `sessionstate.IsResponseStreamType` or to the customer-output set.
      Message reconstruction and the coordinator's history ignore it, as they

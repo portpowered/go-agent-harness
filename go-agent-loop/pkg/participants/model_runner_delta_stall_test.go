@@ -211,3 +211,49 @@ func TestSessionOutbox_NothingWrittenAfterSessionEnds(t *testing.T) {
 		}
 	})
 }
+
+// A provider delegation reaches the delta consumer even when it arrives while
+// the outbox is full of speech audio: the audio around it may be shed, the
+// delegation never is, because the provider never times one out.
+func TestSessionModelRunner_DelegationSurvivesFullOutbox(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := newRecordingSession()
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 1, nil)
+		ctx, cancel := context.WithCancel(context.Background())
+		errCh := make(chan error, 1)
+		go func() { errCh <- runner.Run(ctx) }()
+		defer func() {
+			cancel()
+			<-errCh
+		}()
+
+		audio := messages.StreamMessage{Type: messages.StreamTypeAudioDelta, ResponseID: "live_seg_1", Value: messages.NewAudioDeltaValue([]byte{1, 2})}
+		delegation := messages.StreamMessage{Type: messages.StreamTypeDelegationCreated, Value: messages.NewDelegationCreatedValue("del_1", messages.DelegationTargetClient, 3600, nil)}
+		for _, msg := range []messages.StreamMessage{audio, audio, audio, delegation, audio, audio} {
+			session.recv.Write(ctx, msg)
+		}
+		synctest.Wait()
+		if runner.DeltaOutbox.Drops() == 0 {
+			t.Fatal("outbox drops = 0, want the stalled consumer to shed ordinary audio")
+		}
+
+		// Drain on virtual time: once the outbox stays empty for a second the
+		// delegation was dropped, which fails here instead of deadlocking.
+		for {
+			var got messages.StreamMessage
+			select {
+			case got = <-runner.DeltaOutbox.Chan():
+			case <-time.After(time.Second):
+				t.Fatal("the outbox drained without DELEGATION.CREATED: it was dropped")
+			}
+			if got.Type == messages.StreamTypeDelegationCreated {
+				value, ok := got.Value.(*messages.DelegationCreatedValue)
+				if !ok || value.ID != "del_1" || got.ResponseID != "" {
+					t.Fatalf("delivered delegation %+v (response %q), want del_1 with no response id", value, got.ResponseID)
+				}
+				return
+			}
+			synctest.Wait()
+		}
+	})
+}

@@ -76,7 +76,8 @@ func (s *unresolvedFailureSession) SendWithOutcome(ctx context.Context, msg mess
 		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
 		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
 		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// Other client messages need no scripted response.
 	}
 	return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}

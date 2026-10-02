@@ -251,9 +251,10 @@ func (b *TypedBuffer[T]) Chan() <-chan T {
 }
 
 // MustDeliver reports whether losing msg would corrupt the turn: a tool call
-// or tool result, a message or session boundary, an error, LOOP.END, or an
-// assembled SYSTEM.FULL_MESSAGE. Such deltas wait for buffer capacity
-// instead of being dropped when a consumer falls behind.
+// or tool result, a message or session boundary, an error, LOOP.END, an
+// assembled SYSTEM.FULL_MESSAGE, or a DELEGATION.CREATED (the provider never
+// times a delegation out, so a lost one is never answered). Such deltas wait
+// for buffer capacity instead of being dropped when a consumer falls behind.
 func MustDeliver(msg StreamMessage) bool {
 	if msg.Role == RoleTool {
 		return true
@@ -267,7 +268,8 @@ func MustDeliver(msg StreamMessage) bool {
 		StreamTypeError,
 		StreamTypeSessionClose,
 		StreamTypeLoopEnd,
-		StreamTypeSystemFullMessage:
+		StreamTypeSystemFullMessage,
+		StreamTypeDelegationCreated:
 		return true
 	default:
 		return false

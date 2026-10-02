@@ -31,6 +31,9 @@ func (s *liveSession) Send(ctx context.Context, msg messages.StreamMessage) bool
 //   - RESPONSE.CANCEL has no wire event either: it ends the open speech
 //     segment as cancelled, drops its later output and interrupts local
 //     playback unless KeepPlayback is set;
+//   - CONTEXT.APPEND becomes session.instructions.append,
+//     session.thinking.append or session.commentary.append by its kind,
+//     split into appends of at most MaxAppendTokens (see contextAppend);
 //   - RESPONSE.CREATE, TOOLCALL.END, TEXT.DELTA and every other type fail
 //     with a terminal-failure outcome, never a silent success.
 func (s *liveSession) SendWithOutcome(ctx context.Context, msg messages.StreamMessage) messages.SessionSendOutcome {
@@ -53,6 +56,8 @@ func (s *liveSession) SendWithOutcome(ctx context.Context, msg messages.StreamMe
 	case messages.StreamTypeResponseCancel:
 		s.cancelSegment(msg)
 		return messages.SessionSendOutcome{Status: messages.SessionSendSucceeded}
+	case messages.StreamTypeContextAppend:
+		return s.contextAppend(ctx, msg)
 	default:
 		return s.noWireEvent(msg)
 	}

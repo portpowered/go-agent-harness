@@ -539,7 +539,8 @@ func runFaultScenarioWithConn(t *testing.T, rawConn transport.Conn, options ...O
 			messages.StreamTypePong, messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose,
 			messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 			messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate, messages.StreamTypeRefusal,
-			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeSystemFullMessage:
+			messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeSystemFullMessage,
+			messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 			// Other stream types do not affect the fault-transport observation.
 		}
 	}

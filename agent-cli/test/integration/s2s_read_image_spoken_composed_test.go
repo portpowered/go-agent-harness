@@ -318,7 +318,8 @@ func (c *readImageSpokenCounts) observe(index int, event messages.StreamMessage)
 		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
 		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
 		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// Other stream types are not part of the read-image tool evidence.
 	}
 }

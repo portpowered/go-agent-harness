@@ -17,6 +17,7 @@ func TestMustDeliverClassifiesTurnCorruptingDeltas(t *testing.T) {
 		{Type: StreamTypeSessionClose},
 		{Type: StreamTypeLoopEnd},
 		{Type: StreamTypeSystemFullMessage},
+		{Type: StreamTypeDelegationCreated},
 		{Type: StreamTypeTextDelta, Role: RoleTool}, // any tool-result delta
 	}
 	for _, msg := range must {
@@ -29,6 +30,7 @@ func TestMustDeliverClassifiesTurnCorruptingDeltas(t *testing.T) {
 		{Type: StreamTypeAudioDelta},
 		{Type: StreamTypeAudioStart},
 		{Type: StreamTypeSessionOpen},
+		{Type: StreamTypeContextAppend},
 	}
 	for _, msg := range droppable {
 		if MustDeliver(msg) {

@@ -122,6 +122,22 @@ const (
 	// audio.
 	StreamTypeResponseCreate StreamMessageType = "RESPONSE.CREATE"
 
+	// StreamTypeDelegationCreated (inbound, observational) reports that a
+	// full-duplex provider handed backend work to the client, for example a
+	// GPT-Live client delegation. Its value is a [DelegationCreatedValue]. It
+	// carries no ResponseID and is not scoped to a response: it never opens,
+	// retires or tags one, and message reconstruction ignores it. It is
+	// must-deliver ([MustDeliver]), because the provider never times a
+	// delegation out, so a lost one would never be answered.
+	StreamTypeDelegationCreated StreamMessageType = "DELEGATION.CREATED"
+
+	// StreamTypeContextAppend is sent TO the inference provider (via
+	// session.Send) to add context to a live session: a delegation result or
+	// progress, a greeting, a disclosure or UI context. Its value is a
+	// [ContextAppendValue]. A provider with no channel for it returns a
+	// terminal-failure outcome, so senders must check the outcome.
+	StreamTypeContextAppend StreamMessageType = "CONTEXT.APPEND"
+
 	// StreamTypeRefusal carries the complete accumulated refusal text from a model.
 	// Emitted once after all refusal deltas are collected, before MESSAGE.END.
 	StreamTypeRefusal StreamMessageType = "REFUSAL"

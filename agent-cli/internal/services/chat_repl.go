@@ -270,7 +270,8 @@ func (m *ChatModel) applyStreamEvent(evt messages.StreamMessage) {
 		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
 		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
 		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// The chat view does not render the remaining stream types.
 	}
 }

@@ -335,6 +335,10 @@ func newEvidenceLifecycleValue(kind messages.StreamMessageType) messages.StreamM
 		return new(messages.RefusalValue)
 	case messages.StreamTypeLoopEnd:
 		return new(messages.LoopEndValue)
+	case messages.StreamTypeDelegationCreated:
+		return new(messages.DelegationCreatedValue)
+	case messages.StreamTypeContextAppend:
+		return new(messages.ContextAppendValue)
 	default:
 		return nil
 	}
