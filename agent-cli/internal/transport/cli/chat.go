@@ -100,7 +100,7 @@ func (c *ChatCommand) Generate() *cobra.Command {
 		Use:     "chat",
 		Short:   "Start an interactive chat session with the agent",
 		Long:    "Interactive multi-turn conversation. Type 'exit' or 'quit' to leave.\nWith --activate-audio-in the agent listens on the default microphone instead of stdin.\nWith --loop, runs in iterative mode with user steering between iterations.",
-		Example: "  yui chat\n  yui chat --activate-audio-in",
+		Example: "  yui chat\n  yui chat --activate-audio-in\n  yui chat --provider openai-chatgpt",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateChatInvocation(cmd, c.loopFlags, c.chatFlags, c.inputIsInteractive); err != nil {
 				// Chat preflight failures are already actionable. Leave final
@@ -130,6 +130,9 @@ func (c *ChatCommand) Generate() *cobra.Command {
 
 	cmd.Flags().BoolVar(&c.chatFlags.ActivateAudioIn, "activate-audio-in", false, "Enable audio input from the default microphone")
 	cmd.Flags().BoolVar(&c.chatFlags.ActivateAudioOut, "activate-audio-out", false, "Enable audio output")
+	cmd.Flags().StringVar(&c.askFlags.Provider, "provider", "", "Provider ID (overrides config); openai-chatgpt uses the ChatGPT login from \"yui auth chatgpt\" instead of an API key")
+	cmd.Flags().StringVar(&c.askFlags.Model, "model", "", "Model ID (overrides config)")
+	cmd.Flags().StringVar(&c.askFlags.BaseURL, "base-url", "", "Base URL for the provider (overrides config)")
 
 	cmd.Flags().BoolVar(&c.loopFlags.Loop, "loop", false, "Enable iterative loop mode (re-instantiates fresh sessions up to --max-iterations)")
 	cmd.Flags().IntVar(&c.loopFlags.MaxIterations, "max-iterations", defaultChatLoopIterations, "Maximum number of loop iterations (requires --loop)")

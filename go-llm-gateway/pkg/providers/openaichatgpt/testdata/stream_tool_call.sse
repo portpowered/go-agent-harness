@@ -1,0 +1,18 @@
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"get_weather","arguments":""}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","output_index":0,"item_id":"fc_1","delta":"{\"city\":"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","output_index":0,"item_id":"fc_1","delta":"\"Paris\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","output_index":0,"item_id":"fc_1","arguments":"{\"city\":\"Paris\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_3","usage":{"input_tokens":30,"output_tokens":7,"total_tokens":37}}}
+

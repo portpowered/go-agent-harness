@@ -1,0 +1,7 @@
+MESSAGE.START
+TOOLCALL.START[0] id="call_1" name="get_weather"
+TOOLCALL.DELTA[0] "{\"city\":"
+TOOLCALL.DELTA[0] "\"Paris\"}"
+TOOLCALL.END[0] id="call_1" name="get_weather" args="{\"city\":\"Paris\"}"
+MESSAGE.END prompt=30 completion=7 total=37 reasoning=0
+USAGE.INFO prompt=30 completion=7 total=37 reasoning=0

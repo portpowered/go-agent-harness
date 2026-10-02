@@ -21,8 +21,10 @@ import (
 
 type chatTestToolExecutor struct{}
 
-func (chatTestToolExecutor) Execute(context.Context, messages.ToolCall) (messages.ToolCallResponse, error) {
-	return messages.ToolCallResponse{}, nil
+// Execute answers every call with a fixed result for that call's id, so the
+// loop's tool message keeps the provider's call id.
+func (chatTestToolExecutor) Execute(_ context.Context, call messages.ToolCall) (messages.ToolCallResponse, error) {
+	return messages.ToolCallResponse{ToolCallID: call.ID, Name: call.Name, Content: "tool result for " + call.Name}, nil
 }
 
 type chatTestInferencer struct {
@@ -109,8 +111,13 @@ func newTestAgentCLIAtWithFlags(t *testing.T, inferencer messages.Inferencer, co
 	t.Helper()
 	globalFlags := flags.NewGlobalFlags()
 	globalFlags.ConfigDirPath = configDir
+	return newTestAgentCLIWithService(globalFlags, newChatTestSessionService(inferencer))
+}
+
+// newTestAgentCLIWithService composes the test CLI around textService, the
+// session service behind ask and chat.
+func newTestAgentCLIWithService(globalFlags *flags.GlobalFlags, textService session.Service) (*AgentCLI, *flags.ChatFlags, *flags.LoopFlags) {
 	rootCommand := NewRootCommand(globalFlags)
-	textService := newChatTestSessionService(inferencer)
 	askFlags := flags.NewAskFlags()
 	askFlags.NoSystemInformation = true
 	loopFlags := flags.NewLoopFlags()

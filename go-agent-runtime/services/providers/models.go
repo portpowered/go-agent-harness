@@ -89,6 +89,12 @@ const OpenAILiveProvider = "openai-live"
 // OpenAILive1Model is the only GPT-Live model.
 const OpenAILive1Model = "gpt-live-1"
 
+// OpenAIChatGPTProvider is the text provider for the OpenAI Responses API
+// over the ChatGPT Codex backend, signed with a ChatGPT login instead of an
+// API key. It has no static catalog: its models come from the account's
+// model list, and with no model configured it uses the account's default.
+const OpenAIChatGPTProvider = "openai-chatgpt"
+
 // RealtimeModel.Delegation values.
 const (
 	RealtimeDelegationClient    = "client"

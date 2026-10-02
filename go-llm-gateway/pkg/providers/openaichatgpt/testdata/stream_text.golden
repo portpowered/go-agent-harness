@@ -1,0 +1,9 @@
+MESSAGE.START
+TEXT.START
+TEXT.DELTA "Hello"
+TEXT.END
+TEXT.START
+TEXT.DELTA "World"
+TEXT.END
+MESSAGE.END prompt=100 completion=10 total=110 reasoning=5
+USAGE.INFO prompt=100 completion=10 total=110 reasoning=5

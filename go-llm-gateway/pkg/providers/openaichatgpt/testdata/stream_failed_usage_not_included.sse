@@ -1,0 +1,6 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_4"}}
+
+event: response.failed
+data: {"type":"response.failed","response":{"id":"resp_4","status":"failed","error":{"code":"usage_not_included","message":"Your plan does not include Codex."}}}
+

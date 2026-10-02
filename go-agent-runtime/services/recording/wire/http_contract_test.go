@@ -45,6 +45,7 @@ func TestHTTPRecordingPublicContractCapturesConsumedTrafficWithoutSecrets(t *tes
 	}
 	request.Header.Set("Authorization", "Bearer request-secret")
 	request.Header.Set("Cookie", "session=request-secret")
+	request.Header.Set("Chatgpt-Account-Id", "account-secret")
 	request.Header.Set("X-Request", "retained")
 	response, err := transport.RoundTrip(request)
 	if err != nil {
@@ -88,6 +89,9 @@ func assertCapturedHTTPExchange(t *testing.T, recorder recording.HTTPRecorder, d
 	}
 	if _, ok := got.Request.Headers["Cookie"]; ok {
 		t.Fatal("captured request retained Cookie")
+	}
+	if _, ok := got.Request.Headers["Chatgpt-Account-Id"]; ok {
+		t.Fatal("captured request retained the ChatGPT account id")
 	}
 	if _, ok := got.Response.Headers["Set-Cookie"]; ok {
 		t.Fatal("captured response retained Set-Cookie")

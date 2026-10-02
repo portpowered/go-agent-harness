@@ -38,6 +38,39 @@ func (m *Manager) Credential(ctx context.Context) (Credential, error) {
 	return cred, errors.Join(err, lock.Release())
 }
 
+// ForceRefresh replaces an access token the backend rejected (HTTP 401)
+// before its known expiry. Under the store lock it reloads the file: when
+// another process already rotated the token (the stored access token is no
+// longer rejected), that credential is returned without a refresh;
+// otherwise the refresh token is exchanged now, whatever the expiry says. A
+// permanent refresh failure returns an error matching ErrReauthRequired.
+func (m *Manager) ForceRefresh(ctx context.Context, rejected string) (Credential, error) {
+	lock, err := m.store.Lock(ctx)
+	if err != nil {
+		return Credential{}, err
+	}
+	cred, err := m.forceRefreshLocked(ctx, rejected)
+	return cred, errors.Join(err, lock.Release())
+}
+
+func (m *Manager) forceRefreshLocked(ctx context.Context, rejected string) (Credential, error) {
+	cred, err := m.store.Load()
+	if err != nil {
+		return Credential{}, err
+	}
+	if cred.AccessToken != "" && cred.AccessToken != rejected {
+		return cred, nil
+	}
+	refreshed, err := m.client.Refresh(ctx, cred)
+	if err != nil {
+		return Credential{}, err
+	}
+	if err := m.store.Save(refreshed); err != nil {
+		return Credential{}, fmt.Errorf("save refreshed ChatGPT credential: %w", err)
+	}
+	return refreshed, nil
+}
+
 func (m *Manager) refreshLocked(ctx context.Context) (Credential, error) {
 	cred, err := m.store.Load()
 	if err != nil {

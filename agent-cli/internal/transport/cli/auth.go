@@ -6,18 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
 	"github.com/spf13/cobra"
-)
-
-const (
-	authStoreDirName  = "auth"
-	authStoreFileName = "chatgpt.json"
 )
 
 // AuthCommand is the `auth` command group: sign-in for model providers.
@@ -62,7 +57,7 @@ func authStore(globalFlags *flags.GlobalFlags, effects authEffects) (*chatgptaut
 	if effects.sleep != nil {
 		options = append(options, chatgptauth.WithStoreSleeper(effects.sleep))
 	}
-	return chatgptauth.NewFileStore(filepath.Join(dir, authStoreDirName, authStoreFileName), options...), nil
+	return chatgptauth.NewFileStore(config.ChatGPTAuthStorePath(dir), options...), nil
 }
 
 // AuthChatGPTCommand signs in with a ChatGPT account.

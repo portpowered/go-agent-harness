@@ -107,6 +107,9 @@ func TestStoreLockWaitStopsWithTheContext(t *testing.T) {
 	}
 }
 
+// rotatedAccessToken is the access token the fake issuer rotates to.
+const rotatedAccessToken = "access-new"
+
 func TestManagerRefreshesOnlyInsideTheExpiryWindow(t *testing.T) {
 	clock := newVirtualClock()
 	issuer := newFakeIssuer(t)
@@ -122,9 +125,9 @@ func TestManagerRefreshesOnlyInsideTheExpiryWindow(t *testing.T) {
 	}
 
 	clock.Advance(time.Hour - RefreshWindow)
-	issuer.queueToken(issuerReply{status: http.StatusOK, body: tokenBody(t, "access-new", "refresh-new", 3600)})
+	issuer.queueToken(issuerReply{status: http.StatusOK, body: tokenBody(t, rotatedAccessToken, "refresh-new", 3600)})
 	cred, err = manager.Credential(t.Context())
-	if err != nil || cred.AccessToken != "access-new" {
+	if err != nil || cred.AccessToken != rotatedAccessToken {
 		t.Fatalf("Credential in window = %q, %v; want a refreshed token", cred.AccessToken, err)
 	}
 	stored, err := store.Load()
@@ -209,5 +212,39 @@ func TestManagerRefreshFailures(t *testing.T) {
 	store := newTestStore(t)
 	if _, err := NewManager(store, NewClient(Config{})).Credential(t.Context()); !errors.Is(err, ErrNotLoggedIn) || !strings.Contains(err.Error(), "yui auth chatgpt") {
 		t.Fatalf("Credential with no store = %v, want ErrNotLoggedIn", err)
+	}
+}
+
+func TestManagerForceRefreshReplacesARejectedToken(t *testing.T) {
+	clock := newVirtualClock()
+	issuer := newFakeIssuer(t)
+	store := newTestStore(t)
+	if err := store.Save(storedCredentialFixture(t, testEpoch().Add(time.Hour))); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	manager := NewManager(store, issuer.client(clock))
+
+	issuer.queueToken(issuerReply{status: http.StatusOK, body: tokenBody(t, rotatedAccessToken, "refresh-new", 3600)})
+	cred, err := manager.ForceRefresh(t.Context(), "access-old")
+	if err != nil || cred.AccessToken != rotatedAccessToken || len(issuer.forms()) != 1 {
+		t.Fatalf("ForceRefresh = %q, %v after %d refreshes; want one refresh to access-new", cred.AccessToken, err, len(issuer.forms()))
+	}
+	if stored, err := store.Load(); err != nil || stored.RefreshToken != "refresh-new" {
+		t.Fatalf("stored = %+v, %v; want the rotated refresh token", stored, err)
+	}
+
+	// A second caller still holding the old token gets the rotated one
+	// without another refresh (the refresh token must not be reused).
+	cred, err = manager.ForceRefresh(t.Context(), "access-old")
+	if err != nil || cred.AccessToken != rotatedAccessToken || len(issuer.forms()) != 1 {
+		t.Fatalf("second ForceRefresh = %q, %v after %d refreshes; want the stored token, no refresh", cred.AccessToken, err, len(issuer.forms()))
+	}
+
+	issuer.queueToken(issuerReply{status: http.StatusBadRequest, body: map[string]string{"error": "refresh_token_reused"}})
+	if _, err := manager.ForceRefresh(t.Context(), rotatedAccessToken); !errors.Is(err, ErrReauthRequired) {
+		t.Fatalf("ForceRefresh with a dead refresh token = %v, want ErrReauthRequired", err)
+	}
+	if _, err := NewManager(newTestStore(t), issuer.client(clock)).ForceRefresh(t.Context(), "x"); !errors.Is(err, ErrNotLoggedIn) {
+		t.Fatalf("ForceRefresh with no login = %v, want ErrNotLoggedIn", err)
 	}
 }

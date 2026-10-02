@@ -422,6 +422,10 @@ func (c Config) Validate() error {
 	if c.Model.Provider == ProviderFal {
 		return c.validateFal()
 	}
+	if c.Model.Provider == ProviderOpenAIChatGPT {
+		// Signed with the ChatGPT login; the provider checks the auth store.
+		return nil
+	}
 	if c.Model.Provider == ProviderGrok {
 		return fmt.Errorf("model.provider %q is session-only; use agent session --record or --replay for Grok realtime sessions", ProviderGrok)
 	}

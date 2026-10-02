@@ -4,6 +4,49 @@
 
 ### Added
 
+- `pkg/providers/openaichatgpt`: the `openai-chatgpt` text provider
+  (`Infer`, `InferStream`). It speaks the Responses API over the ChatGPT
+  Codex backend (`POST https://chatgpt.com/backend-api/codex/responses`) on a
+  ChatGPT login, taking the access token and account id from a
+  `CredentialSource` (`*chatgptauth.Manager`, which refreshes before expiry).
+  Requests send `store:false`, `stream:true`, `instructions`, input items,
+  function tools (`strict:false`), optional `reasoning` (from the request
+  Config `reasoning_effort`), `include:["reasoning.encrypted_content"]` and
+  `prompt_cache_key`, with the headers `Authorization`,
+  `chatgpt-account-id`, `originator`, `OpenAI-Beta: responses=experimental`,
+  `accept: text/event-stream`, `session-id` and `x-client-request-id`, as Codex
+  and OpenClaw do.
+  - The SSE stream maps to text, reasoning, tool-call, refusal, usage and
+    error stream messages. A line may be up to 16 MiB, and a stream that
+    sends nothing for `DefaultStreamIdleTimeout` (300 s, Codex's
+    `stream_idle_timeout`; `WithStreamIdleTimeout`) fails with
+    `ErrStreamIdle`.
+  - Reasoning items that carry `encrypted_content` are kept per function
+    call and sent back immediately before that call in the next request,
+    without their item id (as OpenClaw's ChatGPT path does), so reasoning
+    carries across tool steps with `store:false` and interleaved responses
+    keep their order.
+  - With no model configured, the provider lists
+    `GET {base}/models?client_version=...` once and uses the account's
+    default model by Codex's rule (`DefaultModel`; `Provider.Models`).
+  - A 401 force-refreshes the credential (`ForceRefresher`) and retries the
+    request once; a second 401 is `ErrSignInAgain`. A 403 is not a sign-in
+    failure: a policy code (`misalignment_policy_violation`, `cyber_policy`,
+    `bio_policy`, `invalid_prompt`) is `ErrPolicyViolation`
+    (invalid request), anything else `ErrBlocked`. `usage_limit_reached`,
+    `usage_not_included`, `server_is_overloaded`/`slow_down`
+    (`ErrServerOverloaded`), rate-limit and context-length codes map to typed
+    errors. A tool result without a tool call id is rejected
+    (`ErrToolResultWithoutCallID`).
+  - Error text never contains a token or response text: at most the HTTP
+    status and a sanitized error code, also for token refresh failures.
+- `pkg/providers/openai/chatgptauth`: `Manager.ForceRefresh(ctx, rejected)`
+  replaces an access token the backend rejected. Under the store lock it
+  reloads the file and returns a token another process already rotated, and
+  otherwise refreshes regardless of the expiry.
+- `pkg/providers/openaichatgpt/fakechatgpt`: a scripted fake ChatGPT Codex
+  backend (`POST /responses` as SSE, `GET /models`) for `httptest`. It is test
+  support; only `_test.go` files may import it.
 - `pkg/providers/openailive`: the wire layer of the OpenAI GPT-Live protocol
   (`gpt-live-1`, `/v1/live/sessions`), the first phase of
   docs/architecture/gpt-live-provider.md. It has typed structs for every

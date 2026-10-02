@@ -17,6 +17,8 @@ import (
 	llmproviders "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 	falprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/fal"
 	oaiprovider "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openai/chatgptauth"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openaichatgpt"
 )
 
 var _ providers.Service = (*Service)(nil)
@@ -59,7 +61,7 @@ func (s *Service) Build(ctx context.Context, cfg providers.Config) (llmproviders
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(cfg.APIKey) == "" && cfg.ReplayPath == "" && cfg.Provider != "fal" && requiresCredential(cfg.BaseURL) {
+	if strings.TrimSpace(cfg.APIKey) == "" && cfg.ReplayPath == "" && cfg.Provider != "fal" && cfg.Provider != providers.OpenAIChatGPTProvider && requiresCredential(cfg.BaseURL) {
 		return nil, errors.New("provider API key is missing")
 	}
 	invocation, recorder, err := s.httpRuntime(cfg)
@@ -110,9 +112,61 @@ func (s *Service) buildFal(cfg providers.Config) (llmproviders.Provider, error) 
 	return falprovider.New(opts...), nil
 }
 
-func (s *Service) buildConfiguredProvider(cfg providers.Config) (llmproviders.Provider, error) {
-	if cfg.Provider == "fal" {
-		return s.buildFal(cfg)
+// captureSessionID is the openai-chatgpt conversation id while recording or
+// replaying. The id is part of the request body (prompt_cache_key), and
+// replay matches bodies exactly, so a capture needs a fixed one.
+const captureSessionID = "yui-capture"
+
+// replayCredential signs replayed requests. Replay never reaches the
+// backend, so it needs no login and must never refresh a token.
+type replayCredential struct{}
+
+func (replayCredential) Credential(context.Context) (chatgptauth.Credential, error) {
+	return chatgptauth.Credential{AccessToken: "replay"}, nil
+}
+
+// buildOpenAIChatGPT builds the openai-chatgpt provider over the ChatGPT
+// auth store at cfg.ChatGPTAuthPath. It fails before any network operation
+// when there is no usable sign-in. Token refresh uses its own HTTP client,
+// so a recording transport never captures the refresh token exchange. In
+// replay it reads no store and signs with a placeholder, so replay works
+// with no login and never refreshes.
+func (s *Service) buildOpenAIChatGPT(cfg providers.Config) (llmproviders.Provider, error) {
+	opts := []openaichatgpt.Option{
+		openaichatgpt.WithModel(cfg.Model),
+		openaichatgpt.WithLogger(s.logger),
 	}
-	return s.buildOpenAI(cfg), nil
+	if cfg.BaseURL != "" {
+		opts = append(opts, openaichatgpt.WithBaseURL(cfg.BaseURL))
+	}
+	if s.httpClient != nil {
+		opts = append(opts, openaichatgpt.WithHTTPClient(s.httpClient))
+	}
+	if cfg.RecordPath != "" || cfg.ReplayPath != "" {
+		opts = append(opts, openaichatgpt.WithSessionID(captureSessionID))
+	}
+	if cfg.ReplayPath != "" {
+		return openaichatgpt.New(replayCredential{}, opts...), nil
+	}
+	path := strings.TrimSpace(cfg.ChatGPTAuthPath)
+	if path == "" {
+		return nil, fmt.Errorf("%s has no ChatGPT auth store: %w", providers.OpenAIChatGPTProvider, chatgptauth.ErrNotLoggedIn)
+	}
+	store := chatgptauth.NewFileStore(path)
+	if _, err := store.Load(); err != nil {
+		return nil, fmt.Errorf("%s: %w", providers.OpenAIChatGPTProvider, err)
+	}
+	manager := chatgptauth.NewManager(store, chatgptauth.NewClient(chatgptauth.Config{}))
+	return openaichatgpt.New(manager, opts...), nil
+}
+
+func (s *Service) buildConfiguredProvider(cfg providers.Config) (llmproviders.Provider, error) {
+	switch cfg.Provider {
+	case "fal":
+		return s.buildFal(cfg)
+	case providers.OpenAIChatGPTProvider:
+		return s.buildOpenAIChatGPT(cfg)
+	default:
+		return s.buildOpenAI(cfg), nil
+	}
 }

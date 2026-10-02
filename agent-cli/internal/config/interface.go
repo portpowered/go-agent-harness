@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"path/filepath"
+	"time"
+)
 
 // Default values for model configuration
 const (
@@ -18,7 +21,21 @@ const (
 	// (model gpt-live-1). It has no config block of its own: it uses the
 	// model.openai API key and base URL.
 	ProviderOpenAILive = "openai-live"
+	// ProviderOpenAIChatGPT is the Responses API over the ChatGPT Codex
+	// backend, signed with the `yui auth chatgpt` login instead of an API key.
+	ProviderOpenAIChatGPT = "openai-chatgpt"
 )
+
+// ChatGPT auth store location under the config directory (`yui auth chatgpt`).
+const (
+	AuthStoreDirName         = "auth"
+	ChatGPTAuthStoreFileName = "chatgpt.json"
+)
+
+// ChatGPTAuthStorePath is the ChatGPT auth store under configDir.
+func ChatGPTAuthStorePath(configDir string) string {
+	return filepath.Join(configDir, AuthStoreDirName, ChatGPTAuthStoreFileName)
+}
 
 // Configuration directory and file names
 const (
@@ -219,6 +236,9 @@ type ModelConfig struct {
 	Local      *OpenAIConfig `koanf:"local" yaml:"local"`
 	Fal        *FalConfig    `koanf:"fal" yaml:"fal"`
 	Grok       *GrokConfig   `koanf:"grok" yaml:"grok"`
+	// OpenAIChatGPT configures the openai-chatgpt provider. It has no API
+	// key: requests are signed with the ChatGPT login.
+	OpenAIChatGPT *ChatGPTConfig `koanf:"openai_chatgpt" yaml:"openai_chatgpt,omitempty"`
 
 	// ContinuationNudgeEnabled enables automatic re-invocation when a model stops
 	// early (no tool call and no stop-word in the response). Default: false.
@@ -252,6 +272,14 @@ type ClaudeConfig struct {
 type FalConfig struct {
 	Model   string `koanf:"model" yaml:"model"`
 	APIKey  string `koanf:"api_key" yaml:"api_key"`
+	BaseURL string `koanf:"base_url" yaml:"base_url"`
+}
+
+// ChatGPTConfig holds openai-chatgpt provider settings. An empty Model uses
+// the account's default Codex model; an empty BaseURL uses
+// https://chatgpt.com/backend-api/codex.
+type ChatGPTConfig struct {
+	Model   string `koanf:"model" yaml:"model"`
 	BaseURL string `koanf:"base_url" yaml:"base_url"`
 }
 

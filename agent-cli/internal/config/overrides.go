@@ -100,6 +100,15 @@ func (c Config) ApplyOverrides(apiKey, model, provider, baseURL string) Config {
 		}
 		endpoint.apply(&cfg.APIKey, &cfg.Model, &cfg.BaseURL)
 		out.Model.Grok = cfg
+	case ProviderOpenAIChatGPT:
+		// There is no API key to override: the ChatGPT login signs requests.
+		cfg := &ChatGPTConfig{}
+		if out.Model.OpenAIChatGPT != nil {
+			*cfg = *out.Model.OpenAIChatGPT
+		}
+		overrideNonEmpty(&cfg.Model, model)
+		overrideNonEmpty(&cfg.BaseURL, baseURL)
+		out.Model.OpenAIChatGPT = cfg
 	}
 
 	return out

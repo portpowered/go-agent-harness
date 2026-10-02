@@ -1,0 +1,12 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp1"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Hello"}],"phase":"commentary"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"World"}]}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp1","usage":{"input_tokens":100,"input_tokens_details":{"cached_tokens":40,"cache_write_tokens":60},"output_tokens":10,"output_tokens_details":{"reasoning_tokens":5},"total_tokens":110}}}
+

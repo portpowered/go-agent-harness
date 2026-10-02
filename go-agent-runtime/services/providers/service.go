@@ -15,13 +15,17 @@ import (
 // Config is the provider-owned value contract. It contains no config-file
 // paths, CLI flags, or environment lookup rules.
 type Config struct {
-	Provider   string
-	Model      string
-	APIKey     string
-	BaseURL    string
-	Fal        *FalConfig
-	RecordPath string
-	ReplayPath string
+	Provider string
+	Model    string
+	APIKey   string
+	BaseURL  string
+	// ChatGPTAuthPath is the ChatGPT auth store (`yui auth chatgpt`) the
+	// openai-chatgpt provider signs requests with. The host resolves it; the
+	// provider service only reads and refreshes the file it names.
+	ChatGPTAuthPath string
+	Fal             *FalConfig
+	RecordPath      string
+	ReplayPath      string
 }
 
 // FalConfig contains provider-specific values used by fal.ai.
