@@ -325,11 +325,8 @@ func (r *adapterIntegrationRun) openHandle(t *testing.T, ctx context.Context) we
 
 func (r *adapterIntegrationRun) attachExternal(t *testing.T, ctx context.Context, handle webmcp.BrowserHandle) webmcp.TargetSession {
 	t.Helper()
-	targets, err := handle.ListTargets(ctx)
-	if err != nil {
-		t.Fatalf("neutral BrowserHandle.ListTargets: %v", err)
-	}
-	r.selectedTarget, err = findFixtureTarget(targets, r.fixtureURL)
+	var err error
+	r.selectedTarget, err = waitForNeutralFixtureTarget(ctx, handle, r.fixtureURL)
 	if err != nil {
 		t.Fatalf("find exact fixture target through neutral target list: %v", err)
 	}
@@ -630,6 +627,29 @@ func assertFixtureHeaders(t *testing.T, ctx context.Context, fixtureURL string) 
 	}
 	if response.Header.Get("Origin-Agent-Cluster") != "?1" || response.Header.Get("Permissions-Policy") != "tools=(self)" {
 		t.Fatalf("fixture isolation headers = Origin-Agent-Cluster %q Permissions-Policy %q", response.Header.Get("Origin-Agent-Cluster"), response.Header.Get("Permissions-Policy"))
+	}
+}
+
+// waitForNeutralFixtureTarget polls the neutral target list until it reports
+// the fixture page. Chrome's DevTools HTTP list can show the page's URL a
+// moment before Target.getTargets does.
+func waitForNeutralFixtureTarget(ctx context.Context, handle webmcp.BrowserHandle, fixtureURL string) (webmcp.Target, error) {
+	retry := time.NewTicker(50 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		targets, err := handle.ListTargets(ctx)
+		if err != nil {
+			return webmcp.Target{}, fmt.Errorf("neutral BrowserHandle.ListTargets: %w", err)
+		}
+		target, findErr := findFixtureTarget(targets, fixtureURL)
+		if findErr == nil {
+			return target, nil
+		}
+		select {
+		case <-ctx.Done():
+			return webmcp.Target{}, errors.Join(ctx.Err(), findErr)
+		case <-retry.C:
+		}
 	}
 }
 
