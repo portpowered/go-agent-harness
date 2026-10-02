@@ -57,6 +57,28 @@ every program that imports `pkg/probe`. These names have no replacement:
 
 ### Added
 
+- Two stream types for full-duplex providers that delegate backend work
+  (docs/architecture/gpt-live-provider.md, PR 3):
+  - `messages.StreamTypeDelegationCreated` (`DELEGATION.CREATED`, inbound,
+    observational) with `messages.DelegationCreatedValue{ID, Target,
+    OffsetMS, Task, Transcript}` and `messages.TranscriptFragment`
+    (`NewDelegationCreatedValue`, `DelegationTargetClient`). It carries no
+    `ResponseID`, is not a response stream type, and message reconstruction
+    ignores it. `messages.MustDeliver` now returns true for it, so a full
+    session outbox waits for capacity instead of dropping it.
+  - `messages.StreamTypeContextAppend` (`CONTEXT.APPEND`, outbound via
+    `Send`) with `messages.ContextAppendValue{Kind, DelegationID, Content}`
+    (`NewContextAppendValue`, `NewDelegationContextAppendValue`) and the
+    kinds `ContextAppendInstructions`, `ContextAppendThinking` and
+    `ContextAppendCommentary`. A provider with no channel for it returns a
+    terminal-failure outcome.
+
+  The addition is source compatible, but a switch over
+  `messages.StreamMessageType` that the `exhaustive` linter checks (or that
+  rejects unknown types, like a capture decoder) must now list both types.
+  Outside implementers of `messages.Session` that forward every stream
+  message should decline `CONTEXT.APPEND` unless they implement it.
+
 - `messages.SessionFullDuplex` (`FullDuplex() bool`), forwarded by
   `messages.SessionCapabilities`. A session that reports it (OpenAI GPT-Live)
   owns interruption itself, so the session model runner never runs local

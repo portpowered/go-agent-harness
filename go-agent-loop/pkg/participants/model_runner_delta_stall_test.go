@@ -211,3 +211,45 @@ func TestSessionOutbox_NothingWrittenAfterSessionEnds(t *testing.T) {
 		}
 	})
 }
+
+// A provider delegation reaches the delta consumer even when it arrives while
+// the outbox is full of speech audio: the audio around it may be shed, the
+// delegation never is, because the provider never times one out.
+func TestSessionModelRunner_DelegationSurvivesFullOutbox(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		session := newRecordingSession()
+		runner := NewSessionModelRunner(&testSessionInferencer{session: session}, 1, nil)
+		ctx, cancel := context.WithCancel(context.Background())
+		errCh := make(chan error, 1)
+		go func() { errCh <- runner.Run(ctx) }()
+		defer func() {
+			cancel()
+			<-errCh
+		}()
+
+		audio := messages.StreamMessage{Type: messages.StreamTypeAudioDelta, ResponseID: "live_seg_1", Value: messages.NewAudioDeltaValue([]byte{1, 2})}
+		delegation := messages.StreamMessage{Type: messages.StreamTypeDelegationCreated, Value: messages.NewDelegationCreatedValue("del_1", messages.DelegationTargetClient, 3600, nil)}
+		for _, msg := range []messages.StreamMessage{audio, audio, audio, delegation, audio, audio} {
+			session.recv.Write(ctx, msg)
+		}
+		synctest.Wait()
+		if runner.DeltaOutbox.Drops() == 0 {
+			t.Fatal("outbox drops = 0, want the stalled consumer to shed ordinary audio")
+		}
+
+		for {
+			got, ok := runner.DeltaOutbox.ReadBlocking(ctx.Done())
+			if !ok {
+				t.Fatal("outbox closed before DELEGATION.CREATED was delivered")
+			}
+			if got.Type == messages.StreamTypeDelegationCreated {
+				value, ok := got.Value.(*messages.DelegationCreatedValue)
+				if !ok || value.ID != "del_1" || got.ResponseID != "" {
+					t.Fatalf("delivered delegation %+v (response %q), want del_1 with no response id", value, got.ResponseID)
+				}
+				return
+			}
+			synctest.Wait()
+		}
+	})
+}

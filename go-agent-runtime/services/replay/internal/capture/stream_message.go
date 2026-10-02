@@ -127,6 +127,10 @@ func newStreamMessageValueOne(messageType messages.StreamMessageType) (messages.
 		value = new(messages.InferenceResultValue)
 	case messages.StreamTypePong:
 		value = new(messages.PongValue)
+	case messages.StreamTypeDelegationCreated:
+		value = new(messages.DelegationCreatedValue)
+	case messages.StreamTypeContextAppend:
+		value = new(messages.ContextAppendValue)
 	default:
 		return nil, false
 	}

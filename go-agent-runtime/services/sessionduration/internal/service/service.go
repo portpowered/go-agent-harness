@@ -248,7 +248,8 @@ func (s *terminalState) observe(msg messages.StreamMessage) {
 		messages.StreamTypeLoopEnd,
 		messages.StreamTypeUsageInfo,
 		messages.StreamTypeError,
-		messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// These events do not change the accepted assistant-output projection.
 	}
 }

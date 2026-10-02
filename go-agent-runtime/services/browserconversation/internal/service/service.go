@@ -228,7 +228,8 @@ func (t *evidenceTracker) observe(ctx context.Context, message messages.StreamMe
 		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
 		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		return
 	}
 }
@@ -254,7 +255,8 @@ func (t *evidenceTracker) noteLateEventLocked(message messages.StreamMessage) {
 		messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
 		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		return
 	}
 }

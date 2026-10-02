@@ -176,7 +176,8 @@ func (s *interactiveTimeoutSession) Send(ctx context.Context, msg messages.Strea
 		messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated,
 		messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel, messages.StreamTypeRefusal,
 		messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo, messages.StreamTypeError,
-		messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// Other client messages need no scripted response.
 	}
 	return true

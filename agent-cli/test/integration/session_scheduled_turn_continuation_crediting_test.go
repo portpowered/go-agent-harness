@@ -117,7 +117,8 @@ func (s *scheduledContinuationSession) SendWithOutcome(ctx context.Context, msg 
 		messages.StreamTypeInputItemAdded, messages.StreamTypePong, messages.StreamTypeSessionOpen,
 		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCancel, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
-		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		// Other client messages need no scripted response.
 	}
 

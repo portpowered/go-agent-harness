@@ -342,7 +342,8 @@ func readDeviceProbeTranscript(t *testing.T, ctx context.Context, out *messages.
 			messages.StreamTypeSessionOpen, messages.StreamTypeSessionClose, messages.StreamTypeSessionCreated,
 			messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate, messages.StreamTypeResponseCancel,
 			messages.StreamTypeResponseCreate, messages.StreamTypeRefusal, messages.StreamTypeLoopEnd,
-			messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage:
+			messages.StreamTypeUsageInfo, messages.StreamTypeError, messages.StreamTypeSystemFullMessage,
+			messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 			// Other stream types do not carry the recognized transcript.
 		}
 	}

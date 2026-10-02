@@ -111,7 +111,8 @@ func (b *liveDeviceProbeSessionBridge) handleMessage(ctx context.Context, messag
 		messages.StreamTypeSessionCreated, messages.StreamTypeSessionUpdated, messages.StreamTypeSessionUpdate,
 		messages.StreamTypeResponseCancel, messages.StreamTypeResponseCreate,
 		messages.StreamTypeRefusal, messages.StreamTypeLoopEnd, messages.StreamTypeUsageInfo,
-		messages.StreamTypeSystemFullMessage:
+		messages.StreamTypeSystemFullMessage,
+		messages.StreamTypeDelegationCreated, messages.StreamTypeContextAppend:
 		return false, nil
 	}
 	return false, nil

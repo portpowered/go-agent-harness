@@ -4,6 +4,25 @@
 
 ### Added
 
+- `openailive` delegation surface (PR 3 of
+  docs/architecture/gpt-live-provider.md). A client
+  `session.delegation.created` becomes `DELEGATION.CREATED` with no
+  `ResponseID`, so a delegation mid-segment never retires the speech
+  segment. It is reported once a user transcript fragment ending at or after
+  its `offset_ms` arrives, or after the settle window (`WithDelegationSettle`,
+  default `DefaultDelegationSettle` = 400 ms on the session clock), or at the
+  session end, whichever is first, and it carries the recent transcript
+  (a bounded ring of speaker spans). Responses-mode delegations are still
+  logged and dropped. `CONTEXT.APPEND` maps to `session.instructions.append`,
+  `session.thinking.append` or `session.commentary.append` by kind, with
+  `delegation_id` the value's id or `null` and numbered event ids
+  (`evt_ctx_<n>`). Content over `MaxAppendTokens` (500, estimated
+  conservatively) is split at sentence or word boundaries into several
+  appends under the same delegation id. An empty append or an unknown kind
+  fails with `ErrNoWireEvent`.
+- `pkg/testing`: session captures decode `DELEGATION.CREATED` and
+  `CONTEXT.APPEND` values.
+
 - `pkg/providers/openaichatgpt`: the `openai-chatgpt` text provider
   (`Infer`, `InferStream`). It speaks the Responses API over the ChatGPT
   Codex backend (`POST https://chatgpt.com/backend-api/codex/responses`) on a
@@ -90,7 +109,6 @@
   `TEXT.DELTA` fail with `openailive.ErrNoWireEvent`, `MESSAGE.END` and
   `SESSION.UPDATE` succeed with no wire event, and `RESPONSE.CANCEL` ends the
   open segment locally. Command errors are non-terminal `ERROR`s.
-  `session.delegation.created` is logged and ignored for now.
 
 - `pkg/providers/openailive/quicksilver`: the wire layer of the older GPT-Live
   dialect that a ChatGPT login can open (`gpt-live-1-codex`, "OpenAI-Alpha:

@@ -215,3 +215,83 @@ func (v *ResponseCreateValue) IsToolContinuation() bool {
 func (v *ResponseCreateValue) IsToolAcknowledgement() bool {
 	return v != nil && v.Purpose == ResponsePurposeToolAcknowledgement
 }
+
+// DelegationTargetClient is the DelegationCreatedValue target of work the
+// client runs itself (GPT-Live client delegation).
+const DelegationTargetClient = "client"
+
+// TranscriptFragment is one span of conversation transcript on the
+// provider's timeline, in milliseconds from session start.
+type TranscriptFragment struct {
+	Speaker Role   `json:"speaker"` // RoleUser or RoleAssistant
+	Text    string `json:"text"`
+	StartMS int64  `json:"start_ms"`
+	EndMS   int64  `json:"end_ms"`
+}
+
+// DelegationCreatedValue is the value for DELEGATION.CREATED (inbound): the
+// provider asks the client to do backend work and answer it with
+// CONTEXT.APPEND messages that carry ID.
+type DelegationCreatedValue struct {
+	Type string `json:"type"` // "delegation_created"
+	// ID is the provider's delegation id; results and progress quote it.
+	ID string `json:"delegation_id"`
+	// Target is who does the work, DelegationTargetClient for the client.
+	Target string `json:"target"`
+	// OffsetMS is where on the provider timeline the model decided to
+	// delegate.
+	OffsetMS int64 `json:"offset_ms"`
+	// Task is the task text, when the provider sends one. GPT-Live's public
+	// dialect never does: the client works the task out from Transcript and
+	// the session history.
+	Task string `json:"task,omitempty"`
+	// Transcript is the recent conversation the provider had transcribed when
+	// it reported the delegation, oldest first.
+	Transcript []TranscriptFragment `json:"transcript,omitempty"`
+}
+
+func (*DelegationCreatedValue) streamMessageValue() {}
+
+// NewDelegationCreatedValue returns a value for DELEGATION.CREATED.
+func NewDelegationCreatedValue(id, target string, offsetMS int64, transcript []TranscriptFragment) *DelegationCreatedValue {
+	return &DelegationCreatedValue{Type: "delegation_created", ID: id, Target: target, OffsetMS: offsetMS, Transcript: transcript}
+}
+
+// ContextAppendKind selects how a live provider treats appended context.
+type ContextAppendKind string
+
+const (
+	// ContextAppendInstructions is a trusted behaviour directive. It applies
+	// to the rest of the session and may interrupt speech.
+	ContextAppendInstructions ContextAppendKind = "instructions"
+	// ContextAppendThinking is quiet context, such as progress or facts, that
+	// does not directly ask the model to speak.
+	ContextAppendThinking ContextAppendKind = "thinking"
+	// ContextAppendCommentary is a result for the model to speak, in its own
+	// words.
+	ContextAppendCommentary ContextAppendKind = "commentary"
+)
+
+// ContextAppendValue is the value for CONTEXT.APPEND (outbound).
+type ContextAppendValue struct {
+	Type string            `json:"type"` // "context_append"
+	Kind ContextAppendKind `json:"kind"`
+	// DelegationID ties the context to one delegation; nil is session
+	// context. It always encodes, as null when nil.
+	DelegationID *string `json:"delegation_id"`
+	Content      string  `json:"content"`
+}
+
+func (*ContextAppendValue) streamMessageValue() {}
+
+// NewContextAppendValue returns a CONTEXT.APPEND value of session context,
+// tied to no delegation.
+func NewContextAppendValue(kind ContextAppendKind, content string) *ContextAppendValue {
+	return &ContextAppendValue{Type: "context_append", Kind: kind, Content: content}
+}
+
+// NewDelegationContextAppendValue returns a CONTEXT.APPEND value that answers
+// the delegation delegationID.
+func NewDelegationContextAppendValue(kind ContextAppendKind, delegationID, content string) *ContextAppendValue {
+	return &ContextAppendValue{Type: "context_append", Kind: kind, DelegationID: &delegationID, Content: content}
+}

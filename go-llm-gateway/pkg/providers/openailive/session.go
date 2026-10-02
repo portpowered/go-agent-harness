@@ -3,6 +3,7 @@ package openailive
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -42,10 +43,11 @@ const reasonFinalizationUnconfirmed = "finalization_unconfirmed"
 
 // sessionSettings are the per-connection options.
 type sessionSettings struct {
-	format       AudioFormat
-	clock        clock.TimerSource
-	segmentGap   time.Duration
-	closeTimeout time.Duration
+	format           AudioFormat
+	clock            clock.TimerSource
+	segmentGap       time.Duration
+	delegationSettle time.Duration
+	closeTimeout     time.Duration
 }
 
 // liveSession is one GPT-Live primary-WebSocket session. The shared realtime
@@ -76,14 +78,16 @@ type liveSession struct {
 	closing      <-chan struct{}
 	startClosing context.CancelFunc
 
-	// mu guards the segmenter and the outbox (outbox.go), so the read loop,
-	// the idle watcher and RESPONSE.CANCEL emit in one order. It is never
-	// held while waiting for the reader of Receive.
-	mu       sync.Mutex
-	segments *segmenter
-	watching bool
-	outbox   []outboxEntry
-	backlog  int
+	// mu guards the segmenter, the delegation tracker and the outbox
+	// (outbox.go), so the read loop, the idle watcher and RESPONSE.CANCEL
+	// emit in one order. It is never held while waiting for the reader of
+	// Receive.
+	mu          sync.Mutex
+	segments    *segmenter
+	delegations *delegationTracker
+	watching    bool
+	outbox      []outboxEntry
+	backlog     int
 	// pumpExited is set once the pump has drained after the session ended;
 	// later entries are written directly.
 	pumpExited bool
@@ -94,6 +98,8 @@ type liveSession struct {
 	// sendMu orders audio appends and holds a trailing odd PCM byte.
 	sendMu  sync.Mutex
 	oddByte []byte
+	// appends numbers the event ids of context appends.
+	appends atomic.Int64
 }
 
 func newLiveSession(conn transport.Conn, logger logging.Logger, settings sessionSettings) *liveSession {
@@ -105,6 +111,7 @@ func newLiveSession(conn transport.Conn, logger logging.Logger, settings session
 		pumpWake:     make(chan struct{}, 1),
 		drained:      make(chan struct{}, 1),
 		segments:     newSegmenter(settings.segmentGap, settings.format),
+		delegations:  newDelegationTracker(settings.delegationSettle, settings.segmentGap),
 	}
 	s.base = realtime.NewSession(conn, logger, realtime.Config{
 		LogPrefix:         "openai live",
@@ -206,7 +213,7 @@ func (s *liveSession) ReadEnded(_ context.Context, err error) bool {
 	s.base.SetTerminalError(err)
 	s.base.Logger().Warn("openai live: socket closed before session.closed", logging.Field{Key: "error", Value: err})
 	s.mu.Lock()
-	out, segmentOpen := s.segments.finish()
+	out, segmentOpen := s.finishLocked()
 	s.emitLocked(out...)
 	s.emitTerminalLocked(messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
@@ -235,20 +242,39 @@ func (s *liveSession) watchLocked() {
 	if s.watching {
 		return
 	}
-	if _, pending := s.segments.nextDeadline(); !pending {
+	if _, pending := s.nextDeadlineLocked(); !pending {
 		return
 	}
 	s.watching = true
 	go s.watch()
 }
 
-// watch closes segments and utterances that go quiet, on the session clock.
+// nextDeadlineLocked is the earliest time the segmenter or the delegation
+// tracker has work due. Callers hold mu.
+func (s *liveSession) nextDeadlineLocked() (time.Time, bool) {
+	next, pending := s.segments.nextDeadline()
+	if settle, held := s.delegations.nextDeadline(); held && (!pending || settle.Before(next)) {
+		next, pending = settle, true
+	}
+	return next, pending
+}
+
+// finishLocked closes the open segment and utterance and reports every held
+// delegation at the end of the session. segmentOpen reports whether a
+// segment was still open. Callers hold mu.
+func (s *liveSession) finishLocked() (out []messages.StreamMessage, segmentOpen bool) {
+	out, segmentOpen = s.segments.finish()
+	return append(out, s.delegations.finish()...), segmentOpen
+}
+
+// watch closes segments and utterances that go quiet, and reports held
+// delegations whose settle window passes, on the session clock.
 // It exits when nothing is pending or the session ends.
 func (s *liveSession) watch() {
 	source := s.base.Clock()
 	for {
 		s.mu.Lock()
-		deadline, pending := s.segments.nextDeadline()
+		deadline, pending := s.nextDeadlineLocked()
 		if !pending {
 			s.watching = false
 			s.mu.Unlock()
@@ -263,7 +289,9 @@ func (s *liveSession) watch() {
 			return
 		}
 		s.mu.Lock()
-		s.emitLocked(s.segments.due(source.Now())...)
+		now := source.Now()
+		s.emitLocked(s.segments.due(now)...)
+		s.emitLocked(s.delegations.due(now)...)
 		s.mu.Unlock()
 	}
 }

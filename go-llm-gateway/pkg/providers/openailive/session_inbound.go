@@ -40,9 +40,11 @@ func (s *liveSession) inboundLocked(event Event) []messages.StreamMessage {
 	case OutputAudioDelta:
 		return s.outputAudioLocked(now, typed)
 	case OutputTranscriptDelta:
-		return s.segments.outputTranscript(now, TranscriptDelta(typed))
+		out := s.segments.outputTranscript(now, TranscriptDelta(typed))
+		return append(out, s.delegations.transcript(messages.RoleAssistant, TranscriptDelta(typed))...)
 	case InputTranscriptDelta:
-		return s.segments.inputTranscript(now, TranscriptDelta(typed))
+		out := s.segments.inputTranscript(now, TranscriptDelta(typed))
+		return append(out, s.delegations.transcript(messages.RoleUser, TranscriptDelta(typed))...)
 	case SessionUpdated:
 		return []messages.StreamMessage{{Type: messages.StreamTypeSessionUpdated, Value: messages.NewSessionUpdatedValue(typed.Session.ID)}}
 	case ErrorEvent:
@@ -52,16 +54,27 @@ func (s *liveSession) inboundLocked(event Event) []messages.StreamMessage {
 		s.base.Logger().Debug("openai live: usage", logging.Field{Key: "seconds", Value: typed.Usage.Seconds})
 		return nil
 	case DelegationCreated:
-		// Delegations reach the harness in a later phase. Until then they
-		// are logged and dropped, never turned into tool calls.
-		s.base.Logger().Info("openai live: delegation ignored",
-			logging.Field{Key: "delegation_id", Value: typed.Delegation.ID}, logging.Field{Key: "target", Value: typed.Delegation.Target})
-		return nil
+		return s.delegationLocked(now, typed)
 	}
 	// Acknowledgements, session.started, info, response.event, transport.*
 	// and unknown events carry nothing for the stream.
 	s.base.Logger().Debug("openai live: server event not mapped", logging.Field{Key: "type", Value: event.EventType()})
 	return nil
+}
+
+// delegationLocked maps a delegation. A client delegation becomes
+// DELEGATION.CREATED, with no ResponseID, once its user transcript arrives or
+// the settle window passes; it never becomes a tool call. Responses
+// delegations occur only in a Responses-mode session, which this provider
+// does not start, so they are logged and dropped.
+func (s *liveSession) delegationLocked(now time.Time, event DelegationCreated) []messages.StreamMessage {
+	// Client delegation is the default mode, so an absent target is one.
+	if target := event.Delegation.Target; target != DelegationClient && target != "" {
+		s.base.Logger().Info("openai live: delegation ignored",
+			logging.Field{Key: "delegation_id", Value: event.Delegation.ID}, logging.Field{Key: "target", Value: event.Delegation.Target})
+		return nil
+	}
+	return s.delegations.created(now, event)
 }
 
 func (s *liveSession) outputAudioLocked(now time.Time, delta OutputAudioDelta) []messages.StreamMessage {
@@ -85,7 +98,7 @@ func (s *liveSession) outputAudioLocked(now time.Time, delta OutputAudioDelta) [
 // vocabulary. The GPT-Live reason is kept verbatim as Reason.
 func (s *liveSession) handleClosed(closed SessionClosed) {
 	s.mu.Lock()
-	out, segmentOpen := s.segments.finish()
+	out, segmentOpen := s.finishLocked()
 	s.emitLocked(out...)
 	s.emitTerminalLocked(messages.StreamMessage{Type: messages.StreamTypeSessionClose, Value: closeValue(s.sessionID, closed.Reason, segmentOpen)})
 	s.mu.Unlock()

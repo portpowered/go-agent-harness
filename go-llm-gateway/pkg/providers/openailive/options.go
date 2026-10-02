@@ -15,6 +15,10 @@ const (
 	// DefaultSegmentGap is the quiet gap G that ends a speech segment or a
 	// user utterance (design open question Q5).
 	DefaultSegmentGap = 600 * time.Millisecond
+	// DefaultDelegationSettle is the settle window D: how long a client
+	// delegation waits for the user transcript that covers its offset
+	// before it is reported anyway (design open question Q5).
+	DefaultDelegationSettle = 400 * time.Millisecond
 	// DefaultCloseTimeout bounds the session.close handshake, as the
 	// official SDK examples do.
 	DefaultCloseTimeout = 15 * time.Second
@@ -62,7 +66,8 @@ func WithLogger(logger logging.Logger) Option {
 	return func(p *Provider) { p.logger = logger }
 }
 
-// WithClock sets the clock of the segment, utterance and close timers. The
+// WithClock sets the clock of the segment, utterance, delegation settle and
+// close timers. The
 // default is the host clock, which is virtual inside a testing/synctest
 // bubble.
 func WithClock(source clock.TimerSource) Option {
@@ -75,6 +80,17 @@ func WithSegmentGap(gap time.Duration) Option {
 	return func(p *Provider) {
 		if gap > 0 {
 			p.segmentGap = gap
+		}
+	}
+}
+
+// WithDelegationSettle sets the settle window D a client delegation waits
+// for its user transcript. A non-positive value keeps
+// DefaultDelegationSettle.
+func WithDelegationSettle(settle time.Duration) Option {
+	return func(p *Provider) {
+		if settle > 0 {
+			p.delegationSettle = settle
 		}
 	}
 }
