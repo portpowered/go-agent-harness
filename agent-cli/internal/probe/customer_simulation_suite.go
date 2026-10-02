@@ -68,6 +68,13 @@ type CustomerSimulationSuiteOptions struct {
 	ReplayService     runtimeReplay.StreamMessageCodec
 	CaptureOutputSink io.Writer
 	CaptureErrorSink  io.Writer
+
+	// PatienceClock replaces the wall clock behind the Family E patience
+	// controller. Nil uses the wall clock anchored at child start. Hermetic
+	// tests inject a virtual clock driven by the scripted product boundaries
+	// so the policy thresholds measure product behavior, not how quickly the
+	// host starts and reaps the child.
+	PatienceClock PatienceClock
 }
 
 // CustomerSimulationSuiteResult is safe to marshal as a report. It contains
