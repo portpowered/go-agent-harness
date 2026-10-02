@@ -342,9 +342,8 @@ func Wait(ctx context.Context, source Source, duration time.Duration) error {
 	return wait(ctx, timerSource, duration)
 }
 
-// WithDeadline uses source's timer domain. It returns an error instead of
-// falling back to host time when source lacks scheduling support, and
-// contract.ErrNilContext for a nil parent.
+// WithDeadline uses source's timer domain. It returns an error, never a
+// host-time fallback, when source lacks scheduling support or parent is nil.
 func WithDeadline(parent context.Context, source Source, deadline time.Time) (context.Context, context.CancelFunc, error) {
 	if parent == nil {
 		return nil, nil, contract.ErrNilContext
@@ -357,19 +356,14 @@ func WithDeadline(parent context.Context, source Source, deadline time.Time) (co
 	return ctx, cancel, nil
 }
 
-// WithTimeout uses source's timer domain. It returns an error instead of
-// falling back to host time when source lacks scheduling support, and
-// contract.ErrNilContext for a nil parent.
+// WithTimeout uses source's timer domain. It returns an error, never a
+// host-time fallback, when source lacks scheduling support or parent is nil.
 func WithTimeout(parent context.Context, source Source, timeout time.Duration) (context.Context, context.CancelFunc, error) {
-	if parent == nil {
-		return nil, nil, contract.ErrNilContext
-	}
 	timerSource, err := RequireTimerSource(source)
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx, cancel := withDeadline(parent, timerSource, timerSource.Now().Add(timeout))
-	return ctx, cancel, nil
+	return WithDeadline(parent, timerSource, timerSource.Now().Add(timeout))
 }
 func wait(ctx context.Context, source TimerSource, duration time.Duration) error {
 	if ctx == nil {
@@ -394,9 +388,7 @@ func withDeadline(parent context.Context, source TimerSource, deadline time.Time
 		return child, func() { child.finish(context.Canceled) }
 	}
 	timer := source.NewTimer(deadline.Sub(source.Now()))
-	cancel := func() {
-		child.finish(context.Canceled)
-	}
+	cancel := func() { child.finish(context.Canceled) }
 	go func() {
 		defer timer.Stop()
 		select {

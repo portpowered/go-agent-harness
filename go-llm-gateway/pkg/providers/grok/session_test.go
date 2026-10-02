@@ -690,27 +690,3 @@ func TestSession_SendWithOutcomeLifecycle(t *testing.T) {
 		t.Fatalf("successful send status = %q, want succeeded", outcome.Status)
 	}
 }
-
-// The shared skeleton's mutators must not be promoted onto the provider
-// session, where any holder of the messages.Session could assert them.
-func TestGrokSessionDoesNotExposeSkeletonMutators(t *testing.T) {
-	var session any = newGrokSession(newMockConn(), nil)
-	if _, ok := session.(interface{ SetTerminalError(error) }); ok {
-		t.Error("SetTerminalError is reachable on the provider session")
-	}
-	if _, ok := session.(interface {
-		WriteTerminal(messages.StreamMessage) bool
-	}); ok {
-		t.Error("WriteTerminal is reachable on the provider session")
-	}
-	if _, ok := session.(interface {
-		WriteEvent(models.SessionEvent) error
-	}); ok {
-		t.Error("WriteEvent is reachable on the provider session")
-	}
-	if _, ok := session.(interface {
-		SendQueue() *messages.TypedBuffer[models.SessionEvent]
-	}); ok {
-		t.Error("SendQueue is reachable on the provider session")
-	}
-}

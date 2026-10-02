@@ -2,6 +2,7 @@ package grok
 
 import (
 	"context"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
 	"sync"
 	"testing"
 
@@ -108,5 +109,29 @@ func TestGrokSessionDropCountersZeroWithoutOverflow(t *testing.T) {
 	}
 	if records := logger.records(); len(records) != 0 {
 		t.Fatalf("normal traffic emitted %d drop records, want 0", len(records))
+	}
+}
+
+// The shared skeleton's mutators must not be promoted onto the provider
+// session, where any holder of the messages.Session could assert them.
+func TestGrokSessionDoesNotExposeSkeletonMutators(t *testing.T) {
+	var session any = newGrokSession(newMockConn(), nil)
+	if _, ok := session.(interface{ SetTerminalError(error) }); ok {
+		t.Error("SetTerminalError is reachable on the provider session")
+	}
+	if _, ok := session.(interface {
+		WriteTerminal(messages.StreamMessage) bool
+	}); ok {
+		t.Error("WriteTerminal is reachable on the provider session")
+	}
+	if _, ok := session.(interface {
+		WriteEvent(models.SessionEvent) error
+	}); ok {
+		t.Error("WriteEvent is reachable on the provider session")
+	}
+	if _, ok := session.(interface {
+		SendQueue() *messages.TypedBuffer[models.SessionEvent]
+	}); ok {
+		t.Error("SendQueue is reachable on the provider session")
 	}
 }

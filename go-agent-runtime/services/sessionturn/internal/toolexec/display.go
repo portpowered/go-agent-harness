@@ -40,11 +40,25 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 	if err != nil || !supported {
 		return tools.DisplayPermission{}, false, err
 	}
+	result, arrived := e.boundedRecheck(ctx, call, rechecker)
+	switch {
+	case !arrived:
+		return tools.DisplayPermission{}, false, nil
+	case isPanic(result.err):
+		return tools.DisplayPermission{}, false, result.err
+	case ctx.Err() != nil || result.err != nil || result.permission.State != tools.DisplayPermissionDenied:
+		return tools.DisplayPermission{}, false, nil
+	}
+	return result.permission, true, nil
+}
+
+// boundedRecheck runs the re-check within e.recheckLimit and reports whether
+// its result arrived in time. resultCh is unbuffered and abandoned is closed
+// only here, so exactly one side owns the result: this function when it
+// receives it, the worker (which records a late panic) once it has given up.
+func (e *Executor) boundedRecheck(ctx context.Context, call messages.ToolCall, rechecker tools.ScreenRecordingPermissionRechecker) (recheckResult, bool) {
 	recheckCtx, cancel := context.WithTimeout(ctx, e.recheckLimit)
 	defer cancel()
-	// resultCh is unbuffered and abandoned is closed only by this function,
-	// so exactly one side owns the result: this function when it receives
-	// it, the worker when this function has given up on it.
 	resultCh := make(chan recheckResult)
 	abandoned := make(chan struct{})
 	go func() {
@@ -59,16 +73,10 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 	}()
 	select {
 	case result := <-resultCh:
-		if isPanic(result.err) {
-			return tools.DisplayPermission{}, false, result.err
-		}
-		if ctx.Err() != nil || result.err != nil || result.permission.State != tools.DisplayPermissionDenied {
-			return tools.DisplayPermission{}, false, nil
-		}
-		return result.permission, true, nil
+		return result, true
 	case <-recheckCtx.Done():
 		close(abandoned)
-		return tools.DisplayPermission{}, false, nil
+		return recheckResult{}, false
 	}
 }
 
