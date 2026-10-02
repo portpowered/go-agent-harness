@@ -2,8 +2,9 @@
 
 `make lint` runs the pinned golangci-lint (v2.9.0, through the Makefile's
 analyzer resolver) once for every `LINT_MODULES` module, then once more for
-Wire injector packages. Production and test files are both checked, including
-files behind opt-in build tags and platform-specific files (see
+Wire injector packages and once for packages holding other-OS files.
+Production and test files are both checked, including files behind opt-in
+build tags and platform-specific files (see
 [Build tags](#build-tags) and [Operating systems](#operating-systems)).
 golangci-lint is the only owner of size, complexity, package-global and `init`
 limits and of every import rule depguard can express; the architecture gate
@@ -38,7 +39,8 @@ and receiver type: `os.Getwd`, `os.UserHomeDir`, `fmt.Print*`, `time.Sleep`,
 `context.Background`/`TODO`, `panic`, and `Skip*` on `testing.T`, `B`, `TB`
 and `F` (through `testing.common`) are forbidden. Context roots and panics are
 allowed in `cmd/` packages, `main.go` files and tests. Generated files (for
-example Wire's `wire_gen.go`) are excluded.
+example Wire's `wire_gen.go`) are excluded, and only with the standard
+`// Code generated ... DO NOT EDIT.` header (`exclusions.generated: strict`).
 
 Every finding is reported (`uniq-by-line: false`). A `//nolint` directive must
 name one linter and give a reason. An unused directive is itself a finding.
@@ -95,9 +97,7 @@ trailing `$`). The lists are:
 | `go-audio` | go-audio | agent-cli, go-agent-loop, go-agent-runtime, go-device-gateway, go-llm-gateway |
 | `gateway-functional-tests` | go-llm-gateway/test/functional | go-agent-loop except `pkg/messages` (`list-mode: lax`) |
 | `session-contract` | agentsession/interface.go | go-device-gateway, go-llm-gateway |
-| `tool-contract` | tools/interface.go | agent-cli/internal/services/internal |
-| `device-contract` | devices/interface.go and the device list/probe transports | go-device-gateway, agent-cli/internal/services/internal |
-| `cli-transports` | agent-cli/internal/transport/cli, non-test | agent-cli/internal/services/internal |
+| `device-contract` | devices/interface.go and the device list/probe transports | go-device-gateway |
 | `agent-cli-production` | agent-cli/internal, non-test | agent-cli/internal/audio*, the retired wavio and loop clock packages |
 | `agent-cli-binary` | agent-cli/internal, non-test, except webmcp/testkit | `encoding/binary` |
 
@@ -109,9 +109,13 @@ import for each.
 express: the service shape and contract rules, the service-boundary import
 rules (they follow the gate's service classifier and composition registry),
 public-surface leaks, the session-wrapper rule, `forbidden_source_patterns`,
-generated-file registration, and the two `forbidden_imports` rules whose
-import pattern has a wildcard in the middle (`**/services/servicetest` and
-`go-agent-runtime/services/**/wire`). See the
+generated-file registration, and the `forbidden_imports` rules whose import
+pattern has a wildcard in the middle: `**/services/internal/**` (the tool and
+device contracts, the device list/probe transports and every CLI transport),
+`**/services/servicetest` and `go-agent-runtime/services/**/wire`. depguard
+matches only import-path prefixes, so it could deny today's one
+`agent-cli/internal/services/internal` prefix but not a private service tree
+added elsewhere. See the
 [gate README](../../tools/architecturegate/README.md).
 
 ## Round-3 cleanup (temporary exclusions)
@@ -165,10 +169,19 @@ the recorded regeneration command stable.
 
 | Lane | Command | Covers |
 | --- | --- | --- |
-| Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; wireinject |
+| Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; wireinject; other-OS stubs (`make lint-other-os`, below) |
 | Windows cross | `make lint-cross LINT_CROSS_GOOS=windows` | `GOOS=windows CGO_ENABLED=0` (WASAPI, Win32 syscalls) |
-| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, cgo and microphone stubs) |
+| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, cgo and microphone stubs, and the `darwin && arm64` live and e2e_internal tests) |
 | Darwin cgo | `make lint-darwin-cgo` (macOS only) | cgo on, for packages holding a cgo-constrained file (CoreAudio capture, display permission) |
+
+The darwin lane sets `GOARCH=arm64` (`LINT_CROSS_GOARCH_darwin`) on every
+host: several macOS live and e2e_internal tests are constrained to
+`darwin && arm64`, and no file is constrained to `darwin && amd64`.
+
+`make lint-other-os` (run by `make lint`) lints, as `GOOS=js GOARCH=wasm`
+with cgo disabled, only the packages holding a file whose build constraint
+excludes linux, darwin and windows (the unsupported-platform stubs). No
+other lane builds those files.
 
 `make lint-cross` runs both cross lanes by default. Cross-linting needs no C
 toolchain because cgo is disabled. Darwin cgo files need the macOS SDK, so

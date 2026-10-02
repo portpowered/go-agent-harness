@@ -77,7 +77,6 @@ func depguardCases() []depguardCase {
 	const repo = "github.com/portpowered/go-agent-harness"
 	cli, runtime, loop := repo+"/agent-cli", repo+"/go-agent-runtime", repo+"/go-agent-loop"
 	device, provider := repo+"/go-device-gateway/pkg/devices", repo+"/go-llm-gateway/pkg/providers/openai"
-	private := cli + "/internal/services/internal/devices"
 	return []depguardCase{
 		// Module dependency direction (production and tests).
 		{"go-agent-loop/pkg/engine/engine.go", runtime + "/services/session", "reusable-modules"},
@@ -101,16 +100,12 @@ func depguardCases() []depguardCase {
 		{"agent-cli/internal/services/agentsession/interface.go", device, "session-contract"},
 		{"agent-cli/internal/services/agentsession/interface.go", provider, "session-contract"},
 		{"agent-cli/internal/services/agentsession/session.go", device, ""},
-		{"agent-cli/internal/services/tools/interface.go", cli + "/internal/services/internal/tools", "tool-contract"},
 		{"agent-cli/internal/services/devices/interface.go", device, "device-contract"},
-		{"agent-cli/internal/services/devices/interface.go", private, "device-contract"},
 		{"agent-cli/internal/services/devices/validation.go", device, ""},
 		{"agent-cli/internal/transport/cli/devices.go", device, "device-contract"},
 		{"agent-cli/internal/transport/cli/probe_output.go", device, "device-contract"},
 		{"agent-cli/internal/transport/cli/probe.go", device, "device-contract"},
 		{"agent-cli/internal/transport/cli/session.go", device, ""},
-		{"agent-cli/internal/transport/cli/internal/livehost/files.go", private, "cli-transports"},
-		{"agent-cli/internal/transport/cli/session_test.go", private, ""},
 		// Audio payload access (production only).
 		{"go-agent-loop/pkg/engine/engine.go", "encoding/binary", "agent-loop-production"},
 		{"go-agent-loop/test/functional/media/harness.go", loop + "/pkg/platform/clock", "agent-loop-production"},

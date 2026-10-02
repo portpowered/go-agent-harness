@@ -287,6 +287,29 @@ func TestGlobAndMissingModuleValidation(t *testing.T) {
 	}
 }
 
+// TestPolicyRejectsUnknownKeys proves a retired or misspelled manifest key
+// fails the load instead of lingering unenforced.
+func TestPolicyRejectsUnknownKeys(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "known.json", `{"version":1,"module_dirs":["mod"],"service_roots":["services/*"]}`)
+	if _, err := loadPolicy("known.json", root); err != nil {
+		t.Fatalf("known keys were rejected: %v", err)
+	}
+	for name, manifest := range map[string]string{
+		"retired limits":     `{"version":1,"module_dirs":["mod"],"limits":{"function_lines":80}}`,
+		"retired baseline":   `{"version":1,"module_dirs":["mod"],"baseline":"docs/architecture/baselines"}`,
+		"misspelled key":     `{"version":1,"module_dirs":["mod"],"service_root":["services/*"]}`,
+		"unknown nested key": `{"version":1,"module_dirs":["mod"],"forbidden_imports":[{"from":["a"],"imports":["b"],"reason":"r","only_tests":true}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			writeFixture(t, root, "unknown.json", manifest)
+			if _, err := loadPolicy("unknown.json", root); err == nil || !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("loadPolicy error = %v; want an unknown field error", err)
+			}
+		})
+	}
+}
+
 func TestTargetInventoryActivatesPlatformOnlyPackages(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.com/platform\n\ngo 1.26.7\n")

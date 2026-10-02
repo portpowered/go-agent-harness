@@ -38,8 +38,9 @@ The gate keeps:
 - **Source patterns** (`forbidden_source_patterns`): hand-rolled encodings stay
   in the module that owns them (see below).
 - **Glob import rules** (`forbidden_imports`): only the rules whose import
-  pattern has a wildcard in the middle, such as `**/services/servicetest` or
-  `.../services/**/wire`. depguard matches import-path prefixes only.
+  pattern has a wildcard in the middle (`**/services/internal/**`,
+  `**/services/servicetest`, `.../services/**/wire`). depguard matches
+  import-path prefixes only.
 - **Generated files** (`generated_files`): a `Code generated` header must be a
   registered, reproducible generator output (`generated-file-spoof`).
 

@@ -124,9 +124,10 @@ jobs:
   #
   # Every lane enforces the single policy in .golangci.yml on all code (it
   # also loads the opt-in live/e2e/e2e_internal/stress/sessioncapacityramp
-  # test tags). The linux lanes add the wireinject pass; the windows
-  # and darwin lanes lint with cgo disabled (darwin also with the
-  # nomicrophone tag). The cgo-constrained darwin packages are linted
+  # test tags). The linux lanes add the wireinject pass and the other-OS
+  # stub packages (GOOS=js GOARCH=wasm); the windows and darwin lanes lint
+  # with cgo disabled (darwin as GOARCH=arm64, for the darwin && arm64 live
+  # tests, and with the nomicrophone tag). The cgo-constrained darwin packages are linted
   # natively in CI (WebMCP Chrome), which already runs on macOS. See
   # docs/architecture/lint-policy.md.
   static-lint:

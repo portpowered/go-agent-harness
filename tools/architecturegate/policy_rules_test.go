@@ -71,7 +71,15 @@ func TestRepositoryImportRulesRejectViolations(t *testing.T) {
 func repositoryImportCases() []repositoryImportCase {
 	const repo = "github.com/portpowered/go-agent-harness"
 	cli, runtime := repo+"/agent-cli", repo+"/go-agent-runtime"
+	private, transport := cli+"/internal/services/internal/devices", cli+"/internal/transport/cli"
 	return []repositoryImportCase{
+		{"tool contract private", cli, cli + "/internal/services/tools", "internal/services/tools/interface.go", cli + "/internal/services/internal/tools", true},
+		{"tool contract private elsewhere", cli, cli + "/internal/services/tools", "internal/services/tools/interface.go", cli + "/internal/room/services/internal/state", true},
+		{"tool implementation private", cli, cli + "/internal/services/tools", "internal/services/tools/tools.go", cli + "/internal/services/internal/tools", false},
+		{"device contract private", cli, cli + "/internal/services/devices", "internal/services/devices/interface.go", private, true},
+		{"device probe transport private", cli, transport, "internal/transport/cli/probe_output.go", private, true},
+		{"cli transport private", cli, transport + "/internal/livehost", "internal/transport/cli/internal/livehost/files.go", private, true},
+		{"cli transport test private", cli, transport, "internal/transport/cli/session_test.go", private, false},
 		{"application test runtime access", cli, cli + "/internal/room", "internal/room/room.go", cli + "/internal/services/servicetest", true},
 		{"application test runtime access in another module", cli, cli + "/internal/room", "internal/room/room.go", runtime + "/services/servicetest/fake", true},
 		{"test runtime access from a test", cli, cli + "/internal/room", "internal/room/room_test.go", cli + "/internal/services/servicetest", false},

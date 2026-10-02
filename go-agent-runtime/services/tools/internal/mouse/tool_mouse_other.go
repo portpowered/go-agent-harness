@@ -4,26 +4,26 @@ package mouse
 
 import (
 	"context"
-	"fmt"
+	"errors"
 )
 
 const platformMouseErr = "mouse control is not yet supported on this platform"
 
-func (mouseDriver) move(_ context.Context, _, _ int) error { return fmt.Errorf(platformMouseErr) }
+func (mouseDriver) move(_ context.Context, _, _ int) error { return errors.New(platformMouseErr) }
 func (mouseDriver) click(_ context.Context, _, _ int, _ string) error {
-	return fmt.Errorf(platformMouseErr)
+	return errors.New(platformMouseErr)
 }
 func (mouseDriver) doubleClick(_ context.Context, _, _ int, _ string) error {
-	return fmt.Errorf(platformMouseErr)
+	return errors.New(platformMouseErr)
 }
 func (mouseDriver) buttonDown(_ context.Context, _, _ int, _ string) error {
-	return fmt.Errorf(platformMouseErr)
+	return errors.New(platformMouseErr)
 }
 func (mouseDriver) buttonUp(_ context.Context, _, _ int, _ string) error {
-	return fmt.Errorf(platformMouseErr)
+	return errors.New(platformMouseErr)
 }
 func (mouseDriver) drag(_ context.Context, _, _, _, _ int, _ string) error {
-	return fmt.Errorf(platformMouseErr)
+	return errors.New(platformMouseErr)
 }
 
 // mousePlatform holds platform input handles; this platform needs none.
