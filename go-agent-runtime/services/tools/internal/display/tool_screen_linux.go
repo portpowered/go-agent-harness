@@ -118,7 +118,7 @@ func screenCaptureDisplayWithContextAndProcess(ctx context.Context, _ screenPlat
 		return nil, fmt.Errorf("release screenshot temp name: %w", err)
 	}
 
-	area :=fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
+	area := fmt.Sprintf("%d,%d,%d,%d", bounds.Min.X, bounds.Min.Y, bounds.Dx(), bounds.Dy())
 	args := []string{"-a", area, path}
 	out, err := process.Run(ctx, "scrot", args...)
 	if err != nil {

@@ -530,6 +530,7 @@ func TestUserRunnerConcurrentWritesTakeUniqueOrderedIndices(t *testing.T) {
 // writeUserRunnerMessages alternates Write and Stop on runner, as Send and
 // SendInterrupt do.
 func writeUserRunnerMessages(t *testing.T, runner *UserRunner, writer, count int) {
+	t.Helper()
 	for index := range count {
 		var err error
 		if index%2 == 0 {

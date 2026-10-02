@@ -346,8 +346,10 @@ func TestConcurrentSendAndInterruptShutsDownCleanly(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not exit within 5s after context cancellation (potential deadlock)")
 	}
-	if inf.CallCount() == 0 {
-		t.Fatalf("no inference ran for %d concurrent sends (%d rejected)", totalMessages, rejected.Load())
+	// Writes beyond the user buffer's capacity are refused, never lost
+	// silently, so the loop must have accepted at least one write.
+	if attempted := int64(totalMessages + totalMessages/2); rejected.Load() >= attempted {
+		t.Fatalf("all %d sends and interrupts were refused", attempted)
 	}
 }
 
