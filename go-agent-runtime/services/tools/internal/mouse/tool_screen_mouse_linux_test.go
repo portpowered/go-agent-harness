@@ -337,3 +337,13 @@ func TestLinuxScreenCaptureWritesIntoTheReservedTempFile(t *testing.T) {
 		t.Fatalf("captured image bounds = %v, want the 2x2 fixture", got)
 	}
 }
+
+// screenDisplayBounds reports the host display's bounds, or empty when
+// discovery fails. Only the Linux and Windows tests read the live bounds.
+func screenDisplayBounds(index int) image.Rectangle {
+	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
+	if err != nil {
+		return image.Rectangle{}
+	}
+	return bounds
+}

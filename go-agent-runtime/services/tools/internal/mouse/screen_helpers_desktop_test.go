@@ -3,11 +3,9 @@
 package mouse
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"image"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -16,14 +14,6 @@ import (
 
 // The screen helpers read the host display, which only the desktop
 // platforms' tests use.
-
-func screenDisplayBounds(index int) image.Rectangle {
-	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
-	if err != nil {
-		return image.Rectangle{}
-	}
-	return bounds
-}
 
 func assertScreenResult(t *testing.T, message messages.Message, mediaType string, width, height int) messages.ImagePart {
 	t.Helper()
