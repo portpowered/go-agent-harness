@@ -121,7 +121,7 @@ func runLiveClassificationProbe08(t *testing.T, ctx context.Context, pinned pinn
 	cdpURL := baseURL + "/json/version?probe08=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, true)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "08-initial")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "08-initial")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "08-initial", 1)
 	if len(tabs) != 1 {
 		discardSecondaryError(initial.Close)
 		t.Fatalf("probe 08 initial eligible tabs = %+v, want one", tabs)
@@ -199,7 +199,7 @@ func runLiveClassificationProbe09(t *testing.T, ctx context.Context, pinned pinn
 	cdpURL := baseURL + "/json/version?probe09=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "09")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "09")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "09", 2)
 	if len(tabs) != 2 {
 		t.Fatalf("probe 09 eligible tabs = %+v, want two", tabs)
 	}
@@ -255,7 +255,7 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	cdpURL := baseURL + "/json/version?probe10=" + staleRefRandomToken(t) + "#redacted"
 	writeClassificationConfig(t, configDir, cdpURL, false)
 	browserID := liveClassificationBrowserID(t, ctx, binaryPath, configDir, "10")
-	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "10")
+	tabs := liveClassificationTabs(t, ctx, binaryPath, configDir, browserID, "10", 2)
 	readyTab, unverifiedTab := classificationTabsByOrigin(t, tabs, readyFixture.server.URL, noTools.URL)
 
 	unselected := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--json")
@@ -296,20 +296,36 @@ func liveClassificationBrowserID(t *testing.T, ctx context.Context, binaryPath, 
 	return data.Browsers[0].ID
 }
 
-func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, configDir, browserID, probe string) []gateTab {
+// liveClassificationTabs lists the eligible pages, retrying until want of
+// them are eligible: a freshly opened page becomes eligible only once its
+// document has loaded and WebMCP has enabled on it.
+func liveClassificationTabs(t *testing.T, ctx context.Context, binaryPath, configDir, browserID, probe string, want int) []gateTab {
 	t.Helper()
-	result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
-	data := requireGateSuccessData[gateTabsData](t, result)
+	waitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	for {
+		result := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "tabs", "--browser", browserID, "--eligible", "--json")
+		data := requireGateSuccessData[gateTabsData](t, result)
+		eligible := eligibleClassificationTabs(data, browserID)
+		if len(eligible) >= want {
+			recordClassificationResult(t, result, configDir, "probe-"+probe+"-tabs", fmt.Sprintf(`{"eligible_target_ids":%s}`, mustJSON(t, classificationTabIDs(eligible))))
+			return eligible
+		}
+		select {
+		case <-waitCtx.Done():
+			t.Fatalf("probe %s tabs = %+v, want %d eligible pages", probe, data, want)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+func eligibleClassificationTabs(data gateTabsData, browserID string) []gateTab {
 	eligible := make([]gateTab, 0, len(data.Tabs))
 	for _, tab := range data.Tabs {
 		if tab.BrowserID == browserID && tab.Type == pageTargetType && tab.Eligible {
 			eligible = append(eligible, tab)
 		}
 	}
-	if len(eligible) == 0 {
-		t.Fatalf("probe %s tabs = %+v, want at least one eligible page", probe, data)
-	}
-	recordClassificationResult(t, result, configDir, "probe-"+probe+"-tabs", fmt.Sprintf(`{"eligible_target_ids":%s}`, mustJSON(t, classificationTabIDs(eligible))))
 	return eligible
 }
 
