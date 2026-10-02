@@ -52,6 +52,16 @@ the file imports that package as. The checked-in rules keep WAV containers
 go-audio; use `wavio` and `codec` instead. Tests are included, because test
 helpers were where the copies accumulated.
 
+The rules match syntax, not behavior, so they are a tripwire for the common
+copy rather than a proof. Known bypasses that the PCM16 rule does not see:
+manual byte shifts (`int16(b[i]) | int16(b[i+1])<<8`), `binary.Read` or
+`binary.Write` into an `[]int16`, and a value alias such as
+`le := binary.LittleEndian` followed by `le.Uint16(...)` (an aliased package
+import is caught; an aliased value is not). Review catches these. The WAV rule
+likewise sees only the `"RIFF"` literal, not the bytes built another way.
+`tests/localai` is not a governed module: it is a standalone black-box
+conformance suite with no go-audio dependency, and its README says so.
+
 Composition authority is explicit. A whole package may be registered for an
 external application module; a repository test gets a single exact
 `_test.go` source entry. Wildcards, production files, and paths outside the
