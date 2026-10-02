@@ -58,6 +58,7 @@ These are the supported consumer-facing command groups:
 | `yui probe customer-simulation --live ...` | Run the explicitly billed conversational customer-simulation suite and write sanitized reports plus finalized evidence bundles. |
 | `yui session ...` | Live session capture, offline replay, and stored session inspection via `show`, `list`, and `delete`. |
 | `yui config add-local ...` | Write a local provider entry into the CLI config for OpenAI-compatible local inference servers. |
+| `yui auth chatgpt` / `status` / `logout` | Sign in with a ChatGPT account (browser or `--device`), inspect, or remove the stored credential (`<config-dir>/auth/chatgpt.json`, mode 0600). Providers do not use it yet; see `docs/architecture/chatgpt-oauth.md`. |
 
 Common starting flows:
 
