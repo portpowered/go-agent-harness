@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testcover"
 )
 
 const (
@@ -22,6 +24,7 @@ const (
 // contract's diagnostics stay comparable.
 func TestMain(m *testing.M) {
 	if mode := os.Getenv(fixtureModeEnv); mode != "" {
+		testcover.MustIsolateFixtureProcess()
 		os.Exit(runTimeoutFixture(context.Background(), mode))
 	}
 	os.Exit(m.Run())

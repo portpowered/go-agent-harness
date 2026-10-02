@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -170,15 +172,8 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			wantStderr:     "Error: invalid argument \"not-a-float\" for \"--context-pressure-threshold\" flag: strconv.ParseFloat: parsing \"not-a-float\": invalid syntax\n",
 			wantErr:        `invalid argument "not-a-float" for "--context-pressure-threshold" flag`,
 		},
-		{
-			name:       "text session cancels through root",
-			args:       []string{"chat"},
-			input:      "\x03",
-			wantCode:   0,
-			wantStdout: "Port OS Agent Chat (type 'exit' or 'quit' to end)\n---\n\x1b[?25l\x1b[?2004h\r \r\x1b[2K\r\x1b[?2004l\x1b[?25h\x1b[?1002l\x1b[?1003l\x1b[?1006l",
-			wantStderr: "",
-		},
 	}
+	t.Run("text session cancels through root", testTextSessionCancelsThroughRoot)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -201,6 +196,84 @@ func TestChatCommand_ExecuteThroughRoot(t *testing.T) {
 			}
 			assertChatFlagParseError(t, got.err, tt.wantErr)
 		})
+	}
+}
+
+// chatPrompt is the text session's initial TUI frame.
+const chatPrompt = "> Type a message..."
+
+// frameWatchBuffer is a goroutine-safe output buffer that reports when the
+// output first contains want.
+type frameWatchBuffer struct {
+	mu   sync.Mutex
+	buf  bytes.Buffer
+	want string
+	seen chan struct{}
+	once sync.Once
+}
+
+func newFrameWatchBuffer(want string) *frameWatchBuffer {
+	return &frameWatchBuffer{want: want, seen: make(chan struct{})}
+}
+
+func (b *frameWatchBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n, err := b.buf.Write(p)
+	if strings.Contains(b.buf.String(), b.want) {
+		b.once.Do(func() { close(b.seen) })
+	}
+	return n, err
+}
+
+func (b *frameWatchBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// testTextSessionCancelsThroughRoot presses Ctrl+C in the text session TUI.
+// The TUI flushes frames on a 60 fps ticker, so a Ctrl+C queued before the
+// program starts races the first flush. The key is sent only once the
+// initial prompt frame is on stdout, which fixes the frame sequence.
+func testTextSessionCancelsThroughRoot(t *testing.T) {
+	agentCLI := newTestAgentCLI(t, &chatTestInferencer{response: "unused"})
+	agentCLI.router.ChatCommand.inputIsInteractive = func(*cobra.Command) bool { return true }
+	agentCLI.router.ChatCommand.openMicrophone = func() (audio.AudioSource, error) { return audio.NewSliceSource(nil), nil }
+	stdin, keys := io.Pipe()
+	stdout := newFrameWatchBuffer(chatPrompt)
+	var stderr bytes.Buffer
+	root := agentCLI.Generate()
+	root.SetIn(stdin)
+	root.SetOut(stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"chat"})
+	returned := make(chan struct{})
+	pressed := make(chan struct{})
+	go func() {
+		defer close(pressed)
+		select {
+		case <-stdout.seen:
+			_, err := keys.Write([]byte("\x03"))
+			keys.CloseWithError(err)
+		case <-returned: // chat ended without showing its prompt
+		}
+	}()
+	err := root.ExecuteContext(context.Background())
+	close(returned)
+	keys.CloseWithError(errors.New("chat returned"))
+	<-pressed
+	if err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	want := "Port OS Agent Chat (type 'exit' or 'quit' to end)\n---\n" +
+		"\x1b[?25l\x1b[?2004h\r\r\n" + chatPrompt + strings.Repeat(" ", 59) + "\r\x1b[A \x1b[J" +
+		"\r\x1b[2K\r\x1b[?2004l\x1b[?25h\x1b[?1002l\x1b[?1003l\x1b[?1006l"
+	if got := stdout.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 }
 

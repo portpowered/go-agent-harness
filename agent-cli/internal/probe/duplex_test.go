@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/testcover"
 )
 
 // duplexProcessBound is the hard upper bound for a duplex child that must
@@ -259,12 +261,15 @@ const (
 func TestMain(m *testing.M) {
 	switch strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") {
 	case duplexChildName:
+		testcover.MustIsolateFixtureProcess()
 		runDuplexTestChild(os.Args[1:])
 		os.Exit(0)
 	case duplexSIGINTChildName:
+		testcover.MustIsolateFixtureProcess()
 		runDuplexSIGINTChild()
 		os.Exit(0)
 	case blindEnvironmentAgentName:
+		testcover.MustIsolateFixtureProcess()
 		os.Exit(runBlindEnvironmentAgent())
 	}
 	os.Exit(m.Run())

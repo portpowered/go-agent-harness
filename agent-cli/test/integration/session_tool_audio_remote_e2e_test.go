@@ -264,6 +264,16 @@ func runRemoteToolAudioScenario(t *testing.T, testCase remoteToolAudioCase, delt
 	provider := newRemoteToolAudioProvider(responses, testCase.toolResponses, calls, deltaDelay, prompt, inputFrames*audio.FrameSize*3/2)
 	defer provider.Close()
 	device, startAgent := startRemoteToolAudioTopology(t, testCase, provider)
+	if testCase.timingEvidence {
+		// Timing is judged from the process-edge capture; the device PCM
+		// oracle must not depend on the host keeping up with wall time.
+		expected := remoteToolAudioExpected(t, responses)
+		device = &queueFedDevice{
+			remoteToolAudioDevice: device, allSent: provider.allResponsesSent,
+			expectedNonzero: len(expected), finalMarker: expected[max(0, len(expected)-audio.FrameSize):],
+			poll: callbackInterval,
+		}
+	}
 
 	paths := newRemoteToolAudioPaths(t, testCase, calls, toolDelay)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

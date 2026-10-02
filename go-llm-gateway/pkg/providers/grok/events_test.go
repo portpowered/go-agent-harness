@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
@@ -150,31 +151,36 @@ func TestSession_InterruptionFlushesQueuedPlayback(t *testing.T) {
 			}
 		},
 	} {
+		// Each run decodes two 3 s JSON audio frames; under -race on a loaded
+		// host that alone can outlast a wall-clock safety deadline. In the
+		// bubble the deadline is fake time and fires only on a real deadlock.
 		t.Run(name, func(t *testing.T) {
-			conn := newMockConn()
-			session := newConfiguredGrokSession(conn, logging.DummyLogger(), grokSessionSettings{outputSampleRate: 24000})
-			endpoints := session.RTCMedia()
-			ctx := newGrokTestContext(t)
-			session.start(ctx)
-			defer closeForTest(t, session)
+			synctest.Test(t, func(t *testing.T) {
+				conn := newMockConn()
+				session := newConfiguredGrokSession(conn, logging.DummyLogger(), grokSessionSettings{outputSampleRate: 24000})
+				endpoints := session.RTCMedia()
+				ctx := newGrokTestContext(t)
+				session.start(ctx)
+				defer closeForTest(t, session)
 
-			backlog := make([]int16, 24000*3)
-			conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-cancelled", "delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
-			if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
-				t.Fatalf("read first frame: %v", err)
-			}
-			interrupt(t, conn, session)
-			// A late delta of the cancelled response is discarded; the next
-			// audible frame is the next response's.
-			conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-cancelled", "delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
-			conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-next", "delta": codec.EncodeBase64(codec.EncodePCM16(make([]int16, 720)))})
-			frame, err := endpoints.Inbound.ReadFrame(ctx)
-			if err != nil {
-				t.Fatalf("read frame after interruption: %v", err)
-			}
-			if frame.PlaybackResponse.ResponseID != "resp-next" {
-				t.Fatalf("first frame after the interruption belongs to %+v, want resp-next", frame.PlaybackResponse)
-			}
+				backlog := make([]int16, 24000*3)
+				conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-cancelled", "delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
+				if _, err := endpoints.Inbound.ReadFrame(ctx); err != nil {
+					t.Fatalf("read first frame: %v", err)
+				}
+				interrupt(t, conn, session)
+				// A late delta of the cancelled response is discarded; the next
+				// audible frame is the next response's.
+				conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-cancelled", "delta": codec.EncodeBase64(codec.EncodePCM16(backlog))})
+				conn.addServerEvent("response.audio.delta", map[string]any{"response_id": "resp-next", "delta": codec.EncodeBase64(codec.EncodePCM16(make([]int16, 720)))})
+				frame, err := endpoints.Inbound.ReadFrame(ctx)
+				if err != nil {
+					t.Fatalf("read frame after interruption: %v", err)
+				}
+				if frame.PlaybackResponse.ResponseID != "resp-next" {
+					t.Fatalf("first frame after the interruption belongs to %+v, want resp-next", frame.PlaybackResponse)
+				}
+			})
 		})
 	}
 }
