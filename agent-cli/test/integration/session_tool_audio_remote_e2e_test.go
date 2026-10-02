@@ -339,6 +339,10 @@ func assertRemoteToolTimingEvidence(t *testing.T, capturePath string, wantCalls 
 			t.Errorf("process-edge %s latency = %dms, want <= %dms; summary=%+v", check.name, check.got, check.max, report.Summary)
 		}
 	}
+	// EstimatedAudibleGapMS is the primary gap check for the queue-paced
+	// device: its playback drains on the device's own cadence, so the latency
+	// caps above bound each stage, but only the estimated gap says whether
+	// queued audio ran out before the next response's audio arrived.
 	if report.Summary.EstimatedAudibleGapMS.Count != 0 {
 		t.Errorf("serial tool fixture introduced an estimated audible gap: %+v", report.Summary.EstimatedAudibleGapMS)
 	}
