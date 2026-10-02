@@ -392,6 +392,18 @@ jobs:
       - name: Run coverage gate
         run: make coverage-gate
 
+      # Floors are set from what this gate measures on CI linux (platform
+      # files and capability paths differ from a developer machine), so
+      # publish every profile it read, pass or fail.
+      - name: Upload gated coverage profiles
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-coverage-profiles
+          path: coverage/*.out
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Save Go cache
         if: always()
         uses: ./.github/actions/go-cache-save

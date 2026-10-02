@@ -520,6 +520,12 @@ gate fails naming that package.
 - Minimums use **exactly two decimal places** (`80.0` is rejected; write `80.00`).
 - The `packages` array stays **sorted** by import path.
 - Each entry carries **exactly one** of `minimum` or `exception`.
+- Floors are **measured on CI linux**: the gate in `CI (coverage)` reads the
+  union of every profile (agent-cli shards plus the library and embedding
+  profiles) and publishes them as the `gated-coverage-profiles` artifact.
+  Platform files and capability paths (mouse and screen backends, symlink
+  handling) cover differently on macOS, so set floors from that artifact
+  (`gh run download <run> -n gated-coverage-profiles`), not from a local run.
 - Floors **ratchet up**. The gate fails a floor more than 2.00 points below
   the measured coverage and prints the minimum to raise it to: measured minus
   1.00, half the allowed headroom, so the floor survives the next run moving
