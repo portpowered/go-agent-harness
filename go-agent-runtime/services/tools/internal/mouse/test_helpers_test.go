@@ -2,13 +2,8 @@ package mouse
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
 	"image"
-	"testing"
 
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	display "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
 
@@ -30,36 +25,4 @@ func (*portableDisplaySurface) Bounds(context.Context, int) (image.Rectangle, er
 
 func (*portableDisplaySurface) Capture(context.Context, image.Rectangle) (*image.RGBA, error) {
 	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
-}
-
-func screenDisplayBounds(index int) image.Rectangle {
-	bounds, err := display.NewHostDisplaySurface().Bounds(context.Background(), index)
-	if err != nil {
-		return image.Rectangle{}
-	}
-	return bounds
-}
-
-func assertScreenResult(t *testing.T, message messages.Message, mediaType string, width, height int) messages.ImagePart {
-	t.Helper()
-	if message.Role != messages.RoleTool || len(message.ContentParts) != 2 {
-		t.Fatalf("screen result = %#v, want one metadata part and one image part", message)
-	}
-	var result display.ScreenResult
-	if err := json.Unmarshal([]byte(message.TextContent()), &result); err != nil {
-		t.Fatalf("decode screen result: %v", err)
-	}
-	imagePart, ok := message.ContentParts[1].(messages.ImagePart)
-	if !ok {
-		t.Fatalf("screen image part = %T, want messages.ImagePart", message.ContentParts[1])
-	}
-	digest := sha256.Sum256(imagePart.Bytes)
-	wantDigest := fmt.Sprintf("%x", digest)
-	if result.Version != display.ScreenResultVersion || result.Status != display.ScreenResultStatusSuccess || result.Source != display.ScreenResultSource || result.MIMEType != mediaType || result.ByteLength != len(imagePart.Bytes) || result.Width != width || result.Height != height || result.SHA256 != wantDigest || result.TypedProjection != display.ScreenResultTypedProjectionInputImage {
-		t.Fatalf("screen result = %+v, image = %s/%d bytes; want version/status/source/mime/dimensions/digest projection", result, imagePart.MediaType, len(imagePart.Bytes))
-	}
-	if imagePart.MediaType != mediaType || len(imagePart.Bytes) == 0 {
-		t.Fatalf("screen image part = %#v, want non-empty %s", imagePart, mediaType)
-	}
-	return imagePart
 }

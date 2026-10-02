@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,43 +10,25 @@ import (
 	"strings"
 )
 
-const (
-	policyVersion = 1
-
-	defaultPackageFileLimit        = 15
-	defaultProductionFileLineLimit = 400
-	defaultTestFileLineLimit       = 600
-	defaultFunctionLineLimit       = 80
-	defaultTestFunctionLineLimit   = 120
-	defaultFunctionStatementLimit  = 50
-	defaultTestStatementLimit      = 80
-	defaultCognitiveLimit          = 15
-	defaultTestCognitiveLimit      = 20
-	defaultCyclomaticLimit         = 15
-	defaultTestCyclomaticLimit     = 20
-)
+const policyVersion = 1
 
 // Policy is the reviewed architecture manifest. Patterns are repository
-// relative for directories and Go import paths for import rules.
+// relative for directories and Go import paths for import rules. Size,
+// complexity, package-global and init limits are not part of it: they are
+// golangci-lint settings in .golangci.yml.
 type Policy struct {
 	Version                 int                 `json:"version"`
 	ModuleDirs              []string            `json:"module_dirs"`
 	Patterns                []string            `json:"patterns"`
-	Baseline                string              `json:"baseline"`
 	ServiceRoots            []string            `json:"service_roots"`
 	CompositionRoots        []string            `json:"composition_roots"`
 	CompositionRegistry     []CompositionEntry  `json:"composition_registry"`
 	ModuleRules             []ModuleRule        `json:"module_rules"`
-	ReusableModules         []string            `json:"reusable_modules"`
-	CLIModules              []string            `json:"cli_modules"`
 	ForbiddenImports        []ImportRule        `json:"forbidden_imports"`
 	ForbiddenRootImports    []string            `json:"forbidden_root_imports"`
 	ForbiddenSourcePatterns []SourcePatternRule `json:"forbidden_source_patterns,omitempty"`
 	GeneratedFiles          []GeneratedRule     `json:"generated_files"`
-	GlobalExceptions        []GlobalException   `json:"global_exceptions"`
-	GlobalStateScopes       []string            `json:"global_state_scopes"`
-	RootFunctionExceptions  []GlobalException   `json:"root_function_exceptions"`
-	Limits                  Limits              `json:"limits"`
+	RootFunctionExceptions  []SymbolException   `json:"root_function_exceptions,omitempty"`
 }
 
 type GeneratedRule struct {
@@ -64,7 +47,9 @@ type ModuleRule struct {
 	AllowedTopLevel []string `json:"allowed_top_level"`
 }
 
-type GlobalException struct {
+// SymbolException exempts one named symbol of a package (optionally one
+// file) from a service-root rule.
+type SymbolException struct {
 	Package string `json:"package"`
 	File    string `json:"file"`
 	Name    string `json:"name"`
@@ -83,75 +68,18 @@ type CompositionEntry struct {
 	Reason  string `json:"reason"`
 }
 
-type Limits struct {
-	PackageFiles        int `json:"package_files"`
-	ProductionFileLines int `json:"production_file_lines"`
-	TestFileLines       int `json:"test_file_lines"`
-	FunctionLines       int `json:"function_lines"`
-	TestFunctionLines   int `json:"test_function_lines"`
-	FunctionStatements  int `json:"function_statements"`
-	TestStatements      int `json:"test_function_statements"`
-	Cognitive           int `json:"cognitive_complexity"`
-	TestCognitive       int `json:"test_cognitive_complexity"`
-	Cyclomatic          int `json:"cyclomatic_complexity"`
-	TestCyclomatic      int `json:"test_cyclomatic_complexity"`
-}
-
-func defaultLimits() Limits {
-	return Limits{
-		PackageFiles: defaultPackageFileLimit, ProductionFileLines: defaultProductionFileLineLimit, TestFileLines: defaultTestFileLineLimit,
-		FunctionLines: defaultFunctionLineLimit, TestFunctionLines: defaultTestFunctionLineLimit,
-		FunctionStatements: defaultFunctionStatementLimit, TestStatements: defaultTestStatementLimit,
-		Cognitive: defaultCognitiveLimit, TestCognitive: defaultTestCognitiveLimit, Cyclomatic: defaultCyclomaticLimit, TestCyclomatic: defaultTestCyclomaticLimit,
-	}
-}
-
 func (p *Policy) applyDefaults() {
-	defaults := defaultLimits()
 	if p.Version == 0 {
 		p.Version = policyVersion
 	}
 	if len(p.Patterns) == 0 {
 		p.Patterns = []string{"./..."}
 	}
-	if p.Limits.PackageFiles == 0 {
-		p.Limits.PackageFiles = defaults.PackageFiles
-	}
-	if p.Limits.ProductionFileLines == 0 {
-		p.Limits.ProductionFileLines = defaults.ProductionFileLines
-	}
-	if p.Limits.TestFileLines == 0 {
-		p.Limits.TestFileLines = defaults.TestFileLines
-	}
-	if p.Limits.FunctionLines == 0 {
-		p.Limits.FunctionLines = defaults.FunctionLines
-	}
-	if p.Limits.TestFunctionLines == 0 {
-		p.Limits.TestFunctionLines = defaults.TestFunctionLines
-	}
-	if p.Limits.FunctionStatements == 0 {
-		p.Limits.FunctionStatements = defaults.FunctionStatements
-	}
-	if p.Limits.TestStatements == 0 {
-		p.Limits.TestStatements = defaults.TestStatements
-	}
-	if p.Limits.Cognitive == 0 {
-		p.Limits.Cognitive = defaults.Cognitive
-	}
-	if p.Limits.TestCognitive == 0 {
-		p.Limits.TestCognitive = defaults.TestCognitive
-	}
-	if p.Limits.Cyclomatic == 0 {
-		p.Limits.Cyclomatic = defaults.Cyclomatic
-	}
-	if p.Limits.TestCyclomatic == 0 {
-		p.Limits.TestCyclomatic = defaults.TestCyclomatic
-	}
 }
 
 func loadPolicy(path, repoRoot string) (Policy, error) {
 	if strings.TrimSpace(path) == "" {
-		return Policy{Version: policyVersion, Limits: defaultLimits()}, nil
+		return Policy{Version: policyVersion}, nil
 	}
 	abs, err := resolveRepoPath(path, repoRoot)
 	if err != nil {
@@ -161,8 +89,12 @@ func loadPolicy(path, repoRoot string) (Policy, error) {
 	if err != nil {
 		return Policy{}, fmt.Errorf("read architecture manifest %q: %w", path, err)
 	}
+	// Unknown keys fail, so a retired section (for example the former size
+	// limits or baselines) cannot linger in the manifest unenforced.
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
 	var policy Policy
-	if err := json.Unmarshal(data, &policy); err != nil {
+	if err := decoder.Decode(&policy); err != nil {
 		return Policy{}, fmt.Errorf("decode architecture manifest %q: %w", path, err)
 	}
 	if policy.Version != policyVersion {
@@ -194,13 +126,7 @@ func validatePolicy(policy Policy) error {
 	if err := validateGeneratedRules(policy.GeneratedFiles); err != nil {
 		return err
 	}
-	if err := validateGlobalExceptions(policy.GlobalExceptions); err != nil {
-		return err
-	}
-	if err := validateGlobalExceptions(policy.RootFunctionExceptions); err != nil {
-		return err
-	}
-	return validateLimits(policy.Limits)
+	return validateSymbolExceptions(policy.RootFunctionExceptions)
 }
 
 func validateModuleDirs(dirs []string) error {
@@ -350,18 +276,11 @@ func validateGeneratedRules(rules []GeneratedRule) error {
 	return nil
 }
 
-func validateGlobalExceptions(exceptions []GlobalException) error {
+func validateSymbolExceptions(exceptions []SymbolException) error {
 	for _, exception := range exceptions {
 		if exception.Package == "" || exception.Name == "" || exception.Reason == "" {
-			return errors.New("global_exceptions entries require package, name, and reason")
+			return errors.New("root_function_exceptions entries require package, name, and reason")
 		}
-	}
-	return nil
-}
-
-func validateLimits(limits Limits) error {
-	if limits.PackageFiles < 1 || limits.ProductionFileLines < 1 || limits.TestFileLines < 1 || limits.FunctionLines < 1 || limits.TestFunctionLines < 1 || limits.FunctionStatements < 1 || limits.TestStatements < 1 || limits.Cognitive < 1 || limits.TestCognitive < 1 || limits.Cyclomatic < 1 || limits.TestCyclomatic < 1 {
-		return errors.New("all limits must be positive")
 	}
 	return nil
 }

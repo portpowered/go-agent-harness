@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"go/build"
 	"go/parser"
 	"go/token"
 	"os"
@@ -30,7 +28,7 @@ func discoverModule(ctx context.Context, goBinary, dir string, patterns []string
 	if err != nil {
 		return nil, err
 	}
-	if err := walkModuleSources(module, modulePath, packagesByDir); err != nil {
+	if err := walkModuleSources(module, packagesByDir); err != nil {
 		return nil, err
 	}
 	return finalizeModule(module, packagesByDir)
@@ -50,12 +48,12 @@ func listedPackages(module *Module, listed []goListPackage) (map[string]*Package
 		if previous := packagesByDir[packageDir]; previous != nil && previous.ImportPath != listedPackage.ImportPath {
 			return nil, fmt.Errorf("module %q has multiple package import paths for %q: %q and %q", module.Dir, packageDir, previous.ImportPath, listedPackage.ImportPath)
 		}
-		packagesByDir[packageDir] = &Package{ImportPath: listedPackage.ImportPath, Dir: packageDir, Module: module, TypeLoadable: true}
+		packagesByDir[packageDir] = &Package{ImportPath: listedPackage.ImportPath, Dir: packageDir, Module: module}
 	}
 	return packagesByDir, nil
 }
 
-func walkModuleSources(module *Module, modulePath string, packagesByDir map[string]*Package) error {
+func walkModuleSources(module *Module, packagesByDir map[string]*Package) error {
 	err := filepath.WalkDir(module.Dir, func(name string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -66,7 +64,7 @@ func walkModuleSources(module *Module, modulePath string, packagesByDir map[stri
 		if filepath.Ext(name) != ".go" {
 			return nil
 		}
-		return inventorySource(module, modulePath, name, packagesByDir, true)
+		return inventorySource(module, name, packagesByDir)
 	})
 	if err != nil {
 		return fmt.Errorf("inventory module %q: %w", module.Dir, err)
@@ -81,25 +79,16 @@ func skipInventoryDirectory(name string) error {
 	return nil
 }
 
-func inventorySource(module *Module, modulePath, name string, packagesByDir map[string]*Package, selectedOnly bool) error {
-	packageDir := filepath.Dir(name)
-	pkg := packagesByDir[packageDir]
+func inventorySource(module *Module, name string, packagesByDir map[string]*Package) error {
+	pkg := packagesByDir[filepath.Dir(name)]
 	if pkg == nil {
-		if selectedOnly {
-			// go list is the source of truth for an explicitly selected pattern.
-			// Do not re-add every other directory while walking the module: doing
-			// so makes -pattern/-scope silently ineffective and lets an unrelated
-			// package fail a focused gate. Inactive files belonging to a selected
-			// package are still visited because the package directory itself is
-			// already present in packagesByDir.
-			return nil
-		}
-		var err error
-		pkg, err = derivedPackage(module, modulePath, packageDir)
-		if err != nil {
-			return err
-		}
-		packagesByDir[packageDir] = pkg
+		// go list is the source of truth for an explicitly selected pattern.
+		// Do not re-add every other directory while walking the module: doing
+		// so makes -pattern/-scope silently ineffective and lets an unrelated
+		// package fail a focused gate. Inactive files belonging to a selected
+		// package are still visited because the package directory itself is
+		// already present in packagesByDir.
+		return nil
 	}
 	rel, err := filepath.Rel(module.Dir, name)
 	if err != nil {
@@ -112,38 +101,6 @@ func inventorySource(module *Module, modulePath, name string, packagesByDir map[
 	}
 	pkg.Files = append(pkg.Files, &SourceFile{Path: name, RelPath: filepath.ToSlash(rel), AST: parsed, Fset: fset, Test: strings.HasSuffix(name, "_test.go"), Generated: hasGeneratedHeader(name)})
 	return nil
-}
-
-func derivedPackage(module *Module, modulePath, packageDir string) (*Package, error) {
-	rel, err := filepath.Rel(module.Dir, packageDir)
-	if err != nil {
-		return nil, err
-	}
-	importPath := modulePath
-	if rel != "." {
-		importPath += "/" + filepath.ToSlash(rel)
-	}
-	// Snapshot inventories are used by baseline bootstrap. Keep their package
-	// paths loadable so type-aware architecture rules (especially exported API
-	// leaks) are checked against the exact merge-base source instead of being
-	// silently skipped when the baseline file did not exist yet.
-	return &Package{ImportPath: importPath, Dir: packageDir, Module: module, TypeLoadable: true}, nil
-}
-
-// markSnapshotTypeLoadability keeps inactive platform/tag-only directories in
-// the physical inventory while excluding them from the optional historical
-// type load. packages.Load reports a hard error for a package with no files
-// matching the host build context; that error must not hide otherwise useful
-// type-aware checks for the rest of the merge-base snapshot.
-func markSnapshotTypeLoadability(packagesByDir map[string]*Package) {
-	for _, pkg := range packagesByDir {
-		if _, err := build.Default.ImportDir(pkg.Dir, 0); err != nil {
-			var noGo *build.NoGoError
-			if errors.As(err, &noGo) {
-				pkg.TypeLoadable = false
-			}
-		}
-	}
 }
 
 func finalizeModule(module *Module, packagesByDir map[string]*Package) (*Module, error) {

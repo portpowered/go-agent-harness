@@ -32,6 +32,10 @@ LINT_CROSS_GOOS ?= windows darwin
 # with the tag and removes none: every `!nomicrophone` darwin file also
 # needs cgo.
 LINT_CROSS_TAGS_darwin := nomicrophone
+# GOARCH for one cross GOOS (empty keeps the host's). Darwin lints arm64 so
+# the files constrained to darwin && arm64 (the macOS live and e2e_internal
+# tests) are linted; no file is constrained to darwin && amd64.
+LINT_CROSS_GOARCH_darwin := arm64
 # Modules `make lint` and `make lint-cross` run at once. Each golangci-lint
 # run is itself parallel, but small modules are dominated by per-run startup
 # and package loading, so overlapping them shortens the run.
@@ -150,8 +154,6 @@ CUSTOMER_SESSION_DIR ?= $(HOME)/.codex/sessions
 GOLANGCI_LINT ?= golangci-lint
 ANALYZER_TOOL_DIR ?= .cache/go-tools
 ARCHITECTURE_POLICY := docs/architecture/architecture-policy.json
-ARCHITECTURE_BASELINE := docs/architecture/baselines
-ARCHITECTURE_BASE ?= origin/main
 GORELEASER ?= goreleaser
 RTC_RACE_TIMEOUT ?= 30s
 # Race test binaries sleep 1s at exit by default (GORACE atexit_sleep_ms);
@@ -196,8 +198,8 @@ define agent_cli_split_tests
 endef
 
 .DEFAULT_GOAL := help
-.PHONY: architecture-size-check test-architecture-gate verify-architecture embed-check
-.PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-providers-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
+.PHONY: architecture-check test-architecture-gate verify-architecture embed-check
+.PHONY: help deps fmt fmt-fix wire-check typecheck lint lint-module lint-wireinject lint-other-os lint-cross lint-cross-module lint-darwin-cgo test test-module coverage-module test-tools test-audio-stability test-audio-stability-race test-audio-device-server-integration test-audio-stress test-loop-race test-providers-race test-linux-devices-race test-rtc-race test-sessions-race test-factory-scripts test-integration test-regressions test-customer-sessions build coverage coverage-ci-agent-cli coverage-agent-cli-shard coverage-ci-libraries coverage-gate coverage-registration coverage-changed check-ci-test-partition verify-standalone-checkout prepush prepush-full test-cgo-delta ci release-check release-tags release-push release-dry-run release test-budget test-hermetic
 
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -286,7 +288,8 @@ lint: ## Run golangci-lint (default and opt-in test build tags, then wireinject)
 	$(golangci_config_check); \
 	export LINT_ANALYZER="$$analyzer"; \
 	bash scripts/run-bounded.sh --jobs $(LINT_JOBS) -- $(foreach module,$(LINT_SCHEDULED_MODULES),'lint $(module)::$(MAKE) --no-print-directory lint-module LINT_MODULE=$(module)'); \
-	$(MAKE) --no-print-directory lint-wireinject
+	$(MAKE) --no-print-directory lint-wireinject; \
+	$(MAKE) --no-print-directory lint-other-os
 
 # lint-module lints one LINT_MODULE (used by `make lint`).
 lint-module:
@@ -309,6 +312,21 @@ lint-wireinject: ## Run golangci-lint on Wire injector (wireinject) packages of 
 		$(golangci_run) -- --build-tags wireinject $$packages; \
 	done
 
+# Files for operating systems other than linux, darwin and windows (each one's
+# build constraint excludes all three) build in no other lane. Lint them as
+# GOOS=js GOARCH=wasm, restricted to their packages.
+golangci_other_os_dirs = { git grep -l --all-match -e '^//go:build .*!linux' -e '^//go:build .*!darwin' -e '^//go:build .*!windows' -- '*.go' ':!:**/testdata/**' || true; } | sed -E 's\#(^|/)[^/]*$$\#\#; s\#^\#./\#' | sort -u
+
+lint-other-os: ## Run golangci-lint as GOOS=js GOARCH=wasm on LINT_SHARD packages holding other-OS files (run by make lint).
+	@set -euo pipefail; \
+	$(golangci_resolve); \
+	for module in $(LINT_SELECTED_MODULES); do \
+		packages="$$(cd "$$module" && $(golangci_other_os_dirs))"; \
+		if [ -z "$$packages" ]; then continue; fi; \
+		echo "==> lint $$module other-OS packages GOOS=js GOARCH=wasm ($(LINT_CONFIG))"; \
+		GOOS=js GOARCH=wasm CGO_ENABLED=0 $(golangci_run) -- $$packages; \
+	done
+
 lint-cross: ## Run golangci-lint for each LINT_CROSS_GOOS (cgo disabled) on LINT_SHARD modules, LINT_JOBS at once.
 	@set -euo pipefail; \
 	$(golangci_resolve); \
@@ -322,8 +340,8 @@ lint-cross-module:
 	@set -euo pipefail; \
 	$(golangci_resolve); \
 	module="$(LINT_MODULE)"; \
-	echo "==> lint $$module GOOS=$(LINT_CROSS_TARGET) CGO_ENABLED=0$(if $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET)), +tags $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET))) ($(LINT_CONFIG))"; \
-	GOOS="$(LINT_CROSS_TARGET)" CGO_ENABLED=0 $(golangci_run) -- $(LINT_RUN_FLAGS) $(if $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET)),--build-tags $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET))) ./...
+	echo "==> lint $$module GOOS=$(LINT_CROSS_TARGET)$(if $(LINT_CROSS_GOARCH_$(LINT_CROSS_TARGET)), GOARCH=$(LINT_CROSS_GOARCH_$(LINT_CROSS_TARGET))) CGO_ENABLED=0$(if $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET)), +tags $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET))) ($(LINT_CONFIG))"; \
+	GOOS="$(LINT_CROSS_TARGET)" $(if $(LINT_CROSS_GOARCH_$(LINT_CROSS_TARGET)),GOARCH="$(LINT_CROSS_GOARCH_$(LINT_CROSS_TARGET))" )CGO_ENABLED=0 $(golangci_run) -- $(LINT_RUN_FLAGS) $(if $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET)),--build-tags $(LINT_CROSS_TAGS_$(LINT_CROSS_TARGET))) ./...
 
 lint-darwin-cgo: ## On macOS, run golangci-lint with cgo on packages holding cgo-constrained files.
 	@set -euo pipefail; \
@@ -376,15 +394,18 @@ test-cgo-delta: ## Test natively (cgo, real microphone backend) only the package
 		fi; \
 	done
 
-architecture-size-check: ## Enforce architecture and size budgets in one shared inventory pass.
-	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY) -baseline $(ARCHITECTURE_BASELINE) -baseline-base "$(ARCHITECTURE_BASE)" -check architecture,size
+# Size, complexity, package-global and init limits are golangci-lint's (make
+# lint); the gate checks service shape and the boundaries depguard cannot
+# express. See docs/architecture/lint-policy.md.
+architecture-check: ## Enforce service shape, public-surface and boundary rules (tools/architecturegate).
+	@cd tools/architecturegate && GOWORK=off $(GO) run . -repo ../.. -manifest $(ARCHITECTURE_POLICY)
 
-# -count=1: its tests read docs/architecture at the repository root, outside
+# -count=1: its tests read docs/architecture and .golangci.yml at the repository root, outside
 # the module, where Go's test cache cannot see a change.
 test-architecture-gate: ## Verify architecture enforcement against positive and negative fixtures.
 	@cd tools/architecturegate && GOWORK=off $(GO) test ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"
 
-verify-architecture: architecture-size-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
+verify-architecture: architecture-check test-architecture-gate wire-check ## Run architecture and generated-composition checks.
 
 embed-check: ## Exercise the public runtime API from an independent headless consumer module.
 	@cd tests/embedding && GOWORK=off CGO_ENABLED=0 $(GO) test -mod=readonly ./... -count=1 -timeout "$(GO_TEST_TIMEOUT)"

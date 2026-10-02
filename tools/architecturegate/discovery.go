@@ -26,12 +26,11 @@ type Module struct {
 }
 
 type Package struct {
-	ImportPath   string
-	Dir          string
-	Module       *Module
-	Files        []*SourceFile
-	Types        *packages.Package
-	TypeLoadable bool
+	ImportPath string
+	Dir        string
+	Module     *Module
+	Files      []*SourceFile
+	Types      *packages.Package
 	// SourceTypes is the package type-checked from source, unexported types
 	// included. Only packages importing messages load it; see
 	// loadSessionSourceTypes.
@@ -233,7 +232,7 @@ func loadModuleTypes(ctx context.Context, module *Module, goos, goarch string) e
 	}
 	for _, pkg := range module.Packages {
 		pkg.Types = byPath[pkg.ImportPath]
-		if pkg.TypeLoadable && pkg.Types == nil {
+		if pkg.Types == nil {
 			return fmt.Errorf("type loading returned no package for %s", pkg.ImportPath)
 		}
 	}
@@ -243,9 +242,7 @@ func loadModuleTypes(ctx context.Context, module *Module, goos, goarch string) e
 func typeLoadPatterns(module *Module) []string {
 	patterns := make([]string, 0, len(module.Packages))
 	for _, pkg := range module.Packages {
-		if pkg.TypeLoadable {
-			patterns = append(patterns, pkg.ImportPath)
-		}
+		patterns = append(patterns, pkg.ImportPath)
 	}
 	return patterns
 }

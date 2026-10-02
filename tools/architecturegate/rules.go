@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"go/ast"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -78,14 +77,16 @@ func moduleShapeIssue(pkg *Package, module *Module) Issue {
 	}
 }
 
-func evaluate(ctx context.Context, modules []*Module, policy Policy, checks map[string]bool, goos, goarch string) (Result, error) {
+func evaluate(ctx context.Context, modules []*Module, policy Policy, goos, goarch string) (Result, error) {
 	result := inventoryResult(modules, policy)
-	if checks["architecture"] {
-		if err := loadTypes(ctx, modules, goos, goarch); err != nil {
-			return result, err
+	if err := loadTypes(ctx, modules, goos, goarch); err != nil {
+		return result, err
+	}
+	for _, module := range modules {
+		for _, pkg := range module.Packages {
+			result.Issues = append(result.Issues, architectureIssues(pkg, module, classifyService(pkg, module, policy), policy)...)
 		}
 	}
-	result.Issues = append(result.Issues, packageIssues(modules, policy, checks)...)
 	result.Sort()
 	return result, nil
 }
@@ -96,63 +97,13 @@ func inventoryResult(modules []*Module, policy Policy) Result {
 		result.Packages += len(module.Packages)
 		for _, pkg := range module.Packages {
 			for _, source := range pkg.Files {
-				maintained := maintainedFile(source, module, policy)
-				result.Files += maintained
-				if maintained == 0 {
-					continue
+				if !source.Generated || !registeredGenerated(source.Path, module, policy) {
+					result.Files++
 				}
-				result.Functions += sourceFunctions(source)
 			}
 		}
 	}
 	return result
-}
-
-func maintainedFile(source *SourceFile, module *Module, policy Policy) int {
-	if source.Generated && registeredGenerated(source.Path, module, policy) {
-		return 0
-	}
-	return 1
-}
-
-func sourceFunctions(source *SourceFile) int {
-	count := 0
-	ast.Inspect(source.AST, func(node ast.Node) bool {
-		switch node := node.(type) {
-		case *ast.FuncDecl:
-			if node.Body != nil {
-				count++
-			}
-		case *ast.FuncLit:
-			if node.Body != nil {
-				count++
-			}
-		}
-		return true
-	})
-	return count
-}
-
-func packageIssues(modules []*Module, policy Policy, checks map[string]bool) []Issue {
-	issues := make([]Issue, 0)
-	for _, module := range modules {
-		for _, pkg := range module.Packages {
-			issues = append(issues, selectedPackageIssues(pkg, module, policy, checks)...)
-		}
-	}
-	return issues
-}
-
-func selectedPackageIssues(pkg *Package, module *Module, policy Policy, checks map[string]bool) []Issue {
-	issues := make([]Issue, 0)
-	if checks["size"] {
-		issues = append(issues, sizeIssues(pkg, module, policy)...)
-	}
-	if checks["architecture"] {
-		service := classifyService(pkg, module, policy)
-		issues = append(issues, architectureIssues(pkg, module, service, policy)...)
-	}
-	return issues
 }
 
 func classifyService(pkg *Package, module *Module, policy Policy) serviceInfo {
@@ -274,10 +225,6 @@ func moduleOwnsImport(module *Module, importPath string) bool {
 		return false
 	}
 	return importPath == module.Path || strings.HasPrefix(importPath, module.Path+"/")
-}
-
-func moduleIsReusable(module *Module, policy Policy) bool {
-	return matchesAny(policy.ReusableModules, module.Path, module.Dir, filepath.Base(module.Dir))
 }
 
 // ImportRule forbids Imports from From packages; see the README for its fields.

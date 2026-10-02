@@ -2,11 +2,15 @@
 
 `make lint` runs the pinned golangci-lint (v2.9.0, through the Makefile's
 analyzer resolver) once for every `LINT_MODULES` module, then once more for
-Wire injector packages. Production and test files are both checked, including
-files behind opt-in build tags and platform-specific files (see
-[Build tags](#build-tags) and [Operating systems](#operating-systems)). These
-limits are separate from the stricter [architecture gate budgets](size-baselines.md)
-and do not replace them.
+Wire injector packages and once for packages holding other-OS files.
+Production and test files are both checked, including files behind opt-in
+build tags and platform-specific files (see
+[Build tags](#build-tags) and [Operating systems](#operating-systems)).
+golangci-lint is the only owner of size, complexity, package-global and `init`
+limits and of every import rule depguard can express; the architecture gate
+checks only service shape and the boundaries golangci-lint cannot express (see
+[Size and complexity](#size-and-complexity) and
+[Boundaries: depguard and the architecture gate](#boundaries-depguard-and-the-architecture-gate)).
 
 ## One policy, all code
 
@@ -18,8 +22,8 @@ linter applies to every file, and any finding fails lint.
 | --- | --- |
 | `linters.default: standard` | `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused` |
 | `errcheck` | also checks blank assignments and type assertions; only Win32 `LazyProc.Call`, `Proc.Call` and `SyscallN` are excluded |
-| `revive` `file-length-limit` | 1,000 physical lines per file |
-| `funlen` | 100 lines per function (statements are not counted) |
+| `revive` `file-length-limit` | 978 physical lines per file (comments and blank lines count) |
+| `funlen` | 100 lines and 78 statements per function |
 | `gocyclo`, `gocognit` | 30 |
 | `nestif` | 5 |
 | `dupl` | 150 tokens |
@@ -35,7 +39,8 @@ and receiver type: `os.Getwd`, `os.UserHomeDir`, `fmt.Print*`, `time.Sleep`,
 `context.Background`/`TODO`, `panic`, and `Skip*` on `testing.T`, `B`, `TB`
 and `F` (through `testing.common`) are forbidden. Context roots and panics are
 allowed in `cmd/` packages, `main.go` files and tests. Generated files (for
-example Wire's `wire_gen.go`) are excluded.
+example Wire's `wire_gen.go`) are excluded, and only with the standard
+`// Code generated ... DO NOT EDIT.` header (`exclusions.generated: strict`).
 
 Every finding is reported (`uniq-by-line: false`). A `//nolint` directive must
 name one linter and give a reason. An unused directive is itself a finding.
@@ -47,6 +52,71 @@ assignment. Do not turn a success into a failure because cleanup failed.
 Paths in findings and in exclusion rules are relative to the repository root
 (`run.relative-path-mode: gitroot`), for example `agent-cli/internal/...`,
 even though golangci-lint runs once per module directory.
+
+## Size and complexity
+
+These limits apply to production and test code alike, on every lint lane, with
+no baseline and no exclusion. Each one is the tightest value every current
+file passes on every lane (linux, windows, darwin, the opt-in test tags,
+wireinject and darwin cgo), measured when the architecture gate's size rules
+were retired. They only go down: lower a value when the code allows it, and
+never raise one above the hard caps of 1,000 lines per file and 100 lines per
+function. Split code by responsibility rather than suppressing a finding.
+
+| Linter | Value | Findings at the next tighter values |
+| --- | --- | --- |
+| `revive` `file-length-limit` | 978 | 977: 2, 950: 12, 900: 27, 800: 53, 600: 101, 400: 344 |
+| `funlen` `lines` | 100 | 99: 3, 95: 21, 90: 61, 80: 144 |
+| `funlen` `statements` | 78 | 77: 1, 70: 3, 60: 13, 50: 56 |
+| `gocyclo` | 30 | 29: 2, 25: 34, 20: 125, 15: 481 |
+| `gocognit` | 30 | 29: 6, 25: 63, 20: 224, 15: 695 |
+| `nestif` | 5 | 4: 51 |
+
+golangci-lint cannot give tests looser limits than production code without an
+exclusion, so one value covers both. Function literals count toward their
+enclosing function. There is no files-per-package limit.
+
+`gochecknoglobals` and `gochecknoinits` own package state: every package
+variable and `init` function needs a specific `//nolint` with a reason, except
+what `gochecknoglobals` allows (`Err*` sentinel errors, `regexp.MustCompile`
+results, `version` and `//go:embed` variables).
+
+## Boundaries: depguard and the architecture gate
+
+`depguard` holds every import rule it can express: a list of files (globs
+anchored at the repository root with `${config-path}`, optionally excluding
+tests with `!$test`) and a deny list of import-path prefixes (exact with a
+trailing `$`). The lists are:
+
+| List | Files | Denied imports |
+| --- | --- | --- |
+| `reusable-modules` | go-agent-loop, go-audio, go-device-gateway, go-llm-gateway | go-agent-runtime, agent-cli |
+| `runtime-module` | go-agent-runtime | agent-cli |
+| `agent-loop` | go-agent-loop | go-device-gateway, go-llm-gateway |
+| `agent-loop-production` | go-agent-loop, non-test | `encoding/binary`, the retired loop clock package |
+| `go-audio` | go-audio | agent-cli, go-agent-loop, go-agent-runtime, go-device-gateway, go-llm-gateway |
+| `gateway-functional-tests` | go-llm-gateway/test/functional | go-agent-loop except `pkg/messages` (`list-mode: lax`) |
+| `session-contract` | agentsession/interface.go | go-device-gateway, go-llm-gateway |
+| `device-contract` | devices/interface.go and the device list/probe transports | go-device-gateway |
+| `agent-cli-production` | agent-cli/internal, non-test | agent-cli/internal/audio*, the retired wavio and loop clock packages |
+| `agent-cli-binary` | agent-cli/internal, non-test, except webmcp/testkit | `encoding/binary` |
+
+`TestDepguardImportRulesRejectViolations` in tools/architecturegate runs the
+pinned depguard analyzer over these lists with a violating and an allowed
+import for each.
+
+`make architecture-check` (tools/architecturegate) keeps what depguard cannot
+express: the service shape and contract rules, the service-boundary import
+rules (they follow the gate's service classifier and composition registry),
+public-surface leaks, the session-wrapper rule, `forbidden_source_patterns`,
+generated-file registration, and the `forbidden_imports` rules whose import
+pattern has a wildcard in the middle: `**/services/internal/**` (the tool and
+device contracts, the device list/probe transports and every CLI transport),
+`**/services/servicetest` and `go-agent-runtime/services/**/wire`. depguard
+matches only import-path prefixes, so it could deny today's one
+`agent-cli/internal/services/internal` prefix but not a private service tree
+added elsewhere. See the
+[gate README](../../tools/architecturegate/README.md).
 
 ## Round-3 cleanup (temporary exclusions)
 
@@ -99,10 +169,19 @@ the recorded regeneration command stable.
 
 | Lane | Command | Covers |
 | --- | --- | --- |
-| Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; wireinject |
+| Linux (cgo on) | `make lint` | default and opt-in tags; linux cgo files; wireinject; other-OS stubs (`make lint-other-os`, below) |
 | Windows cross | `make lint-cross LINT_CROSS_GOOS=windows` | `GOOS=windows CGO_ENABLED=0` (WASAPI, Win32 syscalls) |
-| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, cgo and microphone stubs) |
+| Darwin cross | `make lint-cross LINT_CROSS_GOOS=darwin` | `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0` plus `nomicrophone` (darwin files without cgo, cgo and microphone stubs, and the `darwin && arm64` live and e2e_internal tests) |
 | Darwin cgo | `make lint-darwin-cgo` (macOS only) | cgo on, for packages holding a cgo-constrained file (CoreAudio capture, display permission) |
+
+The darwin lane sets `GOARCH=arm64` (`LINT_CROSS_GOARCH_darwin`) on every
+host: several macOS live and e2e_internal tests are constrained to
+`darwin && arm64`, and no file is constrained to `darwin && amd64`.
+
+`make lint-other-os` (run by `make lint`) lints, as `GOOS=js GOARCH=wasm`
+with cgo disabled, only the packages holding a file whose build constraint
+excludes linux, darwin and windows (the unsupported-platform stubs). No
+other lane builds those files.
 
 `make lint-cross` runs both cross lanes by default. Cross-linting needs no C
 toolchain because cgo is disabled. Darwin cgo files need the macOS SDK, so
@@ -211,7 +290,8 @@ replaced lanes' caches in go-cache's `fallback-cache-names` so the merged
 lane's first run is warm).
 
 The required `CI (static)` check runs `make fmt`, `make
-check-ci-test-partition` and `make architecture-size-check` (75-100s cold;
+check-ci-test-partition` and `make architecture-check` (75-100s cold before
+the size rules moved here;
 `make wire-check`, another 40-55s cold, runs in `CI (unit)`), then
 waits for every job named `CI (static lint *` and fails if any of them failed
 or fewer than `--min-matches` lanes exist (`scripts/ci-await-jobs.sh`), so

@@ -1,45 +1,85 @@
 # architecturegate
 
-`architecturegate` is the repository's standalone shape and complexity gate.
-It is kept in its own Go module so checking the workspace does not make the
-runtime depend on its analysis implementation. The policy manifest is
+`architecturegate` is the repository's service-shape and boundary gate. It
+checks only what golangci-lint cannot express. It is kept in its own Go module
+so checking the workspace does not make the runtime depend on its analysis
+implementation. The policy manifest is
 [`docs/architecture/architecture-policy.json`](../../docs/architecture/architecture-policy.json).
 
-Run it from the repository root with the repository-pinned Go toolchain. The
-tool is a standalone module, so invoke it from its directory with the root
-passed explicitly:
+## What it owns, and what golangci-lint owns
+
+[`.golangci.yml`](../../.golangci.yml) is the single owner of file and
+function size, statement count, cyclomatic and cognitive complexity, nesting,
+package globals and `init` functions, and of every import rule depguard can
+express. It applies the same limits to all code, with no baseline. See
+[lint-policy.md](../../docs/architecture/lint-policy.md).
+
+The gate keeps:
+
+- **Service shape** (`service_roots`, `module_rules`): a service under
+  `services/<name>/` has root contracts, `internal/` implementations, `wire/`
+  construction and optional `transports/` (`service-shape`); a root declares a
+  `Service` interface (`service-interface`) and exposes no free functions or
+  constructors (`root-exported-function`, `root-constructor`); wire packages
+  hold no exported business methods (`wire-business-method`); extracted
+  runtime modules only grow allow-listed top-level directories
+  (`module-root-shape`).
+- **Service boundaries**: roots consume contracts only
+  (`root-implementation-import`, `root-private-import`) and import no effectful
+  packages (`root-forbidden-import`, `forbidden_root_imports`); only
+  composition imports a service wire (`wire-import`); peers never import each
+  other's private packages (`peer-private-import`); tests do not bypass
+  composition (`test-private-import`); exported APIs never reach an
+  `internal` type (`public-implementation-leak`). These follow the gate's
+  service classifier and the `composition_registry`, which depguard's
+  file-glob/import-prefix lists cannot model.
+- **Session wrappers** (`session-wrapper-capabilities`): a type that holds and
+  is a `messages.Session` embeds `messages.SessionCapabilities`.
+- **Source patterns** (`forbidden_source_patterns`): hand-rolled encodings stay
+  in the module that owns them (see below).
+- **Glob import rules** (`forbidden_imports`): only the rules whose import
+  pattern has a wildcard in the middle (`**/services/internal/**`,
+  `**/services/servicetest`, `.../services/**/wire`). depguard matches
+  import-path prefixes only.
+- **Generated files** (`generated_files`): a `Code generated` header must be a
+  registered, reproducible generator output (`generated-file-spoof`).
+
+There is no baseline: every finding fails the gate.
+
+## Run
+
+Run it from the repository root with `make architecture-check`, or from its
+directory with the root passed explicitly:
 
 ```sh
 cd tools/architecturegate
 GOWORK=off go run . \
   -repo ../.. \
-  -manifest docs/architecture/architecture-policy.json \
-  -check architecture
+  -manifest docs/architecture/architecture-policy.json
 ```
 
-The size lane is deliberately separate because existing code is migrated in
-measured phases. A reviewed baseline can be supplied explicitly:
+Use `-format json` to archive a deterministic CI report. `-module-dir` may be
+repeated to check a fixture or a smaller module set; `-pattern`/`-scope` may be
+repeated to select package patterns. `-goos` and `-goarch` let the inventory
+remain the same while type loading is repeated for a supported build matrix.
 
-```sh
-GOWORK=off go run . \
-  -repo ../.. \
-  -manifest docs/architecture/architecture-policy.json \
-  -baseline docs/architecture/baselines \
-  -baseline-base origin/main \
-  -check size
-```
+The inventory walks every `.go` file in a selected package directory,
+including inactive platform files. Type-aware checks use `go/packages` for the
+selected host matrix. Registered generated files are excluded only when they
+have a standard generated header and match a manifest generator entry.
 
-The same baseline flags may be used with `-check architecture`. The driver
-combines every JSON fragment recursively, validates the combined deletion-only
-baseline, and filters entries by the selected lane.
+The manifest rejects unknown keys, so a retired section cannot linger in it
+unenforced.
+
+## Policy rules
 
 `forbidden_imports` rules name the importing packages (`from`) and the
 forbidden import patterns (`imports`). Optional fields narrow a rule:
 `except` re-allows specific imports, `except_from` removes packages from
-`from`, `files` limits the rule to module-relative source paths (for example
-one package's public `interface.go`), and `production_only` skips `_test.go`
-files. Prefer a rule here over a test that parses imports: the gate reports
-every violation with its file and runs once for the whole workspace.
+`from`, `files` limits the rule to module-relative source paths, and
+`production_only` skips `_test.go` files. Add a rule here only when depguard
+cannot express it; otherwise add a depguard list to `.golangci.yml` and a case
+to `TestDepguardImportRulesRejectViolations`.
 
 `forbidden_source_patterns` rules keep a hand-rolled encoding inside the
 module that owns it. Each rule has a `name` (the issue rule), the governed
@@ -68,70 +108,18 @@ external application module; a repository test gets a single exact
 module are rejected. Registered tests can assemble public service Wire
 packages while the private implementation import rule still applies.
 
-There is no accept-current or baseline-writing mode. Produce a review report
-first, preserving failures with `|| true`, then add only confirmed pre-existing
-issues to the checked-in JSON with a rationale and migration phase:
-
-```sh
-GOWORK=off go run . \
-  -repo ../.. \
-  -manifest docs/architecture/architecture-policy.json \
-  -check all -format json > /tmp/runtime-refactor-architecture-report.json || true
-```
-
-`-baseline-base` is required in CI. When that ref already contains the
-baseline, the gate rejects added entries and ceiling increases by comparing
-the two manifests. For the first baseline, it archives the merge-base source
-tree and measures its source-level architecture and size issues, allowing only
-entries that existed in that source tree; violations in newly extracted
-modules remain live failures. Buildable historical packages are type-loaded
-from that snapshot for public-surface checks, while inactive platform/tag-only
-directories remain in the physical inventory without blocking the snapshot
-load. Historical source is never executed through the current module graph.
-This bootstrap still requires review of each entry's rationale and phase.
-
-Use `-format json` to archive a deterministic CI report. `-module-dir` may be
-repeated to check a fixture or a smaller module set; `-pattern`/`-scope` may be
-repeated to select package patterns. `-goos` and `-goarch` let the inventory
-remain the same while type loading is repeated for a supported build matrix.
-
-The inventory walks every `.go` file in a selected package directory,
-including inactive platform files. Type-aware checks use `go/packages` for the
-selected host matrix. Registered generated files are excluded only when they
-have a standard generated header and match a manifest generator entry. A
-header without a registration is reported as `generated-file-spoof`.
-
-The baseline directory is deletion-only. A new issue fails; a metric increase fails; a
-metric reduction requires the recorded value to be lowered; and a resolved
-entry must be deleted. There is no automatic accept-current or update flag.
-Renames are explicit one-to-one entries in the baseline and cannot multiply a
-debt exemption.
-
-Fragments mirror ownership: file debt is stored below the module and source
-path, while package-wide debt uses `_package.json` in the mirrored package.
-`scripts/shard-architecture-baseline.py` performs the deterministic one-way
-migration from the former monolith. A pre-migration branch should generate into
-a temporary directory named `baselines`, then apply only its owned fragment
-diffs after rebasing so newer reductions are not overwritten.
-
-The pinned `golangci-lint` configuration is separate from this gate: a single
-`.golangci.yml` applies to all code. See
-[lint-policy.md](../../docs/architecture/lint-policy.md).
-Verify it with the resolver's v2.9.0 binary:
-
-```sh
-golangci-lint config verify --config .golangci.yml
-```
-
-The service shape is recognized only under `services/<name>/`: contracts live
-at the root, private implementation packages under `internal/`, construction
-under `wire/`, and optional adapters under `transports/`. Root contracts cannot
-reach implementation types or expose constructors. Peer service internals and
-wire packages are protected, and reusable modules listed by policy cannot
-import a CLI module.
-
 `module_rules` provides an explicit top-level allowlist for extracted runtime
 modules. Keep this list narrow (the module root, `services`, `wire`, and named
 platform contracts) so copied public implementation trees cannot become an
 accidental second API. Generated files are registered per module and exact
 path; a recursive wildcard cannot register arbitrary Wire packages.
+
+## Tests
+
+`make test-architecture-gate` runs the positive and negative fixtures. They
+also load the checked-in policy and `.golangci.yml`:
+`TestRepositoryImportRulesRejectViolations` and
+`TestRepositorySourcePatternRulesKeepAudioEncodingInGoAudio` prove the gate's
+own repository rules, and `TestDepguardImportRulesRejectViolations` runs the
+depguard analyzer version golangci-lint v2.9.0 pins over the repository's
+depguard lists.

@@ -2,55 +2,13 @@ package main
 
 import (
 	"context"
-	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/analysistest"
 )
-
-func TestScopedBaselineKeepsOnlySelectedModules(t *testing.T) {
-	first := &Module{Path: "example.com/first", Dir: "/repo/first"}
-	second := &Module{Path: "example.com/second", Dir: "/repo/second"}
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{
-		{Rule: "file-lines", Module: first.Path, Package: first.Path, File: "first.go", Value: 401, Rationale: "legacy", Phase: "P0"},
-		{Rule: "file-lines", Module: second.Path, Package: second.Path, File: "second.go", Value: 401, Rationale: "legacy", Phase: "P0"},
-	}}
-	filtered := baselineForModules(baseline, []*Module{first})
-	if len(filtered.Entries) != 1 || filtered.Entries[0].Module != first.Path {
-		t.Fatalf("filtered baseline = %#v", filtered.Entries)
-	}
-}
-
-func TestScopedBaselineKeepsStaleEntriesInsideSelectedPrefix(t *testing.T) {
-	module := &Module{
-		Path: "example.com/app",
-		Dir:  "/repo/app",
-		Packages: []*Package{
-			{ImportPath: "example.com/app/internal/acceptance"},
-		},
-	}
-	selected := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/acceptance", File: "current.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	removed := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/acceptance/removed", File: "old.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	unrelated := BaselineEntry{Rule: "file-lines", Module: module.Path, Package: "example.com/app/internal/services", File: "service.go", Value: 401, Rationale: "legacy", Phase: "P0"}
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{selected, removed, unrelated}}
-	filtered := baselineForScope(baseline, []*Module{module}, []string{"./internal/acceptance/..."})
-	issues := compareBaseline([]Issue{{Rule: selected.Rule, Module: selected.Module, Package: selected.Package, File: selected.File, Value: selected.Value}}, filtered)
-	if !hasRule(issues, "baseline-stale") {
-		t.Fatalf("removed package inside selected prefix was discarded: %#v", filtered)
-	}
-	for _, issue := range issues {
-		if issue.Package == unrelated.Package {
-			t.Fatalf("unrelated package leaked into focused baseline report: %#v", issues)
-		}
-	}
-}
 
 func TestUnclassifiedPackagesCannotConsumeLocalServiceInternals(t *testing.T) {
 	module := &Module{Dir: "/repo", Path: "example.com/app"}
@@ -110,7 +68,7 @@ func NewService() session.Service { return impl.Service{} }
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := evaluate(context.Background(), modules, policy, map[string]bool{"architecture": true}, "", "")
+	result, err := evaluate(context.Background(), modules, policy, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,163 +202,6 @@ func NewRecorder() Recorder { return Recorder{} }
 	}
 }
 
-func TestGlobalStateScopeCoversNonServicePackages(t *testing.T) {
-	module := &Module{Dir: "/repo", Path: "example.com/audio"}
-	policy := fixturePolicy()
-	policy.GlobalStateScopes = []string{"example.com/audio/pkg/analysis/**"}
-	file := sourceFixture(t, "state.go", "package analysis\nvar DefaultConfig = Config{}\ntype Config struct{}\n", false)
-	pkg := &Package{ImportPath: "example.com/audio/pkg/analysis", Dir: "/repo/pkg/analysis", Module: module, Files: []*SourceFile{file}}
-	issues := architectureIssues(pkg, module, serviceInfo{}, policy)
-	if !hasRule(issues, "mutable-global") {
-		t.Fatalf("issues = %#v; scoped package global was missed", issues)
-	}
-}
-
-func TestReusableModuleCannotImportCLI(t *testing.T) {
-	module := &Module{Dir: "/repo", Path: "example.com/reusable"}
-	policy := fixturePolicy()
-	policy.ReusableModules = []string{"example.com/reusable"}
-	policy.CLIModules = []string{"example.com/cli/**"}
-	file := sourceFixture(t, "reusable.go", `package reusable
-import "example.com/cli/internal/config"
-var _ config.Config
-`, false)
-	pkg := &Package{ImportPath: module.Path + "/pkg", Dir: "/repo/pkg", Module: module, Files: []*SourceFile{file}}
-	issues := importIssues(pkg, module, serviceInfo{}, file, "example.com/cli/internal/config", policy)
-	if !hasRule(issues, "reusable-cli-import") {
-		t.Fatalf("issues = %#v", issues)
-	}
-}
-
-func TestMutableGlobalAnalyzerReportsVariablesAndInit(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "fixture.go", `package fixture
-var Registry = map[string]string{}
-func init() {}
-`, parser.ParseComments)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var reports []analysis.Diagnostic
-	_, err = MutableGlobalAnalyzer.Run(&analysis.Pass{Analyzer: MutableGlobalAnalyzer, Fset: fset, Files: []*ast.File{file}, Report: func(d analysis.Diagnostic) { reports = append(reports, d) }})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(reports) != 2 {
-		t.Fatalf("reports = %#v", reports)
-	}
-}
-
-func TestMutableGlobalAnalyzerFixture(t *testing.T) {
-	analysistest.Run(t, analysistest.TestData(), MutableGlobalAnalyzer, "architecturemutableglobal")
-}
-
-func TestSizeMetricsAndDeletionOnlyBaseline(t *testing.T) {
-	dir := t.TempDir()
-	name := filepath.Join(dir, "large.go")
-	body := "package fixture\nfunc Large() {\n"
-	for index := range 55 {
-		body += "_ = " + string(rune('a'+index%26)) + "\n"
-	}
-	body += "}\n"
-	if err := os.WriteFile(name, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	source := sourceFixtureAt(t, name, body, false)
-	pkg := &Package{ImportPath: "example.com/fixture", Dir: dir, Files: []*SourceFile{source}}
-	module := &Module{Path: "example.com/fixture", Dir: dir}
-	policy := fixturePolicy()
-	policy.Limits.FunctionLines = 2
-	policy.Limits.FunctionStatements = 2
-	issues := sizeIssues(pkg, module, policy)
-	if !hasRule(issues, "function-lines") || !hasRule(issues, "function-statements") {
-		t.Fatalf("issues = %#v", issues)
-	}
-
-	metric := Issue{Rule: "function-lines", Module: "example.com/fixture", Package: "example.com/fixture", File: "large.go", Symbol: "Large", Value: 10, Limit: 2, Message: "too large"}
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{{Rule: metric.Rule, Module: metric.Module, Package: metric.Package, File: metric.File, Symbol: metric.Symbol, Value: metric.Value, Rationale: "legacy holder", Phase: "P0"}}}
-	if got := compareBaseline([]Issue{metric}, baseline); len(got) != 0 {
-		t.Fatalf("matching baseline = %#v", got)
-	}
-	if got := compareBaseline([]Issue{{Rule: metric.Rule, Module: metric.Module, Package: metric.Package, File: metric.File, Symbol: metric.Symbol, Value: 11, Message: metric.Message}}, baseline); !hasRule(got, "baseline-drift") {
-		t.Fatalf("increase = %#v", got)
-	}
-	if got := compareBaseline(nil, baseline); !hasRule(got, "baseline-stale") {
-		t.Fatalf("resolved entry = %#v", got)
-	}
-	if got := compareBaseline([]Issue{{Rule: metric.Rule, Module: metric.Module, Package: metric.Package, File: metric.File, Symbol: metric.Symbol, Value: 9, Message: metric.Message}}, baseline); !hasRule(got, "baseline-drift") {
-		t.Fatalf("reduction without baseline edit = %#v", got)
-	}
-}
-
-func TestBaselineRenameIsOneToOne(t *testing.T) {
-	old := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app/services/a", File: "old.go", Symbol: "Run", Value: 81, Rationale: "extraction holder", Phase: "P0"}
-	current := Issue{Rule: old.Rule, Module: old.Module, Package: old.Package, File: newFixtureFile, Symbol: old.Symbol, Value: old.Value, Message: "same"}
-	oldKey := baselineIssue(old).Key()
-	newKey := current.Key()
-	baseline := Baseline{Version: baselineVersion, Entries: []BaselineEntry{old}, Renames: []BaselineRename{{From: oldKey, To: newKey}}}
-	if got := compareBaseline([]Issue{current}, baseline); len(got) != 0 {
-		t.Fatalf("renamed holder = %#v", got)
-	}
-	if err := validateBaseline(baseline); err != nil {
-		t.Fatal(err)
-	}
-	baseline.Renames = append(baseline.Renames, BaselineRename{From: oldKey, To: newKey})
-	if err := validateBaseline(baseline); err == nil {
-		t.Fatal("duplicate rename was accepted")
-	}
-}
-
-func TestNestedFunctionLiteralsReceiveIndependentBudgets(t *testing.T) {
-	content := `package fixture
-func Outer() {
-  first := func() { if true { _ = 1 }; if true { _ = 2 }; if true { _ = 3 } }
-  second := func() { if true { _ = 4 }; if true { _ = 5 }; if true { _ = 6 } }
-  _, _ = first, second
-}
-var packageHandler = func() { if true { _ = 7 }; if true { _ = 8 }; if true { _ = 9 } }
-`
-	source := sourceFixture(t, "nested.go", content, false)
-	pkg := &Package{ImportPath: "example.com/fixture", Dir: filepath.Dir(source.Path), Files: []*SourceFile{source}}
-	module := &Module{Path: "example.com/fixture", Dir: pkg.Dir}
-	policy := fixturePolicy()
-	policy.Limits.Cognitive = 1
-	policy.Limits.Cyclomatic = 1
-	issues := sizeIssues(pkg, module, policy)
-	if !hasRule(issues, "cognitive-complexity") || !hasRule(issues, "cyclomatic-complexity") {
-		t.Fatalf("issues = %#v; nested callbacks were not measured", issues)
-	}
-	seen := map[string]bool{}
-	for _, issue := range issues {
-		if (issue.Rule == "cognitive-complexity" || issue.Rule == "cyclomatic-complexity") && strings.HasPrefix(issue.Symbol, "func-literal@") {
-			seen[issue.Symbol] = true
-		}
-	}
-	if !seen["func-literal@3:12"] || !seen["func-literal@4:13"] || len(seen) != 3 {
-		t.Fatalf("literal identities = %#v; nested and package-level callbacks need stable positions", seen)
-	}
-}
-
-func TestGenericMethodMetricsHaveDistinctReceiverNames(t *testing.T) {
-	content := `package fixture
-type First[T any] struct{}
-type Second[T any] struct{}
-func (First[T]) Run() { if true { _ = 1 } }
-func (Second[T]) Run() { if true { _ = 2 } }
-`
-	source := sourceFixture(t, "generic_methods.go", content, false)
-	metrics := functionMetrics(source)
-	seen := map[string]bool{}
-	for _, metric := range metrics {
-		if strings.HasSuffix(metric.Name, ".Run") {
-			seen[metric.Name] = true
-		}
-	}
-	if len(seen) != 2 {
-		t.Fatalf("method identities = %#v; generic receivers must not collapse to one name", seen)
-	}
-}
-
 func TestModuleRootAllowlistRejectsCopiedImplementationTree(t *testing.T) {
 	module := &Module{Dir: "/repo", Path: "example.com/runtime"}
 	pkg := &Package{ImportPath: "example.com/runtime/agent", Dir: "/repo/agent", Module: module}
@@ -467,7 +268,7 @@ func TestGeneratedHeaderRequiresRegistration(t *testing.T) {
 	source := sourceFixtureAt(t, name, content, false)
 	module := &Module{Path: "example.com/fixture", Dir: dir}
 	pkg := &Package{ImportPath: module.Path, Dir: dir, Module: module, Files: []*SourceFile{source}}
-	issues := architectureIssues(pkg, module, serviceInfo{}, Policy{Version: policyVersion, Limits: defaultLimits()})
+	issues := architectureIssues(pkg, module, serviceInfo{}, Policy{Version: policyVersion})
 	if !hasRule(issues, "generated-file-spoof") {
 		t.Fatalf("issues = %#v", issues)
 	}
@@ -486,6 +287,29 @@ func TestGlobAndMissingModuleValidation(t *testing.T) {
 	}
 }
 
+// TestPolicyRejectsUnknownKeys proves a retired or misspelled manifest key
+// fails the load instead of lingering unenforced.
+func TestPolicyRejectsUnknownKeys(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "known.json", `{"version":1,"module_dirs":["mod"],"service_roots":["services/*"]}`)
+	if _, err := loadPolicy("known.json", root); err != nil {
+		t.Fatalf("known keys were rejected: %v", err)
+	}
+	for name, manifest := range map[string]string{
+		"retired limits":     `{"version":1,"module_dirs":["mod"],"limits":{"function_lines":80}}`,
+		"retired baseline":   `{"version":1,"module_dirs":["mod"],"baseline":"docs/architecture/baselines"}`,
+		"misspelled key":     `{"version":1,"module_dirs":["mod"],"service_root":["services/*"]}`,
+		"unknown nested key": `{"version":1,"module_dirs":["mod"],"forbidden_imports":[{"from":["a"],"imports":["b"],"reason":"r","only_tests":true}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			writeFixture(t, root, "unknown.json", manifest)
+			if _, err := loadPolicy("unknown.json", root); err == nil || !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("loadPolicy error = %v; want an unknown field error", err)
+			}
+		})
+	}
+}
+
 func TestTargetInventoryActivatesPlatformOnlyPackages(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "go.mod", "module example.com/platform\n\ngo 1.26.7\n")
@@ -494,47 +318,12 @@ func TestTargetInventoryActivatesPlatformOnlyPackages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(modules) != 1 || len(modules[0].Packages) != 1 || !modules[0].Packages[0].TypeLoadable {
+	if len(modules) != 1 || len(modules[0].Packages) != 1 {
 		t.Fatalf("target inventory = %#v; platform-only package was not selected", modules)
 	}
 }
-func TestC10BaselinePublic(t *testing.T) {
-	root := t.TempDir()
-	writeFixture(t, root, "manifest.json", `{"baseline":"baseline.json","module_dirs":["mod"],"patterns":["./..."],"limits":{"function_lines":1},"version":1}`)
-	writeFixture(t, root, "mod/go.mod", "module example.com/app\n\ngo 1.26.7\n")
-	writeFixture(t, root, "mod/old.go", "package app\n\nfunc Run() {\n _ = 1\n _ = 2\n _ = 3\n _ = 4\n _ = 5\n}\n")
-	entry := BaselineEntry{Rule: "function-lines", Module: "example.com/app", Package: "example.com/app", File: "old.go", Symbol: "Run", Value: 7, Rationale: "C10 public regression", Phase: "P0"}
-	initial := Baseline{Version: baselineVersion, SourceCommit: "reviewed-source", Entries: []BaselineEntry{entry}}
-	data, err := baselineJSON(initial)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeFixture(t, root, "baseline.json", string(data))
-	gitTestCommand(t, root, "init")
-	gitTestCommand(t, root, "config", "user.email", "architecturegate@example.test")
-	gitTestCommand(t, root, "config", "user.name", "architecturegate")
-	gitTestCommand(t, root, "add", ".")
-	gitTestCommand(t, root, "commit", "-m", "introduce reviewed baseline")
-	gitTestCommand(t, root, "branch", "mainline")
-	gitTestCommand(t, root, "checkout", "-b", "candidate")
-	initial.Renames = []BaselineRename{{From: baselineIssue(entry).Key(), To: baselineIssue(entry).Key() + "-renamed"}}
-	data, err = baselineJSON(initial)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeFixture(t, root, "baseline.json", string(data))
-	gitTestCommand(t, root, "add", "baseline.json")
-	gitTestCommand(t, root, "commit", "-m", "add missing rename target")
-	result := Result{}
-	if err := applyBaseline(&result, nil, runOptions{baselinePath: "baseline.json", baselineBase: "mainline", checkSet: map[string]bool{"architecture": true}}, Policy{}, root); err != nil {
-		t.Fatal(err)
-	}
-	if !hasRule(result.Issues, "baseline-history-rename") {
-		t.Fatalf("issues=%#v; missing target was accepted", result.Issues)
-	}
-}
 func fixturePolicy() Policy {
-	return Policy{Version: policyVersion, ServiceRoots: []string{"services/*"}, CompositionRoots: []string{"wire"}, Limits: defaultLimits()}
+	return Policy{Version: policyVersion, ServiceRoots: []string{"services/*"}, CompositionRoots: []string{"wire"}}
 }
 
 func writeFixture(t *testing.T, root, relative, content string) {
@@ -561,15 +350,6 @@ func sourceFixtureAt(t *testing.T, name, content string, test bool) *SourceFile 
 		t.Fatal(err)
 	}
 	return &SourceFile{Path: name, RelPath: filepath.Base(name), AST: file, Fset: fset, Test: test}
-}
-
-func gitTestCommand(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	command := exec.CommandContext(t.Context(), "git", args...)
-	command.Dir = dir
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
-	}
 }
 
 func hasRule(issues []Issue, rule string) bool {

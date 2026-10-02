@@ -165,8 +165,9 @@ runner now retains composed provider tests alongside CLI/device regressions.
 
 ## Latency follow-up
 
-CI now runs architecture and size enforcement through one architecturegate
-inventory (`make architecture-size-check`). The individual diagnostic targets,
+CI then ran architecture and size enforcement through one architecturegate
+inventory (`make architecture-size-check`; since then size and complexity
+belong to golangci-lint and the gate runs as `make architecture-check`). The individual diagnostic targets,
 both rule sets, baseline checks, fixture tests and Wire validation remain.
 On the same local worktree, separate checks took 27.43s + 15.85s; combined took
 22.61s and preserved the pending test-file baseline failure. This is an indicative
