@@ -265,12 +265,14 @@ func runLiveClassificationProbe10(t *testing.T, ctx context.Context, pinned pinn
 	}
 	recordClassificationResult(t, unselected, configDir, "probe-10-unselected", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":false,"catalog_evidence":%q,"selection":"none"}`, unselectedReport.Status, unselectedReport.PageTools, unselectedReport.Catalog.Evidence))
 
-	unverified := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", unverifiedTab.TargetID, "--json")
-	unverifiedReport := requireClassificationDoctor(t, unverified, false)
-	if unverifiedReport.Status != "not_ready" || unverifiedReport.PageTools != "unverified" || unverifiedReport.Catalog.Ready {
-		t.Fatalf("probe 10 exact unverified report = %+v, want not_ready/unverified/false", unverifiedReport)
+	// A page with the WebMCP domain and no tools publishes an empty catalog:
+	// the page producer itself is the readiness evidence.
+	empty := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", unverifiedTab.TargetID, "--json")
+	emptyReport := requireClassificationDoctor(t, empty, true)
+	if emptyReport.Status != gateStatusReady || !emptyReport.Catalog.Ready || emptyReport.Catalog.Evidence != "page_producer" {
+		t.Fatalf("probe 10 exact empty-catalog report = %+v, want ready with page_producer catalog evidence", emptyReport)
 	}
-	recordClassificationResult(t, unverified, configDir, "probe-10-exact-unverified", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":false,"target_id":%q,"error_code":%q}`, unverifiedReport.Status, unverifiedReport.PageTools, unverifiedTab.TargetID, classificationDoctorErrorCode(unverifiedReport)))
+	recordClassificationResult(t, empty, configDir, "probe-10-exact-empty-catalog", fmt.Sprintf(`{"status":%q,"page_tools":%q,"catalog_ready":true,"catalog_evidence":%q,"target_id":%q}`, emptyReport.Status, emptyReport.PageTools, emptyReport.Catalog.Evidence, unverifiedTab.TargetID))
 
 	ready := runGateCommand(t, ctx, binaryPath, configDir, "webmcp", "doctor", "--browser-browser", browserID, "--browser-tab", readyTab.TargetID, "--json")
 	readyReport := requireClassificationDoctor(t, ready, true)
