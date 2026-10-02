@@ -296,7 +296,7 @@ func (s *RTCDeviceSink) runPlaybackCommands() {
 			if request.Epoch == 0 {
 				s.DiscardPlayback()
 			} else {
-				_, receipt.Applied = s.discardPlaybackAtEpoch(request.Epoch)
+				receipt.Applied = s.discardPlaybackAtEpoch(request.Epoch)
 				if !receipt.Applied {
 					receipt.Err = audio.ErrStalePlaybackCommand
 				}

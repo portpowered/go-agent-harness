@@ -249,6 +249,9 @@ func (s *RTCDeviceSource) ProviderSampleRate() int {
 // completion. The method does not close the RTC endpoint because that endpoint
 // belongs to its caller.
 func (s *RTCDeviceSource) Pump(ctx context.Context, outbound audio.OutboundMedia) error {
+	if s == nil {
+		return ErrRTCDeviceSourceClosed
+	}
 	return s.pumpWithUploadedObserver(ctx, outbound, s.uploadedSamplesObserver)
 }
 

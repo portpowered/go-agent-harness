@@ -373,20 +373,20 @@ func (s *RTCDeviceSink) PlaybackBuffer() PlaybackBufferPort {
 // newer than the generation already observed by the sink. It is called by the
 // playback command worker, so admission remains a bounded queue operation and
 // never performs device mutation on a loop tick.
-func (s *RTCDeviceSink) discardPlaybackAtEpoch(epoch uint64) (int, bool) {
+func (s *RTCDeviceSink) discardPlaybackAtEpoch(epoch uint64) bool {
 	if s == nil || s.sink == nil {
-		return 0, false
+		return false
 	}
 	s.playbackMu.Lock()
 	defer s.playbackMu.Unlock()
 	if epoch <= s.playbackGeneration {
-		return 0, false
+		return false
 	}
-	discarded := s.discardPlaybackObservations("epoch discard", s.playbackGeneration)
+	s.discardPlaybackObservations("epoch discard", s.playbackGeneration)
 	s.playbackBlocked = true
 	s.playbackGeneration = epoch
 	s.snapshotEpoch.Store(s.playbackGeneration)
-	return discarded, true
+	return true
 }
 
 // CaptureBufferSnapshot returns the live capture handoff observation. It is
