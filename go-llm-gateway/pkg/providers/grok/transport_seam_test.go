@@ -137,7 +137,7 @@ func awaitSeamSessionCreated(ctx context.Context, t *testing.T, recv *messages.T
 		if !ok {
 			t.Fatal("session ended before SESSION.CREATED was delivered")
 		}
-		switch msg.Type { //nolint:exhaustive // The test waits for its two terminal types; every other type is skipped.
+		switch msg.Type { //nolint:exhaustive // The helper waits for SESSION.OPEN and SESSION.CREATED; every other type is skipped.
 		case messages.StreamTypeSessionOpen:
 			sawOpen = true
 		case messages.StreamTypeSessionCreated:

@@ -93,7 +93,7 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 		outputSampleRate: int(config.OutputAudioSampleRate),
 		inputSampleRate:  int(config.InputAudioSampleRate),
 	})
-	gs.PrepareRTCMedia()
+	gs.base.PrepareRTCMedia()
 
 	// Send initial session.update with config.
 	sessionUpdate, err := buildSessionUpdate(config)
@@ -101,7 +101,7 @@ func (p *GrokSessionProvider) ConnectSession(ctx context.Context, config models.
 		return nil, errors.Join(fmt.Errorf("grok: build session update: %w", err), conn.Close())
 	}
 
-	if err := gs.WriteEvent(sessionUpdate); err != nil {
+	if err := gs.base.WriteEvent(sessionUpdate); err != nil {
 		return nil, errors.Join(fmt.Errorf("grok: send session update: %w", err), conn.Close())
 	}
 

@@ -36,7 +36,7 @@ func (s *grokSession) writeRTCMediaFrame(ctx context.Context, frame sharedaudio.
 // publishRTCMedia fans inbound provider audio out to the media reader without
 // removing it from the normal session stream.
 func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
-	media := s.CurrentRTCMedia()
+	media := s.base.CurrentRTCMedia()
 	if media == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (s *grokSession) publishRTCMedia(event models.SessionEvent) error {
 
 // interruptRTCPlayback discards response audio queued for local playback.
 func (s *grokSession) interruptRTCPlayback() {
-	if media := s.CurrentRTCMedia(); media != nil {
+	if media := s.base.CurrentRTCMedia(); media != nil {
 		media.InterruptInbound()
 	}
 }
@@ -73,7 +73,7 @@ func (s *grokSession) interruptRTCPlayback() {
 // media path records its own failure; the read loop keeps translating events.
 func (s *grokSession) publishRTCMediaWithLog(event models.SessionEvent) {
 	if err := s.publishRTCMedia(event); err != nil && !errors.Is(err, sharedaudio.ErrSessionMediaClosed) {
-		s.Logger().Warn("grok: RTC media event failed", logging.Field{Key: "error", Value: err})
+		s.base.Logger().Warn("grok: RTC media event failed", logging.Field{Key: "error", Value: err})
 	}
 }
 

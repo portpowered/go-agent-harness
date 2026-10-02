@@ -188,7 +188,7 @@ func TestRealtimeSession_CancelWaitsForPoppedContinuationAdmission(t *testing.T)
 
 	var wire []models.SessionEventType
 	for len(wire) < 3 {
-		event, ok := session.SendQueue().ReadBlockingContext(ctx)
+		event, ok := session.base.SendQueue().ReadBlockingContext(ctx)
 		if !ok {
 			t.Fatalf("send queue yielded %v, want initial create, continuation and cancel around the seeds", wire)
 		}
@@ -231,7 +231,7 @@ func TestRealtimeSession_DispatchFailureInvalidatesBeforeFreshAdmission(t *testi
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var enterOnce sync.Once
-	session.SendQueue().SetOnDrop(func(models.SessionEvent) {
+	session.base.SendQueue().SetOnDrop(func(models.SessionEvent) {
 		enterOnce.Do(func() { close(entered) })
 		<-release
 	})
@@ -253,7 +253,7 @@ func TestRealtimeSession_DispatchFailureInvalidatesBeforeFreshAdmission(t *testi
 		t.Fatalf("fresh response admitted before failed generation invalidation: %#v", outcome)
 	case <-time.After(20 * time.Millisecond):
 	}
-	if _, ok := session.SendQueue().Read(); !ok {
+	if _, ok := session.base.SendQueue().Read(); !ok {
 		t.Fatal("failed to free one send queue slot")
 	}
 	close(release)
@@ -348,7 +348,7 @@ func TestRealtimeSession_WaitForAudioIntentSettlements(t *testing.T) {
 	if err := session.waitForAudioIntentSettlements(t.Context(), pending); err == nil || !strings.Contains(err.Error(), "closed before deferred audio intent settled") {
 		t.Fatalf("wait after close = %v", err)
 	}
-	session.SetTerminalError(failure)
+	session.base.SetTerminalError(failure)
 	if err := session.waitForAudioIntentSettlements(t.Context(), pending); !errors.Is(err, failure) {
 		t.Fatalf("wait after terminal failure = %v", err)
 	}

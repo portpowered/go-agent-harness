@@ -298,6 +298,14 @@ func (s *realtimeSession) observeResponseLifecycle(event models.SessionEvent) {
 // call. It supersedes any standalone response request queued for the same
 // audio turn; combined tool-result intents, the continuation needed to
 // complete this call, are kept.
+//
+// An idle slot is deliberately left idle. The slot is idle here only when the
+// adapter released it locally (a cancel the provider reported as not active)
+// or the response was out of band; either way no response.done this adapter
+// tracks will arrive for it. Marking the slot responseSlotFunctionCall would
+// hold it busy with no done to free it and park every later intent. The tool
+// turn alone carries the suppression: standalone requests stay stale until
+// the tool result is admitted.
 func (s *realtimeSession) observeFunctionCallItem() {
 	s.responseMu.Lock()
 	st := &s.response

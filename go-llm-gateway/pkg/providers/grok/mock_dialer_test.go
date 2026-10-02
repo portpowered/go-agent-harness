@@ -20,8 +20,11 @@ type mockWebSocketConn struct {
 	clientMessages [][]byte
 	clientWriteCh  chan struct{}
 
-	closed    bool
-	readBlock chan struct{} // closed to unblock a pending ReadMessage
+	closed bool
+	// readBlock wakes a ReadMessage waiting for data: addServerMessage
+	// signals it (capacity 1, so a wake sent before the reader waits is
+	// kept), and Close closes it.
+	readBlock chan struct{}
 
 	// If set, ReadMessage returns this error after all queued messages are delivered.
 	readErr error
@@ -43,6 +46,9 @@ func (c *mockWebSocketConn) addServerMessage(msg []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.serverMessages = append(c.serverMessages, msg)
+	if c.closed {
+		return // readBlock is closed; nothing is waiting.
+	}
 	// Signal any pending ReadMessage that data is available.
 	select {
 	case c.readBlock <- struct{}{}:
