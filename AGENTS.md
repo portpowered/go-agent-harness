@@ -53,7 +53,7 @@ the provider and sending to it, so the RESPONSE.CANCEL reaches the wire before
 the interrupting audio. Moving it into a tick would add a goroutine hop
 between observing and sending and would lose that ordering. The runner's
 lifecycle state is the set of explicit phases in
-`participants/model_runner_session_state.go`.
+`participants/internal/sessionstate/`.
 
 
 ## validation

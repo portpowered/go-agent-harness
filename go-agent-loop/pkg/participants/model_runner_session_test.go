@@ -287,7 +287,7 @@ func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 	defer ap.Stop()
 
 	if err := runner.EnqueueSessionInput(ctx, SessionAudio([]byte{1, 2, 3}, messages.SessionAudioInputPolicyDefault), SessionAdmitOrFail); err != nil {
-		t.Fatalf("EnqueueSessionAudioInput: %v", err)
+		t.Fatalf("EnqueueSessionInput(audio): %v", err)
 	}
 	eventErrCh := make(chan error, 1)
 	go func() {
@@ -306,7 +306,7 @@ func TestSessionModelRunnerQueuesSessionEventAfterPendingAudio(t *testing.T) {
 		t.Fatalf("second outbound type = %s, want %s", second.Type, messages.StreamTypeMessageEnd)
 	}
 	if err := <-eventErrCh; err != nil {
-		t.Fatalf("EnqueueSessionEvent: %v", err)
+		t.Fatalf("EnqueueSessionInput(event): %v", err)
 	}
 }
 

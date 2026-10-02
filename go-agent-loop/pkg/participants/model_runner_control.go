@@ -25,7 +25,16 @@ func (r *ModelRunner) forwardQueuedSessionEvent(ctx context.Context, session mes
 	} else {
 		r.flushHeldAudio(ctx, session, state)
 	}
-	if r.suppressRejectedBatchContinuation(ctx, state, evt) || state.HoldForAcknowledgement(evt) {
+	if r.suppressRejectedBatchContinuation(ctx, state, evt) {
+		return
+	}
+	if state.HoldForAcknowledgement(evt) {
+		// A held continuation replays from Deferred and is consumed then. A
+		// held acknowledgement is dropped and never replays, so its pending
+		// tool boundary is released now.
+		if sessionstate.IsAcknowledgementCreate(evt) {
+			r.markSessionToolEventConsumed(evt)
+		}
 		return
 	}
 	// A request for a new response waits only while a cancel is actually

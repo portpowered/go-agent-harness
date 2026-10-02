@@ -240,14 +240,14 @@ func TestModelRunner_ExplicitSessionAudioPolicyControlsCancellation(t *testing.T
 			state := newInFlightRunState(t, session, runner, "resp-policy")
 
 			if err := runner.EnqueueSessionInput(ctx, SessionAudio(loudPCM(), test.policy), SessionAdmitOrFail); err != nil {
-				t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
+				t.Fatalf("EnqueueSessionInput(audio): %v", err)
 			}
 			input := <-runner.ingress.ordered
 			if input.kind != sessionInputAudio {
 				t.Fatalf("queued session input kind = %d, want audio", input.kind)
 			}
 			if err := runner.forwardSessionAudio(ctx, session, state, input.audio); err != nil {
-				t.Fatalf("forwardSessionAudioInputWithState: %v", err)
+				t.Fatalf("forwardSessionAudio: %v", err)
 			}
 
 			assertPolicyAudioForwarded(t, session.sentMessages(), test.wantSentCount, test.wantCancel)
@@ -313,14 +313,14 @@ func TestModelRunner_ExplicitInterruptPolicyDoesNotCancelToolContinuation(t *tes
 	state := newContinuationRunState(t, runner, "resp-continuation-policy")
 
 	if err := runner.EnqueueSessionInput(ctx, SessionAudio(loudPCM(), messages.SessionAudioInputPolicyInterrupt), SessionAdmitOrFail); err != nil {
-		t.Fatalf("EnqueueSessionAudioInputWithPolicy: %v", err)
+		t.Fatalf("EnqueueSessionInput(audio): %v", err)
 	}
 	input := <-runner.ingress.ordered
 	if input.kind != sessionInputAudio {
 		t.Fatalf("queued session input kind = %d, want audio", input.kind)
 	}
 	if err := runner.forwardSessionAudio(ctx, session, state, input.audio); err != nil {
-		t.Fatalf("forwardSessionAudioInputWithState: %v", err)
+		t.Fatalf("forwardSessionAudio: %v", err)
 	}
 
 	sent := session.sentMessages()
