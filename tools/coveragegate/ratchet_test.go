@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"path/filepath"
 	"testing"
 )
 
@@ -149,5 +151,36 @@ func TestManifestRejectsNoopMinimumsAndUnexplainedExceptions(t *testing.T) {
 	constructed := Manifest{Packages: []PackageEntry{{ImportPath: "example/a", HasMinimum: true, MinimumCents: 10}}}
 	if err := Compare(constructed, nil); !errors.Is(err, ErrManifestNoopMinimum) {
 		t.Fatalf("Compare() of a constructed 0.10 minimum = %v, want ErrManifestNoopMinimum", err)
+	}
+}
+
+// Stale floors are judged by CI's linux measurement, so the command enforces
+// them only with --ratchet (make passes it in CI). Regressions fail either
+// way.
+func TestRunEnforcesStaleFloorsOnlyWithRatchet(t *testing.T) {
+	directory := t.TempDir()
+	manifestPath := filepath.Join(directory, "manifest")
+	writeManifestFragment(t, filepath.Join(manifestPath, "a.json"), `{"package":"example/a","minimum":50.00}`)
+	writeManifestFragment(t, filepath.Join(manifestPath, "b.json"), `{"package":"example/b","minimum":50.00}`)
+	stale := writeProfile(t, "mode: set\nexample/a/a.go:1.1,1.2 9 1\nexample/a/a.go:2.1,2.2 1 0\nexample/b/b.go:1.1,1.2 1 1\nexample/b/b.go:2.1,2.2 1 0\n")
+	selectPath := filepath.Join(directory, "select.txt")
+	writeTestFile(t, selectPath, "example/a\n")
+
+	var output bytes.Buffer
+	for _, args := range [][]string{
+		{"--manifest", manifestPath, stale},
+		{"--manifest", manifestPath, "--select", selectPath, stale},
+	} {
+		if err := run(args, &output, &output); err != nil {
+			t.Fatalf("run(%v) = %v, want stale floors ignored without --ratchet", args, err)
+		}
+		if err := run(append([]string{"--ratchet"}, args...), &output, &output); !errors.Is(err, ErrCoverageFloorStale) {
+			t.Fatalf("run(--ratchet %v) = %v, want ErrCoverageFloorStale", args, err)
+		}
+	}
+
+	regressed := writeProfile(t, "mode: set\nexample/a/a.go:1.1,1.2 1 1\nexample/a/a.go:2.1,2.2 9 0\nexample/b/b.go:1.1,1.2 1 1\nexample/b/b.go:2.1,2.2 1 0\n")
+	if err := run([]string{"--manifest", manifestPath, regressed}, &output, &output); !errors.Is(err, ErrCoverageFloorViolation) || errors.Is(err, ErrCoverageFloorStale) {
+		t.Fatalf("run() on a regression = %v, want only the floor violation", err)
 	}
 }

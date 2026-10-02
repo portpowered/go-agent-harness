@@ -533,6 +533,10 @@ gate fails naming that package.
   0.10 comparison band) is worth more than 1.00, both widen to that one
   statement, so the suggested floor also tolerates losing a single covered
   statement. Raise the floor in the same change that adds the coverage.
+  Because floors are CI linux numbers, the stale check runs where they are
+  measured: `make` passes `--ratchet` when `CI` is set (`COVERAGE_RATCHET=1`
+  runs it locally). Regressions, unregistered packages and covered
+  exceptions fail everywhere.
 - A minimum of `0.10` or less is rejected: it passes with no statement
   covered, so it enforces nothing. The lowest minimum is `0.20`. The one
   documented consequence: in a one-statement package (for example the

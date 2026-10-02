@@ -114,6 +114,11 @@ AGENT_CLI_INTEGRATION_PROFILES = $(foreach shard,$(shell seq 1 $(AGENT_CLI_INTEG
 AGENT_CLI_TEST_RUNNER := ./cmd/testtimeout
 COVERAGE_DIR ?= coverage
 COVERAGE_MANIFEST_DIR ?= coverage-manifest
+# COVERAGE_RATCHET=1 also fails floors more than the allowed headroom below
+# measured coverage. Floors are measured on CI linux (CI is set there), so it
+# is on in CI and off locally, where macOS platform files cover differently.
+COVERAGE_RATCHET ?= $(if $(CI),1,0)
+COVERAGE_RATCHET_FLAG = $(if $(filter 1,$(COVERAGE_RATCHET)),--ratchet)
 COVERAGE_BASE ?= origin/main
 COVERAGE_MODULES ?= $(MODULES)
 COVERAGE_INCLUDE_EMBEDDING ?= 1
@@ -665,7 +670,7 @@ coverage-ci-libraries: ## Write hermetic library and embedding profiles owned by
 
 coverage-gate: ## Enforce coverage policy against a complete set of generated profiles.
 	@echo "==> coverage gate"
-	@cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out) $(AGENT_CLI_INTEGRATION_PROFILES) $(abspath $(COVERAGE_DIR))/embedding.out
+	@cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(COVERAGE_RATCHET_FLAG) $(foreach module,$(MODULES),$(abspath $(COVERAGE_DIR))/$(module).out) $(AGENT_CLI_INTEGRATION_PROFILES) $(abspath $(COVERAGE_DIR))/embedding.out
 
 coverage-registration: ## Validate every workspace Go package is registered without running coverage.
 	@set -euo pipefail; \
@@ -720,7 +725,7 @@ coverage-changed: ## Run coverage and the gate for the packages affected by chan
 		echo "==> coverage gate (changed scope)"; \
 		profiles=(); \
 		for profile in "$$dir"/*.out; do [ -e "$$profile" ] && profiles+=("$$profile"); done; \
-		(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" --select "$$dir/check.txt" $${profiles[@]+"$${profiles[@]}"}); \
+		(cd tools/coveragegate && GOWORK=off CGO_ENABLED=$(BUILD_CGO_ENABLED) $(GO) run . --manifest "$(abspath $(COVERAGE_MANIFEST_DIR))" $(COVERAGE_RATCHET_FLAG) --select "$$dir/check.txt" $${profiles[@]+"$${profiles[@]}"}); \
 	fi
 
 wire-check: ## Regenerate the pinned Wire graph and reject generated-code drift.
