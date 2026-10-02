@@ -1194,7 +1194,6 @@ own test, replay, timeout, and transport behavior.
   `github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway`
 - File path: `go-llm-gateway/pkg/providers/openai/options.go`,
   `go-llm-gateway/pkg/providers/openai/provider.go`,
-  `go-llm-gateway/pkg/providers/openai/realtime_dialer.go`,
   `go-llm-gateway/pkg/providers/anthropic/options.go`,
   `go-llm-gateway/pkg/providers/anthropic/provider.go`,
   `go-llm-gateway/pkg/providers/gemini/options.go`,

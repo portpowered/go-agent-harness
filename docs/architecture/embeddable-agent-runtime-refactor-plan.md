@@ -18,7 +18,6 @@ The reference inspected was the local `~/infinite-you` checkout, particularly:
 
 - `pkg/services/factory_sessions/service_contracts.go` and `wire/wire.go`: owner-root contracts and service-local construction.
 - `pkg/services/models/wire/wire.go`: private components assembled behind a service construction boundary.
-- `docs/internal/standards/code/general-backend-standards.md`: recursive service ownership, inert construction, package limits, and deletion-only debt baselines.
 - `Makefile`: separate package file-count, structure, boundary, and runtime-construction gates.
 
 Adopt those ownership principles, without copying every existing reference signature. Some reference constructors still name private implementation types and have very large argument lists. Our externally callable providers must expose public contracts only, and their dependency groups must describe a cohesive role.
