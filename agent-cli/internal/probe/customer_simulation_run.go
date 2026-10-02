@@ -150,7 +150,7 @@ func (r *customerSimulationRun) prepare() (CustomerSimulationRunResult, error) {
 	r.oracle = oracle
 	r.started = time.Now()
 	if r.spec.Scenario.Family == ScenarioFamilyE {
-		controller, controllerErr := NewPatienceController(r.spec.Scenario, FamilyEActionID, FamilyETurnID, RealPatienceClock{})
+		controller, controllerErr := NewPatienceController(r.spec.Scenario, FamilyEActionID, FamilyETurnID, r.options.PatienceClock)
 		if controllerErr != nil {
 			return r.fail(controllerErr, "create patience controller: %v", controllerErr)
 		}
@@ -261,14 +261,18 @@ func (r *customerSimulationRun) duplexConfig() DuplexSessionConfig {
 	}
 }
 
-// startPatienceListening anchors the patience clock at child start. A
-// listening failure is recorded by the controller's own ledger checks, so the
-// start hook itself has no error to report.
+// startPatienceListening anchors the wall patience clock at child start. An
+// injected clock keeps the origin it reported when the controller was built,
+// because the runner's wall-clock origin is not on its timeline. A listening
+// failure is recorded by the controller's own ledger checks, so the start hook
+// itself has no error to report.
 func (r *customerSimulationRun) startPatienceListening(startedAt time.Time) {
 	if r.patienceController == nil {
 		return
 	}
-	r.patienceController.startedAt = startedAt
+	if r.options.PatienceClock == nil {
+		r.patienceController.startedAt = startedAt
+	}
 	if err := r.patienceController.StartListening(); err != nil {
 		return
 	}

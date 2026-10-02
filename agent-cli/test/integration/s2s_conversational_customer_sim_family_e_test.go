@@ -105,6 +105,7 @@ func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSim
 	scenario := familyEShippedScenario()
 	fixture := newFamilyEProviderFixture(t, scenario, mode)
 	fixture.SetStartedAt(time.Now())
+	clock := newFamilyEPatienceClock()
 
 	validator := probe.CustomerSimulationValidatorAgentFunc(func(_ context.Context, request probe.CustomerSimulationValidatorRequest) ([]byte, error) {
 		refs := append([]string(nil), request.Input.EvidenceRefs...)
@@ -134,6 +135,7 @@ func runFamilyEShipped(t *testing.T, mode familyEShippedMode) (probe.CustomerSim
 		}},
 		Validator: validator, MaxDuration: scenario.Deadline, FrameDuration: time.Millisecond, SilenceDuration: 5 * time.Millisecond, ShutdownGrace: time.Second,
 		ReplayService: replaywire.NewService(),
+		PatienceClock: clock, CaptureOutputSink: newFamilyEStallSink(clock, scenario.Patience, mode),
 	})
 	observation := fixture.Snapshot()
 	fixture.Close()
@@ -147,10 +149,11 @@ func familyEShippedScenario() probe.CustomerScenario {
 	scenario := probe.NewFamilyEScenario()
 	scenario.ID = "family-e-shipped-child"
 	scenario.Name = "Shipped child patience test"
-	// The patience controller runs on the real clock, so these thresholds are
-	// real waits: a quarter of the production-like 3s/4s/6s policy keeps the
-	// same ordering (response start < re-prompt < dead air < deadline) with
-	// enough headroom over child-process startup on a loaded runner.
+	// These thresholds are virtual: familyEPatienceClock only advances while
+	// the scripted product is silent, so they never race child start-up or
+	// exit on a loaded runner. A quarter of the production-like 3s/4s/6s
+	// policy keeps the ordering (response start < re-prompt < dead air) and
+	// keeps the stalled modes to a few dozen 25ms controller wakes.
 	scenario.Patience = probe.PatienceThresholds{
 		ListenBeforeFollowUp: 100 * time.Millisecond,
 		ResponseStart:        750 * time.Millisecond,
@@ -161,6 +164,88 @@ func familyEShippedScenario() probe.CustomerScenario {
 	}
 	scenario.Deadline = 5 * time.Second
 	return scenario
+}
+
+// familyEPatienceStep is how far one controller clock sample moves virtual
+// time during a product stall.
+const familyEPatienceStep = 50 * time.Millisecond
+
+// familyEPatienceClock is the virtual patience clock for the shipped-child
+// tests. It is frozen until the product stalls, so host scheduling (child
+// start-up, connection setup, coverage flush at exit) never counts as
+// customer waiting. Once a stall is declared, every controller sample
+// advances it by familyEPatienceStep, up to the stall's budget when it has
+// one. Advancing per sample, rather than per wall-clock tick, means the
+// controller always sees the whole silence after it observes the stalled
+// output, whenever that observation happens.
+type familyEPatienceClock struct {
+	mu       sync.Mutex
+	base     time.Time
+	elapsed  time.Duration
+	stalling bool
+	limit    time.Duration
+}
+
+func newFamilyEPatienceClock() *familyEPatienceClock {
+	return &familyEPatienceClock{base: time.Unix(0, 0).UTC()}
+}
+
+// Now implements probe.PatienceClock.
+func (c *familyEPatienceClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.base.Add(c.elapsed)
+	if c.stalling && (c.limit == 0 || c.elapsed < c.limit) {
+		c.elapsed += familyEPatienceStep
+		if c.limit > 0 && c.elapsed > c.limit {
+			c.elapsed = c.limit
+		}
+	}
+	return now
+}
+
+// stall starts virtual time. A positive budget caps the silence that can
+// accrue after the latest product output; zero lets it run unbounded.
+func (c *familyEPatienceClock) stall(budget time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stalling = true
+	if budget > 0 {
+		c.limit = c.elapsed + budget
+	}
+}
+
+// familyEStallSink receives the child's stdout after the runner has recorded
+// it as observable progress, which makes product output the event that
+// starts (or re-arms) the scripted stall. A nil clock never stalls.
+type familyEStallSink struct {
+	clock  *familyEPatienceClock
+	budget time.Duration
+}
+
+// newFamilyEStallSink scripts the silence the product shows after each
+// output. Normal never stalls: its response completes before any check-in.
+// Recovery stops halfway between the re-prompt and dead-air thresholds, so
+// the bounded check-in always happens and dead air never does, however long
+// the re-prompt takes to reach the provider. The dead-air mode stalls until
+// the controller gives up.
+func newFamilyEStallSink(clock *familyEPatienceClock, policy probe.PatienceThresholds, mode familyEShippedMode) familyEStallSink {
+	switch mode {
+	case familyEShippedNormal:
+		return familyEStallSink{}
+	case familyEShippedRecovery:
+		return familyEStallSink{clock: clock, budget: policy.Reprompt + (policy.AbsoluteDeadAir-policy.Reprompt)/2}
+	case familyEShippedDeadAir:
+		return familyEStallSink{clock: clock}
+	}
+	return familyEStallSink{clock: clock}
+}
+
+func (s familyEStallSink) Write(data []byte) (int, error) {
+	if len(data) > 0 && s.clock != nil {
+		s.clock.stall(s.budget)
+	}
+	return len(data), nil
 }
 
 func readFamilyEPatience(t *testing.T, run probe.CustomerSimulationRunResult) probe.PatienceEvidence {
