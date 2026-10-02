@@ -28,9 +28,9 @@ type screenExecutor struct {
 	// panicLate panics in the re-check only after its bound has expired.
 	panicLate bool
 	pageSight bool
-	started      chan struct{}
-	exited       chan struct{}
-	startOnce    sync.Once
+	started   chan struct{}
+	exited    chan struct{}
+	startOnce sync.Once
 }
 
 func newScreenExecutor(permission tools.DisplayPermission) *screenExecutor {
