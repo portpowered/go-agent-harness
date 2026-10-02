@@ -617,6 +617,14 @@ Use:
 - `inference.NewGatewayInferencer(...)` for stateless loop turns
 - `inference.NewSessionGatewayInferencer(...)` for loop-managed session flows
 
+A text request never ends on an assistant message. When the conversation
+does (for example after a bare `SendInterrupt` saved a partial response), the
+Anthropic, Gemini, OpenAI Chat Completions and openai-chatgpt request builders
+keep that message as context and append a `providers.ContinuationPrompt`
+("Continue.") user turn. No provider here takes a trailing assistant message
+as a prefill: Claude 4.6 and later reject it with a 400. The caller's
+conversation is not changed.
+
 This relationship is part of the current architecture boundary: `agent-cli`
 composes `go-agent-loop` and `go-llm-gateway`, and this module currently
 develops against the checked-out loop contracts through the root workspace.

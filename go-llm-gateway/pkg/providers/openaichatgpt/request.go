@@ -164,6 +164,8 @@ func buildRequest(req providers.InferenceRequest, opts requestOptions) (response
 // conversationToInput joins the system messages into instructions and maps
 // every other message to Responses input items. Reasoning items kept from an
 // earlier response go back right before the function call they preceded.
+// Input that ends on an assistant message gets a providers.ContinuationPrompt
+// user message, so the request always ends on a user turn or tool output.
 func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string, []any, error) {
 	var instructions []string
 	input := make([]any, 0, len(msgs))
@@ -188,7 +190,20 @@ func conversationToInput(msgs []models.Message, replay *reasoningReplay) (string
 			input = append(input, inputItem{Type: itemTypeFunctionCallOutput, CallID: msg.ToolCallID, Output: &output})
 		}
 	}
+	if endsOnAssistantMessage(input) {
+		input = append(input, userItem(models.NewTextMessage(models.RoleUser, providers.ContinuationPrompt)))
+	}
 	return strings.Join(instructions, "\n\n"), input, nil
+}
+
+// endsOnAssistantMessage reports whether the last input item is an assistant
+// message.
+func endsOnAssistantMessage(input []any) bool {
+	if len(input) == 0 {
+		return false
+	}
+	item, ok := input[len(input)-1].(inputItem)
+	return ok && item.Type == itemTypeMessage && item.Role == roleAssistant
 }
 
 func userItem(msg models.Message) inputItem {

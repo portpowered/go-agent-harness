@@ -247,8 +247,8 @@ func TestAudioFormatFromMediaType(t *testing.T) {
 
 func TestMessagesToParams_AssistantMessageTextOnly(t *testing.T) {
 	params := messagesToParams([]models.Message{models.NewTextMessage(models.RoleAssistant, "Here is the answer.")}, logging.DummyLogger())
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	a := params[0]
 	if a.Role != "assistant" {
@@ -270,8 +270,8 @@ func TestMessagesToParams_AssistantMessageWithContentPartsText(t *testing.T) {
 		Role:         models.RoleAssistant,
 		ContentParts: []models.ContentPart{models.TextPart{Text: "Part one."}, models.TextPart{Text: " Part two."}},
 	}}, logging.DummyLogger())
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	a := params[0]
 	parts := a.Content.parts
@@ -296,8 +296,8 @@ func TestMessagesToParams_AssistantMessageWithContentPartsTextAndImage(t *testin
 			models.ImagePart{Bytes: []byte("x"), MediaType: "image/png"},
 		},
 	}}, logging.DummyLogger())
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	a := params[0]
 	parts := a.Content.parts
@@ -326,8 +326,8 @@ func TestMessagesToParams_AssistantMessageWithContentPartsTextAndAudio(t *testin
 			models.AudioPart{Bytes: []byte("wav"), MediaType: "audio/wav"},
 		},
 	}}, logging.DummyLogger())
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	a := params[0]
 	parts := a.Content.parts
@@ -357,8 +357,8 @@ func TestMessagesToParams_AssistantMessageWithToolCallsAndContentParts(t *testin
 			{ID: "call_1", Name: testToolGetWeather, Arguments: `{"city":"NYC"}`},
 		},
 	}}, logging.DummyLogger())
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	a := params[0]
 	if len(a.ToolCalls) != 1 {

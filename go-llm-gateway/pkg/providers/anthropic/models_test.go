@@ -340,8 +340,8 @@ func TestMessagesToParams_AssistantMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	if params[0].Role != anthropic.MessageParamRoleAssistant {
 		t.Fatal("expected assistant message")
@@ -365,8 +365,8 @@ func TestMessagesToParams_AssistantMessageWithToolCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(params) != 1 {
-		t.Fatalf("expected 1 param, got %d", len(params))
+	if len(params) != 2 {
+		t.Fatalf("expected the assistant message and a continuation user turn, got %d params", len(params))
 	}
 	if len(params[0].Content) != 2 {
 		t.Fatalf("expected 2 blocks (text + tool_use), got %d", len(params[0].Content))

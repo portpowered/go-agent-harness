@@ -152,6 +152,19 @@
   direct requirements (all were
   already indirect at the same versions).
 
+### Fixed
+
+- A text request no longer ends on an assistant message. Claude 4.6 and
+  later (including the default `claude-opus-4-6` and `claude-sonnet-4-6`)
+  reject a trailing assistant message as a prefill with a 400; a bare
+  `SendInterrupt` in go-agent-loop produced one by resuming on the saved
+  partial response. The Anthropic, Gemini, OpenAI Chat Completions and
+  openai-chatgpt (Responses) request builders now keep a trailing assistant
+  message as context and append a user turn with the new
+  `providers.ContinuationPrompt` ("Continue."). Requests that end on a user
+  turn or a tool result are unchanged, and the caller's messages are not
+  modified. No provider takes a trailing assistant message as a prefill.
+
 ### Removed
 
 The re-export aliases and forwarders below were deleted. Each one is

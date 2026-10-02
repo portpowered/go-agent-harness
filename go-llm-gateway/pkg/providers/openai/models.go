@@ -10,11 +10,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/logging"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // Chat Completions request vocabulary shared by message conversion.
 const (
 	requestRoleUser       = "user"
+	requestRoleAssistant  = "assistant"
 	contentTypeImageURL   = "image_url"
 	contentTypeInputAudio = "input_audio"
 	contentTypeText       = "text"
@@ -24,6 +26,10 @@ const (
 // All message roles (system, user, assistant, tool) support all content types
 // (text, image, audio, video) to allow maximum compatibility with third-party
 // APIs such as OpenRouter that extend the standard OpenAI schema.
+// Messages that end on an assistant message get a
+// providers.ContinuationPrompt user turn: Chat Completions answers a trailing
+// assistant message as a new turn rather than continuing it, and compatible
+// APIs (OpenRouter to Claude) reject it as a prefill.
 func messagesToParams(msgs []models.Message, logger logging.Logger) []requestMsg {
 	result := make([]requestMsg, 0, len(msgs))
 	for _, msg := range msgs {
@@ -40,6 +46,9 @@ func messagesToParams(msgs []models.Message, logger logging.Logger) []requestMsg
 		case models.RoleTool:
 			result = append(result, toolMessageToParam(msg, logger))
 		}
+	}
+	if last := len(result) - 1; last >= 0 && result[last].Role == requestRoleAssistant {
+		result = append(result, requestMsg{Role: requestRoleUser, Content: strContent(providers.ContinuationPrompt)})
 	}
 	return result
 }
@@ -82,7 +91,7 @@ func assistantMessageToParam(msg models.Message) requestMsg {
 	}
 
 	return requestMsg{
-		Role:      "assistant",
+		Role:      requestRoleAssistant,
 		Content:   content,
 		ToolCalls: toolCalls,
 	}

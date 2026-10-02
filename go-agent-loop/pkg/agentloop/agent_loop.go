@@ -548,10 +548,19 @@ func (al *AgentLoop) TodoQueueLen() int {
 	return al.engine.State().LoopState.TodoQueue.Len()
 }
 
-// SendInterrupt cancels the current in-flight model or tool execution and resumes
-// inference from the partial response accumulated so far. The optional followUp
-// message is appended to the conversation as a new user turn before the resumed
-// inference is dispatched; pass nil to simply interrupt without adding context.
+// SendInterrupt cancels the current in-flight model or tool execution and starts
+// a new inference. The partial response accumulated so far stays in the
+// conversation history as an assistant message, so the model sees what it
+// already said; tool calls the interrupt cut off get cancelled results. Held
+// user turns are placed next, then the optional followUp message as a new user
+// turn; pass nil to interrupt without adding context.
+//
+// The new inference is a new turn, not a prefill continuation of the partial
+// text. Without a followUp or held turn, the request may end on the partial
+// assistant message; go-llm-gateway's text providers then append a
+// "Continue." user turn on the wire (providers.ContinuationPrompt), because
+// Claude 4.6 and later reject a trailing assistant message. An Inferencer
+// implemented elsewhere must do the same for providers without prefill.
 //
 // The interrupt is delivered as a control-plane message through the user runner so
 // it flows through the same ordering path as regular messages. The InterruptHandler
