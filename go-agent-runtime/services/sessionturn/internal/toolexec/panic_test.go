@@ -110,11 +110,19 @@ func TestDisplayRecheckPanicAfterTimeoutIsRecorded(t *testing.T) {
 			t.Fatalf("Execute = %q, %v; want the timeout presentation", response.Content, err)
 		}
 		synctest.Wait()
+		// Once the call gives up on the re-check, the worker and the caller
+		// record concurrently, so the two diagnostics arrive in either order.
 		got := diagnostics.all()
-		if len(got) != 2 || !errors.Is(got[0].Error, sessionturn.ErrToolTimeout) {
-			t.Fatalf("diagnostics = %#v, want the timeout then the late panic", got)
+		timeouts := 0
+		for _, diagnostic := range got {
+			if errors.Is(diagnostic.Error, sessionturn.ErrToolTimeout) && !errors.Is(diagnostic.Error, errRecheckPanicked) {
+				timeouts++
+			}
 		}
-		requirePanicDiagnostic(t, got[1:], errRecheckPanicked, "late recheck failed")
+		if len(got) != 2 || timeouts != 1 {
+			t.Fatalf("diagnostics = %#v, want one timeout and one late panic", got)
+		}
+		requirePanicDiagnostic(t, got, errRecheckPanicked, "late recheck failed")
 	})
 }
 

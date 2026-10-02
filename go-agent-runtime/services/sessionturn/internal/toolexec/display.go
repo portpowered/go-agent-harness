@@ -29,7 +29,7 @@ type recheckResult struct {
 // diagnostic. A re-check that panics only after its bound has expired, when
 // the caller has already reported the timeout, records its own diagnostic.
 func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.ToolCall) (permission tools.DisplayPermission, denied bool, panicked error) {
-	if ctx.Err() != nil || !e.presentation.displayTool(call.Name) || e.pageSightTool(call) || e.presentation.DisplayPermissionDenied == nil {
+	if contextDone(ctx) || !e.presentation.displayTool(call.Name) || e.pageSightTool(call) || e.presentation.DisplayPermissionDenied == nil {
 		return tools.DisplayPermission{}, false, nil
 	}
 	rechecker, ok := e.inner.(tools.ScreenRecordingPermissionRechecker)
@@ -46,7 +46,7 @@ func (e *Executor) deniedScreenPermission(ctx context.Context, call messages.Too
 		return tools.DisplayPermission{}, false, nil
 	case isPanic(result.err):
 		return tools.DisplayPermission{}, false, result.err
-	case ctx.Err() != nil || result.err != nil || result.permission.State != tools.DisplayPermissionDenied:
+	case contextDone(ctx) || result.err != nil || result.permission.State != tools.DisplayPermissionDenied:
 		return tools.DisplayPermission{}, false, nil
 	}
 	return result.permission, true, nil
@@ -103,4 +103,15 @@ func recheck(ctx context.Context, rechecker tools.ScreenRecordingPermissionReche
 		}
 	}()
 	return rechecker.RecheckScreenRecordingPermission(ctx)
+}
+
+// contextDone reports whether ctx has ended. A session that ended before or
+// during the re-check is no permission finding and no re-check failure.
+func contextDone(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
