@@ -8,12 +8,16 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/models"
+	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 // messagesToParams converts gateway messages to Anthropic message params.
 // System messages are collected into a single system prompt; user/assistant/tool
 // are converted to alternating user/assistant turns. Consecutive tool messages
 // are merged into one user message with multiple tool_result blocks.
+// A conversation that ends on an assistant message gets a
+// providers.ContinuationPrompt user turn, because Claude 4.6 and later reject
+// a trailing assistant message (a prefill).
 func messagesToParams(msgs []models.Message) (system []anthropic.TextBlockParam, params []anthropic.MessageParam, err error) {
 	var toolResultBlocks []anthropic.ContentBlockParamUnion
 	flushToolResults := func() {
@@ -57,6 +61,9 @@ func messagesToParams(msgs []models.Message) (system []anthropic.TextBlockParam,
 		}
 	}
 	flushToolResults()
+	if last := len(params) - 1; last >= 0 && params[last].Role == anthropic.MessageParamRoleAssistant {
+		params = append(params, anthropic.NewUserMessage(anthropic.NewTextBlock(providers.ContinuationPrompt)))
+	}
 	return system, params, nil
 }
 

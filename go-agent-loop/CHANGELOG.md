@@ -120,6 +120,13 @@ every program that imports `pkg/probe`. These names have no replacement:
 
 ### Fixed
 
+- A bare `SendInterrupt` (no text, no held user turns) no longer leads to a
+  request that Claude 4.6 and later reject with a 400. The interrupt still
+  saves the partial response to history and dispatches a request that ends
+  on it; go-llm-gateway's text providers now append a "Continue." user turn
+  on the wire (`providers.ContinuationPrompt`) instead of sending the partial
+  as a prefill. The `SendInterrupt` docs now say the resumed inference is a
+  new turn with the partial in context, not a continuation of its text.
 - A user turn that arrives while a model response is still streaming no
   longer drops that response's tool calls. Previously the coordinator reset
   the response's delta window when it dispatched the user turn, so the

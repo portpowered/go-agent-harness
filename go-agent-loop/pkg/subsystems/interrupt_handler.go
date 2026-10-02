@@ -24,6 +24,12 @@ type ExecutionCanceller interface {
 //     DeltaOutbox are silently dropped by the ordering layer.
 //  5. Dispatch a fresh InferenceRequest with the updated conversation.
 //
+// History stays as it happened: a bare interrupt (no text, no held turns)
+// dispatches a request that ends on the saved partial assistant message. The
+// Inferencer turns that into a valid request; go-llm-gateway appends a
+// "Continue." user turn, since Claude 4.6 and later reject a trailing
+// assistant message as a prefill.
+//
 // InterruptHandler runs at TickGroupInterruptHandler (-1) so it executes before
 // the Coordinator sees the current tick's inputs.
 type InterruptHandler struct {
@@ -129,7 +135,7 @@ func (h *InterruptHandler) Execute(ctx context.Context, curr *state.LoopState) e
 	curr.History.CurrentModelDeltaCount = 0
 
 	// 5. Dispatch a new inference request with the updated conversation so the
-	//    model can resume from the (possibly partial) history.
+	//    model answers with the (possibly partial) response in context.
 	h.logInfo("interrupt_handler: dispatching resumed inference request",
 		logging.Field{Key: "passID", Value: curr.History.CurrentPassID})
 	curr.Outputs.ModelInbox.Write(ctx, messages.InferenceRequest{

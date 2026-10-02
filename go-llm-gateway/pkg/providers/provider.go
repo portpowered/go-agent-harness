@@ -104,6 +104,15 @@ type CacheControlConfig struct {
 	CacheRetentionPolicy string // "in_memory" or "24h"; default "in_memory" if empty
 }
 
+// ContinuationPrompt is the text of the user turn a text request builder
+// appends when the conversation ends on an assistant message, such as the
+// partial response an interrupt saved. No provider here takes a trailing
+// assistant message as a prefill to continue: Claude 4.6 and later reject it
+// with a 400, and Chat Completions, Responses and Gemini answer it as a new
+// turn. So every request ends on a user (or tool result) turn, the partial
+// stays in the request as context, and the caller's history is unchanged.
+const ContinuationPrompt = "Continue."
+
 // InferenceRequest is the input to an inference call.
 type InferenceRequest struct {
 	Messages []models.Message

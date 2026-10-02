@@ -114,6 +114,11 @@ func TestInterruptHandler_InterruptWithPartialModelResponse(t *testing.T) {
 	if req.LoopPassID != 2 {
 		t.Errorf("InferenceRequest.LoopPassID: got %d, want 2", req.LoopPassID)
 	}
+	// A bare interrupt adds no synthetic user turn to history: the request
+	// ends on the partial, and the gateway adds the continuation on the wire.
+	if last := req.Messages[len(req.Messages)-1]; last.Role != messages.RoleAssistant || last.TextContent() != "hello wor" {
+		t.Errorf("request ends on %s %q, want the partial assistant message", last.Role, last.TextContent())
+	}
 
 	// Model delta tracking should be reset.
 	if ls.History.CurrentModelDeltaCount != 0 {

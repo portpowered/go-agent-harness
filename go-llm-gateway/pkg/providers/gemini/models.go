@@ -11,6 +11,8 @@ import (
 // messagesToContents converts gateway messages to Gemini Content slices.
 // System messages are extracted separately (Gemini uses a dedicated system instruction field).
 // User, assistant, and tool messages become Content entries with the appropriate role.
+// Contents that end on a model turn get a providers.ContinuationPrompt user
+// turn, so a request never asks Gemini to prefill a trailing model turn.
 func messagesToContents(msgs []models.Message) (system *genai.Content, contents []*genai.Content) {
 	var systemParts []*genai.Part
 
@@ -46,6 +48,9 @@ func messagesToContents(msgs []models.Message) (system *genai.Content, contents 
 		}
 	}
 
+	if last := len(contents) - 1; last >= 0 && contents[last].Role == genai.RoleModel {
+		contents = append(contents, genai.NewContentFromText(providers.ContinuationPrompt, genai.RoleUser))
+	}
 	if len(systemParts) > 0 {
 		system = &genai.Content{Parts: systemParts}
 	}
