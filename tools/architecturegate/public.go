@@ -221,7 +221,8 @@ func isImplementationPath(importPath string) bool {
 // RIFF container identifier); Selectors are forbidden package-qualified
 // selector chains written as "<import path>.<Name>[.<Name>...]" (for example
 // "encoding/binary.LittleEndian.PutUint16"). A selector matches only when the
-// file imports that path, under any local name.
+// file imports that path, under any local name. ExceptFiles name exempt files
+// as "<module path>/<module-relative path>".
 type SourcePatternRule struct {
 	Name        string   `json:"name"`
 	From        []string `json:"from"`
@@ -236,7 +237,9 @@ func (rule SourcePatternRule) appliesTo(pkg *Package, module *Module, source *So
 	if !matchesAny(rule.From, pkg.ImportPath, module.Path) || matchesAny(rule.ExceptFrom, pkg.ImportPath, module.Path) {
 		return false
 	}
-	return !matchesAny(rule.ExceptFiles, source.RelPath)
+	// An exempt file is named by its module path and module-relative path,
+	// so an exemption never reaches a same-named file in another module.
+	return !matchesAny(rule.ExceptFiles, module.Path+"/"+source.RelPath)
 }
 
 func sourcePatternIssues(pkg *Package, module *Module, source *SourceFile, policy Policy) []Issue {

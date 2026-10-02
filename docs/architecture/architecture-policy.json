@@ -181,12 +181,12 @@
         "github.com/portpowered/go-agent-harness/go-agent-runtime/**",
         "github.com/portpowered/go-agent-harness/go-device-gateway/**",
         "github.com/portpowered/go-agent-harness/go-llm-gateway/**",
-        "github.com/portpowered/go-agent-harness/scripts/webmcp-o0/**",
+        "github.com/portpowered/go-agent-harness/tests/localai/**",
         "example.com/agent-runtime-consumer/**"
       ],
       "except_files": [
-        "internal/input/mimetype.go",
-        "test/integration/mimetype_validation_test.go"
+        "github.com/portpowered/go-agent-harness/agent-cli/internal/input/mimetype.go",
+        "github.com/portpowered/go-agent-harness/agent-cli/test/integration/mimetype_validation_test.go"
       ],
       "literals": [
         "RIFF"
@@ -201,7 +201,7 @@
         "github.com/portpowered/go-agent-harness/go-agent-runtime/**",
         "github.com/portpowered/go-agent-harness/go-device-gateway/**",
         "github.com/portpowered/go-agent-harness/go-llm-gateway/**",
-        "github.com/portpowered/go-agent-harness/scripts/webmcp-o0/**",
+        "github.com/portpowered/go-agent-harness/tests/localai/**",
         "example.com/agent-runtime-consumer/**"
       ],
       "selectors": [
@@ -209,7 +209,10 @@
         "encoding/binary.LittleEndian.AppendUint16",
         "encoding/binary.LittleEndian.Uint16"
       ],
-      "reason": "PCM16 samples are packed, decoded and measured only by go-audio/pkg/codec (EncodePCM16, DecodePCM16, PCM16Samples, RMS, PCM16RMS)"
+      "reason": "PCM16 samples are packed, decoded and measured only by go-audio/pkg/codec (EncodePCM16, DecodePCM16, PCM16Samples, RMS, PCM16RMS); the exception is the standalone tests/localai conformance oracle, which keeps its own helpers so it stays independent of the go-audio code under test",
+      "except_files": [
+        "github.com/portpowered/go-agent-harness/tests/localai/protocol_test.go"
+      ]
     }
   ],
   "generated_files": [
