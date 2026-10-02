@@ -12,7 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-var ErrIDExhausted = errors.New("webmcp testkit: deterministic ID source exhausted")
+var ErrIDExhausted = errors.New("webmcp hermetic: deterministic ID source exhausted")
 
 // DeterministicIDSource produces reproducible, collision-free IDs for both
 // the semantic recorder and the low-level browser runtime. Tool refs use the

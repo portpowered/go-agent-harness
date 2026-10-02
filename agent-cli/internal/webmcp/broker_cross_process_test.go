@@ -327,13 +327,13 @@ func waitForTestkitEvent(t *testing.T, events <-chan webmcp.BrowserEvent) webmcp
 	case event := <-events:
 		return event
 	case <-timer.C:
-		t.Fatal("timed out waiting for testkit browser event")
+		t.Fatal("timed out waiting for scripted browser event")
 		return webmcp.BrowserEvent{}
 	}
 }
 
 // scriptedTargetSession returns the scripted session for targetID behind a
-// handle opened from a testkit runtime, failing the test when the handle is
+// handle opened from a scripted runtime, failing the test when the handle is
 // not a scripted one.
 func scriptedPrimaryTargetSession(t *testing.T, handle webmcp.BrowserHandle) *webmcptest.ScriptedTargetSession {
 	t.Helper()

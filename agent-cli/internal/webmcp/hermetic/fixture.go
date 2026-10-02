@@ -19,26 +19,26 @@ const (
 
 var (
 	// ErrInvalidBrowserScript identifies a malformed or unsupported fixture.
-	ErrInvalidBrowserScript = errors.New("webmcp testkit: invalid browser script")
+	ErrInvalidBrowserScript = errors.New("webmcp hermetic: invalid browser script")
 	// ErrInvalidFixtureOperation identifies a caller operation that cannot be
 	// sent to a scripted runtime.
-	ErrInvalidFixtureOperation = errors.New("webmcp testkit: invalid fixture operation")
+	ErrInvalidFixtureOperation = errors.New("webmcp hermetic: invalid fixture operation")
 	// ErrFixtureOperationMismatch identifies a caller operation that differs
 	// from the next expected operation in a script.
-	ErrFixtureOperationMismatch = errors.New("webmcp testkit: fixture operation mismatch")
+	ErrFixtureOperationMismatch = errors.New("webmcp hermetic: fixture operation mismatch")
 	// ErrFixtureIncomplete identifies a runtime closed before all expected
 	// operations or pending invocations were resolved.
-	ErrFixtureIncomplete = errors.New("webmcp testkit: fixture incomplete")
+	ErrFixtureIncomplete = errors.New("webmcp hermetic: fixture incomplete")
 	// ErrFixturePendingInvocations identifies unresolved invocation state at
 	// fixture completion.
-	ErrFixturePendingInvocations = errors.New("webmcp testkit: pending fixture invocations")
+	ErrFixturePendingInvocations = errors.New("webmcp hermetic: pending fixture invocations")
 	// ErrFixtureClosed identifies a runtime that cannot accept more work.
-	ErrFixtureClosed = errors.New("webmcp testkit: fixture runtime closed")
+	ErrFixtureClosed = errors.New("webmcp hermetic: fixture runtime closed")
 	// ErrFixtureCanceled identifies context cancellation at the fixture edge.
-	ErrFixtureCanceled = errors.New("webmcp testkit: fixture operation canceled")
+	ErrFixtureCanceled = errors.New("webmcp hermetic: fixture operation canceled")
 	// ErrFixtureClock identifies a clock that moved backwards while emitting
 	// neutral observations.
-	ErrFixtureClock = errors.New("webmcp testkit: fixture clock moved backwards")
+	ErrFixtureClock = errors.New("webmcp hermetic: fixture clock moved backwards")
 )
 
 // ScriptValidationError identifies a safe structural fixture error. Path is a

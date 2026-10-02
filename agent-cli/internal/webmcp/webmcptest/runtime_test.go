@@ -12,7 +12,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
-// Fixture values shared by the testkit tests: defaultTargetID is the first
+// Fixture values shared by the webmcptest tests: defaultTargetID is the first
 // scripted page target, secondTargetID the second, and okJSONOutput a
 // minimal successful tool output.
 const (

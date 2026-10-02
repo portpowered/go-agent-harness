@@ -21,13 +21,13 @@ var (
 	// ErrPublishedEventEvicted means a caller requested an event older than
 	// the bounded publication history. The session event channel remains the
 	// authoritative stream for callers that need every observation.
-	ErrPublishedEventEvicted = errors.New("webmcp testkit: published event evicted")
+	ErrPublishedEventEvicted = errors.New("webmcptest: published event evicted")
 	// ErrNoActiveTargetSession means a retired session has no current session
 	// to which a late event can be injected.
-	ErrNoActiveTargetSession = errors.New("webmcp testkit: no active target session")
+	ErrNoActiveTargetSession = errors.New("webmcptest: no active target session")
 )
 
-// PublishedEvent is the testkit's publication observation. Sequence is local
+// PublishedEvent is the scripted runtime's publication observation. Sequence is local
 // to the runtime publication ledger; Event.Sequence remains the sequence
 // assigned by the browser session that produced the event.
 type PublishedEvent struct {

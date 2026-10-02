@@ -14,12 +14,12 @@ import (
 )
 
 var (
-	ErrInvalidBrowserConfig        = errors.New("webmcp testkit: invalid browser configuration")
-	ErrInvalidTargetConfig         = errors.New("webmcp testkit: invalid target configuration")
-	ErrTargetAlreadyAttached       = errors.New("webmcp testkit: target already attached")
-	ErrInvocationAlreadyReleased   = errors.New("webmcp testkit: invocation already released")
-	ErrCancellationNotAcknowledged = errors.New("webmcp testkit: cancellation not acknowledged")
-	ErrGenerationExhausted         = errors.New("webmcp testkit: page generation exhausted")
+	ErrInvalidBrowserConfig        = errors.New("webmcptest: invalid browser configuration")
+	ErrInvalidTargetConfig         = errors.New("webmcptest: invalid target configuration")
+	ErrTargetAlreadyAttached       = errors.New("webmcptest: target already attached")
+	ErrInvocationAlreadyReleased   = errors.New("webmcptest: invocation already released")
+	ErrCancellationNotAcknowledged = errors.New("webmcptest: cancellation not acknowledged")
+	ErrGenerationExhausted         = errors.New("webmcptest: page generation exhausted")
 )
 
 // OperationKind identifies an observable fake-runtime operation. It aliases

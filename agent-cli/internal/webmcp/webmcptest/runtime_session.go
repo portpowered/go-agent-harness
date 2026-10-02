@@ -302,7 +302,7 @@ func (s *ScriptedTargetSession) invokeWebMCPWithID(ctx context.Context, id webmc
 		return "", err
 	}
 	if id == "" {
-		return "", errors.New("webmcp testkit: invocation ID is empty")
+		return "", errors.New("webmcptest: invocation ID is empty")
 	}
 	s.mu.Lock()
 	if s.closed {
@@ -316,7 +316,7 @@ func (s *ScriptedTargetSession) invokeWebMCPWithID(ctx context.Context, id webmc
 	}
 	if _, exists := s.invokes[id]; exists {
 		s.mu.Unlock()
-		return "", fmt.Errorf("webmcp testkit: invocation %q already exists", id)
+		return "", fmt.Errorf("webmcptest: invocation %q already exists", id)
 	}
 	record := &InvocationRecord{
 		ID:         id,
@@ -521,7 +521,7 @@ func (s *ScriptedTargetSession) emitLocked(event webmcp.BrowserEvent) error {
 
 // emitPublishedLocked publishes a shared browser event, or a local terminal
 // lifecycle event when terminal is true. The variadic form keeps the helper
-// compatible with older testkit callers that did not need the terminal flag.
+// compatible with older callers that did not need the terminal flag.
 func (s *ScriptedTargetSession) emitLocal(event webmcp.BrowserEvent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

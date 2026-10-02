@@ -199,7 +199,7 @@ func MarshalRedactedEvents(events []Event, policy RedactionPolicy, credentials .
 }
 
 // RedactedBrowserArtifact is the durable semantic artifact produced by the
-// testkit. Its digest is always calculated over Data after redaction.
+// package. Its digest is always calculated over Data after redaction.
 type RedactedBrowserArtifact struct {
 	Format    string
 	Data      []byte
@@ -209,7 +209,7 @@ type RedactedBrowserArtifact struct {
 
 // RecordingArtifact adapts a redacted browser artifact to the existing
 // transcript bundle writer. The conversion keeps the transcript package as
-// the sole owner of manifest.json while retaining the testkit's redaction
+// the sole owner of manifest.json while retaining the package's redaction
 // boundary as the source of the artifact bytes and effective policy.
 func (a RedactedBrowserArtifact) RecordingArtifact(path string) transcript.BrowserArtifact {
 	if path == "" {

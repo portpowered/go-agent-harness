@@ -11,21 +11,21 @@ import (
 var (
 	// ErrReplayMismatch identifies a browser replay that diverged from the
 	// ordered fixture contract.
-	ErrReplayMismatch = errors.New("webmcp testkit: replay mismatch")
+	ErrReplayMismatch = errors.New("webmcp hermetic: replay mismatch")
 	// ErrReplayIncomplete identifies a replay closed before all expected
 	// operations and events were consumed.
-	ErrReplayIncomplete = errors.New("webmcp testkit: replay incomplete")
+	ErrReplayIncomplete = errors.New("webmcp hermetic: replay incomplete")
 	// ErrReplayPendingInvocations identifies invocation responses that were not
 	// observed before replay completion.
-	ErrReplayPendingInvocations = errors.New("webmcp testkit: replay has pending invocations")
+	ErrReplayPendingInvocations = errors.New("webmcp hermetic: replay has pending invocations")
 	// ErrReplayCanceled identifies replay stopped by a caller context.
-	ErrReplayCanceled = errors.New("webmcp testkit: replay canceled")
+	ErrReplayCanceled = errors.New("webmcp hermetic: replay canceled")
 	// ErrReplayClosed identifies a replay that has already reached a terminal
 	// state and cannot accept another operation or event.
-	ErrReplayClosed = errors.New("webmcp testkit: replay closed")
+	ErrReplayClosed = errors.New("webmcp hermetic: replay closed")
 	// ErrInvalidReplayRequest identifies a malformed caller operation or event
 	// submitted to a replay.
-	ErrInvalidReplayRequest = errors.New("webmcp testkit: invalid replay request")
+	ErrInvalidReplayRequest = errors.New("webmcp hermetic: invalid replay request")
 )
 
 // ReplayMode selects the amount of work a browser replay permits outside its
@@ -58,7 +58,7 @@ const (
 	ReplayCanceled   ReplayStatus = "canceled"
 
 	// ReplayCancelled retains the spelling used by the provider session
-	// replayer while ReplayCanceled matches the testkit's existing status names.
+	// replayer while ReplayCanceled matches the package's existing status names.
 	ReplayCancelled = ReplayCanceled
 )
 

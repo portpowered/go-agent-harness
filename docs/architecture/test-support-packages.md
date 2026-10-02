@@ -7,19 +7,32 @@ link them:
 - in a package whose name marks it as test support, when several packages
   share them, and only `_test.go` files import that package.
 
-A package is test support when one element of its import path is `test`,
-`tests`, `testdata`, `testing`, `testkit` or `testutil`, starts with `test`,
-ends with `test` (`clitest`, `servicetest`, `webmcptest`), or starts with
-`mock` or `fake`.
+## Naming rule
+
+Name a test-support package so that one element of its import path, below
+the module directory, marks it. An element marks test support when it:
+
+- is `test`, `tests`, `testdata`, `testing`, `testkit`, `testutil`,
+  `fixture`, `fixtures` or `harness`;
+- starts with `test`, `mock`, `fake` or `stub` (`testcover`, `mocktool`,
+  `fakebrowser`, `stubprovider`);
+- ends with `test`, `stub`, `stubs`, `fixture`, `fixtures` or `harness`
+  (`clitest`, `webmcptest`, `providerstubs`, `audiofixture`, `timeharness`).
+
+Production packages must not use these forms. `sessionfixturevalidator` is
+fine because `fixture` sits inside the element. Simulation is not on the list:
+`probe/customersim` is the production customer-simulation probe.
 
 ## The check
 
 `make prod-deps-check` (run by `make architecture-check`, so by CI's static
 job and the prepush gate) runs `scripts/prod-deps-check.py`. For every main
-package that is not itself test support, and for GOOS linux, darwin and
-windows, it lists the linked packages with `go list -deps`. It fails on any
-linked repository package that is test support and prints the import chain
-that pulls it in.
+package that is not itself test support, it lists the linked packages with
+`go list -deps` in each build configuration: GOOS linux, darwin and windows
+without cgo, the native GOOS with cgo, and linux with each CI tag set
+(`wireinject`, `nomicrophone`, `e2e`). It fails on any linked repository
+package that is test support, printing the import chain that pulls it in, and
+on any main or dependency that does not resolve. It runs in about 3 seconds.
 
 `go-llm-gateway/pkg/testing` is the one allowed exception. It is the public,
 documented session-capture fixture contract, and the production replay and

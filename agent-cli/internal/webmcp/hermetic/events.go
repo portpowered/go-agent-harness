@@ -18,7 +18,7 @@ import (
 
 const (
 	// BrowserEventsVersion is the only event-stream version understood by the
-	// testkit. Unknown versions are rejected instead of being guessed.
+	// package. Unknown versions are rejected instead of being guessed.
 	BrowserEventsVersion = "webmcp.browser-events.v1"
 
 	// The redaction rule names are part of the frozen event contract. Keep the
@@ -32,14 +32,14 @@ const (
 
 var (
 	// ErrInvalidBrowserEvent identifies a malformed event or event stream.
-	ErrInvalidBrowserEvent = errors.New("webmcp testkit: invalid browser event")
+	ErrInvalidBrowserEvent = errors.New("webmcp hermetic: invalid browser event")
 	// ErrRecorderWrite identifies a failure to append a canonical event line.
-	ErrRecorderWrite = errors.New("webmcp testkit: browser event write failed")
+	ErrRecorderWrite = errors.New("webmcp hermetic: browser event write failed")
 	// ErrRecorderClock identifies a clock that moved backwards.
-	ErrRecorderClock = errors.New("webmcp testkit: monotonic clock moved backwards")
+	ErrRecorderClock = errors.New("webmcp hermetic: monotonic clock moved backwards")
 	// ErrIDSourceUnavailable identifies an attempt to allocate an ID without an
 	// injected ID source.
-	ErrIDSourceUnavailable = errors.New("webmcp testkit: deterministic ID source unavailable")
+	ErrIDSourceUnavailable = errors.New("webmcp hermetic: deterministic ID source unavailable")
 )
 
 // EventType is the semantic browser observation name.

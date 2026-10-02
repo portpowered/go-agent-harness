@@ -49,6 +49,9 @@ func TestRepresentativeScenarioValidatesAndMarshalsInOrder(t *testing.T) {
 	if len(corpus.calls) != 1 || corpus.calls[0] != "greeting-audio" {
 		t.Fatalf("lookup calls: %#v", corpus.calls)
 	}
+	// probe.Scenario's JSON is the shape of the in-memory runner plan, not a
+	// loadable document: probe.scenario.v2 is the only scenario format a
+	// loader accepts.
 	got, err := json.Marshal(scenario)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)

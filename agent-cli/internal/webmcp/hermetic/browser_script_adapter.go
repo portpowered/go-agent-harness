@@ -32,18 +32,18 @@ type BrowserScriptAdapter struct {
 // browser script and its run-scoped runtime.
 func NewBrowserScriptAdapter(script BrowserScript, runtime *BrowserScriptRuntime) (*BrowserScriptAdapter, error) {
 	if runtime == nil {
-		return nil, fmt.Errorf("webmcp testkit: browser script runtime is nil")
+		return nil, fmt.Errorf("webmcp hermetic: browser script runtime is nil")
 	}
 	if err := script.Validate(); err != nil {
 		return nil, err
 	}
 	fixtureTarget := runtime.Target()
 	if fixtureTarget.ID == "" {
-		return nil, errors.New("webmcp testkit: browser script has no target")
+		return nil, errors.New("webmcp hermetic: browser script has no target")
 	}
 	browserID := runtime.BrowserID()
 	if browserID == "" {
-		return nil, errors.New("webmcp testkit: browser script has no browser ID")
+		return nil, errors.New("webmcp hermetic: browser script has no browser ID")
 	}
 	origin := targetOrigin(fixtureTarget.URL)
 	target := webmcp.Target{
@@ -296,7 +296,7 @@ func (h *BrowserScriptHandle) Attach(ctx context.Context, targetID webmcp.Target
 	if h.session != nil && !h.session.isClosed() {
 		if h.session.Ownership() != ownership {
 			h.mu.Unlock()
-			return nil, errors.New("webmcp testkit: target already attached")
+			return nil, errors.New("webmcp hermetic: target already attached")
 		}
 		session := h.session
 		h.mu.Unlock()
@@ -422,7 +422,7 @@ func (s *BrowserScriptSession) EnableWebMCP(ctx context.Context) error {
 		}
 	}
 	if operation, ok := s.runtime.NextExpectedOperationType(); !ok || operation != OperationEnableWebMCP {
-		return fmt.Errorf("webmcp testkit: expected enable_webmcp operation")
+		return fmt.Errorf("webmcp hermetic: expected enable_webmcp operation")
 	}
 	execution, err := s.runtime.Execute(ctx, OperationRequest{Type: OperationEnableWebMCP})
 	if err != nil {
@@ -636,7 +636,7 @@ func (s *BrowserScriptSession) emitFixtureEvent(event FixtureEvent) error {
 	case EmittedToolResponded:
 		converted.Type = webmcp.EventToolResponded
 	default:
-		return fmt.Errorf("webmcp testkit: unsupported fixture event %q", event.Type)
+		return fmt.Errorf("webmcp hermetic: unsupported fixture event %q", event.Type)
 	}
 	return s.emit(converted)
 }

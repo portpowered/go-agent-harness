@@ -25,7 +25,7 @@ type invocation struct {
 }
 
 // statefulBroker is the shared browser execution contract. Both the hermetic
-// testkit broker and the production StatefulBroker satisfy this extension of
+// hermetic broker and the production StatefulBroker satisfy this extension of
 // the public broker interface, so mode selection does not create a second
 // step grammar or evidence projection.
 type statefulBroker interface {

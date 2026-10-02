@@ -24,18 +24,18 @@ const (
 
 var (
 	// ErrInvalidRedactionPolicy identifies a malformed or non-canonical policy.
-	ErrInvalidRedactionPolicy = errors.New("webmcp testkit: invalid redaction policy")
+	ErrInvalidRedactionPolicy = errors.New("webmcp hermetic: invalid redaction policy")
 	// ErrInvalidRedactionCredential identifies a credential configuration that
 	// cannot safely be used for byte replacement.
-	ErrInvalidRedactionCredential = errors.New("webmcp testkit: invalid redaction credential")
+	ErrInvalidRedactionCredential = errors.New("webmcp hermetic: invalid redaction credential")
 	// ErrRedactionCredentialSurvived identifies a configured credential that was
 	// still present after the pre-persistence redaction boundary.
-	ErrRedactionCredentialSurvived = errors.New("webmcp testkit: configured credential survived redaction")
+	ErrRedactionCredentialSurvived = errors.New("webmcp hermetic: configured credential survived redaction")
 	// ErrRawCDPNotAllowed identifies an attempt to use canonical semantic
 	// recording for raw CDP diagnostics.
-	ErrRawCDPNotAllowed = errors.New("webmcp testkit: raw CDP is not allowed in canonical browser evidence")
+	ErrRawCDPNotAllowed = errors.New("webmcp hermetic: raw CDP is not allowed in canonical browser evidence")
 	// ErrRawCDPDetected identifies a raw CDP field in a semantic event payload.
-	ErrRawCDPDetected = errors.New("webmcp testkit: raw CDP field in canonical browser evidence")
+	ErrRawCDPDetected = errors.New("webmcp hermetic: raw CDP field in canonical browser evidence")
 )
 
 // RedactionError preserves a safe, inspectable redaction failure. Its text is
@@ -52,9 +52,9 @@ type RedactionError struct {
 
 func (e *RedactionError) Error() string {
 	if e == nil {
-		return "webmcp testkit: redaction error"
+		return "webmcp hermetic: redaction error"
 	}
-	parts := []string{"webmcp testkit: redaction"}
+	parts := []string{"webmcp hermetic: redaction"}
 	if e.Operation != "" {
 		parts = append(parts, e.Operation)
 	}
