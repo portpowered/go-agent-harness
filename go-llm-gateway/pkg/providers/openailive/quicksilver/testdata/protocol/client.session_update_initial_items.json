@@ -1,0 +1,36 @@
+{
+  "type": "session.update",
+  "session": {
+    "instructions": "Speak briefly.",
+    "audio": {
+      "output": {
+        "voice": "marin"
+      }
+    },
+    "delegation": {
+      "type": "client"
+    },
+    "initial_items": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Question"
+          }
+        ]
+      },
+      {
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "Answer"
+          }
+        ]
+      }
+    ]
+  }
+}

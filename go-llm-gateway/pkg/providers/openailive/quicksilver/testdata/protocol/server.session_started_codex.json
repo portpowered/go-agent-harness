@@ -1,0 +1,7 @@
+{
+  "type": "session.started",
+  "session": {
+    "id": "rtc_core_test",
+    "instructions": "backend prompt"
+  }
+}

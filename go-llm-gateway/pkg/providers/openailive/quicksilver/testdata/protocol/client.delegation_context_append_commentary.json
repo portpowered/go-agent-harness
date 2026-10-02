@@ -1,0 +1,11 @@
+{
+  "type": "delegation.context.append",
+  "delegation_item_id": "delegation_stream",
+  "channel": "commentary",
+  "content": [
+    {
+      "type": "input_text",
+      "text": "[PROGRESS]seed first xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  ]
+}

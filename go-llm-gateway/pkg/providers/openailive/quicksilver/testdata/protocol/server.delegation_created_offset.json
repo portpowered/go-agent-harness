@@ -1,0 +1,15 @@
+{
+  "type": "delegation.created",
+  "offset_ms": 1000,
+  "item": {
+    "id": "handoff-123",
+    "type": "delegation",
+    "target": "client",
+    "content": [
+      {
+        "type": "input_text",
+        "text": "check the weather"
+      }
+    ]
+  }
+}

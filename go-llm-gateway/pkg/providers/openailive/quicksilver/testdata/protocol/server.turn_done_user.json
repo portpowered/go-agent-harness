@@ -1,0 +1,8 @@
+{
+  "type": "turn.done",
+  "turn": {
+    "id": "turn-1",
+    "role": "user",
+    "transcript": "hello"
+  }
+}

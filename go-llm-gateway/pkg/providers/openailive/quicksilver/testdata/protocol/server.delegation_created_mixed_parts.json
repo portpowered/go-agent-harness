@@ -1,0 +1,22 @@
+{
+  "type": "delegation.created",
+  "item": {
+    "type": "delegation",
+    "target": "client",
+    "id": "delegation-1",
+    "content": [
+      {
+        "type": "input_text",
+        "text": "curl https://exa"
+      },
+      {
+        "type": "output_text",
+        "text": "ignored"
+      },
+      {
+        "type": "input_text",
+        "text": "mple.com"
+      }
+    ]
+  }
+}

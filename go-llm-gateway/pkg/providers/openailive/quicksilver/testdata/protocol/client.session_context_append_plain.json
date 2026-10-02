@@ -1,0 +1,9 @@
+{
+  "type": "session.context.append",
+  "content": [
+    {
+      "type": "input_text",
+      "text": "Legacy speech request"
+    }
+  ]
+}

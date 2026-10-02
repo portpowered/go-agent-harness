@@ -1,0 +1,11 @@
+{
+  "type": "delegation.context.append",
+  "delegation_item_id": "delegation-1",
+  "channel": "speakable",
+  "content": [
+    {
+      "type": "input_text",
+      "text": "The repository is clean."
+    }
+  ]
+}

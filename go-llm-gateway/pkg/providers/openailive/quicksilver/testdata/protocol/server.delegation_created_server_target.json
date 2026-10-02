@@ -1,0 +1,9 @@
+{
+  "type": "delegation.created",
+  "item": {
+    "type": "delegation",
+    "target": "server",
+    "id": "delegation-2",
+    "content": []
+  }
+}
