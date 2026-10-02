@@ -14,14 +14,7 @@ const defaultOutputSampleRateHz = 24000
 
 const millisecondsPerSecond = 1000
 
-type Report = replay.CaptureTimingReport
-type ResponseTiming = replay.CaptureResponseTiming
-type ToolTiming = replay.CaptureToolTiming
 type Summary = replay.CaptureTimingSummary
-type DurationSummary = replay.CaptureDurationSummary
-
-const ReportSchemaVersion = replay.CaptureTimingReportSchemaVersion
-
 type wireEvent struct {
 	ResponseID string          `json:"response_id"`
 	Delta      string          `json:"delta"`
@@ -38,7 +31,7 @@ type wireItem struct {
 }
 
 type responseState struct {
-	timing         ResponseTiming
+	timing         replay.CaptureResponseTiming
 	firstAudioMS   int64
 	lastAudioMS    int64
 	audioBytes     int64
@@ -46,12 +39,12 @@ type responseState struct {
 	firstAudioSet  bool
 }
 
-func AnalyzeCapture(capture gwtesting.SessionCapture) (Report, error) {
+func AnalyzeCapture(capture gwtesting.SessionCapture) (replay.CaptureTimingReport, error) {
 	report := initialReport(capture)
 	collector := newTimingCollector()
 	for _, record := range capture.Records {
 		if err := collector.observe(record); err != nil {
-			return Report{}, err
+			return replay.CaptureTimingReport{}, err
 		}
 	}
 	collector.finish(&report)
@@ -62,14 +55,14 @@ type timingCollector struct {
 	responses            map[string]*responseState
 	responseOrder        []string
 	commits              []int64
-	tools                []ToolTiming
+	tools                []replay.CaptureToolTiming
 	toolIndex            map[string]int
 	continuationRequests []int64
 }
 
-func initialReport(capture gwtesting.SessionCapture) Report {
-	report := Report{
-		SchemaVersion: ReportSchemaVersion,
+func initialReport(capture gwtesting.SessionCapture) replay.CaptureTimingReport {
+	report := replay.CaptureTimingReport{
+		SchemaVersion: replay.CaptureTimingReportSchemaVersion,
 		Provider:      capture.Provider.Name,
 		Model:         capture.Provider.Model,
 		SampleRateHz:  outputSampleRate(capture),
@@ -83,7 +76,7 @@ func initialReport(capture gwtesting.SessionCapture) Report {
 func newTimingCollector() *timingCollector {
 	return &timingCollector{
 		responses: make(map[string]*responseState),
-		tools:     make([]ToolTiming, 0),
+		tools:     make([]replay.CaptureToolTiming, 0),
 		toolIndex: make(map[string]int),
 	}
 }
@@ -139,7 +132,7 @@ func (collector *timingCollector) observeCreated(record gwtesting.CapturedSessio
 	if _, exists := collector.responses[id]; exists {
 		return
 	}
-	collector.responses[id] = &responseState{timing: ResponseTiming{ResponseID: id, CreatedMS: record.TimestampMs}}
+	collector.responses[id] = &responseState{timing: replay.CaptureResponseTiming{ResponseID: id, CreatedMS: record.TimestampMs}}
 	collector.responseOrder = append(collector.responseOrder, id)
 }
 
@@ -177,7 +170,7 @@ func (collector *timingCollector) observeToolCall(record gwtesting.CapturedSessi
 		return
 	}
 	collector.toolIndex[event.CallID] = len(collector.tools)
-	collector.tools = append(collector.tools, ToolTiming{CallID: event.CallID, Name: event.Name, ResponseID: event.ResponseID, CallReadyMS: record.TimestampMs})
+	collector.tools = append(collector.tools, replay.CaptureToolTiming{CallID: event.CallID, Name: event.Name, ResponseID: event.ResponseID, CallReadyMS: record.TimestampMs})
 }
 
 func (collector *timingCollector) observeToolResult(record gwtesting.CapturedSessionEvent, event wireEvent) {
@@ -198,7 +191,7 @@ func (collector *timingCollector) observeDone(record gwtesting.CapturedSessionEv
 	}
 }
 
-func (collector *timingCollector) finish(report *Report) {
+func (collector *timingCollector) finish(report *replay.CaptureTimingReport) {
 	for _, id := range collector.responseOrder {
 		state := collector.responses[id]
 		setAudioTiming(state, report.SampleRateHz)
@@ -268,7 +261,7 @@ func setFirstOutput(state *responseState, timestamp int64) {
 	state.timing.FirstOutputMS = int64Pointer(timestamp)
 }
 
-func linkToolContinuations(tools []ToolTiming, requests []int64, responses []ResponseTiming) {
+func linkToolContinuations(tools []replay.CaptureToolTiming, requests []int64, responses []replay.CaptureResponseTiming) {
 	for index := range tools {
 		tool := &tools[index]
 		if tool.ResultSentMS == nil {
@@ -282,7 +275,7 @@ func linkToolContinuations(tools []ToolTiming, requests []int64, responses []Res
 	}
 }
 
-func linkContinuationResponse(tool *ToolTiming, requestMS int64, responses []ResponseTiming) {
+func linkContinuationResponse(tool *replay.CaptureToolTiming, requestMS int64, responses []replay.CaptureResponseTiming) {
 	tool.ContinuationRequestedMS = int64Pointer(requestMS)
 	tool.ResultToRequestMS = int64Pointer(requestMS - *tool.ResultSentMS)
 	response := firstContinuationResponse(responses, requestMS)
@@ -296,7 +289,7 @@ func linkContinuationResponse(tool *ToolTiming, requestMS int64, responses []Res
 	linkContinuationAudio(tool, response)
 }
 
-func firstContinuationResponse(responses []ResponseTiming, requestMS int64) *ResponseTiming {
+func firstContinuationResponse(responses []replay.CaptureResponseTiming, requestMS int64) *replay.CaptureResponseTiming {
 	for index := range responses {
 		if responses[index].CreatedMS >= requestMS {
 			return &responses[index]
@@ -305,7 +298,7 @@ func firstContinuationResponse(responses []ResponseTiming, requestMS int64) *Res
 	return nil
 }
 
-func linkContinuationOutput(tool *ToolTiming, response *ResponseTiming) {
+func linkContinuationOutput(tool *replay.CaptureToolTiming, response *replay.CaptureResponseTiming) {
 	if response.FirstOutputMS == nil {
 		return
 	}
@@ -314,7 +307,7 @@ func linkContinuationOutput(tool *ToolTiming, response *ResponseTiming) {
 	tool.ResultToFirstOutputMS = int64Pointer(*response.FirstOutputMS - *tool.ResultSentMS)
 }
 
-func linkContinuationAudio(tool *ToolTiming, response *ResponseTiming) {
+func linkContinuationAudio(tool *replay.CaptureToolTiming, response *replay.CaptureResponseTiming) {
 	if response.FirstAudioMS == nil {
 		return
 	}
@@ -322,7 +315,7 @@ func linkContinuationAudio(tool *ToolTiming, response *ResponseTiming) {
 	tool.ResultToFirstAudioMS = int64Pointer(*response.FirstAudioMS - *tool.ResultSentMS)
 }
 
-func computePlaybackTimeline(responses []ResponseTiming) {
+func computePlaybackTimeline(responses []replay.CaptureResponseTiming) {
 	var previousEnd int64
 	havePrevious := false
 	for index := range responses {
@@ -348,7 +341,7 @@ func computePlaybackTimeline(responses []ResponseTiming) {
 	}
 }
 
-func assignTurns(responses []ResponseTiming, commits []int64) {
+func assignTurns(responses []replay.CaptureResponseTiming, commits []int64) {
 	for responseIndex := range responses {
 		for commitIndex := len(commits) - 1; commitIndex >= 0; commitIndex-- {
 			if responses[responseIndex].CreatedMS >= commits[commitIndex] {

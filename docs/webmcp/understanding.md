@@ -16,7 +16,7 @@ There are two integration gates. I1 proves explicit discovery, selection, catalo
 
 ### Workspace and ownership
 
-- The workspace currently includes only `agent-cli`, `go-agent-loop`, and `go-llm-gateway`, with local replacements from CLI to both libraries; helper/test modules are separate from the workspace (`go.work`, `test/localai/go.mod`, `tools/coveragegate/go.mod`, `tools/rtc-race-gate/go.mod`, `tools/session-race-gate/go.mod`, `tools/timingate/go.mod`).
+- The workspace currently includes only `agent-cli`, `go-agent-loop`, and `go-llm-gateway`, with local replacements from CLI to both libraries; helper/test modules are separate from the workspace (`go.work`, `tests/localai/go.mod`, `tools/coveragegate/go.mod`, `tools/racegate/go.mod`, `tools/timingate/go.mod`).
 - All of those manifests are still at Go 1.24.2, and `agent-cli` has no `chromedp`/`cdproto` dependency (`go.work`, `agent-cli/go.mod`, `go-agent-loop/go.mod`, `go-llm-gateway/go.mod`). Thus all browser packages, locks, launchers, and adapters in the plan are additions, not existing seams.
 - The current root command has ask/chat/tool/interaction/probe/media/session/config/devices groups and no WebMCP route (`agent-cli/internal/cli/routes.go`). Browser ownership in `agent-cli` is therefore consistent with the real routing boundary.
 
@@ -96,7 +96,7 @@ There are two integration gates. I1 proves explicit discovery, selection, catalo
 |---|---|---|
 | O0 operator gate | **Blocked / mandatory** | No pin/launcher/browser evidence exists in current manifests or CLI surface (`go.work`, `agent-cli/go.mod`, `agent-cli/internal/cli/routes.go`). |
 | C0 contract freeze | **Ready now** | New neutral package can be added without browser dependencies; freeze cleanup, continuation, fixture grammar, error, and schema decisions first (`agent-cli/internal/cli/session.go`, `go-agent-loop/pkg/messages/tool_values.go`). |
-| A toolchain/dependencies | **Blocked on operator choices** | Every module is 1.24.2 and Chrome dependencies are absent (`go.work`, `agent-cli/go.mod`, `tools/session-race-gate/go.mod`). |
+| A toolchain/dependencies | **Blocked on operator choices** | Every module is 1.24.2 and Chrome dependencies are absent (`go.work`, `agent-cli/go.mod`, `tools/racegate/go.mod`). |
 | B discovery/selection | **Ready after C0; live proof blocked on O0** | Mostly new standard-library/platform work, with config and routing integration later (`agent-cli/internal/config/interface.go`, `agent-cli/internal/cli/routes.go`). |
 | C broker/catalog/invocation | **Ready after C0** | Can be built against neutral fakes, but must compensate for concurrent loop batches and cooperative-only cancellation (`go-agent-loop/pkg/participants/tool_runner.go`, `agent-cli/internal/services/session_tools.go`). |
 | D Chrome adapter | **Blocked on A + O0** | No generated dependency or proven ownership-safe lifecycle is present (`agent-cli/go.mod`). |
@@ -111,7 +111,7 @@ There are two integration gates. I1 proves explicit discovery, selection, catalo
 | L showcase/hillclimbing | **Scripts can draft; evidence blocked on O0/I1** | Direct catalog capture has no command yet (`agent-cli/internal/cli/routes.go`). |
 | Gate I2 | **Blocked on H–L integration** | Existing continuation is proven for generic text/rich tools but must be re-proven with broker calls, multi-call batches, interruption, and late results (`go-agent-loop/pkg/participants/model_runner.go`, `go-llm-gateway/pkg/providers/openai/composed_tool_result_test.go`). |
 | M real-browser CI/platforms | **Blocked on O0 + I2** | Current CI has Go/session/RTC gates but no Chrome setup (`.github/workflows/ci.yml`). |
-| N hardening | **Not ready until integrated runtime exists** | Existing race gates provide patterns, not browser coverage (`Makefile`, `tools/rtc-race-gate/main.go`, `tools/session-race-gate/main.go`). |
+| N hardening | **Not ready until integrated runtime exists** | Existing race gates provide patterns, not browser coverage (`Makefile`, `tools/racegate`). |
 | O demo/docs/submission | **Documentation can draft; completion blocked on I2** | Existing docs cover session recording but no WebMCP commands (`agent-cli/docs/session-record-replay.md`, `agent-cli/internal/cli/routes.go`). |
 | P projected tools/richer attach | **Defer** | Dynamic schema/session updates would build on still-missing raw schema and broker lifecycle (`go-agent-loop/pkg/messages/tool_values.go`, `go-llm-gateway/pkg/providers/openai/session_config.go`). |
 | Q two-agent stretch | **Defer** | It depends on a broker lease/mutation queue that does not yet exist; current runner only supplies generic concurrent execution (`go-agent-loop/pkg/participants/tool_runner.go`). |

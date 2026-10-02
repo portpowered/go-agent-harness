@@ -1,20 +1,10 @@
 package input
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
-
-// ReadStdinText reads all available text from r and returns it trimmed of leading/trailing whitespace.
-func ReadStdinText(r io.Reader) (string, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), nil
-}
 
 // ParseAskArgs splits args into a prompt (text) and a list of attachment paths.
 // Existing filesystem entries and path-shaped arguments are attachments. Keeping

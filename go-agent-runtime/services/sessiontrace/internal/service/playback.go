@@ -23,15 +23,6 @@ const (
 	// teardown when the bounded speaker queue discarded samples for overflow.
 	SessionDiagnosticEventPlaybackOverflow = sessiontrace.SessionDiagnosticEventPlaybackOverflow
 
-	SessionDiagnosticFieldPlaybackDeviceID            = sessiontrace.SessionDiagnosticFieldPlaybackDeviceID
-	SessionDiagnosticFieldPlaybackSampleRate          = sessiontrace.SessionDiagnosticFieldPlaybackSampleRate
-	SessionDiagnosticFieldPlaybackChannels            = sessiontrace.SessionDiagnosticFieldPlaybackChannels
-	SessionDiagnosticFieldPlaybackLatencyTargetMillis = sessiontrace.SessionDiagnosticFieldPlaybackLatencyTargetMillis
-	SessionDiagnosticFieldPlaybackCapacitySamples     = sessiontrace.SessionDiagnosticFieldPlaybackCapacitySamples
-	SessionDiagnosticFieldPlaybackQueuedSamples       = sessiontrace.SessionDiagnosticFieldPlaybackQueuedSamples
-	SessionDiagnosticFieldPlaybackPeakQueuedSamples   = sessiontrace.SessionDiagnosticFieldPlaybackPeakQueuedSamples
-	SessionDiagnosticFieldPlaybackDroppedSamples      = sessiontrace.SessionDiagnosticFieldPlaybackDroppedSamples
-	SessionDiagnosticFieldPlaybackOverflowEvents      = sessiontrace.SessionDiagnosticFieldPlaybackOverflowEvents
 	// SessionDiagnosticFieldPlaybackParticipantID identifies which room
 	// participant's local speaker queue dropped samples. It is set only by
 	// emitRoomParticipantPlaybackOverflowDiagnostic; the single-session and
@@ -41,7 +32,6 @@ const (
 	SessionLogMessagePlaybackSnapshot = "audio playback queue finalized"
 )
 
-type SessionDiagnosticSink = sessiontrace.DiagnosticSink
 type SessionDiagnosticRecord = sessiontrace.DiagnosticRecord
 
 type playbackMetricDefinition struct {
@@ -93,7 +83,7 @@ func recordPlaybackLog(ctx context.Context, logger observability.Logger, record 
 // at worst from "written to the caller's sink" to "logged by the host logger",
 // and without a logger to a line on the diagnostic writer (standard error by
 // default) -- it never silently vanishes.
-func resolvePlaybackDiagnosticSink(ctx context.Context, options sessiontrace.PlaybackDiagnosticsOptions) SessionDiagnosticSink {
+func resolvePlaybackDiagnosticSink(ctx context.Context, options sessiontrace.PlaybackDiagnosticsOptions) sessiontrace.DiagnosticSink {
 	if options.Sink != nil {
 		return options.Sink
 	}
@@ -176,15 +166,15 @@ func combineRTCDevicePlaybackReceiptObservers(observers ...devicert.RTCDevicePla
 // the canonical field set shared by every playback-overflow emission point.
 func playbackOverflowDiagnosticFields(id devicegw.DeviceID, stats audio.PlaybackQueueStats) map[string]string {
 	return map[string]string{
-		SessionDiagnosticFieldPlaybackDeviceID:            string(id),
-		SessionDiagnosticFieldPlaybackSampleRate:          strconv.Itoa(stats.Format.SampleRate),
-		SessionDiagnosticFieldPlaybackChannels:            strconv.Itoa(stats.Format.Channels),
-		SessionDiagnosticFieldPlaybackLatencyTargetMillis: strconv.FormatInt(stats.LatencyTarget.Milliseconds(), 10),
-		SessionDiagnosticFieldPlaybackCapacitySamples:     strconv.Itoa(stats.CapacitySamples),
-		SessionDiagnosticFieldPlaybackQueuedSamples:       strconv.Itoa(stats.QueuedSamples),
-		SessionDiagnosticFieldPlaybackPeakQueuedSamples:   strconv.Itoa(stats.PeakQueuedSamples),
-		SessionDiagnosticFieldPlaybackDroppedSamples:      strconv.FormatUint(stats.DroppedSamples, 10),
-		SessionDiagnosticFieldPlaybackOverflowEvents:      strconv.FormatUint(stats.OverflowEvents, 10),
+		sessiontrace.SessionDiagnosticFieldPlaybackDeviceID:            string(id),
+		sessiontrace.SessionDiagnosticFieldPlaybackSampleRate:          strconv.Itoa(stats.Format.SampleRate),
+		sessiontrace.SessionDiagnosticFieldPlaybackChannels:            strconv.Itoa(stats.Format.Channels),
+		sessiontrace.SessionDiagnosticFieldPlaybackLatencyTargetMillis: strconv.FormatInt(stats.LatencyTarget.Milliseconds(), 10),
+		sessiontrace.SessionDiagnosticFieldPlaybackCapacitySamples:     strconv.Itoa(stats.CapacitySamples),
+		sessiontrace.SessionDiagnosticFieldPlaybackQueuedSamples:       strconv.Itoa(stats.QueuedSamples),
+		sessiontrace.SessionDiagnosticFieldPlaybackPeakQueuedSamples:   strconv.Itoa(stats.PeakQueuedSamples),
+		sessiontrace.SessionDiagnosticFieldPlaybackDroppedSamples:      strconv.FormatUint(stats.DroppedSamples, 10),
+		sessiontrace.SessionDiagnosticFieldPlaybackOverflowEvents:      strconv.FormatUint(stats.OverflowEvents, 10),
 	}
 }
 
@@ -194,7 +184,7 @@ func playbackOverflowDiagnosticFields(id devicegw.DeviceID, stats audio.Playback
 // is resolved by the caller (see planSessionRuntime) so it is never nil in
 // production; the defensive check below only protects the handful of unit
 // tests that call this constructor directly with an explicit nil.
-func sessionPlaybackDiagnosticObserver(sink SessionDiagnosticSink) devicert.RTCDevicePlaybackObserver {
+func sessionPlaybackDiagnosticObserver(sink sessiontrace.DiagnosticSink) devicert.RTCDevicePlaybackObserver {
 	if sink == nil {
 		return nil
 	}

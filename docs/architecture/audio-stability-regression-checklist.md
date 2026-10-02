@@ -29,7 +29,7 @@ The matrix is covered proportionally rather than by one test function per row; t
 - [x] T19–T20 — startup/lifecycle ordering and long integer-sample timelines: deterministic render-first ordering, duration table, long-run resampler count, and session lifecycle corpus.
 - [x] B01–B10 — exact underflow/overflow, capture policy, starvation, burst pacing, hysteresis and capacity edges: playback queue, simulated duplex, and `TestVirtualPlaybackCapacityAdversarial` tables.
 - [x] B11–B16 — malformed/fragmented input, diagnostics/recorder pressure, callback contention accounting, and defensive ownership: device, recording short-write, queue, and RTC adversarial suites.
-- [x] B01–B16 observability — `TestSessionPlaybackObservabilitySamplesCompleteSnapshotAndContainsFailures`, `TestSessionCaptureObservabilitySamplesDropOldestLoss`, `TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock`, and `TestRTCDeviceBindingPublishesCaptureSnapshotAfterCallbackStops` lock the stable metric/log schema and prove observers execute after callback locks are released.
+- [x] B01–B16 observability — `TestSimulatedDuplexObservabilityReportsFaultsOutsideDeviceLock` locks the stable metric/log schema and proves observers execute after callback locks are released.
 - [x] B17–B25 — mid-frame cancel, linearizable barge-in discard, stale generations, close/loss/double-start/repeated-close/stress/race: RTC cancellation/adversarial suites plus `test-audio-stability-race`.
 - [x] R01–R09 — identity, complete supported-rate matrix, chunk invariance, duration, independent count oracle, phase continuity, long-run count and final tail: streaming resampler matrix and RTC boundary tests.
 - [x] R10–R16 — alias rejection, passband preservation, FIR/step/silence/DC/extreme saturation behavior: `TestDownsample48To16RejectsOutOfBandAlias`, streaming signal tests, and existing PCM analysis corpus.
@@ -44,7 +44,7 @@ The matrix is covered proportionally rather than by one test function per row; t
 ## Native and hardware lanes
 
 - [x] M01–M08 — CoreAudio default/permission/busy/format/loss/route/sleep/Bluetooth contracts are represented by typed platform errors and the opt-in CoreAudio hardware conformance lane.
-- [x] M09–M14 — digital loopback, drift/overload/period/partial callback, and queue-empty-versus-rendered checks are owned by `TestRTCDeviceBindingHardwareRoundTrip`, CoreAudio callback tests, and the deterministic simulator used as the PR negative/control lane.
+- [x] M09–M14 — digital loopback, drift/overload/period/partial callback, and queue-empty-versus-rendered checks are owned by CoreAudio callback tests and the deterministic simulator used as the PR negative/control lane.
 - [x] M15–M20 — physical volume, competing apps, service restart, electrical/acoustic loopback and background system audio remain opt-in hardware-canary scenarios; their committed runner is the existing device probe/hardware round-trip path and their artifacts use the same quantitative recording/replay analyzers.
 
 Environment-gated M-lane tests require the named macOS route, permissions, and (for electrical/acoustic cases) physical fixtures. A green hermetic run proves the implementation and deterministic controls; it does not assert that absent hardware was exercised.
@@ -53,10 +53,10 @@ Environment-gated M-lane tests require the named macOS route, permissions, and (
 
 - [x] `make test-audio-stability`
 - [x] `make test-audio-stability-race`
-- [x] `make fmt-fix`, `make vet`, and `make build`
+- [x] `make fmt-fix`, `make lint`, and `make build`
 - [x] `make coverage-changed COVERAGE_BASE=origin/main`
 - [x] Root `make test` audit: all changed packages passed; the existing `TestSessionCLI_DuplexPCMMultiTurnSchedule` timeout was reproduced unchanged in a clean `origin/main` worktree and is therefore recorded as a baseline exception, not hidden as a branch regression.
-- [x] `make validate` component gates relevant to this change (format, vet, build, changed coverage, focused race) passed. The aggregate target inherits the same independently reproduced baseline integration timeout above.
+- [x] `make prepush` component gates relevant to this change (format, lint, build, changed coverage, focused race) passed. The aggregate target inherits the same independently reproduced baseline integration timeout above.
 
 The observability follow-up reruns these merge commands on its own branch before merge; checklist marks describe required gates, not inherited results.
 

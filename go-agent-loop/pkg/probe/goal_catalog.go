@@ -200,9 +200,6 @@ func (e *GoalCatalogValidationError) Is(target error) bool {
 // coverage or leave a goal without objective evidence.
 func ValidateGoalCatalog(catalog GoalCatalog) error { return catalog.Validate() }
 
-// ValidateCatalog is the concise spelling of ValidateGoalCatalog.
-func ValidateCatalog(catalog GoalCatalog) error { return ValidateGoalCatalog(catalog) }
-
 func catalogValidationError(index int, goalID, field string, kind error, reason string) error {
 	return &GoalCatalogValidationError{Index: index, GoalID: goalID, Field: field, Kind: kind, Reason: reason}
 }

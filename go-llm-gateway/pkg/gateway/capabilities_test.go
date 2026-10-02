@@ -138,10 +138,10 @@ func TestGatewayCapabilitiesUsesProviderReporterWithoutInference(t *testing.T) {
 	if got.Provider != capabilityTestProviderName {
 		t.Fatalf("Provider = %q, want fake-provider", got.Provider)
 	}
-	if got.Stateless.Tools.State != CapabilityStateSupported {
+	if got.Stateless.Tools.State != capabilities.CapabilityStateSupported {
 		t.Fatalf("Tools state = %q, want supported", got.Stateless.Tools.State)
 	}
-	if got.Stateless.Streaming.State != CapabilityStateUnsupported {
+	if got.Stateless.Streaming.State != capabilities.CapabilityStateUnsupported {
 		t.Fatalf("Streaming state = %q, want unsupported", got.Stateless.Streaming.State)
 	}
 	if provider.capCalls != 1 {
@@ -166,13 +166,13 @@ func TestGatewayCapabilitiesFallbacksToUnknownForLegacyProvider(t *testing.T) {
 	if got.Provider != "legacy-provider" {
 		t.Fatalf("Provider = %q, want legacy-provider", got.Provider)
 	}
-	if got.Stateless.Tools.State != CapabilityStateUnknown {
+	if got.Stateless.Tools.State != capabilities.CapabilityStateUnknown {
 		t.Fatalf("Tools state = %q, want unknown", got.Stateless.Tools.State)
 	}
-	if got.Stateless.Streaming.State != CapabilityStateUnknown {
+	if got.Stateless.Streaming.State != capabilities.CapabilityStateUnknown {
 		t.Fatalf("Streaming state = %q, want unknown", got.Stateless.Streaming.State)
 	}
-	if got.Session.Sessions.State != CapabilityStateUnknown {
+	if got.Session.Sessions.State != capabilities.CapabilityStateUnknown {
 		t.Fatalf("Sessions state = %q, want unknown", got.Session.Sessions.State)
 	}
 	if provider.inferCalls != 0 || provider.streamCalls != 0 {
@@ -204,10 +204,10 @@ func TestSessionGatewayCapabilitiesUsesProviderReporterWithoutConnecting(t *test
 	if got.Provider != "session-provider" {
 		t.Fatalf("Provider = %q, want session-provider", got.Provider)
 	}
-	if got.Session.Sessions.State != CapabilityStateSupported {
+	if got.Session.Sessions.State != capabilities.CapabilityStateSupported {
 		t.Fatalf("Sessions state = %q, want supported", got.Session.Sessions.State)
 	}
-	if got.Session.AudioOutput.State != CapabilityStateUnsupported {
+	if got.Session.AudioOutput.State != capabilities.CapabilityStateUnsupported {
 		t.Fatalf("AudioOutput state = %q, want unsupported", got.Session.AudioOutput.State)
 	}
 	if provider.capCalls != 1 {
@@ -262,7 +262,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			caps: capabilities.SessionCapabilities{
 				Sessions: capabilities.Unsupported("session transport unavailable"),
 			},
-			feature: FeatureSessions,
+			feature: capabilities.FeatureSessions,
 		},
 		{
 			name: "tools",
@@ -272,7 +272,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				Tools: []models.ToolDefinition{{Name: "lookup"}},
 			},
-			feature: FeatureTools,
+			feature: capabilities.FeatureTools,
 		},
 		{
 			name: "audio input format",
@@ -282,7 +282,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				InputAudioFormat: models.AudioFormatPCM16,
 			},
-			feature: FeatureAudioInput,
+			feature: capabilities.FeatureAudioInput,
 		},
 		{
 			name: "audio input sample rate",
@@ -292,7 +292,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				InputAudioSampleRate: models.SampleRate16000,
 			},
-			feature: FeatureAudioInput,
+			feature: capabilities.FeatureAudioInput,
 		},
 		{
 			name: "audio output modality",
@@ -302,7 +302,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				Modalities: []models.SessionModality{models.SessionModalityText, models.SessionModalityAudio},
 			},
-			feature: FeatureAudioOutput,
+			feature: capabilities.FeatureAudioOutput,
 		},
 		{
 			name: "audio output format",
@@ -312,7 +312,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				OutputAudioFormat: models.AudioFormatPCM16,
 			},
-			feature: FeatureAudioOutput,
+			feature: capabilities.FeatureAudioOutput,
 		},
 		{
 			name: "audio output voice",
@@ -322,7 +322,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				Voice: "alloy",
 			},
-			feature: FeatureAudioOutput,
+			feature: capabilities.FeatureAudioOutput,
 		},
 		{
 			name: "audio output sample rate",
@@ -332,7 +332,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				OutputAudioSampleRate: models.SampleRate24000,
 			},
-			feature: FeatureAudioOutput,
+			feature: capabilities.FeatureAudioOutput,
 		},
 		{
 			name: "provider config",
@@ -342,7 +342,7 @@ func unsupportedSessionFeatureCases() []unsupportedSessionFeatureCase {
 			config: models.SessionConfig{
 				Config: json.RawMessage(`{"vendor":"specific"}`),
 			},
-			feature: FeatureProviderSpecificConfig,
+			feature: capabilities.FeatureProviderSpecificConfig,
 		},
 	}
 }
@@ -364,7 +364,7 @@ func assertUnsupportedFeatureError(t *testing.T, err error, provider string, fea
 	if unsupported.RequestedMode != mode {
 		t.Fatalf("mode = %q, want %q", unsupported.RequestedMode, mode)
 	}
-	if unsupported.Capability.State != CapabilityStateUnsupported {
+	if unsupported.Capability.State != capabilities.CapabilityStateUnsupported {
 		t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
 	}
 }
@@ -510,14 +510,14 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 			req: InferenceRequest{
 				Tools: []models.ToolDefinition{{Name: "lookup"}},
 			},
-			feature: FeatureTools,
+			feature: capabilities.FeatureTools,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
 			name:    "streaming",
 			caps:    capabilities.StatelessCapabilities{Streaming: capabilities.Unsupported("stream API unavailable")},
 			stream:  true,
-			feature: FeatureStreaming,
+			feature: capabilities.FeatureStreaming,
 			mode:    capabilities.RequestedModeStatelessStream,
 		},
 		{
@@ -529,7 +529,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 					ContentParts: []models.ContentPart{models.ImagePart{URL: "https://example.com/image.png"}},
 				}},
 			},
-			feature: FeatureImageInput,
+			feature: capabilities.FeatureImageInput,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
@@ -541,7 +541,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 					ContentParts: []models.ContentPart{models.AudioPart{URL: "https://example.com/audio.mp3"}},
 				}},
 			},
-			feature: FeatureAudioInput,
+			feature: capabilities.FeatureAudioInput,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
@@ -553,7 +553,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 					ContentParts: []models.ContentPart{models.AudioPart{Bytes: []byte("wav"), MediaType: "audio/wav"}},
 				}},
 			},
-			feature: FeatureAudioOutput,
+			feature: capabilities.FeatureAudioOutput,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
@@ -565,7 +565,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 					ContentParts: []models.ContentPart{models.VideoPart{URL: "https://example.com/video.mp4"}},
 				}},
 			},
-			feature: FeatureVideoOutput,
+			feature: capabilities.FeatureVideoOutput,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
@@ -574,7 +574,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 			req: InferenceRequest{
 				Thinking: &providers.ThinkingConfig{Mode: providers.ThinkingEnabled, BudgetTokens: 4096},
 			},
-			feature: FeatureReasoning,
+			feature: capabilities.FeatureReasoning,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
@@ -583,7 +583,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 			req: InferenceRequest{
 				CacheControl: &providers.CacheControlConfig{CacheRetentionPolicy: providers.CacheRetentionInMemory},
 			},
-			feature: FeaturePromptCaching,
+			feature: capabilities.FeaturePromptCaching,
 			mode:    capabilities.RequestedModeStateless,
 		},
 		{
@@ -592,7 +592,7 @@ func unsupportedStatelessFeatureCases() []unsupportedStatelessFeatureCase {
 			req: InferenceRequest{
 				Config: json.RawMessage(`{"duration":"5s"}`),
 			},
-			feature: FeatureProviderSpecificConfig,
+			feature: capabilities.FeatureProviderSpecificConfig,
 			mode:    capabilities.RequestedModeStateless,
 		},
 	}
@@ -630,13 +630,13 @@ func TestGatewayRejectsFalStreamingBeforeProviderExecution(t *testing.T) {
 	if unsupported.Provider != "fal" {
 		t.Fatalf("provider = %q, want fal", unsupported.Provider)
 	}
-	if unsupported.Feature != FeatureStreaming {
+	if unsupported.Feature != capabilities.FeatureStreaming {
 		t.Fatalf("feature = %q, want streaming", unsupported.Feature)
 	}
 	if unsupported.RequestedMode != capabilities.RequestedModeStatelessStream {
 		t.Fatalf("mode = %q, want stateless_stream", unsupported.RequestedMode)
 	}
-	if unsupported.Capability.State != CapabilityStateUnsupported {
+	if unsupported.Capability.State != capabilities.CapabilityStateUnsupported {
 		t.Fatalf("capability state = %q, want unsupported", unsupported.Capability.State)
 	}
 	if provider.streamCalls != 0 {

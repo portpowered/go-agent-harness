@@ -117,10 +117,6 @@ func compareReplayTools(expected, actual []ToolDescriptor) (string, string) {
 	return "", ""
 }
 
-func replayJSONDifference(left, right json.RawMessage) string {
-	return replayJSONDifferenceAt(left, right, "value")
-}
-
 func replayJSONDifferenceAt(left, right json.RawMessage, path string) string {
 	if len(left) == 0 && len(right) == 0 {
 		return ""

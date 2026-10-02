@@ -66,7 +66,7 @@ func TestProductionWebMCPDirectCommandsRehydrateSelectionAndOperateLiveBroker(t 
 	}
 
 	watch := executeDirectCommand(t, configDir, store, factory, "watch", "--once", "--json")
-	var watchData WebMCPDirectWatchData
+	var watchData directops.WatchData
 	decodeDirectData(t, requireDirectSuccess(t, watch).Data, &watchData)
 	if watchData.Status != directops.WatchStatusOnce || len(watchData.Events) != 1 || watchData.Events[0].Type != string(webmcp.BrokerEventSelected) || watchData.Events[0].Version != webmcp.BrowserEventsVersion || watchData.Events[0].BrowserID != browserID || watchData.Events[0].TargetID != targetID || watchData.Events[0].Sequence == 0 {
 		t.Fatalf("live watch = %+v", watchData)

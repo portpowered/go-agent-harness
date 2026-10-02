@@ -45,20 +45,6 @@ type signalingConfig struct {
 // SignalingOption configures a deterministic RTC signaling fault decorator.
 type SignalingOption func(*signalingConfig) error
 
-// WithICEFailure arms a failure after the wrapped signaling exchange has
-// completed candidate gathering. The trigger is tied to that ordered
-// signaling boundary, not host time, so the same loopback scenario always
-// produces the same outcome.
-func WithICEFailure() SignalingOption {
-	return func(cfg *signalingConfig) error {
-		cfg.iceFailure = true
-		return nil
-	}
-}
-
-// WithICEConnectionFailure is an explicit alias for WithICEFailure.
-func WithICEConnectionFailure() SignalingOption { return WithICEFailure() }
-
 func resolveSignalingOptions(options []SignalingOption) (signalingConfig, error) {
 	var cfg signalingConfig
 	for _, option := range options {
@@ -97,11 +83,6 @@ func WrapSignaling(inner rtc.Signaling, options ...SignalingOption) (*Signaling,
 		return nil, err
 	}
 	return &Signaling{inner: inner, cfg: cfg}, nil
-}
-
-// NewSignaling is an explicit constructor alias for WrapSignaling.
-func NewSignaling(inner rtc.Signaling, options ...SignalingOption) (*Signaling, error) {
-	return WrapSignaling(inner, options...)
 }
 
 func (s *Signaling) SendOffer(ctx context.Context, description rtc.SessionDescription) error {

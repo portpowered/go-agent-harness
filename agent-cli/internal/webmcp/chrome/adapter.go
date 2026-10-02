@@ -44,12 +44,6 @@ func NewRuntime(options ...Option) *Runtime {
 	return &Runtime{options: resolved}
 }
 
-// NewAdapter is an expressive alias for callers that name the concrete
-// implementation rather than the neutral runtime it supplies.
-func NewAdapter(options ...Option) *Runtime {
-	return NewRuntime(options...)
-}
-
 // Open connects to the supplied browser endpoint. The endpoint is explicit;
 // this adapter does not discover browsers or silently select a different one.
 func (r *Runtime) Open(ctx context.Context, candidate webmcp.BrowserCandidate) (webmcp.BrowserHandle, error) {

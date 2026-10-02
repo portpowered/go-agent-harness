@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	streamanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/stream"
 	platformclock "github.com/portpowered/go-agent-harness/go-audio/pkg/clock"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
-	"strings"
-	"sync"
-	"time"
 )
 
 const redactedMarker = "[REDACTED]"
@@ -106,12 +107,12 @@ func requiredRoomReplayParticipantArtifacts(participant RoomReplayParticipant) (
 		role  string
 		field string
 	}{
-		{roomReplayArtifactRoleWAV, "wav"},
-		{roomReplayArtifactRoleDeltas, "deltas"},
-		{roomReplayArtifactRoleSentPCM, "sent_pcm"},
-		{roomReplayArtifactRoleReceivedPCM, "received_pcm"},
-		{roomReplayArtifactRoleEvents, "events"},
-		{roomReplayArtifactRoleDiagnostics, "diagnostics"},
+		{roomevidence.RoomReplayAudioRoleWAV, "wav"},
+		{roomevidence.RoomReplayAudioRoleDeltas, "deltas"},
+		{roomevidence.RoomReplayAudioRoleSentPCM, "sent_pcm"},
+		{roomevidence.RoomReplayAudioRoleReceivedPCM, "received_pcm"},
+		{roomevidence.RoomReplayAudioRoleEvents, "events"},
+		{roomevidence.RoomReplayAudioRoleDiagnostics, "diagnostics"},
 	}
 	var result roomReplayParticipantArtifacts
 	for _, item := range roles {
@@ -120,17 +121,17 @@ func requiredRoomReplayParticipantArtifacts(participant RoomReplayParticipant) (
 			return roomReplayParticipantArtifacts{}, roomReplayAudioIncomplete("participants["+participant.ID+"].artifacts."+item.field, "", "validated "+item.field+" artifact", "missing", ErrRoomReplayBundleIncomplete)
 		}
 		switch item.role {
-		case roomReplayArtifactRoleWAV:
+		case roomevidence.RoomReplayAudioRoleWAV:
 			result.wav = artifact
-		case roomReplayArtifactRoleDeltas:
+		case roomevidence.RoomReplayAudioRoleDeltas:
 			result.deltas = artifact
-		case roomReplayArtifactRoleSentPCM:
+		case roomevidence.RoomReplayAudioRoleSentPCM:
 			result.sent = artifact
-		case roomReplayArtifactRoleReceivedPCM:
+		case roomevidence.RoomReplayAudioRoleReceivedPCM:
 			result.received = artifact
-		case roomReplayArtifactRoleEvents:
+		case roomevidence.RoomReplayAudioRoleEvents:
 			result.events = artifact
-		case roomReplayArtifactRoleDiagnostics:
+		case roomevidence.RoomReplayAudioRoleDiagnostics:
 			result.diagnostics = artifact
 		}
 	}
@@ -192,7 +193,7 @@ func loadRoomReplayWAVParticipant(plan RoomReplayPlan, participantID string, art
 	return wav, nil
 }
 
-func appendRoomReplayDeltaBoundaries(stream *AudioStream, deltas []AudioDelta) {
+func appendRoomReplayDeltaBoundaries(stream *AudioStream, deltas []roomevidence.AudioDelta) {
 	endSample := 0
 	for index, delta := range deltas {
 		endSample += len(delta.PCM) / 2
@@ -202,7 +203,7 @@ func appendRoomReplayDeltaBoundaries(stream *AudioStream, deltas []AudioDelta) {
 	}
 }
 
-func completeRoomReplayWAVMetadata(metadata roomReplayAudioStreamMetadata, deltas []AudioDelta, sampleCount, sampleRate int) roomReplayAudioStreamMetadata {
+func completeRoomReplayWAVMetadata(metadata roomReplayAudioStreamMetadata, deltas []roomevidence.AudioDelta, sampleCount, sampleRate int) roomReplayAudioStreamMetadata {
 	if !metadata.HasStart {
 		for _, delta := range deltas {
 			if delta.HasOffset {

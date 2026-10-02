@@ -1,6 +1,8 @@
 package admission
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestLimitsDefaultToProductionBounds(t *testing.T) {
 	t.Parallel()
@@ -26,4 +28,9 @@ func TestLimitsMayOnlyLowerBounds(t *testing.T) {
 	if got := New(larger).limits; got != DefaultLimits() {
 		t.Fatalf("larger limits = %+v, want capped defaults", got)
 	}
+}
+
+// DefaultLimits returns the production admission bounds.
+func DefaultLimits() Limits {
+	return Limits{ManifestBytes: MaxManifestBytes, ArtifactBytes: MaxArtifactBytes, TimelineBytes: MaxTimelineBytes, TimelineEvents: MaxTimelineEvents}
 }

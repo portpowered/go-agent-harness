@@ -477,3 +477,7 @@ func customerSimulationTestPatienceController(t *testing.T, scenario CustomerSce
 	}
 	return controller
 }
+
+func NewPatienceTestClock() *ManualPatienceClock {
+	return NewManualPatienceClock(time.Unix(0, 0).UTC())
+}

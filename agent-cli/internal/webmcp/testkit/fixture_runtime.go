@@ -193,16 +193,6 @@ func NewScriptRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*B
 	return NewScriptedFixtureRuntime(script, options...)
 }
 
-// NewScriptedRuntime is an alias for NewScriptedFixtureRuntime.
-func NewScriptedRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
-	return NewScriptedFixtureRuntime(script, options...)
-}
-
-// NewBrowserRuntime is an alias for NewScriptedFixtureRuntime.
-func NewBrowserRuntime(script BrowserScript, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {
-	return NewScriptedFixtureRuntime(script, options...)
-}
-
 // NewRuntime accepts either a BrowserScript value or pointer for convenient
 // use by callers that load a script through a pointer-oriented helper.
 func NewRuntime(value any, options ...FixtureRuntimeOption) (*BrowserScriptRuntime, error) {

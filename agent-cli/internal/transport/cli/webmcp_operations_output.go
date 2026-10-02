@@ -118,7 +118,7 @@ func writeDirectHumanData(out io.Writer, data any) error {
 	case WebMCPDirectCancelData:
 		_, err := fmt.Fprintf(out, "Invocation %s: %s\n", value.InvocationID, value.Status)
 		return err
-	case WebMCPDirectWatchData:
+	case operations.WatchData:
 		return writeDirectHumanWatch(out, value)
 	default:
 		encoded, err := json.MarshalIndent(data, "", "  ")
@@ -167,7 +167,7 @@ func writeDirectHumanTools(out io.Writer, value WebMCPDirectToolsData) error {
 	return w.err
 }
 
-func writeDirectHumanWatch(out io.Writer, value WebMCPDirectWatchData) error {
+func writeDirectHumanWatch(out io.Writer, value operations.WatchData) error {
 	w := &humanWriter{out: out}
 	w.printf("Watch: %s (%d events)\n", value.Status, len(value.Events))
 	for _, event := range value.Events {

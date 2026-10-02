@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 const (
@@ -18,7 +20,7 @@ const (
 // new choice; repeating the same selector-free call cannot make the result
 // more specific.
 func withAmbiguityRecovery(code ErrorCode, details map[string]any) map[string]any {
-	if code != ErrorAmbiguousBrowser && code != ErrorAmbiguousTab {
+	if code != public.ErrorAmbiguousBrowser && code != public.ErrorAmbiguousTab {
 		return details
 	}
 	result := sanitizeAmbiguityDetails(code, details)
@@ -26,7 +28,7 @@ func withAmbiguityRecovery(code ErrorCode, details map[string]any) map[string]an
 		result = map[string]any{}
 	}
 	instruction := "Ask the customer which browser they mean, then retry once with its exact browser ID; do not repeat this call until the customer provides a choice."
-	if code == ErrorAmbiguousTab {
+	if code == public.ErrorAmbiguousTab {
 		instruction = "Ask the customer which named page they mean, then retry once with its exact target ID; do not repeat this call until the customer provides a choice."
 	}
 	result["recovery"] = map[string]any{
@@ -43,9 +45,9 @@ func sanitizeAmbiguityDetails(code ErrorCode, details map[string]any) map[string
 		result = map[string]any{}
 	}
 	switch code {
-	case ErrorAmbiguousBrowser:
+	case public.ErrorAmbiguousBrowser:
 		result["candidate_browser_ids"] = boundedAmbiguityIDs(anyAmbiguityIDs(result["candidate_browser_ids"]))
-	case ErrorAmbiguousTab:
+	case public.ErrorAmbiguousTab:
 		sanitizeAmbiguousTabDetails(result)
 	}
 	return result

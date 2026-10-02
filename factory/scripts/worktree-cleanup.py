@@ -53,7 +53,6 @@ SCRATCH_DIR_NAMES = frozenset(
 GO_BUILD_CACHE_NAME = "go-build"
 GO_BUILD_CACHE_MARKER = "cached build artifacts from the Go build system"
 GO_TOOLS_CACHE_NAME = "go-tools"
-STATICCHECK_CACHE_NAME = "staticcheck"
 GLOBAL_CACHE_RETENTION_HOURS = 2
 CACHE_KEY_LENGTH = 64
 CACHE_ENTRY_SUFFIXES = ("-a", "-d")
@@ -828,7 +827,6 @@ def global_cache_candidates(
     paths: list[tuple[Path, str]] = []
     if go_cache_value:
         paths.append((Path(go_cache_value), "go-build"))
-    paths.append((approved_root / STATICCHECK_CACHE_NAME, "staticcheck"))
     candidates: list[dict[str, Any]] = []
     for raw_path, output_type in paths:
         path = raw_path.expanduser().resolve()
@@ -841,10 +839,7 @@ def global_cache_candidates(
         }
         if raw_path.expanduser().is_symlink():
             entry["reason"] = "cache is symlinked"
-        elif path.parent != approved_root or path.name not in {
-            GO_BUILD_CACHE_NAME,
-            STATICCHECK_CACHE_NAME,
-        }:
+        elif path.parent != approved_root or path.name != GO_BUILD_CACHE_NAME:
             entry["reason"] = "cache path is outside the approved user cache root"
         elif not path.is_dir():
             entry["reason"] = "cache is absent or not a directory"
@@ -1056,8 +1051,7 @@ def _remove_global_cache(
     if raw_path.is_symlink():
         raise CleanupBlocked(f"global cache changed to a symlink: {path}")
     path = raw_path.resolve()
-    expected_name = GO_BUILD_CACHE_NAME if output_type == "go-build" else STATICCHECK_CACHE_NAME
-    if path.parent != approved_root or path.name != expected_name:
+    if path.parent != approved_root or path.name != GO_BUILD_CACHE_NAME:
         raise CleanupBlocked(f"global cache escaped its approved root: {path}")
     if not path.is_dir():
         raise CleanupBlocked(f"global cache changed before pruning: {path}")

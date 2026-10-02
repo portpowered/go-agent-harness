@@ -35,9 +35,6 @@ const (
 	DisplayPermissionGranted     = runtimeTools.DisplayPermissionGranted
 	DisplayPermissionDenied      = runtimeTools.DisplayPermissionDenied
 	DisplayPermissionUnavailable = runtimeTools.DisplayPermissionUnavailable
-	DisplayPermissionCanceled    = runtimeTools.DisplayPermissionCanceled
-	DisplayPermissionTimedOut    = runtimeTools.DisplayPermissionTimedOut
-	DisplayPermissionFailed      = runtimeTools.DisplayPermissionFailed
 )
 
 type DisplayPermission = runtimeTools.DisplayPermission
@@ -194,7 +191,7 @@ func NewHostDisplaySurfaceWithOptions(options HostDisplaySurfaceOptions) Display
 func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, error) {
 	if err := ctx.Err(); err != nil {
 		return capabilityForScreenError(err, "display capability check was canceled"), &ScreenCaptureError{
-			State: ScreenCaptureCanceled, Operation: "display capability check", Reason: "display capability check was canceled", Cause: err,
+			State: runtimeTools.ScreenCaptureCanceled, Operation: "display capability check", Reason: "display capability check was canceled", Cause: err,
 		}
 	}
 	if s.permission != nil {
@@ -215,27 +212,27 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 	count, bounds, err := screenDisplayInfoWithContextAndProcess(ctx, s.process)
 	if err != nil {
 		state := classifyScreenCaptureState(err)
-		if state == ScreenCaptureGranted || state == ScreenCaptureFailed {
-			state = ScreenCaptureUnavailable
+		if state == runtimeTools.ScreenCaptureGranted || state == runtimeTools.ScreenCaptureFailed {
+			state = runtimeTools.ScreenCaptureUnavailable
 		}
 		capability := DisplayCapability{State: state, Reason: "display discovery is unavailable"}
 		return capability, &ScreenCaptureError{State: state, Operation: "display discovery", Reason: capability.Reason, Cause: err}
 	}
 	if count <= 0 {
 		capability := UnavailableDisplayCapability("no usable display was discovered")
-		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display discovery", Reason: capability.Reason}
+		return capability, &ScreenCaptureError{State: runtimeTools.ScreenCaptureUnavailable, Operation: "display discovery", Reason: capability.Reason}
 	}
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.process); err != nil {
 		state := classifyScreenCaptureState(err)
-		if state == ScreenCaptureGranted || state == ScreenCaptureFailed {
-			state = ScreenCaptureUnavailable
+		if state == runtimeTools.ScreenCaptureGranted || state == runtimeTools.ScreenCaptureFailed {
+			state = runtimeTools.ScreenCaptureUnavailable
 		}
 		capability := DisplayCapability{State: state, Reason: "the screen capture command is unavailable"}
 		return capability, &ScreenCaptureError{State: state, Operation: "screen capture admission", Reason: capability.Reason, Cause: err}
 	}
 	if bounds.Empty() {
 		capability := UnavailableDisplayCapability("display geometry is empty")
-		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display geometry", Reason: capability.Reason}
+		return capability, &ScreenCaptureError{State: runtimeTools.ScreenCaptureUnavailable, Operation: "display geometry", Reason: capability.Reason}
 	}
 	return UsableDisplayCapability(count), nil
 }
@@ -296,39 +293,39 @@ func screenCaptureStateForPermission(state DisplayPermissionState) ScreenCapture
 	case DisplayPermissionDenied:
 		return ScreenCaptureDenied
 	case DisplayPermissionUnavailable:
-		return ScreenCaptureUnavailable
-	case DisplayPermissionCanceled:
-		return ScreenCaptureCanceled
-	case DisplayPermissionTimedOut:
-		return ScreenCaptureTimedOut
+		return runtimeTools.ScreenCaptureUnavailable
+	case runtimeTools.DisplayPermissionCanceled:
+		return runtimeTools.ScreenCaptureCanceled
+	case runtimeTools.DisplayPermissionTimedOut:
+		return runtimeTools.ScreenCaptureTimedOut
 	default:
-		return ScreenCaptureFailed
+		return runtimeTools.ScreenCaptureFailed
 	}
 }
 
 func classifyScreenCaptureState(err error) ScreenCaptureState {
 	if err == nil {
-		return ScreenCaptureGranted
+		return runtimeTools.ScreenCaptureGranted
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, ErrScreenCaptureCanceled) {
-		return ScreenCaptureCanceled
+		return runtimeTools.ScreenCaptureCanceled
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrScreenCaptureTimedOut) {
-		return ScreenCaptureTimedOut
+		return runtimeTools.ScreenCaptureTimedOut
 	}
 	if errors.Is(err, ErrScreenRecordingPermissionDenied) || screenRecordingPermissionText(err.Error()) {
 		return ScreenCaptureDenied
 	}
 	if errors.Is(err, ErrDisplayUnavailable) || errors.Is(err, exec.ErrNotFound) {
-		return ScreenCaptureUnavailable
+		return runtimeTools.ScreenCaptureUnavailable
 	}
-	return ScreenCaptureFailed
+	return runtimeTools.ScreenCaptureFailed
 }
 
 func capabilityForScreenError(err error, fallback string) DisplayCapability {
 	state := classifyScreenCaptureState(err)
-	if state == ScreenCaptureGranted {
-		state = ScreenCaptureUnavailable
+	if state == runtimeTools.ScreenCaptureGranted {
+		state = runtimeTools.ScreenCaptureUnavailable
 	}
 	return DisplayCapability{State: state, Reason: fallback}
 }
@@ -341,8 +338,8 @@ func newScreenCaptureError(operation, reason string, cause error) *ScreenCapture
 		}
 	}
 	state := classifyScreenCaptureState(cause)
-	if state == ScreenCaptureGranted {
-		state = ScreenCaptureFailed
+	if state == runtimeTools.ScreenCaptureGranted {
+		state = runtimeTools.ScreenCaptureFailed
 	}
 	return &ScreenCaptureError{State: state, Operation: operation, Reason: reason, Cause: cause}
 }

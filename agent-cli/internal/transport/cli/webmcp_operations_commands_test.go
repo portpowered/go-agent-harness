@@ -247,7 +247,7 @@ func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 	}
 	ended := executeDirectCommand(t, configDir, store, directFactory(closedBroker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
 	envelope := requireDirectSuccess(t, ended)
-	var endedData WebMCPDirectWatchData
+	var endedData operations.WatchData
 	decodeDirectData(t, envelope.Data, &endedData)
 	if endedData.Status != operations.WatchStatusEnded || len(endedData.Events) != 0 {
 		t.Fatalf("terminated watch = %+v", endedData)
@@ -266,7 +266,7 @@ func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 		t.Fatalf("canceled watch: %v", canceled.err)
 	}
 	envelope = decodeDirectEnvelope(t, canceled.stdout)
-	var canceledData WebMCPDirectWatchData
+	var canceledData operations.WatchData
 	decodeDirectData(t, envelope.Data, &canceledData)
 	if canceledData.Status != operations.WatchStatusCanceled {
 		t.Fatalf("canceled watch = %+v", canceledData)
@@ -315,7 +315,7 @@ func TestWebMCPDirectWatchReportsBoundedFailure(t *testing.T) {
 		t.Fatalf("bounded watch failure: %v", result.err)
 	}
 	envelope := requireDirectSuccess(t, result)
-	var data WebMCPDirectWatchData
+	var data operations.WatchData
 	decodeDirectData(t, envelope.Data, &data)
 	if data.Status != operations.WatchStatusFailed || len(data.Events) != 1 || data.Events[0].Type != string(webmcp.BrokerEventSessionClosed) || data.Events[0].Reason != webmcp.BrokerWatchBufferFullReason {
 		t.Fatalf("bounded watch result = %+v, want explicit failed status", data)
@@ -341,7 +341,7 @@ func TestWebMCPDirectToolsWatchSubscribesBeforeSelection(t *testing.T) {
 		t.Fatalf("tools --watch: %v\nstdout=%s", result.err, result.stdout)
 	}
 	envelope := requireDirectSuccess(t, result)
-	var data WebMCPDirectWatchData
+	var data operations.WatchData
 	decodeDirectData(t, envelope.Data, &data)
 	if data.Status != operations.WatchStatusEnded || len(data.Events) != 2 || data.Events[0].Type != string(webmcp.BrokerEventSelected) || data.Events[1].Type != string(webmcp.BrokerEventCatalogChanged) {
 		t.Fatalf("tools --watch result = %+v, want selection and initial catalog events", data)

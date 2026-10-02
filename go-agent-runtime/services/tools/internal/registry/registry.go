@@ -41,7 +41,6 @@ const (
 
 var (
 	ErrDuplicateTool = errors.New("tool already registered")
-	ErrToolNotFound  = public.ErrToolNotFound
 	ErrEmptyToolName = errors.New("tool name is empty")
 	ErrNilTool       = errors.New("tool is nil")
 )
@@ -76,7 +75,7 @@ func (e *RegistryError) Unwrap() error {
 	case RegistryErrorDuplicate:
 		return ErrDuplicateTool
 	case RegistryErrorNotFound:
-		return ErrToolNotFound
+		return public.ErrToolNotFound
 	case RegistryErrorEmptyName:
 		return ErrEmptyToolName
 	case RegistryErrorNilTool:

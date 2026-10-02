@@ -94,7 +94,7 @@ and pushes to `main`, and every job starts at once (no `needs:`):
 
 | Job | Runs |
 | --- | --- |
-| `CI (static)` (required) | `fmt`, `check-ci-test-partition`, `architecture-check`, then waits for every lint lane |
+| `CI (static)` (required) | `fmt`, `check-ci-test-partition`, `architecture-check`, `deadcode-check`, then waits for every lint lane |
 | `CI (static lint …)` | nine golangci-lint lanes (linux, windows and darwin by agent-cli, runtime and support); see [lint-policy.md](lint-policy.md) |
 | `CI (unit)` (required) | `test-tools`, `test-factory-scripts`, the agent-cli build, the standalone-checkout check, `wire-check` |
 | `CI (coverage libraries)` | every other module's and the embedding consumer's coverage |

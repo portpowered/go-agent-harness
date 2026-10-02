@@ -13,11 +13,6 @@ import (
 // a probe.scenario.v2 run; see scenariov2.BrowserExecutorMode.
 type ProbeScenarioV2BrowserExecutorMode = scenariov2.BrowserExecutorMode
 
-const (
-	ProbeScenarioV2BrowserExecutorHermetic = scenariov2.BrowserExecutorHermetic
-	ProbeScenarioV2BrowserExecutorReal     = scenariov2.BrowserExecutorReal
-)
-
 // probeScenarioV2BrowserExecutorModeValue is the typed --browser-executor flag.
 type probeScenarioV2BrowserExecutorModeValue struct {
 	target *ProbeScenarioV2BrowserExecutorMode
@@ -25,7 +20,7 @@ type probeScenarioV2BrowserExecutorModeValue struct {
 
 func (v *probeScenarioV2BrowserExecutorModeValue) String() string {
 	if v == nil || v.target == nil || *v.target == "" {
-		return string(ProbeScenarioV2BrowserExecutorHermetic)
+		return string(scenariov2.BrowserExecutorHermetic)
 	}
 	return string(*v.target)
 }
@@ -53,7 +48,7 @@ func (c *ProbeRunCommand) probeScenarioV2BrowserExecutorOptions(cmd *cobra.Comma
 		return scenariov2.BrowserExecutorOptions{}, err
 	}
 	options := scenariov2.BrowserExecutorOptions{Mode: mode, Factory: probeScenarioV2RealRuntimeFactory(c.browserFactory)}
-	if mode != ProbeScenarioV2BrowserExecutorReal {
+	if mode != scenariov2.BrowserExecutorReal {
 		return options, nil
 	}
 	globalFlags := c.globalFlags

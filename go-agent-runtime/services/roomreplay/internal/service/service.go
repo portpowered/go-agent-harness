@@ -14,20 +14,13 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomreplay"
 )
 
-type RoomReplayBundleErrorKind = roomreplay.RoomReplayBundleErrorKind
-type RoomReplayBundleError = roomreplay.RoomReplayBundleError
 type RoomReplayPlan = roomreplay.RoomReplayPlan
-type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
 type RoomReplayArtifact = roomreplay.RoomReplayArtifact
-type RoomReplayParticipant = roomreplay.RoomReplayParticipant
-type RoomReplayTimelineEvent = roomreplay.RoomReplayTimelineEvent
-type ParticipantKind = roomreplay.ParticipantKind
 
 const (
-	RoomReplayBundleSchemaVersion = roomreplay.RoomReplayBundleSchemaVersion
-	RoomReplayBundleManifestPath  = roomreplay.RoomReplayBundleManifestPath
-	RoomReplayBundleMismatch      = roomreplay.RoomReplayBundleMismatch
-	RoomReplayBundleIncomplete    = roomreplay.RoomReplayBundleIncomplete
+	RoomReplayBundleManifestPath = roomreplay.RoomReplayBundleManifestPath
+	RoomReplayBundleMismatch     = roomreplay.RoomReplayBundleMismatch
+	RoomReplayBundleIncomplete   = roomreplay.RoomReplayBundleIncomplete
 )
 
 const (
@@ -189,7 +182,7 @@ func nearestExistingRoomReplayPath(output string) (string, []string, error) {
 	}
 }
 
-func newRoomReplayBundleError(kind RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
+func newRoomReplayBundleError(kind roomreplay.RoomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
 	if kind == "" {
 		kind = RoomReplayBundleMismatch
 	}
@@ -199,7 +192,7 @@ func newRoomReplayBundleError(kind RoomReplayBundleErrorKind, field, artifact, e
 	} else {
 		replayCause = gateway.NewReplayMismatchError(expected, actual, cause)
 	}
-	return &RoomReplayBundleError{
+	return &roomreplay.RoomReplayBundleError{
 		Kind: kind, Field: field, Artifact: artifact, Expected: expected, Actual: actual, Err: replayCause,
 	}
 }

@@ -10,24 +10,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/admission"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/codec"
 )
 
 type roomReplayDeltaParseState struct {
-	deltas            []AudioDelta
+	deltas            []roomevidence.AudioDelta
 	seenDeltaIDs      map[string]int
 	previousOffset    time.Duration
 	hasPreviousOffset bool
 }
 
-func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, streamID string, plan RoomReplayPlan) ([]AudioDelta, error) {
-	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, maxRoomReplayArtifactBytes, "participants["+participantID+"].deltas")
+func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, streamID string, plan RoomReplayPlan) ([]roomevidence.AudioDelta, error) {
+	data, err := readRoomReplayArtifact(plan.BundlePath, artifact, admission.MaxArtifactBytes, "participants["+participantID+"].deltas")
 	if err != nil {
 		return nil, err
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, roomReplayJSONLScannerInitialBufferBytes), roomReplayJSONLScannerMaxTokenBytes)
-	state := roomReplayDeltaParseState{deltas: make([]AudioDelta, 0), seenDeltaIDs: make(map[string]int)}
+	state := roomReplayDeltaParseState{deltas: make([]roomevidence.AudioDelta, 0), seenDeltaIDs: make(map[string]int)}
 	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
@@ -50,31 +52,31 @@ func loadRoomReplayAudioDeltas(artifact RoomReplayArtifact, participantID, strea
 	return state.deltas, nil
 }
 
-func parseRoomReplayAudioDeltaLine(line []byte, lineNumber int, artifact RoomReplayArtifact, participantID, streamID string, plan RoomReplayPlan, state *roomReplayDeltaParseState) (AudioDelta, bool, error) {
+func parseRoomReplayAudioDeltaLine(line []byte, lineNumber int, artifact RoomReplayArtifact, participantID, streamID string, plan RoomReplayPlan, state *roomReplayDeltaParseState) (roomevidence.AudioDelta, bool, error) {
 	object, _, payload, found, err := parseRoomReplayDeltaPayload(line, lineNumber, artifact, participantID)
 	if err != nil || !found {
-		return AudioDelta{}, found, err
+		return roomevidence.AudioDelta{}, found, err
 	}
 	sequence, hasSequence, err := parseRoomReplayDeltaSequence(object, lineNumber, artifact, participantID)
 	if err != nil {
-		return AudioDelta{}, false, err
+		return roomevidence.AudioDelta{}, false, err
 	}
 	offset, hasOffset, err := parseRoomReplayDeltaOffset(object, lineNumber, artifact, participantID, plan, state)
 	if err != nil {
-		return AudioDelta{}, false, err
+		return roomevidence.AudioDelta{}, false, err
 	}
 	if err := validateRoomReplayDeltaOwners(object, lineNumber, artifact, participantID, streamID); err != nil {
-		return AudioDelta{}, false, err
+		return roomevidence.AudioDelta{}, false, err
 	}
 	id, err := parseRoomReplayDeltaIdentity(object, lineNumber, artifact, participantID, state)
 	if err != nil {
-		return AudioDelta{}, false, err
+		return roomevidence.AudioDelta{}, false, err
 	}
 	turnID, _, turnErr := roomReplayStringField(object, "turn_id", "turn", "response_id")
 	if turnErr != nil {
-		return AudioDelta{}, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "turn_id"), artifact.Path, "string turn identity", "invalid", turnErr)
+		return roomevidence.AudioDelta{}, false, roomReplayAudioMismatch(roomReplayDeltaLineField(participantID, lineNumber, "turn_id"), artifact.Path, "string turn identity", "invalid", turnErr)
 	}
-	return AudioDelta{ID: id, Sequence: sequence, HasSequence: hasSequence, Offset: offset, HasOffset: hasOffset, TurnID: strings.TrimSpace(turnID), LineNumber: lineNumber, PCM: append([]byte(nil), payload...)}, true, nil
+	return roomevidence.AudioDelta{ID: id, Sequence: sequence, HasSequence: hasSequence, Offset: offset, HasOffset: hasOffset, TurnID: strings.TrimSpace(turnID), LineNumber: lineNumber, PCM: append([]byte(nil), payload...)}, true, nil
 }
 
 func parseRoomReplayDeltaPayload(line []byte, lineNumber int, artifact RoomReplayArtifact, participantID string) (roomReplayJSONObject, string, []byte, bool, error) {

@@ -18,18 +18,12 @@ import (
 // The direct command results are owned by internal/webmcp/operations; these
 // names keep the CLI's public result vocabulary.
 type (
-	WebMCPDirectBrowser           = operations.Browser
 	WebMCPDirectBrowsersData      = operations.BrowsersData
-	WebMCPDirectTab               = operations.Tab
 	WebMCPDirectTabsData          = operations.TabsData
 	WebMCPDirectContext           = operations.Context
-	WebMCPDirectFrame             = operations.Frame
-	WebMCPDirectTool              = operations.Tool
 	WebMCPDirectToolsData         = operations.ToolsData
 	WebMCPDirectInvocation        = operations.Invocation
 	WebMCPDirectCancelData        = operations.CancelData
-	WebMCPDirectEvent             = operations.Event
-	WebMCPDirectWatchData         = operations.WatchData
 	WebMCPDirectInvocationReceipt = operations.Receipt
 )
 
@@ -112,8 +106,6 @@ func newWebMCPDirectFlags() *webmcpDirectFlags {
 	return &webmcpDirectFlags{}
 }
 
-type webmcpDirectOperation = direct.Operation
-
 // directOutcome adapts a typed operation result to the untyped command
 // result; a failed operation has no data.
 func directOutcome[T any](value T, err error) (any, error) {
@@ -134,14 +126,14 @@ func (c *WebMCPOperationsCommand) directSelector(cmd *cobra.Command, browser con
 	}
 }
 
-func (c *WebMCPOperationsCommand) executeDirect(cmd *cobra.Command, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation webmcpDirectOperation) error {
+func (c *WebMCPOperationsCommand) executeDirect(cmd *cobra.Command, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation direct.Operation) error {
 	if cmd == nil {
 		return errors.New("WebMCP command is required")
 	}
 	return c.executeDirectWithParentContext(cmd, cmd.Context(), values, kind, fallback, operation)
 }
 
-func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Command, ctx context.Context, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation webmcpDirectOperation) error {
+func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Command, ctx context.Context, values *webmcpDirectFlags, kind string, fallback webmcp.ErrorCode, operation direct.Operation) error {
 	if cmd == nil {
 		return errors.New("WebMCP command is required")
 	}
@@ -169,7 +161,7 @@ func (c *WebMCPOperationsCommand) executeDirectWithParentContext(cmd *cobra.Comm
 	return operationErr
 }
 
-func (c *WebMCPOperationsCommand) runDirect(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, operation webmcpDirectOperation) (any, error) {
+func (c *WebMCPOperationsCommand) runDirect(ctx context.Context, cmd *cobra.Command, values *webmcpDirectFlags, operation direct.Operation) (any, error) {
 	browser, err := c.resolveDirectBrowserConfig(cmd, values)
 	if err != nil {
 		return nil, err

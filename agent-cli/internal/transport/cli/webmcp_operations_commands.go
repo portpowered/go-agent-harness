@@ -6,6 +6,7 @@ import (
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/config"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/direct"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/operations/xvideo"
 	"github.com/spf13/cobra"
@@ -252,7 +253,7 @@ func (c *WebMCPOperationsCommand) watchCommand() *cobra.Command {
 
 // watchOperation is shared by watch and tools --watch, which promise the
 // same observation and output contract.
-func (c *WebMCPOperationsCommand) watchOperation(cmd *cobra.Command, values *webmcpDirectFlags) webmcpDirectOperation {
+func (c *WebMCPOperationsCommand) watchOperation(cmd *cobra.Command, values *webmcpDirectFlags) direct.Operation {
 	return func(ctx context.Context, broker webmcp.Broker, browser config.BrowserConfig) (any, error) {
 		return directOutcome(operations.Watch(ctx, broker, operations.WatchRequest{
 			Selector: c.directSelector(cmd, browser),

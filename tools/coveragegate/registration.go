@@ -167,12 +167,6 @@ func collectImportPaths(listing, moduleDir string, packages map[string]string) e
 	return nil
 }
 
-// DiscoverPackages is kept as a short alias for callers that only need the
-// package list and do not need to distinguish it from workspace discovery.
-func DiscoverPackages(ctx context.Context, goBinary string, moduleDirs []string) ([]string, error) {
-	return DiscoverWorkspacePackages(ctx, goBinary, moduleDirs)
-}
-
 // ValidateRegistration checks that the current workspace and manifest are
 // the same closed set. Manifest syntax, ordering, entry shape, and duplicate
 // entries are validated before the set comparison.

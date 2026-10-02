@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	core "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/internal/display"
 )
@@ -202,7 +203,7 @@ func TestRegistryS4Errors(t *testing.T) {
 		errs func() []error
 	}{
 		{"duplicate registration", RegistryErrorDuplicate, `tool "original" is already registered`, ErrDuplicateTool, func() []error { return []error{duplicateRegistry.Register(duplicate)} }},
-		{"unknown lookup/execution", RegistryErrorNotFound, `tool "missing" not found`, ErrToolNotFound, func() []error {
+		{"unknown lookup/execution", RegistryErrorNotFound, `tool "missing" not found`, public.ErrToolNotFound, func() []error {
 			_, lookupErr := unknownRegistry.Lookup("missing")
 			_, executeErr := unknownRegistry.Execute(context.Background(), "missing", nil)
 			return []error{lookupErr, executeErr}

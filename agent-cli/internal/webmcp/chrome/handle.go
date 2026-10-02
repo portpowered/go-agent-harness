@@ -31,7 +31,7 @@ type handle struct {
 	httpClient      *http.Client
 	commandTimeout  time.Duration
 	eventBuffer     int
-	wireTrace       webmcp.WireTraceSink
+	wireTrace       WireTraceSink
 	sessions        map[*targetSession]struct{}
 	targetOps       targetContextOps
 

@@ -37,19 +37,6 @@ func (w *testWriter) StderrString() string {
 	return w.stderr.String()
 }
 
-func (w *testWriter) Reset() {
-	w.stdout.Reset()
-	w.stderr.Reset()
-}
-
-// NewTestWriter returns a writer that captures stdout and stderr.
-func NewTestWriter() *testWriter {
-	return &testWriter{
-		stdout: bytes.Buffer{},
-		stderr: bytes.Buffer{},
-	}
-}
-
 // Realtime wire vocabulary shared by the hermetic provider fixtures.
 const (
 	rtEventSessionUpdate              = "session.update"

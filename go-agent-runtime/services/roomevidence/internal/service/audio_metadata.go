@@ -300,47 +300,25 @@ func parseRoomReplaySpeechAnnotations(raw json.RawMessage) []streamanalysis.Spee
 }
 
 type (
-	RoomReplayPlan           = roomevidence.RoomReplayPlan
-	RoomReplayPCMFormat      = roomevidence.RoomReplayPCMFormat
-	RoomReplayArtifact       = roomevidence.RoomReplayArtifact
-	RoomReplayParticipant    = roomevidence.RoomReplayParticipant
-	RoomReplayTimelineEvent  = roomevidence.RoomReplayTimelineEvent
-	AudioDelta               = roomevidence.AudioDelta
-	DeltaReconstructionError = roomevidence.DeltaReconstructionError
-	AudioStream              = roomevidence.AudioStream
-	AudioParticipant         = roomevidence.AudioParticipant
-	AudioAnnotation          = roomevidence.AudioAnnotation
-	Bundle                   = roomevidence.Bundle
-	ToleranceProfile         = roomevidence.ToleranceProfile
-	ParticipantKind          = roomevidence.ParticipantKind
-	roomReplayJSONObject     map[string]json.RawMessage
+	RoomReplayPlan        = roomevidence.RoomReplayPlan
+	RoomReplayArtifact    = roomevidence.RoomReplayArtifact
+	RoomReplayParticipant = roomevidence.RoomReplayParticipant
+	AudioStream           = roomevidence.AudioStream
+	AudioParticipant      = roomevidence.AudioParticipant
+	roomReplayJSONObject  map[string]json.RawMessage
 )
 
 const (
-	RoomReplayBundleManifestPath = roomevidence.RoomReplayBundleManifestPath
-	BundleMismatch               = roomevidence.BundleMismatch
-	BundleIncomplete             = roomevidence.BundleIncomplete
-	roomReplayAudioRoleSent      = "sent"
-	roomReplayAudioRoleReceived  = "received"
-
-	roomReplayArtifactRoleWAV         = roomevidence.RoomReplayAudioRoleWAV
-	roomReplayArtifactRoleDiagnostics = roomevidence.RoomReplayAudioRoleDiagnostics
-	roomReplayArtifactRoleDeltas      = roomevidence.RoomReplayAudioRoleDeltas
-	roomReplayArtifactRoleSentPCM     = roomevidence.RoomReplayAudioRoleSentPCM
-	roomReplayArtifactRoleReceivedPCM = roomevidence.RoomReplayAudioRoleReceivedPCM
-	roomReplayArtifactRoleEvents      = roomevidence.RoomReplayAudioRoleEvents
+	roomReplayAudioRoleSent     = "sent"
+	roomReplayAudioRoleReceived = "received"
 )
 
 const (
-	ErrInvalidRoomReplayBundle       = roomevidence.ErrInvalidRoomReplayBundle
-	ErrRoomReplayBundleIncomplete    = roomevidence.ErrRoomReplayBundleIncomplete
-	ErrRoomReplayDeltaReconstruction = roomevidence.ErrRoomReplayDeltaReconstruction
-	ErrRoomReplayAudioTimeline       = roomevidence.ErrRoomReplayAudioTimeline
-	ErrRoomReplayToleranceProfile    = roomevidence.ErrRoomReplayToleranceProfile
+	ErrRoomReplayBundleIncomplete = roomevidence.ErrRoomReplayBundleIncomplete
 )
 
-func DefaultRoomReplayToleranceProfile() ToleranceProfile {
-	return ToleranceProfile{
+func DefaultRoomReplayToleranceProfile() roomevidence.ToleranceProfile {
+	return roomevidence.ToleranceProfile{
 		Name:         "suite-default",
 		StreamConfig: roomanalysis.DefaultPCM16AnalysisConfig(),
 		RoomConfig:   roomanalysis.DefaultPCM16RoomAnalysisConfig(),

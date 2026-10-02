@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
 )
 
 var (
@@ -172,22 +173,6 @@ func WithAutoResponse(output json.RawMessage) ScriptedTargetSessionOption {
 	})
 }
 
-func WithAutoResponseStatus(status string, output json.RawMessage) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
-		options.AutoRespond = true
-		options.AutoResponseStatus = status
-		options.AutoResponseOutput = cloneBytes(output)
-	})
-}
-
-func WithEnableError(err error) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.EnableError = err })
-}
-
-func WithInvokeError(err error) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.InvokeError = err })
-}
-
 func WithCancelError(err error) ScriptedTargetSessionOption {
 	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.CancelError = err })
 }
@@ -200,34 +185,14 @@ func WithPageScreenshot(screenshot webmcp.PageScreenshot) ScriptedTargetSessionO
 	})
 }
 
-func WithPageScreenshotError(err error) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
-		options.PageScreenshotError = err
-	})
-}
-
 func WithCastDevices(devices ...webmcp.CastDevice) ScriptedTargetSessionOption {
 	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
 		options.CastDevices = append([]webmcp.CastDevice(nil), devices...)
 	})
 }
 
-func WithCastError(err error) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.CastError = err })
-}
-
-func WithCancellationAcknowledgement(acknowledged bool) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) {
-		options.AcknowledgeCancellation = boolPointer(acknowledged)
-	})
-}
-
 func WithCancellationResponse(enabled bool) ScriptedTargetSessionOption {
 	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.EmitCancellationResponse = boolPointer(enabled) })
-}
-
-func WithIDs(ids webmcp.IDSource) ScriptedTargetSessionOption {
-	return scriptedTargetSessionOptionFunc(func(options *ScriptedTargetSessionOptions) { options.IDs = ids })
 }
 
 type ScriptedBrowserRuntime struct {

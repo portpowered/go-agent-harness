@@ -289,11 +289,6 @@ func (a *frictionAggregator) report() FrictionReport {
 	return report
 }
 
-// Aggregate is a short alias for aggregating decoded ScenarioResult values.
-func Aggregate(results []ScenarioResult) FrictionReport {
-	return AggregateScenarioResults(results)
-}
-
 func readFrictionReportInput(input FrictionReportInput, index int) ([]ScenarioResult, error) {
 	source := strings.TrimSpace(input.Name)
 	if source == "" {

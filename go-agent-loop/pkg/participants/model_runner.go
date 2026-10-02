@@ -156,12 +156,6 @@ func (r *ModelRunner) bargeInTuning() BargeInConfig {
 // when the continuation was queued is not the continuation -- the request is
 // deferred until that response ends -- so it stays interruptible.
 func (r *ModelRunner) forwardSessionAudio(ctx context.Context, session messages.Session, state *sessionRunState, input messages.SessionAudioInput) error {
-	if sessionAdmissionClosed(session) {
-		// Room-bound shutdown closes input admission before it cancels the
-		// session. A frame that was already queued behind that boundary is
-		// intentionally discarded without manufacturing a provider failure.
-		return nil
-	}
 	if input.InterruptionPolicy.InterruptsResponse() {
 		held, err := r.bargeIn(ctx, session, input.PCM, state)
 		if held || err != nil {
@@ -195,14 +189,8 @@ func (r *ModelRunner) bargeIn(ctx context.Context, session messages.Session, pcm
 }
 
 // releaseHeldAudio forwards onset frames held while barge-in was undecided.
-// Once admission has closed (room shutdown) they are discarded, like any
-// frame that reaches that boundary.
 func (r *ModelRunner) releaseHeldAudio(ctx context.Context, session messages.Session, state *sessionRunState) error {
-	held := state.Onset.Take()
-	if sessionAdmissionClosed(session) {
-		return nil
-	}
-	for _, pcm := range held {
+	for _, pcm := range state.Onset.Take() {
 		if err := forwardUserAudio(ctx, session, pcm); err != nil {
 			return err
 		}

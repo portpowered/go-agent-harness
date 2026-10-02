@@ -282,22 +282,6 @@ func NewBroker(options BrokerOptions) *StatefulBroker {
 	}
 }
 
-// NewBrokerWithRuntime is a convenience constructor for small tests and
-// adapters that already have their runtime and discoverer separated.
-func NewBrokerWithRuntime(runtime BrowserRuntime, discoverer BrowserDiscoverer, options ...BrokerOptions) *StatefulBroker {
-	resolved := BrokerOptions{Runtime: runtime, Discoverer: discoverer}
-	if len(options) > 0 {
-		resolved = options[0]
-		if resolved.Runtime == nil {
-			resolved.Runtime = runtime
-		}
-		if resolved.Discoverer == nil {
-			resolved.Discoverer = discoverer
-		}
-	}
-	return NewBroker(resolved)
-}
-
 var _ Broker = (*StatefulBroker)(nil)
 var _ DirectCanceller = (*StatefulBroker)(nil)
 var _ BrowserEventWatcher = (*StatefulBroker)(nil)

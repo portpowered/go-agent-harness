@@ -98,17 +98,6 @@ type WriterOptions = WriterConfig
 // WriterOption is an optional WriterConfig mutator for NewWriter.
 type WriterOption func(*WriterConfig)
 
-// DefaultWriterConfig returns the documented bounded-storage defaults.
-func DefaultWriterConfig() WriterConfig {
-	return WriterConfig{
-		SegmentSize:     DefaultSegmentSize,
-		MaxSegmentBytes: DefaultSegmentSize,
-		MaxBackups:      DefaultMaxBackups,
-		BackupCount:     DefaultMaxBackups,
-		Mode:            recordingFileMode,
-	}
-}
-
 // WithSegmentSize sets the active segment limit. Non-positive values are
 // normalized back to DefaultSegmentSize by the constructor.
 func WithSegmentSize(size int64) WriterOption {
@@ -117,9 +106,6 @@ func WithSegmentSize(size int64) WriterOption {
 		config.MaxSegmentBytes = size
 	}
 }
-
-// WithMaxSegmentBytes is an alias for WithSegmentSize.
-func WithMaxSegmentBytes(size int64) WriterOption { return WithSegmentSize(size) }
 
 // WithMaxBackups sets the number of rotated backup files. Non-positive values
 // are normalized back to DefaultMaxBackups by the constructor.
@@ -136,11 +122,6 @@ func WithDegradationReporter(reporter func(error)) WriterOption {
 		config.Reporter = reporter
 		config.OnDegraded = reporter
 	}
-}
-
-// WithReporter is an alias for WithDegradationReporter.
-func WithReporter(reporter func(error)) WriterOption {
-	return WithDegradationReporter(reporter)
 }
 
 // WriterStatus is a race-safe snapshot of a Writer.
@@ -245,11 +226,6 @@ func NewWriterOn(sink io.WriteCloser, options ...WriterOption) (*Writer, error) 
 		reporter:    writerReporter(config),
 		state:       WriterHealthy,
 	}, nil
-}
-
-// NewTranscriptWriter is a descriptive constructor alias.
-func NewTranscriptWriter(path string, options ...WriterOption) (*Writer, error) {
-	return NewWriter(path, options...)
 }
 
 // Append writes one complete encoded record and returns its one-based accepted
@@ -542,4 +518,15 @@ func renameIfPresent(source, destination string) error {
 		return err
 	}
 	return os.Rename(source, destination)
+}
+
+// DefaultWriterConfig returns the documented bounded-storage defaults.
+func DefaultWriterConfig() WriterConfig {
+	return WriterConfig{
+		SegmentSize:     DefaultSegmentSize,
+		MaxSegmentBytes: DefaultSegmentSize,
+		MaxBackups:      DefaultMaxBackups,
+		BackupCount:     DefaultMaxBackups,
+		Mode:            recordingFileMode,
+	}
 }

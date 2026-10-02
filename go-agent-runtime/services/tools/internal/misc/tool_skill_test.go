@@ -39,3 +39,7 @@ func TestLoadSkillWithoutRootsFailsClosed(t *testing.T) {
 		t.Fatalf("unbound skill result = %#v", messages)
 	}
 }
+
+func NewLoadSkillTool() *LoadSkillTool {
+	return NewLoadSkillToolFromRoots()
+}

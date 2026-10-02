@@ -51,18 +51,6 @@ func RunSessionReplayProbe(ctx context.Context, fixturePath string) (SessionRepl
 	return runSessionReplayProbe(ctx, fixturePath, capture)
 }
 
-// RunSessionReplayProbeFromCapture replays an already decoded capture without
-// applying committed-file hygiene. It is intended for callers that validate a
-// committed source capture, construct a short-lived in-memory variant (for
-// example by injecting real PCM into placeholder append records), and then
-// need the same deterministic replay observations.
-func RunSessionReplayProbeFromCapture(ctx context.Context, capture SessionCapture) (SessionReplayProbeReport, error) {
-	if err := validateSessionCaptureEnvelope("<in-memory>", capture); err != nil {
-		return SessionReplayProbeReport{}, fmt.Errorf("validate in-memory replay capture: %w", err)
-	}
-	return runSessionReplayProbe(ctx, "<in-memory>", capture)
-}
-
 func runSessionReplayProbe(ctx context.Context, fixture string, capture SessionCapture) (SessionReplayProbeReport, error) {
 	dialer, err := NewReplayWebSocketDialerFromCapture(capture)
 	if err != nil {
@@ -130,4 +118,16 @@ func runSessionReplayProbe(ctx context.Context, fixture string, capture SessionC
 		return SessionReplayProbeReport{}, fmt.Errorf("replay probe did not reach session end")
 	}
 	return report, nil
+}
+
+// RunSessionReplayProbeFromCapture replays an already decoded capture without
+// applying committed-file hygiene. It is intended for callers that validate a
+// committed source capture, construct a short-lived in-memory variant (for
+// example by injecting real PCM into placeholder append records), and then
+// need the same deterministic replay observations.
+func RunSessionReplayProbeFromCapture(ctx context.Context, capture SessionCapture) (SessionReplayProbeReport, error) {
+	if err := validateSessionCaptureEnvelope("<in-memory>", capture); err != nil {
+		return SessionReplayProbeReport{}, fmt.Errorf("validate in-memory replay capture: %w", err)
+	}
+	return runSessionReplayProbe(ctx, "<in-memory>", capture)
 }

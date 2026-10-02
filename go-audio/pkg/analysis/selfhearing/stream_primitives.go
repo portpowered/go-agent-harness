@@ -9,10 +9,8 @@ import (
 // The self-hearing API keeps these neutral stream contracts available under
 // its domain package while the stream owner remains the canonical definition.
 type (
-	PCM16LagWindow              = analysisstream.PCM16LagWindow
-	PCM16TimedFrame             = analysisstream.PCM16TimedFrame
-	PCM16MediaFrame             = analysisstream.PCM16MediaFrame
-	PCM16CorrelationMeasurement = analysisstream.PCM16CorrelationMeasurement
+	PCM16LagWindow  = analysisstream.PCM16LagWindow
+	PCM16TimedFrame = analysisstream.PCM16TimedFrame
 )
 
 func samplesToDuration(samples, sampleRate int) time.Duration {

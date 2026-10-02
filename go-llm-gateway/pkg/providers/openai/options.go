@@ -66,14 +66,6 @@ func WithWebSocketDialer(d transport.Dialer) Option {
 	}
 }
 
-// WithLegacyRealtimeSessionUpdate sends the pre-GA flat Realtime session.update
-// shape for compatibility with older replay fixtures or compatible providers.
-func WithLegacyRealtimeSessionUpdate() Option {
-	return func(p *OpenAIProvider) {
-		p.realtimeLegacySessionUpdate = true
-	}
-}
-
 // WithClientOwnedAudioTurnBoundaries configures a realtime session for finite
 // client-scheduled audio turns. It explicitly disables provider turn detection
 // so the caller owns the single commit and response.create pair for each turn.
@@ -89,4 +81,12 @@ func WithClientOwnedAudioTurnBoundaries() Option {
 // the default non-blocking overload contract remains available to other hosts.
 func WithSessionWriteBackpressure() Option {
 	return func(p *OpenAIProvider) { p.sessionWriteBackpressure = true }
+}
+
+// WithLegacyRealtimeSessionUpdate sends the pre-GA flat Realtime session.update
+// shape for compatibility with older replay fixtures or compatible providers.
+func WithLegacyRealtimeSessionUpdate() Option {
+	return func(p *OpenAIProvider) {
+		p.realtimeLegacySessionUpdate = true
+	}
 }

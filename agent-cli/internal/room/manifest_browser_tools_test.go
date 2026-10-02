@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	runtimeRooms "github.com/portpowered/go-agent-harness/go-agent-runtime/services/rooms"
 )
 
 func TestParseManifest_BrowserToolsNormalizesJSONOptionsAndRedactsEndpoints(t *testing.T) {
@@ -138,67 +140,67 @@ func TestParseManifest_BrowserToolsRejectsInvalidParticipantQualifiedOptions(t *
 		{
 			name:   "unsupported backend",
 			field:  "participants[0].browserTools.backend",
-			cause:  ErrUnsupportedBrowserToolsBackend,
+			cause:  runtimeRooms.ErrUnsupportedBrowserToolsBackend,
 			mutate: withBrowserTools(map[string]any{"backend": "chrome"}),
 		},
 		{
 			name:   "invalid auto select",
 			field:  "participants[0].browserTools.selection.auto_select",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(map[string]any{"selection": map[string]any{"auto_select": "many"}}),
 		},
 		{
 			name:   "invalid duration",
 			field:  "participants[0].browserTools.limits.invocation_timeout",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(map[string]any{"limits": map[string]any{"invocation_timeout": "soon"}}),
 		},
 		{
 			name:   "negative size",
 			field:  "participants[0].browserTools.limits.max_input_bytes",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(map[string]any{"limits": map[string]any{"max_input_bytes": -1}}),
 		},
 		{
 			name:   "invalid CDP scheme",
 			field:  "participants[0].browserTools.connection.cdp_url",
-			cause:  ErrInvalidBrowserEndpoint,
+			cause:  runtimeRooms.ErrInvalidBrowserEndpoint,
 			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"cdp_url": "file:///tmp/debug"}}),
 		},
 		{
 			name:   "page websocket",
 			field:  "participants[0].browserTools.connection.ws_endpoint",
-			cause:  ErrInvalidBrowserEndpoint,
+			cause:  runtimeRooms.ErrInvalidBrowserEndpoint,
 			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"ws_endpoint": "ws://127.0.0.1:9222/devtools/page/page-secret"}}),
 		},
 		{
 			name:   "remote endpoint without opt in",
 			field:  "participants[0].browserTools.connection.cdp_url",
-			cause:  ErrInvalidBrowserEndpoint,
+			cause:  runtimeRooms.ErrInvalidBrowserEndpoint,
 			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"cdp_url": "https://browser.example:9222"}}),
 		},
 		{
 			name:   "null browser tools object",
 			field:  "participants[0].browserTools",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(nil),
 		},
 		{
 			name:   "malformed boolean",
 			field:  "participants[0].browserTools.connection.allow_remote_cdp",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(map[string]any{"connection": map[string]any{"allow_remote_cdp": "yes"}}),
 		},
 		{
 			name:   "malformed duration type",
 			field:  "participants[0].browserTools.limits.invocation_timeout",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(map[string]any{"limits": map[string]any{"invocation_timeout": 30}}),
 		},
 		{
 			name:   "malformed origin list",
 			field:  "participants[0].browserTools.policy.allowed_origins",
-			cause:  ErrInvalidBrowserToolsOption,
+			cause:  runtimeRooms.ErrInvalidBrowserToolsOption,
 			mutate: withBrowserTools(map[string]any{"policy": map[string]any{"allowed_origins": "https://cube.example"}}),
 		},
 	}
@@ -230,16 +232,16 @@ func TestParseManifest_BrowserToolsRejectsUnknownNestedFields(t *testing.T) {
 func TestManifestValidate_BrowserToolsRejectsDirectUnnormalizedValue(t *testing.T) {
 	t.Setenv("A", "a")
 	t.Setenv("B", "b")
-	manifest := Manifest{
+	manifest := runtimeRooms.Manifest{
 		SchemaVersion: SchemaVersion,
 		Room:          Room{MaxTurns: 1},
-		Participants: []Participant{
-			{ID: "a", SystemPrompt: "a", Provider: "openai", Model: "gpt", APIKeyEnv: "A", Tools: []string{}, BrowserTools: &BrowserToolsConfig{Backend: "webmcp"}},
+		Participants: []runtimeRooms.Participant{
+			{ID: "a", SystemPrompt: "a", Provider: "openai", Model: "gpt", APIKeyEnv: "A", Tools: []string{}, BrowserTools: &runtimeRooms.BrowserToolsConfig{Backend: "webmcp"}},
 			{ID: "b", SystemPrompt: "b", Provider: "openai", Model: "gpt", APIKeyEnv: "B", Tools: []string{}},
 		},
 	}
 	err := manifest.Validate()
-	assertManifestError(t, err, "participants[0].browserTools.selection.auto_select", ErrInvalidBrowserToolsOption)
+	assertManifestError(t, err, "participants[0].browserTools.selection.auto_select", runtimeRooms.ErrInvalidBrowserToolsOption)
 }
 
 // withBrowserTools returns a manifest mutation that sets the first
@@ -252,7 +254,7 @@ func withBrowserTools(value any) func(map[string]any) {
 
 // assertBrowserToolsManifestRedacted requires the serialized manifest to keep
 // the browser configuration while redacting endpoint secrets.
-func assertBrowserToolsManifestRedacted(t *testing.T, manifest Manifest) {
+func assertBrowserToolsManifestRedacted(t *testing.T, manifest runtimeRooms.Manifest) {
 	t.Helper()
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
@@ -313,4 +315,10 @@ func withoutSecondParticipantField(key string) func(map[string]any) {
 	return func(document map[string]any) {
 		delete(fixtureParticipant(document, 1), key)
 	}
+}
+
+// DefaultBrowserToolsConfig retains the CLI helper while using runtime's
+// canonical, configuration-independent defaults.
+func DefaultBrowserToolsConfig() runtimeRooms.BrowserToolsConfig {
+	return runtimeRooms.BrowserToolsDefaults{}.Config()
 }

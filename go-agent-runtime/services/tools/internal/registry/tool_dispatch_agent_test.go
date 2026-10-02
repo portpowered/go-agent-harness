@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
@@ -227,4 +228,8 @@ func TestParseToolNames_Nil(t *testing.T) {
 	if names != nil {
 		t.Errorf("expected nil, got %v", names)
 	}
+}
+
+func NewToolRegistry() *ToolRegistry {
+	return NewToolRegistryWithPolicyAndSkillRoots(RegistryOptions{}, nil, nil, io.Discard)
 }

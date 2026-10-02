@@ -43,11 +43,6 @@ type Limits struct {
 	TimelineEvents int
 }
 
-// DefaultLimits returns the production admission bounds.
-func DefaultLimits() Limits {
-	return Limits{ManifestBytes: MaxManifestBytes, ArtifactBytes: MaxArtifactBytes, TimelineBytes: MaxTimelineBytes, TimelineEvents: MaxTimelineEvents}
-}
-
 func (l Limits) normalized() Limits {
 	return Limits{
 		ManifestBytes:  lowerLimit(l.ManifestBytes, MaxManifestBytes),

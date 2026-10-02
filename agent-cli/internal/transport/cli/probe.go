@@ -11,6 +11,7 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/replay"
 	probescenario "github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenario"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/probe/scenariov2"
 	serviceDevices "github.com/portpowered/go-agent-harness/agent-cli/internal/services/devices"
 	serviceprobes "github.com/portpowered/go-agent-harness/agent-cli/internal/services/probes"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
@@ -93,7 +94,7 @@ func newProbeRunCommand(service serviceDevices.DeviceService, probeService servi
 		Provider:            "openai",
 		CaptureTime:         serviceDevices.DefaultDeviceProbeCaptureDuration,
 		deviceProbeDeadline: probescenario.DefaultDeadline,
-		BrowserExecutorMode: ProbeScenarioV2BrowserExecutorHermetic,
+		BrowserExecutorMode: scenariov2.BrowserExecutorHermetic,
 		browserFlags:        flags.NewBrowserFlags(),
 		browserFactory:      NewProductionWebMCPDoctorFactory(),
 		replayService:       replayService,
@@ -135,7 +136,7 @@ func (c *ProbeRunCommand) SetBrowserExecutorFactory(factory WebMCPDoctorFactory)
 // Generate returns the cobra command for probe run.
 func (c *ProbeRunCommand) Generate() *cobra.Command {
 	if c.BrowserExecutorMode == "" {
-		c.BrowserExecutorMode = ProbeScenarioV2BrowserExecutorHermetic
+		c.BrowserExecutorMode = scenariov2.BrowserExecutorHermetic
 	}
 	if c.browserFlags == nil {
 		c.browserFlags = flags.NewBrowserFlags()

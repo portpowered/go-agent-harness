@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
 	roomanalysis "github.com/portpowered/go-agent-harness/go-audio/pkg/analysis/room"
 )
 
-func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (ToleranceProfile, error) {
+func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (roomevidence.ToleranceProfile, error) {
 	profile := DefaultRoomReplayToleranceProfile()
 	raw, present := roomReplayProfileRawField(manifest, "tolerances", "tolerance_profile", "analysis_profile")
 	if !present {
@@ -20,28 +21,28 @@ func parseRoomReplayToleranceProfile(manifest roomReplayJSONObject) (TolerancePr
 	}
 	object, err := roomReplayObject(raw)
 	if err != nil {
-		return ToleranceProfile{}, fmt.Errorf("%w: profile must be a JSON object: %w", ErrRoomReplayToleranceProfile, err)
+		return roomevidence.ToleranceProfile{}, fmt.Errorf("%w: profile must be a JSON object: %w", roomevidence.ErrRoomReplayToleranceProfile, err)
 	}
 	if err := applyRoomReplayProfileName(&profile, object); err != nil {
-		return ToleranceProfile{}, err
+		return roomevidence.ToleranceProfile{}, err
 	}
 	if err := applyRoomReplayStreamProfile(&profile, object); err != nil {
-		return ToleranceProfile{}, err
+		return roomevidence.ToleranceProfile{}, err
 	}
 	if err := applyRoomReplayRoomProfile(&profile, object); err != nil {
-		return ToleranceProfile{}, err
+		return roomevidence.ToleranceProfile{}, err
 	}
 
 	if err := validateRoomReplayToleranceTightening(profile); err != nil {
-		return ToleranceProfile{}, err
+		return roomevidence.ToleranceProfile{}, err
 	}
 	return profile, nil
 }
 
-func applyRoomReplayProfileName(profile *ToleranceProfile, object roomReplayJSONObject) error {
+func applyRoomReplayProfileName(profile *roomevidence.ToleranceProfile, object roomReplayJSONObject) error {
 	name, present, err := roomReplayStringField(object, "name", "profile", "id")
 	if err != nil && present {
-		return fmt.Errorf("%w: name: %w", ErrRoomReplayToleranceProfile, err)
+		return fmt.Errorf("%w: name: %w", roomevidence.ErrRoomReplayToleranceProfile, err)
 	}
 	if present && strings.TrimSpace(name) != "" {
 		profile.Name = strings.TrimSpace(name)
@@ -49,7 +50,7 @@ func applyRoomReplayProfileName(profile *ToleranceProfile, object roomReplayJSON
 	return nil
 }
 
-func applyRoomReplayStreamProfile(profile *ToleranceProfile, object roomReplayJSONObject) error {
+func applyRoomReplayStreamProfile(profile *roomevidence.ToleranceProfile, object roomReplayJSONObject) error {
 	stream := &profile.StreamConfig
 	checks := []func() error{
 		func() error {
@@ -85,7 +86,7 @@ func applyRoomReplayStreamProfile(profile *ToleranceProfile, object roomReplayJS
 	return nil
 }
 
-func applyRoomReplayRoomProfile(profile *ToleranceProfile, object roomReplayJSONObject) error {
+func applyRoomReplayRoomProfile(profile *roomevidence.ToleranceProfile, object roomReplayJSONObject) error {
 	roomConfig := &profile.RoomConfig
 	roomConfig.StreamConfig = profile.StreamConfig
 	if err := applyRoomReplayCorrelationWindow(roomConfig, object); err != nil {
@@ -132,7 +133,7 @@ func applyRoomReplayCorrelationWindow(roomConfig *roomanalysis.PCM16RoomAnalysis
 	}
 	lagObject, err := roomReplayObject(lagRaw)
 	if err != nil {
-		return fmt.Errorf("%w: correlation_lag_window must be an object: %w", ErrRoomReplayToleranceProfile, err)
+		return fmt.Errorf("%w: correlation_lag_window must be an object: %w", roomevidence.ErrRoomReplayToleranceProfile, err)
 	}
 	if err := applyRoomReplayProfileDurationFromObject(lagObject, "min", &roomConfig.CorrelationLagWindow.Min, "correlation_lag_window.min"); err != nil {
 		return err
@@ -168,7 +169,7 @@ func applyRoomReplayProfileDuration(object roomReplayJSONObject, name string, de
 	}
 	value, err := roomReplayDurationValue(raw, strings.HasSuffix(name, "_ms"))
 	if err != nil {
-		return fmt.Errorf("%w: field %q: %w", ErrRoomReplayToleranceProfile, field, err)
+		return fmt.Errorf("%w: field %q: %w", roomevidence.ErrRoomReplayToleranceProfile, field, err)
 	}
 	*destination = value
 	return nil
@@ -181,7 +182,7 @@ func applyRoomReplayProfileDurationFromObject(object roomReplayJSONObject, name 
 	}
 	value, err := roomReplayDurationValue(raw, false)
 	if err != nil {
-		return fmt.Errorf("%w: field %q: %w", ErrRoomReplayToleranceProfile, field, err)
+		return fmt.Errorf("%w: field %q: %w", roomevidence.ErrRoomReplayToleranceProfile, field, err)
 	}
 	*destination = value
 	return nil
@@ -195,7 +196,7 @@ func applyRoomReplayProfileFloat(object roomReplayJSONObject, name string, desti
 	var value float64
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(&value); err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-		return fmt.Errorf("%w: field %q must be a finite number", ErrRoomReplayToleranceProfile, field)
+		return fmt.Errorf("%w: field %q must be a finite number", roomevidence.ErrRoomReplayToleranceProfile, field)
 	}
 	*destination = value
 	return nil
@@ -208,7 +209,7 @@ func applyRoomReplayProfileInt(object roomReplayJSONObject, name string, destina
 	}
 	value, err := roomReplayInt64Raw(raw)
 	if err != nil || value < int64(-int(^uint(0)>>1)-1) || value > int64(^uint(0)>>1) {
-		return fmt.Errorf("%w: field %q must be an integer", ErrRoomReplayToleranceProfile, field)
+		return fmt.Errorf("%w: field %q must be an integer", roomevidence.ErrRoomReplayToleranceProfile, field)
 	}
 	*destination = int(value)
 	return nil
@@ -224,7 +225,7 @@ func roomReplayInt64Raw(raw json.RawMessage) (int64, error) {
 	return strconv.ParseInt(number.String(), 10, 64)
 }
 
-func validateRoomReplayToleranceTightening(profile ToleranceProfile) error {
+func validateRoomReplayToleranceTightening(profile roomevidence.ToleranceProfile) error {
 	defaults := DefaultRoomReplayToleranceProfile()
 	stream := profile.StreamConfig
 	baseStream := defaults.StreamConfig
@@ -243,13 +244,13 @@ func validateRoomReplayToleranceTightening(profile ToleranceProfile) error {
 	}
 	for _, check := range checks {
 		if check.looser {
-			return fmt.Errorf("%w: field %q would loosen suite default", ErrRoomReplayToleranceProfile, check.field)
+			return fmt.Errorf("%w: field %q would loosen suite default", roomevidence.ErrRoomReplayToleranceProfile, check.field)
 		}
 	}
 	roomConfig := profile.RoomConfig
 	baseRoom := defaults.RoomConfig
 	if roomConfig.CorrelationLagWindow.Min < baseRoom.CorrelationLagWindow.Min || roomConfig.CorrelationLagWindow.Max > baseRoom.CorrelationLagWindow.Max || roomConfig.CorrelationLagWindow.Min > roomConfig.CorrelationLagWindow.Max {
-		return fmt.Errorf("%w: correlation_lag_window would widen or invert suite window", ErrRoomReplayToleranceProfile)
+		return fmt.Errorf("%w: correlation_lag_window would widen or invert suite window", roomevidence.ErrRoomReplayToleranceProfile)
 	}
 	roomChecks := []struct {
 		field  string
@@ -266,7 +267,7 @@ func validateRoomReplayToleranceTightening(profile ToleranceProfile) error {
 	}
 	for _, check := range roomChecks {
 		if check.looser {
-			return fmt.Errorf("%w: field %q would loosen suite default", ErrRoomReplayToleranceProfile, check.field)
+			return fmt.Errorf("%w: field %q would loosen suite default", roomevidence.ErrRoomReplayToleranceProfile, check.field)
 		}
 	}
 	return nil
@@ -274,7 +275,7 @@ func validateRoomReplayToleranceTightening(profile ToleranceProfile) error {
 
 func validateRoomReplayDeltaStream(stream AudioStream, plan RoomReplayPlan, participantID string) error {
 	if len(stream.Deltas) == 0 {
-		return &DeltaReconstructionError{ParticipantID: participantID, StreamID: stream.StreamID, DeltaID: "missing", DeltaIndex: 0, ByteOffset: 0, ExpectedLength: len(stream.PCM), ActualLength: 0, ExpectedSampleCount: stream.SampleCount, ActualSampleCount: 0, Cause: ErrRoomReplayDeltaReconstruction}
+		return &roomevidence.DeltaReconstructionError{ParticipantID: participantID, StreamID: stream.StreamID, DeltaID: "missing", DeltaIndex: 0, ByteOffset: 0, ExpectedLength: len(stream.PCM), ActualLength: 0, ExpectedSampleCount: stream.SampleCount, ActualSampleCount: 0, Cause: roomevidence.ErrRoomReplayDeltaReconstruction}
 	}
 	previousOffset := time.Duration(-1)
 	for _, delta := range stream.Deltas {
@@ -304,16 +305,16 @@ func reconstructRoomReplayDeltaStream(stream AudioStream, participantID string) 
 		if len(stream.Deltas) > 0 {
 			deltaID = "after-" + stream.Deltas[len(stream.Deltas)-1].ID
 		}
-		return &DeltaReconstructionError{
+		return &roomevidence.DeltaReconstructionError{
 			ParticipantID: participantID, StreamID: stream.StreamID, DeltaID: deltaID, DeltaIndex: len(stream.Deltas), ByteOffset: position,
 			ExpectedByte: int(stream.PCM[position]), ActualByte: -1, ExpectedLength: len(stream.PCM), ActualLength: position,
-			ExpectedSampleCount: stream.SampleCount, ActualSampleCount: position / 2, Cause: ErrRoomReplayDeltaReconstruction,
+			ExpectedSampleCount: stream.SampleCount, ActualSampleCount: position / 2, Cause: roomevidence.ErrRoomReplayDeltaReconstruction,
 		}
 	}
 	return nil
 }
 
-func compareRoomReplayDelta(stream AudioStream, participantID string, index int, delta AudioDelta, position int) error {
+func compareRoomReplayDelta(stream AudioStream, participantID string, index int, delta roomevidence.AudioDelta, position int) error {
 	if position < len(stream.PCM) {
 		shared := len(delta.PCM)
 		if remaining := len(stream.PCM) - position; shared > remaining {
@@ -321,11 +322,11 @@ func compareRoomReplayDelta(stream AudioStream, participantID string, index int,
 		}
 		for offset := range shared {
 			if delta.PCM[offset] != stream.PCM[position+offset] {
-				return &DeltaReconstructionError{
+				return &roomevidence.DeltaReconstructionError{
 					ParticipantID: participantID, StreamID: stream.StreamID, DeltaID: delta.ID, DeltaIndex: index, ByteOffset: position + offset,
 					ExpectedByte: int(stream.PCM[position+offset]), ActualByte: int(delta.PCM[offset]),
 					ExpectedLength: len(stream.PCM), ActualLength: position + len(delta.PCM),
-					ExpectedSampleCount: stream.SampleCount, ActualSampleCount: (position + len(delta.PCM)) / 2, Cause: ErrRoomReplayDeltaReconstruction,
+					ExpectedSampleCount: stream.SampleCount, ActualSampleCount: (position + len(delta.PCM)) / 2, Cause: roomevidence.ErrRoomReplayDeltaReconstruction,
 				}
 			}
 		}
@@ -333,10 +334,10 @@ func compareRoomReplayDelta(stream AudioStream, participantID string, index int,
 	if position+len(delta.PCM) <= len(stream.PCM) {
 		return nil
 	}
-	return &DeltaReconstructionError{
+	return &roomevidence.DeltaReconstructionError{
 		ParticipantID: participantID, StreamID: stream.StreamID, DeltaID: delta.ID, DeltaIndex: index, ByteOffset: len(stream.PCM),
 		ExpectedByte: -1, ActualByte: int(delta.PCM[len(stream.PCM)-position]), ExpectedLength: len(stream.PCM), ActualLength: position + len(delta.PCM),
-		ExpectedSampleCount: stream.SampleCount, ActualSampleCount: (position + len(delta.PCM)) / 2, Cause: ErrRoomReplayDeltaReconstruction,
+		ExpectedSampleCount: stream.SampleCount, ActualSampleCount: (position + len(delta.PCM)) / 2, Cause: roomevidence.ErrRoomReplayDeltaReconstruction,
 	}
 }
 

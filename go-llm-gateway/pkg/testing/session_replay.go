@@ -53,12 +53,6 @@ func (o SessionReplayOutcome) OK() bool {
 	return o.Status == SessionReplayCompleted
 }
 
-// WithReplayTiming enables real-time delays between events based on their
-// recorded timestamps. By default, all events are delivered immediately.
-func WithReplayTiming() SessionReplayerOption {
-	return func(r *SessionReplayer) { r.useTiming = true }
-}
-
 // WithReplayOutboundValidation controls whether Send must match recorded
 // client-to-server events before replay advances past them. Validation is
 // enabled by default; disable it only for read-only transcript rendering.
@@ -120,17 +114,6 @@ func NewSessionReplayer(ctx context.Context, path string, opts ...SessionReplaye
 		return nil, err
 	}
 	return newSessionReplayer(ctx, loaded.Capture.Records, opts...), nil
-}
-
-// NewSessionReplayerFromBytes creates a SessionReplayer from raw protected
-// version-2 capture JSON bytes. It exists for callers that already own the
-// capture bytes; legacy bytes require NewSessionReplayerFromLegacyBytes.
-func NewSessionReplayerFromBytes(ctx context.Context, data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
-	capture, err := validateSessionCapturePath("", data)
-	if err != nil {
-		return nil, fmt.Errorf("parse session capture: %w", err)
-	}
-	return newSessionReplayer(ctx, capture.Records, opts...), nil
 }
 
 // NewSessionReplayerFromLegacyBytes is an explicit compatibility seam for
@@ -527,4 +510,21 @@ func decodeLegacySessionCaptureEvents(data []byte) ([]CapturedSessionEvent, erro
 		return nil, err
 	}
 	return events, nil
+}
+
+// NewSessionReplayerFromBytes creates a SessionReplayer from raw protected
+// version-2 capture JSON bytes. It exists for callers that already own the
+// capture bytes; legacy bytes require NewSessionReplayerFromLegacyBytes.
+func NewSessionReplayerFromBytes(ctx context.Context, data []byte, opts ...SessionReplayerOption) (*SessionReplayer, error) {
+	capture, err := validateSessionCapturePath("", data)
+	if err != nil {
+		return nil, fmt.Errorf("parse session capture: %w", err)
+	}
+	return newSessionReplayer(ctx, capture.Records, opts...), nil
+}
+
+// WithReplayTiming enables real-time delays between events based on their
+// recorded timestamps. By default, all events are delivered immediately.
+func WithReplayTiming() SessionReplayerOption {
+	return func(r *SessionReplayer) { r.useTiming = true }
 }

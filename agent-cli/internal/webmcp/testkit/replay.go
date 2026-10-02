@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 )
 
@@ -243,30 +242,6 @@ func WithReplayMode(mode ReplayMode) ReplayOption {
 	return func(replay *BrowserReplay) { replay.mode = mode }
 }
 
-// WithStrictReplay selects exact ordered matching.
-func WithStrictReplay() ReplayOption { return WithReplayMode(ReplayStrict) }
-
-// WithDiagnosticReplay permits fixed read-only discovery/list operations.
-func WithDiagnosticReplay() ReplayOption { return WithReplayMode(ReplayDiagnostic) }
-
-// WithReplayStrictness is an alias for WithReplayMode.
-func WithReplayStrictness(strict bool) ReplayOption {
-	if strict {
-		return WithStrictReplay()
-	}
-	return WithDiagnosticReplay()
-}
-
-// WithReplayContext supplies a context that is checked by replay calls and
-// Wait. It does not start a watcher goroutine: the replay keeps only the
-// context's done channel and error accessor.
-func WithReplayContext(ctx context.Context) ReplayOption {
-	return func(replay *BrowserReplay) {
-		replay.replayDone = ctx.Done()
-		replay.replayErr = ctx.Err
-	}
-}
-
 // WithReplayClock injects the monotonic clock used for generated executions
 // and observations.
 func WithReplayClock(clock Clock) ReplayOption {
@@ -277,39 +252,11 @@ func WithReplayClock(clock Clock) ReplayOption {
 	}
 }
 
-// WithReplayClockFunc injects a function-backed replay clock.
-func WithReplayClockFunc(clock func() uint64) ReplayOption {
-	return WithReplayClock(ClockFunc(clock))
-}
-
 // WithReplayIDSource injects deterministic invocation IDs.
 func WithReplayIDSource(source IDSource) ReplayOption {
 	return func(replay *BrowserReplay) {
 		if source != nil {
 			replay.ids = source
-		}
-	}
-}
-
-// WithReplayIDFunc injects a function-backed deterministic ID source.
-func WithReplayIDFunc(source func(string) string) ReplayOption {
-	return WithReplayIDSource(IDSourceFunc(source))
-}
-
-// WithReplayBrowserID sets the browser context used by generated events.
-func WithReplayBrowserID(browserID string) ReplayOption {
-	return func(replay *BrowserReplay) {
-		if strings.TrimSpace(browserID) != "" {
-			replay.browserID = browserID
-		}
-	}
-}
-
-// WithReplayTargetID selects the endpoint target used by generated events.
-func WithReplayTargetID(targetID string) ReplayOption {
-	return func(replay *BrowserReplay) {
-		if strings.TrimSpace(targetID) != "" {
-			replay.targetID = targetID
 		}
 	}
 }

@@ -49,7 +49,7 @@ should:
 The current baseline replay checks can be rerun offline with:
 
 ```text
-go test ./agent-cli/test/integration -run 'TestSessionCommand_HelpDocumentsRecordReplayAndHistorySubcommands|TestProbeRunAllPassExitZero' -count=1
+go test ./agent-cli/test/integration -run 'TestProbeRunAllPassExitZero' -count=1
 ```
 
 That command validates the existing CLI/replay seams only; it is not v5c proof

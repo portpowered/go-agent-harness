@@ -14,15 +14,12 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/transcript"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/admission"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/gateway"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers"
 )
 
 const (
-	maxRoomReplayManifestBytes               = admission.MaxManifestBytes
-	maxRoomReplayArtifactBytes               = admission.MaxArtifactBytes
 	roomReplayJSONLScannerInitialBufferBytes = 64 << 10
 	roomReplayJSONLScannerMaxTokenBytes      = 4 << 20
 	maxRedactedJSONDepth                     = 16
@@ -30,18 +27,18 @@ const (
 
 func newRoomReplayBundleError(kind roomReplayBundleErrorKind, field, artifact, expected, actual string, cause error) error {
 	if kind == "" {
-		kind = BundleMismatch
+		kind = roomevidence.BundleMismatch
 	}
 	var replayCause error
 	var classifications []error
-	if kind == BundleIncomplete {
+	if kind == roomevidence.BundleIncomplete {
 		replayCause = gateway.NewReplayIncompleteError(expected, actual, cause)
 		classifications = []error{roomevidence.ErrRoomReplayBundleIncomplete, providers.ErrReplayIncomplete}
 	} else {
 		replayCause = gateway.NewReplayMismatchError(expected, actual, cause)
 		classifications = []error{roomevidence.ErrInvalidRoomReplayBundle, providers.ErrReplayMismatch}
 	}
-	return &roomevidenceBundleError{
+	return &roomevidence.BundleError{
 		Kind:     kind,
 		Field:    field,
 		Artifact: artifact,
@@ -77,8 +74,6 @@ func (e *roomReplayBundleCauseError) Unwrap() []error {
 // roomReplayBundleErrorKind keeps the service implementation independent of
 // the public type's string alias while retaining the exact public value.
 type roomReplayBundleErrorKind = roomevidence.BundleErrorKind
-
-type roomevidenceBundleError = roomevidence.BundleError
 
 func roomReplayObject(raw json.RawMessage) (roomReplayJSONObject, error) {
 	var object roomReplayJSONObject
@@ -217,7 +212,7 @@ func cloneRoomReplayPlan(plan RoomReplayPlan) RoomReplayPlan {
 	for index := range plan.Artifacts {
 		plan.Artifacts[index] = cloneRoomReplayArtifact(plan.Artifacts[index])
 	}
-	plan.Timeline = append([]RoomReplayTimelineEvent(nil), plan.Timeline...)
+	plan.Timeline = append([]roomevidence.RoomReplayTimelineEvent(nil), plan.Timeline...)
 	for index := range plan.Timeline {
 		plan.Timeline[index].Raw = append(json.RawMessage(nil), plan.Timeline[index].Raw...)
 	}

@@ -173,8 +173,8 @@ func firstRoomReplayTimeField(primary, fallback roomReplayJSONObject, name strin
 	return time.Time{}, false, errors.New("missing timestamp")
 }
 
-func parseRoomReplayPCMFormat(object roomReplayJSONObject) (RoomReplayPCMFormat, error) {
-	format := RoomReplayPCMFormat{}
+func parseRoomReplayPCMFormat(object roomReplayJSONObject) (roomreplay.RoomReplayPCMFormat, error) {
+	format := roomreplay.RoomReplayPCMFormat{}
 	container := object
 	for _, key := range []string{"pcm_format", "pcm", "audio_format"} {
 		if raw, ok := roomReplayRawField(object, key); ok {
@@ -187,29 +187,29 @@ func parseRoomReplayPCMFormat(object roomReplayJSONObject) (RoomReplayPCMFormat,
 	var err error
 	format.SampleRate, _, err = firstRoomReplayIntField(container, object, "sample_rate_hz", "sample_rate", "sampleRate")
 	if err != nil {
-		return RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.sample_rate_hz", "", "positive sample rate", "invalid or missing", err)
+		return roomreplay.RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.sample_rate_hz", "", "positive sample rate", "invalid or missing", err)
 	}
 	format.Channels, _, err = firstRoomReplayIntField(container, object, "channels", "channel_count")
 	if err != nil {
-		return RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.channels", "", "positive channel count", "invalid or missing", err)
+		return roomreplay.RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.channels", "", "positive channel count", "invalid or missing", err)
 	}
 	format.SampleWidthBits, _, err = firstRoomReplayIntField(container, object, "sample_width_bits", "sample_width", "bits_per_sample")
 	if err != nil {
-		return RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.sample_width_bits", "", "16", "invalid or missing", err)
+		return roomreplay.RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.sample_width_bits", "", "16", "invalid or missing", err)
 	}
 	format.SampleWidthBit = format.SampleWidthBits
 	format.ByteOrder, _, err = firstRoomReplayStringField(container, object, "byte_order", "endianness")
 	if err != nil {
-		return RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.byte_order", "", "little", "invalid or missing", err)
+		return roomreplay.RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.byte_order", "", "little", "invalid or missing", err)
 	}
 	format.Encoding, _, err = firstRoomReplayStringField(container, object, "encoding", "sample_encoding", "format")
 	if err != nil {
-		return RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.encoding", "", "signed_pcm16", "invalid or missing", err)
+		return roomreplay.RoomReplayPCMFormat{}, newRoomReplayBundleError(RoomReplayBundleIncomplete, "pcm_format.encoding", "", "signed_pcm16", "invalid or missing", err)
 	}
 	return format, nil
 }
 
-func validateRoomReplayPCMFormat(format RoomReplayPCMFormat) error {
+func validateRoomReplayPCMFormat(format roomreplay.RoomReplayPCMFormat) error {
 	sampleWidth := format.SampleWidthBits
 	if sampleWidth == 0 {
 		sampleWidth = format.SampleWidthBit

@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/admission"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/admission"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/roomevidence/internal/pathguard"
 )
 
 // Service is the private implementation behind the public room evidence
@@ -164,22 +165,22 @@ func validateRoomReplayPlan(plan RoomReplayPlan) error {
 	return nil
 }
 
-func loadRoomReplayManifest(plan RoomReplayPlan) (roomReplayJSONObject, ToleranceProfile, map[string]roomReplayJSONObject, error) {
-	data, err := readRoomReplayPath(plan.BundlePath, plan.ManifestPath, maxRoomReplayManifestBytes, "run-manifest.json")
+func loadRoomReplayManifest(plan RoomReplayPlan) (roomReplayJSONObject, roomevidence.ToleranceProfile, map[string]roomReplayJSONObject, error) {
+	data, err := readRoomReplayPath(plan.BundlePath, plan.ManifestPath, admission.MaxManifestBytes, "run-manifest.json")
 	if err != nil {
-		return nil, ToleranceProfile{}, nil, err
+		return nil, roomevidence.ToleranceProfile{}, nil, err
 	}
 	manifest, err := roomReplayObject(data)
 	if err != nil {
-		return nil, ToleranceProfile{}, nil, roomReplayAudioMismatch("run-manifest.json", "", "JSON object", "invalid", err)
+		return nil, roomevidence.ToleranceProfile{}, nil, roomReplayAudioMismatch("run-manifest.json", "", "JSON object", "invalid", err)
 	}
 	profile, err := parseRoomReplayToleranceProfile(manifest)
 	if err != nil {
-		return nil, ToleranceProfile{}, nil, err
+		return nil, roomevidence.ToleranceProfile{}, nil, err
 	}
 	participants, err := roomReplayAudioParticipantObjects(manifest)
 	if err != nil {
-		return nil, ToleranceProfile{}, nil, err
+		return nil, roomevidence.ToleranceProfile{}, nil, err
 	}
 	return manifest, profile, participants, nil
 }
@@ -287,7 +288,7 @@ func validateOutputTarget(destination string) error {
 	return nil
 }
 
-func (r *recorder) hashArtifactInto(integrity map[string]artifactIntegrity, relative string) {
+func (r *recorder) hashArtifactInto(integrity map[string]roomevidence.ArtifactIntegrity, relative string) {
 	if strings.TrimSpace(relative) == "" {
 		return
 	}
@@ -300,7 +301,7 @@ func (r *recorder) hashArtifactInto(integrity map[string]artifactIntegrity, rela
 	if err != nil {
 		return
 	}
-	integrity[filepath.ToSlash(relative)] = artifactIntegrity{Size: info.Size(), SHA256: hash}
+	integrity[filepath.ToSlash(relative)] = roomevidence.ArtifactIntegrity{Size: info.Size(), SHA256: hash}
 }
 
 func hashFile(path string) (hash string, err error) {
@@ -320,7 +321,7 @@ func hashFile(path string) (hash string, err error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-func writeManifestFile(path string, manifest roomManifest, secrets []string, syncFile roomevidence.FileSync) error {
+func writeManifestFile(path string, manifest roomevidence.RunManifest, secrets []string, syncFile roomevidence.FileSync) error {
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal room run manifest: %w", err)

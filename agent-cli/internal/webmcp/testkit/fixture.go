@@ -436,19 +436,10 @@ func DecodeBrowserScript(data []byte) (BrowserScript, error) {
 	return LoadBrowserScript(data)
 }
 
-// DecodeScript is an alias for LoadBrowserScript.
-func DecodeScript(data []byte) (BrowserScript, error) { return LoadBrowserScript(data) }
-
 // LoadScript is an alias for LoadBrowserScript.
 func LoadScript(data []byte) (BrowserScript, error) {
 	return LoadBrowserScript(data)
 }
-
-// LoadFixture is an alias for LoadBrowserScript.
-func LoadFixture(data []byte) (BrowserScript, error) { return LoadBrowserScript(data) }
-
-// LoadBrowserFixture is an alias for LoadBrowserScript.
-func LoadBrowserFixture(data []byte) (BrowserScript, error) { return LoadBrowserScript(data) }
 
 // LoadBrowserScriptFile reads and validates a fixture from disk.
 func LoadBrowserScriptFile(path string) (BrowserScript, error) {
@@ -463,9 +454,6 @@ func LoadBrowserScriptFile(path string) (BrowserScript, error) {
 func LoadScriptFile(path string) (BrowserScript, error) {
 	return LoadBrowserScriptFile(path)
 }
-
-// LoadFixtureFile is an alias for LoadBrowserScriptFile.
-func LoadFixtureFile(path string) (BrowserScript, error) { return LoadBrowserScriptFile(path) }
 
 // LoadBrowserScriptReader loads a complete script from a reader.
 func LoadBrowserScriptReader(reader io.Reader) (BrowserScript, error) {

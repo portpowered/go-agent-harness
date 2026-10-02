@@ -19,7 +19,6 @@ import (
 
 	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/transport/cli"
-
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeSession "github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/clock"

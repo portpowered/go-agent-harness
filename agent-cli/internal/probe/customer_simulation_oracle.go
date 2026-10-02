@@ -50,14 +50,6 @@ func NewFilesystemOracle(root string) (*FilesystemOracle, error) {
 	return &FilesystemOracle{root: absRoot}, nil
 }
 
-// Root returns the absolute sandbox path owned by the oracle.
-func (o *FilesystemOracle) Root() string {
-	if o == nil {
-		return ""
-	}
-	return o.root
-}
-
 // CaptureCheckpoint records the declared expectations as observed at one
 // point in the run. It returns the checkpoint even when an observation fails,
 // allowing the caller to preserve partial evidence for a BROKEN verdict.
@@ -113,24 +105,6 @@ func (o *FilesystemOracle) Checkpoint(id, actionID string, at time.Duration, exp
 		return checkpoint, captureErr
 	}
 	return checkpoint, VerifyFilesystemExpectations(expectations, checkpoint)
-}
-
-// CaptureFilesystemCheckpoint is the one-shot form of CaptureCheckpoint.
-func CaptureFilesystemCheckpoint(root, id, actionID string, at time.Duration, expectations []FilesystemExpectation) (FilesystemCheckpoint, error) {
-	oracle, err := NewFilesystemOracle(root)
-	if err != nil {
-		return FilesystemCheckpoint{}, err
-	}
-	return oracle.CaptureCheckpoint(id, actionID, at, expectations)
-}
-
-// CheckFilesystemCheckpoint is the one-shot form of Checkpoint.
-func CheckFilesystemCheckpoint(root, id, actionID string, at time.Duration, expectations []FilesystemExpectation) (FilesystemCheckpoint, error) {
-	oracle, err := NewFilesystemOracle(root)
-	if err != nil {
-		return FilesystemCheckpoint{}, err
-	}
-	return oracle.Checkpoint(id, actionID, at, expectations)
 }
 
 func (o *FilesystemOracle) observe(relative string) (FilesystemCheckpointEntry, error) {

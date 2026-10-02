@@ -17,7 +17,7 @@ type roomReplayManifestDocument struct {
 	ClockBase     time.Time
 	StartedAt     time.Time
 	EndedAt       time.Time
-	PCMFormat     RoomReplayPCMFormat
+	PCMFormat     roomreplay.RoomReplayPCMFormat
 	Participants  []roomReplayParticipantRef
 	RoomArtifacts []roomReplayArtifactRef
 	Inventory     []roomReplayArtifactRef
@@ -94,8 +94,8 @@ func validateRoomReplayManifest(ctx context.Context, root, manifestPath string, 
 }
 
 func validateRoomReplayManifestHeader(document roomReplayManifestDocument) error {
-	if document.SchemaVersion != 1 && document.SchemaVersion != RoomReplayBundleSchemaVersion {
-		return newRoomReplayBundleError(RoomReplayBundleMismatch, "schema_version", "", "1 or "+strconv.Itoa(RoomReplayBundleSchemaVersion), strconv.Itoa(document.SchemaVersion), ErrInvalidRoomReplayBundle)
+	if document.SchemaVersion != 1 && document.SchemaVersion != roomreplay.RoomReplayBundleSchemaVersion {
+		return newRoomReplayBundleError(RoomReplayBundleMismatch, "schema_version", "", "1 or "+strconv.Itoa(roomreplay.RoomReplayBundleSchemaVersion), strconv.Itoa(document.SchemaVersion), ErrInvalidRoomReplayBundle)
 	}
 	if !document.Finalized {
 		return newRoomReplayBundleError(RoomReplayBundleIncomplete, "finalized", "", "true", "false or missing", ErrRoomReplayBundleIncomplete)
@@ -219,12 +219,12 @@ func projectRoomReplayPlan(root, manifestPath string, document roomReplayManifes
 	return plan, nil
 }
 
-func projectRoomReplayParticipant(participant roomReplayParticipantRef, byPath map[string]RoomReplayArtifact) (RoomReplayParticipant, error) {
-	projection := RoomReplayParticipant{ID: participant.ID, Kind: participant.Kind, Provider: participant.Provider, Model: participant.Model, Voice: participant.Voice, OpeningPrompt: participant.OpeningPrompt, SystemPrompt: participant.SystemPrompt, RecordedTurnCount: participant.RecordedTurnCount, Artifacts: make([]RoomReplayArtifact, 0, len(participant.Artifacts))}
+func projectRoomReplayParticipant(participant roomReplayParticipantRef, byPath map[string]RoomReplayArtifact) (roomreplay.RoomReplayParticipant, error) {
+	projection := roomreplay.RoomReplayParticipant{ID: participant.ID, Kind: participant.Kind, Provider: participant.Provider, Model: participant.Model, Voice: participant.Voice, OpeningPrompt: participant.OpeningPrompt, SystemPrompt: participant.SystemPrompt, RecordedTurnCount: participant.RecordedTurnCount, Artifacts: make([]RoomReplayArtifact, 0, len(participant.Artifacts))}
 	for role, ref := range participant.Artifacts {
 		artifact, ok := byPath[roomReplayPathKey(ref.Path)]
 		if !ok {
-			return RoomReplayParticipant{}, newRoomReplayBundleError(RoomReplayBundleMismatch, ref.Field, ref.Path, "validated artifact", "missing", ErrInvalidRoomReplayBundle)
+			return roomreplay.RoomReplayParticipant{}, newRoomReplayBundleError(RoomReplayBundleMismatch, ref.Field, ref.Path, "validated artifact", "missing", ErrInvalidRoomReplayBundle)
 		}
 		artifact.Name, artifact.Role, artifact.Owner = role, role, "participant:"+participant.ID+":"+role
 		projection.Artifacts = append(projection.Artifacts, artifact)

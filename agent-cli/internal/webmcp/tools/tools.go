@@ -51,11 +51,6 @@ func NewToolSet(broker webmcp.Broker, webCast ...bool) *ToolSet {
 	return NewBrokerToolSet(broker, webCast...)
 }
 
-// NewWebMCPToolSet is a descriptive constructor alias.
-func NewWebMCPToolSet(broker webmcp.Broker, webCast ...bool) *ToolSet {
-	return NewBrokerToolSet(broker, webCast...)
-}
-
 // NewExecutor creates the direct agent-loop executor for broker.
 func NewExecutor(broker webmcp.Broker, webCast ...bool) *Executor {
 	return NewBrokerToolSet(broker, webCast...).Executor()
@@ -113,17 +108,6 @@ func (s *BrokerToolSet) Broker() webmcp.Broker {
 		return nil
 	}
 	return s.broker
-}
-
-// StableDefinitions is a package-level convenience for callers that only
-// need the provider-facing schemas.
-func StableDefinitions() []map[string]any {
-	return webmcp.StableBrokerToolSchemas()
-}
-
-// BrokerToolDefinitions is a package-level alias matching the domain name.
-func BrokerToolDefinitions() []map[string]any {
-	return StableDefinitions()
 }
 
 // Executor adapts a broker to messages.ToolExecutor. Ordinary broker calls

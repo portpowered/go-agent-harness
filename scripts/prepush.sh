@@ -32,6 +32,7 @@ readonly stage_format=("fmt")
 stage_static=(
 	"lint"
 	"verify-architecture"
+	"deadcode-check"
 	"build BUILD_LIBRARY_PACKAGES=0"
 	"coverage-registration"
 	"check-ci-test-partition"

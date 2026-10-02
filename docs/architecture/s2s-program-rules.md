@@ -568,7 +568,7 @@ re-measure to discover them.**
 | `agent-cli/internal/services` | 27.6% |
 | `agent-cli/internal/logger` | 7.7% |
 | `agent-cli/internal/cli` | 7.1% |
-| `go-agent-loop/pkg/logging`, `go-llm-gateway/pkg/models`, `agent-cli/internal/{wire,workspace,execctx,flags,sysinfo}` | 0.0% |
+| `go-agent-loop/pkg/logging`, `go-llm-gateway/pkg/models`, `agent-cli/internal/{wire,workspace,flags}` | 0.0% |
 
 Known environment facts:
 

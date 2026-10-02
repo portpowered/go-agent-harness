@@ -46,27 +46,6 @@ type UnsupportedFeatureError = capabilities.UnsupportedFeatureError
 // ahead of the caller reading its InferStream channel.
 const StreamMessageBuffer = 64
 
-const (
-	CapabilityStateUnknown     = capabilities.CapabilityStateUnknown
-	CapabilityStateSupported   = capabilities.CapabilityStateSupported
-	CapabilityStateUnsupported = capabilities.CapabilityStateUnsupported
-
-	RequestedModeStateless       = capabilities.RequestedModeStateless
-	RequestedModeStatelessStream = capabilities.RequestedModeStatelessStream
-	RequestedModeSession         = capabilities.RequestedModeSession
-
-	FeatureSessions               = capabilities.FeatureSessions
-	FeatureTools                  = capabilities.FeatureTools
-	FeatureStreaming              = capabilities.FeatureStreaming
-	FeatureImageInput             = capabilities.FeatureImageInput
-	FeatureAudioInput             = capabilities.FeatureAudioInput
-	FeatureAudioOutput            = capabilities.FeatureAudioOutput
-	FeatureVideoOutput            = capabilities.FeatureVideoOutput
-	FeatureReasoning              = capabilities.FeatureReasoning
-	FeaturePromptCaching          = capabilities.FeaturePromptCaching
-	FeatureProviderSpecificConfig = capabilities.FeatureProviderSpecificConfig
-)
-
 // UnknownProviderCapabilities returns the documented fallback for providers
 // without explicit capability reporting.
 func UnknownProviderCapabilities(provider string) capabilities.ProviderCapabilities {

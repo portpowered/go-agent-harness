@@ -2,7 +2,6 @@ package testkit
 
 import (
 	"errors"
-	"io"
 )
 
 // OperationDiscover and the list constants are diagnostic-only caller
@@ -80,9 +79,4 @@ func cloneBrowserScript(script BrowserScript) BrowserScript {
 		}
 	}
 	return result
-}
-
-// LoadReplayScriptReader is the reader form of LoadReplayScriptFile.
-func LoadReplayScriptReader(reader io.Reader) (BrowserScript, error) {
-	return LoadBrowserScriptReader(reader)
 }

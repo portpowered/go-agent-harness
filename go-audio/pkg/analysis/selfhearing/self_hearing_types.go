@@ -150,7 +150,7 @@ const (
 // It deliberately contains no audio samples or conversation metadata.
 type PCM16SelfHearingObservation struct {
 	Classification   PCM16SelfHearingClassification
-	Measurement      PCM16CorrelationMeasurement
+	Measurement      stream.PCM16CorrelationMeasurement
 	EvidenceSamples  int
 	EvidenceDuration time.Duration
 }
@@ -195,12 +195,6 @@ func ResolvePCM16SelfHearingPolicy(topology PCM16SelfHearingTopology) PCM16SelfH
 	return PCM16SelfHearingPolicyPairedDevice
 }
 
-// EnablesPCM16SelfHearing reports whether the topology admits a local
-// feedback controller.
-func (topology PCM16SelfHearingTopology) EnablesPCM16SelfHearing() bool {
-	return ResolvePCM16SelfHearingPolicy(topology) == PCM16SelfHearingPolicyPairedDevice
-}
-
 // PCM16SelfHearingBufferStats exposes only bounded-storage counts. It never
 // exposes the retained PCM itself.
 type PCM16SelfHearingBufferStats struct {
@@ -208,4 +202,10 @@ type PCM16SelfHearingBufferStats struct {
 	CaptureSamples     int
 	MaxPlaybackSamples int
 	MaxCaptureSamples  int
+}
+
+// EnablesPCM16SelfHearing reports whether the topology admits a local
+// feedback controller.
+func (topology PCM16SelfHearingTopology) EnablesPCM16SelfHearing() bool {
+	return ResolvePCM16SelfHearingPolicy(topology) == PCM16SelfHearingPolicyPairedDevice
 }

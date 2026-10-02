@@ -343,3 +343,6 @@ func (o *BrowserScriptOperation) ExpectRequest() OperationRequest {
 		URL:          o.Expect.URL,
 	}
 }
+
+// WithDiagnosticReplay permits fixed read-only discovery/list operations.
+func WithDiagnosticReplay() ReplayOption { return WithReplayMode(ReplayDiagnostic) }

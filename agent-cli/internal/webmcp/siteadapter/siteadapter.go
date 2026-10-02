@@ -166,18 +166,6 @@ func ForURL(rawURL string) (Script, bool) {
 	return Script{}, false
 }
 
-// Supported returns a defensive copy of the bundled adapter registry.
-func Supported() []Info {
-	adapters := registry()
-	result := make([]Info, 0, len(adapters))
-	for _, adapter := range adapters {
-		info := adapter.info
-		info.URLPatterns = append([]string(nil), info.URLPatterns...)
-		result = append(result, info)
-	}
-	return result
-}
-
 // BootstrapSource returns the dispatcher installed in every attached target.
 // Each bundled IIFE fails closed on its own exact HTTPS host/path boundary.
 // Installing the dispatcher independently of the target's initial URL avoids

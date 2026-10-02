@@ -46,27 +46,6 @@ func NewBufferedCapture(source *RTCDeviceSource) (*BufferedCapture, error) {
 	return &BufferedCapture{producer: producer, consumer: consumer, control: control}, nil
 }
 
-func (b *BufferedCapture) Producer() audio.FrameProducer {
-	if b == nil {
-		return audio.FrameProducer{}
-	}
-	return b.producer
-}
-
-func (b *BufferedCapture) Consumer() audio.FrameConsumer {
-	if b == nil {
-		return audio.FrameConsumer{}
-	}
-	return b.consumer
-}
-
-func (b *BufferedCapture) Control() audio.BufferControl {
-	if b == nil {
-		return audio.BufferControl{}
-	}
-	return b.control
-}
-
 // pumpBufferedCapture separates device acquisition from provider transmission.
 // Only this transport worker can call the provider. The source produces owned
 // frames into a bounded memory port, so no agent tick performs device I/O.
@@ -187,4 +166,25 @@ func (s *RTCDeviceSource) filteredCapture(ctx context.Context, frame []int16) ([
 		return nil, &RTCDeviceSourceError{DeviceID: s.id, Operation: "filter", Err: err}
 	}
 	return samples, nil
+}
+
+func (b *BufferedCapture) Consumer() audio.FrameConsumer {
+	if b == nil {
+		return audio.FrameConsumer{}
+	}
+	return b.consumer
+}
+
+func (b *BufferedCapture) Control() audio.BufferControl {
+	if b == nil {
+		return audio.BufferControl{}
+	}
+	return b.control
+}
+
+func (b *BufferedCapture) Producer() audio.FrameProducer {
+	if b == nil {
+		return audio.FrameProducer{}
+	}
+	return b.producer
 }

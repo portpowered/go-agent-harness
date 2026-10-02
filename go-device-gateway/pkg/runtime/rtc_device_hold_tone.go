@@ -44,19 +44,6 @@ func sessionTimingClock(ctx context.Context) (platformclock.TimerSource, bool) {
 	return platformclock.Real{}, true
 }
 
-// ValidateTimingClock verifies an explicitly injected source without
-// substituting host time. A nil source means the caller did not inject a
-// timing domain and is valid for the live default path.
-func ValidateTimingClock(source platformclock.Source) error {
-	if source == nil {
-		return nil
-	}
-	if _, ok := source.(platformclock.TimerSource); !ok {
-		return fmt.Errorf("%w: %T", ErrInvalidSessionTimingClock, source)
-	}
-	return nil
-}
-
 // defaultRTCDeviceHoldToneTick is how often the background filler checks
 // whether a hold-tone pulse is due. It is much shorter than the shortest
 // meaningful gap threshold or pulse, so the cue starts and stops close to
@@ -353,4 +340,17 @@ func TimingClock(ctx context.Context) (platformclock.TimerSource, bool) {
 // explicitly injected timing source before launching it.
 func (s *RTCDeviceSink) StartHoldToneChecked(ctx context.Context) (func(), error) {
 	return s.startHoldToneChecked(ctx)
+}
+
+// ValidateTimingClock verifies an explicitly injected source without
+// substituting host time. A nil source means the caller did not inject a
+// timing domain and is valid for the live default path.
+func ValidateTimingClock(source platformclock.Source) error {
+	if source == nil {
+		return nil
+	}
+	if _, ok := source.(platformclock.TimerSource); !ok {
+		return fmt.Errorf("%w: %T", ErrInvalidSessionTimingClock, source)
+	}
+	return nil
 }

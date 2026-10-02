@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 func TestBrowserResultEnvelopePreservesNestedNulls(t *testing.T) {
@@ -26,7 +28,7 @@ func TestBrowserResultEnvelopePreservesNestedNulls(t *testing.T) {
 func TestBrowserResultEnvelopeRejectsUnknownAndNullFields(t *testing.T) {
 	valid := `{"version":"webmcp.tool-result.v1","ok":true,"data":{"value":1},"error":null}`
 	invalid := []string{
-		strings.Replace(valid, ToolResultVersion, "webmcp.tool-result.v0", 1),
+		strings.Replace(valid, public.ToolResultVersion, "webmcp.tool-result.v0", 1),
 		strings.Replace(valid, `,"error":null`, `,"error":null,"extra":true`, 1),
 		`{"version":"webmcp.tool-result.v1","ok":false,"data":null,"error":{"code":"no_eligible_tab","message":"bad","retryable":null,"details":{}}}`,
 	}

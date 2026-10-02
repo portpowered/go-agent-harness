@@ -6,20 +6,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
-	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/subsystems"
 )
-
-// iterTestTokenCounter is a test double that returns a fixed token count.
-type iterTestTokenCounter struct {
-	count int
-}
-
-func (c *iterTestTokenCounter) Count(_ []messages.Message) int {
-	return c.count
-}
-
-// Compile-time check that iterTestTokenCounter satisfies subsystems.TokenCounter.
-var _ subsystems.TokenCounter = (*iterTestTokenCounter)(nil)
 
 // TestIterativeLoop_NormalIteration verifies the loop runs MaxIterations times
 // when no stop word is configured.

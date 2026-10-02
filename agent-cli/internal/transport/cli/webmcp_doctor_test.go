@@ -250,7 +250,7 @@ browser:
 	}
 }
 
-func assertUnselectedDoctorReport(t *testing.T, report WebMCPDoctorReport, browserID, targetID string) {
+func assertUnselectedDoctorReport(t *testing.T, report doctor.Report, browserID, targetID string) {
 	t.Helper()
 	if report.Status != doctor.StatusNotReady || report.Error != nil {
 		t.Fatalf("unselected report status/error = %s/%+v, want not_ready/nil", report.Status, report.Error)
@@ -769,10 +769,10 @@ func executeDoctorCommand(t *testing.T, configDir string, factory WebMCPDoctorFa
 	return command, &stdout, &stderr
 }
 
-func decodeDoctorReport(t *testing.T, output string) WebMCPDoctorReport {
+func decodeDoctorReport(t *testing.T, output string) doctor.Report {
 	t.Helper()
 	decoder := json.NewDecoder(strings.NewReader(output))
-	var report WebMCPDoctorReport
+	var report doctor.Report
 	if err := decoder.Decode(&report); err != nil {
 		t.Fatalf("decode doctor JSON: %v; output=%q", err, output)
 	}
@@ -783,13 +783,13 @@ func decodeDoctorReport(t *testing.T, output string) WebMCPDoctorReport {
 	return report
 }
 
-func doctorCheckByName(report WebMCPDoctorReport, name string) WebMCPDoctorCheck {
+func doctorCheckByName(report doctor.Report, name string) doctor.Check {
 	for _, check := range report.Checks {
 		if check.Name == name {
 			return check
 		}
 	}
-	return WebMCPDoctorCheck{}
+	return doctor.Check{}
 }
 
 func writeDoctorConfig(t *testing.T, browserYAML string) string {

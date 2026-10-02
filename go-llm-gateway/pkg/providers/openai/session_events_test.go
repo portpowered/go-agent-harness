@@ -125,7 +125,7 @@ func TestRealtimeInboundMessages_ActiveResponseCreateRejectionIsNonTerminal(t *t
 	if !ok || value == nil {
 		t.Fatalf("active-response error value = %T, want *messages.ErrorValue", got[0].Value)
 	}
-	if !value.IsNonTerminal() || value.Classification != realtimeResponseCreateActiveClass || value.Code != realtimeResponseCreateActiveCode {
+	if !value.IsNonTerminal() || value.Classification != messages.ErrorClassificationResponseCreateActive || value.Code != realtimeResponseCreateActiveCode {
 		t.Fatalf("active-response error metadata = %#v, want nonterminal recoverable diagnostic", value)
 	}
 }

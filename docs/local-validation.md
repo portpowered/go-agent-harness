@@ -6,7 +6,7 @@ enforces, each once, in three fail-fast stages:
 | Stage | Phases (run concurrently, at most `PREPUSH_JOBS`) |
 | --- | --- |
 | format | `fmt` |
-| static | `lint` (its golangci config enables govet and staticcheck), `verify-architecture`, `build BUILD_LIBRARY_PACKAGES=0` (links the binaries; lint already type-checks every package), `coverage-registration`, `check-ci-test-partition`, `verify-standalone-checkout`, and `test-factory-scripts` when `factory/` or the `Makefile` changed (always in the full scope) |
+| static | `lint` (its golangci config enables govet and staticcheck), `verify-architecture`, `deadcode-check` (no function unreachable from every main and test beyond `docs/architecture/deadcode-allowlist.txt`, which may only shrink; see `docs/architecture/deadcode-gate.md`), `build BUILD_LIBRARY_PACKAGES=0` (links the binaries; lint already type-checks every package), `coverage-registration`, `check-ci-test-partition`, `verify-standalone-checkout`, and `test-factory-scripts` when `factory/` or the `Makefile` changed (always in the full scope) |
 | tests | `coverage COVERAGE_SCOPE=<scope>`, `test-cgo-delta`, `test-tools` (it runs a real golangci-lint, whose machine-wide lock must not overlap `lint`) |
 
 A failed stage stops the gate; the phases already running in that stage finish

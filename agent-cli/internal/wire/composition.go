@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 	"reflect"
+
+	serviceTools "github.com/portpowered/go-agent-harness/agent-cli/internal/services/tools"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/flags"
 	hostServices "github.com/portpowered/go-agent-harness/agent-cli/internal/services"
@@ -13,7 +14,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	runtimeTools "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 	runtimeToolsWire "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools/wire"
-	"github.com/portpowered/go-agent-harness/go-audio/pkg/observability"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/transport"
 )
 
@@ -156,11 +156,6 @@ func NewToolServicePort(service serviceTools.Service) PortSwap {
 	return NewPortSwap(PortToolService, service)
 }
 
-// SwapPort is a concise alias for NewPortSwap.
-func SwapPort(name string, value any) PortSwap {
-	return NewPortSwap(name, value)
-}
-
 // CompositionOption configures an optional composition capability. Required
 // ports remain explicit parameters to ComposeAgentCLI.
 type CompositionOption func(*compositionOptions) error
@@ -208,101 +203,6 @@ func WithSessionRuntimeObserver(observer SessionRuntimeObserver) CompositionOpti
 		options.runtimeObserver = observer
 		return nil
 	}
-}
-
-// WithMetricSampler supplies the application metrics seam to direct
-// composition callers. Nil is normalized to the no-op implementation.
-func WithMetricSampler(sampler MetricSampler) CompositionOption {
-	return func(options *compositionOptions) error {
-		options.metricSampler = observability.EnsureMetricSampler(sampler)
-		return nil
-	}
-}
-
-// WithLogger supplies the structured application logger to direct
-// composition callers. Nil is normalized to the no-op implementation.
-func WithLogger(logger Logger) CompositionOption {
-	return func(options *compositionOptions) error {
-		options.logger = observability.EnsureLogger(logger)
-		return nil
-	}
-}
-
-// WithRelaxedModelValidation preserves the test-only behavior of the legacy
-// mock initializer without making validation mode a dependency port.
-func WithRelaxedModelValidation() CompositionOption {
-	return func(options *compositionOptions) error {
-		options.relaxModelValidation = true
-		return nil
-	}
-}
-
-// WithStrictModelValidation explicitly selects production validation behavior.
-func WithStrictModelValidation() CompositionOption {
-	return func(options *compositionOptions) error {
-		options.relaxModelValidation = false
-		return nil
-	}
-}
-
-// ComposeAgentCLI constructs the singular CLI root from the required tool and
-// transport and audio-side ports. An omitted clock is normalized to clock.Real.
-// Optional inference capabilities are supplied through CompositionOption.
-// Validation runs before any graph constructor is called.
-func ComposeAgentCLI(
-	ctx context.Context, toolExecutor messages.ToolExecutor,
-	transportDialer transport.Dialer,
-	deviceRegistry DeviceRegistry,
-	audioSource AudioSource,
-	audioSink AudioSink,
-	clockSource Clock,
-	options ...CompositionOption,
-) (*cli.AgentCLI, error) {
-	compositionOptions, err := applyCompositionOptions(options)
-	if err != nil {
-		return nil, err
-	}
-
-	values := compositionValues{
-		toolExecutor:      toolExecutor,
-		transportDialer:   transportDialer,
-		deviceRegistry:    deviceRegistry,
-		audioSource:       audioSource,
-		audioSink:         audioSink,
-		clockSource:       clockSource,
-		runtimeObserver:   compositionOptions.runtimeObserver,
-		metricSampler:     observability.EnsureMetricSampler(compositionOptions.metricSampler),
-		logger:            observability.EnsureLogger(compositionOptions.logger),
-		inferencer:        compositionOptions.inferencer,
-		sessionInferencer: compositionOptions.sessionInferencer,
-		toolService:       compositionOptions.toolService,
-	}
-	normalizeClock(&values)
-	if err := validateDependencies(&values); err != nil {
-		return nil, err
-	}
-
-	toolDefaults, err := newToolDefaults(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return assembleAgentCLI(ctx,
-		markToolExecutorReplacement(values.toolExecutor),
-		values.transportDialer,
-		values.deviceRegistry,
-		values.audioSource,
-		values.audioSink,
-		values.clockSource,
-		values.runtimeObserver,
-		values.metricSampler,
-		values.logger,
-		toolDefaults.definitions,
-		toolServiceOverride{service: values.toolService},
-		values.inferencer,
-		values.sessionInferencer,
-		compositionOptions.relaxModelValidation,
-		nil,
-	)
 }
 
 // InitializeAgentCLI builds the production CLI with the registry-backed tool

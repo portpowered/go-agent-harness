@@ -9,7 +9,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/metrics"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/probe"
-	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/audioio"
 	runtimeDevices "github.com/portpowered/go-agent-harness/go-agent-runtime/services/devices"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/replay"
 	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/session"
@@ -110,8 +109,6 @@ type CancellationIntent interface {
 	SIGINTReceived() bool
 }
 
-type ScheduledAudioInput = audioio.ScheduledAudioInput
-
 type ScheduledAudioDispatchPolicy string
 
 const (
@@ -122,15 +119,6 @@ const (
 type LivenessTimer interface {
 	C() <-chan time.Time
 	Stop() bool
-}
-
-type LivenessError struct {
-	Classification     string
-	ResponseID         string
-	TerminalReason     messages.TerminalReason
-	TerminalProvenance messages.TerminalProvenance
-	OutputState        messages.TerminalOutputState
-	Usage              messages.TokenUsage
 }
 
 type TerminalObservation struct {

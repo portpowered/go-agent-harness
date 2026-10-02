@@ -89,11 +89,6 @@ func Execute(ctx context.Context, manifest Manifest, executor EntryExecutor) (Ex
 	return Execution{Results: results}, nil
 }
 
-// Run is a function-shaped alias for Execute.
-func Run(ctx context.Context, manifest Manifest, executor EntryExecutor) (Execution, error) {
-	return Execute(ctx, manifest, executor)
-}
-
 func executeEntry(ctx context.Context, executor EntryExecutor, entry Entry) (outcome EntryOutcome, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {

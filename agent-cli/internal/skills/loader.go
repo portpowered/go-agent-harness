@@ -125,21 +125,6 @@ func (l *Loader) LoadSkillWithPath(name, resourcePath string) (content string, e
 	return string(data), nil
 }
 
-// GetSkillDir returns the absolute directory path for a skill by name, or empty if not found.
-func (l *Loader) GetSkillDir(name string) string {
-	list, err := l.List()
-	if err != nil {
-		// Skills that cannot be listed cannot be found.
-		return ""
-	}
-	for _, s := range list {
-		if s.Meta.Name == name {
-			return s.Dir
-		}
-	}
-	return ""
-}
-
 // loadSkillEntry loads the skill in directory name under dir. found is false
 // for a directory without a skill file and for an invalid skill, which are
 // skipped rather than reported.

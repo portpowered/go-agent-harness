@@ -81,11 +81,6 @@ func NewTeeWithReporter(live any, transcript RecordSink, reporter func(error)) *
 	return NewTee(live, transcript, WithTeeReporter(reporter))
 }
 
-// NewTransparentTee is a descriptive constructor alias.
-func NewTransparentTee(live any, transcript RecordSink, options ...TeeOption) *Tee {
-	return NewTee(live, transcript, options...)
-}
-
 // Write preserves the live consumer's returned count and error. Transcript
 // failures are reported and intentionally excluded from the returned result.
 func (t *Tee) Write(record Record) (int, error) {

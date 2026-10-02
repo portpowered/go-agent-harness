@@ -118,9 +118,6 @@ func ComposeFiles(scenarioFiles []string, transports []string, repeatCount, conc
 	})
 }
 
-// ComposeManifest is a descriptive alias for Compose.
-func ComposeManifest(input ComposeInput) (Manifest, error) { return Compose(input) }
-
 func loadScenarioRefs(paths []string) ([]ScenarioRef, error) {
 	if len(paths) == 0 {
 		return nil, validation("scenario_files", "", "must contain at least one file", ErrNoScenarios)

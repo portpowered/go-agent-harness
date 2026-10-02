@@ -368,3 +368,7 @@ func familyEFinding(verdict MechanicalVerdict, code string) MechanicalFinding {
 	}
 	return MechanicalFinding{}
 }
+
+func FamilyERepromptScript() []string {
+	return []string{FamilyEReprompt(0), FamilyEReprompt(1)}
+}

@@ -7,12 +7,14 @@ import (
 	"regexp"
 	"sort"
 	"unicode/utf8"
+
+	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 const maxInputValidationIssues = 64
 
 type pageIssueCollector struct {
-	issues []ToolResultIssue
+	issues []public.ToolResultIssue
 }
 
 func (c *pageIssueCollector) add(path, code string) {
@@ -22,11 +24,11 @@ func (c *pageIssueCollector) add(path, code string) {
 	if path == "" {
 		path = "/"
 	}
-	c.issues = append(c.issues, ToolResultIssue{Path: path, Code: code})
+	c.issues = append(c.issues, public.ToolResultIssue{Path: path, Code: code})
 }
 
-func (c *pageIssueCollector) sorted() []ToolResultIssue {
-	issues := append([]ToolResultIssue(nil), c.issues...)
+func (c *pageIssueCollector) sorted() []public.ToolResultIssue {
+	issues := append([]public.ToolResultIssue(nil), c.issues...)
 	sort.SliceStable(issues, func(i, j int) bool {
 		if issues[i].Path != issues[j].Path {
 			return issues[i].Path < issues[j].Path
@@ -40,7 +42,7 @@ func (c *pageIssueCollector) sorted() []ToolResultIssue {
 // It intentionally returns only JSON Pointer paths and issue codes, so invalid
 // user values are never echoed through a model-facing error. The validator is
 // bounded by maxBytes and by a fixed issue count to keep broker failures safe.
-func validatePageToolInput(input, schema json.RawMessage, maxBytes int) []ToolResultIssue {
+func validatePageToolInput(input, schema json.RawMessage, maxBytes int) []public.ToolResultIssue {
 	if input == nil {
 		// The direct broker seam permits an omitted input. The stable flat tool
 		// adapter still requires input_json, so this is only a convenience for
@@ -48,7 +50,7 @@ func validatePageToolInput(input, schema json.RawMessage, maxBytes int) []ToolRe
 		input = json.RawMessage(`{}`)
 	}
 	if maxBytes <= 0 {
-		maxBytes = DefaultMaxInputBytes
+		maxBytes = public.DefaultMaxInputBytes
 	}
 	collector := &pageIssueCollector{}
 	if len(input) > maxBytes {

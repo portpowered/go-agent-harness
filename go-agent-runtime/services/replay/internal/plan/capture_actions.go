@@ -15,15 +15,7 @@ import (
 	gatewaytesting "github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/testing"
 )
 
-type Report = replay.CaptureTimingReport
-type ResponseTiming = replay.CaptureResponseTiming
-type ToolTiming = replay.CaptureToolTiming
-type Summary = replay.CaptureTimingSummary
-type DurationSummary = replay.CaptureDurationSummary
-
-const ReportSchemaVersion = replay.CaptureTimingReportSchemaVersion
-
-func analyzeCaptureTiming(capture gatewaytesting.SessionCapture) (Report, error) {
+func analyzeCaptureTiming(capture gatewaytesting.SessionCapture) (replay.CaptureTimingReport, error) {
 	return timing.AnalyzeCapture(capture)
 }
 

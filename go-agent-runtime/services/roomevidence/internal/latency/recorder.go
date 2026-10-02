@@ -40,7 +40,7 @@ type Recorder struct {
 
 	mu             sync.Mutex
 	sequence       uint64
-	events         []RoomLatencyEvent
+	events         []rooms.RoomLatencyEvent
 	nextTurn       map[string]int
 	active         map[string]string
 	lastSpeechStop map[string]uint64
@@ -72,7 +72,7 @@ func NewWithFileSync(source platformclock.Source, format rooms.AudioFormat, sync
 	}
 }
 
-func (r *Recorder) appendLocked(kind RoomLatencyEventKind, transitionID, participantID, peerID string, turnIndex int, responseID string, pcmBytes int) int {
+func (r *Recorder) appendLocked(kind rooms.RoomLatencyEventKind, transitionID, participantID, peerID string, turnIndex int, responseID string, pcmBytes int) int {
 	timestamp := r.clock.Now().UTC()
 	tick := r.sequence + 1
 	if source, ok := r.clock.(interface{ Tick() uint64 }); ok {
@@ -81,9 +81,9 @@ func (r *Recorder) appendLocked(kind RoomLatencyEventKind, transitionID, partici
 	return r.appendAtLocked(kind, transitionID, participantID, peerID, turnIndex, responseID, pcmBytes, timestamp, tick)
 }
 
-func (r *Recorder) appendAtLocked(kind RoomLatencyEventKind, transitionID, participantID, peerID string, turnIndex int, responseID string, pcmBytes int, timestamp time.Time, tick uint64) int {
+func (r *Recorder) appendAtLocked(kind rooms.RoomLatencyEventKind, transitionID, participantID, peerID string, turnIndex int, responseID string, pcmBytes int, timestamp time.Time, tick uint64) int {
 	r.sequence++
-	event := RoomLatencyEvent{
+	event := rooms.RoomLatencyEvent{
 		Sequence:          r.sequence,
 		Kind:              kind,
 		TransitionID:      transitionID,
@@ -97,7 +97,7 @@ func (r *Recorder) appendAtLocked(kind RoomLatencyEventKind, transitionID, parti
 		SampleRateHz:      r.format.SampleRate,
 		Channels:          r.format.Channels,
 	}
-	if kind != RoomLatencyEventSpeakerPCM {
+	if kind != rooms.RoomLatencyEventSpeakerPCM {
 		event.SampleRateHz = 0
 		event.Channels = 0
 	}
@@ -133,10 +133,10 @@ func (r *Recorder) observeSpeakerBytes(sourceID string, targetIDs []string, pcmB
 			continue
 		}
 		seen[targetID] = struct{}{}
-		r.appendLocked(RoomLatencyEventSpeakerPCM, "", sourceID, targetID, 0, "", pcmBytes)
+		r.appendLocked(rooms.RoomLatencyEventSpeakerPCM, "", sourceID, targetID, 0, "", pcmBytes)
 	}
 	if len(seen) == 0 {
-		r.appendLocked(RoomLatencyEventSpeakerPCM, "", sourceID, "", 0, "", pcmBytes)
+		r.appendLocked(rooms.RoomLatencyEventSpeakerPCM, "", sourceID, "", 0, "", pcmBytes)
 	}
 }
 
@@ -153,7 +153,7 @@ func (r *Recorder) ObserveSpeechStopped(participantID string) {
 	state := &roomLatencyTransitionState{id: transitionID, participantID: participantID, turnIndex: turnIndex}
 	for index := len(r.events) - 1; index >= 0; index-- {
 		event := &r.events[index]
-		if event.Kind != RoomLatencyEventSpeakerPCM || event.PeerParticipantID != participantID || event.ParticipantID == participantID || event.TransitionID != "" {
+		if event.Kind != rooms.RoomLatencyEventSpeakerPCM || event.PeerParticipantID != participantID || event.ParticipantID == participantID || event.TransitionID != "" {
 			continue
 		}
 		if event.Sequence <= r.lastSpeechStop[participantID] {
@@ -166,11 +166,11 @@ func (r *Recorder) ObserveSpeechStopped(participantID string) {
 	}
 	r.transitions[transitionID] = state
 	r.active[participantID] = transitionID
-	stopIndex := r.appendLocked(RoomLatencyEventEndOfSpeech, transitionID, participantID, state.peerID, turnIndex, "", 0)
+	stopIndex := r.appendLocked(rooms.RoomLatencyEventEndOfSpeech, transitionID, participantID, state.peerID, turnIndex, "", 0)
 	r.lastSpeechStop[participantID] = r.events[stopIndex].Sequence
 }
 
-func (r *Recorder) ObserveRuntime(participantID string, observation Observation) {
+func (r *Recorder) ObserveRuntime(participantID string, observation rooms.LatencyObservation) {
 	if r == nil || strings.TrimSpace(participantID) == "" {
 		return
 	}
@@ -183,18 +183,18 @@ func (r *Recorder) ObserveRuntime(participantID string, observation Observation)
 	r.observeRuntimeLocked(strings.TrimSpace(participantID), observation, kind)
 }
 
-func runtimeObservationKind(kind ObservationKind) (RoomLatencyEventKind, bool) {
+func runtimeObservationKind(kind rooms.LatencyObservationKind) (rooms.RoomLatencyEventKind, bool) {
 	switch kind {
 	case ObservationInputCommit:
-		return RoomLatencyEventInputCommit, true
+		return rooms.RoomLatencyEventInputCommit, true
 	case ObservationResponseCreate:
-		return RoomLatencyEventResponseCreate, true
+		return rooms.RoomLatencyEventResponseCreate, true
 	default:
 		return "", false
 	}
 }
 
-func (r *Recorder) observeRuntimeLocked(participantID string, observation Observation, kind RoomLatencyEventKind) {
+func (r *Recorder) observeRuntimeLocked(participantID string, observation rooms.LatencyObservation, kind rooms.RoomLatencyEventKind) {
 	transitionID := r.active[participantID]
 	state := r.transitions[transitionID]
 	if state == nil {
@@ -216,14 +216,14 @@ func (r *Recorder) observeRuntimeLocked(participantID string, observation Observ
 	r.appendAtLocked(kind, transitionID, participantID, "", state.turnIndex, observation.ResponseID, 0, timestamp.UTC(), observation.Tick)
 }
 
-func (r *Recorder) duplicateRuntimeObservationLocked(kind RoomLatencyEventKind, transitionID string, state *roomLatencyTransitionState, responseID string) bool {
+func (r *Recorder) duplicateRuntimeObservationLocked(kind rooms.RoomLatencyEventKind, transitionID string, state *roomLatencyTransitionState, responseID string) bool {
 	switch kind {
-	case RoomLatencyEventInputCommit:
+	case rooms.RoomLatencyEventInputCommit:
 		if state.commitSeen {
 			return true
 		}
 		state.commitSeen = true
-	case RoomLatencyEventResponseCreate:
+	case rooms.RoomLatencyEventResponseCreate:
 		if state.responseSeen {
 			// A client-owned MESSAGE.END can be followed by the provider's
 			// response.created boundary. Preserve an ID learned from the latter
@@ -234,6 +234,10 @@ func (r *Recorder) duplicateRuntimeObservationLocked(kind RoomLatencyEventKind, 
 			return true
 		}
 		state.responseSeen = true
+	case rooms.RoomLatencyEventSpeakerPCM, rooms.RoomLatencyEventEndOfSpeech,
+		rooms.RoomLatencyEventProviderAudio, rooms.RoomLatencyEventPeerAudio:
+		// Not runtime observations: their duplicates are rejected where they
+		// are recorded.
 	}
 	return false
 }
@@ -241,7 +245,7 @@ func (r *Recorder) duplicateRuntimeObservationLocked(kind RoomLatencyEventKind, 
 func (r *Recorder) updateResponseCreateIDLocked(transitionID, responseID string) {
 	for index := len(r.events) - 1; index >= 0; index-- {
 		event := &r.events[index]
-		if event.TransitionID == transitionID && event.Kind == RoomLatencyEventResponseCreate {
+		if event.TransitionID == transitionID && event.Kind == rooms.RoomLatencyEventResponseCreate {
 			event.ResponseID = responseID
 			return
 		}
@@ -281,10 +285,10 @@ func (r *Recorder) observeProviderAudioAt(participantID string, responseID strin
 	}
 	turnIndex := state.turnIndex
 	if timestamp.IsZero() {
-		r.appendLocked(RoomLatencyEventProviderAudio, transitionID, participantID, "", turnIndex, responseID, 0)
+		r.appendLocked(rooms.RoomLatencyEventProviderAudio, transitionID, participantID, "", turnIndex, responseID, 0)
 		return
 	}
-	r.appendAtLocked(RoomLatencyEventProviderAudio, transitionID, participantID, "", turnIndex, responseID, 0, timestamp.UTC(), tick)
+	r.appendAtLocked(rooms.RoomLatencyEventProviderAudio, transitionID, participantID, "", turnIndex, responseID, 0, timestamp.UTC(), tick)
 }
 
 func (r *Recorder) ObservePeerAudio(sourceID, targetID string, frame audio.PCMFrame) {
@@ -316,7 +320,7 @@ func (r *Recorder) observePeerBytes(sourceID, targetID string, pcmBytes int) {
 	state.peerAudioSeen = true
 	turnIndex := state.turnIndex
 	responseID := state.responseID
-	r.appendLocked(RoomLatencyEventPeerAudio, transitionID, sourceID, targetID, turnIndex, responseID, pcmBytes)
+	r.appendLocked(rooms.RoomLatencyEventPeerAudio, transitionID, sourceID, targetID, turnIndex, responseID, pcmBytes)
 }
 
 func (r *Recorder) framePCMBytes(frame audio.PCMFrame) int {
@@ -335,17 +339,17 @@ func (r *Recorder) framePCMBytes(frame audio.PCMFrame) int {
 	return len(frame.Samples) * 2
 }
 
-func (r *Recorder) Bundle() RoomLatencyBundle {
+func (r *Recorder) Bundle() rooms.RoomLatencyBundle {
 	if r == nil {
-		return RoomLatencyBundle{}
+		return rooms.RoomLatencyBundle{}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	events := append([]RoomLatencyEvent(nil), r.events...)
+	events := append([]rooms.RoomLatencyEvent(nil), r.events...)
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Sequence < events[j].Sequence })
-	return RoomLatencyBundle{
-		SchemaVersion: RoomLatencyBundleSchemaVersion,
-		Format: RoomLatencyPCMFormat{
+	return rooms.RoomLatencyBundle{
+		SchemaVersion: rooms.RoomLatencyBundleSchemaVersion,
+		Format: rooms.RoomLatencyPCMFormat{
 			SampleRateHz:    r.format.SampleRate,
 			Channels:        r.format.Channels,
 			FrameDurationNS: int64(r.format.FrameDuration),

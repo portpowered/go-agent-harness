@@ -46,11 +46,6 @@ func NewProbeAcceptanceCommand(runners ...AcceptanceProbeRunner) *ProbeAcceptanc
 	return command
 }
 
-// NewAcceptanceProbeCommand is an alias for the public constructor.
-func NewAcceptanceProbeCommand(runners ...AcceptanceProbeRunner) *ProbeAcceptanceCommand {
-	return NewProbeAcceptanceCommand(runners...)
-}
-
 // Generate returns the cobra command for one blind acceptance probe.
 func (c *ProbeAcceptanceCommand) Generate() *cobra.Command {
 	cmd := &cobra.Command{

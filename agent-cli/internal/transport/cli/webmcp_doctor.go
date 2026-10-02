@@ -71,7 +71,7 @@ func (c *WebMCPDoctorCommand) Run(ctx context.Context, out io.Writer) error {
 
 // diagnose resolves the browser configuration from this command's flags and
 // runs the doctor with the command's runtime factory.
-func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) (WebMCPDoctorReport, error) {
+func (c *WebMCPDoctorCommand) diagnose(ctx context.Context, cmd *cobra.Command) (doctor.Report, error) {
 	factory := c.factory
 	if factory == nil {
 		factory = defaultWebMCPDoctorFactory(c.globalFlags)

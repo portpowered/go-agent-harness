@@ -172,14 +172,14 @@ func (s *hostDisplaySurface) Probe(ctx context.Context) (DisplayCapability, erro
 	}
 	if count <= 0 {
 		capability := UnavailableDisplayCapability("no usable display was discovered")
-		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display discovery", Reason: capability.Reason}
+		return capability, &ScreenCaptureError{State: public.ScreenCaptureUnavailable, Operation: "display discovery", Reason: capability.Reason}
 	}
 	if err := screenCapturePrerequisitesWithContextAndProcess(ctx, s.platform, s.process); err != nil {
 		return unavailableDisplayProbe("screen capture admission", "the screen capture command is unavailable", err)
 	}
 	if bounds.Empty() {
 		capability := UnavailableDisplayCapability("display geometry is empty")
-		return capability, &ScreenCaptureError{State: ScreenCaptureUnavailable, Operation: "display geometry", Reason: capability.Reason}
+		return capability, &ScreenCaptureError{State: public.ScreenCaptureUnavailable, Operation: "display geometry", Reason: capability.Reason}
 	}
 	return UsableDisplayCapability(count), nil
 }
@@ -205,8 +205,8 @@ func (s *hostDisplaySurface) probePermission(ctx context.Context) (DisplayCapabi
 
 func unavailableDisplayProbe(operation, reason string, cause error) (DisplayCapability, error) {
 	state := classifyScreenCaptureState(cause)
-	if state == ScreenCaptureGranted || state == ScreenCaptureFailed {
-		state = ScreenCaptureUnavailable
+	if state == public.ScreenCaptureGranted || state == ScreenCaptureFailed {
+		state = public.ScreenCaptureUnavailable
 	}
 	capability := DisplayCapability{State: state, Reason: reason}
 	return capability, &ScreenCaptureError{State: state, Operation: operation, Reason: reason, Cause: cause}
@@ -254,24 +254,24 @@ func (s *hostDisplaySurface) CaptureDisplay(ctx context.Context, display int, bo
 	return screenCaptureDisplayWithContextAndProcess(ctx, s.platform, display, bounds, s.process)
 }
 
-func screenCaptureStateForPermission(state DisplayPermissionState) ScreenCaptureState {
+func screenCaptureStateForPermission(state DisplayPermissionState) public.ScreenCaptureState {
 	switch state {
 	case DisplayPermissionDenied:
 		return ScreenCaptureDenied
 	case DisplayPermissionUnavailable:
-		return ScreenCaptureUnavailable
-	case DisplayPermissionCanceled:
+		return public.ScreenCaptureUnavailable
+	case public.DisplayPermissionCanceled:
 		return ScreenCaptureCanceled
-	case DisplayPermissionTimedOut:
+	case public.DisplayPermissionTimedOut:
 		return ScreenCaptureTimedOut
 	default:
 		return ScreenCaptureFailed
 	}
 }
 
-func classifyScreenCaptureState(err error) ScreenCaptureState {
+func classifyScreenCaptureState(err error) public.ScreenCaptureState {
 	if err == nil {
-		return ScreenCaptureGranted
+		return public.ScreenCaptureGranted
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, ErrScreenCaptureCanceled) {
 		return ScreenCaptureCanceled
@@ -283,15 +283,15 @@ func classifyScreenCaptureState(err error) ScreenCaptureState {
 		return ScreenCaptureDenied
 	}
 	if errors.Is(err, ErrDisplayUnavailable) || errors.Is(err, exec.ErrNotFound) {
-		return ScreenCaptureUnavailable
+		return public.ScreenCaptureUnavailable
 	}
 	return ScreenCaptureFailed
 }
 
 func capabilityForScreenError(err error, fallback string) DisplayCapability {
 	state := classifyScreenCaptureState(err)
-	if state == ScreenCaptureGranted {
-		state = ScreenCaptureUnavailable
+	if state == public.ScreenCaptureGranted {
+		state = public.ScreenCaptureUnavailable
 	}
 	return DisplayCapability{State: state, Reason: fallback}
 }
@@ -304,7 +304,7 @@ func newScreenCaptureError(operation, reason string, cause error) *ScreenCapture
 		}
 	}
 	state := classifyScreenCaptureState(cause)
-	if state == ScreenCaptureGranted {
+	if state == public.ScreenCaptureGranted {
 		state = ScreenCaptureFailed
 	}
 	return &ScreenCaptureError{State: state, Operation: operation, Reason: reason, Cause: cause}
@@ -315,8 +315,8 @@ func displayUnavailableForCapability(operation string, capability DisplayCapabil
 		return newScreenCaptureError(operation, capability.Reason, cause)
 	}
 	state := capability.State
-	if state == "" || state == ScreenCaptureGranted {
-		state = ScreenCaptureUnavailable
+	if state == "" || state == public.ScreenCaptureGranted {
+		state = public.ScreenCaptureUnavailable
 	}
 	reason := capability.Reason
 	if reason == "" {

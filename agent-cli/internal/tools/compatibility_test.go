@@ -222,7 +222,7 @@ func TestFilesystemRefusalValidation(t *testing.T) {
 }
 
 func TestDisplayCapabilityContract(t *testing.T) {
-	if !IsPhysicalDisplayToolName(ScreenToolID) || !IsPhysicalDisplayToolName(HostDisplayToolID) || IsPhysicalDisplayToolName("page_sight") {
+	if !IsPhysicalDisplayToolName(runtimeTools.ScreenToolID) || !IsPhysicalDisplayToolName(HostDisplayToolID) || IsPhysicalDisplayToolName("page_sight") {
 		t.Fatal("physical display name classification changed")
 	}
 	if got := UsableDisplayCapability(-1); got.DisplayCount != 0 || got.Available || got.Usable() {
@@ -238,7 +238,7 @@ func TestDisplayCapabilityContract(t *testing.T) {
 
 func TestDisplayCaptureErrorIdentity(t *testing.T) {
 	cause := errors.New("permission denied by host")
-	for _, state := range []ScreenCaptureState{ScreenCaptureGranted, ScreenCaptureDenied, ScreenCaptureUnavailable, ScreenCaptureCanceled, ScreenCaptureTimedOut, ScreenCaptureFailed} {
+	for _, state := range []ScreenCaptureState{runtimeTools.ScreenCaptureGranted, ScreenCaptureDenied, runtimeTools.ScreenCaptureUnavailable, runtimeTools.ScreenCaptureCanceled, runtimeTools.ScreenCaptureTimedOut, runtimeTools.ScreenCaptureFailed} {
 		err := &ScreenCaptureError{State: state, Operation: "show", Reason: "boundary reason", Cause: cause}
 		if err.Error() == "" || !errors.Is(err, ErrScreenCapture) || !errors.Is(err, cause) {
 			t.Errorf("screen error state %q = %v", state, err)
@@ -433,7 +433,7 @@ func assertUnavailableDisplayDiscovery(t *testing.T, ctx context.Context) {
 		}),
 	})
 	capability, err := surface.Probe(ctx)
-	if err == nil || capability.State != ScreenCaptureUnavailable {
+	if err == nil || capability.State != runtimeTools.ScreenCaptureUnavailable {
 		t.Fatalf("failed discovery Probe = %+v, %v", capability, err)
 	}
 }
@@ -460,7 +460,7 @@ func TestDisplaySurfaceCancellationAndDefaults(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if capability, err := surface.Probe(canceled); err == nil || capability.State != ScreenCaptureCanceled {
+	if capability, err := surface.Probe(canceled); err == nil || capability.State != runtimeTools.ScreenCaptureCanceled {
 		t.Fatalf("canceled surface Probe = %+v, %v", capability, err)
 	}
 

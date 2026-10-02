@@ -47,3 +47,4 @@ factory/inputs/BATCH/
 
 # Factory runtime caches and provider artifacts (never source).
 .you-agent-factory/
+.cache/deadcode/

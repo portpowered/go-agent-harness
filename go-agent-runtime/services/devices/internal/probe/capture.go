@@ -46,7 +46,7 @@ func forwardProbeFrames(ctx context.Context, pending []int16, link *liveDevicePr
 		if err != nil {
 			return pending, frameCount, fmt.Errorf("round-trip microphone frame over WebRTC: %w", err)
 		}
-		providerFrame, err := wavio.Resample(trackFrame, deviceProbeInputSampleRate, deviceProbeProviderSampleRate)
+		providerFrame, err := wavio.Resample(trackFrame, deviceProbeInputSampleRate, wavio.Rate24kHz)
 		if err != nil {
 			return pending, frameCount, fmt.Errorf("resample microphone frame for session: %w", err)
 		}

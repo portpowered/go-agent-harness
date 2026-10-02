@@ -13,8 +13,6 @@ import (
 	"github.com/portpowered/go-agent-harness/go-audio/pkg/mixer"
 )
 
-type RoomReplayBundleErrorKind = roomreplay.RoomReplayBundleErrorKind
-type RoomReplayBundleError = roomreplay.RoomReplayBundleError
 type RoomReplayPCMFormat = roomreplay.RoomReplayPCMFormat
 type RoomReplayArtifact = roomreplay.RoomReplayArtifact
 type RoomReplayParticipant = roomreplay.RoomReplayParticipant
@@ -24,8 +22,6 @@ type RoomReplayPlan = roomreplay.RoomReplayPlan
 const (
 	RoomReplayBundleSchemaVersion = roomreplay.RoomReplayBundleSchemaVersion
 	RoomReplayBundleManifestPath  = roomreplay.RoomReplayBundleManifestPath
-	RoomReplayBundleMismatch      = roomreplay.RoomReplayBundleMismatch
-	RoomReplayBundleIncomplete    = roomreplay.RoomReplayBundleIncomplete
 )
 
 // Service is the public room lifecycle and admission contract. Implementations

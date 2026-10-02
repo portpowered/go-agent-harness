@@ -14,6 +14,7 @@ FORMAT_STAGE = ("fmt",)
 STATIC_STAGE = (
     "lint",
     "verify-architecture",
+    "deadcode-check",
     "build",
     "coverage-registration",
     "check-ci-test-partition",

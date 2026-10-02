@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
+	"github.com/portpowered/go-agent-harness/go-agent-runtime/services/sessiontrace"
 )
 
 const c156MutationValue = "mutated"
@@ -227,14 +228,14 @@ func TestC156DiagnosticCallbacksPreservePublicRecords(t *testing.T) {
 	nilSessionDiagnostic.RecordSessionDiagnostic(SessionDiagnosticRecord{Event: SessionDiagnosticEventFailure})
 
 	fields := map[string]string{
-		SessionDiagnosticFieldCancelledBy:        "sigint",
-		SessionDiagnosticFieldCompletedTurnCount: "2",
+		sessiontrace.SessionDiagnosticFieldCancelledBy:        "sigint",
+		sessiontrace.SessionDiagnosticFieldCompletedTurnCount: "2",
 	}
 	var sessionRecords []SessionDiagnosticRecord
 	sessionDiagnostic := SessionDiagnosticFunc(func(record SessionDiagnosticRecord) {
 		sessionRecords = append(sessionRecords, record)
 	})
-	record := SessionDiagnosticRecord{Event: SessionDiagnosticEventTerminal, Fields: fields}
+	record := SessionDiagnosticRecord{Event: sessiontrace.SessionDiagnosticEventTerminal, Fields: fields}
 	sessionDiagnostic.RecordSessionDiagnostic(record)
 	if len(sessionRecords) != 1 {
 		t.Fatalf("session diagnostic records = %d, want exactly one", len(sessionRecords))

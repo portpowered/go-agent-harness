@@ -2,7 +2,6 @@ package testkit
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -38,11 +37,6 @@ func (f IDSourceFunc) NextID(kind string) string {
 	return f(kind)
 }
 
-// WithClockFunc injects a function-backed monotonic clock.
-func WithClockFunc(clock func() uint64) RecorderOption {
-	return WithClock(ClockFunc(clock))
-}
-
 // WithIDSource injects deterministic ID allocation. A nil source is ignored.
 func WithIDSource(source IDSource) RecorderOption {
 	return recorderOptionFunc(func(recorder *Recorder) {
@@ -50,11 +44,6 @@ func WithIDSource(source IDSource) RecorderOption {
 			recorder.ids = source
 		}
 	})
-}
-
-// WithIDFunc injects a function-backed deterministic ID source.
-func WithIDFunc(source func(string) string) RecorderOption {
-	return WithIDSource(IDSourceFunc(source))
 }
 
 // Recorder appends validated canonical browser event lines to an io.Writer.
@@ -199,26 +188,5 @@ func (r *Recorder) writeLocked(event Event) error {
 	r.nextSequence = event.Sequence + 1
 	r.lastMonotonic = event.MonotonicMS
 	r.hasEvents = true
-	return nil
-}
-
-// WriteRedactedEvents serializes redacted events to a writer only after the
-// complete artifact has been transformed and credential-checked. A failed
-// transformation never writes a partial event stream.
-func WriteRedactedEvents(writer io.Writer, events []Event, policy RedactionPolicy, credentials ...[]string) error {
-	if writer == nil {
-		return newRedactionError(ErrRecorderWrite, "write events", "writer", errors.New("writer is nil"), nil)
-	}
-	data, err := MarshalRedactedEvents(events, policy, credentials...)
-	if err != nil {
-		return err
-	}
-	n, err := writer.Write(data)
-	if err == nil && n != len(data) {
-		err = io.ErrShortWrite
-	}
-	if err != nil {
-		return newRedactionError(ErrRecorderWrite, "write events", "writer", err, nil)
-	}
 	return nil
 }

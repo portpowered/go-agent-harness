@@ -1800,7 +1800,7 @@ the scoped `P3-CORE-02` work:
 - Affected boundary: `go-agent-loop/pkg/messages.ErrorValue` consumed by loop, gateway, and CLI layers
 - Evidence:
   - `go-agent-loop/pkg/messages/agent_messages.go` defines `ErrorValue` with optional `ErrorType`, `Code`, `Param`, and `EventID`
-  - `go-llm-gateway/pkg/providers/openai/session.go` maps provider Realtime error payloads through `messages.NewErrorValueWithDetails(...)`, so current starter APIs are not absent for provider-supplied typed details
+  - Provider Realtime error payloads are mapped through `messages.NewErrorValueWithTerminal(...)` (`go-llm-gateway/pkg/providers/errors.go`, `pkg/providers/internal/realtime`), so current starter APIs are not absent for provider-supplied typed details
   - `go-agent-loop/pkg/participants/model_runner.go`, `go-agent-loop/pkg/participants/tool_runner.go`, `go-agent-loop/pkg/subsystems/interaction_events.go`, and multiple provider stream adapters still emit `messages.NewErrorValue(err.Error())` in observable error paths, dropping category and structured details
 - Observable impact:
   - callers can detect that an error occurred and can read typed OpenAI Realtime details when those details are present, but they usually cannot distinguish retryable provider failures, invalid user input, transport shutdown, replay divergence, or tool runtime errors from the shared stream contract alone

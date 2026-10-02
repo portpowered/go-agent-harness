@@ -65,11 +65,6 @@ func WithRuntime(runtime webmcp.BrowserRuntime) Option {
 	return func(options *Options) { options.Runtime = runtime }
 }
 
-// WithCatalog injects the DevTools version/target catalog.
-func WithCatalog(catalog webmcp.DevToolsCatalog) Option {
-	return func(options *Options) { options.Catalog = catalog }
-}
-
 // WithDiscovery injects the discovery service.
 func WithDiscovery(service DiscoveryService) Option {
 	return func(options *Options) { options.Discovery = service }
@@ -94,12 +89,6 @@ func WithManagedBrowserManager(manager *chrome.ManagedBrowserManager) Option {
 	return func(options *Options) { options.ManagedBrowserManager = manager }
 }
 
-// WithManagedBrowserManagerFactory defers manager creation until the browser
-// configuration has been resolved.
-func WithManagedBrowserManagerFactory(factory func(string) *chrome.ManagedBrowserManager) Option {
-	return func(options *Options) { options.ManagedBrowserManagerFactory = factory }
-}
-
 // WithHTTPClient injects the discovery HTTP client.
 func WithHTTPClient(client discovery.HTTPClient) Option {
 	return func(options *Options) { options.HTTPClient = client }
@@ -118,11 +107,6 @@ func WithProcessEnumerator(enumerator discovery.ProcessEnumerator) Option {
 // WithIDMapper injects the browser ID mapper.
 func WithIDMapper(mapper discovery.IDMapper) Option {
 	return func(options *Options) { options.IDMapper = mapper }
-}
-
-// WithTargetIDMapper injects the target ID mapper.
-func WithTargetIDMapper(mapper discovery.TargetIDMapper) Option {
-	return func(options *Options) { options.TargetIDMapper = mapper }
 }
 
 // WithClock injects the discovery and broker clock.

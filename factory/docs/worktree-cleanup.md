@@ -45,7 +45,7 @@ common-dir lock prevents overlapping manual and automatic runs. Automatic
 reports live under `.git/factory-cleanup/`; active or queued Work names and all
 of the safety checks above remain protected. Under pressure only, the pass also
 prunes only content-addressed `-a` and `-d` entries older than two hours from
-the shared Go build and staticcheck caches. Recent entries remain available to
+the shared Go build cache. Recent entries remain available to
 concurrent workers, and the Go regeneration marker and cache root are checked
 again immediately before pruning. The factory supervisor pins one resolved
 `GOCACHE` and `GOMODCACHE` in its process environment (optionally through

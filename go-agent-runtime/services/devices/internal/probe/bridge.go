@@ -187,7 +187,7 @@ func (b *liveDeviceProbeSessionBridge) flushAudio(ctx context.Context, final boo
 }
 
 func (b *liveDeviceProbeSessionBridge) writeOutputFrame(ctx context.Context, providerFrame []int16) error {
-	outputFrame, err := wavio.Resample(providerFrame, deviceProbeProviderSampleRate, deviceProbeInputSampleRate)
+	outputFrame, err := wavio.Resample(providerFrame, wavio.Rate24kHz, deviceProbeInputSampleRate)
 	if err != nil {
 		return fmt.Errorf("resample session output: %w", err)
 	}

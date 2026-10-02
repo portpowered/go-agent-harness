@@ -13,8 +13,6 @@ import (
 
 type SessionBrowserBrokerFactory func(config.BrowserConfig) (webmcp.Broker, error)
 
-type SessionDisplayCapability = cliTools.DisplayCapability
-
 func NewSessionToolCapabilitiesFactory(staticExecutor messages.ToolExecutor, brokerFactory SessionBrowserBrokerFactory) SessionToolCapabilitiesFactory {
 	return NewSessionToolCapabilitiesFactoryWithDisplaySurface(staticExecutor, brokerFactory, nil)
 }

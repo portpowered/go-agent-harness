@@ -2,8 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"sync"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/discovery"
@@ -121,100 +119,12 @@ func New(options Options) *LaneBToolSet {
 	return set
 }
 
-// NewWithService is the fake-friendly constructor variant accepting the
-// narrow interface rather than requiring a concrete discovery.Service.
-func NewWithService(service DiscoveryService, inputs discovery.ConnectionInputs, options ...ToolSetOptions) *LaneBToolSet {
-	setOptions := firstToolSetOptions(options)
-	return New(Options{Service: service, Inputs: inputs, ToolSetOptions: setOptions})
-}
-
-// NewLaneBToolSet constructs a set backed by the neutral Lane B discovery seam.
-func NewLaneBToolSet(service DiscoveryService, inputs discovery.ConnectionInputs, options ...ToolSetOptions) *LaneBToolSet {
-	return NewWithService(service, inputs, options...)
-}
-
-// NewLaneBBrokerToolSet is a descriptive constructor alias.
-func NewLaneBBrokerToolSet(service DiscoveryService, inputs discovery.ConnectionInputs, options ...ToolSetOptions) *LaneBToolSet {
-	return NewLaneBToolSet(service, inputs, options...)
-}
-
-// NewLaneBExecutor constructs the correlated messages.ToolExecutor directly.
-func NewLaneBExecutor(service DiscoveryService, inputs discovery.ConnectionInputs, options ...ToolSetOptions) *LaneBExecutor {
-	return NewLaneBToolSet(service, inputs, options...).Executor()
-}
-
-// Definitions returns the flattened go-agent-loop representation.
-func (s *LaneBToolSet) Definitions() []messages.ToolDefinition {
-	if s == nil {
-		return nil
-	}
-	return AgentLoopDefinitions()
-}
-
-// AgentLoopDefinitions is a descriptive alias for Definitions.
-func (s *LaneBToolSet) AgentLoopDefinitions() []messages.ToolDefinition { return s.Definitions() }
-
-// DefinitionSchemas returns complete closed schemas for the model/provider
-// boundary. It never includes a dynamic page schema.
-func (s *LaneBToolSet) DefinitionSchemas() []map[string]any { return StableToolSchemas() }
-
-// FunctionDefinitions is a descriptive alias for DefinitionSchemas.
-func (s *LaneBToolSet) FunctionDefinitions() []map[string]any { return s.DefinitionSchemas() }
-
 // Executor returns the correlated textual executor.
 func (s *LaneBToolSet) Executor() *LaneBExecutor {
 	if s == nil {
 		return &LaneBExecutor{}
 	}
 	return s.executor
-}
-
-// Service returns the injected neutral discovery seam.
-func (s *LaneBToolSet) Service() DiscoveryService {
-	if s == nil {
-		return nil
-	}
-	return s.service
-}
-
-// Execute runs a named tool through the existing CLI Tool message contract.
-func (s *LaneBToolSet) Execute(ctx context.Context, name string, args map[string]any) ([]messages.Message, error) {
-	if s == nil {
-		return nil, errors.New("nil webmcp tool set")
-	}
-	spec, ok := s.spec(name)
-	if !ok {
-		encoded, encodeErr := laneBInvalidEnvelope(name, nil, []ToolResultIssue{{Path: "/name", Code: "unknown_tool"}})
-		if encodeErr != nil {
-			return nil, encodeErr
-		}
-		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
-	}
-	if args == nil {
-		args = map[string]any{}
-	}
-	raw, err := json.Marshal(args)
-	if err != nil {
-		encoded, encodeErr := laneBInvalidEnvelope(name, nil, []ToolResultIssue{{Path: "/", Code: "invalid_json"}})
-		if encodeErr != nil {
-			return nil, encodeErr
-		}
-		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
-	}
-	values, issues := laneBDecodeArguments(raw, spec)
-	issues = append(issues, validateDecodedArguments(spec.definition.Name, values)...)
-	if len(issues) > 0 {
-		encoded, encodeErr := laneBInvalidEnvelope(name, values, issues)
-		if encodeErr != nil {
-			return nil, encodeErr
-		}
-		return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
-	}
-	encoded, err := s.executeValidated(ctx, spec, values)
-	if err != nil {
-		return nil, err
-	}
-	return []messages.Message{messages.NewTextMessage(messages.RoleTool, string(encoded))}, nil
 }
 
 // LaneBExecutor adapts the tool set to messages.ToolExecutor. It always returns

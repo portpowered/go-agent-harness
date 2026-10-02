@@ -353,7 +353,7 @@ caps := gw.Capabilities()
 if caps.Stateless.Tools.IsSupported() {
 	// Offer tool calling for this provider.
 }
-if caps.Stateless.Reasoning.State == gateway.CapabilityStateUnknown {
+if caps.Stateless.Reasoning.State == capabilities.CapabilityStateUnknown {
 	// Do not present this as supported unless your application has another
 	// provider-specific reason to allow it.
 }

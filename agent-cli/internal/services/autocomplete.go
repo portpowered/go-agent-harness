@@ -43,11 +43,6 @@ type Autocomplete struct {
 	offset      int          // scroll offset for long lists
 }
 
-// NewAutocomplete creates an empty, inactive Autocomplete model.
-func NewAutocomplete() Autocomplete {
-	return Autocomplete{}
-}
-
 // SetSuggestions replaces the full suggestion list and reapplies the current filter.
 func (a *Autocomplete) SetSuggestions(items []Suggestion) {
 	a.suggestions = items

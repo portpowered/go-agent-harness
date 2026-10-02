@@ -17,22 +17,12 @@ import (
 type ScreenCaptureState = runtimeTools.ScreenCaptureState
 
 const (
-	ScreenToolID          = runtimeTools.ScreenToolID
-	HostDisplayToolID     = runtimeTools.HostDisplayToolID
-	PhysicalDisplayToolID = runtimeTools.PhysicalDisplayToolID
-	PageSightToolID       = runtimeTools.PageSightToolID
+	HostDisplayToolID = runtimeTools.HostDisplayToolID
+	PageSightToolID   = runtimeTools.PageSightToolID
 
 	ScreenRecordingPermissionDeniedErrorCode = runtimeTools.ScreenRecordingPermissionDeniedErrorCode
 
-	ScreenCaptureGranted          = runtimeTools.ScreenCaptureGranted
-	ScreenCaptureDenied           = runtimeTools.ScreenCaptureDenied
-	ScreenCaptureUnavailable      = runtimeTools.ScreenCaptureUnavailable
-	ScreenCaptureCanceled         = runtimeTools.ScreenCaptureCanceled
-	ScreenCaptureTimedOut         = runtimeTools.ScreenCaptureTimedOut
-	ScreenCaptureFailed           = runtimeTools.ScreenCaptureFailed
-	ScreenCapturePermissionDenied = runtimeTools.ScreenCapturePermissionDenied
-	ScreenCaptureTimeout          = runtimeTools.ScreenCaptureTimeout
-	ScreenCaptureCancelled        = runtimeTools.ScreenCaptureCancelled
+	ScreenCaptureDenied = runtimeTools.ScreenCaptureDenied
 )
 
 // ScreenToolErrorResult and ScreenToolSessionErrorResult are the CLI host
@@ -80,7 +70,7 @@ func encodeScreenToolErrorResult(err error, includeOperatorGuidance bool) string
 
 // IsPhysicalDisplayToolName identifies calls that may reach a host display.
 func IsPhysicalDisplayToolName(name string) bool {
-	return name == ScreenToolID || name == HostDisplayToolID
+	return name == runtimeTools.ScreenToolID || name == HostDisplayToolID
 }
 
 // DisplayCapabilityState is retained as an alias for callers that only need
@@ -88,8 +78,8 @@ func IsPhysicalDisplayToolName(name string) bool {
 type DisplayCapabilityState = ScreenCaptureState
 
 const (
-	DisplayCapabilityUsable      = ScreenCaptureGranted
-	DisplayCapabilityUnavailable = ScreenCaptureUnavailable
+	DisplayCapabilityUsable      = runtimeTools.ScreenCaptureGranted
+	DisplayCapabilityUnavailable = runtimeTools.ScreenCaptureUnavailable
 )
 
 var (
@@ -116,12 +106,12 @@ func UsableDisplayCapability(displayCount int) DisplayCapability {
 	if displayCount < 0 {
 		displayCount = 0
 	}
-	return DisplayCapability{State: ScreenCaptureGranted, Available: displayCount > 0, DisplayCount: displayCount}
+	return DisplayCapability{State: runtimeTools.ScreenCaptureGranted, Available: displayCount > 0, DisplayCount: displayCount}
 }
 
 // UnavailableDisplayCapability constructs a normalized failed capability.
 func UnavailableDisplayCapability(reason string) DisplayCapability {
-	return DisplayCapability{State: ScreenCaptureUnavailable, Reason: reason}
+	return DisplayCapability{State: runtimeTools.ScreenCaptureUnavailable, Reason: reason}
 }
 
 // ScreenCaptureError is a stable, inspectable error for display failures.
@@ -168,13 +158,13 @@ func (e *ScreenCaptureError) Unwrap() error {
 	switch e.State {
 	case ScreenCaptureDenied:
 		errs = append(errs, ErrScreenRecordingPermissionDenied)
-	case ScreenCaptureUnavailable:
+	case runtimeTools.ScreenCaptureUnavailable:
 		errs = append(errs, ErrDisplayUnavailable)
-	case ScreenCaptureCanceled:
+	case runtimeTools.ScreenCaptureCanceled:
 		errs = append(errs, ErrScreenCaptureCanceled)
-	case ScreenCaptureTimedOut:
+	case runtimeTools.ScreenCaptureTimedOut:
 		errs = append(errs, ErrScreenCaptureTimedOut)
-	case ScreenCaptureFailed:
+	case runtimeTools.ScreenCaptureFailed:
 		errs = append(errs, ErrScreenCaptureFailed)
 	}
 	if e.Cause != nil {

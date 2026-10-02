@@ -43,11 +43,6 @@ func NewClientCapture(sink RecordSink, metadata ClientMetadata, reporters ...fun
 	return &ClientCapture{sink: sink, metadata: metadata, reporter: reporter}
 }
 
-// NewClient is an alias for NewClientCapture.
-func NewClient(sink RecordSink, metadata ClientMetadata, reporters ...func(error)) *ClientCapture {
-	return NewClientCapture(sink, metadata, reporters...)
-}
-
 // WrapDeviceInput records bytes returned by source as client/in/device-in.
 // The source's count and error are returned unchanged.
 func (c *ClientCapture) WrapDeviceInput(source io.Reader) *ClientDeviceInput {
@@ -137,17 +132,6 @@ func (c *ClientWebSocket) ReadMessage() (int, []byte, error) {
 	return messageType, payload, err
 }
 
-// Close passes through to an optional live connection closer.
-func (c *ClientWebSocket) Close() error {
-	if c == nil || c.inner == nil {
-		return ErrNilClientBoundary
-	}
-	if closer, ok := c.inner.(io.Closer); ok {
-		return closer.Close()
-	}
-	return nil
-}
-
 func (c *ClientCapture) observe(direction Direction, stream Stream, payload []byte, accepted int, liveErr error) {
 	if c == nil || c.sink == nil || accepted <= 0 {
 		return
@@ -173,3 +157,14 @@ var (
 	_ io.Reader = (*ClientDeviceInput)(nil)
 	_ io.Writer = (*ClientDeviceOutput)(nil)
 )
+
+// Close passes through to an optional live connection closer.
+func (c *ClientWebSocket) Close() error {
+	if c == nil || c.inner == nil {
+		return ErrNilClientBoundary
+	}
+	if closer, ok := c.inner.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}

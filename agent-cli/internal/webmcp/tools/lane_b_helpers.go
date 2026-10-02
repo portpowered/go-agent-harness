@@ -12,13 +12,6 @@ func maxInt(left, right int) int {
 	return right
 }
 
-func firstToolSetOptions(options []ToolSetOptions) ToolSetOptions {
-	if len(options) == 0 {
-		return ToolSetOptions{}
-	}
-	return options[0]
-}
-
 func laneBCloneMap(value map[string]any) map[string]any {
 	if value == nil {
 		return nil

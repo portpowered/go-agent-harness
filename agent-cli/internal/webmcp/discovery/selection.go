@@ -40,11 +40,6 @@ func NewDetachOnlyTargetHandle(detacher TargetDetacher) *TargetHandle {
 	}
 }
 
-// NewExternalTargetHandle is a descriptive constructor alias.
-func NewExternalTargetHandle(detacher TargetDetacher) *TargetHandle {
-	return NewDetachOnlyTargetHandle(detacher)
-}
-
 // Ownership reports the cleanup ownership represented by the handle.
 func (h *TargetHandle) Ownership() TargetOwnership {
 	if h == nil || h.ownership == "" {

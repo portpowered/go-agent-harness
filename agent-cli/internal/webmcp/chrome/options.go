@@ -22,13 +22,19 @@ const (
 	defaultCommandTimeout = 15 * time.Second
 )
 
+// WireTraceSink receives safe WebMCP wire-boundary evidence. Implementations
+// should keep recording bounded and must not add raw transport or page data.
+type WireTraceSink interface {
+	RecordWebMCPWireTrace(webmcp.WebMCPWireTrace)
+}
+
 // RuntimeOptions configures the adapter without exposing a browser protocol
 // type. A zero value is valid and receives safe production defaults.
 type RuntimeOptions struct {
 	EventBuffer    int
 	CommandTimeout time.Duration
 	HTTPClient     *http.Client
-	WireTrace      webmcp.WireTraceSink
+	WireTrace      WireTraceSink
 }
 
 // Option customizes a Runtime.
@@ -61,7 +67,7 @@ func WithHTTPClient(client *http.Client) Option {
 // WithWireTraceSink records safe target/session and CDP method evidence at
 // the command boundary. The sink never receives endpoint, input, or output
 // values from the adapter.
-func WithWireTraceSink(sink webmcp.WireTraceSink) Option {
+func WithWireTraceSink(sink WireTraceSink) Option {
 	return func(options *RuntimeOptions) {
 		if sink != nil {
 			options.WireTrace = sink

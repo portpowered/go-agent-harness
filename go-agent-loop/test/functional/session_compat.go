@@ -5,6 +5,3 @@ import "github.com/portpowered/go-agent-harness/go-agent-loop/test/functional/in
 // MockSessionInferencer remains available from the historical functional
 // package path for cross-module functional consumers.
 type MockSessionInferencer = sessionmock.Inferencer
-
-// NewMockSessionInferencer forwards to sessionmock.NewInferencer.
-func NewMockSessionInferencer() *sessionmock.Inferencer { return sessionmock.NewInferencer() }

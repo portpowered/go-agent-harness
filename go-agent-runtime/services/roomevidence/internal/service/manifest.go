@@ -29,13 +29,6 @@ type diagnosticRecord struct {
 	TUnixMS   int64             `json:"t_unix_ms"`
 }
 
-type artifactIntegrity = roomevidence.ArtifactIntegrity
-type manifestTiming = roomevidence.ManifestTiming
-type manifestBounds = roomevidence.ManifestBounds
-type participantManifest = roomevidence.ManifestParticipant
-type roomManifest = roomevidence.RunManifest
-type roomAudioFormat = roomevidence.ManifestAudioFormat
-
 func (r *recorder) Finalize(finalization roomevidence.Finalization) (roomevidence.Result, error) {
 	if r == nil {
 		return roomevidence.Result{}, nil
@@ -132,23 +125,23 @@ func roomReason(result rooms.RoomResult) rooms.RoomTerminationReason {
 func (r *recorder) writeManifest(result rooms.RoomResult, runErr error, endedAt time.Time) error {
 	health := r.Health()
 	reason := roomReason(result)
-	manifest := roomManifest{
+	manifest := roomevidence.RunManifest{
 		SchemaVersion: roomevidence.SchemaVersion,
 		Finalized:     runErr == nil,
-		Timing: manifestTiming{
+		Timing: roomevidence.ManifestTiming{
 			StartedAt: r.startedAt.UTC().Format(time.RFC3339Nano),
 			EndedAt:   endedAt.UTC().Format(time.RFC3339Nano),
 			Elapsed:   endedAt.Sub(r.startedAt).String(),
 			ClockBase: r.startedAt.UTC().Format(time.RFC3339Nano),
 		},
-		Bounds:            manifestBounds{MaxTurns: r.manifest.Room.MaxTurns, MaxDuration: durationString(r.manifest.Room.MaxDuration)},
+		Bounds:            roomevidence.ManifestBounds{MaxTurns: r.manifest.Room.MaxTurns, MaxDuration: durationString(r.manifest.Room.MaxDuration)},
 		TerminationReason: reason, Reason: reason,
-		Participants: make(map[string]participantManifest, len(r.participants)),
+		Participants: make(map[string]roomevidence.ManifestParticipant, len(r.participants)),
 		TurnCounts:   make(map[string]int, len(r.participants)),
-		AudioFormat:  roomAudioFormat{SampleRate: r.format.SampleRate, Channels: r.format.Channels, Encoding: roomevidence.AudioEncoding, SampleWidthBits: roomevidence.AudioSampleWidthBit, ByteOrder: roomevidence.AudioByteOrder},
+		AudioFormat:  roomevidence.ManifestAudioFormat{SampleRate: r.format.SampleRate, Channels: r.format.Channels, Encoding: roomevidence.AudioEncoding, SampleWidthBits: roomevidence.AudioSampleWidthBit, ByteOrder: roomevidence.AudioByteOrder},
 		RoomMix:      roomevidence.MixPath, RoomTimeline: roomevidence.TimelinePath, RoomLatency: roomevidence.LatencyPath,
 		Artifacts:         make(map[string]string, len(r.participants)*7+2),
-		ArtifactIntegrity: make(map[string]artifactIntegrity, len(r.participants)*7+2),
+		ArtifactIntegrity: make(map[string]roomevidence.ArtifactIntegrity, len(r.participants)*7+2),
 		RecordingStatus:   cloneStatus(health.Status), DegradedArtifacts: cloneMap(health.DegradedArtifacts),
 	}
 	manifest.Artifacts["room_mix"] = roomevidence.MixPath
@@ -183,7 +176,7 @@ func (r *recorder) writeManifest(result rooms.RoomResult, runErr error, endedAt 
 		if participantReason == "" {
 			participantReason = rooms.ParticipantTerminationError
 		}
-		manifest.Participants[configured.ID] = participantManifest{
+		manifest.Participants[configured.ID] = roomevidence.ManifestParticipant{
 			ID: configured.ID, Kind: normalizeParticipantKind(configured.Kind),
 			SystemPrompt: sanitizedText(configured.SystemPrompt, r.secrets), OpeningPrompt: sanitizedText(configured.OpeningPrompt, r.secrets),
 			Provider: sanitizedText(configured.Provider, r.secrets), Model: sanitizedText(configured.Model, r.secrets), APIKeyEnv: sanitizedText(configured.APIKeyEnv, r.secrets),
@@ -202,7 +195,7 @@ func (r *recorder) writeManifest(result rooms.RoomResult, runErr error, endedAt 
 	return writeManifestFile(filepath.Join(r.destination, roomevidence.ManifestPath), manifest, r.secrets, r.syncFile)
 }
 
-func (r *recorder) addParticipantArtifacts(manifest *roomManifest, id string, paths roomevidence.ArtifactPaths) {
+func (r *recorder) addParticipantArtifacts(manifest *roomevidence.RunManifest, id string, paths roomevidence.ArtifactPaths) {
 	entries := map[string]string{
 		id + ".wav": paths.WAV, id + ".diagnostics": paths.Diagnostics, id + ".deltas": paths.Deltas,
 		id + ".sent_pcm": paths.SentPCM, id + ".received_pcm": paths.ReceivedPCM, id + ".events": paths.Events,

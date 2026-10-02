@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	public "github.com/portpowered/go-agent-harness/go-agent-runtime/services/tools"
 )
 
 func TestBrowserToolDefinitionsAreFreshAndClosed(t *testing.T) {
@@ -11,7 +13,7 @@ func TestBrowserToolDefinitionsAreFreshAndClosed(t *testing.T) {
 	if len(first) != 12 {
 		t.Fatalf("browser definitions = %d, want 12", len(first))
 	}
-	if first[0].Name != GetContextToolName || first[5].Name != CancelToolName {
+	if first[0].Name != public.GetContextToolName || first[5].Name != public.CancelToolName {
 		t.Fatalf("stable ordering changed: first=%q sixth=%q", first[0].Name, first[5].Name)
 	}
 	parameters, ok := first[0].Parameters["properties"].(map[string]any)
@@ -60,7 +62,7 @@ func TestValidatePageToolInputUsesBoundedJSONSchemaPolicy(t *testing.T) {
 		input  json.RawMessage
 		schema json.RawMessage
 		limit  int
-		want   []ToolResultIssue
+		want   []public.ToolResultIssue
 	}{
 		{
 			name:   "valid exact number",
@@ -71,13 +73,13 @@ func TestValidatePageToolInputUsesBoundedJSONSchemaPolicy(t *testing.T) {
 			name:   "required property",
 			input:  json.RawMessage(`{}`),
 			schema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}`),
-			want:   []ToolResultIssue{{Path: "/name", Code: "required"}},
+			want:   []public.ToolResultIssue{{Path: "/name", Code: "required"}},
 		},
 		{
 			name:   "reference and unknown property",
 			input:  json.RawMessage(`{"name":12,"secret":"redacted"}`),
 			schema: json.RawMessage(`{"$defs":{"name":{"type":"string"}},"type":"object","properties":{"name":{"$ref":"#/$defs/name"}},"additionalProperties":false}`),
-			want: []ToolResultIssue{
+			want: []public.ToolResultIssue{
 				{Path: "/name", Code: "invalid_type"},
 				{Path: "/secret", Code: "unknown_property"},
 			},
@@ -86,20 +88,20 @@ func TestValidatePageToolInputUsesBoundedJSONSchemaPolicy(t *testing.T) {
 			name:   "duplicate and malformed",
 			input:  json.RawMessage(`{"a":1,"a":2}`),
 			schema: json.RawMessage(`{"type":"object"}`),
-			want:   []ToolResultIssue{{Path: "/a", Code: "duplicate_property"}},
+			want:   []public.ToolResultIssue{{Path: "/a", Code: "duplicate_property"}},
 		},
 		{
 			name:   "input limit",
 			input:  json.RawMessage(`{"value":"too large"}`),
 			schema: json.RawMessage(`{"type":"object"}`),
 			limit:  4,
-			want:   []ToolResultIssue{{Path: "/", Code: "input_too_large"}},
+			want:   []public.ToolResultIssue{{Path: "/", Code: "input_too_large"}},
 		},
 		{
 			name:   "invalid utf8",
 			input:  json.RawMessage([]byte{'{', 0xff, '}'}),
 			schema: json.RawMessage(`{"type":"object"}`),
-			want:   []ToolResultIssue{{Path: "/", Code: "invalid_utf8"}},
+			want:   []public.ToolResultIssue{{Path: "/", Code: "invalid_utf8"}},
 		},
 	}
 

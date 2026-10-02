@@ -222,10 +222,8 @@ The Phase 4 contract repair evidence is credential-free. Run these commands
 from the repository root:
 
 ```bash
-go test ./agent-cli/internal/agent
 go test ./go-agent-loop/pkg/agentloop
 go test ./go-agent-loop/pkg/messages
-go test ./agent-cli/internal/services -run 'TestRunSession_RecordFlushesCaptureWhenContextCanceled|TestPlanSessionRuntime_GenericReplayHonorsCallerCancellation|TestRunAgentLoopSession_ReturnsOnCleanDoneSignal|TestRunAgentLoopSession_TimeoutCancelsLoopWithoutCallerCancellationError|TestRunSession_SessionProviderCloseExitsPromptly'
 go test ./agent-cli/test/integration -run 'TestSessionCommand_.*Replay.*'
 go test ./go-llm-gateway/pkg/testing -run 'TestSessionReplayer_'
 make typecheck
