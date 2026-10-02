@@ -25,6 +25,9 @@ type ModelRunner struct {
 
 	// ingress is the ordered user-input queue; nil outside session mode.
 	ingress *sessionIngress
+	// sessionOut orders the session goroutine's writes to DeltaOutbox; see
+	// sessionOutbox.
+	sessionOut *sessionOutbox
 
 	streamID      string // set at start of each inference (one stream per request)
 	actorIndex    int    // incremented for each delta written to DeltaOutbox

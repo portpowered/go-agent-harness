@@ -27,6 +27,8 @@ func (r *ModelRunner) runSession(ctx context.Context) (err error) {
 		return fmt.Errorf("session connect: %w", err)
 	}
 	defer func() { err = joinOnFailure(err, session.Close()) }()
+	// Deltas the session produced reach DeltaOutbox before Run returns.
+	defer func() { r.sessionOut.flush(ctx) }()
 
 	state := sessionRunState{}
 	for {
@@ -225,7 +227,7 @@ func (r *ModelRunner) forwardSessionMessageWithState(ctx context.Context, sessio
 		state.Response.HasOutput = true
 	}
 	r.forwardInitialSessionConfig(ctx, session, state, msg)
-	messages.WriteStreamDelta(ctx, r.DeltaOutbox, msg)
+	r.writeSessionDelta(ctx, msg)
 	return messageEndOwned
 }
 
@@ -254,6 +256,8 @@ func (r *ModelRunner) forwardInitialSessionConfig(ctx context.Context, session m
 // deferred send failures are flushed, and err is returned unchanged.
 func (r *ModelRunner) endSession(ctx context.Context, state *sessionRunState, err error) error {
 	if err != nil && ctx.Err() == nil {
+		// The terminal failure must follow every queued delta.
+		r.sessionOut.flush(ctx)
 		r.publishSessionAudioFailure(err, state.Response.HasOutput)
 	}
 	r.flushPendingSessionSendErrors(ctx, state.ToolBatch.TakeFailures())
@@ -277,7 +281,7 @@ func (r *ModelRunner) finishClosedSession(ctx context.Context, session messages.
 		terminalProvenance = messages.TerminalProvenanceSession
 		terminalOutputState = messages.TerminalOutputNotApplicable
 	}
-	messages.WriteStreamDelta(ctx, r.DeltaOutbox, messages.StreamMessage{
+	r.writeSessionDelta(ctx, messages.StreamMessage{
 		Type: messages.StreamTypeSessionClose,
 		Value: messages.NewSessionCloseValueWithTerminal(
 			"",
@@ -309,7 +313,7 @@ func (r *ModelRunner) tagSessionAcknowledgement(ctx context.Context, state *sess
 	if rejectsActiveResponseCreate(*msg) && ack.Outstanding() {
 		ack.Reject()
 		if start := ack.Start; start != nil && start.ResponseID == state.Response.ID {
-			messages.WriteStreamDelta(ctx, r.DeltaOutbox, *start)
+			r.writeSessionDelta(ctx, *start)
 		}
 	}
 	if !ack.Outstanding() {

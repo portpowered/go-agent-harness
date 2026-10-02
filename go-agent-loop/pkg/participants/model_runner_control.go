@@ -186,7 +186,7 @@ func (r *ModelRunner) forwardSessionEventOutcome(ctx context.Context, session me
 		// per-call obligation together.
 		return failure, true, false, false
 	}
-	messages.WriteStreamDelta(ctx, r.DeltaOutbox, failure)
+	r.writeSessionDelta(ctx, failure)
 	return messages.StreamMessage{}, false, false, false
 }
 
@@ -286,7 +286,7 @@ func (r *ModelRunner) publishSessionAudioFailure(err error, hasOutput bool) {
 
 func (r *ModelRunner) flushPendingSessionSendErrors(ctx context.Context, failures []messages.StreamMessage) {
 	for _, failure := range failures {
-		messages.WriteStreamDelta(ctx, r.DeltaOutbox, failure)
+		r.writeSessionDelta(ctx, failure)
 	}
 }
 
