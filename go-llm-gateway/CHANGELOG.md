@@ -44,7 +44,13 @@
   `openai-session-id`), and dials the sideband
   (`wss://api.openai.com/v1/live/{call_id}`) with the same identity headers.
   The credential comes from a `CredentialSource` on every request
-  (`CredentialFunc` adapts the ChatGPT token manager). `Peer` is a pion
+  (`CredentialFunc` adapts `chatgptauth.Manager.Credential`); `Credential`
+  redacts its token in `String`, `GoString` and `LogValue`. Every sideband
+  write has a deadline (`CallConfig.SidebandWriteTimeout`, default 10 s),
+  received frames are capped at 16 MiB, and `Sideband.Close` first expires
+  the write deadline so a `Send` stuck on a peer that stopped reading
+  returns, sends `session.close` only if the writer frees within
+  `SidebandCloseGrace`, and always closes the connection. `Peer` is a pion
   WebRTC peer with one send-and-receive Opus track that converts 48 kHz
   mono PCM16 frames through go-audio's pure-Go Opus codec. Nothing in
   production reaches the package yet.
@@ -52,8 +58,9 @@
   (`httptest` call creation answered by an in-process pion peer, and the
   sideband WebSocket) and `VirtualNetwork`, an in-memory pion network so the
   loopback tests open no UDP socket. Only `_test.go` files may import it.
-- `go.mod`: `github.com/google/uuid`, `github.com/pion/logging` and
-  `github.com/pion/transport/v4` are now direct requirements (all were
+- `go.mod`: `github.com/google/uuid`, `github.com/pion/ice/v4`,
+  `github.com/pion/logging` and `github.com/pion/transport/v4` are now
+  direct requirements (all were
   already indirect at the same versions).
 
 ### Removed

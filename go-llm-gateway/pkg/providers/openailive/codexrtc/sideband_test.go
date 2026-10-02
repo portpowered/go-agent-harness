@@ -3,9 +3,12 @@ package codexrtc_test
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexrtc"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/codexrtc/fakecodex"
@@ -23,8 +26,8 @@ func receive(t *testing.T, sideband *codexrtc.Sideband) quicksilver.Event {
 
 // The sideband repeats the call's identity headers (OpenClaw
 // realtime-quicksilver-session.test.ts:364-389), sends nothing on connect
-// (OpenClaw realtime-quicksilver-gateway-bridge.test.ts:421 and Codex
-// realtime_websocket/methods.rs:985-1008), receives server events, and
+// (OpenClaw realtime-quicksilver-gateway-bridge.test.ts:424 and Codex
+// realtime_websocket/methods.rs:986-1016), receives server events, and
 // answers delegations with context appends.
 func TestSidebandCarriesTheDialectWithTheCallIdentity(t *testing.T) {
 	started := quicksilver.SessionStarted{Session: &quicksilver.SessionResource{ID: fakecodex.DefaultCallID}}
@@ -72,8 +75,8 @@ func TestSidebandCarriesTheDialectWithTheCallIdentity(t *testing.T) {
 	if err := sideband.Close(); err != nil {
 		t.Fatalf("second close: %v", err)
 	}
-	if err := sideband.Send(quicksilver.SessionClose{}); err == nil {
-		t.Fatal("send after close succeeded")
+	if err := sideband.Send(quicksilver.SessionClose{}); !errors.Is(err, codexrtc.ErrSidebandClosed) {
+		t.Fatalf("send after close: %v", err)
 	}
 }
 
@@ -171,5 +174,96 @@ func TestSidebandRejectsAMismatchedIdentity(t *testing.T) {
 	_, err := h.client.DialSideband(ctx, call)
 	if !errors.Is(err, codexrtc.ErrUnauthorized) || len(h.backend.Errors()) != 1 {
 		t.Fatalf("err = %v, backend errors %v", err, h.backend.Errors())
+	}
+}
+
+// bigAppend is a context append large enough that a peer which stops reading
+// fills the socket buffers within a few sends.
+func bigAppend() quicksilver.Event {
+	return quicksilver.SessionContextAppend{Content: []quicksilver.ContentPart{{Type: quicksilver.PartInputText, Text: strings.Repeat("x", 1<<20)}}}
+}
+
+// stalledSideband dials a sideband whose peer never reads.
+func stalledSideband(t *testing.T, writeTimeout time.Duration) *codexrtc.Sideband {
+	t.Helper()
+	h := newHarness(t, fixedCredential(), fakecodex.WithAnswer(answerSDP), fakecodex.WithSidebandStall())
+	client, err := codexrtc.NewCallClient(codexrtc.CallConfig{
+		Credential: fixedCredential(), BackendURL: h.server.URL + "/backend-api/codex",
+		SidebandBaseURL: h.sidebandBase(), HTTPClient: h.server.Client(), SidebandWriteTimeout: writeTimeout,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := deadline(t)
+	call, err := client.Create(ctx, codexrtc.CallRequest{OfferSDP: "v=offer\r\n", Session: codexSession(t), IDs: testIDs()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sideband, err := client.DialSideband(ctx, call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sideband
+}
+
+// A peer that stops reading must not hold Close: it expires the stuck
+// write, skips the courtesy frames, and drops the connection.
+func TestCloseReturnsPromptlyWhileASendIsStuckOnAStalledPeer(t *testing.T) {
+	sideband := stalledSideband(t, time.Hour)
+	sendDone := make(chan error, 1)
+	go func() {
+		for {
+			if err := sideband.Send(bigAppend()); err != nil {
+				sendDone <- err
+				return
+			}
+		}
+	}()
+	// Wait until the sender is blocked: no send error arrives for a while.
+	select {
+	case err := <-sendDone:
+		t.Fatalf("send failed before the peer stalled: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	closed := make(chan error, 1)
+	start := time.Now()
+	go func() { closed <- sideband.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("close: %v", err)
+		}
+	case <-time.After(5 * codexrtc.SidebandCloseGrace):
+		t.Fatal("Close blocked behind a stuck Send")
+	}
+	if elapsed := time.Since(start); elapsed > 3*codexrtc.SidebandCloseGrace {
+		t.Fatalf("Close took %s", elapsed)
+	}
+	select {
+	case err := <-sendDone:
+		if err == nil {
+			t.Fatal("stuck send reported success")
+		}
+	case <-time.After(5 * codexrtc.SidebandCloseGrace):
+		t.Fatal("stuck Send never returned after Close")
+	}
+}
+
+func TestSendGivesUpAfterTheWriteTimeoutOnAStalledPeer(t *testing.T) {
+	sideband := stalledSideband(t, 100*time.Millisecond)
+	t.Cleanup(func() {
+		if err := sideband.Close(); err != nil {
+			t.Logf("close: %v", err)
+		}
+	})
+	var err error
+	for range 64 {
+		if err = sideband.Send(bigAppend()); err != nil {
+			break
+		}
+	}
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Fatalf("send on a stalled peer: %v, want a write deadline error", err)
 	}
 }

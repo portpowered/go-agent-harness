@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -40,6 +41,31 @@ type Credential struct {
 	// AccountID is the chatgpt_account_id claim, sent as chatgpt-account-id.
 	AccountID string
 }
+
+// String describes the credential with the access token redacted; the
+// account id is an identifier, not a secret.
+func (c Credential) String() string {
+	token := `""`
+	if c.AccessToken != "" {
+		token = redactedMark
+	}
+	return fmt.Sprintf("Credential{AccessToken:%s AccountID:%q}", token, c.AccountID)
+}
+
+// GoString is String, so %#v redacts too.
+func (c Credential) GoString() string { return "codexrtc." + c.String() }
+
+// LogValue keeps the token out of structured logs.
+func (c Credential) LogValue() slog.Value {
+	token := ""
+	if c.AccessToken != "" {
+		token = redactedMark
+	}
+	return slog.GroupValue(slog.String("access_token", token), slog.String("account_id", c.AccountID))
+}
+
+// redactedMark replaces a secret in formatted output.
+const redactedMark = "[REDACTED]"
 
 // CredentialSource returns the current credential. It is called before every
 // request, so an implementation can refresh the token.

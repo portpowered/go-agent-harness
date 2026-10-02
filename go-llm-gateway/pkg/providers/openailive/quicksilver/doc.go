@@ -25,6 +25,6 @@
 // Sources: Codex codex-rs (revision 1e6185e522)
 // codex-api/src/endpoint/realtime_websocket/{protocol.rs,
 // protocol_frameless_bidi.rs, methods_frameless_bidi.rs} and OpenClaw
-// (revision 0dc63ee) extensions/openai/realtime-quicksilver-{events,wire,
+// (revision 87af5763) extensions/openai/realtime-quicksilver-{events,wire,
 // protocol}.ts. The design is docs/architecture/chatgpt-oauth.md section 3.2.
 package quicksilver

@@ -14,9 +14,10 @@
 //     and Sideband carries the quicksilver dialect (package quicksilver).
 //
 // The credential comes from a CredentialSource on every request, so a
-// refreshed ChatGPT token is used without rebuilding the client; the ChatGPT
-// token manager (go-llm-gateway/pkg/providers/openai/chatgptauth) plugs in
-// through CredentialFunc.
+// refreshed ChatGPT token is used without rebuilding the client. The ChatGPT
+// token manager plugs in through CredentialFunc: chatgptauth.Manager.Credential
+// (go-llm-gateway/pkg/providers/openai/chatgptauth) returns a credential whose
+// AccessToken and AccountID map one to one onto Credential.
 //
 // No production session reaches this package yet. Tests run it against the
 // fakecodex subpackage: an httptest call-creation endpoint backed by an

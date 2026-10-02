@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/portpowered/go-agent-harness/go-llm-gateway/pkg/providers/openailive/quicksilver"
@@ -102,6 +103,9 @@ type CallConfig struct {
 	Originator string
 	// Version is sent as the version header when set.
 	Version string
+	// SidebandWriteTimeout bounds every sideband write; it defaults to
+	// DefaultSidebandWriteTimeout.
+	SidebandWriteTimeout time.Duration
 }
 
 // CallClient creates calls and dials their sidebands.
@@ -113,6 +117,7 @@ type CallClient struct {
 	dialer       *websocket.Dialer
 	originator   string
 	version      string
+	writeTimeout time.Duration
 }
 
 // NewCallClient validates config and applies its defaults.
@@ -136,6 +141,10 @@ func NewCallClient(config CallConfig) (*CallClient, error) {
 		dialer:       config.Dialer,
 		originator:   defaultString(config.Originator, DefaultOriginator),
 		version:      config.Version,
+		writeTimeout: config.SidebandWriteTimeout,
+	}
+	if client.writeTimeout <= 0 {
+		client.writeTimeout = DefaultSidebandWriteTimeout
 	}
 	if client.http == nil {
 		client.http = http.DefaultClient

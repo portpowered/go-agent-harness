@@ -22,7 +22,7 @@ func decodeGolden(t *testing.T, name string) qs.Event {
 	return event
 }
 
-// OpenClaw realtime-quicksilver-delegation.test.ts:295-298: an unmodelled
+// OpenClaw realtime-quicksilver-delegation.test.ts:297-300: an unmodelled
 // type is reported, not rejected, and passes through unchanged.
 func TestUnknownEventTypesDecodeToUnknownEventAndReEncodeUnchanged(t *testing.T) {
 	frame := []byte(`{"type":"future.event","detail":{"x":1}}`)
@@ -85,8 +85,8 @@ func TestMalformedFramesAreRejected(t *testing.T) {
 	}
 }
 
-// Codex protocol_frameless_bidi.rs:72-90 and OpenClaw
-// realtime-quicksilver-events.ts:83-89 join only the input_text parts and
+// Codex protocol_frameless_bidi.rs:73-96 and OpenClaw
+// realtime-quicksilver-events.ts:71-90 join only the input_text parts and
 // accept only client-targeted delegations.
 func TestDelegationPromptJoinsInputTextAndOnlyClientTargetsAreWork(t *testing.T) {
 	mixed, ok := decodeGolden(t, "server.delegation_created_mixed_parts").(qs.DelegationCreated)
@@ -99,8 +99,8 @@ func TestDelegationPromptJoinsInputTextAndOnlyClientTargetsAreWork(t *testing.T)
 	}
 }
 
-// Codex protocol_common.rs:63-83 reads the top-level message, then the
-// nested one; OpenClaw realtime-quicksilver-events.ts:140-156 treats the
+// Codex protocol_common.rs:68-83 reads the top-level message, then the
+// nested one; OpenClaw realtime-quicksilver-events.ts:146-163 treats the
 // listed nested codes as credential failures.
 func TestErrorTextAndCredentialFailure(t *testing.T) {
 	cases := []struct {

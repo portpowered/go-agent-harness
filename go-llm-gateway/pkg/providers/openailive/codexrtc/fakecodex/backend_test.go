@@ -271,3 +271,24 @@ func TestStatusOptionsRejectCallsAndSidebands(t *testing.T) {
 		t.Fatalf("sideband status %d", status)
 	}
 }
+
+func TestStalledSidebandHoldsUntilTheBackendCloses(t *testing.T) {
+	backend, server := serve(t, fakecodex.WithAnswer("v=answer\r\n"), fakecodex.WithSidebandStall())
+	if status := post(t, server, http.MethodPost, "?"+codexrtc.CallQuery, identity(), goodBody); status != http.StatusCreated {
+		t.Fatalf("status %d", status)
+	}
+	conn, _ := dialSideband(t, server, identity())
+	if conn == nil {
+		t.Fatal("sideband refused")
+	}
+	if err := backend.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Released, the handler closes the connection, so the read ends.
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("stalled sideband stayed open after Close")
+	}
+	if err := backend.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+}

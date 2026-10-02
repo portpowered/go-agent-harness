@@ -16,7 +16,7 @@ import (
 // reference source. Citations name the file and line of the literal:
 //
 //   - Codex: openai/codex revision 1e6185e522, paths under codex-rs/.
-//   - OpenClaw: openclaw/openclaw revision 0dc63ee, paths under
+//   - OpenClaw: openclaw/openclaw revision 87af5763, paths under
 //     extensions/openai/.
 const goldenDir = "testdata/protocol"
 
@@ -44,7 +44,7 @@ func clientGoldens() map[string]qs.Event {
 	return map[string]qs.Event{
 		// OpenClaw realtime-quicksilver-wire.test.ts:79-93.
 		"client.session_update_initial_items": qs.SessionUpdate{Session: withHistory},
-		// OpenClaw realtime-quicksilver-bridge.test.ts:33-40.
+		// OpenClaw realtime-quicksilver-bridge.test.ts:34-40.
 		"client.session_update_direct": qs.SessionUpdate{Session: marinSession("Use delegation for real work.")},
 		// OpenClaw realtime-quicksilver-delegation.test.ts:194-198.
 		"client.session_context_append_speakable": qs.SessionContextAppend{Channel: qs.ChannelSpeakable, Content: text("Ready")},
@@ -67,7 +67,7 @@ func clientGoldens() map[string]qs.Event {
 		},
 		// Codex codex-api/src/endpoint/realtime_websocket/protocol.rs:75-76
 		// (unit variant) and methods.rs:415-417; OpenClaw
-		// realtime-quicksilver-protocol.ts:157.
+		// realtime-quicksilver-protocol.ts:155.
 		"client.session_close": qs.SessionClose{},
 		// Shape from Codex realtime_websocket/protocol.rs:60-61 and OpenClaw
 		// realtime-quicksilver-protocol.ts:12-17; the audio value is the

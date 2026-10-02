@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ice/v4"
 	"github.com/pion/logging"
 	"github.com/pion/transport/v4/vnet"
 	"github.com/pion/webrtc/v4"
@@ -13,12 +14,12 @@ import (
 // Virtual network settings. The ICE timeouts are short so a broken
 // connection fails fast instead of holding a test.
 const (
-	vnetCIDR            = "10.66.0.0/24"
-	vnetClientIP        = "10.66.0.2"
-	vnetServerIP        = "10.66.0.3"
-	iceDisconnected     = time.Second
-	iceFailed           = 2 * time.Second
-	iceKeepaliveInteval = 200 * time.Millisecond
+	vnetCIDR             = "10.66.0.0/24"
+	vnetClientIP         = "10.66.0.2"
+	vnetServerIP         = "10.66.0.3"
+	iceDisconnected      = time.Second
+	iceFailed            = 2 * time.Second
+	iceKeepaliveInterval = 200 * time.Millisecond
 )
 
 // VirtualNetwork is an in-memory pion network with two hosts, so WebRTC peers
@@ -62,7 +63,8 @@ func host(router *vnet.Router, ip string) (*webrtc.SettingEngine, error) {
 	}
 	settings := &webrtc.SettingEngine{}
 	settings.SetNet(network)
-	settings.SetICETimeouts(iceDisconnected, iceFailed, iceKeepaliveInteval)
+	settings.SetICETimeouts(iceDisconnected, iceFailed, iceKeepaliveInterval)
+	settings.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	return settings, nil
 }
 

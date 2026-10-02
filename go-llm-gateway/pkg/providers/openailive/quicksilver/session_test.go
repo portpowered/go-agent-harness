@@ -32,14 +32,14 @@ func requireJSON(t *testing.T, value any, want string) {
 	}
 }
 
-// Codex codex-api/src/endpoint/realtime_websocket/methods_frameless_bidi_tests.rs:23-46.
+// Codex codex-api/src/endpoint/realtime_websocket/methods_frameless_bidi_tests.rs:24-49.
 func TestBuildSessionMatchesCodexSessionWithoutHistory(t *testing.T) {
 	session := mustBuild(t, models.SessionConfig{Model: "gpt-live", Instructions: "instructions", Voice: "marin"})
 	requireJSON(t, session, `{"model":"gpt-live","instructions":"instructions",
 		"audio":{"output":{"voice":"marin"}},"delegation":{"type":"client"}}`)
 }
 
-// Codex methods_frameless_bidi_tests.rs:48-102: user and developer history
+// Codex methods_frameless_bidi_tests.rs:51-102: user and developer history
 // is input_text, assistant history is output_text.
 func TestBuildSessionMatchesCodexRoleBearingHistory(t *testing.T) {
 	session := mustBuild(t, models.SessionConfig{
@@ -55,7 +55,7 @@ func TestBuildSessionMatchesCodexRoleBearingHistory(t *testing.T) {
 		{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I remember."}]}]`)
 }
 
-// OpenClaw extensions/openai/realtime-quicksilver-wire.test.ts:101-110: the
+// OpenClaw extensions/openai/realtime-quicksilver-wire.test.ts:97-103: the
 // codex model defaults to cove and keeps its own voices.
 func TestBuildSessionDefaultsTheCodexModelToCoveAndRejectsOtherVoices(t *testing.T) {
 	session := mustBuild(t, models.SessionConfig{Model: qs.ModelCodex})
@@ -103,8 +103,8 @@ func TestBuildSessionRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
-// OpenClaw realtime-quicksilver-wire.ts:161-167 and Codex
-// methods_frameless_bidi.rs:36-50: session.update carries no model.
+// OpenClaw realtime-quicksilver-wire.ts:155-168 and Codex
+// methods_frameless_bidi.rs:35-50: session.update carries no model.
 func TestSessionUpdateDropsTheModel(t *testing.T) {
 	update := qs.NewSessionUpdate(mustBuild(t, models.SessionConfig{Model: qs.ModelCodex, Instructions: " Speak briefly. "}))
 	encoded, err := qs.EncodeEvent(update)

@@ -92,6 +92,10 @@ func WithSidebandEvents(events ...quicksilver.Event) Option {
 // frame, right after the scripted events.
 func WithSidebandDrop() Option { return func(b *Backend) { b.dropSideband = true } }
 
+// WithSidebandStall makes each sideband stop reading after the scripted
+// events, like a peer that hangs, until Backend.Close.
+func WithSidebandStall() Option { return func(b *Backend) { b.stallSideband = true } }
+
 // Backend is the fake. It serves one call; later calls replace it.
 type Backend struct {
 	token, accountID string
@@ -103,6 +107,9 @@ type Backend struct {
 	sidebandStatus   int
 	script           []quicksilver.Event
 	dropSideband     bool
+	stallSideband    bool
+	stop             chan struct{}
+	stopOnce         sync.Once
 	upgrader         websocket.Upgrader
 
 	mu      sync.Mutex
@@ -115,7 +122,7 @@ type Backend struct {
 
 // New returns a Backend configured by options.
 func New(options ...Option) *Backend {
-	b := &Backend{token: DefaultToken, accountID: DefaultAccountID, changed: make(chan struct{})}
+	b := &Backend{token: DefaultToken, accountID: DefaultAccountID, changed: make(chan struct{}), stop: make(chan struct{})}
 	for _, option := range options {
 		option(b)
 	}
@@ -182,8 +189,9 @@ func (b *Backend) WaitClientEvents(ctx context.Context, n int) ([]quicksilver.Ev
 	}
 }
 
-// Close closes the answer peer.
+// Close releases stalled sidebands and closes the answer peer.
 func (b *Backend) Close() error {
+	b.stopOnce.Do(func() { close(b.stop) })
 	if peer := b.Peer(); peer != nil {
 		return peer.Close()
 	}
@@ -352,6 +360,10 @@ func (b *Backend) serveSideband(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if b.dropSideband {
+		return
+	}
+	if b.stallSideband {
+		<-b.stop
 		return
 	}
 	b.readClientEvents(conn)
