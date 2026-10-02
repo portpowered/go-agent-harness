@@ -531,6 +531,7 @@ func TestSessionModelRunner_OrderedExplicitCancelPrecedesHeldOnsetAudio(t *testi
 		t.Fatalf("sent %#v, want RESPONSE.CANCEL before the held frame", sent)
 	}
 }
+
 // TestKernelRunner_DispatchWithoutListenersDropsAndLaterListenersSeeOnlyNewDeltas
 // covers dispatch with no delta reader or message outbox: those deltas are
 // dropped, and listeners attached later receive only what follows.
