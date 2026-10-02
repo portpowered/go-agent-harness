@@ -22,10 +22,6 @@ import (
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/siteadapter"
 )
 
-// catalogEvidencePageProducer records that the page's own WebMCP producer
-// reported its catalog, including an empty one.
-const catalogEvidencePageProducer = "page_producer"
-
 type targetSession struct {
 	focusMu          sync.Mutex
 	focusUsers       int
