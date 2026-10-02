@@ -45,7 +45,7 @@ func TestPageToolSlowSetupClassifiedDistinctly(t *testing.T) {
 	// ListTools outlasts the whole call, so only the setup reserve (one third
 	// of the remaining budget) decides the outcome; the scale is irrelevant.
 	broker := &latencyBroker{listToolsDelay: 2 * time.Second}
-	broker.catalog = pageCatalog()
+	broker.Catalog = pageCatalog()
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec"})
 
@@ -74,8 +74,8 @@ func TestPageToolColdStartFitsLongRunningBudget(t *testing.T) {
 	// Scaled 10x down from a 700ms setup and 900ms invoke under a 4s budget:
 	// the setup reserve is proportional, so the ratios are what is tested.
 	broker := &latencyBroker{listToolsDelay: 70 * time.Millisecond, invokeDelay: 90 * time.Millisecond}
-	broker.catalog = pageCatalog()
-	broker.invokeResult = webmcp.InvokeResult{InvocationID: "inv-cold", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"solved":true}`)}
+	broker.Catalog = pageCatalog()
+	broker.InvokeResult = webmcp.InvokeResult{InvocationID: "inv-cold", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"solved":true}`)}
 	set := NewBrokerToolSet(broker)
 	set.SetReservedToolNames([]string{"exec"})
 

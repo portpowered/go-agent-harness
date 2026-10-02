@@ -31,18 +31,18 @@ const (
 func TestWebMCPDirectInvokeReceiptUsesBrowserIDAndOnlyHandoffFields(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	page, target, candidate, tool := directFixture()
-	broker := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-		catalog:    webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
-		invokeResult: webmcp.InvokeResult{
+	broker := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+		Catalog:    webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
+		InvokeResult: webmcp.InvokeResult{
 			InvocationID:        "broker-invocation-1",
 			BrowserInvocationID: testBrowserInvocationID,
 			State:               webmcp.InvocationCompleted,
 			Output:              json.RawMessage(`{"page_output":"do-not-put-in-receipt"}`),
 		},
-	}
+	}}
 
 	result := executeDirectCommand(t, configDir, NewFileWebMCPSelectionStore(configDir), directFactory(broker),
 		"invoke", "--browser", "browser-a", "--tab", "tab-a", "--tool-ref", string(tool.Ref),
@@ -130,11 +130,11 @@ func TestWebMCPDirectCancelRehydratesExactSelectionWithoutLocalRegistry(t *testi
 	}); err != nil {
 		t.Fatalf("seed persisted selection: %v", err)
 	}
-	base := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-	}
+	base := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+	}}
 	broker := &directCancelCommandBroker{directCommandBroker: base}
 
 	result := executeDirectCommand(t, configDir, store, directFactory(broker), "cancel", "--invocation", testBrowserInvocationID, "--json")
@@ -147,22 +147,22 @@ func TestWebMCPDirectCancelRehydratesExactSelectionWithoutLocalRegistry(t *testi
 	if got := broker.directCancelRequest; got.Target != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) || got.InvocationID != testBrowserInvocationID {
 		t.Fatalf("direct cancel request = %+v", got)
 	}
-	if base.cancelRequest.InvocationID != "" {
-		t.Fatalf("fresh direct cancel consulted local broker registry: %+v", base.cancelRequest)
+	if base.LastCancel().InvocationID != "" {
+		t.Fatalf("fresh direct cancel consulted local broker registry: %+v", base.LastCancel())
 	}
-	if len(base.selectCalls) != 1 || base.selectCalls[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
-		t.Fatalf("exact selection calls = %+v", base.selectCalls)
+	if len(base.Selects) != 1 || base.Selects[0] != (webmcp.TargetSelector{BrowserID: candidate.ID, TargetID: target.ID}) {
+		t.Fatalf("exact selection calls = %+v", base.Selects)
 	}
 }
 
 func TestWebMCPDirectCancelRejectsConvenientFallbackTarget(t *testing.T) {
 	configDir := writeDirectConfig(t, "  selection:\n    auto_select: single\n")
 	page, target, candidate, _ := directFixture()
-	base := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-	}
+	base := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+	}}
 	broker := &directCancelCommandBroker{directCommandBroker: base}
 
 	result := executeDirectCommand(t, configDir, nil, directFactory(broker), "cancel", "--browser", "browser-a", "--invocation", testBrowserInvocationID, "--json")
@@ -173,8 +173,8 @@ func TestWebMCPDirectCancelRejectsConvenientFallbackTarget(t *testing.T) {
 	if envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorStaleSelection) {
 		t.Fatalf("fallback cancellation envelope = %+v", envelope)
 	}
-	if len(base.selectCalls) != 0 || broker.directCancelRequest.InvocationID != "" {
-		t.Fatalf("fallback cancellation touched target/cancel path: selections=%+v request=%+v", base.selectCalls, broker.directCancelRequest)
+	if len(base.Selects) != 0 || broker.directCancelRequest.InvocationID != "" {
+		t.Fatalf("fallback cancellation touched target/cancel path: selections=%+v request=%+v", base.Selects, broker.directCancelRequest)
 	}
 }
 
@@ -191,11 +191,11 @@ func TestWebMCPDirectCancelClassifiesBrowserRejection(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed persisted selection: %v", err)
 	}
-	base := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-	}
+	base := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+	}}
 	broker := &directCancelCommandBroker{
 		directCommandBroker: base,
 		directCancelErr:     errors.New("browser response leaked credential=secret"),
@@ -217,12 +217,12 @@ func TestWebMCPDirectCancelClassifiesBrowserRejection(t *testing.T) {
 func TestWebMCPDirectHumanOutputIsStableAndRedacted(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	page, target, candidate, tool := directFixture()
-	broker := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-		catalog:    webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
-	}
+	broker := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+		Catalog:    webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
+	}}
 	result := executeDirectCommand(t, configDir, NewFileWebMCPSelectionStore(configDir), directFactory(broker), "browsers")
 	if result.err != nil {
 		t.Fatalf("browsers: %v", result.err)
@@ -240,12 +240,11 @@ func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	page, target, candidate, _ := directFixture()
-	closedBroker := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-		watch:      closedEventChannel(),
-	}
+	closedBroker := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+	}}
 	ended := executeDirectCommand(t, configDir, store, directFactory(closedBroker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
 	envelope := requireDirectSuccess(t, ended)
 	var endedData operations.WatchData
@@ -254,12 +253,12 @@ func TestWebMCPDirectWatchReportsTerminationAndCancellation(t *testing.T) {
 		t.Fatalf("terminated watch = %+v", endedData)
 	}
 
-	blockedBroker := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-		watch:      make(chan webmcp.BrokerEvent),
-	}
+	blockedBroker := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+		Events:     make(chan webmcp.BrokerEvent),
+	}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	canceled := executeDirectCommandContext(t, ctx, configDir, store, directFactory(blockedBroker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
@@ -304,12 +303,12 @@ func TestWebMCPDirectWatchReportsBoundedFailure(t *testing.T) {
 		Reason:    webmcp.BrokerWatchBufferFullReason,
 	}
 	close(stream)
-	broker := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-		watch:      stream,
-	}
+	broker := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+		Events:     stream,
+	}}
 
 	result := executeDirectCommand(t, configDir, store, directFactory(broker), "watch", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json")
 	if result.err != nil {
@@ -329,11 +328,11 @@ func TestWebMCPDirectToolsWatchSubscribesBeforeSelection(t *testing.T) {
 	page, target, candidate, _ := directFixture()
 	stream := make(chan webmcp.BrokerEvent, 2)
 	broker := &selectionOrderingWatchBroker{
-		directCommandBroker: &directCommandBroker{
-			candidates: []webmcp.BrowserCandidate{candidate},
-			targets:    []webmcp.Target{target},
-			selected:   page,
-		},
+		directCommandBroker: &directCommandBroker{Broker: webmcptest.Broker{
+			Candidates: []webmcp.BrowserCandidate{candidate},
+			Targets:    []webmcp.Target{target},
+			Page:       page,
+		}},
 		stream: stream,
 	}
 
@@ -414,13 +413,13 @@ func TestWebMCPDirectClassifiesBrokerFailures(t *testing.T) {
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	_, target, candidate, tool := directFixture()
-	broker := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: candidate.ID, TargetID: target.ID}},
-		catalog:    webmcp.ToolCatalogSnapshot{Context: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: candidate.ID, TargetID: target.ID}}, Tools: []webmcp.ToolDescriptor{tool}},
-		invokeErr:  webmcp.NewClassifiedError(webmcp.ErrorStaleToolRef, "tool ref is stale", map[string]any{"tool_ref": string(tool.Ref)}),
-	}
+	broker := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       webmcp.PageContext{Key: webmcp.PageKey{BrowserID: candidate.ID, TargetID: target.ID}},
+		Catalog:    webmcp.ToolCatalogSnapshot{Context: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: candidate.ID, TargetID: target.ID}}, Tools: []webmcp.ToolDescriptor{tool}},
+		InvokeErr:  webmcp.NewClassifiedError(webmcp.ErrorStaleToolRef, "tool ref is stale", map[string]any{"tool_ref": string(tool.Ref)}),
+	}}
 	result := executeDirectCommand(t, configDir, store, directFactory(broker), "invoke", "--browser", "browser-a", "--tab", "tab-a", "--tool-ref", string(tool.Ref), "--input-json", `{}`, "--json")
 	if result.err == nil {
 		t.Fatal("stale invocation unexpectedly succeeded")
@@ -435,20 +434,20 @@ func TestWebMCPDirectClassifiesPersistedBrowserLossAsDisconnected(t *testing.T) 
 	configDir := writeDirectConfig(t, "")
 	store := NewFileWebMCPSelectionStore(configDir)
 	page, target, candidate, _ := directFixture()
-	selected := &directCommandBroker{
-		candidates: []webmcp.BrowserCandidate{candidate},
-		targets:    []webmcp.Target{target},
-		selected:   page,
-	}
+	selected := &directCommandBroker{Broker: webmcptest.Broker{
+		Candidates: []webmcp.BrowserCandidate{candidate},
+		Targets:    []webmcp.Target{target},
+		Page:       page,
+	}}
 	if result := executeDirectCommand(t, configDir, store, directFactory(selected), "select", "--browser", string(candidate.ID), "--tab", string(target.ID), "--json"); result.err != nil {
 		t.Fatalf("seed persisted selection: %v\nstdout=%s", result.err, result.stdout)
 	}
 
-	lost := &directCommandBroker{
-		discoverErr: webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
+	lost := &directCommandBroker{Broker: webmcptest.Broker{
+		DiscoverErr: webmcp.NewClassifiedError(webmcp.ErrorEndpointUnreachable, "browser endpoint could not be reached", map[string]any{
 			"phase": "discovery",
 		}),
-	}
+	}}
 	result := executeDirectCommand(t, configDir, store, directFactory(lost), "context", "--json")
 	if result.err == nil {
 		t.Fatal("context unexpectedly succeeded after the persisted browser disappeared")
@@ -527,8 +526,8 @@ func directTargetOperationCases(tool webmcp.ToolDescriptor) []directOperationCas
 			if data.InvocationID != testDirectInvocationID || data.ToolRef != string(tool.Ref) || data.Status != string(webmcp.InvocationCompleted) {
 				t.Fatalf("invoke result = %+v", data)
 			}
-			if broker.invokeRequest.ToolRef != tool.Ref || string(broker.invokeRequest.Input) != `{"value":1}` || broker.invokeRequest.Reason != "test reason" {
-				t.Fatalf("invoke request = %+v", broker.invokeRequest)
+			if broker.LastInvoke().ToolRef != tool.Ref || string(broker.LastInvoke().Input) != `{"value":1}` || broker.LastInvoke().Reason != "test reason" {
+				t.Fatalf("invoke request = %+v", broker.LastInvoke())
 			}
 			requireSingleDispatchReceipt(t, result.stderr, testDirectInvocationID, tool.Ref)
 		}},
@@ -536,8 +535,8 @@ func directTargetOperationCases(tool webmcp.ToolDescriptor) []directOperationCas
 			t.Helper()
 			var data WebMCPDirectCancelData
 			decodeDirectData(t, requireDirectSuccess(t, result).Data, &data)
-			if data.InvocationID != testDirectInvocationID || broker.cancelRequest.InvocationID != testDirectInvocationID {
-				t.Fatalf("cancel result/request = %+v/%+v", data, broker.cancelRequest)
+			if data.InvocationID != testDirectInvocationID || broker.LastCancel().InvocationID != testDirectInvocationID {
+				t.Fatalf("cancel result/request = %+v/%+v", data, broker.LastCancel())
 			}
 		}},
 	}
@@ -567,13 +566,13 @@ func TestWebMCPDirectOperationsUseBrokerIDsRefsAndInvocations(t *testing.T) {
 	page, target, candidate, tool := directFixture()
 	for _, test := range directOperationCases(tool) {
 		t.Run(test.name, func(t *testing.T) {
-			broker := &directCommandBroker{
-				candidates:   []webmcp.BrowserCandidate{candidate},
-				targets:      []webmcp.Target{target},
-				selected:     page,
-				catalog:      webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
-				invokeResult: webmcp.InvokeResult{InvocationID: testDirectInvocationID, State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"ok":true}`)},
-			}
+			broker := &directCommandBroker{Broker: webmcptest.Broker{
+				Candidates:   []webmcp.BrowserCandidate{candidate},
+				Targets:      []webmcp.Target{target},
+				Page:         page,
+				Catalog:      webmcp.ToolCatalogSnapshot{Context: page, Generation: page.Generation, Tools: []webmcp.ToolDescriptor{tool}},
+				InvokeResult: webmcp.InvokeResult{InvocationID: testDirectInvocationID, State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"ok":true}`)},
+			}}
 			result := executeDirectCommand(t, configDir, store, directFactory(broker), test.args...)
 			test.check(t, result, broker)
 			if test.name != "invoke" && result.stderr != "" {

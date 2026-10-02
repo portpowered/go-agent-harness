@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp"
+	"github.com/portpowered/go-agent-harness/agent-cli/internal/webmcp/webmcptest"
 	"github.com/portpowered/go-agent-harness/go-agent-loop/pkg/messages"
 )
 
@@ -32,11 +33,13 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 		t.Fatalf("default definitions = %d, want cast controls disabled", len(got))
 	}
 	broker := &recordingBroker{
-		selected: webmcp.PageContext{
-			Key:       webmcp.PageKey{BrowserID: "browser-office", TargetID: "tab-example"},
-			URL:       "https://example.com/",
-			Origin:    "https://example.com",
-			Connected: true,
+		Broker: webmcptest.Broker{
+			Page: webmcp.PageContext{
+				Key:       webmcp.PageKey{BrowserID: "browser-office", TargetID: "tab-example"},
+				URL:       "https://example.com/",
+				Origin:    "https://example.com",
+				Connected: true,
+			},
 		},
 		castDevices: []webmcp.CastDevice{{Name: "Office TV", ID: "sink-office"}},
 	}
@@ -75,8 +78,8 @@ func TestOpenTabAndWebCastToolsExecuteEndToEndThroughBroker(t *testing.T) {
 			t.Fatalf("%s result = %s, err=%v", call.Name, response.Content, err)
 		}
 	}
-	if !reflect.DeepEqual(broker.calls, []string{"open_tab", "list_cast_devices", "cast_tab", "cast_media", "navigate_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
-		t.Fatalf("cast broker calls = %v device=%q", broker.calls, broker.castDeviceName)
+	if !reflect.DeepEqual(broker.Calls, []string{"open_tab", "list_cast_devices", "cast_tab", "cast_media", "navigate_tab", "stop_casting"}) || broker.castDeviceName != "Office TV" {
+		t.Fatalf("cast broker calls = %v device=%q", broker.Calls, broker.castDeviceName)
 	}
 	if broker.lastOpen.URL != "https://example.com/" || !broker.lastOpen.Activate {
 		t.Fatalf("open-tab request = %+v", broker.lastOpen)
@@ -97,8 +100,8 @@ func TestCastToolRejectsUnknownModeBeforeCallingBroker(t *testing.T) {
 	if err != nil || envelope.OK {
 		t.Fatalf("invalid cast mode result = %s, err=%v", response.Content, err)
 	}
-	if len(broker.calls) != 0 {
-		t.Fatalf("invalid cast mode reached broker: %v", broker.calls)
+	if len(broker.Calls) != 0 {
+		t.Fatalf("invalid cast mode reached broker: %v", broker.Calls)
 	}
 }
 func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
@@ -109,7 +112,7 @@ func TestOpenTabCreatesSelectsAndActivatesRequestedWebsite(t *testing.T) {
 		Connected: true,
 		Ready:     true,
 	}
-	broker := &recordingBroker{selected: want}
+	broker := &recordingBroker{Broker: webmcptest.Broker{Page: want}}
 	response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "open-tab-call",
 		Name:      webmcp.OpenTabToolName,

@@ -307,63 +307,27 @@ func (d directDiscoverer) Discover(context.Context, webmcp.DiscoverOptions) ([]w
 	return append([]webmcp.BrowserCandidate(nil), d.candidates...), nil
 }
 
+// directCommandBroker adds selection options and activation to the shared
+// scripted broker. Selects records only successful selections.
 type directCommandBroker struct {
-	candidates []webmcp.BrowserCandidate
-	targets    []webmcp.Target
-	selected   webmcp.PageContext
-	catalog    webmcp.ToolCatalogSnapshot
-
-	discoverErr error
-	listErr     error
-	selectErr   error
-	activateErr error
-	toolsErr    error
-	invokeErr   error
-	cancelErr   error
-
-	invokeResult webmcp.InvokeResult
-	watch        <-chan webmcp.BrokerEvent
-
-	selectCalls     []webmcp.TargetSelector
-	activateCalls   []webmcp.TargetSelector
-	listTargetCalls int
-	invokeRequest   webmcp.InvokeRequest
-	cancelRequest   webmcp.CancelRequest
-	closeCalls      int
+	webmcptest.Broker
+	activateErr   error
+	activateCalls []webmcp.TargetSelector
 }
 
-func (b *directCommandBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	if b.discoverErr != nil {
-		return nil, b.discoverErr
+func (b *directCommandBroker) Select(ctx context.Context, selector webmcp.TargetSelector) (webmcp.PageContext, error) {
+	return b.SelectWithOptions(ctx, selector, webmcp.SelectOptions{})
+}
+
+func (b *directCommandBroker) SelectWithOptions(ctx context.Context, selector webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
+	if b.SelectErr != nil {
+		return webmcp.PageContext{}, b.SelectErr
 	}
-	return append([]webmcp.BrowserCandidate(nil), b.candidates...), nil
-}
-
-func (b *directCommandBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	b.listTargetCalls++
-	if b.listErr != nil {
-		return nil, b.listErr
-	}
-	return append([]webmcp.Target(nil), b.targets...), nil
-}
-
-func (b *directCommandBroker) Select(_ context.Context, selector webmcp.TargetSelector) (webmcp.PageContext, error) {
-	return b.selectWithOptions(selector, false)
-}
-
-func (b *directCommandBroker) SelectWithOptions(_ context.Context, selector webmcp.TargetSelector, options webmcp.SelectOptions) (webmcp.PageContext, error) {
-	return b.selectWithOptions(selector, options.Activate)
-}
-
-func (b *directCommandBroker) selectWithOptions(selector webmcp.TargetSelector, activate bool) (webmcp.PageContext, error) {
-	if b.selectErr != nil {
-		return webmcp.PageContext{}, b.selectErr
-	}
-	b.selectCalls = append(b.selectCalls, selector)
-	if activate {
+	page, err := b.Broker.Select(ctx, selector)
+	if options.Activate {
 		b.activateCalls = append(b.activateCalls, selector)
 	}
-	return b.selected, nil
+	return page, err
 }
 
 func (b *directCommandBroker) Activate(_ context.Context, selector webmcp.TargetSelector) error {
@@ -372,48 +336,6 @@ func (b *directCommandBroker) Activate(_ context.Context, selector webmcp.Target
 	}
 	b.activateCalls = append(b.activateCalls, selector)
 	return nil
-}
-
-func (b *directCommandBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	return b.selected, nil
-}
-
-func (b *directCommandBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	if b.toolsErr != nil {
-		return webmcp.ToolCatalogSnapshot{}, b.toolsErr
-	}
-	return b.catalog, nil
-}
-
-func (b *directCommandBroker) Invoke(_ context.Context, request webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
-	b.invokeRequest = request
-	if b.invokeErr != nil {
-		return webmcp.InvokeResult{}, b.invokeErr
-	}
-	return b.invokeResult, nil
-}
-
-func (b *directCommandBroker) Cancel(_ context.Context, request webmcp.CancelRequest) error {
-	b.cancelRequest = request
-	return b.cancelErr
-}
-
-func (b *directCommandBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
-	if b.watch != nil {
-		return b.watch
-	}
-	return closedEventChannel()
-}
-
-func (b *directCommandBroker) Close() error {
-	b.closeCalls++
-	return nil
-}
-
-func closedEventChannel() <-chan webmcp.BrokerEvent {
-	channel := make(chan webmcp.BrokerEvent)
-	close(channel)
-	return channel
 }
 
 type selectionOrderingWatchBroker struct {

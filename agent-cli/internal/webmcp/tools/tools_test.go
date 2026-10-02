@@ -139,7 +139,7 @@ func assertToolSchemaContract(t *testing.T, schemas []map[string]any, testCase s
 func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 	imageBytes := testPNG(t, 3, 2)
 	broker := &recordingBroker{
-		selected: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}},
+		Broker: webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 		screenshot: webmcp.PageScreenshot{
 			MIMEType: "IMAGE/PNG",
 			Bytes:    imageBytes,
@@ -172,14 +172,14 @@ func TestShowPageReturnsValidatedBoundedMetadata(t *testing.T) {
 	if strings.Contains(response.Content, string(imageBytes)) {
 		t.Fatal("show_page result exposed raw image bytes")
 	}
-	if got := broker.calls; len(got) != 1 || got[0] != "capture_page" {
+	if got := broker.Calls; len(got) != 1 || got[0] != "capture_page" {
 		t.Fatalf("broker calls = %#v, want one capture call", got)
 	}
 }
 func TestComposedShowPagePreservesItsSingleImageProjection(t *testing.T) {
 	imageBytes := testPNG(t, 2, 2)
 	broker := &recordingBroker{
-		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}},
+		Broker:     webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 		screenshot: webmcp.PageScreenshot{MIMEType: pngMIMEType, Bytes: imageBytes},
 	}
 	set := NewBrokerToolSet(broker)
@@ -218,7 +218,7 @@ func TestShowPageReturnsClassifiedErrorsWithoutImageData(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			broker := &recordingBroker{
-				selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}},
+				Broker:     webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 				screenshot: testCase.shot,
 			}
 			response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
@@ -261,7 +261,7 @@ func TestShowPageIsDisabledAndInputClosedOutsideBrowserSessions(t *testing.T) {
 	}
 
 	broker := &recordingBroker{
-		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}},
+		Broker:     webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 		screenshot: webmcp.PageScreenshot{MIMEType: pngMIMEType, Bytes: testPNG(t, 1, 1)},
 	}
 	response, err = NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
@@ -276,8 +276,8 @@ func TestShowPageIsDisabledAndInputClosedOutsideBrowserSessions(t *testing.T) {
 	if err != nil || envelope.OK || envelope.Error == nil || envelope.Error.Code != string(webmcp.ErrorInvalidToolInput) {
 		t.Fatalf("invalid show_page = %#v (err %v), want invalid_tool_input", envelope, err)
 	}
-	if len(broker.calls) != 0 {
-		t.Fatalf("invalid show_page called broker: %#v", broker.calls)
+	if len(broker.Calls) != 0 {
+		t.Fatalf("invalid show_page called broker: %#v", broker.Calls)
 	}
 }
 
@@ -293,7 +293,7 @@ func TestShowPagePreservesCancellationAndDeadlineClassification(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			broker := &recordingBroker{
-				selected:      webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}},
+				Broker:        webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 				screenshotErr: testCase.err,
 			}
 			response, err := NewBrokerToolSet(broker).Executor().Execute(context.Background(), messages.ToolCall{
@@ -330,14 +330,14 @@ func TestGetContextReportsNoPageSelectedBeforeStaleSelection(t *testing.T) {
 	}
 	assertNoPageSelectedContextError(t, envelope)
 
-	staleBroker := &recordingBroker{
-		selectedErr: webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, webmcp.DefaultErrorMessage(webmcp.ErrorStaleSelection), map[string]any{
+	staleBroker := &recordingBroker{Broker: webmcptest.Broker{
+		SelectedErr: webmcp.NewClassifiedError(webmcp.ErrorStaleSelection, webmcp.DefaultErrorMessage(webmcp.ErrorStaleSelection), map[string]any{
 			"browser_id":          testBrowserID,
 			"target_id":           "target-a",
 			"selected_generation": uint64(3),
 			"reason":              "generation_changed",
 		}),
-	}
+	}}
 	response, err = NewBrokerToolSet(staleBroker).Executor().Execute(context.Background(), messages.ToolCall{
 		ID:        "stale-page-call",
 		Name:      webmcp.GetContextToolName,
@@ -406,14 +406,14 @@ func TestExecutorRejectsInvalidBrokerArgumentsBeforeCallingBroker(t *testing.T) 
 	}
 	for index, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			before := broker.callCount()
+			before := len(broker.Calls)
 			response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-" + string(rune('a'+index)), Name: testCase.name, Arguments: testCase.arguments})
 			if err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 			assertTextualResponse(t, response, "call-"+string(rune('a'+index)), testCase.name)
-			if broker.callCount() != before {
-				t.Fatalf("broker calls changed from %d to %d for invalid input", before, broker.callCount())
+			if len(broker.Calls) != before {
+				t.Fatalf("broker calls changed from %d to %d for invalid input", before, len(broker.Calls))
 			}
 			assertInvalidToolInputIssue(t, response.Content, testCase.wantPath, testCase.wantCode)
 			if testCase.wantNoText != "" && strings.Contains(response.Content, testCase.wantNoText) {
@@ -451,8 +451,8 @@ func assertInvalidToolInputIssue(t *testing.T, content, wantPath, wantCode strin
 
 func assertInvokeOutputPreserved(t *testing.T, executor *Executor, broker *recordingBroker, output string) {
 	t.Helper()
-	broker.invokeResult.InvocationID = webmcp.InvocationID("inv-" + output)
-	broker.invokeResult.Output = json.RawMessage(output)
+	broker.InvokeResult.InvocationID = webmcp.InvocationID("inv-" + output)
+	broker.InvokeResult.Output = json.RawMessage(output)
 	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-output", Name: webmcp.InvokeToolName, Arguments: `{"tool_ref":"webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw","input_json":"{}","reason":"read it"}`})
 	if err != nil {
 		t.Fatalf("invoke output %s: %v", output, err)
@@ -473,8 +473,8 @@ func assertInvokeOutputPreserved(t *testing.T, executor *Executor, broker *recor
 }
 
 func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *testing.T) {
-	broker := &recordingBroker{
-		selected: webmcp.PageContext{
+	broker := &recordingBroker{Broker: webmcptest.Broker{
+		Page: webmcp.PageContext{
 			Key:        webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID},
 			Title:      "Fixture",
 			URL:        "https://fixture.test/",
@@ -483,11 +483,11 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 			Connected:  true,
 			Ready:      true,
 		},
-		targets: []webmcp.Target{
+		Targets: []webmcp.Target{
 			{BrowserID: testBrowserID, ID: testTargetID, Type: "page", Title: "Fixture", Origin: "https://fixture.test", Eligible: true},
 			{BrowserID: testBrowserID, ID: "tab-b", Type: "page", Title: "Other", Origin: "https://other.test", Eligible: false},
 		},
-		catalog: webmcp.ToolCatalogSnapshot{
+		Catalog: webmcp.ToolCatalogSnapshot{
 			Generation: 7,
 			Tools: []webmcp.ToolDescriptor{{
 				Ref:         "webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw",
@@ -500,8 +500,8 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 				Generation:  7,
 			}},
 		},
-		invokeResult: webmcp.InvokeResult{InvocationID: "inv-1", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"value":42}`)},
-	}
+		InvokeResult: webmcp.InvokeResult{InvocationID: "inv-1", State: webmcp.InvocationCompleted, Output: json.RawMessage(`{"value":42}`)},
+	}}
 	executor := NewExecutor(broker)
 
 	response, err := executor.Execute(context.Background(), messages.ToolCall{ID: "call-context", Name: webmcp.GetContextToolName, Arguments: `{}`})
@@ -540,8 +540,8 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 	if selected.BrowserID != testBrowserID || selected.TargetID != testTargetID || selected.NextStep != "selected; call webmcp_list_tools to obtain tool refs" {
 		t.Fatalf("select data = %+v, want exact selection and next step", selected)
 	}
-	if len(broker.calls) == 0 || broker.calls[len(broker.calls)-1] != "select_with_options" {
-		t.Fatalf("select broker calls = %#v, want select_with_options", broker.calls)
+	if len(broker.Calls) == 0 || broker.Calls[len(broker.Calls)-1] != "select_with_options" {
+		t.Fatalf("select broker calls = %#v, want select_with_options", broker.Calls)
 	}
 
 	response, err = executor.Execute(context.Background(), messages.ToolCall{ID: "call-invoke", Name: webmcp.InvokeToolName, Arguments: `{"tool_ref":"webmcp.tool-ref.v1:AAECAwQFBgcICQoLDA0ODw","input_json":"{\"count\":90071992547409931234567890}","reason":"read it"}`})
@@ -553,8 +553,8 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 	if response.Content != wantInvoke {
 		t.Fatalf("invoke golden = %s, want %s", response.Content, wantInvoke)
 	}
-	if string(broker.lastInvoke.Input) != `{"count":90071992547409931234567890}` {
-		t.Fatalf("invoke input = %s, want original number token", broker.lastInvoke.Input)
+	if string(broker.LastInvoke().Input) != `{"count":90071992547409931234567890}` {
+		t.Fatalf("invoke input = %s, want original number token", broker.LastInvoke().Input)
 	}
 
 	for _, output := range []string{`[1,{"value":2}]`, `null`} {
@@ -569,8 +569,8 @@ func TestExecutorReturnsCorrelatedCompactEnvelopesAndPreservesPageValues(t *test
 	if response.Content != `{"version":"webmcp.tool-result.v1","ok":true,"data":{"invocation_id":"inv-1","status":"cancel_requested"},"error":null}` {
 		t.Fatalf("cancel golden = %s", response.Content)
 	}
-	if broker.lastCancel.Reason != "user stopped" {
-		t.Fatalf("cancel reason = %q", broker.lastCancel.Reason)
+	if broker.LastCancel().Reason != "user stopped" {
+		t.Fatalf("cancel reason = %q", broker.LastCancel().Reason)
 	}
 }
 
@@ -666,7 +666,7 @@ func TestExecutorSelectsAndListsAfterLiveActivationFailure(t *testing.T) {
 func TestToolSetExecutorPreservesShowPageImageProjection(t *testing.T) {
 	imageBytes := testPNG(t, 1, 1)
 	set := NewToolSet(&recordingBroker{
-		selected:   webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}},
+		Broker:     webmcptest.Broker{Page: webmcp.PageContext{Key: webmcp.PageKey{BrowserID: testBrowserID, TargetID: testTargetID}}},
 		screenshot: webmcp.PageScreenshot{MIMEType: pngMIMEType, Bytes: imageBytes},
 	})
 	response, err := set.Executor().Execute(context.Background(), messages.ToolCall{
@@ -684,130 +684,78 @@ func TestToolSetExecutorPreservesShowPageImageProjection(t *testing.T) {
 	}
 }
 
+// recordingBroker adds the tab, screenshot, cast and selection-option
+// extensions the tool surface forwards to the shared scripted broker.
 type recordingBroker struct {
-	selected       webmcp.PageContext
-	selectedErr    error
-	targets        []webmcp.Target
-	catalog        webmcp.ToolCatalogSnapshot
-	invokeResult   webmcp.InvokeResult
-	lastInvoke     webmcp.InvokeRequest
-	lastCancel     webmcp.CancelRequest
+	webmcptest.Broker
 	lastOpen       webmcp.OpenTabRequest
 	lastNavigate   string
 	screenshot     webmcp.PageScreenshot
 	screenshotErr  error
-	calls          []string
 	castDevices    []webmcp.CastDevice
 	castDeviceName string
 }
 
-func (b *recordingBroker) Discover(context.Context, webmcp.DiscoverOptions) ([]webmcp.BrowserCandidate, error) {
-	b.calls = append(b.calls, "discover")
-	return nil, nil
-}
-
-func (b *recordingBroker) ListTargets(context.Context, webmcp.BrowserSelector) ([]webmcp.Target, error) {
-	b.calls = append(b.calls, "list_targets")
-	return append([]webmcp.Target(nil), b.targets...), nil
-}
-
-func (b *recordingBroker) Select(context.Context, webmcp.TargetSelector) (webmcp.PageContext, error) {
-	b.calls = append(b.calls, "select")
-	return b.selected, nil
-}
-
-func (b *recordingBroker) Selected(context.Context) (webmcp.PageContext, error) {
-	b.calls = append(b.calls, "selected")
-	return b.selected, b.selectedErr
-}
-
-func (b *recordingBroker) ListTools(context.Context, webmcp.ListToolsOptions) (webmcp.ToolCatalogSnapshot, error) {
-	b.calls = append(b.calls, "list_tools")
-	return b.catalog, nil
-}
-
-func (b *recordingBroker) Invoke(_ context.Context, request webmcp.InvokeRequest) (webmcp.InvokeResult, error) {
-	b.calls = append(b.calls, "invoke")
-	b.lastInvoke = request
-	return b.invokeResult, nil
-}
-
-func (b *recordingBroker) Cancel(_ context.Context, request webmcp.CancelRequest) error {
-	b.calls = append(b.calls, "cancel")
-	b.lastCancel = request
-	return nil
-}
-
 func (b *recordingBroker) OpenTab(_ context.Context, request webmcp.OpenTabRequest) (webmcp.PageContext, error) {
-	b.calls = append(b.calls, "open_tab")
+	b.Record("open_tab")
 	b.lastOpen = request
-	return b.selected, b.selectedErr
+	return b.Page, b.SelectedErr
 }
 
 func (b *recordingBroker) NavigateSelectedTab(_ context.Context, targetURL string) (webmcp.PageContext, error) {
-	b.calls = append(b.calls, "navigate_tab")
+	b.Record("navigate_tab")
 	b.lastNavigate = targetURL
-	b.selected.URL = targetURL
-	return b.selected, b.selectedErr
+	b.Page.URL = targetURL
+	return b.Page, b.SelectedErr
 }
 
 func (b *recordingBroker) CapturePageScreenshot(context.Context) (webmcp.PageScreenshot, error) {
-	b.calls = append(b.calls, "capture_page")
+	b.Record("capture_page")
 	if b.screenshotErr != nil {
 		return webmcp.PageScreenshot{}, b.screenshotErr
 	}
 	screenshot := b.screenshot
 	if screenshot.BrowserID == "" {
-		screenshot.BrowserID = b.selected.Key.BrowserID
+		screenshot.BrowserID = b.Page.Key.BrowserID
 	}
 	if screenshot.TargetID == "" {
-		screenshot.TargetID = b.selected.Key.TargetID
+		screenshot.TargetID = b.Page.Key.TargetID
 	}
 	screenshot.Bytes = append([]byte(nil), screenshot.Bytes...)
 	return screenshot, nil
 }
 
 func (b *recordingBroker) ListCastDevices(context.Context) ([]webmcp.CastDevice, error) {
-	b.calls = append(b.calls, "list_cast_devices")
+	b.Record("list_cast_devices")
 	return append([]webmcp.CastDevice(nil), b.castDevices...), nil
 }
 
 func (b *recordingBroker) CastSelectedTab(_ context.Context, deviceName string) error {
-	b.calls = append(b.calls, "cast_tab")
+	b.Record("cast_tab")
 	b.castDeviceName = deviceName
 	return nil
 }
 
 func (b *recordingBroker) CastSelectedMedia(_ context.Context, deviceName string) error {
-	b.calls = append(b.calls, "cast_media")
+	b.Record("cast_media")
 	b.castDeviceName = deviceName
 	return nil
 }
 
 func (b *recordingBroker) StopCasting(_ context.Context, deviceName string) error {
-	b.calls = append(b.calls, "stop_casting")
+	b.Record("stop_casting")
 	b.castDeviceName = deviceName
 	return nil
 }
 
-func (b *recordingBroker) Watch(context.Context) <-chan webmcp.BrokerEvent {
-	channel := make(chan webmcp.BrokerEvent)
-	close(channel)
-	return channel
+func (b *recordingBroker) SelectWithOptions(context.Context, webmcp.TargetSelector, webmcp.SelectOptions) (webmcp.PageContext, error) {
+	b.Record("select_with_options")
+	return b.Page, nil
 }
 
-func (b *recordingBroker) Close() error { return nil }
-
-func (b *recordingBroker) callCount() int { return len(b.calls) }
-
-func (b *recordingBroker) SelectWithOptions(_ context.Context, _ webmcp.TargetSelector, _ webmcp.SelectOptions) (webmcp.PageContext, error) {
-	b.calls = append(b.calls, "select_with_options")
-	return b.selected, nil
-}
-
-func (b *recordingBroker) SelectedWithRefresh(_ context.Context, _ bool) (webmcp.PageContext, error) {
-	b.calls = append(b.calls, "selected_with_refresh")
-	return b.selected, b.selectedErr
+func (b *recordingBroker) SelectedWithRefresh(context.Context, bool) (webmcp.PageContext, error) {
+	b.Record("selected_with_refresh")
+	return b.Page, b.SelectedErr
 }
 
 func assertTextualResponse(t *testing.T, response messages.ToolCallResponse, callID, name string) {
