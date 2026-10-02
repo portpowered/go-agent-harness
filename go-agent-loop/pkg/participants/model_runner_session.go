@@ -101,12 +101,20 @@ func (r *ModelRunner) awaitSessionStep(ctx context.Context, session messages.Ses
 // without this a runner that resumes after a stall could let the timer
 // overtake the very frame that completes the onset, and the interrupting
 // audio would reach the provider before its cancel.
+//
+// Only the hold whose window expired is released. The drained input can end
+// that hold and start a new one (quiet past the hangover, then a new loud
+// frame); the new hold has its own window and must stay held, or its audio
+// would precede the cancel its onset may still produce.
 func (r *ModelRunner) expireHeldOnset(ctx context.Context, session messages.Session, state *sessionRunState) (bool, error) {
+	expired := state.Onset.Expiry()
 	if _, err := r.forwardPendingSessionInputs(ctx, session, state); err != nil {
 		return true, r.endSession(ctx, state, err)
 	}
-	// Onset can no longer be reached: release whatever is still held.
-	r.flushHeldAudio(ctx, session, state)
+	if state.Onset.Expiry() == expired {
+		// Onset can no longer be reached: release the expired hold.
+		r.flushHeldAudio(ctx, session, state)
+	}
 	return false, nil
 }
 

@@ -329,6 +329,47 @@ func TestSessionModelRunner_HeldOnsetExpiryYieldsToQueuedSpeech(t *testing.T) {
 	}
 }
 
+// Queued input drained at expiry can end the old hold and start a new one:
+// enough quiet frames pass the hangover and release the held frame, and a
+// later loud frame is held under its own onset window. That new hold has not
+// expired, so it must stay held -- releasing it would send interrupting
+// audio ahead of any RESPONSE.CANCEL its onset produces. select chooses at
+// random, so the setup is repeated enough times that a lucky ordering cannot
+// hide the bug.
+func TestSessionModelRunner_HeldOnsetExpiryKeepsHoldStartedByQueuedInput(t *testing.T) {
+	ctx := context.Background()
+	const quietFrames = 40 // 800 ms of quiet: past the 300 ms hangover
+	for attempt := range 32 {
+		fake := clock.NewDeterministic(time.Time{}, time.Millisecond)
+		session := newRecordingSession()
+		runner := NewSessionModelRunner(nil, 16, nil)
+		runner.SetClock(fake)
+		state := newInFlightRunState(t, session, runner, "resp-held")
+		sendUserAudio(t, runner, session, state, heldOnsetFrame())
+		for range quietFrames {
+			if err := runner.EnqueueSessionInput(ctx, SessionAudio(pcmFrameAtLevel(0), messages.SessionAudioInputPolicyInterrupt), SessionAdmitWaiting); err != nil {
+				t.Fatalf("attempt %d: enqueue quiet frame: %v", attempt, err)
+			}
+		}
+		if err := runner.EnqueueSessionInput(ctx, SessionAudio(heldOnsetFrame(), messages.SessionAudioInputPolicyInterrupt), SessionAdmitWaiting); err != nil {
+			t.Fatalf("attempt %d: enqueue new loud frame: %v", attempt, err)
+		}
+		fake.AdvanceBy(DefaultBargeInConfig().MinSpeech)
+		// Step until every queued frame is consumed, whichever ready case
+		// select takes first. The new hold's window never elapses on the
+		// fake clock, so its timer cannot make a step ready.
+		for first := true; first || len(runner.ingress.ordered) > 0; first = false {
+			if done, err := runner.awaitSessionStep(ctx, session, state); done || err != nil {
+				t.Fatalf("attempt %d: session step = done:%t err:%v, want the loop to continue", attempt, done, err)
+			}
+		}
+		sent := session.sentMessages()
+		if len(state.Onset.Frames) != 1 || len(sent) != 1+quietFrames || countSent(sent, messages.StreamTypeResponseCancel) != 0 {
+			t.Fatalf("attempt %d: held=%d sent=%d (cancels=%d), want the new loud frame still held after the old frame and the quiet frames", attempt, len(state.Onset.Frames), len(sent), countSent(sent, messages.StreamTypeResponseCancel))
+		}
+	}
+}
+
 // A held frame that the provider rejects when it is finally released is the
 // runner's terminal audio failure, published so the engine observes it.
 func TestSessionModelRunner_HeldOnsetReleaseFailureIsPublished(t *testing.T) {
